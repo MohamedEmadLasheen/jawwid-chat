@@ -15,7 +15,7 @@ import { reminderLabel } from './copy'
  * answered at the network boundary. The contract is docs/admin/
  * pd027-payments.md: these prove each control sends its documented route and
  * body, and that approve / reject / edit are offered only on the server's word
- * (`canVerifyPayments`, `canEdit`).
+ * (`canDecide` on the receipts list, `canEdit` on the settings).
  */
 
 // Long multi-step dialogs: give a loaded machine room (this file only; vitest isolates files).
@@ -84,12 +84,16 @@ function settings(over: Partial<BillingSettings> = {}): BillingSettings {
 const opsManager = makeStaff({ id: 'om-1', name: 'Operations Manager', role: 'manager' })
 const superAdmin = makeStaff({ id: 'sa-1', name: 'Owner', role: 'super_admin' })
 
-function access(a: { canVerifyPayments?: boolean } = {}) {
-  on('GET', /\/instalments\/access$/, () => json({ billingReader: true, canAssignBillingSupervisor: false, canVerifyPayments: false, ...a }))
+/** GET /payment-receipts' `canDecide`: the payment recorders approve and reject. */
+let canDecide = true
+function access(a: { canDecide?: boolean } = {}) {
+  canDecide = a.canDecide ?? true
+  on('GET', /\/instalments\/access$/, () => json({ billingReader: true, canAssignBillingSupervisor: false, canRecordPayments: canDecide, canVerifyPayments: false }))
 }
 
 beforeEach(() => {
   routes = []
+  canDecide = true
   fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = String(input)
     const method = (init.method ?? 'GET').toUpperCase()
@@ -105,7 +109,7 @@ beforeEach(() => {
   on('GET', /\/payment-receipts\?status=(\w+)$/, (url) => {
     const status = new URLSearchParams(url.split('?')[1]).get('status') as ReceiptStatus
     const items = status === 'pending' ? PENDING : status === 'approved' ? [receipt({ id: 'rc-9', status: 'approved', reviewedBy: { id: 'om-1', name: 'Operations Manager' }, reviewedAt: '2026-10-21T15:00:00Z', paymentId: 'pay-9' })] : []
-    return json({ items, counts: COUNTS })
+    return json({ items, counts: COUNTS, canDecide })
   })
 })
 afterEach(() => {
@@ -115,7 +119,7 @@ afterEach(() => {
 
 describe('Payments > Receipts', () => {
   it('lists pending receipts with counts, the file inline (image) or as a link (PDF), and switches status', async () => {
-    access({ canVerifyPayments: true })
+    access({ canDecide: true })
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Payments' })).toBeInTheDocument()
     const list = await screen.findByRole('list', { name: 'Receipts' })
@@ -142,7 +146,7 @@ describe('Payments > Receipts', () => {
   })
 
   it('approves with a corrected amount and date, sending only what was changed', async () => {
-    access({ canVerifyPayments: true })
+    access({ canDecide: true })
     on('POST', /\/payment-receipts\/rc-1\/approve$/, () => json({ receipt: receipt({ status: 'approved' }) }))
     on('POST', /\/payment-receipts\/rc-2\/approve$/, () => json({ receipt: receipt({ id: 'rc-2', status: 'approved' }) }))
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments' })
@@ -170,7 +174,7 @@ describe('Payments > Receipts', () => {
   })
 
   it('rejects only with a reason', async () => {
-    access({ canVerifyPayments: true })
+    access({ canDecide: true })
     on('POST', /\/payment-receipts\/rc-1\/reject$/, () => json({ receipt: receipt({ status: 'rejected', rejectReason: 'amount not received' }) }))
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments' })
     const list = await screen.findByRole('list', { name: 'Receipts' })
@@ -185,18 +189,18 @@ describe('Payments > Receipts', () => {
     expect(bodyOf(calls('POST', /\/payment-receipts\/rc-1\/reject$/)[0])).toEqual({ reason: 'amount not received' })
   })
 
-  it('offers no Approve or Reject unless the server says canVerifyPayments', async () => {
-    access({ canVerifyPayments: false })
+  it('offers no Approve or Reject unless the server says canDecide', async () => {
+    access({ canDecide: false })
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'admin' }), route: '/payments' })
     const list = await screen.findByRole('list', { name: 'Receipts' })
     expect(within(list).getAllByRole('listitem')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
-    expect(screen.getByText(/approved or rejected by the super admin and the Operations Manager/)).toBeInTheDocument()
+    expect(screen.getByText(/approved or rejected by the payment recorders/)).toBeInTheDocument()
   })
 
   it('the super admin opens it as an Admin Portal section, in Arabic', async () => {
-    access({ canVerifyPayments: true })
+    access({ canDecide: true })
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/payments', locale: 'ar' })
     expect(await screen.findByRole('heading', { level: 1, name: 'المدفوعات' })).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')

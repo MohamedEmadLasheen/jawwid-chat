@@ -400,7 +400,7 @@ function PaymentsSection({ billing, onOpen }: { billing: FamilyBilling; onOpen: 
  * PD-27: payment requests (each with its own link), the payments that
  * arrived, their invoices, and the receipts the parents uploaded. Every
  * control is the server's answer: `canRecord` creates requests and records
- * cash; `canVerify` records bank transfers, voids and refunds.
+ * cash or bank transfers, voids and decides receipts; `canVerify` refunds.
  */
 function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dialogs) => void }) {
   const tx = useCopy()
@@ -432,14 +432,15 @@ function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d
         action={
           billing.canRecord && (
             <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'cash' })}>
-              {tx(PAY.recordCash)}
+              {tx(PAY.recordReceived)}
             </button>
           )
         }
       >
         <PaymentList
           payments={billing.payments}
-          canVerify={billing.canVerify}
+          canVoid={billing.canRecord}
+          canRefund={billing.canVerify}
           // A payment whose instalment is fully paid is corrected by voiding the instalment.
           voidable={(p) => !(p.instalmentId && fullyPaid.has(p.instalmentId))}
           onVoid={(payment) => onOpen({ kind: 'voidPayment', payment })}
@@ -480,7 +481,7 @@ function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d
         title={tx(PAY.familyReceipts)}
         hint={tx(PAY.familyReceiptsHint)}
         action={
-          billing.canVerify &&
+          billing.canRecord &&
           pending > 0 && (
             <Link className="btn btn--sm" to={paymentsPath}>
               {tx(PAY.reviewInPayments)}

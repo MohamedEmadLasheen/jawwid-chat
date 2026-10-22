@@ -733,9 +733,9 @@ export function CancelRequestDialog({ billing, request, onClose }: { billing: Fa
 }
 
 /**
- * PD-27: money already received -- cash (Operations, Sales) or, for a
- * verifier, a bank transfer. Optionally towards an open request or instalment,
- * whose remaining amount it prefills.
+ * PD-27: money already received -- cash or a bank transfer, by any payment
+ * recorder (PD-17 / PD-20). Optionally towards an open request or
+ * instalment, whose remaining amount it prefills.
  */
 export function RecordFamilyPaymentDialog({
   billing,
@@ -800,16 +800,14 @@ export function RecordFamilyPaymentDialog({
     >
       <PaymentError error={record.error} />
       <p className="field__hint">{tx(PAY.recordHint)}</p>
-      {billing.canVerify && (
-        <Field label={tx(PAY.method)}>
-          {(id) => (
-            <select id={id} className="select" value={method} onChange={(e) => setMethod(e.target.value as NewFamilyPayment['method'])}>
-              <option value="cash">{tx(METHOD.cash)}</option>
-              <option value="bank_transfer">{tx(METHOD.bank_transfer)}</option>
-            </select>
-          )}
-        </Field>
-      )}
+      <Field label={tx(PAY.method)}>
+        {(id) => (
+          <select id={id} className="select" value={method} onChange={(e) => setMethod(e.target.value as NewFamilyPayment['method'])}>
+            <option value="cash">{tx(METHOD.cash)}</option>
+            <option value="bank_transfer">{tx(METHOD.bank_transfer)}</option>
+          </select>
+        )}
+      </Field>
       {(openRequests.length > 0 || openInstalments.length > 0) && (
         <Field label={tx(PAY.towards)}>
           {(id) => (

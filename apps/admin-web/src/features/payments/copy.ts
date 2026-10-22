@@ -10,7 +10,7 @@ export { toMinor } from '@/features/profiles/copy'
 
 /**
  * PD-27 copy, Arabic and English side by side. Wording rules: a payment is
- * confirmed by the server (Stripe's verified webhook, a verifier's approval,
+ * confirmed by the server (Stripe's verified webhook, a recorder's approval,
  * or staff recording cash), never by the page; and the server sends nothing on
  * WhatsApp -- the staff member's own WhatsApp opens with the link typed in.
  */
@@ -41,9 +41,9 @@ export const PAY = {
   reject: { en: 'Reject', ar: 'رفض' },
   reviewedBy: { en: '{status} by {name}, {date}', ar: '{status} بواسطة {name}، {date}' },
   rejectedBecause: { en: 'Reason: {reason}', ar: 'السبب: {reason}' },
-  verifyOnly: {
-    en: 'Receipts are approved or rejected by the super admin and the Operations Manager.',
-    ar: 'يعتمد الإيصالات أو يرفضها المدير العام ومدير العمليات.',
+  decideOnly: {
+    en: 'Receipts are approved or rejected by the payment recorders: Operations, Sales, the Operations Manager and the super admin.',
+    ar: 'يعتمد الإيصالات أو يرفضها مسجّلو المدفوعات: العمليات والمبيعات ومدير العمليات والمدير العام.',
   },
   approveTitle: { en: 'Approve the receipt: {label}', ar: 'اعتماد الإيصال: {label}' },
   approveHint: {
@@ -149,7 +149,7 @@ export const PAY = {
     ar: 'كل دفعة أيًّا كانت طريقة وصولها. لا تُعدَّل الدفعة ولا تُحذف: يُلغى الخطأ مع السبب، ويُسجَّل المبلغ المُعاد كاسترداد.',
   },
   noPayments: { en: 'No payments yet.', ar: 'لا توجد دفعات بعد.' },
-  recordCash: { en: 'Record cash', ar: 'تسجيل نقدًا' },
+  recordReceived: { en: 'Record a payment', ar: 'تسجيل دفعة مستلمة' },
   recordTitle: { en: 'Record a payment', ar: 'تسجيل دفعة' },
   recordHint: {
     en: 'For money already received. Your name is on the payment and an invoice is issued.',
@@ -198,8 +198,8 @@ export const PAY = {
   // Receipts on the Parent Profile
   familyReceipts: { en: 'Bank-transfer receipts', ar: 'إيصالات التحويل البنكي' },
   familyReceiptsHint: {
-    en: 'Uploaded by the parents in the app. A verifier approves (which records the payment) or rejects with a reason.',
-    ar: 'يرفعها أولياء الأمور من التطبيق. يعتمدها المُراجِع (فتُسجَّل الدفعة) أو يرفضها مع السبب.',
+    en: 'Uploaded by the parents in the app. A payment recorder approves (which records the payment) or rejects with a reason.',
+    ar: 'يرفعها أولياء الأمور من التطبيق. يعتمدها مسجّل المدفوعات (فتُسجَّل الدفعة) أو يرفضها مع السبب.',
   },
   noFamilyReceipts: { en: 'No receipts uploaded.', ar: 'لم تُرفع إيصالات.' },
   reviewInPayments: { en: 'Review in Payments', ar: 'المراجعة في المدفوعات' },
@@ -311,8 +311,8 @@ export function whatsappUrl(request: PaymentRequest): string {
 
 const BY_CODE: Record<string, Pair> = {
   'COMM.BILLING_DENIED': {
-    en: 'You may not do this. Payments are for Operations, Sales and the super admin; verifying for the super admin and the Operations Manager.',
-    ar: 'لا يمكنك تنفيذ هذا. المدفوعات للعمليات والمبيعات والمدير العام، والتحقق للمدير العام ومدير العمليات.',
+    en: 'You may not do this. Payments are for Operations, Sales and the super admin; refunds and payment settings for the super admin and the Operations Manager.',
+    ar: 'لا يمكنك تنفيذ هذا. المدفوعات للعمليات والمبيعات والمدير العام، والاسترداد وإعدادات الدفع للمدير العام ومدير العمليات.',
   },
   'COMM.BILLING_NOT_FOUND': { en: 'Not found, or not one you look after.', ar: 'غير موجود، أو ليس مما تتابعه.' },
   'COMM.BILLING_STATE': {

@@ -46,7 +46,7 @@ export interface BillingSupervisorView {
 }
 
 export const instalmentsApi = {
-  /** PD-27 adds `canVerifyPayments`: approve receipts, record bank transfers, void, refund. */
+  /** PD-27 adds `canVerifyPayments`: refunds and payment settings (receipts are decided by `canRecordPayments`). */
   access: () =>
     api.get<{ billingReader: boolean; canAssignBillingSupervisor: boolean; canRecordPayments?: boolean; canVerifyPayments?: boolean }>(
       '/instalments/access',

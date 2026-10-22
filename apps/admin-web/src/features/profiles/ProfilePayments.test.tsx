@@ -240,8 +240,9 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(cash!).getByText('recorded by Supervisor One')).toBeInTheDocument()
     expect(within(cash!).getByText('Invoice JW-2026-000001')).toBeInTheDocument()
     expect(within(card!).getByText('confirmed by Stripe')).toBeInTheDocument()
-    // Not a verifier: neither Void nor Refund.
-    expect(within(received).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // A recorder voids (never a card payment); only a verifier refunds.
+    expect(within(cash!).getByRole('button', { name: 'Void' })).toBeInTheDocument()
+    expect(within(card!).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
     expect(within(received).queryByRole('button', { name: 'Refund' })).not.toBeInTheDocument()
 
     const invoices = screen.getByRole('region', { name: 'Invoices' })
@@ -251,8 +252,8 @@ describe('PD-27 on the Parent Profile', () => {
     const receipts = screen.getByRole('region', { name: 'Bank-transfer receipts' })
     expect(within(receipts).getByText('Pending verification')).toBeInTheDocument()
     expect(within(receipts).getByRole('img', { name: 'Receipt for 3-month subscription' })).toHaveAttribute('src', receipt.fileUrl)
-    // Review is offered to verifiers only.
-    expect(within(receipts).queryByRole('link', { name: 'Review in Payments' })).not.toBeInTheDocument()
+    // A recorder decides receipts: pointed at the Payments area.
+    expect(within(receipts).getByRole('link', { name: 'Review in Payments' })).toHaveAttribute('href', '/payments')
 
     const timeline = screen.getByRole('region', { name: 'Payment timeline' })
     expect(within(timeline).getByText('Partially paid')).toBeInTheDocument()
@@ -267,7 +268,7 @@ describe('PD-27 on the Parent Profile', () => {
     expect(screen.getByRole('region', { name: 'الدفعات المستلمة' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'الفواتير' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'طلب دفعة' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'تسجيل نقدًا' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'تسجيل دفعة مستلمة' })).toBeInTheDocument()
   })
 
   it('Request payment sends the documented body, then shows the link with Copy and a wa.me link', async () => {
@@ -379,13 +380,13 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(requests).queryByRole('link', { name: 'Send on WhatsApp' })).not.toBeInTheDocument()
   })
 
-  it('Record cash: cash only for a non-verifier; towards a request prefills its remaining amount', async () => {
+  it('Record a payment: cash by default; towards a request prefills its remaining amount', async () => {
     serve(billing())
     on('POST', /\/families\/f-1\/payments$/, () => json(billing()))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Record cash' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
     const dialog = screen.getByRole('dialog', { name: 'Record a payment' })
-    expect(within(dialog).queryByLabelText('Method')).not.toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Method')).toHaveValue('cash')
     await userEvent.selectOptions(within(dialog).getByLabelText('Towards'), 'r:r-1')
     expect(within(dialog).getByLabelText('Amount')).toHaveValue('1200.00')
     await userEvent.type(within(dialog).getByLabelText('Reference'), 'RB-77')
@@ -401,11 +402,11 @@ describe('PD-27 on the Parent Profile', () => {
     })
   })
 
-  it('a verifier may record a bank transfer towards an instalment', async () => {
-    serve(billing({ canVerify: true }))
-    on('POST', /\/families\/f-1\/payments$/, () => json(billing({ canVerify: true })))
+  it('any recorder (not only a verifier) may record a bank transfer towards an instalment', async () => {
+    serve(billing({ canVerify: false }))
+    on('POST', /\/families\/f-1\/payments$/, () => json(billing({ canVerify: false })))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Record cash' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
     const dialog = screen.getByRole('dialog', { name: 'Record a payment' })
     await userEvent.selectOptions(within(dialog).getByLabelText('Method'), 'bank_transfer')
     await userEvent.selectOptions(within(dialog).getByLabelText('Towards'), 'i:i-1')
@@ -526,15 +527,25 @@ describe('PD-27 on the Parent Profile', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
     const requests = await screen.findByRole('region', { name: 'Payment requests' })
     expect(screen.queryByRole('button', { name: 'Request payment' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Record cash' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Record a payment' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Payment link' })).not.toBeInTheDocument()
     expect(within(requests).queryByRole('button', { name: /Cancel the request/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Review in Payments' })).not.toBeInTheDocument()
     // Copying a link someone else created is still offered.
     expect(within(requests).getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
-  it('a verifier with pending receipts is pointed at the Payments area', async () => {
-    serve(billing({ canVerify: true }))
+  it('a verifier who may not record refunds but does not void', async () => {
+    serve(billing({ canRecord: false, canVerify: true }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    const received = await screen.findByRole('region', { name: 'Payments received' })
+    expect(within(received).getByRole('button', { name: 'Refund' })).toBeInTheDocument()
+    expect(within(received).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+  })
+
+  it('a recorder with pending receipts is pointed at the Payments area', async () => {
+    serve(billing())
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
     const receipts = await screen.findByRole('region', { name: 'Bank-transfer receipts' })
     expect(within(receipts).getByRole('link', { name: 'Review in Payments' })).toHaveAttribute('href', '/payments')

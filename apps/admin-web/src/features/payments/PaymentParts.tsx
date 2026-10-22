@@ -268,19 +268,22 @@ function RequestItem({ request: r, canCancel, onCancel }: { request: PaymentRequ
 }
 
 /**
- * Payments received. Void and Refund only for a verifier (`canVerify`): a card
- * payment is refunded, never voided; a voided one takes neither; `voidable`
- * lets the caller withhold Void where the server would refuse it.
+ * Payments received. Void for a payment recorder (`canRecord`), never on a card
+ * payment (it is refunded instead); Refund for a verifier only (`canVerify`);
+ * a voided one takes neither; `voidable` lets the caller withhold Void where
+ * the server would refuse it.
  */
 export function PaymentList({
   payments,
-  canVerify,
+  canVoid,
+  canRefund,
   voidable = () => true,
   onVoid,
   onRefund,
 }: {
   payments: Payment[]
-  canVerify: boolean
+  canVoid: boolean
+  canRefund: boolean
   voidable?: (p: Payment) => boolean
   onVoid?: (p: Payment) => void
   onRefund?: (p: Payment) => void
@@ -291,8 +294,8 @@ export function PaymentList({
     <ol className="pf-timeline" aria-label={tx(PAY.received)}>
       {payments.map((p) => {
         const live = !p.voided
-        const mayVoid = canVerify && live && p.method !== 'card' && !!onVoid && voidable(p)
-        const mayRefund = canVerify && live && p.amountMinor - p.refundedMinor > 0 && !!onRefund
+        const mayVoid = canVoid && live && p.method !== 'card' && !!onVoid && voidable(p)
+        const mayRefund = canRefund && live && p.amountMinor - p.refundedMinor > 0 && !!onRefund
         return <PaymentItem key={p.id} payment={p} onVoid={mayVoid ? () => onVoid!(p) : undefined} onRefund={mayRefund ? () => onRefund!(p) : undefined} />
       })}
     </ol>

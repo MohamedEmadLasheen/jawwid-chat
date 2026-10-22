@@ -71,7 +71,7 @@ export function TrialPaymentsDialog({ trialId, name, onClose }: { trialId: strin
             <h3 className="tf-subtitle">{tx(PAY.requests)}</h3>
             <RequestList requests={q.data.items} canCancel onCancel={setCancelling} />
             <h3 className="tf-subtitle">{tx(PAY.trialPayments)}</h3>
-            <PaymentList payments={q.data.payments} canVerify={false} />
+            <PaymentList payments={q.data.payments} canVoid={false} canRefund={false} />
           </>
         )}
       </QueryBoundary>

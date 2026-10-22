@@ -11,7 +11,7 @@ import { api } from '@/core/api/client'
  * Dates are YYYY-MM-DD in the academy's time zone; instants are ISO-8601.
  *
  * What a viewer may do is the server's answer alone (`canRecord`,
- * `canVerify`, `canVerifyPayments`, `canEdit`); these pages only offer the
+ * `canVerify`, `canDecide`, `canEdit`); these pages only offer the
  * controls it would accept. Nothing here sends a message: "Send on WhatsApp"
  * opens the staff member's own WhatsApp with the link typed in.
  */
@@ -166,6 +166,8 @@ export type BillingSettingsUpdate = Partial<{
 export interface ReceiptList {
   items: Receipt[]
   counts: Record<ReceiptStatus, number>
+  /** This viewer approves and rejects receipts: the payment recorders (canRecord). */
+  canDecide: boolean
 }
 
 /** A request before Assign: no family yet, the trial's id instead. */

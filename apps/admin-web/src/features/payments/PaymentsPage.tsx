@@ -8,7 +8,7 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { BankAccount, BillingSettings, InvoiceIssuer, Receipt, ReceiptStatus } from './api'
 import { PAY, describeError, type Pair, formatDay, formatMoney, reminderLabel, toMinor, useCopy } from './copy'
-import { useApproveReceipt, useBillingSettings, useCanVerifyPayments, useReceipts, useRejectReceipt, useSaveBillingSettings } from './hooks'
+import { useApproveReceipt, useBillingSettings, useReceipts, useRejectReceipt, useSaveBillingSettings } from './hooks'
 import { Field, Footer, ReasonDialog, ReceiptFile, ReceiptStatusBadge, ServerError } from './PaymentParts'
 import './payments.css'
 
@@ -26,10 +26,10 @@ const DECIDED_LABEL: Record<'approved' | 'rejected', Pair> = {
 
 /**
  * PD-27: the Payments area. Receipts -- the bank transfers parents reported,
- * waiting for a verifier -- and Settings: the bank account parents pay into,
+ * waiting for a payment recorder -- and Settings: the bank account parents pay into,
  * the invoice issuer, which reminders fire, and whether Stripe is configured.
- * Approve / Reject appear only when GET /instalments/access says
- * `canVerifyPayments`; Settings are editable only when the server says
+ * Approve / Reject appear only when GET /payment-receipts says `canDecide`
+ * (the payment recorders); Settings are editable only when the server says
  * `canEdit`. The server decides each request again.
  */
 export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
@@ -69,7 +69,7 @@ function ReceiptsTab() {
   const { locale } = useI18n()
   const [status, setStatus] = useState<ReceiptStatus>('pending')
   const list = useReceipts(status)
-  const canVerify = useCanVerifyPayments()
+  const canDecide = list.data?.canDecide === true
   const [deciding, setDeciding] = useState<{ kind: 'approve' | 'reject'; receipt: Receipt } | null>(null)
   const counts = list.data?.counts
 
@@ -81,7 +81,7 @@ function ReceiptsTab() {
         onChange={setStatus}
         options={STATUSES.map((s) => ({ value: s, label: tx(FILTER_LABEL[s]), count: counts?.[s] }))}
       />
-      {!canVerify && <p className="field__hint">{tx(PAY.verifyOnly)}</p>}
+      {list.data && !canDecide && <p className="field__hint">{tx(PAY.decideOnly)}</p>}
       {list.error ? (
         <EmptyState icon="alert" title={describeError(list.error, locale)} />
       ) : (
@@ -94,8 +94,8 @@ function ReceiptsTab() {
                 <ReceiptRow
                   key={r.id}
                   receipt={r}
-                  onApprove={canVerify && r.status === 'pending' ? () => setDeciding({ kind: 'approve', receipt: r }) : undefined}
-                  onReject={canVerify && r.status === 'pending' ? () => setDeciding({ kind: 'reject', receipt: r }) : undefined}
+                  onApprove={canDecide && r.status === 'pending' ? () => setDeciding({ kind: 'approve', receipt: r }) : undefined}
+                  onReject={canDecide && r.status === 'pending' ? () => setDeciding({ kind: 'reject', receipt: r }) : undefined}
                 />
               ))}
             </ul>

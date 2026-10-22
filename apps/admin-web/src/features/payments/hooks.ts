@@ -1,19 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { instalmentKeys } from '@/features/instalments/api'
-import { useInstalmentAccess } from '@/features/instalments/hooks'
 import { profileKeys } from '@/features/profiles/api'
 import { paymentKeys, paymentsApi, type BillingSettingsUpdate, type NewTrialRequest, type ReceiptStatus } from './api'
-
-/**
- * Whether this viewer verifies payments (approves receipts): GET
- * /instalments/access's `canVerifyPayments`. Asked by everyone who opens the
- * Payments area, the super admin included -- a UX answer, the server decides
- * each approval again.
- */
-export function useCanVerifyPayments(): boolean {
-  const access = useInstalmentAccess(true)
-  return access.data?.canVerifyPayments === true
-}
 
 /** Re-read every few minutes: each receipt's file link is signed and short-lived. */
 export function useReceipts(status: ReceiptStatus) {
