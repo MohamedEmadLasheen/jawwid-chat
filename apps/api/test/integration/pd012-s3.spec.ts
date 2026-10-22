@@ -135,7 +135,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   // Money rows are never deleted (chat.guard_family_instalment); a test starts from none.
-  await g.prisma.$executeRawUnsafe(`truncate chat.family_instalment`);
+  await g.prisma.$executeRawUnsafe(`truncate chat.payment_refund, chat.invoice, chat.payment_receipt, chat.payment, chat.payment_checkout, chat.payment_request, chat.family_instalment`);
   await g.prisma.$executeRaw`delete from chat.family_billing_supervision where organization_id = ${orgId}::uuid`;
 });
 

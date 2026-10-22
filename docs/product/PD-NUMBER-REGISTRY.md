@@ -35,7 +35,8 @@ claimed. The decision text itself still lives in
 | PD-24 | Change a family's supervisor without losing anything | `claude/supervisor-transfer` | built, verifying |
 | PD-25 | Parent self-recovery (reset code, forgot email) | `claude/parent-account-recovery-6cd585` | in progress |
 | PD-26 | The Teacher Supervision page (leaves, absences, lateness, grants, complaints) | `claude/admin-teacher-management-41f08a` | built — renumbered from "PD-24" |
-| PD-27 | next free number | — | — |
+| PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | built, verifying |
+| PD-28 | next free number | — | — |
 
 ## Migration slots (open branches)
 
@@ -46,5 +47,6 @@ claimed. The decision text itself still lives in
 | `20261022150000` | PD-26 — `chat_pd026_teacher_supervision` (rename from `pd024`) |
 | `20261022160000` | PD-25 — `chat_pd025_parent_self_recovery` |
 | `20261022163000` | PD-22 amendment — `chat_pd022_clock_shift_warning` |
+| `20261022170000` | PD-27 — `chat_pd027_payments` |
 
-The next free slot is `20261022170000`.
+The next free slot is `20261022180000`.

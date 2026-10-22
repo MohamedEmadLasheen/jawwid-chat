@@ -15,7 +15,7 @@ family owes on a schedule. PD-27 adds how money arrives and what the parent gets
 | Payment | `chat.payment` | Money that arrived: card (Stripe), bank transfer, cash, or the PD-17 `invoice` method. Append-only; a mistake is voided with a reason. |
 | Refund | `chat.payment_refund` | Money given back on a payment. From Stripe (webhook) or recorded by staff. |
 | Invoice | `chat.invoice` | One per payment, numbered `JW-<year>-<000001>` per organization, frozen at issue (a snapshot), downloadable as a PDF. |
-| Bank-transfer receipt | `chat.payment_receipt` | Proof a parent uploaded. Pending until a verifier approves (creates the payment) or rejects (with a reason). |
+| Bank-transfer receipt | `chat.payment_receipt` | Proof a parent uploaded. Pending until a payment recorder approves (creates the payment) or rejects (with a reason). |
 | Checkout | `chat.payment_checkout` | Each Stripe Checkout Session we opened for a request. The webhook is matched against it. |
 | Stripe event | `chat.stripe_event` | Every verified Stripe event id, once. A redelivery is a no-op. |
 
@@ -46,10 +46,10 @@ family owes on a schedule. PD-27 adds how money arrives and what the parent gets
 
 **Bank transfer.** The parent (in the app) picks an amount due, sees the academy's bank
 details (`billing.bank_account`) and the amount, transfers, and uploads a screenshot or PDF
-(JPEG/PNG/WebP/PDF, ≤ 10 MB). The receipt is **pending verification**. A verifier sees it in
+(JPEG/PNG/WebP/PDF, ≤ 10 MB). The receipt is **pending verification**. A payment recorder sees it in
 **Payments > Receipts**, opens the file (a signed, per-viewer link), and approves (optionally
 correcting the amount and date) or rejects with a reason the parent sees. Approval creates
-the payment and its invoice exactly like a card payment. A verifier can also record a bank
+the payment and its invoice exactly like a card payment. A recorder can also record a bank
 transfer directly (a parent who sent the receipt to their supervisor).
 
 **Cash.** Operations or Sales records `{method: cash, amountMinor, paidOn, requestId? |
@@ -71,15 +71,18 @@ be switched on or off in **Payments > Settings**.
 
 ## Who may do what
 
-`billingAccessOf` (PD-17) gains `canVerify`.
+`billingAccessOf` (PD-17) gains `canVerify`. PD-17 / PD-20 already let the payment
+recorders (Operations in reach, Sales, the Operations Manager, the super admin)
+record payments of every method and void them; PD-27 keeps that, and adds
+`canVerify` only for money going back out and for where parents send money.
 
 | | Super admin | Operations Manager | Ops supervisor / coverage | Sales department | Parents of the family | Anyone else |
 |---|---|---|---|---|---|---|
 | Read requests, payments, invoices, receipts | every family | every family | families they reach | every family | own family (no voided rows, no staff names) | never |
 | Create / cancel a payment request | ✓ | ✓ | families they reach | every family (and trials) | — | — |
-| Record cash | ✓ | ✓ | families they reach | every family | — | — |
-| **Approve / reject a receipt, record a bank transfer, void a payment, refund** (`canVerify`) | ✓ | ✓ | **no** | **no** | — | — |
-| Bank details, invoice issuer, reminder policy (`/billing/settings` write) | ✓ | ✓ | no | no | — | — |
+| Record cash or a bank transfer, approve / reject a receipt, void a payment (`canRecord`) | ✓ | ✓ | families they reach | every family | — | — |
+| **Refund** (`canVerify`) | ✓ | ✓ | **no** | **no** | — | — |
+| **Bank details, invoice issuer, reminder policy** (`/billing/settings` write, `canVerify`) | ✓ | ✓ | no | no | — | — |
 | Pay (card), upload a receipt | — | — | — | — | every active parent | the link holder may pay by card only |
 
 Refusals: `COMM.BILLING_DENIED` (403), `COMM.BILLING_NOT_FOUND` (404: unknown or out of reach),
@@ -194,23 +197,23 @@ interface BankAccount {      // every field optional except accountName
 
 | Route | Body / query | Answer |
 |---|---|---|
-| `GET /instalments/access` | | PD-17 fields **+ `canVerifyPayments`** |
+| `GET /instalments/access` | | PD-17 fields **+ `canVerifyPayments`** (refunds, settings). Receipts are decided by whoever has `canRecordPayments`. |
 | `GET /families/:id/billing` | | PD-17 shape **+** `requests: PaymentRequest[]`, `payments: Payment[]`, `invoices: Invoice[]`, `receipts: Receipt[]`, `canVerify`, `cardAvailable`. Each `instalments[]` row gains `paidMinor`, `remainingMinor`, `partial`, `requestId` (its open request, if any). Every POST below that names a family answers this shape. |
 | `POST /families/:id/instalments` | PD-17 body, **or** `{label, currency?, learnerId?, items: [{amountMinor, dueDate}] (1–24)}` | family billing |
 | `POST /families/:id/payment-requests` | `{purpose, label, amountMinor?, currency?, learnerId?, instalmentId?, planMonths?, periodStart?, periodEnd?, expiresInDays? (1–90, default 14)}` — with `instalmentId`, amount defaults to what it still owes and purpose to `instalment` | `{ request: PaymentRequest, billing }` |
 | `POST /payment-requests/:id/cancel` | `{reason}` | family billing (or `{request}` for a trial's) |
-| `POST /families/:id/payments` | `{method: 'cash' \| 'bank_transfer', amountMinor, paidOn (≤ today), requestId? \| instalmentId?, learnerId?, reference?}` — `bank_transfer` needs `canVerify` | family billing |
+| `POST /families/:id/payments` | `{method: 'cash' \| 'bank_transfer', amountMinor, paidOn (≤ today), requestId? \| instalmentId?, learnerId?, reference?}` — `canRecord`; at most what is still owed | family billing |
 | `POST /instalments/:id/payment` | PD-17 `{paidOn, method?, reference?}` — now records a payment for the whole remaining amount (method `invoice` \| `bank_transfer` \| `cash`) | family billing |
-| `POST /payments/:id/void` | `{reason}` — `canVerify`; card payments are refunded, never voided; a payment whose instalment is already fully paid is corrected by voiding the instalment | family billing |
+| `POST /payments/:id/void` | `{reason}` — `canRecord`; card payments are refunded, never voided; a payment whose instalment is already fully paid is corrected by voiding the instalment | family billing |
 | `POST /payments/:id/refunds` | `{amountMinor, reason}` — `canVerify`; a card payment is refunded through Stripe | family billing |
 | `POST /instalments/:id/void` | PD-17 `{reason}` — also voids its non-card payments and their invoices; refused (409) while it has a card payment | family billing |
-| `GET /payment-receipts` | `?status=pending\|approved\|rejected` (default pending) | `{ items: Receipt[], counts: {pending, approved, rejected} }` in scope |
-| `POST /payment-receipts/:id/approve` | `{amountMinor?, paidOn?}` — `canVerify` | `{ receipt: Receipt }` |
-| `POST /payment-receipts/:id/reject` | `{reason}` — `canVerify` | `{ receipt: Receipt }` |
+| `GET /payment-receipts` | `?status=pending\|approved\|rejected` (default pending) | `{ items: Receipt[], counts: {pending, approved, rejected}, canDecide }` in scope |
+| `POST /payment-receipts/:id/approve` | `{amountMinor?, paidOn?}` — `canRecord` | `{ receipt: Receipt }` |
+| `POST /payment-receipts/:id/reject` | `{reason}` — `canRecord` | `{ receipt: Receipt }` |
 | `GET /invoices/:id/link` | | `{ url }` — a signed PDF link for this viewer (5 minutes) |
-| `GET /billing/settings` | | `{ bankAccount: BankAccount \| null, issuer: {name, address \| null, taxId \| null} \| null, cardAvailable, reminders: [{key, offsetDays, enabled}], canEdit }` |
+| `GET /billing/settings` | | `{ bankAccount: BankAccount \| null, issuer: {name, address \| null, taxId \| null} \| null, cardAvailable, webhookConfigured, reminders: [{key, offsetDays, enabled}], canEdit }` |
 | `POST /billing/settings` | `{ bankAccount?: BankAccount \| null, issuer?: {...} \| null, reminders?: [{key, enabled}] }` — super admin / Operations Manager | the same |
-| `GET /trials/new-students/:trialId/payment-requests` | | `{ items: PaymentRequest[], payments: Payment[], suggestedAmountMinor: number \| null, currency }` — before Assign (suggested = the form's package prices) |
+| `GET /trials/new-students/:trialId/payment-requests` | | `{ items: PaymentRequest[], payments: Payment[], suggestedAmountMinor: number \| null, currency, enrolledFamilyId: string \| null }` — before Assign (suggested = the form's package prices; once assigned, `enrolledFamilyId` names the family to use instead) |
 | `POST /trials/new-students/:trialId/payment-requests` | `{purpose?: 'subscription', label, amountMinor, currency?, planMonths?, periodStart?, periodEnd?, expiresInDays?}` | `{ request: PaymentRequest }` |
 
 ### Parent (bearer token, an active contact of the family)
@@ -247,7 +250,7 @@ events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`
 ## Security and reliability
 
 * **Server-side confirmation only.** A payment exists only after a verified webhook (or a
-  verifier's approval, or staff recording cash). The Checkout success page just shows "we
+  recorder's approval of a receipt, or staff recording cash or a transfer). The Checkout success page just shows "we
   are confirming your payment" and re-reads.
 * **Exactly once.** `chat.stripe_event.id` is the primary key (a redelivered event is
   skipped), and `chat.payment.stripe_checkout_session_id` / `stripe_payment_intent_id` are

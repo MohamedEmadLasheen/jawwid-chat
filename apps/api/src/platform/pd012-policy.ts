@@ -100,10 +100,10 @@ export interface BillingAccess {
   /** Edit the Parent Profile's contact record: name, phone, e-mail, region, note, photo (inside `scope`). */
   canEditParent: boolean;
   /**
-   * PD-27: confirm money nobody else can see arrive -- approve or reject a
-   * bank-transfer receipt, record a bank transfer, void a payment, refund. The
-   * super admin and the Operations Manager only: the person who asks for money
-   * (Sales, a supervisor) is not the one who says it reached the account.
+   * PD-27: money going back out and where money goes -- refunds, and the
+   * payment settings (the bank account parents pay into, the invoice issuer,
+   * the reminder policy). The super admin and the Operations Manager only.
+   * Recording, voiding and deciding receipts stay with canRecord (PD-17 / PD-20).
    */
   canVerify: boolean;
 }

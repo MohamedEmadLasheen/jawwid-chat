@@ -51,9 +51,11 @@ export interface TrialPayer {
 /**
  * PD-27, the staff side: payment requests (links), cash and bank transfers
  * recorded by hand, voids and refunds, the receipts queue, the settings, and
- * the signed invoice link. Who may do what is billingAccessOf (PD-17) plus
- * `canVerify` -- the super admin and the Operations Manager confirm money that
- * only the bank statement shows (a transfer, a receipt), void and refund.
+ * the signed invoice link. Who may do what is billingAccessOf: PD-17 / PD-20's
+ * recorders (Operations in reach, Sales, the Operations Manager, the super
+ * admin) record, void and decide receipts, as they already recorded payments;
+ * `canVerify` -- the super admin and the Operations Manager -- refunds and sets
+ * the bank account the parents pay into.
  */
 @Injectable()
 export class PaymentsService {
@@ -252,9 +254,6 @@ export class PaymentsService {
     const family = await this.billing.requireFamily(actor, access, familyId);
     const method = body.method;
     if (method !== 'cash' && method !== 'bank_transfer') throw invalid('method: cash | bank_transfer');
-    if (method === 'bank_transfer' && !access.canVerify) {
-      throw new CommError(CommErrorCode.BILLING_DENIED, 'a bank transfer is confirmed by the super admin or the Operations Manager');
-    }
     const amountMinor = requireAmount('amountMinor', body.amountMinor);
     const paidOn = requireDate('paidOn', body.paidOn);
     if (paidOn > todayIn(await this.billing.timeZone())) throw invalid('paidOn: a payment is recorded once it arrived, not ahead of time');
@@ -323,7 +322,7 @@ export class PaymentsService {
 
   /** { reason } -- a payment recorded by mistake. Never a card payment. */
   async voidPayment(actorId: string, paymentId: string, body: Record<string, unknown>) {
-    const { actor, access } = await this.requireVerifier(actorId);
+    const { actor, access } = await this.billing.requireRecorder(actorId);
     const payment = await this.requirePayment(actor, access, paymentId);
     const reason = requireText('reason', body.reason, 500);
     if (payment.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this payment is already voided', 409);
@@ -417,12 +416,13 @@ export class PaymentsService {
     ]);
     const counts = { pending: 0, approved: 0, rejected: 0 };
     for (const g of grouped) counts[g.status as keyof typeof counts] = g._count._all;
-    return { items: await this.reads.presentReceipts(rows, actor.actorId), counts, canVerify: access.canVerify };
+    // PD-17 / PD-20: whoever records the family's payments decides its receipts.
+    return { items: await this.reads.presentReceipts(rows, actor.actorId), counts, canDecide: access.canRecord };
   }
 
   /** { amountMinor?, paidOn? } -- the verifier saw the money arrive. */
   async approveReceipt(actorId: string, receiptId: string, body: Record<string, unknown>) {
-    const { actor, access } = await this.requireVerifier(actorId);
+    const { actor, access } = await this.billing.requireRecorder(actorId);
     const receipt = await this.requireReceipt(actor, access, receiptId);
     if (receipt.status !== 'pending') throw new CommError(CommErrorCode.BILLING_STATE, 'this receipt is already decided', 409);
     const amountMinor = body.amountMinor === undefined || body.amountMinor === null ? Number(receipt.amountMinor) : requireAmount('amountMinor', body.amountMinor);
@@ -476,7 +476,7 @@ export class PaymentsService {
 
   /** { reason } -- shown to the parent. */
   async rejectReceipt(actorId: string, receiptId: string, body: Record<string, unknown>) {
-    const { actor, access } = await this.requireVerifier(actorId);
+    const { actor, access } = await this.billing.requireRecorder(actorId);
     const receipt = await this.requireReceipt(actor, access, receiptId);
     const reason = requireText('reason', body.reason, 500);
     if (receipt.status !== 'pending') throw new CommError(CommErrorCode.BILLING_STATE, 'this receipt is already decided', 409);
@@ -655,10 +655,11 @@ export class PaymentsService {
     };
   }
 
+  /** PD-27: money going back out (a refund) is the super admin's or the Operations Manager's. */
   private async requireVerifier(actorId: string): Promise<{ actor: Actor; access: BillingAccess }> {
     const { actor, access } = await this.billing.requireReader(actorId);
     if (!access.canVerify) {
-      throw new CommError(CommErrorCode.BILLING_DENIED, 'confirming, voiding and refunding money is the super admin\'s or the Operations Manager\'s');
+      throw new CommError(CommErrorCode.BILLING_DENIED, 'refunds are made by the super admin or the Operations Manager');
     }
     return { actor, access };
   }

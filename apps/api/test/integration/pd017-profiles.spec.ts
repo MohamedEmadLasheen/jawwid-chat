@@ -127,7 +127,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await g.prisma.$executeRawUnsafe(`truncate chat.family_instalment, chat.family_billing, chat.parent_file`);
+  await g.prisma.$executeRawUnsafe(`truncate chat.payment_refund, chat.invoice, chat.payment_receipt, chat.payment, chat.payment_checkout, chat.payment_request, chat.family_instalment, chat.family_billing, chat.parent_file`);
 });
 
 describe('1. who opens a Parent Profile', () => {

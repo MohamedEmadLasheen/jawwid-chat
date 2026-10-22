@@ -8,7 +8,8 @@
  *  - an invoice is issued and the parent downloads it as a PDF; nobody else can;
  *  - partial instalment payments (cash + card), bank-transfer receipts
  *    (approve / reject), voids, refunds, settings, reminders;
- *  - who may do what (canRecord vs canVerify, teachers never).
+ *  - who may do what (recorders record, void and decide receipts; refunds and
+ *    settings are canVerify's; teachers never).
  *
  * Synthetic people only (G-20).
  */
@@ -284,7 +285,7 @@ describe('PD-27 over HTTP', () => {
       label: 'x', items: [{ amountMinor: 1, dueDate: '2026-12-01' }, { amountMinor: 1, dueDate: '2026-11-01' }],
     })).code).toBe(CommErrorCode.VALIDATION);
 
-    // A supervisor records cash -- but cannot confirm a bank transfer.
+    // A supervisor records cash (PD-17 / PD-20: Operations records payments in reach).
     const cash = await http(supervisor.subject, 'POST', `/families/${f.id}/payments`, {
       method: 'cash', amountMinor: 40000, paidOn: today(), instalmentId: first.id, reference: 'Receipt book 12',
     });
@@ -292,9 +293,6 @@ describe('PD-27 over HTTP', () => {
     const partial = cash.json.instalments.find((i: any) => i.id === first.id);
     expect(partial).toMatchObject({ status: expect.any(String), paidMinor: 40000, remainingMinor: 60000, partial: true });
     expect(cash.json.payments[0]).toMatchObject({ method: 'cash', amountMinor: 40000, recordedBy: { id: supervisor.id } });
-    expect((await http(supervisor.subject, 'POST', `/families/${f.id}/payments`, {
-      method: 'bank_transfer', amountMinor: 1000, paidOn: today(), instalmentId: first.id,
-    })).code).toBe(CommErrorCode.BILLING_DENIED);
     expect((await http(supervisor.subject, 'POST', `/families/${f.id}/payments`, {
       method: 'cash', amountMinor: 60001, paidOn: today(), instalmentId: first.id,
     })).code).toBe(CommErrorCode.VALIDATION);
@@ -362,14 +360,13 @@ describe('PD-27 over HTTP', () => {
     const other = familyOf(5).f;
     expect((await fetch(receipt.fileUrl.replace(/^.*\/api\/v1/, base).replace(/a=[^&]+/, `a=${other.parent.id}`))).status).toBe(403);
 
-    // The queue: Sales sees it but cannot confirm money; the Operations Manager can.
+    // The queue: the payment recorders decide receipts (PD-17 / PD-20) -- here Sales.
     const queue = await http(m.salesManager.subject, 'GET', '/payment-receipts');
     expect(queue.json.items.find((r: any) => r.id === receipt.id)).toMatchObject({ family: { id: f.id }, uploadedBy: { id: f.parent.id } });
-    expect(queue.json.canVerify).toBe(false);
-    expect((await http(m.salesManager.subject, 'POST', `/payment-receipts/${receipt.id}/approve`, {})).code).toBe(CommErrorCode.BILLING_DENIED);
-    const approved = await http(m.operationsManager.subject, 'POST', `/payment-receipts/${receipt.id}/approve`, {});
+    expect(queue.json.canDecide).toBe(true);
+    const approved = await http(m.salesManager.subject, 'POST', `/payment-receipts/${receipt.id}/approve`, {});
     expect(approved.status).toBe(201);
-    expect(approved.json.receipt).toMatchObject({ status: 'approved', reviewedBy: { id: m.operationsManager.id } });
+    expect(approved.json.receipt).toMatchObject({ status: 'approved', reviewedBy: { id: m.salesManager.id } });
     expect((await http(m.operationsManager.subject, 'POST', `/payment-receipts/${receipt.id}/approve`, {})).code).toBe(CommErrorCode.BILLING_STATE);
 
     const billing = await http(m.superAdmin.subject, 'GET', `/families/${f.id}/billing`);
@@ -414,8 +411,9 @@ describe('PD-27 over HTTP', () => {
     });
     expect(cash.json.requests.find((r: any) => r.id === req.id).status).toBe('paid');
     const payment = cash.json.payments.find((p: any) => p.requestId === req.id);
-    expect((await http(m.salesManager.subject, 'POST', `/payments/${payment.id}/void`, { reason: 'wrong family' })).code).toBe(CommErrorCode.BILLING_DENIED);
-    const voided = await http(m.operationsManager.subject, 'POST', `/payments/${payment.id}/void`, { reason: 'wrong family' });
+    // A teacher never; the recorder who made the mistake voids it (PD-17's rule).
+    expect((await http(familyOf(6).teacher.subject, 'POST', `/payments/${payment.id}/void`, { reason: 'x' })).code).toBe(CommErrorCode.BILLING_DENIED);
+    const voided = await http(m.salesManager.subject, 'POST', `/payments/${payment.id}/void`, { reason: 'wrong family' });
     expect(voided.status).toBe(201);
     expect(voided.json.payments.find((p: any) => p.id === payment.id).voided).toMatchObject({ reason: 'wrong family' });
     expect(voided.json.invoices.find((i: any) => i.id === payment.invoice.id).status).toBe('void');
@@ -429,6 +427,8 @@ describe('PD-27 over HTTP', () => {
     await webhook(stripe.completedEvent(stripe.complete(sessionId)));
     const card = (await http(m.superAdmin.subject, 'GET', `/families/${f.id}/billing`)).json.payments.find((p: any) => p.method === 'card');
     expect((await http(m.superAdmin.subject, 'POST', `/payments/${card.id}/void`, { reason: 'x' })).code).toBe(CommErrorCode.BILLING_STATE);
+    // Money going back out is the super admin's or the Operations Manager's.
+    expect((await http(m.salesManager.subject, 'POST', `/payments/${card.id}/refunds`, { amountMinor: 1, reason: 'x' })).code).toBe(CommErrorCode.BILLING_DENIED);
     const refunded = await http(m.superAdmin.subject, 'POST', `/payments/${card.id}/refunds`, { amountMinor: 10000, reason: 'one lesson cancelled' });
     expect(refunded.status).toBe(201);
     expect(stripe.refunds).toHaveLength(1);

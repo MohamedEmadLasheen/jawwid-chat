@@ -409,9 +409,6 @@ export class BillingService {
     if (!method || !(INSTALMENT_PAYMENT_METHODS as readonly string[]).includes(method)) {
       throw invalid('method: invoice | bank_transfer | cash');
     }
-    if (method === 'bank_transfer' && !access.canVerify) {
-      throw new CommError(CommErrorCode.BILLING_DENIED, 'a bank transfer is confirmed by the super admin or the Operations Manager');
-    }
     const reference = body.reference === undefined || body.reference === null || body.reference === ''
       ? null
       : requireText('reference', body.reference, 120);
@@ -459,9 +456,6 @@ export class BillingService {
     const payments = await this.prisma.payment.findMany({ where: { instalmentId: inv.id, voidedAt: null } });
     if (payments.some((p) => p.method === 'card')) {
       throw new CommError(CommErrorCode.BILLING_STATE, 'a card paid towards this instalment; refund the card payment instead of voiding it', 409);
-    }
-    if (payments.length > 0 && !access.canVerify) {
-      throw new CommError(CommErrorCode.BILLING_DENIED, 'an instalment with payments is voided by the super admin or the Operations Manager');
     }
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
