@@ -10,7 +10,6 @@ import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/messages/presentation/teacher_away_banner.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/conversation.dart';
-import 'package:jawwid_chat/shared/models/user_role.dart';
 
 /// PD-24: a teacher on leave is SHOWN as such in the chat; messaging is not blocked.
 /// The server marks the member (`away: { kind, until }`); the client only words it,
