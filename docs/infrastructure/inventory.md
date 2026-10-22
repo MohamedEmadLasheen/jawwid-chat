@@ -24,7 +24,7 @@ has been designed.
 | Sentry | staging, prod | error tracking | AI #7 | external SaaS | — | — | — | n/a | ✗ |
 | OTLP / Grafana | staging, prod | metrics, traces, dashboards | AI #7 | external | — | — | — | n/a | ✗ |
 | CI | — | build, test, gates | AI #5 (gates), AI #7 (pipeline) | GitHub Actions | — | — | — | n/a | file ✓, **never executed** |
-| CD | staging, prod | deployment | AI #7 | GitHub Actions | registry, secret store | — | — | n/a | file ✓, release step **not implemented** |
+| CD | staging, prod | deployment | AI #7 | GitHub Actions → DigitalOcean App Platform (ADR-010) | registry, secret store | — | — | n/a | file ✓, release step implemented (`doctl`), **never executed**: no DO account yet |
 
 ## Repository artifacts
 
@@ -48,7 +48,11 @@ has been designed.
 | `scripts/infra/smoke.sh` | Post-deploy verification |
 | `scripts/infra/backup-db.sh` / `restore-db.sh` | Backup, checksum, guarded restore |
 | `.github/workflows/ci.yml` | QA gates (AI #5) + infrastructure jobs (AI #7) |
-| `.github/workflows/deploy-{staging,production}.yml` | Deployment, release step unimplemented |
+| `.github/workflows/deploy-{staging,production}.yml` | Deployment; the Release step deploys `.do/app.<env>.yaml` with `doctl` |
+| `.do/app.{staging,production}.yaml` | App Platform app specs (the IaC, ADR-009), generated from the manifest |
+| `scripts/infra/app-spec.py` | Renders, resolves and checks the app specs (guard `app-spec`) |
+| `scripts/infra/do-release.sh` | Deploys a resolved spec, then verifies the active deployment's tags |
+| `scripts/infra/install-doctl.sh` | Pinned, checksum-verified doctl for CI and the deploy jobs |
 
 ## Ports (local)
 

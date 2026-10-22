@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates backup-client backup-encryption ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption ci-wiring"
 
 title() {
   case "$1" in
@@ -196,6 +196,7 @@ title() {
     web-env)       echo "Server secrets must not be reachable from a client bundle" ;;
     env-example)   echo "The local environment example is valid" ;;
     env-templates) echo "Environment templates match the manifest" ;;
+    app-spec)      echo "App Platform specs match the manifest and DigitalOcean's schema" ;;
     backup-client) echo "The backup drill runs the pg_dump it is given" ;;
     backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
@@ -287,6 +288,23 @@ gate_env_templates() {
   done
   rm -rf "$tmp"
   return "$rc"
+}
+
+gate_app_spec() {
+  # The DigitalOcean App Platform specs (.do/app.<env>.yaml, ADR-009/ADR-010)
+  # are rendered from infra/env/manifest.tsv. The check fails when a committed
+  # spec is stale, loses an ADR invariant (one image two commands, the
+  # liveness/readiness split, Admin Web as a container), carries a literal
+  # value, names a variable its deploy workflow never supplies, or fails
+  # `doctl apps spec validate --schema-only` (offline, no credentials). doctl
+  # is REQUIRED: without it the gate fails rather than skipping the schema.
+  # The selftest runs first and proves each of those drifts is caught.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the app-spec gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/infra/app-spec.py selftest || return 1
+  "$PYTHON" -I scripts/infra/app-spec.py check
 }
 
 gate_backup_client() {
