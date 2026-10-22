@@ -96,14 +96,14 @@ afterEach(() => {
 })
 
 describe('the Teachers area has three pages', () => {
-  it('links Statistics, Teacher files, Certificates and Leave requests (one registry, PD-11 T5)', async () => {
+  it('links Statistics, Teacher files, Certificates and Supervision (one registry, PD-11 T5; PD-26)', async () => {
     on('GET', /\/learner-certificates\?state=requested$/, () => json({ certificates: [] }))
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/certificates' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
     expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('href', '/teachers')
     expect(within(tabs).getByRole('link', { name: 'Teacher files' })).toHaveAttribute('href', '/teachers/files')
     expect(within(tabs).getByRole('link', { name: 'Certificates' })).toHaveAttribute('aria-current', 'page')
-    expect(within(tabs).getByRole('link', { name: 'Leave requests' })).toHaveAttribute('href', '/teachers/leave')
+    expect(within(tabs).getByRole('link', { name: 'Supervision' })).toHaveAttribute('href', '/teachers/supervision')
   })
 
   it('the super admin has the same pages under Admin > Teachers, without Statistics (that is Admin > Reports)', async () => {
@@ -111,7 +111,7 @@ describe('the Teachers area has three pages', () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/certificates' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers department' })
     expect(within(tabs).getByRole('link', { name: 'Teachers' })).toHaveAttribute('href', '/admin/teachers')
-    expect(within(tabs).getByRole('link', { name: 'Leave requests' })).toHaveAttribute('href', '/admin/teachers/leave')
+    expect(within(tabs).getByRole('link', { name: 'Supervision' })).toHaveAttribute('href', '/admin/teachers/supervision')
     expect(within(tabs).queryByRole('link', { name: 'Statistics' })).not.toBeInTheDocument()
   })
 })

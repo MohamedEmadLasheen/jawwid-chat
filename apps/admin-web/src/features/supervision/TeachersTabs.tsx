@@ -18,8 +18,7 @@ export function TeachersTabs({ basePath }: { basePath: string }) {
   const tabs = [
     { to: basePath, label: tx(S.tabTeachers), end: true },
     { to: `${basePath}/certificates`, label: tx(S.tabCertificates), end: false },
-    { to: `${basePath}/leave`, label: tx(S.tabLeave), end: false },
-    { to: `${basePath}/discipline`, label: tx(S.tabDiscipline), end: false },
+    { to: `${basePath}/supervision`, label: tx(S.tabSupervision), end: false },
   ]
   return (
     <nav className="sv-tabs" aria-label={tx(S.sections)}>

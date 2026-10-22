@@ -46,6 +46,7 @@ import 'message_actions.dart';
 import 'message_bubble.dart';
 import 'message_composer.dart';
 import 'pinned_banner.dart';
+import 'teacher_away_banner.dart';
 
 /// One conversation.
 ///
@@ -1044,6 +1045,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               tone: JawwidBannerTone.warning,
             ),
           ?widget.banner,
+          TeacherAwayBanner(conversationId: widget.conversationId),
           PinnedBanner(
             conversationId: widget.conversationId,
             onJump: (messageId) => _jumpToMessage(messageId, state),

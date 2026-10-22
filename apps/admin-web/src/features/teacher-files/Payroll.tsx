@@ -69,7 +69,7 @@ function Section({ id, title, hint, action, children }: { id: string; title: str
 }
 
 /** "1,500.00 EGP" in the reader's language; an unknown currency code still shows the amount. */
-function useMoney() {
+export function useMoney() {
   const { locale } = useI18n()
   return (amount: string | null, currency: string | null) => {
     if (amount === null || currency === null) return locale === 'ar' ? P.none.ar : P.none.en
