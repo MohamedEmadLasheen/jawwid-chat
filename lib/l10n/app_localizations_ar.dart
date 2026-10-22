@@ -1408,6 +1408,22 @@ class L10nAr extends L10n {
   String get cardViolationApology => 'اعتذار عن الحصة';
 
   @override
+  String get cardViolationAbsence => 'غياب';
+
+  @override
+  String get cardViolationComplaint => 'شكوى ثبتت';
+
+  @override
+  String chatTeacherOnLeave(String name, String date) {
+    return '$name في إجازة حتى $date. تظل الرسائل تصله.';
+  }
+
+  @override
+  String chatTeacherAway(String name, String date) {
+    return '$name غير متاح حتى $date. تظل الرسائل تصله.';
+  }
+
+  @override
   String cardViolationStep(String step) {
     return 'المخالفة رقم $step هذا الشهر';
   }

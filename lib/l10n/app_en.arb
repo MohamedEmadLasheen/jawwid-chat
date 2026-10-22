@@ -841,6 +841,30 @@
   },
   "cardViolationNoShow": "Absent from the lesson",
   "cardViolationApology": "Apologised for the lesson",
+  "cardViolationAbsence": "Absent",
+  "cardViolationComplaint": "A complaint was upheld",
+  "chatTeacherOnLeave": "{name} is on leave until {date}. Messages still reach them.",
+  "@chatTeacherOnLeave": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "chatTeacherAway": "{name} is away until {date}. Messages still reach them.",
+  "@chatTeacherAway": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "cardViolationStep": "Violation {step} this month",
   "@cardViolationStep": {
     "placeholders": {

@@ -25,7 +25,7 @@ const SRC = join(__dirname, '..', '..', '..', 'src');
 const OWNER = 'teacher-file/';
 
 /** The table names and the Prisma accessors / fields that reach them. Case-sensitive on purpose. */
-const NAMES = /\bteacher_file\b|\bteacherFile\b|\badminOnlyPhone\b|\bTeacherFile\b(?!Module|Controller|Service|Access|EntryKind)|\bteacher_pay(?:_terms|out_account|_adjustment)\b|\bteacherPay(?:Terms|outAccount|Adjustment)\b|\bTeacherPay(?:Terms|outAccount|Adjustment)\b|\bdetailsSealed\b|\bdetails_sealed\b|\bTEACHER_PAYOUT_KEYS\b/;
+const NAMES = /\bteacher_file\b|\bteacherFile\b|\badminOnlyPhone\b|\bTeacherFile\b(?!Module|Controller|Service|Access|EntryKind)|\bteacher_pay(?:_terms|out_account|_adjustment|_default)\b|\bteacherPay(?:Terms|outAccount|Adjustment|Default)\b|\bTeacherPay(?:Terms|outAccount|Adjustment|Default)\b|\bdetailsSealed\b|\bdetails_sealed\b|\bTEACHER_PAYOUT_KEYS\b/;
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -61,6 +61,7 @@ describe('the Teacher File is read only by src/teacher-file (PD-10, G-07)', () =
       'return { phone: file.adminOnlyPhone };',
       'await this.prisma.teacherPayoutAccount.findUnique({ where: { teacherId } });',
       'select amount from chat.teacher_pay_adjustment',
+      'await this.prisma.teacherPayDefault.findMany();',
       'const raw = process.env.TEACHER_PAYOUT_KEYS;',
       'return row.detailsSealed;',
     ];

@@ -174,7 +174,11 @@ export class ConversationController {
     const child = children.get(conversation.id) as { id: string; avatarObjectKey: string | null } | undefined;
     const labels =
       actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, [conversation.id]) : null;
-    return toConversationDto(conversation, members, {
+    const away = await this.conversations.teachersAway(
+      members.filter((m) => m.actorKind === 'teacher' && m.actorId !== actor.actorId).map((m) => m.actorId),
+      actor.kind === 'staff',
+    );
+    return toConversationDto(conversation, members.map((m) => (away.has(m.actorId) ? { ...m, away: away.get(m.actorId) } : m)), {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: false, // PD-14
       viewerModerates: this.authz.moderatableAuthorKinds(actor, await this.conversations.staffAccess(actor, conversation)),

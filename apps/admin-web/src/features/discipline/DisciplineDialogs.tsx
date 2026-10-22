@@ -4,10 +4,11 @@ import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { opsApi } from '@/features/teachers/opsApi'
+import { trialsApi } from '@/features/trials/api'
 import { useRoster } from '@/features/teachers/opsHooks'
 import { LADDER, type Decision, type Violation } from './api'
 import { D, DECISION_LABEL, describeError, useCopy } from './copy'
-import { useDecide, useRecordLateness } from './hooks'
+import { useDecide, useRecordAbsence, useRecordLateness } from './hooks'
 
 const localDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -157,7 +158,7 @@ export function DecideDialog({ violation, onClose }: { violation: Violation; onC
 }
 
 /** Lateness on a held lesson: pick the teacher, then one of their held lessons of the last two weeks. */
-export function LatenessDialog({ onClose }: { onClose: () => void }) {
+export function LatenessDialog({ onClose, lessonType = 'regular' }: { onClose: () => void; lessonType?: 'regular' | 'trial' }) {
   const tx = useCopy()
   const { dateTime } = useI18n()
   const record = useRecordLateness()
@@ -172,18 +173,34 @@ export function LatenessDialog({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState('')
   const [touched, setTouched] = useState(false)
   const window = useMemo(() => ({ from: new Date(Date.now() - 14 * 86_400_000).toISOString(), to: new Date().toISOString() }), [])
+  // A regular lesson (or make-up) comes from /lessons; a trial from /trials. Both are held lessons.
   const lessons = useQuery({
     queryKey: ['lessons', 'held', teacher, window.from],
     queryFn: () => opsApi.lessons({ teacherId: teacher, ...window }),
-    enabled: teacher !== '',
+    enabled: teacher !== '' && lessonType === 'regular',
   })
-  const held = (lessons.data?.lessons ?? []).filter((l) => l.outcome === 'held').reverse()
+  const trials = useQuery({
+    queryKey: ['trials', 'held', teacher, window.from],
+    queryFn: () => trialsApi.list({ teacherId: teacher, ...window }),
+    enabled: teacher !== '' && lessonType === 'trial',
+  })
+  const held: Array<{ id: string; label: string; startsAt: string }> =
+    lessonType === 'trial'
+      ? (trials.data?.trials ?? [])
+          .filter((t) => t.attendance === 'attended')
+          .map((t) => ({ id: t.id, label: t.prospect.displayName, startsAt: t.startsAt }))
+          .reverse()
+      : (lessons.data?.lessons ?? [])
+          .filter((l) => l.outcome === 'held')
+          .map((l) => ({ id: l.id, label: l.learner.name, startsAt: l.startsAt }))
+          .reverse()
+  const loading = lessonType === 'trial' ? trials.isLoading : lessons.isLoading
   const parsed = /^\d{1,3}$/.test(minutes.trim()) ? Number(minutes.trim()) : NaN
   const minutesInvalid = !Number.isInteger(parsed) || parsed < 1 || parsed > 240
 
   return (
     <Dialog
-      title={tx(D.latenessTitle)}
+      title={`${tx(D.latenessTitle)} — ${tx(lessonType === 'trial' ? D.trial : D.regular)}`}
       onClose={onClose}
       footer={
         <>
@@ -232,14 +249,14 @@ export function LatenessDialog({ onClose }: { onClose: () => void }) {
           <label className="field__label" htmlFor={lessonId}>
             {tx(D.lesson)}
           </label>
-          {held.length === 0 && !lessons.isLoading ? (
-            <p className="dc-muted">{tx(D.noHeld)}</p>
+          {held.length === 0 && !loading ? (
+            <p className="dc-muted">{tx(lessonType === 'trial' ? D.noHeldTrials : D.noHeld)}</p>
           ) : (
             <select id={lessonId} className="input" value={lesson} onChange={(e) => setLesson(e.target.value)}>
-              <option value="">{tx(D.chooseLesson)}</option>
+              <option value="">{tx(lessonType === 'trial' ? D.chooseTrial : D.chooseLesson)}</option>
               {held.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {`${l.learner.name} — ${dateTime(l.startsAt)}`}
+                  {`${l.label} — ${dateTime(l.startsAt)}`}
                 </option>
               ))}
             </select>
@@ -259,6 +276,82 @@ export function LatenessDialog({ onClose }: { onClose: () => void }) {
           {tx(D.reasonOptional)}
         </label>
         <textarea id={noteId} className="input dc-textarea" value={note} dir="auto" rows={2} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
+      </div>
+      <ServerError error={record.error} />
+    </Dialog>
+  )
+}
+
+/**
+ * PD-24: an absence with no lesson to close. The server refuses a future day
+ * and an empty note; a lesson the teacher missed is closed as their absence
+ * instead (Needs action), which records it here by itself.
+ */
+export function AbsenceDialog({ onClose }: { onClose: () => void }) {
+  const tx = useCopy()
+  const record = useRecordAbsence()
+  const roster = useRoster()
+  const teacherId = useId()
+  const dayId = useId()
+  const noteId = useId()
+  const [teacher, setTeacher] = useState('')
+  const [day, setDay] = useState(() => localDay(new Date()))
+  const [note, setNote] = useState('')
+  const [touched, setTouched] = useState(false)
+  const missing = { teacher: !teacher, day: !/^\d{4}-\d{2}-\d{2}$/.test(day), note: !note.trim() }
+
+  return (
+    <Dialog
+      title={tx(D.absenceTitle)}
+      onClose={onClose}
+      footer={
+        <>
+          <DialogCancelButton onClick={onClose} />
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={record.isPending}
+            onClick={() => {
+              setTouched(true)
+              if (missing.teacher || missing.day || missing.note) return
+              record.mutate({ teacherId: teacher, occurredOn: day, note: note.trim() }, { onSuccess: onClose })
+            }}
+          >
+            {record.isPending ? tx(D.saving) : tx(D.save)}
+          </button>
+        </>
+      }
+    >
+      <p className="field__hint">{tx(D.absenceHint)}</p>
+      <div className="field">
+        <label className="field__label" htmlFor={teacherId}>
+          {tx(D.teacher)}
+        </label>
+        <select id={teacherId} className="input" value={teacher} onChange={(e) => setTeacher(e.target.value)}>
+          <option value="">{tx(D.chooseTeacher)}</option>
+          {(roster.data?.teachers ?? [])
+            .filter((t) => t.isActive)
+            .map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+        </select>
+        {touched && missing.teacher && <span className="field__error">{tx(D.required)}</span>}
+      </div>
+      <div className="field">
+        <label className="field__label" htmlFor={dayId}>
+          {tx(D.day)}
+        </label>
+        <input id={dayId} className="input" type="date" dir="ltr" value={day} max={localDay(new Date())} onChange={(e) => setDay(e.target.value)} />
+        {touched && missing.day && <span className="field__error">{tx(D.required)}</span>}
+      </div>
+      <div className="field">
+        <label className="field__label" htmlFor={noteId}>
+          {tx(D.whatHappened)}
+        </label>
+        <textarea id={noteId} className="input dc-textarea" value={note} dir="auto" rows={3} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
+        {touched && missing.note && <span className="field__error">{tx(D.required)}</span>}
       </div>
       <ServerError error={record.error} />
     </Dialog>

@@ -1,0 +1,12 @@
+/* PD-24 Teacher Supervision page. Tokens only; the tables and chips are the shared ones. */
+.th-body { display: flex; flex-direction: column; gap: var(--space-3); margin-block-start: var(--space-3); }
+.th-intro { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.th-intro .field__hint { flex: 1 1 24rem; margin: 0; }
+.th-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.th-muted { color: var(--text-muted); }
+.th-subtitle { font-size: var(--fs-md); font-weight: 600; margin: var(--space-3) 0 var(--space-1); }
+.th-defaults { display: flex; flex-direction: column; gap: var(--space-2); }
+.th-default-cell { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.th-amount { inline-size: 7rem; }
+.th-currency { max-inline-size: 16rem; }
+.th-complaints { margin: 0; }

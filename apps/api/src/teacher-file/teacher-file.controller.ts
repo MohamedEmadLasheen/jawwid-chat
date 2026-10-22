@@ -23,6 +23,33 @@ export class TeacherFileController {
     return this.files.list(actorId);
   }
 
+  // PD-24: declared before ':teacherId', which would otherwise match them.
+
+  /** Every complaint, newest first: by source (management | parent) and status. */
+  @Get('complaints')
+  complaints(@ActorId() actorId: string, @Query('from') from?: string, @Query('status') status?: string) {
+    return this.files.complaints(actorId, { from, status });
+  }
+
+  /** Every recorded reward, newest first; amounts for the super admin only. */
+  @Get('rewards')
+  @Header('Cache-Control', 'no-store')
+  rewards(@ActorId() actorId: string, @Query('month') month?: string) {
+    return this.payroll.rewards(actorId, month);
+  }
+
+  /** The default amount of a first and second deduction, per currency (super admin). */
+  @Get('finance/deduction-defaults')
+  @Header('Cache-Control', 'no-store')
+  deductionDefaults(@ActorId() actorId: string) {
+    return this.payroll.deductionDefaults(actorId);
+  }
+
+  @Post('finance/deduction-defaults')
+  setDeductionDefault(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
+    return this.payroll.setDeductionDefault(actorId, body ?? {});
+  }
+
   @Get(':teacherId')
   detail(@ActorId() actorId: string, @Param('teacherId') teacherId: string) {
     return this.files.detail(actorId, teacherId);

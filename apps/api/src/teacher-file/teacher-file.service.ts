@@ -19,12 +19,16 @@ import { ActorKind } from '../communication/contracts/vocab';
 export const TeacherFileEntryKind = {
   COMPLAINT: 'complaint',
   COMPLAINT_RESOLUTION: 'complaint_resolution',
+  /** PD-24: a follow-up note on a complaint; as many as it takes. */
+  COMPLAINT_FOLLOWUP: 'complaint_followup',
   MONTHLY_COMMENT: 'monthly_comment',
   DAY_OFF: 'day_off',
   DAY_OFF_CANCELLATION: 'day_off_cancellation',
 } as const;
 export type TeacherFileEntryKind = (typeof TeacherFileEntryKind)[keyof typeof TeacherFileEntryKind];
 const KINDS: ReadonlySet<string> = new Set(Object.values(TeacherFileEntryKind));
+/** PD-24: where a complaint came from. */
+const COMPLAINT_SOURCES: ReadonlySet<string> = new Set(['management', 'parent']);
 
 /** Same shapes the table's CHECK constraints accept; checked here first for a readable 400. */
 const PHONE = /^\+?[0-9][0-9 ()-]{5,30}$/;
@@ -81,6 +85,7 @@ export class TeacherFileService {
     });
     const studentCount = new Map(students.map((r) => [r.teacherId, r._count._all]));
     const open = await this.openComplaintCounts(ids);
+    const away = await this.awayToday(ids);
 
     return {
       access: publicAccess(access),
@@ -90,7 +95,10 @@ export class TeacherFileService {
         isActive: t.isActive && t.leftAt === null,
         studentCount: studentCount.get(t.id) ?? 0,
         openComplaints: open.get(t.id) ?? 0,
+        away: away.get(t.id) ?? null,
       })),
+      // PD-24: who may be named as a complaint's handler.
+      supervisors: await this.supervisors(org),
     };
   }
 
@@ -98,7 +106,7 @@ export class TeacherFileService {
     const { actor, access } = await this.gate(actorId, (a) => a.canView);
     const teacher = await this.requireTeacher(actor, teacherId);
 
-    const [file, learners, entries, daysOff, deductions] = await Promise.all([
+    const [file, learners, entries, daysOff, deductions, upheld] = await Promise.all([
       this.prisma.teacherFile.findUnique({ where: { teacherId: teacher.id } }),
       this.prisma.learner.findMany({
         where: { organizationId: teacher.organizationId, teacherId: teacher.id },
@@ -114,6 +122,10 @@ export class TeacherFileService {
         where: { teacherId: teacher.id, decision: { in: ['deduction_1', 'deduction_2'] } },
         orderBy: { decidedAt: 'desc' },
       }),
+      this.prisma.teacherViolation.findMany({
+        where: { teacherId: teacher.id, kind: 'complaint' },
+        select: { id: true, complaintEntryId: true, decision: true, decidedAt: true },
+      }),
     ]);
 
     const supervision = await this.prisma.learnerSupervision.findMany({
@@ -123,6 +135,7 @@ export class TeacherFileService {
     const staffIds = new Set<string>([
       ...supervision.map((r) => r.supervisorId),
       ...entries.map((e) => e.createdBy),
+      ...entries.map((e) => e.handledBy).filter((x): x is string => !!x),
       ...daysOff.map((d) => d.createdBy),
       ...deductions.map((v) => v.decidedBy as string),
     ]);
@@ -141,6 +154,7 @@ export class TeacherFileService {
         name: teacher.name,
         isActive: teacher.isActive && teacher.leftAt === null,
         leftAt: teacher.leftAt,
+        away: (await this.awayToday([teacher.id])).get(teacher.id) ?? null,
       },
       personal: {
         fullName: teacher.name,
@@ -161,7 +175,7 @@ export class TeacherFileService {
         };
       }),
       employment: { teachingMarket: file?.teachingMarket ?? null, studentCount: learners.length },
-      supervision: shapeTimeline(entries, daysOff, person),
+      supervision: shapeTimeline(entries, daysOff, person, upheldByComplaint(upheld)),
       // PD-18: what was recorded, for everyone who reads the file. The AMOUNTS are
       // payroll's and come only from GET /teacher-files/:id/finance (super admin).
       history: {
@@ -179,6 +193,48 @@ export class TeacherFileService {
         })),
       },
     };
+  }
+
+  /**
+   * PD-24: every complaint of the organization, newest first, shaped as on a
+   * Teacher File (source, handler, follow-ups, the action taken, the status)
+   * with the teacher's name -- the Supervision page's Complaints section.
+   */
+  async complaints(actorId: string, query: { from?: string; status?: string }) {
+    const { actor, access } = await this.gate(actorId, (a) => a.canView);
+    if (query.from !== undefined && !COMPLAINT_SOURCES.has(query.from)) throw invalid('from', 'must be management or parent');
+    const org = actor.organizationId as string;
+    const roots = await this.prisma.teacherSupervisionEntry.findMany({
+      where: { organizationId: org, kind: TeacherFileEntryKind.COMPLAINT, ...(query.from ? { complaintSource: query.from } : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      take: 500,
+    });
+    const ids = roots.map((r) => r.id);
+    const [followUps, upheld, teachers] = await Promise.all([
+      ids.length ? this.prisma.teacherSupervisionEntry.findMany({ where: { refersTo: { in: ids } }, orderBy: [{ createdAt: 'desc' }] }) : [],
+      ids.length
+        ? this.prisma.teacherViolation.findMany({
+            where: { complaintEntryId: { in: ids } },
+            select: { id: true, complaintEntryId: true, decision: true, decidedAt: true },
+          })
+        : [],
+      this.prisma.teacher.findMany({ where: { id: { in: [...new Set(roots.map((r) => r.teacherId))] } }, select: { id: true, name: true } }),
+    ]);
+    const entries = [...roots, ...followUps];
+    const staff = await this.prisma.staff.findMany({
+      where: { id: { in: [...new Set([...entries.map((e) => e.createdBy), ...entries.map((e) => e.handledBy).filter((x): x is string => !!x)])] } },
+      select: { id: true, name: true },
+    });
+    const nameOf = new Map(staff.map((x) => [x.id, x.name]));
+    const teacherOf = new Map(roots.map((r) => [r.id, r.teacherId]));
+    const teacherName = new Map(teachers.map((t) => [t.id, t.name]));
+    const shaped = shapeTimeline(entries, [], (id) => ({ id, name: nameOf.get(id) ?? '' }), upheldByComplaint(upheld)).complaints
+      .map((c) => {
+        const teacherId = teacherOf.get(c.id) as string;
+        return { ...c, teacher: { id: teacherId, name: teacherName.get(teacherId) ?? '' } };
+      })
+      .filter((c) => !query.status || c.status === query.status);
+    return { access: publicAccess(access), complaints: shaped };
   }
 
   // ------------------------------------------------------------------
@@ -248,6 +304,8 @@ export class TeacherFileService {
       refersTo?: unknown;
       sourceConversationId?: unknown;
       sourceMessageId?: unknown;
+      source?: unknown;
+      handledBy?: unknown;
     },
   ) {
     const { actor } = await this.gate(actorId, (a) => a.canWriteSupervision);
@@ -275,9 +333,18 @@ export class TeacherFileService {
         data.period = requireDate('month', `${body.month}-01`);
         break;
       case TeacherFileEntryKind.COMPLAINT_RESOLUTION:
+      case TeacherFileEntryKind.COMPLAINT_FOLLOWUP:
         data.refersTo = requireUuid('refersTo', body.refersTo);
         break;
       case TeacherFileEntryKind.COMPLAINT:
+        // PD-24: every new complaint says where it came from and who handles it
+        // (the writer, unless another Teachers department supervisor is named;
+        // the database refuses anyone else).
+        if (typeof body.source !== 'string' || !COMPLAINT_SOURCES.has(body.source)) {
+          throw invalid('source', 'must be management or parent');
+        }
+        data.complaintSource = body.source;
+        data.handledBy = body.handledBy === undefined || body.handledBy === null ? actor.actorId : requireUuid('handledBy', body.handledBy);
         if (body.sourceConversationId !== undefined && body.sourceConversationId !== null) {
           data.conversationId = await this.readableSource(actor, body.sourceConversationId);
           if (body.sourceMessageId !== undefined && body.sourceMessageId !== null) {
@@ -412,6 +479,29 @@ export class TeacherFileService {
     return conversation.id;
   }
 
+  /**
+   * PD-24: whether each teacher is away today (the academy's), and until when.
+   * Computed from chat.teacher_day_off on every read; never stored.
+   */
+  async awayToday(teacherIds: string[]): Promise<Map<string, Away>> {
+    if (teacherIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ teacher_id: string; kind: Away['kind']; until: Date }>>`
+      SELECT t.id::text AS teacher_id, a.kind, a.until
+        FROM unnest(${teacherIds}::uuid[]) AS t(id)
+        CROSS JOIN LATERAL chat.teacher_away(t.id, chat.academy_today()) a`;
+    return new Map(rows.map((r) => [r.teacher_id, { kind: r.kind, until: isoDate(r.until) }]));
+  }
+
+  /** PD-24: the Teachers department (manager and members) and the super admin -- who may handle a complaint. */
+  private async supervisors(organizationId: string) {
+    return this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
+      SELECT s.id::text AS id, s.name
+        FROM chat.staff s
+       WHERE s.organization_id = ${organizationId}::uuid
+         AND chat.is_lesson_manager(s.id, ${organizationId}::uuid)
+       ORDER BY s.name`;
+  }
+
   private async openComplaintCounts(teacherIds: string[]): Promise<Map<string, number>> {
     if (teacherIds.length === 0) return new Map();
     const rows = await this.prisma.$queryRaw<Array<{ teacher_id: string; open: number }>>`
@@ -419,7 +509,8 @@ export class TeacherFileService {
         FROM chat.teacher_supervision_entry c
        WHERE c.kind = 'complaint'
          AND c.teacher_id = ANY(${teacherIds}::uuid[])
-         AND NOT EXISTS (SELECT 1 FROM chat.teacher_supervision_entry r WHERE r.refers_to = c.id)
+         AND NOT EXISTS (SELECT 1 FROM chat.teacher_supervision_entry r
+                          WHERE r.refers_to = c.id AND r.kind = 'complaint_resolution')
        GROUP BY c.teacher_id`;
     return new Map(rows.map((r) => [r.teacher_id, r.open]));
   }
@@ -444,18 +535,36 @@ function publicAccess(a: TeacherFileAccess) {
  * days off (PD-11's rows; a cancelled day off no longer exists, so
  * `cancellation` is always null -- the audit trail has it).
  */
-export function shapeTimeline(entries: Entry[], daysOff: DayOff[], person: (id: string) => { id: string; name: string }) {
-  const followUp = new Map<string, Entry>();
-  for (const e of entries) if (e.refersTo) followUp.set(e.refersTo, e);
+export function shapeTimeline(
+  entries: Entry[],
+  daysOff: DayOff[],
+  person: (id: string) => { id: string; name: string },
+  upheld: Map<string, UpheldComplaint> = new Map(),
+) {
+  const resolutionOf = new Map<string, Entry>();
+  const followUpsOf = new Map<string, Entry[]>();
+  for (const e of entries) {
+    if (!e.refersTo) continue;
+    if (e.kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION) resolutionOf.set(e.refersTo, e);
+    else followUpsOf.set(e.refersTo, [...(followUpsOf.get(e.refersTo) ?? []), e]);
+  }
   const brief = (e: Entry) => ({ id: e.id, body: e.body, createdAt: e.createdAt, author: person(e.createdBy) });
 
   const complaints = entries
     .filter((e) => e.kind === TeacherFileEntryKind.COMPLAINT)
     .map((e) => {
-      const r = followUp.get(e.id);
+      const r = resolutionOf.get(e.id);
+      const action = upheld.get(e.id) ?? null;
       return {
         ...brief(e),
         source: e.conversationId ? { conversationId: e.conversationId, messageId: e.sourceMessageId } : null,
+        // PD-24. Null on complaints recorded before it.
+        from: (e.complaintSource as 'management' | 'parent' | null) ?? null,
+        handledBy: e.handledBy ? person(e.handledBy) : null,
+        // Oldest first: they read as the complaint's story.
+        followUps: (followUpsOf.get(e.id) ?? []).slice().reverse().map(brief),
+        action,
+        status: complaintStatus(!!r, action),
         resolution: r ? brief(r) : null,
       };
     });
@@ -483,6 +592,39 @@ export function shapeTimeline(entries: Entry[], daysOff: DayOff[], person: (id: 
   return { complaints, monthlyComments, daysOff: days };
 }
 
+export interface Away {
+  kind: 'leave' | 'suspended' | 'day_off';
+  /** The last day of the unbroken run of days off, YYYY-MM-DD. */
+  until: string;
+}
+
+/** PD-24: an upheld complaint is a violation on the ladder; its decision is the action taken. */
+export interface UpheldComplaint {
+  violationId: string;
+  decision: string | null;
+  decidedAt: Date | null;
+}
+
+function upheldByComplaint(rows: Array<{ id: string; complaintEntryId: string | null; decision: string | null; decidedAt: Date | null }>) {
+  return new Map(
+    rows
+      .filter((r) => r.complaintEntryId)
+      .map((r) => [r.complaintEntryId as string, { violationId: r.id, decision: r.decision, decidedAt: r.decidedAt }]),
+  );
+}
+
+/**
+ * open      nothing done yet
+ * upheld    on the ladder, waiting for the Teachers department's decision
+ * actioned  upheld and decided (the decision is the action taken)
+ * resolved  closed with a resolution, whatever else happened
+ */
+export function complaintStatus(resolved: boolean, action: UpheldComplaint | null): 'open' | 'upheld' | 'actioned' | 'resolved' {
+  if (resolved) return 'resolved';
+  if (!action) return 'open';
+  return action.decision ? 'actioned' : 'upheld';
+}
+
 /** A database refusal of an unlawful entry becomes 409, never a 500. */
 export function mapTimelineRefusal(e: unknown): unknown {
   if (e instanceof CommError) return e;
@@ -495,7 +637,7 @@ export function mapTimelineRefusal(e: unknown): unknown {
     if (/teacher_day_off_once_per_day|teacherId_day|\(teacher_id, day\)/.test(text)) {
       return new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'that day off is already recorded', 409);
     }
-    if (code === 'P2002' || /teacher_supervision_entry_one_resolution/.test(text)) {
+    if (/teacher_supervision_entry_one_resolution/.test(text) || (code === 'P2002' && !/complaint_entry_id/.test(text))) {
       return new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'that complaint already has a resolution', 409);
     }
     const why = /ERROR:\s*([^\n]+)/.exec(text)?.[1] ?? /Message: `([^`]+)`/.exec(text)?.[1] ?? 'the timeline refused this entry';

@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-20 — CLOSED
+## 4. Product decisions PD-1 to PD-24 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -139,6 +139,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
+**PD-24 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -162,6 +163,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
+| **PD-24** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 
 ---
 
@@ -2002,7 +2004,96 @@ applies to Sales.
 
 ---
 
-### Decisions still open after PD-1 to PD-20
+### PD-24 · The Teacher Supervision page
+
+**Closed 2026-10-22** by the product owner. Amends PD-12 §3 (what joins the
+ladder; deductions) and PD-18 item 3 (who prices a decided deduction).
+
+The owner asked for one admin page in five sections: teacher leave, apologies
+and absences, late arrivals (trial and regular), grants and rewards, and
+complaints (from management and from parents), every record on the teacher's
+file and every deduction and reward in payroll. Most of it already existed
+(PD-10 complaints, PD-11 bonuses, PD-12 leave and the ladder, PD-18 payroll).
+Asked the same day, the owner chose:
+
+1. **"Cannot be contacted while on leave"** means the teacher is **shown** as on
+   leave and **given no new assignments**. Messages still reach them.
+2. **Deduction amounts:** the super admin sets a **default amount per step**
+   (first and second deduction); deciding a deduction applies it to that
+   month's pay at once; one case can still be changed.
+3. **Complaints:** an **upheld complaint joins the same monthly ladder** as
+   absences and lateness.
+4. **Permanent suspension** keeps PD-12's behaviour: refused while the teacher
+   has students, then the teacher is deactivated.
+
+**Final decision.**
+
+1. **One page**, the Teachers area's *Supervision* tab (and Admin › Teachers ›
+   Supervision): Leave, Apologies & absences, Lateness, Grants & rewards,
+   Complaints. It replaces the Leave requests and Discipline tabs; their old
+   links land on their section.
+2. **Leave.** Each teacher's balance is shown next to the name, or "not
+   tracked" with the days taken when no allowance is set; the leave is
+   recorded either way. **On leave** is computed from PD-11's days off, never
+   stored. While a teacher is on leave or suspended: the Teacher File and the
+   lists carry the status; parents and teachers in a chat with them read "on
+   leave until …" (a suspension reads "away until …" to them); a **transfer**
+   to them and a **subscription form** naming them are refused; trials and
+   make-ups were already refused on a day off.
+3. **Apologies and absences.** The apology card and a lesson closed as the
+   teacher's absence are recorded by themselves (PD-12). An absence with **no
+   lesson** (a meeting, a shift) is recorded by the Teachers department, with
+   what happened, once the day has come. It joins the ladder like any other.
+4. **Lateness** lists trial and regular lessons apart, with the delay and the
+   action taken. A trial is late on the same terms as a lesson (it was held).
+5. **Rewards** are PD-11's bonus entries: reason, date, who recorded it. The
+   super admin can type the amount while recording; otherwise it is priced in
+   Payroll as before. Amounts stay the super admin's (PD-18).
+6. **Deductions.** The moment a first or second deduction is decided, the
+   super admin's default for that step, in the teacher's pay currency that
+   month, is written as its pay adjustment. No pay terms or no default (or a
+   default of 0) leaves it unpriced, as before. The super admin corrects one
+   case with PD-18's correction.
+7. **Complaints** carry their **source** (management or a parent) and the
+   **supervisor handling** them, any number of **follow-up notes**, and one
+   resolution. Upholding a complaint makes it a violation on the teacher's
+   monthly ladder; its decision is the **action taken**. A parent's complaint is
+   recorded by staff, linked to the parent's message where there is one; the
+   app has no complaint form.
+
+**Canonical rule.**
+```
+away(teacher, day)   = the run of chat.teacher_day_off rows from that day:
+                       suspended > leave > day_off, until its last day.
+                       Computed (chat.teacher_away); a plain day off never
+                       blocks an assignment.
+ladder               = PD-12's, over: the teacher's apology and absence
+                       (lesson), lateness, an absence with no lesson, an
+                       upheld complaint (counted in the complaint's month).
+priced deduction     = decided deduction_1|2 + terms(month).currency +
+                       newest default(step, currency) > 0
+                       -> one teacher_pay_adjustment, created by the decider.
+```
+
+**Implementation phase.** Built with the decision: migration
+`20261022150000_chat_pd024_teacher_supervision.sql`;
+`docs/admin/pd024-teacher-supervision.md`; protected by
+`apps/api/test/integration/pd024-teacher-supervision.spec.ts`.
+
+**Consequences.**
+- PD-12's "Teachers-department staff never see salary or amounts" stands: the
+  default amounts and reward amounts are the super admin's only.
+- PD-18 item 3 now reads: the super admin prices a bonus, and prices a
+  deduction only when no default applies or to correct one.
+- Complaints recorded before PD-24 have no source or handler; they read as such.
+
+**Deprecated behaviour.** PD-12's separate Leave requests and Discipline tabs.
+
+**Closed.** 2026-10-22.
+
+---
+
+### Decisions still open after PD-1 to PD-24
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

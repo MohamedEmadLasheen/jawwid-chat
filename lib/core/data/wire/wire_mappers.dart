@@ -2,6 +2,7 @@ import '../../../shared/models/conversation.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/story.dart';
+import '../../../shared/models/supervision.dart' show parseCalendarDay;
 import '../../../shared/models/teacher_profile.dart';
 import '../../../shared/models/user_role.dart';
 import '../repositories.dart';
@@ -588,6 +589,20 @@ abstract final class WireMappers {
       // "you may" would offer actions the server then refuses.
       canOpenDirect: json['canOpenDirect'] == true,
       avatarUrl: _nonEmpty(json['avatarUrl']),
+      away: memberAway(json['away']),
+    );
+  }
+
+  /// PD-24 `away: { kind, until }`. Anything but a well-formed object is "not away":
+  /// a notice that guessed would tell a family something the server did not say.
+  /// Every kind but `leave` reads as away -- staff's own kinds included.
+  static MemberAway? memberAway(Object? raw) {
+    if (raw is! Map) return null;
+    final until = parseCalendarDay(raw['until']);
+    if (until == null) return null;
+    return MemberAway(
+      kind: raw['kind'] == 'leave' ? MemberAwayKind.leave : MemberAwayKind.away,
+      until: until,
     );
   }
 

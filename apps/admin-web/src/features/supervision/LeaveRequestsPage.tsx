@@ -37,6 +37,20 @@ export function useLeaveDates() {
  */
 export function LeaveRequestsPage({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
   const tx = useCopy()
+  return (
+    <div className="page">
+      <div className="page__inner">
+        <PageHeader eyebrow={eyebrow} title={tx(S.leaveTitle)} subtitle={tx(S.leaveSubtitle)} />
+        <TeachersTabs basePath={basePath} />
+        <LeaveRequestsList basePath={basePath} />
+      </div>
+    </div>
+  )
+}
+
+/** The requests list and its dialogs, shared with the Supervision page's Leave section (PD-24). */
+export function LeaveRequestsList({ basePath }: { basePath: string }) {
+  const tx = useCopy()
   const { locale, number } = useI18n()
   const dates = useLeaveDates()
   const [filter, setFilter] = useState<Filter>('requested')
@@ -47,117 +61,113 @@ export function LeaveRequestsPage({ basePath, eyebrow }: { basePath: string; eye
   const rows = list.data?.requests ?? []
 
   return (
-    <div className="page">
-      <div className="page__inner">
-        <PageHeader eyebrow={eyebrow} title={tx(S.leaveTitle)} subtitle={tx(S.leaveSubtitle)} />
-        <TeachersTabs basePath={basePath} />
-        {isSupervisionRefusal(list.error) ? (
-          <EmptyState icon="lock" title={describeError(list.error, locale)} />
-        ) : (
-          <>
-            <div className="toolbar">
-              <FilterChips<Filter>
-                label={tx(S.leaveTitle)}
-                value={filter}
-                onChange={setFilter}
-                options={[
-                  { value: 'requested', label: tx(S.leaveRequested) },
-                  { value: 'approved', label: tx(S.leaveApproved) },
-                  { value: 'all', label: tx(S.stateAll) },
-                ]}
-              />
-            </div>
-            <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
-              {rows.length === 0 ? (
-                <EmptyState title={tx(S.noLeave)} />
-              ) : (
-                <div className="table-wrap sv-table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th scope="col">{tx(S.teacher)}</th>
-                        <th scope="col">{tx(S.dates)}</th>
-                        <th scope="col">{tx(S.days)}</th>
-                        <th scope="col">{tx(S.reason)}</th>
-                        <th scope="col">
-                          <span className="sr-only">{tx(S.approve)}</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r) => {
-                        const state = LEAVE_STATE[r.state]
-                        const lessons = r.collidingLessons?.length ?? 0
-                        return (
-                          <tr key={r.id}>
-                            <td dir="auto">
-                              <Link to={teacherFilePath(basePath, r.teacher.id)}>{r.teacher.name}</Link>
-                            </td>
-                            <td>{dates(r)}</td>
-                            <td>
-                              <div className="sv-cell-main">
-                                <span>{number(r.days)}</span>
-                                {r.state === 'requested' && (
-                                  <span className="sv-muted">
-                                    {tx(S.balanceNow)}: {r.balance === null || r.balance === undefined ? tx(S.noAllowance) : number(r.balance)}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td>
-                              <div className="sv-cell-main">
-                                <span dir="auto">{r.reason}</span>
-                                {r.decisionNote && (
-                                  <span className="sv-muted" dir="auto">
-                                    {r.decisionNote}
-                                  </span>
-                                )}
-                                {lessons > 0 && (
-                                  <Badge tone="warn" dot>
-                                    {tx(S.lessonsInside, { n: number(lessons) })}
+    <>
+      {isSupervisionRefusal(list.error) ? (
+        <EmptyState icon="lock" title={describeError(list.error, locale)} />
+      ) : (
+        <>
+          <div className="toolbar">
+            <FilterChips<Filter>
+              label={tx(S.leaveTitle)}
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'requested', label: tx(S.leaveRequested) },
+                { value: 'approved', label: tx(S.leaveApproved) },
+                { value: 'all', label: tx(S.stateAll) },
+              ]}
+            />
+          </div>
+          <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
+            {rows.length === 0 ? (
+              <EmptyState title={tx(S.noLeave)} />
+            ) : (
+              <div className="table-wrap sv-table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{tx(S.teacher)}</th>
+                      <th scope="col">{tx(S.dates)}</th>
+                      <th scope="col">{tx(S.days)}</th>
+                      <th scope="col">{tx(S.reason)}</th>
+                      <th scope="col">
+                        <span className="sr-only">{tx(S.approve)}</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const state = LEAVE_STATE[r.state]
+                      const lessons = r.collidingLessons?.length ?? 0
+                      return (
+                        <tr key={r.id}>
+                          <td dir="auto">
+                            <Link to={teacherFilePath(basePath, r.teacher.id)}>{r.teacher.name}</Link>
+                          </td>
+                          <td>{dates(r)}</td>
+                          <td>
+                            <div className="sv-cell-main">
+                              <span>{number(r.days)}</span>
+                              {r.state === 'requested' && (
+                                <span className="sv-muted">
+                                  {tx(S.balanceNow)}: {r.balance === null || r.balance === undefined ? tx(S.noAllowance) : number(r.balance)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="sv-cell-main">
+                              <span dir="auto">{r.reason}</span>
+                              {r.decisionNote && (
+                                <span className="sv-muted" dir="auto">
+                                  {r.decisionNote}
+                                </span>
+                              )}
+                              {lessons > 0 && (
+                                <Badge tone="warn" dot>
+                                  {tx(S.lessonsInside, { n: number(lessons) })}
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="sv-actions">
+                              {r.state === 'requested' ? (
+                                <>
+                                  <button type="button" className="btn btn--primary btn--sm" onClick={() => setApproving(r)}>
+                                    {tx(S.approve)}
+                                  </button>
+                                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDeclining(r)}>
+                                    {tx(S.decline)}
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <Badge tone={state.tone} dot>
+                                    {tx(state.label)}
                                   </Badge>
-                                )}
-                              </div>
-                            </td>
-                            <td>
-                              <div className="sv-actions">
-                                {r.state === 'requested' ? (
-                                  <>
-                                    <button type="button" className="btn btn--primary btn--sm" onClick={() => setApproving(r)}>
-                                      {tx(S.approve)}
+                                  {r.state === 'approved' && (
+                                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCancelling(r)}>
+                                      {tx(S.cancelLeave)}
                                     </button>
-                                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDeclining(r)}>
-                                      {tx(S.decline)}
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Badge tone={state.tone} dot>
-                                      {tx(state.label)}
-                                    </Badge>
-                                    {r.state === 'approved' && (
-                                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCancelling(r)}>
-                                        {tx(S.cancelLeave)}
-                                      </button>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </QueryBoundary>
-          </>
-        )}
-        {approving && <ApproveLeaveDialog request={approving} onClose={() => setApproving(null)} />}
-        {declining && <DeclineLeaveDialog request={declining} onClose={() => setDeclining(null)} />}
-        {cancelling && <CancelLeaveDialog request={cancelling} onClose={() => setCancelling(null)} />}
-      </div>
-    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </QueryBoundary>
+        </>
+      )}
+      {approving && <ApproveLeaveDialog request={approving} onClose={() => setApproving(null)} />}
+      {declining && <DeclineLeaveDialog request={declining} onClose={() => setDeclining(null)} />}
+      {cancelling && <CancelLeaveDialog request={cancelling} onClose={() => setCancelling(null)} />}
+    </>
   )
 }

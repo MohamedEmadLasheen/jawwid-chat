@@ -114,6 +114,15 @@ export interface ConversationMemberDto {
   isSilent: boolean;
 
   /**
+   * PD-24: a teacher member who is away today, and the last day they are away
+   * (YYYY-MM-DD). Messaging still works; a client shows "On leave until ...".
+   * Staff read why (leave | suspended | day_off); anyone else reads leave or
+   * away -- a suspension is the administration's business. Absent when not
+   * away, and on routes that do not compute it.
+   */
+  away?: MemberAwayDto;
+
+  /**
    * The member's display name (mobile gap O3).
    *
    * `displayName` and not `name`: this is an ACTOR, and `Actor.displayName` is
@@ -340,11 +349,17 @@ export type ConversationWithLearner = Conversation & { learner?: Learner | null 
  * four columns and a name, and saying so keeps a widened Prisma include from
  * reaching a client through this parameter.
  */
+export interface MemberAwayDto {
+  kind: 'leave' | 'suspended' | 'day_off' | 'away';
+  until: string;
+}
+
 export interface ResolvedMember {
   actorId: string;
   actorKind: string;
   memberRole: string;
   isSilent: boolean;
+  away?: MemberAwayDto;
   /** '' when the actor no longer resolves. Never an id. */
   displayName: string;
   /** Advisory; see ConversationMemberDto.canOpenDirect. False when unknown. */
@@ -391,6 +406,7 @@ export function toConversationDto(
       displayName: m.displayName,
       canOpenDirect: m.canOpenDirect,
       avatarUrl: m.avatarUrl ?? null,
+      ...(m.away ? { away: m.away } : {}),
     })),
     // Two fields enumerated by hand, like every other field here: the Learner
     // row is never spread, so `level`, `nextClassAt` and `teacherId` cannot

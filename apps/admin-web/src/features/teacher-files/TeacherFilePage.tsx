@@ -4,12 +4,13 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
-import type { EntryBrief, TeacherFile } from './api'
+import type { Complaint, EntryBrief, TeacherFile } from './api'
 import { T, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherFile } from './hooks'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
+import { AwayBadge, ComplaintItem, UpholdDialog } from './Complaint'
 import { SupervisionTimeline } from './SupervisionTimeline'
 import { EmploymentSection, FinancialSummarySection, HistorySection, usePayroll } from './Payroll'
 import { MonthlyKpis, TeacherScheduleSection, currentMonth, teacherAreaLinks, type TeacherWorkLinks } from './TeacherWork'
@@ -47,9 +48,12 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                   eyebrow={eyebrow}
                   title={data.teacher.name}
                   status={
-                    <Badge tone={data.teacher.isActive ? 'ok' : 'outline'} dot>
-                      {tx(data.teacher.isActive ? T.active : T.inactive)}
-                    </Badge>
+                    <>
+                      <Badge tone={data.teacher.isActive ? 'ok' : 'outline'} dot>
+                        {tx(data.teacher.isActive ? T.active : T.inactive)}
+                      </Badge>
+                      <AwayBadge away={data.teacher.away} />
+                    </>
                   }
                   actions={data.teacher.isActive && data.access.canWriteSupervision ? <OpenSupervisionButton teacherId={data.teacher.id} /> : undefined}
                 />
@@ -216,6 +220,7 @@ function Complaints({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent
   const tx = useCopy()
   const write = file.access.canWriteSupervision
   const items = file.supervision.complaints
+  const [upholding, setUpholding] = useState<Complaint | null>(null)
   return (
     <Section
       id="tf-complaints"
@@ -233,39 +238,18 @@ function Complaints({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent
       ) : (
         <ul className="tf-entries">
           {items.map((c) => (
-            <li key={c.id} className="tf-entry">
-              <div className="tf-entry__head">
-                <Badge tone={c.resolution ? 'ok' : 'warn'} dot>
-                  {tx(c.resolution ? T.resolved : T.unresolved)}
-                </Badge>
-                <Byline entry={c} />
-                {c.source && <span className="tf-muted">{tx(T.fromConversation)}</span>}
-              </div>
-              <p className="tf-entry__body" dir="auto">
-                {c.body}
-              </p>
-              {c.resolution ? (
-                <div className="tf-followup">
-                  <p className="tf-entry__body" dir="auto">
-                    {c.resolution.body}
-                  </p>
-                  <Byline entry={c.resolution} />
-                </div>
-              ) : (
-                write && (
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => onAdd({ kind: 'complaint_resolution', refersTo: c.id })}
-                  >
-                    {tx(T.resolve)}
-                  </button>
-                )
-              )}
-            </li>
+            <ComplaintItem
+              key={c.id}
+              complaint={c}
+              canWrite={write}
+              onFollowUp={() => onAdd({ kind: 'complaint_followup', refersTo: c.id })}
+              onResolve={() => onAdd({ kind: 'complaint_resolution', refersTo: c.id })}
+              onUphold={() => setUpholding(c)}
+            />
           ))}
         </ul>
       )}
+      {upholding && <UpholdDialog complaint={upholding} onClose={() => setUpholding(null)} />}
     </Section>
   )
 }

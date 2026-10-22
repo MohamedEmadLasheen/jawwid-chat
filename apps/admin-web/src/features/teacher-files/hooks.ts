@@ -33,6 +33,8 @@ function useRefresh(teacherId: string) {
     void qc.invalidateQueries({ queryKey: teacherFileKeys.list })
     // Complaints, comments and days off are on the timeline too.
     void qc.invalidateQueries({ queryKey: timelineKeys.timeline(teacherId) })
+    // PD-24: the Supervision page lists complaints across teachers.
+    void qc.invalidateQueries({ queryKey: ['teacher-supervision'] })
   }
 }
 
@@ -44,6 +46,18 @@ export function useUpdatePersonal(teacherId: string) {
 export function useAddEntry(teacherId: string) {
   const done = useRefresh(teacherId)
   return useMutation({ mutationFn: (body: NewEntry) => teacherFileApi.addEntry(teacherId, body), onSuccess: done })
+}
+
+/** The same write, for a teacher chosen in the dialog (the Supervision page, PD-24). */
+export function useAddEntryFor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ teacherId, body }: { teacherId: string; body: NewEntry }) => teacherFileApi.addEntry(teacherId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.all })
+      void qc.invalidateQueries({ queryKey: ['teacher-supervision'] })
+    },
+  })
 }
 
 /** PD-11's supervision timeline. A refusal is an answer (the section then does not show), not retried. */

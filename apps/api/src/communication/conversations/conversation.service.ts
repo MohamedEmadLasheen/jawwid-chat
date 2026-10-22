@@ -22,7 +22,7 @@ import type { AuditService } from '../../platform/audit.service';
 import type { StaffAccessBasis } from '../../platform/staff-scope';
 import { Actor, SYSTEM_ACTOR, isConversationStaff } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
-import type { ConversationWithLearner, ResolvedMember } from '../contracts/dto';
+import type { ConversationWithLearner, MemberAwayDto, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
 import {
   ActorKind,
@@ -327,6 +327,25 @@ export class ConversationService {
    * but incidental, and it is not a property to rely on while widening what the
    * endpoint returns. A membership list must be reachable only by a member.
    */
+  /**
+   * PD-24: which of these teachers are away today (the academy's), until when.
+   * `staffView` keeps why; anyone else reads leave or away (a suspension or a
+   * recorded day off is not theirs to know). Computed on every read.
+   */
+  async teachersAway(teacherIds: string[], staffView: boolean): Promise<Map<string, MemberAwayDto>> {
+    if (teacherIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; kind: 'leave' | 'suspended' | 'day_off'; until: Date }>>`
+      SELECT t.id::text AS id, a.kind, a.until
+        FROM unnest(${teacherIds}::uuid[]) AS t(id)
+        CROSS JOIN LATERAL chat.teacher_away(t.id, chat.academy_today()) a`;
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        { kind: staffView || r.kind === 'leave' ? r.kind : 'away', until: r.until.toISOString().slice(0, 10) },
+      ]),
+    );
+  }
+
   async readWithMembers(
     conversationId: string,
     actorId: string,

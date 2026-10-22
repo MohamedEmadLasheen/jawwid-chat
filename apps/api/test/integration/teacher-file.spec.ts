@@ -287,7 +287,7 @@ describe('5. the supervision timeline', () => {
   const add = (who: string, body: Record<string, unknown>) => http(who, 'POST', `/teacher-files/${t()}/entries`, body);
 
   it('a complaint, then its resolution; a second resolution is refused', async () => {
-    const c = await add(sup(), { kind: 'complaint', body: 'Started the lesson 20 minutes late.' });
+    const c = await add(sup(), { kind: 'complaint', body: 'Started the lesson 20 minutes late.', source: 'management' });
     expect(c.status).toBe(201);
     let file = await http(sup(), 'GET', `/teacher-files/${t()}`);
     expect(file.json.supervision.complaints[0]).toMatchObject({ id: c.json.id, resolution: null, author: { id: m.teacherSupervisors[0].id } });
@@ -350,7 +350,10 @@ describe('5. the supervision timeline', () => {
     [{ kind: 'monthly_comment', body: 'x' }, 'month'],
     [{ kind: 'day_off', dayOffOn: '2026-02-30', body: 'x' }, 'dayOffOn'],
     [{ kind: 'complaint_resolution', body: 'x' }, 'refersTo'],
-    [{ kind: 'complaint', body: 'x', sourceMessageId: randomUUID() }, 'sourceMessageId'],
+    [{ kind: 'complaint', body: 'x', source: 'parent', sourceMessageId: randomUUID() }, 'sourceMessageId'],
+    [{ kind: 'complaint', body: 'x' }, 'source'],
+    [{ kind: 'complaint', body: 'x', source: 'student' }, 'source'],
+    [{ kind: 'complaint_followup', body: 'x' }, 'refersTo'],
   ])('refuses %j with a 400 naming %s', async (body, field) => {
     const r = await add(sup(), body);
     expect([r.status, r.code]).toEqual([400, 'COMMON.VALIDATION']);
@@ -391,6 +394,7 @@ describe('6. a complaint may only point at a conversation its writer can read', 
     });
     const r = await http(m.superAdmin.subject, 'POST', `/teacher-files/${teacher().id}/entries`, {
       kind: 'complaint',
+      source: 'parent',
       body: 'Parent says the lesson started late.',
       sourceConversationId: group.conversationId,
       sourceMessageId: message.id,
@@ -409,6 +413,7 @@ describe('6. a complaint may only point at a conversation its writer can read', 
       [direct, randomUUID()].map((id) =>
         http(m.teacherSupervisors[0].subject, 'POST', `/teacher-files/${teacher().id}/entries`, {
           kind: 'complaint',
+          source: 'parent',
           body: 'probe',
           sourceConversationId: id,
         }),
