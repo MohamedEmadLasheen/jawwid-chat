@@ -5,6 +5,7 @@ import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../application/upcoming_calls_controller.dart';
 import '../data/scheduled_call_repository.dart';
@@ -89,8 +90,9 @@ class _ScheduleCallSheetState extends ConsumerState<ScheduleCallSheet> {
     super.dispose();
   }
 
+  // PD-22: the picked wall clock is the account's zone, which may not be the phone's.
   DateTime get _startsAt =>
-      DateTime(_day.year, _day.month, _day.day, _time.hour, _time.minute);
+      AppClock.wallClock(_day.year, _day.month, _day.day, _time.hour, _time.minute);
 
   Future<void> _pickDay() async {
     final today = DateTime(_now().year, _now().month, _now().day);

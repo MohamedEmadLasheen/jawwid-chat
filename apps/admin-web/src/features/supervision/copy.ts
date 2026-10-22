@@ -14,6 +14,7 @@ export const S = {
   tabCertificates: { en: 'Certificates', ar: 'الشهادات' },
   tabLeave: { en: 'Leave requests', ar: 'طلبات الإجازة' },
   tabDiscipline: { en: 'Discipline', ar: 'الانضباط' },
+  tabSupervision: { en: 'Supervision', ar: 'الإشراف' },
   sections: { en: 'Teachers department', ar: 'قسم المعلمين' },
 
   // Certificates

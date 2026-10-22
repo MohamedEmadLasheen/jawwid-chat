@@ -562,6 +562,19 @@ model QuietHours {
   @@schema("chat")
 }
 
+/// PD-22: the zone a person sees and is notified in. 20261022130000 owns the DDL.
+/// automatic = follows the phone's OS zone (reported by the app); false = picked by hand.
+model ActorTimeZone {
+  actorId        String   @id @map("actor_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  timeZone       String   @map("time_zone")
+  automatic      Boolean  @default(true)
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now())
+
+  @@map("actor_time_zone")
+  @@schema("chat")
+}
+
 model Call {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
   organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
@@ -1436,6 +1449,10 @@ model TeacherSupervisionEntry {
   refersTo       String?   @map("refers_to") @db.Uuid
   /// PD-10: a complaint's source message (in conversation_id).
   sourceMessageId String?  @map("source_message_id") @db.Uuid
+  /// PD-26: a complaint's source, management | parent (null before PD-26).
+  complaintSource String?  @map("complaint_source")
+  /// PD-26: the Teachers department supervisor handling a complaint.
+  handledBy       String?  @map("handled_by") @db.Uuid
 
   @@map("teacher_supervision_entry")
   @@schema("chat")
@@ -1520,6 +1537,20 @@ model TeacherPayAdjustment {
   @@schema("chat")
 }
 
+/// PD-26: the default amount of a first or second deduction in one currency. Append-only; newest wins.
+model TeacherPayDefault {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  kind           String
+  currency       String
+  amount         Decimal  @db.Decimal(12, 2)
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("teacher_pay_default")
+  @@schema("chat")
+}
+
 // =====================================================================
 // PD-12 S1 -- 20261019090000_chat_pd012_s1.sql owns the DDL and every rule.
 // =====================================================================
@@ -1598,7 +1629,8 @@ model TeacherViolation {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
   teacherId      String    @map("teacher_id") @db.Uuid
-  lessonId       String    @map("lesson_id") @db.Uuid
+  /// PD-26: null for an absence recorded without a lesson, and an upheld complaint.
+  lessonId       String?   @map("lesson_id") @db.Uuid
   kind           String
   occurredAt     DateTime  @map("occurred_at") @db.Timestamptz
   month          DateTime  @db.Date
@@ -1612,6 +1644,8 @@ model TeacherViolation {
   decidedBy      String?   @map("decided_by") @db.Uuid
   decidedAt      DateTime? @map("decided_at") @db.Timestamptz
   suspensionId   String?   @unique @map("suspension_id") @db.Uuid
+  /// PD-26: the complaint a `complaint` violation upheld.
+  complaintEntryId String? @unique @map("complaint_entry_id") @db.Uuid
 
   @@unique([lessonId, kind])
   @@map("teacher_violation")

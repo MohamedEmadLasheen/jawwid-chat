@@ -835,6 +835,22 @@ The teacher owns it: **Save is the publish.** There is no draft, no submit and n
 
 No parent-facing route exists yet: `publicProfile` (approved certificates only) is service-level, waiting for the family screen.
 
+### 3.6a Time zone (`time-zone.controller.ts`) — EXISTS (PD-22)
+
+The caller's own time zone. No route reads or writes another person's.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/me/time-zone` | none | `{ timeZone: string \| null, automatic: boolean, updatedAt: string \| null }` |
+| POST | `/me/time-zone/device` | `{ timeZone }` | The setting. The phone's OS zone, recorded only while `automatic` is true. |
+| PUT | `/me/time-zone` | `{ automatic, timeZone }` | The setting. `automatic: false` pins `timeZone`; `true` follows the phone again. |
+
+- `timeZone` is an IANA name (`Asia/Kuwait`); letter case is corrected. An offset
+  (`+03:00`) or an unknown name is `COMMON.VALIDATION` (400).
+- Every weekly slot in a Student Profile or a group's children carries
+  `nextStartsAt` (ISO), the next real start; the Student Profile also carries
+  `familyTimeZone` for staff.
+
 ### 3.7 Approvals (`approval.controller.ts`, `approval.service.ts`)
 
 ```

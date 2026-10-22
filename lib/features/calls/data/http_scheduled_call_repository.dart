@@ -1,5 +1,6 @@
 import '../../../core/errors/app_error.dart';
 import '../../../core/network/api_client.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../domain/scheduled_call.dart';
 import 'scheduled_call_repository.dart';
 
@@ -122,7 +123,7 @@ ScheduledCall parseScheduledCall(Map<dynamic, dynamic> row) {
   };
   DateTime? time(String key) {
     final raw = row[key];
-    return raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
+    return AppClock.parse(raw);
   }
 
   final startsAt = time('startsAt');

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
+import { AwayBadge } from './Complaint'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -70,9 +71,12 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                           )}
                         </td>
                         <td>
-                          <Badge tone={row.isActive ? 'ok' : 'outline'} dot>
-                            {tx(row.isActive ? T.active : T.inactive)}
-                          </Badge>
+                          <span className="tf-badges">
+                            <Badge tone={row.isActive ? 'ok' : 'outline'} dot>
+                              {tx(row.isActive ? T.active : T.inactive)}
+                            </Badge>
+                            <AwayBadge away={row.away} />
+                          </span>
                         </td>
                       </tr>
                     ))}

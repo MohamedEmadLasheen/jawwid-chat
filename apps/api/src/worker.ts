@@ -216,7 +216,8 @@ async function bootstrap(): Promise<void> {
       }
     }
 
-    // Lessons from regular times, and their reminders -- before dispatch, so a
+    // Lessons from regular times, their reminders and (hourly, inside the
+    // sweep) the PD-22 daylight-saving warnings -- before dispatch, so a
     // reminder scheduled now and already due goes out on this pass.
     if (Date.now() >= nextLessonSweep) {
       draining = true;

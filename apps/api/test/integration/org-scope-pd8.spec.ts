@@ -612,7 +612,7 @@ describe('4b. reassignment over HTTP: access follows the child, at once', () => 
     expect([bySuper.status, bySuper.code]).toEqual([409, CommErrorCode.ORG_STRUCTURE_INVALID]);
   });
 
-  it('moving ONE child of a family group detaches it; moving the LAST child transfers the group; private 1:1s never transfer', async () => {
+  it('moving ONE child of a family group detaches it; moving the LAST child transfers the group; a 1:1 is never duplicated', async () => {
     const family = m.families.find((f) => f.scenario === 'A' && f.children.length >= 2)!;
     const from = family.children[0].supervisorId;
     const to = m.supervisors.find((x) => x.id !== from)!.id;
@@ -643,7 +643,9 @@ describe('4b. reassignment over HTTP: access follows the child, at once', () => 
     expect(fromSees.has(direct.conversationId)).toBe(false);
     const toSees = await listed(to);
     expect(toSees.has(group.conversationId)).toBe(true);
-    // `from`'s private 1:1 with the parent did not transfer to `to`.
+    // `from`'s 1:1 with the parent did not pass to `to`: the parent had already
+    // opened one with `to`, and two threads cannot share one pair (PD-24). The
+    // clean hand-over is pinned in supervisor-transfer-pd024.spec.ts.
     expect(toSees.has(direct.conversationId)).toBe(false);
     const seated = await g.prisma.conversationMember.findMany({ where: { conversationId: group.conversationId, actorKind: 'staff', leftAt: null } });
     expect(seated.map((x) => x.actorId)).toEqual([to]);

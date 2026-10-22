@@ -1,4 +1,5 @@
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { ACADEMY_ZONE, zoneLabel } from '@/core/time/academyTime'
 
 export interface Pair {
   en: string
@@ -41,7 +42,7 @@ export const J = {
     ar: 'سجّل الحصة التعويضية بعد اتفاق الأسرة والمعلم على الموعد. أوقات المعلم المتاحة مقترحة أدناه.',
   },
   makeupDate: { en: 'Date', ar: 'التاريخ' },
-  makeupTime: { en: 'Time', ar: 'الوقت' },
+  makeupTime: { en: 'Time (Cairo time)', ar: 'الوقت (بتوقيت القاهرة)' },
   suggested: { en: 'Free times', ar: 'أوقات متاحة' },
   send: { en: 'Send', ar: 'إرسال' },
   sending: { en: 'Sending…', ar: 'جارٍ الإرسال…' },
@@ -187,8 +188,10 @@ export const WEEKDAYS: Record<number, Pair> = {
   7: { en: 'Sunday', ar: 'الأحد' },
 }
 
+/** PD-22: "Mon 21 Oct, 17:00 (Cairo time)" -- the academy's clock, named. */
 export function formatLessonWhen(iso: string, locale: 'ar' | 'en'): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', {
-    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  const when = new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', {
+    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE,
   }).format(new Date(iso))
+  return `${when} (${zoneLabel(ACADEMY_ZONE, locale)})`
 }

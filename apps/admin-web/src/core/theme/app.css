@@ -510,6 +510,9 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow-x: auto;
+  /* The containing block of a header's absolutely positioned .sr-only label, so it
+     scrolls with the table instead of widening the page (seen in RTL at phone width). */
+  position: relative;
 }
 .table { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-md); }
 .table th, .table td {

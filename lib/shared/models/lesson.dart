@@ -5,6 +5,8 @@
 /// decided again when it is submitted. The client only draws what it is offered.
 library;
 
+import '../utils/app_clock.dart';
+
 /// A form under "+" that records what happened to one lesson.
 enum LessonTicketKind {
   /// Teacher: the learner attended. Closes the lesson as held.
@@ -193,11 +195,20 @@ class GroupChild {
 
 /// A child's regular weekly time, in the teacher's zone: ISO [weekday] 1..7, [start] 'HH:MM'.
 class GroupChildSlot {
-  const GroupChildSlot({required this.weekday, required this.start, required this.durationMinutes});
+  const GroupChildSlot({
+    required this.weekday,
+    required this.start,
+    required this.durationMinutes,
+    this.nextStartsAt,
+  });
 
   final int weekday;
   final String start;
   final int durationMinutes;
+
+  /// PD-22: the next real start, in the account's zone. What a reader is shown: the
+  /// weekday itself can differ from [weekday] in another country.
+  final DateTime? nextStartsAt;
 }
 
 /// The structured half of a message of type `card`.
@@ -227,7 +238,7 @@ class MessageCard {
 
   DateTime? time(String key) {
     final v = payload[key];
-    return v is String ? DateTime.tryParse(v)?.toLocal() : null;
+    return AppClock.parse(v);
   }
 
   bool flag(String key) => payload[key] == true;

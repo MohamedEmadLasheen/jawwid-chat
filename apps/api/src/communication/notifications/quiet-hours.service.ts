@@ -21,7 +21,11 @@ export class QuietHoursService {
     const settings = await this.prisma.quietHours.findUnique({ where: { actorId: recipientId } });
     if (!settings || !settings.enabled) return scheduledAt;
 
-    const localMinutes = QuietHoursService.minutesInZone(scheduledAt, settings.timezone);
+    // PD-22: the person's own zone (from their phone) decides when their night
+    // is; quiet_hours.timezone is only the fallback for someone who never
+    // opened the app.
+    const own = await this.prisma.actorTimeZone.findUnique({ where: { actorId: recipientId }, select: { timeZone: true } });
+    const localMinutes = QuietHoursService.minutesInZone(scheduledAt, own?.timeZone ?? settings.timezone);
     if (!QuietHoursService.isQuiet(localMinutes, settings.startMinute, settings.endMinute)) {
       return scheduledAt;
     }

@@ -177,6 +177,46 @@ export class LeaveService {
     return { requests: await this.dtos(rows, true) };
   }
 
+  /**
+   * PD-26: every teacher's leave at a glance -- the balance next to the name
+   * (blank while no allowance is set, yet the leave is still recorded), whether
+   * they are away today and until when, and how many requests wait.
+   */
+  async overview(actorId: string, yearQuery?: string) {
+    const actor = await this.requireSupervisor(actorId);
+    const year = yearField(yearQuery, todayIn(await this.timeZone()));
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; name: string; active: boolean; allowance: number | null; used: number; pending: number; away_kind: string | null; away_until: Date | null }>
+    >`
+      SELECT t.id::text AS id, t.name, (t.is_active AND t.left_at IS NULL) AS active,
+             (SELECT a.days FROM chat.teacher_leave_allowance a
+               WHERE a.teacher_id = t.id AND a.leave_year = ${year}
+               ORDER BY a.set_at DESC, a.id DESC LIMIT 1) AS allowance,
+             (SELECT count(*)::int FROM chat.teacher_day_off o
+               WHERE o.teacher_id = t.id AND o.suspension_id IS NULL
+                 AND extract(year FROM o.day) = ${year}) AS used,
+             (SELECT count(*)::int FROM chat.teacher_leave_request r
+               WHERE r.teacher_id = t.id AND r.state = 'requested') AS pending,
+             away.kind AS away_kind, away.until AS away_until
+        FROM chat.teacher t
+        LEFT JOIN LATERAL chat.teacher_away(t.id, chat.academy_today()) away ON true
+       WHERE t.organization_id = ${actor.organizationId}::uuid
+       ORDER BY (t.is_active AND t.left_at IS NULL) DESC, t.name`;
+    return {
+      year,
+      teachers: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        isActive: r.active,
+        allowance: r.allowance,
+        used: r.used,
+        balance: r.allowance === null ? null : r.allowance - r.used,
+        pendingRequests: r.pending,
+        away: r.away_kind && r.away_until ? { kind: r.away_kind, until: isoDate(r.away_until) } : null,
+      })),
+    };
+  }
+
   /** One teacher's leave for a year, for the Teacher File and the Supervision page. */
   async teacherLeave(actorId: string, teacherId: string, yearQuery?: string) {
     const actor = await this.requireSupervisor(actorId);

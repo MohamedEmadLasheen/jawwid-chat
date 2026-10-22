@@ -10,6 +10,7 @@ import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/network/error_mapper.dart';
 import '../../../shared/models/message.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../domain/message_log.dart';
 import '../domain/outbox.dart';
 
@@ -215,7 +216,8 @@ class MessagesController extends Notifier<MessagesState> {
   /// Compose and enqueue. Returns the client id so a caller can track this message.
   String send(String body, {ReplyPreview? replyTo}) {
     final clientMessageId = _uuid.v4();
-    final now = DateTime.now();
+    // PD-22: the echo's time reads in the account's zone, like the server copy that replaces it.
+    final now = AppClock.now();
 
     // The echo carries no author identity beyond `isMine`. Author name and role are the
     // server's to assert, and own messages never render an author line anyway — so looking
@@ -257,7 +259,7 @@ class MessagesController extends Notifier<MessagesState> {
   /// what they just recorded while it is still uploading.
   String sendVoice(PendingVoiceNote note, {ReplyPreview? replyTo}) {
     final clientMessageId = _uuid.v4();
-    final now = DateTime.now();
+    final now = AppClock.now();
 
     final echo = Message(
       clientMessageId: clientMessageId,
@@ -308,7 +310,7 @@ class MessagesController extends Notifier<MessagesState> {
     ReplyPreview? replyTo,
   }) {
     final clientMessageId = _uuid.v4();
-    final now = DateTime.now();
+    final now = AppClock.now();
 
     final echo = Message(
       clientMessageId: clientMessageId,

@@ -28,6 +28,7 @@ import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { TrialService } from '../../src/lessons/trial.service';
 import { NewStudentsService } from '../../src/new-students/new-students.service';
 import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.service';
+import { OrgStructureService } from '../../src/org/org-structure.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
@@ -39,7 +40,10 @@ const cards = new CardPoster(g.conversations, g.outbox, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
 const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
 // PD-16: the page is NewStudentEnrolmentService's (filtered per viewer).
-const enrolment = new NewStudentEnrolmentService(g.prisma, g.authz, g.conversations, new NewStudentsService(g.prisma), lessons, scheduling, audit);
+const enrolment = new NewStudentEnrolmentService(
+  g.prisma, g.authz, g.conversations, new NewStudentsService(g.prisma), lessons, scheduling,
+  new OrgStructureService(g.prisma, g.authz, g.conversations, audit), audit,
+);
 const stats = new StatsService(g.prisma, g.conversations, lessons, scheduling, g.config);
 
 const MIN = 60_000;

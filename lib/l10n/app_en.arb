@@ -521,6 +521,27 @@
     }
   },
   "systemGroupArchived": "Group archived",
+  "systemGroupSupervisorChanged": "{name} is now this group's supervisor",
+  "@systemGroupSupervisorChanged": {
+    "description": "PD-24 system message: the group was handed to another supervisor; history kept.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "systemGroupSupervisorChangedNoName": "This group's supervisor changed",
+  "systemDirectSupervisorChanged": "{name} is now your supervisor; the chat history is kept",
+  "@systemDirectSupervisorChanged": {
+    "description": "PD-24 system message in the parent's 1:1 with their supervisor after a transfer.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "systemDirectSupervisorChangedNoName": "Your supervisor changed; the chat history is kept",
+  "systemGroupLearnerDetached": "A child of this group moved to another supervisor",
   "systemUpdate": "System update",
   "lessonTicketsHeader": "Lesson",
   "@lessonTicketsHeader": {
@@ -841,6 +862,30 @@
   },
   "cardViolationNoShow": "Absent from the lesson",
   "cardViolationApology": "Apologised for the lesson",
+  "cardViolationAbsence": "Absent",
+  "cardViolationComplaint": "A complaint was upheld",
+  "chatTeacherOnLeave": "{name} is on leave until {date}. Messages still reach them.",
+  "@chatTeacherOnLeave": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "chatTeacherAway": "{name} is away until {date}. Messages still reach them.",
+  "@chatTeacherAway": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "cardViolationStep": "Violation {step} this month",
   "@cardViolationStep": {
     "placeholders": {
@@ -1463,5 +1508,51 @@
   "salesVoidConfirm": "Void instalment",
   "salesBillingStateConflict": "This instalment was already paid or voided. The list has been refreshed.",
   "salesBillingInvalid": "Check the date and the reference, then try again.",
-  "salesWriteFailed": "Could not save. Try again."
+  "salesWriteFailed": "Could not save. Try again.",
+  "settingsDateTime": "Date & time",
+  "@settingsDateTime": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "settingsDateTimeSubtitle": "Time zone: {zone}",
+  "@settingsDateTimeSubtitle": {
+    "description": "PD-22: Settings -> Date & time.",
+    "placeholders": {
+      "zone": {
+        "type": "String",
+        "example": "Kuwait (GMT+3)"
+      }
+    }
+  },
+  "timeZoneSetAutomatically": "Set automatically",
+  "@timeZoneSetAutomatically": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneAutomaticHint": "Uses your phone's time zone, and changes by itself when you travel.",
+  "@timeZoneAutomaticHint": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneLabel": "Time zone",
+  "@timeZoneLabel": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneUnknown": "Not known yet",
+  "@timeZoneUnknown": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneAppliesTo": "Lesson times, reminders and notifications are shown in this time zone.",
+  "@timeZoneAppliesTo": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneSearchHint": "Search for a city",
+  "@timeZoneSearchHint": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneNoMatch": "No time zone matches.",
+  "@timeZoneNoMatch": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneSaveFailed": "Could not change the time zone. Try again.",
+  "@timeZoneSaveFailed": {
+    "description": "PD-22: Settings -> Date & time."
+  }
 }

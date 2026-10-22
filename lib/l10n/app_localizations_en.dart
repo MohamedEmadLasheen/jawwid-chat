@@ -834,6 +834,28 @@ class L10nEn extends L10n {
   String get systemGroupArchived => 'Group archived';
 
   @override
+  String systemGroupSupervisorChanged(String name) {
+    return '$name is now this group\'s supervisor';
+  }
+
+  @override
+  String get systemGroupSupervisorChangedNoName =>
+      'This group\'s supervisor changed';
+
+  @override
+  String systemDirectSupervisorChanged(String name) {
+    return '$name is now your supervisor; the chat history is kept';
+  }
+
+  @override
+  String get systemDirectSupervisorChangedNoName =>
+      'Your supervisor changed; the chat history is kept';
+
+  @override
+  String get systemGroupLearnerDetached =>
+      'A child of this group moved to another supervisor';
+
+  @override
   String get systemUpdate => 'System update';
 
   @override
@@ -1402,6 +1424,22 @@ class L10nEn extends L10n {
 
   @override
   String get cardViolationApology => 'Apologised for the lesson';
+
+  @override
+  String get cardViolationAbsence => 'Absent';
+
+  @override
+  String get cardViolationComplaint => 'A complaint was upheld';
+
+  @override
+  String chatTeacherOnLeave(String name, String date) {
+    return '$name is on leave until $date. Messages still reach them.';
+  }
+
+  @override
+  String chatTeacherAway(String name, String date) {
+    return '$name is away until $date. Messages still reach them.';
+  }
 
   @override
   String cardViolationStep(String step) {
@@ -2743,4 +2781,38 @@ class L10nEn extends L10n {
 
   @override
   String get salesWriteFailed => 'Could not save. Try again.';
+
+  @override
+  String get settingsDateTime => 'Date & time';
+
+  @override
+  String settingsDateTimeSubtitle(String zone) {
+    return 'Time zone: $zone';
+  }
+
+  @override
+  String get timeZoneSetAutomatically => 'Set automatically';
+
+  @override
+  String get timeZoneAutomaticHint =>
+      'Uses your phone\'s time zone, and changes by itself when you travel.';
+
+  @override
+  String get timeZoneLabel => 'Time zone';
+
+  @override
+  String get timeZoneUnknown => 'Not known yet';
+
+  @override
+  String get timeZoneAppliesTo =>
+      'Lesson times, reminders and notifications are shown in this time zone.';
+
+  @override
+  String get timeZoneSearchHint => 'Search for a city';
+
+  @override
+  String get timeZoneNoMatch => 'No time zone matches.';
+
+  @override
+  String get timeZoneSaveFailed => 'Could not change the time zone. Try again.';
 }

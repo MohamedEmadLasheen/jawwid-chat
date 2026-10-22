@@ -12,6 +12,7 @@ import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/search_fold.dart';
 import '../../../shared/utils/text_direction.dart';
@@ -218,7 +219,7 @@ class _Feed extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final now = DateTime.now();
+    final now = AppClock.now();
     // The same box searches message text across every chat (owner decision
     // 2026-10-20) once there is a term worth sending.
     final term = query.trim();

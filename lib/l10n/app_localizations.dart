@@ -1597,6 +1597,36 @@ abstract class L10n {
   /// **'Group archived'**
   String get systemGroupArchived;
 
+  /// PD-24 system message: the group was handed to another supervisor; history kept.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now this group\'s supervisor'**
+  String systemGroupSupervisorChanged(String name);
+
+  /// No description provided for @systemGroupSupervisorChangedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'This group\'s supervisor changed'**
+  String get systemGroupSupervisorChangedNoName;
+
+  /// PD-24 system message in the parent's 1:1 with their supervisor after a transfer.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now your supervisor; the chat history is kept'**
+  String systemDirectSupervisorChanged(String name);
+
+  /// No description provided for @systemDirectSupervisorChangedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'Your supervisor changed; the chat history is kept'**
+  String get systemDirectSupervisorChangedNoName;
+
+  /// No description provided for @systemGroupLearnerDetached.
+  ///
+  /// In en, this message translates to:
+  /// **'A child of this group moved to another supervisor'**
+  String get systemGroupLearnerDetached;
+
   /// No description provided for @systemUpdate.
   ///
   /// In en, this message translates to:
@@ -2592,6 +2622,30 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Apologised for the lesson'**
   String get cardViolationApology;
+
+  /// No description provided for @cardViolationAbsence.
+  ///
+  /// In en, this message translates to:
+  /// **'Absent'**
+  String get cardViolationAbsence;
+
+  /// No description provided for @cardViolationComplaint.
+  ///
+  /// In en, this message translates to:
+  /// **'A complaint was upheld'**
+  String get cardViolationComplaint;
+
+  /// No description provided for @chatTeacherOnLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is on leave until {date}. Messages still reach them.'**
+  String chatTeacherOnLeave(String name, String date);
+
+  /// No description provided for @chatTeacherAway.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is away until {date}. Messages still reach them.'**
+  String chatTeacherAway(String name, String date);
 
   /// No description provided for @cardViolationStep.
   ///
@@ -4896,6 +4950,66 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Could not save. Try again.'**
   String get salesWriteFailed;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Date & time'**
+  String get settingsDateTime;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Time zone: {zone}'**
+  String settingsDateTimeSubtitle(String zone);
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Set automatically'**
+  String get timeZoneSetAutomatically;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Uses your phone\'s time zone, and changes by itself when you travel.'**
+  String get timeZoneAutomaticHint;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Time zone'**
+  String get timeZoneLabel;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Not known yet'**
+  String get timeZoneUnknown;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson times, reminders and notifications are shown in this time zone.'**
+  String get timeZoneAppliesTo;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for a city'**
+  String get timeZoneSearchHint;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'No time zone matches.'**
+  String get timeZoneNoMatch;
+
+  /// PD-22: Settings -> Date & time.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change the time zone. Try again.'**
+  String get timeZoneSaveFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
