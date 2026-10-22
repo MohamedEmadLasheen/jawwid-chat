@@ -89,7 +89,8 @@ first two; AI #7 thereafter.
 
 ## Blockers
 
-**BLOCKER-1 · No hosting.** No cloud account, domain, TLS certificate, managed
+**BLOCKER-1 · No hosting.** *Provider chosen 2026-10-22: DigitalOcean App
+Platform (ADR-010). Nothing is provisioned yet.* No cloud account, domain, TLS certificate, managed
 Postgres, Redis, object storage bucket, push credentials or LiveKit project
 exists for Jawwid Chat. Owner: product owner. Until then, nothing can be
 deployed anywhere, and the release step of both deployment workflows fails on
@@ -147,7 +148,7 @@ Cross-referenced: `docs/product-operations/shared-working-tree-risk.md`.
 
 1. ~~Provision a git remote~~ — done; CI runs and is green (BLOCKER-2 closed).
 2. ~~Write `main.ts` and `worker.ts`~~ — done (BLOCKER-4 closed).
-3. **Choose a provider** (ADR-003 vs PRD §12.3 remains unresolved) and provision
+3. ~~Choose a provider~~ — DigitalOcean App Platform (ADR-010). Provision
    hosting, then create the GitHub `staging` environment and configure its
    variables and secrets (BLOCKER-1; ordered sequence under **Staging:
    CODE-CLOSED / INFRA-BLOCKED**). Verify the BYPASSRLS capability first —
