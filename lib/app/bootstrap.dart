@@ -40,6 +40,7 @@ import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
+import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
@@ -198,6 +199,11 @@ List<Override> _httpOverrides() {
     profileRepositoryProvider.overrideWithValue(
       HttpProfileRepository(client: client),
     ),
+    // PD-23: Devices & sessions. The SAME client -- the one that refreshes through the one
+    // token provider -- never the public transport and never a second refresher.
+    accountSessionsRepositoryProvider.overrideWithValue(
+      HttpAccountSessionsRepository(client: client),
+    ),
     // Stories are read-only here. The development composition root below registers no
     // implementation on purpose -- a fixture story is indistinguishable on screen from a real
     // publication, and this feature's contract is that what a reader sees was genuinely
@@ -304,6 +310,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     // A fixture profile is honest here, unlike a fixture story: it is the signed-in user's
     // OWN, so nothing fake stands in for something another person actually published.
     profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
+    // PD-23: an in-memory list of this account's devices, so the screen can be worked on.
+    accountSessionsRepositoryProvider.overrideWithValue(FakeAccountSessionsRepository()),
     // The fixture parent has billed nothing: an honest empty answer about their OWN account.
     billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
     // A Sales seat can join a fixture trial group (PD-20).

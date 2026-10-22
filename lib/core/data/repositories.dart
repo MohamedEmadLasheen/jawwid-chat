@@ -150,23 +150,6 @@ class CallHistoryEntry {
   final CallHistoryDirection? direction;
 }
 
-/// A device/session this user is signed in on (§9, §43).
-class DeviceSession {
-  const DeviceSession({
-    required this.id,
-    required this.label,
-    required this.platform,
-    required this.lastSeenAt,
-    this.isCurrent = false,
-  });
-
-  final String id;
-  final String label;
-  final String platform;
-  final DateTime lastSeenAt;
-  final bool isCurrent;
-}
-
 /// A recording sitting on disk that has not been uploaded yet.
 ///
 /// Held separately from [UploadedAttachment] because the two are at different
@@ -301,9 +284,8 @@ abstract interface class AuthRepository {
 
   Future<void> signOut();
 
-  Future<List<DeviceSession>> devices();
-
-  Future<void> revokeDevice(String deviceId);
+  // The account's sessions ("Devices & sessions", PD-23) are not here: they are their own
+  // repository, `AccountSessionsRepository`, over the one authenticated ApiClient.
 
   /// Emits when the backend ends this session — revoked elsewhere, or account disabled.
   Stream<void> get sessionRevoked;

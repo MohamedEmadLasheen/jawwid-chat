@@ -180,7 +180,18 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
-  Future<void> signOut() async {
+  /// The one sign-out path.
+  ///
+  /// [serverAlreadyEnded] is for a session the server has ALREADY ended at this user's own
+  /// request -- PD-23's "sign out" of this device from Devices & sessions. `/auth/logout`
+  /// would then be refused as revoked, and that refusal would arrive here as a
+  /// "your session was revoked" sign-out the user did not need to be told about. Everything
+  /// local is cleared exactly as for any other sign-out.
+  Future<void> signOut({bool serverAlreadyEnded = false}) async {
+    if (serverAlreadyEnded) {
+      await _endSession(SignedOutReason.none);
+      return;
+    }
     try {
       await _repository.signOut();
     } catch (error) {

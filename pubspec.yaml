@@ -87,6 +87,14 @@ dependencies:
   # platform channel.
   video_player: ^2.14.0
 
+  # PD-23 app lock: Face ID / Touch ID / Android BiometricPrompt, with the device
+  # passcode as the fallback. flutter.dev's own package. The app never sees
+  # biometric data -- the platform answers yes or no. Reached only through the
+  # seam in lib/features/app_lock/data/app_lock_authenticator.dart, so no test
+  # touches the platform channel. Android needs MainActivity to be a
+  # FlutterFragmentActivity; iOS needs NSFaceIDUsageDescription.
+  local_auth: ^3.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

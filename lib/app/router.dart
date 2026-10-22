@@ -17,6 +17,7 @@ import '../features/profile/presentation/my_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/sales_payments/presentation/family_billing_screen.dart';
 import '../features/sales_payments/presentation/sales_payments_screen.dart';
+import '../features/sessions/presentation/devices_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
 import '../features/student_profile/presentation/student_profile_screen.dart';
@@ -74,6 +75,9 @@ abstract final class Routes {
 
   /// The viewer's starred messages (their private bookmarks).
   static const starred = '/settings/starred';
+
+  /// PD-23: the account's own sessions -- every device signed in, and signing them out.
+  static const devices = '/settings/devices';
 
   /// The teacher's professional profile. A SEPARATE destination from
   /// [myAccount]: that screen is who you are, this one is what families read
@@ -234,6 +238,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.starred,
         builder: (context, state) => const StarredMessagesScreen(),
+      ),
+      GoRoute(
+        path: Routes.devices,
+        builder: (context, state) => const DevicesScreen(),
       ),
       GoRoute(
         path: Routes.teacherProfile,

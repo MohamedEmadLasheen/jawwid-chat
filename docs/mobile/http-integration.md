@@ -185,9 +185,13 @@ identity: the bearer token is the only credential the client sends.
   still enforced immediately — `AuthService.authenticate` re-reads the session row on every
   request — so a revoked session fails the next call the app makes. What is missing is only
   the eviction of an app sitting idle, which realtime provides.
-- **Session registry.** `GET /me/sessions` and `DELETE /me/sessions/:id` are named in
-  IDENTITY-MODEL §4 but not published. `devices()` and `revokeDevice()` fail explicitly
-  rather than fabricating a list a user would act on.
+- **Session registry — shipped (PD-23).** `GET /me/sessions`,
+  `POST /me/sessions/:id/revoke` and `POST /me/sessions/revoke-others`
+  (API-CONTRACT §3.1a) back Settings → Devices & sessions through
+  `AccountSessionsRepository` (`lib/features/sessions`), on the same `ApiClient` and so the
+  same single token provider. The old `AuthRepository.devices()` / `revokeDevice()` stubs are
+  gone. Revoking the CURRENT session signs out through `AuthController.signOut(serverAlreadyEnded:
+  true)`, which never presents the now-revoked refresh token again.
 
 ## 5. Defects found in the backend while integrating
 
