@@ -6,6 +6,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { OrgStructureService } from '../org/org-structure.service';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { LessonService } from '../lessons/lesson.service';
@@ -51,6 +52,7 @@ export class NewStudentEnrolmentService {
     private readonly forms: NewStudentsService,
     private readonly lessons: LessonService,
     private readonly scheduling: SchedulingService,
+    private readonly org: OrgStructureService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
@@ -263,6 +265,25 @@ export class NewStudentEnrolmentService {
       }
     }
     return { familyId: created.familyId, learnerIds: created.learners.map((l) => l.id), schedules };
+  }
+
+  /**
+   * PD-24: the Operations manager (or the super admin) changes a new student's
+   * supervisor at any time after Assign. The children of the enrolment -- with
+   * any sibling who shares a group with them -- move together, and their
+   * group, the parent's 1:1, billing and profiles follow
+   * (OrgStructureService.transferLearners). Nothing is created again.
+   */
+  async changeSupervisor(actorId: string, trialId: string, body: Record<string, unknown>) {
+    const actor = await this.conversations.requireActor(actorId);
+    const viewer = await this.viewer(actor);
+    if (!viewer.superAdmin && !viewer.opsManager) {
+      throw new CommError(CommErrorCode.LESSON_DENIED, 'a new student\'s supervisor is changed by the Operations manager');
+    }
+    if (!isUuid(trialId)) throw notFound();
+    const enrolment = await this.prisma.studentEnrolment.findFirst({ where: { lessonId: trialId, organizationId: actor.organizationId ?? '' } });
+    if (!enrolment) throw notFound();
+    return this.org.transferLearners(actor, enrolment.learnerIds, body);
   }
 
   async createGroup(actorId: string, trialId: string) {

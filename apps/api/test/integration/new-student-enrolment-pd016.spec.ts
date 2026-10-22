@@ -27,6 +27,7 @@ import { TrialService } from '../../src/lessons/trial.service';
 import { EnrollmentService } from '../../src/lessons/enrollment.service';
 import { NewStudentsService } from '../../src/new-students/new-students.service';
 import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.service';
+import { OrgStructureService } from '../../src/org/org-structure.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
@@ -43,7 +44,10 @@ const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, 
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, new CardPoster(g.conversations, g.outbox, audit), g.config, audit);
 const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
-const enrolment = new NewStudentEnrolmentService(g.prisma, g.authz, g.conversations, new NewStudentsService(g.prisma), lessons, scheduling, audit);
+const enrolment = new NewStudentEnrolmentService(
+  g.prisma, g.authz, g.conversations, new NewStudentsService(g.prisma), lessons, scheduling,
+  new OrgStructureService(g.prisma, g.authz, g.conversations, audit), audit,
+);
 const details = new EnrollmentService(g.prisma, g.authz, g.conversations, lessons, scheduling, audit);
 const auth = new AuthService(g.prisma, new PrismaIdentityService(g.prisma), audit);
 const signup = new ParentSignupService(g.prisma, audit);
@@ -255,6 +259,40 @@ describe('3. the family group', () => {
     // The group's details page shows each child with the age Sales recorded.
     const kids = await details.groupLearners(contact.id, conversationId);
     expect(kids.learners.map((k) => [k.name, k.age, k.course?.name]).sort()).toEqual([['child_p1', 8, 'course_p'], ['child_p2', 11, 'course_p']]);
+  });
+});
+
+describe('3b. changing the supervisor (PD-24)', () => {
+  it('only the Operations manager; the same group, the parent\'s 1:1 and the card follow the children', async () => {
+    const done = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    const { conversationId } = await enrolment.createGroup(s.ownerId, trialId);
+    const contact = await g.prisma.contact.findFirstOrThrow({ where: { familyId: done.familyId } });
+    const direct = await g.prisma.conversation.findFirstOrThrow({ where: { type: 'direct', familyId: done.familyId } });
+
+    for (const who of [s.ownerId, s.otherAdminId, salesId, tsupId]) {
+      expect(await code(enrolment.changeSupervisor(who, trialId, { supervisorId: s.otherAdminId, reason: 'probe' }))).toBe(CommErrorCode.LESSON_DENIED);
+    }
+    expect(await code(enrolment.changeSupervisor(s.managerId, trialId, { supervisorId: s.otherAdminId }))).toBe(CommErrorCode.VALIDATION);
+
+    const r = await enrolment.changeSupervisor(s.managerId, trialId, { supervisorId: s.otherAdminId, reason: 'supervisor on leave' });
+    expect(r).toMatchObject({ changed: true, groups: 1, directChats: 1 });
+    expect(r.learners.map((l) => l.id).sort()).toEqual([...done.learnerIds].sort());
+
+    // The card: now the new supervisor's, and gone from the previous one's page.
+    const ids = async (actor: string) => (await enrolment.page(actor)).students.map((x) => x.trialId);
+    expect(await ids(s.otherAdminId)).toEqual([trialId]);
+    expect(await ids(s.ownerId)).toEqual([]);
+    expect((await enrolment.page(s.managerId)).students[0].enrolment).toMatchObject({
+      supervisor: { id: s.otherAdminId },
+      groupConversationId: conversationId,
+    });
+    // The same group and the same 1:1, with the new supervisor seated in place of the old.
+    const seated = async (id: string) =>
+      (await g.prisma.conversationMember.findMany({ where: { conversationId: id, leftAt: null } })).map((m) => m.actorId).sort();
+    expect(await seated(conversationId)).toEqual([contact.id, s.teacherId, s.otherAdminId].sort());
+    expect(await seated(direct.id)).toEqual([contact.id, s.otherAdminId].sort());
+    expect(await g.prisma.conversation.count({ where: { familyId: done.familyId } })).toBe(2);
+    expect((await g.prisma.family.findUniqueOrThrow({ where: { id: done.familyId } })).ownerId).toBe(s.otherAdminId);
   });
 });
 

@@ -52,9 +52,13 @@ Consequences the tests pin:
 * Reassigning a child moves the child's groups with it
   (`ConversationService.reconcileSupervisionChange`): its Student Group and a
   family group about it alone transfer; a family group about it *and* others
-  detaches it (teachers who teach none of the remaining children leave). The
-  former supervisor's private 1:1 with the parent never transfers, and is lost
-  to them once they supervise none of the family's children.
+  detaches it (teachers who teach none of the remaining children leave). Since
+  PD-24 (2026-10-22) the former supervisor's 1:1 with the parent passes to the
+  new supervisor -- the same conversation and history -- once they supervise
+  none of the family's children (unless the parent already has a 1:1 with the
+  new supervisor; then it stays as history nobody below the super admin
+  reads). A whole group moves with `OrgStructureService.transferGroup`, which
+  moves every child of the group together so nothing is detached.
 * The Sales manager reads nothing yet; the Teachers manager reads the Teachers
   supervisors' channels with teachers; the Operations Manager reads no
   Teachers-department channel.

@@ -62,6 +62,15 @@ export interface CandidateFamily {
   }>
 }
 
+/** PD-24: what a transfer moved -- every child of the unit, with the counts of what followed. */
+export interface TransferResult {
+  supervisorId: string
+  changed: boolean
+  learners: Array<{ id: string; name: string }>
+  groups: number
+  directChats: number
+}
+
 export interface NewFamilyGroup {
   learnerIds: string[]
   contactIds: string[]
@@ -77,6 +86,9 @@ export const orgApi = {
       `/org/learners/${encodeURIComponent(learnerId)}/supervisor`,
       body,
     ),
+  /** PD-24: a student or family group, with all its children, moves to another supervisor. */
+  transferGroup: (conversationId: string, body: { supervisorId: string; reason: string }) =>
+    api.post<TransferResult>(`/org/conversations/${encodeURIComponent(conversationId)}/supervisor`, body),
   createBackup: (body: { primaryId: string; backupId: string; reason: string }) => api.post('/org/backups', body),
   activateBackup: (id: string, body: { reason: string; until?: string }) =>
     api.post(`/org/backups/${encodeURIComponent(id)}/activate`, body),

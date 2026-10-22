@@ -1,4 +1,5 @@
 import { api } from '@/core/api/client'
+import type { TransferResult } from '@/features/organization/api'
 
 /**
  * PD-11 T4 and the trial journey -- trial lessons, each trial's one outcome,
@@ -160,6 +161,9 @@ export const trialsApi = {
   /** PD-16: the Operations manager assigns the supervisor; Chat creates the family. */
   assignNewStudent: (trialId: string, body: { supervisorId: string; email?: string }) =>
     api.post<AssignResult>(`/trials/new-students/${id(trialId)}/assign`, body),
+  /** PD-24: the Operations manager changes the supervisor; the children, their group and records move. */
+  changeNewStudentSupervisor: (trialId: string, body: { supervisorId: string; reason: string }) =>
+    api.post<TransferResult>(`/trials/new-students/${id(trialId)}/supervisor`, body),
   /** PD-16: the responsible supervisor opens the family's group. */
   createNewStudentGroup: (trialId: string) => api.post<{ conversationId: string }>(`/trials/new-students/${id(trialId)}/group`),
 }

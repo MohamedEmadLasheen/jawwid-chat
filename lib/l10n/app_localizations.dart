@@ -1597,6 +1597,36 @@ abstract class L10n {
   /// **'Group archived'**
   String get systemGroupArchived;
 
+  /// PD-24 system message: the group was handed to another supervisor; history kept.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now this group\'s supervisor'**
+  String systemGroupSupervisorChanged(String name);
+
+  /// No description provided for @systemGroupSupervisorChangedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'This group\'s supervisor changed'**
+  String get systemGroupSupervisorChangedNoName;
+
+  /// PD-24 system message in the parent's 1:1 with their supervisor after a transfer.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now your supervisor; the chat history is kept'**
+  String systemDirectSupervisorChanged(String name);
+
+  /// No description provided for @systemDirectSupervisorChangedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'Your supervisor changed; the chat history is kept'**
+  String get systemDirectSupervisorChangedNoName;
+
+  /// No description provided for @systemGroupLearnerDetached.
+  ///
+  /// In en, this message translates to:
+  /// **'A child of this group moved to another supervisor'**
+  String get systemGroupLearnerDetached;
+
   /// No description provided for @systemUpdate.
   ///
   /// In en, this message translates to:
