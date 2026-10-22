@@ -14,6 +14,7 @@ import { useTrialOp, useTrialSlots, useTrialTeachers, useTrials } from './hooks'
 import { TrialCardDialog } from './TrialCardDialog'
 import '../teachers/teachers.css'
 import './trials.css'
+import { ACADEMY_ZONE } from '@/core/time/academyTime'
 
 type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
 type Filter = 'all' | 'decision' | 'upcoming'
@@ -241,9 +242,9 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
   }
 
   const dayLabel = (k: string) =>
-    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { weekday: 'long', day: 'numeric', month: 'short' }).format(new Date(`${k}T12:00:00`))
+    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${k}T12:00:00Z`))
   const timeLabel = (iso: string) =>
-    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE }).format(new Date(iso))
 
   return (
     <Dialog

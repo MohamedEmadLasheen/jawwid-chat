@@ -2580,4 +2580,38 @@ class L10nEn extends L10n {
 
   @override
   String get salesWriteFailed => 'Could not save. Try again.';
+
+  @override
+  String get settingsDateTime => 'Date & time';
+
+  @override
+  String settingsDateTimeSubtitle(String zone) {
+    return 'Time zone: $zone';
+  }
+
+  @override
+  String get timeZoneSetAutomatically => 'Set automatically';
+
+  @override
+  String get timeZoneAutomaticHint =>
+      'Uses your phone\'s time zone, and changes by itself when you travel.';
+
+  @override
+  String get timeZoneLabel => 'Time zone';
+
+  @override
+  String get timeZoneUnknown => 'Not known yet';
+
+  @override
+  String get timeZoneAppliesTo =>
+      'Lesson times, reminders and notifications are shown in this time zone.';
+
+  @override
+  String get timeZoneSearchHint => 'Search for a city';
+
+  @override
+  String get timeZoneNoMatch => 'No time zone matches.';
+
+  @override
+  String get timeZoneSaveFailed => 'Could not change the time zone. Try again.';
 }

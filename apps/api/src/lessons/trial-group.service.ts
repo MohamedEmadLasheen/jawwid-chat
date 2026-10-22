@@ -13,6 +13,7 @@ import { CommEvent } from '../communication/contracts/events';
 import { ActorKind, ConversationType, LessonKind, MemberRole } from '../communication/contracts/vocab';
 import { CardPoster } from '../supervision/card-poster';
 import { renderTrialCardBody, type CardLanguage } from './trial-cards';
+import { ACADEMY_ZONE, canonicalZone, whenWithZone } from '../platform/time-zone';
 
 type Tx = Prisma.TransactionClient;
 
@@ -332,11 +333,13 @@ export class TrialGroupService {
     };
   }
 
-  /** The instant in the academy's zone, as the group reads it. */
+  /**
+   * The instant in the academy's zone, naming that zone (PD-22): members of one
+   * conversation live in different countries, so the text must not pass for
+   * anyone's own clock. Clients draw `startsAt` in the reader's zone instead.
+   */
   async when(at: Date, lang: CardLanguage): Promise<string> {
-    const zone = String(await this.config.get('stats.zone'));
-    return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-GB', {
-      timeZone: zone, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
-    }).format(at);
+    const zone = canonicalZone(await this.config.get('stats.zone')) ?? ACADEMY_ZONE;
+    return whenWithZone(at, zone, lang);
   }
 }

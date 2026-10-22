@@ -42,7 +42,7 @@ class _TrialCard extends StatelessWidget {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final muted = foreground.withValues(alpha: 0.75);
-    final startsAt = card.time('startsAt')?.toLocal();
+    final startsAt = card.time('startsAt');
     final subtitle = [
       ?card.text('prospectName'),
       if (startsAt != null) lessonWhen(context, startsAt),

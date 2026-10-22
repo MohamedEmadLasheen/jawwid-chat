@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-20 — CLOSED
+## 4. Product decisions PD-1 to PD-22 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -139,6 +139,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
+**PD-22 was closed by the product owner on 2026-10-22** (every account has its own time zone). PD-21 is reserved by the teacher supervision hub.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -162,6 +163,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
+| **PD-22** | **Each account's time zone** (2026-10-22) | **CLOSED** — every person's times are shown and notified in their own zone, taken from their phone's OS zone ("Set automatically", like a phone) or picked by hand; teachers follow their phone too; a weekly lesson stays anchored in the teacher's zone; Admin Web shows Cairo time, named, with the family's local time beside it; reminders say the time in the recipient's zone. Record: `../architecture/TIME-ZONES.md` |
 
 ---
 
@@ -2012,9 +2014,71 @@ pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the
 
 ---
 
-### Decisions still open after PD-1 to PD-20
+### PD-22 · Each account's time zone
 
-None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
+**Closed 2026-10-22** by the product owner.
+
+The owner asked that every account have its own time zone, applied across the whole
+application and kept current when the person travels "like on mobile phones":
+teachers see lesson times in Cairo time, parents and students in their own country's
+time, and reminders arrive and read at the right local time. Owner answers the same
+day:
+
+1. **Teachers follow their phone** like everyone else (not locked to Cairo).
+2. **A weekly lesson stays anchored in the teacher's zone.** When Egypt changes its
+   clocks and the Gulf does not, the family's local time moves by an hour and the
+   teacher's does not.
+3. **Admin Web shows Cairo time, named, with the family's local time beside it.**
+4. **Push reminders state the local time** (still naming nobody).
+
+**Final decision.**
+
+```
+source of the zone   = the phone's OS time zone (IANA, e.g. Asia/Kuwait), reported
+                        by the app at sign-in and whenever it returns to the
+                        foreground. NEVER the location: the OS zone is what a phone
+                        itself uses, and needs no permission.
+setting              = "Set automatically" (default) follows the phone; turned off,
+                        the person picks a zone, which wins on every device until
+                        they turn it back on.            chat.actor_time_zone
+storage              = unchanged: every moment is an instant (timestamptz); a weekly
+                        lesson is a wall-clock time in the teacher's zone
+                        (PD-11 T2), materialized by Postgres AT TIME ZONE
+display (app)        = every instant in the account's zone; a weekly slot by its
+                        next real start (`nextStartsAt`), because the weekday can
+                        differ across zones
+display (Admin Web)  = Africa/Cairo for everyone, labelled; the family's local time
+                        beside a lesson where it differs
+text read by many    = a scheduled-call or trial card's text names its zone
+                        ("17:00 (Cairo time)"); the app draws `startsAt` instead
+reminders            = fire at the same instant as before (offsets from the lesson);
+                        the text's {time} is worded at SEND time in the recipient's
+                        zone; unknown zone -> the academy's time, named
+quiet hours          = the recipient's own night, in their zone
+academy calendar     = instalment due dates, payroll month, leave days stay dates in
+                        schedule.timezone; they are never converted
+```
+
+**Implementation phase.** Migration `20261022120000_chat_pd022_account_time_zone.sql`
+(table + reminder templates v2); `/me/time-zone` (API-CONTRACT §3.6a); the app's
+`AppClock`, `TimeZoneController` and Settings -> Date & time; Admin Web's
+`core/time/academyTime.ts`.
+
+**Consequences.** A family abroad sees a lesson move by an hour twice a year when
+Egypt changes its clocks; no teacher is ever double-booked by a clock change. A
+person's zone is visible to the administration only as "the family's local time".
+
+**Deprecated behaviour.** The 2026-10-14 rule "a reminder shows no time" is replaced:
+the time is now right for its reader. Times in Admin Web no longer follow the staff
+member's browser.
+
+**Closed.** 2026-10-22.
+
+---
+
+### Decisions still open after PD-1 to PD-22
+
+None at the decision level (PD-21 is held by the teacher supervision hub). PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
 phase starts and do not reopen either decision. Any new product question is
 recorded here with a new `PD-n` and the same six fields: decision, canonical

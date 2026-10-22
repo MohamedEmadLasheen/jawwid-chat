@@ -11,6 +11,7 @@ import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/search_text.dart';
 import '../../../shared/utils/text_direction.dart';
@@ -476,10 +477,8 @@ class _InlineProgress extends StatelessWidget {
 String callWhenLabel(BuildContext context, DateTime when, DateTime now) {
   final l10n = L10n.of(context);
   final locale = Localizations.localeOf(context).toLanguageTag();
-  final local = when.toLocal();
-  final day = DateTime(local.year, local.month, local.day);
-  final today = DateTime(now.year, now.month, now.day);
-  final difference = today.difference(day).inDays;
+  final local = AppClock.view(when);
+  final difference = RelativeTime.calendarDaysBetween(local, AppClock.view(now));
 
   final dayPart = switch (difference) {
     0 => l10n.todayLabel,

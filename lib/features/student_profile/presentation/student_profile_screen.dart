@@ -57,7 +57,16 @@ class _Body extends StatelessWidget {
     final locale = Localizations.localeOf(context).toLanguageTag();
     // ISO weekday 1 = Monday; 2024-01-01 was a Monday.
     String weekday(int d) => DateFormat.EEEE(locale).format(DateTime(2024, 1, d));
-    final zones = {for (final s in profile.schedule) ?s.timezone};
+    final material = MaterialLocalizations.of(context);
+    // PD-22: each lesson's next real start in the reader's own zone. Only a slot the server
+    // sent without one falls back to the teacher's wall clock, and only then is its zone named.
+    String when(StudentProfileSlot s) {
+      final next = s.nextStartsAt;
+      return next == null
+          ? '${weekday(s.weekday)} · ${s.start}'
+          : '${weekday(next.weekday)} · ${material.formatTimeOfDay(TimeOfDay.fromDateTime(next))}';
+    }
+    final zones = {for (final s in profile.schedule) if (s.nextStartsAt == null) ?s.timezone};
 
     return ListView(
       padding: const EdgeInsetsDirectional.only(bottom: Spacing.spacing9),
@@ -89,7 +98,7 @@ class _Body extends StatelessWidget {
           label: l10n.studentProfileSchedule,
           lines: [
             for (final s in profile.schedule)
-              '${weekday(s.weekday)} · ${s.start} · ${l10n.groupChildMinutes(s.durationMinutes)}',
+              '${when(s)} · ${l10n.groupChildMinutes(s.durationMinutes)}',
           ],
           missing: l10n.groupChildNoSchedule,
           note: zones.length == 1 ? l10n.studentProfileTimeZone(zones.single) : null,
