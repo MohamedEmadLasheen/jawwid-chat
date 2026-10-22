@@ -53,6 +53,7 @@ class AuthUser {
     this.avatarUrl,
     this.locale,
     this.timeZone,
+    this.isSuperAdmin = false,
   });
 
   final String id;
@@ -65,6 +66,10 @@ class AuthUser {
 
   /// IANA zone. Cairo is the product default when absent (§46).
   final String? timeZone;
+
+  /// PD-20 amendment: the organization's super admin, signed in with the Sales tabs.
+  /// Only ever true together with [UserRole.sales].
+  final bool isSuperAdmin;
 
   bool get isParent => role == UserRole.parent;
   bool get isTeacher => role == UserRole.teacher;

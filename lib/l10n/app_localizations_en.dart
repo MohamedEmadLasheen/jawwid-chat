@@ -2480,6 +2480,9 @@ class L10nEn extends L10n {
   String get roleSales => 'Sales';
 
   @override
+  String get roleSuperAdmin => 'Super admin';
+
+  @override
   String get conversationsEmptyBodySales =>
       'Trial groups and your conversations will appear here.';
 

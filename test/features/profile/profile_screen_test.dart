@@ -28,6 +28,7 @@ void main() {
     required UserRole role,
     required Widget child,
     Locale locale = const Locale('en'),
+    bool superAdmin = false,
   }) {
     final backend = FakeBackend(role: role);
     addTearDown(backend.dispose);
@@ -45,7 +46,7 @@ void main() {
           () => _SignedIn(
             backend: backend,
             // The fixture's own principal for the role (PD-20 added Sales).
-            user: AuthUser(id: backend.user.id, displayName: backend.user.displayName, role: role),
+            user: AuthUser(id: backend.user.id, displayName: backend.user.displayName, role: role, isSuperAdmin: superAdmin),
           ),
         ),
       ],
@@ -339,6 +340,18 @@ void main() {
       await tester.pumpWidget(harness(role: UserRole.sales, child: const SettingsScreen(), locale: const Locale('ar')));
       await tester.pumpAndSettle();
       expect(find.text('المبيعات'), findsOneWidget);
+    });
+
+    testWidgets('the super admin is labelled Super admin, with the same rows (PD-20 amendment)', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.sales, child: const SettingsScreen(), superAdmin: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Super admin'), findsOneWidget);
+      expect(find.text('Sales'), findsNothing);
+      expect(find.text('My profile'), findsNothing);
+
+      await tester.pumpWidget(harness(role: UserRole.sales, child: const SettingsScreen(), superAdmin: true, locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      expect(find.text('المدير العام'), findsOneWidget);
     });
 
     testWidgets('My account offers Sales no photo controls (the server refuses staff photos)', (tester) async {

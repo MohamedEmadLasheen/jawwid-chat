@@ -4477,6 +4477,12 @@ abstract class L10n {
   /// **'Sales'**
   String get roleSales;
 
+  /// No description provided for @roleSuperAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Super admin'**
+  String get roleSuperAdmin;
+
   /// No description provided for @conversationsEmptyBodySales.
   ///
   /// In en, this message translates to:

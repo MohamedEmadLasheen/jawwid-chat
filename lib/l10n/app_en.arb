@@ -1349,6 +1349,7 @@
   "billingDeniedBody": "If you have a question, ask the academy.",
   "tabPayments": "Payments",
   "roleSales": "Sales",
+  "roleSuperAdmin": "Super admin",
   "conversationsEmptyBodySales": "Trial groups and your conversations will appear here.",
   "internalNoteLabel": "Internal note",
   "trialGroupNotMember": "You are not a member of this group yet.",

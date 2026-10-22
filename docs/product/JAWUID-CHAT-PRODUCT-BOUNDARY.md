@@ -1959,8 +1959,9 @@ a reason; instalment plans stay in Admin Web), and also gets **Chats and Calls**
 who signs in          = a parent, a teacher (unchanged), or a Sales-department
                         staff member whose staff role is a conversation role
                         (admin, coverage, manager). GET /lessons/access says
-                        `sales`. Every other staff member -- the super admin
-                        included -- is still sent to Admin Web.
+                        `sales`. Since the amendment below, also the super
+                        admin. Every other staff member is still sent to
+                        Admin Web.
 Sales tabs            = Chats, Calls, Payments, Settings
 Chats                 = what the server already shows Sales (every trial group,
                         their own directs and supervised groups); trial groups
@@ -1995,8 +1996,17 @@ another department to the app is a new decision.
 applies to Sales.
 
 **Defaults adopted at closing** (the owner may override without reopening PD-20):
-1. The super admin keeps using Admin Web; the app does not admit it as Sales.
+1. ~~The super admin keeps using Admin Web; the app does not admit it as Sales.~~
+   Overridden the same day, see the amendment.
 2. Composing an internal note from the app is not offered.
+
+**Amendment, 2026-10-22: the super admin signs in too** (owner: "let owner sign in
+with the Sales tabs"). The organization's `super_admin` signs in to the app with the
+same tabs (Chats, Calls, Payments, Settings), labelled "Super admin" / "المدير العام".
+No department is needed: the server already serves it every conversation, family
+and payment of the organization. It is not offered "Join this group": it may start a
+group call without a seat in the chat (PD-19 amendments). Admin Web's administration
+pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the app.
 
 **Closed.** 2026-10-22.
 
