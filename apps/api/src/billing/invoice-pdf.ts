@@ -118,7 +118,7 @@ export function renderInvoicePdf(doc: InvoiceDocument): Promise<Buffer> {
 
     // Issuer
     let y = 48;
-    line(s.issuer?.name ?? 'Jawwid · جوّيد', left, y, width, 'left', 'bold', 16, BRAND);
+    line(s.issuer?.name ?? 'Jawwid · جَوِّد', left, y, width, 'left', 'bold', 16, BRAND);
     line('فاتورة', left, y, width, 'right', 'bold', 16, BRAND);
     y += 24;
     if (s.issuer?.address) { line(s.issuer.address, left, y, width * 0.6, 'left', 'regular', 9, MUTED); y += 13; }
@@ -186,7 +186,7 @@ export function renderInvoicePdf(doc: InvoiceDocument): Promise<Buffer> {
     const footY = pdf.page.height - pdf.page.margins.bottom - 24;
     rule(footY - 8);
     line('Issued by Jawwid Chat. This invoice was generated from the payment record and is valid without a signature.', left, footY, width, 'left', 'regular', 8, MUTED);
-    line('صدرت من جوّيد. أُنشئت هذه الفاتورة من سجل الدفع ولا تحتاج إلى توقيع.', left, footY + 12, width, 'right', 'regular', 8, MUTED);
+    line('صدرت من جَوِّد. أُنشئت هذه الفاتورة من سجل الدفع ولا تحتاج إلى توقيع.', left, footY + 12, width, 'right', 'regular', 8, MUTED);
 
     pdf.end();
   });

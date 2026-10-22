@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import type { FamilyInstalment, Invoice, Payment, PaymentRequest, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
@@ -94,8 +94,10 @@ export class PaymentLedger {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
-    private readonly notifications: NotificationService,
-    private readonly reminders: ReminderService,
+    // Optional only for suites that build the billing services by hand; the
+    // module always provides both, and without them no push is sent.
+    @Optional() private readonly notifications?: NotificationService,
+    @Optional() private readonly reminders?: ReminderService,
   ) {}
 
   /** 32 random bytes, base64url: 43 characters, the whole capability of a link. */
@@ -179,6 +181,15 @@ export class PaymentLedger {
           },
         });
         settledInstalmentId = instalment.id;
+        // PD-17's audit event, kept: the instalment is paid (by this payment and any before it).
+        await this.audit.audit(tx, {
+          actorId: input.auditActorId ?? undefined,
+          action: 'instalment.paid',
+          entity: 'family',
+          entityId: instalment.familyId,
+          after: { instalmentId: instalment.id, paidOn: input.paidOn, method: input.method, amountMinor: Number(instalment.amountMinor), currency: instalment.currency },
+          reason: 'payment recorded',
+        });
         // Another live link for this instalment would now ask for money that is not owed.
         await tx.paymentRequest.updateMany({
           where: { instalmentId: instalment.id, paidAt: null, cancelledAt: null, id: { not: request?.id ?? undefined } },
@@ -328,8 +339,8 @@ export class PaymentLedger {
   async afterRecorded(recorded: RecordedPayment): Promise<void> {
     const { payment, invoice, settledInstalmentId } = recorded;
     try {
-      if (settledInstalmentId) await this.reminders.cancelForSubject(settledInstalmentId);
-      if (!payment.familyId) return;
+      if (settledInstalmentId) await this.reminders?.cancelForSubject(settledInstalmentId);
+      if (!payment.familyId || !this.notifications) return;
       const recipients = await this.familyParents(payment.familyId);
       for (const r of recipients) {
         await this.notifications.schedule({

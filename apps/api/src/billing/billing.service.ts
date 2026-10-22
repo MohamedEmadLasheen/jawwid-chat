@@ -103,6 +103,7 @@ export interface TimelineInstalment {
  */
 @Injectable()
 export class BillingService {
+  private readonly ledger: PaymentLedger;
   private readonly reads: PaymentsReadService;
   private readonly stripe: StripeGateway;
 
@@ -112,11 +113,13 @@ export class BillingService {
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     // PD-27. Optional so suites that build this service by hand keep working;
     // the module always provides all four.
-    @Optional() private readonly ledger?: PaymentLedger,
+    @Optional() ledger?: PaymentLedger,
     @Optional() reads?: PaymentsReadService,
     @Optional() private readonly paymentReminders?: PaymentReminders,
     @Optional() @Inject(STRIPE_GATEWAY) stripe?: StripeGateway,
   ) {
+    // Built by hand (older suites): the same ledger, without the pushes.
+    this.ledger = ledger ?? new PaymentLedger(prisma, audit);
     this.reads = reads ?? new PaymentsReadService(prisma);
     this.stripe = stripe ?? new StripeSdkGateway();
   }
@@ -605,7 +608,6 @@ export class BillingService {
   }
 
   private requireLedger(): PaymentLedger {
-    if (!this.ledger) throw new Error('BillingService was built without the PD-27 ledger');
     return this.ledger;
   }
 

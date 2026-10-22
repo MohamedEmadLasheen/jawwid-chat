@@ -673,11 +673,11 @@ create trigger stripe_event_never_deleted
 -- ===========================================================================
 
 insert into chat.notification_template (key, locale, title, body) values
-  ('payment_received', 'ar', 'جوّيد',
+  ('payment_received', 'ar', 'جَوِّد',
    'وصلتنا دفعتكم {amount} {currency}. الفاتورة {invoice_number} في المدفوعات.'),
   ('payment_received', 'en', 'Jawwid',
    'We received your payment of {amount} {currency}. Invoice {invoice_number} is in Payments.'),
-  ('payment_receipt_rejected', 'ar', 'جوّيد',
+  ('payment_receipt_rejected', 'ar', 'جَوِّد',
    'لم نتمكن من تأكيد إيصال التحويل ({amount} {currency}): {reason}'),
   ('payment_receipt_rejected', 'en', 'Jawwid',
    'We could not confirm your transfer receipt ({amount} {currency}): {reason}')

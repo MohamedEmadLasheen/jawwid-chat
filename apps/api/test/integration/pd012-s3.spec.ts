@@ -163,7 +163,7 @@ describe('1. who reads instalments', () => {
     for (const f of m.families) await instalment(f.id);
     const out = await billing.list(m.salesManager.id, {})
     expect(new Set(out.items.map((i) => i.family.id))).toEqual(new Set(m.families.map((f) => f.id)));
-    expect(await billing.access(m.salesManager.id)).toEqual({ billingReader: true, canAssignBillingSupervisor: false, canRecordPayments: true });
+    expect(await billing.access(m.salesManager.id)).toEqual({ billingReader: true, canAssignBillingSupervisor: false, canRecordPayments: true, canVerifyPayments: false });
     const f = singleFamily();
     expect(await code(billing.setBillingSupervisor(m.salesManager.id, f.id, { supervisorId: f.children[0]!.supervisorId, reason: 'r' }))).toBe(
       CommErrorCode.BILLING_DENIED,
