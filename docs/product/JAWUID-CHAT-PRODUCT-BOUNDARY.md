@@ -2125,6 +2125,11 @@ reminders            = fire at the same instant as before (offsets from the less
                         the text's {time} is worded at SEND time in the recipient's
                         zone; unknown zone -> the academy's time, named
 quiet hours          = the recipient's own night, in their zone
+clock-change warning = a parent whose local lesson time moves because one of the two
+                        zones changes its clocks is told once per weekly time per
+                        change, 3 days before the first lesson at the new time:
+                        "from {day}, the lesson starts at {time} your time" (both
+                        in their zone, at send time; names nobody)
 academy calendar     = instalment due dates, payroll month, leave days stay dates in
                         schedule.timezone; they are never converted
 ```
@@ -2134,9 +2139,30 @@ academy calendar     = instalment due dates, payroll month, leave days stay date
 `AppClock`, `TimeZoneController` and Settings -> Date & time; Admin Web's
 `core/time/academyTime.ts`.
 
+**Daylight-saving warning (follow-up, 2026-10-22).** The promise in answer 2 --
+families are told *before* their local time moves -- is kept by the worker:
+`SchedulingService.scheduleClockShiftWarnings` (hourly, inside the lesson sweep)
+looks at four consecutive starts of every live weekly time and, for each parent
+whose zone is known, compares their local weekday and clock between consecutive
+starts. A difference is a change: one notification per parent per weekly time per
+change (dedupe key `lesson_clock_shift_parent:<slot>:<date of the first new-time
+lesson>:<parent>`), scheduled 3 days before that lesson (rule
+`lesson_clock_shift_parent`, data, so the lead time is an UPDATE). It covers Egypt's
+two changes (end of the last Thursday of October; last Friday of April) against the
+Gulf, and a family in a country with its own change dates (London: two warnings in
+autumn). Nobody is told whose local time does not move (a Cairo family), whose zone
+is unknown (their reminders already name Cairo time), or whose weekly time begins
+after the change. A warning that stops holding before it is sent -- the weekly time
+is replaced, the parent flies to a zone where nothing moves, the lesson begins -- is
+cancelled, and revived if it holds again. Migration
+`20261022163000_chat_pd022_clock_shift_warning.sql` (template `lesson_clock_shift`
+ar + en, and the rule). Teachers are not warned: a slot is anchored in their
+availability zone, which is the zone they work in.
+
 **Consequences.** A family abroad sees a lesson move by an hour twice a year when
-Egypt changes its clocks; no teacher is ever double-booked by a clock change. A
-person's zone is visible to the administration only as "the family's local time".
+Egypt changes its clocks, and is told three days before; no teacher is ever
+double-booked by a clock change. A person's zone is visible to the administration
+only as "the family's local time".
 
 **Deprecated behaviour.** The 2026-10-14 rule "a reminder shows no time" is replaced:
 the time is now right for its reader. Times in Admin Web no longer follow the staff
