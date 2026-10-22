@@ -12,7 +12,7 @@ import { actorRefKey, type IdentityService, type ResolvedActors } from '../../pl
 import type { AuditService } from '../../platform/audit.service';
 import type { MediaTokenIssuer } from './media-token';
 import { Actor, SYSTEM_ACTOR } from '../../platform/types';
-import { ConversationService } from '../conversations/conversation.service';
+import { ConversationService, isUuid } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
@@ -87,17 +87,13 @@ export class CallService {
     this.requireConversationOrganization(initiator, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, initiator.actorId);
 
-    const { decision, participantActors } = await this.decideInitiate(
+    const { decision, participantActors, callType: type } = await this.decideInitiate(
       initiator,
       conv,
       membership,
       now,
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
-
-    // PD-19 second amendment: the staff-only groups around a teacher (trial
-    // group, supervision) seat several people, so their calls are group calls.
-    const type = GROUP_CALL_CONVERSATION_TYPES.has(conv.type) ? CallType.GROUP : CallType.DIRECT;
 
     // Unguessable and server-owned.
     const roomName = `jawwid-${conv.id}-${randomUUID()}`;
@@ -147,7 +143,37 @@ export class CallService {
       });
 
       return { callId: call.id, roomName };
+    }).catch((e: unknown) => {
+      throw this.callRefusal(e) ?? e;
     });
+  }
+
+  /**
+   * The BR-1 call triggers' refusal, as the COMM.* code the application would
+   * have given. Null for anything else, which stays a 500.
+   *
+   * THE DATABASE HAS THE LAST WORD (chat.assert_call_br1, a deferred constraint
+   * trigger, and chat.enforce_call_participant_rules). decideInitiate() asks the
+   * same questions first, so reaching this means the two disagree -- a defect,
+   * logged as one -- but the caller still gets a refusal it can act on, not a
+   * 500. Matched on the triggers' own messages: a deferred trigger fails at
+   * COMMIT, and Prisma's error for that carries the text but not the SQLSTATE.
+   */
+  private callRefusal(e: unknown): CommError | null {
+    if (e instanceof CommError) return null;
+    const text = e instanceof Error ? e.message : String(e);
+    let refusal: CommError | null = null;
+    if (/a direct call may not have more than two participants/.test(text)) {
+      refusal = new CommError(CommErrorCode.INVALID_PARTICIPANTS, 'a direct call has exactly two participants');
+    } else if (/BR-1 violation: .*direct call/.test(text)) {
+      refusal = new CommError(CommErrorCode.BR1_TEACHER_PARENT_DIRECT, 'a teacher and a parent may not share a direct call');
+    } else if (/BR-1 violation: .*requires a Jawwid staff participant/.test(text)) {
+      refusal = new CommError(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED, 'this call requires a Jawwid staff participant');
+    }
+    if (refusal) {
+      this.log.error(`call start refused by the database, not by decideInitiate: ${refusal.code}`);
+    }
+    return refusal;
   }
 
   /**
@@ -162,13 +188,24 @@ export class CallService {
    * It RESOLVES and DECIDES; it does not act. What a denial means is the
    * caller's business, which is why start() throws and callCapability()
    * reports.
+   *
+   * It also decides the CALL TYPE, and refuses a direct call with more than
+   * two seats -- the rule chat.assert_call_br1 enforces at commit. Asked here,
+   * the capability answer and start() agree on it, and a conversation type
+   * that seats several people without being a group call is refused as
+   * COMM.INVALID_PARTICIPANTS instead of failing inside the database (found
+   * 2026-10-22 in teacher_supervision, before PD-19's second amendment).
    */
   private async decideInitiate(
     initiator: Actor,
     conv: Conversation,
     membership: ConversationMember | null,
     now: Date,
-  ): Promise<{ decision: Decision; participantActors: Actor[] }> {
+  ): Promise<{ decision: Decision; participantActors: Actor[]; callType: CallType }> {
+    // PD-19 second amendment: the staff-only groups around a teacher (trial
+    // group, supervision) seat several people, so their calls are group calls.
+    const callType = GROUP_CALL_CONVERSATION_TYPES.has(conv.type) ? CallType.GROUP : CallType.DIRECT;
+
     const members = await this.prisma.conversationMember.findMany({
       where: { conversationId: conv.id, leftAt: null },
     });
@@ -203,7 +240,7 @@ export class CallService {
       // The START path. Since PD-19 a parent member may start one too.
       CallIntent.INITIATE,
     );
-    if (!decision.allowed) return { decision, participantActors };
+    if (!decision.allowed) return { decision, participantActors, callType };
 
     // D1 (ported from 33a347a, PD-A). Whoever starts a call must be ON it. The
     // participants are the conversation's live members; since PD-8 a department
@@ -217,7 +254,14 @@ export class CallService {
     if (seat.allowed && !participantActors.some((a) => a.actorId === initiator.actorId)) {
       participantActors.push(initiator);
     }
-    return { decision: seat, participantActors };
+    if (seat.allowed && callType === CallType.DIRECT && participantActors.length > 2) {
+      return {
+        decision: { allowed: false, code: CommErrorCode.INVALID_PARTICIPANTS, reason: 'a direct call has exactly two participants' },
+        participantActors,
+        callType,
+      };
+    }
+    return { decision: seat, participantActors, callType };
   }
 
   /**
@@ -1023,10 +1067,7 @@ export class CallService {
     const now = new Date();
     const actor = await this.conversations.requireActor(actorId);
 
-    const call = await this.prisma.call.findUnique({
-      where: { id: callId },
-      include: { participants: true },
-    });
+    const call = await this.findCall(callId);
     if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
     // D3: another organization's call reads exactly as an unknown one, before
     // its status or its participants can be read off the refusal.
@@ -1100,10 +1141,7 @@ export class CallService {
    * go through authorizeJoin() instead.
    */
   private async requireLiveParticipant(callId: string, actor: Actor) {
-    const call = await this.prisma.call.findUnique({
-      where: { id: callId },
-      include: { participants: true },
-    });
+    const call = await this.findCall(callId);
     if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
     this.requireCallOrganization(actor, call.organizationId);
     if (!call.participants.some((p) => p.actorId === actor.actorId)) {
@@ -1113,6 +1151,20 @@ export class CallService {
       );
     }
     return call;
+  }
+
+  /**
+   * A call addressed by id, with its participants. Every `/calls/:id` route
+   * reaches the call through here. An id that is not a uuid names nothing: it
+   * is an unknown call, never handed to Postgres, whose type error (Prisma
+   * P2023) used to answer `/calls/None/accept` with a 500.
+   */
+  private async findCall(callId: string) {
+    if (!isUuid(callId)) return null;
+    return this.prisma.call.findUnique({
+      where: { id: callId },
+      include: { participants: true },
+    });
   }
 
   /**

@@ -537,3 +537,4 @@ mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; 
 .cw-theme__swatch { block-size: 44px; border-radius: var(--radius-sm); background: var(--cw-bg, var(--bg)); border: 1px solid var(--border); }
 .cw-wall { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-block-start: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); }
 .cw-wall__preview { inline-size: 96px; block-size: 64px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-hover) center / cover no-repeat; flex: none; }
+.cw-support { font-style: normal; color: var(--danger); }

@@ -27,6 +27,20 @@ import {
   Visibility,
 } from '../communication/contracts/vocab';
 
+/** PD-21: what an administrator may do to another account. */
+export type AccountAdminAct = 'reset_password' | 'suspend' | 'reactivate' | 'impersonate';
+
+/** PD-21: the account an administrator acts on, resolved by the caller. */
+export interface AccountAdminTarget {
+  accountId: string;
+  organizationId: string;
+  /** chat.account.kind: staff | family | teacher */
+  kind: string;
+  /** Present when kind = staff. */
+  staffId?: string | null;
+  staffRole?: string | null;
+}
+
 export type Decision =
   | { allowed: true; onBehalfMode: string | null; moderation: string }
   | { allowed: false; code: CommErrorCode; reason: string };
@@ -1276,6 +1290,59 @@ export class AuthorizationService {
       return deny(CommErrorCode.STAFF_ASSIGNMENT_DENIED, 'the super admin cannot be deactivated, and nobody deactivates themselves');
     }
     return base;
+  }
+
+  // ------------------------------------------------------------------
+  // PD-21: account administration
+  // ------------------------------------------------------------------
+
+  /**
+   * May `actor` reset the password of, suspend, reactivate or impersonate the
+   * account `target`? Owner decision 2026-10-22 (PD-21), which widens
+   * AUTHORIZATION-MODEL §3 `users.manage` from the super admin to every staff
+   * role -- for PARENT and TEACHER accounts:
+   *
+   *   - any active staff member, any role, of the same organization;
+   *   - a STAFF account only by the super admin, and never the super admin's
+   *     own (its only credential writer is the bootstrap CLI);
+   *   - never one's own account;
+   *   - impersonation: parent (family) and teacher accounts only, never staff.
+   *
+   * Another tenant's account is answered as NOT FOUND, never as forbidden, so
+   * the status does not reveal that the id exists elsewhere. Like the other
+   * rules here this takes the target as an input and reads nothing itself.
+   * The account's STATE (already suspended, ...) is the service's to check.
+   *
+   * An impersonation session cannot reach this at all: its actor is the
+   * parent or teacher, never staff.
+   */
+  canAdministerAccount(actor: Actor, target: AccountAdminTarget, act: AccountAdminAct): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not administer accounts');
+    if (actor.kind !== ActorKind.STAFF || !actor.organizationId) {
+      return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, 'only staff administer accounts');
+    }
+    if (target.organizationId !== actor.organizationId) {
+      return deny(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'no such account');
+    }
+    if (target.kind === 'staff') {
+      if (target.staffId === actor.actorId) {
+        return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, 'nobody administers their own account this way');
+      }
+      if (target.staffRole === StaffRole.SUPER_ADMIN) {
+        return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, "the super admin's account is never administered from the portal");
+      }
+      if (actor.staffRole !== StaffRole.SUPER_ADMIN) {
+        return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, "only the super admin administers a staff member's account");
+      }
+      if (act === 'impersonate') {
+        return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, 'a staff account is never impersonated');
+      }
+      return allow();
+    }
+    if (target.kind !== 'family' && target.kind !== 'teacher') {
+      return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, 'unknown account kind');
+    }
+    return allow();
   }
 
   private ownershipAuthority(actor: Actor, organizationId: string, roles: string[], what: string): Decision {

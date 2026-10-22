@@ -19,6 +19,12 @@ export interface RequestOptions {
    * machinery would wait on its own promise.
    */
   anonymous?: boolean
+  /**
+   * PD-21: send THIS bearer instead of the staff session's (a support
+   * session's token). Implies `anonymous`'s other half: a 401 is never answered
+   * by refreshing, and never ends the staff session.
+   */
+  bearer?: string
 }
 
 function buildUrl(path: string, query?: Query): string {
@@ -72,6 +78,16 @@ export function refreshSession(): Promise<boolean> {
   return refreshing
 }
 
+/**
+ * PD-21: a request on a support session -- the token of the account the
+ * administrator is acting as, held in memory by the support page only. Never
+ * refreshed (a support session has no refresh token) and a 401 never touches
+ * the administrator's own session.
+ */
+export async function requestAs<T>(bearer: string, path: string, options: Omit<RequestOptions, 'anonymous' | 'bearer'> = {}): Promise<T> {
+  return parse<T>(await send(path, { ...options, bearer }), { ...options, anonymous: true })
+}
+
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await send(path, options)
 
@@ -83,12 +99,12 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 }
 
 async function send(path: string, options: RequestOptions): Promise<Response> {
-  const { method = 'GET', query, body, signal, idempotencyKey, anonymous } = options
+  const { method = 'GET', query, body, signal, idempotencyKey, anonymous, bearer } = options
 
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
-  const access = anonymous ? null : tokenStore.access()
+  const access = bearer ?? (anonymous ? null : tokenStore.access())
   if (access) headers['Authorization'] = `Bearer ${access}`
 
   try {
