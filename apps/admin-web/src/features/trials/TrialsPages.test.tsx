@@ -568,7 +568,7 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
       ...BASE,
       enrolment: {
         familyId: 'f-1', learnerIds: ['k-1'], supervisor: { id: 'sup-1', name: 'Supervisor One' }, assignedAt: '2026-10-21T08:00:00Z',
-        groupConversationId: 'c-new', canCreateGroup: false, parentSignup: { state: 'signed_up', code: null, expiresAt: null },
+        groupConversationId: 'c-new', canCreateGroup: false, parentSignup: { state: 'signed_up' },
       },
     }
     on('GET', /\/trials\/new-students$/, () => json({ students: [assigned], canAssign: true }))
