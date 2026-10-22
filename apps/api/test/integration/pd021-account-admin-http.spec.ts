@@ -180,7 +180,7 @@ describe('PD-21: who may', () => {
     expect(accounts.length).toBeGreaterThan(0);
     expect(new Set(accounts.map((a) => a.kind))).toEqual(new Set(['family', 'teacher']));
     expect(JSON.stringify(all.json)).not.toMatch(/@|passwordHash|password_hash|codeHash|"subject"/i);
-    for (const a of accounts) expect(a.allowed).toEqual({ resetPassword: true, suspend: true, reactivate: false, impersonate: true });
+    for (const a of accounts) expect(a.allowed).toEqual({ resetPassword: true, suspend: true, reactivate: false, impersonate: true, signOut: true });
 
     const child = m.families[2]!.children[0]!;
     const found = await as(supervisor.subject, 'GET', `/admin/accounts?q=${encodeURIComponent(child.name)}`);
@@ -351,7 +351,7 @@ describe('PD-21: suspend and reactivate', () => {
     const admin = m.supervisors[0]!;
     const suspended = await as(admin.subject, 'POST', `/admin/accounts/${accountId}/suspend`, { reason: 'left the academy for a term' });
     expect(suspended.status).toBe(200);
-    expect(suspended.json).toMatchObject({ status: 'suspended', allowed: { suspend: false, reactivate: true, impersonate: false } });
+    expect(suspended.json).toMatchObject({ status: 'suspended', allowed: { suspend: false, reactivate: true, impersonate: false, signOut: false } });
 
     expect((await call(session.accessToken, 'GET', '/me')).status).toBe(401);
     expect((await call(null, 'POST', '/auth/refresh', { refreshToken: session.refreshToken })).status).toBe(401);

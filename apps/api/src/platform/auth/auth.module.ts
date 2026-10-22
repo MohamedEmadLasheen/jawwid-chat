@@ -10,7 +10,7 @@ import Redis from 'ioredis';
 import { AuthService } from './auth.service';
 import { AuthenticatedGuard } from './auth.guard';
 import { ActionThrottleGuard } from './action-throttle.guard';
-import { AuthController, MeController } from './auth.controller';
+import { AuthController, MeController, MeSessionsController } from './auth.controller';
 import { AuthErrorFilter } from './auth.errors';
 import { LoginRateLimiter, RATE_LIMIT_STORE, type RateLimitStore } from './login-rate-limit';
 import { CLIENT_ADDRESS_POLICY, readClientAddressPolicy } from './client-address';
@@ -84,7 +84,8 @@ export const loginRateLimitStoreProvider = {
 @Module({
   // PD-16: ParentSignupController -- a parent sets the password of the account Chat created at enrolment.
   // PD-21: PasswordResetController -- the person finishes a reset an administrator issued.
-  controllers: [AuthController, MeController, ParentSignupController, PasswordResetController],
+  // PD-23: MeSessionsController -- the person's own Devices & sessions.
+  controllers: [AuthController, MeController, MeSessionsController, ParentSignupController, PasswordResetController],
   providers: [
     AuthService,
     ParentSignupService,

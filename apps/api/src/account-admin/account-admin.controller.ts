@@ -17,6 +17,7 @@ const CurrentAccountId = createParamDecorator((_data: unknown, ctx: ExecutionCon
 
 /**
  * PD-21: `/admin/accounts` -- reset a password, suspend, reactivate.
+ * PD-23: list and end an account's sessions.
  *
  * Protected twice, and neither depends on the other: the global
  * AuthenticatedGuard (no verified bearer, no request), and
@@ -61,6 +62,37 @@ export class AccountAdminController {
     @Body() body: { reason?: unknown },
   ) {
     return this.accounts.suspend(actor, actorAccountId, accountId, body ?? {});
+  }
+
+  /** PD-23: the account's live sessions (devices). */
+  @Get(':accountId/sessions')
+  sessions(@CurrentActor() actor: Actor, @Param('accountId') accountId: string) {
+    return this.accounts.listSessions(actor, accountId);
+  }
+
+  /** PD-23: end every session. Body: `{ reason }`. Declared before `:sessionId/revoke` so the literal wins. */
+  @Post(':accountId/sessions/revoke-all')
+  @HttpCode(200)
+  revokeAllSessions(
+    @CurrentActor() actor: Actor,
+    @CurrentAccountId() actorAccountId: string,
+    @Param('accountId') accountId: string,
+    @Body() body: { reason?: unknown },
+  ) {
+    return this.accounts.revokeAllSessions(actor, actorAccountId, accountId, body ?? {});
+  }
+
+  /** PD-23: end one session. Body: `{ reason }`. */
+  @Post(':accountId/sessions/:sessionId/revoke')
+  @HttpCode(200)
+  revokeSession(
+    @CurrentActor() actor: Actor,
+    @CurrentAccountId() actorAccountId: string,
+    @Param('accountId') accountId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() body: { reason?: unknown },
+  ) {
+    return this.accounts.revokeSession(actor, actorAccountId, accountId, sessionId, body ?? {});
   }
 
   /** Body: `{ reason }`. */

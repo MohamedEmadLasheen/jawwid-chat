@@ -55,6 +55,11 @@ export interface SessionRow {
   revokedReason: string | null;
   ipHash: string | null;
   userAgent: string | null;
+  /** PD-23 */
+  authenticatedAt: Date;
+  client: string | null;
+  remembered: boolean;
+  impersonationId: string | null;
 }
 
 export interface DeviceRow {
@@ -64,6 +69,14 @@ export interface DeviceRow {
   name: string | null;
   appVersion: string | null;
   lastSeenAt: Date;
+}
+
+interface SessionFilter {
+  id?: string | { not: string };
+  accountId?: string;
+  revokedAt?: null;
+  impersonationId?: null;
+  expiresAt?: { gt: Date };
 }
 
 export class FakeDb {
@@ -133,12 +146,20 @@ export class FakeDb {
       if (this.sessions.some((s) => s.refreshTokenHash === hash)) {
         throw new Error('unique constraint violated: session.refresh_token_hash');
       }
+      const createdAt = new Date();
+      // check (authenticated_at <= created_at); the column default is now().
+      const authenticatedAt = (args.data.authenticatedAt as Date | undefined) ?? createdAt;
+      if (authenticatedAt > createdAt) throw new Error('check constraint violated: session_authenticated_before_created');
+      // check (not remembered or client = 'web')
+      if (args.data.remembered === true && args.data.client !== 'web') {
+        throw new Error('check constraint violated: session_remembered_only_on_web');
+      }
       const row: SessionRow = {
         id: randomUUID(),
         accountId: String(args.data.accountId),
         deviceId: (args.data.deviceId as string | null) ?? null,
         refreshTokenHash: hash,
-        createdAt: new Date(),
+        createdAt,
         expiresAt: args.data.expiresAt as Date,
         lastSeenAt: (args.data.lastSeenAt as Date | null) ?? null,
         revokedAt: null,
@@ -146,6 +167,10 @@ export class FakeDb {
         revokedReason: null,
         ipHash: (args.data.ipHash as string | null) ?? null,
         userAgent: (args.data.userAgent as string | null) ?? null,
+        authenticatedAt,
+        client: (args.data.client as string | null) ?? null,
+        remembered: args.data.remembered === true,
+        impersonationId: null,
       };
       this.sessions.push(row);
       return { id: row.id, createdAt: row.createdAt };
@@ -175,12 +200,25 @@ export class FakeDb {
       return { ...row };
     },
 
+    /** PD-23: the live-session filters listLiveSessions / revokeSessionOf / revokeOtherSessions use. */
+    findMany: async (args: { where: SessionFilter; select?: Record<string, unknown> }) =>
+      this.sessions
+        .filter((s) => this.matchesSession(s, args.where))
+        .sort((a, b) => (b.lastSeenAt?.getTime() ?? 0) - (a.lastSeenAt?.getTime() ?? 0))
+        .map((s) => ({ ...s, device: this.devices.find((d) => d.id === s.deviceId) ?? null })),
+
+    findFirst: async (args: { where: SessionFilter }) => {
+      const row = this.sessions.find((s) => this.matchesSession(s, args.where));
+      return row ? { id: row.id } : null;
+    },
+
     updateMany: async (args: {
-      where: { id?: string; accountId?: string; revokedAt?: null };
+      where: { id?: string | { in: string[] }; accountId?: string; revokedAt?: null };
       data: Partial<SessionRow>;
     }) => {
       const matched = this.sessions.filter((s) => {
-        if (args.where.id !== undefined && s.id !== args.where.id) return false;
+        if (typeof args.where.id === 'object' && !args.where.id.in.includes(s.id)) return false;
+        if (typeof args.where.id === 'string' && s.id !== args.where.id) return false;
         if (args.where.accountId !== undefined && s.accountId !== args.where.accountId) return false;
         if (args.where.revokedAt === null && s.revokedAt !== null) return false;
         return true;
@@ -195,6 +233,16 @@ export class FakeDb {
       return { count: matched.length };
     },
   };
+
+  private matchesSession(s: SessionRow, where: SessionFilter): boolean {
+    if (typeof where.id === 'string' && s.id !== where.id) return false;
+    if (typeof where.id === 'object' && s.id === where.id.not) return false;
+    if (where.accountId !== undefined && s.accountId !== where.accountId) return false;
+    if (where.revokedAt === null && s.revokedAt !== null) return false;
+    if (where.impersonationId === null && s.impersonationId !== null) return false;
+    if (where.expiresAt && !(s.expiresAt > where.expiresAt.gt)) return false;
+    return true;
+  }
 
   // -- impersonation_session (PD-21) ---------------------------------------
   // No support session is ever started in these unit specs, so the table is
