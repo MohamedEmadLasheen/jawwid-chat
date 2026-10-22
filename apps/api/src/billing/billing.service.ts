@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { FamilyInstalment } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
@@ -13,14 +13,20 @@ import { mapStructureRefusal } from '../org/org-structure.service';
 import { todayIn } from '../leave/leave.service';
 import { billingAccessOf } from './billing-access';
 import { addMonths, compareInstalments, daysFrom, statusOf, type InstalmentStatus } from './instalment';
+import { day, invalid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
+import { BANK_ACCOUNT_KEY, PaymentLedger, type PaymentMethod } from './payment-ledger.service';
+import { PaymentsReadService, type MoneyView } from './payments-read.service';
+import { PaymentReminders } from './payment-reminders.service';
+import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 const RESPONSIBLE = ['all', 'me', 'none'] as const;
 type Responsible = (typeof RESPONSIBLE)[number];
-export const PAYMENT_METHODS = ['invoice', 'bank_transfer'] as const;
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const CURRENCY_RE = /^[A-Z]{3}$/;
+/** PD-17's family-level "how this family pays" (chat.family_billing.payment_method). */
+export const FAMILY_PAYMENT_METHODS = ['invoice', 'bank_transfer'] as const;
+export type FamilyPaymentMethod = (typeof FAMILY_PAYMENT_METHODS)[number];
+/** What staff may name when marking an instalment paid in one go (PD-17 route). */
+const INSTALMENT_PAYMENT_METHODS = ['invoice', 'bank_transfer', 'cash'] as const;
 const MAX_PLAN = 24;
 
 type FamilyRow = {
@@ -66,9 +72,16 @@ export interface TimelineInstalment {
   dueDate: string;
   status: InstalmentStatus | 'voided';
   days: number;
+  /** PD-27: what its standing payments add up to; paid in part while open and > 0. */
+  paidMinor: number;
+  remainingMinor: number;
+  partial: boolean;
+  /** PD-27: its live payment link, if any. */
+  requestId: string | null;
   createdAt: string;
   createdBy: { id: string; name: string };
-  payment: { paidOn: string; method: PaymentMethod; reference: string | null; recordedAt: string; recordedBy: { id: string; name: string } } | null;
+  /** recordedBy null: a card payment completed it (Stripe confirmed it, no one typed it). */
+  payment: { paidOn: string; method: PaymentMethod; reference: string | null; recordedAt: string; recordedBy: { id: string; name: string } | null } | null;
   void: { at: string; by: { id: string; name: string }; reason: string } | null;
 }
 
@@ -90,11 +103,23 @@ export interface TimelineInstalment {
  */
 @Injectable()
 export class BillingService {
+  private readonly reads: PaymentsReadService;
+  private readonly stripe: StripeGateway;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly conversations: ConversationService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
-  ) {}
+    // PD-27. Optional so suites that build this service by hand keep working;
+    // the module always provides all four.
+    @Optional() private readonly ledger?: PaymentLedger,
+    @Optional() reads?: PaymentsReadService,
+    @Optional() private readonly paymentReminders?: PaymentReminders,
+    @Optional() @Inject(STRIPE_GATEWAY) stripe?: StripeGateway,
+  ) {
+    this.reads = reads ?? new PaymentsReadService(prisma);
+    this.stripe = stripe ?? new StripeSdkGateway();
+  }
 
   /** The navigation probe: may this staff member open Instalment Payments (and Parent Profiles) at all? */
   async access(actorId: string) {
@@ -104,6 +129,7 @@ export class BillingService {
       billingReader: access.scope !== null,
       canAssignBillingSupervisor: access.canAssign,
       canRecordPayments: access.canRecord,
+      canVerifyPayments: access.canVerify,
     };
   }
 
@@ -220,12 +246,12 @@ export class BillingService {
   async setFamilyBilling(actorId: string, familyId: string, body: Record<string, unknown>) {
     const { actor, access } = await this.requireRecorder(actorId);
     const family = await this.requireFamily(actor, access, familyId);
-    const next: { paymentMethod?: PaymentMethod | null; currency?: string | null } = {};
+    const next: { paymentMethod?: FamilyPaymentMethod | null; currency?: string | null } = {};
     let planMonths: number | null | undefined;
     if ('paymentMethod' in body) {
       const v = body.paymentMethod;
-      if (v !== null && !PAYMENT_METHODS.includes(v as PaymentMethod)) throw invalid('paymentMethod: invoice | bank_transfer, or null');
-      next.paymentMethod = v as PaymentMethod | null;
+      if (v !== null && !FAMILY_PAYMENT_METHODS.includes(v as FamilyPaymentMethod)) throw invalid('paymentMethod: invoice | bank_transfer, or null');
+      next.paymentMethod = v as FamilyPaymentMethod | null;
     }
     if ('currency' in body) next.currency = body.currency === null ? null : requireCurrency(body.currency);
     if ('planMonths' in body) {
@@ -273,27 +299,47 @@ export class BillingService {
   }
 
   /**
-   * One instalment, or a plan of `count` instalments `everyMonths` apart.
+   * One instalment, or a plan: `count` equal instalments `everyMonths` apart,
+   * or (PD-27) a custom schedule `items: [{amountMinor, dueDate}]`.
    * { label, amountMinor, firstDueDate, currency?, count?, everyMonths?, learnerId? }
-   * The currency defaults to the family's.
+   * { label, items, currency?, learnerId? }
+   * The currency defaults to the family's. Reminders are scheduled for each.
    */
   async createInstalments(actorId: string, familyId: string, body: Record<string, unknown>) {
     const { actor, access } = await this.requireRecorder(actorId);
     const family = await this.requireFamily(actor, access, familyId);
     const label = requireText('label', body.label, 100);
-    const amountMinor = body.amountMinor;
-    if (typeof amountMinor !== 'number' || !Number.isSafeInteger(amountMinor) || amountMinor <= 0 || amountMinor > 1_000_000_000_000) {
-      throw invalid('amountMinor: a positive whole amount in minor units (e.g. cents)');
+
+    let schedule: { amountMinor: number; dueDate: string }[];
+    let everyMonths: number | null = null;
+    if (body.items !== undefined) {
+      if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > MAX_PLAN) {
+        throw invalid(`items: 1 to ${MAX_PLAN} rows of { amountMinor, dueDate }`);
+      }
+      schedule = body.items.map((raw, i) => {
+        const row = (raw ?? {}) as Record<string, unknown>;
+        return { amountMinor: requireAmount(`items[${i}].amountMinor`, row.amountMinor), dueDate: requireDate(`items[${i}].dueDate`, row.dueDate) };
+      });
+      for (let i = 1; i < schedule.length; i++) {
+        if ((schedule[i] as { dueDate: string }).dueDate < (schedule[i - 1] as { dueDate: string }).dueDate) {
+          throw invalid('items: due dates in order, earliest first');
+        }
+      }
+    } else {
+      const amountMinor = requireAmount('amountMinor', body.amountMinor);
+      const firstDueDate = requireDate('firstDueDate', body.firstDueDate);
+      const count = body.count === undefined ? 1 : body.count;
+      if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > MAX_PLAN) {
+        throw invalid(`count: 1 to ${MAX_PLAN}`);
+      }
+      const every = body.everyMonths === undefined ? 1 : body.everyMonths;
+      if (typeof every !== 'number' || !Number.isInteger(every) || every < 1 || every > 12) {
+        throw invalid('everyMonths: 1 to 12');
+      }
+      everyMonths = every;
+      schedule = Array.from({ length: count }, (_, i) => ({ amountMinor, dueDate: addMonths(firstDueDate, i * every) }));
     }
-    const firstDueDate = requireDate('firstDueDate', body.firstDueDate);
-    const count = body.count === undefined ? 1 : body.count;
-    if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > MAX_PLAN) {
-      throw invalid(`count: 1 to ${MAX_PLAN}`);
-    }
-    const everyMonths = body.everyMonths === undefined ? 1 : body.everyMonths;
-    if (typeof everyMonths !== 'number' || !Number.isInteger(everyMonths) || everyMonths < 1 || everyMonths > 12) {
-      throw invalid('everyMonths: 1 to 12');
-    }
+
     const billing = await this.prisma.familyBilling.findUnique({ where: { familyId: family.id } });
     const currency = body.currency === undefined || body.currency === null ? billing?.currency ?? null : requireCurrency(body.currency);
     if (!currency) throw invalid('currency: set the family\'s currency, or send one');
@@ -304,15 +350,17 @@ export class BillingService {
       if (!child) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'that child is not in this family');
     }
 
+    const count = schedule.length;
     const planId = count > 1 ? randomUUID() : null;
-    const rows = Array.from({ length: count }, (_, i) => ({
+    const rows = schedule.map((item, i) => ({
+      id: randomUUID(),
       familyId: family.id,
       learnerId,
       planId,
       label: count > 1 ? `${label} · ${i + 1}/${count}` : label,
-      amountMinor: BigInt(amountMinor),
+      amountMinor: BigInt(item.amountMinor),
       currency,
-      dueDate: new Date(`${addMonths(firstDueDate, i * everyMonths)}T00:00:00Z`),
+      dueDate: new Date(`${item.dueDate}T00:00:00Z`),
       createdBy: actor.actorId,
     }));
     await this.prisma.$transaction(async (tx) => {
@@ -323,61 +371,105 @@ export class BillingService {
         action: 'instalment.created',
         entity: 'family',
         entityId: family.id,
-        after: { planId, count, everyMonths, amountMinor, currency, firstDueDate, learnerId, label },
+        after: {
+          planId,
+          count,
+          everyMonths,
+          schedule: schedule.map((x) => ({ amountMinor: x.amountMinor, dueDate: x.dueDate })),
+          currency,
+          learnerId,
+          label,
+        },
         reason: count > 1 ? 'instalment plan created' : 'instalment created',
       });
     });
+    if (this.paymentReminders) {
+      const created = await this.prisma.familyInstalment.findMany({ where: { id: { in: rows.map((r) => r.id) } } });
+      await this.paymentReminders.scheduleFor(created).catch(() => undefined);
+    }
     return this.presentFamily(actor, access, family.id);
   }
 
-  /** { paidOn: YYYY-MM-DD (not after today), method?: invoice | bank_transfer, reference? } -- once. */
+  /**
+   * PD-17's "this instalment is paid": { paidOn: YYYY-MM-DD (not after today),
+   * method?: invoice | bank_transfer | cash, reference? }. Since PD-27 it records
+   * a payment for everything the instalment still owes (through the ledger, so
+   * an invoice is issued); a part payment is POST /families/:id/payments.
+   */
   async recordPayment(actorId: string, instalmentId: string, body: Record<string, unknown>) {
     const { actor, access } = await this.requireRecorder(actorId);
     const inv = await this.requireInstalment(actor, access, instalmentId);
     const paidOn = requireDate('paidOn', body.paidOn);
     const today = todayIn(await this.timeZone());
     if (paidOn > today) throw invalid('paidOn: a payment is recorded once it arrived, not ahead of time');
-    let method = body.method as PaymentMethod | undefined;
+    let method = body.method as string | undefined | null;
     if (method === undefined || method === null) {
-      method = ((await this.prisma.familyBilling.findUnique({ where: { familyId: inv.familyId } }))?.paymentMethod ?? undefined) as PaymentMethod | undefined;
+      method = (await this.prisma.familyBilling.findUnique({ where: { familyId: inv.familyId } }))?.paymentMethod ?? undefined;
     }
-    if (!method || !PAYMENT_METHODS.includes(method)) throw invalid('method: invoice | bank_transfer');
+    if (!method || !(INSTALMENT_PAYMENT_METHODS as readonly string[]).includes(method)) {
+      throw invalid('method: invoice | bank_transfer | cash');
+    }
+    if (method === 'bank_transfer' && !access.canVerify) {
+      throw new CommError(CommErrorCode.BILLING_DENIED, 'a bank transfer is confirmed by the super admin or the Operations Manager');
+    }
     const reference = body.reference === undefined || body.reference === null || body.reference === ''
       ? null
       : requireText('reference', body.reference, 120);
+    if (inv.paidOn || inv.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already paid or voided', 409);
+    const ledger = this.requireLedger();
 
-    await this.prisma.$transaction(async (tx) => {
+    const recorded = await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
-      const changed = await tx.familyInstalment.updateMany({
-        where: { id: inv.id, paidOn: null, voidedAt: null },
-        data: {
-          paidOn: new Date(`${paidOn}T00:00:00Z`),
-          paidMethod: method,
-          paidReference: reference,
-          paidRecordedBy: actor.actorId,
-          paidRecordedAt: new Date(),
-        },
+      const paid = await ledger.standingSum(tx, { instalmentId: inv.id });
+      const remaining = Number(inv.amountMinor) - paid;
+      if (remaining <= 0) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already covered', 409);
+      const learner = inv.learnerId ? await tx.learner.findUnique({ where: { id: inv.learnerId }, select: { name: true } }) : null;
+      return ledger.record(tx, {
+        organizationId: inv.organizationId,
+        familyId: inv.familyId,
+        trialLessonId: null,
+        learnerId: inv.learnerId,
+        childName: learner?.name ?? null,
+        requestId: null,
+        instalmentId: inv.id,
+        method: method as PaymentMethod,
+        amountMinor: remaining,
+        currency: inv.currency,
+        paidOn,
+        recordedBy: actor.actorId,
+        reference,
+        auditActorId: actor.actorId,
+        auditReason: 'payment recorded',
       });
-      if (changed.count !== 1) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already paid or voided', 409);
-      await this.audit.audit(tx, {
-        actorId: actor.actorId,
-        action: 'instalment.paid',
-        entity: 'family',
-        entityId: inv.familyId,
-        after: { instalmentId: inv.id, paidOn, method, amountMinor: Number(inv.amountMinor), currency: inv.currency },
-        reason: 'payment recorded',
-      });
-    });
+    }).catch((e) => { throw mapPaymentRefusal(e); });
+    await ledger.afterRecorded(recorded);
     return this.presentFamily(actor, access, inv.familyId);
   }
 
-  /** { reason } -- final. A wrong amount or a payment recorded by mistake is voided and written again. */
+  /**
+   * { reason } -- final. A wrong amount or a payment recorded by mistake is
+   * voided and written again. PD-27: its payments and their invoices are voided
+   * with it, its live links cancelled, its reminders stopped -- unless a card
+   * paid towards it: money Stripe took is refunded, never voided away.
+   */
   async voidInstalment(actorId: string, instalmentId: string, body: Record<string, unknown>) {
     const { actor, access } = await this.requireRecorder(actorId);
     const inv = await this.requireInstalment(actor, access, instalmentId);
     const reason = requireText('reason', body.reason, 500);
+    const payments = await this.prisma.payment.findMany({ where: { instalmentId: inv.id, voidedAt: null } });
+    if (payments.some((p) => p.method === 'card')) {
+      throw new CommError(CommErrorCode.BILLING_STATE, 'a card paid towards this instalment; refund the card payment instead of voiding it', 409);
+    }
+    if (payments.length > 0 && !access.canVerify) {
+      throw new CommError(CommErrorCode.BILLING_DENIED, 'an instalment with payments is voided by the super admin or the Operations Manager');
+    }
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      for (const p of payments) await this.requireLedger().voidPayment(tx, p, actor.actorId, reason, { cascadeFromInstalment: true });
+      await tx.paymentRequest.updateMany({
+        where: { instalmentId: inv.id, paidAt: null, cancelledAt: null },
+        data: { cancelledAt: new Date(), cancelledBy: actor.actorId, cancelReason: 'the instalment was voided' },
+      });
       const changed = await tx.familyInstalment.updateMany({
         where: { id: inv.id, voidedAt: null },
         data: { voidedAt: new Date(), voidedBy: actor.actorId, voidReason: reason },
@@ -388,20 +480,23 @@ export class BillingService {
         action: 'instalment.voided',
         entity: 'family',
         entityId: inv.familyId,
-        before: { instalmentId: inv.id, paid: inv.paidOn !== null, amountMinor: Number(inv.amountMinor), currency: inv.currency },
+        before: { instalmentId: inv.id, paid: inv.paidOn !== null, payments: payments.length, amountMinor: Number(inv.amountMinor), currency: inv.currency },
         reason,
       });
     });
+    await this.paymentReminders?.cancelFor(inv.id);
     return this.presentFamily(actor, access, inv.familyId);
   }
 
-  private async presentFamily(actor: Actor, access: BillingAccess, familyId: string) {
+  /** The family's money, as every staff route answers it (PD-17 + PD-27). */
+  async presentFamily(actor: Actor, access: BillingAccess, familyId: string) {
     const org = actor.organizationId as string;
     const today = todayIn(await this.timeZone());
-    const [family, billing, instalments] = await Promise.all([
+    const [family, billing, instalments, money] = await Promise.all([
       this.prisma.family.findUniqueOrThrow({ where: { id: familyId }, select: { id: true, subscriptionPlanMonths: true } }),
       this.prisma.familyBilling.findUnique({ where: { familyId } }),
       this.prisma.familyInstalment.findMany({ where: { familyId, organizationId: org }, orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }] }),
+      this.reads.forFamily(familyId, org, { actorId: actor.actorId, staff: true }),
     ]);
     const learnerIds = [...new Set(instalments.flatMap((i) => (i.learnerId ? [i.learnerId] : [])))];
     const learners = await this.prisma.learner.findMany({ where: { id: { in: learnerIds } }, select: { id: true, name: true } });
@@ -412,55 +507,50 @@ export class BillingService {
     );
     const person = (id: string) => ({ id, name: staffName.get(id) ?? '' });
 
-    const timeline: TimelineInstalment[] = instalments.map((i) => present(i, today, learnerName, person));
-    // Per currency: what has been paid, what is still owed, and how much of that is late.
-    const totals = new Map<string, { currency: string; paidMinor: number; outstandingMinor: number; overdueMinor: number }>();
-    for (const t of timeline) {
-      if (t.status === 'voided') continue;
-      const sum = totals.get(t.currency) ?? { currency: t.currency, paidMinor: 0, outstandingMinor: 0, overdueMinor: 0 };
-      if (t.status === 'paid') sum.paidMinor += t.amountMinor;
-      else sum.outstandingMinor += t.amountMinor;
-      if (t.status === 'overdue') sum.overdueMinor += t.amountMinor;
-      totals.set(t.currency, sum);
-    }
+    const timeline: TimelineInstalment[] = instalments.map((i) => present(i, today, learnerName, person, money));
     return {
       familyId: family.id,
       today,
-      paymentMethod: (billing?.paymentMethod ?? null) as PaymentMethod | null,
+      paymentMethod: (billing?.paymentMethod ?? null) as FamilyPaymentMethod | null,
       currency: billing?.currency ?? null,
       planMonths: family.subscriptionPlanMonths,
       instalments: timeline,
-      totals: [...totals.values()],
+      totals: totalsOf(timeline),
       // Operations and Sales record (PD-17); the client hides nothing the server would refuse.
       canRecord: access.canRecord,
+      // PD-27.
+      canVerify: access.canVerify,
+      cardAvailable: this.stripe.checkoutAvailable,
+      requests: money.requests,
+      payments: money.payments,
+      invoices: money.invoices,
+      receipts: money.receipts,
     };
   }
 
   /**
    * PD-17: the parents' own payments, for the app's Settings > Payments. Every
    * active parent of the family reads them (owner, 2026-10-21: "both parents"),
-   * not only the one holding the billing permission -- reading is not managing,
-   * and paying is still recorded by staff. The family is the caller's own;
-   * nothing here takes a family id. Voided rows, void reasons, who recorded what
-   * and every internal note stay staff-side.
+   * not only the one holding the billing permission. The family is the caller's
+   * own; nothing here takes a family id. Voided rows, void reasons, who recorded
+   * what and every internal note stay staff-side.
+   *
+   * PD-27 adds what the parent acts on: the open payment requests, the bank
+   * details for a transfer, whether a card can be used, their receipts and
+   * every invoice that stands.
    */
   async mine(actorId: string) {
-    const actor = await this.conversations.requireActor(actorId);
-    const denied = () => new CommError(CommErrorCode.BILLING_DENIED, 'payments are shown to the family\'s parents');
-    if (actor.kind !== 'contact' || !actor.isActive || !actor.familyId) throw denied();
-    const contact = await this.prisma.contact.findUnique({
-      where: { id: actor.actorId },
-      select: { familyId: true, organizationId: true, isActive: true },
-    });
-    if (!contact || !contact.isActive || contact.familyId !== actor.familyId) throw denied();
+    const { contact } = await this.requireParent(actorId);
     const today = todayIn(await this.timeZone());
-    const [family, billing, rows] = await Promise.all([
+    const [family, billing, rows, money, bank] = await Promise.all([
       this.prisma.family.findUniqueOrThrow({ where: { id: contact.familyId }, select: { subscriptionPlanMonths: true } }),
       this.prisma.familyBilling.findUnique({ where: { familyId: contact.familyId } }),
       this.prisma.familyInstalment.findMany({
         where: { familyId: contact.familyId, organizationId: contact.organizationId, voidedAt: null },
         orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
       }),
+      this.reads.forFamily(contact.familyId, contact.organizationId, { actorId, staff: false }),
+      this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } }),
     ]);
     const learnerIds = [...new Set(rows.flatMap((i) => (i.learnerId ? [i.learnerId] : [])))];
     const learners = await this.prisma.learner.findMany({
@@ -471,6 +561,8 @@ export class BillingService {
     const instalments = rows.map((i) => {
       const dueDate = day(i.dueDate);
       const status = statusOf({ status: i.paidOn ? 'paid' : 'open', dueDate }, today);
+      const m = money.byInstalment.get(i.id);
+      const paidMinor = i.paidOn ? Math.max(Number(i.amountMinor), m?.paidMinor ?? 0) : m?.paidMinor ?? 0;
       return {
         id: i.id,
         label: i.label,
@@ -480,31 +572,50 @@ export class BillingService {
         dueDate,
         status,
         days: status === 'overdue' ? -daysFrom(today, dueDate) : Math.max(0, daysFrom(today, dueDate)),
+        paidMinor,
+        remainingMinor: i.paidOn ? 0 : Math.max(0, Number(i.amountMinor) - paidMinor),
+        partial: !i.paidOn && paidMinor > 0,
+        requestId: i.paidOn ? null : m?.requestId ?? null,
         payment:
           i.paidOn && i.paidMethod
             ? { paidOn: day(i.paidOn), method: i.paidMethod as PaymentMethod, reference: i.paidReference }
             : null,
       };
     });
-    const totals = new Map<string, { currency: string; paidMinor: number; outstandingMinor: number; overdueMinor: number }>();
-    for (const t of instalments) {
-      const sum = totals.get(t.currency) ?? { currency: t.currency, paidMinor: 0, outstandingMinor: 0, overdueMinor: 0 };
-      if (t.status === 'paid') sum.paidMinor += t.amountMinor;
-      else sum.outstandingMinor += t.amountMinor;
-      if (t.status === 'overdue') sum.overdueMinor += t.amountMinor;
-      totals.set(t.currency, sum);
-    }
     return {
       today,
-      paymentMethod: (billing?.paymentMethod ?? null) as PaymentMethod | null,
+      paymentMethod: (billing?.paymentMethod ?? null) as FamilyPaymentMethod | null,
       currency: billing?.currency ?? null,
       planMonths: family.subscriptionPlanMonths,
       instalments,
-      totals: [...totals.values()],
+      totals: totalsOf(instalments),
+      requests: money.requests,
+      invoices: money.invoices,
+      receipts: money.receipts,
+      bankAccount: parseBankAccount(bank?.value),
+      cardAvailable: this.stripe.checkoutAvailable,
     };
   }
 
-  private async requireInstalment(actor: Actor, access: BillingAccess, instalmentId: string): Promise<FamilyInstalment> {
+  /** The signed-in parent and their family (PD-17's rule: any active contact of it). */
+  async requireParent(actorId: string): Promise<{ actor: Actor; contact: { id: string; familyId: string; organizationId: string } }> {
+    const actor = await this.conversations.requireActor(actorId);
+    const denied = () => new CommError(CommErrorCode.BILLING_DENIED, 'payments are shown to the family\'s parents');
+    if (actor.kind !== 'contact' || !actor.isActive || !actor.familyId) throw denied();
+    const contact = await this.prisma.contact.findUnique({
+      where: { id: actor.actorId },
+      select: { id: true, familyId: true, organizationId: true, isActive: true },
+    });
+    if (!contact || !contact.isActive || contact.familyId !== actor.familyId) throw denied();
+    return { actor, contact: { id: contact.id, familyId: contact.familyId, organizationId: contact.organizationId } };
+  }
+
+  private requireLedger(): PaymentLedger {
+    if (!this.ledger) throw new Error('BillingService was built without the PD-27 ledger');
+    return this.ledger;
+  }
+
+  async requireInstalment(actor: Actor, access: BillingAccess, instalmentId: string): Promise<FamilyInstalment> {
     if (!isUuid(instalmentId)) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'instalment not found');
     const inv = await this.prisma.familyInstalment.findFirst({
       where: { id: instalmentId.toLowerCase(), organizationId: actor.organizationId as string },
@@ -596,12 +707,12 @@ export class BillingService {
 
   // ------------------------------------------------------------------
 
-  private accessOf(actor: Actor): Promise<BillingAccess> {
+  accessOf(actor: Actor): Promise<BillingAccess> {
     return billingAccessOf(this.prisma, actor);
   }
 
   /** PD-17: Operations (in scope), Sales and the super admin record money. */
-  private async requireRecorder(actorId: string): Promise<{ actor: Actor; access: BillingAccess }> {
+  async requireRecorder(actorId: string): Promise<{ actor: Actor; access: BillingAccess }> {
     const { actor, access } = await this.requireReader(actorId);
     if (!access.canRecord) {
       throw new CommError(CommErrorCode.BILLING_DENIED, 'payments are recorded by the Operations and Sales departments');
@@ -609,7 +720,7 @@ export class BillingService {
     return { actor, access };
   }
 
-  private async requireReader(actorId: string): Promise<{ actor: Actor; access: BillingAccess }> {
+  async requireReader(actorId: string): Promise<{ actor: Actor; access: BillingAccess }> {
     const actor = await this.conversations.requireActor(actorId);
     const access = await this.accessOf(actor);
     if (access.scope === null) {
@@ -631,7 +742,7 @@ export class BillingService {
          AND (${!reach} OR chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL)`;
   }
 
-  private async requireFamily(actor: Actor, access: BillingAccess, familyId: string) {
+  async requireFamily(actor: Actor, access: BillingAccess, familyId: string) {
     if (!isUuid(familyId)) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'family not found');
     const rows = await this.prisma.$queryRaw<{ id: string; reach: string | null }[]>`
       SELECT f.id, chat.staff_reaches_family(${actor.actorId}::uuid, f.id) AS reach
@@ -644,7 +755,7 @@ export class BillingService {
     return f;
   }
 
-  private async timeZone(): Promise<string> {
+  async timeZone(): Promise<string> {
     const row = await this.prisma.config.findUnique({ where: { key: 'schedule.timezone' } });
     const tz = typeof row?.value === 'string' ? row.value : DEFAULT_TIME_ZONE;
     try {
@@ -660,68 +771,93 @@ function emptyCounts() {
   return { overdue: 0, due: 0, upcoming: 0, paid: 0, unassigned: 0 };
 }
 
-function invalid(reason: string) {
-  return new CommError(CommErrorCode.VALIDATION, reason, 400);
-}
-
-function requireUuid(field: string, value: unknown): string {
-  if (!isUuid(value)) throw invalid(`${field}: must be a uuid`);
-  return (value as string).toLowerCase();
-}
-
-function requireText(field: string, value: unknown, max: number): string {
-  if (typeof value !== 'string' || value.trim().length === 0) throw invalid(`${field}: is required`);
-  if (value.trim().length > max) throw invalid(`${field}: must be at most ${max} characters`);
-  return value.trim();
-}
-
-function requireDate(field: string, value: unknown): string {
-  if (typeof value !== 'string' || !DATE_RE.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
-    throw invalid(`${field}: YYYY-MM-DD`);
-  }
-  return value;
-}
-
-function requireCurrency(value: unknown): string {
-  const c = typeof value === 'string' ? value.trim().toUpperCase() : '';
-  if (!CURRENCY_RE.test(c)) throw invalid('currency: a three-letter ISO 4217 code, e.g. AED');
-  return c;
-}
-
-function day(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 function present(
   i: FamilyInstalment,
   today: string,
   learnerName: Map<string, string>,
   person: (id: string) => { id: string; name: string },
+  money: MoneyView,
 ): TimelineInstalment {
   const dueDate = day(i.dueDate);
   const status = i.voidedAt ? 'voided' : statusOf({ status: i.paidOn ? 'paid' : 'open', dueDate }, today);
+  const m = money.byInstalment.get(i.id);
+  const amount = Number(i.amountMinor);
+  // A PD-17 row paid before PD-27 has no payment rows: paid is its whole amount.
+  const paidMinor = i.paidOn ? Math.max(amount, m?.paidMinor ?? 0) : i.voidedAt ? 0 : m?.paidMinor ?? 0;
   return {
     id: i.id,
     planId: i.planId,
     label: i.label,
     child: i.learnerId ? { id: i.learnerId, name: learnerName.get(i.learnerId) ?? '' } : null,
-    amountMinor: Number(i.amountMinor),
+    amountMinor: amount,
     currency: i.currency,
     dueDate,
     status,
     days: status === 'overdue' ? -daysFrom(today, dueDate) : Math.max(0, daysFrom(today, dueDate)),
+    paidMinor,
+    remainingMinor: i.paidOn || i.voidedAt ? 0 : Math.max(0, amount - paidMinor),
+    partial: !i.paidOn && !i.voidedAt && paidMinor > 0,
+    requestId: i.paidOn || i.voidedAt ? null : m?.requestId ?? null,
     createdAt: i.createdAt.toISOString(),
     createdBy: person(i.createdBy),
     payment:
-      i.paidOn && i.paidMethod && i.paidRecordedAt && i.paidRecordedBy
+      i.paidOn && i.paidMethod && i.paidRecordedAt
         ? {
             paidOn: day(i.paidOn),
             method: i.paidMethod as PaymentMethod,
             reference: i.paidReference,
             recordedAt: i.paidRecordedAt.toISOString(),
-            recordedBy: person(i.paidRecordedBy),
+            // null for a card payment: Stripe confirmed it.
+            recordedBy: i.paidRecordedBy ? person(i.paidRecordedBy) : null,
           }
         : null,
     void: i.voidedAt && i.voidedBy && i.voidReason ? { at: i.voidedAt.toISOString(), by: person(i.voidedBy), reason: i.voidReason } : null,
   };
+}
+
+/** Per currency: what has been paid, what is still owed, and how much of that is late. Voided rows do not count. */
+function totalsOf(rows: { status: string; amountMinor: number; currency: string; paidMinor: number; remainingMinor: number }[]) {
+  const totals = new Map<string, { currency: string; paidMinor: number; outstandingMinor: number; overdueMinor: number }>();
+  for (const t of rows) {
+    if (t.status === 'voided') continue;
+    const sum = totals.get(t.currency) ?? { currency: t.currency, paidMinor: 0, outstandingMinor: 0, overdueMinor: 0 };
+    sum.paidMinor += t.paidMinor;
+    sum.outstandingMinor += t.remainingMinor;
+    if (t.status === 'overdue') sum.overdueMinor += t.remainingMinor;
+    totals.set(t.currency, sum);
+  }
+  return [...totals.values()];
+}
+
+export interface BankAccount {
+  bankName: string | null;
+  accountName: string;
+  iban: string | null;
+  accountNumber: string | null;
+  swift: string | null;
+  note: string | null;
+}
+
+export function parseBankAccount(value: unknown): BankAccount | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const text = (k: string) => (typeof v[k] === 'string' && (v[k] as string).trim() ? (v[k] as string).trim() : null);
+  const accountName = text('accountName');
+  if (!accountName) return null;
+  return { bankName: text('bankName'), accountName, iban: text('iban'), accountNumber: text('accountNumber'), swift: text('swift'), note: text('note') };
+}
+
+/**
+ * A PD-27 database guard's refusal (chat.guard_payment*, raised as a check or
+ * privilege violation) read as the 409 it is. The guards' sentences are written
+ * for people, so the first line is passed on; anything else is rethrown.
+ */
+const GUARD_PHRASES = ['never changes', 'is final', 'stays paid', 'stays cancelled', 'never exceed', 'is not refunded', 'that stands', 'only once', 'pays an open instalment'];
+export function mapPaymentRefusal(e: unknown): unknown {
+  if (e instanceof CommError) return e;
+  const text = String((e as { message?: string })?.message ?? '');
+  if (!GUARD_PHRASES.some((k) => text.includes(k))) return e;
+  const line = GUARD_PHRASES.map((k) => text.split('\n').find((l) => l.includes(k))).find(Boolean) ?? '';
+  const sentence = line.replace(/^.*?(?:ERROR:|message:|`)\s*/, '').replace(/[`"].*$/, '').trim();
+  return new CommError(CommErrorCode.BILLING_STATE, sentence || 'that payment record cannot change that way', 409);
 }

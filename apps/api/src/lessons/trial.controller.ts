@@ -3,6 +3,8 @@ import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { TrialService } from './trial.service';
 import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
+import { NewStudentsService } from '../new-students/new-students.service';
+import { PaymentsService } from '../billing/payments.service';
 
 /**
  * PD-11 T4 and the trial journey: trial lessons, prospects, each trial's one
@@ -15,6 +17,8 @@ export class TrialController {
   constructor(
     private readonly trials: TrialService,
     private readonly enrolment: NewStudentEnrolmentService,
+    private readonly payments: PaymentsService,
+    private readonly forms: NewStudentsService,
   ) {}
 
   @Post('prospects')
@@ -83,6 +87,20 @@ export class TrialController {
   @Post('new-students/:trialId/supervisor')
   changeNewStudentSupervisor(@ActorId() actorId: string, @Param('trialId') trialId: string, @Body() body: Record<string, unknown>) {
     return this.enrolment.changeSupervisor(actorId, trialId, body ?? {});
+  }
+
+  /** PD-27: a trial's payment links and payments before Assign. */
+  @Get('new-students/:trialId/payment-requests')
+  async trialPaymentRequests(@ActorId() actorId: string, @Param('trialId') trialId: string) {
+    const payer = await this.payments.trialPayer(actorId, trialId, (org, id) => this.forms.payerFor(org, id));
+    return this.payments.trialRequests(actorId, payer);
+  }
+
+  /** PD-27: { label, amountMinor, purpose?, currency?, planMonths?, periodStart?, periodEnd?, expiresInDays? } */
+  @Post('new-students/:trialId/payment-requests')
+  async createTrialPaymentRequest(@ActorId() actorId: string, @Param('trialId') trialId: string, @Body() body: Record<string, unknown>) {
+    const payer = await this.payments.trialPayer(actorId, trialId, (org, id) => this.forms.payerFor(org, id));
+    return this.payments.createTrialRequest(actorId, payer, body ?? {});
   }
 
   /** PD-16: the responsible supervisor opens the family's group. */

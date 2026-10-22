@@ -270,6 +270,8 @@ export enum CommErrorCode {
   BILLING_NOT_FOUND = 'COMM.BILLING_NOT_FOUND',
   /** PD-17: the instalment is already paid or voided, so it cannot be paid or voided again. 409. */
   BILLING_STATE = 'COMM.BILLING_STATE',
+  /** PD-27: card payments are not configured on this deployment (no STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET). 503. */
+  PAYMENTS_UNAVAILABLE = 'COMM.PAYMENTS_UNAVAILABLE',
   /** PD-17: Parent Profiles are the administration's -- Operations (in scope), the Operations Manager and the super admin. Never a teacher. 403. */
   PARENT_PROFILE_DENIED = 'COMM.PARENT_PROFILE_DENIED',
   /** PD-17: no such parent in the caller's organization, or none this caller may see. 404. */

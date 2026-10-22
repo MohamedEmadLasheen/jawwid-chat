@@ -24,9 +24,19 @@ export type MediaVariant = 'o' | 't'; // original, thumbnail
  * (`wallpapers`: served to its owner only -- communication/themes), or a
  * teacher's qualification certificate file (`teacher-certificates`: Teacher
  * Profile V2 -- not PD-12's student certificates, which are message
- * attachments).
+ * attachments), or a parent's bank-transfer receipt (`payment-receipts`: the
+ * family's parents and the staff who read that family's money -- PD-27), or an
+ * invoice PDF (`invoices`: rendered on request, the same readers -- PD-27).
  */
-export type MediaKind = 'attachments' | 'stories' | 'staff' | 'avatars' | 'wallpapers' | 'teacher-certificates';
+export type MediaKind =
+  | 'attachments'
+  | 'stories'
+  | 'staff'
+  | 'avatars'
+  | 'wallpapers'
+  | 'teacher-certificates'
+  | 'payment-receipts'
+  | 'invoices';
 
 const MEDIA_KINDS: ReadonlySet<string> = new Set<MediaKind>([
   'attachments',
@@ -35,6 +45,8 @@ const MEDIA_KINDS: ReadonlySet<string> = new Set<MediaKind>([
   'avatars',
   'wallpapers',
   'teacher-certificates',
+  'payment-receipts',
+  'invoices',
 ]);
 
 export interface MediaUrlClaims {

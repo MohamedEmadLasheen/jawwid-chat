@@ -210,8 +210,8 @@ interface BankAccount {      // every field optional except accountName
 | `GET /invoices/:id/link` | | `{ url }` — a signed PDF link for this viewer (5 minutes) |
 | `GET /billing/settings` | | `{ bankAccount: BankAccount \| null, issuer: {name, address \| null, taxId \| null} \| null, cardAvailable, reminders: [{key, offsetDays, enabled}], canEdit }` |
 | `POST /billing/settings` | `{ bankAccount?: BankAccount \| null, issuer?: {...} \| null, reminders?: [{key, enabled}] }` — super admin / Operations Manager | the same |
-| `GET /new-students/:trialId/payment-requests` | | `{ items: PaymentRequest[], payments: Payment[], suggestedAmountMinor: number \| null, currency }` — before Assign (suggested = the form's package prices) |
-| `POST /new-students/:trialId/payment-requests` | `{purpose?: 'subscription', label, amountMinor, currency?, planMonths?, periodStart?, periodEnd?, expiresInDays?}` | `{ request: PaymentRequest }` |
+| `GET /trials/new-students/:trialId/payment-requests` | | `{ items: PaymentRequest[], payments: Payment[], suggestedAmountMinor: number \| null, currency }` — before Assign (suggested = the form's package prices) |
+| `POST /trials/new-students/:trialId/payment-requests` | `{purpose?: 'subscription', label, amountMinor, currency?, planMonths?, periodStart?, periodEnd?, expiresInDays?}` | `{ request: PaymentRequest }` |
 
 ### Parent (bearer token, an active contact of the family)
 
@@ -233,7 +233,8 @@ interface BankAccount {      // every field optional except accountName
 
 Stripe Dashboard → Developers → Webhooks → endpoint `https://<api>/api/v1/stripe/webhook`,
 events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
-`checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`.
+`checkout.session.async_payment_failed`, `checkout.session.expired`, `refund.created`,
+`refund.updated`.
 
 ## Environment
 

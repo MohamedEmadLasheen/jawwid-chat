@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AuthorizationService } from '../platform/authorization.service';
@@ -12,6 +12,7 @@ import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { LessonService } from '../lessons/lesson.service';
 import { SchedulingService } from '../lessons/scheduling.service';
 import { normalizeEmail } from '../platform/auth/parent-signup.service';
+import { PaymentLedger } from '../billing/payment-ledger.service';
 import { NewStudentsService } from './new-students.service';
 import { seedFromEnrolment } from '../parent-profile/parent-record.service';
 
@@ -54,6 +55,9 @@ export class NewStudentEnrolmentService {
     private readonly scheduling: SchedulingService,
     private readonly org: OrgStructureService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-27: what the trial's family paid before Assign moves onto the family.
+    // Optional only for suites that build this service by hand.
+    @Optional() private readonly payments?: PaymentLedger,
   ) {}
 
   /** The New Students page, filtered for the viewer, each entry with its setup state. */
@@ -237,6 +241,9 @@ export class NewStudentEnrolmentService {
             assignedBy: actor.actorId,
           },
         });
+        // PD-27: payment links, payments and invoices made for this trial before
+        // the family existed now belong to it (and to the child, if one).
+        await this.payments?.attachTrial(tx, trialId, family.id, learners.map((l) => l.id));
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: 'new_student.enrolled',

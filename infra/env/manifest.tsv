@@ -137,6 +137,22 @@ BACKUP_ENCRYPTION_PASSPHRASE	backup	yes	opt	opt	opt
 # the key loses every saved account: back it up with the database backups' key.
 # Generate one with: echo "k1:$(openssl rand -base64 32)"
 TEACHER_PAYOUT_KEYS	payroll	yes	opt	opt	opt
+# STRIPE_SECRET_KEY is CONSUMED by apps/api/src/billing (PD-27): card payments
+# through Stripe Checkout (the payment link's "Pay by card", the app's Pay) and
+# card refunds. Unset = no card option is offered anywhere and a checkout
+# answers 503; bank transfers and cash work without it. Restricted key scopes:
+# Checkout Sessions write, Refunds write.
+STRIPE_SECRET_KEY	payments	yes	opt	opt	opt
+# STRIPE_WEBHOOK_SECRET is CONSUMED by POST /api/v1/stripe/webhook (PD-27): the
+# endpoint's signing secret (whsec_...). A card payment is recorded ONLY from a
+# webhook this secret verifies. Unset = the webhook answers 503 and Stripe
+# retries for three days.
+STRIPE_WEBHOOK_SECRET	payments	yes	opt	opt	opt
+# PAYMENT_LINK_BASE_URL is CONSUMED by apps/api/src/billing (PD-27): the public
+# origin plus /api/v1 that payment links are built on, e.g.
+# https://api.jawwid.com/api/v1. Unset = the origin of the request that made
+# the link (fine locally; set it wherever a proxy rewrites the host).
+PAYMENT_LINK_BASE_URL	payments	no	opt	opt	opt
 # SENTRY_DSN is CONSUMED: when set, the API and the worker report 5xx responses,
 # swallowed worker-subsystem failures and process-level faults to Sentry
 # (apps/api/src/infra/observability/sentry-error-tracker.ts); when unset or
