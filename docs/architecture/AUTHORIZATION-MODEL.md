@@ -81,13 +81,15 @@ Family-facing staff (may take part in family conversations): `admin`,
 | `broadcasts.send` | send official messages (Phase 2) | | | | | ● | ● |
 | `audit.read` | read audit log | | | | | ● | ● |
 | `settings.manage` | edit `chat.config` | | | | | ● | ● |
-| `users.manage` | provision/suspend/deactivate accounts, reset credentials, revoke others' sessions | | | | | | ● |
+| `users.manage` | provision/suspend/deactivate accounts, reset credentials, revoke others' sessions | | | ●⁵ | ●⁵ | ●⁵ | ● |
 | `sessions.manage` | list/revoke own sessions | ● | ● | ● | ● | ● | ● |
 
 ¹ only on families with an active **explicit temporary assignment** to the coverage admin (PD-3; scope, §6). A shift schedule is not an authorization input.
 ² in `student_group`/`class_group`, published on send (PD-14: nothing is held for approval; an admin in charge moderates afterwards by edit or delete — `AuthorizationService.moderatableAuthorKinds`); refused entirely when no live admin is present (C-4).
 ³ a parent reads only their own family; a teacher reads only the families of learners they teach, through the group.
 ⁴ **PD-19, CLOSED 2026-10-21 (supersedes PD-2).** A member who may write in a conversation may also start a call in it, parents included (family group, Student Group, Class Group, and their 1:1 with their supervisor). Non-members (D1; except the super admin in a group, who is given a seat on the call — PD-19 amendment), a direct teacher↔parent pair (BR-1 / PD-7), a group with no live admin (C-4) and silent members are still refused. `canCall`'s `CallIntent` stays on the signature but no rule distinguishes start from join. Protected by `apps/api/test/unit/authorization/pd019-member-may-start-call.spec.ts`.
+
+⁵ **PD-21, CLOSED 2026-10-22.** Every staff role — the departments (finance, technical, academic) too — may reset the password of, suspend, reactivate and impersonate any **parent or teacher** account of its organization. A **staff** account is administered by the super admin only; the super admin's own account by nobody (the bootstrap CLI is its only credential writer); one's own account by nobody. A reset is a one-time code the person completes with their own password; nobody but the person ever knows a password. Provisioning and offboarding (deactivation) stay the super admin's. Decided by `AuthorizationService.canAdministerAccount`; protected by `apps/api/test/unit/account-admin/account-admin-authorization.spec.ts` and `apps/api/test/integration/pd021-account-admin-http.spec.ts`. Record: `../admin/pd021-account-administration.md`.
 
 The table is the *default* mapping. Phase 1 stores it in `chat.role_permission`
 (`role`, `permission`) seeded by migration, exposes it through `GET /config`

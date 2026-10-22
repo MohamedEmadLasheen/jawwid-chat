@@ -3151,6 +3151,12 @@ abstract class L10n {
   /// **'Forwarded'**
   String get forwardedLabel;
 
+  /// No description provided for @sentBySupportLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent by support'**
+  String get sentBySupportLabel;
+
   /// Shown next to a message's time when its author edited it after sending.
   ///
   /// In en, this message translates to:
@@ -4260,6 +4266,54 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Something went wrong. Try again.'**
   String get signupFailed;
+
+  /// No description provided for @resetOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot your password? I have a reset code'**
+  String get resetOpen;
+
+  /// No description provided for @resetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a new password'**
+  String get resetTitle;
+
+  /// No description provided for @resetIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the academy for a one-time code. Then enter your login, the code and a new password of your own. Nobody else will know it.'**
+  String get resetIntro;
+
+  /// No description provided for @resetUsernameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your login (e-mail)'**
+  String get resetUsernameLabel;
+
+  /// No description provided for @resetUsernameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your login.'**
+  String get resetUsernameRequired;
+
+  /// No description provided for @resetCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'6-digit code'**
+  String get resetCodeLabel;
+
+  /// No description provided for @resetCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That code is not valid, has expired or was already used. Ask the academy for a new one.'**
+  String get resetCodeInvalid;
+
+  /// No description provided for @resetFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Set password'**
+  String get resetFinish;
 
   /// No description provided for @studentProfileTitle.
   ///

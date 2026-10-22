@@ -69,6 +69,12 @@ final parentSignupRepositoryProvider = Provider<ParentSignupRepository>((ref) {
   return const NoParentSignupRepository();
 });
 
+/// PD-21: finishing a password reset the academy issued. Overridden at startup with the HTTP
+/// implementation.
+final passwordResetRepositoryProvider = Provider<PasswordResetRepository>((ref) {
+  return const NoPasswordResetRepository();
+});
+
 final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
   return const NoLessonRepository();
 });

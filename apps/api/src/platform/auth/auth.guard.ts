@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AuthService } from './auth.service';
+import { AuthService, type SupportSessionFacts } from './auth.service';
+import { currentRequestContext } from '../request-context';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import type { Actor } from '../types';
 
@@ -15,6 +16,8 @@ export interface AuthenticatedRequest {
   actor?: Actor;
   accountId?: string;
   sessionId?: string;
+  /** PD-21: present when the request runs in a support session (an administrator acting as the account). */
+  impersonation?: SupportSessionFacts;
 }
 
 /**
@@ -65,6 +68,14 @@ export class AuthenticatedGuard implements CanActivate {
     request.actor = authenticated.actor;
     request.accountId = authenticated.accountId;
     request.sessionId = authenticated.sessionId;
+    // PD-21: a support session. The interceptor gates and records it; the audit
+    // writer and the message writer stamp it, through the request context.
+    if (authenticated.impersonation) {
+      request.impersonation = authenticated.impersonation;
+      const context = currentRequestContext();
+      if (!context) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
+      context.impersonationId = authenticated.impersonation.id;
+    }
 
     void this.auth.touchSession(authenticated.sessionId);
     return true;

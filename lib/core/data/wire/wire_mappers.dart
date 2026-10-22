@@ -409,6 +409,7 @@ abstract final class WireMappers {
       isStarred: json['starred'] == true,
       isPinned: json['pinned'] == true,
       isForwarded: json['forwarded'] == true,
+      isSentBySupport: json['sentBySupport'] == true,
       editedAt: parseTime(json['editedAt']),
       isInternal: json['visibility'] == Wire.visibilityInternal,
       reactions: [

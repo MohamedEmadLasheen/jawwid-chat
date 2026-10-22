@@ -59,4 +59,33 @@ describe('malformed ids are unknown, not server errors', () => {
       404,
     ]);
   });
+
+  // POST /calls/:id/{token,accept,decline,end}. `None` is what a client sent on
+  // the system-test stack (2026-10-22); Prisma refused it with P2023 -> 500.
+  it('a non-uuid call id is not found, on every call route', async () => {
+    const routes: Array<[string, (id: string) => Promise<unknown>]> = [
+      ['token', (id) => g.calls.issueToken(id, s.parentId)],
+      ['accept', (id) => g.calls.accept(id, s.parentId)],
+      ['decline', (id) => g.calls.decline(id, s.parentId)],
+      ['end', (id) => g.calls.end(id, s.parentId)],
+    ];
+    for (const [route, call] of routes) {
+      for (const bad of ['None', 'not-a-uuid', '', undefined as unknown as string]) {
+        expect([route, bad, await refusal(call(bad))]).toEqual([
+          route,
+          bad,
+          [CommErrorCode.CALL_NOT_FOUND, 404],
+        ]);
+      }
+    }
+  });
+
+  it('a non-uuid conversation id is not found on the call routes that take one', async () => {
+    expect(await refusal(g.calls.start('None', s.parentId))).toEqual([CommErrorCode.CONVERSATION_NOT_FOUND, 404]);
+    expect(await refusal(g.calls.callCapability('None', s.parentId))).toEqual([
+      CommErrorCode.CONVERSATION_NOT_FOUND,
+      404,
+    ]);
+    expect(await refusal(g.calls.history('None', s.parentId))).toEqual([CommErrorCode.CONVERSATION_NOT_FOUND, 404]);
+  });
 });

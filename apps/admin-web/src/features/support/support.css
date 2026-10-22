@@ -1,0 +1,45 @@
+/* PD-21 support session. The banner stays in view: the administrator must never
+   forget whose account this is. */
+.support-banner {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-soft);
+  color: var(--text);
+  border-block-end: 2px solid var(--danger);
+}
+.support-banner__until { font-variant-numeric: tabular-nums; }
+.support-banner__actions { display: flex; gap: var(--space-2); margin-inline-start: auto; }
+.support-center { text-align: center; }
+.support-chats { display: grid; grid-template-columns: minmax(12rem, 18rem) 1fr; gap: var(--space-4); margin-block-start: var(--space-3); }
+@media (max-width: 720px) { .support-chats { grid-template-columns: 1fr; } }
+.support-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); align-content: start; }
+.support-list__item {
+  inline-size: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.support-list__item--open { border-color: var(--accent); font-weight: var(--fw-medium); }
+.support-thread { min-inline-size: 0; }
+.support-messages { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: var(--space-2); max-block-size: 55vh; overflow-y: auto; }
+.support-message { padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); }
+.support-message__meta { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; font-size: var(--fs-sm); color: var(--text-muted); }
+.support-message__body { white-space: pre-wrap; overflow-wrap: anywhere; margin-block-start: var(--space-1); }
+.support-composer { display: grid; gap: var(--space-2); justify-items: start; }
+.support-composer .field { inline-size: 100%; }
+.support-profile { display: grid; gap: var(--space-3); justify-items: start; max-inline-size: 36rem; margin-block-start: var(--space-3); }
+.support-profile .field { inline-size: 100%; }
+.support-profile__heading { font-size: var(--fs-lg); margin: var(--space-3) 0 0; }
