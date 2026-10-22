@@ -274,6 +274,17 @@ export enum CommErrorCode {
   PARENT_PROFILE_DENIED = 'COMM.PARENT_PROFILE_DENIED',
   /** PD-17: no such parent in the caller's organization, or none this caller may see. 404. */
   PARENT_PROFILE_NOT_FOUND = 'COMM.PARENT_PROFILE_NOT_FOUND',
+  /**
+   * PD-20: this caller may not reset, suspend, reactivate or impersonate this
+   * account -- not staff, the target is the caller's own account, the super
+   * admin's, or (for anyone but the super admin) another staff member's; or an
+   * impersonation of a staff account. 403. Never retry.
+   */
+  ACCOUNT_ADMIN_DENIED = 'COMM.ACCOUNT_ADMIN_DENIED',
+  /** PD-20: no such account in the caller's organization. 404. */
+  ACCOUNT_ADMIN_NOT_FOUND = 'COMM.ACCOUNT_ADMIN_NOT_FOUND',
+  /** PD-20: not in a state for this (suspend an inactive account, reactivate one that is not suspended, impersonate an inactive one). 409. */
+  ACCOUNT_ADMIN_STATE = 'COMM.ACCOUNT_ADMIN_STATE',
   /** PD-13: no such scheduled call, or none in a conversation this caller may read. 404. */
   SCHEDULED_CALL_NOT_FOUND = 'COMM.SCHEDULED_CALL_NOT_FOUND',
   /** PD-13: only someone who may start a call in the conversation schedules one there; only its creator cancels it. 403. */

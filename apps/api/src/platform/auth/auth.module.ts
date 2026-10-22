@@ -1,5 +1,7 @@
 import { ParentSignupController } from './parent-signup.controller';
 import { ParentSignupService } from './parent-signup.service';
+import { PasswordResetController } from './password-reset.controller';
+import { PasswordResetService } from './password-reset.service';
 import { Logger, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import Redis from 'ioredis';
@@ -79,10 +81,12 @@ export const loginRateLimitStoreProvider = {
 
 @Module({
   // PD-16: ParentSignupController -- a parent sets the password of the account Chat created at enrolment.
-  controllers: [AuthController, MeController, ParentSignupController],
+  // PD-20: PasswordResetController -- the person finishes a reset an administrator issued.
+  controllers: [AuthController, MeController, ParentSignupController, PasswordResetController],
   providers: [
     AuthService,
     ParentSignupService,
+    PasswordResetService,
     LoginRateLimiter,
     loginRateLimitStoreProvider,
     // Resolved once at boot, from the same variable bootstrap.ts uses to set
@@ -98,6 +102,6 @@ export const loginRateLimitStoreProvider = {
     { provide: APP_GUARD, useClass: ActionThrottleGuard },
     { provide: APP_FILTER, useClass: AuthErrorFilter },
   ],
-  exports: [AuthService, LoginRateLimiter],
+  exports: [AuthService, LoginRateLimiter, PasswordResetService],
 })
 export class AuthModule {}

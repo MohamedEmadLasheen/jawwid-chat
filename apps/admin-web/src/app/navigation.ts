@@ -98,6 +98,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   trials: 'people',
   coverage: 'people',
   'teacher-profiles': 'people',
+  accounts: 'people',
   stories: 'stories',
   tasks: 'more',
   dashboard: 'more',
@@ -119,6 +120,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   dashboard: '/dashboard',
   stories: '/stories',
   'teacher-profiles': '/teacher-profiles',
+  accounts: '/accounts',
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
@@ -136,10 +138,14 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   dashboard: 'dashboard',
   stories: 'stories',
   'teacher-profiles': 'approvals',
+  accounts: 'lock',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
 export const ADMIN_CHAT_LABEL: Bilingual = { en: 'Chat', ar: 'الدردشة' }
+
+/** PD-20: account administration, beside the read-only Users section. */
+export const ADMIN_ACCOUNTS_LABEL: Bilingual = { en: 'Accounts', ar: 'الحسابات' }
 
 function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
@@ -172,6 +178,15 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     path: AREA_PATH.chat,
     icon: AREA_ICON.chat,
     label: { text: ADMIN_CHAT_LABEL },
+    inDevelopment: false,
+  })
+  // PD-20: the super admin administers accounts (reset, set inactive) at
+  // /accounts, the same page every staff role has; Users stays read-only.
+  out.get('people')?.[0]?.entries.push({
+    key: 'accounts',
+    path: AREA_PATH.accounts,
+    icon: AREA_ICON.accounts,
+    label: { text: ADMIN_ACCOUNTS_LABEL },
     inDevelopment: false,
   })
   // One registry group inside a destination needs no heading.

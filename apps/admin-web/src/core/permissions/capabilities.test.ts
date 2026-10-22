@@ -48,10 +48,10 @@ describe('role → navigation', () => {
     }
   })
 
-  it('gives departments tasks and nothing else', () => {
+  it('gives departments tasks and, PD-20, account administration -- nothing else', () => {
     for (const role of ['finance', 'technical', 'academic'] as const) {
       expect(isDepartment(role)).toBe(true)
-      expect(visibleAreas(role)).toEqual(['tasks'])
+      expect(visibleAreas(role)).toEqual(['tasks', 'accounts'])
       // Departments must never reach a family record (AI #5 matrix §1).
       expect(canOpenArea(role, 'families')).toBe(false)
       expect(canOpenArea(role, 'inbox')).toBe(false)

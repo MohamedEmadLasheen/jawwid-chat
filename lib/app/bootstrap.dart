@@ -12,6 +12,7 @@ import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_parent_signup_repository.dart';
+import '../core/data/http/http_password_reset_repository.dart';
 import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/http_supervision_repository.dart';
@@ -143,6 +144,9 @@ List<Override> _httpOverrides() {
     authRepositoryProvider.overrideWithValue(auth),
     parentSignupRepositoryProvider.overrideWithValue(
       HttpParentSignupRepository(transport: publicTransport),
+    ),
+    passwordResetRepositoryProvider.overrideWithValue(
+      HttpPasswordResetRepository(transport: publicTransport),
     ),
     conversationRepositoryProvider.overrideWithValue(
       HttpConversationRepository(

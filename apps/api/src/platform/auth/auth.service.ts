@@ -693,26 +693,49 @@ export class AuthService {
   }
 
   async revokeAllForAccount(accountId: string, reason: string): Promise<void> {
-    const revoked = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.session.updateMany({
-        where: { accountId, revokedAt: null },
-        data: { revokedAt: new Date(), revokedReason: reason },
-      });
-      if (result.count === 0) return false;
+    const revoked = await this.prisma.$transaction((tx) => this.revokeAccountSessionsInTx(tx, accountId, reason));
+    await this.enforceAccountRevocation(accountId, revoked > 0);
+  }
 
-      await this.audit.audit(tx, {
-        actorId: null,
-        action: AUDIT_ACTION.SESSION_REVOKED,
-        entity: 'account',
-        entityId: accountId,
-        after: { revokedSessions: result.count },
-        reason,
-      });
-      return true;
+  /**
+   * PD-20: every live session of an account, revoked INSIDE the caller's
+   * transaction -- so a password reset or a suspension and the end of the
+   * sessions it implies commit together or not at all. Returns how many were
+   * live. The caller MUST follow the commit with enforceAccountRevocation().
+   *
+   * `revokedBy` is the administrator's ACCOUNT id (chat.session.revoked_by
+   * references chat.account); `actorId` their staff id, for the audit row.
+   */
+  async revokeAccountSessionsInTx(
+    tx: Tx,
+    accountId: string,
+    reason: string,
+    by?: { revokedBy: string; actorId: string },
+  ): Promise<number> {
+    const result = await tx.session.updateMany({
+      where: { accountId, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: reason, revokedBy: by?.revokedBy ?? null },
     });
-    // RT-009: every session is gone, so every socket of the account goes too;
-    // and, as for a single session, not reported complete until confirmed.
-    if (revoked) this.revocation.disconnectAccount(accountId);
+    if (result.count === 0) return 0;
+
+    await this.audit.audit(tx, {
+      actorId: by?.actorId ?? null,
+      action: AUDIT_ACTION.SESSION_REVOKED,
+      entity: 'account',
+      entityId: accountId,
+      after: { revokedSessions: result.count },
+      reason,
+    });
+    return result.count;
+  }
+
+  /**
+   * RT-009: every session is gone, so every socket of the account goes too;
+   * and, as for a single session, not reported complete until confirmed --
+   * also when nothing was live, since this may be a retry.
+   */
+  async enforceAccountRevocation(accountId: string, revokedAny: boolean): Promise<void> {
+    if (revokedAny) this.revocation.disconnectAccount(accountId);
     await this.revocation.confirmRevoked();
   }
 
@@ -733,7 +756,9 @@ export class AuthService {
   /**
    * Sets an account's password. NOT an endpoint: there is no public
    * registration and no self-service reset in the MVP (PRD §7.1), so this is
-   * reached only from seeds, tests and manager-driven provisioning.
+   * reached only from seeds, tests and manager-driven provisioning. The
+   * administrator-issued reset (PD-20) is PasswordResetService, which also
+   * revokes the account's sessions; this does not.
    */
   async setPassword(accountId: string, plain: string): Promise<void> {
     const passwordHash = await hashPassword(plain);

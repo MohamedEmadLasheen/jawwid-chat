@@ -2341,6 +2341,32 @@ class L10nAr extends L10n {
   String get signupFailed => 'حدث خطأ. حاول مرة أخرى.';
 
   @override
+  String get resetOpen => 'نسيت كلمة المرور؟ لديّ رمز إعادة تعيين';
+
+  @override
+  String get resetTitle => 'تعيين كلمة مرور جديدة';
+
+  @override
+  String get resetIntro =>
+      'اطلب من الأكاديمية رمزًا لمرة واحدة، ثم أدخل بيانات الدخول والرمز وكلمة مرور جديدة تختارها بنفسك. لن يعرفها أحد غيرك.';
+
+  @override
+  String get resetUsernameLabel => 'بيانات الدخول (البريد الإلكتروني)';
+
+  @override
+  String get resetUsernameRequired => 'أدخل بيانات الدخول.';
+
+  @override
+  String get resetCodeLabel => 'الرمز المكوّن من 6 أرقام';
+
+  @override
+  String get resetCodeInvalid =>
+      'هذا الرمز غير صالح أو منتهي أو مستخدم من قبل. اطلب رمزًا جديدًا من الأكاديمية.';
+
+  @override
+  String get resetFinish => 'تعيين كلمة المرور';
+
+  @override
   String get studentProfileTitle => 'ملف الطالب';
 
   @override

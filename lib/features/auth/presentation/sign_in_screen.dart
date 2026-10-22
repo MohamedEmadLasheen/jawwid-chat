@@ -6,6 +6,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/auth_state.dart';
 import 'parent_signup_screen.dart';
+import 'password_reset_screen.dart';
 
 /// Username + password sign-in. There is no public registration and no self-service reset:
 /// accounts are provisioned by Jawwid (§8), so the screen says so rather than offering a
@@ -40,6 +41,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _username.text = result.email;
     _password.text = result.password;
     await ref.read(authControllerProvider.notifier).signIn(username: result.email, password: result.password);
+  }
+
+  /// PD-20: finishing a reset the academy issued, then signing in normally with the new password.
+  Future<void> _openReset() async {
+    final result = await PasswordResetScreen.open(context, initialUsername: _username.text.trim());
+    if (result == null || !mounted) return;
+    _username.text = result.username;
+    _password.text = result.password;
+    await ref.read(authControllerProvider.notifier).signIn(username: result.username, password: result.password);
   }
 
   Future<void> _submit() async {
@@ -137,6 +147,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       key: const ValueKey('parent-signup-open'),
                       onPressed: isBusy ? null : _openSignup,
                       child: Text(l10n.signupOpen),
+                    ),
+                    TextButton(
+                      key: const ValueKey('password-reset-open'),
+                      onPressed: isBusy ? null : _openReset,
+                      child: Text(l10n.resetOpen),
                     ),
                   ],
                 ),

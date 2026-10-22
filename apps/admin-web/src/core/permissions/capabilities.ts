@@ -33,6 +33,7 @@ export type NavArea =
   | 'trials'
   | 'calls'
   | 'teacher-profiles'
+  | 'accounts'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -78,7 +79,8 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `teacher-profiles` (the teacher certificate review queue) is routable
     // too: the server admits the super admin as a reviewer.
     // `parents` (PD-17) likewise: offered as the Admin Portal's Parents section.
-    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'trials', 'calls', 'teacher-profiles', 'settings']
+    // `accounts` (PD-20) is offered beside the read-only Users section.
+    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'trials', 'calls', 'teacher-profiles', 'accounts', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -87,7 +89,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-12 S3 instalments and PD-11 T4 trials / new students -- each offered
     // only when the server confirms the department (see SERVER_CONFIRMED_AREAS).
     // PD-13: the Calls page (voice calls, scheduled calls, call links).
-    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'instalments', 'parents', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'teacher-profiles', 'settings']
+    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'instalments', 'parents', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -104,11 +106,12 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // teacher-profiles is here for the same reason stories is: admin and
     // coverage hold the reviewer role server-side
     // (AuthorizationService.canReviewTeacherProfile).
-    return ['chat', 'calls', 'inbox', 'families', 'teachers', 'instalments', 'parents', 'trials', 'tasks', 'stories', 'teacher-profiles']
+    return ['chat', 'calls', 'inbox', 'families', 'teachers', 'instalments', 'parents', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts']
   }
   if (isDepartment(role)) {
-    // Departments get tasks and nothing else — they may not open family records.
-    return ['tasks']
+    // Departments get tasks — they may not open family records — and, PD-20
+    // (owner decision: every staff role), account administration.
+    return ['tasks', 'accounts']
   }
   return []
 }

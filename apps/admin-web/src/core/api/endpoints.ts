@@ -100,6 +100,17 @@ export const sessionApi = {
       throw refusal
     }
   },
+  /**
+   * PD-20: finish a password reset an administrator issued -- the login, the
+   * one-time code, and a new password of the person's own. Opens no session:
+   * the person signs in afterwards like anyone else.
+   */
+  completePasswordReset: (username: string, code: string, password: string) =>
+    request<{ ok: true }>('/auth/password-reset', {
+      method: 'POST',
+      body: { username, code, password },
+      anonymous: true,
+    }),
   logout: async (): Promise<void> => {
     try {
       if (tokenStore.access()) await api.post<void>('/auth/logout')

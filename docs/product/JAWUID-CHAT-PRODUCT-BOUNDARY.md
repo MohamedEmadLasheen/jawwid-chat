@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-19 — CLOSED
+## 4. Product decisions PD-1 to PD-20 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -138,6 +138,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-17 was closed by the product owner on 2026-10-21** (Parent and Student Profiles; payments recorded in Chat). It supersedes PD-10 §1 and PD-12's "Core invoices, read-only" for family money.
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2).
+**PD-20 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -160,6 +161,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-17** | **Parent Profile and Student Profile; family payments recorded in Chat** (2026-10-21) | **CLOSED** — a Parent Profile (contact details, internal note, children, subscription, payment method, payment timeline) for the administration only, by the Instalment Payments rule plus Sales; Operations and Sales record payments; the parent sees their own payments in the app; a Student Profile for the administration and the child's own teacher; instalments and payments are Chat's own append-only records, nothing is read from Core; teachers reach neither a parent nor money by any route |
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call |
+| **PD-20** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
 
 ---
 
@@ -1915,7 +1917,68 @@ the super admin call too").
 
 ---
 
-### Decisions still open after PD-1 to PD-19
+### PD-20 · Account administration: password reset, inactive accounts, impersonation
+
+**Closed by the product owner on 2026-10-22** (owner request: admins, the super
+admin included, may impersonate a student's account, reset another account's
+password, and set any account inactive; permissions enforced on the backend,
+every action in the audit log, existing account security preserved). The plan
+was reviewed before any change; the owner answered four design questions.
+
+**Background.** Students have no login: a learner has no account, and the PRD
+defers student login (row 8, "one parent login, all children"). The family
+(parent) account holds the children. `users.manage`
+(`../architecture/AUTHORIZATION-MODEL.md` §3) — suspend, reset credentials,
+revoke sessions — was the super admin's alone, and no route served it.
+
+**Decision.**
+1. **Who.** Every staff role (admin, coverage, manager, finance, technical,
+   academic, super admin), organization-wide, on any **parent or teacher**
+   account. A **staff** account only by the super admin. **Nobody** acts on the
+   super admin's account (the bootstrap CLI stays its only credential writer)
+   or on their own.
+2. **Password reset.** The administrator never sees or chooses a password. They
+   issue a **one-time 6-digit code** (10 minutes, 5 tries, only its hash
+   stored), shown to them once, and pass it on by hand. The person enters their
+   login, the code and a password of their own (`POST /auth/password-reset`,
+   public, rate-limited like login). Completing it sets the password, clears
+   the lockout and **ends every session of the account**. The administrator may
+   also sign the account out everywhere at issue time (a compromised account).
+3. **Inactive.** "Set inactive" is `chat.account.status = 'suspended'`
+   (reversible). The account is signed out everywhere at once — sessions
+   revoked, sockets cut, call rooms and scheduled notifications cleaned up
+   (RT-032) — and every login answers `AUTH.ACCOUNT_DISABLED`. Reactivation
+   returns it to active; **no earlier session or refresh token comes back**.
+   `deactivated` (offboarding) is never reversed from here.
+4. **Impersonation** ("support session"). Of **parent and teacher** accounts —
+   never a staff account. Messages sent while impersonating are **allowed but
+   labelled** to recipients as sent by support on the person's behalf. Every
+   support session records the administrator, the target, the reason, the start
+   and the end, and every action taken; it is short-lived and ends with the
+   administrator's own session.
+
+**Canonical rule.** `AuthorizationService.canAdministerAccount(actor, target,
+act)` decides all four acts; `AccountAdminService` asks it before it reveals or
+changes anything. The database states the same rule for reset codes
+(`chat.guard_password_reset_code`), and reactivation is server-side only
+(`chat.reactivate_account`). Every act writes `chat.audit_log` in its own
+transaction with the administrator as actor and their reason.
+
+**Consequences.**
+- Admin Web: an **Accounts** page for every staff role (search by the person's,
+  the family's or a child's name); "Forgot your password? I have a reset code"
+  on the sign-in page. The mobile app has the same reset screen.
+- Departments (finance, technical, academic) gain one page: Accounts.
+- Supersedes the super-admin-only scope of `users.manage` for these acts.
+- Record: `../admin/pd020-account-administration.md`.
+
+**Deprecated behaviour.** `users.manage` as a super-admin-only key for reset and
+suspension. PRD §7.1's "temporary password" wording: the administrator issues a
+code, never a password.
+
+**Closed.** 2026-10-22.
+
+### Decisions still open after PD-1 to PD-20
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

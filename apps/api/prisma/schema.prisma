@@ -1862,6 +1862,26 @@ model ParentSignupCode {
   @@schema("chat")
 }
 
+/// PD-20: a one-time code an administrator issues so a person can set a new
+/// password. 20261022100000_chat_pd020_password_reset.sql owns the DDL and the
+/// rules (who may issue one; forward-only; never deleted). Hash only.
+model PasswordResetCode {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  issuedBy       String    @map("issued_by") @db.Uuid
+  codeHash       String    @map("code_hash")
+  reason         String
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  attempts       Int       @default(0)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz
+  supersededAt   DateTime? @map("superseded_at") @db.Timestamptz
+
+  @@map("password_reset_code")
+  @@schema("chat")
+}
+
 // =====================================================================
 // PD-17 -- 20261021150000_chat_pd017_parent_student_profiles.sql owns the
 // DDL and every rule. No relations declared: these rows are read by key.

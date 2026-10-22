@@ -41,6 +41,12 @@ export enum AuthErrorCode {
   SIGNUP_CODE_INVALID = 'AUTH.SIGNUP_CODE_INVALID',
   /** 400. PD-16 parent sign-up: the chosen password is too short. */
   PASSWORD_TOO_WEAK = 'AUTH.PASSWORD_TOO_WEAK',
+  /**
+   * 401. PD-20 password reset: the code is wrong, expired, used up or was never
+   * issued -- one code for all of them, and the same whether the login is known
+   * or not, so the reset cannot enumerate accounts.
+   */
+  RESET_CODE_INVALID = 'AUTH.RESET_CODE_INVALID',
 }
 
 /**
@@ -66,6 +72,7 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   [AuthErrorCode.RATE_LIMITED]: 'too many attempts; try again later',
   [AuthErrorCode.SIGNUP_CODE_INVALID]: 'the code is not valid; ask for a new one',
   [AuthErrorCode.PASSWORD_TOO_WEAK]: 'choose a password of at least 8 characters',
+  [AuthErrorCode.RESET_CODE_INVALID]: 'the code is not valid; ask your administrator for a new one',
 };
 
 const STATUS: Record<AuthErrorCode, number> = {
@@ -78,6 +85,7 @@ const STATUS: Record<AuthErrorCode, number> = {
   [AuthErrorCode.RATE_LIMITED]: 429,
   [AuthErrorCode.SIGNUP_CODE_INVALID]: 401,
   [AuthErrorCode.PASSWORD_TOO_WEAK]: 400,
+  [AuthErrorCode.RESET_CODE_INVALID]: 401,
 };
 
 /**

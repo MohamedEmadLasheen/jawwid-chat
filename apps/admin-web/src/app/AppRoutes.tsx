@@ -35,6 +35,7 @@ import { StudentProfilePage } from '@/features/profiles/StudentProfilePage'
 import { CallsPage } from '@/features/calls-page/CallsPage'
 import { JoinLinkPage } from '@/features/calls-page/JoinLinkPage'
 import { TeacherProfilesPage } from '@/features/teacher-profiles/TeacherProfilesPage'
+import { AccountsPage } from '@/features/accounts/AccountsPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -128,6 +129,8 @@ export function AppRoutes() {
           path="/teacher-profiles"
           element={<Area area="teacher-profiles"><TeacherProfilesPage /></Area>}
         />
+        {/* PD-20: account administration -- every staff role; the server decides each account and action. */}
+        <Route path="/accounts" element={<Area area="accounts"><AccountsPage /></Area>} />
         {/*
           Staff profiles: every staff role, no Area gate. What a profile shows
           and what may be changed on it is decided by /staff-profiles per
