@@ -328,7 +328,7 @@ export class ConversationService {
    * endpoint returns. A membership list must be reachable only by a member.
    */
   /**
-   * PD-24: which of these teachers are away today (the academy's), until when.
+   * PD-26: which of these teachers are away today (the academy's), until when.
    * `staffView` keeps why; anyone else reads leave or away (a suspension or a
    * recorded day off is not theirs to know). Computed on every read.
    */

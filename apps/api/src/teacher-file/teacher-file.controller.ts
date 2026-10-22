@@ -23,7 +23,7 @@ export class TeacherFileController {
     return this.files.list(actorId);
   }
 
-  // PD-24: declared before ':teacherId', which would otherwise match them.
+  // PD-26: declared before ':teacherId', which would otherwise match them.
 
   /** Every complaint, newest first: by source (management | parent) and status. */
   @Get('complaints')

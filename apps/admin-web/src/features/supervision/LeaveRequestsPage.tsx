@@ -48,7 +48,7 @@ export function LeaveRequestsPage({ basePath, eyebrow }: { basePath: string; eye
   )
 }
 
-/** The requests list and its dialogs, shared with the Supervision page's Leave section (PD-24). */
+/** The requests list and its dialogs, shared with the Supervision page's Leave section (PD-26). */
 export function LeaveRequestsList({ basePath }: { basePath: string }) {
   const tx = useCopy()
   const { locale, number } = useI18n()

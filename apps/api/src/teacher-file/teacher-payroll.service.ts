@@ -304,7 +304,7 @@ export class TeacherPayrollService {
   }
 
   // ------------------------------------------------------------------
-  // PD-24: default deduction amounts, and the Rewards list
+  // PD-26: default deduction amounts, and the Rewards list
   // ------------------------------------------------------------------
 
   /**

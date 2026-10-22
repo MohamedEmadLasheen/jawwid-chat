@@ -181,7 +181,7 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
   )
 }
 
-/** The super admin's default deduction amounts, per currency (PD-24). */
+/** The super admin's default deduction amounts, per currency (PD-26). */
 function DeductionDefaults() {
   const tx = useCopy()
   const { locale } = useI18n()

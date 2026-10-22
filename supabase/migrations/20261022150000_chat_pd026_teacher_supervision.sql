@@ -1,9 +1,9 @@
--- PD-24 (closed 2026-10-22) -- the Teacher Supervision page: leave, absences,
+-- PD-26 (closed 2026-10-22) -- the Teacher Supervision page: leave, absences,
 -- lateness, rewards and complaints in one place, each one traceable on the
 -- Teacher File and, for money, in payroll.
 --
--- Record: docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md §4 PD-24, and
--- docs/admin/pd024-teacher-supervision.md.
+-- Record: docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md §4 PD-26, and
+-- docs/admin/pd026-teacher-supervision.md.
 --
 -- Most of the page already existed (PD-10 complaints, PD-12 leave and the
 -- discipline ladder, PD-18 payroll). This migration adds only what was missing:
@@ -165,7 +165,7 @@ drop index chat.teacher_supervision_entry_one_resolution;
 create unique index teacher_supervision_entry_one_resolution
   on chat.teacher_supervision_entry (refers_to) where kind = 'complaint_resolution';
 
--- Complaints recorded before PD-24 keep a null source and handler; the server
+-- Complaints recorded before PD-26 keep a null source and handler; the server
 -- requires both from now on.
 alter table chat.teacher_supervision_entry
   add column complaint_source text check (complaint_source in ('management', 'parent')),
@@ -206,7 +206,7 @@ create table chat.teacher_pay_default (
 );
 
 comment on table chat.teacher_pay_default is
-  'PD-24: the default amount of a first or second deduction in one currency; the newest row wins. Append-only. Super admin only.';
+  'PD-26: the default amount of a first or second deduction in one currency; the newest row wins. Append-only. Super admin only.';
 
 create index teacher_pay_default_lookup_idx on chat.teacher_pay_default (organization_id, kind, currency, created_at desc);
 
@@ -234,7 +234,7 @@ create trigger teacher_pay_default_append_only before update or delete on chat.t
 
 -- The deduction's month is the violation's; its currency is the teacher's pay
 -- currency in that month. No terms, or no default in that currency, leaves the
--- deduction unpriced: Payroll lists it to price by hand, as before PD-24.
+-- deduction unpriced: Payroll lists it to price by hand, as before PD-26.
 create or replace function chat.price_decided_deduction()
 returns trigger
 language plpgsql

@@ -594,7 +594,7 @@ abstract final class WireMappers {
     );
   }
 
-  /// PD-24 `away: { kind, until }`. Anything but a well-formed object is "not away":
+  /// PD-26 `away: { kind, until }`. Anything but a well-formed object is "not away":
   /// a notice that guessed would tell a family something the server did not say.
   /// Every kind but `leave` reads as away -- staff's own kinds included.
   static MemberAway? memberAway(Object? raw) {

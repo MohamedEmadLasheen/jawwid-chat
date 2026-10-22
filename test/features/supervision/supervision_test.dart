@@ -161,7 +161,7 @@ void main() {
     });
   });
 
-  group('discipline cards for incidents with no lesson (PD-24)', () {
+  group('discipline cards for incidents with no lesson (PD-26)', () {
     testWidgets('an absence and an upheld complaint are named, with the day', (tester) async {
       for (final (kind, text) in [('absence', 'Absent'), ('complaint', 'A complaint was upheld')]) {
         final m = WireMappers.message(

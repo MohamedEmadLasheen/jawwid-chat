@@ -8,7 +8,7 @@ import type { Violation } from './api'
 
 /**
  * PD-12 S2 discipline, now the Supervision page's Absences and Lateness
- * sections (PD-24), through the real routes and the real API client,
+ * sections (PD-26), through the real routes and the real API client,
  * with `fetch` answered at the network boundary. These prove the page's side:
  * the server's step and suggestion are shown, the suggestion is what is sent by
  * default, another choice asks for a reason first, and a suspension over open

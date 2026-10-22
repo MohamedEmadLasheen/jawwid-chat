@@ -62,7 +62,7 @@ export const T = {
   resolved: { en: 'Resolved', ar: 'تمت المعالجة' },
   unresolved: { en: 'Open', ar: 'مفتوحة' },
   fromConversation: { en: 'Linked to a conversation', ar: 'مرتبطة بمحادثة' },
-  // PD-24
+  // PD-26
   fromParent: { en: 'From a parent', ar: 'من ولي أمر' },
   fromManagement: { en: 'From management', ar: 'من الإدارة' },
   source: { en: 'Source', ar: 'المصدر' },

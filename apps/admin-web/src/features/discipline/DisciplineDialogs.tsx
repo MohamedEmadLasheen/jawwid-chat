@@ -283,7 +283,7 @@ export function LatenessDialog({ onClose, lessonType = 'regular' }: { onClose: (
 }
 
 /**
- * PD-24: an absence with no lesson to close. The server refuses a future day
+ * PD-26: an absence with no lesson to close. The server refuses a future day
  * and an empty note; a lesson the teacher missed is closed as their absence
  * instead (Needs action), which records it here by itself.
  */

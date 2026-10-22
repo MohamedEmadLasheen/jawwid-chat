@@ -3,7 +3,7 @@ import type { Pair } from '@/features/organization/copy'
 export { useCopy, type Pair } from '@/features/organization/copy'
 
 /**
- * PD-24 Teacher Supervision copy, Arabic and English side by side. Wording
+ * PD-26 Teacher Supervision copy, Arabic and English side by side. Wording
  * rule: say what the server will do; an amount is named only where the super
  * admin sees it.
  */

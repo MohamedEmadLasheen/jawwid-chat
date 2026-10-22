@@ -34,7 +34,7 @@ export const TEACHERS_TABS: TeachersTab[] = [
   // PD-10 Teacher File and PD-12 S1's queues.
   { key: 'files', segment: 'files', label: { en: 'Teacher files', ar: 'ملفات المعلمين' } },
   { key: 'certificates', segment: 'certificates', label: { en: 'Certificates', ar: 'الشهادات' } },
-  // PD-24: leave, apologies and absences, lateness, rewards and complaints (was Leave requests + Discipline).
+  // PD-26: leave, apologies and absences, lateness, rewards and complaints (was Leave requests + Discipline).
   { key: 'supervision', segment: 'supervision', label: { en: 'Supervision', ar: 'الإشراف' } },
 ]
 

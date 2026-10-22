@@ -19,7 +19,7 @@ import { ActorKind } from '../communication/contracts/vocab';
 export const TeacherFileEntryKind = {
   COMPLAINT: 'complaint',
   COMPLAINT_RESOLUTION: 'complaint_resolution',
-  /** PD-24: a follow-up note on a complaint; as many as it takes. */
+  /** PD-26: a follow-up note on a complaint; as many as it takes. */
   COMPLAINT_FOLLOWUP: 'complaint_followup',
   MONTHLY_COMMENT: 'monthly_comment',
   DAY_OFF: 'day_off',
@@ -27,7 +27,7 @@ export const TeacherFileEntryKind = {
 } as const;
 export type TeacherFileEntryKind = (typeof TeacherFileEntryKind)[keyof typeof TeacherFileEntryKind];
 const KINDS: ReadonlySet<string> = new Set(Object.values(TeacherFileEntryKind));
-/** PD-24: where a complaint came from. */
+/** PD-26: where a complaint came from. */
 const COMPLAINT_SOURCES: ReadonlySet<string> = new Set(['management', 'parent']);
 
 /** Same shapes the table's CHECK constraints accept; checked here first for a readable 400. */
@@ -97,7 +97,7 @@ export class TeacherFileService {
         openComplaints: open.get(t.id) ?? 0,
         away: away.get(t.id) ?? null,
       })),
-      // PD-24: who may be named as a complaint's handler.
+      // PD-26: who may be named as a complaint's handler.
       supervisors: await this.supervisors(org),
     };
   }
@@ -196,7 +196,7 @@ export class TeacherFileService {
   }
 
   /**
-   * PD-24: every complaint of the organization, newest first, shaped as on a
+   * PD-26: every complaint of the organization, newest first, shaped as on a
    * Teacher File (source, handler, follow-ups, the action taken, the status)
    * with the teacher's name -- the Supervision page's Complaints section.
    */
@@ -337,7 +337,7 @@ export class TeacherFileService {
         data.refersTo = requireUuid('refersTo', body.refersTo);
         break;
       case TeacherFileEntryKind.COMPLAINT:
-        // PD-24: every new complaint says where it came from and who handles it
+        // PD-26: every new complaint says where it came from and who handles it
         // (the writer, unless another Teachers department supervisor is named;
         // the database refuses anyone else).
         if (typeof body.source !== 'string' || !COMPLAINT_SOURCES.has(body.source)) {
@@ -480,7 +480,7 @@ export class TeacherFileService {
   }
 
   /**
-   * PD-24: whether each teacher is away today (the academy's), and until when.
+   * PD-26: whether each teacher is away today (the academy's), and until when.
    * Computed from chat.teacher_day_off on every read; never stored.
    */
   async awayToday(teacherIds: string[]): Promise<Map<string, Away>> {
@@ -492,7 +492,7 @@ export class TeacherFileService {
     return new Map(rows.map((r) => [r.teacher_id, { kind: r.kind, until: isoDate(r.until) }]));
   }
 
-  /** PD-24: the Teachers department (manager and members) and the super admin -- who may handle a complaint. */
+  /** PD-26: the Teachers department (manager and members) and the super admin -- who may handle a complaint. */
   private async supervisors(organizationId: string) {
     return this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
       SELECT s.id::text AS id, s.name
@@ -558,7 +558,7 @@ export function shapeTimeline(
       return {
         ...brief(e),
         source: e.conversationId ? { conversationId: e.conversationId, messageId: e.sourceMessageId } : null,
-        // PD-24. Null on complaints recorded before it.
+        // PD-26. Null on complaints recorded before it.
         from: (e.complaintSource as 'management' | 'parent' | null) ?? null,
         handledBy: e.handledBy ? person(e.handledBy) : null,
         // Oldest first: they read as the complaint's story.
@@ -598,7 +598,7 @@ export interface Away {
   until: string;
 }
 
-/** PD-24: an upheld complaint is a violation on the ladder; its decision is the action taken. */
+/** PD-26: an upheld complaint is a violation on the ladder; its decision is the action taken. */
 export interface UpheldComplaint {
   violationId: string;
   decision: string | null;

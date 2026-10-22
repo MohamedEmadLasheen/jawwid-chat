@@ -120,7 +120,7 @@ export interface ConversationMemberDto {
   isSilent: boolean;
 
   /**
-   * PD-24: a teacher member who is away today, and the last day they are away
+   * PD-26: a teacher member who is away today, and the last day they are away
    * (YYYY-MM-DD). Messaging still works; a client shows "On leave until ...".
    * Staff read why (leave | suspended | day_off); anyone else reads leave or
    * away -- a suspension is the administration's business. Absent when not

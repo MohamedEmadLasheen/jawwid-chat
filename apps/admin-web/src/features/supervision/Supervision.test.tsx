@@ -96,7 +96,7 @@ afterEach(() => {
 })
 
 describe('the Teachers area has three pages', () => {
-  it('links Statistics, Teacher files, Certificates and Supervision (one registry, PD-11 T5; PD-24)', async () => {
+  it('links Statistics, Teacher files, Certificates and Supervision (one registry, PD-11 T5; PD-26)', async () => {
     on('GET', /\/learner-certificates\?state=requested$/, () => json({ certificates: [] }))
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/certificates' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers' })

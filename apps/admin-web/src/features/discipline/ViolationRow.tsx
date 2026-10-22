@@ -25,7 +25,7 @@ export function violationWhat(v: Violation, tx: ReturnType<typeof useCopy>): str
 export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide: () => void; extra?: ReactNode }) {
   const tx = useCopy()
   const { dateTime, date } = useI18n()
-  // A lesson has a time; an absence with no lesson is a day (PD-24).
+  // A lesson has a time; an absence with no lesson is a day (PD-26).
   const when = v.lesson ? (v.lesson.startsAt ? dateTime(v.lesson.startsAt) : null) : date(v.occurredAt)
   const context = v.complaint
     ? [tx(v.complaint.from === 'parent' ? D.fromParent : D.fromManagement), v.complaint.body]

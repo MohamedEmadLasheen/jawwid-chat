@@ -11,7 +11,7 @@ import 'package:jawwid_chat/features/messages/presentation/teacher_away_banner.d
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/conversation.dart';
 
-/// PD-24: a teacher on leave is SHOWN as such in the chat; messaging is not blocked.
+/// PD-26: a teacher on leave is SHOWN as such in the chat; messaging is not blocked.
 /// The server marks the member (`away: { kind, until }`); the client only words it,
 /// and says nothing when it is told nothing.
 class _Groups implements GroupRepository {

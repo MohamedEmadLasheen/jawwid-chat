@@ -6,7 +6,7 @@ import '../../../core/data/repositories.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 
-/// PD-24: the teacher members of this conversation who are away today, read from
+/// PD-26: the teacher members of this conversation who are away today, read from
 /// the conversation's own member list (`GET /conversations/:id`), where the server
 /// marks them. Empty on any failure: the notice is advisory, never a gate.
 final awayTeachersProvider = FutureProvider.autoDispose.family<List<GroupMember>, String>((ref, conversationId) async {
@@ -20,7 +20,7 @@ final awayTeachersProvider = FutureProvider.autoDispose.family<List<GroupMember>
 
 /// "Ustadh Omar is on leave until 3 Nov. Messages still reach them." -- above the
 /// thread, for as long as the server says a teacher here is away. Messaging is not
-/// blocked (owner decision, PD-24); the family just knows not to expect a quick reply.
+/// blocked (owner decision, PD-26); the family just knows not to expect a quick reply.
 /// Absent while unknown and when nobody is away.
 class TeacherAwayBanner extends ConsumerWidget {
   const TeacherAwayBanner({super.key, required this.conversationId});

@@ -1,8 +1,8 @@
-# PD-24: the Teacher Supervision page
+# PD-26: the Teacher Supervision page
 
-Record: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-24.
-Migration: `supabase/migrations/20261022150000_chat_pd024_teacher_supervision.sql`.
-Tests: `apps/api/test/integration/pd024-teacher-supervision.spec.ts`,
+Record: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-26.
+Migration: `supabase/migrations/20261022150000_chat_pd026_teacher_supervision.sql`.
+Tests: `apps/api/test/integration/pd026-teacher-supervision.spec.ts`,
 `apps/admin-web/src/features/teacher-supervision/TeacherSupervision.test.tsx`,
 `test/features/messages/teacher_away_banner_test.dart`.
 
@@ -11,10 +11,10 @@ admin's `/admin/teachers/supervision`), with five sections in the URL
 (`?section=leave|absences|lateness|rewards|complaints`). The old
 `/teachers/leave` and `/teachers/discipline` links redirect to their section.
 
-Each section is a view over records that already existed. PD-24 adds only what
+Each section is a view over records that already existed. PD-26 adds only what
 was missing.
 
-| Section | Reads | Writes | New in PD-24 |
+| Section | Reads | Writes | New in PD-26 |
 |---|---|---|---|
 | Leave | `GET /teacher-leave-overview`, PD-12's leave requests | approve / decline / cancel (PD-12) | the overview; "on leave" status everywhere; assignments refused |
 | Apologies & absences | `GET /discipline/violations?kind=absences` | decide (PD-12); `POST /teachers/:id/absences` | absence with no lesson |
@@ -77,7 +77,7 @@ complaint is still resolved once. Its status is computed:
 | actioned | upheld and decided; the decision is the action taken |
 | resolved | it has a resolution |
 
-Complaints recorded before PD-24 have no source or handler.
+Complaints recorded before PD-26 have no source or handler.
 
 ## Known limits
 

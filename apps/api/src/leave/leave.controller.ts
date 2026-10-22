@@ -54,7 +54,7 @@ export class LeaveController {
     return this.leave.cancel(actorId, id, body ?? {});
   }
 
-  /** PD-24: every teacher's balance and whether they are away today. */
+  /** PD-26: every teacher's balance and whether they are away today. */
   @Get('teacher-leave-overview')
   overview(@ActorId() actorId: string, @Query('year') year?: string) {
     return this.leave.overview(actorId, year);

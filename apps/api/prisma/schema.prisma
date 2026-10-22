@@ -1436,9 +1436,9 @@ model TeacherSupervisionEntry {
   refersTo       String?   @map("refers_to") @db.Uuid
   /// PD-10: a complaint's source message (in conversation_id).
   sourceMessageId String?  @map("source_message_id") @db.Uuid
-  /// PD-24: a complaint's source, management | parent (null before PD-24).
+  /// PD-26: a complaint's source, management | parent (null before PD-26).
   complaintSource String?  @map("complaint_source")
-  /// PD-24: the Teachers department supervisor handling a complaint.
+  /// PD-26: the Teachers department supervisor handling a complaint.
   handledBy       String?  @map("handled_by") @db.Uuid
 
   @@map("teacher_supervision_entry")
@@ -1524,7 +1524,7 @@ model TeacherPayAdjustment {
   @@schema("chat")
 }
 
-/// PD-24: the default amount of a first or second deduction in one currency. Append-only; newest wins.
+/// PD-26: the default amount of a first or second deduction in one currency. Append-only; newest wins.
 model TeacherPayDefault {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
@@ -1616,7 +1616,7 @@ model TeacherViolation {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
   teacherId      String    @map("teacher_id") @db.Uuid
-  /// PD-24: null for an absence recorded without a lesson, and an upheld complaint.
+  /// PD-26: null for an absence recorded without a lesson, and an upheld complaint.
   lessonId       String?   @map("lesson_id") @db.Uuid
   kind           String
   occurredAt     DateTime  @map("occurred_at") @db.Timestamptz
@@ -1631,7 +1631,7 @@ model TeacherViolation {
   decidedBy      String?   @map("decided_by") @db.Uuid
   decidedAt      DateTime? @map("decided_at") @db.Timestamptz
   suspensionId   String?   @unique @map("suspension_id") @db.Uuid
-  /// PD-24: the complaint a `complaint` violation upheld.
+  /// PD-26: the complaint a `complaint` violation upheld.
   complaintEntryId String? @unique @map("complaint_entry_id") @db.Uuid
 
   @@unique([lessonId, kind])

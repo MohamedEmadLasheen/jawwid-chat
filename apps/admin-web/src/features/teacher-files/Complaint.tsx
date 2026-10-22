@@ -16,7 +16,7 @@ const STATUS: Record<ComplaintStatus, { label: keyof typeof T; tone: Tone }> = {
   resolved: { label: 'statusResolved', tone: 'ok' },
 }
 
-/** "On leave until 3 Nov", "Suspended until ...": the badge a teacher on a day off carries (PD-24). */
+/** "On leave until 3 Nov", "Suspended until ...": the badge a teacher on a day off carries (PD-26). */
 export function AwayBadge({ away }: { away: Away | null | undefined }) {
   const tx = useCopy()
   const cal = useCalendarDate()
@@ -38,7 +38,7 @@ function Byline({ entry }: { entry: EntryBrief }) {
 
 /**
  * One complaint, the same on the Teacher File and on the Supervision page
- * (PD-24): where it came from, who handles it, its status, the action taken
+ * (PD-26): where it came from, who handles it, its status, the action taken
  * (the decision on its violation, once upheld), its follow-ups and resolution.
  */
 export function ComplaintItem({
@@ -127,7 +127,7 @@ export function ComplaintItem({
   )
 }
 
-/** Upholding puts the complaint on the teacher's monthly ladder (PD-24); the decision is a second, separate act. */
+/** Upholding puts the complaint on the teacher's monthly ladder (PD-26); the decision is a second, separate act. */
 export function UpholdDialog({ complaint, onClose }: { complaint: Complaint; onClose: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()

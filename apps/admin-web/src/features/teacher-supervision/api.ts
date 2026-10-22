@@ -2,7 +2,7 @@ import { api } from '@/core/api/client'
 import type { Complaint, Person, TeacherFileAccessFlags } from '@/features/teacher-files/api'
 
 /**
- * PD-24: the Teacher Supervision page's reads, mirrored from apps/api
+ * PD-26: the Teacher Supervision page's reads, mirrored from apps/api
  * (src/leave, src/teacher-file). Absences and lateness are the discipline
  * routes (features/discipline/api.ts); leave requests are PD-12's
  * (features/supervision/api.ts). Who may see what is decided by the server.

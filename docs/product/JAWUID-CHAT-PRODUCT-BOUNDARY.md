@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-24 — CLOSED
+## 4. Product decisions PD-1 to PD-26 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -140,8 +140,8 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
 **PD-21 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
-PD-22 and PD-23 are reserved by work in progress (per-account time zones; convenient sign-in).
-**PD-24 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
+PD-22 to PD-25 are reserved by work in progress; `PD-NUMBER-REGISTRY.md` assigns them.
+**PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -166,7 +166,7 @@ PD-22 and PD-23 are reserved by work in progress (per-account time zones; conven
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
 | **PD-21** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
-| **PD-24** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
+| **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 
 ---
 
@@ -2082,7 +2082,7 @@ code, never a password.
 
 ---
 
-### PD-24 · The Teacher Supervision page
+### PD-26 · The Teacher Supervision page
 
 **Closed 2026-10-22** by the product owner. Amends PD-12 §3 (what joins the
 ladder; deductions) and PD-18 item 3 (who prices a decided deduction).
@@ -2154,16 +2154,16 @@ priced deduction     = decided deduction_1|2 + terms(month).currency +
 ```
 
 **Implementation phase.** Built with the decision: migration
-`20261022150000_chat_pd024_teacher_supervision.sql`;
-`docs/admin/pd024-teacher-supervision.md`; protected by
-`apps/api/test/integration/pd024-teacher-supervision.spec.ts`.
+`20261022150000_chat_pd026_teacher_supervision.sql`;
+`docs/admin/pd026-teacher-supervision.md`; protected by
+`apps/api/test/integration/pd026-teacher-supervision.spec.ts`.
 
 **Consequences.**
 - PD-12's "Teachers-department staff never see salary or amounts" stands: the
   default amounts and reward amounts are the super admin's only.
 - PD-18 item 3 now reads: the super admin prices a bonus, and prices a
   deduction only when no default applies or to correct one.
-- Complaints recorded before PD-24 have no source or handler; they read as such.
+- Complaints recorded before PD-26 have no source or handler; they read as such.
 
 **Deprecated behaviour.** PD-12's separate Leave requests and Discipline tabs.
 
@@ -2171,7 +2171,7 @@ priced deduction     = decided deduction_1|2 + terms(month).currency +
 
 ---
 
-### Decisions still open after PD-1 to PD-24
+### Decisions still open after PD-1 to PD-26
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

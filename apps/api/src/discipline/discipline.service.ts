@@ -25,7 +25,7 @@ const MONTH_RE = /^\d{4}-\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 
-/** The lists of the Teacher Supervision page (PD-24), by what happened. */
+/** The lists of the Teacher Supervision page (PD-26), by what happened. */
 const KIND_FILTERS = {
   late: ['late'],
   cancellations: ['teacher_apology', 'teacher_no_show'],
@@ -188,7 +188,7 @@ export class DisciplineService {
   }
 
   // ------------------------------------------------------------------
-  // PD-24: incidents that are not a lesson's
+  // PD-26: incidents that are not a lesson's
   // ------------------------------------------------------------------
 
   /**
@@ -236,7 +236,7 @@ export class DisciplineService {
 
   /**
    * An upheld complaint joins the same monthly ladder as absences and lateness
-   * (PD-24): it becomes a violation, decided like any other. Once.
+   * (PD-26): it becomes a violation, decided like any other. Once.
    */
   async upholdComplaint(actorId: string, complaintId: string, body: Record<string, unknown>) {
     const actor = await this.requireSupervisor(actorId);
@@ -522,11 +522,11 @@ export class DisciplineService {
         id: r.id,
         kind: r.kind,
         teacher: { id: r.teacherId, name: teacherName.get(r.teacherId) ?? null },
-        // PD-24: null for an absence without a lesson, and an upheld complaint.
+        // PD-26: null for an absence without a lesson, and an upheld complaint.
         lesson: r.lessonId
           ? {
               id: r.lessonId,
-              // trial | regular, so lateness reads in two lists (PD-24). A make-up is a regular lesson.
+              // trial | regular, so lateness reads in two lists (PD-26). A make-up is a regular lesson.
               kind: lesson?.kind === 'trial' ? 'trial' : 'regular',
               startsAt: lesson?.startsAt.toISOString() ?? null,
               learnerName: lesson?.learner?.name ?? null,

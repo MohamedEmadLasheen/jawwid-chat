@@ -8,11 +8,11 @@ import type { Violation } from '@/features/discipline/api'
 import type { LeaveOverviewRow, SupervisedComplaint } from './api'
 
 /**
- * PD-24 Teacher Supervision page, through the real routes and the real API
+ * PD-26 Teacher Supervision page, through the real routes and the real API
  * client, with `fetch` answered at the network boundary. These prove the
  * page's side: what each section shows and what each button sends. What the
  * server does with it -- the ladder, the automatic deduction, the away rule --
- * is proven in apps/api test/integration/pd024-teacher-supervision.spec.ts.
+ * is proven in apps/api test/integration/pd026-teacher-supervision.spec.ts.
  * Synthetic people only.
  */
 

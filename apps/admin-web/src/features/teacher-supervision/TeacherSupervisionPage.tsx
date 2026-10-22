@@ -30,7 +30,7 @@ function thisMonth(): string {
 }
 
 /**
- * PD-24: one page for the Teachers department's supervision -- leave,
+ * PD-26: one page for the Teachers department's supervision -- leave,
  * apologies and absences, lateness, rewards, complaints. Each section is a
  * view over records that already exist (PD-10/11/12/18) and lands on the
  * teacher's file; nothing is typed twice. The section is in the URL, so the
@@ -259,7 +259,7 @@ function LatenessSection() {
           </button>
         }
       />
-      {/* The two subsections: trial lessons and regular lessons (PD-24). */}
+      {/* The two subsections: trial lessons and regular lessons (PD-26). */}
       <FilterChips<'regular' | 'trial'>
         variant="tabs"
         label={tx(H.lessonType)}

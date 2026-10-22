@@ -24,7 +24,7 @@ class Page<T> {
 ///
 /// There is no phone-number field. §5 makes phone numbers unrenderable, so the client does
 /// not model them and cannot leak what it never receives.
-/// PD-24: a teacher member who is away today, and the last day they are away.
+/// PD-26: a teacher member who is away today, and the last day they are away.
 ///
 /// Staff read why; a parent or teacher reads [MemberAwayKind.leave] or
 /// [MemberAwayKind.away] (a suspension or a recorded day off is the
@@ -65,7 +65,7 @@ class GroupMember {
   /// build — correctly yields.
   final bool canOpenDirect;
 
-  /// PD-24. Null when not away, and from a server that does not send it.
+  /// PD-26. Null when not away, and from a server that does not send it.
   final MemberAway? away;
 }
 

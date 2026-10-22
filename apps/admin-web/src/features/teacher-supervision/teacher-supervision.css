@@ -1,4 +1,4 @@
-/* PD-24 Teacher Supervision page. Tokens only; the tables and chips are the shared ones. */
+/* PD-26 Teacher Supervision page. Tokens only; the tables and chips are the shared ones. */
 .th-body { display: flex; flex-direction: column; gap: var(--space-3); margin-block-start: var(--space-3); }
 .th-intro { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .th-intro .field__hint { flex: 1 1 24rem; margin: 0; }

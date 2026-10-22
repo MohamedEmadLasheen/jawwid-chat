@@ -33,7 +33,7 @@ function useRefresh(teacherId: string) {
     void qc.invalidateQueries({ queryKey: teacherFileKeys.list })
     // Complaints, comments and days off are on the timeline too.
     void qc.invalidateQueries({ queryKey: timelineKeys.timeline(teacherId) })
-    // PD-24: the Supervision page lists complaints across teachers.
+    // PD-26: the Supervision page lists complaints across teachers.
     void qc.invalidateQueries({ queryKey: ['teacher-supervision'] })
   }
 }
@@ -48,7 +48,7 @@ export function useAddEntry(teacherId: string) {
   return useMutation({ mutationFn: (body: NewEntry) => teacherFileApi.addEntry(teacherId, body), onSuccess: done })
 }
 
-/** The same write, for a teacher chosen in the dialog (the Supervision page, PD-24). */
+/** The same write, for a teacher chosen in the dialog (the Supervision page, PD-26). */
 export function useAddEntryFor() {
   const qc = useQueryClient()
   return useMutation({

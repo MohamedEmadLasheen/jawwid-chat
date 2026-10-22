@@ -14,7 +14,7 @@ export interface TeacherFileAccessFlags {
   canViewFinance?: boolean
 }
 
-/** PD-24: away today, and the last day (YYYY-MM-DD). Computed from the days off on every read. */
+/** PD-26: away today, and the last day (YYYY-MM-DD). Computed from the days off on every read. */
 export interface Away {
   kind: 'leave' | 'suspended' | 'day_off'
   until: string
@@ -26,7 +26,7 @@ export interface TeacherSummary {
   isActive: boolean
   studentCount: number
   openComplaints: number
-  /** PD-24. Optional: older servers omit it. */
+  /** PD-26. Optional: older servers omit it. */
   away?: Away | null
 }
 
@@ -47,7 +47,7 @@ export type ComplaintStatus = 'open' | 'upheld' | 'actioned' | 'resolved'
 export interface Complaint extends EntryBrief {
   source: { conversationId: string; messageId: string | null } | null
   resolution: EntryBrief | null
-  /** PD-24 (optional on older servers). Null on complaints recorded before it. */
+  /** PD-26 (optional on older servers). Null on complaints recorded before it. */
   from?: 'management' | 'parent' | null
   handledBy?: Person | null
   followUps?: EntryBrief[]

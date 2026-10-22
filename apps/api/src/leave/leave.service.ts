@@ -178,7 +178,7 @@ export class LeaveService {
   }
 
   /**
-   * PD-24: every teacher's leave at a glance -- the balance next to the name
+   * PD-26: every teacher's leave at a glance -- the balance next to the name
    * (blank while no allowance is set, yet the leave is still recorded), whether
    * they are away today and until when, and how many requests wait.
    */

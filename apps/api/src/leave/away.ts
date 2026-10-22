@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 /**
- * PD-24: a teacher on leave or suspended today is not given new students
+ * PD-26: a teacher on leave or suspended today is not given new students
  * (a transfer, a subscription form naming them). Null when they may be; else
  * the reason, naming the day they are back. A plain day off does not count.
  */

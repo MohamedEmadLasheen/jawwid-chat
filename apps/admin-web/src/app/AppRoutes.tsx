@@ -97,7 +97,7 @@ export function AppRoutes() {
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />
         {/* PD-12: the department's queues, tabs of the same area. */}
         <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
-        {/* PD-24: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
+        {/* PD-26: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
         <Route path="/teachers/leave" element={<Navigate to="/teachers/supervision?section=leave" replace />} />
         {/* PD-11 T4: Sales' trials and Operations' new students (features/trials/area.tsx). */}
