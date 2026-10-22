@@ -141,6 +141,11 @@ export interface ChatMessage {
   starred?: boolean
   /** Pinned for everyone in this conversation (at most three). */
   pinned?: boolean
+  /**
+   * PD-21: an administrator sent it in a support session, acting as its
+   * author. Shown to everyone as "Sent by support".
+   */
+  sentBySupport?: boolean
 }
 
 /** How long after sending the server lets an author edit (communication.edit_window_minutes). */

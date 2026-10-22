@@ -16,6 +16,7 @@ import { BillingModule } from './billing/billing.module';
 import { ParentRecordModule } from './parent-profile/parent-record.module';
 import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
 import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
+import { AccountAdminModule } from './account-admin/account-admin.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -55,6 +56,7 @@ import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
     ParentRecordModule,
     CoreBoundaryModule,
     ScheduledCallModule,
+    AccountAdminModule,
   ],
 })
 export class AppModule {}

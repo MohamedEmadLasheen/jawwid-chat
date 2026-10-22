@@ -1737,6 +1737,9 @@ class L10nEn extends L10n {
   String get forwardedLabel => 'Forwarded';
 
   @override
+  String get sentBySupportLabel => 'Sent by support';
+
+  @override
   String get editedMark => 'Edited';
 
   @override
@@ -2352,6 +2355,32 @@ class L10nEn extends L10n {
   String get signupFailed => 'Something went wrong. Try again.';
 
   @override
+  String get resetOpen => 'Forgot your password? I have a reset code';
+
+  @override
+  String get resetTitle => 'Set a new password';
+
+  @override
+  String get resetIntro =>
+      'Ask the academy for a one-time code. Then enter your login, the code and a new password of your own. Nobody else will know it.';
+
+  @override
+  String get resetUsernameLabel => 'Your login (e-mail)';
+
+  @override
+  String get resetUsernameRequired => 'Enter your login.';
+
+  @override
+  String get resetCodeLabel => '6-digit code';
+
+  @override
+  String get resetCodeInvalid =>
+      'That code is not valid, has expired or was already used. Ask the academy for a new one.';
+
+  @override
+  String get resetFinish => 'Set password';
+
+  @override
   String get studentProfileTitle => 'Student profile';
 
   @override
@@ -2494,6 +2523,9 @@ class L10nEn extends L10n {
 
   @override
   String get roleSales => 'Sales';
+
+  @override
+  String get roleSuperAdmin => 'Super admin';
 
   @override
   String get conversationsEmptyBodySales =>

@@ -150,7 +150,7 @@ void main() {
     late FakeBackend backend;
     late _RecordingTrials trials;
 
-    Future<void> pump(WidgetTester tester, String conversationId, {UserRole role = UserRole.sales}) async {
+    Future<void> pump(WidgetTester tester, String conversationId, {UserRole role = UserRole.sales, bool superAdmin = false}) async {
       backend = FakeBackend(role: UserRole.sales);
       addTearDown(backend.dispose);
       trials = _RecordingTrials(backend);
@@ -158,6 +158,7 @@ void main() {
         TrialGroupJoinBanner(conversationId: conversationId, onJoined: () => trials.refreshed++),
         overrides: [
           currentRoleProvider.overrideWithValue(role),
+          isSuperAdminProvider.overrideWithValue(superAdmin),
           principalIdProvider.overrideWithValue(backend.user.id),
           groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
           trialRepositoryProvider.overrideWithValue(trials),
@@ -183,6 +184,12 @@ void main() {
       expect(find.byKey(const ValueKey('trial-group-join')), findsNothing);
     });
 
+    testWidgets('is absent for the super admin, who calls without a seat (PD-20 amendment)', (tester) async {
+      await pump(tester, 'c_trial_2', superAdmin: true);
+      expect(find.byKey(const ValueKey('trial-group-join')), findsNothing);
+      expect(trials.joined, isEmpty);
+    });
+
     for (final role in [UserRole.teacher, UserRole.parent]) {
       testWidgets('is absent for a ${role.name}', (tester) async {
         await pump(tester, 'c_trial_2', role: role);
@@ -198,6 +205,7 @@ void main() {
             ChatScreenRoute(conversationId: id),
             overrides: [
               currentRoleProvider.overrideWithValue(UserRole.sales),
+              isSuperAdminProvider.overrideWithValue(false),
               principalIdProvider.overrideWithValue(backend.user.id),
               conversationRepositoryProvider.overrideWithValue(FakeConversationRepository(backend)),
               messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
@@ -231,6 +239,7 @@ void main() {
         locale: const Locale('ar'),
         overrides: [
           currentRoleProvider.overrideWithValue(UserRole.sales),
+          isSuperAdminProvider.overrideWithValue(false),
           principalIdProvider.overrideWithValue(backend.user.id),
           groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
         ],

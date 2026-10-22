@@ -62,6 +62,9 @@ class _TrialGroupJoinBannerState extends ConsumerState<TrialGroupJoinBanner> {
   @override
   Widget build(BuildContext context) {
     if (ref.watch(currentRoleProvider) != UserRole.sales) return const SizedBox.shrink();
+    // The super admin starts a group call without a seat in the chat (PD-19 amendments), so
+    // joining a trial group would only add it to the member list.
+    if (ref.watch(isSuperAdminProvider)) return const SizedBox.shrink();
     final member = ref.watch(trialGroupMembershipProvider(widget.conversationId));
     if (member.value != false) return const SizedBox.shrink();
 

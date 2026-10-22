@@ -213,6 +213,23 @@ class MessageBubble extends StatelessWidget {
                         ],
                       ),
                     ),
+                  // PD-21: an administrator wrote this as its author, in a support session.
+                  if (message.isSentBySupport)
+                    Padding(
+                      key: const ValueKey('message-sent-by-support'),
+                      padding: const EdgeInsets.only(bottom: Spacing.spacing1),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.support_agent, size: 12, color: theme.colorScheme.error),
+                          const SizedBox(width: Spacing.spacing1),
+                          Text(
+                            l10n.sentBySupportLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.error),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (replyTo != null)
                     _QuotedMessage(reply: replyTo!, onTap: onTapReply),
                   if (message.isDeleted)

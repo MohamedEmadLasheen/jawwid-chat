@@ -262,11 +262,13 @@ class HttpAuthRepository implements AuthRepository {
     final displayName = actor['displayName'];
     final locale = actor['locale'];
 
+    final role = roleFor(actor['kind'], staffRole: actor['staffRole'], salesDepartment: salesDepartment);
     return AuthUser(
       id: id,
       displayName: displayName is String ? displayName : '',
-      role: roleFor(actor['kind'], staffRole: actor['staffRole'], salesDepartment: salesDepartment),
+      role: role,
       locale: locale is String && locale.isNotEmpty ? locale : null,
+      isSuperAdmin: role == UserRole.sales && actor['staffRole'] == superAdminStaffRole,
     );
   }
 
@@ -278,8 +280,10 @@ class HttpAuthRepository implements AuthRepository {
   /// PD-20: a `staff` principal is [UserRole.sales] only when ALL of these hold:
   ///  * [salesDepartment] -- `GET /lessons/access` says `sales: true`;
   ///  * the staff role is one the chat API serves (`admin | coverage | manager`);
-  ///  * it is not `super_admin` -- whom `/lessons/access` also calls sales, but who is the
-  ///    whole organization's administrator, not a Sales seat, and belongs in the console.
+  ///
+  /// PD-20 amendment (owner, 2026-10-22): the organization's `super_admin` signs in too,
+  /// with the same tabs. It needs no department: the server already serves it every
+  /// conversation, family and payment of the organization.
   ///
   /// **Fails closed.** Any other staff member, `system` and anything this build has not
   /// heard of are refused, never defaulted. Defaulting an unknown kind to `parent` would
@@ -287,6 +291,7 @@ class HttpAuthRepository implements AuthRepository {
   static UserRole roleFor(Object? kind, {Object? staffRole, bool salesDepartment = false}) => switch (kind) {
         Wire.actorContact => UserRole.parent,
         Wire.actorTeacher => UserRole.teacher,
+        Wire.actorStaff when staffRole == superAdminStaffRole => UserRole.sales,
         Wire.actorStaff when salesDepartment && salesStaffRoles.contains(staffRole) => UserRole.sales,
         _ => throw AppError(
             AppErrorKind.forbidden,
@@ -297,5 +302,9 @@ class HttpAuthRepository implements AuthRepository {
 }
 
 /// The staff roles the chat API serves to a Sales seat (`admin | coverage | manager`).
-/// `super_admin`, `finance`, `technical` and `academic` are deliberately absent.
+/// `finance`, `technical` and `academic` are deliberately absent; `super_admin` is let in
+/// on its own ([superAdminStaffRole]), without the department check.
 const salesStaffRoles = {'admin', 'coverage', 'manager'};
+
+/// PD-20 amendment: the organization's super admin uses the app with the Sales tabs.
+const superAdminStaffRole = 'super_admin';

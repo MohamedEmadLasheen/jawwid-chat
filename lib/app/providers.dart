@@ -68,6 +68,12 @@ final parentSignupRepositoryProvider = Provider<ParentSignupRepository>((ref) {
   return const NoParentSignupRepository();
 });
 
+/// PD-21: finishing a password reset the academy issued. Overridden at startup with the HTTP
+/// implementation.
+final passwordResetRepositoryProvider = Provider<PasswordResetRepository>((ref) {
+  return const NoPasswordResetRepository();
+});
+
 final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
   return const NoLessonRepository();
 });
@@ -308,6 +314,12 @@ NotifierProvider<AuthController, AuthState> buildAuthController(Ref ref) {
 /// so a session ending takes every protected surface with it (§7).
 final currentRoleProvider = Provider<UserRole?>(
   (ref) => ref.watch(authControllerProvider).user?.role,
+);
+
+/// PD-20 amendment: whether the signed-in user is the organization's super admin (who uses
+/// the app with the Sales tabs). False when signed out.
+final isSuperAdminProvider = Provider<bool>(
+  (ref) => ref.watch(authControllerProvider).user?.isSuperAdmin ?? false,
 );
 
 /// THE SESSION BOUNDARY: the authenticated principal's id, or null when signed out.

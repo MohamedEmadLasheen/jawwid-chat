@@ -1020,6 +1020,7 @@
     }
   },
   "forwardedLabel": "Forwarded",
+  "sentBySupportLabel": "Sent by support",
   "editedMark": "Edited",
   "@editedMark": {
     "description": "Shown next to a message's time when its author edited it after sending."
@@ -1278,6 +1279,14 @@
   "signupNewCode": "Send a new code",
   "signupTooMany": "Too many attempts. Try again in a few minutes.",
   "signupFailed": "Something went wrong. Try again.",
+  "resetOpen": "Forgot your password? I have a reset code",
+  "resetTitle": "Set a new password",
+  "resetIntro": "Ask the academy for a one-time code. Then enter your login, the code and a new password of your own. Nobody else will know it.",
+  "resetUsernameLabel": "Your login (e-mail)",
+  "resetUsernameRequired": "Enter your login.",
+  "resetCodeLabel": "6-digit code",
+  "resetCodeInvalid": "That code is not valid, has expired or was already used. Ask the academy for a new one.",
+  "resetFinish": "Set password",
   "studentProfileTitle": "Student profile",
   "studentProfileView": "View profile",
   "studentProfileTeacher": "Assigned teacher",
@@ -1373,6 +1382,7 @@
   "billingDeniedBody": "If you have a question, ask the academy.",
   "tabPayments": "Payments",
   "roleSales": "Sales",
+  "roleSuperAdmin": "Super admin",
   "conversationsEmptyBodySales": "Trial groups and your conversations will appear here.",
   "internalNoteLabel": "Internal note",
   "trialGroupNotMember": "You are not a member of this group yet.",

@@ -85,7 +85,7 @@ class SettingsScreen extends ConsumerWidget {
                                 // The role label, not an internal role id.
                                 switch (user.role) {
                                   UserRole.teacher => l10n.groupMemberRoleTeacher,
-                                  UserRole.sales => l10n.roleSales,
+                                  UserRole.sales => user.isSuperAdmin ? l10n.roleSuperAdmin : l10n.roleSales,
                                   UserRole.parent => l10n.groupMemberRoleParent,
                                 },
                                 style: Theme.of(context)

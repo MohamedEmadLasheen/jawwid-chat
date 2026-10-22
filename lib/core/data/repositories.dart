@@ -353,6 +353,25 @@ class NoParentSignupRepository implements ParentSignupRepository {
       throw UnsupportedError('no sign-up server in this build');
 }
 
+/// PD-21: a parent or teacher finishes a password reset the academy issued. The
+/// administrator handed over a one-time code; the password is the person's own. PUBLIC --
+/// the sign-in transport, never the authenticated client -- and it opens no session: the
+/// caller signs in normally afterwards (every earlier session was ended by the reset).
+abstract interface class PasswordResetRepository {
+  /// `POST /auth/password-reset`. A refusal is an AppError with the server's code
+  /// (`AUTH.RESET_CODE_INVALID`, `AUTH.PASSWORD_TOO_WEAK`, `COMMON.RATE_LIMITED`).
+  Future<void> complete({required String username, required String code, required String password});
+}
+
+/// The build with no reset server (fixtures, tests that do not override it).
+class NoPasswordResetRepository implements PasswordResetRepository {
+  const NoPasswordResetRepository();
+
+  @override
+  Future<void> complete({required String username, required String code, required String password}) =>
+      throw UnsupportedError('no reset server in this build');
+}
+
 abstract interface class ConversationRepository {
   Future<List<Conversation>> list({bool includeArchived = false});
 

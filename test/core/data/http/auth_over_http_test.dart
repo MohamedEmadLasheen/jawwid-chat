@@ -280,12 +280,21 @@ void main() {
             throwsA(isA<AppError>().having((e) => e.code, 'code', AuthFailures.roleNotSupported)),
           );
 
-      test('a super admin is refused, even though /lessons/access calls them Sales', () async {
+      test('the super admin signs in with the Sales tabs, decided from /me alone (PD-20 amendment)', () async {
         server.on('GET', '/me', [Reply.ok(staff('super_admin'))]);
+        server.on('GET', '/lessons/access', [access(sales: false)]);
+
+        final user = await stack().auth.currentUser();
+        expect(user.role, UserRole.sales);
+        expect(user.isSuperAdmin, isTrue);
+        expect(server.countOf('GET', '/lessons/access'), 0, reason: 'no department is needed');
+      });
+
+      test('a Sales manager is not marked as the super admin', () async {
+        server.on('GET', '/me', [Reply.ok(staff('manager'))]);
         server.on('GET', '/lessons/access', [access(sales: true)]);
 
-        await expectRefused();
-        expect(server.countOf('GET', '/lessons/access'), 0, reason: 'decided from /me alone');
+        expect((await stack().auth.currentUser()).isSuperAdmin, isFalse);
       });
 
       for (final role in ['finance', 'technical', 'academic', null]) {
@@ -325,7 +334,8 @@ void main() {
 
       test('roleFor, directly: every condition is required', () {
         expect(HttpAuthRepository.roleFor(Wire.actorStaff, staffRole: 'manager', salesDepartment: true), UserRole.sales);
-        for (final (role, sales) in [('manager', false), ('super_admin', true), ('finance', true), (null, true)]) {
+        expect(HttpAuthRepository.roleFor(Wire.actorStaff, staffRole: 'super_admin'), UserRole.sales);
+        for (final (role, sales) in [('manager', false), ('finance', true), (null, true)]) {
           expect(
             () => HttpAuthRepository.roleFor(Wire.actorStaff, staffRole: role, salesDepartment: sales),
             throwsA(isA<AppError>()),
