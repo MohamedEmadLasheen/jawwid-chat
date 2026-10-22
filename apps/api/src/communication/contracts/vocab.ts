@@ -83,6 +83,19 @@ export const GROUP_CONVERSATION_TYPES: ReadonlySet<string> = new Set([
   ConversationType.CLASS_GROUP,
   ConversationType.FAMILY_GROUP,
 ]);
+/**
+ * PD-19, second amendment (2026-10-22): conversations whose calls are GROUP
+ * calls. The family-facing
+ * groups above plus the staff-only groups around one teacher -- the trial group
+ * and the supervision conversation -- which seat the teacher with several staff
+ * and so cannot be a two-seat DIRECT call (chat.assert_call_br1). Deliberately a
+ * separate set: C-4 admin presence stays keyed on GROUP_CONVERSATION_TYPES.
+ */
+export const GROUP_CALL_CONVERSATION_TYPES: ReadonlySet<string> = new Set([
+  ...GROUP_CONVERSATION_TYPES,
+  ConversationType.TRIAL_GROUP,
+  ConversationType.TEACHER_SUPERVISION,
+]);
 export type ConversationType = (typeof ConversationType)[keyof typeof ConversationType];
 
 export const ConversationState = {
