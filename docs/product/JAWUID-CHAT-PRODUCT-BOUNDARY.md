@@ -2012,6 +2012,71 @@ pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the
 
 ---
 
+### PD-24 · Changing a family's supervisor without losing anything
+
+**Closed 2026-10-22** by the product owner. Amends PD-8's reassignment rule.
+(PD-22 and PD-23 are reserved by work in progress: per-account time zones and convenient sign-in.)
+
+The owner's request of 2026-10-22: a group's supervisor can be changed; the
+chat history, participants, messages and attachments stay and the group is not
+recreated; the current supervisor leaves the group and the new one joins it. On
+the New Students page the super admin and the Operations Manager change the
+assigned supervisor at any time. The student's complete profile and the
+parent's information and records move to the new supervisor, who sees the whole
+history; the previous supervisor no longer sees the student. Owner answer the
+same day: **the parent's 1:1 with the old supervisor is handed over** (same
+conversation, whole history) rather than left behind as PD-8 had it.
+
+**Final decision.**
+
+```
+who          the super admin, or the Operations Manager who runs both the old
+             and the new supervisor (canAssignSupervision); a reason is required
+where        Admin Web: the group's info panel ("Change supervisor") and the
+             New Students card ("Change", after Assign); the Organization page
+             keeps its per-child reassignment
+the unit     the group's children (or the enrolment's), plus every child who
+             shares a live family group with them -- a group is never split
+in one transaction, nothing created again:
+  supervision     one learner_supervision row per child, audited (before,
+                  after, reason, who)
+  groups          the same conversation: the old supervisor's seat ends
+                  (left_at, kept on record), the new one is seated as admin,
+                  a system line "X is now this group's supervisor"
+  parent's 1:1    the same conversation passes to the new supervisor (seat
+                  swapped, pair key rewritten, a system line) once the old
+                  supervisor has no child of the family left; if the parent
+                  already has a 1:1 with the new supervisor, nothing is
+                  duplicated and the old one stays as history
+  billing         the family's billing supervisor follows
+  owner           family.owner_id (workload) follows, via transfer_ownership
+read through scope, so they move with the row and the previous supervisor
+loses them at once: the Student and Parent Profiles, lessons and reports,
+payments, the New Students card, the learners list
+```
+
+**Implementation phase.** Built 2026-10-22, no migration:
+`OrgStructureService.transferLearners` / `transferGroup`,
+`ConversationService.reconcileSupervisionChange` (now several children at once)
+and `transferFamilyDirects`; routes `POST /org/conversations/:id/supervisor` and
+`POST /trials/new-students/:trialId/supervisor`; Admin Web
+`organization/ChangeSupervisorDialog.tsx`; the system lines in both clients.
+
+**Consequences.** `../architecture/ORG-SCOPE-PD8.md` §2: a former supervisor's
+1:1 with the parent now passes to the new supervisor instead of being lost. The
+per-child reassignment (Organization page) also hands over the 1:1, billing and
+owner when the child was the old supervisor's last in the family.
+
+**Deprecated behaviour.** "Private 1:1s never transfer" (PD-8).
+
+**Defaults adopted at closing** (the owner may override without reopening PD-24):
+1. A reason is required, as for every structure change.
+2. Only Operations primary supervisors can receive a family (PD-8's rule).
+
+**Closed.** 2026-10-22.
+
+---
+
 ### Decisions still open after PD-1 to PD-20
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
