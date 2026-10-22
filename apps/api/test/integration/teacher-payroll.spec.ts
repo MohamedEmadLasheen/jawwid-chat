@@ -242,7 +242,11 @@ describe('3. the payout account', () => {
     const audit = await g.prisma.auditLog.findMany({ where: { entityId: t(), action: { startsWith: 'teacher_file.' } } });
     expect(audit.map((a) => a.action)).toEqual(expect.arrayContaining(['teacher_file.payout_account_set', 'teacher_file.payout_account_revealed', 'teacher_file.pay_terms_set']));
     expect(audit.find((a) => a.action === 'teacher_file.payout_account_revealed')?.reason).toBe('paying October');
-    const text = JSON.stringify(audit.map((a) => ({ action: a.action, before: a.before, after: a.after, reason: a.reason })));
+    // The rows name terms and adjustment ids, whose random digits may contain "6000" or
+    // "5500": look for the secrets only in what is left, as the amounts check below does.
+    const text = JSON.stringify(audit.map((a) => ({ action: a.action, before: a.before, after: a.after, reason: a.reason })))
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>')
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z/g, '<at>');
     for (const secret of [ACCOUNT_NUMBER, IBAN, 'QA Bank', '6000', '5500']) expect(text).not.toContain(secret);
   });
 
