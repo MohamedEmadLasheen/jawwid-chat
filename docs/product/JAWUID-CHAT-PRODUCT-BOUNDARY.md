@@ -142,7 +142,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-21 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
 **PD-22 was closed by the product owner on 2026-10-22** (every account has its own time zone).
 **PD-23 was closed by the product owner on 2026-10-22** (convenient sign-in: session lifetimes per role, devices and sessions, app lock, "keep me signed in" on Admin Web).
-PD-24 is recorded below.
+**PD-24 was closed by the product owner on 2026-10-22** (a family's supervisor is changed in place; nothing is recreated). It amends PD-8's reassignment rule: the parent's one-to-one with the old supervisor is handed over.
 **PD-25 was closed by the product owner on 2026-10-22** (a parent recovers their own account: forgot password, forgot e-mail). It builds on PD-21's reset code.
 **PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 
@@ -171,6 +171,7 @@ PD-24 is recorded below.
 | **PD-21** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
 | **PD-22** | **Each account's time zone** (2026-10-22) | **CLOSED** — every person's times are shown and notified in their own zone, taken from their phone's OS zone ("Set automatically", like a phone) or picked by hand; teachers follow their phone too; a weekly lesson stays anchored in the teacher's zone; Admin Web shows Cairo time, named, with the family's local time beside it; reminders say the time in the recipient's zone. Record: `../architecture/TIME-ZONES.md` |
 | **PD-23** | **Convenient sign-in** (2026-10-22) | **CLOSED** — a session ends after an idle and an absolute limit per role (parents/teachers 30 d idle; staff app 14 d / 30 d; Admin Web kept signed in 7 d / 30 d, otherwise 12 h / 7 d; super admin 12 h / 7 d and never kept signed in); everyone sees and ends their own devices; staff sign out an account's devices under the PD-21 rule; an app lock with the phone's own Face ID / fingerprint / passcode, opt-in for families and on by default for staff; passkeys wait for a production domain. Record: `../security/pd023-convenient-sign-in.md` |
+| **PD-24** | **Changing a family's supervisor** (2026-10-22) | **CLOSED** — the super admin and the Operations Manager change a group's or a New Students entry's supervisor at any time; the same conversation keeps its history, the old supervisor leaves and the new one joins; the children and everyone sharing a live family group with them move together; the parent's one-to-one with the old supervisor is handed over (amends PD-8), unless one with the new supervisor already exists |
 | **PD-25** | **A parent recovers their own account** (2026-10-22) | **CLOSED** — from the app's sign-in screen: forgot password = a one-time code e-mailed to the sign-in address; forgot e-mail = a one-time code by WhatsApp to the phone in the parent file, then the sign-in e-mail is shown; both end in PD-21's reset; parents only; nothing says whether an account exists. Record: `../admin/pd025-parent-self-recovery.md` |
 | **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 
@@ -2176,10 +2177,19 @@ member's browser.
 
 ---
 
+### PD-23 · Convenient sign-in
+
+**Closed 2026-10-22** by the product owner. The full record (sessions per role,
+devices and sessions, the app lock and its deviation from the first design,
+"keep me signed in" on Admin Web, and the passkey phases waiting on a production
+domain) is `../security/pd023-convenient-sign-in.md`. The summary is the PD-23
+row in the table above.
+
+---
+
 ### PD-24 · Changing a family's supervisor without losing anything
 
 **Closed 2026-10-22** by the product owner. Amends PD-8's reassignment rule.
-(PD-23 is reserved by work in progress: convenient sign-in.)
 
 The owner's request of 2026-10-22: a group's supervisor can be changed; the
 chat history, participants, messages and attachments stay and the group is not
