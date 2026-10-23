@@ -13,7 +13,7 @@ function staff(role: string, over: Partial<Actor> = {}): Actor {
   return { actorId: 's', kind: 'staff', displayName: 's', locale: 'ar', isActive: true, staffRole: role as never, organizationId: ORG, ...over };
 }
 
-describe('who reads and records a family\'s money (billing.family_read, PD-17)', () => {
+describe('who reads and records a family\'s money (billing.family_read, PD-17; PD-27 canVerify = canAssign)', () => {
   it.each`
     role             | ops          | sales        | scope      | assign   | record   | edit
     ${'super_admin'} | ${null}      | ${null}      | ${'all'}   | ${true}  | ${true}  | ${true}
@@ -28,7 +28,7 @@ describe('who reads and records a family\'s money (billing.family_read, PD-17)',
     ${'admin'}       | ${'manager'} | ${null}      | ${null}    | ${false} | ${false} | ${false}
     ${'finance'}     | ${'member'}  | ${null}      | ${null}    | ${false} | ${false} | ${false}
   `('$role, Operations $ops, Sales $sales -> $scope', ({ role, ops, sales, scope, assign, record, edit }) => {
-    expect(decideBillingAccess(staff(role), ops, sales)).toEqual({ scope, canAssign: assign, canRecord: record, canEditParent: edit });
+    expect(decideBillingAccess(staff(role), ops, sales)).toEqual({ scope, canAssign: assign, canRecord: record, canEditParent: edit, canVerify: assign });
   });
 
   it('never a teacher, a parent, an inactive or org-less staff member -- whatever department they claim', () => {

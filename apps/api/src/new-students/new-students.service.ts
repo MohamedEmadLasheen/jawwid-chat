@@ -29,6 +29,16 @@ export interface ChildForm {
   schedule: ScheduleSlot[];
 }
 
+/** PD-27: the part of a form a payment request may use. */
+export interface TrialFormPayer {
+  parentName: string;
+  childName: string | null;
+  currency: string;
+  /** Sum of the children's package prices, in major units; null when 0. */
+  packageTotal: number | null;
+  enrolledFamilyId: string | null;
+}
+
 /** Sales' subscription form, validated. */
 export interface SubscriptionForm {
   parent: { name: string; email: string | null; phone: string };
@@ -140,6 +150,27 @@ export class NewStudentsService {
     const form = await this.prisma.trialSubscription.findFirst({ where: { lessonId, organizationId, withdrawnAt: null } });
     if (!form) return null;
     return (await this.present(organizationId, [form]))[0];
+  }
+
+  /**
+   * PD-27: what a payment request for this trial needs from the form -- the
+   * payer's name, the child (when there is one), the currency and the package
+   * prices (major units, as Sales typed them). Never the phone or the e-mail.
+   */
+  async payerFor(organizationId: string, lessonId: string): Promise<TrialFormPayer | null> {
+    if (!isUuid(lessonId)) return null;
+    const form = await this.prisma.trialSubscription.findFirst({ where: { lessonId, organizationId, withdrawnAt: null } });
+    if (!form) return null;
+    const children = form.children as unknown as ChildForm[];
+    const enrolment = await this.prisma.studentEnrolment.findUnique({ where: { lessonId }, select: { familyId: true } });
+    const total = children.reduce((sum, c) => sum + c.packagePrice, 0);
+    return {
+      parentName: form.parentName,
+      childName: children.length === 1 ? (children[0] as ChildForm).name : null,
+      currency: form.currency,
+      packageTotal: total > 0 ? total : null,
+      enrolledFamilyId: enrolment?.familyId ?? null,
+    };
   }
 
   private async present(organizationId: string, forms: Array<Prisma.TrialSubscriptionGetPayload<object>>) {

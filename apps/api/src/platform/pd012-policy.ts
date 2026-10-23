@@ -99,9 +99,16 @@ export interface BillingAccess {
   canRecord: boolean;
   /** Edit the Parent Profile's contact record: name, phone, e-mail, region, note, photo (inside `scope`). */
   canEditParent: boolean;
+  /**
+   * PD-27: money going back out and where money goes -- refunds, and the
+   * payment settings (the bank account parents pay into, the invoice issuer,
+   * the reminder policy). The super admin and the Operations Manager only.
+   * Recording, voiding and deciding receipts stay with canRecord (PD-17 / PD-20).
+   */
+  canVerify: boolean;
 }
 
-export const NO_BILLING_ACCESS: BillingAccess = Object.freeze({ scope: null, canAssign: false, canRecord: false, canEditParent: false });
+export const NO_BILLING_ACCESS: BillingAccess = Object.freeze({ scope: null, canAssign: false, canRecord: false, canEditParent: false, canVerify: false });
 
 export function decideBillingAccess(
   actor: Actor,
@@ -109,16 +116,16 @@ export function decideBillingAccess(
   salesRole: SalesDepartmentRole = null,
 ): BillingAccess {
   if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return NO_BILLING_ACCESS;
-  if (actor.staffRole === StaffRole.SUPER_ADMIN) return { scope: 'all', canAssign: true, canRecord: true, canEditParent: true };
+  if (actor.staffRole === StaffRole.SUPER_ADMIN) return { scope: 'all', canAssign: true, canRecord: true, canEditParent: true, canVerify: true };
   if (operationsRole === 'manager' && actor.staffRole === StaffRole.MANAGER) {
-    return { scope: 'all', canAssign: true, canRecord: true, canEditParent: true };
+    return { scope: 'all', canAssign: true, canRecord: true, canEditParent: true, canVerify: true };
   }
   if (
     operationsRole === 'member' &&
     (actor.staffRole === StaffRole.ADMIN || actor.staffRole === StaffRole.COVERAGE)
   ) {
-    return { scope: 'reach', canAssign: false, canRecord: true, canEditParent: true };
+    return { scope: 'reach', canAssign: false, canRecord: true, canEditParent: true, canVerify: false };
   }
-  if (salesRole !== null) return { scope: 'all', canAssign: false, canRecord: true, canEditParent: false };
+  if (salesRole !== null) return { scope: 'all', canAssign: false, canRecord: true, canEditParent: false, canVerify: false };
   return NO_BILLING_ACCESS;
 }

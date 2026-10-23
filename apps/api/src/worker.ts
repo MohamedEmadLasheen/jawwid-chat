@@ -10,6 +10,7 @@ import { LifecycleService } from './lessons/lifecycle.service';
 import { NotificationService } from './communication/notifications/notification.service';
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
+import { PaymentReminders } from './billing/payment-reminders.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
@@ -68,6 +69,13 @@ const CALL_SWEEP_MS = Number(process.env.CALL_SWEEP_INTERVAL_MS ?? 5000);
 const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
 
 /**
+ * PD-27: how often open instalments schedule their payment reminders. Idempotent
+ * (one notification per rule, instalment and parent), so every replica may run
+ * it; hourly is enough for reminders measured in days.
+ */
+const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -114,6 +122,7 @@ async function bootstrap(): Promise<void> {
   const notifications = app.get(NotificationService);
   const scheduling = app.get(SchedulingService);
   const lifecycle = app.get(LifecycleService);
+  const paymentReminders = app.get(PaymentReminders);
 
   let running = true;
   let draining = false;
@@ -151,6 +160,7 @@ async function bootstrap(): Promise<void> {
   let nextStorySweep = 0;
   let lastSweepAt = 0;
   let nextLessonSweep = 0;
+  let nextPaymentReminderSweep = 0;
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
   // short (OutboxPacer). Without Redis there are no hints and the loop simply
@@ -231,6 +241,20 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextLessonSweep = Date.now() + LESSON_SWEEP_MS;
+      }
+    }
+
+    // PD-27: payment reminders for open instalments (a parent added since the
+    // instalment was created is reached here). Before dispatch, like lessons.
+    if (Date.now() >= nextPaymentReminderSweep) {
+      draining = true;
+      try {
+        await paymentReminders.sweep();
+      } catch (e) {
+        report(log, 'payment reminder sweep', 'billing.reminders', e);
+      } finally {
+        draining = false;
+        nextPaymentReminderSweep = Date.now() + PAYMENT_REMINDER_SWEEP_MS;
       }
     }
 

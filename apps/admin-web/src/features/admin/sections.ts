@@ -34,6 +34,7 @@ export type AdminSectionKey =
   | 'teachers'
   | 'instalments'
   | 'parents'
+  | 'payments'
   | 'stories'
   | 'quality'
   | 'reports'
@@ -268,6 +269,22 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     note: {
       en: 'Administration only. Teachers never see a parent’s profile or payments.',
       ar: 'للإدارة فقط. لا يرى المعلمون ملف ولي الأمر ولا مدفوعاته.',
+    },
+  },
+  {
+    key: 'payments',
+    group: 'operations',
+    icon: 'tag',
+    // PD-27: bank-transfer receipts to verify, and the academy's payment settings.
+    status: 'managed',
+    label: { en: 'Payments', ar: 'المدفوعات' },
+    purpose: {
+      en: 'Bank-transfer receipts waiting for verification, the bank account parents pay into, the invoice issuer and the reminder policy.',
+      ar: 'إيصالات التحويل البنكي بانتظار التحقق، والحساب البنكي الذي يدفع إليه أولياء الأمور، وجهة إصدار الفواتير وسياسة التذكير.',
+    },
+    note: {
+      en: 'Payment requests, cash and refunds are recorded on each family’s Parent Profile. A card payment exists only once Stripe confirms it.',
+      ar: 'تُسجَّل طلبات الدفع والمدفوعات النقدية والاستردادات في ملف ولي الأمر لكل أسرة. ولا توجد دفعة البطاقة إلا بعد تأكيد Stripe.',
     },
   },
   {

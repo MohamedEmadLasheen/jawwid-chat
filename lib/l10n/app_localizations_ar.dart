@@ -2994,4 +2994,198 @@ class L10nAr extends L10n {
   @override
   String get timeZoneSaveFailed =>
       'تعذّر تغيير المنطقة الزمنية. حاول مرة أخرى.';
+
+  @override
+  String get billingAmountDueTitle => 'المبلغ المستحق';
+
+  @override
+  String get billingPay => 'ادفع';
+
+  @override
+  String billingPaidOfTotal(String paid, String total) {
+    return 'دُفع $paid من $total';
+  }
+
+  @override
+  String billingPeriod(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String get billingConfirmingPayment =>
+      'جارٍ تأكيد دفعتك، وقد يستغرق ذلك دقيقة.';
+
+  @override
+  String get billingPaySheetTitle => 'كيف تريد أن تدفع؟';
+
+  @override
+  String get billingPayByCard => 'الدفع بالبطاقة';
+
+  @override
+  String get billingPayByCardHint => 'تُفتح صفحة دفع آمنة';
+
+  @override
+  String get billingBankTransferHint => 'حوّل المبلغ ثم ارفع إيصال التحويل';
+
+  @override
+  String get billingPaymentsUnavailable =>
+      'الدفع بالبطاقة غير متاح حاليًا. يمكنك الدفع بالتحويل البنكي.';
+
+  @override
+  String get billingNoLongerOpen =>
+      'تم دفع هذا المبلغ أو لم يعد مطلوبًا. تم تحديث القائمة.';
+
+  @override
+  String get billingCouldNotOpen => 'تعذّر فتح الصفحة. حاول مرة أخرى.';
+
+  @override
+  String get billingTransferAmount => 'المبلغ المطلوب تحويله';
+
+  @override
+  String get billingBankName => 'البنك';
+
+  @override
+  String get billingAccountName => 'اسم صاحب الحساب';
+
+  @override
+  String get billingIban => 'رقم الآيبان (IBAN)';
+
+  @override
+  String get billingAccountNumber => 'رقم الحساب';
+
+  @override
+  String get billingSwift => 'رمز السويفت (SWIFT)';
+
+  @override
+  String get billingCopy => 'نسخ';
+
+  @override
+  String get billingCopied => 'تم النسخ';
+
+  @override
+  String get billingNoBankAccount =>
+      'لم تُضف الأكاديمية بياناتها البنكية بعد. اطلبها من المشرف.';
+
+  @override
+  String get billingUploadReceiptTitle => 'رفع إيصال التحويل';
+
+  @override
+  String get billingReceiptPhoto => 'صورة';
+
+  @override
+  String get billingReceiptCamera => 'الكاميرا';
+
+  @override
+  String get billingReceiptPdf => 'ملف PDF';
+
+  @override
+  String get billingReceiptFileHint =>
+      'لقطة شاشة أو ملف PDF للتحويل: JPEG أو PNG أو WebP أو PDF، بحد أقصى 10 ميغابايت.';
+
+  @override
+  String get billingReceiptAttachedPhoto => 'تم إرفاق صورة';
+
+  @override
+  String get billingReceiptRemove => 'إزالة';
+
+  @override
+  String billingReceiptAmountLabel(String currency) {
+    return 'المبلغ الذي حوّلته ($currency)';
+  }
+
+  @override
+  String get billingReceiptDateLabel => 'تاريخ التحويل';
+
+  @override
+  String get billingReceiptNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get billingReceiptSend => 'إرسال الإيصال';
+
+  @override
+  String get billingReceiptSent =>
+      'تم إرسال الإيصال، وستؤكده الأكاديمية قريبًا.';
+
+  @override
+  String get billingReceiptNeedFile => 'أرفق الإيصال أولًا.';
+
+  @override
+  String get billingReceiptBadAmount => 'أدخل المبلغ الذي حوّلته.';
+
+  @override
+  String get billingReceiptWrongType =>
+      'استخدم صورة JPEG أو PNG أو WebP، أو ملف PDF.';
+
+  @override
+  String get billingReceiptTooLarge => 'حجم الملف أكبر من 10 ميغابايت.';
+
+  @override
+  String get billingReceiptPickDenied =>
+      'اسمح بالوصول من الإعدادات، ثم حاول مرة أخرى.';
+
+  @override
+  String get billingReceiptPickFailed =>
+      'تعذّر استخدام هذا الملف. جرّب ملفًا آخر.';
+
+  @override
+  String get billingReceiptInvalid =>
+      'تحقّق من المبلغ والتاريخ، ثم حاول مرة أخرى.';
+
+  @override
+  String get billingReceiptsTitle => 'إيصالات التحويل';
+
+  @override
+  String get billingReceiptPending => 'قيد التحقق';
+
+  @override
+  String get billingReceiptApproved => 'مقبول';
+
+  @override
+  String get billingReceiptRejected => 'مرفوض';
+
+  @override
+  String billingReceiptRejectReason(String reason) {
+    return 'السبب: $reason';
+  }
+
+  @override
+  String billingTransferredOn(String date) {
+    return 'حُوِّل في $date';
+  }
+
+  @override
+  String get billingInvoicesTitle => 'الفواتير';
+
+  @override
+  String billingInvoiceIssued(String date) {
+    return 'صدرت في $date';
+  }
+
+  @override
+  String get billingInvoiceRefunded => 'مُستردّة';
+
+  @override
+  String get billingInvoicePartiallyRefunded => 'مُستردّة جزئيًا';
+
+  @override
+  String get billingInvoiceDownload => 'تنزيل';
+
+  @override
+  String billingRefundedAmount(String amount) {
+    return 'استُرِدّ $amount';
+  }
+
+  @override
+  String get billingMethodCard => 'بطاقة';
+
+  @override
+  String get billingMethodCash => 'نقدًا';
+
+  @override
+  String get billingTooManyAttempts =>
+      'محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.';
+
+  @override
+  String get billingReceiptNotAccepted =>
+      'تعذّرت إضافة هذا الإيصال: إما أن المبلغ دُفع أو أُغلق، أو أن هناك إيصالات أخرى ما زالت قيد التحقق.';
 }

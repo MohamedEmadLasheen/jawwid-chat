@@ -35,7 +35,7 @@ claimed. The decision text itself still lives in
 | PD-24 | Change a family's supervisor without losing anything | `claude/supervisor-transfer` | MERGED #107 |
 | PD-25 | Parent self-recovery (reset code, forgot email) | `claude/parent-account-recovery-6cd585` | MERGED #112 |
 | PD-26 | The Teacher Supervision page (leaves, absences, lateness, grants, complaints) | `claude/admin-teacher-management-41f08a` | MERGED #108 (renumbered from "PD-24") |
-| PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | in progress |
+| PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | PR #117 |
 | PD-28 | next free number | — | — |
 
 ## Migration slots claimed on 2026-10-22

@@ -1995,6 +1995,152 @@ model FamilyInstalment {
   @@schema("chat")
 }
 
+/// PD-27: a request to pay, carrying the unique payment link. Terms never
+/// change (chat.guard_payment_request); 20261022170000_chat_pd027_payments.sql
+/// owns the DDL and the rules.
+model PaymentRequest {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  token          String    @unique
+  familyId       String?   @map("family_id") @db.Uuid
+  trialLessonId  String?   @map("trial_lesson_id") @db.Uuid
+  learnerId      String?   @map("learner_id") @db.Uuid
+  childName      String?   @map("child_name")
+  payerName      String?   @map("payer_name")
+  instalmentId   String?   @map("instalment_id") @db.Uuid
+  purpose        String
+  label          String
+  amountMinor    BigInt    @map("amount_minor")
+  currency       String
+  planMonths     Int?      @map("plan_months") @db.SmallInt
+  periodStart    DateTime? @map("period_start") @db.Date
+  periodEnd      DateTime? @map("period_end") @db.Date
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  paidAt         DateTime? @map("paid_at") @db.Timestamptz
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelledBy    String?   @map("cancelled_by") @db.Uuid
+  cancelReason   String?   @map("cancel_reason")
+
+  @@map("payment_request")
+  @@schema("chat")
+}
+
+/// PD-27: money that arrived. Append-only (chat.guard_payment).
+model Payment {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId          String    @map("organization_id") @db.Uuid
+  familyId                String?   @map("family_id") @db.Uuid
+  trialLessonId           String?   @map("trial_lesson_id") @db.Uuid
+  learnerId               String?   @map("learner_id") @db.Uuid
+  childName               String?   @map("child_name")
+  requestId               String?   @map("request_id") @db.Uuid
+  instalmentId            String?   @map("instalment_id") @db.Uuid
+  method                  String
+  amountMinor             BigInt    @map("amount_minor")
+  currency                String
+  paidOn                  DateTime  @map("paid_on") @db.Date
+  recordedAt              DateTime  @default(now()) @map("recorded_at") @db.Timestamptz
+  recordedBy              String?   @map("recorded_by") @db.Uuid
+  reference               String?
+  stripeCheckoutSessionId String?   @unique @map("stripe_checkout_session_id")
+  stripePaymentIntentId   String?   @unique @map("stripe_payment_intent_id")
+  receiptId               String?   @unique @map("receipt_id") @db.Uuid
+  voidedAt                DateTime? @map("voided_at") @db.Timestamptz
+  voidedBy                String?   @map("voided_by") @db.Uuid
+  voidReason              String?   @map("void_reason")
+
+  @@map("payment")
+  @@schema("chat")
+}
+
+/// PD-27: money given back on a payment. Never edited or deleted.
+model PaymentRefund {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  paymentId      String   @map("payment_id") @db.Uuid
+  amountMinor    BigInt   @map("amount_minor")
+  reason         String
+  stripeRefundId String?  @unique @map("stripe_refund_id")
+  recordedBy     String?  @map("recorded_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("payment_refund")
+  @@schema("chat")
+}
+
+/// PD-27: a parent's proof of a bank transfer, decided once.
+model PaymentReceipt {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  familyId       String    @map("family_id") @db.Uuid
+  requestId      String    @map("request_id") @db.Uuid
+  amountMinor    BigInt    @map("amount_minor")
+  currency       String
+  transferredOn  DateTime  @map("transferred_on") @db.Date
+  note           String?
+  objectKey      String    @unique @map("object_key")
+  mimeType       String    @map("mime_type")
+  byteSize       Int       @map("byte_size")
+  uploadedBy     String    @map("uploaded_by") @db.Uuid
+  uploadedAt     DateTime  @default(now()) @map("uploaded_at") @db.Timestamptz
+  status         String    @default("pending")
+  reviewedBy     String?   @map("reviewed_by") @db.Uuid
+  reviewedAt     DateTime? @map("reviewed_at") @db.Timestamptz
+  rejectReason   String?   @map("reject_reason")
+  paymentId      String?   @unique @map("payment_id") @db.Uuid
+
+  @@map("payment_receipt")
+  @@schema("chat")
+}
+
+/// PD-27: one invoice per payment; the number is assigned by the database.
+model Invoice {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  /// Assigned by chat.guard_invoice; whatever the writer sends is replaced.
+  number         String    @default("")
+  paymentId      String    @unique @map("payment_id") @db.Uuid
+  familyId       String?   @map("family_id") @db.Uuid
+  trialLessonId  String?   @map("trial_lesson_id") @db.Uuid
+  issuedAt       DateTime  @default(now()) @map("issued_at") @db.Timestamptz
+  snapshot       Json
+  voidedAt       DateTime? @map("voided_at") @db.Timestamptz
+
+  @@unique([organizationId, number])
+  @@map("invoice")
+  @@schema("chat")
+}
+
+/// PD-27: a Stripe Checkout Session opened for a request.
+model PaymentCheckout {
+  stripeSessionId String   @id @map("stripe_session_id")
+  organizationId  String   @map("organization_id") @db.Uuid
+  requestId       String   @map("request_id") @db.Uuid
+  amountMinor     BigInt   @map("amount_minor")
+  currency        String
+  status          String   @default("open")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("payment_checkout")
+  @@schema("chat")
+}
+
+/// PD-27: every verified Stripe webhook event, once.
+model StripeEvent {
+  id         String   @id
+  type       String
+  livemode   Boolean
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz
+  outcome    String
+
+  @@map("stripe_event")
+  @@schema("chat")
+}
+
 /// PD-21: an administrator acting as a parent or teacher account (a "support
 /// session"). 20261022120000_chat_pd021_impersonation.sql owns the DDL and the
 /// rules (who, whom, at most an hour, never deleted, forward-only).

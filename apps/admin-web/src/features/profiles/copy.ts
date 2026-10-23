@@ -92,6 +92,7 @@ export const P = {
   overdue: { en: 'of which overdue', ar: 'منها متأخر' },
   dueOn: { en: 'Due {date}', ar: 'يستحق {date}' },
   paidOnBy: { en: 'Paid {date} by {method} · recorded by {name}', ar: 'دُفع {date} عبر {method} · سجّله {name}' },
+  paidOnByStripe: { en: 'Paid {date} by {method} · confirmed by Stripe', ar: 'دُفع {date} عبر {method} · أكّده Stripe' },
   reference: { en: 'Reference', ar: 'المرجع' },
   voidedBy: { en: 'Voided by {name}: {reason}', ar: 'ألغاه {name}: {reason}' },
   forChild: { en: 'For {name}', ar: 'عن {name}' },
@@ -129,6 +130,18 @@ export const P = {
   save: { en: 'Save', ar: 'حفظ' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
   cancel: { en: 'Cancel', ar: 'إلغاء الأمر' },
+
+  // PD-27: a custom schedule, partial payments
+  scheduleMode: { en: 'Schedule', ar: 'الجدول' },
+  equalMode: { en: 'Equal instalments', ar: 'أقساط متساوية' },
+  customMode: { en: 'Custom schedule', ar: 'جدول مخصص' },
+  rowAmount: { en: 'Amount {n}', ar: 'المبلغ {n}' },
+  rowDue: { en: 'Due date {n}', ar: 'تاريخ الاستحقاق {n}' },
+  addRow: { en: 'Add a row', ar: 'إضافة صف' },
+  removeRow: { en: 'Remove row {n}', ar: 'حذف الصف {n}' },
+  scheduleTotal: { en: 'Total: {amount}', ar: 'الإجمالي: {amount}' },
+  scheduleMax: { en: 'At most 24 instalments.', ar: '24 قسطًا كحد أقصى.' },
+  wholeRemaining: { en: 'Records the whole remaining amount: {amount}.', ar: 'يسجّل كامل المبلغ المتبقي: {amount}.' },
 
   // The Student Profile
   studentEyebrow: { en: 'Student profile', ar: 'ملف الطالب' },
@@ -231,8 +244,8 @@ const BY_CODE: Record<string, Pair> = {
   },
   'COMM.BILLING_NOT_FOUND': { en: 'Not found.', ar: 'غير موجود.' },
   'COMM.BILLING_STATE': {
-    en: 'This instalment is already paid or voided. Reload to see it.',
-    ar: 'هذا القسط مدفوع أو ملغى بالفعل. أعد التحميل لرؤيته.',
+    en: 'This was already paid, voided, cancelled or expired. Reload to see it.',
+    ar: 'تم دفع هذا أو إلغاؤه أو انتهى بالفعل. أعد التحميل لرؤيته.',
   },
   'COMM.LESSON_NOT_FOUND': {
     en: 'This student was not found, or is not one you may open.',

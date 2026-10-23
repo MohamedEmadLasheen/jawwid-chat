@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-26 — CLOSED
+## 4. Product decisions PD-1 to PD-27 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -145,6 +145,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-24 was closed by the product owner on 2026-10-22** (a family's supervisor is changed in place; nothing is recreated). It amends PD-8's reassignment rule: the parent's one-to-one with the old supervisor is handed over.
 **PD-25 was closed by the product owner on 2026-10-22** (a parent recovers their own account: forgot password, forgot e-mail). It builds on PD-21's reset code.
 **PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
+**PD-27 was closed by the product owner on 2026-10-22** (payments: payment links, card payments through Stripe, bank-transfer receipts, cash, invoices, instalment reminders). It builds on PD-17.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -174,6 +175,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-24** | **Changing a family's supervisor** (2026-10-22) | **CLOSED** — the super admin and the Operations Manager change a group's or a New Students entry's supervisor at any time; the same conversation keeps its history, the old supervisor leaves and the new one joins; the children and everyone sharing a live family group with them move together; the parent's one-to-one with the old supervisor is handed over (amends PD-8), unless one with the new supervisor already exists |
 | **PD-25** | **A parent recovers their own account** (2026-10-22) | **CLOSED** — from the app's sign-in screen: forgot password = a one-time code e-mailed to the sign-in address; forgot e-mail = a one-time code by WhatsApp to the phone in the parent file, then the sign-in e-mail is shown; both end in PD-21's reset; parents only; nothing says whether an account exists. Record: `../admin/pd025-parent-self-recovery.md` |
 | **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
+| **PD-27** | **Payments: links, card, bank transfer, cash, invoices, reminders** (2026-10-22) | **CLOSED** — a payment request carries a unique link that works before the parent has an account; card payments through Stripe Checkout are recorded only from a verified webhook, exactly once; parents upload bank-transfer receipts that staff approve or reject with a reason; staff record cash; instalments may be paid in part and by several methods; every payment issues a numbered invoice the parent downloads as a PDF; a trial's payments move onto the family at Assign; append-only, audited, reminders before and after the due date |
 
 ---
 
@@ -2384,7 +2386,125 @@ priced deduction     = decided deduction_1|2 + terms(month).currency +
 
 ---
 
-### Decisions still open after PD-1 to PD-26
+### PD-27 · Payments: payment links, card, bank transfer, cash, invoices, reminders
+
+**Closed 2026-10-22** by the product owner. Builds on PD-17 (payments are Chat's
+own records); amends PD-17's "paying is still recorded by staff" -- a card
+payment now records itself, from Stripe's confirmation.
+
+The owner's request of 2026-10-22: one payment system for subscriptions after a
+trial, renewals, instalments and other amounts due, paid by card (Stripe), bank
+transfer or cash, as simple as possible for parents. Sales or Operations create
+a payment request after a successful trial; a unique link goes to the parent
+(WhatsApp or another channel); the parent pays by card; Stripe's confirmation
+records the payment and puts an invoice in the parent's account, linked to the
+right parent, student, package and billing period -- and the link works before
+the parent has registered, the payment following them to the account they sign
+up with using the same verified e-mail. Parents see and download every invoice.
+Bank transfers: bank details and the amount, a receipt upload, "pending
+verification" until an authorized admin approves (an invoice) or rejects with a
+reason. Cash recorded by authorized admins with who recorded it and what remains.
+Configurable instalment plans (amounts and due dates), partial payments, a link
+per instalment, automatic balances, reminders before and after the due date.
+Server-side confirmation, exactly once, secure links, receipts for authorized
+eyes only, a full audit trail, only authorized staff approve, record or modify.
+
+**Final decision.**
+
+```
+what is paid        a payment request ("please pay X for Y"): purpose
+                    subscription | renewal | instalment | balance | other, an
+                    amount and currency, the child, the package (1/3/6/12
+                    months), the billing period; for an enrolled family, or for
+                    a trial before Assign; optionally one instalment
+the link            PAYMENT_LINK_BASE_URL/pay/<256-bit token>: no account needed;
+                    shows the payer's name, the child's first name, the label,
+                    package, period, amount and what remains, bank details --
+                    never a contact channel, another payment or a staff name;
+                    expires (14 days by default), cancellable; staff copy it or
+                    open "Send on WhatsApp" (their own WhatsApp; Chat sends nothing)
+card                Stripe Checkout, opened when the parent taps Pay, for what is
+                    still owed; recorded ONLY from a verified webhook (signature,
+                    a session Chat opened, paid, exact amount and currency);
+                    exactly once (event id, session id, payment intent unique);
+                    a second open page for one request is expired first
+bank transfer       the parent picks an amount due in the app, sees the bank
+                    details, uploads a JPEG/PNG/WebP/PDF receipt (<= 10 MB, bytes
+                    checked); pending until a payment recorder approves (a payment
+                    and an invoice) or rejects with a reason the parent reads; a
+                    recorder may also record a transfer directly
+cash                Operations (families they reach) and Sales record it: amount,
+                    date, what it pays, a reference; the recorder is on the payment
+instalments         PD-17's plans, plus a custom schedule (amount + due date per
+                    row); paid in part, by several methods; paid when the payments
+                    that stand cover it; each open instalment has its own link;
+                    the parent pays any open instalment in the app
+invoices            one per payment, JW-<year>-<000001> per academy (the database
+                    numbers it), frozen at issue; a PDF in Arabic and English;
+                    parents see every invoice that stands, any time
+before Assign       the trial's request, payment and invoice carry the trial; Assign
+                    (PD-16) attaches them to the family it creates, in its own
+                    transaction; the parent signs up with the form's e-mail --
+                    Assign made it the account's subject -- and finds the invoice.
+                    Nothing is matched on an e-mail Stripe collected.
+corrections         a payment recorded by mistake is voided with a reason (its
+                    invoice with it); a card payment is refunded (through Stripe),
+                    never voided; refunds never exceed the payment; nothing is
+                    edited or deleted (database guards)
+who                 read: PD-17's billing readers; request, record cash or a
+                    transfer, approve / reject receipts, void: canRecord, PD-17 /
+                    PD-20's recorders (Operations in reach, Sales, the Operations
+                    Manager, the super admin); refund and payment settings (the
+                    bank account parents pay into): canVerify -- the super admin
+                    and the Operations Manager; never a teacher
+reminders           the rules seeded in 2026-09 (D-7, D-3, due day, D+3, D+7,
+                    push to every active parent) now fire for open instalments;
+                    each rule switched on or off in Payments > Settings; paid or
+                    voided cancels the rest
+audit               payment_request.created|cancelled, payment.recorded|voided|
+                    refunded|stripe_mismatch|attached_at_assign, receipt.uploaded|
+                    approved|rejected, billing.settings_set, PD-17's instalment.*
+```
+
+**Implementation phase.** Migration `20261022170000_chat_pd027_payments.sql`
+(payment_request, payment, payment_refund, payment_receipt, invoice +
+invoice_counter, payment_checkout, stripe_event; every table guarded; PD-17's
+instalment accepts card and cash). `apps/api/src/billing`: PaymentLedger (the one
+writer), CheckoutService + StripeWebhookController (the StripeGateway seam),
+PayLinkController (the public page), PaymentsService, ParentPaymentsService,
+the invoice PDF, receipt and invoice media links, PaymentReminders (worker
+sweep). Admin Web: the Parent Profile's money section, the Payments area
+(Receipts, Settings), New Students. App: Settings > Payments. Contract and
+operations: `../admin/pd027-payments.md`. Secrets: `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET` (optional; without them there is no card option).
+
+**Consequences.** PD-17's "mark this instalment paid" now issues an invoice too
+(it records a payment for what is owed through the same ledger). A parent's
+Payments screen is no longer read-only: they pay and send receipts there. Card
+data never reaches Chat (Stripe hosts the card form).
+
+**Deprecated behaviour.** "Paying is recorded by staff" (PD-17) for card
+payments; an instalment paid only whole, in one go.
+
+**Defaults adopted at closing** (the owner may override without reopening PD-27):
+1. Receipts, transfers and voids stay with PD-17 / PD-20's payment recorders
+   (Sales included); refunds and the payment settings (the bank account parents
+   pay into) are the super admin's and the Operations Manager's.
+2. Links expire after 14 days (1-90 when created); an expired link is replaced,
+   not extended.
+3. Receipts are uploaded in the app, not on the public link page (a parent who
+   cannot sign in yet sends it to their supervisor, who records the transfer).
+4. A refund does not reopen what it paid: the family is asked again if needed.
+5. Reminders are push notifications; WhatsApp reminders wait for a WhatsApp
+   sender (PD-16).
+6. Invoice issuer details (name, address, tax number) and the bank account are
+   set in Payments > Settings; until then the invoice shows "Jawwid".
+
+**Closed.** 2026-10-22.
+
+---
+
+### Decisions still open after PD-1 to PD-27
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

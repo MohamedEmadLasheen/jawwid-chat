@@ -106,7 +106,7 @@ void main() {
     });
 
     testWidgets('every instalment, in the order the server sent them', (tester) async {
-      tester.view.physicalSize = const Size(1080, 4000);
+      tester.view.physicalSize = const Size(1080, 9000);
       addTearDown(tester.view.resetPhysicalSize);
       await tester.pumpWidget(app(_Billing()..answer = billing));
       await tester.pumpAndSettle();
@@ -131,6 +131,8 @@ void main() {
     });
 
     testWidgets('a paid instalment says when and how, with its reference', (tester) async {
+      tester.view.physicalSize = const Size(1080, 9000);
+      addTearDown(tester.view.resetPhysicalSize);
       await tester.pumpWidget(app(_Billing()..answer = billing));
       await tester.pumpAndSettle();
 
@@ -190,7 +192,7 @@ void main() {
     const ar = Locale('ar');
 
     testWidgets('the summary and the rows, in Arabic', (tester) async {
-      tester.view.physicalSize = const Size(1080, 4000);
+      tester.view.physicalSize = const Size(1080, 9000);
       addTearDown(tester.view.resetPhysicalSize);
       await tester.pumpWidget(app(_Billing()..answer = billing, locale: ar));
       await tester.pumpAndSettle();
@@ -249,4 +251,13 @@ class _Billing implements BillingRepository {
     if (failWith != null) throw failWith!;
     return answer ?? (throw const AppError(AppErrorKind.forbidden, code: 'COMM.BILLING_DENIED'));
   }
+
+  @override
+  Future<String> checkout({String? requestId, String? instalmentId}) => throw UnimplementedError();
+
+  @override
+  Future<ParentBilling> submitReceipt(ReceiptDraft draft) => throw UnimplementedError();
+
+  @override
+  Future<String> invoiceLink(String invoiceId) => throw UnimplementedError();
 }

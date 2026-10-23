@@ -62,6 +62,8 @@ COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build     --chown=node:node /app/dist         ./dist
 COPY --chown=node:node package.json ./
 COPY --chown=node:node prisma ./prisma
+# PD-27: the invoice PDF's typeface (IBM Plex Sans Arabic, OFL), read at render time.
+COPY --chown=node:node assets ./assets
 
 # `node` is an unprivileged user that ships with the base image. The runtime
 # needs no write access to its own code, so nothing here is owned by root.

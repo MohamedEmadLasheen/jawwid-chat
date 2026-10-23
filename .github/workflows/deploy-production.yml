@@ -239,6 +239,11 @@ jobs:
           WHATSAPP_RECOVERY_TEMPLATE: ${{ vars.WHATSAPP_RECOVERY_TEMPLATE }}
           WHATSAPP_TEMPLATE_LANGUAGE: ${{ vars.WHATSAPP_TEMPLATE_LANGUAGE }}
           WHATSAPP_API_VERSION: ${{ vars.WHATSAPP_API_VERSION }}
+          # PD-27: card payments (optional; unset = no card option, bank transfer
+          # and cash still work) and the public origin payment links point at.
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          PAYMENT_LINK_BASE_URL: ${{ vars.PAYMENT_LINK_BASE_URL }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           OTEL_SERVICE_NAME: jawwid-chat-api
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}

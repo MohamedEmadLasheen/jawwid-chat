@@ -1,4 +1,5 @@
 import { api } from '@/core/api/client'
+import type { Invoice, Payment, PaymentMethod as AnyPaymentMethod, PaymentRequest, PlanMonths, Receipt, RequestPurpose } from '@/features/payments/api'
 
 /**
  * PD-17 wire contract, mirrored from apps/api/src/parent-profile,
@@ -43,7 +44,10 @@ export type ParentUpdate = Partial<{
   adminNote: string | null
 }>
 
+/** A family's usual method (PD-17). What a payment actually used is PD-27's wider set. */
 export type PaymentMethod = 'invoice' | 'bank_transfer'
+/** POST /instalments/:id/payment: the whole remaining amount, by one of these. */
+export type InstalmentPaymentMethod = 'invoice' | 'bank_transfer' | 'cash'
 export type TimelineStatus = 'overdue' | 'due' | 'upcoming' | 'paid' | 'voided'
 
 export interface TimelineInstalment {
@@ -59,8 +63,15 @@ export interface TimelineInstalment {
   days: number
   createdAt: string
   createdBy: { id: string; name: string }
-  payment: { paidOn: string; method: PaymentMethod; reference: string | null; recordedAt: string; recordedBy: { id: string; name: string } } | null
+  /** recordedBy null: confirmed by Stripe (PD-27). */
+  payment: { paidOn: string; method: AnyPaymentMethod; reference: string | null; recordedAt: string; recordedBy: { id: string; name: string } | null } | null
   void: { at: string; by: { id: string; name: string }; reason: string } | null
+  /** PD-27: payments may be partial; the instalment is paid when they cover it. */
+  paidMinor: number
+  remainingMinor: number
+  partial: boolean
+  /** Its open payment request, if any. */
+  requestId: string | null
 }
 
 export interface FamilyBilling {
@@ -73,6 +84,15 @@ export interface FamilyBilling {
   instalments: TimelineInstalment[]
   totals: Array<{ currency: string; paidMinor: number; outstandingMinor: number; overdueMinor: number }>
   canRecord: boolean
+  /** PD-27. */
+  requests: PaymentRequest[]
+  payments: Payment[]
+  invoices: Invoice[]
+  receipts: Receipt[]
+  /** Approve receipts, record bank transfers, void, refund: the super admin and the Operations Manager. */
+  canVerify: boolean
+  /** Stripe is configured on this deployment. */
+  cardAvailable: boolean
 }
 
 export type BillingUpdate = Partial<{ paymentMethod: PaymentMethod | null; currency: string | null; planMonths: number | null }>
@@ -85,6 +105,37 @@ export interface NewInstalments {
   count?: number
   everyMonths?: number
   learnerId?: string | null
+}
+
+/** PD-27: a custom schedule, 1-24 rows, instead of the equal split. */
+export interface CustomInstalments {
+  label: string
+  currency?: string
+  learnerId?: string | null
+  items: Array<{ amountMinor: number; dueDate: string }>
+}
+
+export interface NewPaymentRequest {
+  purpose: RequestPurpose
+  label: string
+  amountMinor?: number
+  currency?: string
+  learnerId?: string
+  instalmentId?: string
+  planMonths?: PlanMonths
+  periodStart?: string
+  periodEnd?: string
+  expiresInDays?: number
+}
+
+export interface NewFamilyPayment {
+  method: 'cash' | 'bank_transfer'
+  amountMinor: number
+  paidOn: string
+  requestId?: string
+  instalmentId?: string
+  learnerId?: string
+  reference?: string
 }
 
 export interface StudentProfile {
@@ -127,10 +178,18 @@ export const profilesApi = {
 
   billing: (familyId: string) => api.get<FamilyBilling>(`${family(familyId)}/billing`),
   updateBilling: (familyId: string, body: BillingUpdate) => api.post<FamilyBilling>(`${family(familyId)}/billing`, body),
-  createInstalments: (familyId: string, body: NewInstalments) => api.post<FamilyBilling>(`${family(familyId)}/instalments`, body),
-  recordPayment: (id: string, body: { paidOn: string; method: PaymentMethod; reference?: string }) =>
+  createInstalments: (familyId: string, body: NewInstalments | CustomInstalments) => api.post<FamilyBilling>(`${family(familyId)}/instalments`, body),
+  recordPayment: (id: string, body: { paidOn: string; method: InstalmentPaymentMethod; reference?: string }) =>
     api.post<FamilyBilling>(`/instalments/${encodeURIComponent(id)}/payment`, body),
   voidInstalment: (id: string, reason: string) => api.post<FamilyBilling>(`/instalments/${encodeURIComponent(id)}/void`, { reason }),
+
+  // PD-27: every write that names a family answers its billing.
+  createPaymentRequest: (familyId: string, body: NewPaymentRequest) =>
+    api.post<{ request: PaymentRequest; billing: FamilyBilling }>(`${family(familyId)}/payment-requests`, body),
+  cancelPaymentRequest: (id: string, reason: string) => api.post<FamilyBilling>(`/payment-requests/${encodeURIComponent(id)}/cancel`, { reason }),
+  recordFamilyPayment: (familyId: string, body: NewFamilyPayment) => api.post<FamilyBilling>(`${family(familyId)}/payments`, body),
+  voidPayment: (id: string, reason: string) => api.post<FamilyBilling>(`/payments/${encodeURIComponent(id)}/void`, { reason }),
+  refundPayment: (id: string, body: { amountMinor: number; reason: string }) => api.post<FamilyBilling>(`/payments/${encodeURIComponent(id)}/refunds`, body),
 
   student: (learnerId: string) => api.get<StudentProfile>(`/learners/${encodeURIComponent(learnerId)}/profile`),
 }

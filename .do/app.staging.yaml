@@ -284,6 +284,18 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: ${TEACHER_PAYOUT_KEYS}
+      - key: STRIPE_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STRIPE_SECRET_KEY}
+      - key: STRIPE_WEBHOOK_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STRIPE_WEBHOOK_SECRET}
+      - key: PAYMENT_LINK_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${PAYMENT_LINK_BASE_URL}
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET
@@ -609,6 +621,18 @@ workers:
         scope: RUN_TIME
         type: SECRET
         value: ${TEACHER_PAYOUT_KEYS}
+      - key: STRIPE_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STRIPE_SECRET_KEY}
+      - key: STRIPE_WEBHOOK_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STRIPE_WEBHOOK_SECRET}
+      - key: PAYMENT_LINK_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${PAYMENT_LINK_BASE_URL}
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET

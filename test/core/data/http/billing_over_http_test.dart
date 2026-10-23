@@ -121,7 +121,7 @@ void main() {
             'currency': 'KWD',
             'dueDate': '2026-10-01',
             'status': 'written_off',
-            'payment': {'paidOn': '2026-10-02', 'method': 'cash', 'reference': null},
+            'payment': {'paidOn': '2026-10-02', 'method': 'cheque', 'reference': null},
           },
         ],
         'totals': <Object?>[],
@@ -137,6 +137,15 @@ void main() {
     expect(billing.instalments.single.payment?.method, isNull);
     expect(billing.instalments.single.payment?.reference, isNull);
     expect(billing.totals, isEmpty);
+    // A PD-17 server: nothing of PD-27's, and no card offered.
+    expect(billing.requests, isEmpty);
+    expect(billing.invoices, isEmpty);
+    expect(billing.receipts, isEmpty);
+    expect(billing.bankAccount, isNull);
+    expect(billing.cardAvailable, isFalse);
+    expect(billing.instalments.single.paidMinor, isNull);
+    expect(billing.instalments.single.partial, isFalse);
+    expect(billing.instalments.single.owedMinor, 100);
   });
 
   test('a parent who does not hold billing gets 403 COMM.BILLING_DENIED, intact', () async {

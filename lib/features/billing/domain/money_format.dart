@@ -19,3 +19,47 @@ String formatMoney(int amountMinor, String currency, String locale) {
   final format = NumberFormat.currency(locale: locale, name: code, symbol: '$code ', decimalDigits: digits);
   return format.format(amountMinor / math.pow(10, digits)).trim();
 }
+
+/// An amount as a parent would type it: no code, no grouping, the currency's decimals
+/// (`125050` AED is "1250.50"). Used to prefill an amount field.
+String plainAmount(int amountMinor, String currency) {
+  final digits = minorDigits(currency);
+  if (digits == 0) return '$amountMinor';
+  final s = amountMinor.abs().toString().padLeft(digits + 1, '0');
+  final sign = amountMinor < 0 ? '-' : '';
+  return '$sign${s.substring(0, s.length - digits)}.${s.substring(s.length - digits)}';
+}
+
+/// What a parent typed, in [currency]'s minor units; null when it is not a positive
+/// amount with at most the currency's decimals. Exact -- never through a double, so
+/// "1250.10" is 125010 and not 125009.
+///
+/// Arabic-Indic digits and the Arabic decimal mark are read as typed on an Arabic
+/// keyboard; commas and the Arabic thousands mark are taken as grouping.
+int? parseAmountMinor(String input, String currency) {
+  const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+  const easternArabic = '۰۱۲۳۴۵۶۷۸۹';
+  final b = StringBuffer();
+  for (final ch in input.trim().split('')) {
+    final a = arabicIndic.indexOf(ch);
+    final e = easternArabic.indexOf(ch);
+    if (a >= 0) {
+      b.write(a);
+    } else if (e >= 0) {
+      b.write(e);
+    } else if (ch == '٫') {
+      b.write('.');
+    } else if (ch == ',' || ch == '٬' || ch == ' ') {
+      continue;
+    } else {
+      b.write(ch);
+    }
+  }
+  final digits = minorDigits(currency);
+  final m = RegExp(r'^(\d+)(?:\.(\d*))?$').firstMatch(b.toString());
+  if (m == null) return null;
+  final fraction = m[2] ?? '';
+  if (fraction.length > digits) return null;
+  final minor = int.tryParse('${m[1]}${fraction.padRight(digits, '0')}');
+  return minor == null || minor <= 0 ? null : minor;
+}

@@ -1265,5 +1265,123 @@
   "timeZoneAppliesTo": "تظهر مواعيد الحصص والتذكيرات والإشعارات بهذه المنطقة الزمنية.",
   "timeZoneSearchHint": "ابحث عن مدينة",
   "timeZoneNoMatch": "لا توجد منطقة زمنية مطابقة.",
-  "timeZoneSaveFailed": "تعذّر تغيير المنطقة الزمنية. حاول مرة أخرى."
+  "timeZoneSaveFailed": "تعذّر تغيير المنطقة الزمنية. حاول مرة أخرى.",
+  "billingAmountDueTitle": "المبلغ المستحق",
+  "billingPay": "ادفع",
+  "billingPaidOfTotal": "دُفع {paid} من {total}",
+  "@billingPaidOfTotal": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPeriod": "{start} – {end}",
+  "@billingPeriod": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "billingConfirmingPayment": "جارٍ تأكيد دفعتك، وقد يستغرق ذلك دقيقة.",
+  "billingPaySheetTitle": "كيف تريد أن تدفع؟",
+  "billingPayByCard": "الدفع بالبطاقة",
+  "billingPayByCardHint": "تُفتح صفحة دفع آمنة",
+  "billingBankTransferHint": "حوّل المبلغ ثم ارفع إيصال التحويل",
+  "billingPaymentsUnavailable": "الدفع بالبطاقة غير متاح حاليًا. يمكنك الدفع بالتحويل البنكي.",
+  "billingNoLongerOpen": "تم دفع هذا المبلغ أو لم يعد مطلوبًا. تم تحديث القائمة.",
+  "billingCouldNotOpen": "تعذّر فتح الصفحة. حاول مرة أخرى.",
+  "billingTransferAmount": "المبلغ المطلوب تحويله",
+  "billingBankName": "البنك",
+  "billingAccountName": "اسم صاحب الحساب",
+  "billingIban": "رقم الآيبان (IBAN)",
+  "billingAccountNumber": "رقم الحساب",
+  "billingSwift": "رمز السويفت (SWIFT)",
+  "billingCopy": "نسخ",
+  "billingCopied": "تم النسخ",
+  "billingNoBankAccount": "لم تُضف الأكاديمية بياناتها البنكية بعد. اطلبها من المشرف.",
+  "billingUploadReceiptTitle": "رفع إيصال التحويل",
+  "billingReceiptPhoto": "صورة",
+  "billingReceiptCamera": "الكاميرا",
+  "billingReceiptPdf": "ملف PDF",
+  "billingReceiptFileHint": "لقطة شاشة أو ملف PDF للتحويل: JPEG أو PNG أو WebP أو PDF، بحد أقصى 10 ميغابايت.",
+  "billingReceiptAttachedPhoto": "تم إرفاق صورة",
+  "billingReceiptRemove": "إزالة",
+  "billingReceiptAmountLabel": "المبلغ الذي حوّلته ({currency})",
+  "@billingReceiptAmountLabel": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "billingReceiptDateLabel": "تاريخ التحويل",
+  "billingReceiptNoteLabel": "ملاحظة (اختياري)",
+  "billingReceiptSend": "إرسال الإيصال",
+  "billingReceiptSent": "تم إرسال الإيصال، وستؤكده الأكاديمية قريبًا.",
+  "billingReceiptNeedFile": "أرفق الإيصال أولًا.",
+  "billingReceiptBadAmount": "أدخل المبلغ الذي حوّلته.",
+  "billingReceiptWrongType": "استخدم صورة JPEG أو PNG أو WebP، أو ملف PDF.",
+  "billingReceiptTooLarge": "حجم الملف أكبر من 10 ميغابايت.",
+  "billingReceiptPickDenied": "اسمح بالوصول من الإعدادات، ثم حاول مرة أخرى.",
+  "billingReceiptPickFailed": "تعذّر استخدام هذا الملف. جرّب ملفًا آخر.",
+  "billingReceiptInvalid": "تحقّق من المبلغ والتاريخ، ثم حاول مرة أخرى.",
+  "billingReceiptsTitle": "إيصالات التحويل",
+  "billingReceiptPending": "قيد التحقق",
+  "billingReceiptApproved": "مقبول",
+  "billingReceiptRejected": "مرفوض",
+  "billingReceiptRejectReason": "السبب: {reason}",
+  "@billingReceiptRejectReason": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "billingTransferredOn": "حُوِّل في {date}",
+  "@billingTransferredOn": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingInvoicesTitle": "الفواتير",
+  "billingInvoiceIssued": "صدرت في {date}",
+  "@billingInvoiceIssued": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingInvoiceRefunded": "مُستردّة",
+  "billingInvoicePartiallyRefunded": "مُستردّة جزئيًا",
+  "billingInvoiceDownload": "تنزيل",
+  "billingRefundedAmount": "استُرِدّ {amount}",
+  "@billingRefundedAmount": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "billingMethodCard": "بطاقة",
+  "billingMethodCash": "نقدًا",
+  "billingTooManyAttempts": "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.",
+  "billingReceiptNotAccepted": "تعذّرت إضافة هذا الإيصال: إما أن المبلغ دُفع أو أُغلق، أو أن هناك إيصالات أخرى ما زالت قيد التحقق."
 }
