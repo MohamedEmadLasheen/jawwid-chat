@@ -36,7 +36,7 @@ claimed. The decision text itself still lives in
 | PD-25 | Parent self-recovery (reset code, forgot email) | `claude/parent-account-recovery-6cd585` | MERGED #112 |
 | PD-26 | The Teacher Supervision page (leaves, absences, lateness, grants, complaints) | `claude/admin-teacher-management-41f08a` | MERGED #108 (renumbered from "PD-24") |
 | PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | MERGED #117 |
-| PD-28 | Teacher web: the Flutter app built for the browser, for teachers | `claude/pd28-teacher-web-fbd19a` | PR #120 (no migration) |
+| PD-28 | Teacher web: the Flutter app built for the browser, for teachers | `claude/pd28-teacher-web-fbd19a` | in progress |
 | PD-29 | Materials: open library by subject and age, practice this week from the lesson report, memorization progress map | `claude/pd29-materials-ef11b4` | in progress |
 | PD-30 | next free number | — | — |
 

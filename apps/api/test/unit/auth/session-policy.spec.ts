@@ -130,6 +130,18 @@ describe('PD-23 policy at login and refresh', () => {
     expect(db.sessions[0]).toMatchObject({ client: 'web', remembered: true });
   });
 
+  it("a teacher's browser session is re-decided at every refresh and keeps the browser limits", async () => {
+    await account('teacher-web-refresh', teacherActor());
+    const first = await auth.login('teacher-web-refresh', PASSWORD, { device: { platform: 'web' }, remember: true });
+    // A refresh names no device and no remember flag: both come back from the row.
+    const second = await auth.refresh(first.refreshToken, { userAgent: 'anything' });
+    const successor = db.sessions.find((s) => s.id === second.sessionId)!;
+    expect(successor).toMatchObject({ client: 'web', remembered: true });
+    expect(second.remembered).toBe(true);
+    near(second.expiresAt, Date.now() + 7 * DAY);
+    near(second.absoluteExpiresAt!, db.sessions[0].authenticatedAt.getTime() + 30 * DAY);
+  });
+
   it('a teacher on the phone keeps 30 days and is never "remembered", even if asked', async () => {
     await account('teacher-app', teacherActor());
     const pair = await auth.login('teacher-app', PASSWORD, { device: { platform: 'android', name: 'Pixel' }, remember: true });
