@@ -21,7 +21,8 @@ describe('PD-29 manifest', () => {
 
   it('the downloadable template parses back into valid rows', () => {
     const rows = parseCsv(manifestTemplate());
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({ path: '/lessons/quran/surah-78', ref: '/lessons/quran/surah-78' });
     for (const r of rows) expect(parseItemRow(r).errors).toEqual([]);
   });
 

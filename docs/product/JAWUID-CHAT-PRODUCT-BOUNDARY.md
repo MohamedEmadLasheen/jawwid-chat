@@ -2583,10 +2583,20 @@ create anything.
 **Final decision.**
 
 ```
-what an item is     a way to PLAY existing material: an https link, one uploaded
-                    file (audio, video, PDF, image), or one uploaded HTML5
-                    package (a zip with index.html; H5P exported as HTML works).
-                    No game engine, no authoring tool. Retired, never deleted
+what an item is     a way to PLAY existing material: a lesson of the academy's
+                    lessons site (its PATH only; the site's base URL is
+                    configuration, MATERIALS_SITE_BASE_URL, so it can move to a
+                    pinned snapshot origin with no migration), an https link,
+                    one uploaded file (audio, video, PDF, image), or one
+                    uploaded HTML5 package (a zip with index.html; H5P exported
+                    as HTML works). No game engine, no authoring tool. Retired,
+                    never deleted
+v1 content          the academy's existing 83 lessons (38 Quran: Al-Fatihah and
+                    Juz' Amma; 10 Arabic reading; 35 Islamic studies), seeded by
+                    the bulk import from docs/product/pd029-seed/ as drafts for
+                    every age. The import is BLOCKED on shared and deployed
+                    environments until the department head clears the lessons
+                    site's security review
 who manages it      the super admin and the Teachers department's manager, on
                     Admin Web (Materials); single items by form, existing
                     libraries by bulk import: a CSV/JSON manifest (one row per
@@ -2612,21 +2622,36 @@ who reads a child   the family, the child's own teacher, staff whose PD-8 scope
                     LESSON_ACTS.correct_memorization
 recitations         from an authorized source, as data: a URL template covering
                     all 114 surahs, overridden per surah by a URL or an uploaded
-                    audio file
-playing             POST /materials/items/:id/open is the access decision. A file
-                    -> a short-lived signed storage URL (streams with Range,
-                    never through the API); a package -> a play URL whose every
-                    file is re-authorized and served with CSP `sandbox
-                    allow-scripts allow-forms` (no allow-same-origin: an opaque
-                    origin with no reach to the app, its storage or a token);
-                    Admin Web previews in an <iframe sandbox="allow-scripts
-                    allow-forms">; the app plays in a WebView pinned to the
-                    package's prefix or the link's host, with no JS channel
-uploads             a grant per file, bound to type and size; the server checks
-                    the real bytes; a zip is read whole and validated (no
+                    audio file. EMPTY in v1 until the owner names the source;
+                    "Listen" is shown only when one is configured
+progress map feed   teacher marks in the lesson report (and corrections) only;
+                    nothing is read from the lessons site
+playing             POST /materials/items/:id/open is the access decision, and it
+                    names how the item is presented:
+                    - a package (OUR origin) -> a 30-minute play URL, every file
+                      re-authorized, served with CSP `sandbox allow-scripts
+                      allow-forms` (never allow-same-origin) and played ONLY in
+                      an iframe with that sandbox or a pinned WebView, never as
+                      a top-level tab
+                    - a lesson of the lessons site, or a link whose origin is in
+                      MATERIALS_FRAME_ORIGINS -> an iframe sandbox EXACTLY
+                      "allow-scripts allow-same-origin allow-forms" (it keeps
+                      its own origin, never ours), referrerpolicy no-referrer;
+                      never allow-popups, allow-top-navigation or allow-modals
+                    - any other https link -> opened in the browser, never framed
+                    - a file -> a short-lived signed storage URL (Range, never
+                      through the API)
+                    The app's WebView pins navigation to the play prefix or the
+                    allowlisted host, with no JS channel
+uploads             a grant per file, bound to type and size; the server first
+                    copies the upload to a key no grant can name (so bytes put
+                    under the grant later are never served), then checks the
+                    copy's real bytes; a zip is read whole and validated (no
                     traversal, absolute path, backslash, symlink, encryption,
-                    zip64 or duplicate; sizes, ratio and CRC verified; types a
-                    page does not need are skipped and never served)
+                    zip64 or duplicate; sizes, ratio and CRC verified; deflated
+                    entries at most 2 MB, so large media is stored and streams by
+                    range; types a page does not need are skipped and never
+                    served)
 ```
 
 **Implementation phase.** Delivered with the decision: migration
@@ -2638,17 +2663,21 @@ report's Practice and Memorization sections (also in the PD-28 teacher web).
 **Consequences.** The report card's text gains a "Practice this week" line. The
 play token is keyed by HMAC(JWT_ACCESS_SECRET, "jawwid/pd029/play-token/v1"),
 never the secret itself. Admin Web's Content-Security-Policy gains `frame-src`
-(the API origin and https:) and the storage origin in `img-src`, for the
-sandboxed preview. A report deleted without resend keeps its marks in the
+listing exactly the API origin and MATERIALS_FRAME_ORIGINS (never a bare
+`https:`), and the storage origin in `img-src`, for the sandboxed preview. The
+API accepts a 6 MB body on the bulk import route only. A report deleted without resend keeps its marks in the
 history; a supervisor corrects them. Surah 19's Arabic name is stored through a
 Unicode escape because its letters are also a name the G-20 guard protects.
 
-**Open questions.** (1) The recitation source: the owner names it; until then
-any source is a template row and per-surah overrides. (2) A raw `.h5p` file
+**Open questions.** (1) The recitation source: the owner names it (the lessons
+hotlink everyayah.com / cdn.islamic.network / mp3quran.net, not yet approved);
+until then none is configured. (2) A raw `.h5p` file
 needs the H5P player; v1 takes HTML5 zips, H5P exported as HTML, or hosted H5P
 embed links -- bundling a player is a possible later step. (3) Serving packages
 from their own hostname in production (defence in depth beyond the CSP sandbox)
-needs one environment variable; not done.
+needs one environment variable; not done. (4) Age bands per lesson (none in
+the content). (5) A completion event from the lessons site (postMessage) to
+feed the map automatically -- a possible v2.
 
 **Deprecated behaviour.** None.
 

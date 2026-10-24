@@ -50,6 +50,7 @@ export function applyInfrastructure(
 ): void {
   applyTrustedProxy(app);
   applyWebhookBodyParser(app);
+  applyMaterialsImportBodyParser(app);
   applyRequestOrigin(app);
   applySecurityHeaders(app);
   applyCors(app, options.allowedOrigins ?? parseOrigins(process.env.CORS_ALLOWED_ORIGINS));
@@ -97,6 +98,52 @@ function applyWebhookBodyParser(app: INestApplication): void {
       } catch {
         req.body = {};
       }
+      next();
+    });
+    req.on('error', next);
+  });
+}
+
+/**
+ * PD-29: the Materials bulk import carries a whole CSV or JSON manifest (up to
+ * 1000 rows), well over the default 100 KB JSON limit. This route alone may
+ * send up to 6 MB; the service then refuses a manifest over 5 MB with a
+ * readable error. Every other route keeps the default limit.
+ */
+function applyMaterialsImportBodyParser(app: INestApplication): void {
+  const LIMIT = 6 * 1024 * 1024;
+  type Req = NodeJS.ReadableStream & {
+    headers: Record<string, string | string[] | undefined>;
+    url?: string;
+    method?: string;
+    body?: unknown;
+    _body?: boolean;
+    destroy(): void;
+  };
+  app.use((req: Req, res: { status(code: number): { end(): void } }, next: (err?: unknown) => void) => {
+    const type = String(req.headers['content-type'] ?? '').toLowerCase();
+    const path = String(req.url ?? '').split('?')[0];
+    if (req.method !== 'POST' || !path.endsWith('/materials/admin/import') || !type.startsWith('application/json')) return next();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let refused = false;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > LIMIT) {
+        if (!refused) res.status(413).end();
+        refused = true;
+        req.destroy();
+      } else chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (refused) return;
+      try {
+        req.body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      } catch {
+        req.body = {};
+      }
+      // Tell the default JSON parser this body is already read.
+      req._body = true;
       next();
     });
     req.on('error', next);
