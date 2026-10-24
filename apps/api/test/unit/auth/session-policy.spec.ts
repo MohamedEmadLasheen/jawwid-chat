@@ -39,13 +39,20 @@ describe('PD-23 session policy table', () => {
     ['staff naming no platform, asking to be remembered', staffActor(), null, true, 'staff_web'],
     ['super admin on the web, asking to be remembered', staffActor({ staffRole: 'super_admin' }), 'web', true, 'super_admin'],
     ['super admin on the app', staffActor({ staffRole: 'super_admin' }), 'app', false, 'super_admin'],
-    ['parent asking to be remembered', contactActor(), 'web', true, 'family_app'],
+    // PD-28: a family account in a browser gets the browser limits, not the phone's 30 days.
+    ['parent on the web, asking to be remembered', contactActor(), 'web', true, 'family_web_remembered'],
+    ['teacher on the web, kept signed in', teacherActor(), 'web', true, 'family_web_remembered'],
+    ['teacher on the web, this tab', teacherActor(), 'web', false, 'family_web'],
+    ['teacher naming no platform, asking to be remembered', teacherActor(), null, true, 'family_app'],
+    ['teacher on the app, asking to be remembered', teacherActor(), 'app', true, 'family_app'],
   ] as const)('%s -> %s', (_label, actor, client, remember, expected) => {
     expect(sessionPolicyFor(actor, client, remember).name).toBe(expected);
   });
 
   it('matches the owner decision of 2026-10-22, limit by limit', () => {
     expect(SESSION_POLICIES.family_app).toMatchObject({ idleSeconds: 30 * 86400, absoluteSeconds: null });
+    expect(SESSION_POLICIES.family_web_remembered).toMatchObject({ idleSeconds: 7 * 86400, absoluteSeconds: 30 * 86400, remembered: true });
+    expect(SESSION_POLICIES.family_web).toMatchObject({ idleSeconds: 12 * 3600, absoluteSeconds: 7 * 86400, remembered: false });
     expect(SESSION_POLICIES.staff_app).toMatchObject({ idleSeconds: 14 * 86400, absoluteSeconds: 30 * 86400 });
     expect(SESSION_POLICIES.staff_web_remembered).toMatchObject({ idleSeconds: 7 * 86400, absoluteSeconds: 30 * 86400, remembered: true });
     expect(SESSION_POLICIES.staff_web).toMatchObject({ idleSeconds: 12 * 3600, absoluteSeconds: 7 * 86400 });
@@ -102,6 +109,33 @@ describe('PD-23 policy at login and refresh', () => {
     expect(pair.remembered).toBe(true);
     near(pair.expiresAt, Date.now() + 7 * DAY);
     near(pair.absoluteExpiresAt!, Date.now() + 30 * DAY);
+  });
+
+  // PD-28: the teacher web portal. Same lifetimes as Admin Web, from the same login route.
+  it('a teacher in a browser gets 12 hours idle and 7 days absolute, this tab only', async () => {
+    await account('teacher-web', teacherActor());
+    const pair = await auth.login('teacher-web', PASSWORD, { device: { platform: 'web', name: 'Chrome on macOS' } });
+    expect(pair.remembered).toBe(false);
+    near(pair.expiresAt, Date.now() + 12 * HOUR);
+    near(pair.absoluteExpiresAt!, Date.now() + 7 * DAY);
+    expect(db.sessions[0]).toMatchObject({ client: 'web', remembered: false });
+  });
+
+  it('a teacher in a browser who asks to be kept signed in gets 7 days idle, 30 days absolute', async () => {
+    await account('teacher-web-kept', teacherActor());
+    const pair = await auth.login('teacher-web-kept', PASSWORD, { device: { platform: 'web' }, remember: true });
+    expect(pair.remembered).toBe(true);
+    near(pair.expiresAt, Date.now() + 7 * DAY);
+    near(pair.absoluteExpiresAt!, Date.now() + 30 * DAY);
+    expect(db.sessions[0]).toMatchObject({ client: 'web', remembered: true });
+  });
+
+  it('a teacher on the phone keeps 30 days and is never "remembered", even if asked', async () => {
+    await account('teacher-app', teacherActor());
+    const pair = await auth.login('teacher-app', PASSWORD, { device: { platform: 'android', name: 'Pixel' }, remember: true });
+    expect(pair.remembered).toBe(false);
+    near(pair.expiresAt, Date.now() + 30 * DAY);
+    expect(pair.absoluteExpiresAt).toBeNull();
   });
 
   it('the super admin is never kept signed in, whatever the client asks', async () => {

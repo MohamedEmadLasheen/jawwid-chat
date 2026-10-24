@@ -13,10 +13,17 @@ import type { Actor } from '../types';
  * | who                         | where                     | idle | absolute |
  * |-----------------------------|---------------------------|------|----------|
  * | parent, teacher             | app                       | 30 d | none     |
+ * | parent, teacher             | web, kept signed in       |  7 d | 30 d     |
+ * | parent, teacher             | web, this tab only        | 12 h |  7 d     |
  * | staff (not super admin)     | app                       | 14 d | 30 d     |
  * | staff (not super admin)     | Admin Web, kept signed in |  7 d | 30 d     |
  * | staff (not super admin)     | Admin Web, this tab only  | 12 h |  7 d     |
  * | super admin                 | anywhere                  | 12 h |  7 d     |
+ *
+ * PD-28 (owner decision 2026-10-24): a teacher may use the app in a browser
+ * (the Flutter web build under /teacher/). A browser gets the browser limits
+ * whoever holds it, the same ones Admin Web has; the 30-day family policy is
+ * for the phone, whose token sits in the keychain, not in web storage.
  *
  * The super admin is never "kept signed in": the strongest account gets the
  * shortest session until it has a second factor (passkeys, PD-23 phase B).
@@ -37,7 +44,14 @@ export type SessionClient = 'app' | 'web';
 
 export interface SessionPolicy {
   /** A stable name, for logs and tests. */
-  readonly name: 'family_app' | 'staff_app' | 'staff_web_remembered' | 'staff_web' | 'super_admin';
+  readonly name:
+    | 'family_app'
+    | 'family_web_remembered'
+    | 'family_web'
+    | 'staff_app'
+    | 'staff_web_remembered'
+    | 'staff_web'
+    | 'super_admin';
   readonly idleSeconds: number;
   readonly absoluteSeconds: number | null;
   /** Whether "keep me signed in" is in effect -- the request, granted or not. */
@@ -46,6 +60,8 @@ export interface SessionPolicy {
 
 export const SESSION_POLICIES = {
   family_app: { name: 'family_app', idleSeconds: 30 * DAY, absoluteSeconds: null, remembered: false },
+  family_web_remembered: { name: 'family_web_remembered', idleSeconds: 7 * DAY, absoluteSeconds: 30 * DAY, remembered: true },
+  family_web: { name: 'family_web', idleSeconds: 12 * HOUR, absoluteSeconds: 7 * DAY, remembered: false },
   staff_app: { name: 'staff_app', idleSeconds: 14 * DAY, absoluteSeconds: 30 * DAY, remembered: false },
   staff_web_remembered: { name: 'staff_web_remembered', idleSeconds: 7 * DAY, absoluteSeconds: 30 * DAY, remembered: true },
   staff_web: { name: 'staff_web', idleSeconds: 12 * HOUR, absoluteSeconds: 7 * DAY, remembered: false },
@@ -60,8 +76,8 @@ export function clientOfPlatform(platform: string | undefined): SessionClient | 
 }
 
 /**
- * The policy for `actor` on `client`. `rememberRequested` is honoured only for
- * staff on the web, and never for the super admin.
+ * The policy for `actor` on `client`. `rememberRequested` is honoured only on
+ * the web, and never for the super admin.
  *
  * A staff login that names no platform gets the STRICTER staff policy (this
  * tab only): a missing field must never buy a longer session.
@@ -71,7 +87,13 @@ export function sessionPolicyFor(
   client: SessionClient | null,
   rememberRequested: boolean,
 ): SessionPolicy {
-  if (actor.kind !== ActorKind.STAFF) return SESSION_POLICIES.family_app;
+  if (actor.kind !== ActorKind.STAFF) {
+    // PD-28: only a login that NAMED the web gets the browser limits. A family
+    // login naming no platform keeps the app policy it always had, so no
+    // existing phone build changes behaviour.
+    if (client !== 'web') return SESSION_POLICIES.family_app;
+    return rememberRequested ? SESSION_POLICIES.family_web_remembered : SESSION_POLICIES.family_web;
+  }
   if (actor.staffRole === StaffRole.SUPER_ADMIN) return SESSION_POLICIES.super_admin;
   if (client === 'app') return SESSION_POLICIES.staff_app;
   if (client === 'web' && rememberRequested) return SESSION_POLICIES.staff_web_remembered;
