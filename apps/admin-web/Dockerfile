@@ -58,10 +58,14 @@ COPY teacher-web/ /usr/share/nginx/html/teacher/
 # STORAGE_ORIGIN: the object store's origin (https://...), the host of the
 # API's signed upload and download URLs. Empty means voice notes upload and
 # play only when the store is served from API_ORIGIN (the local driver).
+# MATERIALS_FRAME_ORIGINS (PD-29): the https origins a Materials link may be
+# framed from (the lessons site), space-separated. Empty: only packages from
+# API_ORIGIN are framed.
 ENV API_ORIGIN="" \
     REALTIME_ORIGIN="" \
     LIVEKIT_ORIGIN="" \
     STORAGE_ORIGIN="" \
+    MATERIALS_FRAME_ORIGINS="" \
     NGINX_PORT=8080
 
 EXPOSE 8080

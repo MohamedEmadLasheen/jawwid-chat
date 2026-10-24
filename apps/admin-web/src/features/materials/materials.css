@@ -1,0 +1,55 @@
+/* PD-29 Materials. The design system's page, card, field and button classes;
+   logical properties only, so it reads the same in Arabic and English. */
+.mt-tabs { margin-block-end: var(--space-3); }
+.mt-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; margin-block-end: var(--space-2); }
+.mt-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-3); }
+.mt-filters .input { flex: 2 1 16rem; min-inline-size: 0; inline-size: auto; }
+.mt-filters .select { flex: 1 1 11rem; min-inline-size: 0; inline-size: auto; }
+.mt-items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.mt-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; }
+.mt-item__body { display: grid; gap: var(--space-1); min-inline-size: 0; }
+.mt-item__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.mt-item__meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); color: var(--text-muted); font-size: var(--fs-sm); }
+.mt-item__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
+.mt-ref { font-family: var(--font-mono, monospace); font-size: var(--fs-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.mt-form { display: grid; gap: var(--space-2); min-inline-size: min(34rem, 80vw); }
+.mt-textarea { min-block-size: 5rem; resize: vertical; }
+.mt-ages, .mt-mode { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+.mt-ages legend, .mt-mode legend { inline-size: 100%; }
+.mt-ages label, .mt-mode label { display: inline-flex; gap: var(--space-1); align-items: center; }
+.mt-ages .field__hint { inline-size: 100%; }
+.mt-frame { display: block; inline-size: 100%; block-size: min(70vh, 40rem); border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
+.mt-browser { display: grid; gap: var(--space-2); justify-items: start; }
+.mt-media { display: block; inline-size: 100%; max-block-size: 60vh; object-fit: contain; }
+.mt-import, .mt-recitations { display: grid; gap: var(--space-3); }
+.mt-intro { margin: 0; color: var(--text-muted); max-inline-size: 60rem; }
+.mt-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.mt-report { overflow-x: auto; }
+.mt-table { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.mt-table th, .mt-table td { text-align: start; vertical-align: top; padding: var(--space-2); border-block-end: 1px solid var(--border); }
+.mt-table__error td { background: color-mix(in srgb, var(--danger, #b42318) 6%, transparent); }
+.mt-source { display: grid; gap: var(--space-2); }
+.mt-subhead { margin: var(--space-2) 0 0; font-size: var(--fs-sm); }
+.mt-tracks { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.mt-tracks li { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.mt-override { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.mt-override .input { flex: 1 1 12rem; min-inline-size: 0; inline-size: auto; }
+.mt-override .select { flex: 1 1 14rem; min-inline-size: 0; inline-size: auto; }
+.mt-add-source { display: grid; gap: var(--space-2); max-inline-size: 40rem; }
+/* The memorization map on the Student Profile. */
+.mt-map { display: grid; gap: var(--space-3); }
+.mt-counts { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.mt-juz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: var(--space-3); align-items: start; }
+.mt-juz { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.mt-juz h4 { margin: 0; font-size: var(--fs-sm); color: var(--text-muted); }
+.mt-surahs { display: flex; flex-wrap: wrap; gap: var(--space-1); list-style: none; margin: 0; padding: 0; }
+.mt-surah { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-1) var(--space-2); background: var(--surface, transparent); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.mt-surah--memorized { border-color: var(--ok, #12805c); background: color-mix(in srgb, var(--ok, #12805c) 12%, transparent); }
+.mt-surah--in_progress { border-color: var(--info, #1f6feb); background: color-mix(in srgb, var(--info, #1f6feb) 10%, transparent); }
+.mt-surah--needs_revision { border-color: var(--warn, #b54708); background: color-mix(in srgb, var(--warn, #b54708) 12%, transparent); }
+.dialog--sheet .mt-form { min-inline-size: 0; }
+.mt-history { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+@media (max-width: 560px) {
+  .mt-item { grid-template-columns: 1fr; }
+  .mt-item__actions { justify-content: flex-start; }
+}

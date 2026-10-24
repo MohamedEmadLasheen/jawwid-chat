@@ -63,10 +63,11 @@ describe('The navigation registry', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
-    // The twenty-one sections, plus Chat (PD-8: where the super admin replies) and
-    // Accounts (PD-21: where every staff role administers accounts).
-    expect(keys).toHaveLength(23)
-    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts'].sort())
+    // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
+    // Accounts (PD-21: where every staff role administers accounts) and
+    // Materials (PD-29: the library the super admin manages).
+    expect(keys).toHaveLength(24)
+    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
     const more = destinations.find((d) => d.key === 'more')!
@@ -97,16 +98,22 @@ describe('The navigation registry', () => {
           // PD-27: Payments likewise.
           ...(!billingReader && visibleAreas(role).includes('payments') ? ['payments'] : []),
           ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
+          // PD-29: Materials waits for the Teachers manager (GET /materials/admin/access).
+          ...(visibleAreas(role).includes('materials') ? ['materials'] : []),
         ]
         expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager, billingReader }).includes(a)), role).toEqual(withheld)
         expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
       }
     }
     // And the super admin's navigation is the portal, not the operator screens
-    // -- except Chat, the one workspace it writes in (PD-8), and Accounts, the
-    // one page every staff role shares (PD-21).
+    // -- except Chat, the one workspace it writes in (PD-8), Accounts, the
+    // one page every staff role shares (PD-21), and Materials, the library it
+    // manages with the Teachers manager (PD-29).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/materials'])
+    // The Teachers manager is offered Materials on the server's word only.
+    expect(destinationsFor('manager', { materialsManager: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).toContain('/materials')
+    expect(destinationsFor('admin', { materialsManager: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).not.toContain('/materials')
   })
 })
 
@@ -215,8 +222,9 @@ describe('The desktop rail', () => {
     expect(more).toHaveAttribute('aria-expanded', 'true')
 
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
-    // 13 + Payments (PD-27, beside Instalments under Operations & performance).
-    expect(within(menu).getAllByRole('link')).toHaveLength(14)
+    // 13 + Payments (PD-27, beside Instalments under Operations & performance)
+    // + Materials (PD-29, under Overview).
+    expect(within(menu).getAllByRole('link')).toHaveLength(15)
     expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'Overview', 'Communication', 'Operations & performance', 'Administration',
     ])
@@ -322,7 +330,8 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getByRole('group', { name: 'الأشخاص والفرق' })).toBeInTheDocument()
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    expect(within(nav).getAllByRole('link')).toHaveLength(23)
+    expect(within(more).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
+    expect(within(nav).getAllByRole('link')).toHaveLength(24)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

@@ -39,6 +39,13 @@ for path in / /index.html /some/deep/link /teacher/ /teacher/index.html /teacher
     *"frame-ancestors 'none'"*) ok "$path CSP with frame-ancestors 'none'" ;;
     *) bad "$path CSP with frame-ancestors 'none' (got: ${csp:-none})" ;;
   esac
+  # PD-29: frame-src names exact origins only -- never a bare scheme or a wildcard.
+  frames="$(printf '%s' "$csp" | tr ';' '\n' | sed -n 's/^ *frame-src //p')"
+  wide=""
+  for src in $frames; do
+    case "$src" in https:|http:|'*'|*'*'*) wide="$wide $src" ;; esac
+  done
+  [ -z "$wide" ] && ok "$path frame-src exact origins only" || bad "$path frame-src too wide:$wide"
   has "$h" '^strict-transport-security: max-age=' && ok "$path HSTS" || bad "$path HSTS missing"
   has "$h" '^x-content-type-options: nosniff' && ok "$path nosniff" || bad "$path nosniff missing"
   has "$h" '^referrer-policy: strict-origin-when-cross-origin' && ok "$path Referrer-Policy" || bad "$path Referrer-Policy missing"

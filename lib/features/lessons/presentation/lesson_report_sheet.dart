@@ -5,6 +5,7 @@ import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import '../../materials/presentation/report_materials_section.dart';
 import '../domain/report_vocab.dart';
 import 'lesson_ticket_sheet.dart';
 
@@ -128,6 +129,9 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
   bool get _editing => widget.editLessonId != null;
   String get _lessonId => widget.editLessonId ?? widget.ticket!.lessonId!;
 
+  /// PD-29: practice this week and the memorization map, sent with the report.
+  late final _materials = ReportMaterialsController(editing: _editing);
+
   @override
   void initState() {
     super.initState();
@@ -172,6 +176,7 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
     _covered.dispose();
     _homework.dispose();
     _note.dispose();
+    _materials.dispose();
     super.dispose();
   }
 
@@ -188,6 +193,8 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
         nextTasks: [for (final c in nextTaskCodes) if (_tasks.contains(c)) c],
         homework: _optional(_homework),
         note: _optional(_note),
+        practice: _materials.draftPractice,
+        memorization: _materials.draftMarks,
       );
 
   Future<void> _submit() async {
@@ -319,6 +326,8 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
                   maxLength: 500,
                   decoration: InputDecoration(labelText: l10n.reportHomeworkDetailsLabel, border: const OutlineInputBorder()),
                 ),
+                // PD-29: what to practise this week, and surah statuses for the map.
+                ReportMaterialsSection(controller: _materials),
                 const SizedBox(height: Spacing.spacing2),
                 TextField(
                   key: const ValueKey('report-note'),

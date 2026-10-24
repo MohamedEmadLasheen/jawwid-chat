@@ -10,6 +10,7 @@ import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/application/chat_realtime.dart';
 import '../features/conversations/presentation/chats_screen.dart';
 import '../features/lessons/presentation/teacher_schedule_screen.dart';
+import '../features/materials/presentation/child_materials_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/messages/presentation/starred_messages_screen.dart';
@@ -118,6 +119,12 @@ abstract final class Routes {
   /// a teacher who is not this child's with a 404 regardless.
   static String studentProfile(String learnerId) => '$studentsPrefix/$learnerId';
   static const studentsPrefix = '/students';
+
+  /// PD-29: one child's Materials (Library, Practice this week, Progress map) -- for the
+  /// family, the child's own teacher and staff the server allows; the server decides.
+  /// `?tab=progress` opens on the map.
+  static String childMaterials(String learnerId, {bool progress = false}) =>
+      '/children/$learnerId/materials${progress ? '?tab=progress' : ''}';
 }
 
 /// Rebuilds on every authentication change, so a session ending immediately evicts every
@@ -270,6 +277,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => FamilyBillingScreen(
           familyId: state.pathParameters['familyId']!,
           familyName: state.extra is String ? state.extra! as String : null,
+        ),
+      ),
+      GoRoute(
+        path: '/children/:learnerId/materials',
+        builder: (context, state) => ChildMaterialsScreen(
+          learnerId: state.pathParameters['learnerId']!,
+          childName: state.extra is String ? state.extra! as String : null,
+          initialTab: state.uri.queryParameters['tab'] == 'progress' ? 2 : 0,
         ),
       ),
       GoRoute(

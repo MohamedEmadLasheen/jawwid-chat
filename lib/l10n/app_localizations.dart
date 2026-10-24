@@ -5592,6 +5592,390 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Voice notes can be recorded in the phone app.'**
   String get voiceNoteWebUnavailable;
+
+  /// PD-29: the child's Materials page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials'**
+  String get materialsTitle;
+
+  /// PD-29: the entry to a child's Materials page.
+  ///
+  /// In en, this message translates to:
+  /// **'Library, practice this week and the memorization map'**
+  String get materialsEntrySubtitle;
+
+  /// PD-29 tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get materialsTabLibrary;
+
+  /// PD-29 tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Practice this week'**
+  String get materialsTabPractice;
+
+  /// PD-29 tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Memorization map'**
+  String get materialsTabProgress;
+
+  /// PD-29 subject filter.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get materialsSubjectAll;
+
+  /// PD-29 subject.
+  ///
+  /// In en, this message translates to:
+  /// **'Quran'**
+  String get materialsSubjectQuran;
+
+  /// PD-29 subject.
+  ///
+  /// In en, this message translates to:
+  /// **'Arabic language'**
+  String get materialsSubjectArabic;
+
+  /// PD-29 subject.
+  ///
+  /// In en, this message translates to:
+  /// **'Islamic studies'**
+  String get materialsSubjectIslamic;
+
+  /// PD-29 Quran strand.
+  ///
+  /// In en, this message translates to:
+  /// **'Memorization'**
+  String get materialsStrandMemorization;
+
+  /// PD-29 Quran strand.
+  ///
+  /// In en, this message translates to:
+  /// **'Recitation'**
+  String get materialsStrandRecitation;
+
+  /// PD-29 Quran strand.
+  ///
+  /// In en, this message translates to:
+  /// **'Word meanings'**
+  String get materialsStrandWordMeanings;
+
+  /// PD-29 Quran strand.
+  ///
+  /// In en, this message translates to:
+  /// **'Tafsir'**
+  String get materialsStrandTafsir;
+
+  /// PD-29 item kind.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get materialsKindActivity;
+
+  /// PD-29 item kind.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get materialsKindAudio;
+
+  /// PD-29 item kind.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get materialsKindVideo;
+
+  /// PD-29 item kind.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF'**
+  String get materialsKindPdf;
+
+  /// PD-29 item kind.
+  ///
+  /// In en, this message translates to:
+  /// **'Picture'**
+  String get materialsKindImage;
+
+  /// PD-29 age filter.
+  ///
+  /// In en, this message translates to:
+  /// **'All ages'**
+  String get materialsAgeAll;
+
+  /// PD-29 an age band, e.g. Ages 7–9.
+  ///
+  /// In en, this message translates to:
+  /// **'Ages {band}'**
+  String materialsAgeBand(String band);
+
+  /// PD-29 the child's own band in the filter.
+  ///
+  /// In en, this message translates to:
+  /// **'{band} · your child\'s age'**
+  String materialsAgeForChild(String band);
+
+  /// PD-29 empty library.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here yet for this subject and age.'**
+  String get materialsLibraryEmpty;
+
+  /// PD-29 load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials could not be loaded.'**
+  String get materialsUnavailable;
+
+  /// PD-29 empty practice.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to practise yet. It appears here when the teacher adds it to a lesson report.'**
+  String get materialsPracticeEmpty;
+
+  /// PD-29 practice older than a week.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing new this week. The latest practice:'**
+  String get materialsPracticeLatest;
+
+  /// PD-29 practice card heading.
+  ///
+  /// In en, this message translates to:
+  /// **'From the lesson of {day}'**
+  String materialsPracticeFrom(String day);
+
+  /// PD-29 an ayah range to practise.
+  ///
+  /// In en, this message translates to:
+  /// **'Surah {surah}, ayahs {from}–{to}'**
+  String materialsAyahRange(String surah, String from, String to);
+
+  /// PD-29 a whole surah to practise.
+  ///
+  /// In en, this message translates to:
+  /// **'Surah {surah}'**
+  String materialsWholeSurah(String surah);
+
+  /// PD-29 play the recitation.
+  ///
+  /// In en, this message translates to:
+  /// **'Listen'**
+  String get materialsListen;
+
+  /// PD-29 a retired item in practice.
+  ///
+  /// In en, this message translates to:
+  /// **'This item is no longer in the library.'**
+  String get materialsItemGone;
+
+  /// PD-29 next-lesson tasks.
+  ///
+  /// In en, this message translates to:
+  /// **'For next lesson'**
+  String get materialsNextTasks;
+
+  /// PD-29 homework.
+  ///
+  /// In en, this message translates to:
+  /// **'Homework'**
+  String get materialsHomework;
+
+  /// PD-29 surah status.
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get materialsStatusNotStarted;
+
+  /// PD-29 surah status.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get materialsStatusInProgress;
+
+  /// PD-29 surah status.
+  ///
+  /// In en, this message translates to:
+  /// **'Memorized'**
+  String get materialsStatusMemorized;
+
+  /// PD-29 surah status.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs revision'**
+  String get materialsStatusNeedsRevision;
+
+  /// PD-29 a juz' heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Juz’ {n}'**
+  String materialsJuz(String n);
+
+  /// PD-29 a surah's history.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get materialsHistory;
+
+  /// PD-29 empty history.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing recorded for this surah yet.'**
+  String get materialsHistoryEmpty;
+
+  /// PD-29 mark source.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson report'**
+  String get materialsSourceReport;
+
+  /// PD-29 mark source.
+  ///
+  /// In en, this message translates to:
+  /// **'Edited report'**
+  String get materialsSourceReportEdit;
+
+  /// PD-29 mark source.
+  ///
+  /// In en, this message translates to:
+  /// **'Correction'**
+  String get materialsSourceCorrection;
+
+  /// PD-29 who marked.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher'**
+  String get materialsByTeacher;
+
+  /// PD-29 who marked (staff, unnamed to families).
+  ///
+  /// In en, this message translates to:
+  /// **'The academy'**
+  String get materialsByAcademy;
+
+  /// PD-29 correct a surah's status.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct'**
+  String get materialsCorrect;
+
+  /// PD-29 correction reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (required)'**
+  String get materialsCorrectReason;
+
+  /// PD-29 open an activity outside the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in browser'**
+  String get materialsOpenExternally;
+
+  /// PD-29 web build.
+  ///
+  /// In en, this message translates to:
+  /// **'The activity opened in a new tab.'**
+  String get materialsOpenedInTab;
+
+  /// PD-29 open failed.
+  ///
+  /// In en, this message translates to:
+  /// **'This could not be opened on this device.'**
+  String get materialsCannotOpen;
+
+  /// PD-29 playback failed.
+  ///
+  /// In en, this message translates to:
+  /// **'This could not be played.'**
+  String get materialsPlayFailed;
+
+  /// PD-29 report section.
+  ///
+  /// In en, this message translates to:
+  /// **'Practice this week'**
+  String get reportPracticeLabel;
+
+  /// PD-29 report action.
+  ///
+  /// In en, this message translates to:
+  /// **'Add ayahs'**
+  String get reportPracticeAddAyahs;
+
+  /// PD-29 report action.
+  ///
+  /// In en, this message translates to:
+  /// **'From the library'**
+  String get reportPracticeAddItem;
+
+  /// PD-29 report edit hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Practice stays as it was unless you change it.'**
+  String get reportPracticeKeep;
+
+  /// PD-29 report section.
+  ///
+  /// In en, this message translates to:
+  /// **'Memorization map'**
+  String get reportMemorizationLabel;
+
+  /// PD-29 report action.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark a surah'**
+  String get reportMemorizationAdd;
+
+  /// PD-29 surah field.
+  ///
+  /// In en, this message translates to:
+  /// **'Surah'**
+  String get reportSurahLabel;
+
+  /// PD-29 ayah field.
+  ///
+  /// In en, this message translates to:
+  /// **'From ayah'**
+  String get reportAyahFrom;
+
+  /// PD-29 ayah field.
+  ///
+  /// In en, this message translates to:
+  /// **'To ayah'**
+  String get reportAyahTo;
+
+  /// PD-29 ayah range error.
+  ///
+  /// In en, this message translates to:
+  /// **'Ayahs 1 to {count}, the first not after the last.'**
+  String reportAyahInvalid(String count);
+
+  /// PD-29 add button.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get reportAdd;
+
+  /// PD-29 item picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the library'**
+  String get reportPickerSearch;
+
+  /// PD-29 item picker.
+  ///
+  /// In en, this message translates to:
+  /// **'No published items match.'**
+  String get reportPickerEmpty;
+
+  /// PD-29: under the correction reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Parents can see this reason.'**
+  String get materialsCorrectReasonHint;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -3178,4 +3178,215 @@ class L10nEn extends L10n {
   @override
   String get voiceNoteWebUnavailable =>
       'Voice notes can be recorded in the phone app.';
+
+  @override
+  String get materialsTitle => 'Materials';
+
+  @override
+  String get materialsEntrySubtitle =>
+      'Library, practice this week and the memorization map';
+
+  @override
+  String get materialsTabLibrary => 'Library';
+
+  @override
+  String get materialsTabPractice => 'Practice this week';
+
+  @override
+  String get materialsTabProgress => 'Memorization map';
+
+  @override
+  String get materialsSubjectAll => 'All';
+
+  @override
+  String get materialsSubjectQuran => 'Quran';
+
+  @override
+  String get materialsSubjectArabic => 'Arabic language';
+
+  @override
+  String get materialsSubjectIslamic => 'Islamic studies';
+
+  @override
+  String get materialsStrandMemorization => 'Memorization';
+
+  @override
+  String get materialsStrandRecitation => 'Recitation';
+
+  @override
+  String get materialsStrandWordMeanings => 'Word meanings';
+
+  @override
+  String get materialsStrandTafsir => 'Tafsir';
+
+  @override
+  String get materialsKindActivity => 'Activity';
+
+  @override
+  String get materialsKindAudio => 'Audio';
+
+  @override
+  String get materialsKindVideo => 'Video';
+
+  @override
+  String get materialsKindPdf => 'PDF';
+
+  @override
+  String get materialsKindImage => 'Picture';
+
+  @override
+  String get materialsAgeAll => 'All ages';
+
+  @override
+  String materialsAgeBand(String band) {
+    return 'Ages $band';
+  }
+
+  @override
+  String materialsAgeForChild(String band) {
+    return '$band · your child\'s age';
+  }
+
+  @override
+  String get materialsLibraryEmpty =>
+      'Nothing here yet for this subject and age.';
+
+  @override
+  String get materialsUnavailable => 'Materials could not be loaded.';
+
+  @override
+  String get materialsPracticeEmpty =>
+      'Nothing to practise yet. It appears here when the teacher adds it to a lesson report.';
+
+  @override
+  String get materialsPracticeLatest =>
+      'Nothing new this week. The latest practice:';
+
+  @override
+  String materialsPracticeFrom(String day) {
+    return 'From the lesson of $day';
+  }
+
+  @override
+  String materialsAyahRange(String surah, String from, String to) {
+    return 'Surah $surah, ayahs $from–$to';
+  }
+
+  @override
+  String materialsWholeSurah(String surah) {
+    return 'Surah $surah';
+  }
+
+  @override
+  String get materialsListen => 'Listen';
+
+  @override
+  String get materialsItemGone => 'This item is no longer in the library.';
+
+  @override
+  String get materialsNextTasks => 'For next lesson';
+
+  @override
+  String get materialsHomework => 'Homework';
+
+  @override
+  String get materialsStatusNotStarted => 'Not started';
+
+  @override
+  String get materialsStatusInProgress => 'In progress';
+
+  @override
+  String get materialsStatusMemorized => 'Memorized';
+
+  @override
+  String get materialsStatusNeedsRevision => 'Needs revision';
+
+  @override
+  String materialsJuz(String n) {
+    return 'Juz’ $n';
+  }
+
+  @override
+  String get materialsHistory => 'History';
+
+  @override
+  String get materialsHistoryEmpty => 'Nothing recorded for this surah yet.';
+
+  @override
+  String get materialsSourceReport => 'Lesson report';
+
+  @override
+  String get materialsSourceReportEdit => 'Edited report';
+
+  @override
+  String get materialsSourceCorrection => 'Correction';
+
+  @override
+  String get materialsByTeacher => 'Teacher';
+
+  @override
+  String get materialsByAcademy => 'The academy';
+
+  @override
+  String get materialsCorrect => 'Correct';
+
+  @override
+  String get materialsCorrectReason => 'Reason (required)';
+
+  @override
+  String get materialsOpenExternally => 'Open in browser';
+
+  @override
+  String get materialsOpenedInTab => 'The activity opened in a new tab.';
+
+  @override
+  String get materialsCannotOpen => 'This could not be opened on this device.';
+
+  @override
+  String get materialsPlayFailed => 'This could not be played.';
+
+  @override
+  String get reportPracticeLabel => 'Practice this week';
+
+  @override
+  String get reportPracticeAddAyahs => 'Add ayahs';
+
+  @override
+  String get reportPracticeAddItem => 'From the library';
+
+  @override
+  String get reportPracticeKeep =>
+      'Practice stays as it was unless you change it.';
+
+  @override
+  String get reportMemorizationLabel => 'Memorization map';
+
+  @override
+  String get reportMemorizationAdd => 'Mark a surah';
+
+  @override
+  String get reportSurahLabel => 'Surah';
+
+  @override
+  String get reportAyahFrom => 'From ayah';
+
+  @override
+  String get reportAyahTo => 'To ayah';
+
+  @override
+  String reportAyahInvalid(String count) {
+    return 'Ayahs 1 to $count, the first not after the last.';
+  }
+
+  @override
+  String get reportAdd => 'Add';
+
+  @override
+  String get reportPickerSearch => 'Search the library';
+
+  @override
+  String get reportPickerEmpty => 'No published items match.';
+
+  @override
+  String get materialsCorrectReasonHint => 'Parents can see this reason.';
 }
