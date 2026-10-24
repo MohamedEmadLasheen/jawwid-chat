@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-27 — CLOSED
+## 4. Product decisions PD-1 to PD-28 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -146,6 +146,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-25 was closed by the product owner on 2026-10-22** (a parent recovers their own account: forgot password, forgot e-mail). It builds on PD-21's reset code.
 **PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 **PD-27 was closed by the product owner on 2026-10-22** (payments: payment links, card payments through Stripe, bank-transfer receipts, cash, invoices, instalment reminders). It builds on PD-17.
+**PD-28 was closed by the product owner on 2026-10-24** (teachers use their portal in a laptop browser: the same app and the same account, teacher-only on the web for now). It extends PD-23's browser session rules to teachers.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -176,6 +177,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-25** | **A parent recovers their own account** (2026-10-22) | **CLOSED** — from the app's sign-in screen: forgot password = a one-time code e-mailed to the sign-in address; forgot e-mail = a one-time code by WhatsApp to the phone in the parent file, then the sign-in e-mail is shown; both end in PD-21's reset; parents only; nothing says whether an account exists. Record: `../admin/pd025-parent-self-recovery.md` |
 | **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 | **PD-27** | **Payments: links, card, bank transfer, cash, invoices, reminders** (2026-10-22) | **CLOSED** — a payment request carries a unique link that works before the parent has an account; card payments through Stripe Checkout are recorded only from a verified webhook, exactly once; parents upload bank-transfer receipts that staff approve or reject with a reason; staff record cash; instalments may be paid in part and by several methods; every payment issues a numbered invoice the parent downloads as a PDF; a trial's payments move onto the family at Assign; append-only, audited, reminders before and after the due date |
+| **PD-28** | **The teacher portal in a browser** (2026-10-24) | **CLOSED** — a teacher signs in at Admin Web's address under `/teacher/` with the same account and gets the same portal as on the phone (the Flutter app built for the web, nothing rebuilt); only teachers on the web for now, everyone else is told to use the app (or Admin Web for staff); the browser keeps the session as Admin Web does (this tab only, or "keep me signed in" on this device) with Admin Web's lifetimes (12 h / 7 d, kept signed in 7 d / 30 d); no push, app lock or voice-note recording in the browser. Record: `../mobile/teacher-web-portal.md` |
 
 ---
 
@@ -2504,7 +2506,66 @@ payments; an instalment paid only whole, in one go.
 
 ---
 
-### Decisions still open after PD-1 to PD-27
+### PD-28 · The teacher portal in a browser
+
+**Closed 2026-10-24** by the product owner. Extends PD-23 (browser session rules
+now apply to a teacher in a browser, not only to staff on Admin Web).
+
+The owner's request of 2026-10-24: teachers should reach their portal from a
+laptop, "like the admin account", with the simplest and fastest solution that
+reuses what exists.
+
+**Final decision.**
+
+```
+what                the existing Flutter app (lib/), built for the web; the same
+                    screens, the same API, the same account -- no second client
+where               the Admin Web address, under /teacher/, served by the same
+                    nginx container (ADR-011); one image, one deploy
+who                 teachers only, for now. Any other account that signs in in a
+                    browser sees "The web portal is for teachers" -- parents are
+                    pointed at the phone app, staff at Admin Web -- and a sign-out
+                    button; nothing else is loaded for it. The phone builds are
+                    unchanged for every role. (A screen choice, not an access
+                    control: the server decides every request as it always has.)
+session             as Admin Web (PD-23 §4): the access token in memory only; the
+                    refresh token in sessionStorage (this tab), or in localStorage
+                    with "Keep me signed in on this device" (offered only where the
+                    Web Locks API exists, and every refresh then runs under one
+                    lock so two tabs never present the same token)
+lifetimes           a login that names the web gets the browser limits whoever
+                    holds it: 12 h idle / 7 d absolute, kept signed in 7 d / 30 d
+                    (policies family_web / family_web_remembered beside
+                    staff_web / staff_web_remembered; the super admin is
+                    unchanged). The phone's 30 days are untouched.
+devices             the browser signs in as "Chrome on macOS" (Admin Web's rule)
+not in a browser    push notifications (no APNs/FCM; realtime while the tab is
+                    open); the app lock (no Face ID / passcode prompt); recording
+                    voice notes (a browser records WebM/Opus, which the iPhone app
+                    cannot play); CallKit. Playing voice notes, attachments,
+                    photos, files and voice calls (LiveKit) work.
+time zone           the browser's own zone (PD-22 "Set automatically"), or a zone
+                    picked by hand, as on the phone
+```
+
+**Implementation phase.** Delivered with the decision (PR for
+`claude/pd28-teacher-web-fbd19a`); no migration. The build and serving recipe is
+`../mobile/teacher-web-portal.md`.
+
+**Consequences.** The deploy workflows build the Flutter web bundle before the
+Admin Web image. `/teacher/` has its own Content-Security-Policy, Admin Web's
+plus `'wasm-unsafe-eval'` (CanvasKit is WebAssembly) and `blob:` / `data:` in
+`connect-src` (picked files are read through their `blob:` URL); Admin Web's own
+policy is unchanged. The API's CORS `allowedHeaders` gains `X-Idempotency-Key`, which
+the app has always sent and which only a browser checks.
+
+**Deprecated behaviour.** "Teachers have only the phone app."
+
+**Closed.** 2026-10-24.
+
+---
+
+### Decisions still open after PD-1 to PD-28
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
