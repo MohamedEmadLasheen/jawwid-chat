@@ -16,6 +16,7 @@ import 'package:jawwid_chat/design/widgets/jawwid_avatar.dart';
 import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/profile/data/profile_photo_repository.dart';
+import 'package:jawwid_chat/features/profile/presentation/profile_screen.dart';
 import 'package:jawwid_chat/features/settings/presentation/settings_screen.dart';
 import 'package:jawwid_chat/features/teacher_profile/presentation/teacher_profile_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
@@ -791,14 +792,29 @@ void main() {
     });
   });
 
-  group('the Settings entry is a teacher-only door', () {
-    testWidgets('a teacher sees Professional profile', (tester) async {
+  // Owner 2026-10-24: one profile screen. A teacher's own row at the top of
+  // Settings opens it; there is no second "Professional profile" entry.
+  group('a teacher has one profile', () {
+    testWidgets('Settings has no separate Professional profile row', (tester) async {
       await pumpScreen(tester, harness(
           repository: FakeTeacherProfileRepository(),
           child: const SettingsScreen(),
         ));
 
-      expect(find.text('Professional profile'), findsOneWidget);
+      expect(find.text('Professional profile'), findsNothing);
+    });
+
+    testWidgets('My account, for a teacher, IS the professional profile: one photo, name, role, sections', (tester) async {
+      await pumpScreen(tester, harness(
+          repository: FakeTeacherProfileRepository(),
+          child: const MyAccountScreen(),
+        ));
+
+      expect(find.byType(TeacherProfileScreen), findsOneWidget);
+      expect(find.text('My profile'), findsOneWidget);
+      // One avatar on the screen, and no second "Profile photo" section.
+      expect(find.byType(JawwidAvatar), findsOneWidget);
+      expect(find.text('Profile photo'), findsNothing);
     });
 
     testWidgets('a parent does not', (tester) async {

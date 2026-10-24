@@ -20,6 +20,7 @@ import '../../conversations/application/conversations_controller.dart';
 import '../../conversations/application/open_direct_controller.dart';
 import '../../lessons/presentation/child_progress_card.dart';
 import '../../lessons/presentation/group_children_section.dart';
+import '../../teacher_profile/presentation/teacher_profile_screen.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_view.dart';
 import 'profile_photos_section.dart';
@@ -92,11 +93,16 @@ class ConversationProfileScreen extends ConsumerWidget {
 /// A separate entry point from [ConversationProfileScreen] on purpose: "my account" and
 /// "someone else's profile" are different things with different audiences, and collapsing
 /// them into one screen with a flag is how a viewer check eventually gets missed.
+///
+/// A TEACHER has one profile screen, not two (owner 2026-10-24): their account IS
+/// their professional profile -- one photo, name, role, then what families read --
+/// so this route shows [TeacherProfileScreen].
 class MyAccountScreen extends ConsumerWidget {
   const MyAccountScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(currentRoleProvider) == UserRole.teacher) return const TeacherProfileScreen();
     final l10n = L10n.of(context);
     final state = ref.watch(myAccountProvider);
 
@@ -114,6 +120,10 @@ class MyAccountScreen extends ConsumerWidget {
         // so the controls would offer only a failure.
         AsyncData(:final value) => ProfileBody(
             view: value,
+            // The one photo, from the one place it is kept (`GET /me/photo`): the
+            // session's user carries none, so this header used to show initials
+            // even after a photo was set.
+            headerAvatarUrl: ref.watch(myPhotosProvider).value?.avatarUrl ?? value.subject.avatarUrl,
             actions: [
               if (ref.watch(currentRoleProvider) != UserRole.sales)
                 ProfilePhotosSection(displayName: value.subject.displayName),
@@ -126,9 +136,12 @@ class MyAccountScreen extends ConsumerWidget {
 
 /// The shared body: header, then whatever sections this viewer is entitled to.
 class ProfileBody extends ConsumerWidget {
-  const ProfileBody({super.key, required this.view, this.actions = const []});
+  const ProfileBody({super.key, required this.view, this.actions = const [], this.headerAvatarUrl});
 
   final ProfileView view;
+
+  /// The viewer's own photo on their own account, read fresh; null elsewhere.
+  final String? headerAvatarUrl;
 
   /// Conversation-scoped controls, rendered under the header. Empty on an
   /// account profile, which has no conversation to act on.
@@ -141,7 +154,7 @@ class ProfileBody extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: Spacing.spacing9),
       children: [
-        ProfileHeader(view: view),
+        ProfileHeader(view: view, avatarUrl: headerAvatarUrl),
 
         if (actions.isNotEmpty) ...[
           const ProfileDivider(),
@@ -272,9 +285,12 @@ class ProfileBody extends ConsumerWidget {
 
 /// Large avatar, name, and one quiet line of role or context.
 class ProfileHeader extends StatelessWidget {
-  const ProfileHeader({super.key, required this.view});
+  const ProfileHeader({super.key, required this.view, this.avatarUrl});
 
   final ProfileView view;
+
+  /// Overrides the subject's photo link (own account: the fresh one).
+  final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -300,7 +316,7 @@ class ProfileHeader extends StatelessWidget {
         children: [
           JawwidAvatar(
             displayName: view.subject.displayName,
-            imageUrl: view.subject.avatarUrl,
+            imageUrl: avatarUrl ?? view.subject.avatarUrl,
             size: Sizes.avatarXl,
           ),
           const SizedBox(height: Spacing.spacing5),

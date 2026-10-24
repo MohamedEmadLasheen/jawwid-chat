@@ -14,6 +14,7 @@ import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../app_lock/application/app_lock_controller.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
+import '../../profile/presentation/profile_photos_section.dart';
 import '../application/theme_mode_controller.dart';
 import 'date_time_screen.dart';
 
@@ -68,7 +69,9 @@ class SettingsScreen extends ConsumerWidget {
                       children: [
                         JawwidAvatar(
                           displayName: user.displayName,
-                          imageUrl: user.avatarUrl,
+                          // The one photo, from where it is kept (`GET /me/photo`);
+                          // the session's user carries none.
+                          imageUrl: ref.watch(myPhotosProvider).value?.avatarUrl ?? user.avatarUrl,
                           size: Sizes.avatarLg,
                         ),
                         const SizedBox(width: Spacing.spacing4),
@@ -111,18 +114,9 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-          // Teachers only. A parent has no professional profile in this
-          // product, so the row is ABSENT for them rather than present and
-          // refused -- the same rule the rest of this app follows for an
-          // affordance with nothing behind it.
-          if (user != null && user.isTeacher)
-            ListTile(
-              leading: const Icon(Icons.workspace_premium_outlined),
-              title: Text(l10n.teacherProfileSettingsEntry),
-              subtitle: Text(l10n.teacherProfileSettingsSubtitle),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push(Routes.teacherProfile),
-            ),
+          // A teacher has ONE profile (owner 2026-10-24): the row above opens it --
+          // photo, name, role and the professional sections families read. There is
+          // no second "Professional profile" row and no second photo upload.
           // Parent only, and deliberately a SEPARATE row from the identity header above.
           //
           // The header opens My account, a read-only summary both roles share. This opens

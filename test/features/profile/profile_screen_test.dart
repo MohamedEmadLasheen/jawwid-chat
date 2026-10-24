@@ -7,6 +7,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/app/shells/app_shell.dart';
 import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
+import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/design/widgets/jawwid_avatar.dart';
@@ -15,6 +16,7 @@ import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/conversations/presentation/chats_screen.dart';
 import 'package:jawwid_chat/features/conversations/presentation/conversation_tile.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
+import 'package:jawwid_chat/features/profile/data/profile_photo_repository.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_photos_section.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_sections.dart';
@@ -30,6 +32,7 @@ void main() {
     required Widget child,
     Locale locale = const Locale('en'),
     bool superAdmin = false,
+    String? photoUrl,
   }) {
     final backend = FakeBackend(role: role);
     addTearDown(backend.dispose);
@@ -37,6 +40,7 @@ void main() {
     return ProviderScope(
       overrides: [
         currentRoleProvider.overrideWithValue(role),
+        if (photoUrl != null) profilePhotoRepositoryProvider.overrideWithValue(_OnePhoto(photoUrl)),
         conversationRepositoryProvider
             .overrideWithValue(FakeConversationRepository(backend)),
         messageRepositoryProvider
@@ -260,6 +264,27 @@ void main() {
     });
   });
 
+  // Owner 2026-10-24: "uploaded photos don't show". The photo is kept in one place
+  // (`/me/photo`, written by `/me/avatar`), but Settings and My account read the
+  // session's user, which carries none -- so they showed initials after an upload.
+  group('my own photo shows wherever my own face is drawn', () {
+    const url = 'https://api.example/media/avatars/contact.p1.self?s=sig&k=abcd1234';
+    String? avatarIn(WidgetTester tester, Finder scope) =>
+        tester.widget<JawwidAvatar>(find.descendant(of: scope, matching: find.byType(JawwidAvatar)).first).imageUrl;
+
+    testWidgets('the Settings row', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.parent, photoUrl: url, child: const SettingsScreen()));
+      await tester.pumpAndSettle();
+      expect(avatarIn(tester, find.byType(SettingsScreen)), url);
+    });
+
+    testWidgets('the My account header', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.parent, photoUrl: url, child: const MyAccountScreen()));
+      await tester.pumpAndSettle();
+      expect(avatarIn(tester, find.byType(ProfileHeader)), url);
+    });
+  });
+
   group('Settings offers exactly one way into my account', () {
     testWidgets('the identity row is the entry point, and there is only one',
         (tester) async {
@@ -395,4 +420,22 @@ class _SignedIn extends AuthController {
 
   @override
   AuthState build() => AuthAuthenticated(_user);
+}
+
+class _OnePhoto implements ProfilePhotoRepository {
+  _OnePhoto(this.url);
+
+  final String url;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<MyPhotos> mine() async => MyPhotos(avatarUrl: url);
+
+  @override
+  Future<String?> set(PendingAttachment photo, {String? childId}) async => url;
+
+  @override
+  Future<void> remove({String? childId}) async {}
 }
