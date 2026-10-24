@@ -7,8 +7,8 @@
 #
 # Every HTML entry point -- Admin Web's / and /index.html, a deep link, and the
 # teacher portal's /teacher/ and /teacher/index.html -- must carry the CSP
-# (with frame-ancestors 'none': the console must not be framable), HSTS and
-# nosniff. nginx drops a server block's add_header in any location that has an
+# (with frame-ancestors 'none': the console must not be framable), HSTS,
+# nosniff and Referrer-Policy. nginx drops a server block's add_header in any location that has an
 # add_header of its own, so one innocent per-location header removes all of
 # them without an error; Admin Web's index.html shipped that way until PD-28.
 # This catches it however it comes back.
@@ -41,6 +41,7 @@ for path in / /index.html /some/deep/link /teacher/ /teacher/index.html /teacher
   esac
   has "$h" '^strict-transport-security: max-age=' && ok "$path HSTS" || bad "$path HSTS missing"
   has "$h" '^x-content-type-options: nosniff' && ok "$path nosniff" || bad "$path nosniff missing"
+  has "$h" '^referrer-policy: strict-origin-when-cross-origin' && ok "$path Referrer-Policy" || bad "$path Referrer-Policy missing"
   case "$path" in
     /teacher/*)
       case "$csp" in *"'wasm-unsafe-eval'"*) ok "$path portal policy (wasm)" ;; *) bad "$path portal policy lacks 'wasm-unsafe-eval'" ;; esac
