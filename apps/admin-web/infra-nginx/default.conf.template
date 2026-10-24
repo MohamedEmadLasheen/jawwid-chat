@@ -1,6 +1,28 @@
 # Admin Web static hosting. Owner: AI #7 (infrastructure).
 # Rendered by the nginx image's envsubst at container start.
 
+# PD-28: one policy per app on this origin. Admin Web keeps its policy byte for
+# byte; the teacher portal under /teacher/ (the Flutter web build, see
+# docs/mobile/teacher-web-portal.md) gets a copy with exactly three additions:
+#
+#   script-src 'wasm-unsafe-eval'   CanvasKit, Flutter's renderer, is WebAssembly,
+#                                   and compiling ANY WebAssembly under a CSP needs
+#                                   this keyword. It allows WebAssembly only -- not
+#                                   eval(), not inline script; script-src stays 'self'.
+#   connect-src blob: data:         the portal reads a picked photo or file through
+#                                   its blob: URL (the browser's handle on it) to
+#                                   upload it, and Flutter decodes images and the
+#                                   bundled fonts by fetching them.
+#   img-src API + store             Flutter fetches images itself (connect-src); the
+#                                   same origins in img-src cover its <img> fallback.
+#
+# No third-party host is added: CanvasKit and the fonts are served from /teacher/
+# (`--no-web-resources-cdn`), never from gstatic.
+map $uri $jawwid_csp {
+    ~^/teacher(/|$)  "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob: data: ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
+    default          "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
+}
+
 server {
     listen       ${NGINX_PORT};
     server_name  _;
@@ -30,8 +52,8 @@ server {
     # host of the API's signed upload URLs). media-src adds the API and the
     # store, which serve the signed URLs a voice note plays from.
     # A wildcard here would let injected script exfiltrate customer messages to
-    # any host it liked.
-    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'" always;
+    # any host it liked. The policy itself is chosen per app by the map above.
+    add_header Content-Security-Policy $jawwid_csp always;
 
     gzip on;
     gzip_types text/plain text/css application/javascript application/json image/svg+xml;
@@ -57,6 +79,25 @@ server {
     location = /index.html {
         add_header Cache-Control "no-store, must-revalidate" always;
         try_files $uri =404;
+    }
+
+    # PD-28: the teacher web portal. Its file names carry no content hash, so
+    # nothing here is cached without asking: `expires -1` sends
+    # `Cache-Control: no-cache`, every file is revalidated with its ETag (a 304
+    # when unchanged), and a new deploy is picked up on the next load. It is
+    # `expires`, not `add_header`, on purpose: an add_header in a location drops
+    # every add_header of the server block, the CSP and HSTS among them. Unknown paths fall back to the portal's own index.html; it routes
+    # with #-URLs, so the fallback only ever serves a reload or a mistyped path.
+    # `=404` (not a redirect) when no portal is in the image, so a local Admin Web
+    # image without one answers 404 instead of looping.
+    location = /teacher {
+        absolute_redirect off;
+        return 301 /teacher/;
+    }
+
+    location /teacher/ {
+        expires -1;
+        try_files $uri $uri/index.html /teacher/index.html =404;
     }
 
     # SPA routing: unknown paths are client routes, not 404s.

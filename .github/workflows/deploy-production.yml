@@ -99,6 +99,13 @@ jobs:
           docker buildx imagetools inspect "$IMAGE" >/dev/null \
             || { echo "::error::$IMAGE does not exist -- deploy this commit to staging first"; exit 1; }
 
+      - name: Install Flutter for the teacher web portal (PD-28)
+        # Pinned to the version pubspec.yaml is developed against, from
+        # Flutter's own repository; no third-party action.
+        run: |
+          git clone --quiet --depth 1 --branch 3.47.2 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+
       - id: build
         name: Build and push the Admin Web image
         env:
@@ -116,6 +123,11 @@ jobs:
           case "${host%/}" in
             */*) echo "::error::vars.PRODUCTION_API_BASE_URL must be the API origin, with no path"; exit 1 ;;
           esac
+          # PD-28: the teacher web portal -- the Flutter app built for the browser
+          # against the same API -- goes into the image under /teacher/. Built
+          # before the image because it needs the repository root.
+          FLUTTER="$RUNNER_TEMP/flutter/bin/flutter" \
+            scripts/mobile/build-teacher-web.sh "${API_BASE_URL%/}/api/v1"
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/admin-web"
           # Rebuilt on every production deploy, rollbacks included (ADR-006,
           # ADR-011): the bundle carries the production URLs.

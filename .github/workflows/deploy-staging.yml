@@ -96,6 +96,14 @@ jobs:
           docker push "$IMAGE:${GITHUB_SHA}"
           docker push "$IMAGE:staging"
 
+      - name: Install Flutter for the teacher web portal (PD-28)
+        if: inputs.image_tag == ''
+        # Pinned to the version pubspec.yaml is developed against, from
+        # Flutter's own repository; no third-party action.
+        run: |
+          git clone --quiet --depth 1 --branch 3.47.2 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+
       - name: Build and push Admin Web image
         if: inputs.image_tag == ''
         env:
@@ -116,6 +124,11 @@ jobs:
           # Both are compiled into the bundle. Unguarded, a missing realtime URL
           # builds and ships a staging Admin Web that silently cannot connect.
           test -n "$REALTIME_URL" || { echo "::error::vars.STAGING_REALTIME_URL is not set"; exit 1; }
+          # PD-28: the teacher web portal -- the Flutter app built for the browser
+          # against the same API -- goes into the image under /teacher/. Built
+          # before the image because it needs the repository root.
+          FLUTTER="$RUNNER_TEMP/flutter/bin/flutter" \
+            scripts/mobile/build-teacher-web.sh "${API_BASE_URL%/}/api/v1"
           IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/admin-web"
           # These values are compiled into the browser bundle, so the image is
           # environment-specific and is never promoted to production.
