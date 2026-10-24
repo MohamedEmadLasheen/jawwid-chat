@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/models/parent_billing.dart';
 import '../../errors/app_error.dart';
@@ -54,7 +54,7 @@ class HttpBillingRepository implements BillingRepository {
       );
     }
 
-    final bytes = await File(file.filePath).readAsBytes();
+    final bytes = await XFile(file.filePath).readAsBytes();
     // Storage signed this exact length; a different one would be an opaque 403.
     if (bytes.length != file.byteSize) {
       throw const AppError(

@@ -72,6 +72,7 @@ class HttpAuthRepository implements AuthRepository {
   Future<AuthSession> signIn({
     required String username,
     required String password,
+    bool remember = false,
   }) async {
     final description = await _device.describe();
 
@@ -84,10 +85,13 @@ class HttpAuthRepository implements AuthRepository {
         // describe itself. A wrong platform string is silently dropped by `AuthService`,
         // which would cost the user the device row they later read their sessions from.
         if (description != null) 'device': description.toWire(),
+        // PD-23, sent only when asked: the server honours it on the web alone.
+        if (remember) 'remember': true,
       },
     );
 
-    return _session(response.data);
+    // A login is the one answer that says where the session is kept (PD-28 browser store).
+    return _session(response.data, fromLogin: true);
   }
 
   @override
@@ -195,7 +199,7 @@ class HttpAuthRepository implements AuthRepository {
   Stream<void> get sessionRevoked => const Stream<void>.empty();
 
   /// `TokenPairDto` -> [AuthSession].
-  static AuthSession _session(Map<String, Object?>? body) {
+  static AuthSession _session(Map<String, Object?>? body, {bool fromLogin = false}) {
     final access = body?['accessToken'];
     final refresh = body?['refreshToken'];
     final expiresIn = body?['expiresIn'];
@@ -226,7 +230,15 @@ class HttpAuthRepository implements AuthRepository {
       accessToken: access,
       refreshToken: refresh,
       accessTokenExpiresAt: DateTime.now().add(Duration(seconds: seconds)),
+      // Read from a login only; a refresh never moves the session (see AuthSession.remembered).
+      // Anything but a literal true is false: a missing field never buys a longer session.
+      remembered: fromLogin ? _remembered(body) : null,
     );
+  }
+
+  static bool _remembered(Map<String, Object?>? body) {
+    final session = body?['session'];
+    return session is Map && session['remembered'] == true;
   }
 
   /// `ActorDto` -> [AuthUser], including the role decision.

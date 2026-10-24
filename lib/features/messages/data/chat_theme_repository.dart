@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:cross_file/cross_file.dart';
 
 import '../../../core/data/http/attachment_uploader.dart';
 import '../../../core/data/repositories.dart';
@@ -69,7 +69,7 @@ class HttpChatThemeRepository implements ChatThemeRepository {
         debugDetail: 'wallpaper upload authorization carried no objectKey or uploadUrl',
       );
     }
-    final bytes = await File(photo.filePath).readAsBytes();
+    final bytes = await XFile(photo.filePath).readAsBytes();
     final headers = <String, String>{};
     final raw = grant?['headers'];
     if (raw is Map) {

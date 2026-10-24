@@ -46,6 +46,12 @@ FROM nginx:1.27-alpine AS runtime
 # and realtime origins instead of being loosened to a wildcard.
 COPY infra-nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
+# PD-28: the teacher web portal, built beforehand by
+# scripts/mobile/build-teacher-web.sh into teacher-web/ (the Flutter app needs the
+# repository root, which is not this image's build context). Without that step
+# only the placeholder is copied and /teacher/ answers 404; the deploy workflows
+# always run it.
+COPY teacher-web/ /usr/share/nginx/html/teacher/
 
 # LIVEKIT_ORIGIN: the media server the call screen connects to (wss://...),
 # from the API's LIVEKIT_URL. Empty means calls cannot connect media.

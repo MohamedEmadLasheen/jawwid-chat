@@ -3188,4 +3188,21 @@ class L10nAr extends L10n {
   @override
   String get billingReceiptNotAccepted =>
       'تعذّرت إضافة هذا الإيصال: إما أن المبلغ دُفع أو أُغلق، أو أن هناك إيصالات أخرى ما زالت قيد التحقق.';
+
+  @override
+  String get signInKeepSignedIn => 'إبقائي مسجّلًا للدخول على هذا الجهاز';
+
+  @override
+  String get webPortalTitle => 'بوابة الويب مخصّصة للمعلمين';
+
+  @override
+  String get webPortalFamilyBody => 'برجاء استخدام تطبيق جَوِّد على هاتفك.';
+
+  @override
+  String get webPortalStaffBody =>
+      'برجاء استخدام لوحة التحكم (Admin Web)، أو تطبيق جَوِّد على هاتفك.';
+
+  @override
+  String get voiceNoteWebUnavailable =>
+      'يمكن تسجيل الرسائل الصوتية من تطبيق الهاتف.';
 }

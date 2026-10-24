@@ -436,6 +436,25 @@ jobs:
             --build-arg VITE_REALTIME_URL=wss://api.ci.invalid \
             -t jawwid-chat-admin:${{ github.sha }} apps/admin-web
 
+      - name: Admin Web serves its security headers on every entry point
+        # nginx drops a server block's add_header in any location with one of
+        # its own; Admin Web's index.html shipped without a CSP or HSTS that
+        # way until PD-28. Asserted on the real image: /, /index.html, a deep
+        # link and the teacher portal's /teacher/ (a stand-in index.html here;
+        # the real Flutter bundle is built by the deploy workflows).
+        run: |
+          mkdir -p ci-teacher-web
+          printf '<!doctype html><title>teacher portal stand-in</title>\n' > ci-teacher-web/index.html
+          cid="$(docker run -d -p 127.0.0.1:8099:8080 \
+            -e API_ORIGIN=https://api.ci.invalid -e REALTIME_ORIGIN=wss://api.ci.invalid \
+            -v "$PWD/ci-teacher-web:/usr/share/nginx/html/teacher:ro" \
+            jawwid-chat-admin:${{ github.sha }})"
+          for _ in $(seq 1 20); do curl -sf http://127.0.0.1:8099/healthz >/dev/null && break; sleep 1; done
+          status=0
+          scripts/infra/check-web-headers.sh http://127.0.0.1:8099 || status=$?
+          docker rm -f "$cid" >/dev/null
+          exit "$status"
+
   # ------------------------------------------------------------- dependencies
   # AI #7. Advisory: a transitive advisory with no fix available must not block
   # an unrelated bugfix. Promoting this to blocking is AI #5's gate decision.

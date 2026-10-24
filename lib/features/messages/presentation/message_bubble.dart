@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/media/local_image.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
@@ -841,8 +840,8 @@ class _PhotoAttachment extends StatelessWidget {
     if (url == null || url.isEmpty) return const _AttachmentUnavailable();
 
     if (attachment.isLocal) {
-      return Image.file(
-        File(url),
+      return Image(
+        image: localImageProvider(url),
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => const _AttachmentUnavailable(),
       );

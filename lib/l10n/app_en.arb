@@ -1897,5 +1897,25 @@
   "billingReceiptNotAccepted": "This receipt can't be added: the amount is already paid or closed, or other receipts are still waiting to be checked.",
   "@billingReceiptNotAccepted": {
     "description": "PD-27: Settings -> Payments."
+  },
+  "signInKeepSignedIn": "Keep me signed in on this device",
+  "@signInKeepSignedIn": {
+    "description": "PD-28: web portal sign-in checkbox (PD-23 'keep me signed in'). Only shown in a browser."
+  },
+  "webPortalTitle": "The web portal is for teachers",
+  "@webPortalTitle": {
+    "description": "PD-28: shown in the browser to a signed-in account that is not a teacher."
+  },
+  "webPortalFamilyBody": "Please use the Jawwid app on your phone.",
+  "@webPortalFamilyBody": {
+    "description": "PD-28: the web portal refusal, for a parent."
+  },
+  "webPortalStaffBody": "Please use Admin Web, or the Jawwid app on your phone.",
+  "@webPortalStaffBody": {
+    "description": "PD-28: the web portal refusal, for a staff member."
+  },
+  "voiceNoteWebUnavailable": "Voice notes can be recorded in the phone app.",
+  "@voiceNoteWebUnavailable": {
+    "description": "PD-28: shown in the browser instead of starting a recording."
   }
 }

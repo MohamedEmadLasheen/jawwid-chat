@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../../core/audio/voice_recorder.dart';
@@ -251,7 +252,8 @@ class VoiceFailureNotice extends StatelessWidget {
 
     final text = switch (failure) {
       VoiceRecorderFailure.permissionDenied => l10n.voicePermissionDeniedBody,
-      VoiceRecorderFailure.unsupported => l10n.voiceUnsupported,
+      // PD-28: in the browser the answer is "use the phone", not "this device cannot".
+      VoiceRecorderFailure.unsupported => kIsWeb ? l10n.voiceNoteWebUnavailable : l10n.voiceUnsupported,
       VoiceRecorderFailure.tooShort => l10n.voiceTooShort,
       VoiceRecorderFailure.failed => l10n.voiceRecordingFailed,
     };

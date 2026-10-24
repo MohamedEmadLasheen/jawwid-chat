@@ -1,6 +1,49 @@
 # Admin Web static hosting. Owner: AI #7 (infrastructure).
 # Rendered by the nginx image's envsubst at container start.
 
+# NO `add_header` INSIDE A LOCATION. nginx inherits a server block's
+# add_header directives into a location only when that location has none of its
+# own, so a single per-location add_header silently strips the CSP, HSTS and
+# nosniff from every response it serves. That is exactly how Admin Web's own
+# index.html went out without a CSP (frame-ancestors) or HSTS until PD-28.
+# Anything that differs per path is therefore chosen by a map here and sent
+# once, at server level; scripts/infra/check-web-headers.sh asserts the result
+# in CI (on the built image) and after every deploy (smoke.sh).
+#
+# Cache-Control per path. An empty value sends no header.
+#   /assets/   Vite's content-hashed bundles: cached for good (with `expires 1y`)
+#   /index.html  never cached: it names the bundles of THIS release
+#   /teacher/  the PD-28 portal: Flutter's names are not hashed, so every file
+#              is revalidated (ETag, a 304 when unchanged)
+map $uri $jawwid_cache_control {
+    ~^/assets/        "public, immutable";
+    /index.html       "no-store, must-revalidate";
+    ~^/teacher(/|$)   "no-cache";
+    default           "";
+}
+
+# PD-28: one policy per app on this origin. Admin Web keeps its policy byte for
+# byte; the teacher portal under /teacher/ (the Flutter web build, see
+# docs/mobile/teacher-web-portal.md) gets a copy with exactly three additions:
+#
+#   script-src 'wasm-unsafe-eval'   CanvasKit, Flutter's renderer, is WebAssembly,
+#                                   and compiling ANY WebAssembly under a CSP needs
+#                                   this keyword. It allows WebAssembly only -- not
+#                                   eval(), not inline script; script-src stays 'self'.
+#   connect-src blob: data:         the portal reads a picked photo or file through
+#                                   its blob: URL (the browser's handle on it) to
+#                                   upload it, and Flutter decodes images and the
+#                                   bundled fonts by fetching them.
+#   img-src API + store             Flutter fetches images itself (connect-src); the
+#                                   same origins in img-src cover its <img> fallback.
+#
+# No third-party host is added: CanvasKit and the fonts are served from /teacher/
+# (`--no-web-resources-cdn`), never from gstatic.
+map $uri $jawwid_csp {
+    ~^/teacher(/|$)  "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob: data: ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
+    default          "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
+}
+
 server {
     listen       ${NGINX_PORT};
     server_name  _;
@@ -30,8 +73,9 @@ server {
     # host of the API's signed upload URLs). media-src adds the API and the
     # store, which serve the signed URLs a voice note plays from.
     # A wildcard here would let injected script exfiltrate customer messages to
-    # any host it liked.
-    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'" always;
+    # any host it liked. The policy itself is chosen per app by the map above.
+    add_header Content-Security-Policy $jawwid_csp always;
+    add_header Cache-Control $jawwid_cache_control always;
 
     gzip on;
     gzip_types text/plain text/css application/javascript application/json image/svg+xml;
@@ -39,24 +83,38 @@ server {
 
     location = /healthz {
         access_log off;
-        add_header Content-Type text/plain;
+        default_type text/plain;
         return 200 "ok\n";
     }
 
     # Vite emits content-hashed filenames under /assets, so these are safe to
-    # cache permanently. A new deploy produces new names.
+    # cache permanently. A new deploy produces new names. (Cache-Control comes
+    # from $jawwid_cache_control; `expires` adds the max-age.)
     location /assets/ {
         expires 1y;
-        add_header Cache-Control "public, immutable";
         try_files $uri =404;
     }
 
     # index.html must NEVER be cached: it is the file that points at the hashed
     # bundles. A cached index.html is how a browser keeps loading the previous
     # release after a rollback and reports "the fix didn't deploy".
+    # (Cache-Control: no-store, from $jawwid_cache_control.)
     location = /index.html {
-        add_header Cache-Control "no-store, must-revalidate" always;
         try_files $uri =404;
+    }
+
+    # PD-28: the teacher web portal. Unknown paths fall back to the portal's own
+    # index.html; it routes with #-URLs, so the fallback only ever serves a
+    # reload or a mistyped path. `=404` (not a redirect) when no portal is in
+    # the image, so a local Admin Web image without one answers 404 instead of
+    # looping. (Cache-Control: no-cache, from $jawwid_cache_control.)
+    location = /teacher {
+        absolute_redirect off;
+        return 301 /teacher/;
+    }
+
+    location /teacher/ {
+        try_files $uri $uri/index.html /teacher/index.html =404;
     }
 
     # SPA routing: unknown paths are client routes, not 404s.

@@ -19,6 +19,10 @@ npm-debug.log*
 .flutter-plugins
 .flutter-plugins-dependencies
 /build/
+# PD-28: the teacher web portal bundle, built by scripts/mobile/build-teacher-web.sh
+# into the Admin Web image's context. Generated per environment; never committed.
+/apps/admin-web/teacher-web/*
+!/apps/admin-web/teacher-web/.gitkeep
 .packages
 .pub-cache/
 .pub/

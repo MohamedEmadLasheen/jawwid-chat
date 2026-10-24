@@ -34,6 +34,7 @@ class _FakeAuthRepository implements AuthRepository {
   Future<AuthSession> signIn({
     required String username,
     required String password,
+    bool remember = false,
   }) async {
     signInCalls++;
     final error = signInError;

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/models/message.dart';
 import '../../errors/app_error.dart';
@@ -220,7 +220,7 @@ class HttpMessageRepository implements MessageRepository {
       );
     }
 
-    final bytes = await File(filePath).readAsBytes();
+    final bytes = await XFile(filePath).readAsBytes();
     // The authorization bound the size it signed for. Sending a different length
     // would be refused by storage, so fail here with something diagnosable
     // rather than as an opaque 403.

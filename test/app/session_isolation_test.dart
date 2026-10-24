@@ -475,6 +475,7 @@ class _SwitchableAuthRepository implements AuthRepository {
   Future<AuthSession> signIn({
     required String username,
     required String password,
+    bool remember = false,
   }) async {
     session.principal = username;
     return AuthSession(
