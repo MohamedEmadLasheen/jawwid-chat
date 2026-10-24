@@ -10,6 +10,7 @@ import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
 import { ActorKind, CardKind, LessonOutcome } from '../communication/contracts/vocab';
 import { renderCardBody } from './lesson-card';
+import { parseReportMaterials } from '../materials/report-materials';
 import {
   LessonService,
   invalid,
@@ -179,6 +180,8 @@ export class LessonRecordService {
    */
   async editReport(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const fields = reportFields(body);
+    // PD-29: a key the edit leaves out leaves that part as it was.
+    const materials = parseReportMaterials(body);
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.lessons.load(actor, lessonId);
     this.lessons.requireAct(actor, standing, 'edit_report');
@@ -187,10 +190,13 @@ export class LessonRecordService {
 
     await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
+        await this.lessons.prepareMaterials(tx, lesson, actor, materials);
         await this.revise(tx, report, actor, 'edit', null);
         await tx.lessonReport.update({ where: { lessonId: lesson.id }, data: { ...fields } });
+        await this.lessons.reportMaterials?.writeEdit(tx, lesson, actor, materials);
         if (report.messageId) {
-          await this.rewriteCard(tx, report.messageId, actor, this.lessons.reportPayload(lesson, fields), lang);
+          const practice = this.lessons.reportMaterials ? await this.lessons.reportMaterials.cardPractice(tx, lesson.id) : undefined;
+          await this.rewriteCard(tx, report.messageId, actor, this.lessons.reportPayload(lesson, fields, practice), lang);
         }
         await this.audit.audit(tx, {
           actorId: actor.actorId,
