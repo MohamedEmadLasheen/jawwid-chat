@@ -275,8 +275,6 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
   static const _neutral100 = Color(0xFFEBE8E3);
   static const _neutral200 = Color(0xFFDCD7D0);
   static const _neutral300 = Color(0xFFC2BBB2);
-  static const _neutral400 = Color(0xFF9C948A);
-  static const _neutral500 = Color(0xFF776E64);
   static const _neutral600 = Color(0xFF5A534B);
   static const _neutral700 = Color(0xFF423C36);
   static const _neutral800 = Color(0xFF2B2823);
