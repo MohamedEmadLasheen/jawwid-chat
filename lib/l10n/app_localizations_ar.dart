@@ -1038,7 +1038,16 @@ class L10nAr extends L10n {
 
   @override
   String lessonsOtherUnreported(int count) {
-    return 'حصص أخرى بلا تقرير ($count)';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة أخرى بلا تقرير',
+      many: '$count حصة أخرى بلا تقرير',
+      few: '$count حصص أخرى بلا تقرير',
+      two: 'حصتان أخريان بلا تقرير',
+      one: 'حصة أخرى بلا تقرير',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -1046,7 +1055,17 @@ class L10nAr extends L10n {
 
   @override
   String scheduleFilterNeedsReport(int count) {
-    return 'تحتاج تقريرًا ($count)';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تحتاج تقريرًا ($count)',
+      many: 'تحتاج تقريرًا ($count)',
+      few: 'تحتاج تقريرًا ($count)',
+      two: 'تحتاج تقريرًا (2)',
+      one: 'تحتاج تقريرًا (1)',
+      zero: 'تحتاج تقريرًا',
+    );
+    return '$_temp0';
   }
 
   @override
