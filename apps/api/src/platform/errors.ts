@@ -346,6 +346,18 @@ export enum CommErrorCode {
    * the same reasoning STORY_NOT_FOUND above is written for.
    */
   LEARNER_NOT_IN_FAMILY = 'COMM.LEARNER_NOT_IN_FAMILY',
+
+  // --- PD-29: Materials ---
+  /** No such library item, recitation or upload, or none this caller may see. 404. */
+  MATERIAL_NOT_FOUND = 'COMM.MATERIAL_NOT_FOUND',
+  /** The library is managed by the super admin and the Teachers manager; this caller may not do this. 403. */
+  MATERIAL_DENIED = 'COMM.MATERIAL_DENIED',
+  /** A library item, import row or recitation failed validation. 400. */
+  MATERIAL_INVALID = 'COMM.MATERIAL_INVALID',
+  /** The uploaded file is not what it claims, or the package is refused (unsafe path, type, size). 400. */
+  MATERIAL_FILE_REFUSED = 'COMM.MATERIAL_FILE_REFUSED',
+  /** The upload never reached storage, so there is no file to use. 409. */
+  MATERIAL_NOT_UPLOADED = 'COMM.MATERIAL_NOT_UPLOADED',
 }
 
 export class CommError extends Error {

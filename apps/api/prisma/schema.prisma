@@ -2180,3 +2180,158 @@ model ImpersonationAction {
   @@map("impersonation_action")
   @@schema("chat")
 }
+
+// ---------------------------------------------------------------------------
+// PD-29: Materials (20261022180000)
+// ---------------------------------------------------------------------------
+
+/// PD-29: the 114 surahs. Reference data, fixed by its migration.
+model QuranSurah {
+  number     Int    @id @db.SmallInt
+  nameAr     String @map("name_ar")
+  nameEn     String @map("name_en")
+  ayahCount  Int    @map("ayah_count") @db.SmallInt
+  juz        Int    @db.SmallInt
+  juzEnd     Int    @map("juz_end") @db.SmallInt
+
+  @@map("quran_surah")
+  @@schema("chat")
+}
+
+/// PD-29: each object key an upload grant was issued for. Written once.
+model MaterialUpload {
+  objectKey      String   @id @map("object_key")
+  organizationId String   @map("organization_id") @db.Uuid
+  issuedTo       String   @map("issued_to") @db.Uuid
+  /// item | recitation
+  purpose        String
+  fileName       String?  @map("file_name")
+  mimeType       String   @map("mime_type")
+  byteSize       BigInt   @map("byte_size")
+  issuedAt       DateTime @default(now()) @map("issued_at") @db.Timestamptz
+
+  @@map("material_upload")
+  @@schema("chat")
+}
+
+/// PD-29: one library item -- an https link, an uploaded file or an HTML5 package. Never deleted.
+model MaterialItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  externalRef    String?  @map("external_ref")
+  /// quran | arabic | islamic_studies
+  subject        String
+  /// memorization | recitation | word_meanings | tafsir (Quran only)
+  strand         String?
+  titleAr        String?  @map("title_ar")
+  titleEn        String?  @map("title_en")
+  description    String?
+  /// activity_package | activity_link | audio | video | pdf | image
+  kind           String
+  /// url | file | package
+  source         String
+  url            String?
+  objectKey      String?  @map("object_key")
+  mimeType       String?  @map("mime_type")
+  byteSize       BigInt?  @map("byte_size")
+  packageEntry   String?  @map("package_entry")
+  ageGroups      String[] @default([]) @map("age_groups")
+  surah          Int?     @db.SmallInt
+  /// draft | published | retired
+  status         String   @default("draft")
+  createdBy      String   @map("created_by") @db.Uuid
+  updatedBy      String   @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("material_item")
+  @@schema("chat")
+}
+
+/// PD-29: the validated index of a package's zip. Written once.
+model MaterialPackageEntry {
+  objectKey      String @map("object_key")
+  path           String
+  dataOffset     BigInt @map("data_offset")
+  compressedSize BigInt @map("compressed_size")
+  size           BigInt
+  method         Int    @db.SmallInt
+  crc32          BigInt
+
+  @@id([objectKey, path])
+  @@map("material_package_entry")
+  @@schema("chat")
+}
+
+/// PD-29: a recitation source (a URL template for all surahs).
+model RecitationSource {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  urlTemplate    String?  @map("url_template")
+  isDefault      Boolean  @default(false) @map("is_default")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdBy      String   @map("created_by") @db.Uuid
+  updatedBy      String   @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("recitation_source")
+  @@schema("chat")
+}
+
+/// PD-29: one surah's recitation in a source, overriding its template.
+model RecitationTrack {
+  sourceId       String   @map("source_id") @db.Uuid
+  surah          Int      @db.SmallInt
+  organizationId String   @map("organization_id") @db.Uuid
+  url            String?
+  objectKey      String?  @map("object_key")
+  updatedBy      String   @map("updated_by") @db.Uuid
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@id([sourceId, surah])
+  @@map("recitation_track")
+  @@schema("chat")
+}
+
+/// PD-29: practice attached to a lesson report. Withdrawn, never deleted.
+model LessonReportPractice {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  lessonId       String    @map("lesson_id") @db.Uuid
+  position       Int       @db.SmallInt
+  /// ayah_range | item
+  kind           String
+  surah          Int?      @db.SmallInt
+  ayahFrom       Int?      @map("ayah_from") @db.SmallInt
+  ayahTo         Int?      @map("ayah_to") @db.SmallInt
+  itemId         String?   @map("item_id") @db.Uuid
+  addedAt        DateTime  @default(now()) @map("added_at") @db.Timestamptz
+  withdrawnAt    DateTime? @map("withdrawn_at") @db.Timestamptz
+
+  @@map("lesson_report_practice")
+  @@schema("chat")
+}
+
+/// PD-29: the memorization map's history. Append-only; the newest mark per surah is the status.
+model MemorizationMark {
+  id             String   @id @default(uuid()) @db.Uuid
+  seq            BigInt   @default(autoincrement())
+  organizationId String   @map("organization_id") @db.Uuid
+  learnerId      String   @map("learner_id") @db.Uuid
+  surah          Int      @db.SmallInt
+  /// not_started | in_progress | memorized | needs_revision
+  status         String
+  /// report | report_edit | correction
+  source         String
+  lessonId       String?  @map("lesson_id") @db.Uuid
+  reason         String?
+  /// teacher | staff
+  byKind         String   @map("by_kind")
+  byId           String   @map("by_id") @db.Uuid
+  at             DateTime @default(now()) @db.Timestamptz
+
+  @@map("memorization_mark")
+  @@schema("chat")
+}

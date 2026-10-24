@@ -18,6 +18,7 @@ import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
 import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
 import { AccountAdminModule } from './account-admin/account-admin.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
+import { MaterialsModule } from './materials/materials.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -60,6 +61,8 @@ import { AccountRecoveryModule } from './account-recovery/account-recovery.modul
     AccountAdminModule,
     // PD-25: parents recover their own account from the sign-in screen.
     AccountRecoveryModule,
+    // PD-29: the Materials library, practice this week and the memorization map.
+    MaterialsModule,
   ],
 })
 export class AppModule {}
