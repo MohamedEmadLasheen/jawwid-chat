@@ -16,10 +16,13 @@
 --                                only at a key this table says was issued to
 --                                its own organization.
 --   chat.material_item           one library item. Nothing is authored here: an
---                                item PLAYS existing material -- an https link,
---                                one uploaded file (audio, video, PDF, image),
---                                or one uploaded HTML5 package (a zip, played
---                                sandboxed). Retired, never deleted, because
+--                                item PLAYS existing material -- a lesson of the
+--                                academy's lessons site (its PATH only; the site's
+--                                base URL is configuration, so the site can move
+--                                to a pinned snapshot without a migration), an
+--                                https link, one uploaded file (audio, video,
+--                                PDF, image), or one uploaded HTML5 package (a
+--                                zip, played sandboxed). Retired, never deleted, because
 --                                reports point at items. `external_ref` is the
 --                                stable key a bulk import updates by.
 --   chat.material_package_entry  the validated index of a package's zip: each
@@ -243,7 +246,12 @@ create table chat.material_item (
   title_en         text check (title_en is null or length(btrim(title_en)) between 1 and 200),
   description      text check (description is null or length(description) <= 2000),
   kind             text not null check (kind in ('activity_package', 'activity_link', 'audio', 'video', 'pdf', 'image')),
-  source           text not null check (source in ('url', 'file', 'package')),
+  source           text not null check (source in ('site', 'url', 'file', 'package')),
+  -- A lesson of the configured lessons site: an absolute path, joined to the
+  -- site's base URL when the item is opened.
+  site_path        text check (site_path is null
+                               or (site_path ~ '^/[A-Za-z0-9._~/-]*$' and site_path !~ '^//' and site_path !~ '(^|/)\.\.(/|$)'
+                                   and length(site_path) <= 500)),
   url              text check (url is null or (url ~ '^https://[^\s/]+' and length(url) <= 2000)),
   object_key       text references chat.material_upload (object_key),
   mime_type        text check (mime_type is null or length(mime_type) between 3 and 120),
@@ -261,13 +269,16 @@ create table chat.material_item (
   constraint material_item_has_a_title check (title_ar is not null or title_en is not null),
   constraint material_item_strand_is_quran check (strand is null or subject = 'quran'),
   constraint material_item_source_shape check (
-       (source = 'url' and url is not null and object_key is null and package_entry is null
-          and kind <> 'activity_package')
+       (source = 'site' and site_path is not null and url is null and object_key is null and package_entry is null
+          and kind = 'activity_link')
+    or (source <> 'site' and site_path is null
+        and ((source = 'url' and url is not null and object_key is null and package_entry is null
+                and kind <> 'activity_package')
     or (source = 'file' and object_key is not null and url is null and package_entry is null
           and kind in ('audio', 'video', 'pdf', 'image') and mime_type is not null and byte_size is not null)
     or (source = 'package' and object_key is not null and url is null and package_entry is not null
-          and kind = 'activity_package' and byte_size is not null)),
-  constraint material_item_link_is_a_url check (kind <> 'activity_link' or source = 'url')
+          and kind = 'activity_package' and byte_size is not null)))),
+  constraint material_item_link_is_a_link check (kind <> 'activity_link' or source in ('url', 'site'))
 );
 
 comment on table chat.material_item is
@@ -475,7 +486,9 @@ create table chat.lesson_report_practice (
 comment on table chat.lesson_report_practice is
   'PD-29: practice attached to a lesson report (an ayah range or a library item). Withdrawn and replaced only beside a PD-15 report revision; never deleted.';
 
-create index lesson_report_practice_live_idx on chat.lesson_report_practice (lesson_id) where withdrawn_at is null;
+-- One live entry per position of a report.
+create unique index lesson_report_practice_live_position on chat.lesson_report_practice (lesson_id, position)
+  where withdrawn_at is null;
 
 create or replace function chat.guard_lesson_report_practice()
 returns trigger
@@ -579,8 +592,10 @@ begin
       raise exception 'a teacher marks only their own students' using errcode = 'insufficient_privilege';
     end if;
   else
-    if not (chat.can_correct_lessons(new.by_id, new.organization_id)
-            or chat.staff_reaches_family(new.by_id, v_learner.family_id) is not null) then
+    -- The floor under the API's rule (the Teachers department and the child's
+    -- Operations supervisor): the super admin and the Teachers and Operations
+    -- departments. Other staff whose scope reaches the family do not correct.
+    if not chat.can_correct_lessons(new.by_id, new.organization_id) then
       raise exception 'a child''s map is corrected by their teacher, their supervisor or the Teachers department'
         using errcode = 'insufficient_privilege';
     end if;

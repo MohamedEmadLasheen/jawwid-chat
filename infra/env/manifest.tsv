@@ -90,6 +90,15 @@ ATTACHMENT_MAX_BYTES_FILE	storage	no	opt	opt	opt
 # Ceiling on the duration a sender may claim for a voice note. The server never
 # decodes the audio, so this bounds an assertion rather than a measurement.
 ATTACHMENT_MAX_VOICE_DURATION_MS	storage	no	opt	opt	opt
+# PD-29 Materials (apps/api/src/materials/materials-config.ts). The academy's
+# lessons site (a lesson item stores its PATH only, joined to this base when
+# opened, so the site can move to a pinned snapshot origin without a
+# migration), and the https origins a link may be framed from (the site's
+# origin is always included; any other link opens in the browser). Unset: the
+# lessons are not offered. Optional everywhere; Admin Web's frame-src reads its
+# own MATERIALS_FRAME_ORIGINS.
+MATERIALS_SITE_BASE_URL	materials	no	opt	opt	opt
+MATERIALS_FRAME_ORIGINS	materials	no	opt	opt	opt
 FCM_PROJECT_ID	push	no	opt	opt	req
 FCM_SERVICE_ACCOUNT_JSON	push	yes	opt	opt	req
 APNS_KEY_ID	push	no	opt	opt	req

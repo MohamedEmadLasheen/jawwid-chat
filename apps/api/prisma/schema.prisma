@@ -2228,8 +2228,10 @@ model MaterialItem {
   description    String?
   /// activity_package | activity_link | audio | video | pdf | image
   kind           String
-  /// url | file | package
+  /// site | url | file | package
   source         String
+  /// A lesson of the configured lessons site: its path only (MATERIALS_SITE_BASE_URL is joined when opened).
+  sitePath       String?  @map("site_path")
   url            String?
   objectKey      String?  @map("object_key")
   mimeType       String?  @map("mime_type")

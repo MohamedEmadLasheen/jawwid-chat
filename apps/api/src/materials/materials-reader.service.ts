@@ -16,6 +16,7 @@ import { LessonOutcome } from '../communication/contracts/vocab';
 import { SURAHS, surahOf } from './quran-surahs';
 import { PlayTokenSigner, PLAY_TOKEN_TTL_SECONDS } from './play-token';
 import { MaterialsAdminService, renderTemplate } from './materials-admin.service';
+import { linkPresentation, readMaterialsConfig, type MaterialsConfig } from './materials-config';
 import { AGE_GROUPS, MARK_STATUSES, SUBJECTS, ageGroupOf, type AgeGroup, type MarkStatus } from './vocab';
 
 /** How long a signed storage URL for a file (audio, video, PDF, image) lives. */
@@ -45,12 +46,22 @@ function invalid(reason: string) {
  * open a published item. `open` is the access decision -- the item's object
  * key never reaches a client. It returns a short-lived signed STORAGE URL for
  * a file (so audio and video stream from storage with native HTTP Range, not
- * through this process), the https link for a link, and a play URL for a
- * package, whose every file request is re-authorized (play.controller.ts).
+ * through this process), the URL for a lesson of the lessons site or a link,
+ * and a play URL for a package, whose every file request is re-authorized
+ * (play.controller.ts) -- with the one `presentation` a client must use:
+ *
+ *   frame-isolated  a package from OUR origin: sandbox "allow-scripts allow-forms"
+ *   frame-site      a link on the frame allowlist (the lessons site, or
+ *                   MATERIALS_FRAME_ORIGINS): sandbox "allow-scripts
+ *                   allow-same-origin allow-forms" -- it keeps its own origin
+ *   browser         any other https link: opened in the browser, never embedded
+ *   file            a signed storage URL
  */
 @Injectable()
 export class MaterialsReaderService {
   private readonly playTokens = new PlayTokenSigner();
+  /** Read once at startup: an invalid value stops the API rather than mis-framing anything. */
+  private readonly config: MaterialsConfig = readMaterialsConfig();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -285,18 +296,26 @@ export class MaterialsReaderService {
     if (item.status !== 'published' && !(await this.admin.mayManage(actor))) throw notFound();
     if (actor.kind === ActorKind.CONTACT && !actor.familyId) throw notFound();
 
-    if (item.source === 'url') return { itemId: item.id, kind: item.kind, mode: 'link', url: item.url };
+    if (item.source === 'site') {
+      if (!this.config.siteBase) {
+        throw new CommError(CommErrorCode.MATERIAL_UNAVAILABLE, 'the lessons site is not configured on this deployment', 409);
+      }
+      return { itemId: item.id, kind: item.kind, mode: 'link', presentation: 'frame-site', url: `${this.config.siteBase}${item.sitePath}` };
+    }
+    if (item.source === 'url') {
+      return { itemId: item.id, kind: item.kind, mode: 'link', presentation: linkPresentation(item.url as string, this.config), url: item.url };
+    }
     if (item.source === 'file') {
       const url = await this.storage.signedReadUrl(item.objectKey as string, FILE_URL_TTL_SECONDS);
       return {
-        itemId: item.id, kind: item.kind, mode: 'file', url, mimeType: item.mimeType,
+        itemId: item.id, kind: item.kind, mode: 'file', presentation: 'file', url, mimeType: item.mimeType,
         expiresAt: new Date(Date.now() + FILE_URL_TTL_SECONDS * 1000).toISOString(),
       };
     }
     const token = this.playTokens.sign(item.id, item.objectKey as string, actor.actorId);
     const entry = (item.packageEntry as string).split('/').map(encodeURIComponent).join('/');
     return {
-      itemId: item.id, kind: item.kind, mode: 'package',
+      itemId: item.id, kind: item.kind, mode: 'package', presentation: 'frame-isolated',
       url: `${apiBase()}/materials/play/${item.id}/${token}/${entry}`,
       expiresAt: new Date(Date.now() + PLAY_TOKEN_TTL_SECONDS * 1000).toISOString(),
     };
@@ -306,6 +325,7 @@ export class MaterialsReaderService {
   async openRecitation(actorId: string, surahParam: string) {
     const actor = await this.conversations.requireActor(actorId);
     if (!actor.isActive || !actor.organizationId) throw notFound('recitation');
+    if (actor.kind === ActorKind.CONTACT && !actor.familyId) throw notFound('recitation');
     const surah = /^\d{1,3}$/.test(surahParam) ? surahOf(Number(surahParam)) : null;
     if (!surah) throw notFound('surah');
     const source = await this.prisma.recitationSource.findFirst({ where: { organizationId: actor.organizationId, isDefault: true, isActive: true } });
@@ -368,7 +388,7 @@ export function itemDto(i: MaterialItem) {
     subject: i.subject,
     strand: i.strand,
     kind: i.kind,
-    mode: i.source === 'url' ? 'link' : i.source,
+    mode: i.source === 'url' || i.source === 'site' ? 'link' : i.source,
     ageGroups: i.ageGroups,
     surah: i.surah,
     description: i.description,

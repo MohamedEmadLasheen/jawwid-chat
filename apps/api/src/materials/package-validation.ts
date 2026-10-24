@@ -25,6 +25,12 @@ export interface PackageLimits {
   maxEntryBytes: number;
   /** Uncompressed / compressed, for entries over 1 MB. */
   maxRatio: number;
+  /**
+   * The largest DEFLATED entry. A compressed entry is inflated whole to be
+   * served, so anything big (video, audio) must be stored uncompressed, which
+   * the play route streams by byte range without holding it in memory.
+   */
+  maxDeflatedEntryBytes: number;
 }
 
 export const DEFAULT_PACKAGE_LIMITS: PackageLimits = {
@@ -32,6 +38,7 @@ export const DEFAULT_PACKAGE_LIMITS: PackageLimits = {
   maxTotalBytes: 200 * 1024 * 1024,
   maxEntryBytes: 100 * 1024 * 1024,
   maxRatio: 200,
+  maxDeflatedEntryBytes: 2 * 1024 * 1024,
 };
 
 export interface PackageEntry {
@@ -197,6 +204,11 @@ export function validatePackage(zip: Buffer, limits: PackageLimits = DEFAULT_PAC
     }
     if (method !== 0 && method !== 8) throw new PackageRefused(`an unsupported compression method in ${name}`);
     if (usize > limits.maxEntryBytes) throw new PackageRefused(`a file over ${limits.maxEntryBytes} bytes: ${name}`);
+    if (method === 8 && usize > limits.maxDeflatedEntryBytes) {
+      throw new PackageRefused(
+        `a compressed file over ${Math.floor(limits.maxDeflatedEntryBytes / 1024 / 1024)} MB: ${name} -- zip large media without compression (store) so it can stream`,
+      );
+    }
     if (usize > 1024 * 1024 && usize / Math.max(1, csize) > limits.maxRatio) throw new PackageRefused(`a file that expands suspiciously: ${name}`);
     if (method === 0 && csize !== usize) throw new PackageRefused(`a damaged zip (stored size mismatch): ${name}`);
     totalBytes += usize;

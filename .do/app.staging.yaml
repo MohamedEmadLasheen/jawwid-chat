@@ -220,6 +220,14 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${ATTACHMENT_MAX_VOICE_DURATION_MS}
+      - key: MATERIALS_SITE_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${MATERIALS_SITE_BASE_URL}
+      - key: MATERIALS_FRAME_ORIGINS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${MATERIALS_FRAME_ORIGINS}
       - key: FCM_PROJECT_ID
         scope: RUN_TIME
         type: GENERAL
@@ -557,6 +565,14 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${ATTACHMENT_MAX_VOICE_DURATION_MS}
+      - key: MATERIALS_SITE_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${MATERIALS_SITE_BASE_URL}
+      - key: MATERIALS_FRAME_ORIGINS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${MATERIALS_FRAME_ORIGINS}
       - key: FCM_PROJECT_ID
         scope: RUN_TIME
         type: GENERAL

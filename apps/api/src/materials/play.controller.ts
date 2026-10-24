@@ -17,6 +17,8 @@ interface PlayResponse {
   status(code: number): PlayResponse;
   setHeader(name: string, value: string): void;
   send(body?: string | Buffer): void;
+  write(chunk: Uint8Array): boolean;
+  end(): void;
 }
 
 /**
@@ -42,6 +44,9 @@ export function playCsp(frameAncestors: string[]): string {
     "object-src 'none'",
     "form-action 'none'",
     "base-uri 'none'",
+    // Where supported, the page may not navigate itself away from its files
+    // (its URL carries the play token). Ignored by browsers that dropped it.
+    "navigate-to 'self'",
     `frame-ancestors ${frameAncestors.length ? frameAncestors.join(' ') : "'none'"}`,
   ].join('; ');
 }
@@ -113,48 +118,70 @@ export class MaterialsPlayController {
     const size = Number(entry.size);
     const start = Number(entry.dataOffset);
     const csize = Number(entry.compressedSize);
-    let body: Buffer;
-    let range: { start: number; end: number } | null = null;
+    const headers = () => {
+      res.setHeader('Content-Type', type);
+      res.setHeader('Content-Security-Policy', playCsp(frameAncestors()));
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Referrer-Policy', 'no-referrer');
+      // The sandboxed page is an opaque origin, so its own requests for its own
+      // files are cross-origin: let them through, without credentials.
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.setHeader('Accept-Ranges', 'bytes');
+    };
+
     if (entry.method === 0) {
+      // Stored: streamed straight from storage by byte range, never held whole.
       const wanted = parseByteRange(req.headers.range, size);
       if (wanted === 'unsatisfiable') {
         res.setHeader('Content-Range', `bytes */${size}`);
         return refuse(res, 416, 'range not satisfiable');
       }
-      range = wanted;
-      const from = start + (range?.start ?? 0);
-      const to = start + (range ? range.end : size - 1);
-      body = size === 0 ? Buffer.alloc(0) : await this.readRange(item.objectKey, from, to);
-    } else {
-      const compressed = csize === 0 ? Buffer.alloc(0) : await this.readRange(item.objectKey, start, start + csize - 1);
-      const whole = readEntryBytes(compressed, 8, size);
-      const wanted = parseByteRange(req.headers.range, whole.length);
-      if (wanted === 'unsatisfiable') {
-        res.setHeader('Content-Range', `bytes */${whole.length}`);
-        return refuse(res, 416, 'range not satisfiable');
+      headers();
+      const length = wanted ? wanted.end - wanted.start + 1 : size;
+      res.setHeader('Content-Length', String(length));
+      if (wanted) res.setHeader('Content-Range', `bytes ${wanted.start}-${wanted.end}/${size}`);
+      res.status(wanted ? 206 : 200);
+      if (length === 0) {
+        res.end();
+        return;
       }
-      range = wanted;
-      body = range ? whole.subarray(range.start, range.end + 1) : whole;
-    }
-
-    res.setHeader('Content-Type', type);
-    res.setHeader('Content-Security-Policy', playCsp(frameAncestors()));
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    // The sandboxed page is an opaque origin, so its own requests for its own
-    // files are cross-origin: let them through, without credentials.
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'private, max-age=300');
-    res.setHeader('Accept-Ranges', 'bytes');
-    if (range) {
-      res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
-      res.setHeader('Content-Length', String(body.length));
-      res.status(206).send(body);
+      const from = start + (wanted?.start ?? 0);
+      await this.stream(item.objectKey, from, from + length - 1, res);
       return;
     }
+
+    // Deflated: at most maxDeflatedEntryBytes (validation refuses larger), so
+    // inflating it is bounded.
+    const compressed = csize === 0 ? Buffer.alloc(0) : await this.readRange(item.objectKey, start, start + csize - 1);
+    const whole = readEntryBytes(compressed, 8, size);
+    const wanted = parseByteRange(req.headers.range, whole.length);
+    if (wanted === 'unsatisfiable') {
+      res.setHeader('Content-Range', `bytes */${whole.length}`);
+      return refuse(res, 416, 'range not satisfiable');
+    }
+    headers();
+    const body = wanted ? whole.subarray(wanted.start, wanted.end + 1) : whole;
     res.setHeader('Content-Length', String(body.length));
-    res.status(200).send(body);
+    if (wanted) res.setHeader('Content-Range', `bytes ${wanted.start}-${wanted.end}/${size}`);
+    res.status(wanted ? 206 : 200).send(body);
+  }
+
+  /** Pipe a byte range of a stored object to the response, chunk by chunk. */
+  private async stream(objectKey: string, from: number, to: number, res: PlayResponse): Promise<void> {
+    const got = await this.storage.read(objectKey, `bytes=${from}-${to}`);
+    if (!got || got === 'unsatisfiable' || !got.range || got.range.end - got.range.start !== to - from) {
+      // A store that ignored the range would hand back the whole zip.
+      res.end();
+      throw new Error('storage did not honour the byte range');
+    }
+    if (Buffer.isBuffer(got.body)) {
+      res.write(got.body);
+    } else {
+      for await (const chunk of got.body) res.write(chunk);
+    }
+    res.end();
   }
 
   private async readRange(objectKey: string, from: number, to: number): Promise<Buffer> {
