@@ -405,6 +405,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${STORAGE_ORIGIN}
+      - key: MATERIALS_FRAME_ORIGINS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${MATERIALS_FRAME_ORIGINS}
 workers:
   # The outbox worker: the API image, the worker command (ADR-004). It serves
   # no HTTP, so it has no health check; a crash exits and is restarted.
