@@ -2210,5 +2210,9 @@
   "reportPickerEmpty": "No published items match.",
   "@reportPickerEmpty": {
     "description": "PD-29 item picker."
+  },
+  "materialsCorrectReasonHint": "Parents can see this reason.",
+  "@materialsCorrectReasonHint": {
+    "description": "PD-29: under the correction reason."
   }
 }

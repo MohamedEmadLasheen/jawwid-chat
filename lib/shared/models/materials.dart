@@ -81,19 +81,49 @@ class MaterialItem {
   }
 }
 
+/// How the server says an item must be presented (`open`'s `presentation`).
+enum MaterialPresentation {
+  /// An uploaded package from OUR origin: sandboxed WITHOUT same-origin, pinned to its play prefix.
+  frameIsolated,
+
+  /// A lesson of the lessons site or an allowlisted link: framed, keeping its OWN origin, pinned to its host.
+  frameSite,
+
+  /// Any other https link: opened in the browser, never embedded.
+  browser,
+
+  /// Audio, video, PDF or image from a signed storage URL.
+  file;
+
+  static MaterialPresentation parse(String? raw) => switch (raw) {
+        'frame-isolated' => frameIsolated,
+        'frame-site' => frameSite,
+        'file' => file,
+        // Unknown or missing: the safest choice -- never embedded.
+        _ => browser,
+      };
+}
+
+/// The exact iframe sandboxes (the web build). Never allow-popups,
+/// allow-top-navigation or allow-modals.
+const sandboxIsolated = 'allow-scripts allow-forms';
+const sandboxSite = 'allow-scripts allow-same-origin allow-forms';
+
 /// What `open` returned: a short-lived URL to play, and how.
 class OpenedMaterial {
-  const OpenedMaterial({required this.kind, required this.mode, required this.url, this.mimeType});
+  const OpenedMaterial({required this.kind, required this.mode, required this.url, required this.presentation, this.mimeType});
 
   final String kind;
   final String mode;
   final String url;
+  final MaterialPresentation presentation;
   final String? mimeType;
 
   static OpenedMaterial fromJson(Map<String, Object?> raw) => OpenedMaterial(
         kind: raw['kind'] as String? ?? '',
         mode: raw['mode'] as String? ?? 'link',
         url: raw['url'] as String? ?? '',
+        presentation: MaterialPresentation.parse(raw['presentation'] as String?),
         mimeType: raw['mimeType'] as String?,
       );
 }

@@ -531,7 +531,11 @@ class _SurahSheetState extends ConsumerState<_SurahSheet> {
                   key: const ValueKey('correct-reason'),
                   controller: _reason,
                   maxLength: 1000,
-                  decoration: InputDecoration(labelText: l10n.materialsCorrectReason, border: const OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: l10n.materialsCorrectReason,
+                    helperText: l10n.materialsCorrectReasonHint,
+                    border: const OutlineInputBorder(),
+                  ),
                 ),
                 FilledButton(
                   key: const ValueKey('correct-submit'),

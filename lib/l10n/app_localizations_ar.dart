@@ -3411,4 +3411,7 @@ class L10nAr extends L10n {
 
   @override
   String get reportPickerEmpty => 'لا توجد مواد منشورة مطابقة.';
+
+  @override
+  String get materialsCorrectReasonHint => 'يرى أولياء الأمور هذا السبب.';
 }

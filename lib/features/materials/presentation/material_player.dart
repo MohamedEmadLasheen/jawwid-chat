@@ -14,11 +14,16 @@ import '../data/materials_repository.dart';
 import 'activity_view.dart';
 
 /// PD-29: open one library item. The server's `open` is the access decision and
-/// returns a short-lived URL; how it plays follows its kind:
+/// returns a short-lived URL with the one presentation to use:
 ///
-///  * an activity (package or link) -> full screen, behind [ActivityViewFactory];
-///  * audio -> an in-app player; video -> an in-app video player;
-///  * a picture -> full screen; a PDF -> handed to the phone (the attachment rule).
+///  * frame-isolated (an uploaded package) -> full screen behind
+///    [ActivityViewFactory], pinned to its play prefix; never handed to the
+///    browser (its URL carries a play token);
+///  * frame-site (a lesson of the lessons site, an allowlisted link) -> full
+///    screen behind [ActivityViewFactory], pinned to its host;
+///  * browser (any other link) -> handed to the browser, never embedded;
+///  * file: audio and video in-app, a picture full screen, a PDF handed to the
+///    phone (the attachment rule).
 Future<void> openMaterial(BuildContext context, String itemId, {required String title}) {
   return Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(
     builder: (_) => MaterialPlayerScreen(title: title, load: (repo) => repo.open(itemId)),
@@ -30,7 +35,7 @@ Future<void> playRecitation(BuildContext context, int surah, {required String ti
   return Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(
     builder: (_) => MaterialPlayerScreen(
       title: title,
-      load: (repo) async => OpenedMaterial(kind: 'audio', mode: 'file', url: await repo.recitation(surah)),
+      load: (repo) async => OpenedMaterial(kind: 'audio', mode: 'file', presentation: MaterialPresentation.file, url: await repo.recitation(surah)),
     ),
   ));
 }
@@ -60,8 +65,11 @@ class _MaterialPlayerScreenState extends ConsumerState<MaterialPlayerScreen> {
     try {
       final opened = await widget.load(ref.read(materialsRepositoryProvider));
       if (!mounted) return;
-      if (opened.mode == 'file' && opened.kind == 'pdf') {
-        // A document goes to whatever on the phone opens documents.
+      final handOver = opened.presentation == MaterialPresentation.browser
+          || (opened.presentation == MaterialPresentation.file && opened.kind == 'pdf');
+      if (handOver) {
+        // A link off the frame allowlist goes to the browser; a document to
+        // whatever on the phone opens documents.
         final ok = await ref.read(attachmentOpenerProvider).open(opened.url);
         if (!mounted) return;
         if (ok) {
@@ -81,12 +89,13 @@ class _MaterialPlayerScreenState extends ConsumerState<MaterialPlayerScreen> {
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final opened = _opened;
-    final isActivity = opened != null && (opened.mode == 'package' || opened.mode == 'link');
+    // A lesson may be opened in the browser too; a package never (its play token).
+    final mayOpenOutside = opened != null && opened.presentation == MaterialPresentation.frameSite;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
-          if (isActivity)
+          if (mayOpenOutside)
             IconButton(
               tooltip: l10n.materialsOpenExternally,
               icon: const Icon(Icons.open_in_browser),
@@ -98,9 +107,12 @@ class _MaterialPlayerScreenState extends ConsumerState<MaterialPlayerScreen> {
         (_, final Object _, _) => JawwidErrorView(title: l10n.materialsUnavailable),
         (_, _, true) => JawwidErrorView(title: l10n.materialsCannotOpen),
         (null, _, _) => const JawwidLoadingView(),
-        (final OpenedMaterial o, _, _) when o.mode == 'package' || o.mode == 'link' => ref
+        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameIsolated => ref
             .watch(activityViewFactoryProvider)
-            .build(context, url: o.url, allow: activityAllowance(o.url, isPackage: o.mode == 'package')),
+            .build(context, url: o.url, sandbox: sandboxIsolated, allow: activityAllowance(o.url, isPackage: true)),
+        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameSite => ref
+            .watch(activityViewFactoryProvider)
+            .build(context, url: o.url, sandbox: sandboxSite, allow: activityAllowance(o.url, isPackage: false)),
         (final OpenedMaterial o, _, _) when o.kind == 'audio' => _AudioBody(url: o.url),
         (final OpenedMaterial o, _, _) when o.kind == 'video' => _VideoBody(url: o.url),
         (final OpenedMaterial o, _, _) when o.kind == 'image' => InteractiveViewer(

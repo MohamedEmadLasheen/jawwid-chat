@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
+import 'package:jawwid_chat/core/media/attachment_opener.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/lessons/presentation/lesson_card_view.dart';
 import 'package:jawwid_chat/features/lessons/presentation/lesson_report_sheet.dart';
@@ -27,12 +28,13 @@ void main() {
   );
   const song = MaterialItem(id: 'm-2', titleAr: 'أنشودة الحروف', titleEn: 'Letters song', subject: 'arabic', kind: 'video', mode: 'link');
 
-  Widget app(Widget home, {required _Materials materials, _Lessons? lessons, _Activity? activity, Locale locale = const Locale('en')}) {
+  Widget app(Widget home, {required _Materials materials, _Lessons? lessons, _Activity? activity, _Opener? opener, Locale locale = const Locale('en')}) {
     return ProviderScope(
       overrides: [
         materialsRepositoryProvider.overrideWithValue(materials),
         if (lessons != null) lessonRepositoryProvider.overrideWithValue(lessons),
         activityViewFactoryProvider.overrideWithValue(activity ?? _Activity()),
+        attachmentOpenerProvider.overrideWithValue(opener ?? _Opener()),
       ],
       child: MaterialApp(
         locale: locale,
@@ -70,12 +72,55 @@ void main() {
       await tester.pumpAndSettle();
       expect(materials.opened, ['m-1']);
       expect(activity.urls, [_Materials.playUrl]);
+      // An uploaded package: sandboxed WITHOUT same-origin, and never offered to the browser.
+      expect(activity.sandboxes.single, 'allow-scripts allow-forms');
+      expect(find.byTooltip('Open in browser'), findsNothing);
       // The WebView may stay only under the package's own play prefix.
       final allow = activity.allows.single;
       expect(allow(Uri.parse('https://api.example.test/api/v1/materials/play/m-1/tok/js/app.js')), isTrue);
       expect(allow(Uri.parse('https://api.example.test/api/v1/materials/play/m-2/tok/index.html')), isFalse);
       expect(allow(Uri.parse('https://api.example.test/api/v1/me')), isFalse);
       expect(allow(Uri.parse('https://evil.example.test/api/v1/materials/play/m-1/tok/x')), isFalse);
+    });
+
+    testWidgets('a lesson of the lessons site is framed keeping its own origin, pinned to its host', (tester) async {
+      final materials = _Materials()
+        ..items = [song]
+        ..openAs = const OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/quran/surah-78');
+      final activity = _Activity();
+      await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Letters song'));
+      await tester.pumpAndSettle();
+      expect(activity.sandboxes.single, 'allow-scripts allow-same-origin allow-forms');
+      expect(activity.sandboxes.single, isNot(contains('allow-popups')));
+      expect(activity.sandboxes.single, isNot(contains('allow-top-navigation')));
+      expect(activity.sandboxes.single, isNot(contains('allow-modals')));
+      final allow = activity.allows.single;
+      expect(allow(Uri.parse('https://lessons.example.test/lessons/arabic/lesson-1')), isTrue);
+      expect(allow(Uri.parse('https://gemini.example.test/')), isFalse);
+      expect(allow(Uri.parse('http://lessons.example.test/x')), isFalse);
+      expect(find.byTooltip('Open in browser'), findsOneWidget);
+    });
+
+    testWidgets('any other link is never embedded: it goes to the browser', (tester) async {
+      final materials = _Materials()
+        ..items = [song]
+        ..openAs = const OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.browser, url: 'https://elsewhere.example.test/game');
+      final activity = _Activity();
+      final opener = _Opener();
+      await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity, opener: opener));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Letters song'));
+      await tester.pumpAndSettle();
+      expect(opener.opened, ['https://elsewhere.example.test/game']);
+      expect(activity.urls, isEmpty);
+    });
+
+    test('an unknown presentation is treated as "browser": never embedded', () {
+      expect(MaterialPresentation.parse(null), MaterialPresentation.browser);
+      expect(MaterialPresentation.parse('frame-everything'), MaterialPresentation.browser);
+      expect(MaterialPresentation.parse('frame-isolated'), MaterialPresentation.frameIsolated);
     });
 
     testWidgets('reads in Arabic', (tester) async {
@@ -162,6 +207,7 @@ void main() {
       await tester.pumpAndSettle();
       final submit = find.byKey(const ValueKey('correct-submit'));
       expect(tester.widget<FilledButton>(submit).onPressed, isNull, reason: 'no reason, no correction');
+      expect(find.text('Parents can see this reason.'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('correct-needs_revision')));
       await tester.enterText(find.byKey(const ValueKey('correct-reason')), 'forgot the last ayahs');
       await tester.pump();
@@ -273,13 +319,25 @@ void main() {
 
 class _Activity implements ActivityViewFactory {
   final urls = <String>[];
+  final sandboxes = <String>[];
   final allows = <bool Function(Uri)>[];
 
   @override
-  Widget build(BuildContext context, {required String url, required bool Function(Uri uri) allow}) {
+  Widget build(BuildContext context, {required String url, required String sandbox, required bool Function(Uri uri) allow}) {
     urls.add(url);
+    sandboxes.add(sandbox);
     allows.add(allow);
     return const Text('activity');
+  }
+}
+
+class _Opener implements AttachmentOpener {
+  final opened = <String>[];
+
+  @override
+  Future<bool> open(String url) async {
+    opened.add(url);
+    return true;
   }
 }
 
@@ -338,10 +396,12 @@ class _Materials implements MaterialsRepository {
     return _history(surah);
   }
 
+  OpenedMaterial openAs = const OpenedMaterial(kind: 'activity_package', mode: 'package', presentation: MaterialPresentation.frameIsolated, url: playUrl);
+
   @override
   Future<OpenedMaterial> open(String itemId) async {
     opened.add(itemId);
-    return const OpenedMaterial(kind: 'activity_package', mode: 'package', url: playUrl);
+    return openAs;
   }
 
   @override

@@ -5970,6 +5970,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'No published items match.'**
   String get reportPickerEmpty;
+
+  /// PD-29: under the correction reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Parents can see this reason.'**
+  String get materialsCorrectReasonHint;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

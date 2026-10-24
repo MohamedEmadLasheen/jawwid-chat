@@ -14,7 +14,9 @@ import 'activity_view_web.dart' if (dart.library.io) 'activity_view_mobile.dart'
 /// live in the keychain and in memory, never in a WebView cookie or storage. A
 /// package is sandboxed by its own CSP header besides (an opaque origin).
 abstract interface class ActivityViewFactory {
-  Widget build(BuildContext context, {required String url, required bool Function(Uri uri) allow});
+  /// [sandbox] is the exact iframe sandbox for the web build ([sandboxIsolated] or
+  /// [sandboxSite]); [allow] pins every top-level navigation.
+  Widget build(BuildContext context, {required String url, required String sandbox, required bool Function(Uri uri) allow});
 }
 
 final activityViewFactoryProvider = Provider<ActivityViewFactory>((ref) => createActivityViewFactory());

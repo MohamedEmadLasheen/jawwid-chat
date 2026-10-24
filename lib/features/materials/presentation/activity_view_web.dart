@@ -1,36 +1,58 @@
-import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'dart:ui_web' as ui_web;
 
-import '../../../l10n/app_localizations.dart';
+import 'package:flutter/widgets.dart';
+import 'package:web/web.dart' as web;
+
 import 'activity_view.dart';
 
-/// In a browser (PD-28's web build) there is no WebView: the activity opens in
-/// a new tab, where the package's own CSP sandbox applies.
-ActivityViewFactory createActivityViewFactory() => const _NewTabActivityFactory();
+/// In a browser (PD-28's web build) an activity plays in an <iframe> with the
+/// exact sandbox the server's presentation calls for:
+///   a package  -> "allow-scripts allow-forms" (never same-origin; its URL carries
+///                 a play token, so it is never a top-level tab)
+///   a lesson   -> "allow-scripts allow-same-origin allow-forms" (its own origin)
+/// with no referrer, and no camera, microphone or geolocation. The page's CSP
+/// (frame-src) names exactly the origins that may be framed.
+ActivityViewFactory createActivityViewFactory() => const _IframeActivityFactory();
 
-class _NewTabActivityFactory implements ActivityViewFactory {
-  const _NewTabActivityFactory();
+class _IframeActivityFactory implements ActivityViewFactory {
+  const _IframeActivityFactory();
 
   @override
-  Widget build(BuildContext context, {required String url, required bool Function(Uri uri) allow}) => _NewTab(url: url);
+  Widget build(BuildContext context, {required String url, required String sandbox, required bool Function(Uri uri) allow}) =>
+      _ActivityFrame(url: url, sandbox: sandbox);
 }
 
-class _NewTab extends StatefulWidget {
-  const _NewTab({required this.url});
+class _ActivityFrame extends StatefulWidget {
+  const _ActivityFrame({required this.url, required this.sandbox});
 
   final String url;
+  final String sandbox;
 
   @override
-  State<_NewTab> createState() => _NewTabState();
+  State<_ActivityFrame> createState() => _ActivityFrameState();
 }
 
-class _NewTabState extends State<_NewTab> {
+class _ActivityFrameState extends State<_ActivityFrame> {
+  static int _next = 0;
+  late final String _viewType = 'pd29-activity-${_next++}';
+
   @override
   void initState() {
     super.initState();
-    launchUrl(Uri.parse(widget.url), webOnlyWindowName: '_blank');
+    ui_web.platformViewRegistry.registerViewFactory(_viewType, (int _) {
+      final frame = web.HTMLIFrameElement()
+        ..src = widget.url
+        ..referrerPolicy = 'no-referrer'
+        ..allow = 'autoplay; fullscreen';
+      frame.setAttribute('sandbox', widget.sandbox);
+      frame.style
+        ..border = '0'
+        ..width = '100%'
+        ..height = '100%';
+      return frame;
+    });
   }
 
   @override
-  Widget build(BuildContext context) => Center(child: Text(L10n.of(context).materialsOpenedInTab));
+  Widget build(BuildContext context) => HtmlElementView(viewType: _viewType);
 }

@@ -19,6 +19,7 @@
 .mt-ages label, .mt-mode label { display: inline-flex; gap: var(--space-1); align-items: center; }
 .mt-ages .field__hint { inline-size: 100%; }
 .mt-frame { display: block; inline-size: 100%; block-size: min(70vh, 40rem); border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
+.mt-browser { display: grid; gap: var(--space-2); justify-items: start; }
 .mt-media { display: block; inline-size: 100%; max-block-size: 60vh; object-fit: contain; }
 .mt-import, .mt-recitations { display: grid; gap: var(--space-3); }
 .mt-intro { margin: 0; color: var(--text-muted); max-inline-size: 60rem; }

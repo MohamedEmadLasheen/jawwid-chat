@@ -1,6 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+// A new window (target=_blank, window.open) is never opened: no onCreateWindow
+// handler is installed, so the WebView drops it.
+
 import 'activity_view.dart';
 
 ActivityViewFactory createActivityViewFactory() => const _WebViewActivityFactory();
@@ -9,7 +12,7 @@ class _WebViewActivityFactory implements ActivityViewFactory {
   const _WebViewActivityFactory();
 
   @override
-  Widget build(BuildContext context, {required String url, required bool Function(Uri uri) allow}) =>
+  Widget build(BuildContext context, {required String url, required String sandbox, required bool Function(Uri uri) allow}) =>
       _ActivityWebView(url: url, allow: allow);
 }
 
@@ -29,10 +32,9 @@ class _ActivityWebViewState extends State<_ActivityWebView> {
     ..setNavigationDelegate(NavigationDelegate(
       onNavigationRequest: (request) {
         final uri = Uri.tryParse(request.url);
-        // about:blank and data: frames a package builds for itself stay inside it.
-        if (uri != null && (uri.scheme == 'about' || uri.scheme == 'data' || uri.scheme == 'blob')) {
-          return NavigationDecision.navigate;
-        }
+        // A frame the page embeds (a player, about:blank) is its own business;
+        // the page itself never leaves its prefix or host.
+        if (!request.isMainFrame) return NavigationDecision.navigate;
         return uri != null && widget.allow(uri) ? NavigationDecision.navigate : NavigationDecision.prevent;
       },
     ))

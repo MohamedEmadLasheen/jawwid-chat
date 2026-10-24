@@ -10,6 +10,7 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import {
   AGE_GROUPS,
   KINDS,
+  SANDBOX,
   STRANDS,
   SUBJECTS,
   materialsApi,
@@ -229,6 +230,7 @@ function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
           <span>{tx(KIND_LABEL[item.kind])}</span>
           {surah && <span>{tx(M.surah)}: {locale === 'ar' ? surah.nameAr : surah.nameEn}</span>}
           <span>{item.ageGroups.length ? item.ageGroups.map((a) => tx(AGE_LABEL[a])).join('، ') : tx(M.allAges)}</span>
+          {item.sitePath && item.sitePath !== item.externalRef && <span className="mt-ref" dir="ltr">{item.sitePath}</span>}
           {item.externalRef && <span className="mt-ref" dir="ltr">{item.externalRef}</span>}
         </div>
       </div>
@@ -254,7 +256,7 @@ function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
   )
 }
 
-type SourceMode = 'keep' | 'link' | 'file'
+type SourceMode = 'keep' | 'site' | 'link' | 'file'
 
 function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () => void }) {
   const tx = useCopy()
@@ -271,6 +273,7 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
   const [externalRef, setExternalRef] = useState(item?.externalRef ?? '')
   const [mode, setMode] = useState<SourceMode>(item ? 'keep' : 'link')
   const [url, setUrl] = useState(item?.source === 'url' ? item.url ?? '' : '')
+  const [path, setPath] = useState(item?.sitePath ?? '')
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<unknown>(null)
@@ -291,7 +294,10 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
       externalRef: externalRef.trim() || null,
     }
     try {
-      if (mode === 'link') {
+      if (mode === 'site') {
+        body.path = path.trim()
+        body.kind = 'activity_link'
+      } else if (mode === 'link') {
         body.url = url.trim()
         body.kind = kind || 'activity_link'
       } else if (mode === 'file' && file) {
@@ -387,12 +393,20 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
             </label>
           )}
           <label>
+            <input type="radio" name="mt-source" checked={mode === 'site'} onChange={() => setMode('site')} /> {tx(M.sourceSite)}
+          </label>
+          <label>
             <input type="radio" name="mt-source" checked={mode === 'link'} onChange={() => setMode('link')} /> {tx(M.sourceLink)}
           </label>
           <label>
             <input type="radio" name="mt-source" checked={mode === 'file'} onChange={() => setMode('file')} /> {tx(M.sourceFile)}
           </label>
         </fieldset>
+        {mode === 'site' && (
+          <Field label={tx(M.sitePath)} hint={tx(M.sitePathHint)}>
+            {(id) => <input id={id} className="input" dir="ltr" placeholder="/lessons/quran/surah-78" value={path} onChange={(e) => setPath(e.target.value)} />}
+          </Field>
+        )}
         {mode === 'link' && (
           <>
             <Field label={tx(M.url)}>
@@ -430,11 +444,17 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
 }
 
 /**
- * The preview plays exactly what a family would get, from `open`. A package
- * or a link runs in an <iframe sandbox="allow-scripts allow-forms"> -- never
- * allow-same-origin, so it is an opaque origin that cannot reach this page,
- * its storage or the session. (The package's own response carries the same
- * sandbox as a CSP header.)
+ * The preview plays exactly what a family would get, presented as the server
+ * says (`open`'s `presentation`):
+ *   frame-isolated  an uploaded package from our API, in <iframe sandbox="allow-scripts
+ *                   allow-forms"> -- never allow-same-origin, never a top-level tab
+ *                   (its URL carries a play token)
+ *   frame-site      a lesson of the lessons site or an allowlisted link, in
+ *                   <iframe sandbox="allow-scripts allow-same-origin allow-forms">: it
+ *                   keeps ITS origin, never ours
+ *   browser         any other link: offered as a link to open, never framed
+ *   file            the signed storage URL in <audio>, <video> or <img>; a PDF opens
+ * Never allow-popups, allow-top-navigation or allow-modals; no referrer.
  */
 function PreviewDialog({ item, onClose }: { item: MaterialItem; onClose: () => void }) {
   const tx = useCopy()
@@ -442,18 +462,12 @@ function PreviewDialog({ item, onClose }: { item: MaterialItem; onClose: () => v
   // A fresh signed link each time the preview opens; never cached.
   const open = useQuery({ queryKey: ['materials', 'open', item.id], queryFn: () => materialsApi.open(item.id), gcTime: 0, staleTime: 0, retry: false })
   const opened: OpenResult | undefined = open.data
-  const error = open.error
   return (
     <Dialog title={itemTitle(item, locale)} onClose={onClose} variant="sheet">
-      <ServerError error={error} />
+      <ServerError error={open.error} />
       {opened && <Player opened={opened} />}
-      {opened && (opened.mode !== 'file' || opened.kind === 'pdf') && (
-        <p className="field__hint">
-          {tx(M.previewNote)}{' '}
-          <a href={opened.url} target="_blank" rel="noopener noreferrer">
-            {tx(M.open)}
-          </a>
-        </p>
+      {opened && (opened.presentation === 'frame-isolated' || opened.presentation === 'frame-site') && (
+        <p className="field__hint">{tx(M.previewNote)}</p>
       )}
     </Dialog>
   )
@@ -461,29 +475,40 @@ function PreviewDialog({ item, onClose }: { item: MaterialItem; onClose: () => v
 
 export function Player({ opened }: { opened: OpenResult }) {
   const tx = useCopy()
-  if (opened.mode === 'package' || opened.mode === 'link' || opened.kind === 'pdf') {
-    if (opened.mode === 'file' && opened.kind === 'pdf') {
+  switch (opened.presentation) {
+    case 'frame-isolated':
+    case 'frame-site':
+      return (
+        <iframe
+          className="mt-frame"
+          title={opened.itemId}
+          src={opened.url}
+          sandbox={SANDBOX[opened.presentation]}
+          referrerPolicy="no-referrer"
+          allow="autoplay; fullscreen"
+        />
+      )
+    case 'browser':
+      return (
+        <div className="mt-browser">
+          <p className="field__hint">{tx(M.opensInBrowser)}</p>
+          <a className="btn" href={opened.url} target="_blank" rel="noopener noreferrer">
+            {tx(M.open)}
+          </a>
+        </div>
+      )
+    case 'file':
+      if (opened.kind === 'audio') return <audio className="mt-media" controls src={opened.url} />
+      if (opened.kind === 'video') return <video className="mt-media" controls src={opened.url} />
+      if (opened.kind === 'image') return <img className="mt-media" src={opened.url} alt="" />
       return (
         <a className="btn" href={opened.url} target="_blank" rel="noopener noreferrer">
           {tx(M.open)}
         </a>
       )
-    }
-    return (
-      <iframe
-        className="mt-frame"
-        title={opened.itemId}
-        src={opened.url}
-        sandbox="allow-scripts allow-forms"
-        referrerPolicy="no-referrer"
-        allow="autoplay; fullscreen"
-      />
-    )
+    default:
+      return <p className="field__hint">{tx(M.noPreview)}</p>
   }
-  if (opened.kind === 'audio') return <audio className="mt-media" controls src={opened.url} />
-  if (opened.kind === 'video') return <video className="mt-media" controls src={opened.url} />
-  if (opened.kind === 'image') return <img className="mt-media" src={opened.url} alt="" />
-  return <p className="field__hint">{tx(M.noPreview)}</p>
 }
 
 // ---------------------------------------------------------------------------

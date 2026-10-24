@@ -1451,5 +1451,6 @@
   "reportAyahInvalid": "الآيات من 1 إلى {count}، والأولى لا تأتي بعد الأخيرة.",
   "reportAdd": "إضافة",
   "reportPickerSearch": "ابحث في المكتبة",
-  "reportPickerEmpty": "لا توجد مواد منشورة مطابقة."
+  "reportPickerEmpty": "لا توجد مواد منشورة مطابقة.",
+  "materialsCorrectReasonHint": "يرى أولياء الأمور هذا السبب."
 }

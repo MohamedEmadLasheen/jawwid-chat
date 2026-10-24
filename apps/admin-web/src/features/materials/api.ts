@@ -30,7 +30,9 @@ export interface MaterialItem {
   subject: Subject
   strand: Strand | null
   kind: Kind
-  source: 'url' | 'file' | 'package'
+  source: 'site' | 'url' | 'file' | 'package'
+  /** A lesson of the lessons site: its path (the site's base URL is configuration). */
+  sitePath: string | null
   url: string | null
   mimeType: string | null
   byteSize: number | null
@@ -57,6 +59,7 @@ export interface ItemInput {
   description?: string | null
   status?: ItemStatus
   url?: string | null
+  path?: string | null
   uploadToken?: string
 }
 
@@ -78,10 +81,26 @@ export interface UploadGrant {
   expiresAt: string
 }
 
+/**
+ * How the server says an item must be presented:
+ *   frame-isolated  an uploaded package (our origin): sandbox WITHOUT same-origin
+ *   frame-site      a lesson of the lessons site or an allowlisted link: it keeps its own origin
+ *   browser         any other link: opened in the browser, never framed
+ *   file            audio, video, PDF or image from a signed storage URL
+ */
+export type Presentation = 'frame-isolated' | 'frame-site' | 'browser' | 'file'
+
+/** The exact sandboxes. Never allow-popups, allow-top-navigation or allow-modals. */
+export const SANDBOX: Record<'frame-isolated' | 'frame-site', string> = {
+  'frame-isolated': 'allow-scripts allow-forms',
+  'frame-site': 'allow-scripts allow-same-origin allow-forms',
+}
+
 export interface OpenResult {
   itemId: string
   kind: Kind
   mode: 'link' | 'file' | 'package'
+  presentation: Presentation
   url: string
   mimeType?: string | null
   expiresAt?: string

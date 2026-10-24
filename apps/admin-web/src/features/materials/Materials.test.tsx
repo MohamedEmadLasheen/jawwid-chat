@@ -39,7 +39,7 @@ const bodyOf = (call: unknown[] | undefined) => {
 function item(over: Partial<MaterialItem> = {}): MaterialItem {
   return {
     id: 'm-1', externalRef: 'naba-game', titleAr: 'لعبة سورة النبأ', titleEn: 'An-Naba game', subject: 'quran', strand: 'memorization',
-    kind: 'activity_package', source: 'package', url: null, mimeType: 'application/zip', byteSize: 1200, packageEntry: 'index.html',
+    kind: 'activity_package', source: 'package', sitePath: null, url: null, mimeType: 'application/zip', byteSize: 1200, packageEntry: 'index.html',
     ageGroups: ['4-6', '7-9'], surah: 78, description: null, status: 'published', createdAt: '2026-10-24T10:00:00Z', updatedAt: '2026-10-24T10:00:00Z',
     ...over,
   }
@@ -120,7 +120,7 @@ describe('Materials > Library', () => {
 
   it('previews a package in an iframe sandboxed WITHOUT same-origin', async () => {
     const playUrl = 'https://api.example.test/api/v1/materials/play/m-1/token/index.html'
-    on('POST', /\/materials\/items\/m-1\/open$/, () => json({ itemId: 'm-1', kind: 'activity_package', mode: 'package', url: playUrl }, 201))
+    on('POST', /\/materials\/items\/m-1\/open$/, () => json({ itemId: 'm-1', kind: 'activity_package', mode: 'package', presentation: 'frame-isolated', url: playUrl }, 201))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/materials' })
     const list = await screen.findByRole('list', { name: 'Library' })
     await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Preview' }))
@@ -134,6 +134,51 @@ describe('Materials > Library', () => {
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-forms')
     expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin')
     expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer')
+    // A package is never offered as a top-level tab: its URL carries a play token.
+    expect(within(dialog).queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  async function preview(presentation: string, url: string) {
+    on('POST', /\/materials\/items\/m-2\/open$/, () => json({ itemId: 'm-2', kind: 'activity_link', mode: 'link', presentation, url }, 201))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/materials' })
+    const list = await screen.findByRole('list', { name: 'Library' })
+    await userEvent.click(within(within(list).getAllByRole('listitem')[1]!).getByRole('button', { name: 'Preview' }))
+    return screen.findByRole('dialog', { name: 'Letters song' })
+  }
+
+  it('an allowlisted link (the lessons site) is framed with EXACTLY allow-scripts allow-same-origin allow-forms', async () => {
+    const dialog = await preview('frame-site', 'https://lessons.example.test/lessons/quran/surah-78')
+    const frame = await waitFor(() => {
+      const f = dialog.querySelector('iframe')
+      if (!f) throw new Error('no frame yet')
+      return f
+    })
+    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin allow-forms')
+    expect(frame.getAttribute('sandbox')).not.toMatch(/allow-popups|allow-top-navigation|allow-modals/)
+    expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer')
+    expect(frame.getAttribute('allow') ?? '').not.toMatch(/camera|microphone|geolocation/)
+  })
+
+  it('any other link is never framed: it is offered to open in the browser', async () => {
+    const dialog = await preview('browser', 'https://elsewhere.example.test/game')
+    expect(await within(dialog).findByRole('link', { name: 'Open in a new tab' })).toHaveAttribute('href', 'https://elsewhere.example.test/game')
+    expect(within(dialog).getByRole('link', { name: 'Open in a new tab' })).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(dialog.querySelector('iframe')).toBeNull()
+  })
+
+  it('adds a lesson of the lessons site by its path only', async () => {
+    on('POST', /\/materials\/admin\/items$/, (_u, init) => json({ ...item({ id: 'm-4', source: 'site', kind: 'activity_link' }), ...JSON.parse(String(init.body)) }, 201))
+    renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/materials' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Add item' }))
+    const dialog = await screen.findByRole('dialog', { name: 'New item' })
+    await userEvent.type(within(dialog).getByLabelText('Title (Arabic)'), 'سورة النبأ')
+    await userEvent.click(within(dialog).getByLabelText('A lesson of the lessons site'))
+    await userEvent.type(within(dialog).getByLabelText('Lesson path'), '/lessons/quran/surah-78')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/materials\/admin\/items$/)).toHaveLength(1))
+    const body = bodyOf(calls('POST', /\/materials\/admin\/items$/)[0])
+    expect(body).toMatchObject({ path: '/lessons/quran/surah-78', kind: 'activity_link' })
+    expect(body).not.toHaveProperty('url')
   })
 })
 
@@ -258,6 +303,7 @@ describe('Student Profile > memorization map', () => {
     const dialog = await screen.findByRole('dialog', { name: '78. An-Naba' })
     expect(await within(dialog).findByText('Teacher One')).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Correct' })).toBeDisabled()
+    expect(within(dialog).getByText('Required. Parents can see this reason.')).toBeInTheDocument()
     await userEvent.selectOptions(within(dialog).getByLabelText('New status'), 'memorized')
     await userEvent.type(within(dialog).getByLabelText('Reason'), 'recited in full')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Correct' }))

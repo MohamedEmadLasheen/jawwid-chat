@@ -39,6 +39,12 @@ export const M = {
   description: { en: 'Description', ar: 'الوصف' },
   ref: { en: 'Ref (stable key for imports)', ar: 'المرجع (مفتاح ثابت للاستيراد)' },
   source: { en: 'Source', ar: 'المصدر' },
+  sourceSite: { en: 'A lesson of the lessons site', ar: 'درس من موقع الدروس' },
+  sitePath: { en: 'Lesson path', ar: 'مسار الدرس' },
+  sitePathHint: {
+    en: 'The path on the lessons site, e.g. /lessons/quran/surah-78. The site’s address is set by the deployment, so the lessons can move without editing items.',
+    ar: 'المسار على موقع الدروس، مثل ‎/lessons/quran/surah-78. عنوان الموقع يحدده الإعداد، فيمكن نقل الدروس دون تعديل المواد.',
+  },
   sourceLink: { en: 'A link (https)', ar: 'رابط (https)' },
   sourceFile: { en: 'Upload a file', ar: 'رفع ملف' },
   sourceKeep: { en: 'Keep the current source', ar: 'إبقاء المصدر الحالي' },
@@ -62,8 +68,12 @@ export const M = {
   skipped: { en: 'Not served (types a web page does not need): {files}', ar: 'لن تُعرض (أنواع لا تحتاجها صفحة الويب): {files}' },
   open: { en: 'Open in a new tab', ar: 'فتح في تبويب جديد' },
   previewNote: {
-    en: 'Played in a sandbox: it cannot reach this page, your session or the API. Some sites refuse to be shown inside another page -- open them in a new tab.',
-    ar: 'يُعرض في بيئة معزولة: لا يصل إلى هذه الصفحة ولا إلى جلستك ولا إلى الخادم. بعض المواقع ترفض العرض داخل صفحة أخرى -- افتحها في تبويب جديد.',
+    en: 'Played in a sandbox: it cannot reach this page, your session or the API.',
+    ar: 'يُعرض في بيئة معزولة: لا يصل إلى هذه الصفحة ولا إلى جلستك ولا إلى الخادم.',
+  },
+  opensInBrowser: {
+    en: 'This link is not on the allowed list for embedding, so families open it in their browser.',
+    ar: 'هذا الرابط ليس ضمن القائمة المسموح بعرضها داخل التطبيق، لذلك تفتحه الأسر في المتصفح.',
   },
   noPreview: { en: 'This file type has no preview here.', ar: 'لا توجد معاينة لهذا النوع هنا.' },
 
@@ -124,7 +134,7 @@ export const M = {
   correct: { en: 'Correct', ar: 'تصحيح' },
   newStatus: { en: 'New status', ar: 'الحالة الجديدة' },
   reason: { en: 'Reason', ar: 'السبب' },
-  reasonHint: { en: 'Required. Everyone who sees the map sees it.', ar: 'مطلوب، ويراه كل من يرى الخريطة.' },
+  reasonHint: { en: 'Required. Parents can see this reason.', ar: 'مطلوب. يرى أولياء الأمور هذا السبب.' },
   noHistory: { en: 'Nothing recorded for this surah yet.', ar: 'لم يُسجَّل شيء لهذه السورة بعد.' },
   byTeacher: { en: 'Teacher', ar: 'المعلم' },
   byStaff: { en: 'Administration', ar: 'الإدارة' },
