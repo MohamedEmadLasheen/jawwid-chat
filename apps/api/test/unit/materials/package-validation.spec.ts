@@ -61,13 +61,23 @@ describe('PD-29 package validation', () => {
 
   it('refuses an entry that expands suspiciously and a package too large once unpacked', () => {
     const big = Buffer.alloc(5 * 1024 * 1024, 0x61);
-    expect(refusal(buildZip([{ name: 'index.html', data: 'x' }, { name: 'a.txt', data: big, deflate: true }]))).toContain('expands suspiciously');
-    const limits = { maxEntries: 2000, maxTotalBytes: 10, maxEntryBytes: 1000, maxRatio: 200 };
+    const roomy = { maxEntries: 2000, maxTotalBytes: 1e9, maxEntryBytes: 1e9, maxRatio: 200, maxDeflatedEntryBytes: 1e9 };
+    expect(() => validatePackage(buildZip([{ name: 'index.html', data: 'x' }, { name: 'a.txt', data: big, deflate: true }]), roomy)).toThrow(/expands suspiciously/);
+    const limits = { maxEntries: 2000, maxTotalBytes: 10, maxEntryBytes: 1000, maxRatio: 200, maxDeflatedEntryBytes: 1e9 };
     expect(() => validatePackage(buildZip([{ name: 'index.html', data: 'more than ten bytes' }]), limits)).toThrow(/once unpacked/);
   });
 
+  it('refuses a compressed entry over the cap: large media must be stored, so it streams by range', () => {
+    const media = Buffer.alloc(3 * 1024 * 1024);
+    for (let i = 0; i < media.length; i++) media[i] = (i * 7919) % 251; // barely compressible
+    expect(refusal(buildZip([{ name: 'index.html', data: 'x' }, { name: 'clip.mp4', data: media, deflate: true }])))
+      .toMatch(/compressed file over 2 MB: clip\.mp4.*store/);
+    // The same bytes stored uncompressed are fine.
+    expect(validatePackage(buildZip([{ name: 'index.html', data: 'x' }, { name: 'clip.mp4', data: media }])).entries).toHaveLength(2);
+  });
+
   it('refuses too many entries', () => {
-    const limits = { maxEntries: 2, maxTotalBytes: 1e9, maxEntryBytes: 1e9, maxRatio: 200 };
+    const limits = { maxEntries: 2, maxTotalBytes: 1e9, maxEntryBytes: 1e9, maxRatio: 200, maxDeflatedEntryBytes: 1e9 };
     expect(() => validatePackage(buildZip([{ name: 'index.html', data: 'x' }, { name: 'a.js', data: 'x' }, { name: 'b.js', data: 'x' }]), limits)).toThrow(/more than 2 files/);
   });
 

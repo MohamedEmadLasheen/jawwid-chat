@@ -358,6 +358,8 @@ export enum CommErrorCode {
   MATERIAL_FILE_REFUSED = 'COMM.MATERIAL_FILE_REFUSED',
   /** The upload never reached storage, so there is no file to use. 409. */
   MATERIAL_NOT_UPLOADED = 'COMM.MATERIAL_NOT_UPLOADED',
+  /** The lessons site is not configured on this deployment (MATERIALS_SITE_BASE_URL). 409. */
+  MATERIAL_UNAVAILABLE = 'COMM.MATERIAL_UNAVAILABLE',
 }
 
 export class CommError extends Error {

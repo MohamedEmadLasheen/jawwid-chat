@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma, type MaterialItem } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
@@ -30,6 +31,7 @@ type Tx = Prisma.TransactionClient;
 
 /** Where an item's bytes or link come from, checked and ready to write. */
 type Source =
+  | { source: 'site'; kind: 'activity_link'; sitePath: string }
   | { source: 'url'; kind: Kind; url: string }
   | { source: 'file'; kind: Kind; objectKey: string; mimeType: string; byteSize: number }
   | { source: 'package'; kind: 'activity_package'; objectKey: string; mimeType: string; byteSize: number; packageEntry: string; entries: PackageEntry[]; skipped: string[] };
@@ -181,8 +183,8 @@ export class MaterialsAdminService {
     const actor = await this.requireManager(actorId);
     const { fields, errors } = parseItemRow(body);
     if (errors.length) throw invalid(errors.join('; '));
-    const source = await this.sourceFor(actor.organizationId, fields, body.uploadToken);
-    if (!source) throw invalid('url or uploadToken: an item plays a link, an uploaded file or an uploaded package');
+    const source = await this.sourceFor(actor, fields, body.uploadToken);
+    if (!source) throw invalid('path, url or uploadToken: an item plays a lesson of the lessons site, a link, an uploaded file or an uploaded package');
     const created = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
         const item = await this.insert(tx, actor, fields, source);
@@ -202,12 +204,20 @@ export class MaterialsAdminService {
     const current = await this.item(actor.organizationId, itemId);
     // Canonical column names on both sides, so a changed field always wins.
     const merged: Record<string, unknown> = { ...canonicalRow(rowOf(current)), ...canonicalRow(body) };
-    if ('uploadToken' in body && body.uploadToken) delete merged.url;
+    // A new source replaces the old one entirely.
+    const newSource = ['url', 'path', 'sitePath', 'site_path', 'uploadToken'].find((k) => k in body && body[k]);
+    if (newSource) {
+      delete merged.url;
+      delete merged.path;
+      Object.assign(merged, canonicalRow(body));
+      if (newSource === 'uploadToken') {
+        delete merged.url;
+        delete merged.path;
+      }
+    }
     const { fields, errors } = parseItemRow(merged);
     if (errors.length) throw invalid(errors.join('; '));
-    const source = ('url' in body && body.url) || ('uploadToken' in body && body.uploadToken)
-      ? await this.sourceFor(actor.organizationId, fields, body.uploadToken)
-      : null;
+    const source = newSource ? await this.sourceFor(actor, fields, body.uploadToken) : null;
     const updated = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
         const row = await this.apply(tx, actor, current, fields, source, fields.status ?? current.status);
@@ -274,7 +284,7 @@ export class MaterialsAdminService {
           }
         }
       }
-      if (!current && !fields.url && !fields.file) errors.push('url or file: a new item needs one');
+      if (!current && !fields.url && !fields.sitePath && !fields.file) errors.push('path, url or file: a new item needs one');
       return { index, rowNumber: index + 1, fields, file, current, errors, warnings };
     });
     const unmatchedFiles = files.filter((f) => !usedFiles.has(f.name)).map((f) => f.name);
@@ -307,10 +317,11 @@ export class MaterialsAdminService {
     const sources = new Map<number, Source | null>();
     for (const r of rows) {
       try {
-        if (r.fields.url) sources.set(r.index, { source: 'url', kind: r.fields.kind ?? 'activity_link', url: r.fields.url });
+        if (r.fields.sitePath) sources.set(r.index, { source: 'site', kind: 'activity_link', sitePath: r.fields.sitePath });
+        else if (r.fields.url) sources.set(r.index, { source: 'url', kind: r.fields.kind ?? 'activity_link', url: r.fields.url });
         else if (r.file) {
           if (!r.file.uploadToken) throw invalid(`file: ${r.file.name} has not been uploaded`, 409);
-          sources.set(r.index, await this.fileSource(actor.organizationId, r.file.uploadToken, 'item', r.fields.kind));
+          sources.set(r.index, await this.fileSource(actor, r.file.uploadToken, 'item', r.fields.kind));
         } else sources.set(r.index, null);
       } catch (e) {
         if (!(e instanceof CommError)) throw e;
@@ -420,7 +431,7 @@ export class MaterialsAdminService {
       if (why) throw invalid(`url: ${why}`);
       data = { url: body.url.trim(), objectKey: null };
     } else if (typeof body.uploadToken === 'string' && body.uploadToken) {
-      const file = await this.fileSource(actor.organizationId, body.uploadToken, 'recitation', 'audio');
+      const file = await this.fileSource(actor, body.uploadToken, 'recitation', 'audio');
       data = { url: null, objectKey: (file as { objectKey: string }).objectKey };
     } else throw invalid('url, uploadToken or clear: true');
 
@@ -461,10 +472,14 @@ export class MaterialsAdminService {
     return s;
   }
 
-  private async sourceFor(organizationId: string, fields: ItemFields, uploadToken: unknown): Promise<Source | null> {
+  private async sourceFor(actor: Actor & { organizationId: string }, fields: ItemFields, uploadToken: unknown): Promise<Source | null> {
     if (typeof uploadToken === 'string' && uploadToken) {
-      if (fields.url) throw invalid('url and uploadToken: an item has one source');
-      return this.fileSource(organizationId, uploadToken, 'item', fields.kind);
+      if (fields.url || fields.sitePath) throw invalid('path, url and uploadToken: an item has one source');
+      return this.fileSource(actor, uploadToken, 'item', fields.kind);
+    }
+    if (fields.sitePath) {
+      if (fields.kind && fields.kind !== 'activity_link') throw invalid('kind: a lesson of the lessons site is an activity_link');
+      return { source: 'site', kind: 'activity_link', sitePath: fields.sitePath };
     }
     if (fields.url) {
       const kind = fields.kind ?? 'activity_link';
@@ -475,34 +490,57 @@ export class MaterialsAdminService {
   }
 
   /**
-   * An uploaded file, checked: granted to this organization for this purpose,
-   * present in storage, the size granted, the real bytes of the type declared;
-   * a zip is read whole and validated as a package.
+   * An uploaded file, checked and PINNED. The upload's signed PUT stays usable
+   * until it expires, so the bytes under its key could still be replaced after
+   * they were reviewed. The file is therefore first copied, server side, to a
+   * key no upload grant can name (`materials/<org>/v/<uuid>`), and everything
+   * after that -- the real-bytes check, the package validation, the item, the
+   * play route -- uses only the copy. The original key is never served.
    */
-  async fileSource(organizationId: string, uploadToken: string, purpose: 'item' | 'recitation', declaredKind: Kind | null): Promise<Source> {
+  async fileSource(actor: Actor & { organizationId: string }, uploadToken: string, purpose: 'item' | 'recitation', declaredKind: Kind | null): Promise<Source> {
+    const organizationId = actor.organizationId;
     const upload = await this.prisma.materialUpload.findUnique({ where: { objectKey: uploadToken } });
     if (!upload || upload.organizationId !== organizationId || upload.purpose !== purpose) throw notFound('upload');
     const kind = kindOfMime(upload.mimeType);
     if (!kind) throw refused('not an accepted file type');
     if (declaredKind && declaredKind !== kind) throw invalid(`kind: the file is ${kind}, not ${declaredKind}`);
-    const head = await this.storage.readHead(upload.objectKey, 64);
-    if (!head) throw new CommError(CommErrorCode.MATERIAL_NOT_UPLOADED, `${upload.fileName ?? 'the file'} has not been uploaded`, 409);
-    if (head.byteSize !== Number(upload.byteSize)) throw refused(`${upload.fileName ?? 'the file'}: its size differs from the upload granted`);
-    if (!bytesMatchMime(head.head, upload.mimeType)) throw refused(`${upload.fileName ?? 'the file'}: its contents are not ${upload.mimeType}`);
-    const byteSize = Number(upload.byteSize);
-    if (kind !== 'activity_package') return { source: 'file', kind, objectKey: upload.objectKey, mimeType: upload.mimeType, byteSize };
+    const name = upload.fileName ?? 'the file';
+    if (!this.storage.copy) throw refused('this storage cannot pin an upload; the file is not accepted');
+    const pinned = `materials/${organizationId}/v/${randomUUID()}`;
+    if (!(await this.storage.copy(upload.objectKey, pinned))) {
+      throw new CommError(CommErrorCode.MATERIAL_NOT_UPLOADED, `${name} has not been uploaded`, 409);
+    }
+    try {
+      const source = await this.checkPinned(pinned, name, upload.mimeType, Number(upload.byteSize), kind);
+      await this.prisma.materialUpload.create({
+        data: {
+          objectKey: pinned, organizationId, issuedTo: actor.actorId, purpose,
+          fileName: upload.fileName, mimeType: upload.mimeType, byteSize: upload.byteSize,
+        },
+      });
+      return source;
+    } catch (e) {
+      await this.storage.delete(pinned).catch(() => undefined);
+      throw e;
+    }
+  }
 
-    const stored = await this.storage.read(upload.objectKey);
+  /** The pinned copy is what it claims: the size granted, the real bytes of its type, a valid package. */
+  private async checkPinned(objectKey: string, name: string, mimeType: string, byteSize: number, kind: Kind): Promise<Source> {
+    const head = await this.storage.readHead(objectKey, 64);
+    if (!head) throw new CommError(CommErrorCode.MATERIAL_NOT_UPLOADED, `${name} has not been uploaded`, 409);
+    if (head.byteSize !== byteSize) throw refused(`${name}: its size differs from the upload granted`);
+    if (!bytesMatchMime(head.head, mimeType)) throw refused(`${name}: its contents are not ${mimeType}`);
+    if (kind !== 'activity_package') return { source: 'file', kind, objectKey, mimeType, byteSize };
+
+    const stored = await this.storage.read(objectKey);
     if (!stored || stored === 'unsatisfiable') throw new CommError(CommErrorCode.MATERIAL_NOT_UPLOADED, 'the package has not been uploaded', 409);
     const zip = await collect(stored.body, PACKAGE_MAX_BYTES);
     try {
       const pkg = validatePackage(zip);
-      return {
-        source: 'package', kind: 'activity_package', objectKey: upload.objectKey, mimeType: upload.mimeType, byteSize,
-        packageEntry: pkg.entry, entries: pkg.entries, skipped: pkg.skipped,
-      };
+      return { source: 'package', kind: 'activity_package', objectKey, mimeType, byteSize, packageEntry: pkg.entry, entries: pkg.entries, skipped: pkg.skipped };
     } catch (e) {
-      if (e instanceof PackageRefused) throw refused(`${upload.fileName ?? 'the package'}: ${e.message}`);
+      if (e instanceof PackageRefused) throw refused(`${name}: ${e.message}`);
       throw e;
     }
   }
@@ -607,6 +645,7 @@ function importFiles(raw: unknown): ImportFile[] {
 function manifestRows(body: Record<string, unknown>): Array<Record<string, unknown>> {
   const m = body.manifest;
   if (typeof m === 'string') {
+    if (m.length > 5 * 1024 * 1024) throw invalid('manifest: at most 5 MB');
     if (body.format === 'json' || /^\s*[[{]/.test(m)) {
       let parsed: unknown;
       try {
@@ -616,7 +655,6 @@ function manifestRows(body: Record<string, unknown>): Array<Record<string, unkno
       }
       return jsonRows(parsed);
     }
-    if (m.length > 5 * 1024 * 1024) throw invalid('manifest: at most 5 MB');
     try {
       return parseCsv(m);
     } catch (e) {
@@ -685,10 +723,13 @@ function itemData(f: ItemFields) {
 }
 
 function sourceData(s: Source) {
+  if (s.source === 'site') {
+    return { kind: s.kind, source: 'site', sitePath: s.sitePath, url: null, objectKey: null, mimeType: null, byteSize: null, packageEntry: null };
+  }
   return s.source === 'url'
-    ? { kind: s.kind, source: 'url', url: s.url, objectKey: null, mimeType: null, byteSize: null, packageEntry: null }
+    ? { kind: s.kind, source: 'url', sitePath: null, url: s.url, objectKey: null, mimeType: null, byteSize: null, packageEntry: null }
     : {
-        kind: s.kind, source: s.source, url: null, objectKey: s.objectKey, mimeType: s.mimeType, byteSize: BigInt(s.byteSize),
+        kind: s.kind, source: s.source, sitePath: null, url: null, objectKey: s.objectKey, mimeType: s.mimeType, byteSize: BigInt(s.byteSize),
         packageEntry: s.source === 'package' ? s.packageEntry : null,
       };
 }
@@ -697,7 +738,7 @@ function sourceData(s: Source) {
 function rowOf(i: MaterialItem): Record<string, unknown> {
   return {
     ref: i.externalRef, title_ar: i.titleAr, title_en: i.titleEn, subject: i.subject, strand: i.strand, kind: i.kind,
-    age_groups: i.ageGroups, surah: i.surah, description: i.description, url: i.url, status: i.status,
+    age_groups: i.ageGroups, surah: i.surah, description: i.description, url: i.url, path: i.sitePath, status: i.status,
   };
 }
 
@@ -705,7 +746,7 @@ function rowOf(i: MaterialItem): Record<string, unknown> {
 function auditView(i: MaterialItem) {
   return {
     externalRef: i.externalRef, subject: i.subject, strand: i.strand, titleAr: i.titleAr, titleEn: i.titleEn, kind: i.kind,
-    source: i.source, url: i.url, ageGroups: i.ageGroups, surah: i.surah, status: i.status,
+    source: i.source, url: i.url, sitePath: i.sitePath, ageGroups: i.ageGroups, surah: i.surah, status: i.status,
   };
 }
 
@@ -721,6 +762,7 @@ export function adminDto(i: MaterialItem) {
     kind: i.kind,
     source: i.source,
     url: i.source === 'url' ? i.url : null,
+    sitePath: i.sitePath,
     mimeType: i.mimeType,
     byteSize: i.byteSize === null ? null : Number(i.byteSize),
     packageEntry: i.packageEntry,

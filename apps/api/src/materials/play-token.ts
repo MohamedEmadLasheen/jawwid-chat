@@ -8,7 +8,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * It sits in the PATH, not the query, so the package's own relative URLs
  * (`js/app.js`, `../img/a.png` inside the package) resolve under the same
  * token and keep working. It binds one item, one package (its object key),
- * one viewer and an expiry -- and, like every RT-037 link, it is not the
+ * one viewer and an expiry (30 minutes) -- and, like every RT-037 link, it is not the
  * authorization: each file request re-checks that the viewer is live and the
  * item still published.
  *
@@ -18,7 +18,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * media URL or anything else signed from that secret -- and vice versa.
  */
 export const PLAY_TOKEN_LABEL = 'jawwid/pd029/play-token/v1';
-export const PLAY_TOKEN_TTL_SECONDS = 2 * 60 * 60;
+/** Short: a package that navigates itself could show its own URL, token included. */
+export const PLAY_TOKEN_TTL_SECONDS = 30 * 60;
 
 export interface PlayClaims {
   itemId: string;

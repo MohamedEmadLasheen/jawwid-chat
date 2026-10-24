@@ -6,9 +6,10 @@ import { AGE_GROUPS, ITEM_STATUSES, KINDS, STRANDS, SUBJECTS, type ItemStatus, t
  * it must meet. Shared by the single-item form and the bulk import, so a row
  * the import accepts is exactly an item the form would accept.
  *
- * A row names its source as `url` (an https link) or `file` (a file name in
- * the same import, or an upload token on the form) -- never both. On an update
- * a row may name neither: the item keeps the source it has.
+ * A row names ONE source: `path` (a lesson of the configured lessons site --
+ * its path only, joined to MATERIALS_SITE_BASE_URL when opened), `url` (any
+ * https link) or `file` (a file name in the same import, or an upload token on
+ * the form). On an update a row may name none: the item keeps its source.
  */
 export interface ItemFields {
   externalRef: string | null;
@@ -21,6 +22,7 @@ export interface ItemFields {
   surah: number | null;
   description: string | null;
   url: string | null;
+  sitePath: string | null;
   file: string | null;
   status: ItemStatus | null;
 }
@@ -29,7 +31,7 @@ export const MAX_IMPORT_ROWS = 1000;
 
 /** The manifest's column names, in the order the template lists them. */
 export const MANIFEST_COLUMNS = [
-  'ref', 'title_ar', 'title_en', 'subject', 'strand', 'kind', 'age_groups', 'surah', 'description', 'url', 'file', 'status',
+  'ref', 'title_ar', 'title_en', 'subject', 'strand', 'kind', 'age_groups', 'surah', 'description', 'path', 'url', 'file', 'status',
 ] as const;
 
 const ALIASES: Record<string, string> = {
@@ -39,6 +41,7 @@ const ALIASES: Record<string, string> = {
   subject: 'subject', strand: 'strand', kind: 'kind', type: 'kind',
   age_groups: 'age_groups', agegroups: 'age_groups', age_group: 'age_groups', ages: 'age_groups',
   surah: 'surah', description: 'description', url: 'url', link: 'url',
+  path: 'path', site_path: 'path', sitepath: 'path', lesson_path: 'path',
   file: 'file', file_name: 'file', filename: 'file', status: 'status',
 };
 
@@ -74,6 +77,15 @@ export function checkHttpsUrl(raw: string): string | null {
   if (u.protocol !== 'https:') return 'must start with https://';
   if (!u.hostname) return 'has no host';
   if (u.username || u.password) return 'must not carry a user name or password';
+  return null;
+}
+
+/** A site path (`/lessons/quran/surah-78`), or the reason it is refused. */
+export function checkSitePath(raw: string): string | null {
+  if (raw.length > 500) return 'at most 500 characters';
+  if (!/^\/[A-Za-z0-9._~/-]*$/.test(raw) || raw.startsWith('//') || /(^|\/)\.\.(\/|$)/.test(raw)) {
+    return 'a path on the lessons site, starting with / (letters, digits, - _ . ~ /)';
+  }
   return null;
 }
 
@@ -126,8 +138,14 @@ export function parseItemRow(raw: Record<string, unknown>): { fields: ItemFields
     const why = checkHttpsUrl(url);
     if (why) errors.push(`url: ${why}`);
   }
+  const sitePath = text(r.path);
+  if (sitePath) {
+    const why = checkSitePath(sitePath);
+    if (why) errors.push(`path: ${why}`);
+    if (kind && kind !== 'activity_link') errors.push('kind: a lesson of the lessons site is an activity_link');
+  }
   const file = text(r.file);
-  if (url && file) errors.push('url and file: a row names one source, not both');
+  if ([url, sitePath, file].filter(Boolean).length > 1) errors.push('path, url and file: a row names one source');
   if (url && kind === 'activity_package') errors.push('kind: an activity_package is an uploaded zip, not a link');
 
   const statusRaw = text(r.status);
@@ -135,7 +153,7 @@ export function parseItemRow(raw: Record<string, unknown>): { fields: ItemFields
   if (status && !(ITEM_STATUSES as readonly string[]).includes(status)) errors.push(`status: one of ${ITEM_STATUSES.join(', ')}`);
 
   return {
-    fields: { externalRef, titleAr, titleEn, subject, strand, kind, ageGroups, surah, description, url, file, status },
+    fields: { externalRef, titleAr, titleEn, subject, strand, kind, ageGroups, surah, description, url, sitePath, file, status },
     errors,
   };
 }
@@ -188,7 +206,8 @@ export function parseCsv(input: string): Array<Record<string, string>> {
 export function manifestTemplate(): string {
   return [
     MANIFEST_COLUMNS.join(','),
-    'quran-juz30-naba-game,لعبة سورة النبأ,An-Naba game,quran,memorization,activity_package,4-6|7-9,78,,,naba-game.zip,draft',
-    'arabic-letters-song,أنشودة الحروف,Letters song,arabic,,video,4-6,,,https://example.org/letters,,draft',
+    '/lessons/quran/surah-78,سورة النبأ,Surah An-Naba,quran,memorization,activity_link,,78,,/lessons/quran/surah-78,,,draft',
+    'quran-juz30-naba-game,لعبة سورة النبأ,An-Naba game,quran,memorization,activity_package,4-6|7-9,78,,,,naba-game.zip,draft',
+    'arabic-letters-song,أنشودة الحروف,Letters song,arabic,,video,4-6,,,,https://example.org/letters,,draft',
   ].join('\r\n') + '\r\n';
 }

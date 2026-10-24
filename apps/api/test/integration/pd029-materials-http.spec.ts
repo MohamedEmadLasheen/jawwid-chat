@@ -47,6 +47,9 @@ jest.setTimeout(300_000);
 const REDIS_URL = process.env.AUTH_TEST_REDIS_URL ?? process.env.REDIS_URL ?? 'redis://localhost:6410';
 const inheritedRedisUrl = process.env.REDIS_URL;
 const inheritedCors = process.env.CORS_ALLOWED_ORIGINS;
+const inheritedSite = process.env.MATERIALS_SITE_BASE_URL;
+const inheritedFrames = process.env.MATERIALS_FRAME_ORIGINS;
+const SITE = 'https://lessons.pd29.example.test';
 const PASSWORD = 'pd29-http-spec-password-1';
 const DOMAIN = 'pd29http.qa.jawwid.test';
 const DOMAIN2 = 'pd29http2.qa.jawwid.test';
@@ -68,6 +71,12 @@ class MemoryStorage implements ObjectStorage {
   }
   async delete(objectKey: string) {
     this.blobs.delete(objectKey);
+  }
+  async copy(source: string, target: string) {
+    const b = this.blobs.get(source);
+    if (!b) return false;
+    this.blobs.set(target, { mimeType: b.mimeType, bytes: Buffer.from(b.bytes) });
+    return true;
   }
   async readHead(objectKey: string, maxBytes: number) {
     const b = this.blobs.get(objectKey);
@@ -170,6 +179,8 @@ beforeAll(async () => {
 
   process.env.REDIS_URL = REDIS_URL;
   process.env.CORS_ALLOWED_ORIGINS = ADMIN_ORIGIN;
+  process.env.MATERIALS_SITE_BASE_URL = SITE;
+  process.env.MATERIALS_FRAME_ORIGINS = 'https://activities.example.test';
   const moduleRef = await Test.createTestingModule({
     imports: [PlatformModule, AuthModule, CommunicationModule, LessonModule, MaterialsModule],
   }).overrideProvider(OBJECT_STORAGE).useValue(storage).compile();
@@ -193,6 +204,10 @@ afterAll(async () => {
   else process.env.REDIS_URL = inheritedRedisUrl;
   if (inheritedCors === undefined) delete process.env.CORS_ALLOWED_ORIGINS;
   else process.env.CORS_ALLOWED_ORIGINS = inheritedCors;
+  if (inheritedSite === undefined) delete process.env.MATERIALS_SITE_BASE_URL;
+  else process.env.MATERIALS_SITE_BASE_URL = inheritedSite;
+  if (inheritedFrames === undefined) delete process.env.MATERIALS_FRAME_ORIGINS;
+  else process.env.MATERIALS_FRAME_ORIGINS = inheritedFrames;
 });
 
 async function linkItem(subject: string, extra: Record<string, unknown> = {}) {
@@ -306,11 +321,11 @@ describe('3. open: the access decision', () => {
     for (const who of [parent, teacher, supervisor]) {
       const r = await http(who, 'POST', `/materials/items/${item.id}/open`);
       expect(r.status).toBe(201);
-      expect(r.json).toMatchObject({ mode: 'file', kind: 'pdf', mimeType: 'application/pdf' });
+      expect(r.json).toMatchObject({ mode: 'file', presentation: 'file', kind: 'pdf', mimeType: 'application/pdf' });
       expect(r.json.url).toMatch(/^https:\/\/storage\.pd29\.example\.test\/.+\?ttl=3600&sig=/);
     }
     const link = await linkItem(manager);
-    expect((await http(parent, 'POST', `/materials/items/${link.id}/open`)).json).toMatchObject({ mode: 'link', url: 'https://activities.example.test/a' });
+    expect((await http(parent, 'POST', `/materials/items/${link.id}/open`)).json).toMatchObject({ mode: 'link', presentation: 'frame-site', url: 'https://activities.example.test/a' });
   });
 
   it('a draft is the managers\' preview only; another organization gets the same 404 as an unknown id', async () => {
@@ -330,7 +345,7 @@ describe('4. play', () => {
   it('serves a package\'s files sandboxed: CSP sandbox without same-origin, nosniff, its own type, CORS for its opaque origin', async () => {
     const item = (await packageItem()).json;
     const open = await http(parent, 'POST', `/materials/items/${item.id}/open`);
-    expect(open.json.mode).toBe('package');
+    expect(open.json).toMatchObject({ mode: 'package', presentation: 'frame-isolated' });
     const url = open.json.url as string;
     expect(url).toMatch(new RegExp(`/api/v1/materials/play/${item.id}/[^/]+/index\\.html$`));
 
@@ -390,6 +405,57 @@ describe('4. play', () => {
     expect(r.status).toBe(206);
     expect(r.headers.get('content-range')).toBe('bytes 4-7/16');
     expect(await r.text()).toBe('4567');
+  });
+});
+
+describe('4b. pinning and presentation', () => {
+  it('an upload is pinned at validation: bytes put under the grant afterwards are never served', async () => {
+    const token = await upload(manager, 'p.pdf', 'application/pdf', PDF);
+    const item = (await http(manager, 'POST', '/materials/admin/items', { titleAr: 'كتاب', subject: 'arabic', uploadToken: token, status: 'published' })).json;
+    const row = await g.prisma.materialItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(row.objectKey).not.toBe(token);
+    expect(row.objectKey).toMatch(new RegExp(`^materials/${orgId}/v/`));
+    // The still-live grant is used to swap the bytes: same type, same length.
+    storage.put(token, 'application/pdf', Buffer.from('%PDF-1.7\n% swapped!\n'));
+    const open = await http(parent, 'POST', `/materials/items/${item.id}/open`);
+    expect(open.json.url).toContain(row.objectKey!);
+    expect(storage.blobs.get(row.objectKey!)!.bytes.equals(PDF)).toBe(true);
+
+    // A package too: the play route serves the validated copy.
+    const zipToken = await upload(manager, 'g.zip', 'application/zip', sampleActivity());
+    const pkg = (await http(manager, 'POST', '/materials/admin/items', { titleAr: 'لعبة', subject: 'quran', uploadToken: zipToken, status: 'published' })).json;
+    storage.put(zipToken, 'application/zip', buildZip([{ name: 'index.html', data: '<script>steal()</script>' }]));
+    const url = (await http(parent, 'POST', `/materials/items/${pkg.id}/open`)).json.url as string;
+    expect(await (await fetch(url)).text()).toContain('<h1>Activity</h1>');
+  });
+
+  it('a lesson of the lessons site stores its path; the configured base is joined when opened, framed from its own origin', async () => {
+    const r = await http(manager, 'POST', '/materials/admin/import', {
+      manifest: 'ref,title_ar,subject,strand,surah,path,status\r\n/lessons/quran/surah-78,سورة النبأ,quran,memorization,78,/lessons/quran/surah-78,published\r\n',
+      dryRun: false,
+    });
+    expect(r.json).toMatchObject({ committed: true, summary: { create: 1 } });
+    const row = await g.prisma.materialItem.findFirstOrThrow({ where: { organizationId: orgId, externalRef: '/lessons/quran/surah-78' } });
+    expect(row).toMatchObject({ source: 'site', sitePath: '/lessons/quran/surah-78', url: null, kind: 'activity_link' });
+    const open = await http(parent, 'POST', `/materials/items/${row.id}/open`);
+    expect(open.json).toMatchObject({ mode: 'link', presentation: 'frame-site', url: `${SITE}/lessons/quran/surah-78` });
+    // Re-importing the same path updates, never duplicates.
+    await http(manager, 'POST', '/materials/admin/import', {
+      manifest: 'ref,title_ar,subject,path\r\n/lessons/quran/surah-78,سورة النبأ (محدّثة),quran,/lessons/quran/surah-78\r\n', dryRun: false,
+    });
+    expect(await g.prisma.materialItem.count({ where: { organizationId: orgId, externalRef: '/lessons/quran/surah-78' } })).toBe(1);
+    // The database refuses a site path that leaves the site.
+    await expect(g.prisma.$executeRawUnsafe(`update chat.material_item set site_path = '//evil.test/x' where id = '${row.id}'::uuid`)).rejects.toThrow();
+  });
+
+  it('a link off the allowlist opens in the browser, never framed', async () => {
+    const off = await linkItem(manager, { url: 'https://elsewhere.example.test/game' });
+    expect((await http(parent, 'POST', `/materials/items/${off.id}/open`)).json).toMatchObject({ presentation: 'browser', url: 'https://elsewhere.example.test/game' });
+  });
+
+  it('a JSON manifest over 5 MB is refused before it is parsed', async () => {
+    const r = await http(manager, 'POST', '/materials/admin/import', { format: 'json', manifest: `[${' '.repeat(5 * 1024 * 1024)}]` });
+    expect([r.status, r.code]).toEqual([400, CommErrorCode.MATERIAL_INVALID]);
   });
 });
 
