@@ -1,6 +1,27 @@
 # Admin Web static hosting. Owner: AI #7 (infrastructure).
 # Rendered by the nginx image's envsubst at container start.
 
+# NO `add_header` INSIDE A LOCATION. nginx inherits a server block's
+# add_header directives into a location only when that location has none of its
+# own, so a single per-location add_header silently strips the CSP, HSTS and
+# nosniff from every response it serves. That is exactly how Admin Web's own
+# index.html went out without a CSP (frame-ancestors) or HSTS until PD-28.
+# Anything that differs per path is therefore chosen by a map here and sent
+# once, at server level; scripts/infra/check-web-headers.sh asserts the result
+# in CI (on the built image) and after every deploy (smoke.sh).
+#
+# Cache-Control per path. An empty value sends no header.
+#   /assets/   Vite's content-hashed bundles: cached for good (with `expires 1y`)
+#   /index.html  never cached: it names the bundles of THIS release
+#   /teacher/  the PD-28 portal: Flutter's names are not hashed, so every file
+#              is revalidated (ETag, a 304 when unchanged)
+map $uri $jawwid_cache_control {
+    ~^/assets/        "public, immutable";
+    /index.html       "no-store, must-revalidate";
+    ~^/teacher(/|$)   "no-cache";
+    default           "";
+}
+
 # PD-28: one policy per app on this origin. Admin Web keeps its policy byte for
 # byte; the teacher portal under /teacher/ (the Flutter web build, see
 # docs/mobile/teacher-web-portal.md) gets a copy with exactly three additions:
@@ -54,6 +75,7 @@ server {
     # A wildcard here would let injected script exfiltrate customer messages to
     # any host it liked. The policy itself is chosen per app by the map above.
     add_header Content-Security-Policy $jawwid_csp always;
+    add_header Cache-Control $jawwid_cache_control always;
 
     gzip on;
     gzip_types text/plain text/css application/javascript application/json image/svg+xml;
@@ -61,42 +83,37 @@ server {
 
     location = /healthz {
         access_log off;
-        add_header Content-Type text/plain;
+        default_type text/plain;
         return 200 "ok\n";
     }
 
     # Vite emits content-hashed filenames under /assets, so these are safe to
-    # cache permanently. A new deploy produces new names.
+    # cache permanently. A new deploy produces new names. (Cache-Control comes
+    # from $jawwid_cache_control; `expires` adds the max-age.)
     location /assets/ {
         expires 1y;
-        add_header Cache-Control "public, immutable";
         try_files $uri =404;
     }
 
     # index.html must NEVER be cached: it is the file that points at the hashed
     # bundles. A cached index.html is how a browser keeps loading the previous
     # release after a rollback and reports "the fix didn't deploy".
+    # (Cache-Control: no-store, from $jawwid_cache_control.)
     location = /index.html {
-        add_header Cache-Control "no-store, must-revalidate" always;
         try_files $uri =404;
     }
 
-    # PD-28: the teacher web portal. Its file names carry no content hash, so
-    # nothing here is cached without asking: `expires -1` sends
-    # `Cache-Control: no-cache`, every file is revalidated with its ETag (a 304
-    # when unchanged), and a new deploy is picked up on the next load. It is
-    # `expires`, not `add_header`, on purpose: an add_header in a location drops
-    # every add_header of the server block, the CSP and HSTS among them. Unknown paths fall back to the portal's own index.html; it routes
-    # with #-URLs, so the fallback only ever serves a reload or a mistyped path.
-    # `=404` (not a redirect) when no portal is in the image, so a local Admin Web
-    # image without one answers 404 instead of looping.
+    # PD-28: the teacher web portal. Unknown paths fall back to the portal's own
+    # index.html; it routes with #-URLs, so the fallback only ever serves a
+    # reload or a mistyped path. `=404` (not a redirect) when no portal is in
+    # the image, so a local Admin Web image without one answers 404 instead of
+    # looping. (Cache-Control: no-cache, from $jawwid_cache_control.)
     location = /teacher {
         absolute_redirect off;
         return 301 /teacher/;
     }
 
     location /teacher/ {
-        expires -1;
         try_files $uri $uri/index.html /teacher/index.html =404;
     }
 

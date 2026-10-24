@@ -34,9 +34,20 @@ directory to `/usr/share/nginx/html/teacher/`.
 ## Serving (`apps/admin-web/infra-nginx/default.conf.template`)
 
 - `location /teacher/`: falls back to the portal's own `index.html`, then `=404`.
-  `expires -1` (`Cache-Control: no-cache`), because Flutter's file names are not hashed.
-  Every file is revalidated by ETag. It uses `expires`, not `add_header`, because an
-  `add_header` inside a location drops the server's security headers.
+- **Caching:** the portal is sent with `Cache-Control: no-cache`, because Flutter's file
+  names are not hashed. Every file is revalidated by ETag.
+- **No `add_header` inside any location.** nginx drops all of a server's `add_header`
+  directives in any location that has one of its own. That is how Admin Web's own
+  `index.html` went out without its CSP (`frame-ancestors`), HSTS and nosniff before
+  PD-28.
+  - Every per-path header is now chosen by a server-level `map`: `$jawwid_cache_control`
+    for caching, `$jawwid_csp` for the policy.
+  - `scripts/infra/check-web-headers.sh` asserts the headers on `/`, `/index.html`, a deep
+    link, `/teacher/`, `/teacher/index.html` and a portal deep link: the CSP with
+    `frame-ancestors 'none'`, HSTS, nosniff, the right policy per app, and the caching
+    rule.
+  - The check runs in CI (`ci.yml`, images job, on the freshly built image with a
+    stand-in portal) and after every deploy (`smoke.sh --web`).
 - `/teacher` redirects to `/teacher/` with a relative `Location`.
 - **CSP:** a `map` picks the policy per app. Admin Web's policy is unchanged. `/teacher/`
   gets the same policy plus:
@@ -145,9 +156,9 @@ Screenshots: [`evidence/pd28/`](evidence/pd28/).
   connects (timer running), and LiveKit logs the browser's published `audio/opus`
   microphone track. The other side answered through the API only, so two-way audio
   between two real people was not exercised.
-- **Headers:** `/teacher/` responses carry the portal CSP, HSTS, `nosniff` and
-  `Cache-Control: no-cache`. `/teacher` answers 301 to `/teacher/`. Unknown paths serve
-  the portal's `index.html`.
+- **Headers:** `check-web-headers.sh` passed 37/37 on the image. Before the fix it reported
+  `/`, `/index.html` and Admin Web deep links with no CSP, HSTS or nosniff. With the CSP now
+  applied, Admin Web still signs in and loads its conversations, with no CSP violations.
 
 ## Known limits and follow-ups
 
