@@ -1,0 +1,11 @@
+{
+    "name": "Jawwid — Teacher portal",
+    "short_name": "Jawwid",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#FFFFFF",
+    "theme_color": "#195766",
+    "description": "Jawwid Chat for teachers, in the browser (PD-28).",
+    "prefer_related_applications": false,
+    "icons": []
+}

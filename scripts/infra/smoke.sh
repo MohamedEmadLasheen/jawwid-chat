@@ -106,6 +106,15 @@ if [ -n "$WEB" ]; then
   # index.html must not be cached, or a rollback keeps serving the old bundle.
   printf '%s' "$wh" | grep -Eq 'cache-control:.*(no-store|no-cache)' \
     && ok "index.html is not cached" || bad "index.html is cacheable -- rollbacks will not take effect"
+
+  # Every HTML entry point -- Admin Web and the PD-28 teacher portal under
+  # /teacher/ -- carries the CSP with frame-ancestors, HSTS and nosniff, each
+  # app with its own policy. Shared with CI, which runs it on the built image.
+  if "$(dirname "${BASH_SOURCE[0]}")/check-web-headers.sh" "$WEB" | sed 's/^/  /'; then
+    ok "security headers on every Admin Web and teacher portal entry point"
+  else
+    bad "security headers missing on an entry point (see check-web-headers above)"
+  fi
 fi
 
 echo

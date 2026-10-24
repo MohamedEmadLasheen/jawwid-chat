@@ -26,11 +26,18 @@ class AuthSession {
     required this.accessToken,
     required this.refreshToken,
     required this.accessTokenExpiresAt,
+    this.remembered,
   });
 
   final String accessToken;
   final String refreshToken;
   final DateTime accessTokenExpiresAt;
+
+  /// PD-23 `session.remembered`, as a LOGIN answered it: "keep me signed in" is in effect.
+  /// Null for a refresh, which never changes where the session is kept. Only the PD-28
+  /// browser store reads it (localStorage when true, sessionStorage otherwise); the phone
+  /// keeps every session in the Keychain / Keystore.
+  final bool? remembered;
 
   /// Treat the token as expired slightly early so a request does not race the expiry.
   bool isExpired(DateTime now, {Duration skew = const Duration(seconds: 30)}) =>

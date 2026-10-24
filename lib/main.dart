@@ -46,7 +46,11 @@ Future<void> main() async {
   // Started HERE rather than from a widget because push must not depend on which screen
   // happens to be mounted -- and because `app.dart` and `router.dart` belong to a closed
   // workstream. It must be listened, not read: see `startPushRegistration`.
-  startPushRegistration(container);
+  //
+  // PD-28: not in a browser. The web portal has no push channel (APNs / FCM tokens come from
+  // the phone's native code), so there is nothing to register; it is told about new messages
+  // over the realtime connection while the tab is open, as the app is while it is in front.
+  if (!kIsWeb) startPushRegistration(container);
 
   // PD-22. The account's time zone follows the phone (or the zone picked in Settings) for as
   // long as the app runs; started here for the same reasons as push registration.

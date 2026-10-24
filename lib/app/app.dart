@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../design/theme.dart';
 import '../features/app_lock/presentation/app_lock_gate.dart';
+import '../features/auth/presentation/web_portal_gate.dart';
 import '../features/calls/presentation/call_presenter.dart';
 import '../features/settings/application/theme_mode_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -81,8 +82,13 @@ class JawwidApp extends ConsumerWidget {
           // protected route can show above an unlocked check -- except the call
           // screen, which a locked app still rings and answers on (see
           // `app_lock_gate.dart`).
-          child: CallPresenter(
-            child: AppLockGate(child: child ?? const SizedBox.shrink()),
+          //
+          // PD-28: in a browser, an account that is not a teacher's gets the "web portal is
+          // for teachers" screen in place of all of it -- calls included. A no-op on a phone.
+          child: WebPortalGate(
+            child: CallPresenter(
+              child: AppLockGate(child: child ?? const SizedBox.shrink()),
+            ),
           ),
         );
       },

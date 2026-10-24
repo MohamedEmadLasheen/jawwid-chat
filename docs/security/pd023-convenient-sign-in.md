@@ -26,6 +26,8 @@ answer:
 | Who | Where | Idle | Absolute |
 |---|---|---|---|
 | Parent, teacher | app | 30 d | none |
+| Parent, teacher | web (PD-28 portal), kept signed in | 7 d | 30 d |
+| Parent, teacher | web (PD-28 portal), this tab only | 12 h | 7 d |
 | Staff (not super admin) | app | 14 d | 30 d |
 | Staff (not super admin) | Admin Web, kept signed in | 7 d | 30 d |
 | Staff (not super admin) | Admin Web, this tab only | 12 h | 7 d |
@@ -36,6 +38,10 @@ answer:
   from the session row; a refresh cannot restate them.
 - A staff login that names no platform gets the stricter "this tab only" policy. A missing
   field never buys a longer session.
+- PD-28: a parent or teacher login gets the browser limits only when it names `web`; one that
+  names no platform keeps the app's 30 days, so no phone build changes behaviour. The web
+  portal stores its tokens exactly as section 4 describes, under its own keys
+  (`jawwid.teacher.refresh*`, Web Lock `jawwid.teacher.refresh`).
 - `JWT_REFRESH_TTL` still caps the idle window. It can only shorten a session, never lengthen one.
 - When a refresh finds the session past its absolute limit, it ends the session with the
   reason `session lifetime reached`. It is never ended as `rotated`, because a row marked

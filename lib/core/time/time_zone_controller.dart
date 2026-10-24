@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../features/auth/presentation/web_portal_gate.dart';
 import '../../shared/utils/app_clock.dart';
 import 'time_zone_api.dart';
 
@@ -58,7 +59,10 @@ class TimeZoneController extends AsyncNotifier<TimeZoneState> {
     _lifecycle = null;
     ref.onDispose(() => _lifecycle?.dispose());
 
-    final api = principal == null ? null : ref.watch(timeZoneApiProvider);
+    // PD-28: an account the web portal turned away is not reported for: the browser it opened
+    // is not where it lives.
+    final refused = ref.watch(webPortalRefusedProvider);
+    final api = principal == null || refused ? null : ref.watch(timeZoneApiProvider);
     final device = await _deviceZone();
     if (api == null) {
       _apply(null);

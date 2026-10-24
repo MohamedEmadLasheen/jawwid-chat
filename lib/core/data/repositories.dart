@@ -292,9 +292,13 @@ class OutgoingMessage {
 // ---------------------------------------------------------------------------------------
 
 abstract interface class AuthRepository {
+  /// [remember] is PD-23's "keep me signed in on this device". Only the PD-28 browser sends
+  /// it (the phone keeps every session in the Keychain / Keystore); the server decides whether
+  /// it is granted and says so in [AuthSession.remembered].
   Future<AuthSession> signIn({
     required String username,
     required String password,
+    bool remember = false,
   });
 
   /// The server-asserted principal. Never inferred from a cached value (§7).

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -207,8 +208,9 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
 
-          // PD-23: app lock -- per account, on this device.
-          if (user != null) ...[
+          // PD-23: app lock -- per account, on this device. PD-28: not in a browser, which has
+          // no Face ID / passcode prompt to ask (`local_auth` has no web implementation).
+          if (user != null && !kIsWeb) ...[
             const _AppLockSection(),
             const Divider(),
           ],

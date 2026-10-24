@@ -76,6 +76,11 @@ dependencies:
   # own, which is the same bar the rest of this dependency list is held to.
   image_picker: ^1.2.3
   file_selector: ^1.1.0
+  # PD-28: the picked file as both pickers already return it. On a phone it is a
+  # path; in a browser it is a blob: URL that `dart:io` cannot open. Reading the
+  # bytes through XFile works on both. flutter.dev's own, already in the tree
+  # through both pickers.
+  cross_file: ^0.3.5
   url_launcher: ^6.3.2
 
   # Story video. The ONLY reason this is here: the Stories backend accepts
@@ -96,6 +101,14 @@ dependencies:
   # touches the platform channel. Android needs MainActivity to be a
   # FlutterFragmentActivity; iOS needs NSFaceIDUsageDescription.
   local_auth: ^3.0.2
+
+  # PD-28: the teacher web portal. Browser storage (sessionStorage /
+  # localStorage), the Web Locks API and the user agent, for the token store and
+  # the device name -- the same three things Admin Web uses. dart.dev's own, and
+  # already in the tree through the web plugins. Imported only behind a
+  # conditional import (lib/core/storage/browser_storage_web.dart), so the phone
+  # builds never compile it.
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

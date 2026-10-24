@@ -196,7 +196,11 @@ function applyCors(app: INestApplication, allowedOrigins: string[]): void {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id'],
+    // X-Idempotency-Key: the Flutter app sends it on every replayable write
+    // (lib/core/network/api_client.dart). A phone never preflights, so it was
+    // never listed; the PD-28 teacher web portal is the same app in a browser,
+    // and without it every message send is refused at the preflight.
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Idempotency-Key', 'X-Request-Id'],
     // Content-Disposition: the file name of a chat export (a download).
     exposedHeaders: ['X-Request-Id', 'Content-Disposition'],
     maxAge: 600,

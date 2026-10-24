@@ -35,16 +35,29 @@ class StoredTokenProvider implements TokenProvider, RenewalReporting {
     required TokenStore store,
     required AuthRepository auth,
     required Future<void> Function(AppError) onEnded,
+    Future<Renewal> Function(Future<Renewal> Function() exchange)? exclusive,
   })  : _store = store,
         _auth = auth,
-        _onEnded = onEnded;
+        _onEnded = onEnded,
+        _exclusive = exclusive;
 
   final TokenStore _store;
   final AuthRepository _auth;
   final Future<void> Function(AppError) _onEnded;
 
+  /// PD-28: runs one whole exchange -- read the refresh token, present it, store the next --
+  /// so that no other holder of the same token can interleave. Only the browser store needs
+  /// it (its tabs may share a token); null runs the exchange directly.
+  final Future<Renewal> Function(Future<Renewal> Function() exchange)? _exclusive;
+
+  /// Empty means none: the PD-28 browser store keeps the access token in memory only, so after
+  /// a reload it has a refresh token and no access token. No header is sent, the API answers
+  /// 401, and the session is renewed the ordinary way.
   @override
-  Future<String?> accessToken() async => (await _store.read())?.accessToken;
+  Future<String?> accessToken() async {
+    final token = (await _store.read())?.accessToken;
+    return token == null || token.isEmpty ? null : token;
+  }
 
   Future<Renewal>? _inFlight;
 
@@ -56,7 +69,9 @@ class StoredTokenProvider implements TokenProvider, RenewalReporting {
     final existing = _inFlight;
     if (existing != null) return existing;
 
-    final flight = _exchange().whenComplete(() => _inFlight = null);
+    final exclusive = _exclusive;
+    final flight = (exclusive == null ? _exchange() : exclusive(_exchange))
+        .whenComplete(() => _inFlight = null);
     _inFlight = flight;
     return flight;
   }

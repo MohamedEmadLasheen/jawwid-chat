@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// What this device calls itself, for `POST /auth/login`.
@@ -64,7 +65,17 @@ class PlatformDeviceDescriptor implements DeviceDescriptor {
     try {
       final version = (await PackageInfo.fromPlatform()).version;
 
-      if (Platform.isIOS) {
+      // PD-28 first: `Platform` is unsupported in a browser and throws on the first read.
+      if (kIsWeb) {
+        final browser = await _deviceInfo.webBrowserInfo;
+        _cached = DeviceDescription(
+          // 'web' is what selects the browser session lifetimes (PD-23 session-policy.ts):
+          // 12 h / 7 d, or 7 d / 30 d when "keep me signed in" is granted.
+          platform: 'web',
+          name: browserDeviceLabel(browser.userAgent, platform: browser.platform),
+          appVersion: version,
+        );
+      } else if (Platform.isIOS) {
         final ios = await _deviceInfo.iosInfo;
         _cached = DeviceDescription(
           platform: 'ios',
@@ -80,11 +91,58 @@ class PlatformDeviceDescriptor implements DeviceDescriptor {
         );
       }
       // Any other host — desktop during development — is left null rather than sent as
-      // `web`, which would be a lie the user would later read off their session list.
+      // `web`, which would be a lie the user would later read off their session list. (The
+      // PD-28 web build above is a browser, so for it `web` is the truth.)
     } catch (_) {
       // A plugin that is unavailable must not cost anybody their login.
       _cached = null;
     }
     return _cached;
   }
+}
+
+/// PD-28: the name a browser signs in under ("Chrome on macOS"), so Devices & sessions can
+/// tell one browser from another. The same rules as Admin Web's `deviceLabel`
+/// (`apps/admin-web/src/core/auth/device.ts`), so a teacher's laptop and an administrator's
+/// read alike: at most 60 characters, and never a version number -- a label for a person,
+/// not a fingerprint.
+String browserDeviceLabel(String? userAgent, {String? platform}) {
+  final ua = userAgent ?? '';
+  final browser = _browserFromUserAgent(ua) ?? 'Web browser';
+  final os = _osFromUserAgent(ua) ?? _osFromPlatform(platform);
+  final label = os == null ? browser : '$browser on $os';
+  return label.length > 60 ? label.substring(0, 60) : label;
+}
+
+String? _browserFromUserAgent(String ua) {
+  if (RegExp(r'Edg(e|A|iOS)?/').hasMatch(ua)) return 'Edge';
+  if (RegExp(r'OPR/|Opera').hasMatch(ua)) return 'Opera';
+  if (ua.contains('SamsungBrowser/')) return 'Samsung Internet';
+  if (RegExp(r'Firefox/|FxiOS/').hasMatch(ua)) return 'Firefox';
+  if (RegExp(r'CriOS/|Chrome/').hasMatch(ua)) return 'Chrome';
+  if (ua.contains('Safari/')) return 'Safari';
+  return null;
+}
+
+String? _osFromUserAgent(String ua) {
+  if (ua.contains('iPhone')) return 'iPhone';
+  if (ua.contains('iPad')) return 'iPad';
+  if (ua.contains('Android')) return 'Android';
+  if (ua.contains('Windows')) return 'Windows';
+  if (ua.contains('CrOS')) return 'ChromeOS';
+  if (RegExp(r'Mac OS X|Macintosh').hasMatch(ua)) return 'macOS';
+  if (ua.contains('Linux')) return 'Linux';
+  return null;
+}
+
+String? _osFromPlatform(String? platform) {
+  if (platform == null || platform.isEmpty) return null;
+  final p = platform.toLowerCase();
+  if (p.contains('mac')) return 'macOS';
+  if (p.contains('win')) return 'Windows';
+  if (p.contains('android')) return 'Android';
+  if (p.contains('chrome os') || p.contains('chromeos') || p.contains('cros')) return 'ChromeOS';
+  if (p.contains('ios')) return 'iOS';
+  if (p.contains('linux')) return 'Linux';
+  return null;
 }
