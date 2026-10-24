@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/media/local_image.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
@@ -216,7 +215,7 @@ class _Thumbnail extends StatelessWidget {
     }
 
     if (attachment.isLocal) {
-      return Image.file(File(url), fit: BoxFit.cover);
+      return Image(image: localImageProvider(url), fit: BoxFit.cover);
     }
 
     return Image.network(

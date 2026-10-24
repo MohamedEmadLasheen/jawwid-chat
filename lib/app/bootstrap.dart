@@ -27,7 +27,9 @@ import '../core/network/device_descriptor.dart';
 import '../core/network/http_stack.dart';
 import '../core/push/push_registration.dart';
 import '../core/realtime/realtime_socket.dart';
+import '../core/storage/browser_token_store.dart';
 import '../core/storage/secure_token_store.dart';
+import '../core/storage/token_store_factory.dart';
 import '../core/time/time_zone_api.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/application/session_termination.dart';
@@ -112,7 +114,8 @@ Future<List<Override>> bootstrap({
 /// paragraph above forbids.
 List<Override> _httpOverrides() {
   final config = ApiConfig.fromEnvironment();
-  final tokenStore = SecureTokenStore();
+  // The Keychain / Keystore on a phone; sessionStorage / localStorage in the PD-28 browser.
+  final tokenStore = platformTokenStore();
   final session = SessionContext();
 
   // The wire from the transport to the controller. `ApiClient` is what sees a revocation on
@@ -136,6 +139,10 @@ List<Override> _httpOverrides() {
   final tokens = StoredTokenProvider(
     store: tokenStore,
     auth: auth,
+    // PD-28: a browser's tabs can share one refresh token ("keep me signed in"); each refresh
+    // then runs under one Web Lock, so no two tabs present the same token. A phone has one
+    // process and needs none.
+    exclusive: tokenStore is BrowserTokenStore ? tokenStore.exclusive : null,
     onEnded: (error) async {
       // The actor id goes first and unconditionally, so the transport stops naming a
       // principal even in the window before the controller has been built.

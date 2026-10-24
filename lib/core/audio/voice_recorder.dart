@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -113,8 +114,13 @@ class PluginVoiceRecorder implements VoiceRecorder {
     AudioEncoder.opus: (extension: 'ogg', mimeType: 'audio/ogg'),
   };
 
+  /// PD-28: never in a browser. A browser records Opus in WebM, which the iPhone app cannot
+  /// play -- a teacher's voice note from a laptop would arrive silent on a parent's phone. The
+  /// composer says so ([VoiceRecorderFailure.unsupported]) instead of recording. Playing voice
+  /// notes in the browser is unaffected.
   @override
   Future<bool> isSupported() async {
+    if (kIsWeb) return false;
     for (final encoder in _preferred.keys) {
       if (await _recorder.isEncoderSupported(encoder)) return true;
     }

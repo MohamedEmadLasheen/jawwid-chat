@@ -24,6 +24,7 @@ class FakeAuthRepository implements AuthRepository {
   Future<AuthSession> signIn({
     required String username,
     required String password,
+    bool remember = false,
   }) async {
     if (username.trim().isEmpty || password.isEmpty) {
       throw const AppError(AppErrorKind.unauthenticated, code: 'invalid_credentials');

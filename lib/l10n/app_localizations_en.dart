@@ -3161,4 +3161,21 @@ class L10nEn extends L10n {
   @override
   String get billingReceiptNotAccepted =>
       'This receipt can\'t be added: the amount is already paid or closed, or other receipts are still waiting to be checked.';
+
+  @override
+  String get signInKeepSignedIn => 'Keep me signed in on this device';
+
+  @override
+  String get webPortalTitle => 'The web portal is for teachers';
+
+  @override
+  String get webPortalFamilyBody => 'Please use the Jawwid app on your phone.';
+
+  @override
+  String get webPortalStaffBody =>
+      'Please use Admin Web, or the Jawwid app on your phone.';
+
+  @override
+  String get voiceNoteWebUnavailable =>
+      'Voice notes can be recorded in the phone app.';
 }

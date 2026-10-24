@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/storage/browser_token_store.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/auth_state.dart';
@@ -26,6 +28,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   bool _obscured = true;
 
+  /// PD-28 (web only): PD-23's "Keep me signed in on this device". Unticked by default.
+  bool _remember = false;
+
   @override
   void dispose() {
     _username.dispose();
@@ -40,7 +45,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     if (result == null || !mounted) return;
     _username.text = result.email;
     _password.text = result.password;
-    await ref.read(authControllerProvider.notifier).signIn(username: result.email, password: result.password);
+    await ref.read(authControllerProvider.notifier).signIn(
+          username: result.email,
+          password: result.password,
+          remember: _remember,
+        );
   }
 
   /// PD-25 (and PD-21's academy code): a recovery that set a new password signs in normally
@@ -56,7 +65,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       return;
     }
     _password.text = password;
-    await ref.read(authControllerProvider.notifier).signIn(username: result.username, password: password);
+    await ref.read(authControllerProvider.notifier).signIn(
+          username: result.username,
+          password: password,
+          remember: _remember,
+        );
   }
 
   Future<void> _submit() async {
@@ -66,6 +79,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     await ref.read(authControllerProvider.notifier).signIn(
           username: _username.text.trim(),
           password: _password.text,
+          remember: _remember,
         );
   }
 
@@ -75,6 +89,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final theme = Theme.of(context);
     final state = ref.watch(authControllerProvider);
     final isBusy = state is AuthSigningIn;
+
+    // PD-28: offered only in a browser that can keep a shared token safely (Web Locks and
+    // localStorage, see BrowserTokenStore). The phone keeps every session anyway.
+    final store = ref.watch(tokenStoreProvider);
+    final canRemember = store is BrowserTokenStore && store.persistenceSupported;
 
     return Scaffold(
       body: SafeArea(
@@ -138,6 +157,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           (value == null || value.isEmpty) ? '' : null,
                       onFieldSubmitted: (_) => _submit(),
                     ),
+                    if (canRemember)
+                      CheckboxListTile(
+                        key: const ValueKey('sign-in-remember'),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: _remember,
+                        onChanged: isBusy ? null : (value) => setState(() => _remember = value ?? false),
+                        title: Text(l10n.signInKeepSignedIn),
+                      ),
                     const SizedBox(height: Spacing.spacing7),
 
                     FilledButton(
@@ -150,11 +178,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           : Text(l10n.signInAction),
                     ),
                     const SizedBox(height: Spacing.spacing3),
-                    TextButton(
-                      key: const ValueKey('parent-signup-open'),
-                      onPressed: isBusy ? null : _openSignup,
-                      child: Text(l10n.signupOpen),
-                    ),
+                    // PD-28: the web portal is for teachers; a parent creates an account in the app.
+                    if (!kIsWeb)
+                      TextButton(
+                        key: const ValueKey('parent-signup-open'),
+                        onPressed: isBusy ? null : _openSignup,
+                        child: Text(l10n.signupOpen),
+                      ),
                     TextButton(
                       key: const ValueKey('account-recovery-open'),
                       onPressed: isBusy ? null : _openRecovery,

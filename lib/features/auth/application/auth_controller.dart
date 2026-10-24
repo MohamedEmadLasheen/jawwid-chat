@@ -144,13 +144,14 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
-  Future<void> signIn({required String username, required String password}) async {
+  Future<void> signIn({required String username, required String password, bool remember = false}) async {
     state = const AuthSigningIn();
 
     try {
       final session = await _repository.signIn(
         username: username,
         password: password,
+        remember: remember,
       );
       await _tokens.write(session);
 

@@ -5562,6 +5562,36 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'This receipt can\'t be added: the amount is already paid or closed, or other receipts are still waiting to be checked.'**
   String get billingReceiptNotAccepted;
+
+  /// PD-28: web portal sign-in checkbox (PD-23 'keep me signed in'). Only shown in a browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep me signed in on this device'**
+  String get signInKeepSignedIn;
+
+  /// PD-28: shown in the browser to a signed-in account that is not a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'The web portal is for teachers'**
+  String get webPortalTitle;
+
+  /// PD-28: the web portal refusal, for a parent.
+  ///
+  /// In en, this message translates to:
+  /// **'Please use the Jawwid app on your phone.'**
+  String get webPortalFamilyBody;
+
+  /// PD-28: the web portal refusal, for a staff member.
+  ///
+  /// In en, this message translates to:
+  /// **'Please use Admin Web, or the Jawwid app on your phone.'**
+  String get webPortalStaffBody;
+
+  /// PD-28: shown in the browser instead of starting a recording.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice notes can be recorded in the phone app.'**
+  String get voiceNoteWebUnavailable;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

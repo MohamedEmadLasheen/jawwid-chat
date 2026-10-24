@@ -174,7 +174,7 @@ class _Unreachable implements AuthRepository {
   Stream<void> get sessionRevoked => _inner.sessionRevoked;
 
   @override
-  Future<AuthSession> signIn({required String username, required String password}) {
+  Future<AuthSession> signIn({required String username, required String password, bool remember = false}) {
     signIns++;
     return _inner.signIn(username: username, password: password);
   }

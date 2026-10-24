@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../../../core/data/repositories.dart';
+import '../../../core/media/local_image.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
@@ -153,8 +152,8 @@ class _PhotoPreview extends StatelessWidget {
       borderRadius: Radii.card,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 320),
-        child: Image.file(
-          File(path),
+        child: Image(
+          image: localImageProvider(path),
           fit: BoxFit.contain,
           errorBuilder: (context, _, _) => SizedBox(
             height: 160,

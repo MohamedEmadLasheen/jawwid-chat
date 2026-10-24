@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
+import '../../../core/media/local_image.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
@@ -156,8 +155,8 @@ class _Photo extends StatelessWidget {
     if (url == null || url.isEmpty) return const _PhotoUnavailable();
 
     if (attachment.isLocal) {
-      return Image.file(
-        File(url),
+      return Image(
+        image: localImageProvider(url),
         fit: BoxFit.contain,
         errorBuilder: (_, _, _) => const _PhotoUnavailable(),
       );

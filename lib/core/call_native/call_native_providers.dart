@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'call_presentation.dart';
@@ -12,7 +13,11 @@ import 'call_presentation.dart';
 /// whether it has a session at all: on a cold VoIP wake the screen is already
 /// up when Dart starts. Tying the seam to `authControllerProvider` would mean
 /// the one path that needs it most had no way to take the screen back down.
+///
+/// PD-28: none in a browser. There is no CallKit or ConnectionService there; a call rings and
+/// is answered on the in-app call screen while the tab is open.
 final callPresentationProvider = Provider<CallPresentation?>((ref) {
+  if (kIsWeb) return null;
   final presentation = PlatformCallPresentation();
   ref.onDispose(presentation.dispose);
   return presentation;

@@ -59,7 +59,7 @@ class _Repository implements AuthRepository {
   Stream<void> get sessionRevoked => const Stream<void>.empty();
 
   @override
-  Future<AuthSession> signIn({required String username, required String password}) async =>
+  Future<AuthSession> signIn({required String username, required String password, bool remember = false}) async =>
       AuthSession(
         accessToken: 'access',
         refreshToken: 'refresh',

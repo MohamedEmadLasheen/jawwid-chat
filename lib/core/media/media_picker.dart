@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_selector/file_selector.dart' as selector;
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
@@ -103,7 +101,7 @@ class PluginMediaPicker implements MediaPicker {
 
     if (picked == null) return null;
     return _describe(
-      path: picked.path,
+      file: picked,
       kind: MessageKind.image,
       mimeType: picked.mimeType ?? _mimeFromPath(picked.path, MessageKind.image),
       fileName: picked.name,
@@ -163,7 +161,7 @@ class PluginMediaPicker implements MediaPicker {
 
     if (picked == null) return null;
     return _describe(
-      path: picked.path,
+      file: picked,
       kind: MessageKind.file,
       mimeType: picked.mimeType ?? _mimeFromPath(picked.path, MessageKind.file),
       fileName: picked.name,
@@ -175,16 +173,21 @@ class PluginMediaPicker implements MediaPicker {
   /// The backend re-checks it when it authorizes the upload, but finding out
   /// before the preview means an over-size file is refused while the user still
   /// remembers choosing it, rather than after a progress bar.
+  ///
+  /// Read through the picked [XFile] rather than `dart:io`: in the PD-28 web portal the path
+  /// is a `blob:` URL, which only the picker's own file can measure. On a phone it is the
+  /// same file-system read as before.
   static Future<PendingAttachment> _describe({
-    required String path,
+    required XFile file,
     required MessageKind kind,
     required String mimeType,
     required String fileName,
   }) async {
+    final path = file.path;
     final int byteSize;
     try {
-      byteSize = await File(path).length();
-    } on FileSystemException catch (error) {
+      byteSize = await file.length();
+    } on Exception catch (error) {
       throw MediaPickException(MediaPickFailure.failed, detail: error.toString());
     }
 

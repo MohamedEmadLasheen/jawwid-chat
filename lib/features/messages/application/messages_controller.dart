@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -583,7 +584,8 @@ class MessagesController extends Notifier<MessagesState> {
     _pendingAttachmentFiles.remove(clientMessageId);
 
     final path = _pendingVoiceFiles.remove(clientMessageId);
-    if (path == null) return;
+    // PD-28: a browser has no file to delete (and records no voice notes, see voice_recorder).
+    if (path == null || kIsWeb) return;
     unawaited(
       File(path).delete().catchError((Object _) => File(path)),
     );

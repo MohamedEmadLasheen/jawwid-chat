@@ -11,7 +11,7 @@ import 'package:jawwid_chat/shared/models/user_role.dart';
 
 class _Repo implements AuthRepository {
   @override
-  Future<AuthSession> signIn({required String username, required String password}) async =>
+  Future<AuthSession> signIn({required String username, required String password, bool remember = false}) async =>
       AuthSession(
         accessToken: 'a',
         refreshToken: 'r',

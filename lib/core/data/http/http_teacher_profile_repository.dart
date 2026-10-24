@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:cross_file/cross_file.dart';
 import 'package:dio/dio.dart';
 
 import '../../../shared/models/teacher_profile.dart';
@@ -204,7 +203,7 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
     final hasType = signed.keys.any((k) => k.toLowerCase() == 'content-type');
     await _uploader.put<void>(
       uploadUrl,
-      data: File(filePath).openRead(),
+      data: XFile(filePath).openRead(),
       options: Options(
         headers: {
           ...signed,

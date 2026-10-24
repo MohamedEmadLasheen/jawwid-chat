@@ -1383,5 +1383,10 @@
   "billingMethodCard": "بطاقة",
   "billingMethodCash": "نقدًا",
   "billingTooManyAttempts": "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.",
-  "billingReceiptNotAccepted": "تعذّرت إضافة هذا الإيصال: إما أن المبلغ دُفع أو أُغلق، أو أن هناك إيصالات أخرى ما زالت قيد التحقق."
+  "billingReceiptNotAccepted": "تعذّرت إضافة هذا الإيصال: إما أن المبلغ دُفع أو أُغلق، أو أن هناك إيصالات أخرى ما زالت قيد التحقق.",
+  "signInKeepSignedIn": "إبقائي مسجّلًا للدخول على هذا الجهاز",
+  "webPortalTitle": "بوابة الويب مخصّصة للمعلمين",
+  "webPortalFamilyBody": "برجاء استخدام تطبيق جَوِّد على هاتفك.",
+  "webPortalStaffBody": "برجاء استخدام لوحة التحكم (Admin Web)، أو تطبيق جَوِّد على هاتفك.",
+  "voiceNoteWebUnavailable": "يمكن تسجيل الرسائل الصوتية من تطبيق الهاتف."
 }
