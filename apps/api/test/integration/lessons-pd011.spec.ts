@@ -16,7 +16,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { LessonService } from '../../src/lessons/lesson.service';
+import { LessonService, REPORT_LOOKBACK_DAYS } from '../../src/lessons/lesson.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -288,6 +288,47 @@ describe('5. the needs-action queue and the "+" tickets', () => {
     const parent = await lessons.ticketsFor(s.parentId, groupId);
     expect(parent.tickets.map((t) => `${t.ticket}:${t.lessonId === upcoming ? 'upcoming' : 'started'}`).sort())
       .toEqual(['apology:upcoming', 'late_apology:started']);
+  });
+
+  // Owner 2026-10-24: a lesson left unreported for more than two days vanished
+  // from "+" (the query looked back only the 48 h of the late apology) while the
+  // Schedule still counted it as needing a report. A report has no deadline.
+  it('still offers the report for an open lesson that ended days ago, and never for a closed one', async () => {
+    const DAY = 24 * HOUR;
+    const fourDaysAgo = await lesson(-4 * DAY);
+    const twoDaysAgo = await lesson(-2 * DAY - 3 * HOUR);
+    const reported = await lesson(-6 * DAY);
+    await lessons.report(s.teacherId, reported, { coveredTopics: ['revision'] });
+    const tooOld = await lesson(-(REPORT_LOOKBACK_DAYS + 1) * DAY);
+    const teacher = await lessons.ticketsFor(s.teacherId, groupId);
+    const reports = teacher.tickets.filter((t) => t.ticket === 'report').map((t) => t.lessonId);
+    expect(reports.sort()).toEqual([fourDaysAgo, twoDaysAgo].sort());
+    expect(reports).not.toContain(reported);
+    expect(reports).not.toContain(tooOld);
+    // The late apology keeps its own 48 hours: the old lessons offer the parent nothing.
+    const parent = await lessons.ticketsFor(s.parentId, groupId);
+    expect(parent.tickets.filter((t) => [fourDaysAgo, twoDaysAgo].includes(t.lessonId as string))).toEqual([]);
+    // And the report is accepted when it is sent.
+    await lessons.report(s.teacherId, fourDaysAgo, { coveredTopics: ['revision'] });
+  });
+
+  it('a lesson names the acts its reader may open on it now (the teacher Schedule acts on any lesson)', async () => {
+    const ended = await lesson(-3 * 24 * HOUR);
+    const upcoming = await lesson(5 * HOUR);
+    const held = await lesson(-5 * 24 * HOUR);
+    await lessons.report(s.teacherId, held, { coveredTopics: ['revision'] });
+
+    const endedDto = await lessons.get(s.teacherId, ended);
+    expect([...endedDto.acts].sort()).toEqual(['absence', 'report']);
+    expect(endedDto.suggestedLessonNumber).toEqual(expect.any(Number));
+    expect((await lessons.get(s.teacherId, upcoming)).acts).toEqual(['teacher_apology']);
+    expect((await lessons.get(s.teacherId, held)).acts).toEqual([]);
+    expect((await lessons.get(s.parentId, upcoming)).acts).toEqual(['apology']);
+    expect((await lessons.get(s.parentId, upcoming)).suggestedLessonNumber).toBeUndefined();
+
+    const listed = await lessons.list(s.teacherId, { from: at(-6 * 24 * HOUR), to: at(24 * HOUR) });
+    const acts = Object.fromEntries(listed.lessons.map((l) => [l.id, [...l.acts].sort()]));
+    expect(acts).toEqual({ [ended]: ['absence', 'report'], [upcoming]: ['teacher_apology'], [held]: [] });
   });
 });
 
