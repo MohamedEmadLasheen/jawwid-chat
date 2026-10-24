@@ -21,11 +21,18 @@ export class FakeStripe implements StripeGateway {
   readonly sessions = new Map<string, CheckoutSession & { input: CheckoutInput }>();
   readonly refunds: Array<{ id: string; paymentIntentId: string; amountMinor: number }> = [];
   readonly expired: string[] = [];
+  /** The next createCheckout fails as real Stripe refuses a request (a StripeInvalidRequestError). */
+  failNextCheckout: Error | null = null;
   private n = 0;
   private readonly verifier = new StripeSdkGateway({ STRIPE_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET } as NodeJS.ProcessEnv);
   private readonly signer = new Stripe('sk_test_signing_only');
 
   async createCheckout(input: CheckoutInput): Promise<CheckoutSession> {
+    if (this.failNextCheckout) {
+      const e = this.failNextCheckout;
+      this.failNextCheckout = null;
+      throw e;
+    }
     const id = `cs_test_${++this.n}_${input.requestId.slice(0, 8)}`;
     const session = {
       id,

@@ -444,6 +444,31 @@ describe('PD-27 over HTTP', () => {
     expect((await http(m.superAdmin.subject, 'POST', `/payments/${card.id}/refunds`, { amountMinor: 20001, reason: 'x' })).code).toBe(CommErrorCode.BILLING_STATE);
   });
 
+  it('Stripe refusing a checkout reaches nobody raw: the app gets 503 PAYMENTS_UNAVAILABLE, the link page a plain message', async () => {
+    const { f } = familyOf(7);
+    const req = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'other', label: 'Uniform', amountMinor: 2000, currency: 'AED',
+    })).json.request;
+    const stripeError = () => Object.assign(new Error('Invalid locale: must be one of auto, bg, cs, da (sk_test_secret_should_never_leak)'), {
+      type: 'StripeInvalidRequestError', code: 'parameter_invalid_empty', statusCode: 400,
+    });
+
+    stripe.failNextCheckout = stripeError();
+    const inApp = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: req.id });
+    expect(inApp.status).toBe(503);
+    expect(inApp.code).toBe(CommErrorCode.PAYMENTS_UNAVAILABLE);
+    expect(JSON.stringify(inApp.json)).not.toMatch(/locale|sk_test|Stripe/);
+
+    stripe.failNextCheckout = stripeError();
+    const page = await fetch(`${base}/pay/${tokenOf(req.link)}/checkout`, { method: 'POST', redirect: 'manual' });
+    expect(page.status).toBe(503);
+    const html = await page.text();
+    expect(html).not.toMatch(/Invalid locale|sk_test/);
+    expect(html).toContain('الدفع بالبطاقة غير متاح حاليًا');
+    // Nothing half-made: no checkout row for a session Stripe never opened.
+    expect(await g.prisma.paymentCheckout.count({ where: { requestId: req.id } })).toBe(0);
+  });
+
   it('a cancelled link cannot be paid; its page says so', async () => {
     const { f } = familyOf(7);
     const req = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {

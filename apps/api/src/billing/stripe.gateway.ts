@@ -28,6 +28,7 @@ export interface CheckoutInput {
   cancelUrl: string;
   /** Stripe refuses less than 30 minutes. */
   expiresAt: Date;
+  /** The family's language; mapped to a locale Stripe has (stripeCheckoutLocale). */
   locale: 'ar' | 'en';
   /** Stripe's own idempotency: a retried create returns the same session. */
   idempotencyKey: string;
@@ -110,7 +111,7 @@ export class StripeSdkGateway implements StripeGateway {
         success_url: input.successUrl,
         cancel_url: input.cancelUrl,
         expires_at: Math.floor(input.expiresAt.getTime() / 1000),
-        locale: input.locale,
+        locale: stripeCheckoutLocale(input.locale),
       },
       { idempotencyKey: input.idempotencyKey },
     );
@@ -146,6 +147,16 @@ export class StripeSdkGateway implements StripeGateway {
     if (!this.client) throw new Error('STRIPE_SECRET_KEY is not configured');
     return this.client;
   }
+}
+
+/**
+ * Stripe Checkout has no Arabic page (its locales are a fixed list without
+ * `ar`; sending one is a 400 that fails every checkout). English families get
+ * English; everyone else gets `auto` -- Stripe follows the browser's language
+ * and falls back to English. Our own pages stay Arabic first.
+ */
+export function stripeCheckoutLocale(locale: 'ar' | 'en'): 'en' | 'auto' {
+  return locale === 'en' ? 'en' : 'auto';
 }
 
 export function toSession(s: Stripe.Checkout.Session): CheckoutSession {

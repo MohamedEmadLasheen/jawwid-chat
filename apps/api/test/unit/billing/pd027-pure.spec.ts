@@ -8,7 +8,7 @@ import { CommError, CommErrorCode } from '@platform/errors';
 import { formatMajor, minorDigits } from '../../../src/billing/money';
 import { renderInvoicePdf, visualSegments } from '../../../src/billing/invoice-pdf';
 import { escapeHtml, renderPayPage, type PayPageModel } from '../../../src/billing/pay-page';
-import { StripeSdkGateway } from '../../../src/billing/stripe.gateway';
+import { StripeSdkGateway, stripeCheckoutLocale } from '../../../src/billing/stripe.gateway';
 import { mapPaymentRefusal, parseBankAccount } from '../../../src/billing/billing.service';
 import { validateReceiptFile } from '../../../src/billing/parent-payments.service';
 
@@ -115,6 +115,30 @@ describe('the Stripe webhook signature', () => {
     expect(() => none.verifyWebhook(Buffer.from(body), 'x')).toThrow();
     expect(gateway.checkoutAvailable).toBe(false);
     expect(gateway.webhookAvailable).toBe(true);
+  });
+});
+
+describe('the Stripe Checkout locale (real Stripe has no Arabic page)', () => {
+  it('maps every non-English family to auto, English to en', () => {
+    expect(stripeCheckoutLocale('ar')).toBe('auto');
+    expect(stripeCheckoutLocale('en')).toBe('en');
+  });
+
+  it('sends Stripe a locale it accepts -- never ar', async () => {
+    const gateway = new StripeSdkGateway({ STRIPE_SECRET_KEY: 'sk_test_unit_locale' } as NodeJS.ProcessEnv);
+    const create = jest.fn().mockResolvedValue({
+      id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1', status: 'open', payment_status: 'unpaid',
+      amount_total: 150000, currency: 'aed', payment_intent: null, metadata: {}, expires_at: 1_900_000_000,
+    });
+    (gateway as unknown as { client: unknown }).client = { checkout: { sessions: { create } } };
+    const input = {
+      requestId: 'r', organizationId: 'o', amountMinor: 150000, currency: 'AED', productName: 'Quran', description: null,
+      successUrl: 'https://x/s', cancelUrl: 'https://x/c', expiresAt: new Date(1_900_000_000_000), idempotencyKey: 'k',
+    };
+    await gateway.createCheckout({ ...input, locale: 'ar' });
+    await gateway.createCheckout({ ...input, locale: 'en' });
+    expect(create.mock.calls.map((c) => c[0].locale)).toEqual(['auto', 'en']);
+    expect(create.mock.calls[0][0].line_items[0].price_data.currency).toBe('aed');
   });
 });
 
