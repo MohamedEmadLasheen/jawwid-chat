@@ -15,6 +15,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useLessonAccess } from '@/features/teachers/hooks'
 import { useInstalmentAccess } from '@/features/instalments/hooks'
+import { useMaterialsAccess } from '@/features/materials/hooks'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { TEXT, useText } from '@/features/admin/copy'
@@ -50,9 +51,12 @@ function useDestinations(): Destination[] {
   const billingReader = billing.data?.billingReader === true
   const sales = access.data?.sales === true
   const operations = access.data?.operations === true
+  // PD-29: only a manager can be the Teachers manager (the super admin's entry is a section).
+  const materials = useMaterialsAccess(staff?.role === 'manager')
+  const materialsManager = materials.data?.canManage === true
   return useMemo(
-    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader }) : []),
-    [staff, lessonManager, sales, operations, billingReader],
+    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager }) : []),
+    [staff, lessonManager, sales, operations, billingReader, materialsManager],
   )
 }
 

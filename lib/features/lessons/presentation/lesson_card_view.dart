@@ -8,6 +8,7 @@ import '../../../shared/models/lesson.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../materials/data/materials_repository.dart';
 import '../domain/report_vocab.dart';
 import 'lesson_report_sheet.dart' show showEditReportSheet;
 import 'schedule_change_sheet.dart' show weeklyLabel;
@@ -120,6 +121,24 @@ class _LessonCard extends ConsumerWidget {
       final parsed = raw == null ? null : DateTime.tryParse(raw);
       return parsed == null ? null : MaterialLocalizations.of(context).formatMediumDate(parsed);
     }
+    // PD-29: the report's practice this week -- ayah ranges (named from the surah list)
+    // and library items. The list is fetched only for a card that carries practice.
+    final practiceRaw = [for (final p in (card.payload['practice'] as List?) ?? const []) if (p is Map) p];
+    final surahs = practiceRaw.isEmpty ? null : ref.watch(surahsProvider).value;
+    final arabic = Localizations.localeOf(context).languageCode == 'ar';
+    final practice = <String>[
+      for (final p in practiceRaw)
+        if (p['kind'] == 'item' && p['title'] is String)
+          p['title'] as String
+        else if (p['surah'] is num)
+          () {
+            final n = (p['surah'] as num).toInt();
+            final s = surahs?.where((x) => x.number == n).firstOrNull;
+            final name = s == null ? '$n' : s.name(arabic);
+            final whole = s != null && p['ayahFrom'] == 1 && p['ayahTo'] == s.ayahCount;
+            return whole ? l10n.materialsWholeSurah(name) : l10n.materialsAyahRange(name, '${p['ayahFrom']}', '${p['ayahTo']}');
+          }(),
+    ];
     final rows = <(String, String)>[
       ?action == null ? null : (l10n.cardMakeupResolvedTitle, action),
       if (card.kind == 'learner_transferred' && card.text('teacherName') != null)
@@ -137,6 +156,7 @@ class _LessonCard extends ConsumerWidget {
       ?level == null ? null : (l10n.cardPerformance, level),
       if (tasks.isNotEmpty) (l10n.cardNextLesson, tasks.join('، ')),
       if (card.text('homework') case final v?) (l10n.cardHomework, v),
+      if (practice.isNotEmpty) (l10n.materialsTabPractice, practice.join('، ')),
       if (card.text('reason') case final v?) (l10n.cardReason, v),
       if (card.text('note') case final v?) (l10n.cardNote, v),
     ];

@@ -39,6 +39,7 @@ import '../features/calls/data/fake_scheduled_call_repository.dart';
 import '../features/calls/data/http_account_call_history.dart';
 import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
+import '../features/materials/data/materials_repository.dart';
 import '../features/messages/data/chat_theme_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
@@ -203,6 +204,10 @@ List<Override> _httpOverrides() {
     ),
     billingRepositoryProvider.overrideWithValue(
       HttpBillingRepository(client: client),
+    ),
+    // PD-29: the child's Materials page and the report's practice and map.
+    materialsRepositoryProvider.overrideWithValue(
+      HttpMaterialsRepository(client: client),
     ),
     // PD-20: Sales' Payments (search, a family's instalments, record / void).
     salesPaymentsRepositoryProvider.overrideWithValue(

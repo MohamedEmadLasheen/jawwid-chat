@@ -119,14 +119,24 @@ describe('the legacy Inbox is routable but never offered', () => {
     }
   })
 
-  it('nothing else is hidden: navigation is the openable areas minus Inbox -- and minus Teacher statistics, Instalments, Parents and Payments until the server confirms the department', () => {
+  it('nothing else is hidden: navigation is the openable areas minus Inbox -- and minus Teacher statistics, Instalments, Parents, Payments and Materials until the server confirms the department', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
       expect(navAreas(role)).toEqual(
-        visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'trials' && !money(a)),
+        visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'trials' && a !== 'materials' && !money(a)),
       )
-      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && !money(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
+      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'materials' && !money(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'materials'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
+    }
+  })
+
+  it('PD-29: Materials is offered to the super admin and a manager the server confirms -- never to an operator or a department', () => {
+    expect(visibleAreas('super_admin')).toContain('materials')
+    expect(navAreas('manager', { materialsManager: true })).toContain('materials')
+    expect(navAreas('manager')).not.toContain('materials')
+    for (const role of ['admin', 'coverage', 'finance', 'technical', 'academic'] as const) {
+      expect(navAreas(role, { materialsManager: true })).not.toContain('materials')
     }
   })
 

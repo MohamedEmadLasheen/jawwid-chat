@@ -6,6 +6,7 @@
 library;
 
 import '../utils/app_clock.dart';
+import 'materials.dart';
 
 /// A form under "+" that records what happened to one lesson.
 enum LessonTicketKind {
@@ -139,6 +140,8 @@ class LessonReportDraft {
     this.nextTasks = const [],
     this.homework,
     this.note,
+    this.practice,
+    this.memorization,
   });
 
   final int? lessonNumber;
@@ -153,6 +156,11 @@ class LessonReportDraft {
   final String? homework;
   final String? note;
 
+  /// PD-29: "practice this week" and surah statuses for the memorization map. Null
+  /// means "not sent": on an edit the server then keeps what the report has.
+  final List<PracticeDraft>? practice;
+  final List<MarkDraft>? memorization;
+
   bool get isComplete => coveredTopics.isNotEmpty || (covered?.trim().isNotEmpty ?? false);
 
   Map<String, Object?> toJson() => {
@@ -163,6 +171,8 @@ class LessonReportDraft {
         'nextTasks': nextTasks,
         'homework': ?homework,
         'note': ?note,
+        if (practice != null) 'practice': [for (final p in practice!) p.toJson()],
+        if (memorization != null) 'memorization': [for (final m in memorization!) m.toJson()],
       };
 }
 

@@ -9,6 +9,7 @@ import { parentPath, type StudentProfile } from './api'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useStudent } from './hooks'
 import { familyTime } from '@/core/time/academyTime'
+import { ProgressMapPanel } from '@/features/materials/ProgressMapPanel'
 import './profiles.css'
 
 /**
@@ -36,6 +37,8 @@ export function StudentProfilePage() {
               <>
                 <PageHeader eyebrow={tx(P.studentEyebrow)} title={data.name} />
                 <StudentCard s={data} />
+                {/* PD-29: the memorization map, from lesson reports; corrections need a reason. */}
+                <ProgressMapPanel learnerId={data.id} />
                 {data.family && data.family.parents.length > 0 && (
                   <section className="card panel tf-section" aria-labelledby="st-parents">
                     <div className="tf-section__head">

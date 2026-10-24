@@ -83,6 +83,14 @@ dependencies:
   cross_file: ^0.3.5
   url_launcher: ^6.3.2
 
+  # PD-29 Materials: an HTML5 activity (the academy's existing packages and
+  # links) plays in a WebView. flutter.dev's own, the same bar as every other
+  # dependency here. Reached only through the seam in
+  # lib/features/materials/presentation/activity_view.dart -- no JavaScript
+  # channel, navigation pinned to the activity -- so no test opens a platform
+  # view. The web build (PD-28) never compiles it: it opens a new tab instead.
+  webview_flutter: ^4.13.0
+
   # Story video. The ONLY reason this is here: the Stories backend accepts
   # video/mp4, quicktime and webm, so a video story must actually play -- and
   # nothing else in this app plays video (a video ATTACHMENT is deliberately a

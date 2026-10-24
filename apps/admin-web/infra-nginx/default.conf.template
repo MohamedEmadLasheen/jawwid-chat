@@ -39,9 +39,18 @@ map $uri $jawwid_cache_control {
 #
 # No third-party host is added: CanvasKit and the fonts are served from /teacher/
 # (`--no-web-resources-cdn`), never from gstatic.
+#
+# PD-29: Admin Web's policy gains two things for the Materials preview, and only
+# those. `frame-src ${API_ORIGIN} https:` -- a package plays from the API's
+# /materials/play/... and a link activity from its own https site, each inside
+# an <iframe sandbox="allow-scripts allow-forms"> (never allow-same-origin: an
+# opaque origin that cannot reach this page, its storage or the session; the
+# package's own response carries the same sandbox as a CSP header). And the
+# store in `img-src`, where an image item's short-lived signed URL points.
+# frame-ancestors stays 'none': nothing may frame the console.
 map $uri $jawwid_csp {
     ~^/teacher(/|$)  "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob: data: ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
-    default          "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
+    default          "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; frame-src ${API_ORIGIN} https:; img-src 'self' data: blob: ${STORAGE_ORIGIN}; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
 }
 
 server {

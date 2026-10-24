@@ -20,6 +20,7 @@ import '../../conversations/application/conversations_controller.dart';
 import '../../conversations/application/open_direct_controller.dart';
 import '../../lessons/presentation/child_progress_card.dart';
 import '../../lessons/presentation/group_children_section.dart';
+import '../../materials/presentation/child_materials_entry.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_view.dart';
 import 'profile_photos_section.dart';
@@ -171,6 +172,8 @@ class ProfileBody extends ConsumerWidget {
         if (view.isGroup && view.learner != null && view.learner!.id.isNotEmpty) ...[
           const ProfileDivider(),
           ChildProgressCard(learnerId: view.learner!.id),
+          // PD-29: the child's Materials -- library, practice this week, memorization map.
+          ChildMaterialsEntry(learnerId: view.learner!.id, childName: view.learner!.displayName),
         ],
 
         if (view.isGroup) ...[

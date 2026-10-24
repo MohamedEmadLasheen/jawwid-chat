@@ -102,6 +102,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   'teacher-profiles': 'people',
   accounts: 'people',
   stories: 'stories',
+  materials: 'more',
   tasks: 'more',
   dashboard: 'more',
   settings: null,
@@ -124,6 +125,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   stories: '/stories',
   'teacher-profiles': '/teacher-profiles',
   accounts: '/accounts',
+  materials: '/materials',
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
@@ -143,10 +145,14 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   stories: 'stories',
   'teacher-profiles': 'approvals',
   accounts: 'lock',
+  materials: 'book',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
 export const ADMIN_CHAT_LABEL: Bilingual = { en: 'Chat', ar: 'الدردشة' }
+
+/** PD-29: the Materials library, under More. */
+export const ADMIN_MATERIALS_LABEL: Bilingual = { en: 'Materials', ar: 'المواد التعليمية' }
 
 /** PD-21: account administration, beside the read-only Users section. */
 export const ADMIN_ACCOUNTS_LABEL: Bilingual = { en: 'Accounts', ar: 'الحسابات' }
@@ -191,6 +197,15 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     path: AREA_PATH.accounts,
     icon: AREA_ICON.accounts,
     label: { text: ADMIN_ACCOUNTS_LABEL },
+    inDevelopment: false,
+  })
+  // PD-29: the super admin manages the Materials library at /materials, the
+  // same page the Teachers manager has.
+  out.get('more')?.[0]?.entries.push({
+    key: 'materials',
+    path: AREA_PATH.materials,
+    icon: AREA_ICON.materials,
+    label: { text: ADMIN_MATERIALS_LABEL },
     inDevelopment: false,
   })
   // One registry group inside a destination needs no heading.
