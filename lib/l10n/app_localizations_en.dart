@@ -1016,6 +1016,32 @@ class L10nEn extends L10n {
   String get ticketReport => 'Lesson report';
 
   @override
+  String get ticketWriteReport => 'Write lesson report';
+
+  @override
+  String lessonsOtherUnreported(int count) {
+    return 'Other unreported lessons ($count)';
+  }
+
+  @override
+  String get scheduleFilterAll => 'All';
+
+  @override
+  String scheduleFilterNeedsReport(int count) {
+    return 'Needs a report ($count)';
+  }
+
+  @override
+  String get scheduleNeedsReportHeader => 'Still owed a report';
+
+  @override
+  String get scheduleLessonNoActions => 'Nothing to do for this lesson now.';
+
+  @override
+  String get scheduleLessonLoadFailed =>
+      'Couldn\'t load this lesson. Try again.';
+
+  @override
   String get ticketAbsence => 'Student absent';
 
   @override

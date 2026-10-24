@@ -626,6 +626,20 @@
     "description": "Section header in the + menu for lesson tickets."
   },
   "ticketReport": "Lesson report",
+  "ticketWriteReport": "Write lesson report",
+  "lessonsOtherUnreported": "Other unreported lessons ({count})",
+  "@lessonsOtherUnreported": {
+    "description": "In the chat's + menu, under the one lesson report it offers: a link to the Schedule, filtered to the lessons still owed a report.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "scheduleFilterAll": "All",
+  "scheduleFilterNeedsReport": "Needs a report ({count})",
+  "@scheduleFilterNeedsReport": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "scheduleNeedsReportHeader": "Still owed a report",
+  "scheduleLessonNoActions": "Nothing to do for this lesson now.",
+  "scheduleLessonLoadFailed": "Couldn't load this lesson. Try again.",
   "ticketAbsence": "Student absent",
   "ticketApology": "Apologise for the lesson",
   "ticketTeacherApology": "I can't teach this lesson",

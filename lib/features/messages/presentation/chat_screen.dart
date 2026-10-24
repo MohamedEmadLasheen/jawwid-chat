@@ -30,8 +30,9 @@ import '../../calls/domain/call_timeline.dart';
 import '../../calls/presentation/call_card.dart';
 import '../../calls/presentation/calls_actions.dart';
 import '../../conversations/application/conversations_controller.dart';
-import '../../lessons/presentation/lesson_report_sheet.dart';
+import '../../lessons/domain/lesson_menu.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
+import '../../lessons/presentation/teacher_schedule_screen.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
 import '../application/marks_providers.dart';
@@ -258,8 +259,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _attach() async {
     // PD-11: the lesson tickets the server offers here were prefetched when the
     // chat opened; a fetch still in flight or failed simply offers none.
-    // PD-15: one "Lesson report" entry per lesson (its absence is inside it).
-    final tickets = menuLessonTickets(ref.read(lessonTicketsProvider(widget.conversationId)).value ?? const []);
+    // PD-15: one "Lesson report" entry per lesson (its absence is inside it), and
+    // only THE relevant lesson of each child here (lessonMenu).
+    final lessons = lessonMenu(ref.read(lessonTicketsProvider(widget.conversationId)).value ?? const []);
     // Refetch behind the menu: the next "+" reflects anything another device closed.
     ref.invalidate(lessonTicketsProvider(widget.conversationId));
     final supervision = widget.isTeacherSupervision
@@ -271,7 +273,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (widget.isTrialGroup) ref.invalidate(trialTicketsProvider(widget.conversationId));
     final choice = await showComposerMenu(
       context,
-      tickets: tickets,
+      tickets: lessons.tickets,
+      otherUnreportedLessons: lessons.otherUnreported,
       supervisionTickets: supervision.kinds,
       trialTickets: trials,
     );
@@ -280,6 +283,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     switch (choice) {
       case TicketChoice(:final ticket):
         await _openTicket(ticket);
+        return;
+      case UnreportedLessonsChoice():
+        openScheduleNeedingReport(context, ref);
         return;
       case SupervisionChoice(:final kind):
         await _openSupervisionTicket(kind, supervision.learners);

@@ -206,17 +206,44 @@ class HttpLessonRepository implements LessonRepository {
       final ends = DateTime.tryParse('${raw['endsAt']}');
       final id = raw['id'];
       if (id is! String || starts == null || ends == null) continue;
+      final learner = raw['learner'] is Map ? raw['learner'] as Map : const {};
       out.add(ScheduledLesson(
         id: id,
-        learnerName: (raw['learner'] is Map ? (raw['learner'] as Map)['name'] as String? : null) ?? '',
+        learnerId: learner['id'] as String? ?? '',
+        learnerName: learner['name'] as String? ?? '',
         startsAt: AppClock.view(starts),
         endsAt: AppClock.view(ends),
         kind: raw['kind'] as String? ?? 'regular',
         phase: raw['phase'] as String? ?? 'upcoming',
         outcome: raw['outcome'] as String?,
+        acts: [
+          for (final a in (raw['acts'] as List?) ?? const []) ?LessonTicketKind.parse(a as String?),
+        ],
       ));
     }
     return out;
+  }
+
+  @override
+  Future<List<LessonTicket>> lessonTickets(String lessonId) async {
+    final d = (await _client.get<Map<String, Object?>>('/lessons/$lessonId')).data ?? const {};
+    final starts = DateTime.tryParse('${d['startsAt']}');
+    final ends = DateTime.tryParse('${d['endsAt']}');
+    if (starts == null) return const [];
+    final learner = d['learner'] is Map ? d['learner'] as Map : const {};
+    return [
+      for (final a in (d['acts'] as List?) ?? const [])
+        if (LessonTicketKind.parse(a as String?) case final kind?)
+          LessonTicket(
+            kind: kind,
+            lessonId: lessonId,
+            startsAt: AppClock.view(starts),
+            endsAt: ends == null ? null : AppClock.view(ends),
+            learnerId: learner['id'] as String? ?? '',
+            learnerName: learner['name'] as String? ?? '',
+            suggestedLessonNumber: kind == LessonTicketKind.report ? (d['suggestedLessonNumber'] as num?)?.toInt() : null,
+          ),
+    ];
   }
 
   @override

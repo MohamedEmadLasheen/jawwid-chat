@@ -368,6 +368,12 @@ class TicketChoice extends ComposerChoice {
   final LessonTicket ticket;
 }
 
+/// "Other unreported lessons (N)": open the Schedule, filtered to the lessons still
+/// owed a report.
+class UnreportedLessonsChoice extends ComposerChoice {
+  const UnreportedLessonsChoice();
+}
+
 /// PD-12: a request filed in the teacher's supervision conversation.
 class SupervisionChoice extends ComposerChoice {
   const SupervisionChoice(this.kind);
@@ -386,9 +392,13 @@ class TrialChoice extends ComposerChoice {
 /// group, and they appear only when the server offers one for this member, here,
 /// now -- a parent with no lesson today sees exactly the menu they always saw.
 /// Each ticket names its lesson, because a teacher may owe two at once.
+///
+/// [otherUnreportedLessons]: lessons still owed a report beyond the one offered
+/// (lessonMenu); when there are any, a link to the Schedule filtered to them follows.
 Future<ComposerChoice?> showComposerMenu(
   BuildContext context, {
   List<LessonTicket> tickets = const [],
+  int otherUnreportedLessons = 0,
   List<SupervisionTicketKind> supervisionTickets = const [],
   List<TrialTicket> trialTickets = const [],
 }) {
@@ -480,6 +490,14 @@ Future<ComposerChoice?> showComposerMenu(
                     if (t.startsAt != null) lessonWhen(sheetContext, t.startsAt!),
                   ].join(' · ')),
                   onTap: () => pick(TicketChoice(t)),
+                ),
+              if (otherUnreportedLessons > 0)
+                ListTile(
+                  key: const ValueKey('ticket-other-unreported'),
+                  leading: const Icon(Icons.event_note_outlined),
+                  title: Text(l10n.lessonsOtherUnreported(otherUnreportedLessons)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => pick(const UnreportedLessonsChoice()),
                 ),
               ],
             ],

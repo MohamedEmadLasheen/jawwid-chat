@@ -20,7 +20,7 @@ final lessonTicketsProvider =
 
 /// The label of a ticket in the "+" menu.
 String lessonTicketLabel(L10n l10n, LessonTicketKind kind) => switch (kind) {
-      LessonTicketKind.report => l10n.ticketReport,
+      LessonTicketKind.report => l10n.ticketWriteReport,
       LessonTicketKind.absence => l10n.ticketAbsence,
       LessonTicketKind.apology => l10n.ticketApology,
       LessonTicketKind.teacherApology => l10n.ticketTeacherApology,

@@ -111,9 +111,12 @@ class ScheduledLesson {
     required this.kind,
     required this.phase,
     this.outcome,
+    this.learnerId = '',
+    this.acts = const [],
   });
 
   final String id;
+  final String learnerId;
   final String learnerName;
   final DateTime startsAt;
   final DateTime endsAt;
@@ -124,6 +127,14 @@ class ScheduledLesson {
   /// upcoming / in_progress / awaiting_close / overdue / closed -- the server's.
   final String phase;
   final String? outcome;
+
+  /// What the server says the reader may open on this lesson now (`acts`). Advisory:
+  /// each is decided again on submit.
+  final List<LessonTicketKind> acts;
+
+  /// Open, and started: the teacher still owes its report.
+  bool get needsReport =>
+      outcome == null && (phase == 'in_progress' || phase == 'awaiting_close' || phase == 'overdue');
 }
 
 /// What a teacher writes about a lesson that took place (PD-15): mostly taps -- the

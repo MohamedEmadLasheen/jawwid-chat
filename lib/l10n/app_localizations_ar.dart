@@ -1034,6 +1034,31 @@ class L10nAr extends L10n {
   String get ticketReport => 'تقرير الحصة';
 
   @override
+  String get ticketWriteReport => 'كتابة تقرير الحصة';
+
+  @override
+  String lessonsOtherUnreported(int count) {
+    return 'حصص أخرى بلا تقرير ($count)';
+  }
+
+  @override
+  String get scheduleFilterAll => 'الكل';
+
+  @override
+  String scheduleFilterNeedsReport(int count) {
+    return 'تحتاج تقريرًا ($count)';
+  }
+
+  @override
+  String get scheduleNeedsReportHeader => 'حصص لم يُكتب تقريرها';
+
+  @override
+  String get scheduleLessonNoActions => 'لا يوجد إجراء لهذه الحصة الآن.';
+
+  @override
+  String get scheduleLessonLoadFailed => 'تعذّر تحميل الحصة. حاول مرة أخرى.';
+
+  @override
   String get ticketAbsence => 'غياب الطالب';
 
   @override

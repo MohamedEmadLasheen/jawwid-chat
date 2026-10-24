@@ -1861,6 +1861,48 @@ abstract class L10n {
   /// **'Lesson report'**
   String get ticketReport;
 
+  /// No description provided for @ticketWriteReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Write lesson report'**
+  String get ticketWriteReport;
+
+  /// In the chat's + menu, under the one lesson report it offers: a link to the Schedule, filtered to the lessons still owed a report.
+  ///
+  /// In en, this message translates to:
+  /// **'Other unreported lessons ({count})'**
+  String lessonsOtherUnreported(int count);
+
+  /// No description provided for @scheduleFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get scheduleFilterAll;
+
+  /// No description provided for @scheduleFilterNeedsReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a report ({count})'**
+  String scheduleFilterNeedsReport(int count);
+
+  /// No description provided for @scheduleNeedsReportHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Still owed a report'**
+  String get scheduleNeedsReportHeader;
+
+  /// No description provided for @scheduleLessonNoActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to do for this lesson now.'**
+  String get scheduleLessonNoActions;
+
+  /// No description provided for @scheduleLessonLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this lesson. Try again.'**
+  String get scheduleLessonLoadFailed;
+
   /// No description provided for @ticketAbsence.
   ///
   /// In en, this message translates to:

@@ -187,10 +187,26 @@ void main() {
       await tester.tap(find.text('+'));
       await tester.pumpAndSettle();
       expect(find.text('Lesson'), findsOneWidget);
-      await tester.tap(find.text('Lesson report'));
+      await tester.tap(find.text('Write lesson report'));
       await tester.pumpAndSettle();
       expect(picked, isA<TicketChoice>());
       expect((picked as TicketChoice).ticket.lessonId, 'l1');
+    });
+
+    testWidgets('other lessons still owed a report are one link to the Schedule', (tester) async {
+      ComposerChoice? picked;
+      await tester.pumpWidget(app(Builder(
+        builder: (context) => TextButton(
+          onPressed: () async => picked = await showComposerMenu(context, tickets: [report], otherUnreportedLessons: 2),
+          child: const Text('+'),
+        ),
+      )));
+      await tester.tap(find.text('+'));
+      await tester.pumpAndSettle();
+      expect(find.text('Other unreported lessons (2)'), findsOneWidget);
+      await tester.tap(find.text('Other unreported lessons (2)'));
+      await tester.pumpAndSettle();
+      expect(picked, isA<UnreportedLessonsChoice>());
     });
   });
 
@@ -358,30 +374,103 @@ void main() {
       expect(repo.requested.single.map((o) => '${o.weekday} ${o.start}'), ['3 18:30']);
     });
 
+    Widget scheduleApp(_RecordingLessons repo) => ProviderScope(
+          overrides: [lessonRepositoryProvider.overrideWithValue(repo)],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            theme: JawwidTheme.light(isArabic: false),
+            supportedLocales: JawwidApp.supportedLocales,
+            localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+            home: const TeacherScheduleScreen(),
+          ),
+        );
+    final now = DateTime.now();
+    DateTime day(int offset, int hour) => DateTime(now.year, now.month, now.day + offset, hour);
+    ScheduledLesson scheduled(String id, DateTime at, {String phase = 'upcoming', String? outcome, String kind = 'regular'}) =>
+        ScheduledLesson(id: id, learnerId: 'l_$id', learnerName: 'learner_$id', startsAt: at, endsAt: at.add(const Duration(minutes: 30)), kind: kind, phase: phase, outcome: outcome);
+    List<String> rowKeys(WidgetTester tester) => tester
+        .widgetList<ListTile>(find.byType(ListTile))
+        .map((t) => t.key)
+        .whereType<ValueKey<String>>()
+        .map((k) => k.value)
+        .toList();
+
     testWidgets('the teacher\'s Schedule groups by day and flags a lesson that needs its report', (tester) async {
       final repo = _RecordingLessons()
         ..mine = [
-          ScheduledLesson(id: 'a', learnerName: 'learner_l', startsAt: DateTime(2026, 10, 18, 9), endsAt: DateTime(2026, 10, 18, 9, 30), kind: 'regular', phase: 'awaiting_close'),
-          ScheduledLesson(id: 'b', learnerName: 'learner_m', startsAt: DateTime(2026, 10, 19, 10), endsAt: DateTime(2026, 10, 19, 10, 30), kind: 'makeup', phase: 'upcoming'),
-          ScheduledLesson(id: 'c', learnerName: 'learner_n', startsAt: DateTime(2026, 10, 18, 8), endsAt: DateTime(2026, 10, 18, 8, 30), kind: 'regular', phase: 'closed', outcome: 'held'),
+          scheduled('a', day(1, 9), phase: 'awaiting_close'),
+          scheduled('b', day(2, 10), kind: 'makeup'),
+          scheduled('c', day(1, 8), phase: 'closed', outcome: 'held'),
         ];
-      await tester.pumpWidget(ProviderScope(
-        overrides: [lessonRepositoryProvider.overrideWithValue(repo)],
-        child: const MaterialApp(
-          locale: Locale('en'),
-          supportedLocales: JawwidApp.supportedLocales,
-          localizationsDelegates: [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
-          home: TeacherScheduleScreen(),
-        ),
-      ));
+      await tester.pumpWidget(scheduleApp(repo));
       await tester.pumpAndSettle();
       expect(find.text('Needs report'), findsOneWidget);
       expect(find.text('Held'), findsOneWidget);
       expect(find.text('Upcoming'), findsOneWidget);
       expect(find.textContaining('Make-up'), findsOneWidget);
       // Two days, earliest lesson first.
-      final rows = tester.widgetList<ListTile>(find.byType(ListTile)).map((t) => (t.key as ValueKey).value).toList();
-      expect(rows, ['schedule-c', 'schedule-a', 'schedule-b']);
+      expect(rowKeys(tester), ['schedule-c', 'schedule-a', 'schedule-b']);
+    });
+
+    // Owner 2026-10-24: "2 need a report", and nowhere to write them. A lesson from an
+    // earlier day that is still owed its report is listed on top; a closed one is not.
+    testWidgets('earlier lessons still owed a report lead the Schedule, newest first; a filter shows only them', (tester) async {
+      final repo = _RecordingLessons()
+        ..mine = [
+          scheduled('old', day(-4, 18), phase: 'overdue'),
+          scheduled('recent', day(-2, 18), phase: 'overdue'),
+          scheduled('next', day(1, 18)),
+          scheduled('later', day(4, 18)),
+        ];
+      await tester.pumpWidget(scheduleApp(repo));
+      await tester.pumpAndSettle();
+      expect(find.text('Still owed a report'), findsOneWidget);
+      expect(rowKeys(tester), ['schedule-recent', 'schedule-old', 'schedule-next', 'schedule-later']);
+
+      await tester.tap(find.text('Needs a report (2)'));
+      await tester.pumpAndSettle();
+      expect(rowKeys(tester), ['schedule-recent', 'schedule-old']);
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
+      expect(rowKeys(tester), hasLength(4));
+    });
+
+    testWidgets('tapping a lesson opens what may be done with it now', (tester) async {
+      final owed = scheduled('owed', day(-3, 18), phase: 'overdue');
+      final next = scheduled('next', day(1, 18));
+      final held = scheduled('held', day(1, 8), phase: 'closed', outcome: 'held');
+      LessonTicket ticket(ScheduledLesson l, LessonTicketKind kind) =>
+          LessonTicket(kind: kind, lessonId: l.id, learnerId: l.learnerId, learnerName: l.learnerName, startsAt: l.startsAt, endsAt: l.endsAt);
+      final repo = _RecordingLessons()
+        ..mine = [owed, next, held]
+        ..perLesson = {
+          'owed': [ticket(owed, LessonTicketKind.report), ticket(owed, LessonTicketKind.absence)],
+          'next': [ticket(next, LessonTicketKind.teacherApology)],
+        };
+      await tester.pumpWidget(scheduleApp(repo));
+      await tester.pumpAndSettle();
+
+      // An unreported lesson: straight into its report (attended / did not attend).
+      await tester.tap(find.byKey(const ValueKey('schedule-owed')));
+      await tester.pumpAndSettle();
+      expect(repo.lessonReads, ['owed']);
+      expect(find.byKey(const ValueKey('report-attended')), findsOneWidget);
+      expect(find.byKey(const ValueKey('report-not-attended')), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      // An upcoming lesson: "I can't teach this lesson".
+      await tester.tap(find.byKey(const ValueKey('schedule-next')));
+      await tester.pumpAndSettle();
+      expect(find.text("I can't teach this lesson"), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      // A held lesson: nothing to do, and it says what happened.
+      await tester.tap(find.byKey(const ValueKey('schedule-held')));
+      await tester.pumpAndSettle();
+      expect(find.text('Nothing to do for this lesson now.'), findsOneWidget);
+      expect(find.textContaining('Held'), findsWidgets);
     });
 
     testWidgets('a supervisor\'s make-up decision reads as what was done', (tester) async {
@@ -568,6 +657,16 @@ class _RecordingLessons implements LessonRepository {
 
   @override
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => mine;
+
+  /// What GET /lessons/:id offers per lesson, and how often it was asked.
+  Map<String, List<LessonTicket>> perLesson = const {};
+  final lessonReads = <String>[];
+
+  @override
+  Future<List<LessonTicket>> lessonTickets(String lessonId) async {
+    lessonReads.add(lessonId);
+    return perLesson[lessonId] ?? const [];
+  }
 
   ChildProgress? childProgress;
   TeacherWorkload? workload;
