@@ -113,21 +113,31 @@ export class CheckoutService {
 
     const attempts = await this.prisma.paymentCheckout.count({ where: { requestId: fresh.id } });
     const sep = opts.returnUrl.includes('?') ? '&' : '?';
-    const session = await this.stripe.createCheckout({
-      requestId: fresh.id,
-      organizationId: fresh.organizationId,
-      amountMinor: remaining,
-      currency: fresh.currency,
-      productName: fresh.childName ? `${fresh.label} — ${fresh.childName}` : fresh.label,
-      description: fresh.periodStart && fresh.periodEnd
-        ? `${fresh.periodStart.toISOString().slice(0, 10)} → ${fresh.periodEnd.toISOString().slice(0, 10)}`
-        : null,
-      successUrl: `${opts.returnUrl}${sep}checkout=success`,
-      cancelUrl: `${opts.returnUrl}${sep}checkout=cancelled`,
-      expiresAt: new Date(Date.now() + CHECKOUT_MINUTES * 60_000),
-      locale: opts.locale,
-      idempotencyKey: `checkout:${fresh.id}:${attempts}`,
-    });
+    let session: CheckoutSession;
+    try {
+      session = await this.stripe.createCheckout({
+        requestId: fresh.id,
+        organizationId: fresh.organizationId,
+        amountMinor: remaining,
+        currency: fresh.currency,
+        productName: fresh.childName ? `${fresh.label} — ${fresh.childName}` : fresh.label,
+        description: fresh.periodStart && fresh.periodEnd
+          ? `${fresh.periodStart.toISOString().slice(0, 10)} → ${fresh.periodEnd.toISOString().slice(0, 10)}`
+          : null,
+        successUrl: `${opts.returnUrl}${sep}checkout=success`,
+        cancelUrl: `${opts.returnUrl}${sep}checkout=cancelled`,
+        expiresAt: new Date(Date.now() + CHECKOUT_MINUTES * 60_000),
+        locale: opts.locale,
+        idempotencyKey: `checkout:${fresh.id}:${attempts}`,
+      });
+    } catch (e) {
+      // Stripe's own message never reaches a parent (it can name parameters,
+      // and it is English API prose); the category is logged, never the body
+      // or the key. The client offers the bank transfer instead.
+      const err = e as { type?: string; code?: string; statusCode?: number; name?: string };
+      this.log.error(`stripe checkout refused: ${err.type ?? err.name ?? 'error'}${err.code ? ` (${err.code})` : ''}${err.statusCode ? ` ${err.statusCode}` : ''}`);
+      throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payment is unavailable right now; pay by bank transfer', 503);
+    }
     if (!session.url) throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'Stripe did not return a payment page', 503);
     await this.prisma.paymentCheckout.create({
       data: {
