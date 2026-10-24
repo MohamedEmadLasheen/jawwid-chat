@@ -133,7 +133,7 @@ class ConversationTile extends StatelessWidget {
                         stamp,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: unread
-                              ? tokens.colorBrandPrimary
+                              ? theme.colorScheme.primary
                               : theme.colorScheme.onSurfaceVariant,
                           fontWeight:
                               unread ? FontWeight.w700 : FontWeight.w400,

@@ -35,6 +35,8 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     required this.colorBrandOnPrimary,
     required this.colorBrandSubtle,
     required this.colorAccent,
+    required this.colorAccentStrong,
+    required this.colorAccentSubtle,
     required this.colorStatusSuccessFg,
     required this.colorStatusSuccessBg,
     required this.colorStatusWarningFg,
@@ -87,7 +89,17 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
   final Color colorBrandPrimaryPressed;
   final Color colorBrandOnPrimary;
   final Color colorBrandSubtle;
+
+  /// The gold's decorative shade: indicators, rules, a pin star. Never text --
+  /// accent-500 measures 3.40:1 on white (memory: gold is split by job).
   final Color colorAccent;
+
+  /// The only gold that may carry text (accent-700 in light, a light gold in dark),
+  /// and what is drawn on [colorAccentSubtle].
+  final Color colorAccentStrong;
+
+  /// A quiet gold ground: a selected chip, a notice.
+  final Color colorAccentSubtle;
 
   // --- §2.2 status -------------------------------------------------------------------
   final Color colorStatusSuccessFg;
@@ -140,12 +152,17 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorSurfaceInverse: _neutral800,
     colorTextPrimary: _neutral900,
     colorTextSecondary: _neutral600,
-    colorTextMuted: _neutral500,
+    // WCAG AA (2026-10-24): neutral-500 measured 4.37:1 on the brand-subtle ground
+    // and 4.52:1 on sunken. This shade clears 5:1 on every light surface.
+    colorTextMuted: _neutralMutedLight,
     colorTextInverse: _neutral0,
     colorTextLink: _primary600,
     colorBorderSubtle: _neutral100,
     colorBorderDefault: _neutral200,
-    colorBorderStrong: _neutral300,
+    // The border that identifies a control (a text field, a switch track, a radio):
+    // 3:1 against every light surface, as WCAG 1.4.11 asks of a UI component.
+    // Decorative dividers stay on subtle/default.
+    colorBorderStrong: _neutralControlLight,
     colorBorderFocus: _primary500,
     colorBrandPrimary: _primary500,
     colorBrandPrimaryHover: _primary600,
@@ -153,6 +170,8 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorBrandOnPrimary: _neutral0,
     colorBrandSubtle: _primary50,
     colorAccent: _accent500,
+    colorAccentStrong: _accent700,
+    colorAccentSubtle: _accent50,
     colorStatusSuccessFg: _green600,
     colorStatusSuccessBg: _green100,
     colorStatusWarningFg: _amber600,
@@ -189,19 +208,25 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorSurfaceInverse: _neutral50,
     colorTextPrimary: Color(0xFFF5F3F0),
     colorTextSecondary: _neutral300,
-    colorTextMuted: _neutral400,
+    // neutral-400 measured 3.63:1 on the raised surface; this clears 4.5:1 on all.
+    colorTextMuted: _neutralMutedDark,
     colorTextInverse: _neutral900,
     colorTextLink: _primary300,
     colorBorderSubtle: Color(0xFF33302B),
     colorBorderDefault: Color(0xFF45413A),
-    colorBorderStrong: _neutral600,
+    colorBorderStrong: _neutralControlDark,
     colorBorderFocus: _primary300,
+    // A FILL in dark (white on it: 5.19:1). As text or a control's mark it
+    // measures 2.83:1 on the dark surface, so the theme's `primary` role in dark
+    // is colorTextLink -- see theme.dart.
     colorBrandPrimary: _primary500,
     colorBrandPrimaryHover: _primary600,
     colorBrandPrimaryPressed: _primary700,
     colorBrandOnPrimary: _neutral0,
     colorBrandSubtle: Color(0xFF0B2E2B),
     colorAccent: _accent500,
+    colorAccentStrong: _accent200,
+    colorAccentSubtle: Color(0xFF3A2A12),
     colorStatusSuccessFg: _green100,
     colorStatusSuccessBg: _green700,
     colorStatusWarningFg: _amber100,
@@ -256,6 +281,11 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
   static const _neutral700 = Color(0xFF423C36);
   static const _neutral800 = Color(0xFF2B2823);
   static const _neutral900 = Color(0xFF1A1815);
+  // Between the ramp steps, chosen by measurement (test/design/theme_contrast_test.dart).
+  static const _neutralMutedLight = Color(0xFF685F56);
+  static const _neutralMutedDark = Color(0xFFB3ABA1);
+  static const _neutralControlLight = Color(0xFF857C71);
+  static const _neutralControlDark = Color(0xFF948B80);
 
   static const _primary50 = Color(0xFFE7F2F1);
   static const _primary300 = Color(0xFF66ABA4);
@@ -263,7 +293,10 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
   static const _primary600 = Color(0xFF0B635C);
   static const _primary700 = Color(0xFF084B46);
 
+  static const _accent50 = Color(0xFFFBF1E2);
+  static const _accent200 = Color(0xFFF0C98A);
   static const _accent500 = Color(0xFFC57A1E);
+  static const _accent700 = Color(0xFF8A5310);
 
   static const _red100 = Color(0xFFFBE9E7);
   static const _red500 = Color(0xFFC4362C);
