@@ -24,17 +24,12 @@ class ConversationTile extends StatelessWidget {
     required this.now,
     this.onTap,
     this.onLongPress,
-    this.onOpenProfile,
   });
 
   final Conversation conversation;
   final DateTime now;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
-
-  /// Tapping the avatar or the name opens the profile instead of the conversation — the
-  /// split every messaging app makes, and the one people already reach for.
-  final VoidCallback? onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -83,15 +78,14 @@ class ConversationTile extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  // The avatar and the name open the profile; the rest of the row opens
-                  // the conversation. Both targets clear the 48dp floor.
-                  _ProfileTarget(
-                    onOpenProfile: onOpenProfile,
-                    child: JawwidAvatar(
-                      displayName: conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
-                      imageUrl: conversation.avatarUrl,
-                      size: Sizes.avatarLg,
-                    ),
+                  // The WHOLE row opens the conversation, avatar and name included,
+                  // as in WhatsApp (owner 2026-10-24: tapping a group's avatar used to
+                  // land on Group Info). Group Info and a person's profile are one tap
+                  // further, from the chat header.
+                  JawwidAvatar(
+                    displayName: conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
+                    imageUrl: conversation.avatarUrl,
+                    size: Sizes.avatarLg,
                   ),
                   const SizedBox(width: Spacing.spacing4),
                   Expanded(
@@ -101,16 +95,13 @@ class ConversationTile extends StatelessWidget {
                       children: [
                         // Laid out in the name's own direction: this UI can be in
                         // English while every name in it is Arabic, and vice versa.
-                        _ProfileTarget(
-                          onOpenProfile: onOpenProfile,
-                          child: ContentText(
-                            conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight:
-                                  unread ? FontWeight.w700 : FontWeight.w600,
-                            ),
+                        ContentText(
+                          conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight:
+                                unread ? FontWeight.w700 : FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: Spacing.spacing1),
@@ -176,29 +167,6 @@ class ConversationTile extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Makes its child open the profile, and stops that tap reaching the row underneath.
-///
-/// A plain [GestureDetector] would let the tap fall through to the row's [InkWell] and open
-/// the conversation as well, so this uses an opaque behaviour deliberately. When no profile
-/// handler is supplied the child is returned untouched, leaving the whole row tappable.
-class _ProfileTarget extends StatelessWidget {
-  const _ProfileTarget({required this.child, this.onOpenProfile});
-
-  final Widget child;
-  final VoidCallback? onOpenProfile;
-
-  @override
-  Widget build(BuildContext context) {
-    if (onOpenProfile == null) return child;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onOpenProfile,
-      child: child,
     );
   }
 }

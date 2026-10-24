@@ -41,7 +41,6 @@ class ChatsScreen extends ConsumerStatefulWidget {
   const ChatsScreen({
     super.key,
     this.onOpenConversation,
-    this.onOpenProfile,
     this.onOpenStory,
     this.onOpenMessage,
     this.initialFilter = ChatFilter.all,
@@ -49,9 +48,6 @@ class ChatsScreen extends ConsumerStatefulWidget {
 
   /// Overridable so widget tests can observe navigation without a router.
   final void Function(String conversationId)? onOpenConversation;
-
-  /// Same, for the avatar/name tap that opens a profile rather than the conversation.
-  final void Function(String conversationId)? onOpenProfile;
 
   /// Same, for a tap on the stories rail.
   final void Function(String storyId)? onOpenStory;
@@ -95,15 +91,6 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
       return;
     }
     context.push(Routes.conversationAt(conversationId, messageId));
-  }
-
-  void _openProfile(String conversationId) {
-    final handler = widget.onOpenProfile;
-    if (handler != null) {
-      handler(conversationId);
-      return;
-    }
-    context.push(Routes.conversationProfile(conversationId));
   }
 
   void _openStory(String storyId) {
@@ -180,7 +167,6 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                   role: role,
                   onOpen: _open,
                   onOpenMessage: _openAt,
-                  onOpenProfile: _openProfile,
                   onOpenStory: _openStory,
                 ),
             },
@@ -201,7 +187,6 @@ class _Feed extends ConsumerWidget {
     required this.query,
     required this.role,
     required this.onOpen,
-    required this.onOpenProfile,
     required this.onOpenStory,
   });
 
@@ -214,7 +199,6 @@ class _Feed extends ConsumerWidget {
   final String query;
   final UserRole? role;
   final void Function(String conversationId) onOpen;
-  final void Function(String conversationId) onOpenProfile;
   final void Function(String storyId) onOpenStory;
 
   @override
@@ -290,7 +274,6 @@ class _Feed extends ConsumerWidget {
                   conversation: conversation,
                   now: now,
                   onTap: () => onOpen(conversation.id),
-                  onOpenProfile: () => onOpenProfile(conversation.id),
                   onLongPress: () =>
                       _showActions(context, ref, conversation),
                 );

@@ -14,6 +14,7 @@ import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/conversations/presentation/chats_screen.dart';
 import 'package:jawwid_chat/features/conversations/presentation/conversation_tile.dart';
+import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_photos_section.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_sections.dart';
@@ -65,78 +66,59 @@ void main() {
     );
   }
 
-  group('tapping an avatar or a name opens the profile, not the conversation', () {
-    testWidgets('the avatar opens the profile', (tester) async {
+  // Owner 2026-10-24, WhatsApp-style: the WHOLE row opens the conversation --
+  // its avatar and its name included. Group Info / a person's profile is reached
+  // from the chat header (the last test in this group).
+  group('tapping any part of a row opens the conversation, never the profile', () {
+    Future<String?> tapIn(WidgetTester tester, Finder Function() target) async {
       String? openedConversation;
-      String? openedProfile;
-
       await tester.pumpWidget(
         harness(
           role: UserRole.parent,
-          child: ChatsScreen(
-            onOpenConversation: (id) => openedConversation = id,
-            onOpenProfile: (id) => openedProfile = id,
-          ),
+          child: ChatsScreen(onOpenConversation: (id) => openedConversation = id),
         ),
       );
       await tester.pumpAndSettle();
-
-      await tester.tap(find.byType(JawwidAvatar).first);
+      await tester.tap(target());
       await tester.pumpAndSettle();
+      return openedConversation;
+    }
 
-      expect(openedProfile, isNotNull);
-      expect(
-        openedConversation,
-        isNull,
-        reason: 'the avatar tap must not also open the conversation underneath',
-      );
-    });
-
-    testWidgets('the name opens the profile', (tester) async {
-      String? openedConversation;
-      String? openedProfile;
-
-      await tester.pumpWidget(
-        harness(
-          role: UserRole.parent,
-          child: ChatsScreen(
-            onOpenConversation: (id) => openedConversation = id,
-            onOpenProfile: (id) => openedProfile = id,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
+    testWidgets('the avatar opens the conversation', (tester) async {
       final firstTile = find.byType(ConversationTile).first;
-      final title = tester.widget<ConversationTile>(firstTile).conversation.title;
-      await tester.tap(find.descendant(of: firstTile, matching: find.text(title)));
-      await tester.pumpAndSettle();
-
-      expect(openedProfile, isNotNull);
-      expect(openedConversation, isNull);
+      final opened = await tapIn(tester, () => find.descendant(of: firstTile, matching: find.byType(JawwidAvatar)));
+      expect(opened, isNotNull);
+      expect(find.byType(ConversationProfileScreen), findsNothing);
     });
 
-    testWidgets('the rest of the row still opens the conversation', (tester) async {
-      String? openedConversation;
-      String? openedProfile;
+    testWidgets('the name opens the conversation', (tester) async {
+      final firstTile = find.byType(ConversationTile).first;
+      final opened = await tapIn(tester, () {
+        final title = tester.widget<ConversationTile>(firstTile).conversation.title;
+        return find.descendant(of: firstTile, matching: find.text(title));
+      });
+      expect(opened, isNotNull);
+    });
 
+    testWidgets('the rest of the row opens the conversation', (tester) async {
+      final opened = await tapIn(tester, () => find.text('تم تأكيد موعد الحصة القادمة.').first);
+      expect(opened, isNotNull);
+    });
+
+    testWidgets("inside the chat, the header's name and avatar open Group Info", (tester) async {
+      var openedProfile = 0;
       await tester.pumpWidget(
         harness(
           role: UserRole.parent,
-          child: ChatsScreen(
-            onOpenConversation: (id) => openedConversation = id,
-            onOpenProfile: (id) => openedProfile = id,
-          ),
+          child: ChatScreen(conversationId: 'c_group_1', title: 'Header title', onOpenProfile: () => openedProfile++),
         ),
       );
       await tester.pumpAndSettle();
-
-      // The preview line — clear of both the avatar and the name.
-      await tester.tap(find.text('تم تأكيد موعد الحصة القادمة.').first);
+      await tester.tap(find.text('Header title'));
       await tester.pumpAndSettle();
-
-      expect(openedConversation, isNotNull);
-      expect(openedProfile, isNull);
+      await tester.tap(find.descendant(of: find.byType(AppBar), matching: find.byType(JawwidAvatar)));
+      await tester.pumpAndSettle();
+      expect(openedProfile, 2);
     });
   });
 
