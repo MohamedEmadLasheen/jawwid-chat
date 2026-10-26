@@ -22,7 +22,7 @@ import type { AuditService } from '../../platform/audit.service';
 import type { StaffAccessBasis } from '../../platform/staff-scope';
 import { Actor, SYSTEM_ACTOR, isConversationStaff } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
-import type { ConversationWithLearner, MemberAwayDto, ResolvedMember } from '../contracts/dto';
+import type { ConversationCoverDto, ConversationWithLearner, MemberAwayDto, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
 import {
   ActorKind,
@@ -1658,17 +1658,20 @@ export class ConversationService {
   }
 
   /**
-   * A visible line ("Ola joined to support"), posted inside the caller's
-   * transaction and announced to open screens with no push
-   * (MessageCreatedPayload.silent). PD-33 and PD-35.
+   * A visible line ("Amira is covering for Noura until 3 Nov", "Ola joined to
+   * support"), posted inside the caller's transaction and announced to open
+   * screens with no push (MessageCreatedPayload.silent). PD-33 and PD-35.
+   * `touchActivity: false` (PD-33's cover lines) leaves the chat list's order
+   * alone; a system message never counts as unread (it carries no receipts).
    */
   async postAnnouncement(
     tx: Prisma.TransactionClient,
     conversationId: string,
     kind: string,
     payload: Record<string, unknown>,
-  ): Promise<void> {
-    const message = await this.systemMessage(tx, conversationId, kind, payload);
+    opts: { touchActivity?: boolean } = {},
+  ): Promise<string> {
+    const message = await this.systemMessage(tx, conversationId, kind, payload, opts);
     await this.outbox.enqueue(tx, CommEvent.MESSAGE_CREATED, {
       conversationId,
       messageId: message.id,
@@ -1681,6 +1684,54 @@ export class ConversationService {
       createdAt: message.createdAt.toISOString(),
       silent: true,
     });
+    return message.id;
+  }
+
+  /**
+   * PD-33: the live cover each conversation is under, if any -- a staff member
+   * of it (or the supervisor responsible for a group's children) is away and
+   * a backup covers for them (chat.live_covers). One query for the whole list.
+   */
+  async coversOf(conversationIds: readonly string[]): Promise<Map<string, ConversationCoverDto>> {
+    if (conversationIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<
+      Array<{ conversation_id: string; primary_id: string; primary_name: string; backup_id: string; backup_name: string; ends_at: Date }>
+    >`
+      WITH ids AS (SELECT unnest(${[...conversationIds]}::uuid[]) AS id),
+           principals AS (
+             SELECT cm.conversation_id, cm.actor_id AS staff_id
+               FROM chat.conversation_member cm JOIN ids ON ids.id = cm.conversation_id
+              WHERE cm.left_at IS NULL AND cm.actor_kind = 'staff'
+             UNION
+             SELECT c.id, ls.supervisor_id
+               FROM chat.conversation c JOIN ids ON ids.id = c.id
+               JOIN chat.learner_supervision ls ON ls.learner_id = c.learner_id
+              WHERE c.type = 'student_group'
+             UNION
+             SELECT cl.conversation_id, ls.supervisor_id
+               FROM chat.conversation_learner cl JOIN ids ON ids.id = cl.conversation_id
+               JOIN chat.learner_supervision ls ON ls.learner_id = cl.learner_id)
+      SELECT DISTINCT ON (p.conversation_id)
+             p.conversation_id::text AS conversation_id,
+             lc.primary_id::text AS primary_id, ps.name AS primary_name,
+             lc.backup_id::text AS backup_id, bs.name AS backup_name, lc.ends_at
+        FROM principals p
+        JOIN chat.live_covers(now()) lc ON lc.primary_id = p.staff_id
+        JOIN chat.staff ps ON ps.id = lc.primary_id
+        JOIN chat.staff bs ON bs.id = lc.backup_id
+       ORDER BY p.conversation_id, lc.ends_at`;
+    return new Map(
+      rows.map((r) => [
+        r.conversation_id,
+        {
+          supervisorId: r.primary_id,
+          supervisorName: r.primary_name,
+          coverId: r.backup_id,
+          coverName: r.backup_name,
+          until: r.ends_at.toISOString(),
+        },
+      ]),
+    );
   }
 
   /**
@@ -1749,6 +1800,7 @@ export class ConversationService {
     conversationId: string,
     kind: string,
     payload: Record<string, unknown>,
+    opts: { touchActivity?: boolean } = {},
   ): Promise<Message> {
     // The conversation's own row, locked, is the authority for the message's
     // tenant (RT-030): the column default is the seeded organization, which is
@@ -1778,7 +1830,7 @@ export class ConversationService {
     });
     await tx.conversation.update({
       where: { id: conversationId },
-      data: { lastSeq: seq, lastActivityAt: new Date() },
+      data: opts.touchActivity === false ? { lastSeq: seq } : { lastSeq: seq, lastActivityAt: new Date() },
     });
     return message;
   }

@@ -1007,6 +1007,32 @@ class L10nEn extends L10n {
       'A child of this group moved to another supervisor';
 
   @override
+  String systemCoverStarted(String cover, String supervisor, String date) {
+    return '$cover is covering for $supervisor until $date';
+  }
+
+  @override
+  String systemCoverExtended(String cover, String supervisor, String date) {
+    return '$cover\'s cover for $supervisor is extended until $date';
+  }
+
+  @override
+  String systemCoverEnded(String supervisor) {
+    return '$supervisor is back; the cover has ended';
+  }
+
+  @override
+  String get systemCoverStartedNoName => 'A backup supervisor is covering';
+
+  @override
+  String get systemCoverEndedNoName => 'The cover has ended';
+
+  @override
+  String conversationCoverLine(String cover, String date) {
+    return '$cover is covering until $date';
+  }
+
+  @override
   String systemSeatJoined(String who) {
     return '$who joined to support';
   }
