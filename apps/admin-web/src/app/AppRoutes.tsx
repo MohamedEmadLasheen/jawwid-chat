@@ -39,6 +39,7 @@ import { TeacherProfilesPage } from '@/features/teacher-profiles/TeacherProfiles
 import { AccountsPage } from '@/features/accounts/AccountsPage'
 import { SupportSessionPage } from '@/features/support/SupportSessionPage'
 import { DevicesPage } from '@/features/devices/DevicesPage'
+import { NotificationsPage } from '@/features/notification-center/NotificationsPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -152,6 +153,9 @@ export function AppRoutes() {
             role (GET /me/sessions answers only for the caller). A static
             segment, so it outranks /profile/:staffId. */}
         <Route path="/profile/devices" element={<DevicesPage />} />
+        {/* PD-34: every staff member's own Notification Center; the server
+            answers only for the caller. */}
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/profile/:staffId" element={<ProfilePage />} />
         <Route
           path="/admin/:section"

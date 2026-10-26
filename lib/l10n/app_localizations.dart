@@ -6522,6 +6522,192 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Your feedback could not be sent. Please try again.'**
   String get feedbackFailed;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsCenterTitle;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get notificationsTabAll;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get notificationsTabUnread;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires action'**
+  String get notificationsTabAction;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons'**
+  String get notificationsTabLessons;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get notificationsTabPayments;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversations'**
+  String get notificationsTabConversations;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Announcements'**
+  String get notificationsTabAnnouncements;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all as read'**
+  String get notificationsMarkAllRead;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show older'**
+  String get notificationsLoadOlder;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Open conversation'**
+  String get notificationsActionOpenConversation;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'View lesson'**
+  String get notificationsActionViewLesson;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'View payments'**
+  String get notificationsActionViewPayments;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'View story'**
+  String get notificationsActionOpenStories;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'View calls'**
+  String get notificationsActionOpenCalls;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiet hours'**
+  String get notificationSettingsQuietHours;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications wait until quiet hours end, in your own time zone. Calls and lesson-start reminders always come through.'**
+  String get notificationSettingsQuietHoursBody;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get notificationSettingsFrom;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Until'**
+  String get notificationSettingsUntil;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the academy\'s default'**
+  String get notificationSettingsUseDefault;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show names on the lock screen'**
+  String get notificationSettingsShowNames;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show your child\'s name in lesson reminders and the amount in payment reminders while the phone is locked.'**
+  String get notificationSettingsShowNamesBody;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the student\'s name in lesson reminders while the phone is locked.'**
+  String get notificationSettingsShowNamesTeacherBody;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Push notifications'**
+  String get notificationSettingsCategories;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Switched off, they still appear in Notifications, without an alert.'**
+  String get notificationSettingsCategoriesBody;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Always on'**
+  String get notificationSettingsLocked;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get notificationCategoryMessages;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get notificationCategoryCalls;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get notificationCategoryTasks;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Announcements and stories'**
+  String get notificationCategoryAnnouncements;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get notificationCategorySystem;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -20,6 +20,7 @@ import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { TEXT, useText } from '@/features/admin/copy'
 import { ShiftEndBanner } from '@/features/inbox/ShiftEndBanner'
+import { NotificationBell } from '@/features/notification-center/NotificationBell'
 import { Avatar } from '@/shared/components/Avatar'
 import { BrandLogo } from '@/shared/components/BrandLogo'
 import { Icon } from '@/shared/components/Icon'
@@ -464,6 +465,8 @@ function Topbar({
       <div className="topbar__spacer" />
       {/* No "Read-only access" chip: the super admin has written in conversations
           since PD-8 and publishes stories since 2026-10-17, so the claim was false. */}
+      {/* PD-34: the staff member's own Notification Center. */}
+      {staff && <NotificationBell />}
       <LanguageToggle />
       {staff && (
         <>
