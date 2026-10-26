@@ -3226,7 +3226,8 @@ writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
      Anything else reads as not found.
    - The API and the worker write the switch into `chat.config` at boot, so the
      database and the API read one value. The worker re-seats every supervision
-     conversation and trial group once at start.
+     conversation and trial group (amended below: only an explicit value is
+     written, and re-seating follows every change).
 4. **The `supervision` seat.** A teacher supervisor (or the Teachers Manager)
    joins, visibly, one of these, and only these:
    - the Student Group or family group of a child taught by a teacher in their
@@ -3255,6 +3256,29 @@ writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
 - `GET seats/candidates?teacherId&q`
 
 Proven by `apps/api/test/integration/teacher-supervisor-pd035.spec.ts`.
+
+**Hardening before the switch may be turned on** (department head's review of
+#136, 2026-10-26). These amend part 2's items 1–3:
+- An assignment never outlives its supervisor's place in the Teachers
+  department. The assignment guard locks that membership row (no race with a
+  removal), the move guard also covers handing the row to someone else, and the
+  scope re-checks the department.
+- A supervisor who was deactivated or left the department supervises no one.
+  Their teachers count as unassigned.
+- Boot writes the switch only when the variable is set. Unset leaves the stored
+  value, and a change is logged as a warning.
+- Re-seating follows the switch both ways, covers inactive teachers, and retries
+  on each seat sweep until it completes. Its marker is
+  `chat.config 'teacher_supervisor.reseated_strict'`.
+- Under strict scope, a teacher supervisor moves a child only to one of their
+  own teachers and lists only those.
+- The PD-38 calendar names only their own teachers' children.
+- No service defaults to department-wide when it is built without the scope.
+
+Canonical: `supabase/migrations/20261026160006_chat_pd035_scope_hardening.sql`,
+`docs/admin/pd035-teacher-supervisors.md` (the runbook). Proven by
+`apps/api/test/integration/teacher-scope-hardening-pd035.spec.ts` and
+`apps/api/test/unit/authorization/teacher-scope-boot.spec.ts`.
 
 ---
 

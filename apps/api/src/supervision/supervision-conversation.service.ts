@@ -12,7 +12,7 @@ import {
   type Pd012Access,
   type TeachersDepartmentRole,
 } from '../platform/pd012-policy';
-import { DEPARTMENT_WIDE_SCOPE, TeacherScopeService } from '../platform/teacher-scope';
+import { TeacherScopeService } from '../platform/teacher-scope';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
@@ -39,16 +39,20 @@ export type SupervisionTicket = 'certificate' | 'leave';
  */
 @Injectable()
 export class SupervisionConversationService {
+  readonly teacherScope: TeacherScopeService;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
     private readonly conversations: ConversationService,
     private readonly outbox: OutboxService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
-    // PD-35: which teachers a Teachers-department member works on. A positional
-    // harness construction without it is department-wide (the switch's default).
-    @Optional() readonly teacherScope: TeacherScopeService = DEPARTMENT_WIDE_SCOPE,
-  ) {}
+    // PD-35: which teachers a Teachers-department member works on. Never a
+    // department-wide default: a construction without it reads the real switch.
+    @Optional() teacherScope?: TeacherScopeService,
+  ) {
+    this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
+  }
 
   // ------------------------------------------------------------------
   // Who
@@ -137,18 +141,6 @@ export class SupervisionConversationService {
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'teacher_supervision:' + teacherId}))`;
 
-    const staff = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT s.id::text AS id
-        FROM chat.staff s
-       WHERE s.organization_id = ${organizationId}::uuid
-         AND s.is_active AND s.left_at IS NULL
-         AND s.role IN ('admin', 'coverage', 'manager')
-         AND chat.teachers_department_role(s.id) IS NOT NULL
-         -- PD-35: with the switch on, the teacher's own supervisor and the Teachers Manager.
-         AND (NOT chat.teacher_scope_strict() OR chat.staff_teacher_scope(s.id, ${teacherId}::uuid) IN ('self', 'manager'))
-       ORDER BY s.id`;
-    const wanted = new Set(staff.map((s) => s.id));
-
     let conv = await tx.conversation.findFirst({
       where: { type: ConversationType.TEACHER_SUPERVISION, supervisedTeacherId: teacherId, archivedAt: null },
     });
@@ -197,10 +189,69 @@ export class SupervisionConversationService {
       added.push(teacherId);
     }
     const liveStaff = new Set(live.filter((m) => m.actorKind === ActorKind.STAFF).map((m) => m.actorId));
+    const staff = await this.syncStaff(tx, conv.id, teacherId, organizationId, byStaffId, liveStaff);
+    added.push(...staff.added);
+    removed.push(...staff.removed);
+    if (added.length > 0 || removed.length > 0) {
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added, removed });
+    }
+    return conv;
+  }
+
+  /**
+   * PD-35: bring an existing supervision conversation's staff in line with the
+   * strict switch, whatever the teacher's state -- an inactive teacher's
+   * conversation follows the switch too. Creates nothing and never touches the
+   * teacher's own row. Returns the staff added and removed.
+   */
+  async resyncStaffInTx(tx: Tx, conversationId: string): Promise<{ added: string[]; removed: string[] }> {
+    const conv = await tx.conversation.findFirst({
+      where: { id: conversationId, type: ConversationType.TEACHER_SUPERVISION, archivedAt: null },
+      select: { id: true, organizationId: true, supervisedTeacherId: true },
+    });
+    if (!conv?.supervisedTeacherId) return { added: [], removed: [] };
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'teacher_supervision:' + conv.supervisedTeacherId}))`;
+    const live = await tx.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null, actorKind: ActorKind.STAFF },
+      select: { actorId: true },
+    });
+    const staff = await this.syncStaff(tx, conv.id, conv.supervisedTeacherId, conv.organizationId, null, new Set(live.map((m) => m.actorId)));
+    if (staff.added.length > 0 || staff.removed.length > 0) {
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, ...staff });
+    }
+    return staff;
+  }
+
+  /**
+   * The staff side of a supervision conversation: the Teachers department, or
+   * with the switch on the teacher's own supervisor and the Teachers Manager.
+   * Under the caller's per-teacher lock.
+   */
+  private async syncStaff(
+    tx: Tx,
+    conversationId: string,
+    teacherId: string,
+    organizationId: string,
+    byStaffId: string | null,
+    liveStaff: ReadonlySet<string>,
+  ): Promise<{ added: string[]; removed: string[] }> {
+    const staff = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT s.id::text AS id
+        FROM chat.staff s
+       WHERE s.organization_id = ${organizationId}::uuid
+         AND s.is_active AND s.left_at IS NULL
+         AND s.role IN ('admin', 'coverage', 'manager')
+         AND chat.teachers_department_role(s.id) IS NOT NULL
+         -- PD-35: with the switch on, the teacher's own supervisor and the Teachers Manager.
+         AND (NOT chat.teacher_scope_strict() OR chat.staff_teacher_scope(s.id, ${teacherId}::uuid) IN ('self', 'manager'))
+       ORDER BY s.id`;
+    const wanted = new Set(staff.map((s) => s.id));
+    const added: string[] = [];
+    const removed: string[] = [];
     for (const id of wanted) {
       if (liveStaff.has(id)) continue;
       await tx.conversationMember.create({
-        data: { conversationId: conv.id, actorId: id, actorKind: ActorKind.STAFF, memberRole: MemberRole.ADMIN, addedBy: byStaffId },
+        data: { conversationId, actorId: id, actorKind: ActorKind.STAFF, memberRole: MemberRole.ADMIN, addedBy: byStaffId },
       });
       added.push(id);
     }
@@ -208,20 +259,17 @@ export class SupervisionConversationService {
     const seated = new Set(
       (await tx.$queryRaw<Array<{ staff_id: string }>>`
         SELECT staff_id::text AS staff_id FROM chat.conversation_seat
-         WHERE conversation_id = ${conv.id}::uuid AND left_at IS NULL AND member_id IS NOT NULL`).map((r) => r.staff_id),
+         WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL AND member_id IS NOT NULL`).map((r) => r.staff_id),
     );
     const leaving = [...liveStaff].filter((id) => !wanted.has(id) && !seated.has(id));
     if (leaving.length > 0) {
       await tx.conversationMember.updateMany({
-        where: { conversationId: conv.id, actorId: { in: leaving }, leftAt: null },
+        where: { conversationId, actorId: { in: leaving }, leftAt: null },
         data: { leftAt: new Date() },
       });
       removed.push(...leaving);
     }
-    if (added.length > 0 || removed.length > 0) {
-      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added, removed });
-    }
-    return conv;
+    return { added, removed };
   }
 
   // ------------------------------------------------------------------

@@ -31,7 +31,7 @@ import { renderCardBody, type CardLanguage } from './lesson-card';
 import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
 import { lessonPosition } from '../billing/subscription-reads';
 import type { SubscriptionLockReader } from '../platform/subscription-lock';
-import { DEPARTMENT_WIDE_SCOPE, TeacherScopeService, scopeCovers, type TeacherScope } from '../platform/teacher-scope';
+import { TeacherScopeService, scopeCovers, type TeacherScope } from '../platform/teacher-scope';
 import { ReportMaterials, hasMaterials, parseReportMaterials, type CardPractice, type ReportMaterialsInput } from '../materials/report-materials';
 
 /** PD-35: no teacher -- the scope of someone outside the Teachers department. */
@@ -129,6 +129,8 @@ export const DEFAULT_ZONE = 'Africa/Cairo';
 
 @Injectable()
 export class LessonService {
+  readonly teacherScope: TeacherScopeService;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
@@ -143,10 +145,12 @@ export class LessonService {
     // container (a missing provider fails boot); a positional harness
     // construction without it refuses nothing.
     @Inject(SUBSCRIPTION_LOCK) private readonly locks?: SubscriptionLockReader,
-    // PD-35: which teachers a Teachers-department member works on. A positional
-    // harness construction without it is department-wide (the switch's default).
-    @Optional() readonly teacherScope: TeacherScopeService = DEPARTMENT_WIDE_SCOPE,
-  ) {}
+    // PD-35: which teachers a Teachers-department member works on. Never a
+    // department-wide default: a construction without it reads the real switch.
+    @Optional() teacherScope?: TeacherScopeService,
+  ) {
+    this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
+  }
 
   /**
    * PD-30: no lesson is booked for a child whose group is locked for payment

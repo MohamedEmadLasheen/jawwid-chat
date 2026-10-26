@@ -99,18 +99,6 @@ export class TrialGroupService {
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'trial_group:' + teacherId}))`;
 
-    const staff = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT s.id::text AS id
-        FROM chat.staff s
-       WHERE s.organization_id = ${organizationId}::uuid
-         AND s.is_active AND s.left_at IS NULL
-         AND s.role IN ('admin', 'coverage', 'manager')
-         AND chat.teachers_department_role(s.id) IS NOT NULL
-         -- PD-35: with the switch on, the teacher's own supervisor and the Teachers Manager.
-         AND (NOT chat.teacher_scope_strict() OR chat.staff_teacher_scope(s.id, ${teacherId}::uuid) IN ('self', 'manager'))
-       ORDER BY s.id`;
-    const wanted = new Set(staff.map((s) => s.id));
-
     let conv = await tx.conversation.findFirst({
       where: { type: ConversationType.TRIAL_GROUP, trialTeacherId: teacherId, archivedAt: null },
     });
@@ -152,10 +140,69 @@ export class TrialGroupService {
       added.push(teacherId);
     }
     const liveStaff = new Set(live.filter((m) => m.actorKind === ActorKind.STAFF).map((m) => m.actorId));
+    const staff = await this.syncStaff(tx, conv.id, teacherId, organizationId, byStaffId, liveStaff);
+    added.push(...staff.added);
+    removed.push(...staff.removed);
+    if (added.length > 0 || removed.length > 0) {
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added, removed });
+    }
+    return conv;
+  }
+
+  /**
+   * PD-35: bring an existing trial group's staff in line with the strict
+   * switch, whatever the teacher's state -- an inactive teacher's group follows
+   * the switch too. Creates nothing and never touches the teacher's own row.
+   * Returns the staff added and removed.
+   */
+  async resyncStaffInTx(tx: Tx, conversationId: string): Promise<{ added: string[]; removed: string[] }> {
+    const conv = await tx.conversation.findFirst({
+      where: { id: conversationId, type: ConversationType.TRIAL_GROUP, archivedAt: null },
+      select: { id: true, organizationId: true, trialTeacherId: true },
+    });
+    if (!conv?.trialTeacherId) return { added: [], removed: [] };
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'trial_group:' + conv.trialTeacherId}))`;
+    const live = await tx.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null, actorKind: ActorKind.STAFF },
+      select: { actorId: true },
+    });
+    const staff = await this.syncStaff(tx, conv.id, conv.trialTeacherId, conv.organizationId, null, new Set(live.map((m) => m.actorId)));
+    if (staff.added.length > 0 || staff.removed.length > 0) {
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, ...staff });
+    }
+    return staff;
+  }
+
+  /**
+   * The permanent staff of a trial group: the Teachers department, or with the
+   * switch on the teacher's own supervisor and the Teachers Manager. Under the
+   * caller's per-teacher lock.
+   */
+  private async syncStaff(
+    tx: Tx,
+    conversationId: string,
+    teacherId: string,
+    organizationId: string,
+    byStaffId: string | null,
+    liveStaff: ReadonlySet<string>,
+  ): Promise<{ added: string[]; removed: string[] }> {
+    const staff = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT s.id::text AS id
+        FROM chat.staff s
+       WHERE s.organization_id = ${organizationId}::uuid
+         AND s.is_active AND s.left_at IS NULL
+         AND s.role IN ('admin', 'coverage', 'manager')
+         AND chat.teachers_department_role(s.id) IS NOT NULL
+         -- PD-35: with the switch on, the teacher's own supervisor and the Teachers Manager.
+         AND (NOT chat.teacher_scope_strict() OR chat.staff_teacher_scope(s.id, ${teacherId}::uuid) IN ('self', 'manager'))
+       ORDER BY s.id`;
+    const wanted = new Set(staff.map((s) => s.id));
+    const added: string[] = [];
+    const removed: string[] = [];
     for (const id of wanted) {
       if (liveStaff.has(id)) continue;
       await tx.conversationMember.create({
-        data: { conversationId: conv.id, actorId: id, actorKind: ActorKind.STAFF, memberRole: MemberRole.ADMIN, addedBy: byStaffId },
+        data: { conversationId, actorId: id, actorKind: ActorKind.STAFF, memberRole: MemberRole.ADMIN, addedBy: byStaffId },
       });
       added.push(id);
     }
@@ -166,20 +213,17 @@ export class TrialGroupService {
     const seated = new Set(
       (await tx.$queryRaw<Array<{ staff_id: string }>>`
         SELECT staff_id::text AS staff_id FROM chat.conversation_seat
-         WHERE conversation_id = ${conv.id}::uuid AND left_at IS NULL AND member_id IS NOT NULL`).map((r) => r.staff_id),
+         WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL AND member_id IS NOT NULL`).map((r) => r.staff_id),
     );
     const leaving = [...liveStaff].filter((id) => !wanted.has(id) && !sales.has(id) && !seated.has(id));
     if (leaving.length > 0) {
       await tx.conversationMember.updateMany({
-        where: { conversationId: conv.id, actorId: { in: leaving }, leftAt: null },
+        where: { conversationId, actorId: { in: leaving }, leftAt: null },
         data: { leftAt: new Date() },
       });
       removed.push(...leaving);
     }
-    if (added.length > 0 || removed.length > 0) {
-      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added, removed });
-    }
-    return conv;
+    return { added, removed };
   }
 
   /**

@@ -68,6 +68,7 @@ claimed. The decision text itself still lives in
 | `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (PR #131) |
 | `20261026160003` | PD-35 — `chat_pd035_seat_security_fixes` (security-review fixes for #131, fixed forward; PR #143) |
 | `20261026160004` | PD-35 — `chat_pd035_teacher_supervisor` (PR #136; renumbered from 160001 to sort after 160003) |
+| `20261026160006` | PD-35 — `chat_pd035_scope_hardening` (review follow-up to #136: assignment guard FOR SHARE, move guard covers `staff_id`, scope re-checks the department) |
 | `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |
 | `20261026210000` | PD-38 — `chat_pd038_schedule_calendar` |
 

@@ -6,7 +6,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { DEPARTMENT_WIDE_SCOPE, TeacherScopeService, scopeCovers } from '../platform/teacher-scope';
+import { TeacherScopeService, scopeCovers } from '../platform/teacher-scope';
 import type { TeacherFileAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind } from '../communication/contracts/vocab';
@@ -59,15 +59,19 @@ type DayOff = Prisma.TeacherDayOffGetPayload<object>;
  */
 @Injectable()
 export class TeacherFileService {
+  readonly teacherScope: TeacherScopeService;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
     private readonly conversations: ConversationService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
-    // PD-35: which teachers a Teachers-department member works on. A positional
-    // harness construction without it is department-wide (the switch's default).
-    @Optional() readonly teacherScope: TeacherScopeService = DEPARTMENT_WIDE_SCOPE,
-  ) {}
+    // PD-35: which teachers a Teachers-department member works on. Never a
+    // department-wide default: a construction without it reads the real switch.
+    @Optional() teacherScope?: TeacherScopeService,
+  ) {
+    this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
+  }
 
   // ------------------------------------------------------------------
   // Reading
