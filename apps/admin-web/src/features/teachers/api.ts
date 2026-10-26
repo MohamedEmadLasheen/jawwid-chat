@@ -74,6 +74,8 @@ export interface TeacherRow {
   reportsOnTimeRate: number | null
   trials: TrialStats
   summary?: MonthSummary
+  /** PD-31: lessons the teacher moved this month. Information, NOT a violation. */
+  movesByTeacher?: number
 }
 
 export interface TeacherDetail {
@@ -91,6 +93,8 @@ export interface TeacherDetail {
   workload: { availableMinutes: number | null; scheduledMinutes: number; freeMinutes: number | null }
   movements?: { transfersIn: number; transfersOut: number; paused: number; stopped: number }
   previous: { month: string; held: Bucket }
+  /** PD-31: lessons the teacher moved this month. Information, NOT a violation. */
+  movesByTeacher?: number
 }
 
 export const statsApi = {

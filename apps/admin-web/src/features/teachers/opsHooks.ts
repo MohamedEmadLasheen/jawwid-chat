@@ -26,6 +26,46 @@ export function useLearnerLessons(learnerId: string | null) {
   })
 }
 
+/** PD-31: a learner's lessons from now to four weeks ahead (the Lessons dialog). */
+export function useUpcomingLessons(learnerId: string) {
+  return useQuery({
+    queryKey: opsKeys.upcoming(learnerId),
+    queryFn: () => {
+      const now = new Date()
+      return opsApi.lessons({ learnerId, from: now.toISOString(), to: new Date(now.getTime() + 28 * 86_400_000).toISOString() })
+    },
+  })
+}
+
+/** PD-31: the weekly times offered to a learner -- of their teacher, or of `teacherId` (changing teacher). */
+export function useScheduleOptions(learnerId: string | null, teacherId?: string) {
+  return useQuery({
+    queryKey: opsKeys.scheduleOptions(learnerId ?? '', teacherId ?? ''),
+    queryFn: () => opsApi.scheduleOptions(learnerId as string, teacherId),
+    enabled: learnerId !== null,
+  })
+}
+
+export function useFreeSlots(learnerId: string, minutes: number) {
+  return useQuery({
+    queryKey: opsKeys.freeSlots(learnerId, minutes),
+    queryFn: () => opsApi.freeSlots(learnerId, minutes),
+    enabled: minutes > 0,
+  })
+}
+
+export function useMoveSlots(lessonId: string) {
+  return useQuery({ queryKey: opsKeys.moveSlots(lessonId), queryFn: () => opsApi.moveSlots(lessonId) })
+}
+
+export function useBlockedSlots(blockedId: string) {
+  return useQuery({ queryKey: opsKeys.blockedSlots(blockedId), queryFn: () => opsApi.blockedSlots(blockedId) })
+}
+
+export function useTeacherCandidates() {
+  return useQuery({ queryKey: opsKeys.candidates, queryFn: opsApi.teacherCandidates, staleTime: 60_000 })
+}
+
 export function useSuspensions(kind: 'temporary' | 'permanent', status: 'active' | 'ended') {
   return useQuery({ queryKey: opsKeys.suspensions(kind, status), queryFn: () => opsApi.suspensions({ kind, status }) })
 }

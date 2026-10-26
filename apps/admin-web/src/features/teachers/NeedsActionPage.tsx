@@ -5,8 +5,11 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ActionDialog, type FieldSpec, type FieldValue } from './ActionDialog'
 import { TeachersAreaTabs } from './area'
 import type { Pair } from './copy'
-import { opsApi, type LessonDto, type MakeupAction } from './opsApi'
-import { O, WEEKDAY, formatDay, formatMinutes } from './opsCopy'
+import { opsApi, type BlockedOccurrence, type LessonDto, type MakeupAction, type ScheduleRequestDto } from './opsApi'
+import { O, WEEKDAY, fill, formatDay, formatMinutes } from './opsCopy'
+import { ACADEMY_ZONE, clockIn, whenIn } from '@/core/time/academyTime'
+import { BlockedScheduleDialog } from './LessonDialogs'
+import { dayLabel, weeklyLabel } from './WeeklyChangeDialog'
 import { useNeedsAction, useOp } from './opsHooks'
 import './teachers.css'
 
@@ -15,8 +18,9 @@ type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v:
 /**
  * The Teachers department's daily queue (GET /lessons/needs-action): lessons
  * still without an outcome, late apologies to rule on, teacher-cancelled
- * lessons nobody replaced, families' regular-time requests, and pauses ending
- * soon. Each row offers the one or two decisions the server accepts for it;
+ * lessons nobody replaced, families' and teachers' regular-time requests
+ * (PD-31: before -> after, flagged "no longer free" before anyone approves),
+ * weekly lessons the generator could not create, and pauses ending soon. Each row offers the one or two decisions the server accepts for it;
  * the server re-checks every one.
  */
 export function NeedsActionPage() {
@@ -28,10 +32,13 @@ export function NeedsActionPage() {
   const run = (title: string, fields: FieldSpec[], submit: (v: FieldValue) => Promise<unknown>, intro?: string) =>
     setDialog({ title, intro, fields, submit: (v) => op.mutateAsync(() => submit(v)) })
 
+  const [scheduling, setScheduling] = useState<BlockedOccurrence | null>(null)
+
   const d = q.data
+  const blocked = d?.blockedOccurrences ?? []
   const empty =
     d &&
-    d.overdue.length + d.awaitingClose.length + d.rulings.length + d.makeupsOverdue.length + d.scheduleRequests.length + d.returningSoon.length === 0
+    d.overdue.length + d.awaitingClose.length + d.rulings.length + d.makeupsOverdue.length + d.scheduleRequests.length + d.returningSoon.length + blocked.length === 0
 
   const noteField = (required: boolean, label: Pair = required ? O.note : O.noteOptional): FieldSpec => ({ key: 'note', label, type: 'textarea', required })
   const lessonActions = (l: LessonDto) => (
@@ -120,20 +127,35 @@ export function NeedsActionPage() {
               </Section>
               <Section title={tx(O.requests)} count={d.scheduleRequests.length}>
                 {d.scheduleRequests.map((r) => (
-                  <div className="ts-row" key={r.id}>
+                  <ScheduleRequestRow
+                    key={r.id}
+                    r={r}
+                    onApprove={() => run(tx(O.approve), [noteField(false)], (v) => opsApi.decideScheduleRequest(r.id, { decision: 'approved', note: v('note') || undefined }))}
+                    onReject={() => run(tx(O.reject), [noteField(true)], (v) => opsApi.decideScheduleRequest(r.id, { decision: 'rejected', note: v('note') }))}
+                  />
+                ))}
+              </Section>
+              <Section title={tx(O.blocked)} hint={tx(O.blockedHint)} count={blocked.length}>
+                {blocked.map((b) => (
+                  <div className="ts-row" key={b.id} data-blocked={b.id}>
                     <div className="ts-row__main">
-                      <strong>{r.learner.name}</strong>
+                      <strong>{b.learner.name}</strong>
                       <span className="ts-muted">
-                        {tx(O.requested)}: {r.slots.map((s) => `${tx(WEEKDAY[s.weekday] ?? { en: '?', ar: '?' })} ${s.start}`).join(' · ')}
+                        {b.teacher.name} · {whenIn(b.startsAt, ACADEMY_ZONE, locale)} · {formatMinutes(minutesBetween(b.startsAt, b.endsAt), locale)}
                       </span>
-                      {r.note && <span className="ts-muted" dir="auto">{r.note}</span>}
+                      <span className="ts-muted">
+                        {fill(tx(O.blockedBy), {
+                          kind: tx(BLOCKER_KIND[b.blockedBy.kind] ?? BLOCKER_KIND.regular!),
+                          time: `${clockIn(b.blockedBy.startsAt, ACADEMY_ZONE, locale)}–${clockIn(b.blockedBy.endsAt, ACADEMY_ZONE, locale)}`,
+                        })}
+                      </span>
                     </div>
                     <div className="ts-row__actions">
-                      <button type="button" className="btn btn--sm btn--primary" onClick={() => run(tx(O.approve), [noteField(false)], (v) => opsApi.decideScheduleRequest(r.id, { decision: 'approved', note: v('note') || undefined }))}>
-                        {tx(O.approve)}
+                      <button type="button" className="btn btn--sm btn--primary" onClick={() => setScheduling(b)}>
+                        {tx(O.scheduleElsewhere)}
                       </button>
-                      <button type="button" className="btn btn--sm" onClick={() => run(tx(O.reject), [noteField(true)], (v) => opsApi.decideScheduleRequest(r.id, { decision: 'rejected', note: v('note') }))}>
-                        {tx(O.reject)}
+                      <button type="button" className="btn btn--sm" onClick={() => run(tx(O.dismiss), [noteField(false)], (v) => opsApi.dismissBlocked(b.id, v('note') || undefined))}>
+                        {tx(O.dismiss)}
                       </button>
                     </div>
                   </div>
@@ -160,6 +182,86 @@ export function NeedsActionPage() {
         {dialog && (
           <ActionDialog title={dialog.title} intro={dialog.intro} fields={dialog.fields} onSubmit={dialog.submit} onClose={() => setDialog(null)} />
         )}
+        {scheduling && <BlockedScheduleDialog item={scheduling} onClose={() => setScheduling(null)} />}
+      </div>
+    </div>
+  )
+}
+
+/** The kind of the lesson that blocked a weekly one, inside a sentence. */
+const BLOCKER_KIND: Record<string, Pair> = {
+  regular: { en: 'regular', ar: 'أساسية' },
+  makeup: { en: 'make-up', ar: 'تعويضية' },
+  trial: { en: 'trial', ar: 'تجريبية' },
+}
+
+function minutesBetween(a: string, b: string): number {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60_000)
+}
+
+/**
+ * PD-31: a regular-time request as before -> after, who asked, from when, and
+ * each requested time's free flag. When a requested time was taken since
+ * (`stillFree: false`), Approve is disabled -- it would fail -- and Reject stays.
+ * An older server sends only `slots`: they are shown as before.
+ */
+function ScheduleRequestRow({ r, onApprove, onReject }: { r: ScheduleRequestDto; onApprove: () => void; onReject: () => void }) {
+  const tx = useTx()
+  const { locale } = useI18n()
+  const stale = r.stillFree === false
+  const warnId = `nlf-${r.id}`
+  const legacy = (xs: Array<{ weekday: number; start: string }>) =>
+    xs.map((s) => `${tx(WEEKDAY[s.weekday] ?? { en: '?', ar: '?' })} ${s.start}`).join(' · ')
+  return (
+    <div className={`ts-row${stale ? ' ts-row--stale' : ''}`} data-request={r.id}>
+      <div className="ts-row__main">
+        <strong>{r.learner.name}</strong>
+        {r.requestedBy && (
+          <span className="ts-muted" dir="auto">
+            {fill(tx(r.requestedBy.kind === 'teacher' ? O.requestedByTeacher : O.requestedByFamily), { name: r.requestedBy.name })}
+            {r.teacher ? ` · ${tx(O.teacher)}: ${r.teacher.name}` : ''}
+          </span>
+        )}
+        {r.requested ? (
+          <dl className="ts-diff">
+            <dt>{tx(O.before)}</dt>
+            <dd>{r.current && r.current.length ? r.current.map((c) => weeklyLabel(c.nextStartsAt, locale)).join(' · ') : tx(O.none)}</dd>
+            <dt>{tx(O.after)}</dt>
+            <dd>
+              <ul className="ts-diff__slots">
+                {r.requested.map((s) => (
+                  <li key={`${s.weekday}|${s.start}`} className={s.free ? 'ts-slot--free' : 'ts-slot--busy'}>
+                    {weeklyLabel(s.nextStartsAt, locale)} <span className="ts-slot__flag">({tx(s.free ? O.free : O.notFree)})</span>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+            {r.effectiveFrom && (
+              <>
+                <dt>{tx(O.fromDate)}</dt>
+                <dd>{dayLabel(r.effectiveFrom, locale)}</dd>
+              </>
+            )}
+          </dl>
+        ) : (
+          <span className="ts-muted">
+            {tx(O.requested)}: {legacy(r.slots)}
+          </span>
+        )}
+        {r.note && <span className="ts-muted" dir="auto">{r.note}</span>}
+        {stale && (
+          <p id={warnId} className="banner banner--warn ts-stale" role="note">
+            {tx(O.noLongerFree)}
+          </p>
+        )}
+      </div>
+      <div className="ts-row__actions">
+        <button type="button" className="btn btn--sm btn--primary" disabled={stale} aria-describedby={stale ? warnId : undefined} onClick={onApprove}>
+          {tx(O.approve)}
+        </button>
+        <button type="button" className="btn btn--sm" onClick={onReject}>
+          {tx(O.reject)}
+        </button>
       </div>
     </div>
   )

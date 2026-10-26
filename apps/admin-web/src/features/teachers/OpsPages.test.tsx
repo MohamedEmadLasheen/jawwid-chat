@@ -156,7 +156,21 @@ describe('Schedules', () => {
     )
   })
 
-  it('lists the teacher\'s students; a transfer offers only other active teachers and sends the handover', async () => {
+  it('lists the teacher\'s students; a change of teacher keeps free times and sends the handover', async () => {
+    on('GET', /\/teachers\/candidates$/, () =>
+      json({ teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, away: null }, { id: 't-2', name: 'Teacher Two', isActive: true, away: null }] }),
+    )
+    on('GET', /\/learners\/k-1\/transfer-preview\?toTeacherId=t-2$/, () =>
+      json({
+        toTeacher: { id: 't-2', name: 'Teacher Two', away: null },
+        locked: null,
+        learners: [{
+          id: 'k-1', name: 'Child Alpha', fromTeacher: { id: 't-1', name: 'Teacher One' },
+          slots: [{ weekday: 1, start: '17:00', durationMinutes: 30, nextStartsAt: '2026-11-02T15:00:00Z', free: true }],
+          allFree: true, futureLessons: 4, unmovable: [],
+        }],
+      }),
+    )
     on('POST', /\/learners\/k-1\/transfer$/, () => json({ transferId: 'x', lessonsMoved: 4, lessonsRescheduled: 1, scheduleKept: true }, 201))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/schedules?teacher=t-1' })
     const students = await screen.findByRole('region', { name: 'Students' })
@@ -164,12 +178,15 @@ describe('Schedules', () => {
     expect(within(row).getByText('Monday 17:00 (30 min)')).toBeInTheDocument()
     expect(within(students).queryByText('Child Beta')).not.toBeInTheDocument()
 
-    await userEvent.click(within(row).getByRole('button', { name: 'Transfer' }))
+    await userEvent.click(within(row).getByRole('button', { name: 'Change teacher' }))
     const dialog = await screen.findByRole('dialog')
-    const options = within(within(dialog).getByLabelText('New teacher')).getAllByRole('option').map((o) => o.textContent)
-    expect(options).toEqual(['Teacher Two'])
+    // The current teacher cannot be picked.
+    expect(await within(dialog).findByRole('radio', { name: /Teacher One/ })).toBeDisabled()
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Teacher Two' }))
     await userEvent.type(within(dialog).getByLabelText(/Handover note/), 'continue from Al-Mulk 16')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    const confirm = within(dialog).getByRole('button', { name: 'Change teacher' })
+    await waitFor(() => expect(confirm).toBeEnabled())
+    await userEvent.click(confirm)
     await waitFor(() =>
       expect(sent('POST', /\/learners\/k-1\/transfer$/)).toEqual([
         { toTeacherId: 't-2', reason: 'family_request', handoverNote: 'continue from Al-Mulk 16' },

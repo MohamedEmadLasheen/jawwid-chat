@@ -20,7 +20,17 @@ export interface LessonDto {
   phase: 'upcoming' | 'in_progress' | 'awaiting_close' | 'overdue' | 'closed'
   outcome: string | null
   outcomeNote: string | null
+  /** PD-31: the lesson this one replaced (a moved lesson). */
+  movedFrom?: string | null
+  /** PD-31: for a row moved away, the ISO start of its replacement. */
+  movedTo?: string | null
+  /** PD-31: who moved THIS row here (set when `movedFrom` is). */
+  movedBy?: MovedBy | null
 }
+
+export type MovedBy = 'family' | 'teacher' | 'staff'
+/** PD-30's lock; always null until PD-30 lands. When set, every write is refused. */
+export type Locked = 'balance' | 'overdue' | null
 
 export interface RulingDto {
   id: string
@@ -34,9 +44,28 @@ export interface RulingDto {
 export interface ScheduleRequestDto {
   id: string
   learner: { id: string; name: string }
+  /** Legacy: the requested times without flags. */
   slots: Array<{ weekday: number; start: string }>
   note: string | null
   createdAt: string
+  // PD-31 (optional: an older server omits them).
+  teacher?: { id: string; name: string } | null
+  requestedBy?: { kind: 'family' | 'teacher'; name: string }
+  effectiveFrom?: string | null
+  current?: Array<{ weekday: number; start: string; durationMinutes: number; nextStartsAt: string }>
+  requested?: Array<{ weekday: number; start: string; nextStartsAt: string; free: boolean }>
+  /** false: a requested time was taken since; approving would fail, so it is disabled. */
+  stillFree?: boolean
+}
+
+/** PD-31: a weekly occurrence the generator could not create (the teacher was busy). */
+export interface BlockedOccurrence {
+  id: string
+  learner: { id: string; name: string }
+  teacher: { id: string; name: string }
+  startsAt: string
+  endsAt: string
+  blockedBy: { lessonId: string; kind: 'regular' | 'makeup' | 'trial'; startsAt: string; endsAt: string }
 }
 
 export interface NeedsAction {
@@ -46,6 +75,65 @@ export interface NeedsAction {
   makeupsOverdue: LessonDto[]
   returningSoon: Array<{ suspensionId: string; learner: { id: string; name: string }; returnOn: string }>
   scheduleRequests: ScheduleRequestDto[]
+  blockedOccurrences?: BlockedOccurrence[]
+}
+
+export type MoveRefusal = 'started' | 'not_movable' | 'family_already_moved' | 'family_monthly_limit' | 'too_late'
+
+export interface MoveSlots {
+  lessonId: string
+  startsAt: string
+  durationMinutes: number
+  timezone: string
+  slots: string[]
+  locked: Locked
+  refusal: MoveRefusal | null
+  familyMovesLeft: number | null
+}
+
+export interface ScheduleOptions {
+  timezone: string
+  durationMinutes: number
+  locked: Locked
+  current: Array<{ weekday: number; start: string; durationMinutes: number; nextStartsAt: string }>
+  options: Array<{ weekday: number; start: string; nextStartsAt: string; except: string[] }>
+}
+
+export interface FreeSlots {
+  durationMinutes: number
+  timezone: string
+  slots: string[]
+  locked?: Locked
+}
+
+export interface TeacherCandidate {
+  id: string
+  name: string
+  isActive: boolean
+  away: null | { kind: 'leave' | 'suspended'; until: string }
+}
+
+export interface TransferPreview {
+  toTeacher: { id: string; name: string; away: TeacherCandidate['away'] }
+  locked: Locked
+  /** The conversation route only; more than one means the client must say which teacher is replaced. */
+  groupTeachers?: Array<{ id: string; name: string }>
+  learners: Array<{
+    id: string
+    name: string
+    fromTeacher: { id: string; name: string } | null
+    slots: Array<{ weekday: number; start: string; durationMinutes: number; nextStartsAt: string; free: boolean }>
+    allFree: boolean
+    futureLessons: number
+    unmovable: Array<{ lessonId: string; kind: string; startsAt: string }>
+  }>
+}
+
+export interface TransferBody {
+  toTeacherId: string
+  reason: TransferReason
+  handoverNote?: string
+  note?: string
 }
 
 export interface WeeklySlot {
@@ -124,11 +212,38 @@ export const opsApi = {
     api.post(`/learners/${id(learnerId)}/schedule`, body),
 
   // Learners
-  transfer: (learnerId: string, body: { toTeacherId: string; reason: TransferReason; note?: string; handoverNote?: string }) =>
-    api.post<{ transferId: string; lessonsMoved: number; lessonsRescheduled: number; scheduleKept: boolean }>(
+  transfer: (learnerId: string, body: TransferBody & { slots?: Array<{ weekday: number; start: string }> }) =>
+    api.post<{ transferId: string; toTeacherId?: string; lessonsMoved: number; lessonsRescheduled: number; scheduleKept: boolean }>(
       `/learners/${id(learnerId)}/transfer`,
       body,
     ),
+  transferPreview: (learnerId: string, toTeacherId: string) =>
+    api.get<TransferPreview>(`/learners/${id(learnerId)}/transfer-preview`, { toTeacherId }),
+  // PD-31: a group's children change teacher together, in one transaction.
+  groupTeacherPreview: (conversationId: string, toTeacherId: string, fromTeacherId?: string) =>
+    api.get<TransferPreview>(`/conversations/${id(conversationId)}/teacher-preview`, { toTeacherId, fromTeacherId }),
+  changeGroupTeacher: (
+    conversationId: string,
+    body: TransferBody & { fromTeacherId?: string; slots?: Record<string, Array<{ weekday: number; start: string }>> },
+  ) =>
+    api.post<{ learners: Array<{ learnerId: string; transferId: string; lessonsMoved: number; lessonsRescheduled: number }> }>(
+      `/conversations/${id(conversationId)}/teacher`,
+      body,
+    ),
+  teacherCandidates: () => api.get<{ teachers: TeacherCandidate[] }>('/teachers/candidates'),
+
+  // PD-31: picking times from what is free
+  scheduleOptions: (learnerId: string, teacherId?: string) =>
+    api.get<ScheduleOptions>(`/learners/${id(learnerId)}/schedule-options`, { teacherId }),
+  freeSlots: (learnerId: string, durationMinutes: number) =>
+    api.get<FreeSlots>(`/learners/${id(learnerId)}/free-slots`, { durationMinutes }),
+  moveSlots: (lessonId: string) => api.get<MoveSlots>(`/lessons/${id(lessonId)}/move-slots`),
+  move: (lessonId: string, startsAt: string) => api.post<LessonDto>(`/lessons/${id(lessonId)}/move`, { startsAt }),
+  blockedSlots: (blockedId: string) => api.get<FreeSlots>(`/lessons/blocked/${id(blockedId)}/slots`),
+  scheduleBlocked: (blockedId: string, startsAt: string) =>
+    api.post<LessonDto>(`/lessons/blocked/${id(blockedId)}/schedule`, { startsAt }),
+  dismissBlocked: (blockedId: string, note?: string) =>
+    api.post<{ ok: true }>(`/lessons/blocked/${id(blockedId)}/dismiss`, note ? { note } : {}),
   suspend: (learnerId: string, body: { kind: 'temporary' | 'permanent'; reason: SuspensionReason; note?: string; startsOn?: string; returnOn?: string }) =>
     api.post<SuspensionDto>(`/learners/${id(learnerId)}/suspensions`, body),
   suspensions: (query: { kind?: 'temporary' | 'permanent'; status?: 'active' | 'ended' }) =>
@@ -145,4 +260,12 @@ export const opsKeys = {
   availability: (teacherId: string) => ['lessons-ops', 'availability', teacherId] as const,
   learnerLessons: (learnerId: string) => ['lessons-ops', 'lessons', learnerId] as const,
   suspensions: (kind: string, status: string) => ['lessons-ops', 'suspensions', kind, status] as const,
+  upcoming: (learnerId: string) => ['lessons-ops', 'upcoming', learnerId] as const,
+  scheduleOptions: (learnerId: string, teacherId: string) => ['lessons-ops', 'schedule-options', learnerId, teacherId] as const,
+  freeSlots: (learnerId: string, minutes: number) => ['lessons-ops', 'free-slots', learnerId, minutes] as const,
+  moveSlots: (lessonId: string) => ['lessons-ops', 'move-slots', lessonId] as const,
+  blockedSlots: (blockedId: string) => ['lessons-ops', 'blocked-slots', blockedId] as const,
+  candidates: ['lessons-ops', 'teacher-candidates'] as const,
+  preview: (scope: string, scopeId: string, toTeacherId: string, fromTeacherId: string) =>
+    ['lessons-ops', 'transfer-preview', scope, scopeId, toTeacherId, fromTeacherId] as const,
 }

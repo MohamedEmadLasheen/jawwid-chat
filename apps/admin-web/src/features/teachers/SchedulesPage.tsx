@@ -1,20 +1,22 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ActionDialog, type FieldSpec, type FieldValue } from './ActionDialog'
 import { TeachersAreaTabs } from './area'
 import type { Pair } from './copy'
-import { opsApi, type Availability, type Roster, type SuspensionReason, type TransferReason, type WeeklySlot } from './opsApi'
-import { O, SUSPENSION_REASON, TRANSFER_REASON, WEEKDAY, describeOpsError, formatDay, formatMinutes } from './opsCopy'
+import { opsApi, type Availability, type Roster, type SuspensionReason, type WeeklySlot } from './opsApi'
+import { O, SUSPENSION_REASON, WEEKDAY, describeOpsError, formatDay, formatMinutes } from './opsCopy'
 import { useAvailability, useOp, useRoster } from './opsHooks'
-import { academyWallClockToIso } from '@/core/time/academyTime'
+import { ChangeTeacherDialog } from './ChangeTeacherDialog'
+import { AddLessonDialog, LessonsDialog } from './LessonDialogs'
+import { WeeklyChangeDialog } from './WeeklyChangeDialog'
 import './teachers.css'
 
 type Learner = Roster['learners'][number]
 type Pending = { title: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
+type Open = { kind: 'weekly' | 'add' | 'lessons' | 'teacher'; learner: Learner } | null
 
 const DEFAULT_ZONE = 'Africa/Cairo'
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
@@ -23,9 +25,10 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
  * The Teachers department's scheduling desk (PD-11 T2-T3): pick a teacher, then
  * set their weekly working hours and days off, and for each of their students
  * the regular lesson times (lessons are created from them four weeks ahead),
- * a one-off lesson, a transfer to another teacher, or a pause / stop. Every
- * save is re-checked by the server -- a time another student holds, a teacher
- * already busy -- and its refusal is shown as it is.
+ * a one-off lesson, moving one lesson, a change of teacher, or a pause / stop.
+ * PD-31: every time is picked from the free times the server offers (chips),
+ * never typed. Every save is re-checked by the server -- a time another student
+ * holds, a teacher already busy -- and its refusal is shown as it is.
  */
 export function SchedulesPage() {
   const tx = useTx()
@@ -34,7 +37,7 @@ export function SchedulesPage() {
   const [params, setParams] = useSearchParams()
   const teacherId = params.get('teacher')
   const [dialog, setDialog] = useState<Pending>(null)
-  const [slotsFor, setSlotsFor] = useState<Learner | null>(null)
+  const [open, setOpen] = useState<Open>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const op = useOp((f: () => Promise<unknown>) => f())
   const run = (title: string, fields: FieldSpec[], submit: (v: FieldValue) => Promise<unknown>) =>
@@ -105,64 +108,10 @@ export function SchedulesPage() {
                             <td>{l.family.displayName}</td>
                             <td>{l.slots.length ? l.slots.map((s) => slotLabel(tx, s, locale)).join(' · ') : <span className="ts-muted">{tx(O.none)}</span>}</td>
                             <td className="ts-actions-cell">
-                              <button type="button" className="btn btn--sm" onClick={() => setSlotsFor(l)}>{tx(O.editTimes)}</button>
-                              <button
-                                type="button"
-                                className="btn btn--sm"
-                                onClick={() =>
-                                  run(tx(O.oneOff), [
-                                    { key: 'startsAt', label: O.startsAt, type: 'datetime', required: true },
-                                    { key: 'minutes', label: O.minutes, type: 'number', required: true, initial: String(l.slots[0]?.durationMinutes ?? 30) },
-                                  ], (v) => {
-                                    // PD-22: typed on the academy's (Cairo) clock, not the browser's.
-                                    const typed = v('startsAt')
-                                    const start = new Date(academyWallClockToIso(typed.slice(0, 10), typed.slice(11, 16)) ?? Number.NaN)
-                                    return opsApi.schedule({
-                                      learnerId: l.id,
-                                      startsAt: start.toISOString(),
-                                      endsAt: new Date(start.getTime() + Number(v('minutes')) * 60_000).toISOString(),
-                                    })
-                                  })
-                                }
-                              >
-                                {tx(O.oneOff)}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn--sm"
-                                onClick={() =>
-                                  run(`${tx(O.transfer)} — ${l.name}`, [
-                                    {
-                                      key: 'toTeacherId',
-                                      label: O.toTeacher,
-                                      type: 'select',
-                                      options: teachers.filter((t) => t.isActive && t.id !== l.teacherId).map((t) => ({ value: t.id, label: { en: t.name, ar: t.name } })),
-                                    },
-                                    {
-                                      key: 'reason',
-                                      label: O.reason,
-                                      type: 'select',
-                                      options: Object.entries(TRANSFER_REASON).map(([value, label]) => ({ value, label })),
-                                    },
-                                    { key: 'handoverNote', label: O.handover, type: 'textarea' },
-                                    { key: 'note', label: O.internalNote, type: 'textarea' },
-                                  ], async (v) => {
-                                    const r = await opsApi.transfer(l.id, {
-                                      toTeacherId: v('toTeacherId'),
-                                      reason: v('reason') as TransferReason,
-                                      handoverNote: v('handoverNote') || undefined,
-                                      note: v('note') || undefined,
-                                    })
-                                    setNotice(
-                                      tx(O.transferDone).replace('{moved}', String(r.lessonsMoved)).replace('{moved2}', String(r.lessonsRescheduled)) +
-                                        (r.scheduleKept ? '' : ` ${tx(O.transferTimesLost)}`),
-                                    )
-                                    return r
-                                  })
-                                }
-                              >
-                                {tx(O.transfer)}
-                              </button>
+                              <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'weekly', learner: l })}>{tx(O.editTimes)}</button>
+                              <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'add', learner: l })}>{tx(O.addLesson)}</button>
+                              <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'lessons', learner: l })}>{tx(O.lessons)}</button>
+                              <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'teacher', learner: l })}>{tx(O.changeTeacher)}</button>
                               {!l.suspension && (
                                 <button
                                   type="button"
@@ -200,7 +149,21 @@ export function SchedulesPage() {
           {!teacher && <EmptyState title={tx(O.pickTeacher)} />}
         </QueryBoundary>
         {dialog && <ActionDialog title={dialog.title} fields={dialog.fields} onSubmit={dialog.submit} onClose={() => setDialog(null)} />}
-        {slotsFor && <SlotsDialog learner={slotsFor} onClose={() => setSlotsFor(null)} />}
+        {open?.kind === 'weekly' && <WeeklyChangeDialog learner={open.learner} onClose={() => setOpen(null)} />}
+        {open?.kind === 'add' && (
+          <AddLessonDialog learner={open.learner} defaultMinutes={open.learner.slots[0]?.durationMinutes ?? 30} onClose={() => setOpen(null)} />
+        )}
+        {open?.kind === 'lessons' && <LessonsDialog learner={open.learner} onClose={() => setOpen(null)} />}
+        {open?.kind === 'teacher' && (
+          <ChangeTeacherDialog
+            target={{ kind: 'learner', id: open.learner.id, name: open.learner.name, currentTeacherId: open.learner.teacherId }}
+            onClose={() => setOpen(null)}
+            onDone={(text) => {
+              setOpen(null)
+              setNotice(text)
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -287,63 +250,6 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
         )}
       </section>
     </QueryBoundary>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// A student's regular times
-// ---------------------------------------------------------------------------
-
-function SlotsDialog({ learner, onClose }: { learner: Learner; onClose: () => void }) {
-  const tx = useTx()
-  const { locale } = useI18n()
-  const base = useId()
-  const save = useOp((body: { slots: WeeklySlot[]; effectiveFrom?: string }) => opsApi.setSchedule(learner.id, body))
-  const [slots, setSlots] = useState<WeeklySlot[]>(learner.slots.length ? learner.slots : [{ weekday: 1, start: '17:00', durationMinutes: 30 }])
-  const [from, setFrom] = useState('')
-  const set = (i: number, patch: Partial<WeeklySlot>) => setSlots((s) => s.map((x, j) => (j === i ? { ...x, ...patch } : x)))
-
-  const submit = async () => {
-    try {
-      await save.mutateAsync({ slots, ...(from ? { effectiveFrom: from } : {}) })
-      onClose()
-    } catch {
-      /* shown below */
-    }
-  }
-
-  return (
-    <Dialog
-      title={`${tx(O.regularTimes)} — ${learner.name}`}
-      onClose={onClose}
-      footer={
-        <>
-          <DialogCancelButton onClick={onClose} />
-          <button type="button" className="btn btn--primary" disabled={save.isPending || slots.length === 0} onClick={() => void submit()}>
-            {save.isPending ? tx(O.saving) : tx(O.saveTimes)}
-          </button>
-        </>
-      }
-    >
-      {slots.map((s, i) => (
-        <div className="ts-window" key={i}>
-          <select className="select" aria-label={`${tx(O.when)} ${i + 1}`} value={s.weekday} onChange={(e) => set(i, { weekday: Number(e.target.value) })}>
-            {WEEKDAYS.map((d) => <option key={d} value={d}>{tx(WEEKDAY[d]!)}</option>)}
-          </select>
-          <input className="input" type="time" aria-label={`start ${i + 1}`} value={s.start} onChange={(e) => set(i, { start: e.target.value })} />
-          <input className="input ts-narrow" type="number" min={15} max={240} step={5} aria-label={`${tx(O.minutes)} ${i + 1}`} value={s.durationMinutes} onChange={(e) => set(i, { durationMinutes: Number(e.target.value) })} />
-          <button type="button" className="btn btn--sm" onClick={() => setSlots((x) => x.filter((_, j) => j !== i))}>{tx(O.remove)}</button>
-        </div>
-      ))}
-      <button type="button" className="btn btn--sm" onClick={() => setSlots((x) => [...x, { weekday: 1, start: '17:00', durationMinutes: x[0]?.durationMinutes ?? 30 }])}>
-        {tx(O.addTime)}
-      </button>
-      <div className="field">
-        <label className="field__label" htmlFor={`${base}-from`}>{tx(O.effectiveFrom)}</label>
-        <input id={`${base}-from`} className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-      </div>
-      {save.error && <div className="banner banner--danger" role="alert">{describeOpsError(save.error, locale)}</div>}
-    </Dialog>
   )
 }
 
