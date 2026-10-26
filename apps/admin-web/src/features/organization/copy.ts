@@ -130,11 +130,11 @@ export const T = {
   confirmTitle: { en: 'Confirm the hand-over', ar: 'تأكيد التسليم' },
   summary: {
     en: '{families} families, {groups} groups and {items} open items move to {backup} until {date}.',
-    ar: '{families} أسرة و{groups} مجموعة و{items} مهمة مفتوحة تنتقل إلى {backup} حتى {date}.',
+    ar: 'تنتقل إلى {backup} حتى {date}: الأسر {families} · المجموعات {groups} · المهام المفتوحة {items}.',
   },
   summaryDetail: {
-    en: '{directs} parent chats · {approvals} messages awaiting approval · {instalments} open instalments · {newStudents} new students',
-    ar: '{directs} محادثة مع أولياء الأمور · {approvals} رسالة بانتظار الموافقة · {instalments} قسطًا مفتوحًا · {newStudents} طالبًا جديدًا',
+    en: 'Parent chats: {directs} · Awaiting approval: {approvals} · Open instalments: {instalments} · New students: {newStudents}',
+    ar: 'محادثات أولياء الأمور: {directs} · بانتظار الموافقة: {approvals} · أقساط مفتوحة: {instalments} · طلاب جدد: {newStudents}',
   },
   summaryKeep: {
     en: '{name} keeps every chat and can still reply; notifications go to {backup}. A line is posted in each group so families know who answers.',

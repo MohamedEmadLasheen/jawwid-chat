@@ -1046,8 +1046,8 @@ class L10nAr extends L10n {
   String get systemCoverEndedNoName => 'انتهت التغطية';
 
   @override
-  String conversationCoverLine(String cover, String supervisor, String date) {
-    return 'التغطية: $cover بدلًا من $supervisor حتى $date';
+  String conversationCoverLine(String cover, String date) {
+    return 'التغطية: $cover حتى $date';
   }
 
   @override

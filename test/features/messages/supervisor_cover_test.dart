@@ -116,7 +116,7 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('QA Amira is covering for QA Noor until Nov 3'), findsOneWidget);
+    expect(find.text('QA Amira is covering until Nov 3'), findsOneWidget);
   });
 }
 

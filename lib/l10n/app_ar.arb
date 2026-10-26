@@ -561,7 +561,7 @@
   "systemCoverEnded": "انتهت التغطية؛ عادت المتابعة إلى {supervisor}",
   "systemCoverStartedNoName": "التغطية: مشرف بديل يتابع مؤقتًا",
   "systemCoverEndedNoName": "انتهت التغطية",
-  "conversationCoverLine": "التغطية: {cover} بدلًا من {supervisor} حتى {date}",
+  "conversationCoverLine": "التغطية: {cover} حتى {date}",
   "systemUpdate": "تحديث من النظام",
   "lessonTicketsHeader": "الحصة",
   "ticketReport": "تقرير الحصة",

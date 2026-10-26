@@ -628,8 +628,8 @@
   "@systemCoverEnded": {"placeholders": {"supervisor": {"type": "String"}}},
   "systemCoverStartedNoName": "A backup supervisor is covering",
   "systemCoverEndedNoName": "The cover has ended",
-  "conversationCoverLine": "{cover} is covering for {supervisor} until {date}",
-  "@conversationCoverLine": {"placeholders": {"cover": {"type": "String"}, "supervisor": {"type": "String"}, "date": {"type": "String"}}},
+  "conversationCoverLine": "{cover} is covering until {date}",
+  "@conversationCoverLine": {"placeholders": {"cover": {"type": "String"}, "date": {"type": "String"}}},
   "systemUpdate": "System update",
   "lessonTicketsHeader": "Lesson",
   "@lessonTicketsHeader": {

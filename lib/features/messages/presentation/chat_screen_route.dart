@@ -95,7 +95,7 @@ class ChatScreenRoute extends ConsumerWidget {
             Conversation(isTrialGroup: true) => l10n.trialGroupSubtitle,
             // PD-33: the supervisor is away; the parent is told who answers, until when.
             Conversation(cover: final cover?) =>
-              l10n.conversationCoverLine(cover.coverName, cover.supervisorName, coverDay(cover.until, l10n)),
+              l10n.conversationCoverLine(cover.coverName, coverDay(cover.until, l10n)),
             Conversation(handledByLabel: final handler?) =>
               l10n.handledBy(handler),
             Conversation(learner: final learner?) =>

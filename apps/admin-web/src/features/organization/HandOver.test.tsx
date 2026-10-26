@@ -100,7 +100,7 @@ describe('"I\'m away": the supervisor hands over in one step', () => {
 
     const confirm = await screen.findByRole('dialog', { name: 'Confirm the hand-over' })
     expect(within(confirm).getByText(/^12 families, 9 groups and 4 open items move to Backup Amira until /)).toBeInTheDocument()
-    expect(within(confirm).getByText(/11 parent chats · 1 messages awaiting approval · 2 open instalments · 1 new students/)).toBeInTheDocument()
+    expect(within(confirm).getByText(/Parent chats: 11 · Awaiting approval: 1 · Open instalments: 2 · New students: 1/)).toBeInTheDocument()
     expect(sent('POST', /\/org\/covers$/)).toEqual([])
 
     await userEvent.click(within(confirm).getByRole('button', { name: 'Hand over' }))
@@ -211,7 +211,8 @@ describe('the chat list and the cover line', () => {
     renderWithProviders(<ConversationList conversations={[conv]} selectedId={null} onSelect={() => undefined} onOpenMessage={() => undefined} />, {
       staff: makeStaff({ id: 'bk-1', role: 'coverage' }),
     })
-    expect(await screen.findByText('Covering for Supervisor Noor')).toBeInTheDocument()
+    expect(await screen.findByText('Covering')).toBeInTheDocument()
+    expect(screen.getByLabelText('Covering for Supervisor Noor')).toBeInTheDocument()
   })
 
   it('the system lines read in both languages, with the end day', () => {
@@ -221,5 +222,8 @@ describe('the chat list and the cover line', () => {
     expect(systemText(JSON.stringify({ kind: 'cover.ended', supervisor: 'Supervisor Noor', cover: 'Backup Amira' }), chatCopyFor('en')))
       .toBe('Supervisor Noor is back; the cover has ended')
     expect(chatCopyFor('en').coverLine(conv.cover!)).toBe('Backup Amira is covering for Supervisor Noor until 3 Nov')
+    // A list preview carries the kind only: never "is covering for until".
+    expect(chatCopyFor('en').system['cover.started']!({})).toBe('A backup supervisor is covering')
+    expect(chatCopyFor('ar').system['cover.ended']!({})).toBe('انتهت التغطية')
   })
 })

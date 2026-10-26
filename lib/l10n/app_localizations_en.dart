@@ -1028,8 +1028,8 @@ class L10nEn extends L10n {
   String get systemCoverEndedNoName => 'The cover has ended';
 
   @override
-  String conversationCoverLine(String cover, String supervisor, String date) {
-    return '$cover is covering for $supervisor until $date';
+  String conversationCoverLine(String cover, String date) {
+    return '$cover is covering until $date';
   }
 
   @override

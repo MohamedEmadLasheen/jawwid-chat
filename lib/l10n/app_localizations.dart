@@ -1876,8 +1876,8 @@ abstract class L10n {
   /// No description provided for @conversationCoverLine.
   ///
   /// In en, this message translates to:
-  /// **'{cover} is covering for {supervisor} until {date}'**
-  String conversationCoverLine(String cover, String supervisor, String date);
+  /// **'{cover} is covering until {date}'**
+  String conversationCoverLine(String cover, String date);
 
   /// No description provided for @systemUpdate.
   ///
