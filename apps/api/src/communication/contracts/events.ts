@@ -96,6 +96,12 @@ export interface MessageCreatedPayload {
   visibility: string;
   moderation: string;
   createdAt: string;
+  /**
+   * PD-33 / PD-35: an announcement line (a cover starting or ending, a seat
+   * taken or left) that reaches open screens but sends no push -- one per
+   * conversation would be a push storm. Absent = an ordinary message.
+   */
+  silent?: boolean;
 }
 
 export interface MessageDeletedPayload {
