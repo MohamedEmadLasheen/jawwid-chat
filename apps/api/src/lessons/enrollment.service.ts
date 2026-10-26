@@ -13,6 +13,7 @@ import { signAvatar } from '../communication/profile/avatar-urls';
 import { AvatarService } from '../communication/profile/avatar.service';
 import { nextWeeklyStart } from '../platform/time-zone';
 import { familyZonesOf } from '../platform/time-zone.service';
+import { academyToday, currentOf, standingInOrder } from '../billing/subscription-reads';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -73,6 +74,14 @@ export class EnrollmentService implements OnModuleInit {
     ]);
     const enrollmentOf = new Map(enrollments.map((e) => [e.learnerId, e]));
     const supervisedSet = new Set(supervised);
+    // PD-30: the package is the subscription running now, from the ledger;
+    // PD-15's typed package size only for a child with no ledger yet.
+    const [ledger, today] = await Promise.all([
+      this.prisma.learnerSubscription.findMany({ where: { learnerId: { in: ids } } }),
+      academyToday(this.prisma),
+    ]);
+    const currentSubscription = (learnerId: string) =>
+      currentOf(standingInOrder(ledger.filter((r) => r.learnerId === learnerId)), today);
     return {
       learners: learners.map((l) => {
         const e = enrollmentOf.get(l.id);
@@ -89,7 +98,9 @@ export class EnrollmentService implements OnModuleInit {
           age: e?.birthDate ? ageOn(e.birthDate, now) : e?.statedAge && e.statedAgeOn ? e.statedAge + ageOn(e.statedAgeOn, now) : null,
           ...(staffView ? { birthDate: e?.birthDate ? e.birthDate.toISOString().slice(0, 10) : null } : {}),
           course: e?.course ? { id: e.course.id, name: e.course.name } : null,
-          packageLessons: e?.packageLessons ?? null,
+          packageLessons: currentSubscription(l.id)?.lessonsIncluded ?? e?.packageLessons ?? null,
+          // PD-30: set from the Subscription section, not typed here.
+          packageFromSubscription: currentSubscription(l.id) !== null,
           teacher: l.teacher ? { id: l.teacher.id, name: l.teacher.name } : null,
           schedule: slots
             .filter((s) => s.learnerId === l.id)
@@ -190,7 +201,10 @@ export class EnrollmentService implements OnModuleInit {
         next.courseId = v;
       } else throw invalid('courseId: a course id, or null');
     }
-    if ('packageLessons' in body) {
+    // PD-30: once a child has a subscription the ledger is the package; a
+    // package size sent by an older form is left as it was.
+    const hasLedger = (await this.prisma.learnerSubscription.count({ where: { learnerId: learner.id, voidedAt: null } })) > 0;
+    if ('packageLessons' in body && !hasLedger) {
       const v = body.packageLessons;
       if (v === null) next.packageLessons = null;
       else if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 1000) next.packageLessons = v;

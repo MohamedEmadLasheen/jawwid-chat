@@ -354,6 +354,20 @@ export const CardKind = {
   CALL_LINK: 'call_link',
   /** PD-13: the scheduled call announced above will not happen. */
   CALL_SCHEDULE_CANCELLED: 'call_schedule_cancelled',
+  /**
+   * PD-30, in the family's direct chat with its supervisor (PD-4): the
+   * subscription's lessons are used up and N grace lessons are left. Never in
+   * the group -- the teacher sees nothing financial.
+   */
+  SUBSCRIPTION_GRACE: 'subscription_grace',
+  /** PD-30, in the family's direct chat: the child's lessons are paused, and why (lessons used up / instalment overdue). */
+  SUBSCRIPTION_LOCKED: 'subscription_locked',
+  /** PD-30, in the child's group: the lessons are paused -- no reason, no amount (the teacher reads the group). */
+  LESSONS_PAUSED: 'lessons_paused',
+  /** PD-30, in the child's group: the lessons are back on. */
+  SUBSCRIPTION_UNLOCKED: 'subscription_unlocked',
+  /** PD-30, in the family's direct chat: a parent asked to renew. */
+  RENEWAL_REQUESTED: 'subscription_renewal_requested',
 } as const;
 export type CardKind = (typeof CardKind)[keyof typeof CardKind];
 
