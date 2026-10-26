@@ -11,6 +11,11 @@ import '../../../shared/utils/relative_time.dart';
 /// Pushed as an opaque route rather than shown as a dialog: it is a place the
 /// user goes and comes back from, so it gets a back gesture and a real entry in
 /// the history stack. §18 — the parent must not lose the conversation.
+///
+/// Not a `fullscreenDialog`: on iOS a full-screen dialog has no swipe-back, so
+/// the viewer could only be left by its close button. As a plain page it
+/// leaves by the edge swipe, like every other screen; swipes away from the
+/// edge still turn the photos.
 Future<void> showMediaViewer(
   BuildContext context, {
   required List<Attachment> photos,
@@ -21,7 +26,6 @@ Future<void> showMediaViewer(
 
   return Navigator.of(context, rootNavigator: true).push(
     MaterialPageRoute<void>(
-      fullscreenDialog: true,
       builder: (_) => MediaViewer(
         photos: photos,
         initialIndex: initialIndex.clamp(0, photos.length - 1),

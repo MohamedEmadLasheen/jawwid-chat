@@ -180,46 +180,46 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: Routes.splash,
-        builder: (context, state) => const _SplashScreen(),
+        pageBuilder: (context, state) => _still(state, const _SplashScreen()),
       ),
       GoRoute(
         path: Routes.signIn,
-        builder: (context, state) => const SignInScreen(),
+        pageBuilder: (context, state) => _still(state, const SignInScreen()),
       ),
       ShellRoute(
-        builder: (context, state, child) => _RoleShell(
+        pageBuilder: (context, state, child) => _still(state, _RoleShell(
           currentRoute: state.matchedLocation,
           child: child,
-        ),
+        )),
         routes: [
           GoRoute(
             path: Routes.chats,
-            builder: (context, state) => const ChatsScreen(),
+            pageBuilder: (context, state) => _still(state, const ChatsScreen()),
           ),
           GoRoute(
             path: Routes.calls,
-            builder: (context, state) => const CallsScreen(),
+            pageBuilder: (context, state) => _still(state, const CallsScreen()),
           ),
           GoRoute(
             path: Routes.settings,
-            builder: (context, state) => const SettingsScreen(),
+            pageBuilder: (context, state) => _still(state, const SettingsScreen()),
           ),
           GoRoute(
             path: Routes.schedule,
-            builder: (context, state) => const TeacherScheduleScreen(),
+            pageBuilder: (context, state) => _still(state, const TeacherScheduleScreen()),
           ),
           GoRoute(
             path: Routes.salesPayments,
-            builder: (context, state) => const SalesPaymentsScreen(),
+            pageBuilder: (context, state) => _still(state, const SalesPaymentsScreen()),
           ),
           GoRoute(
             path: Routes.subscriptions,
-            builder: (context, state) => MyPaymentsScreen(
+            pageBuilder: (context, state) => _still(state, MyPaymentsScreen(
               // A fresh key per child asked for, so following the banner again
               // scrolls again even when the tab is already open.
               key: ValueKey('subscriptions-${state.uri.queryParameters['child'] ?? ''}'),
               focusChildId: state.uri.queryParameters['child'],
-            ),
+            )),
           ),
         ],
       ),
@@ -227,31 +227,34 @@ final routerProvider = Provider<GoRouter>((ref) {
       // viewport — the composer and keyboard already claim a large share of a small screen.
       GoRoute(
         path: '${Routes.chats}/:conversationId',
-        builder: (context, state) => ChatScreenRoute(
+        pageBuilder: (context, state) => _page(state, ChatScreenRoute(
           conversationId: state.pathParameters['conversationId']!,
           focusMessageId: state.uri.queryParameters['m'],
           startVoiceRecording: state.uri.queryParameters['voice'] == '1',
-        ),
+        )),
       ),
       // The profile sits outside the tab shell, like the conversation it belongs to: it is
       // pushed on top, keeps a back button, and never highlights a tab.
       GoRoute(
         path: '${Routes.chats}/:conversationId/info',
-        builder: (context, state) => ConversationProfileScreen(
+        pageBuilder: (context, state) => _page(state, ConversationProfileScreen(
           conversationId: state.pathParameters['conversationId']!,
-        ),
+        )),
       ),
       GoRoute(
         path: '${Routes.chats}/:conversationId/media',
-        builder: (context, state) => ConversationMediaScreen(
+        pageBuilder: (context, state) => _page(state, ConversationMediaScreen(
           conversationId: state.pathParameters['conversationId']!,
-        ),
+        )),
       ),
       // W7. Pushed on top of everything, with no tab highlighted: a call takes the
       // screen while it lasts. Leaving it returns to whatever was underneath.
       GoRoute(
         path: Routes.activeCall,
-        builder: (context, state) => ActiveCallScreen(
+        // The page it has always had (no transition, no swipe-back), stated rather than
+        // changed: the call UI is W7, closed, and whether an edge swipe may leave a live
+        // call is a call-UI decision, not a navigation default.
+        pageBuilder: (context, state) => _still(state, ActiveCallScreen(
           onLeave: () {
             if (context.canPop()) context.pop();
           },
@@ -261,35 +264,35 @@ final routerProvider = Provider<GoRouter>((ref) {
                 conversationId,
                 recordVoice: recordVoice,
               ),
-        ),
+        )),
       ),
       GoRoute(
         path: Routes.myAccount,
-        builder: (context, state) => const MyAccountScreen(),
+        pageBuilder: (context, state) => _page(state, const MyAccountScreen()),
       ),
       GoRoute(
         path: Routes.myLeave,
-        builder: (context, state) => const MyLeaveScreen(),
+        pageBuilder: (context, state) => _page(state, const MyLeaveScreen()),
       ),
       GoRoute(
         path: Routes.starred,
-        builder: (context, state) => const StarredMessagesScreen(),
+        pageBuilder: (context, state) => _page(state, const StarredMessagesScreen()),
       ),
       GoRoute(
         path: Routes.devices,
-        builder: (context, state) => const DevicesScreen(),
+        pageBuilder: (context, state) => _page(state, const DevicesScreen()),
       ),
       GoRoute(
         path: Routes.dateTime,
-        builder: (context, state) => const DateTimeScreen(),
+        pageBuilder: (context, state) => _page(state, const DateTimeScreen()),
       ),
       GoRoute(
         path: Routes.teacherProfile,
-        builder: (context, state) => const TeacherProfileScreen(),
+        pageBuilder: (context, state) => _page(state, const TeacherProfileScreen()),
       ),
       GoRoute(
         path: Routes.myProfile,
-        builder: (context, state) => const MyProfileScreen(),
+        pageBuilder: (context, state) => _page(state, const MyProfileScreen()),
       ),
       // PD-30: Payments moved into the parent's Subscriptions tab. The old address is
       // kept, purely to forward, so an earlier push or deep link is matched rather than
@@ -302,39 +305,39 @@ final routerProvider = Provider<GoRouter>((ref) {
       // button. The family's name rides along only for the title while it loads.
       GoRoute(
         path: '${Routes.salesPayments}/families/:familyId',
-        builder: (context, state) => FamilyBillingScreen(
+        pageBuilder: (context, state) => _page(state, FamilyBillingScreen(
           familyId: state.pathParameters['familyId']!,
           familyName: state.extra is String ? state.extra! as String : null,
-        ),
+        )),
       ),
       GoRoute(
         path: '/children/:learnerId/materials',
-        builder: (context, state) => ChildMaterialsScreen(
+        pageBuilder: (context, state) => _page(state, ChildMaterialsScreen(
           learnerId: state.pathParameters['learnerId']!,
           childName: state.extra is String ? state.extra! as String : null,
           initialTab: state.uri.queryParameters['tab'] == 'progress' ? 2 : 0,
-        ),
+        )),
       ),
       GoRoute(
         path: '/children/:learnerId/schedule',
-        builder: (context, state) => ChildScheduleScreen(
+        pageBuilder: (context, state) => _page(state, ChildScheduleScreen(
           learnerId: state.pathParameters['learnerId']!,
           childName: state.extra is String ? state.extra! as String : null,
-        ),
+        )),
       ),
       GoRoute(
         path: '${Routes.studentsPrefix}/:learnerId',
-        builder: (context, state) => StudentProfileScreen(
+        pageBuilder: (context, state) => _page(state, StudentProfileScreen(
           learnerId: state.pathParameters['learnerId']!,
-        ),
+        )),
       ),
       // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
       // open, and a tab bar underneath it would be something to tap by accident.
       GoRoute(
         path: '/stories/:storyId',
-        builder: (context, state) => StoryViewerScreen(
+        pageBuilder: (context, state) => _page(state, StoryViewerScreen(
           storyId: state.pathParameters['storyId']!,
-        ),
+        )),
       ),
       // The two retired destinations, registered purely to forward. Declared as real routes
       // rather than left to the top-level redirect so that an old link is *matched* and
@@ -350,6 +353,42 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// The page every pushed screen is built on: a [MaterialPage], whose route takes its
+/// transition from the theme -- the Cupertino slide with the edge swipe-back on iOS,
+/// predictive back on Android (`JawwidTheme.pageTransitions`).
+///
+/// Stated on every route rather than left to go_router, because go_router 18 picks its
+/// default page by finding a `MaterialApp` from the separate `material_ui` package. This
+/// app's `MaterialApp` is Flutter's own, so the check failed and every route fell back to
+/// go_router's plain-widgets default, a `NoTransitionPage`: no slide, and no iOS
+/// swipe-back on any screen.
+Page<void> _page(GoRouterState state, Widget child) => MaterialPage<void>(
+      key: state.pageKey,
+      name: state.name ?? state.path,
+      arguments: <String, String>{...state.pathParameters, ...state.uri.queryParameters},
+      restorationId: state.pageKey.value,
+      child: child,
+    );
+
+/// A page that arrives in place, with no slide and nothing beneath it to swipe back to:
+///
+///  * the tabs -- they replace one another inside the shell (`go`, never `push`), and a
+///    tab bar switches in place;
+///  * the shell itself, the splash and sign-in -- the app's entry points, which `go`
+///    swaps rather than stacks (signing in should not slide the tabs in);
+///  * the call screen -- unchanged, see its route.
+///
+/// This is exactly what go_router built for EVERY route until now. A screen pushed over
+/// one of these still slides in and swipes back, and the page underneath still takes the
+/// iOS parallax (Flutter hands it the pushed route's delegated transition).
+Page<void> _still(GoRouterState state, Widget child) => NoTransitionPage<void>(
+      key: state.pageKey,
+      name: state.name ?? state.path,
+      arguments: <String, String>{...state.pathParameters, ...state.uri.queryParameters},
+      restorationId: state.pageKey.value,
+      child: child,
+    );
 
 /// Where an unauthenticated or undecided session may go.
 ///
@@ -437,11 +476,22 @@ class _RoleShell extends ConsumerWidget {
     // open threads follow the server without a pull-to-refresh.
     ref.watch(chatRealtimeProvider);
 
-    return AppShell(
-      role: role,
-      currentRoute: currentRoute,
-      onDestinationSelected: (route) => context.go(route),
-      child: child,
+    // Android back on another tab returns to Chats first, and only Back on Chats
+    // leaves the app -- the start-destination rule of every Android app with a tab
+    // bar (WhatsApp included). Nothing is pushed here, so this never stands in the
+    // way of a screen above the tabs; and a tab root has no iOS swipe-back to lose.
+    final onChats = currentRoute == Routes.chats || currentRoute.startsWith('${Routes.chats}/');
+    return PopScope(
+      canPop: onChats,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go(Routes.chats);
+      },
+      child: AppShell(
+        role: role,
+        currentRoute: currentRoute,
+        onDestinationSelected: (route) => context.go(route),
+        child: child,
+      ),
     );
   }
 }
