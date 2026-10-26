@@ -12,6 +12,7 @@ import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
 import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
+import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
@@ -83,6 +84,8 @@ const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
  * already current -- the database recomputes it in the writer's transaction --
  * so this bounds only how late an overdue lock, a card or a hold can be.
  * Exactly-once per event (SubscriptionEffects), so every replica may run it.
+ * It runs on its OWN loop, beside the outbox loop rather than inside it: a
+ * sweep over every child never delays a message's delivery.
  */
 const SUBSCRIPTION_SWEEP_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS ?? 60_000);
 
@@ -138,6 +141,7 @@ async function bootstrap(): Promise<void> {
 
   let running = true;
   let draining = false;
+  let subscriptionBusy = false;
 
   const stop = (signal: string) => {
     if (!running) return;
@@ -147,7 +151,7 @@ async function bootstrap(): Promise<void> {
     // mid-publish would leave rows claimed but unpublished, and at-least-once
     // delivery only holds if a claimed row is either published or released.
     const wait = setInterval(() => {
-      if (!draining) {
+      if (!draining && !subscriptionBusy) {
         clearInterval(wait);
         void flushErrorTracker(errors)
           .then(() => app.close())
@@ -173,7 +177,24 @@ async function bootstrap(): Promise<void> {
   let lastSweepAt = 0;
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
-  let nextSubscriptionSweep = 0;
+
+  // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
+  log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
+  const subscriptionLoop = (async () => {
+    while (running) {
+      subscriptionBusy = true;
+      try {
+        await subscriptions.sweep();
+      } catch (e) {
+        report(log, 'subscription sweep', 'subscriptions.sweep', e);
+      } finally {
+        subscriptionBusy = false;
+      }
+      for (let waited = 0; running && waited < SUBSCRIPTION_SWEEP_MS; waited += 500) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  })();
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
   // short (OutboxPacer). Without Redis there are no hints and the loop simply
@@ -239,20 +260,6 @@ async function bootstrap(): Promise<void> {
       }
     }
 
-    // PD-30: subscription states, their cards and the lesson holds -- before
-    // the lesson sweep, so a held child gets no new lesson on this pass.
-    if (Date.now() >= nextSubscriptionSweep) {
-      draining = true;
-      try {
-        await subscriptions.sweep();
-      } catch (e) {
-        report(log, 'subscription sweep', 'subscriptions.sweep', e);
-      } finally {
-        draining = false;
-        nextSubscriptionSweep = Date.now() + SUBSCRIPTION_SWEEP_MS;
-      }
-    }
-
     // Lessons from regular times, their reminders and (hourly, inside the
     // sweep) the PD-22 daylight-saving warnings -- before dispatch, so a
     // reminder scheduled now and already due goes out on this pass.
@@ -306,6 +313,7 @@ async function bootstrap(): Promise<void> {
     // Either sleep is cut short by the next hint.
     await pacer.pause(pacer.delayAfter(published));
   }
+  await subscriptionLoop;
   await closeWake?.();
 }
 

@@ -55,7 +55,10 @@ export interface SubscriptionException {
 export interface SubscriptionView {
   /** SUBSCRIPTION_LOCK_ENFORCED on this deployment. Off: nothing is refused, the state is still shown. */
   enforced: boolean
+  /** Void a subscription: the payment recorders. */
   canRecord: boolean
+  /** Add one with no payment behind it (free lessons): the super admin, the Operations Manager, the Sales Manager. */
+  canAddSubscription: boolean
   canGrantException: boolean
   standing: Standing | undefined
   subscriptions: LedgerRow[]
@@ -80,7 +83,7 @@ export interface PaymentLock {
   children: Array<{ id: string; name: string; reasons?: LockReason[]; overdue?: { label: string | null; dueDate: string } | null }>
 }
 
-export type NewSubscription = { lessonsIncluded: number; planMonths?: number | null; startsOn?: string; note?: string | null }
+export type NewSubscription = { lessonsIncluded: number; reason: string; planMonths?: number | null; startsOn?: string }
 export type NewException = { kind: ExceptionKind; reason: string; validUntil: string }
 
 const learner = (id: string) => `/learners/${encodeURIComponent(id)}`

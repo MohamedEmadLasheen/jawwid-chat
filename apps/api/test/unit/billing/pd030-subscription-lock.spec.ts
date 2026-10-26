@@ -17,7 +17,7 @@ import { AuthorizationService, CallIntent, type LiveMember } from '@platform/aut
 import { CommErrorCode } from '@platform/errors';
 import { StaffAccessBasis } from '@platform/staff-scope';
 import { canGrantSubscriptionException } from '@platform/subscription-policy';
-import type { LockedChild, SubscriptionLockReader } from '@platform/subscription-lock';
+import { subscriptionLockEnforced, type LockedChild, type SubscriptionLockReader } from '@platform/subscription-lock';
 import { currentOf, forParent, positionOf, standingInOrder, type StaffChildSubscription } from '../../../src/billing/subscription-reads';
 import { renderCardBody } from '../../../src/lessons/lesson-card';
 import { renderPayPage, type PayPageModel } from '../../../src/billing/pay-page';
@@ -219,5 +219,25 @@ describe('PD-30 — what the cards and the pay page say', () => {
     const ctx = { token: 't', nonce: 'n' };
     expect(renderPayPage({ ...model, currency: 'AED' } as PayPageModel, 'en', ctx)).toContain('3 months — 24 lessons');
     expect(renderPayPage({ ...model, currency: 'AED' } as PayPageModel, 'ar', ctx)).toContain('3 أشهر — 24 حصة');
+  });
+});
+
+describe('PD-30 — the SUBSCRIPTION_LOCK_ENFORCED switch', () => {
+  const inherited = process.env.SUBSCRIPTION_LOCK_ENFORCED;
+  afterAll(() => {
+    if (inherited === undefined) delete process.env.SUBSCRIPTION_LOCK_ENFORCED;
+    else process.env.SUBSCRIPTION_LOCK_ENFORCED = inherited;
+  });
+  it.each(['true', 'TRUE', 'True', '1', 'yes', 'YES', 'on', ' true '])('%p is on', (v) => {
+    process.env.SUBSCRIPTION_LOCK_ENFORCED = v;
+    expect(subscriptionLockEnforced()).toBe(true);
+  });
+  it.each(['false', '0', 'no', '', 'enforced', 'off'])('%p is off', (v) => {
+    process.env.SUBSCRIPTION_LOCK_ENFORCED = v;
+    expect(subscriptionLockEnforced()).toBe(false);
+  });
+  it('unset is off', () => {
+    delete process.env.SUBSCRIPTION_LOCK_ENFORCED;
+    expect(subscriptionLockEnforced()).toBe(false);
   });
 });

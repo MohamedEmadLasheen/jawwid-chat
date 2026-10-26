@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -110,6 +111,8 @@ async function bootstrap(): Promise<void> {
   await app.listen(port, '0.0.0.0');
 
   log.log(`error tracking: ${errors.isEnabled() ? errors.name : 'disabled (no SENTRY_DSN)'}`);
+  // PD-30: the effective payment-lock switch, said once at boot.
+  log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
   log.log(
     `Jawwid Chat API listening on :${port} ` +
       `[env=${build.environment} commit=${build.commit} version=${build.version}]`,

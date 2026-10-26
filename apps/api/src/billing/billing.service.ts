@@ -154,8 +154,9 @@ export class BillingService {
     const beforeGoLive = query.beforeGoLive === 'true' || query.beforeGoLive === '1';
     const org = actor.organizationId as string;
     const today = todayIn(await this.timeZone());
-    // PD-30: only instalments due from this day lock a group when overdue.
-    const lockFrom = (await this.prisma.$queryRaw<{ d: string }[]>`SELECT chat.pd030_overdue_from()::text AS d`)[0]!.d;
+    // PD-30: only instalments due from this day lock a group when overdue --
+    // the day enforcement was first switched on; null until then (none locks).
+    const lockFrom = (await this.prisma.$queryRaw<{ d: string | null }[]>`SELECT chat.pd030_overdue_from()::text AS d`)[0]?.d ?? null;
 
     const families = await this.familiesInScope(actor, access, org);
     if (families.length === 0) {
@@ -217,7 +218,7 @@ export class BillingService {
         responsibleSupervisor: person(responsibleId),
         responsibleBasis: inv.learnerId ? 'child' : 'family',
         conversationId: conversationOf.get(family.id) ?? null,
-        beforeGoLive: status === 'overdue' && dueDate < lockFrom,
+        beforeGoLive: status === 'overdue' && (lockFrom === null || dueDate < lockFrom),
       });
     }
 
@@ -366,7 +367,7 @@ export class BillingService {
     let lessons: { lessonsIncluded: number; planMonths: number | null; startsOn: string } | null = null;
     if (body.lessonsIncluded !== undefined && body.lessonsIncluded !== null) {
       const n = body.lessonsIncluded;
-      if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 500) throw invalid('lessonsIncluded: an integer from 1 to 500');
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 1000) throw invalid('lessonsIncluded: an integer from 1 to 1000');
       if (!learnerId) throw invalid('lessonsIncluded: name the child (learnerId) the lessons are for');
       const pm = body.planMonths;
       if (pm !== undefined && pm !== null && !(SUBSCRIPTION_PLAN_MONTHS as readonly unknown[]).includes(pm)) throw invalid('planMonths: 1, 3, 6 or 12');

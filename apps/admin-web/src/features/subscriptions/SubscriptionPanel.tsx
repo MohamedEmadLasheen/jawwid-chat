@@ -39,7 +39,7 @@ export function SubscriptionPanel({ learnerId }: { learnerId: string }) {
         <h2 id="st-subscription" className="tf-section__title">
           {tx(S.title)}
         </h2>
-        {data.canRecord && (
+        {data.canAddSubscription && (
           <button type="button" className="btn btn--sm" onClick={() => setAdding(true)}>
             {tx(S.add)}
           </button>
@@ -221,7 +221,7 @@ function ServerError({ error }: { error: unknown }) {
 
 function lessonsOf(input: string): number | null {
   const n = Number(input)
-  return Number.isInteger(n) && n >= 1 && n <= 500 ? n : null
+  return Number.isInteger(n) && n >= 1 && n <= 1000 ? n : null
 }
 
 function AddSubscriptionDialog({ learnerId, onClose }: { learnerId: string; onClose: () => void }) {
@@ -231,17 +231,23 @@ function AddSubscriptionDialog({ learnerId, onClose }: { learnerId: string; onCl
   const [lessons, setLessons] = useState('')
   const [planMonths, setPlanMonths] = useState('')
   const [startsOn, setStartsOn] = useState('')
-  const [note, setNote] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  // The server's window: from a week ago to a month ahead (the browser's today is close enough for the picker).
+  const shift = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
   const submit = () => {
     const n = lessonsOf(lessons)
-    if (n === null) return setError(tx(S.invalidLessons))
+    const next: Record<string, string> = {}
+    if (n === null) next.lessons = tx(S.invalidLessons)
+    if (reason.trim() === '') next.reason = tx(S.required)
+    setErrors(next)
+    if (n === null || Object.keys(next).length > 0) return
     add.mutate(
       {
         lessonsIncluded: n,
+        reason: reason.trim(),
         planMonths: planMonths ? Number(planMonths) : null,
         ...(startsOn ? { startsOn } : {}),
-        note: note.trim() || null,
       },
       { onSuccess: onClose },
     )
@@ -249,8 +255,9 @@ function AddSubscriptionDialog({ learnerId, onClose }: { learnerId: string; onCl
   return (
     <Dialog title={tx(S.add)} onClose={onClose} footer={<Footer onCancel={onClose} onSave={submit} pending={add.isPending} label={tx(S.save)} />}>
       <ServerError error={add.error} />
-      <Field label={tx(S.lessons)} hint={tx(S.lessonsHint)} error={error}>
-        {(id) => <input id={id} className="input" type="number" min={1} max={500} inputMode="numeric" value={lessons} onChange={(e) => setLessons(e.target.value)} />}
+      <p className="field__hint">{tx(S.addHint)}</p>
+      <Field label={tx(S.lessons)} hint={tx(S.lessonsHint)} error={errors.lessons}>
+        {(id) => <input id={id} className="input" type="number" min={1} max={1000} inputMode="numeric" value={lessons} onChange={(e) => setLessons(e.target.value)} />}
       </Field>
       <Field label={tx(S.plan)}>
         {(id) => (
@@ -265,10 +272,10 @@ function AddSubscriptionDialog({ learnerId, onClose }: { learnerId: string; onCl
         )}
       </Field>
       <Field label={tx(S.startsOn)}>
-        {(id) => <input id={id} className="input" type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />}
+        {(id) => <input id={id} className="input" type="date" min={shift(-7)} max={shift(30)} value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />}
       </Field>
-      <Field label={tx(S.note)}>
-        {(id) => <input id={id} className="input" dir="auto" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />}
+      <Field label={tx(S.reason)} error={errors.reason}>
+        {(id) => <textarea id={id} className="input tf-textarea" dir="auto" rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />}
       </Field>
     </Dialog>
   )

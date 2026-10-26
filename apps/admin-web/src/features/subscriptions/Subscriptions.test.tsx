@@ -53,6 +53,7 @@ function view(over: Partial<SubscriptionView> = {}): SubscriptionView {
   return {
     enforced: true,
     canRecord: true,
+    canAddSubscription: true,
     canGrantException: false,
     standing: {
       child: { id: 'k-1', name: 'Child One' },
@@ -119,9 +120,14 @@ describe('the Student Profile: Subscription', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add subscription' })
     await userEvent.type(within(dialog).getByLabelText('Lessons'), '8')
     await userEvent.selectOptions(within(dialog).getByLabelText('Plan'), '1')
+    // Free lessons need a reason.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(within(dialog).getByText('Required.')).toBeInTheDocument()
+    expect(calls('POST', /\/learners\/k-1\/subscriptions$/)).toHaveLength(0)
+    await userEvent.type(within(dialog).getByLabelText('Reason'), 'Paid in cash at the office')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(calls('POST', /\/learners\/k-1\/subscriptions$/)).toHaveLength(1))
-    expect(bodyOf(calls('POST', /\/learners\/k-1\/subscriptions$/)[0])).toEqual({ lessonsIncluded: 8, planMonths: 1, note: null })
+    expect(bodyOf(calls('POST', /\/learners\/k-1\/subscriptions$/)[0])).toEqual({ lessonsIncluded: 8, reason: 'Paid in cash at the office', planMonths: 1 })
   })
 
   it('offers exceptions only to the three roles (the server says), with a reason and a date', async () => {
@@ -162,6 +168,15 @@ describe('the Student Profile: Subscription', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Child One' })).toBeInTheDocument()
     await waitFor(() => expect(calls('GET', /\/learners\/k-1\/subscription$/)).toHaveLength(1))
     expect(screen.queryByRole('region', { name: 'Subscription' })).not.toBeInTheDocument()
+  })
+
+  it('offers Add subscription only to the three roles (the server says)', async () => {
+    on('GET', /\/learners\/k-1\/subscription$/, () => json(view({ canAddSubscription: false })))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/students/k-1' })
+    const section = await screen.findByRole('region', { name: 'Subscription' })
+    expect(within(section).queryByRole('button', { name: 'Add subscription' })).not.toBeInTheDocument()
+    // A recorder still voids.
+    expect(within(section).getByRole('button', { name: 'Void' })).toBeInTheDocument()
   })
 
   it('says when enforcement is switched off on this server', async () => {

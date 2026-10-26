@@ -258,7 +258,7 @@ export function NewInstalmentsDialog({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const modeName = useId()
   const lessonsMinor = lessons.trim() === '' ? null : Number(lessons)
-  const lessonsValid = lessonsMinor === null || (Number.isInteger(lessonsMinor) && lessonsMinor >= 1 && lessonsMinor <= 500)
+  const lessonsValid = lessonsMinor === null || (Number.isInteger(lessonsMinor) && lessonsMinor >= 1 && lessonsMinor <= 1000)
   const withLessons = learnerId && lessonsMinor !== null && lessonsValid
     ? { lessonsIncluded: lessonsMinor, ...(lessonPlan ? { planMonths: Number(lessonPlan) } : {}) }
     : {}
@@ -441,7 +441,7 @@ export function NewInstalmentsDialog({
         <div className="pf-row">
           <Field label={tx(SUB.lessons)} hint={tx(SUB.lessonsHint)} error={errors.lessons}>
             {(id, d) => (
-              <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={500} value={lessons} aria-describedby={d} onChange={(e) => setLessons(e.target.value)} />
+              <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={1000} value={lessons} aria-describedby={d} onChange={(e) => setLessons(e.target.value)} />
             )}
           </Field>
           <Field label={tx(SUB.plan)}>
@@ -600,7 +600,7 @@ export function RequestPaymentDialog({
     if (expiresInDays === null) next.days = tx(PAY.invalidDays)
     if (periodStart && periodEnd && periodEnd < periodStart) next.period = tx(PAY.periodOrder)
     const lessonCount = lessons.trim() === '' ? null : Number(lessons)
-    if (lessonCount !== null && !(Number.isInteger(lessonCount) && lessonCount >= 1 && lessonCount <= 500)) next.lessons = tx(SUB.invalidLessons)
+    if (lessonCount !== null && !(Number.isInteger(lessonCount) && lessonCount >= 1 && lessonCount <= 1000)) next.lessons = tx(SUB.invalidLessons)
     setErrors(next)
     if (Object.keys(next).length > 0 || amountMinor === null || expiresInDays === null) return
     const pkg = takesPackage(purpose)
@@ -681,7 +681,7 @@ export function RequestPaymentDialog({
           </Field>
           <Field label={tx(SUB.lessons)} hint={tx(SUB.lessonsHint)} error={errors.lessons}>
             {(id, d) => (
-              <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={500} value={lessons} aria-describedby={d} onChange={(e) => setLessons(e.target.value)} />
+              <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={1000} value={lessons} aria-describedby={d} onChange={(e) => setLessons(e.target.value)} />
             )}
           </Field>
           <div className="pf-row">

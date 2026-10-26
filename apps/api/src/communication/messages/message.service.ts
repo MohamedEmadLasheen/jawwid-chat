@@ -1291,6 +1291,10 @@ export class MessageService {
     if (!isAuthor && !isManager && !moderating) {
       throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'not the author of this message');
     }
+    // PD-30: a group locked for payment is read-only for the parent and the
+    // teacher -- deleting for everyone is a write too (staff are not asked).
+    const locked = await this.authz.refusePaymentLockFor(actor, conv);
+    if (locked && !locked.allowed) throw new CommError(locked.code, locked.reason);
     if (isAuthor && !isManager) {
       const ageMs = Date.now() - message.createdAt.getTime();
       if (ageMs > windowMinutes * 60_000) {

@@ -38,6 +38,10 @@ export const S = {
   voidTitle: { en: 'Void this subscription', ar: 'إلغاء هذا الاشتراك' },
   lessons: { en: 'Lessons', ar: 'عدد الحصص' },
   lessonsHint: { en: 'How many lessons the package includes.', ar: 'عدد الحصص التي تشملها الباقة.' },
+  addHint: {
+    en: 'Lessons with no payment behind them. Paid lessons arrive by themselves (a paid link, an instalment plan). Starts from a week ago to a month ahead.',
+    ar: 'حصص بلا دفعة مقابلة. الحصص المدفوعة تُضاف تلقائيًا (رابط مدفوع أو خطة أقساط). يبدأ من أسبوع مضى حتى شهر قادم.',
+  },
   plan: { en: 'Plan', ar: 'المدة' },
   noPlan: { en: '—', ar: '—' },
   startsOn: { en: 'Starts on', ar: 'يبدأ في' },
@@ -61,7 +65,7 @@ export const S = {
   by: { en: 'by {name}', ar: 'بواسطة {name}' },
   renewalAsked: { en: 'Parent asked to renew', ar: 'طلب ولي الأمر التجديد' },
   required: { en: 'Required.', ar: 'مطلوب.' },
-  invalidLessons: { en: 'A whole number from 1 to 500.', ar: 'عدد صحيح من 1 إلى 500.' },
+  invalidLessons: { en: 'A whole number from 1 to 1000.', ar: 'عدد صحيح من 1 إلى 1000.' },
   save: { en: 'Save', ar: 'حفظ' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
   // Renewal requests (Payments)

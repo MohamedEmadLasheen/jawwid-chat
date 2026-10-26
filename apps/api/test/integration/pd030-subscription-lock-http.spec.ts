@@ -94,6 +94,24 @@ function addDays(date: string, n: number): string {
 }
 const at = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
 
+/** Enforcement as if it had been switched on before the test (go-live recorded, announcements done). */
+async function switchedOnBefore() {
+  for (const key of ['subscription.enforced_since', 'subscription.announced_at']) {
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.config (key, value) values ($1, to_jsonb(now()::text)) on conflict (key) do nothing`, key);
+  }
+}
+
+/** A statement as a legacy writer or a person with SQL access would run it: the database must still refuse. */
+async function sqlRefusal(sql: string, ...args: unknown[]): Promise<string> {
+  try {
+    await g.prisma.$executeRawUnsafe(sql, ...args);
+  } catch (e) {
+    return String((e as Error).message);
+  }
+  throw new Error('expected the database to refuse');
+}
+
 async function setGoLive(date: string) {
   await g.prisma.$executeRawUnsafe(
     `insert into chat.config (key, value) values ('subscription.overdue_from', to_jsonb($1::text))
@@ -144,8 +162,10 @@ async function access(learnerId: string) {
   return g.prisma.learnerAccess.findUniqueOrThrow({ where: { learnerId } });
 }
 
-async function addSubscription(childId: string, lessonsIncluded: number, startsOn = addDays(today(), -30)) {
-  const r = await http(m.superAdmin.subject, 'POST', `/learners/${childId}/subscriptions`, { lessonsIncluded, planMonths: 1, startsOn });
+async function addSubscription(childId: string, lessonsIncluded: number, startsOn = addDays(today(), -7)) {
+  const r = await http(m.superAdmin.subject, 'POST', `/learners/${childId}/subscriptions`, {
+    lessonsIncluded, planMonths: 1, startsOn, reason: 'QA: lessons agreed with the owner',
+  });
   expect(r.status).toBe(201);
   return r;
 }
@@ -179,6 +199,7 @@ beforeAll(async () => {
     messages: false,
   });
   await setGoLive(addDays(today(), -60));
+  await switchedOnBefore();
 
   process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({
@@ -221,16 +242,27 @@ describe('PD-30 over HTTP', () => {
     expect((await http(parent.subject, 'GET', `/learners/${child.id}/subscription`)).code).toBe(CommErrorCode.BILLING_DENIED);
     expect((await http(teacher.subject, 'POST', `/learners/${child.id}/subscription-exceptions`, {})).code).toBe(CommErrorCode.BILLING_DENIED);
 
-    // The child's supervisor (Operations, in scope) reads and records.
-    const added = await http(supervisor.subject, 'POST', `/learners/${child.id}/subscriptions`, { lessonsIncluded: 24, planMonths: 3 });
+    // The child's supervisor (Operations, in scope) reads -- but a subscription
+    // with no payment behind it is free lessons: the three roles only.
+    expect((await http(supervisor.subject, 'GET', `/learners/${child.id}/subscription`)).json).toMatchObject({
+      canRecord: true, canAddSubscription: false, canGrantException: false,
+    });
+    expect((await http(supervisor.subject, 'POST', `/learners/${child.id}/subscriptions`, { lessonsIncluded: 24, reason: 'x' })).code)
+      .toBe(CommErrorCode.SUBSCRIPTION_DENIED);
+    // A reason, a start from a week ago to a month ahead, 1..1000 lessons.
+    expect((await http(m.salesManager.subject, 'POST', `/learners/${child.id}/subscriptions`, { lessonsIncluded: 24 })).status).toBe(400);
+    expect((await http(m.salesManager.subject, 'POST', `/learners/${child.id}/subscriptions`, { lessonsIncluded: 24, reason: 'x', startsOn: addDays(today(), -8) })).status).toBe(400);
+    expect((await http(m.salesManager.subject, 'POST', `/learners/${child.id}/subscriptions`, { lessonsIncluded: 24, reason: 'x', startsOn: addDays(today(), 31) })).status).toBe(400);
+    expect((await http(m.salesManager.subject, 'POST', `/learners/${child.id}/subscriptions`, { lessonsIncluded: 1001, reason: 'x' })).status).toBe(400);
+    const added = await http(m.salesManager.subject, 'POST', `/learners/${child.id}/subscriptions`, {
+      lessonsIncluded: 24, planMonths: 3, reason: 'Paid in cash at the office before PD-27',
+    });
     expect(added.status).toBe(201);
     expect(added.json.standing).toMatchObject({
       current: { planMonths: 3, lessonsIncluded: 24, startsOn: today() },
       lessonsIncluded: 24, lessonsUsed: 0, lessonsLeft: 24, state: 'open', lockReasons: [],
     });
-    expect(added.json.canRecord).toBe(true);
-    expect(added.json.canGrantException).toBe(false);
-    expect((await http(supervisor.subject, 'POST', `/learners/${child.id}/subscriptions`, { lessonsIncluded: 0 })).status).toBe(400);
+    expect(added.json).toMatchObject({ canAddSubscription: true, canGrantException: true });
 
     // A supervisor cannot grant an exception; the three roles can.
     const body = { kind: 'balance', reason: 'Owner agreed to wait for the transfer', validUntil: addDays(today(), 30) };
@@ -354,8 +386,12 @@ describe('PD-30 over HTTP', () => {
     expect(await access(child.id)).toMatchObject({ held: true });
     const held = await g.prisma.lesson.findUniqueOrThrow({ where: { id: future.json.id } });
     expect(held).toMatchObject({ outcome: 'suspended', outcomeByKind: 'system', outcomeBy: null, outcomeNote: 'subscription' });
-    const schedule = await http(teacher.subject, 'GET', '/lessons');
-    expect(schedule.json.lessons.find((l: any) => l.id === future.json.id)).toMatchObject({ outcome: 'suspended', suspendedFor: 'payment' });
+    // The teacher's Schedule says "suspended" -- nothing financial reaches a teacher; staff read why.
+    const asTeacher = (await http(teacher.subject, 'GET', '/lessons')).json.lessons.find((l: any) => l.id === future.json.id);
+    expect(asTeacher).toMatchObject({ outcome: 'suspended', outcomeNote: null });
+    expect(asTeacher).not.toHaveProperty('suspendedFor');
+    const asStaff = (await http(m.teachersManager.subject, 'GET', `/lessons?learnerId=${child.id}`)).json.lessons.find((l: any) => l.id === future.json.id);
+    expect(asStaff).toMatchObject({ outcome: 'suspended', suspendedFor: 'payment' });
     expect(PAID_OUTCOMES).not.toContain('suspended');
 
     // Nothing to pay yet: "Request renewal" instead, once a day; the supervisor and Sales hear of it.
@@ -534,8 +570,8 @@ describe('PD-30 over HTTP', () => {
          group by 1, 2 having count(*) > 1) d`, child.id);
     expect(dupes[0]!.n).toBe(0);
     expect(await scheduled()).toBe(scheduledBefore);
-    // The teacher's Schedule shows each time once: the held copies are history.
-    const list = (await http(teacher.subject, 'GET', '/lessons')).json.lessons.filter((l: any) => l.learner.id === child.id && l.startsAt > at(0));
+    // The Schedule shows each time once: the held copies are history.
+    const list = (await http(m.teachersManager.subject, 'GET', `/lessons?learnerId=${child.id}`)).json.lessons.filter((l: any) => l.startsAt > at(0));
     expect(list.filter((l: any) => l.suspendedFor === 'payment')).toHaveLength(0);
     expect(new Set(list.map((l: any) => l.startsAt)).size).toBe(list.length);
   });
@@ -564,5 +600,138 @@ describe('PD-30 over HTTP', () => {
     } finally {
       process.env.SUBSCRIPTION_LOCK_ENFORCED = 'true';
     }
+  });
+
+  it('the database refuses free lessons and exceptions from anyone but the three roles; a 1000-lesson package backfills', async () => {
+    const { child, supervisor } = family();
+    // A supervisor (Operations) writing straight to the database is refused.
+    expect(await sqlRefusal(
+      `insert into chat.subscription_exception (learner_id, organization_id, family_id, kind, reason, valid_until, granted_by)
+       select l.id, l.organization_id, l.family_id, 'both', 'direct SQL', chat.pd030_today() + 5, $2::uuid from chat.learner l where l.id = $1::uuid`,
+      child.id, supervisor.id)).toMatch(/super admin, the Operations Manager or the Sales Manager/);
+    expect(await sqlRefusal(
+      `insert into chat.learner_subscription (learner_id, organization_id, family_id, lessons_included, starts_on, source, note, created_by)
+       select l.id, l.organization_id, l.family_id, 50, chat.pd030_today(), 'staff', 'direct SQL', $2::uuid from chat.learner l where l.id = $1::uuid`,
+      child.id, supervisor.id)).toMatch(/no payment is added by the super admin/);
+    // A grant by the Sales Manager, revoked by a supervisor in SQL: refused.
+    const granted = await http(m.salesManager.subject, 'POST', `/learners/${child.id}/subscription-exceptions`, {
+      kind: 'overdue', reason: 'Salary on the 5th', validUntil: addDays(today(), 5),
+    });
+    expect(granted.status).toBe(201);
+    expect(await sqlRefusal(
+      `update chat.subscription_exception set revoked_at = now(), revoked_by = $2::uuid, revoke_reason = 'x' where id = $1::uuid`,
+      granted.json.exceptions[0].id, supervisor.id)).toMatch(/revoked by the super admin/);
+    // PD-15 packages run to 1000 lessons: the go-live backfill fits them.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.learner_enrollment (learner_id, organization_id, package_lessons, updated_by)
+       select l.id, l.organization_id, 1000, $2::uuid from chat.learner l where l.id = $1::uuid
+       on conflict (learner_id) do update set package_lessons = 1000`, child.id, m.superAdmin.id);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.learner_subscription (learner_id, organization_id, family_id, plan_months, lessons_included, starts_on, source, note)
+       select e.learner_id, l.organization_id, l.family_id, f.subscription_plan_months, e.package_lessons,
+              chat.pd030_today(), 'backfill', 'PD-15 package size, carried over at go-live'
+         from chat.learner_enrollment e join chat.learner l on l.id = e.learner_id join chat.family f on f.id = l.family_id
+        where e.learner_id = $1::uuid`, child.id);
+    expect(await g.prisma.learnerSubscription.count({ where: { learnerId: child.id, lessonsIncluded: 1000, source: 'backfill' } })).toBe(1);
+  });
+
+  it('a paid request credits its lessons once: a voided credit never comes back on a later update of the request', async () => {
+    const { child, f } = family();
+    const req = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'renewal', label: 'Renewal', amountMinor: 1000, learnerId: child.id, lessonsIncluded: 8,
+    });
+    await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 1000, paidOn: today(), requestId: req.json.request.id });
+    const credit = await g.prisma.learnerSubscription.findFirstOrThrow({ where: { requestId: req.json.request.id } });
+    // Staff void the credit (not the payment): the request stays paid.
+    expect((await http(m.salesManager.subject, 'POST', `/subscriptions/${credit.id}/void`, { reason: 'Credited to the sibling instead' })).status).toBe(201);
+    // A webhook retry or a reminder stamp touches the paid request again: nothing is credited.
+    await g.prisma.$executeRawUnsafe(`update chat.payment_request set paid_at = paid_at where id = $1::uuid`, req.json.request.id);
+    await g.prisma.$executeRawUnsafe(`update chat.payment_request set cancelled_at = cancelled_at where id = $1::uuid`, req.json.request.id);
+    expect(await g.prisma.learnerSubscription.count({ where: { requestId: req.json.request.id, voidedAt: null } })).toBe(0);
+  });
+
+  it('fails closed: a stale or missing state row never opens a locked group; a group with no child rows covers its family', async () => {
+    const { child, parent, groupId, f } = family();
+    await setGoLive(addDays(today(), -60));
+    await http(m.operationsManager.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Stale', amountMinor: 5000, firstDueDate: addDays(today(), -1), learnerId: child.id,
+    });
+    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    // The worker is not running; the stored row says open (stale), then disappears.
+    await g.prisma.$executeRawUnsafe(`update chat.learner_access set state = 'open', reasons = '{}' where learner_id = $1::uuid`, child.id);
+    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    await g.prisma.$executeRawUnsafe(`delete from chat.learner_access where learner_id = $1::uuid`, child.id);
+    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    const [{ lock }] = await g.prisma.$queryRawUnsafe<Array<{ lock: string | null }>>(`select chat.learner_lesson_lock($1::uuid) as lock`, child.id);
+    expect(lock).toBe('overdue');
+    // A family group whose child rows are missing (legacy data): it covers every child of its family.
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+      await tx.$executeRawUnsafe(`delete from chat.conversation_learner where conversation_id = $1::uuid`, groupId);
+    });
+    expect(await g.prisma.conversationLearner.count({ where: { conversationId: groupId } })).toBe(0);
+    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    expect((await http(parent.subject, 'GET', `/conversations/${groupId}`)).json.paymentLock.children.map((c: any) => c.id)).toContain(child.id);
+  });
+
+  it('financial cards reach only the family\'s chat with its supervisor -- never a legacy teacher-parent direct', async () => {
+    const { child, teacher, parent, directId, f } = family();
+    // A PD-6 era teacher<->parent direct of this family, more recently active (a fixture of legacy data).
+    const legacy = randomUUID();
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+      await tx.$executeRawUnsafe(
+        `insert into chat.conversation (id, organization_id, type, family_id, direct_key, last_activity_at)
+         values ($1::uuid, $2::uuid, 'direct', $3::uuid, 'legacy-pd6:' || $1, now() + interval '1 day')`,
+        legacy, orgId, f.id);
+      await tx.$executeRawUnsafe(
+        `insert into chat.conversation_member (conversation_id, actor_id, actor_kind, member_role)
+         values ($1::uuid, $2::uuid, 'teacher', 'teacher'), ($1::uuid, $3::uuid, 'contact', 'parent')`,
+        legacy, teacher.id, parent.id);
+    });
+    await addSubscription(child.id, 1);
+    for (let i = 0; i < 3; i++) await report(teacher.subject, await pastLesson(child.id));
+    await effects.applyEvents();
+    expect(await cards(legacy, 'subscription_grace')).toHaveLength(0);
+    expect(await cards(legacy, 'subscription_locked')).toHaveLength(0);
+    expect((await cards(directId, 'subscription_locked')).length).toBe(1);
+    // The supervisor is pushed as well as the parents.
+    expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_locked', familyId: f.id, recipientId: m.families.find((x) => x.id === f.id)!.children.find((c) => c.id === child.id)!.supervisorId } })).toBe(1);
+  });
+
+  it('switching enforcement on: go-live recorded once, every child already in grace or locked is told, holds start on the next pass', async () => {
+    const { child, teacher, groupId, directId } = family();
+    process.env.SUBSCRIPTION_LOCK_ENFORCED = 'false';
+    let futureId = '';
+    try {
+      await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('subscription.enforced_since', 'subscription.announced_at', 'subscription.overdue_from')`);
+      await addSubscription(child.id, 1);
+      const future = await http(m.teachersManager.subject, 'POST', '/lessons', {
+        learnerId: child.id, startsAt: at(9 * 24 * HOUR), endsAt: at(9 * 24 * HOUR + HOUR / 2),
+      });
+      expect(future.status).toBe(201);
+      futureId = future.json.id;
+      for (let i = 0; i < 3; i++) await report(teacher.subject, await pastLesson(child.id));
+      await effects.sweep();
+      expect(await access(child.id)).toMatchObject({ state: 'locked', held: false });
+      expect(await cards(groupId, 'lessons_paused')).toHaveLength(0); // nothing announced while off
+    } finally {
+      process.env.SUBSCRIPTION_LOCK_ENFORCED = 'TRUE'; // any case
+    }
+    // First pass with it on: go-live = today, the announcements, no hold yet.
+    await effects.sweep();
+    const keys = await g.prisma.config.findMany({ where: { key: { in: ['subscription.enforced_since', 'subscription.announced_at', 'subscription.overdue_from'] } } });
+    expect(keys.map((k) => k.key).sort()).toEqual(['subscription.announced_at', 'subscription.enforced_since', 'subscription.overdue_from']);
+    expect(keys.find((k) => k.key === 'subscription.overdue_from')!.value).toBe(today());
+    expect(await cards(groupId, 'lessons_paused')).toHaveLength(1);
+    expect(await cards(directId, 'subscription_locked')).toHaveLength(1);
+    expect(await access(child.id)).toMatchObject({ held: false });
+    expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: futureId } })).toMatchObject({ outcome: null });
+    // The next pass holds; a third changes nothing and announces nothing again.
+    await effects.sweep();
+    expect(await access(child.id)).toMatchObject({ held: true });
+    expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: futureId } })).toMatchObject({ outcome: 'suspended' });
+    await effects.sweep();
+    expect(await cards(groupId, 'lessons_paused')).toHaveLength(1);
   });
 });
