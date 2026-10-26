@@ -816,7 +816,10 @@ export class ConversationService {
     if (toAdd.length === 0 && toRemove.length === 0) {
       if (toAbsorb.length > 0) {
         await this.prisma.$transaction(async (tx) => {
-          for (const id of toAbsorb) await this.absorbSeat(tx, conv.id, id);
+          const reseated = await this.absorbSeats(tx, conv.id, toAbsorb, desired);
+          if (reseated.length > 0) {
+            await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added: reseated, removed: [] });
+          }
         });
       }
       // RT-009: nothing changed NOW, but this may be the retry of a sync whose
@@ -827,7 +830,9 @@ export class ConversationService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      for (const id of toAbsorb) await this.absorbSeat(tx, conv.id, id);
+      toAdd.push(
+        ...(await this.absorbSeats(tx, conv.id, toAbsorb, desired, false)).map((id) => desired.get(id) as MemberSpec),
+      );
       if (toRemove.length > 0) {
         await tx.conversationMember.updateMany({
           where: { id: { in: toRemove.map((m) => m.id) } },
@@ -1125,12 +1130,10 @@ export class ConversationService {
         });
         if (ended.count > 0) removed.push(oldId);
       }
-      const present = await tx.conversationMember.findFirst({
-        where: { conversationId, actorId: newSupervisorId, leftAt: null },
-      });
       // PD-35: the new supervisor may already sit here by choice; the row is
-      // theirs now as supervisor, and the seat ends as absorbed.
-      if (present) await this.absorbSeat(tx, conversationId, newSupervisorId);
+      // theirs now as supervisor, and the seat ends as absorbed. Read under the
+      // seat's lock, so a leave of that seat is never half-seen.
+      const present = await this.absorbSeat(tx, conversationId, newSupervisorId);
       if (!present) {
         await tx.conversationMember.create({
           data: {
@@ -1322,11 +1325,18 @@ export class ConversationService {
     }
     const now = new Date();
     const own = await this.membershipOf(conv.id, actor.actorId);
+    // PD-35: a seat's member row is presence, never the admin role that may
+    // change a conversation's membership.
+    const ownIsSeat = own
+      ? (await this.prisma.$queryRaw<Array<{ n: number }>>`
+          SELECT count(*)::int AS n FROM chat.conversation_seat
+           WHERE member_id = ${own.id}::uuid AND left_at IS NULL`)[0].n > 0
+      : false;
     const scoped = this.authz.canManageMembershipIn(actor, {
       type: conv.type,
       organizationId: conv.organizationId,
       actorBasis: await this.authz.staffAccess(actor, conv, now),
-      actorMemberRole: own?.memberRole ?? null,
+      actorMemberRole: own && !ownIsSeat ? own.memberRole : null,
     });
     if (!scoped.allowed) {
       const status = scoped.code === CommErrorCode.CONVERSATION_NOT_FOUND ? 404 : 403;
@@ -1741,11 +1751,47 @@ export class ConversationService {
    * new supervisor) keeps the member row; the seat itself ends as 'absorbed', so
    * leaving it later can never take away a membership that is not the seat's.
    */
-  private async absorbSeat(tx: Prisma.TransactionClient, conversationId: string, staffId: string): Promise<void> {
+  private async absorbSeat(tx: Prisma.TransactionClient, conversationId: string, staffId: string): Promise<boolean> {
+    // The seat service's own lock: a leave and an absorb of one seat never
+    // interleave. The member row is read only once it is held, so a leave that
+    // committed first is seen, and the caller seats the person afresh.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'seat:' + conversationId + ':' + staffId}))`;
+    const live = await tx.conversationMember.findFirst({
+      where: { conversationId, actorId: staffId, leftAt: null },
+      select: { id: true },
+    });
+    if (!live) return false;
     await tx.$executeRaw`
       UPDATE chat.conversation_seat SET left_at = now(), left_kind = 'absorbed'
        WHERE conversation_id = ${conversationId}::uuid AND staff_id = ${staffId}::uuid
          AND left_at IS NULL AND member_id IS NOT NULL`;
+    return true;
+  }
+
+  /**
+   * PD-35: absorb the seats of people wanted here in their own right. One whose
+   * seat was left meanwhile is seated afresh from `desired` (here, or by the
+   * caller's own insert when `insert` is false). Returns those ids.
+   */
+  private async absorbSeats(
+    tx: Prisma.TransactionClient,
+    conversationId: string,
+    ids: readonly string[],
+    desired: ReadonlyMap<string, MemberSpec>,
+    insert = true,
+  ): Promise<string[]> {
+    const reseat: string[] = [];
+    for (const id of ids) {
+      if (await this.absorbSeat(tx, conversationId, id)) continue;
+      reseat.push(id);
+      const spec = desired.get(id) as MemberSpec;
+      if (insert) {
+        await tx.conversationMember.create({
+          data: { conversationId, actorId: spec.actorId, actorKind: spec.actorKind, memberRole: spec.memberRole },
+        });
+      }
+    }
+    return reseat;
   }
 
   /** System messages are generated by the backend and never by a client. */

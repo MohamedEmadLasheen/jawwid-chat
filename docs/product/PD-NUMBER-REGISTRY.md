@@ -66,6 +66,7 @@ claimed. The decision text itself still lives in
 | `20261026130000` | PD-33 — `chat_pd033_supervisor_cover` |
 | `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
 | `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (later PD-35 PRs: `…160001`, `…160002`) |
+| `20261026160003` | PD-35 — `chat_pd035_seat_security_fixes` (security-review fixes for #131, fixed forward) |
 | `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |
 | `20261026210000` | PD-38 — `chat_pd038_schedule_calendar` |
 
