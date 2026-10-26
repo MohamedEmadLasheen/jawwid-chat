@@ -296,12 +296,33 @@ export class OutboxWorker {
     }
   }
 
+  /**
+   * The live staff members, plus (PD-33) the backup covering for any of them:
+   * a covering backup decides approvals and reads internal notes on the PD-8
+   * `backup` basis, so they hear of them as the away supervisor would have.
+   */
   private async staffMemberIds(conversationId: string): Promise<string[]> {
     const members = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null, actorKind: ActorKind.STAFF },
       select: { actorId: true },
     });
-    return [...new Set([...members.map((m) => m.actorId), ...(await this.effectiveSeatIds(conversationId))])];
+    const ids = members.map((m) => m.actorId);
+    const covers = await this.coversFor(ids);
+    return [...new Set([...ids, ...covers.values(), ...(await this.effectiveSeatIds(conversationId))])];
+  }
+
+  /**
+   * PD-33: for each of these staff members who is away under a live cover, the
+   * backup covering for them (chat.live_covers -- the cover window AND a live
+   * backup link, the same moment access ends).
+   */
+  private async coversFor(staffIds: readonly string[]): Promise<Map<string, string>> {
+    if (staffIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ primary_id: string; backup_id: string }>>`
+      SELECT primary_id::text AS primary_id, backup_id::text AS backup_id
+        FROM chat.live_covers(now())
+       WHERE primary_id = ANY(${[...staffIds]}::uuid[])`;
+    return new Map(rows.map((r) => [r.primary_id, r.backup_id]));
   }
 
   /**
@@ -477,8 +498,14 @@ export class OutboxWorker {
       where: { conversationId, leftAt: null },
       select: { actorId: true },
     });
-    const effective = (await this.effectiveSeatIds(conversationId)).map((actorId) => ({ actorId }));
-    const members = [...new Map([...seated, ...effective].map((m) => [m.actorId, m])).values()];
+    const effective = await this.effectiveSeatIds(conversationId);
+    // The author first: their own seat is never pushed -- nor remapped, so an
+    // away supervisor's own message does not push the backup covering for them.
+    const recipients = [...new Set([...seated.map((m) => m.actorId), ...effective])].filter((id) => id !== authorId);
+    // PD-33: an away supervisor's push goes to the backup covering for them,
+    // once per person even when the backup has a seat of their own.
+    const covers = await this.coversFor(recipients);
+    const members = [...new Set(recipients.map((id) => covers.get(id) ?? id))].map((actorId) => ({ actorId }));
 
     const state = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId },

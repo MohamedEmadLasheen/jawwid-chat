@@ -313,6 +313,7 @@ abstract final class WireMappers {
       themeKey: viewerState?['theme'] is String ? viewerState!['theme'] as String : null,
       wallpaperUrl: _nonEmpty(viewerState?['wallpaperUrl']),
       handledByLabel: handledByLabel,
+      cover: _cover(json['cover']),
       requiresApproval: requiresApproval,
       // An archived conversation is read-only for this client; the backend also refuses
       // with CONVERSATION_ARCHIVED. So is a direct teacher<->parent conversation: PD-7
@@ -360,6 +361,16 @@ abstract final class WireMappers {
       canPay: raw['canPay'] == true,
       children: children,
     );
+  }
+
+  /// PD-33: `cover` as the server sends it, or null when absent or malformed.
+  static ConversationCover? _cover(Object? raw) {
+    if (raw is! Map) return null;
+    final supervisor = _nonEmpty(raw['supervisorName']);
+    final cover = _nonEmpty(raw['coverName']);
+    final until = parseTime(raw['until']);
+    if (supervisor == null || cover == null || until == null) return null;
+    return ConversationCover(supervisorName: supervisor, coverName: cover, until: until);
   }
 
   /// The one other member's photo in a 1:1; null when there is not exactly one.

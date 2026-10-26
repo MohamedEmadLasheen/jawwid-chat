@@ -1007,6 +1007,32 @@ class L10nEn extends L10n {
       'A child of this group moved to another supervisor';
 
   @override
+  String systemCoverStarted(String cover, String supervisor, String date) {
+    return '$cover is covering for $supervisor until $date';
+  }
+
+  @override
+  String systemCoverExtended(String cover, String supervisor, String date) {
+    return '$cover\'s cover for $supervisor is extended until $date';
+  }
+
+  @override
+  String systemCoverEnded(String supervisor) {
+    return '$supervisor is back; the cover has ended';
+  }
+
+  @override
+  String get systemCoverStartedNoName => 'A backup supervisor is covering';
+
+  @override
+  String get systemCoverEndedNoName => 'The cover has ended';
+
+  @override
+  String conversationCoverLine(String cover, String date) {
+    return '$cover is covering until $date';
+  }
+
+  @override
   String systemSeatJoined(String who) {
     return '$who joined to support';
   }
@@ -3403,10 +3429,19 @@ class L10nEn extends L10n {
   String get materialsTabPractice => 'Practice this week';
 
   @override
-  String get materialsTabProgress => 'Memorization map';
+  String get materialsTabOpened => 'Opened this week';
 
   @override
-  String get materialsSubjectAll => 'All';
+  String get materialsOpenedEmpty => 'Nothing opened yet this week';
+
+  @override
+  String get materialsOpenedWeekNote =>
+      'The week runs Saturday to Friday, academy time.';
+
+  @override
+  String materialsOpenedLast(String when) {
+    return 'Last opened $when';
+  }
 
   @override
   String get materialsSubjectQuran => 'Quran';
@@ -3465,19 +3500,6 @@ class L10nEn extends L10n {
   String get materialsUnavailable => 'Materials could not be loaded.';
 
   @override
-  String get materialsPracticeEmpty =>
-      'Nothing to practise yet. It appears here when the teacher adds it to a lesson report.';
-
-  @override
-  String get materialsPracticeLatest =>
-      'Nothing new this week. The latest practice:';
-
-  @override
-  String materialsPracticeFrom(String day) {
-    return 'From the lesson of $day';
-  }
-
-  @override
   String materialsAyahRange(String surah, String from, String to) {
     return 'Surah $surah, ayahs $from–$to';
   }
@@ -3488,66 +3510,10 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get materialsListen => 'Listen';
-
-  @override
   String get materialsItemGone => 'This item is no longer in the library.';
 
   @override
-  String get materialsNextTasks => 'For next lesson';
-
-  @override
-  String get materialsHomework => 'Homework';
-
-  @override
-  String get materialsStatusNotStarted => 'Not started';
-
-  @override
-  String get materialsStatusInProgress => 'In progress';
-
-  @override
-  String get materialsStatusMemorized => 'Memorized';
-
-  @override
-  String get materialsStatusNeedsRevision => 'Needs revision';
-
-  @override
-  String materialsJuz(String n) {
-    return 'Juz’ $n';
-  }
-
-  @override
-  String get materialsHistory => 'History';
-
-  @override
-  String get materialsHistoryEmpty => 'Nothing recorded for this surah yet.';
-
-  @override
-  String get materialsSourceReport => 'Lesson report';
-
-  @override
-  String get materialsSourceReportEdit => 'Edited report';
-
-  @override
-  String get materialsSourceCorrection => 'Correction';
-
-  @override
-  String get materialsByTeacher => 'Teacher';
-
-  @override
-  String get materialsByAcademy => 'The academy';
-
-  @override
-  String get materialsCorrect => 'Correct';
-
-  @override
-  String get materialsCorrectReason => 'Reason (required)';
-
-  @override
   String get materialsOpenExternally => 'Open in browser';
-
-  @override
-  String get materialsOpenedInTab => 'The activity opened in a new tab.';
 
   @override
   String get materialsCannotOpen => 'This could not be opened on this device.';
@@ -3567,12 +3533,6 @@ class L10nEn extends L10n {
   @override
   String get reportPracticeKeep =>
       'Practice stays as it was unless you change it.';
-
-  @override
-  String get reportMemorizationLabel => 'Memorization map';
-
-  @override
-  String get reportMemorizationAdd => 'Mark a surah';
 
   @override
   String get reportSurahLabel => 'Surah';
@@ -3596,9 +3556,6 @@ class L10nEn extends L10n {
 
   @override
   String get reportPickerEmpty => 'No published items match.';
-
-  @override
-  String get materialsCorrectReasonHint => 'Parents can see this reason.';
 
   @override
   String get ticketChangeLessonTime => 'Change lesson time';

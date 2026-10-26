@@ -2573,7 +2573,7 @@ the app has always sent and which only a browser checks.
 
 ---
 
-### PD-29 · Materials: the open library, practice this week, the memorization map
+### PD-29 · Materials: the open library, practice this week, the memorization map (amended 2026-10-26: opened this week, no map)
 
 **Closed 2026-10-24** by the product owner, with the access model chosen by the
 department head at the owner's request. Builds on PD-15 (the lesson report
@@ -2687,9 +2687,67 @@ needs one environment variable; not done. (4) Age bands per lesson (none in
 the content). (5) A completion event from the lessons site (postMessage) to
 feed the map automatically -- a possible v2.
 
-**Deprecated behaviour.** None.
+**Deprecated behaviour.** None at closing; the amendment below retires the
+memorization map and Practice this week.
 
 **Closed.** 2026-10-24.
+
+**Amendment 2026-10-26** (the department head for the owner; no new PD number,
+migration `20261026200000_chat_pd029_material_opens`).
+
+```
+no subject "All"    the child's Library shows one subject at a time and opens
+                    on Quran (the first subject); the age band's "All ages"
+                    stays. Admin Web's Library subject chips are the same
+                    concept and lose "All" too (opening on Quran); its status
+                    and age filters keep theirs
+map retired         the memorization map leaves every screen: the child page's
+                    tab (app and PD-28 teacher web), Admin Web's Student Profile
+                    panel and its corrections, the teacher report's Memorization
+                    section. GET /learners/:id/materials/progress,
+                    GET .../progress/:surah and POST .../progress/:surah/correct
+                    stay routed and answer 410 Gone (COMM.MATERIAL_RETIRED) to
+                    everyone. The data is KEPT: chat.memorization_mark stays,
+                    append-only, nothing deleted or dropped; a report from an
+                    older app build that still carries `memorization` is
+                    accepted and recorded as before, just never shown.
+                    LESSON_ACTS.correct_memorization is no longer reachable
+opened this week    replaces Practice this week on the child page: what was
+                    opened FOR this child in the current academy week -- each
+                    item once, with its last opening, most recent first; an
+                    item since retired is listed, not playable. Recorded by
+                    POST /materials/items/:id/open with a body `learnerId`
+                    (authorized like a library read, LESSON_ACTS.read_materials,
+                    and the item must be the child's organization's) in
+                    chat.material_open (learner, item, opened_by + kind,
+                    opened_at = now()), APPEND-ONLY by trigger, no request-role
+                    grants. Read with GET /learners/:id/materials/opened, which
+                    the same readers see: the family, staff with standing, a
+                    teacher for their own students. An open without learnerId
+                    (an admin preview) records nothing
+the week            Saturday 00:00 to Friday 24:00 in the academy's time zone
+                    (config schedule.timezone, Africa/Cairo by default -- the
+                    Egypt academy week), DST-correct; the response carries
+                    weekStartsAt and timeZone
+practice kept       the teacher still attaches Practice to a lesson report, and
+                    the report's card in the chat still shows it; only the
+                    parent tab was replaced
+one order           everywhere a list of materials appears (the child's
+                    Library, Admin Web's Library, the teacher's report picker),
+                    the server orders it: Quran by surah -- Al-Fatihah (1)
+                    first, then An-Nas (114), Al-Falaq (113), Al-Ikhlas (112) ...
+                    down to An-Naba' (78), i.e. Fatihah then surah descending;
+                    every other material in the order it was provided.
+                    chat.material_item.sort_order holds that order: filled from
+                    the manifest's row number on import (or a `sort_order`
+                    column), kept by a re-import through `ref`, editable on the
+                    item form; the migration backfills the 83 seed rows from
+                    docs/product/pd029-seed's row order. Ties and unnumbered
+                    items fall back to the Arabic title, then creation time
+```
+
+PD-35's planned "not progressing" flag, which was to read this map, is dropped
+with it (the department head tells PD-35).
 
 ---
 
@@ -3016,14 +3074,69 @@ has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
 
 ---
 
-### Decisions still open after PD-1 to PD-32
+### PD-33 · Hand over to backup: a temporary cover with automatic return
 
-None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
-The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
-phase starts and do not reopen either decision. Any new product question is
-recorded here with a new `PD-n` and the same six fields: decision, canonical
-rule, implementation phase, consequences, deprecated behaviour, and the date it
-was closed.
+**Closed 2026-10-26** by the product owner (request) and the department head
+(decisions). Builds on PD-1/PD-3 (coverage is temporary and explicit) and PD-8
+(activated backup links). PD-24 remains the PERMANENT supervisor change.
+
+**Final decision.**
+
+```
+one action     "Hand over to backup": Admin Web Organization team table (manager,
+               super admin) and "I'm away" on the supervisor's chat home
+fields         backup (pre-filled: the linked backup), from (now), until
+               (required, <= cover.max_days = 30), note; one confirm summary
+               "N families, M groups, K open items move to X until <date>"
+backup choice  "I'm away" (the supervisor): only a backup a manager has already
+               linked to them (PD-8 canConfigureBackup). A manager or the super
+               admin: any eligible backup supervisor of the same department,
+               the link created as part of the start
+the model      a cover IS an activation of the pair's chat.supervisor_backup link
+               for [from, until) -- staff_principals / staff_acts_for unchanged,
+               so the backup reaches every covered conversation and queue during
+               the window and nothing after it, to the second, with no job
+seats          effective, not membership rows (BR-1 caps a 1:1 at two members):
+               access through the link; the away supervisor's pushes and staff
+               realtime go to the backup (chat.live_covers); the conversation
+               DTO carries `cover` for every viewer
+away rule      the supervisor keeps every chat (read and reply), gets no pushes,
+               and sees an "Away" banner with End cover now
+items          created during a cover follow the live learner_supervision: they
+               are the supervisor's; acts the backup authored stay attributed to
+               the backup; Instalments "mine" includes covered rows in the window
+visible        one silent system line per affected group / parent 1:1 (started,
+               extended, ended; no push); one summary push to the backup, one
+               "welcome back" push to the supervisor; Covering / Away badges
+return         automatic at `until` (worker cover sweep posts the lines); early
+               "End cover now" by the supervisor, the backup, the manager or the
+               super admin; Extend = the same window again, one tap
+who            start/extend: the supervisor, their department manager, the super
+               admin; end: also the covering backup. Audited (cover.*)
+safety         one open cover per supervisor; the backup must be active, not away
+               and cover fewer than cover.max_concurrent (= 2), re-checked on
+               Extend; the change is one short transaction under the link's row
+               lock (a manual activation cannot overwrite a cover's window, nor
+               leave access open before a future cover begins); closing a cover
+               clamps its link to that moment; deactivating / ending the link
+               ends its cover
+lines          posted after the change commits, 25 conversations per
+               transaction, each recorded once (retries never duplicate); the
+               worker finishes any left over; they do not reorder the chat list
+               or count as unread
+```
+
+**Implementation phase.** Migration `20261026130000_chat_pd033_supervisor_cover`
+(chat.supervisor_cover, guard trigger, chat.cover_of, chat.live_covers, config
+keys, two push templates); `SupervisorCoverService` + routes `GET
+/org/covers/preview`, `GET|POST /org/covers`, `POST /org/covers/:id/extend|end`,
+`GET /me/cover`; worker `coverSweep`; Admin Web `HandOverDialog`, `CoverBanner`;
+app cover line and system lines.
+
+**Follow-up.** PD-33b: ring the backup for calls in covered conversations (W7/W8
+frozen; a call still rings the members).
+
+**Closed.** 2026-10-26.
 
 ---
 
@@ -3073,6 +3186,17 @@ PD-8 decision unchanged, else `seated`); `ConversationSeatService` is the only
 writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
 `POST conversations/:id/leave`, `GET me/seats`. Proven by
 `apps/api/test/integration/conversation-seat-pd035.spec.ts`.
+
+---
+
+### Decisions still open after PD-1 to PD-35
+
+None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
+The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
+phase starts and do not reopen either decision. Any new product question is
+recorded here with a new `PD-n` and the same six fields: decision, canonical
+rule, implementation phase, consequences, deprecated behaviour, and the date it
+was closed.
 
 ---
 

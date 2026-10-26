@@ -4,16 +4,17 @@ import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
-import type { ImportReport, MaterialItem, ProgressMap } from './api'
+import type { ImportReport, MaterialItem } from './api'
 
 /**
- * PD-29: the Materials page (Library, Import, Recitations) and the
- * memorization map on the Student Profile, through the real routes and the
- * real API client, with `fetch` answered at the network boundary. These prove
- * each control sends its route and body, that the preview is sandboxed
- * without same-origin, that an import is checked before anything is written,
- * that a file goes to storage without the session bearer, and that a map
- * correction carries its reason.
+ * PD-29: the Materials page (Library, Import, Recitations), through the real
+ * routes and the real API client, with `fetch` answered at the network
+ * boundary. These prove each control sends its route and body, that the
+ * library shows one subject at a time (Quran first, no "All"), that the
+ * preview is sandboxed without same-origin, that an import is checked before
+ * anything is written, that a file goes to storage without the session
+ * bearer, and that the Student Profile no longer has a memorization map
+ * (retired by the 2026-10-26 amendment).
  */
 
 vi.setConfig({ testTimeout: 20_000 })
@@ -40,9 +41,20 @@ function item(over: Partial<MaterialItem> = {}): MaterialItem {
   return {
     id: 'm-1', externalRef: 'naba-game', titleAr: 'لعبة سورة النبأ', titleEn: 'An-Naba game', subject: 'quran', strand: 'memorization',
     kind: 'activity_package', source: 'package', sitePath: null, url: null, mimeType: 'application/zip', byteSize: 1200, packageEntry: 'index.html',
-    ageGroups: ['4-6', '7-9'], surah: 78, description: null, status: 'published', createdAt: '2026-10-24T10:00:00Z', updatedAt: '2026-10-24T10:00:00Z',
+    ageGroups: ['4-6', '7-9'], surah: 78, description: null, status: 'published', sortOrder: 1, createdAt: '2026-10-24T10:00:00Z', updatedAt: '2026-10-24T10:00:00Z',
     ...over,
   }
+}
+
+const LIBRARY: MaterialItem[] = [
+  item(),
+  item({ id: 'm-2', externalRef: null, titleAr: 'أنشودة الحروف', titleEn: 'Letters song', subject: 'arabic', strand: null, kind: 'video', source: 'url', url: 'https://videos.example.test/1', status: 'draft', surah: null, ageGroups: [], sortOrder: null }),
+]
+
+/** The library opens on Quran; the Arabic item is one chip away. */
+async function showArabic() {
+  await userEvent.click(await screen.findByRole('button', { name: 'Arabic language' }))
+  await screen.findByText('Letters song')
 }
 
 const SURAHS = [
@@ -69,7 +81,10 @@ beforeEach(() => {
   on('GET', /\/instalments\/access$/, () => json({ billingReader: false }))
   on('GET', /\/materials\/admin\/access$/, () => json({ canManage: true }))
   on('GET', /\/materials\/quran\/surahs$/, () => json({ surahs: SURAHS }))
-  on('GET', /\/materials\/admin\/items(\?.*)?$/, () => json({ items: [item(), item({ id: 'm-2', externalRef: null, titleAr: 'أنشودة الحروف', titleEn: 'Letters song', subject: 'arabic', strand: null, kind: 'video', source: 'url', url: 'https://videos.example.test/1', status: 'draft', surah: null, ageGroups: [] })] }))
+  on('GET', /\/materials\/admin\/items(\?.*)?$/, (url) => {
+    const subject = new URL(url, 'https://api.example.test').searchParams.get('subject')
+    return json({ items: LIBRARY.filter((i) => !subject || i.subject === subject) })
+  })
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -81,11 +96,19 @@ describe('Materials > Library', () => {
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/materials' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Materials' })).toBeInTheDocument()
     const list = await screen.findByRole('list', { name: 'Library' })
-    const [game, song] = within(list).getAllByRole('listitem')
+    // One subject at a time, Quran first: there is no subject "All".
+    expect(screen.getByRole('button', { name: 'Quran' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument()
+    expect(String(calls('GET', /\/materials\/admin\/items/)[0]?.[0])).toContain('subject=quran')
+    const [game] = within(list).getAllByRole('listitem')
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
     expect(within(game!).getByText('An-Naba game')).toBeInTheDocument()
     expect(within(game!).getByText('Published')).toBeInTheDocument()
     expect(within(game!).getByText('Activity (HTML5)')).toBeInTheDocument()
     expect(within(game!).getByText('4–6 years، 7–9 years')).toBeInTheDocument()
+    expect(within(game!).getByText('Order 1')).toBeInTheDocument()
+    await showArabic()
+    const [song] = within(screen.getByRole('list', { name: 'Library' })).getAllByRole('listitem')
     expect(within(song!).getByText('Draft')).toBeInTheDocument()
     expect(within(song!).getByText('All ages')).toBeInTheDocument()
     expect(within(song!).getByRole('button', { name: 'Publish' })).toBeInTheDocument()
@@ -113,8 +136,9 @@ describe('Materials > Library', () => {
   it('publishes a draft with one request', async () => {
     on('POST', /\/materials\/admin\/items\/m-2$/, () => json(item({ id: 'm-2', status: 'published' })))
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/materials' })
+    await showArabic()
     const list = await screen.findByRole('list', { name: 'Library' })
-    await userEvent.click(within(within(list).getAllByRole('listitem')[1]!).getByRole('button', { name: 'Publish' }))
+    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Publish' }))
     await waitFor(() => expect(bodyOf(calls('POST', /\/materials\/admin\/items\/m-2$/)[0])).toEqual({ status: 'published' }))
   })
 
@@ -141,8 +165,9 @@ describe('Materials > Library', () => {
   async function preview(presentation: string, url: string) {
     on('POST', /\/materials\/items\/m-2\/open$/, () => json({ itemId: 'm-2', kind: 'activity_link', mode: 'link', presentation, url }, 201))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/materials' })
+    await showArabic()
     const list = await screen.findByRole('list', { name: 'Library' })
-    await userEvent.click(within(within(list).getAllByRole('listitem')[1]!).getByRole('button', { name: 'Preview' }))
+    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Preview' }))
     return screen.findByRole('dialog', { name: 'Letters song' })
   }
 
@@ -179,6 +204,23 @@ describe('Materials > Library', () => {
     const body = bodyOf(calls('POST', /\/materials\/admin\/items$/)[0])
     expect(body).toMatchObject({ path: '/lessons/quran/surah-78', kind: 'activity_link' })
     expect(body).not.toHaveProperty('url')
+    // Left empty, the order is the server's (a new item goes last).
+    expect(body).not.toHaveProperty('sortOrder')
+  })
+
+  it('edits an item\'s place in the order', async () => {
+    on('POST', /\/materials\/admin\/items\/m-1$/, (_u, init) => json({ ...item(), ...JSON.parse(String(init.body)) }))
+    renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/materials' })
+    const list = await screen.findByRole('list', { name: 'Library' })
+    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Edit' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit item' })
+    const order = within(dialog).getByLabelText('Order')
+    expect(order).toHaveValue(1)
+    await userEvent.clear(order)
+    await userEvent.type(order, '9')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/materials\/admin\/items\/m-1$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/materials\/admin\/items\/m-1$/)[0])).toMatchObject({ sortOrder: 9 })
   })
 })
 
@@ -269,54 +311,12 @@ describe('Materials > Recitations', () => {
   })
 })
 
-describe('Student Profile > memorization map', () => {
-  const map: ProgressMap = {
-    child: { id: 'l-1', name: 'Child Alpha' },
-    counts: { not_started: 112, in_progress: 1, memorized: 1, needs_revision: 0 },
-    juz: [
-      { juz: 1, surahs: [{ number: 1, nameAr: 'الفاتحة', nameEn: 'Al-Fatihah', ayahCount: 7, juzEnd: 1, status: 'memorized', updatedAt: '2026-10-20T10:00:00Z', source: 'report', hasRecitation: true }] },
-      { juz: 30, surahs: [{ number: 78, nameAr: 'النبأ', nameEn: 'An-Naba', ayahCount: 40, juzEnd: 30, status: 'in_progress', updatedAt: '2026-10-22T10:00:00Z', source: 'report', hasRecitation: true }] },
-    ],
-    canCorrect: true,
-    viewer: 'staff',
-  }
-
-  it('shows the map by juz\', the history of a surah, and a correction that names its reason', async () => {
+describe('Student Profile', () => {
+  it('has no memorization map any more, and asks for none', async () => {
     on('GET', /\/learners\/l-1\/profile$/, () => json({ id: 'l-1', name: 'Child Alpha', avatarUrl: null, age: 8, course: null, teacher: null, schedule: [], viewer: 'staff' }))
-    on('GET', /\/learners\/l-1\/materials\/progress$/, () => json(map))
-    on('GET', /\/learners\/l-1\/materials\/progress\/78$/, () => json({
-      surah: { number: 78, nameAr: 'النبأ', nameEn: 'An-Naba' },
-      marks: [{ id: 'k-1', status: 'in_progress', source: 'report', lessonId: 'les-1', reason: null, by: { kind: 'teacher', name: 'Teacher One' }, at: '2026-10-22T10:00:00Z' }],
-    }))
-    on('POST', /\/learners\/l-1\/materials\/progress\/78\/correct$/, () => json({
-      surah: { number: 78, nameAr: 'النبأ', nameEn: 'An-Naba' },
-      marks: [
-        { id: 'k-2', status: 'memorized', source: 'correction', lessonId: null, reason: 'recited in full', by: { kind: 'staff', name: 'Owner' }, at: '2026-10-24T10:00:00Z' },
-        { id: 'k-1', status: 'in_progress', source: 'report', lessonId: 'les-1', reason: null, by: { kind: 'teacher', name: 'Teacher One' }, at: '2026-10-22T10:00:00Z' },
-      ],
-    }, 201))
-    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/students/l-1' })
-    const panel = await screen.findByRole('region', { name: 'Memorization map' })
-    expect(within(panel).getByText('Memorized: 1')).toBeInTheDocument()
-    expect(within(panel).getByText('Juz’ 30')).toBeInTheDocument()
-    await userEvent.click(within(panel).getByRole('button', { name: '78. An-Naba — In progress' }))
-    const dialog = await screen.findByRole('dialog', { name: '78. An-Naba' })
-    expect(await within(dialog).findByText('Teacher One')).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Correct' })).toBeDisabled()
-    expect(within(dialog).getByText('Required. Parents can see this reason.')).toBeInTheDocument()
-    await userEvent.selectOptions(within(dialog).getByLabelText('New status'), 'memorized')
-    await userEvent.type(within(dialog).getByLabelText('Reason'), 'recited in full')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Correct' }))
-    await waitFor(() => expect(bodyOf(calls('POST', /\/progress\/78\/correct$/)[0])).toEqual({ status: 'memorized', reason: 'recited in full' }))
-    expect(await within(dialog).findByText('recited in full')).toBeInTheDocument()
-  })
-
-  it('hides itself when the server refuses the viewer', async () => {
-    on('GET', /\/learners\/l-1\/profile$/, () => json({ id: 'l-1', name: 'Child Alpha', avatarUrl: null, age: 8, course: null, teacher: null, schedule: [], viewer: 'staff' }))
-    on('GET', /\/learners\/l-1\/materials\/progress$/, () => json({ error: { code: 'COMM.LESSON_NOT_FOUND', message: 'learner not found' } }, 404))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/students/l-1' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Child Alpha' })).toBeInTheDocument()
-    await waitFor(() => expect(calls('GET', /\/materials\/progress$/)).toHaveLength(1))
     expect(screen.queryByRole('region', { name: 'Memorization map' })).not.toBeInTheDocument()
+    expect(calls('GET', /\/materials\/progress/)).toHaveLength(0)
   })
 })

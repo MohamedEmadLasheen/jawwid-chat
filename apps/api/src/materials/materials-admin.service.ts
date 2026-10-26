@@ -19,6 +19,7 @@ import {
   type ItemFields,
 } from './manifest';
 import { PackageRefused, validatePackage, type PackageEntry } from './package-validation';
+import { sortMaterials } from './ordering';
 import {
   bytesMatchMime,
   FILE_RULES,
@@ -118,8 +119,8 @@ export class MaterialsAdminService {
         { externalRef: { contains: q, mode: 'insensitive' } },
       ] }];
     }
-    const items = await this.prisma.materialItem.findMany({ where, orderBy: [{ updatedAt: 'desc' }], take: 2000 });
-    return { items: items.map(adminDto) };
+    const items = await this.prisma.materialItem.findMany({ where, take: 2000 });
+    return { items: sortMaterials(items).map(adminDto) };
   }
 
   async get(actorId: string, itemId: string) {
@@ -339,7 +340,7 @@ export class MaterialsAdminService {
             const row = await this.apply(tx, actor, r.current, r.fields, source, r.fields.status ?? r.current.status);
             itemIds.set(r.index, row.id);
           } else {
-            const row = await this.insert(tx, actor, r.fields, source as Source);
+            const row = await this.insert(tx, actor, r.fields, source as Source, r.rowNumber);
             itemIds.set(r.index, row.id);
           }
         }
@@ -561,12 +562,14 @@ export class MaterialsAdminService {
     });
   }
 
-  private async insert(tx: Tx, actor: Actor & { organizationId: string }, f: ItemFields, source: Source) {
+  /** `defaultOrder`: a new item's place when the row names none (an import's row number). */
+  private async insert(tx: Tx, actor: Actor & { organizationId: string }, f: ItemFields, source: Source, defaultOrder: number | null = null) {
     await this.writeEntries(tx, source);
     return tx.materialItem.create({
       data: {
         organizationId: actor.organizationId,
         ...itemData(f),
+        sortOrder: f.sortOrder ?? defaultOrder,
         ...sourceData(source),
         status: f.status ?? 'draft',
         createdBy: actor.actorId,
@@ -586,6 +589,8 @@ export class MaterialsAdminService {
       where: { id: current.id },
       data: {
         ...itemData(f),
+        // A re-import keeps the item's place unless the row names a new one.
+        sortOrder: f.sortOrder ?? current.sortOrder,
         ...(source ? sourceData(source) : { kind }),
         status,
         updatedBy: actor.actorId,
@@ -739,6 +744,7 @@ function rowOf(i: MaterialItem): Record<string, unknown> {
   return {
     ref: i.externalRef, title_ar: i.titleAr, title_en: i.titleEn, subject: i.subject, strand: i.strand, kind: i.kind,
     age_groups: i.ageGroups, surah: i.surah, description: i.description, url: i.url, path: i.sitePath, status: i.status,
+    sort_order: i.sortOrder,
   };
 }
 
@@ -747,6 +753,7 @@ function auditView(i: MaterialItem) {
   return {
     externalRef: i.externalRef, subject: i.subject, strand: i.strand, titleAr: i.titleAr, titleEn: i.titleEn, kind: i.kind,
     source: i.source, url: i.url, sitePath: i.sitePath, ageGroups: i.ageGroups, surah: i.surah, status: i.status,
+    sortOrder: i.sortOrder,
   };
 }
 
@@ -770,6 +777,7 @@ export function adminDto(i: MaterialItem) {
     surah: i.surah,
     description: i.description,
     status: i.status,
+    sortOrder: i.sortOrder,
     createdAt: i.createdAt.toISOString(),
     updatedAt: i.updatedAt.toISOString(),
   };
