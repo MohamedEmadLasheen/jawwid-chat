@@ -5,6 +5,7 @@ import { Route, Routes, useLocation } from 'react-router-dom'
 import { renderWithProviders, makeStaff } from '@/test/utils'
 import { IDLE_MEDIA, type CallMedia } from '@/features/calls/callMedia'
 import { toDateInput } from './model'
+import { academyWallClockToIso } from '@/core/time/academyTime'
 
 /**
  * The Calls page (PD-13) against a stubbed API. Every actor is synthetic; this
@@ -426,11 +427,11 @@ describe('Schedule call', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }))
 
     await waitFor(() => expect(posts('/scheduled-calls')).toHaveLength(1))
-    const [y, m, d] = date.split('-').map(Number) as [number, number, number]
+    // PD-22: the typed 15:30 is Cairo time, whatever the browser's zone.
     expect(posts('/scheduled-calls')[0]!.body).toEqual({
       conversationId: 'c-group',
       kind: 'scheduled',
-      startsAt: new Date(y, m - 1, d, 15, 30).toISOString(),
+      startsAt: academyWallClockToIso(date, '15:30'),
       title: 'Term review',
     })
     expect((await screen.findByText('Scheduled — posted in “Group Alpha”')).closest('[role="status"]')).not.toBeNull()

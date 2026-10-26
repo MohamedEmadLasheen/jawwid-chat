@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
+import { isoToAcademyWallClock } from '@/core/time/academyTime'
 import type { TeacherFile, TeacherSummary } from './api'
 
 /**
@@ -337,7 +338,12 @@ describe('schedule and monthly performance', () => {
     expect(within(section).getByRole('link', { name: 'Edit in Schedules' })).toHaveAttribute('href', '/teachers/schedules?teacher=t-1')
     const query = new URL(String(calls('GET', /\/lessons\?/)[0]![0]), 'http://admin.test').searchParams
     expect(query.get('teacherId')).toBe('t-1')
-    expect(new Date(query.get('to')!).getTime() - new Date(query.get('from')!).getTime()).toBe(14 * 86_400_000)
+    // Fourteen whole ACADEMY days from Cairo's midnight (PD-22): both ends are
+    // 00:00 Cairo time, which is 14 x 24 h only when no clock change falls between.
+    const from = isoToAcademyWallClock(query.get('from')!)
+    const to = isoToAcademyWallClock(query.get('to')!)
+    expect([from.time, to.time]).toEqual(['00:00', '00:00'])
+    expect((Date.parse(to.date) - Date.parse(from.date)) / 86_400_000).toBe(14)
   })
 
   it("shows the month's KPIs, a rate the server could not compute as a dash, and follows the month picked", async () => {
