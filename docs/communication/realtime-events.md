@@ -86,7 +86,7 @@ further, and is sent `conversation.access_revoked`.
 | `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | Conversation room. Every termination: `end`, the ring-timeout sweep, and (since 2026-09-27) `decline`. |
 | `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | Actor room |
 | `notification.inbox_changed` | `{ recipientId, unread }` | **The recipient's own actor room only** (PD-34). The Notification Center gained, read or withdrew an entry; refetch `GET /me/notifications/counts`. Carries no text. |
-| `conversation.read` | `{ conversationId, actorId, lastReadSeq }` | **The reader's own actor room only**, never the thread (PD-34). Another device of the same person read the chat up to `lastReadSeq`: clear its badge. |
+| `conversation.read` | `{ conversationId, actorId, lastReadSeq }` | **The reader's own actor room only**, never the thread (PD-34). Another device of the same person read the chat up to `lastReadSeq`: clear its badge. Written to the outbox by `POST …/read` in the read's own transaction; the worker also withdraws that chat's waiting push and reads its Notification Center entry. |
 
 ## Guarantees
 

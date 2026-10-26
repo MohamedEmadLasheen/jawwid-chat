@@ -1,3 +1,4 @@
+import { academyWallClockToIso, isoToAcademyWallClock } from '@/core/time/academyTime'
 import type { ChatConversation } from '@/features/chat/chatApi'
 import type { ChatCopy } from '@/features/chat/copy'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
@@ -85,15 +86,16 @@ export function joinLinkFor(scheduledCallId: string, origin: string = window.loc
   return `${origin}/calls/join/${encodeURIComponent(scheduledCallId)}`
 }
 
-/** Local `<input type=date>` + `<input type=time>` values as an instant. */
-export function localDateTime(date: string, time: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null
-  const [y, mo, d] = date.split('-').map(Number) as [number, number, number]
-  const [h, mi] = time.split(':').map(Number) as [number, number]
-  const at = new Date(y, mo - 1, d, h, mi, 0, 0)
-  return Number.isNaN(at.getTime()) ? null : at
+/**
+ * `<input type=date>` + `<input type=time>` values as an instant. They are the
+ * ACADEMY's wall clock, never the browser's (PD-22: Admin Web shows Cairo time,
+ * labelled), so two staff in two countries schedule the same moment.
+ */
+export function academyDateTime(date: string, time: string): Date | null {
+  const iso = academyWallClockToIso(date, time)
+  return iso ? new Date(iso) : null
 }
 
-const pad = (n: number) => String(n).padStart(2, '0')
-export const toDateInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-export const toTimeInput = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+/** An instant as the date / time inputs show it: the academy's wall clock. */
+export const toDateInput = (d: Date) => isoToAcademyWallClock(d.toISOString()).date
+export const toTimeInput = (d: Date) => isoToAcademyWallClock(d.toISOString()).time

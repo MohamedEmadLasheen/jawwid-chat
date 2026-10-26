@@ -78,7 +78,7 @@ export function buildGraph(
   const pipeline = new NotificationPipeline(prisma, notifications, quietHours, config, identity, silentRealtime as never);
   const inbox = new NotificationInboxService(prisma, templates, config, pipeline);
   const messages = new MessageService(
-    prisma, authz, conversations, outbox, config, attachments, audit, identity, pipeline,
+    prisma, authz, conversations, outbox, config, attachments, audit, identity,
   );
   const approvals = new ApprovalService(
     prisma, authz, conversations, attachments, outbox, audit, identity,

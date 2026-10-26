@@ -222,7 +222,15 @@ export class OutboxWorker {
 
       case CommEvent.CONVERSATION_READ: {
         const actorId = payload.actorId as string | undefined;
-        if (actorId) await this.realtime.toUsers([actorId], type, payload as never);
+        if (!actorId || !conversationId) return;
+        // With the pipeline: withdraw the waiting push, read the entry, and tell
+        // the reader's other devices (it emits conversation.read itself).
+        if (this.pipeline) {
+          const seq = typeof payload.lastReadSeq === 'string' ? BigInt(payload.lastReadSeq) : BigInt(0);
+          await this.pipeline.conversationRead(conversationId, actorId, seq);
+          return;
+        }
+        await this.realtime.toUsers([actorId], type, payload as never);
         return;
       }
 
