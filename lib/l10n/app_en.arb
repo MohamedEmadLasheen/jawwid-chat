@@ -2201,15 +2201,28 @@
   },
   "materialsTabPractice": "Practice this week",
   "@materialsTabPractice": {
-    "description": "PD-29 tab."
+    "description": "PD-29 the practice line on a lesson report's card."
   },
-  "materialsTabProgress": "Memorization map",
-  "@materialsTabProgress": {
-    "description": "PD-29 tab."
+  "materialsTabOpened": "Opened this week",
+  "@materialsTabOpened": {
+    "description": "PD-29 amendment tab: what was opened for the child this academy week."
   },
-  "materialsSubjectAll": "All",
-  "@materialsSubjectAll": {
-    "description": "PD-29 subject filter."
+  "materialsOpenedEmpty": "Nothing opened yet this week",
+  "@materialsOpenedEmpty": {
+    "description": "PD-29 amendment empty Opened this week."
+  },
+  "materialsOpenedWeekNote": "The week runs Saturday to Friday, academy time.",
+  "@materialsOpenedWeekNote": {
+    "description": "PD-29 amendment which week Opened this week covers."
+  },
+  "materialsOpenedLast": "Last opened {when}",
+  "@materialsOpenedLast": {
+    "description": "PD-29 amendment an item's last opening this week.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
   },
   "materialsSubjectQuran": "Quran",
   "@materialsSubjectQuran": {
@@ -2289,23 +2302,6 @@
   "@materialsUnavailable": {
     "description": "PD-29 load failure."
   },
-  "materialsPracticeEmpty": "Nothing to practise yet. It appears here when the teacher adds it to a lesson report.",
-  "@materialsPracticeEmpty": {
-    "description": "PD-29 empty practice."
-  },
-  "materialsPracticeLatest": "Nothing new this week. The latest practice:",
-  "@materialsPracticeLatest": {
-    "description": "PD-29 practice older than a week."
-  },
-  "materialsPracticeFrom": "From the lesson of {day}",
-  "@materialsPracticeFrom": {
-    "description": "PD-29 practice card heading.",
-    "placeholders": {
-      "day": {
-        "type": "String"
-      }
-    }
-  },
   "materialsAyahRange": "Surah {surah}, ayahs {from}–{to}",
   "@materialsAyahRange": {
     "description": "PD-29 an ayah range to practise.",
@@ -2330,90 +2326,13 @@
       }
     }
   },
-  "materialsListen": "Listen",
-  "@materialsListen": {
-    "description": "PD-29 play the recitation."
-  },
   "materialsItemGone": "This item is no longer in the library.",
   "@materialsItemGone": {
     "description": "PD-29 a retired item in practice."
   },
-  "materialsNextTasks": "For next lesson",
-  "@materialsNextTasks": {
-    "description": "PD-29 next-lesson tasks."
-  },
-  "materialsHomework": "Homework",
-  "@materialsHomework": {
-    "description": "PD-29 homework."
-  },
-  "materialsStatusNotStarted": "Not started",
-  "@materialsStatusNotStarted": {
-    "description": "PD-29 surah status."
-  },
-  "materialsStatusInProgress": "In progress",
-  "@materialsStatusInProgress": {
-    "description": "PD-29 surah status."
-  },
-  "materialsStatusMemorized": "Memorized",
-  "@materialsStatusMemorized": {
-    "description": "PD-29 surah status."
-  },
-  "materialsStatusNeedsRevision": "Needs revision",
-  "@materialsStatusNeedsRevision": {
-    "description": "PD-29 surah status."
-  },
-  "materialsJuz": "Juz’ {n}",
-  "@materialsJuz": {
-    "description": "PD-29 a juz' heading.",
-    "placeholders": {
-      "n": {
-        "type": "String"
-      }
-    }
-  },
-  "materialsHistory": "History",
-  "@materialsHistory": {
-    "description": "PD-29 a surah's history."
-  },
-  "materialsHistoryEmpty": "Nothing recorded for this surah yet.",
-  "@materialsHistoryEmpty": {
-    "description": "PD-29 empty history."
-  },
-  "materialsSourceReport": "Lesson report",
-  "@materialsSourceReport": {
-    "description": "PD-29 mark source."
-  },
-  "materialsSourceReportEdit": "Edited report",
-  "@materialsSourceReportEdit": {
-    "description": "PD-29 mark source."
-  },
-  "materialsSourceCorrection": "Correction",
-  "@materialsSourceCorrection": {
-    "description": "PD-29 mark source."
-  },
-  "materialsByTeacher": "Teacher",
-  "@materialsByTeacher": {
-    "description": "PD-29 who marked."
-  },
-  "materialsByAcademy": "The academy",
-  "@materialsByAcademy": {
-    "description": "PD-29 who marked (staff, unnamed to families)."
-  },
-  "materialsCorrect": "Correct",
-  "@materialsCorrect": {
-    "description": "PD-29 correct a surah's status."
-  },
-  "materialsCorrectReason": "Reason (required)",
-  "@materialsCorrectReason": {
-    "description": "PD-29 correction reason."
-  },
   "materialsOpenExternally": "Open in browser",
   "@materialsOpenExternally": {
     "description": "PD-29 open an activity outside the app."
-  },
-  "materialsOpenedInTab": "The activity opened in a new tab.",
-  "@materialsOpenedInTab": {
-    "description": "PD-29 web build."
   },
   "materialsCannotOpen": "This could not be opened on this device.",
   "@materialsCannotOpen": {
@@ -2438,14 +2357,6 @@
   "reportPracticeKeep": "Practice stays as it was unless you change it.",
   "@reportPracticeKeep": {
     "description": "PD-29 report edit hint."
-  },
-  "reportMemorizationLabel": "Memorization map",
-  "@reportMemorizationLabel": {
-    "description": "PD-29 report section."
-  },
-  "reportMemorizationAdd": "Mark a surah",
-  "@reportMemorizationAdd": {
-    "description": "PD-29 report action."
   },
   "reportSurahLabel": "Surah",
   "@reportSurahLabel": {
@@ -2479,10 +2390,6 @@
   "reportPickerEmpty": "No published items match.",
   "@reportPickerEmpty": {
     "description": "PD-29 item picker."
-  },
-  "materialsCorrectReasonHint": "Parents can see this reason.",
-  "@materialsCorrectReasonHint": {
-    "description": "PD-29: under the correction reason."
   },
   "ticketChangeLessonTime": "Change lesson time",
   "@ticketChangeLessonTime": {

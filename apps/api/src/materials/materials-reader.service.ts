@@ -16,8 +16,11 @@ import { LessonOutcome } from '../communication/contracts/vocab';
 import { SURAHS, surahOf } from './quran-surahs';
 import { PlayTokenSigner, PLAY_TOKEN_TTL_SECONDS } from './play-token';
 import { MaterialsAdminService, renderTemplate } from './materials-admin.service';
+import { sortMaterials } from './ordering';
+import { academyWeekStart } from './week';
+import { ACADEMY_ZONE, canonicalZone } from '../platform/time-zone';
 import { linkPresentation, readMaterialsConfig, type MaterialsConfig } from './materials-config';
-import { AGE_GROUPS, MARK_STATUSES, SUBJECTS, ageGroupOf, type AgeGroup, type MarkStatus } from './vocab';
+import { AGE_GROUPS, MARK_STATUSES, SUBJECTS, ageGroupOf, type AgeGroup } from './vocab';
 
 /** How long a signed storage URL for a file (audio, video, PDF, image) lives. */
 export const FILE_URL_TTL_SECONDS = 60 * 60;
@@ -32,15 +35,16 @@ function invalid(reason: string) {
 }
 
 /**
- * PD-29: what a child's Materials page reads -- the open library (by subject,
- * defaulting to the child's age band), practice this week (from the child's
- * lesson reports), and the memorization map -- and the one call that hands a
- * viewer something to play.
+ * PD-29 (amended 2026-10-26): what a child's Materials page reads -- the open
+ * library (one subject at a time, defaulting to the child's age band) and what
+ * was opened for the child this academy week -- and the one call that hands a
+ * viewer something to play (recording it for a child when one is named). The
+ * memorization map is retired: its routes answer 410, its marks are kept.
  *
  * Who: a child's page is LESSON_ACTS.read_materials -- the family, the child's
  * own teacher, and the staff whose PD-8 scope reaches the child (the same
  * lessonStanding every lesson route uses); anyone else gets the same 404 as an
- * unknown child. A map correction is LESSON_ACTS.correct_memorization.
+ * unknown child.
  *
  * The library itself is open: every active person of the organization may
  * open a published item. `open` is the access decision -- the item's object
@@ -95,8 +99,8 @@ export class MaterialsReaderService {
       const q = query.q.trim();
       where.AND = [{ OR: [{ titleAr: { contains: q, mode: 'insensitive' } }, { titleEn: { contains: q, mode: 'insensitive' } }] }];
     }
-    const items = await this.prisma.materialItem.findMany({ where, orderBy: [{ subject: 'asc' }, { titleAr: 'asc' }], take: 300 });
-    return { items: items.map(itemDto) };
+    const items = await this.prisma.materialItem.findMany({ where, take: 300 });
+    return { items: sortMaterials(items).map(itemDto) };
   }
 
   // ------------------------------------------------------------------
@@ -115,7 +119,7 @@ export class MaterialsReaderService {
     const where: Prisma.MaterialItemWhereInput = { organizationId: learner.organizationId, status: 'published' };
     if (subject) where.subject = subject;
     if (group) where.OR = [{ ageGroups: { has: group } }, { ageGroups: { isEmpty: true } }];
-    const items = await this.prisma.materialItem.findMany({ where, orderBy: [{ subject: 'asc' }, { surah: 'asc' }, { titleAr: 'asc' }], take: 1000 });
+    const items = sortMaterials(await this.prisma.materialItem.findMany({ where, take: 1000 }));
     return {
       child: { id: learner.id, name: learner.name, age, ageGroup: childGroup },
       ageGroup: group ?? 'all',
@@ -191,92 +195,36 @@ export class MaterialsReaderService {
     };
   }
 
-  /** The memorization map: 114 surahs grouped by the juz' each starts in, with each one's current status. */
-  async progress(actorId: string, learnerId: string) {
-    const { actor, learner, standing } = await this.child(actorId, learnerId, 'read_materials');
-    const rows = await this.prisma.$queryRaw<Array<{ surah: number; status: MarkStatus; source: string; at: Date }>>`
-      SELECT surah, status, source, at FROM chat.memorization_status WHERE learner_id = ${learner.id}::uuid`;
-    const bySurah = new Map(rows.map((r) => [Number(r.surah), r]));
-    const counts: Record<MarkStatus, number> = { not_started: 0, in_progress: 0, memorized: 0, needs_revision: 0 };
-    const juz = new Map<number, Array<Record<string, unknown>>>();
-    const recited = await this.recitedSurahs(learner.organizationId);
-    for (const s of SURAHS) {
-      const r = bySurah.get(s.number);
-      const status: MarkStatus = r?.status ?? 'not_started';
-      counts[status] += 1;
-      if (!juz.has(s.juz)) juz.set(s.juz, []);
-      juz.get(s.juz)!.push({
-        number: s.number, nameAr: s.nameAr, nameEn: s.nameEn, ayahCount: s.ayahCount, juzEnd: s.juzEnd,
-        status, updatedAt: r ? r.at.toISOString() : null, source: r?.source ?? null, hasRecitation: recited(s.number),
-      });
-    }
+  /**
+   * PD-29 amendment: the materials opened FOR this child during the academy's
+   * current week (Saturday to Friday, academy time zone): each item once, with
+   * its last opening and how many times, most recent first. Who: the same
+   * standing as the library (read_materials) -- the family, the child's own
+   * teacher, staff in PD-8 scope.
+   */
+  async opened(actorId: string, learnerId: string) {
+    const { learner } = await this.child(actorId, learnerId, 'read_materials');
+    const zone = await this.academyZone();
+    const since = academyWeekStart(new Date(), zone);
+    const rows = await this.prisma.$queryRaw<Array<{ item_id: string; last: Date; n: number }>>`
+      SELECT item_id::text, max(opened_at) AS last, count(*)::int AS n
+        FROM chat.material_open
+       WHERE learner_id = ${learner.id}::uuid AND opened_at >= ${since}
+       GROUP BY item_id
+       ORDER BY last DESC
+       LIMIT 200`;
+    const items = rows.length ? await this.prisma.materialItem.findMany({ where: { id: { in: rows.map((r) => r.item_id) } } }) : [];
+    const byId = new Map(items.map((i) => [i.id, i]));
     return {
       child: { id: learner.id, name: learner.name },
-      counts,
-      juz: [...juz.entries()].sort((a, b) => a[0] - b[0]).map(([n, surahs]) => ({ juz: n, surahs })),
-      canCorrect: this.authz.canRecordLessonAct(actor, standing, 'correct_memorization').allowed,
-      viewer: viewerOf(standing, actor),
-    };
-  }
-
-  /** One surah's history for a child, newest first: every mark, who, when, why. */
-  async history(actorId: string, learnerId: string, surahParam: string) {
-    const { actor, learner } = await this.child(actorId, learnerId, 'read_materials');
-    const surah = /^\d{1,3}$/.test(surahParam) ? surahOf(Number(surahParam)) : null;
-    if (!surah) throw notFound('surah');
-    const marks = await this.prisma.memorizationMark.findMany({ where: { learnerId: learner.id, surah: surah.number }, orderBy: { seq: 'desc' } });
-    const teacherIds = [...new Set(marks.filter((m) => m.byKind === 'teacher').map((m) => m.byId))];
-    const staffIds = [...new Set(marks.filter((m) => m.byKind === 'staff').map((m) => m.byId))];
-    const [teachers, staff] = await Promise.all([
-      teacherIds.length ? this.prisma.teacher.findMany({ where: { id: { in: teacherIds } }, select: { id: true, name: true } }) : [],
-      staffIds.length && actor.kind !== ActorKind.CONTACT ? this.prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name: true } }) : [],
-    ]);
-    const names = new Map([...teachers, ...staff].map((p) => [p.id, p.name]));
-    return {
-      surah: { number: surah.number, nameAr: surah.nameAr, nameEn: surah.nameEn },
-      marks: marks.map((m) => ({
-        id: m.id,
-        status: m.status,
-        source: m.source,
-        lessonId: m.lessonId,
-        // The reason a correction gives is shown to everyone who sees the map.
-        reason: m.reason,
-        by: { kind: m.byKind, name: names.get(m.byId) ?? null },
-        at: m.at.toISOString(),
-      })),
-    };
-  }
-
-  /** Correct one surah's status with a reason: a new mark, never an overwrite. */
-  async correct(actorId: string, learnerId: string, surahParam: string, body: Record<string, unknown>) {
-    const { actor, learner } = await this.child(actorId, learnerId, 'correct_memorization');
-    const surah = /^\d{1,3}$/.test(surahParam) ? surahOf(Number(surahParam)) : null;
-    if (!surah) throw notFound('surah');
-    const status = body.status;
-    if (typeof status !== 'string' || !(MARK_STATUSES as readonly string[]).includes(status)) throw invalid(`status: one of ${MARK_STATUSES.join(', ')}`);
-    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-    if (!reason) throw invalid('reason: a correction says why');
-    if (reason.length > MAX_REASON) throw invalid(`reason: at most ${MAX_REASON} characters`);
-    const byKind = actor.kind === ActorKind.TEACHER ? 'teacher' : 'staff';
-    await this.write(() =>
-      this.prisma.$transaction(async (tx) => {
-        const before = await tx.$queryRaw<Array<{ status: string }>>`
-          SELECT status FROM chat.memorization_status WHERE learner_id = ${learner.id}::uuid AND surah = ${surah.number}`;
-        const mark = await tx.memorizationMark.create({
-          data: {
-            organizationId: learner.organizationId, learnerId: learner.id, surah: surah.number, status,
-            source: 'correction', reason, byKind, byId: actor.actorId,
-          },
-        });
-        await this.audit.audit(tx, {
-          actorId: actor.actorId, action: 'memorization.corrected', entity: 'learner', entityId: learner.id,
-          before: { surah: surah.number, status: before[0]?.status ?? 'not_started' },
-          after: { surah: surah.number, status, markId: mark.id },
-          reason,
-        });
+      weekStartsAt: since.toISOString(),
+      timeZone: zone,
+      items: rows.flatMap((r) => {
+        const item = byId.get(r.item_id);
+        if (!item) return [];
+        return [{ item: itemDto(item), available: item.status === 'published', lastOpenedAt: r.last.toISOString(), times: r.n }];
       }),
-    );
-    return this.history(actorId, learnerId, surahParam);
+    };
   }
 
   // ------------------------------------------------------------------
@@ -288,13 +236,35 @@ export class MaterialsReaderService {
    * organization may open a published item (the library is open); the
    * library's managers may also open a draft or retired one to preview it.
    */
-  async open(actorId: string, itemId: string) {
+  async open(actorId: string, itemId: string, body: Record<string, unknown> = {}) {
     const actor = await this.conversations.requireActor(actorId);
     if (!isUuid(itemId) || !actor.isActive || !actor.organizationId) throw notFound();
     const item = await this.prisma.materialItem.findFirst({ where: { id: itemId, organizationId: actor.organizationId } });
     if (!item) throw notFound();
     if (item.status !== 'published' && !(await this.admin.mayManage(actor))) throw notFound();
     if (actor.kind === ActorKind.CONTACT && !actor.familyId) throw notFound();
+    // PD-29 amendment: opened FOR a child -- the viewer must be able to read
+    // that child's page (the same rule as the library); recorded once it opens.
+    let learner: { id: string; organizationId: string } | null = null;
+    if (body.learnerId !== undefined && body.learnerId !== null) {
+      if (typeof body.learnerId !== 'string') throw invalid('learnerId: a child id');
+      learner = (await this.scheduling.learnerFor(actor, body.learnerId, 'read_materials')).learner;
+      if (learner.organizationId !== item.organizationId) throw notFound();
+    }
+    const opened = await this.present(item, actor);
+    if (learner) {
+      await this.prisma.materialOpen.create({
+        data: {
+          organizationId: item.organizationId, learnerId: learner.id, itemId: item.id,
+          openedBy: actor.actorId, openedByKind: actor.kind === ActorKind.CONTACT ? 'contact' : actor.kind === ActorKind.TEACHER ? 'teacher' : 'staff',
+        },
+      });
+    }
+    return opened;
+  }
+
+  /** What to play and how (`presentation`), for this viewer. */
+  private async present(item: MaterialItem, actor: Actor) {
 
     if (item.source === 'site') {
       if (!this.config.siteBase) {
@@ -341,7 +311,12 @@ export class MaterialsReaderService {
 
   // ------------------------------------------------------------------
 
-  private async child(actorId: string, learnerId: string, act: 'read_materials' | 'correct_memorization') {
+  private async academyZone(): Promise<string> {
+    const row = await this.prisma.config.findUnique({ where: { key: 'schedule.timezone' } });
+    return canonicalZone(row?.value) ?? ACADEMY_ZONE;
+  }
+
+  private async child(actorId: string, learnerId: string, act: 'read_materials') {
     const actor = await this.conversations.requireActor(actorId);
     const { learner, standing } = await this.scheduling.learnerFor(actor, learnerId, act);
     return { actor, learner, standing };
