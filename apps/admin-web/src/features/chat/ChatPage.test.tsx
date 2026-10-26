@@ -1250,6 +1250,24 @@ describe('Edit and favorites', () => {
     expect(screen.getByText('Kid two')).toBeInTheDocument()
   })
 
+  it('PD-35: a group joined to support sits under Joined, never in the main list', async () => {
+    const seat = { reason: 'supervision', joinedAt: '2026-10-26T08:00:00Z', effective: false }
+    const viewerState = { pinned: false, archived: false, mutedUntil: null }
+    stubWorkspace({
+      conversations: [
+        conv('c1', { title: 'Kid one' }),
+        conv('c2', { title: 'Kid joined', viewerState: { ...viewerState, seat } }),
+      ],
+      messages: [],
+    })
+    renderChat()
+    expect(await screen.findByText('Kid one')).toBeInTheDocument()
+    expect(screen.queryByText('Kid joined')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Joined/ }))
+    expect(screen.getByText('Kid joined')).toBeInTheDocument()
+    expect(screen.queryByText('Kid one')).not.toBeInTheDocument()
+  })
+
   it("opens the chat's labels from its row menu, not only from inside the chat", async () => {
     stubWorkspace({ conversations: [conv('c1', { title: 'Kid one' })], messages: [] })
     renderChat()

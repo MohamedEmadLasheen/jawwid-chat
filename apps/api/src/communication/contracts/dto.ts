@@ -325,6 +325,11 @@ export interface ConversationViewerStateDto {
    * `member` mention is an "@" marker on the row until opened.
    */
   mention?: ViewerMentionDto;
+  /**
+   * PD-35: the viewer's open visible seat here (joined by choice). Present only
+   * while they hold one -- only staff ever do; absent for everyone else.
+   */
+  seat?: { reason: string; joinedAt: string; effective: boolean };
 }
 
 export interface LastMessageDto {

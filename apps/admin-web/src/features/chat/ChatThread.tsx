@@ -29,6 +29,7 @@ import { ConversationCallControls } from '@/features/calls/ConversationCallContr
 import { useCallCapability } from '@/features/calls/useCallCapability'
 import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
 import { TrialCardDialog, TrialGroupBar } from '@/features/trials/TrialCardDialog'
+import { SeatBar } from './SeatParts'
 import { TR } from '@/features/trials/copy'
 import { useCallsCopy } from '@/features/calls-page/hooks'
 import { useLessonCards } from '@/features/journey/LessonCardDialogs'
@@ -722,6 +723,7 @@ export function ChatThread({
       ) : (
         <>
         {summons && conv && <MentionBanner conversation={conv} mention={summons} onError={setActionError} />}
+        {conv?.viewerState?.seat && !trialGroup && <SeatBar conversationId={conversationId} />}
         {trialGroup && (
           <TrialGroupBar
             conversationId={conversationId}

@@ -10,6 +10,7 @@ import { RealtimeRevocationHub } from './realtime-revocation';
 import { SqlStaffScope } from './staff-scope';
 import { TimeZoneService } from './time-zone.service';
 import { SqlSubscriptionLock } from './subscription-lock';
+import { TeacherScopeService } from './teacher-scope';
 import {
   AUDIT_SERVICE,
   COVERAGE_SERVICE,
@@ -30,6 +31,8 @@ import {
 @Global()
 @Module({
   providers: [
+    // PD-35: which teachers a Teachers-department member works on (and the switch).
+    TeacherScopeService,
     PrismaService,
     AppConfigService,
     AuthorizationService,
@@ -53,6 +56,7 @@ import {
     { provide: REALTIME_REVOCATION, useExisting: RealtimeRevocationHub },
   ],
   exports: [
+    TeacherScopeService,
     PrismaService,
     AppConfigService,
     AuthorizationService,

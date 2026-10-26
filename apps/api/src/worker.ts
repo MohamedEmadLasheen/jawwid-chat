@@ -16,6 +16,7 @@ import { MentionService } from './communication/mentions/mention.service';
 import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
 import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { ConversationSeatService } from './communication/seats/conversation-seat.service';
+import { TeacherSupervisorService } from './teacher-supervisors/teacher-supervisor.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -174,6 +175,10 @@ async function bootstrap(): Promise<void> {
   const mentions = app.get(MentionService);
   const subscriptions = app.get(SubscriptionEffects);
   const seats = app.get(ConversationSeatService);
+  // PD-35: with strict teacher-supervisor scope on, the supervision conversations
+  // and trial groups seat each teacher's own supervisor -- re-seated once at
+  // start, so turning the switch on takes the department-wide seats away.
+  await app.get(TeacherSupervisorService).reseatAll().catch((e: unknown) => report(log, 'teacher supervisor reseat', 'teachers.reseat', e));
   const prisma = app.get(PrismaService);
 
   let running = true;

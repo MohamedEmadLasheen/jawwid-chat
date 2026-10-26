@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
-import { isOperator, isSuperAdmin } from '@/core/permissions/capabilities'
+import { isManager, isOperator, isSuperAdmin } from '@/core/permissions/capabilities'
 import { Dialog } from '@/shared/components/Dialog'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { Splitter, useResizableWidth } from '@/shared/components/Splitter'
@@ -19,6 +19,7 @@ import { ConversationInfo } from './ConversationInfo'
 import { NewFamilyGroupDialog } from './NewFamilyGroupDialog'
 import { NewDirectChatDialog } from './NewDirectChatDialog'
 import { StarredDialog } from './StarredDialog'
+import { JoinGroupDialog } from './SeatParts'
 import { Icon } from '@/shared/components/Icon'
 import { isGroup } from './chatView'
 import { MyCoverBanner } from '@/features/organization/CoverBanner'
@@ -59,6 +60,7 @@ export function ChatPage() {
   const [creatingGroup, setCreatingGroup] = useState(false)
   const [creatingDirect, setCreatingDirect] = useState(false)
   const [showingStarred, setShowingStarred] = useState(false)
+  const [joiningGroup, setJoiningGroup] = useState(false)
   const wide = useMediaQuery('(min-width: 1280px)')
   const resizable = useMediaQuery('(min-width: 1024px)')
   const listWidth = useResizableWidth(LIST_WIDTH_KEY, 360, 280, 520)
@@ -105,10 +107,14 @@ export function ChatPage() {
   // decides each request.
   const canCreateGroup = !!staff && (isOperator(staff.role) || isSuperAdmin(staff.role))
   const canOpenDirect = !!staff && isSuperAdmin(staff.role)
+  const canJoinGroup = !!staff && (isOperator(staff.role) || isManager(staff.role))
 
   const newItems: MenuItem[] = [
     ...(canOpenDirect ? [{ key: 'direct', label: copy.newDirect, icon: 'conversations' as const, onSelect: () => setCreatingDirect(true) }] : []),
     ...(canCreateGroup ? [{ key: 'group', label: copy.newGroup, icon: 'users' as const, onSelect: () => setCreatingGroup(true) }] : []),
+    // PD-35: a teacher supervisor joins their teachers' students' groups; the
+    // server lists only those, so for anyone else the list is simply empty.
+    ...(canJoinGroup ? [{ key: 'join', label: copy.joinGroup, icon: 'users' as const, onSelect: () => setJoiningGroup(true) }] : []),
   ]
 
   const style = resizable ? ({ '--list-w': `${listWidth.width}px` } as CSSProperties) : undefined
@@ -197,6 +203,15 @@ export function ChatPage() {
           onClose={() => setCreatingDirect(false)}
           onOpened={(id) => {
             setCreatingDirect(false)
+            navigate(`/chat/${encodeURIComponent(id)}`)
+          }}
+        />
+      )}
+      {joiningGroup && (
+        <JoinGroupDialog
+          onClose={() => setJoiningGroup(false)}
+          onJoined={(id) => {
+            setJoiningGroup(false)
             navigate(`/chat/${encodeURIComponent(id)}`)
           }}
         />

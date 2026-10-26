@@ -40,6 +40,8 @@ export interface ChatViewerState {
    * on the row until the chat is opened.
    */
   mention?: ChatViewerMention | null
+  /** PD-35, staff: the viewer's open visible seat here (joined by choice); null/absent = none. */
+  seat?: { reason: string; joinedAt: string; effective: boolean } | null
 }
 
 /** PD-36: the viewer was mentioned here. */
@@ -81,6 +83,19 @@ export interface ChatMention {
 export interface MentionCandidates {
   people: Array<{ actorId: string; actorKind: string; displayName: string; staffRole: string | null; isMember: boolean }>
   roles: Array<'supervisor' | 'admin'>
+}
+
+
+/** PD-35: a group of one of the viewer's teachers that they may join. Never its messages. */
+export interface SeatCandidate {
+  conversationId: string
+  type: string
+  title: string | null
+  teacher: { id: string; name: string }
+  learners: string[]
+  lastActivityAt: string | null
+  /** 'none' = may join; 'seated' = joined (may leave); 'member' = a member in their own right. */
+  membership: 'none' | 'seated' | 'member'
 }
 
 /** The eight background presets (the server's CHAT_THEMES). */
@@ -400,6 +415,13 @@ export const chatApi = {
   /** Search this chat's messages, newest first; only what this viewer may read. */
   search: (id: string, q: string, before?: string) =>
     api.get<{ hits: ChatMessage[]; nextBefore: string | null }>(`${conv(id)}/messages/search`, { q, before }),
+  /** PD-35: take a visible seat ("joined to support"). The server decides who may. */
+  joinSeat: (id: string, reason: string) => api.post<{ seatId: string }>(`${conv(id)}/join`, { reason }),
+  /** PD-35: leave one's own seat. */
+  leaveSeat: (id: string) => api.post<{ left: true }>(`${conv(id)}/leave`),
+  /** PD-35: the groups of the viewer's teachers they may join. */
+  seatCandidates: (q?: string) =>
+    api.get<{ groups: SeatCandidate[] }>('/seats/candidates', q ? { q } : undefined).then((r) => r.groups),
   /** Search message text across every chat in the viewer's list (newest matches). */
   searchAll: (q: string) => api.get<{ hits: Array<{ conversationId: string; message: ChatMessage }> }>('/me/search', { q }),
   /** The chat as a .zip (transcript + media). Super admin only; the server logs it. */
@@ -468,6 +490,7 @@ export const chatKeys = {
   search: (id: string, q: string) => ['chat', 'search', id, q] as const,
   searchAll: (q: string) => ['chat', 'search-all', q] as const,
   mentionCandidates: (id: string, q: string) => ['chat', 'mention-candidates', id, q] as const,
+  seatCandidates: (q: string) => ['chat', 'seat-candidates', q] as const,
 }
 
 /** Server order: by seq, numerically (a string compare would put "10" before "9"). */

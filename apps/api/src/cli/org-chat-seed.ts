@@ -418,6 +418,15 @@ export async function seedOrgChat(prisma: PrismaClient, opts: SeedOptions): Prom
     });
   }
 
+  // --- PD-35: each teacher's supervisor, as the Teachers Manager assigns it --
+  // teachers 0-4 Ola, 5-8 Heba, and the last one left unassigned, so the
+  // Organization page shows its warning.
+  for (let i = 0; i < teachers.length - 1; i++) {
+    await prisma.$executeRaw`
+      INSERT INTO chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id, assigned_by, reason)
+      VALUES (${teachers[i].id}::uuid, ${org}::uuid, ${teacherSupervisors[i < 5 ? 0 : 1].id}::uuid, ${teachersManager.id}::uuid, ${why})`;
+  }
+
   // --- teachers <-> their Teachers-department supervisor (teachers 0-4 Ola, 5-9 Heba)
   const teacherDirects: SeedManifest['teacherDirects'] = [];
   for (let i = 0; i < teachers.length; i++) {

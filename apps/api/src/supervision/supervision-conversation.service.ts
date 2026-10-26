@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AuthorizationService } from '../platform/authorization.service';
@@ -12,6 +12,7 @@ import {
   type Pd012Access,
   type TeachersDepartmentRole,
 } from '../platform/pd012-policy';
+import { DEPARTMENT_WIDE_SCOPE, TeacherScopeService } from '../platform/teacher-scope';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
@@ -44,6 +45,9 @@ export class SupervisionConversationService {
     private readonly conversations: ConversationService,
     private readonly outbox: OutboxService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-35: which teachers a Teachers-department member works on. A positional
+    // harness construction without it is department-wide (the switch's default).
+    @Optional() readonly teacherScope: TeacherScopeService = DEPARTMENT_WIDE_SCOPE,
   ) {}
 
   // ------------------------------------------------------------------
@@ -60,6 +64,15 @@ export class SupervisionConversationService {
 
   async staffAccess(actor: Actor): Promise<Pd012Access> {
     return decidePd012StaffAccess(actor, await this.teachersDepartmentRole(actor));
+  }
+
+  /**
+   * PD-35: a teacher outside the caller's scope is answered exactly as an
+   * unknown one (`notFound`). Every per-teacher PD-12 / PD-26 act asks this
+   * after the department gate.
+   */
+  async requireTeacherInScope(actor: Actor, teacherId: string | null | undefined, notFound: CommErrorCode): Promise<void> {
+    if (!(await this.teacherScope.covers(actor, teacherId))) throw new CommError(notFound, 'not found');
   }
 
   // ------------------------------------------------------------------
@@ -80,6 +93,7 @@ export class SupervisionConversationService {
   async ensureForTeacher(actorId: string, teacherId: string) {
     const actor = await this.requireSupervisor(actorId);
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.SUPERVISION_NOT_FOUND, 'no such teacher');
+    await this.requireTeacherInScope(actor, teacherId, CommErrorCode.SUPERVISION_NOT_FOUND);
     const conv = await this.prisma.$transaction((tx) =>
       this.ensureInTx(tx, teacherId, actor.organizationId as string, actor.actorId),
     );
@@ -89,8 +103,12 @@ export class SupervisionConversationService {
   /** Every active teacher's, at once. Idempotent: a second run only re-syncs members. */
   async ensureAll(actorId: string) {
     const actor = await this.requireSupervisor(actorId);
+    const scope = await this.teacherScope.scopeOf(actor);
     const teachers = await this.prisma.teacher.findMany({
-      where: { organizationId: actor.organizationId, isActive: true, leftAt: null },
+      where: {
+        organizationId: actor.organizationId, isActive: true, leftAt: null,
+        ...(scope.all ? {} : { id: { in: [...scope.teacherIds] } }),
+      },
       select: { id: true },
     });
     let ensured = 0;
@@ -126,6 +144,8 @@ export class SupervisionConversationService {
          AND s.is_active AND s.left_at IS NULL
          AND s.role IN ('admin', 'coverage', 'manager')
          AND chat.teachers_department_role(s.id) IS NOT NULL
+         -- PD-35: with the switch on, the teacher's own supervisor and the Teachers Manager.
+         AND (NOT chat.teacher_scope_strict() OR chat.staff_teacher_scope(s.id, ${teacherId}::uuid) IN ('self', 'manager'))
        ORDER BY s.id`;
     const wanted = new Set(staff.map((s) => s.id));
 
@@ -184,7 +204,13 @@ export class SupervisionConversationService {
       });
       added.push(id);
     }
-    const leaving = [...liveStaff].filter((id) => !wanted.has(id));
+    // PD-35: a visible seat taken by choice is the seat service's to end, never a sync's.
+    const seated = new Set(
+      (await tx.$queryRaw<Array<{ staff_id: string }>>`
+        SELECT staff_id::text AS staff_id FROM chat.conversation_seat
+         WHERE conversation_id = ${conv.id}::uuid AND left_at IS NULL AND member_id IS NOT NULL`).map((r) => r.staff_id),
+    );
+    const leaving = [...liveStaff].filter((id) => !wanted.has(id) && !seated.has(id));
     if (leaving.length > 0) {
       await tx.conversationMember.updateMany({
         where: { conversationId: conv.id, actorId: { in: leaving }, leftAt: null },

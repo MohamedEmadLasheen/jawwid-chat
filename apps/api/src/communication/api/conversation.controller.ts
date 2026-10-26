@@ -59,7 +59,7 @@ export class ConversationController {
     // authorized, each in one batch: unread counts (the caller's own
     // receipts), members with names, the viewer's own preferences, and the
     // newest message THIS viewer may see.
-    const [unread, members, states, last, children, covers, mentions] = await Promise.all([
+    const [unread, members, states, last, children, covers, seats, mentions] = await Promise.all([
       this.messages.unreadCountsFor(ids, actorId),
       this.conversations.membersOfMany(ids, actor),
       this.conversations.viewerStates(ids, actor.actorId),
@@ -68,6 +68,8 @@ export class ConversationController {
       this.conversations.soleChildOf(rows.filter((c) => c.type !== 'direct')),
       // PD-33: which rows are under a live cover (one query for the whole list).
       this.conversations.coversOf(ids),
+      // PD-35: the staff viewer's visible seats (the "Joined" filter).
+      actor.kind === 'staff' ? this.conversations.viewerSeats(ids, actor.actorId) : Promise.resolve(null),
       // PD-36: the viewer's own open or unseen mention per row (one query).
       this.mentions ? this.mentions.viewerMentions(ids, actor.actorId) : Promise.resolve(new Map<string, ViewerMentionDto>()),
     ]);
@@ -90,7 +92,7 @@ export class ConversationController {
           // PD-14: nothing is held for approval. Still sent, as false, for
           // clients built before it.
           viewerRequiresApproval: false,
-          viewerState: withMention(viewerState(states.get(c.id), c.id, actor.actorId), mentions.get(c.id)),
+          viewerState: withMention(viewerState(states.get(c.id), c.id, actor.actorId, seats?.get(c.id)), mentions.get(c.id)),
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
           learnerAvatarUrl: c.learner
             ? signAvatar('learner', c.learner.id, c.id, actor.actorId, c.learner.avatarObjectKey)
@@ -179,11 +181,12 @@ export class ConversationController {
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
     const actor = await this.conversations.requireActor(actorId);
-    const [states, last, children, covers, mentions, summoned] = await Promise.all([
+    const [states, last, children, covers, seats, mentions, summoned] = await Promise.all([
       this.conversations.viewerStates([conversation.id], actor.actorId),
       this.messages.lastVisibleMessages([conversation.id], actor),
       conversation.type === 'direct' ? new Map() : this.conversations.soleChildOf([conversation]),
       this.conversations.coversOf([conversation.id]),
+      actor.kind === 'staff' ? this.conversations.viewerSeats([conversation.id], actor.actorId) : Promise.resolve(null),
       this.mentions
         ? this.mentions.viewerMentions([conversation.id], actor.actorId)
         : Promise.resolve(new Map<string, ViewerMentionDto>()),
@@ -203,7 +206,10 @@ export class ConversationController {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: false, // PD-14
       viewerModerates: this.authz.moderatableAuthorKinds(actor, await this.conversations.staffAccess(actor, conversation)),
-      viewerState: withMention(viewerState(states.get(conversation.id), conversation.id, actor.actorId), mentions.get(conversation.id)),
+      viewerState: withMention(
+        viewerState(states.get(conversation.id), conversation.id, actor.actorId, seats?.get(conversation.id)),
+        mentions.get(conversation.id),
+      ),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
       learnerAvatarUrl: conversation.learner
         ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
@@ -338,8 +344,11 @@ function viewerState(
     | undefined,
   conversationId: string,
   viewerId: string,
+  /** PD-35: the viewer's open seat here, if any. Absent otherwise, so the shape is unchanged for everyone else. */
+  seat?: ConversationViewerStateDto['seat'],
 ): ConversationViewerStateDto {
   return {
+    ...(seat ? { seat } : {}),
     pinned: !!row?.pinnedAt,
     favorite: !!row?.favoritedAt,
     archived: !!row?.archivedAt,
