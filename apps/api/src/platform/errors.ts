@@ -204,6 +204,8 @@ export enum CommErrorCode {
   STAFF_TOOL_NOT_FOUND = 'COMM.STAFF_TOOL_NOT_FOUND',
   /** A name, colour, shortcut or body failed validation. 400. */
   STAFF_TOOL_INVALID = 'COMM.STAFF_TOOL_INVALID',
+  /** PD-37: presence settings are staff-only (families and teachers have no presence to hide). 403. */
+  PRESENCE_DENIED = 'COMM.PRESENCE_DENIED',
   /** That label name or shortcut is already taken in this library. 409. */
   STAFF_TOOL_CONFLICT = 'COMM.STAFF_TOOL_CONFLICT',
   // --- Profile photos (parents, teachers, children) ---

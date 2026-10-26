@@ -33,6 +33,9 @@ model Staff {
   role           String
   presence       String    @default("offline")
   lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz
+  /// PD-37: hide my last seen from other staff (and, reciprocally, see nobody's). 20261026180001.
+  /// Not to be confused with `presence` above, the coverage engine's on-duty state.
+  hideLastSeen   Boolean   @map("hide_last_seen") @default(false)
   isActive       Boolean   @map("is_active") @default(true)
   leftAt         DateTime? @map("left_at") @db.Timestamptz
   /// The login this staff member authenticates as. The column has existed in

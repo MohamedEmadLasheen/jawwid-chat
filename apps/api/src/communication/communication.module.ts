@@ -1,6 +1,8 @@
 import { StaffToolsController } from './api/staff-tools.controller';
 import { StaffToolsService } from './staff-tools/staff-tools.service';
 import { StarredController } from './api/starred.controller';
+import { PresenceController } from './api/presence.controller';
+import { PresencePolicy } from './realtime/presence-policy';
 import { ExportController } from './api/export.controller';
 import { ChatThemeController } from './api/chat-theme.controller';
 import { ChatThemeService } from './themes/chat-theme.service';
@@ -91,6 +93,7 @@ import { SeatController } from './seats/seat.controller';
     TeacherMediaController,
     ParentProfileController,
     SeatController,
+    PresenceController,
   ],
   providers: [
     redisProvider,
@@ -122,6 +125,7 @@ import { SeatController } from './seats/seat.controller';
     QuietHoursService,
     TypingService,
     PresenceService,
+    PresencePolicy,
     RealtimeGateway,
     RevocationConfirmer,
     LocalFsBlobStore,

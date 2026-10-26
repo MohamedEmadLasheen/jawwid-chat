@@ -60,7 +60,7 @@ further, and is sent `conversation.access_revoked`.
 | `conversation.unsubscribe` | `{ conversationId }` | |
 | `typing.start` | `{ conversationId }` | Debounced server-side (Redis, before any database read; a "started" goes out at most once per 3 s); safe to call often. **PD-37: only a seated member** (live, not silent, not observer) may type; anyone else gets `{ ok: false }`. Never in a direct teacher↔parent conversation. |
 | `typing.stop` | `{ conversationId }` | Same seat rule. |
-| `presence.heartbeat` | — | Refreshes a TTL key. |
+| `presence.heartbeat` | — | Keeps this connection counted as online (`realtime.presence_ttl_seconds` = 45; send every ~30 s). |
 | `message.delivered` | `{ conversationId, upToSeq }` (PD-37, preferred) or `{ messageIds: string[] }` | The cursor form moves the caller's delivery cursor forward (never back) and turns the authors' ticks grey ✓✓ via `message.status`. The id form only changes the caller's own receipts and announces nothing. |
 
 ## Server → client
@@ -74,7 +74,7 @@ further, and is sent `conversation.access_revoked`.
 | ~~`message.receipt.updated`~~ | — | **Never emitted; deprecated by PD-37.** It would have sent one reader's read to the whole room (the RT-012 roster). Use `message.status`. |
 | `reaction.added` / `reaction.removed` | `{ conversationId, messageId, actorId, emoji }` | Conversation room |
 | `typing.started` / `typing.stopped` | `{ conversationId, actorId, displayName }` | **PD-37: seated members of the conversation only**, excluding the sender. Never a PD-8 reader without a seat, a silent member or an observer. Never stored. |
-| `presence.changed` | `{ actorId, state, lastSeenAt }` | **Not emitted yet** — PD-37 P1a-2 adds it with its visibility rule (staff↔staff only). |
+| `presence.changed` | `{ actorId, state: 'online'\|'offline', lastSeenAt: string\|null }` | **PD-37: actor rooms of the people `PresencePolicy` allows, only.** Staff see staff; the super admin and the Teachers department see teachers; families and teachers see nobody and nobody sees a family. Sent on a TRANSITION only (first connection, last disconnection); "offline" waits 15 s, and a reconnect inside that sends nothing. `lastSeenAt` is null when either side hides last seen. Initial state: `GET /presence`. Unrelated to `chat.staff.presence`, the coverage engine's on-duty state. |
 | `conversation.updated` | `{ conversationId, familyId, state, needsReply, lastActivityAt, handlerId }` | Conversation room |
 | `conversation.membership_changed` | `{ conversationId, added[], removed[] }` | Conversation room. Also emitted when a direct conversation or a Student Group is **created** (`added` = every member). |
 | `conversation.added` | `{ conversationId }` | **Each added member's own actor room** (2026-10-14). A conversation they belong to now exists and they are not subscribed to it yet: re-read the list and subscribe. Carries nothing else. |
