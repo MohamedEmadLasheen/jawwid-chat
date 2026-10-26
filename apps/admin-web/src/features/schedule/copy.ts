@@ -139,6 +139,10 @@ export const S = {
     en: 'Trial, make-up and move pickers offer the bookable hours. Leave on unless this teacher is booked outside the shift.',
     ar: 'تعرض أدوات حجز الحصص التجريبية والتعويضية والنقل أوقات الحجز. اتركه مفعّلًا ما لم يُحجز المعلم خارج الشيفت.',
   },
+  applyLater: {
+    en: 'Bookable hours change at once: set them on the first day of this shift (Schedules tab).',
+    ar: 'تتغير أوقات الحجز فورًا: اضبطها في أول يوم من هذا الشيفت (تبويب الجداول).',
+  },
   reason: { en: 'Reason (optional)', ar: 'السبب (اختياري)' },
   save: { en: 'Save', ar: 'حفظ' },
   cancel: { en: 'Cancel', ar: 'إلغاء' },

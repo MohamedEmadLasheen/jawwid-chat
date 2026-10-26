@@ -162,6 +162,8 @@ export interface ShiftDefault {
 
 export interface WorkPatterns {
   teacherId: string
+  /** The earliest day a change may start: today on the academy's calendar. */
+  today: string
   patterns: WorkPattern[]
   defaults: { full_shift: ShiftDefault; part_shift: ShiftDefault }
 }

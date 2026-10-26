@@ -104,7 +104,7 @@ function ShiftDialog({ teacherId, data, onClose }: { teacherId: string; data: Wo
   const { locale } = useI18n()
   const current: WorkPattern | undefined = data.patterns[0]
   const [category, setCategory] = useState<ShiftCategory>(current?.category ?? 'full_shift')
-  const [validFrom, setValidFrom] = useState(academyToday())
+  const [validFrom, setValidFrom] = useState(data.today ?? academyToday())
   const [timezone, setTimezone] = useState(current?.timezone ?? ACADEMY_ZONE)
   const [rows, setRows] = useState<Rows>(() =>
     current && current.category !== 'hourly' ? rowsFrom(current.windows) : rowsFromDefault(data.defaults.full_shift),
@@ -114,6 +114,8 @@ function ShiftDialog({ teacherId, data, onClose }: { teacherId: string; data: Wo
   const [problem, setProblem] = useState<string | null>(null)
   const save = useSetWorkPattern(teacherId)
   const shift = category !== 'hourly'
+  // Bookable hours change at once, so only a shift starting today carries them.
+  const startsToday = validFrom === (data.today ?? academyToday())
   /** The category's default shift (a part shift's for part, otherwise the full one). */
   const def = data.defaults[category === 'part_shift' ? 'part_shift' : 'full_shift']
 
@@ -134,7 +136,7 @@ function ShiftDialog({ teacherId, data, onClose }: { teacherId: string; data: Wo
         category,
         timezone,
         validFrom,
-        ...(shift ? { windows, applyToAvailability: apply } : {}),
+        ...(shift ? { windows, applyToAvailability: apply && startsToday } : {}),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
       },
       { onSuccess: onClose, onError: (e) => setProblem(describeScheduleError(e, locale)) },
@@ -165,7 +167,7 @@ function ShiftDialog({ teacherId, data, onClose }: { teacherId: string; data: Wo
       </div>
       <label className="field">
         <span className="field__label">{tx(S.validFrom)}</span>
-        <input type="date" className="input" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+        <input type="date" className="input" min={data.today} value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
         <span className="field__hint">{tx(S.validFromHint)}</span>
       </label>
       <label className="field">
@@ -205,7 +207,7 @@ function ShiftDialog({ teacherId, data, onClose }: { teacherId: string; data: Wo
       ) : (
         <p className="sc-hint">{tx(S.shiftHourly)}</p>
       )}
-      {shift && (
+      {shift && startsToday && (
         <label className="sc-check field">
           <input type="checkbox" checked={apply} onChange={(e) => setApply(e.target.checked)} />
           <span>
@@ -214,6 +216,7 @@ function ShiftDialog({ teacherId, data, onClose }: { teacherId: string; data: Wo
           </span>
         </label>
       )}
+      {shift && !startsToday && <p className="field__hint">{tx(S.applyLater)}</p>}
       <label className="field">
         <span className="field__label">{tx(S.reason)}</span>
         <textarea className="textarea" rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />

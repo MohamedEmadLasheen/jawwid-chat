@@ -213,6 +213,7 @@ describe('the academy schedule', () => {
 describe('the shift, in the Teacher File', () => {
   const PATTERNS: WorkPatterns = {
     teacherId: 't-1',
+    today: '2026-11-01',
     patterns: [{
       id: 'p-1', category: 'full_shift', timezone: 'Africa/Cairo', validFrom: '2026-09-01', validTo: null, reason: null,
       createdAt: '2026-09-01T00:00:00Z', windows: [6, 7, 1, 2, 3, 4].map((weekday) => ({ weekday, start: '12:00', end: '19:00' })),
@@ -242,6 +243,24 @@ describe('the shift, in the Teacher File', () => {
     expect(body).toMatchObject({ category: 'part_shift', timezone: 'Africa/Cairo', validFrom: '2026-11-01', applyToAvailability: true })
     expect(body.windows).toHaveLength(6)
     expect(body.windows[0]).toEqual({ weekday: 6, start: '14:00', end: '18:00' })
+  })
+
+  it('a shift starting later cannot carry the bookable hours: the choice is not offered, and not sent', async () => {
+    on('GET', /\/teachers\/t-1\/work-pattern$/, () => json(PATTERNS))
+    on('POST', /\/teachers\/t-1\/work-pattern$/, () => json(PATTERNS, 201))
+    renderWithProviders(<ShiftSection teacherId="t-1" />, { staff: manager })
+    await userEvent.click(await screen.findByRole('button', { name: 'Change shift' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('checkbox', { name: /Also make these the bookable hours/ })).toBeInTheDocument()
+    const from = within(dialog).getByLabelText(/^From/) as HTMLInputElement
+    expect(from).toHaveAttribute('min', '2026-11-01')
+    await userEvent.clear(from)
+    await userEvent.type(from, '2026-12-01')
+    expect(within(dialog).queryByRole('checkbox', { name: /Also make these the bookable hours/ })).toBeNull()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => (i as RequestInit)?.method === 'POST')).toBe(true))
+    const [, init] = fetchMock.mock.calls.find(([, i]) => (i as RequestInit)?.method === 'POST')!
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ validFrom: '2026-12-01', applyToAvailability: false })
   })
 
   it('a refusal is shown in words, and nothing else changes', async () => {

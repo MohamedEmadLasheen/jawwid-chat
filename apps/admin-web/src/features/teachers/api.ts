@@ -90,7 +90,20 @@ export interface TeacherDetail {
   rates: { attendance: number | null; completion: number | null; teacherReliability: number | null }
   reports: { reports: number; onTime: number; onTimeRate: number | null; medianDelayMinutes: number | null }
   replies: { familyMessages: number; answeredWithin: number; rate: number | null; medianReplyMinutes: number | null }
-  workload: { availableMinutes: number | null; scheduledMinutes: number; freeMinutes: number | null }
+  /**
+   * PD-38: one partition of the working hours --
+   * available = bookedWithin + pausedWithin + free; outside = booked time beyond them.
+   * scheduledMinutes counts every lesson (outside the hours too). Newer fields are
+   * optional for an older server.
+   */
+  workload: {
+    availableMinutes: number | null
+    scheduledMinutes: number
+    freeMinutes: number | null
+    bookedWithinMinutes?: number | null
+    pausedWithinMinutes?: number | null
+    outsideMinutes?: number | null
+  }
   movements?: { transfersIn: number; transfersOut: number; paused: number; stopped: number }
   previous: { month: string; held: Bucket }
   /** PD-31: lessons the teacher moved this month. Information, NOT a violation. */
