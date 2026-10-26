@@ -121,6 +121,9 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
   final _topics = <String>{};
   final _tasks = <String>{};
   int? _level;
+
+  /// PD-30: the M of "Lesson N of M"; null with no subscription on record.
+  int? _total;
   bool _loading = false;
   bool _sending = false;
   bool _touched = false;
@@ -136,8 +139,10 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
   void initState() {
     super.initState();
     _covered.addListener(() => setState(() {}));
+    _number.addListener(() => setState(() {}));
     final suggested = widget.ticket?.suggestedLessonNumber;
     if (suggested != null) _number.text = '$suggested';
+    _total = widget.ticket?.suggestedLessonTotal;
     if (_editing) _load();
   }
 
@@ -153,6 +158,7 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
           return;
         }
         _number.text = r.lessonNumber?.toString() ?? '';
+        _total = r.lessonTotal;
         _topics.addAll(r.coveredTopics);
         _covered.text = r.covered ?? '';
         _level = r.rating;
@@ -267,6 +273,17 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
                     ),
                   ),
                 ),
+                // PD-30: "Lesson 2 of 24" -- the number within the child's subscription.
+                // Past the last one it reads "Lesson 25 of 24", as the server keeps it.
+                if (_total case final total? when int.tryParse(_number.text.trim()) != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Spacing.spacing1),
+                    child: Text(
+                      l10n.reportLessonOf(int.parse(_number.text.trim()), total),
+                      key: const ValueKey('report-lesson-of'),
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ),
                 heading(l10n.reportTopicsLabel),
                 Wrap(
                   spacing: Spacing.spacing2,

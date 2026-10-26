@@ -11,6 +11,7 @@ import { parentPath, profileKeys, type StudentProfile } from './api'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useStudent } from './hooks'
 import { familyTime } from '@/core/time/academyTime'
+import { SubscriptionPanel } from '@/features/subscriptions/SubscriptionPanel'
 import { ChangeTeacherDialog } from '@/features/teachers/ChangeTeacherDialog'
 import { O } from '@/features/teachers/opsCopy'
 import { useMayChangeTeacher } from '@/features/teachers/hooks'
@@ -41,6 +42,8 @@ export function StudentProfilePage() {
               <>
                 <PageHeader eyebrow={tx(P.studentEyebrow)} title={data.name} />
                 <StudentCard s={data} />
+                {/* PD-30: lessons bought and used, the lock, exceptions -- billing readers only (the server decides). */}
+                <SubscriptionPanel learnerId={data.id} />
                 {data.family && data.family.parents.length > 0 && (
                   <section className="card panel tf-section" aria-labelledby="st-parents">
                     <div className="tf-section__head">

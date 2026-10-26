@@ -42,6 +42,7 @@ class HttpLessonRepository implements LessonRepository {
         learnerId: learnerId,
         learnerName: learner['name'] as String? ?? '',
         suggestedLessonNumber: (row['suggestedLessonNumber'] as num?)?.toInt(),
+        suggestedLessonTotal: (row['suggestedLessonTotal'] as num?)?.toInt(),
       ));
     }
     return tickets;
@@ -65,6 +66,7 @@ class HttpLessonRepository implements LessonRepository {
     List<String> codes(Object? v) => [for (final c in (v as List?) ?? const []) if (c is String) c];
     return LessonReportDraft(
       lessonNumber: (r['lessonNumber'] as num?)?.toInt(),
+      lessonTotal: (r['lessonTotal'] as num?)?.toInt(),
       coveredTopics: codes(r['coveredTopics']),
       covered: r['covered'] as String?,
       rating: (r['rating'] as num?)?.toInt(),
@@ -287,6 +289,8 @@ class HttpLessonRepository implements LessonRepository {
       movedTo: AppClock.parse(raw['movedTo']),
       movedBy: raw['movedBy'] as String?,
       movedFromStartsAt: AppClock.parse(raw['movedFromStartsAt']),
+      // PD-30: staff and the family read why a lesson is suspended ("payment").
+      suspendedFor: raw['suspendedFor'] is String ? raw['suspendedFor'] as String : null,
       acts: [
         for (final a in (raw['acts'] as List?) ?? const []) ?LessonTicketKind.parse(a as String?),
       ],
@@ -311,6 +315,7 @@ class HttpLessonRepository implements LessonRepository {
             learnerId: learner['id'] as String? ?? '',
             learnerName: learner['name'] as String? ?? '',
             suggestedLessonNumber: kind == LessonTicketKind.report ? (d['suggestedLessonNumber'] as num?)?.toInt() : null,
+            suggestedLessonTotal: kind == LessonTicketKind.report ? (d['suggestedLessonTotal'] as num?)?.toInt() : null,
           ),
     ];
   }

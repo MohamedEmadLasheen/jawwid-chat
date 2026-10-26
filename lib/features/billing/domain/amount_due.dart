@@ -15,6 +15,7 @@ class DueItem {
     this.status,
     this.days,
     this.planMonths,
+    this.lessonsIncluded,
     this.periodStart,
     this.periodEnd,
     this.requestId,
@@ -33,6 +34,9 @@ class DueItem {
   final InstalmentStatus? status;
   final int? days;
   final int? planMonths;
+
+  /// PD-30: the lessons the package buys, shown beside its length.
+  final int? lessonsIncluded;
   final DateTime? periodStart;
   final DateTime? periodEnd;
 
@@ -72,6 +76,7 @@ List<DueItem> amountsDue(ParentBilling billing) {
       remainingMinor: r.remainingMinor,
       currency: r.currency,
       planMonths: r.planMonths,
+      lessonsIncluded: r.lessonsIncluded,
       periodStart: r.periodStart,
       periodEnd: r.periodEnd,
       requestId: r.id,
@@ -94,6 +99,7 @@ List<DueItem> amountsDue(ParentBilling billing) {
       status: i.status,
       days: i.days,
       planMonths: r?.planMonths,
+      lessonsIncluded: r?.lessonsIncluded,
       periodStart: r?.periodStart,
       periodEnd: r?.periodEnd,
       instalmentId: i.id,

@@ -64,12 +64,17 @@ class LessonTicket {
     this.learnerId = '',
     this.learnerName = '',
     this.suggestedLessonNumber,
+    this.suggestedLessonTotal,
   });
 
   final LessonTicketKind kind;
 
   /// PD-15, a report ticket only: the lesson number the form starts from.
   final int? suggestedLessonNumber;
+
+  /// PD-30: the M of "Lesson N of M" -- the lessons of the subscription the lesson falls
+  /// in. Null when the child has no subscription on record ("Lesson N").
+  final int? suggestedLessonTotal;
 
   /// Null for a ticket about the child rather than one lesson.
   final String? lessonId;
@@ -198,6 +203,7 @@ class ScheduledLesson {
     this.outcome,
     this.learnerId = '',
     this.acts = const [],
+    this.suspendedFor,
     this.teacherName,
     this.movedFrom,
     this.movedTo,
@@ -217,6 +223,10 @@ class ScheduledLesson {
   /// upcoming / in_progress / awaiting_close / overdue / closed -- the server's.
   final String phase;
   final String? outcome;
+
+  /// PD-30: why a `suspended` lesson is: `payment` when the system held it while the
+  /// child's group is locked. Null otherwise.
+  final String? suspendedFor;
 
   /// What the server says the reader may open on this lesson now (`acts`). Advisory:
   /// each is decided again on submit.
@@ -257,9 +267,14 @@ class LessonReportDraft {
     this.homework,
     this.note,
     this.practice,
+    this.lessonTotal,
   });
 
   final int? lessonNumber;
+
+  /// PD-30: the M of "Lesson N of M", as the server kept it on the report. Read back
+  /// only -- never sent: the server works it out.
+  final int? lessonTotal;
 
   /// Codes from `report_vocab.dart` (the server's report-vocab.ts).
   final List<String> coveredTopics;

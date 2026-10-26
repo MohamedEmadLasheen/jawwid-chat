@@ -38,7 +38,7 @@ claimed. The decision text itself still lives in
 | PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | MERGED #117 |
 | PD-28 | Teacher web: the Flutter app built for the browser, for teachers | `claude/pd28-teacher-web-fbd19a` | MERGED #120 |
 | PD-29 | Materials: open library by subject and age, practice this week from the lesson report, memorization progress map | `claude/pd29-materials-ef11b4`, `claude/pd29-materials-clients` | MERGED #121 + #122 |
-| PD-30 | Subscriptions, lesson balance and payment-based group lock | `claude/pd30-subscription-lock-*` | in progress |
+| PD-30 | Subscriptions, lesson balance and payment-based group lock | `claude/pd30-api`, `claude/pd30-subscription-lock-f3e070` | PR #126 + #127 |
 | PD-31 | Scheduling: trial time slots, reschedule redesign, a parent's child schedule, change teacher | `claude/pd31-scheduling-*` | in progress |
 | PD-32 | Parent feedback about the teacher (amends PD-26), Starred in Chats, New Students redesign, sign-up code without time expiry (amends PD-16), Trial labels | `claude/pd32-feedback-ui-*` | in progress |
 | PD-33 | next free number | — | — |
@@ -59,9 +59,9 @@ claimed. The decision text itself still lives in
 
 | Slot | Owner |
 |------|--------|
-| `20261026100000` | PD-30 — subscriptions, lesson balance, payment lock |
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
+| `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
 | `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |
 
-The next free slot is `20261026130000`.
+The next free slot is `20261026150000`.
