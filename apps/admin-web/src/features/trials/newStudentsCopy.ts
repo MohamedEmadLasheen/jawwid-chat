@@ -90,6 +90,7 @@ export function formatAmount(amount: number, currency: string, locale: 'ar' | 'e
     return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', {
       style: 'currency',
       currency,
+      currencyDisplay: 'narrowSymbol',
       maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
       minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
     }).format(amount)

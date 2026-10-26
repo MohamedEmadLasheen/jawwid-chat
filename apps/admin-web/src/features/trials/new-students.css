@@ -52,6 +52,8 @@
   display: grid;
   gap: var(--space-4);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  /* Each block as tall as its content: the setup block grows, the others do not stretch. */
+  align-items: start;
 }
 .ns-block {
   display: grid;
@@ -115,8 +117,18 @@
   color: var(--text);
 }
 .ns-table th,
-.ns-table td { vertical-align: top; text-align: start; }
-.ns-table tbody th { font-weight: var(--fw-semibold); }
+.ns-table td { vertical-align: middle; text-align: start; }
+/* A child's name heads its row, but reads like the cells beside it (not like a column header). */
+.ns-table tbody th {
+  font-size: inherit;
+  font-weight: var(--fw-semibold);
+  letter-spacing: normal;
+  padding-block: 12px;
+  background: transparent;
+  color: var(--text);
+  white-space: normal;
+}
+.ns-table tbody tr:last-child th { border-block-end: 0; }
 /* Numbers line up on their end edge, digit under digit. */
 .ns-table .ns-num { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ns-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1); }
