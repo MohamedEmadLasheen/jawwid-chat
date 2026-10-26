@@ -36,6 +36,7 @@ export type NavArea =
   | 'teacher-profiles'
   | 'accounts'
   | 'materials'
+  | 'schedule'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -84,7 +85,8 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `accounts` (PD-21) is offered beside the read-only Users section.
     // `payments` (PD-27) likewise: offered as the Admin Portal's Payments section.
     // `materials` (PD-29) is offered under More beside the Admin Portal's sections.
-    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'settings']
+    // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
+    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -95,7 +97,8 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-13: the Calls page (voice calls, scheduled calls, call links).
     // PD-29: the Materials library -- offered only when the server confirms
     // the Teachers manager (see SERVER_CONFIRMED_AREAS).
-    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'settings']
+    // PD-38: the scheduling calendar -- offered only when the server confirms it.
+    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -112,7 +115,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // teacher-profiles is here for the same reason stories is: admin and
     // coverage hold the reviewer role server-side
     // (AuthorizationService.canReviewTeacherProfile).
-    return ['chat', 'calls', 'inbox', 'families', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts']
+    return ['chat', 'calls', 'inbox', 'families', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts']
   }
   if (isDepartment(role)) {
     // Departments get tasks — they may not open family records — and, PD-21
@@ -154,6 +157,8 @@ export interface DepartmentAccess {
   billingReader?: boolean
   /** PD-29: GET /materials/admin/access -- the super admin or the Teachers manager manages the library. */
   materialsManager?: boolean
+  /** PD-38: GET /lessons/access -- the Teachers department, Operations and the super admin open the schedule. */
+  calendar?: boolean
 }
 
 /**
@@ -171,6 +176,8 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   payments: (a) => a.billingReader === true,
   // PD-29: the library is the Teachers manager's (and the super admin's).
   materials: (a) => a.materialsManager === true,
+  // PD-38: the scheduling calendar.
+  schedule: (a) => a.calendar === true,
 }
 
 /** What navigation shows: the areas this role may open, minus the unlisted ones and those the server has not confirmed. */
