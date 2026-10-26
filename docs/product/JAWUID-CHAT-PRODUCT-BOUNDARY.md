@@ -3075,7 +3075,7 @@ writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
 `apps/api/test/integration/conversation-seat-pd035.spec.ts`.
 
 **Security review (department head, 2026-10-26), fixed forward in
-`20261026160003_chat_pd035_seat_security.sql` and the API.**
+`20261026160003_chat_pd035_seat_security_fixes.sql` and the API.**
 - A seat's member row never counts as PD-8 standing, and never lends access to
   whoever acts for its holder.
 - It is never the admin role that may change membership.

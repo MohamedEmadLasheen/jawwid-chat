@@ -63,6 +63,6 @@ claimed. The decision text itself still lives in
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
 | `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
 | `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (later PD-35 PRs: `…160001`, `…160002`) |
-| `20261026160003` | PD-35 — `chat_pd035_seat_security` (security-review fixes for #131, fixed forward) |
+| `20261026160003` | PD-35 — `chat_pd035_seat_security_fixes` (security-review fixes for #131, fixed forward) |
 
 The next free slot is `20261026150000`.
