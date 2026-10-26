@@ -78,10 +78,35 @@ async function trialAt(cairo: string, minutes: number): Promise<string> {
   return id;
 }
 
+/**
+ * A lesson that was paused before it began and now lies in the past -- history
+ * the calendar must show. The guard lets only a lesson that has not started be
+ * suspended, and this suite's days are fixed in the past, so the fixture writes
+ * that state directly, with triggers off for this one statement's transaction.
+ */
 async function pause(lessonId: string) {
+  await g.prisma.$transaction([
+    g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
+    g.prisma.$executeRawUnsafe(
+      `update chat.lesson set outcome = 'suspended', outcome_by_kind = 'staff', outcome_by = $2::uuid,
+              outcome_at = starts_at - interval '1 day', outcome_note = 'paused'
+        where id = $1::uuid`,
+      lessonId, tsupId,
+    ),
+  ]);
+}
+
+/**
+ * Close a lesson as cancelled by the administration. Its slot stays booked
+ * (time reserved for a student, whatever happened), and only now may another
+ * lesson be put in the same time: the database forbids two OPEN lessons
+ * overlapping (lesson_teacher_is_never_double_booked), so real overlaps are
+ * exactly these -- a closed lesson and the one booked into its time.
+ */
+async function cancel(lessonId: string) {
   await g.prisma.$executeRawUnsafe(
-    `update chat.lesson set outcome = 'suspended', outcome_by_kind = 'staff', outcome_by = $2::uuid,
-            outcome_at = now(), outcome_note = 'paused'
+    `update chat.lesson set outcome = 'admin_cancelled', outcome_by_kind = 'staff', outcome_by = $2::uuid, outcome_at = now(),
+            outcome_note = 'holiday'
       where id = $1::uuid`,
     lessonId, tsupId,
   );
@@ -145,8 +170,9 @@ describe('the numbers: one definition, nothing counted twice', () => {
   beforeEach(async () => {
     window.teacherIds = s.teacherId;
     await fullShift(s.teacherId, '2026-09-01');
-    await lessonAt(s.learnerId, '2026-09-14 13:00', 60);
-    await lessonAt(s.learnerId, '2026-09-14 13:30', 60); // overlaps the first: 13:00-14:30 is 90 minutes, not 120
+    // A cancelled lesson whose time was booked again: 13:00-14:30 is 90 minutes, not 120.
+    await cancel(await lessonAt(s.learnerId, '2026-09-14 13:00', 60));
+    await lessonAt(s.learnerId, '2026-09-14 13:30', 60);
     await lessonAt(learnerN, '2026-09-14 16:00', 30);
     await lessonAt(s.learnerId, '2026-09-14 20:00', 30); // after the shift
     await trialAt('2026-09-14 15:00', 30);
@@ -423,7 +449,7 @@ describe('a month of 100 teachers', () => {
     const [sum, sumMs] = await time(() => calendar.summary(tmgrId, month));
     const [st, statsMs] = await time(() => calendar.stats(tmgrId, month));
     const [filtered, filteredMs] = await time(() => calendar.stats(tmgrId, { ...month, categories: 'full_shift', utilization: 'gte80' }));
-    const [{ plan }] = await g.prisma.$queryRawUnsafe<Array<{ plan: Array<{ 'Execution Time': number }> }>>(
+    const [{ 'QUERY PLAN': plan }] = await g.prisma.$queryRawUnsafe<Array<{ 'QUERY PLAN': Array<{ 'Execution Time': number }> }>>(
       `explain (analyze, format json)
        select chat.mr_minutes(empty) from chat.calendar_capacity(chat.default_organization_id(), null, '2026-10-01', '2026-11-01', '${TZ}')`,
     );
@@ -441,8 +467,10 @@ describe('a month of 100 teachers', () => {
     // (10-21, every day) hold them all. 34 full, 33 part, 33 hourly; 26 working days.
     expect(st.capacity.outsideMinutes).toBe(33 * (26 * 145 + 5 * 360) + 34 * 5 * 360);
     expect(filtered.teachers.every((t) => t.category === 'full_shift')).toBe(true);
-    // The budget on a loaded developer machine; the design target is 300 ms on a server.
-    expect(sumMs).toBeLessThan(5_000);
-    expect(statsMs).toBeLessThan(5_000);
+    // The budget, with room for a loaded CI runner or laptop (measured there:
+    // summary ~0.7-0.9 s, stats ~0.5 s, calendar_capacity ~0.2 s). Two traps
+    // this guards: a per-lesson subquery (17 s) and a per-cell count (4.7 s).
+    expect(sumMs).toBeLessThan(3_000);
+    expect(statsMs).toBeLessThan(3_000);
   });
 });
