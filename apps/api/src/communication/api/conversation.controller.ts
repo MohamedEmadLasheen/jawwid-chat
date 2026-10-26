@@ -56,13 +56,15 @@ export class ConversationController {
     // authorized, each in one batch: unread counts (the caller's own
     // receipts), members with names, the viewer's own preferences, and the
     // newest message THIS viewer may see.
-    const [unread, members, states, last, children] = await Promise.all([
+    const [unread, members, states, last, children, seats] = await Promise.all([
       this.messages.unreadCountsFor(ids, actorId),
       this.conversations.membersOfMany(ids, actor),
       this.conversations.viewerStates(ids, actor.actorId),
       this.messages.lastVisibleMessages(ids, actor),
       // A group's picture: its one child's photo (one query for the whole list).
       this.conversations.soleChildOf(rows.filter((c) => c.type !== 'direct')),
+      // PD-35: the staff viewer's visible seats (the "Joined" filter).
+      actor.kind === 'staff' ? this.conversations.viewerSeats(ids, actor.actorId) : Promise.resolve(null),
     ]);
     // The viewer's PRIVATE labels (staff only); families never get the field.
     const labels = actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, ids) : null;
@@ -83,7 +85,7 @@ export class ConversationController {
           // PD-14: nothing is held for approval. Still sent, as false, for
           // clients built before it.
           viewerRequiresApproval: false,
-          viewerState: viewerState(states.get(c.id), c.id, actor.actorId),
+          viewerState: viewerState(states.get(c.id), c.id, actor.actorId, seats ? (seats.get(c.id) ?? null) : undefined),
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
           learnerAvatarUrl: c.learner
             ? signAvatar('learner', c.learner.id, c.id, actor.actorId, c.learner.avatarObjectKey)
@@ -171,10 +173,11 @@ export class ConversationController {
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
     const actor = await this.conversations.requireActor(actorId);
-    const [states, last, children] = await Promise.all([
+    const [states, last, children, seats] = await Promise.all([
       this.conversations.viewerStates([conversation.id], actor.actorId),
       this.messages.lastVisibleMessages([conversation.id], actor),
       conversation.type === 'direct' ? new Map() : this.conversations.soleChildOf([conversation]),
+      actor.kind === 'staff' ? this.conversations.viewerSeats([conversation.id], actor.actorId) : Promise.resolve(null),
     ]);
     const child = children.get(conversation.id) as { id: string; avatarObjectKey: string | null } | undefined;
     const labels =
@@ -188,7 +191,7 @@ export class ConversationController {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: false, // PD-14
       viewerModerates: this.authz.moderatableAuthorKinds(actor, await this.conversations.staffAccess(actor, conversation)),
-      viewerState: viewerState(states.get(conversation.id), conversation.id, actor.actorId),
+      viewerState: viewerState(states.get(conversation.id), conversation.id, actor.actorId, seats ? (seats.get(conversation.id) ?? null) : undefined),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
       learnerAvatarUrl: conversation.learner
         ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
@@ -316,8 +319,11 @@ function viewerState(
     | undefined,
   conversationId: string,
   viewerId: string,
+  /** PD-35, staff only (undefined for anyone else, so the field is absent). */
+  seat?: ConversationViewerStateDto['seat'],
 ): ConversationViewerStateDto {
   return {
+    ...(seat !== undefined ? { seat } : {}),
     pinned: !!row?.pinnedAt,
     favorite: !!row?.favoritedAt,
     archived: !!row?.archivedAt,

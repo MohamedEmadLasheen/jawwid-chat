@@ -20,6 +20,7 @@ import { AccountAdminModule } from './account-admin/account-admin.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 import { MaterialsModule } from './materials/materials.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
+import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -66,6 +67,8 @@ import { SubscriptionModule } from './subscriptions/subscription.module';
     MaterialsModule,
     // PD-30: subscription locks -- cards, pushes, lesson holds, renewal requests.
     SubscriptionModule,
+    // PD-35: teacher supervisors (assignment, the 'supervision' seat).
+    TeacherSupervisorModule,
   ],
 })
 export class AppModule {}

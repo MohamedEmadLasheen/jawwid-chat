@@ -308,6 +308,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${SUBSCRIPTION_LOCK_ENFORCED}
+      - key: TEACHER_SUPERVISOR_STRICT_SCOPE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${TEACHER_SUPERVISOR_STRICT_SCOPE}
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET
@@ -657,6 +661,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${SUBSCRIPTION_LOCK_ENFORCED}
+      - key: TEACHER_SUPERVISOR_STRICT_SCOPE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${TEACHER_SUPERVISOR_STRICT_SCOPE}
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET

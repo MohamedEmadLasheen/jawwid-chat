@@ -273,6 +273,11 @@ export interface ConversationViewerStateDto {
   theme: string | null;
   /** The viewer's OWN wallpaper photo for this chat, as a link signed for them; null when none. */
   wallpaperUrl: string | null;
+  /**
+   * PD-35, staff only: the viewer's open visible seat here (joined by choice),
+   * or null. Families and teachers never get the field.
+   */
+  seat?: { reason: string; joinedAt: string; effective: boolean } | null;
 }
 
 export interface LastMessageDto {

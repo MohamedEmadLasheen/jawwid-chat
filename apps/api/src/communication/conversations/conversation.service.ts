@@ -1621,6 +1621,16 @@ export class ConversationService {
     return new Map(rows.map((r) => [r.conversationId, r]));
   }
 
+  /** PD-35: the viewer's open seats among these conversations, by conversation. */
+  async viewerSeats(conversationIds: readonly string[], staffId: string) {
+    if (conversationIds.length === 0) return new Map<string, { reason: string; joinedAt: string; effective: boolean }>();
+    const rows = await this.prisma.$queryRaw<Array<{ conversation_id: string; reason: string; joined_at: Date; effective: boolean }>>`
+      SELECT conversation_id::text AS conversation_id, reason, joined_at, member_id IS NULL AS effective
+        FROM chat.conversation_seat
+       WHERE staff_id = ${staffId}::uuid AND left_at IS NULL AND conversation_id = ANY(${[...conversationIds]}::uuid[])`;
+    return new Map(rows.map((r) => [r.conversation_id, { reason: r.reason, joinedAt: r.joined_at.toISOString(), effective: r.effective }]));
+  }
+
   /** Archive / mute / pin / favorite are per-user; one user's pin never affects another. */
   async setPreferences(
     conversationId: string,

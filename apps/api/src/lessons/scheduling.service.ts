@@ -1542,7 +1542,8 @@ export class SchedulingService {
       actor,
       { organizationId: learner.organizationId, teacherId: learner.teacherId ?? '', familyId: learner.familyId },
       {
-        teachersDepartment: staff ? await this.lessons.isManager(actor) : false,
+        // PD-35: the Teachers department stands to the learners of the teachers in its scope.
+        teachersDepartment: staff ? await this.lessons.supervisesTeacher(actor, learner.teacherId) : false,
         supervisesLearner: staff ? (await this.lessons.supervisedLearnerIds(actor, new Date(), learner.id)).length > 0 : false,
       },
     );

@@ -371,8 +371,15 @@ export class TeacherPayrollService {
     const org = actor.organizationId as string;
     const m = month === undefined || month === '' ? null : requireMonth('month', month);
     const [from, to] = m ? await this.monthBounds(m) : [null, null];
+    // PD-35: the rewards of the teachers in the caller's scope.
+    const scope = await this.files.teacherScope.scopeOf(actor);
     const entries = await this.prisma.teacherSupervisionEntry.findMany({
-      where: { organizationId: org, kind: 'bonus', ...(from && to ? { createdAt: { gte: from, lt: to } } : {}) },
+      where: {
+        organizationId: org,
+        kind: 'bonus',
+        ...(from && to ? { createdAt: { gte: from, lt: to } } : {}),
+        ...(scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
+      },
       orderBy: [{ createdAt: 'desc' }],
       take: 500,
     });
