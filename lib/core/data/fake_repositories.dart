@@ -384,8 +384,8 @@ class FakeFeedbackRepository implements FeedbackRepository {
     this.refuseWith,
   })  : _children = children ??
             const [
-              FeedbackChild(learnerId: 'learner_1', name: 'أحمد', teacherName: 'أ. يوسف'),
-              FeedbackChild(learnerId: 'learner_2', name: 'مريم', teacherName: 'أ. فاطمة'),
+              FeedbackChild(learnerId: 'learner_1', name: 'أحمد', teacherName: 'teacher_t1'),
+              FeedbackChild(learnerId: 'learner_2', name: 'child_two', teacherName: 'teacher_t2'),
             ],
         _items = [...items];
 
