@@ -24,6 +24,7 @@ import { PresenceService } from '@communication/realtime/presence.service';
 import { PresencePolicy } from '@communication/realtime/presence-policy';
 import { PresenceController } from '@communication/api/presence.controller';
 import { RealtimeGateway } from '@communication/realtime/realtime.gateway';
+import { TeacherScopeService } from '@platform/teacher-scope';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
@@ -40,6 +41,15 @@ let policy: PresencePolicy;
 const x = {
   superAdmin: '', teachersManager: '', teachersMember: '', hider: '', gone: '', otherOrgStaff: '', otherOrg: '',
 };
+
+/** PD-35's switch, written where chat.teacher_scope_strict() reads it (as boot does). */
+async function setStrict(on: boolean) {
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.config (key, value, scope, description)
+     values ('teacher_supervisor.strict_scope', '${on}'::jsonb, 'teachers', 'pd037 test')
+     on conflict (key) do update set value = excluded.value`,
+  );
+}
 
 async function actor(id: string): Promise<Actor> {
   return g.conversations.requireActor(id);
@@ -58,7 +68,8 @@ beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
   presence = new PresenceService(redis, new AppConfigService(g.prisma));
-  policy = new PresencePolicy(g.prisma);
+  policy = new PresencePolicy(g.prisma, new TeacherScopeService(g.prisma));
+  await setStrict(false);
   for (const k of Object.keys(x) as Array<keyof typeof x>) x[k] = randomUUID();
   const exec = (sql: string) => g.prisma.$executeRawUnsafe(sql);
 
@@ -105,6 +116,27 @@ describe("PD-37 PresencePolicy: who may see a teacher, a parent", () => {
   it('a teacher: the super admin and the Teachers department -- not Operations', async () => {
     const a = await policy.audienceOf(await actor(s.teacherId));
     expect([...a.withLastSeen].sort()).toEqual([x.superAdmin, x.teachersManager, x.teachersMember].sort());
+  });
+
+  it("PD-35 strict scope ON: a teacher supervisor sees only the teachers assigned to them", async () => {
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id)
+       values ('${s.teacherId}'::uuid, chat.default_organization_id(), '${x.teachersMember}'::uuid)`,
+    );
+    await setStrict(true);
+    try {
+      // Theirs: the supervisor, the Teachers Manager and the super admin see it.
+      const mine = await policy.audienceOf(await actor(s.teacherId));
+      expect([...mine.withLastSeen].sort()).toEqual([x.superAdmin, x.teachersManager, x.teachersMember].sort());
+      // Not theirs: the supervisor drops out; the manager and the super admin remain.
+      const other = await policy.audienceOf(await actor(s.newTeacherId));
+      expect([...other.withLastSeen].sort()).toEqual([x.superAdmin, x.teachersManager].sort());
+      // The read direction agrees.
+      const seen = await policy.visibleTo(await actor(x.teachersMember), { staffIds: [], teacherIds: [s.teacherId, s.newTeacherId] });
+      expect([...seen.keys()]).toEqual([s.teacherId]);
+    } finally {
+      await setStrict(false);
+    }
   });
 
   it("a parent: nobody", async () => {

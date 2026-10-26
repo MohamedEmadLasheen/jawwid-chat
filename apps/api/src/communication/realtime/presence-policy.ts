@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
+import { scopeCovers, TeacherScopeService } from '../../platform/teacher-scope';
 import type { Actor } from '../../platform/types';
 import { ActorKind, StaffRole } from '../contracts/vocab';
 
@@ -21,9 +22,10 @@ export interface PresenceAudience {
  *   staff -> staff     yes, inside one organization (online always; last seen
  *                      unless either side hides it -- WhatsApp's reciprocity).
  *   staff -> teacher   the super admin and the Teachers department (manager or
- *                      member). PD-35's strict teacher scope narrows this once
- *                      it is on main (TeacherScopeService.covers); until then
- *                      the department-wide rule PD-35 itself defaults to.
+ *                      member) -- narrowed by PD-35's teacher scope
+ *                      (TeacherScopeService): with the strict switch on, a
+ *                      teacher supervisor sees only the teachers assigned to
+ *                      them (or to one they back up); off, department-wide.
  *   anyone else        nothing. Families and teachers see nobody's presence;
  *                      nobody sees a family's. A teacher does not see staff.
  *
@@ -33,7 +35,10 @@ export interface PresenceAudience {
  */
 @Injectable()
 export class PresencePolicy {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly teacherScope: TeacherScopeService,
+  ) {}
 
   /** The people who may see `subject`'s presence (the subject is never included). */
   async audienceOf(subject: Actor): Promise<PresenceAudience> {
@@ -53,12 +58,18 @@ export class PresencePolicy {
     }
 
     if (subject.kind === ActorKind.TEACHER) {
-      const viewers = await this.prisma.$queryRaw<Array<{ id: string; hide: boolean }>>`
-        SELECT s.id::text AS id, s.hide_last_seen AS hide
+      const org = subject.organizationId;
+      const candidates = await this.prisma.$queryRaw<Array<{ id: string; hide: boolean; role: string }>>`
+        SELECT s.id::text AS id, s.hide_last_seen AS hide, s.role
           FROM chat.staff s
-         WHERE s.organization_id = ${subject.organizationId}::uuid
+         WHERE s.organization_id = ${org}::uuid
            AND s.is_active AND s.left_at IS NULL
-           AND (s.role = ${StaffRole.SUPER_ADMIN} OR ${teachersDepartmentSql('s.id', subject.organizationId)})`;
+           AND (s.role = ${StaffRole.SUPER_ADMIN} OR ${teachersDepartmentSql('s.id', org)})`;
+      // PD-35: off, the department works on every teacher; on, each viewer only
+      // on their own -- asked of the one service every Teachers gate asks.
+      const viewers = (await this.teacherScope.strict())
+        ? await asyncFilter(candidates, (v) => this.teacherScope.covers(staffActor(v.id, v.role, org), subject.actorId))
+        : candidates;
       return split(viewers, (v) => !v.hide);
     }
 
@@ -100,10 +111,29 @@ export class PresencePolicy {
           FROM chat.teacher
          WHERE id = ANY(${[...subjects.teacherIds]}::uuid[])
            AND organization_id = ${org}::uuid AND is_active AND left_at IS NULL`;
-      for (const t of teachers) out.set(t.id, { lastSeen: !me.hide });
+      const scope = await this.teacherScope.scopeOf(viewer);
+      for (const t of teachers) if (scopeCovers(scope, t.id)) out.set(t.id, { lastSeen: !me.hide });
     }
     return out;
   }
+}
+
+/** A staff member as TeacherScopeService reads one (it needs only these fields). */
+function staffActor(actorId: string, role: string, organizationId: string): Actor {
+  return {
+    actorId,
+    kind: ActorKind.STAFF,
+    staffRole: role as Actor['staffRole'],
+    organizationId,
+    isActive: true,
+    displayName: '',
+    locale: 'ar',
+  } as Actor;
+}
+
+async function asyncFilter<T>(rows: T[], keep: (row: T) => Promise<boolean>): Promise<T[]> {
+  const verdicts = await Promise.all(rows.map(keep));
+  return rows.filter((_, i) => verdicts[i]);
 }
 
 function split<T extends { id: string }>(rows: T[], lastSeen: (row: T) => boolean): PresenceAudience {
