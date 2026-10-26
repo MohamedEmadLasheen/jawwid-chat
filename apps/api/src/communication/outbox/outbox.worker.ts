@@ -327,7 +327,19 @@ export class OutboxWorker {
       where: { conversationId, leftAt: null, actorKind: ActorKind.STAFF },
       select: { actorId: true },
     });
-    return members.map((m) => m.actorId);
+    return [...new Set([...members.map((m) => m.actorId), ...(await this.effectiveSeatIds(conversationId))])];
+  }
+
+  /**
+   * PD-35: staff with an EFFECTIVE seat here -- a family 1:1, whose two members
+   * are its identity, so the seat has no member row. They hear what a member
+   * hears for as long as the seat is open.
+   */
+  private async effectiveSeatIds(conversationId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ staff_id: string }>>`
+      SELECT staff_id::text AS staff_id FROM chat.conversation_seat
+       WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL AND member_id IS NULL`;
+    return rows.map((r) => r.staff_id);
   }
 
   /**
@@ -483,11 +495,16 @@ export class OutboxWorker {
     payload: Record<string, unknown>,
   ): Promise<void> {
     if (payload.visibility === Visibility.INTERNAL) return;
+    // PD-33 / PD-35: an announcement line is seen, not pushed.
+    if (payload.silent === true) return;
 
     const authorId = payload.authorId as string | null;
-    const members = await this.prisma.conversationMember.findMany({
+    const seated = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },
+      select: { actorId: true },
     });
+    const effective = (await this.effectiveSeatIds(conversationId)).map((actorId) => ({ actorId }));
+    const members = [...new Map([...seated, ...effective].map((m) => [m.actorId, m])).values()];
 
     const state = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId },

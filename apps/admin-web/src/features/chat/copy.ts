@@ -3,6 +3,28 @@
  * in core/i18n/messages.ts so the workspace can be reviewed and merged on its
  * own; the shared dictionary carries only the nav label.
  */
+/** PD-35: the role word a seat line carries (the server sends the word's key, never wording). */
+const SEAT_ROLE_EN: Record<string, string> = {
+  teacher_supervisor: 'teacher supervisor',
+  supervisor: 'supervisor',
+  manager: 'manager',
+  super_admin: 'administration',
+}
+const SEAT_ROLE_AR: Record<string, string> = {
+  teacher_supervisor: 'مشرف المعلمين',
+  supervisor: 'مشرف',
+  manager: 'مدير',
+  super_admin: 'الإدارة',
+}
+const seatName = (p: Record<string, unknown>, fallback: string) =>
+  typeof p.name === 'string' && p.name.trim() ? p.name : fallback
+/** "Ola (teacher supervisor)", or the name alone for a role word this client does not know. */
+const seatWho = (p: Record<string, unknown>, roles: Record<string, string>) => {
+  const name = seatName(p, roles === SEAT_ROLE_AR ? 'أحد أعضاء الفريق' : 'A team member')
+  const role = typeof p.role === 'string' ? roles[p.role] : undefined
+  return role ? `${name} (${role})` : name
+}
+
 export const chatCopy = {
   ar: {
     search: 'ابحث بالاسم',
@@ -224,6 +246,11 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `أصبح ${String(p.supervisor)} مشرفك؛ سجلّ المحادثة كما هو` : 'تغيّر مشرفك؛ سجلّ المحادثة كما هو',
       'group.learner_detached': () => 'انتقل طفل من هذه المجموعة إلى مشرف آخر',
+      // PD-35: a visible seat, taken or left.
+      'seat.joined': (p: Record<string, unknown>) => `انضم ${seatWho(p, SEAT_ROLE_AR)} للمساندة`,
+      'seat.stepped_in': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_AR)} يتابع هذه المحادثة`,
+      'seat.left': (p: Record<string, unknown>) =>
+        `غادر ${seatName(p, 'أحد أعضاء الفريق')}${p.ended === 'idle' ? ' (لا نشاط)' : ''}`,
       fallback: () => 'تحديث من النظام',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },
@@ -447,6 +474,11 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `${String(p.supervisor)} is now your supervisor; the chat history is kept` : 'Your supervisor changed; the chat history is kept',
       'group.learner_detached': () => 'A child of this group moved to another supervisor',
+      // PD-35: a visible seat, taken or left.
+      'seat.joined': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_EN)} joined to support`,
+      'seat.stepped_in': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_EN)} is following this chat`,
+      'seat.left': (p: Record<string, unknown>) =>
+        `${seatName(p, 'A team member')} left${p.ended === 'idle' ? ' (no activity)' : ''}`,
       fallback: () => 'System update',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },

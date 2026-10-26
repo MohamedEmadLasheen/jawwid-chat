@@ -98,4 +98,24 @@ void main() {
     expect(find.text('Student Group created for QA Learner A'), findsOneWidget);
     expect(find.textContaining('"kind"'), findsNothing);
   });
+
+  test('PD-35: a visible seat, taken and left, reads as words with the role', () {
+    expect(
+      systemMessageText('{"kind":"seat.joined","name":"Ola Mahmoud","role":"teacher_supervisor","reason":"supervision"}', en),
+      'Ola Mahmoud (teacher supervisor) joined to support',
+    );
+    expect(
+      systemMessageText('{"kind":"seat.joined","name":"Ola Mahmoud","role":"teacher_supervisor","reason":"supervision"}', ar),
+      'انضم Ola Mahmoud (مشرف المعلمين) للمساندة',
+    );
+    expect(
+      systemMessageText('{"kind":"seat.stepped_in","name":"Laila Mansour","role":"manager","reason":"mention"}', en),
+      'Laila Mansour (manager) is following this chat',
+    );
+    expect(systemMessageText('{"kind":"seat.left","name":"Ola Mahmoud","ended":"left"}', en), 'Ola Mahmoud left');
+    expect(systemMessageText('{"kind":"seat.left","name":"Ola Mahmoud","ended":"idle"}', en), 'Ola Mahmoud left (no activity)');
+    // An unknown role word shows the name alone; a missing name never shows JSON.
+    expect(systemMessageText('{"kind":"seat.joined","name":"Ola","role":"astronaut"}', en), 'Ola joined to support');
+    expect(systemMessageText('{"kind":"seat.left"}', en), 'A team member left');
+  });
 }
