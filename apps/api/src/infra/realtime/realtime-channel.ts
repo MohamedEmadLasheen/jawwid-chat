@@ -22,14 +22,23 @@ export function realtimeChannel(env: NodeJS.ProcessEnv = process.env): string {
 /** Convenience for call sites that do not re-read the environment. */
 export const REALTIME_CHANNEL = realtimeChannel();
 
+import type { DeliveryAudience } from '../../communication/realtime/realtime.publisher';
+
 /** What travels on the channel. Deliberately flat and JSON-safe. */
 export interface RealtimeEnvelope {
-  /** `room` addresses a conversation; `users` addresses actor rooms. */
-  readonly target: 'room' | 'users';
+  /**
+   * `room` addresses a conversation; `users` addresses actor rooms;
+   * `room-audience` (PD-37) addresses PART of a conversation (`audience`). A
+   * relay from before PD-37 does not know `room-audience` and DISCARDS it --
+   * it can never fall back to the whole room.
+   */
+  readonly target: 'room' | 'users' | 'room-audience';
   /** A conversation id, or the list of actor ids. */
   readonly ids: string[];
   readonly event: string;
   readonly payload: unknown;
+  /** PD-37: only with `room-audience`. */
+  readonly audience?: DeliveryAudience;
 }
 
 export function encodeEnvelope(e: RealtimeEnvelope): string {
@@ -40,6 +49,18 @@ export function decodeEnvelope(raw: string): RealtimeEnvelope | null {
   try {
     const parsed = JSON.parse(raw) as RealtimeEnvelope;
     if (parsed && (parsed.target === 'room' || parsed.target === 'users') && Array.isArray(parsed.ids)) {
+      return parsed;
+    }
+    // An audience delivery without a usable audience is refused, not widened.
+    if (
+      parsed &&
+      parsed.target === 'room-audience' &&
+      Array.isArray(parsed.ids) &&
+      parsed.audience &&
+      typeof parsed.audience === 'object' &&
+      (parsed.audience.onlyActors === undefined || Array.isArray(parsed.audience.onlyActors)) &&
+      (parsed.audience.onlyActors !== undefined || parsed.audience.countableOnly === true)
+    ) {
       return parsed;
     }
     return null;

@@ -169,7 +169,8 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | GET | `/conversations/:conversationId/messages` | API, Flutter | EXISTS | seq pagination unchanged. §3.5 |
 | POST | `/conversations/:conversationId/messages` | API, Flutter | EXISTS | Idempotent on `clientMessageId`. §3.5 |
 | POST | `/conversations/:conversationId/messages/attachments/authorize` | API | RECONCILE | Checks `canRead` today; Phase 1 checks `canSend`. §3.6 |
-| POST | `/conversations/:conversationId/messages/read` | API, Flutter | EXISTS | §3.5 |
+| POST | `/conversations/:conversationId/messages/read` | API, Flutter | EXISTS | Forward-only cursor (PD-37). §3.5 |
+| POST | `/conversations/:conversationId/messages/delivered` | API | **EXISTS (new 2026-10-26, PD-37)** | Delivery cursor `{ upToSeq }`. §3.5 |
 | GET | `/conversations/:conversationId/messages/unread` | API, Flutter | EXISTS | Counts only the caller's own receipts; no membership check needed. §3.5 |
 | POST | `/conversations/:conversationId/messages/:messageId/delivered` | API | EXISTS | Duplicate of WS `message.delivered`; kept. §3.5 |
 | GET | `/conversations/:conversationId/messages/:messageId/info` | API | **EXISTS (new 2026-10-26, PD-37)** | Message info: who read / has / lacks the message. Author or staff only; countable readers only. §3.5 |
@@ -573,9 +574,12 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Realtime: published → `message.created` (+ `conversation.updated`); pending → `approval.requested` (+ `conversation.updated`). Worker side effect: one `new_message` push notification per recipient (`dedupeKey new_message:<messageId>:<actorId>`), skipping muted and inactive recipients.
 
 **POST /conversations/:conversationId/messages/read**
-- Auth: required. Permission: `messages.read`. Scope: `canRead`. Request: `{ upToSeq: string }`.
-- Side effects: the caller's receipts for `seq <= upToSeq` move to `read` (monotonic — never downgrades); `conversation_participant_state.lastReadSeq` upserted. Response: `{ ok: true }`. Idempotent.
-- Realtime: **none** — `message.receipt.updated` is declared but never emitted (§4).
+- Auth: required. Permission: `messages.read`. Scope: `canRead`. Request: `{ upToSeq: string }` (a whole number ≥ 0, else `COMMON.VALIDATION` 400). Rate limit: `abuse.throttle.receipt_cursor_actor` (240 / window, PD-37).
+- Side effects (PD-37, one transaction): the caller's cursor `lastReadSeq` becomes `GREATEST(old, min(upToSeq, conversation.lastSeq))` — **forward only**, never past the last message; `lastDeliveredSeq` follows it (a read implies delivered); `lastReadAt` is stamped when the cursor moved. The caller's receipts for `seq <= cursor` move to `read` in one set-based statement (monotonic — never downgrades). When the cursor moved and the caller is a **seated** member (live, not silent, not observer), a `receipts.advanced` outbox row is written; the worker sends `message.status` to the authors. Response: `{ ok: true }`. Idempotent.
+- Realtime: `message.status` to each affected **author** (§4). Nothing to the room.
+
+**POST /conversations/:conversationId/messages/delivered** (PD-37)
+- As `read`, for the delivery cursor: `lastDeliveredSeq` forward-only and clamped; the caller's `sent` receipts for `seq <= cursor` become `delivered`. Same outbox row (`kind: 'delivered'`) for a seated caller. The WS `message.delivered { conversationId, upToSeq }` does the same.
 
 **GET /conversations/:conversationId/messages/unread**
 - Auth: required. Permission: `messages.read`. Scope: counts only the caller's own receipts in `sent|delivered`; no membership check is run (nothing to leak). Response: `{ unread: number }`.
@@ -1378,10 +1382,10 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 |---|---|---|
 | `conversation.subscribe` | `{ conversationId }` | Authorized (`canRead`, staff scope included); `code` on refusal (`COMM.NOT_CONVERSATION_MEMBER`, `COMM.STAFF_OUT_OF_SCOPE`, `COMM.CONVERSATION_NOT_FOUND`, `COMM.UNKNOWN_ACTOR` — the last is the connect/authenticate race and is the only one worth retrying). |
 | `conversation.unsubscribe` | `{ conversationId }` | |
-| `typing.start` | `{ conversationId }` | Authorized; server-side debounce (`realtime.typing_ttl_seconds` = 8). |
-| `typing.stop` | `{ conversationId }` | |
+| `typing.start` | `{ conversationId }` | Server-side debounce in Redis BEFORE authorization (`realtime.typing_ttl_seconds` = 8; a "started" at most once per 3 s). PD-37: only a **seated** member, never in a direct teacher↔parent conversation. |
+| `typing.stop` | `{ conversationId }` | Same seat rule. |
 | `presence.heartbeat` | — | Refreshes the TTL key (`realtime.presence_ttl_seconds` = 45). |
-| `message.delivered` | `{ messageIds: string[] }` | Only the caller's own receipts; ack `{ ok, updated }`. |
+| `message.delivered` | `{ conversationId, upToSeq }` (PD-37) or `{ messageIds: string[] }` | Cursor form: as `POST …/messages/delivered`. Id form: only the caller's own receipts, announces nothing. Ack `{ ok, updated }`. |
 
 **Server → client**
 
@@ -1389,9 +1393,10 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 |---|---|---|---|
 | `message.created` | `{ conversationId, messageId, seq, authorKind, authorId, type, visibility, moderation, createdAt }` — a hint, no body. **Deliberately no `authorDisplayName`:** the event does not render a message, it triggers `GET …/messages?after=<seq>`, and the rendered author comes from `MessageDto` on that fetch. Adding the name here would enlarge a push-adjacent payload to answer a question the fetch already answers. | conversation room; **internal notes: staff actor rooms only** | `send` (published), `approve` |
 | `message.deleted` | `{ conversationId, messageId, deletedForAll }` | conversation room | `deleteForEveryone` |
-| `message.receipt.updated` | `{ conversationId, messageId, actorId, state, at }` | conversation room | **nobody** — declared, never enqueued. Phase 1 decides: emit on `read` / `delivered` (subject to RT-012 scoping) or remove. |
+| `message.receipt.updated` | — | — | **Deprecated, never emitted** (PD-37 replaced it with `message.status`). |
+| `message.status` | `{ conversationId, items: [{ messageId, seq, status }] }` | **the author's sockets only** (delivery-time checks, RT-009) | outbox worker, from `receipts.advanced` (PD-37) |
 | `reaction.added` / `reaction.removed` | `{ conversationId, messageId, actorId, emoji }` | conversation room | `react` / `unreact` |
-| `typing.started` / `typing.stopped` | `{ conversationId, actorId, displayName }` | conversation room, excluding sender | gateway (direct emit, not outbox) |
+| `typing.started` / `typing.stopped` | `{ conversationId, actorId, displayName }` | **seated members only** (PD-37), excluding sender | gateway (direct emit, not outbox) |
 | `presence.changed` | `{ actorId, state: 'online'\|'offline', lastSeenAt }` | actor rooms | **nobody** — declared, never emitted (`PresenceService` only writes Redis keys). Phase 1 decides. |
 | `conversation.updated` | `{ conversationId, familyId, state, needsReply, lastActivityAt, handlerId }` | conversation room | `send` (always) |
 | `story.published` | `{ storyId, publishedAt, expiresAt, hasMedia, recipientCount }` — a hint; **no title, no body, no media URL** | the resolved audience's actor rooms, one per recipient. Never a broadcast: there is no room meaning "everyone" | `StoryService.publish` via outbox |

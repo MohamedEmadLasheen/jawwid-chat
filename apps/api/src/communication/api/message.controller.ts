@@ -124,6 +124,7 @@ export class MessageController {
     });
   }
 
+  @RateLimited(ActionScope.RECEIPT_CURSOR)
   @Post('read')
   async markRead(
     @ActorId() actorId: string,
@@ -131,6 +132,23 @@ export class MessageController {
     @Body() body: { upToSeq: string },
   ) {
     await this.messages.markReadUpTo(conversationId, actorId, body.upToSeq);
+    return { ok: true };
+  }
+
+  /**
+   * PD-37: this caller's devices have the conversation up to `upToSeq`. The
+   * cursor form of the delivery receipt -- one call per page or per incoming
+   * message, never one per message id. Forward-only; the authors' ticks go grey
+   * ✓✓ through `message.status`.
+   */
+  @RateLimited(ActionScope.RECEIPT_CURSOR)
+  @Post('delivered')
+  async markDelivered(
+    @ActorId() actorId: string,
+    @Param('conversationId') conversationId: string,
+    @Body() body: { upToSeq: string },
+  ) {
+    await this.messages.markDeliveredUpTo(conversationId, actorId, body?.upToSeq);
     return { ok: true };
   }
 

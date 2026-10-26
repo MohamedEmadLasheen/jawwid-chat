@@ -88,6 +88,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.story_publish_actor': 20,
   /** initial hypothesis - call starts (and scheduled-call joins) per actor per window. */
   'abuse.throttle.call_start_actor': 20,
+  /** initial hypothesis - PD-37 read/delivery cursor moves per actor per window. */
+  'abuse.throttle.receipt_cursor_actor': 240,
   /** initial hypothesis - inbound WebSocket frames one socket may send per minute. */
   'abuse.realtime.frames_per_socket_per_minute': 600,
   /** PD-33: how many supervisors one backup may cover at the same time. */

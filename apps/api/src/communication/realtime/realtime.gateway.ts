@@ -19,13 +19,14 @@ import {
   CONVERSATION_ACCESS_REVOKED,
   room,
 } from '../contracts/events';
-import { RealtimePublisher } from './realtime.publisher';
+import { DeliveryAudience, RealtimePublisher } from './realtime.publisher';
+import { isCountableReader } from '../messages/receipt-view';
 import { TypingService } from './typing.service';
 import { RevocationConfirmer } from './revocation-confirmer.service';
 import { realtimeMetrics } from '../../platform/realtime-metrics';
 import { PresenceService } from './presence.service';
 import { MessageService } from '../messages/message.service';
-import { ConversationService } from '../conversations/conversation.service';
+import { ConversationService, isUuid } from '../conversations/conversation.service';
 import { ActorKind, ReceiptState } from '../contracts/vocab';
 import { AuthService } from '../../platform/auth/auth.service';
 import { bearerToken } from '../../platform/auth/auth.guard';
@@ -48,6 +49,13 @@ export const REALTIME_REVALIDATE_INTERVAL_MS = 15_000;
 /** Server-to-server events: "deliver this to YOUR sockets, after YOUR check". */
 const NODE_THREAD = 'rt009:deliver-thread';
 const NODE_USERS = 'rt009:deliver-users';
+/**
+ * PD-37: a thread delivery for part of the room (DeliveryAudience). A channel
+ * of its own, not an extra argument on NODE_THREAD: a node from before PD-37
+ * would ignore the argument and deliver to the whole room. On its own channel
+ * such a node drops the event instead -- it fails closed.
+ */
+const NODE_THREAD_AUDIENCE = 'rt009:deliver-thread-audience';
 
 /**
  * RT-009 COMPLETION BARRIER -- why the row locks are not enough on their own.
@@ -298,6 +306,11 @@ export class RealtimeGateway
       void this.deliverToConversationLocally(conversationId, event, payload, except));
     server.on(NODE_USERS, (actorIds: string[], event: string, payload: unknown) =>
       void this.deliverToActorsLocally(actorIds, event, payload));
+    server.on(
+      NODE_THREAD_AUDIENCE,
+      (conversationId: string, event: string, payload: unknown, except: string | null, audience: DeliveryAudience) =>
+        void this.deliverToConversationLocally(conversationId, event, payload, except ?? undefined, audience),
+    );
     // The completion barrier's acknowledgement: fence FIRST, then answer --
     // synchronously, so no delivery of this node can sit between the two.
     server.on(NODE_FENCE, (ack: (uid: string) => void) => {
@@ -612,30 +625,38 @@ export class RealtimeGateway
     return { ok: true };
   }
 
+  /**
+   * PD-37: "is typing" comes only from a SEATED member and reaches only seated
+   * members. Never stored, never sent to a PD-8 reader without a seat, never in
+   * a direct teacher<->parent conversation (PD-7).
+   *
+   * Debounced BEFORE any database read: a repeat ping inside the TTL, or one
+   * inside the broadcast floor, is answered from Redis alone, so typing costs no
+   * query per keystroke. Only a ping that would announce is authorized.
+   */
   @SubscribeMessage('typing.start')
   async typingStart(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId?: string },
   ): Promise<{ ok: boolean }> {
-    if (!body?.conversationId) return { ok: false };
-    const actor = await this.currentActor(client);
-    if (!actor) return { ok: false };
-    if (!(await this.authorize(actor, body.conversationId)).ok) return { ok: false };
-    // PD-7: "is typing" is a signal too; a direct teacher<->parent
-    // conversation carries none.
-    if (await this.conversations.isDirectTeacherParent(body.conversationId)) return { ok: false };
+    const conversationId = body?.conversationId;
+    if (!conversationId || !isUuid(conversationId) || !client.actor) return { ok: false };
+    if (!(await this.typing.start(conversationId, client.actor.actorId))) return { ok: true };
 
-    // Server-side debounce: a repeat ping inside the TTL only refreshes the key,
-    // so a chatty client cannot amplify fan-out.
-    if (await this.typing.start(body.conversationId, actor.actorId)) {
-      // RT-009: authorized per recipient at delivery, like every thread event.
-      await this.deliverToConversation(
-        body.conversationId,
-        CommEvent.TYPING_STARTED,
-        { conversationId: body.conversationId, actorId: actor.actorId, displayName: actor.displayName },
-        client.id,
-      );
+    const actor = await this.typingSeat(client, conversationId);
+    if (!actor) {
+      // Refused: forget the key, so nothing a refused ping set can look typed.
+      await this.typing.stop(conversationId, client.actor.actorId);
+      return { ok: false };
     }
+    // RT-009: authorized per recipient at delivery; PD-37: seated recipients only.
+    await this.deliverToConversation(
+      conversationId,
+      CommEvent.TYPING_STARTED,
+      { conversationId, actorId: actor.actorId, displayName: actor.displayName },
+      client.id,
+      { countableOnly: true },
+    );
     return { ok: true };
   }
 
@@ -644,22 +665,38 @@ export class RealtimeGateway
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId?: string },
   ): Promise<{ ok: boolean }> {
-    if (!body?.conversationId) return { ok: false };
-    // RT-009: `client.to(room)` reaches the room whether or not the sender is
-    // in it, so this was a broadcast with no authorization at all.
-    const actor = await this.currentActor(client);
+    const conversationId = body?.conversationId;
+    if (!conversationId || !isUuid(conversationId) || !client.actor) return { ok: false };
+    // Only a start that was announced has a key; nothing else needs a stop.
+    if (!(await this.typing.stop(conversationId, client.actor.actorId))) return { ok: true };
+
+    const actor = await this.typingSeat(client, conversationId);
     if (!actor) return { ok: false };
-    if (!(await this.authorize(actor, body.conversationId)).ok) return { ok: false };
-    if (await this.typing.stop(body.conversationId, actor.actorId)) {
-      // RT-009: authorized per recipient at delivery, like every thread event.
-      await this.deliverToConversation(
-        body.conversationId,
-        CommEvent.TYPING_STOPPED,
-        { conversationId: body.conversationId, actorId: actor.actorId, displayName: actor.displayName },
-        client.id,
-      );
-    }
+    await this.deliverToConversation(
+      conversationId,
+      CommEvent.TYPING_STOPPED,
+      { conversationId, actorId: actor.actorId, displayName: actor.displayName },
+      client.id,
+      { countableOnly: true },
+    );
     return { ok: true };
+  }
+
+  /**
+   * PD-37: the socket's identity NOW (RT-009), if it may read the conversation
+   * AND holds a countable seat in it (live, not silent, not observer), and the
+   * conversation is not a direct teacher<->parent one. Otherwise null.
+   */
+  private async typingSeat(client: AuthedSocket, conversationId: string): Promise<Actor | null> {
+    const actor = await this.currentActor(client);
+    if (!actor) return null;
+    if (!(await this.authorize(actor, conversationId)).ok) return null;
+    const membership = await this.conversations.membershipOf(conversationId, actor.actorId);
+    if (!membership || !isCountableReader(membership)) return null;
+    // PD-7: "is typing" is a signal too; a direct teacher<->parent
+    // conversation carries none.
+    if (await this.conversations.isDirectTeacherParent(conversationId)) return null;
+    return actor;
   }
 
   @SubscribeMessage('presence.heartbeat')
@@ -669,12 +706,31 @@ export class RealtimeGateway
     return { ok: true };
   }
 
-  /** The client confirms it has the message on device. */
+  /**
+   * The client confirms it has messages on device.
+   *
+   * PD-37: preferably as a CURSOR, `{ conversationId, upToSeq }` -- one frame
+   * per incoming message or page, forward-only, and it moves the authors'
+   * ticks to grey ✓✓ (`message.status`). The older `{ messageIds }` form still
+   * updates the caller's own receipts and announces nothing.
+   */
   @SubscribeMessage('message.delivered')
   async delivered(
     @ConnectedSocket() client: AuthedSocket,
-    @MessageBody() body: { messageIds?: string[] },
+    @MessageBody() body: { messageIds?: string[]; conversationId?: string; upToSeq?: string },
   ): Promise<{ ok: boolean; updated: number }> {
+    if (body?.conversationId && body.upToSeq !== undefined) {
+      if (!isUuid(body.conversationId)) return { ok: false, updated: 0 };
+      // RT-009: the identity as it is now; the service re-checks read access.
+      const current = await this.currentActor(client);
+      if (!current) return { ok: false, updated: 0 };
+      try {
+        await this.messages.markDeliveredUpTo(body.conversationId, current.actorId, String(body.upToSeq));
+        return { ok: true, updated: 0 };
+      } catch {
+        return { ok: false, updated: 0 };
+      }
+    }
     const actor = client.actor;
     if (!actor || !body?.messageIds?.length) return { ok: false, updated: 0 };
     // Scoped to this actor's own receipt rows; a client cannot acknowledge for
@@ -772,6 +828,8 @@ export class RealtimeGateway
     event: string,
     payload: unknown,
     exceptSocketId?: string,
+    /** PD-37: narrow WHO it is for, after the checks above decided who MAY have it. */
+    audience?: DeliveryAudience,
   ): Promise<void> {
     const name = room.conversation(conversationId);
     await this.serialize(DELIVERY_QUEUE, () => this.fenced(async (permitted) => {
@@ -809,6 +867,19 @@ export class RealtimeGateway
             ).allowed
           );
         });
+        // PD-37: of those allowed, who the event is FOR. Decided on the same
+        // live membership rows, so a member who just went silent or left gets
+        // no typing and no ticks.
+        const wanted = sockets.map((_, i) => {
+          const actor = actors[i];
+          if (!actor || !audience) return true;
+          if (audience.onlyActors && !audience.onlyActors.includes(actor.actorId)) return false;
+          if (audience.countableOnly) {
+            const m = members.get(actor.actorId);
+            if (!m || !isCountableReader(m)) return false;
+          }
+          return true;
+        });
         await this.deliveryBarrier?.();
         // Must be the last await before the emits: proves the locks are still
         // held, so no revocation of these rows can have completed.
@@ -829,7 +900,9 @@ export class RealtimeGateway
           }
           socket.actor = actor;
           if (allowed[i]) {
-            socket.emit(event, payload);
+            // Outside the audience is not a loss of access: nothing is sent,
+            // and the socket stays in the room.
+            if (wanted[i]) socket.emit(event, payload);
             return;
           }
           refusedRead++;
@@ -886,9 +959,14 @@ export class RealtimeGateway
     event: string,
     payload: unknown,
     exceptSocketId?: string,
+    audience?: DeliveryAudience,
   ): Promise<void> {
-    await this.deliverToConversationLocally(conversationId, event, payload, exceptSocketId);
-    this.toOtherNodes(NODE_THREAD, conversationId, event, payload, exceptSocketId);
+    await this.deliverToConversationLocally(conversationId, event, payload, exceptSocketId, audience);
+    if (audience) {
+      this.toOtherNodes(NODE_THREAD_AUDIENCE, conversationId, event, payload, exceptSocketId ?? null, audience);
+    } else {
+      this.toOtherNodes(NODE_THREAD, conversationId, event, payload, exceptSocketId);
+    }
   }
 
   /**
@@ -1078,5 +1156,15 @@ export class RealtimeGateway
     if (actorIds.length === 0) return;
     await this.deliverToActorsLocally(actorIds, event, payload);
     this.toOtherNodes(NODE_USERS, actorIds, event, payload);
+  }
+
+  // PD-37: part of the room, still through every delivery-time check.
+  async toThreadAudience<E extends CommEventName>(
+    conversationId: string,
+    event: E,
+    payload: CommEventPayloads[E],
+    audience: DeliveryAudience,
+  ): Promise<void> {
+    await this.deliverToConversation(conversationId, event, payload, undefined, audience);
   }
 }

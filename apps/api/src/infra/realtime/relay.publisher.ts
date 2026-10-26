@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 import type { CommEventName, CommEventPayloads } from '../../communication/contracts/events';
 import { room } from '../../communication/contracts/events';
-import type { RealtimePublisher } from '../../communication/realtime/realtime.publisher';
+import type { DeliveryAudience, RealtimePublisher } from '../../communication/realtime/realtime.publisher';
 import { RealtimeGateway } from '../../communication/realtime/realtime.gateway';
 import { encodeEnvelope, realtimeChannel, RealtimeEnvelope } from './realtime-channel';
 
@@ -65,6 +65,19 @@ export class RelayRealtimePublisher implements RealtimePublisher, OnModuleDestro
       return;
     }
     await this.viaRedis({ target: 'users', ids: actorIds, event, payload });
+  }
+
+  async toThreadAudience<E extends CommEventName>(
+    conversationId: string,
+    event: E,
+    payload: CommEventPayloads[E],
+    audience: DeliveryAudience,
+  ): Promise<void> {
+    if (this.hasLocalServer()) {
+      await this.gateway.toThreadAudience(conversationId, event, payload, audience);
+      return;
+    }
+    await this.viaRedis({ target: 'room-audience', ids: [conversationId], event, payload, audience });
   }
 
   /**

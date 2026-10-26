@@ -633,23 +633,107 @@ export class MessageService {
 
   /** Advance the read cursor; used for unread reconciliation after reconnect. */
   async markReadUpTo(conversationId: string, actorId: string, seq: string): Promise<void> {
+    await this.advanceCursor('read', conversationId, actorId, seq);
+  }
+
+  /** PD-37: this person's devices have the conversation up to `seq` (grey ✓✓ for its authors). */
+  async markDeliveredUpTo(conversationId: string, actorId: string, seq: string): Promise<void> {
+    await this.advanceCursor('delivered', conversationId, actorId, seq);
+  }
+
+  /**
+   * PD-37: move one person's read or delivery cursor FORWARD, and their
+   * receipts with it, in one transaction.
+   *
+   * - Forward only. A late or replayed "read up to 3" after "read up to 9"
+   *   changes nothing: the cursor is GREATEST(old, new), and receipts only
+   *   ever rise (sent < delivered < read).
+   * - Clamped to the conversation's last seq, so a client cannot pre-read
+   *   messages that do not exist yet.
+   * - ONE set-based statement moves the receipts, instead of loading every
+   *   message id of the conversation (which grew with its history).
+   * - A read implies delivered: the delivery cursor follows the read one.
+   * - When the cursor moved AND the person is a countable reader (seated:
+   *   live, not silent, not observer), a `receipts.advanced` outbox row in the
+   *   same transaction asks the worker to tell the authors. Someone reading
+   *   through PD-8 standing has no receipts, and announces nothing.
+   *
+   * Never depends on the realtime publisher: the worker does the telling
+   * (the provider cycle PD-34 found).
+   */
+  private async advanceCursor(
+    kind: 'delivered' | 'read',
+    conversationId: string,
+    actorId: string,
+    seq: string,
+  ): Promise<void> {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
     const decision = await this.conversations.canReadResolved(actor, conv, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
-    const target = BigInt(seq);
-    const ids = await this.prisma.message.findMany({
-      where: { conversationId, seq: { lte: target } },
-      select: { id: true },
-    });
-    await this.markState(ids.map((m) => m.id), actor.actorId, ReceiptState.READ);
+    let requested: bigint;
+    try {
+      requested = BigInt(seq);
+    } catch {
+      throw new CommError(CommErrorCode.VALIDATION, 'upToSeq must be a whole number', 400);
+    }
+    if (requested < 0n) throw new CommError(CommErrorCode.VALIDATION, 'upToSeq must not be negative', 400);
+    const target = requested < conv.lastSeq ? requested : conv.lastSeq;
+    const announces = membership !== null && isCountableReader(membership);
 
-    await this.prisma.conversationParticipantState.upsert({
-      where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
-      create: { conversationId, actorId: actor.actorId, lastReadSeq: target },
-      update: { lastReadSeq: target },
+    await this.prisma.$transaction(async (tx) => {
+      // The row is the lock: two devices of one person serialize here.
+      await tx.conversationParticipantState.upsert({
+        where: { conversationId_actorId: { conversationId: conv.id, actorId: actor.actorId } },
+        create: { conversationId: conv.id, actorId: actor.actorId },
+        update: {},
+      });
+      const [before] = await tx.$queryRaw<Array<{ read: bigint; delivered: bigint }>>`
+        SELECT last_read_seq AS read, last_delivered_seq AS delivered
+          FROM chat.conversation_participant_state
+         WHERE conversation_id = ${conv.id}::uuid AND actor_id = ${actor.actorId}::uuid
+           FOR UPDATE`;
+      const from = kind === 'read' ? before.read : before.delivered;
+
+      if (kind === 'read') {
+        await tx.$executeRaw`
+          UPDATE chat.message_receipt r
+             SET state = 'read', read_at = now(), delivered_at = coalesce(r.delivered_at, now())
+            FROM chat.message m
+           WHERE r.message_id = m.id AND r.actor_id = ${actor.actorId}::uuid
+             AND m.conversation_id = ${conv.id}::uuid AND m.seq <= ${target}
+             AND r.state <> 'read'`;
+        await tx.$executeRaw`
+          UPDATE chat.conversation_participant_state
+             SET last_read_at = CASE WHEN ${target} > last_read_seq THEN now() ELSE last_read_at END,
+                 last_read_seq = GREATEST(last_read_seq, ${target}),
+                 last_delivered_seq = GREATEST(last_delivered_seq, ${target})
+           WHERE conversation_id = ${conv.id}::uuid AND actor_id = ${actor.actorId}::uuid`;
+      } else {
+        await tx.$executeRaw`
+          UPDATE chat.message_receipt r
+             SET state = 'delivered', delivered_at = now()
+            FROM chat.message m
+           WHERE r.message_id = m.id AND r.actor_id = ${actor.actorId}::uuid
+             AND m.conversation_id = ${conv.id}::uuid AND m.seq <= ${target}
+             AND r.state = 'sent'`;
+        await tx.$executeRaw`
+          UPDATE chat.conversation_participant_state
+             SET last_delivered_seq = GREATEST(last_delivered_seq, ${target})
+           WHERE conversation_id = ${conv.id}::uuid AND actor_id = ${actor.actorId}::uuid`;
+      }
+
+      if (announces && target > from) {
+        await this.outbox.enqueue(tx, CommEvent.RECEIPTS_ADVANCED, {
+          conversationId: conv.id,
+          actorId: actor.actorId,
+          kind,
+          fromSeq: from.toString(),
+          toSeq: target.toString(),
+        });
+      }
     });
   }
 

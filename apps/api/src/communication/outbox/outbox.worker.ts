@@ -6,6 +6,7 @@ import { actorRefKey } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName, room } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
+import { statusUpdatesByAuthor } from '../messages/receipt-status';
 import { ActorKind, CallOutcome, CallType, StoryState, Visibility } from '../contracts/vocab';
 
 /**
@@ -216,6 +217,32 @@ export class OutboxWorker {
         const storyId = payload.storyId as string | undefined;
         if (!storyId) return;
         await this.realtime.toUsers(await this.storyRecipientIds(storyId), type, payload as never);
+        return;
+      }
+
+      /**
+       * PD-37. A seated reader's cursor moved; tell each AUTHOR whose messages
+       * it covers what their ticks are now. Never the room: the payload this
+       * row carries names the reader, and the ticks are the author's alone.
+       * An explicit case so it can never reach the thread fan-out below.
+       */
+      case CommEvent.RECEIPTS_ADVANCED: {
+        if (!conversationId) return;
+        const send = this.realtime.toThreadAudience?.bind(this.realtime);
+        // Without an audience path the only fallback is the whole room, which
+        // is the leak itself: fail, and let the row retry.
+        if (!send) throw new Error('this realtime publisher cannot address part of a conversation');
+        const byAuthor = await statusUpdatesByAuthor(
+          this.prisma,
+          conversationId,
+          BigInt(payload.fromSeq as string),
+          BigInt(payload.toSeq as string),
+        );
+        for (const [authorId, items] of byAuthor) {
+          // The reader's own messages are not changed by their own read.
+          if (authorId === payload.actorId) continue;
+          await send(conversationId, CommEvent.MESSAGE_STATUS, { conversationId, items }, { onlyActors: [authorId] });
+        }
         return;
       }
 
