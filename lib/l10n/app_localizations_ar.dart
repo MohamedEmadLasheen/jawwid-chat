@@ -1025,6 +1025,32 @@ class L10nAr extends L10n {
       'انتقل طفل من هذه المجموعة إلى مشرف آخر';
 
   @override
+  String systemCoverStarted(String cover, String supervisor, String date) {
+    return 'التغطية: $cover بدلًا من $supervisor حتى $date';
+  }
+
+  @override
+  String systemCoverExtended(String cover, String supervisor, String date) {
+    return 'مُدّدت التغطية: $cover بدلًا من $supervisor حتى $date';
+  }
+
+  @override
+  String systemCoverEnded(String supervisor) {
+    return 'انتهت التغطية؛ عادت المتابعة إلى $supervisor';
+  }
+
+  @override
+  String get systemCoverStartedNoName => 'التغطية: مشرف بديل يتابع مؤقتًا';
+
+  @override
+  String get systemCoverEndedNoName => 'انتهت التغطية';
+
+  @override
+  String conversationCoverLine(String cover, String date) {
+    return 'التغطية: $cover حتى $date';
+  }
+
+  @override
   String systemSeatJoined(String who) {
     return 'انضم $who للمساندة';
   }
@@ -3470,10 +3496,19 @@ class L10nAr extends L10n {
   String get materialsTabPractice => 'تدريب هذا الأسبوع';
 
   @override
-  String get materialsTabProgress => 'خريطة الحفظ';
+  String get materialsTabOpened => 'ما فُتح هذا الأسبوع';
 
   @override
-  String get materialsSubjectAll => 'الكل';
+  String get materialsOpenedEmpty => 'لم يُفتح شيء هذا الأسبوع بعد';
+
+  @override
+  String get materialsOpenedWeekNote =>
+      'يبدأ الأسبوع السبت وينتهي الجمعة بتوقيت الأكاديمية.';
+
+  @override
+  String materialsOpenedLast(String when) {
+    return 'آخر فتح $when';
+  }
 
   @override
   String get materialsSubjectQuran => 'القرآن الكريم';
@@ -3532,18 +3567,6 @@ class L10nAr extends L10n {
   String get materialsUnavailable => 'تعذّر تحميل المواد التعليمية.';
 
   @override
-  String get materialsPracticeEmpty =>
-      'لا يوجد تدريب بعد. يظهر هنا عندما يضيفه المعلم إلى تقرير الحصة.';
-
-  @override
-  String get materialsPracticeLatest => 'لا جديد هذا الأسبوع. آخر تدريب:';
-
-  @override
-  String materialsPracticeFrom(String day) {
-    return 'من حصة $day';
-  }
-
-  @override
   String materialsAyahRange(String surah, String from, String to) {
     return 'سورة $surah، الآيات $from–$to';
   }
@@ -3554,66 +3577,10 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get materialsListen => 'استماع';
-
-  @override
   String get materialsItemGone => 'لم تعد هذه المادة في المكتبة.';
 
   @override
-  String get materialsNextTasks => 'المطلوب للحصة القادمة';
-
-  @override
-  String get materialsHomework => 'الواجب';
-
-  @override
-  String get materialsStatusNotStarted => 'لم يبدأ';
-
-  @override
-  String get materialsStatusInProgress => 'قيد الحفظ';
-
-  @override
-  String get materialsStatusMemorized => 'محفوظة';
-
-  @override
-  String get materialsStatusNeedsRevision => 'تحتاج مراجعة';
-
-  @override
-  String materialsJuz(String n) {
-    return 'الجزء $n';
-  }
-
-  @override
-  String get materialsHistory => 'السجل';
-
-  @override
-  String get materialsHistoryEmpty => 'لم يُسجَّل شيء لهذه السورة بعد.';
-
-  @override
-  String get materialsSourceReport => 'تقرير الحصة';
-
-  @override
-  String get materialsSourceReportEdit => 'تقرير معدّل';
-
-  @override
-  String get materialsSourceCorrection => 'تصحيح';
-
-  @override
-  String get materialsByTeacher => 'المعلم';
-
-  @override
-  String get materialsByAcademy => 'الأكاديمية';
-
-  @override
-  String get materialsCorrect => 'تصحيح';
-
-  @override
-  String get materialsCorrectReason => 'السبب (مطلوب)';
-
-  @override
   String get materialsOpenExternally => 'فتح في المتصفح';
-
-  @override
-  String get materialsOpenedInTab => 'فُتح النشاط في تبويب جديد.';
 
   @override
   String get materialsCannotOpen => 'تعذّر فتحه على هذا الجهاز.';
@@ -3632,12 +3599,6 @@ class L10nAr extends L10n {
 
   @override
   String get reportPracticeKeep => 'يبقى التدريب كما هو ما لم تغيّره.';
-
-  @override
-  String get reportMemorizationLabel => 'خريطة الحفظ';
-
-  @override
-  String get reportMemorizationAdd => 'تحديد حالة سورة';
 
   @override
   String get reportSurahLabel => 'السورة';
@@ -3661,9 +3622,6 @@ class L10nAr extends L10n {
 
   @override
   String get reportPickerEmpty => 'لا توجد مواد منشورة مطابقة.';
-
-  @override
-  String get materialsCorrectReasonHint => 'يرى أولياء الأمور هذا السبب.';
 
   @override
   String get ticketChangeLessonTime => 'تغيير موعد الحصة';

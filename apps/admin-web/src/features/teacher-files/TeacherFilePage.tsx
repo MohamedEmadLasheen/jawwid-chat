@@ -15,6 +15,7 @@ import { SupervisionTimeline } from './SupervisionTimeline'
 import { EvaluationsSection } from './Evaluations'
 import { EmploymentSection, FinancialSummarySection, HistorySection, usePayroll } from './Payroll'
 import { MonthlyKpis, TeacherScheduleSection, currentMonth, teacherAreaLinks, type TeacherWorkLinks } from './TeacherWork'
+import { ShiftSection } from '@/features/schedule/ShiftSection'
 import './teacher-files.css'
 import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
@@ -88,6 +89,8 @@ function FileSections({
       <Personal file={file} onEdit={onEdit} />
       <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
       <Students file={file} />
+      {/* PD-38: category and shift, effective-dated. */}
+      <ShiftSection teacherId={file.teacher.id} />
       <TeacherScheduleSection teacherId={file.teacher.id} links={links} />
       <Monthly file={file} onAdd={onAdd} links={links} />
       <Complaints file={file} onAdd={onAdd} />

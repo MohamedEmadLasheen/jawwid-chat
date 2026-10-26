@@ -3,11 +3,10 @@
 /// what it is, and `open` (the access decision) returns something to play.
 library;
 
-/// The subjects, strands, kinds, age bands and map statuses -- the same codes as
+/// The subjects, strands, kinds and age bands -- the same codes as
 /// the server's vocab.ts. An unknown code is kept and shown as the code.
 const materialSubjects = ['quran', 'arabic', 'islamic_studies'];
 const materialAgeGroups = ['4-6', '7-9', '10-12', '13-17', '18+'];
-const markStatuses = ['not_started', 'in_progress', 'memorized', 'needs_revision'];
 
 class Surah {
   const Surah({required this.number, required this.nameAr, required this.nameEn, required this.ayahCount, required this.juz});
@@ -141,116 +140,27 @@ class ChildLibrary {
   final List<MaterialItem> items;
 }
 
-/// One practice entry of a report: an ayah range or a library item.
-sealed class PracticeEntry {
-  const PracticeEntry();
+/// One item opened for the child this academy week (PD-29 amendment): shown once,
+/// with its last opening.
+class OpenedItem {
+  const OpenedItem({required this.item, required this.available, required this.lastOpenedAt, required this.times});
+
+  final MaterialItem item;
+
+  /// False when the item has since left the library (retired): shown, not playable.
+  final bool available;
+  final DateTime lastOpenedAt;
+  final int times;
 }
 
-class AyahPractice extends PracticeEntry {
-  const AyahPractice({
-    required this.surah,
-    required this.nameAr,
-    required this.nameEn,
-    required this.ayahFrom,
-    required this.ayahTo,
-    required this.wholeSurah,
-    required this.hasRecitation,
-  });
+/// "Opened this week": the academy's week, Saturday to Friday in the academy's zone.
+class OpenedThisWeek {
+  const OpenedThisWeek({required this.weekStartsAt, required this.items});
 
-  final int surah;
-  final String nameAr;
-  final String nameEn;
-  final int ayahFrom;
-  final int ayahTo;
-  final bool wholeSurah;
-  final bool hasRecitation;
-}
+  final DateTime weekStartsAt;
 
-class ItemPractice extends PracticeEntry {
-  const ItemPractice(this.item);
-
-  /// Null when the item is no longer in the library.
-  final MaterialItem? item;
-}
-
-class PracticeReport {
-  const PracticeReport({
-    required this.lessonId,
-    required this.submittedAt,
-    this.lessonNumber,
-    this.nextTasks = const [],
-    this.homework,
-    this.practice = const [],
-  });
-
-  final String lessonId;
-  final DateTime submittedAt;
-  final int? lessonNumber;
-  final List<String> nextTasks;
-  final String? homework;
-  final List<PracticeEntry> practice;
-}
-
-class PracticeWeek {
-  const PracticeWeek({required this.current, required this.reports});
-
-  /// False when nothing was reported this week and the latest practice is shown instead.
-  final bool current;
-  final List<PracticeReport> reports;
-}
-
-class ProgressSurah {
-  const ProgressSurah({
-    required this.number,
-    required this.nameAr,
-    required this.nameEn,
-    required this.status,
-    this.hasRecitation = false,
-  });
-
-  final int number;
-  final String nameAr;
-  final String nameEn;
-  final String status;
-  final bool hasRecitation;
-
-  String name(bool arabic) => arabic ? nameAr : nameEn;
-}
-
-class JuzGroup {
-  const JuzGroup({required this.juz, required this.surahs});
-
-  final int juz;
-  final List<ProgressSurah> surahs;
-}
-
-class ProgressMap {
-  const ProgressMap({required this.childName, required this.counts, required this.juz, required this.canCorrect});
-
-  final String childName;
-  final Map<String, int> counts;
-  final List<JuzGroup> juz;
-  final bool canCorrect;
-}
-
-class SurahMark {
-  const SurahMark({required this.status, required this.source, required this.byKind, required this.at, this.byName, this.reason});
-
-  final String status;
-
-  /// `report`, `report_edit` or `correction`.
-  final String source;
-  final String byKind;
-  final String? byName;
-  final String? reason;
-  final DateTime at;
-}
-
-class SurahHistory {
-  const SurahHistory({required this.surah, required this.marks});
-
-  final ProgressSurah surah;
-  final List<SurahMark> marks;
+  /// Most recently opened first.
+  final List<OpenedItem> items;
 }
 
 /// What a teacher attaches to a lesson report (sent with it).
@@ -279,13 +189,4 @@ class PracticeDraft {
 
   @override
   int get hashCode => Object.hash(surah, ayahFrom, ayahTo, itemId);
-}
-
-class MarkDraft {
-  const MarkDraft({required this.surah, required this.status});
-
-  final int surah;
-  final String status;
-
-  Map<String, Object?> toJson() => {'surah': surah, 'status': status};
 }

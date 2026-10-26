@@ -21,6 +21,7 @@ import { AccountRecoveryModule } from './account-recovery/account-recovery.modul
 import { MaterialsModule } from './materials/materials.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
 import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
+import { CalendarModule } from './calendar/calendar.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -69,6 +70,8 @@ import { TeacherSupervisorModule } from './teacher-supervisors/teacher-superviso
     SubscriptionModule,
     // PD-35: teacher supervisors (assignment, the 'supervision' seat).
     TeacherSupervisorModule,
+    // PD-38: the academy scheduling calendar, shifts and supervisor colors.
+    CalendarModule,
   ],
 })
 export class AppModule {}

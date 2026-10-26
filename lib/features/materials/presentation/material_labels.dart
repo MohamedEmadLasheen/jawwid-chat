@@ -40,18 +40,3 @@ IconData kindIcon(String code) => switch (code) {
 
 /// "4–6" -> "Ages 4–6"; "18+" -> "Ages 18+".
 String ageBandLabel(L10n l10n, String band) => l10n.materialsAgeBand(band.replaceAll('-', '–'));
-
-String markLabel(L10n l10n, String code) => switch (code) {
-      'not_started' => l10n.materialsStatusNotStarted,
-      'in_progress' => l10n.materialsStatusInProgress,
-      'memorized' => l10n.materialsStatusMemorized,
-      'needs_revision' => l10n.materialsStatusNeedsRevision,
-      _ => code,
-    };
-
-String markSourceLabel(L10n l10n, String code) => switch (code) {
-      'report' => l10n.materialsSourceReport,
-      'report_edit' => l10n.materialsSourceReportEdit,
-      'correction' => l10n.materialsSourceCorrection,
-      _ => code,
-    };

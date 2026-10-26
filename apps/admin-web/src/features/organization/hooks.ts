@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { chatKeys } from '@/features/chat/chatApi'
-import { orgApi, orgKeys, type NewFamilyGroup } from './api'
+import { orgApi, orgKeys, type NewFamilyGroup, type StartCover } from './api'
 
 export function useStructure(enabled = true) {
   return useQuery({ queryKey: orgKeys.structure, queryFn: orgApi.structure, staleTime: 30_000, enabled })
@@ -68,4 +68,38 @@ export function useCreateBackup() {
 export function useCreateFamilyGroup() {
   const done = useInvalidateOrg()
   return useMutation({ mutationFn: (body: NewFamilyGroup) => orgApi.createFamilyGroup(body), onSuccess: done })
+}
+
+// PD-33 "Hand over to backup". A cover moves who reaches which chats, so every
+// change refreshes the structure, the chat list and the covers themselves.
+
+export function useCovers(enabled = true) {
+  return useQuery({ queryKey: orgKeys.covers, queryFn: orgApi.covers, staleTime: 30_000, enabled })
+}
+
+export function useMyCover(enabled = true) {
+  return useQuery({ queryKey: orgKeys.myCover, queryFn: orgApi.myCover, staleTime: 60_000, enabled })
+}
+
+export function useCoverPreview(supervisorId: string, backupId: string) {
+  return useQuery({
+    queryKey: orgKeys.coverPreview(supervisorId, backupId),
+    queryFn: () => orgApi.coverPreview(supervisorId, backupId || undefined),
+    staleTime: 10_000,
+  })
+}
+
+export function useStartCover() {
+  const done = useInvalidateOrg()
+  return useMutation({ mutationFn: (body: StartCover) => orgApi.startCover(body), onSuccess: done })
+}
+
+export function useExtendCover() {
+  const done = useInvalidateOrg()
+  return useMutation({ mutationFn: (id: string) => orgApi.extendCover(id), onSuccess: done })
+}
+
+export function useEndCover() {
+  const done = useInvalidateOrg()
+  return useMutation({ mutationFn: (id: string) => orgApi.endCover(id), onSuccess: done })
 }

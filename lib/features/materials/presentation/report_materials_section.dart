@@ -7,22 +7,21 @@ import '../../../shared/models/materials.dart';
 import '../data/materials_repository.dart';
 import 'material_labels.dart';
 
-/// PD-29: what a teacher attaches to a lesson report -- "practice this week" (ayah
-/// ranges and library items) and surah statuses for the child's memorization map.
+/// PD-29: what a teacher attaches to a lesson report as practice -- ayah ranges and
+/// library items, shown on the report's card in the chat. (The memorization map
+/// left the product on 2026-10-26, and its section with it.)
 ///
 /// On a new report, an empty list is simply not sent. On an edit, practice is sent
 /// only once the teacher changes it (the server keeps what the report has
-/// otherwise); a surah status is always an addition to the map's history.
+/// otherwise).
 class ReportMaterialsController extends ChangeNotifier {
   ReportMaterialsController({required this.editing});
 
   final bool editing;
   final List<PracticeDraft> _practice = [];
-  final Map<int, String> _marks = {};
   bool _practiceTouched = false;
 
   List<PracticeDraft> get practice => List.unmodifiable(_practice);
-  Map<int, String> get marks => Map.unmodifiable(_marks);
 
   void addPractice(PracticeDraft p) {
     if (_practice.contains(p) || _practice.length >= 10) return;
@@ -37,20 +36,8 @@ class ReportMaterialsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setMark(int surah, String status) {
-    _marks[surah] = status;
-    notifyListeners();
-  }
-
-  void removeMark(int surah) {
-    _marks.remove(surah);
-    notifyListeners();
-  }
-
   /// What the report sends.
   List<PracticeDraft>? get draftPractice => editing ? (_practiceTouched ? practice : null) : (_practice.isEmpty ? null : practice);
-  List<MarkDraft>? get draftMarks =>
-      _marks.isEmpty ? null : [for (final e in _marks.entries) MarkDraft(surah: e.key, status: e.value)];
 }
 
 class ReportMaterialsSection extends ConsumerWidget {
@@ -61,17 +48,11 @@ class ReportMaterialsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final surahs = ref.watch(surahsProvider);
-    // A build without a materials server offers neither section.
+    // A build without a materials server offers no practice section.
     if (surahs.hasError) return const SizedBox.shrink();
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
-    final arabic = Localizations.localeOf(context).languageCode == 'ar';
     final list = surahs.value ?? const <Surah>[];
-    String surahName(int n) {
-      final s = list.where((x) => x.number == n).firstOrNull;
-      return s == null ? '$n' : '$n. ${s.name(arabic)}';
-    }
-
     Widget heading(String text) => Padding(
           padding: const EdgeInsets.only(top: Spacing.spacing4, bottom: Spacing.spacing2),
           child: Text(text, style: theme.textTheme.labelLarge),
@@ -126,33 +107,6 @@ class ReportMaterialsSection extends ConsumerWidget {
                 label: Text(l10n.reportPracticeAddItem),
               ),
             ],
-          ),
-          heading(l10n.reportMemorizationLabel),
-          Wrap(
-            spacing: Spacing.spacing2,
-            runSpacing: Spacing.spacing2,
-            children: [
-              for (final e in controller.marks.entries)
-                InputChip(
-                  key: ValueKey('mark-${e.key}'),
-                  label: Text('${surahName(e.key)} · ${markLabel(l10n, e.value)}'),
-                  onDeleted: () => controller.removeMark(e.key),
-                ),
-            ],
-          ),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              key: const ValueKey('mark-add'),
-              onPressed: list.isEmpty
-                  ? null
-                  : () async {
-                      final m = await showDialog<MarkDraft>(context: context, builder: (_) => _MarkDialog(surahs: list));
-                      if (m != null) controller.setMark(m.surah, m.status);
-                    },
-              icon: const Icon(Icons.flag_outlined),
-              label: Text(l10n.reportMemorizationAdd),
-            ),
           ),
         ],
       ),
@@ -254,67 +208,6 @@ class _AyahDialogState extends State<_AyahDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(MaterialLocalizations.of(context).cancelButtonLabel)),
         FilledButton(key: const ValueKey('ayah-add'), onPressed: _add, child: Text(l10n.reportAdd)),
-      ],
-    );
-  }
-}
-
-class _MarkDialog extends StatefulWidget {
-  const _MarkDialog({required this.surahs});
-
-  final List<Surah> surahs;
-
-  @override
-  State<_MarkDialog> createState() => _MarkDialogState();
-}
-
-class _MarkDialogState extends State<_MarkDialog> {
-  late int _surah = widget.surahs.first.number;
-  String _status = 'in_progress';
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = L10n.of(context);
-    final arabic = Localizations.localeOf(context).languageCode == 'ar';
-    return AlertDialog(
-      title: Text(l10n.reportMemorizationAdd),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          DropdownButtonFormField<int>(
-            key: const ValueKey('mark-surah'),
-            initialValue: _surah,
-            isExpanded: true,
-            decoration: InputDecoration(labelText: l10n.reportSurahLabel),
-            items: [
-              for (final s in widget.surahs) DropdownMenuItem(value: s.number, child: Text('${s.number}. ${s.name(arabic)}')),
-            ],
-            onChanged: (n) => setState(() => _surah = n ?? _surah),
-          ),
-          const SizedBox(height: Spacing.spacing3),
-          Wrap(
-            spacing: Spacing.spacing2,
-            runSpacing: Spacing.spacing2,
-            children: [
-              for (final s in markStatuses)
-                ChoiceChip(
-                  key: ValueKey('mark-status-$s'),
-                  label: Text(markLabel(l10n, s)),
-                  selected: _status == s,
-                  onSelected: (_) => setState(() => _status = s),
-                ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(MaterialLocalizations.of(context).cancelButtonLabel)),
-        FilledButton(
-          key: const ValueKey('mark-save'),
-          onPressed: () => Navigator.of(context).pop(MarkDraft(surah: _surah, status: _status)),
-          child: Text(l10n.reportAdd),
-        ),
       ],
     );
   }

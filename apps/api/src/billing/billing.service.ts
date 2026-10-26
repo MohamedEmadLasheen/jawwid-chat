@@ -228,11 +228,18 @@ export class BillingService {
       if (!r.responsibleSupervisor && r.status !== 'paid') counts.unassigned += 1;
       if (r.beforeGoLive) counts.beforeGoLive += 1;
     }
+    // PD-33: "mine" is also the rows of every supervisor I cover for right now.
+    const mine = new Set([actor.actorId]);
+    if (responsible === 'me') {
+      const covered = await this.prisma.$queryRaw<Array<{ primary_id: string }>>`
+        SELECT primary_id::text AS primary_id FROM chat.live_covers(now()) WHERE backup_id = ${actor.actorId}::uuid`;
+      for (const c of covered) mine.add(c.primary_id);
+    }
     const items = rows
       .filter((r) => !beforeGoLive || r.beforeGoLive)
       .filter((r) =>
         responsible === 'me'
-          ? r.responsibleSupervisor?.id === actor.actorId
+          ? r.responsibleSupervisor !== null && mine.has(r.responsibleSupervisor.id)
           : responsible === 'none'
             ? r.responsibleSupervisor === null
             : true,
