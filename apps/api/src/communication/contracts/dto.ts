@@ -320,11 +320,11 @@ export interface ConversationViewerStateDto {
   /** The viewer's OWN wallpaper photo for this chat, as a link signed for them; null when none. */
   wallpaperUrl: string | null;
   /**
-   * PD-36: the viewer's own open or unseen mention here, or null. A `summons`
+   * PD-36: the viewer's own open or unseen mention here; absent when none. A `summons`
    * that is unseen puts the row at the very top of the list ("Mentioned"); a
    * `member` mention is an "@" marker on the row until opened.
    */
-  mention?: ViewerMentionDto | null;
+  mention?: ViewerMentionDto;
 }
 
 export interface LastMessageDto {

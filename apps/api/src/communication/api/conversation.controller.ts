@@ -90,7 +90,7 @@ export class ConversationController {
           // PD-14: nothing is held for approval. Still sent, as false, for
           // clients built before it.
           viewerRequiresApproval: false,
-          viewerState: { ...viewerState(states.get(c.id), c.id, actor.actorId), mention: mentions.get(c.id) ?? null },
+          viewerState: withMention(viewerState(states.get(c.id), c.id, actor.actorId), mentions.get(c.id)),
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
           learnerAvatarUrl: c.learner
             ? signAvatar('learner', c.learner.id, c.id, actor.actorId, c.learner.avatarObjectKey)
@@ -203,10 +203,7 @@ export class ConversationController {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: false, // PD-14
       viewerModerates: this.authz.moderatableAuthorKinds(actor, await this.conversations.staffAccess(actor, conversation)),
-      viewerState: {
-        ...viewerState(states.get(conversation.id), conversation.id, actor.actorId),
-        mention: mentions.get(conversation.id) ?? null,
-      },
+      viewerState: withMention(viewerState(states.get(conversation.id), conversation.id, actor.actorId), mentions.get(conversation.id)),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
       learnerAvatarUrl: conversation.learner
         ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
@@ -323,6 +320,11 @@ export class ConversationController {
 }
 
 /** The viewer's stored preferences, or the defaults when they never set any. */
+/** PD-36: the viewer's own mention rides on viewerState only when there is one; otherwise the shape is unchanged. */
+function withMention(state: ConversationViewerStateDto, mention: ViewerMentionDto | undefined): ConversationViewerStateDto {
+  return mention ? { ...state, mention } : state;
+}
+
 function viewerState(
   row:
     | {

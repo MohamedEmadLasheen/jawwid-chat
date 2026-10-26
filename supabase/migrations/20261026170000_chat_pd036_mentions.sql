@@ -273,9 +273,9 @@ revoke all on chat.message_mention from public, anon, authenticated, chat_app;
 -- A mention is HIGH priority and still waits out quiet hours.
 insert into chat.notification_template (key, locale, version, title, body) values
   ('mention',       'en', 1, 'Jawwid', 'You were mentioned in a conversation.'),
-  ('mention',       'ar', 1, 'جوّيد',  'تمت الإشارة إليك في محادثة.'),
+  ('mention',       'ar', 1, 'جَوِّد',  'تمت الإشارة إليك في محادثة.'),
   ('mention_group', 'en', 1, 'Jawwid', 'You were mentioned in a family group.'),
-  ('mention_group', 'ar', 1, 'جوّيد',  'تمت الإشارة إليك في مجموعة العائلة.')
+  ('mention_group', 'ar', 1, 'جَوِّد',  'تمت الإشارة إليك في مجموعة العائلة.')
 on conflict (key, locale, version) do nothing;
 
 insert into chat.notification_rule
