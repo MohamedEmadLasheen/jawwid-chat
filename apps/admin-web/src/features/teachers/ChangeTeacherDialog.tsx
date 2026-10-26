@@ -8,7 +8,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import { LockedNotice, WeeklySlotPicker, weeklyKey, type WeeklyOption } from '@/shared/components/SlotPicker'
 import type { Pair } from './copy'
 import { opsApi, opsKeys, type TeacherCandidate, type TransferPreview, type TransferReason } from './opsApi'
-import { O, TRANSFER_REASON, describeOpsError, fill, formatDay } from './opsCopy'
+import { O, TRANSFER_REASON, arrow, describeOpsError, fill, formatDay } from './opsCopy'
 import { useOp, useScheduleOptions, useTeacherCandidates } from './opsHooks'
 import { weeklyLabel } from './WeeklyChangeDialog'
 import './teachers.css'
@@ -30,6 +30,9 @@ function useTx() {
   const { locale } = useI18n()
   return (p: Pair) => (locale === 'ar' ? p.ar : p.en)
 }
+
+/** A name kept whole inside a sentence of the other direction (a Latin name in Arabic): FSI ... PDI. */
+const isolate = (name: string) => `\u2068${name}\u2069`
 
 /** Why a teacher cannot be picked, or null. */
 function unavailable(t: TeacherCandidate, tx: (p: Pair) => string, locale: 'ar' | 'en'): string | null {
@@ -235,7 +238,7 @@ export function ChangeTeacherDialog({
           <h3 className="ts-subtitle">{tx(O.summary)}</h3>
           {learners.map((l) => (
             <p key={l.id} data-testid="teacher-summary">
-              <strong>{fill(tx(O.sumTeacher), { name: l.name, from: fromName(l), to: toName })}</strong>
+              <strong>{fill(tx(O.sumTeacher), { name: isolate(l.name), from: isolate(fromName(l)), to: isolate(toName) })}</strong>
               {' — '}
               {summaryTimes(l, sets[l.id] ?? null, tx, locale)}
               {' · '}
@@ -323,7 +326,7 @@ function LearnerPreview({
   return (
     <div className="ts-preview__learner" role="group" aria-label={l.name}>
       <p>
-        <strong dir="auto">{l.name}</strong> <span className="ts-muted">· {fromName} → {toName} · {fill(tx(O.futureLessons), { n: l.futureLessons })}</span>
+        <strong dir="auto">{l.name}</strong> <span className="ts-muted">· <bdi>{fromName}</bdi>{arrow(locale)}<bdi>{toName}</bdi> · {fill(tx(O.futureLessons), { n: l.futureLessons })}</span>
       </p>
       <ul className="ts-preview__slots">
         {l.slots.map((s, i) => {
@@ -335,7 +338,7 @@ function LearnerPreview({
                 {label} — {s.free ? tx(O.slotFree) : tx(O.slotBusy)}
                 {choice && (
                   <>
-                    {' → '}
+                    {arrow(locale)}
                     <strong>{weeklyLabel(choice.nextStartsAt, locale)}</strong>
                   </>
                 )}

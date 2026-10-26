@@ -311,7 +311,8 @@ describe('Change teacher', () => {
     expect(within(within(picker).getByRole('radiogroup', { name: 'Day' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Fri · 1 time'])
     await userEvent.click(within(picker).getByRole('radio', { name: '18:00' }))
     await waitFor(() => expect(confirm).toBeEnabled())
-    expect(within(dialog).getByTestId('teacher-summary')).toHaveTextContent(
+    // Names are bidi-isolated (FSI ... PDI) so a Latin name cannot flip the arrow in Arabic.
+    expect(within(dialog).getByTestId('teacher-summary').textContent!.replace(/[\u2068\u2069]/g, '')).toBe(
       'Child Alpha: Teacher One → Teacher Two — Mon 17:00 kept; Thu 17:00 → Fri 18:00 · 7 future lessons follow',
     )
     await userEvent.type(within(dialog).getByLabelText(/Handover note/), 'continue from Al-Mulk 16')

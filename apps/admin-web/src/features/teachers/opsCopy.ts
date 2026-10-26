@@ -300,6 +300,11 @@ export function formatDay(day: string, locale: 'ar' | 'en'): string {
   return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { dateStyle: 'medium', timeZone: 'UTC' }).format(d)
 }
 
+/** "from → to" in the reading direction: in Arabic the arrow points left, to the new value. */
+export function arrow(locale: 'ar' | 'en'): string {
+  return locale === 'ar' ? ' ← ' : ' → '
+}
+
 /** "{name}" placeholders filled in. */
 export function fill(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))

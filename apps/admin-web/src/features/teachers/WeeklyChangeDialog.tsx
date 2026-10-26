@@ -6,7 +6,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import { LockedNotice, WeeklySlotPicker, weeklyKey, type WeeklyOption } from '@/shared/components/SlotPicker'
 import type { Pair } from './copy'
 import { opsApi, type ScheduleOptions } from './opsApi'
-import { O, describeOpsError, fill } from './opsCopy'
+import { O, arrow, describeOpsError, fill } from './opsCopy'
 import { useOp, useScheduleOptions } from './opsHooks'
 import './teachers.css'
 
@@ -170,7 +170,7 @@ function WeeklyEditor({
                   <span className={s === 'removed' || s === 'changed' ? 'ts-weekly__old' : undefined}>{label}</span>
                   {r.next && s !== 'unchanged' && (
                     <>
-                      {' → '}
+                      {arrow(locale)}
                       <strong>{weeklyLabel(r.next.nextStartsAt, locale)}</strong>
                     </>
                   )}
