@@ -9,15 +9,13 @@ import 'package:jawwid_chat/features/messages/data/mention_repository.dart';
 import 'package:jawwid_chat/features/messages/domain/mentions.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_composer.dart';
-import 'package:jawwid_chat/features/messages/presentation/system_message_text.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
-import 'package:jawwid_chat/l10n/app_localizations_en.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
 /// PD-36 @mentions in the app: the text helpers (UTF-16 offsets, the same as the server and
 /// Admin Web), the wire mapping, the chip in a bubble (isolated, so an Arabic name in English
-/// text keeps its direction), the @ list in the composer and the step-in system lines.
+/// text keeps its direction) and the @ list in the composer. Answering a summons is PD-35's seat.
 void main() {
   Widget app(Widget child, {Locale locale = const Locale('en')}) => ProviderScope(
         child: MaterialApp(
@@ -144,12 +142,6 @@ void main() {
       await tester.pumpWidget(app(MessageBubble(message: message(), showAuthor: false)));
       await tester.pumpAndSettle();
       expect(find.text('hi @ليلى look'), findsOneWidget);
-    });
-
-    test('a step-in reads as a line, with a name or without', () {
-      final l10n = L10nEn();
-      expect(systemMessageText('{"kind":"mention.stepped_in","name":"Laila Mansour","role":"manager"}', l10n), 'Laila Mansour stepped in');
-      expect(systemMessageText('{"kind":"mention.stepped_out","reason":"idle"}', l10n), 'Jawwid stepped out');
     });
   });
 

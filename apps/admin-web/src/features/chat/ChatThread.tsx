@@ -425,9 +425,7 @@ export function ChatThread({
   // into a 1:1) visibly; until then the composer waits (a client choice, PD-8 unchanged).
   const isMember = (conv?.members ?? []).some((x) => x.actorId === staff?.id)
   const summons =
-    conv && viewerMention?.kind === 'summons' && !isMember && (viewerMention.state === 'pending' || viewerMention.state === 'stepped_in')
-      ? viewerMention
-      : null
+    conv && viewerMention?.kind === 'summons' && !isMember && viewerMention.state === 'pending' ? viewerMention : null
 
   return (
     <>
@@ -730,7 +728,7 @@ export function ChatThread({
             onChanged={() => void queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) })}
           />
         )}
-        {summons?.state !== 'pending' && <ChatComposer
+        {!summons && <ChatComposer
           extraItems={[
             ...(trialGroup ? [{ key: 'trial', label: trialCopy(TR.cardLabel), icon: 'calendar' as const, onSelect: () => setTrialCard(true) }] : []),
             ...lessonCards.items,

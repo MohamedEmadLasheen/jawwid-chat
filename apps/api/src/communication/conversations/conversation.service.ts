@@ -1561,7 +1561,8 @@ export class ConversationService {
       const open = await this.prisma.messageMention.findMany({
         where: {
           targetActorId: actor.actorId,
-          OR: [{ state: 'pending', expiresAt: { gt: now } }, { state: 'stepped_in' }],
+          state: 'pending',
+          expiresAt: { gt: now },
         },
         select: { conversationId: true },
         distinct: ['conversationId'],

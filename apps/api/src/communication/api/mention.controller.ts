@@ -4,8 +4,10 @@ import { MentionService } from '../mentions/mention.service';
 
 /**
  * PD-36 @mentions. Sending one rides on the message send (`mentions` in its
- * body); these routes are the picker and the answers. Joining a GROUP is
- * PD-35's seat route (`POST conversations/:id/join`, reason `mention`).
+ * body); these routes are the picker, "seen" and "not for me". Answering a
+ * summons is PD-35's seat route (`POST conversations/:id/join`, reason
+ * `mention`, sourceId = the mention): a member row in a group, an effective
+ * seat in a family 1:1.
  */
 @Controller()
 export class MentionController {
@@ -28,21 +30,15 @@ export class MentionController {
     await this.mentions.markSeen(actorId, id);
   }
 
-  /** The caller's open summonses (pending, or stepped into a 1:1). */
+  /** The caller's open summonses. */
   @Get('me/mentions')
   mine(@ActorId() actorId: string) {
     return this.mentions.openFor(actorId);
   }
 
-  /** "Not for me" -- or, after stepping into a 1:1, step back out (visible). */
+  /** "Not for me": the caller's open summonses in that conversation close. */
   @Post('mentions/:id/dismiss')
   dismiss(@ActorId() actorId: string, @Param('id') id: string) {
     return this.mentions.dismiss(actorId, id);
-  }
-
-  /** Step into a family 1:1 (no seat: a 1:1 never gains a third member). */
-  @Post('mentions/:id/step-in')
-  stepIn(@ActorId() actorId: string, @Param('id') id: string) {
-    return this.mentions.stepIn(actorId, id);
   }
 }

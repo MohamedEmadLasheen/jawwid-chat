@@ -90,8 +90,9 @@ const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
 const COVER_SWEEP_MS = Number(process.env.COVER_SWEEP_MS ?? 60_000);
 
 /**
- * PD-36: how often unanswered summonses expire and quiet step-ins end. Nothing
- * waits on it for access -- a summons grants none -- so a minute is plenty.
+ * PD-36: how often summonses a seat answered are closed and unanswered ones
+ * expire. Nothing waits on it for access -- a summons grants none -- so a
+ * minute is plenty.
  */
 const MENTION_SWEEP_MS = Number(process.env.MENTION_SWEEP_MS ?? 60_000);
 
@@ -332,7 +333,7 @@ async function bootstrap(): Promise<void> {
       }
     }
 
-    // PD-36: summonses past their window, and step-ins gone quiet. Safe on
+    // PD-36: summonses a seat answered, and those past their window. Safe on
     // every replica: each row moves by a conditional update.
     if (Date.now() >= nextMentionSweep) {
       draining = true;

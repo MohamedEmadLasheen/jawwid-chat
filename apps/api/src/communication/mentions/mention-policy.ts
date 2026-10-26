@@ -17,8 +17,6 @@ export const MentionState = {
   NOTIFIED: 'notified',
   PENDING: 'pending',
   JOINED: 'joined',
-  STEPPED_IN: 'stepped_in',
-  LEFT: 'left',
   DISMISSED: 'dismissed',
   EXPIRED: 'expired',
   VOID: 'void',

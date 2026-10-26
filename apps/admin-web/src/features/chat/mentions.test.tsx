@@ -150,8 +150,8 @@ function stubApi(state: { conversations: ChatConversation[]; messages: Record<st
         })
       }
       if (/\/mentions\/seen$/.test(path)) return json(null, 204)
-      if (/^\/mentions\/[^/]+\/(dismiss|step-in)$/.test(path)) return json({ state: path.endsWith('dismiss') ? 'dismissed' : 'stepped_in' })
-      if (/\/join$/.test(path)) return json({ ok: true })
+      if (/^\/mentions\/[^/]+\/dismiss$/.test(path)) return json({ state: 'dismissed' })
+      if (/\/join$/.test(path)) return json({ id: 'seat-1' })
       const m = path.match(/^\/conversations\/([^/]+)(\/messages(\/read)?)?$/)
       if (m) {
         const id = decodeURIComponent(m[1]!)
@@ -212,18 +212,21 @@ describe('PD-36 in the chat workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join' }))
     await waitFor(() => {
       const join = calls.find((c) => c.method === 'POST' && c.path === '/conversations/c1/join')
-      expect(join?.body).toEqual({ reason: 'mention' })
+      expect(join?.body).toEqual({ reason: 'mention', sourceId: 'mn-1' })
     })
   })
 
-  it('asked into a 1:1: "Step in" (a 1:1 takes no seat); "Not for me" dismisses', async () => {
+  it('asked into a 1:1: "Step in" takes the effective seat; "Not for me" dismisses', async () => {
     const calls = stubApi({
       conversations: [conv('d1', { type: 'direct', viewerState: { pinned: false, archived: false, mutedUntil: null, mention: summons() } })],
       messages: { d1: [] },
     })
     renderChat('/chat/d1')
     fireEvent.click(await screen.findByRole('button', { name: 'Step in' }))
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/mentions/mn-1/step-in')).toBe(true))
+    await waitFor(() => {
+      const join = calls.find((c) => c.method === 'POST' && c.path === '/conversations/d1/join')
+      expect(join?.body).toEqual({ reason: 'mention', sourceId: 'mn-1' })
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Not for me' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/mentions/mn-1/dismiss')).toBe(true))
   })

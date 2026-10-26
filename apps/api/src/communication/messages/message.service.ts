@@ -357,9 +357,6 @@ export class MessageService {
         // PD-36: counted and written under the conversation lock held above,
         // so the rate limits are exact on every replica.
         if (this.mentions) {
-          if (actor.kind === ActorKind.STAFF && conv.type === ConversationType.DIRECT) {
-            await this.mentions.touchStepIn(tx, conv.id, actor.actorId, now);
-          }
           const recorded = await this.mentions.record(tx, plannedMentions, message, conv, actor, now);
           mentionsLimited = recorded.limited;
           (message as MessageWithRelations).mentions = recorded.rows;

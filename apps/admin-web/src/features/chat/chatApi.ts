@@ -47,7 +47,7 @@ export interface ChatViewerMention {
   mentionId: string
   /** 'summons': asked to step in while not a member. 'member': a highlight and a ping. */
   kind: 'member' | 'summons'
-  /** 'pending' (waiting for an answer), 'stepped_in' (in a 1:1 without a seat), 'notified' (a member's). */
+  /** 'pending' (a summons waiting for an answer) or 'notified' (a member's). */
   state: string
   mentionedById: string
   at: string
@@ -61,7 +61,7 @@ export interface ChatSummoned {
   actorId: string
   displayName: string
   staffRole: string
-  /** 'pending' = waiting; 'stepped_in' = stepped into a 1:1 (no seat). */
+  /** 'pending': asked in and waiting. */
   state: string
   mentionedById: string
   mentionedByName: string | null
@@ -349,11 +349,12 @@ export const chatApi = {
   /** PD-36: "Not for me" -- or, after stepping into a 1:1, step back out. */
   dismissMention: (mentionId: string) =>
     api.post<{ state: string }>(`/mentions/${encodeURIComponent(mentionId)}/dismiss`),
-  /** PD-36: step into a family 1:1 on a mention (a 1:1 never gains a seat). */
-  stepIn: (mentionId: string) => api.post<{ state: string }>(`/mentions/${encodeURIComponent(mentionId)}/step-in`),
-  /** PD-36 -> PD-35: take a VISIBLE seat in a group on a mention ("Laila joined"). */
-  joinOnMention: (id: string, refMessageId?: string) =>
-    api.post<{ ok: boolean }>(`${conv(id)}/join`, { reason: 'mention', ...(refMessageId ? { refMessageId } : {}) }),
+  /**
+   * PD-36 -> PD-35: answer a mention by taking a VISIBLE seat -- a member seat in
+   * a group ("Laila joined"), an effective seat in a family 1:1 (no third member).
+   */
+  joinOnMention: (id: string, mentionId: string) =>
+    api.post<{ id: string }>(`${conv(id)}/join`, { reason: 'mention', sourceId: mentionId }),
   /**
    * Forward messages of conversation `id` into up to ten others. The server
    * checks each source is readable here and each destination writable; media

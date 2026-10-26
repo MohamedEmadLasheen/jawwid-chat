@@ -3097,17 +3097,18 @@ parents        name members only, plus "@supervisor" (the children's supervisor,
 read           NO new read rule: whoever may be summoned already reads the whole
                thread under PD-8. "Read-only until Join" is a client gate (Admin
                Web hides the composer); the PD-8 send rule is unchanged
-join           a group: PD-35's seat primitive, reason 'mention' (eligible to
-               join: an open summons + a PD-8 basis other than 'seated'; to stay:
-               the basis alone); a family 1:1: "Step in" -- no seat (a 1:1 never
-               grows), a visible line, that conversation's pushes until they step
-               out or go quiet (mention.step_in_idle_days = 14)
+join           PD-35's visible seat, reason 'mention', sourceId = the mention
+               (POST /conversations/:id/join): a member seat in a group ("Join"),
+               an EFFECTIVE seat in a family 1:1 ("Step in": no third member, the
+               pushes follow); eligible to join: an open summons + PD-8 standing
+               of one's own (chat.staff_conversation_standing); to stay: the
+               standing alone (chat.seat_reason 'mention'); leaving is PD-35's
 the summoned   the chat leads their list ABOVE pinned with "Mentioned" until
 person         opened; a push ("You were mentioned in a family group" / "... in a
                conversation"; no name, no text) that breaks through mute, quiet
                hours respected; Join / Step in / Not for me
 the group      "Mentioned -- waiting" rows at the top of Group Info with who asked
-               and when (parents see name and role); gone once answered, or after
+               and when (parents see name and role); gone once seated, or after
                mention.expiry_days (= 7)
 members        a chip in the message (isolated for RTL), a highlight, and a
                mention push instead of the new-message push
@@ -3125,14 +3126,15 @@ events         MENTION_CREATED (one per person; PD-34 consumes it) and
 (chat.message_mention, chat.conversation_takes_summons,
 chat.mention_eligible_staff, chat.mention_role_targets, the guard trigger, five
 config keys, push rules and templates `mention` / `mention_group`);
-`MentionService` (+ send / edit / delete hooks, worker sweep); routes `GET
+`MentionService` (+ send / edit / delete hooks, the 'mention' SeatPolicy, the
+worker sweep that closes answered summonses as joined); routes `GET
 /conversations/:id/mention-candidates`, `POST /conversations/:id/mentions/seen`,
-`GET /me/mentions`, `POST /mentions/:id/dismiss|step-in`; Admin Web @ picker,
-chips, Mentioned row, banner, Group Info rows; app @ picker (with the two role
-mentions for parents), chips, "@" marker, Group Info rows, step-in lines.
+`GET /me/mentions`, `POST /mentions/:id/dismiss`; Admin Web @ picker, chips,
+Mentioned row, Join / Step in / Not for me banner, Group Info rows; app @ picker
+(with the two role mentions for parents), chips, "@" marker, Group Info rows.
 
-**Depends on.** PD-35's seat primitive for Join in a group (the Admin Web button
-posts `POST /conversations/:id/join {reason:'mention'}`); PD-33's `cover_of`.
+**Depends on.** PD-35's seat primitive (Join and Step in are its seats, reason
+'mention'); PD-33's `cover_of`.
 
 **Closed.** 2026-10-26.
 

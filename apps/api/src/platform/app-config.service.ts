@@ -102,8 +102,6 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'mention.parent_role_day': 3,
   /** PD-36: an unanswered summons expires after this many days. */
   'mention.expiry_days': 7,
-  /** PD-36: a step-in to a family 1:1 ends after this many days without a message from them. */
-  'mention.step_in_idle_days': 14,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

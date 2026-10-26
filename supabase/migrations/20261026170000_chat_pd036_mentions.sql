@@ -5,12 +5,13 @@
 -- Record: docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md §4 PD-36.
 --
 -- A MENTION NEVER WIDENS AUTHORIZATION. Whoever may be summoned is exactly
--- whoever chat.staff_conversation_access() already admits to this conversation
--- (PD-8: the supervisor, an active backup or PD-33 cover, the department
--- manager, the super admin). Those people can already read the whole thread
--- and reply on their PD-8 basis; a summons only points them at it. Taking a
--- VISIBLE seat is PD-35's primitive (chat.conversation_seat, reason
--- 'mention'), not anything in this file.
+-- whoever already STANDS in this conversation under PD-8 --
+-- chat.staff_conversation_standing(), PD-35's basis that no seat supplies: the
+-- supervisor, an active backup or PD-33 cover, the department manager, the
+-- super admin. Those people can already read the whole thread and reply on
+-- that basis; a summons only points them at it. Taking a VISIBLE seat -- a
+-- member row in a group, an effective seat in a family 1:1 -- is PD-35's
+-- primitive (chat.conversation_seat, reason 'mention'), not anything here.
 --
 -- So the database floor here is: a summons row may only name a live staff
 -- member with a PD-8 basis on this conversation, in a conversation type that
@@ -38,16 +39,14 @@ create table chat.message_mention (
   span_length       integer not null check (span_length between 2 and 200),
   --   notified    a member's mention (terminal)
   --   pending     a summons not yet answered
-  --   joined      the summoned person took a seat (PD-35 primitive, group)
-  --   stepped_in  the summoned person stepped into a family 1:1 (no seat)
-  --   left        a step-in ended (dismissed, idle, or standing lost)
+  --   joined      the summoned person took a seat (PD-35: a member row in a
+  --               group, an effective seat in a family 1:1)
   --   dismissed   the summoned person declined it
   --   expired     nobody answered within mention.expiry_days
   --   void        the person lost their standing before answering
   --   removed     the mentioning message was edited or deleted away
   state             text not null check (state in
-                      ('notified', 'pending', 'joined', 'stepped_in', 'left',
-                       'dismissed', 'expired', 'void', 'removed')),
+                      ('notified', 'pending', 'joined', 'dismissed', 'expired', 'void', 'removed')),
   created_at        timestamptz not null default now(),
   expires_at        timestamptz,
   -- When the target first opened the conversation after the mention: the chat
@@ -55,8 +54,6 @@ create table chat.message_mention (
   seen_at           timestamptz,
   resolved_at       timestamptz,
   resolved_by       uuid,
-  -- A step-in's last sign of life (its last message), for the idle sweep.
-  last_active_at    timestamptz,
   constraint message_mention_one_per_span unique (message_id, target_actor_id, span_start),
   constraint message_mention_summons_shape check (
     (is_summons and target_kind = 'staff' and expires_at is not null and state <> 'notified')
@@ -68,11 +65,11 @@ create table chat.message_mention (
 );
 
 comment on table chat.message_mention is
-  'PD-36: one @mention of one person in one message. A role mention (via_role) is expanded to one row per person. is_summons rows name a non-member staff member with PD-8 standing; their state runs pending -> joined | stepped_in | dismissed | expired | void.';
+  'PD-36: one @mention of one person in one message. A role mention (via_role) is expanded to one row per person. is_summons rows name a non-member staff member with PD-8 standing; their state runs pending -> joined | dismissed | expired | void.';
 
 create index message_mention_message on chat.message_mention (message_id);
 create index message_mention_target_open on chat.message_mention (target_actor_id, conversation_id)
-  where state in ('pending', 'stepped_in');
+  where state = 'pending';
 create index message_mention_target_unseen on chat.message_mention (target_actor_id)
   where seen_at is null and state in ('notified', 'pending');
 create index message_mention_due on chat.message_mention (expires_at)
@@ -89,9 +86,7 @@ insert into chat.config (key, value, scope, description) values
 ('mention.parent_role_day', '3'::jsonb, 'org',
  'PD-36: how many "@supervisor" / "@admin" role mentions one parent may send in one conversation per day.'),
 ('mention.expiry_days', '7'::jsonb, 'org',
- 'PD-36: an unanswered summons expires after this many days.'),
-('mention.step_in_idle_days', '14'::jsonb, 'org',
- 'PD-36: a step-in to a family 1:1 ends after this many days without a message from the person who stepped in.')
+ 'PD-36: an unanswered summons expires after this many days.')
 on conflict (key) do nothing;
 
 -- The conversation types that take a summons: the family-facing groups, the
@@ -113,8 +108,9 @@ as $$
 $$;
 
 -- Everyone who may be summoned into p_conversation at p_at: every live
--- conversation-staff member of its organization with a PD-8 basis on it. The
--- @ picker and the send path both read this; neither has its own rule.
+-- conversation-staff member of its organization who STANDS in it under PD-8
+-- (never on a seat alone). The @ picker and the send path both read this;
+-- neither has its own rule.
 create or replace function chat.mention_eligible_staff(p_conversation uuid, p_at timestamptz default now())
 returns table (staff_id uuid, basis text)
 language sql
@@ -122,7 +118,7 @@ stable
 as $$
   select x.staff_id, x.basis
     from (
-      select s.id as staff_id, chat.staff_conversation_access(s.id, c.id, p_at) as basis
+      select s.id as staff_id, chat.staff_conversation_standing(s.id, c.id, p_at) as basis
         from chat.conversation c
         join chat.staff s on s.organization_id = c.organization_id
        where c.id = p_conversation
@@ -189,7 +185,7 @@ begin
     join chat.staff st on st.id = w.id
    where st.role <> 'super_admin'
      and st.is_active and st.left_at is null
-     and chat.staff_conversation_access(w.id, c.id, p_at) is not null;
+     and chat.staff_conversation_standing(w.id, c.id, p_at) is not null;
 end;
 $$;
 
@@ -214,8 +210,7 @@ begin
         using errcode = 'check_violation';
     end if;
     if new.state <> old.state and not (
-         (old.state = 'pending' and new.state in ('joined', 'stepped_in', 'dismissed', 'expired', 'void', 'removed'))
-      or (old.state = 'stepped_in' and new.state in ('left', 'removed'))
+         (old.state = 'pending' and new.state in ('joined', 'dismissed', 'expired', 'void', 'removed'))
       or (old.state = 'notified' and new.state = 'removed')
     ) then
       raise exception 'a mention cannot move from % to %', old.state, new.state
@@ -241,9 +236,9 @@ begin
     if not chat.conversation_takes_summons(new.conversation_id) then
       raise exception 'this conversation takes no summons' using errcode = 'insufficient_privilege';
     end if;
-    -- The whole rule: a PD-8 basis on THIS conversation, now. A mention grants
-    -- nothing; it may only name someone who already has standing.
-    if chat.staff_conversation_access(new.target_actor_id, new.conversation_id, now()) is null then
+    -- The whole rule: PD-8 standing on THIS conversation, now (a seat is no
+    -- standing). A mention grants nothing; it may only name someone who has it.
+    if chat.staff_conversation_standing(new.target_actor_id, new.conversation_id, now()) is null then
       raise exception 'only staff in charge of this conversation can be summoned'
         using errcode = 'insufficient_privilege';
     end if;

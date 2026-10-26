@@ -11,10 +11,11 @@ import { chatCopyFor } from './copy'
  * They can already read it -- that is why they could be asked (PD-8) -- so the
  * banner does not unlock anything. It asks them to take part VISIBLY:
  *
- *   group  "Join" takes a seat through PD-35's primitive; the family and the
+ *   group  "Join": a member seat through PD-35's primitive; the family and the
  *          teacher see "Laila joined", and the pushes start.
- *   1:1    "Step in" -- a 1:1 never gains a third member -- with a visible line;
- *          the pushes follow until they step out.
+ *   1:1    "Step in": the same primitive's EFFECTIVE seat -- a 1:1 never gains a
+ *          third member -- with a visible line; the pushes follow until they
+ *          leave the seat (PD-35's Leave).
  *
  * While the summons is open the composer is not offered (the parent should see
  * someone join before they read their reply). That is a client choice only:
@@ -51,18 +52,6 @@ export function MentionBanner({
     }
   }
 
-  if (mention.state === 'stepped_in') {
-    return (
-      <div className="cw-mention-banner cw-mention-banner--in" role="status">
-        <Icon name="at" size={16} />
-        <span className="cw-mention-banner__text">{copy.mentionSteppedIn}</span>
-        <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void run(() => chatApi.dismissMention(mention.mentionId))}>
-          {copy.mentionStepOut}
-        </button>
-      </div>
-    )
-  }
-
   return (
     <div className="cw-mention-banner" role="region" aria-label={copy.mentionedBadge}>
       <Icon name="at" size={16} />
@@ -79,7 +68,7 @@ export function MentionBanner({
           className="btn btn--primary btn--sm"
           disabled={busy}
           onClick={() =>
-            void run(() => (direct ? chatApi.stepIn(mention.mentionId) : chatApi.joinOnMention(conversation.id)))
+            void run(() => chatApi.joinOnMention(conversation.id, mention.mentionId))
           }
         >
           {direct ? copy.mentionStepIn : copy.mentionJoin}

@@ -90,8 +90,7 @@ export const CommEvent = {
    */
   MENTION_CREATED: 'mention.created',
   /**
-   * PD-36: a summons changed state (joined, stepped in, dismissed, expired,
-   * void, left) -- to the thread, so an open Group Info re-reads its
+   * PD-36: a summons changed state (joined, dismissed, expired, void, removed) -- to the thread, so an open Group Info re-reads its
    * "Mentioned -- waiting" rows, and to the target's actor room.
    */
   MENTION_UPDATED: 'mention.updated',

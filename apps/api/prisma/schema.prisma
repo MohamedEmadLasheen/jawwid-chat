@@ -346,7 +346,6 @@ model MessageMention {
   seenAt          DateTime? @map("seen_at") @db.Timestamptz
   resolvedAt      DateTime? @map("resolved_at") @db.Timestamptz
   resolvedBy      String?   @map("resolved_by") @db.Uuid
-  lastActiveAt    DateTime? @map("last_active_at") @db.Timestamptz
 
   @@unique([messageId, targetActorId, spanStart])
   @@map("message_mention")

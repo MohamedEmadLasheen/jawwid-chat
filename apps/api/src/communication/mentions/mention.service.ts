@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import type { ConversationMember, MessageMention, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AppConfigService } from '../../platform/app-config.service';
@@ -9,11 +9,12 @@ import type { AuditService } from '../../platform/audit.service';
 import type { IdentityService } from '../../platform/identity.service';
 import { actorRefKey } from '../../platform/identity.service';
 import type { Actor } from '../../platform/types';
-import { StaffAccessBasis } from '../../platform/staff-scope';
+import type { Decision } from '../../platform/authorization.service';
+import { SeatPolicyRegistry, SeatReason, type SeatJoinContext, type SeatTarget } from '../seats/seat-policy';
 import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { ActorKind, ConversationType, Visibility } from '../contracts/vocab';
+import { ActorKind, Visibility } from '../contracts/vocab';
 import {
   MentionRole,
   MentionState,
@@ -49,7 +50,7 @@ export interface SummonedDto {
   actorId: string;
   displayName: string;
   staffRole: string;
-  /** 'pending' = waiting; 'stepped_in' = in a family 1:1 without a seat. */
+  /** Always 'pending': a summons a seat answered is no longer listed. */
   state: string;
   mentionedById: string;
   mentionedByName: string | null;
@@ -76,13 +77,15 @@ interface SentMessage {
  * Anything else refuses the whole send, so there is no silent grant. The
  * database refuses it again (chat.guard_message_mention).
  *
- * Taking a VISIBLE seat in a group is PD-35's primitive (reason 'mention');
- * this service decides only whether the mention is still open for it
- * (`assertMayJoin`, `markJoined`). In a family 1:1, which never gains a third
- * member, the summoned person "steps in" instead -- here.
+ * Answering a summons is PD-35's visible seat, reason 'mention': a member row
+ * in a group, an EFFECTIVE seat in a family 1:1 (which never gains a third
+ * member). This service registers the reason's join policy (`canJoin`: an open
+ * summons AND PD-8 standing of the joiner's own) and, in its sweep, marks the
+ * summonses a seat answered. Staying seated is the database's question
+ * (chat.seat_reason 'mention': standing, as for a manual seat).
  */
 @Injectable()
-export class MentionService {
+export class MentionService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly conversations: ConversationService,
@@ -90,7 +93,18 @@ export class MentionService {
     private readonly config: AppConfigService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    // PD-35. Optional so the positional constructions the harnesses share do
+    // not shift; without it nobody can join on a mention (the placeholder refuses).
+    @Optional() private readonly seats?: SeatPolicyRegistry,
   ) {}
+
+  /** Replaces PD-35's refusing placeholder for reason 'mention'. */
+  onModuleInit(): void {
+    this.seats?.register({
+      reason: SeatReason.MENTION,
+      canJoin: (actor, conv, ctx) => this.canJoin(actor, conv, ctx),
+    });
+  }
 
   // -------------------------------------------------------------------
   // Sending
@@ -274,17 +288,6 @@ export class MentionService {
     return { rows, limited };
   }
 
-  /**
-   * A message from someone who stepped into this 1:1 keeps their step-in alive
-   * (the idle sweep counts from their last message). Cheap: a partial index.
-   */
-  async touchStepIn(tx: Prisma.TransactionClient, conversationId: string, actorId: string, now: Date): Promise<void> {
-    await tx.messageMention.updateMany({
-      where: { conversationId, targetActorId: actorId, state: MentionState.STEPPED_IN },
-      data: { lastActiveAt: now },
-    });
-  }
-
   /** An edit that changes an "@..." takes that mention back; an edit never adds one. */
   async onEdited(tx: Prisma.TransactionClient, messageId: string, oldBody: string | null, newBody: string | null, now: Date) {
     const rows = await tx.messageMention.findMany({
@@ -371,16 +374,17 @@ export class MentionService {
         targetActorId: actorId,
         OR: [
           { state: MentionState.PENDING, expiresAt: { gt: now } },
-          { state: MentionState.STEPPED_IN },
           { state: MentionState.NOTIFIED, seenAt: null },
         ],
       },
       orderBy: { createdAt: 'desc' },
     });
+    // A summons a seat already answered is not asking any more (the sweep marks it).
+    const seated = await this.openSeatsOf(actorId, rows.filter((r) => r.isSummons).map((r) => r.conversationId));
     const out = new Map<string, ViewerMentionDto>();
     // A summons outranks a member mention; then the newest.
     for (const r of [...rows].sort((a, b) => Number(b.isSummons) - Number(a.isSummons))) {
-      if (out.has(r.conversationId)) continue;
+      if (out.has(r.conversationId) || (r.isSummons && seated.has(r.conversationId))) continue;
       out.set(r.conversationId, {
         mentionId: r.id,
         kind: r.isSummons ? 'summons' : 'member',
@@ -403,12 +407,19 @@ export class MentionService {
       where: {
         conversationId,
         isSummons: true,
-        OR: [{ state: MentionState.PENDING, expiresAt: { gt: now } }, { state: MentionState.STEPPED_IN }],
+        state: MentionState.PENDING,
+        expiresAt: { gt: now },
       },
       orderBy: { createdAt: 'desc' },
     });
+    // A seat answers a summons: in a group it is a member row already; in a
+    // family 1:1 it is an effective seat, which is no member.
+    const seatHolders = await this.prisma.$queryRaw<Array<{ staff_id: string }>>`
+      SELECT staff_id::text AS staff_id FROM chat.conversation_seat
+       WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL`;
+    const answered = new Set([...liveMemberIds, ...seatHolders.map((x) => x.staff_id)]);
     const latest = new Map<string, MessageMention>();
-    for (const r of rows) if (!latest.has(r.targetActorId) && !liveMemberIds.has(r.targetActorId)) latest.set(r.targetActorId, r);
+    for (const r of rows) if (!latest.has(r.targetActorId) && !answered.has(r.targetActorId)) latest.set(r.targetActorId, r);
     if (latest.size === 0) return [];
     const staff = await this.prisma.staff.findMany({
       where: { id: { in: [...latest.keys()] } },
@@ -439,7 +450,8 @@ export class MentionService {
       where: {
         targetActorId: actorId,
         isSummons: true,
-        OR: [{ state: MentionState.PENDING, expiresAt: { gt: now } }, { state: MentionState.STEPPED_IN }],
+        state: MentionState.PENDING,
+        expiresAt: { gt: now },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -473,16 +485,12 @@ export class MentionService {
 
   /**
    * "Not for me": every open summons of this person in the conversation closes.
-   * A step-in being dismissed is a visible LEAVE ("Laila stepped out").
+   * Leaving a seat taken on one is PD-35's leave (visible, RT-009).
    */
   async dismiss(actorId: string, mentionId: string): Promise<{ state: string }> {
     const actor = await this.conversations.requireActor(actorId);
     const mention = await this.mine(actor, mentionId);
     const now = new Date();
-    if (mention.state === MentionState.STEPPED_IN) {
-      await this.endStepIns(mention.conversationId, actor.actorId, 'left', now, actor.actorId);
-      return { state: MentionState.LEFT };
-    }
     if (mention.state !== MentionState.PENDING) throw closed();
     await this.prisma.$transaction(async (tx) => {
       const open = await tx.messageMention.findMany({
@@ -500,108 +508,55 @@ export class MentionService {
   }
 
   /**
-   * A family 1:1 never gains a third member (its identity is its two members,
-   * and BR-1 caps it at two), so a summoned manager or super admin "steps in":
-   * a visible line, the summons answered, and this conversation's pushes until
-   * they step out or go quiet (mention.step_in_idle_days). They read and reply
-   * on the PD-8 basis they already had -- nothing here grants it.
+   * PD-35 SeatPolicy 'mention': may this actor take a seat here on a mention?
+   *
+   *   an open summons of them in this conversation -- `ctx.sourceId` names it
+   *   when the client knows it -- unexpired; AND
+   *   PD-8 standing of their own (`ctx.standing`, which no seat supplies: the
+   *   seat service reads chat.staff_conversation_standing).
+   *
+   * A summons whose person lost their standing is voided on the way out, so
+   * Group Info stops showing someone who can no longer come.
    */
-  async stepIn(actorId: string, mentionId: string): Promise<{ state: string }> {
-    const actor = await this.conversations.requireActor(actorId);
-    const mention = await this.mine(actor, mentionId);
-    const conv = await this.conversations.requireConversation(mention.conversationId);
-    if (conv.type !== ConversationType.DIRECT) {
-      throw new CommError(CommErrorCode.VALIDATION, 'in a group, Join takes a seat; step-in is for a 1:1', 400);
-    }
-    const now = new Date();
-    await this.assertStillOpen(actor, mention, conv, now);
-
-    await this.prisma.$transaction(async (tx) => {
-      const open = await tx.messageMention.findMany({
-        where: { conversationId: conv.id, targetActorId: actor.actorId, state: MentionState.PENDING },
-      });
-      let moved = 0;
-      for (const r of open) {
-        const res = await tx.messageMention.updateMany({
-          where: { id: r.id, state: MentionState.PENDING },
-          data: { state: MentionState.STEPPED_IN, resolvedAt: now, resolvedBy: actor.actorId, lastActiveAt: now },
-        });
-        if (res.count === 1) {
-          moved += 1;
-          await this.announceState(tx, r, MentionState.STEPPED_IN);
-        }
-      }
-      // A concurrent answer got there first: the summons is no longer open.
-      if (moved === 0) throw closed();
-      await this.conversations.postAnnouncement(tx, conv.id, 'mention.stepped_in', {
-        name: actor.displayName,
-        role: actor.staffRole ?? null,
-      });
-      await this.audit.audit(tx, {
-        actorId: actor.actorId,
-        action: 'mention.stepped_in',
-        entity: 'conversation',
-        entityId: conv.id,
-        after: { mentionId: mention.id },
-        reason: 'answered a mention',
-      });
-    });
-    return { state: MentionState.STEPPED_IN };
-  }
-
-  /**
-   * PD-35 SeatPolicy 'mention', the JOIN half: may this actor take a seat in
-   * this conversation on this mention? A pending summons of them, unexpired,
-   * AND a live PD-8 basis of their own -- never 'seated', which a seat gives.
-   */
-  async assertMayJoin(actor: Actor, conversationId: string, refMessageId: string | null, now = new Date()): Promise<void> {
-    const conv = await this.conversations.requireConversation(conversationId);
-    if (conv.type === ConversationType.DIRECT) {
-      throw new CommError(CommErrorCode.VALIDATION, 'a 1:1 takes no seat; step in instead', 400);
-    }
+  async canJoin(actor: Actor, conv: SeatTarget, ctx: SeatJoinContext): Promise<Decision> {
+    const refuse = (reason: string): Decision => ({ allowed: false, code: CommErrorCode.SEAT_NOT_ELIGIBLE, reason });
     const mention = await this.prisma.messageMention.findFirst({
       where: {
-        conversationId,
+        conversationId: conv.id,
         targetActorId: actor.actorId,
+        isSummons: true,
         state: MentionState.PENDING,
-        ...(refMessageId ? { messageId: refMessageId } : {}),
+        expiresAt: { gt: ctx.now },
+        ...(ctx.sourceId ? { id: ctx.sourceId } : {}),
       },
       orderBy: { createdAt: 'desc' },
     });
-    if (!mention) throw new CommError(CommErrorCode.MENTION_NOT_FOUND, 'no open mention of you here', 404);
-    await this.assertStillOpen(actor, mention, conv, now);
-  }
-
-  /**
-   * PD-35 SeatPolicy 'mention', the STAY half: a joined seat lasts while its
-   * holder keeps a PD-8 basis of their own. The expiry gates joining, not the seat.
-   */
-  async mayStaySeated(actor: Actor, conversationId: string, now = new Date()): Promise<boolean> {
-    const conv = await this.conversations.requireConversation(conversationId);
-    const basis = await this.conversations.staffAccess(actor, conv, now);
-    return basis !== null && basis !== ('seated' as StaffAccessBasis);
-  }
-
-  /** PD-35 SeatPolicy 'mention': in the join's transaction, the summonses it answers. */
-  async markJoined(tx: Prisma.TransactionClient, conversationId: string, actorId: string, now = new Date()): Promise<void> {
-    const open = await tx.messageMention.findMany({
-      where: { conversationId, targetActorId: actorId, state: MentionState.PENDING },
-    });
-    for (const r of open) {
-      const moved = await tx.messageMention.updateMany({
-        where: { id: r.id, state: MentionState.PENDING },
-        data: { state: MentionState.JOINED, resolvedAt: now, resolvedBy: actorId },
-      });
-      if (moved.count === 1) await this.announceState(tx, r, MentionState.JOINED);
+    if (!mention) return refuse('no open mention of you here');
+    if (ctx.standing === null) {
+      await this.closeOne(mention.id, MentionState.PENDING, MentionState.VOID, ctx.now);
+      return refuse('you are no longer in charge of this conversation');
     }
+    return { allowed: true, onBehalfMode: null, moderation: 'published' };
   }
 
   // -------------------------------------------------------------------
   // The sweep (worker; safe on every replica: each row moves by a conditional update)
   // -------------------------------------------------------------------
 
-  async sweep(now = new Date(), batch = 200): Promise<{ expired: number; voided: number; stepOuts: number }> {
-    // 1. Unanswered past the window.
+  async sweep(now = new Date(), batch = 200): Promise<{ expired: number; voided: number; joined: number }> {
+    // 1. Answered by a seat (PD-35's join, reason 'mention' or any other): the
+    //    summonses of that person in that conversation are no longer asking.
+    const seated = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT mm.id::text AS id FROM chat.message_mention mm
+       WHERE mm.state = 'pending'
+         AND EXISTS (SELECT 1 FROM chat.conversation_seat s
+                      WHERE s.conversation_id = mm.conversation_id AND s.staff_id = mm.target_actor_id
+                        AND s.left_at IS NULL)
+       LIMIT ${batch}`;
+    let joined = 0;
+    for (const { id } of seated) joined += await this.closeOne(id, MentionState.PENDING, MentionState.JOINED, now);
+
+    // 2. Unanswered past the window.
     const expiredRows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id::text AS id FROM chat.message_mention
        WHERE state = 'pending' AND expires_at <= ${now}::timestamptz
@@ -611,32 +566,16 @@ export class MentionService {
       expired += await this.closeOne(id, MentionState.PENDING, MentionState.EXPIRED, now);
     }
 
-    // 2. Asked in, then lost their standing before answering: Group Info stops
+    // 3. Asked in, then lost their standing before answering: Group Info stops
     //    showing someone who can no longer come.
     const lost = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id::text AS id FROM chat.message_mention
        WHERE state = 'pending' AND expires_at > ${now}::timestamptz
-         AND chat.staff_conversation_access(target_actor_id, conversation_id, ${now}::timestamptz) IS NULL
+         AND chat.staff_conversation_standing(target_actor_id, conversation_id, ${now}::timestamptz) IS NULL
        LIMIT ${batch}`;
     let voided = 0;
     for (const { id } of lost) voided += await this.closeOne(id, MentionState.PENDING, MentionState.VOID, now);
-
-    // 3. Step-ins that went quiet, or whose holder lost their standing.
-    const idleDays = await this.config.get('mention.step_in_idle_days');
-    const ending = await this.prisma.$queryRaw<Array<{ conversation_id: string; target_actor_id: string; lost: boolean }>>`
-      SELECT DISTINCT conversation_id::text AS conversation_id, target_actor_id::text AS target_actor_id,
-             chat.staff_conversation_access(target_actor_id, conversation_id, ${now}::timestamptz) IS NULL AS lost
-        FROM chat.message_mention
-       WHERE state = 'stepped_in'
-         AND (chat.staff_conversation_access(target_actor_id, conversation_id, ${now}::timestamptz) IS NULL
-              OR (${idleDays}::int > 0
-                  AND coalesce(last_active_at, resolved_at) <= ${now}::timestamptz - make_interval(days => ${idleDays}::int)))
-       LIMIT ${batch}`;
-    let stepOuts = 0;
-    for (const e of ending) {
-      stepOuts += await this.endStepIns(e.conversation_id, e.target_actor_id, e.lost ? 'ineligible' : 'idle', now, null);
-    }
-    return { expired, voided, stepOuts };
+    return { expired, voided, joined };
   }
 
   // -------------------------------------------------------------------
@@ -647,48 +586,6 @@ export class MentionService {
       if (moved.count === 0) return 0;
       const row = await tx.messageMention.findUniqueOrThrow({ where: { id } });
       await this.announceState(tx, row, to);
-      return 1;
-    });
-  }
-
-  /** Every step-in of this person in this 1:1 ends, with one visible line. */
-  private async endStepIns(
-    conversationId: string,
-    actorId: string,
-    reason: 'left' | 'idle' | 'ineligible',
-    now: Date,
-    by: string | null,
-  ): Promise<number> {
-    return this.prisma.$transaction(async (tx) => {
-      const open = await tx.messageMention.findMany({
-        where: { conversationId, targetActorId: actorId, state: MentionState.STEPPED_IN },
-      });
-      let ended = 0;
-      for (const r of open) {
-        const moved = await tx.messageMention.updateMany({
-          where: { id: r.id, state: MentionState.STEPPED_IN },
-          data: { state: MentionState.LEFT, resolvedAt: now, ...(by ? { resolvedBy: by } : {}) },
-        });
-        if (moved.count === 1) {
-          ended += 1;
-          await this.announceState(tx, r, MentionState.LEFT);
-        }
-      }
-      if (ended === 0) return 0;
-      const staff = await tx.staff.findUnique({ where: { id: actorId }, select: { name: true, role: true } });
-      await this.conversations.postAnnouncement(tx, conversationId, 'mention.stepped_out', {
-        name: staff?.name ?? null,
-        role: staff?.role ?? null,
-        reason,
-      });
-      await this.audit.audit(tx, {
-        actorId: by ?? actorId,
-        action: 'mention.stepped_out',
-        entity: 'conversation',
-        entityId: conversationId,
-        after: { actorId, reason },
-        reason: by ? 'stepped out' : `step-in ended: ${reason}`,
-      });
       return 1;
     });
   }
@@ -713,19 +610,14 @@ export class MentionService {
     return mention;
   }
 
-  /** Still answerable: pending, unexpired, and the person still has a PD-8 basis of their own. */
-  private async assertStillOpen(
-    actor: Actor,
-    mention: MessageMention,
-    conv: { id: string; organizationId: string },
-    now: Date,
-  ): Promise<void> {
-    if (mention.state !== MentionState.PENDING || !mention.expiresAt || mention.expiresAt <= now) throw closed();
-    const basis = await this.conversations.staffAccess(actor, conv, now);
-    if (basis === null || basis === ('seated' as StaffAccessBasis)) {
-      await this.closeOne(mention.id, MentionState.PENDING, MentionState.VOID, now);
-      throw closed('you are no longer in charge of this conversation');
-    }
+  /** Of these conversations, the ones where this staff member holds an open seat. */
+  private async openSeatsOf(staffId: string, conversationIds: readonly string[]): Promise<Set<string>> {
+    if (conversationIds.length === 0) return new Set();
+    const rows = await this.prisma.$queryRaw<Array<{ conversation_id: string }>>`
+      SELECT conversation_id::text AS conversation_id FROM chat.conversation_seat
+       WHERE staff_id = ${staffId}::uuid AND left_at IS NULL
+         AND conversation_id = ANY(${[...conversationIds]}::uuid[])`;
+    return new Set(rows.map((r) => r.conversation_id));
   }
 
   private async takesSummons(conversationId: string): Promise<boolean> {
