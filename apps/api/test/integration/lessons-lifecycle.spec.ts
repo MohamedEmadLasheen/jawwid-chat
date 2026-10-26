@@ -296,7 +296,7 @@ describe('4. Teacher Supervision', () => {
     expect(await code(supervision.timeline(s.teacherId, s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(supervision.timeline(s.ownerId, s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
 
-    await supervision.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'late twice this week' });
+    await supervision.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'late twice this week', source: 'management' });
     expect(await code(supervision.addEntry(tsupId, s.teacherId, { kind: 'monthly_comment', body: 'good month' })))
       .toBe(CommErrorCode.VALIDATION);
     await supervision.addEntry(tsupId, s.teacherId, { kind: 'monthly_comment', body: 'good month', period: '2026-10' });

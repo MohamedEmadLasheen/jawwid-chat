@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CommunicationModule } from '../communication/communication.module';
+import { LessonModule } from '../lessons/lesson.module';
 import { TeacherFileController } from './teacher-file.controller';
 import { TeacherFileService } from './teacher-file.service';
 import { TeacherPayrollService } from './teacher-payroll.service';
@@ -20,7 +21,10 @@ import { TeacherEvaluationService } from './teacher-evaluation.service';
  * SupervisionModule posts their cards in the teacher's supervision conversation.
  */
 @Module({
-  imports: [CommunicationModule, SupervisionModule],
+  // LessonModule: PD-11's bonus ticket, which a reward with its amount extends
+  // (PD-26). Nothing under LessonModule or SupervisionModule imports this
+  // module, so no cycle.
+  imports: [CommunicationModule, SupervisionModule, LessonModule],
   controllers: [TeacherFileController, ParentFeedbackController, TeacherEvaluationController],
   providers: [TeacherFileService, TeacherPayrollService, ParentFeedbackService, TeacherEvaluationService],
 })

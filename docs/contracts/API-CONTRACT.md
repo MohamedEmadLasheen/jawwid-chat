@@ -172,6 +172,7 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | POST | `/conversations/:conversationId/messages/read` | API, Flutter | EXISTS | §3.5 |
 | GET | `/conversations/:conversationId/messages/unread` | API, Flutter | EXISTS | Counts only the caller's own receipts; no membership check needed. §3.5 |
 | POST | `/conversations/:conversationId/messages/:messageId/delivered` | API | EXISTS | Duplicate of WS `message.delivered`; kept. §3.5 |
+| GET | `/conversations/:conversationId/messages/:messageId/info` | API | **EXISTS (new 2026-10-26, PD-37)** | Message info: who read / has / lacks the message. Author or staff only; countable readers only. §3.5 |
 | POST | `/conversations/:conversationId/messages/:messageId/reactions` | API, Flutter | EXISTS | §3.5 |
 | DELETE | `/conversations/:conversationId/messages/:messageId/reactions` | API, Flutter | RECONCILE | Gains `?emoji=`; Flutter must send it. §3.5, §6 |
 | DELETE | `/conversations/:conversationId/messages/:messageId/me` | API | EXISTS | §3.5 |
@@ -329,7 +330,12 @@ MessageDto {
   origin: 'user'|'automation'|'broadcast', replyToMessageId: string|null,
   clientMessageId: string|null, deletedAt: string|null, deletedForAll: boolean, createdAt,
   attachments: AttachmentDto[], reactions: {actorId, emoji}[],
-  receipts: {actorId, state: 'sent'|'delivered'|'read', deliveredAt, readAt}[]   // RT-012, see §5
+  status: 'sent'|'delivered'|'read'|null   // PD-37 (closes RT-012, §5 S-5): the ticks on the
+                                          // VIEWER'S OWN message over countable readers (live,
+                                          // not silent, not observer); null on anyone else's
+                                          // message, a deleted-for-all one, and a direct
+                                          // teacher<->parent conversation. No per-recipient
+                                          // detail: that is GET …/messages/:messageId/info.
 }
 AttachmentDto { id, kind: 'image'|'video'|'voice'|'file', mimeType, byteSize, originalName,
   durationMs, width, height, url: string|null /* absolute link to GET /media/attachments/:id, bound to the reader, re-authorized on every request (RT-037) */, thumbnailUrl }
@@ -573,6 +579,10 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 
 **GET /conversations/:conversationId/messages/unread**
 - Auth: required. Permission: `messages.read`. Scope: counts only the caller's own receipts in `sent|delivered`; no membership check is run (nothing to leak). Response: `{ unread: number }`.
+
+**GET /conversations/:conversationId/messages/:messageId/info** (PD-37)
+- Auth: required. Scope: the same read check as every message route (`loadForActor`), AND the caller is the message's author or staff — otherwise `COMM.NOT_MESSAGE_AUTHOR` 403. A deleted-for-all message, one the caller deleted for themselves, or one outside `:conversationId` → `COMM.MESSAGE_NOT_FOUND` 404. A non-staff party to a direct teacher↔parent conversation → `COMM.BR1_TEACHER_PARENT_DIRECT` (PD-7: no signals between them).
+- Response: `{ messageId, status, readBy: Entry[], deliveredTo: Entry[], pending: Entry[] }`, `Entry = { actorId, actorKind, displayName, avatarUrl, at }`. Lists **countable readers only**: live members who are not silent and not `observer`, excluding the author. A PD-8 reader without a seat has no receipt and never appears; neither does a member who left or one who joined after the message.
 
 **POST /conversations/:conversationId/messages/:messageId/delivered**
 - Auth: required. Permission: `messages.read`. Scope: caller's own receipt. Response: `{ updated: number }`. Duplicate of the WS `message.delivered` ack; kept for clients without a socket. Realtime: none.
@@ -1430,7 +1440,7 @@ Reconnect: re-subscribe, then (only once rejoined) `GET …/messages?after=<last
 | S-2 | **Routes with no actor at all**: `POST /conversations/student-group/:learnerId/sync`, `DELETE /notifications/devices/:token`, `POST /notifications/:id/delivered`. Anyone can resync any group, silence any device's push, or corrupt delivery metrics. | `conversation.controller.ts#sync`, `notification.controller.ts#unregister`, `#delivered` | Auth required on all three; sync becomes `conversations.manage` (or worker-internal); device / delivered scoped to owner / recipient. **`unregister` closed 2026-09-24** (scoped to the authenticated owner); **`sync` closed 2026-10-12** (actor required; family-scoped, tenant-isolated); `delivered` remains open. | 1 |
 | S-3 | `POST /conversations/student-group` performs no actor or permission check (header only used as `addedBy`). | `conversation.controller.ts#studentGroup`, `ensureStudentGroup` | `conversations.manage` + family scope. **Closed 2026-10-12**: staff gate before lookup, owner-or-manager scope, tenant isolation. | 1 |
 | S-4 | **RT-011 — unscoped staff lists.** `GET /conversations` returns every conversation (`take: 200`) to any family-facing staff; `GET /approvals/pending` returns every pending approval; `canRead` allows any family-facing staff into any conversation. | `conversation.service.ts#listForActor`; `approval.service.ts#listPending`; `authorization.service.ts#canRead`; `docs/red-team/findings.md` RT-011 | Family scope rule (§3.3) applied to `listForActor`, `listPending`, `canRead` for non-managers; cursor pagination. Lists are built from an authorization-derived filter, never a probe. | 1 |
-| S-5 | **RT-012 — receipt roster disclosure.** `MessageDto.receipts` maps every receipt row (`actorId`, `deliveredAt`, `readAt`) to every reader, so a parent learns staff ids and read times. | `dto.ts#toMessageDto`; findings RT-012 | Receipts scoped to the requester's own row plus an aggregate (`readCount`, `deliveredCount`) for the author; staff see the roster for staff-authored messages only. Shape change is a breaking DTO change — announce with the Phase 1 DTO. | 1 |
+| S-5 | **RT-012 — receipt roster disclosure.** `MessageDto.receipts` maps every receipt row (`actorId`, `deliveredAt`, `readAt`) to every reader, so a parent learns staff ids and read times. | `dto.ts#toMessageDto`; findings RT-012 | **Closed 2026-10-26 (PD-37):** `receipts` removed from `MessageDto`; the author gets an aggregate `status` over countable readers; the roster is `GET …/messages/:messageId/info`, author or staff only (§3.5). | 1 |
 | S-6 | Device token re-binding: registering a token already owned by another actor silently moves it. | `notification.service.ts#registerDevice` (`update: { actorId }`) | Bind tokens to actor + session (§3.9). | 1 |
 | S-7 | Upload authorization requires `canRead`, not `canSend`: silent members and `can_message=false` contacts can mint object keys. | `attachment.service.ts#authorizeUpload` | Check `canSend`. | 1 |
 | S-8 | `Idempotency-Key` accepted but not enforced; a double-submit of a non-message mutation (membership add, assignment) is not deduplicated. | no server-side handling found | Idempotency store keyed by (actor, key) with body hash. | 1+ |

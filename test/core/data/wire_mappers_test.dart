@@ -306,7 +306,7 @@ void main() {
   group('moderation outranks receipts', () {
     Map<String, Object?> messageJson({
       String moderation = 'published',
-      List<Object?> receipts = const [],
+      String? status,
     }) =>
         {
           'id': 'srv_1',
@@ -318,7 +318,7 @@ void main() {
           'body': 'مرحبا',
           'moderation': moderation,
           'createdAt': '2026-09-05T12:00:00.000Z',
-          'receipts': receipts,
+          'status': status,
           'reactions': const [],
           'attachments': const [],
         };
@@ -345,22 +345,21 @@ void main() {
       expect(message.isVisibleToOthers, isTrue);
     });
 
-    test('read beats delivered beats sent', () {
+    test('the ticks are the server\'s status, never a combination of receipts', () {
+      expect(WireMappers.message(messageJson(status: 'read'), viewerActorId: 'me').deliveryState,
+          DeliveryState.read);
+      expect(WireMappers.message(messageJson(status: 'delivered'), viewerActorId: 'me').deliveryState,
+          DeliveryState.delivered);
+      expect(WireMappers.message(messageJson(status: 'sent'), viewerActorId: 'me').deliveryState,
+          DeliveryState.sent);
+      // Someone else's message carries no status.
+      expect(WireMappers.message(messageJson(), viewerActorId: 'me').deliveryState, DeliveryState.sent);
+      // A build from before PD-37 might still see a receipts array; it is ignored.
       expect(
-        WireMappers.deliveryState([
-          {'state': 'delivered'},
-          {'state': 'read'},
-        ]),
-        DeliveryState.read,
+        WireMappers.message({...messageJson(), 'receipts': [{'state': 'read'}]}, viewerActorId: 'me')
+            .deliveryState,
+        DeliveryState.sent,
       );
-      expect(
-        WireMappers.deliveryState([
-          {'state': 'sent'},
-          {'state': 'delivered'},
-        ]),
-        DeliveryState.delivered,
-      );
-      expect(WireMappers.deliveryState(const []), DeliveryState.sent);
     });
 
     test('a server message is never mapped to a client-only state', () {

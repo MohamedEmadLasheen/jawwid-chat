@@ -12,6 +12,7 @@ import 'package:jawwid_chat/core/realtime/call_realtime_client.dart';
 import 'package:jawwid_chat/core/realtime/realtime_socket.dart';
 import 'package:jawwid_chat/features/conversations/application/chat_realtime.dart';
 import 'package:jawwid_chat/features/conversations/application/conversations_controller.dart';
+import 'package:jawwid_chat/features/messages/application/away_teachers.dart';
 import 'package:jawwid_chat/features/messages/application/messages_controller.dart';
 import 'package:jawwid_chat/shared/models/conversation.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
@@ -119,6 +120,18 @@ class _GatedMessages extends FakeMessageRepository {
   }
 }
 
+/// Counts member-list reads (`GET /conversations/:id`), which is where a teacher's
+/// "on leave until" comes from (PD-26).
+class _CountingGroups implements GroupRepository {
+  final reads = <String>[];
+
+  @override
+  Future<StudentGroup> group(String conversationId) async {
+    reads.add(conversationId);
+    return StudentGroup(conversationId: conversationId, learner: const LearnerRef(id: 'l1', displayName: 'l'), members: const []);
+  }
+}
+
 /// Live chat: the list and open threads follow the server on signals, without
 /// a refresh, without duplicates, and without loading threads nobody opened.
 void main() {
@@ -127,6 +140,7 @@ void main() {
   late CallRealtimeClient client;
   late _CountingConversations conversations;
   late _GatedMessages messages;
+  late _CountingGroups groups;
   late ProviderContainer container;
   late Provider<ChatRealtimeCoordinator> coordinatorProvider;
 
@@ -140,6 +154,7 @@ void main() {
     client = CallRealtimeClient(socket: socket, tokens: _Tokens());
     conversations = _CountingConversations(FakeConversationRepository(backend));
     messages = _GatedMessages(backend);
+    groups = _CountingGroups();
 
     coordinatorProvider = Provider<ChatRealtimeCoordinator>((ref) {
       final c = ChatRealtimeCoordinator(
@@ -158,6 +173,7 @@ void main() {
         currentRoleProvider.overrideWithValue(UserRole.parent),
         conversationRepositoryProvider.overrideWithValue(conversations),
         messageRepositoryProvider.overrideWithValue(messages),
+        groupRepositoryProvider.overrideWithValue(groups),
       ],
     );
     await client.connect();
@@ -292,6 +308,41 @@ void main() {
       isTrue,
     );
     expect(conversations.lists, greaterThan(listsBefore));
+  });
+
+  test('PD-26: an open chat\'s "on leave" notice re-reads on its signals and on a reconnect -- never by polling', () async {
+    container.read(coordinatorProvider);
+    await container.read(conversationsControllerProvider.future);
+    final ids = listedIds();
+    final open = ids.first;
+    final sub = container.listen(awayTeachersProvider(open), (_, _) {});
+    addTearDown(sub.close);
+    await container.read(awayTeachersProvider(open).future);
+    await settle();
+    expect(groups.reads, [open]);
+
+    socket.emit('conversation.updated', {'conversationId': open});
+    await settle();
+    await container.read(awayTeachersProvider(open).future);
+    expect(groups.reads, [open, open]);
+
+    socket.emit('conversation.membership_changed', {'conversationId': open, 'added': <String>[], 'removed': <String>[]});
+    await settle();
+    await container.read(awayTeachersProvider(open).future);
+    expect(groups.reads, [open, open, open]);
+
+    socket.drop();
+    socket.back();
+    await settle();
+    await container.read(awayTeachersProvider(open).future);
+    expect(groups.reads, [open, open, open, open]);
+
+    // A signal for a chat nobody has open loads nothing.
+    if (ids.length > 1) {
+      socket.emit('conversation.updated', {'conversationId': ids[1]});
+      await settle();
+      expect(groups.reads.where((r) => r == ids[1]), isEmpty);
+    }
   });
 
   test('a conversation that leaves the list is unsubscribed', () async {
