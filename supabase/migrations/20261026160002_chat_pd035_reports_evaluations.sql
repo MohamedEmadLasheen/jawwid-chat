@@ -167,8 +167,10 @@ begin
 end;
 $$;
 
+-- Any update, not "update of version": PD-15 bumps the version in a BEFORE
+-- trigger, and a column list fires only for columns the statement itself sets.
 create trigger lesson_report_resolves_correction
-  after insert or update of version, deleted_at on chat.lesson_report
+  after insert or update on chat.lesson_report
   for each row execute function chat.resolve_report_correction();
 
 -- ===========================================================================

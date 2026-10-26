@@ -155,7 +155,8 @@ describe('3. withdraw and the list', () => {
     const id = await lesson(-HOUR);
     await lessons.report(s.teacherId, id, REPORT);
     const asked = await corrections.request(s.ownerId, id, { reason: 'please check the rating' });
-    expect(await code(corrections.withdraw(tsupB, asked.id))).toBe(CommErrorCode.LESSON_DENIED);
+    // Neither the asker nor a manager of the lesson: the teacher, and (switch off) nobody else is refused.
+    expect(await code(corrections.withdraw(s.teacherId, asked.id))).toBe(CommErrorCode.LESSON_DENIED);
 
     // The Operations supervisor of the child, the teacher's supervisor and the manager see it.
     for (const who of [s.ownerId, tsupA, tmgr]) {

@@ -220,7 +220,8 @@ export class ReportCorrectionService {
       return await fn();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
-      if (/report_correction_one_open/.test(msg)) throw new CommError(CommErrorCode.LESSON_STATE, 'a correction is already requested for this lesson', 409);
+      // The one-open-per-lesson index; Postgres names the key, not always the index.
+      if (/report_correction_one_open|Key \(lesson_id\)=\([^)]*\) already exists/.test(msg)) throw new CommError(CommErrorCode.LESSON_STATE, 'a correction is already requested for this lesson', 409);
       const known = /(there is no report to correct|the report is not missing|a report is owed only once the lesson has started|this lesson owes no report)/.exec(msg);
       if (known) throw new CommError(CommErrorCode.LESSON_STATE, known[1], 409);
       throw e;

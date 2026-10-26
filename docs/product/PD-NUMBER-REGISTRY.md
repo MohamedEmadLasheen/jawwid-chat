@@ -64,5 +64,6 @@ claimed. The decision text itself still lives in
 | `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
 | `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (PR #131) |
 | `20261026160001` | PD-35 — `chat_pd035_teacher_supervisor` (PR #136) |
+| `20261026160002` | PD-35 — `chat_pd035_reports_evaluations` (PR #138) |
 
 The next free slot is `20261026150000`.
