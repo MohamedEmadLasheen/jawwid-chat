@@ -711,6 +711,14 @@ export class MessageService {
         'BR-1: a teacher and a parent communicate only inside the Student Group, never directly',
       );
     }
+    // PD-30: a group locked for payment is read-only for the parent and the
+    // teacher; a reaction is a write.
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: message.conversationId! },
+      select: { id: true, type: true },
+    });
+    const locked = conv ? await this.authz.refusePaymentLockFor(actor, conv) : null;
+    if (locked && !locked.allowed) throw new CommError(locked.code, locked.reason);
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor); // RT-032
       await tx.messageReaction.upsert({

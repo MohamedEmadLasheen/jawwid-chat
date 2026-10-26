@@ -133,7 +133,13 @@ function reportBody(p: Record<string, unknown>, ar: boolean, title: string | nul
   const performance = typeof p.rating === 'number' ? performanceLabel(p.rating, ar) : null;
   return [
     title,
-    line(ar ? 'رقم الحصة' : 'Lesson no.', p.lessonNumber),
+    // PD-30: "2 of 24" when the report kept its subscription's lessons.
+    line(
+      ar ? 'رقم الحصة' : 'Lesson no.',
+      typeof p.lessonNumber === 'number' && typeof p.lessonTotal === 'number'
+        ? ar ? `${p.lessonNumber} من ${p.lessonTotal}` : `${p.lessonNumber} of ${p.lessonTotal}`
+        : p.lessonNumber,
+    ),
     line(ar ? 'ما تمت دراسته' : 'Covered', list(p.coveredTopics, topicLabel)),
     line(ar ? 'التفاصيل' : 'Details', p.covered),
     line(ar ? 'مستوى الأداء' : 'Performance', performance),

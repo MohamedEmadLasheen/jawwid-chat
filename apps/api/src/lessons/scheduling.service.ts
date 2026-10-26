@@ -467,6 +467,7 @@ export class SchedulingService {
     const { lesson, standing } = await this.lessons.load(actor, lessonId);
     this.requireAct(actor, standing, 'book_makeup');
     await this.assertOwed(lesson, MAKEUP_CAUSES);
+    await this.lessons.assertMayBook(lesson.learnerId);
     const duration = minutesBetween(lesson.startsAt, lesson.endsAt);
     if (actor.kind === ActorKind.CONTACT) {
       const free = await this.freeSlots(lesson.teacherId, duration);

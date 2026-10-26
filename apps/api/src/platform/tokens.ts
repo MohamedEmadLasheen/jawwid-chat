@@ -17,3 +17,5 @@ export const REALTIME_REVOCATION = Symbol('RealtimeRevocation');
 export const RELATIONSHIP_SERVICE = Symbol('RelationshipService');
 /** PD-8: the staff conversation scope (chat.staff_conversation_access). */
 export const STAFF_SCOPE = Symbol('StaffScope');
+/** PD-30: whether a child's group is locked for payment (chat.learner_access). */
+export const SUBSCRIPTION_LOCK = Symbol('SubscriptionLock');
