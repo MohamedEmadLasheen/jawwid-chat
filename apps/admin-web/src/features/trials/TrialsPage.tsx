@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { SlotPicker } from '@/shared/components/SlotPicker'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ActionDialog, type FieldSpec, type FieldValue } from '../teachers/ActionDialog'
@@ -9,7 +10,7 @@ import type { Pair } from '../teachers/copy'
 import { describeOpsError, formatMinutes } from '../teachers/opsCopy'
 import { trialsApi, type TrialDto } from './api'
 import { TrialsAreaTabs, useTrialsAccess } from './area'
-import { ATTENDANCE, NOT_SUBSCRIBED_REASON, OUTCOME, TR, formatWhen, localDay } from './copy'
+import { ATTENDANCE, NOT_SUBSCRIBED_REASON, OUTCOME, TR, formatWhen } from './copy'
 import { useTrialOp, useTrialSlots, useTrialTeachers, useTrials } from './hooks'
 import { TrialCardDialog } from './TrialCardDialog'
 import '../teachers/teachers.css'
@@ -188,24 +189,14 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
   const typed = Number(lengthText)
   const lengthOk = lengthText.trim() !== '' && Number.isInteger(typed) && typed >= MIN_LENGTH && typed <= MAX_LENGTH
   const duration = lengthOk ? typed : 0
-  const [day, setDay] = useState('')
   const [slot, setSlot] = useState('')
   const [error, setError] = useState<unknown>(null)
   const slots = useTrialSlots(teacherId, duration)
   const book = useTrialOp((f: () => Promise<unknown>) => f())
 
-  const byDay = useMemo(() => {
-    const m = new Map<string, string[]>()
-    for (const s of slots.data?.slots ?? []) {
-      const k = localDay(s)
-      m.set(k, [...(m.get(k) ?? []), s])
-    }
-    return m
-  }, [slots.data])
-  const days = [...byDay.keys()]
-  const chosenDay = day && byDay.has(day) ? day : days[0] ?? ''
-  const times = byDay.get(chosenDay) ?? []
-  const chosenSlot = slot && times.includes(slot) ? slot : ''
+  // PD-31: day and time are chosen as chips (SlotPicker), from the same free times.
+  const offered = slots.data?.slots ?? []
+  const chosenSlot = slot && offered.includes(slot) ? slot : ''
   // What still stops the booking, in the order the form asks for it. The Book
   // button stays clickable and says this, rather than greying out silently.
   const unnamed = editing ? [] : students.map((x, i) => (x.name.trim() === '' ? i : -1)).filter((i) => i >= 0)
@@ -243,8 +234,6 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
     }
   }
 
-  const dayLabel = (k: string) =>
-    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${k}T12:00:00Z`))
   const timeLabel = (iso: string) =>
     new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE }).format(new Date(iso))
 
@@ -313,7 +302,7 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
       )}
       <div className="field">
         <label className="field__label" htmlFor="bt-teacher">{tx(TR.teacher)}</label>
-        <select id="bt-teacher" className="select" value={teacherId} onChange={(e) => { setTeacherId(e.target.value); setDay(''); setSlot('') }}>
+        <select id="bt-teacher" className="select" value={teacherId} onChange={(e) => { setTeacherId(e.target.value); setSlot('') }}>
           <option value="">—</option>
           {(teachers.data?.teachers ?? []).map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
@@ -337,52 +326,29 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
         />
         <span id="bt-duration-hint" className="ts-muted">{tx(TR.lengthHint)}</span>
       </div>
-      {/* Day and time are always shown, so the form reads the same from the
-          start; until they can be chosen they say what comes first. */}
+      {/* The time block is always shown, so the form reads the same from the
+          start; until times can be chosen it says what comes first. */}
       {(() => {
         const waiting: Pair | null = teacherId === '' ? TR.chooseTeacherFirst
           : !lengthOk ? TR.enterLengthFirst
-          : slots.isLoading ? TR.loadingSlots
           : null
-        const none = waiting === null && days.length === 0
         return (
-          <>
-            <div className="field">
-              <label className="field__label" htmlFor="bt-day">{tx(TR.day)}</label>
-              <select
-                id="bt-day"
-                className="select"
-                value={waiting || none ? '' : chosenDay}
-                disabled={waiting !== null || none}
-                onChange={(e) => { setDay(e.target.value); setSlot('') }}
-              >
-                {waiting || none ? (
-                  <option value="">{tx(waiting ?? TR.noSlotsShort)}</option>
-                ) : (
-                  days.map((k) => (
-                    <option key={k} value={k}>{dayLabel(k)}</option>
-                  ))
-                )}
-              </select>
-            </div>
-            <div className="field">
-              <label className="field__label" htmlFor="bt-time">{tx(TR.time)}</label>
-              <select
-                id="bt-time"
-                className="select"
-                value={chosenSlot}
-                disabled={waiting !== null || none}
-                aria-invalid={tried && missing === TR.missingTime}
-                onChange={(e) => setSlot(e.target.value)}
-              >
-                <option value="">{waiting || none ? tx(waiting ?? TR.noSlotsShort) : '—'}</option>
-                {!waiting && times.map((s) => (
-                  <option key={s} value={s}>{timeLabel(s)}</option>
-                ))}
-              </select>
-            </div>
-            {none && <p className="ts-muted">{tx(TR.noSlots)}</p>}
-          </>
+          <div className="field">
+            <span className="field__label">{tx(TR.time)}</span>
+            {waiting ? (
+              <p className="ts-muted">{tx(waiting)}</p>
+            ) : (
+              <SlotPicker
+                slots={offered}
+                value={chosenSlot || null}
+                onChange={setSlot}
+                label={tx(TR.time)}
+                loading={slots.isLoading}
+                emptyText={tx(TR.noSlots)}
+                formatTime={timeLabel}
+              />
+            )}
+          </div>
         )
       })()}
       {tried && missing && <p className="field__error" role="alert">{tx(missing)}</p>}

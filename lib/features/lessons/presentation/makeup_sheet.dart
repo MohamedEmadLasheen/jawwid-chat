@@ -8,16 +8,18 @@ import '../../../shared/models/lesson.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/app_clock.dart';
 import 'lesson_ticket_sheet.dart';
+import 'slot_chip_picker.dart';
 
-/// PD-11 T2 / PD-15: "Reschedule a make-up class" -- after any apology, once the
-/// family and the teacher agreed on a time. A parent books into the teacher's free
-/// times; a teacher may also record another agreed date and time (the server refuses
-/// a day off or a clash).
+/// PD-11 T2 / PD-15: "Book the make-up lesson" (PD-31's name) -- after any apology,
+/// once the family and the teacher agreed on a time. A parent books into the teacher's
+/// free times; a teacher may also record another agreed date and time (the server
+/// refuses a day off or a clash).
 ///
-/// Day first, then a time on that day -- the server's free instants, grouped by the
-/// reader's OWN calendar day and shown in their own clock. Booking is instant; the
-/// server re-checks the time, so one taken a moment ago is refused, the offer is
-/// reloaded, and nothing is booked twice.
+/// The PD-31 [SlotChipPicker]: day first, then a time on that day under Morning /
+/// Afternoon / Evening -- the server's free instants, grouped by the reader's OWN
+/// calendar day and shown in their own clock. Booking is instant; the server re-checks
+/// the time, so one taken a moment ago is refused, the offer is reloaded, and nothing
+/// is booked twice.
 Future<bool> showMakeupSheet(BuildContext context, LessonTicket ticket) async {
   final sent = await showModalBottomSheet<bool>(
     context: context,
@@ -41,7 +43,6 @@ class MakeupSheet extends ConsumerStatefulWidget {
 class _MakeupSheetState extends ConsumerState<MakeupSheet> {
   MakeupOffer? _offer;
   Object? _loadError;
-  DateTime? _day;
   DateTime? _picked;
   /// PD-15: a teacher's agreed time outside the free-slot list.
   bool _custom = false;
@@ -61,20 +62,11 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
     });
     try {
       final offer = await ref.read(lessonRepositoryProvider).makeupSlots(widget.ticket.lessonId!);
-      if (!mounted) return;
-      setState(() {
-        _offer = offer;
-        final days = _days(offer);
-        if (_day == null || !days.contains(_day)) _day = days.isEmpty ? null : days.first;
-      });
+      if (mounted) setState(() => _offer = offer);
     } catch (e) {
       if (mounted) setState(() => _loadError = e);
     }
   }
-
-  static DateTime _dayOf(DateTime t) => DateTime(t.year, t.month, t.day);
-
-  List<DateTime> _days(MakeupOffer offer) => offer.slots.map(_dayOf).toSet().toList()..sort();
 
   Future<void> _book() async {
     final picked = _picked;
@@ -103,7 +95,7 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
       context: context,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: now.add(const Duration(days: 60)),
-      initialDate: _day ?? now,
+      initialDate: _picked ?? now,
     );
     if (day == null || !mounted) return;
     final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(now.add(const Duration(hours: 1))));
@@ -120,7 +112,6 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
-    final m = MaterialLocalizations.of(context);
     final offer = _offer;
     final teacher = ref.watch(currentRoleProvider) == UserRole.teacher;
 
@@ -129,57 +120,17 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
       body = Text(l10n.ticketLoadFailed, style: theme.textTheme.bodyMedium);
     } else if (offer == null) {
       body = const Center(child: Padding(padding: EdgeInsets.all(Spacing.spacing5), child: CircularProgressIndicator()));
-    } else if (offer.slots.isEmpty) {
-      body = Text(l10n.makeupNoSlots, style: theme.textTheme.bodyMedium);
     } else {
-      final days = _days(offer);
-      final times = offer.slots.where((t) => _dayOf(t) == _day).toList();
-      body = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(l10n.makeupPickDay, style: theme.textTheme.labelLarge),
-          const SizedBox(height: Spacing.spacing2),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final d in days)
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(end: Spacing.spacing2),
-                    child: ChoiceChip(
-                      key: ValueKey('makeup-day-${d.toIso8601String()}'),
-                      label: Text(m.formatShortMonthDay(d)),
-                      selected: d == _day,
-                      onSelected: (_) => setState(() {
-                        _day = d;
-                        _picked = null;
-                      }),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: Spacing.spacing4),
-          Text(l10n.makeupPickTime, style: theme.textTheme.labelLarge),
-          const SizedBox(height: Spacing.spacing2),
-          Wrap(
-            spacing: Spacing.spacing2,
-            runSpacing: Spacing.spacing2,
-            children: [
-              for (final t in times)
-                ChoiceChip(
-                  key: ValueKey('makeup-time-${t.toUtc().toIso8601String()}'),
-                  label: Text(m.formatTimeOfDay(TimeOfDay.fromDateTime(t))),
-                  selected: !_custom && t == _picked,
-                  onSelected: (_) => setState(() {
-                    _picked = t;
-                    _custom = false;
-                  }),
-                ),
-            ],
-          ),
-        ],
+      body = SlotChipPicker(
+        keyPrefix: 'makeup',
+        slots: offer.slots,
+        locked: offer.locked != null,
+        emptyText: l10n.makeupNoSlots,
+        selected: _custom ? null : _picked,
+        onSelected: (t) => setState(() {
+          _picked = t;
+          _custom = false;
+        }),
       );
     }
 

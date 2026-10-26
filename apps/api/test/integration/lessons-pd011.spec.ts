@@ -283,11 +283,14 @@ describe('5. the needs-action queue and the "+" tickets', () => {
     const started = await lesson(-HOUR / 4);
     const upcoming = await lesson(2 * HOUR);
     const teacher = await lessons.ticketsFor(s.teacherId, groupId);
-    expect(teacher.tickets.map((t) => `${t.ticket}:${t.lessonId === started ? 'started' : 'upcoming'}`).sort())
-      .toEqual(['absence:started', 'report:started', 'teacher_apology:upcoming']);
+    // PD-31: both also get one "Change lesson time" for the child (no lesson of its own).
+    const named = (t: { ticket: string; lessonId: string | null }, of: string) =>
+      `${t.ticket}:${t.lessonId === null ? 'child' : t.lessonId === of ? 'match' : 'other'}`;
+    expect(teacher.tickets.map((t) => named(t, started)).sort())
+      .toEqual(['absence:match', 'change_lesson_time:child', 'report:match', 'teacher_apology:other']);
     const parent = await lessons.ticketsFor(s.parentId, groupId);
-    expect(parent.tickets.map((t) => `${t.ticket}:${t.lessonId === upcoming ? 'upcoming' : 'started'}`).sort())
-      .toEqual(['apology:upcoming', 'late_apology:started']);
+    expect(parent.tickets.map((t) => named(t, upcoming)).sort())
+      .toEqual(['apology:match', 'change_lesson_time:child', 'late_apology:other']);
   });
 
   // Owner 2026-10-24: a lesson left unreported for more than two days vanished

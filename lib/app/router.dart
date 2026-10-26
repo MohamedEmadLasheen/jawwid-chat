@@ -9,6 +9,7 @@ import '../features/calls/presentation/active_call_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/application/chat_realtime.dart';
 import '../features/conversations/presentation/chats_screen.dart';
+import '../features/lessons/presentation/child_schedule_screen.dart';
 import '../features/lessons/presentation/teacher_schedule_screen.dart';
 import '../features/materials/presentation/child_materials_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
@@ -125,6 +126,10 @@ abstract final class Routes {
   /// `?tab=progress` opens on the map.
   static String childMaterials(String learnerId, {bool progress = false}) =>
       '/children/$learnerId/materials${progress ? '?tab=progress' : ''}';
+
+  /// PD-31: one child's weekly times and lessons for the next four weeks, read-only,
+  /// with "Change lesson time". The family's own; the server decides.
+  static String childSchedule(String learnerId) => '/children/$learnerId/schedule';
 }
 
 /// Rebuilds on every authentication change, so a session ending immediately evicts every
@@ -285,6 +290,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           learnerId: state.pathParameters['learnerId']!,
           childName: state.extra is String ? state.extra! as String : null,
           initialTab: state.uri.queryParameters['tab'] == 'progress' ? 2 : 0,
+        ),
+      ),
+      GoRoute(
+        path: '/children/:learnerId/schedule',
+        builder: (context, state) => ChildScheduleScreen(
+          learnerId: state.pathParameters['learnerId']!,
+          childName: state.extra is String ? state.extra! as String : null,
         ),
       ),
       GoRoute(

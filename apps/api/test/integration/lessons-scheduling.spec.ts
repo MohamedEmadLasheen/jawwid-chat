@@ -285,8 +285,9 @@ describe('5. a family asks for new regular times', () => {
     expect((await lessons.ticketsFor(s.parentId, groupId)).tickets.some((t) => t.ticket === 'request_schedule_change')).toBe(true);
     expect(await code(scheduling.requestScheduleChange(s.parentId, s.learnerId, { slots: [{ weekday: wd, start: '17:00' }] })))
       .toBe(CommErrorCode.LESSON_STATE);
-    expect(await code(scheduling.requestScheduleChange(s.teacherId, s.learnerId, { slots: [{ weekday: wd, start: '19:00' }] })))
-      .toBe(CommErrorCode.LESSON_DENIED);
+    // PD-31: the child's teacher may ask too (pd031-scheduling.spec.ts); another teacher may not.
+    expect(await code(scheduling.requestScheduleChange(s.unrelatedTeacherId, s.learnerId, { slots: [{ weekday: wd, start: '19:00' }] })))
+      .toBe(CommErrorCode.LESSON_NOT_FOUND);
     const req = await scheduling.requestScheduleChange(s.parentId, s.learnerId, { slots: [{ weekday: wd, start: '19:00' }], note: 'school ends later' });
     expect(req.status).toBe('pending');
     expect(await code(scheduling.requestScheduleChange(s.parentId, s.learnerId, { slots: [{ weekday: wd, start: '19:30' }] })))

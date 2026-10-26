@@ -16,6 +16,10 @@ import { chatCopyFor } from './copy'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { GroupChildren } from '@/features/journey/GroupChildren'
+import { journeyKeys } from '@/features/journey/api'
+import { ChangeTeacherDialog } from '@/features/teachers/ChangeTeacherDialog'
+import { O } from '@/features/teachers/opsCopy'
+import { useMayChangeTeacher } from '@/features/teachers/hooks'
 import { Link } from 'react-router-dom'
 import { parentPath } from '@/features/profiles/api'
 import { useMayOpenParentProfiles } from '@/features/profiles/hooks'
@@ -72,6 +76,7 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
 
       {(c.type === 'student_group' || c.type === 'family_group') && <GroupChildren conversationId={c.id} />}
       {(c.type === 'student_group' || c.type === 'family_group') && <GroupSupervisor c={c} name={name} />}
+      {(c.type === 'student_group' || c.type === 'family_group') && <GroupTeacher c={c} name={name} />}
 
       <section className="dp-section">
         <div className="cw-info__members-head">
@@ -151,6 +156,46 @@ function GroupSupervisor({ c, name }: { c: ChatConversation; name: string }) {
             setDone(transferNotice(otx, result, supervisorName))
             void queryClient.invalidateQueries({ queryKey: chatKeys.all })
             void queryClient.invalidateQueries({ queryKey: orgKeys.structure })
+          }}
+        />
+      )}
+    </section>
+  )
+}
+
+/**
+ * PD-31: change the teacher of the group's children -- every child taught by
+ * the outgoing teacher moves together, in one transaction, and the group (its
+ * members, messages and files) stays. Offered to the super admin, the Teachers
+ * department and Operations; the server decides, within PD-8 scope.
+ */
+function GroupTeacher({ c, name }: { c: ChatConversation; name: string }) {
+  const { locale } = useI18n()
+  const tx = (p: { en: string; ar: string }) => (locale === 'ar' ? p.ar : p.en)
+  const queryClient = useQueryClient()
+  const may = useMayChangeTeacher()
+  const [open, setOpen] = useState(false)
+  const [done, setDone] = useState<string | null>(null)
+  if (!may) return null
+  return (
+    <section className="dp-section">
+      <div className="cw-info__members-head">
+        <h3 className="dp-section__title">{tx(O.teacher)}</h3>
+        <button type="button" className="btn btn--sm" onClick={() => { setDone(null); setOpen(true) }}>
+          <Icon name="academy" size={14} />
+          {tx(O.changeTeacher)}
+        </button>
+      </div>
+      {done && <p className="banner banner--info" role="status">{done}</p>}
+      {open && (
+        <ChangeTeacherDialog
+          target={{ kind: 'group', id: c.id, name }}
+          onClose={() => setOpen(false)}
+          onDone={(text) => {
+            setOpen(false)
+            setDone(text)
+            void queryClient.invalidateQueries({ queryKey: chatKeys.all })
+            void queryClient.invalidateQueries({ queryKey: journeyKeys.learners(c.id) })
           }}
         />
       )}
