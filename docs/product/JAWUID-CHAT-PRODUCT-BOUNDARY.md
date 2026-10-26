@@ -3027,6 +3027,55 @@ was closed.
 
 ---
 
+### PD-35 · Teacher supervisors (part 1: the visible seat)
+
+**In progress, part 1 of 3** (owner request 2026-10-26; design approved by the
+department head the same day, `pd35-design.md` in the shared notes). Part 1 is
+the shared **visible seat**: the one way any staff member joins a conversation
+by choice and leaves it again. PD-35's teacher-supervisor rule (part 2) and
+PD-36's @mentions are both built on it.
+
+**Final decision (part 1).**
+1. **A seat is visible.** Taking one posts a line every member reads ("Ola
+   (teacher supervisor) joined to support"); leaving posts one too ("Ola left",
+   "… (no activity)"). The lines are silent: they reach open screens and push
+   nobody. Each is audited (`seat.joined`, `seat.left`).
+2. **A seat has a reason** (`chat.seat_reason`, a row each): `manual` (a staff
+   member with their own PD-8 basis makes their presence visible), `mention`
+   (PD-36; refused until PD-36 registers its policy) and, in part 2,
+   `supervision`. Each reason says whether its seat **grants** access, whether
+   it may be taken in a family 1:1, and after how many idle days it ends
+   (default 14; 0 = never).
+3. **Access.** Only a granting reason makes the seat a basis, `seated`, and
+   only while the reason's eligibility still holds: it is re-checked on every
+   access, so a lost reason ends access at once. `seated` is the **weakest**
+   basis: anyone with a PD-8 basis keeps theirs (a manager seated by a mention
+   is still the manager, with PD-14 moderation and the escalation mode). A
+   seated person reads and writes as a party, may start a group call as a
+   member (PD-19), and is never in charge: no moderation of others, no
+   membership changes, no approvals.
+4. **In a group** the seat is a live, non-silent member row. **In a family
+   1:1** it is an *effective* seat: no member row (a 1:1 is its two members,
+   BR-1), but the holder is notified as a member is. A granting reason is never
+   taken in a 1:1. BR-1 / PD-7 and C-4 are untouched: the seat never bypasses
+   the membership triggers.
+5. **Nothing else ends a seat.** The Student Group reconcile, a PD-31 change of
+   teacher and a PD-24 supervisor swap leave it in place; a seat holder who
+   becomes the group's supervisor keeps the row and the seat ends as
+   *absorbed*. A member row ended by a membership edit ends its seat.
+6. **Leaving, and the sweep.** Leaving, and the worker's sweep (a lost reason
+   or idle days), end the seat with its line; a holder left with no access
+   leaves the live room (RT-009) before the operation reports success.
+
+**Canonical rule.** `supabase/migrations/20261026160000_chat_pd035_conversation_seat.sql`
+(`chat.staff_conversation_access` = `chat.staff_conversation_standing`, the
+PD-8 decision unchanged, else `seated`); `ConversationSeatService` is the only
+writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
+`POST conversations/:id/leave`, `GET me/seats`. Proven by
+`apps/api/test/integration/conversation-seat-pd035.spec.ts`.
+
+---
+
 ## 5. Phase map
 
 | Phase | Delivers | Explicitly excluded |
