@@ -295,8 +295,10 @@ export class SchedulingService implements OnApplicationBootstrap {
     const teacher = learner.teacherId
       ? await this.prisma.teacher.findUnique({ where: { id: learner.teacherId }, select: { id: true, name: true } })
       : null;
-    // PD-31: the next real start of each weekly time, so a reader in any zone sees it in their own clock.
-    const next = slots.length ? await this.nextStarts(slots[0].timezone, slots) : new Map<string, Date>();
+    // PD-31: the next time each weekly slot really happens (an instance moved
+    // away, cancelled or paused is skipped), so a reader in any zone sees it in
+    // their own clock.
+    const next = await this.slotNextStarts(slots.map((x) => x.id));
     return {
       learnerId: learner.id,
       timezone: slots[0]?.timezone ?? null,
@@ -307,7 +309,7 @@ export class SchedulingService implements OnApplicationBootstrap {
         start: hhmm(s.startMinute),
         durationMinutes: s.durationMinutes,
         validFrom: s.validFrom.toISOString().slice(0, 10),
-        nextStartsAt: next.get(`${s.weekday}:${s.startMinute}`)?.toISOString() ?? null,
+        nextStartsAt: next.get(s.id)?.toISOString() ?? null,
       })),
       pendingRequest: pending
         ? {
@@ -1372,13 +1374,45 @@ export class SchedulingService implements OnApplicationBootstrap {
       where: { learnerId, validTo: null },
       orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
     });
-    const next = slots.length ? await this.nextStarts(slots[0].timezone, slots) : new Map<string, Date>();
+    const next = await this.slotNextStarts(slots.map((x) => x.id));
     return slots.map((s) => ({
       weekday: s.weekday,
       start: hhmm(s.startMinute),
       durationMinutes: s.durationMinutes,
-      nextStartsAt: next.get(`${s.weekday}:${s.startMinute}`)?.toISOString() ?? null,
+      nextStartsAt: next.get(s.id)?.toISOString() ?? null,
     }));
+  }
+
+  /**
+   * When each of a learner's weekly slots next REALLY happens, keyed by slot
+   * id: its first coming occurrence (within 12 weeks) whose lesson was not
+   * closed early -- moved away, cancelled, paused, voided, excused -- that is
+   * not one of the teacher's days off or inside the learner's pause, and that
+   * the slot still covers. A lesson moved to another time is a lesson of its
+   * own (`moved_from`), never this slot's next start.
+   */
+  async slotNextStarts(slotIds: string[]): Promise<Map<string, Date>> {
+    if (slotIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; next_at: Date | null }>>`
+      SELECT s.id::text AS id, min(o.at) AS next_at
+        FROM chat.learner_schedule_slot s
+        CROSS JOIN LATERAL (
+          SELECT ((d::date + make_interval(mins => s.start_minute)) AT TIME ZONE s.timezone) AS at, d::date AS day
+            FROM generate_series((now() AT TIME ZONE s.timezone)::date,
+                                 (now() AT TIME ZONE s.timezone)::date + 84,
+                                 interval '1 day') d
+           WHERE extract(isodow FROM d) = s.weekday
+             AND d::date >= s.valid_from
+             AND (s.valid_to IS NULL OR d::date < s.valid_to)
+        ) o
+       WHERE s.id = ANY(${slotIds}::uuid[])
+         AND o.at > now()
+         AND NOT EXISTS (SELECT 1 FROM chat.lesson l
+                          WHERE l.schedule_slot_id = s.id AND l.starts_at = o.at AND l.outcome IS NOT NULL)
+         AND NOT EXISTS (SELECT 1 FROM chat.teacher_day_off off WHERE off.teacher_id = s.teacher_id AND off.day = o.day)
+         AND NOT chat.learner_suspended_on(s.learner_id, o.day)
+       GROUP BY s.id`;
+    return new Map(rows.filter((r) => r.next_at !== null).map((r) => [r.id, r.next_at as Date]));
   }
 
   /** The next instant each weekly time (wall clock in `timezone`) falls on, keyed `weekday:startMinute`. */

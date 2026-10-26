@@ -1506,7 +1506,7 @@
   "childScheduleNoLessons": "لا توجد حصص خلال الأسابيع الأربعة القادمة.",
   "childSchedulePending": "طلب تغيير المواعيد بانتظار تأكيد الإدارة.",
   "childScheduleLoadFailed": "تعذّر تحميل المواعيد.",
-  "childLessonMovedTo": "نُقلت إلى {when}",
+  "childLessonMovedFrom": "كانت {when}",
   "childLessonExcused": "بعذر",
   "cardMovedTitle": "تغيّر موعد الحصة",
   "cardMovedByFamily": "غيّرته الأسرة",

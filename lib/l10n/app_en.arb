@@ -2475,9 +2475,9 @@
   "@childScheduleLoadFailed": {
     "description": "PD-31: load failure."
   },
-  "childLessonMovedTo": "Moved to {when}",
-  "@childLessonMovedTo": {
-    "description": "PD-31: a lesson moved away, with its new time.",
+  "childLessonMovedFrom": "Was {when}",
+  "@childLessonMovedFrom": {
+    "description": "PD-31: a lesson moved here, with the time it was moved from.",
     "placeholders": {
       "when": {
         "type": "String"

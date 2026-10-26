@@ -200,6 +200,46 @@ describe('1. one lesson moves', () => {
   });
 });
 
+describe('1b. a weekly slot\'s next start after a move (QA on systest, 2026-10-26)', () => {
+  it('skips the instance moved away; the moved lesson is listed once, at its new time, naming where it came from', async () => {
+    const wd = await weekdayIn(1);
+    await scheduling.setSchedule(tsupId, s.learnerId, { slots: [{ weekday: wd, start: '15:00', durationMinutes: 30 }] });
+    const first = await g.prisma.lesson.findFirstOrThrow({
+      where: { learnerId: s.learnerId, scheduleSlotId: { not: null }, outcome: null },
+      orderBy: { startsAt: 'asc' },
+    });
+    expect((await scheduling.schedule(s.parentId, s.learnerId)).slots[0].nextStartsAt).toBe(first.startsAt.toISOString());
+
+    const offer = await scheduling.moveSlots(s.parentId, first.id);
+    const to = offer.slots.find((x) => new Date(x).getTime() < first.startsAt.getTime()) ?? offer.slots[0];
+    const moved = await scheduling.moveLesson(s.parentId, first.id, { startsAt: to });
+
+    // The weekly slot's next start is the FOLLOWING week's lesson, never the
+    // instance moved away. (Compared with the real row, not +7 days: Cairo's
+    // clock change can fall in between.)
+    const following = await g.prisma.lesson.findFirstOrThrow({
+      where: { scheduleSlotId: first.scheduleSlotId, startsAt: { gt: first.startsAt }, outcome: null },
+      orderBy: { startsAt: 'asc' },
+    });
+    const next = (await scheduling.schedule(s.parentId, s.learnerId)).slots[0].nextStartsAt;
+    expect(next).toBe(following.startsAt.toISOString());
+    const [{ local }] = await g.prisma.$queryRawUnsafe<Array<{ local: string }>>(
+      `select to_char($1::timestamptz at time zone '${TZ}', 'HH24:MI') as local`, following.startsAt,
+    );
+    expect(local).toBe('15:00');
+    expect((await scheduling.scheduleOptions(s.parentId, s.learnerId)).current[0].nextStartsAt).toBe(next);
+
+    // The family's list shows the moved lesson once, open, at its new time, saying where it came from.
+    const listed = (await lessons.list(s.parentId, { learnerId: s.learnerId })).lessons;
+    const open = listed.filter((l) => l.outcome === null);
+    expect(open.filter((l) => l.startsAt === to)).toHaveLength(1);
+    expect(open.find((l) => l.id === moved.id)).toEqual(expect.objectContaining({
+      movedFrom: first.id, movedFromStartsAt: first.startsAt.toISOString(), movedBy: 'family',
+    }));
+    expect(open.some((l) => l.startsAt === first.startsAt.toISOString())).toBe(false);
+  });
+});
+
 describe('2. weekly times', () => {
   it('options carry the current times and the weeks a time would be skipped', async () => {
     const wd = await weekdayIn(3);
