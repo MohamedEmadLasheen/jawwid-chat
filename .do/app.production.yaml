@@ -304,6 +304,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${PAYMENT_LINK_BASE_URL}
+      - key: SUBSCRIPTION_LOCK_ENFORCED
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${SUBSCRIPTION_LOCK_ENFORCED}
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET
@@ -649,6 +653,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${PAYMENT_LINK_BASE_URL}
+      - key: SUBSCRIPTION_LOCK_ENFORCED
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${SUBSCRIPTION_LOCK_ENFORCED}
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET

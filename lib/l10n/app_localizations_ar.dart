@@ -2960,6 +2960,152 @@ class L10nAr extends L10n {
   String get tabPayments => 'المدفوعات';
 
   @override
+  String get tabSubscriptions => 'الاشتراكات';
+
+  @override
+  String subscriptionMonthCount(int months) {
+    String _temp0 = intl.Intl.pluralLogic(
+      months,
+      locale: localeName,
+      other: '$months شهر',
+      many: '$months شهرًا',
+      few: '$months أشهر',
+      two: 'شهران',
+      one: 'شهر واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionLessonCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة',
+      many: '$count حصة',
+      few: '$count حصص',
+      two: 'حصتان',
+      one: 'حصة واحدة',
+      zero: '0 حصة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionPlanLessons(String months, String lessons) {
+    return '$months — $lessons';
+  }
+
+  @override
+  String get subscriptionNone => 'لا يوجد اشتراك بعد';
+
+  @override
+  String subscriptionLessonsLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'بقيت $count حصة',
+      many: 'بقيت $count حصة',
+      few: 'بقيت $count حصص',
+      two: 'بقيت حصتان',
+      one: 'بقيت حصة واحدة',
+      zero: 'لم تبقَ حصص',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionGraceLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تبقّت $count حصة سماح',
+      many: 'تبقّت $count حصة سماح',
+      few: 'تبقّت $count حصص سماح',
+      two: 'تبقّت حصتا سماح',
+      one: 'تبقّت حصة سماح واحدة',
+      zero: 'لم تبقَ حصص سماح',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get subscriptionStateOpen => 'فعّال';
+
+  @override
+  String get subscriptionStateGrace => 'بانتظار التجديد';
+
+  @override
+  String get subscriptionStateLocked => 'متوقف';
+
+  @override
+  String get subscriptionLessonsUsedUp => 'انتهت الحصص';
+
+  @override
+  String subscriptionOverdueSince(String label, String date) {
+    return 'القسط $label متأخر منذ $date';
+  }
+
+  @override
+  String get subscriptionRequestRenewal => 'طلب التجديد';
+
+  @override
+  String get subscriptionRenewalRequested => 'تم طلب التجديد';
+
+  @override
+  String get lockBannerTitle => 'الحصص متوقفة مؤقتًا';
+
+  @override
+  String lockBannerChildBalance(String name) {
+    return '$name: انتهت الحصص';
+  }
+
+  @override
+  String lockBannerChildOverdue(String name, String label, String date) {
+    return '$name: القسط $label متأخر منذ $date';
+  }
+
+  @override
+  String lockBannerChildPaused(String name) {
+    return 'حصص $name متوقفة مؤقتًا';
+  }
+
+  @override
+  String get lockBannerGeneric => 'هذه المجموعة متوقفة مؤقتًا.';
+
+  @override
+  String get lockBannerOpenSubscriptions => 'الذهاب إلى الاشتراكات';
+
+  @override
+  String reportLessonOf(int number, int total) {
+    return 'الحصة $number من $total';
+  }
+
+  @override
+  String cardLessonNumberOf(int number, int total) {
+    return '$number من $total';
+  }
+
+  @override
+  String get outcomeSuspended => 'موقوفة';
+
+  @override
+  String get outcomeSuspendedPayment => 'موقوفة — الدفع';
+
+  @override
+  String get cardLessonsPausedTitle => 'توقفت الحصص مؤقتًا';
+
+  @override
+  String get cardSubscriptionLockedTitle => 'توقفت الحصص — الدفع';
+
+  @override
+  String get cardSubscriptionLockedHint =>
+      'جدّدوا الاشتراك أو ادفعوا من «الاشتراكات».';
+
+  @override
+  String get cardSubscriptionUnlockedTitle => 'عادت الحصص';
+
+  @override
   String get roleSales => 'المبيعات';
 
   @override

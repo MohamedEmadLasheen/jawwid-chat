@@ -8,11 +8,13 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { BankAccount, BillingSettings, InvoiceIssuer, Receipt, ReceiptStatus } from './api'
 import { PAY, describeError, type Pair, formatDay, formatMoney, reminderLabel, toMinor, useCopy } from './copy'
+import { RenewalRequestsPanel } from '@/features/subscriptions/RenewalRequestsPanel'
+import { S } from '@/features/subscriptions/copy'
 import { useApproveReceipt, useBillingSettings, useReceipts, useRejectReceipt, useSaveBillingSettings } from './hooks'
 import { Field, Footer, ReasonDialog, ReceiptFile, ReceiptStatusBadge, ServerError } from './PaymentParts'
 import './payments.css'
 
-type Tab = 'receipts' | 'settings'
+type Tab = 'receipts' | 'renewals' | 'settings'
 const STATUSES: readonly ReceiptStatus[] = ['pending', 'approved', 'rejected']
 const FILTER_LABEL: Record<ReceiptStatus, Pair> = {
   pending: { en: 'Pending', ar: 'قيد الانتظار' },
@@ -35,7 +37,8 @@ const DECIDED_LABEL: Record<'approved' | 'rejected', Pair> = {
 export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
   const [params, setParams] = useSearchParams()
-  const tab: Tab = params.get('tab') === 'settings' ? 'settings' : 'receipts'
+  const asked = params.get('tab')
+  const tab: Tab = asked === 'settings' || asked === 'renewals' ? asked : 'receipts'
   const choose = (next: Tab) => {
     const p = new URLSearchParams(params)
     if (next === 'receipts') p.delete('tab')
@@ -54,11 +57,12 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
             onChange={choose}
             options={[
               { value: 'receipts', label: tx(PAY.receiptsTab) },
+              { value: 'renewals', label: tx(S.renewalsTitle) },
               { value: 'settings', label: tx(PAY.settingsTab) },
             ]}
           />
         </div>
-        {tab === 'receipts' ? <ReceiptsTab /> : <SettingsTab />}
+        {tab === 'receipts' ? <ReceiptsTab /> : tab === 'renewals' ? <RenewalRequestsPanel /> : <SettingsTab />}
       </div>
     </div>
   )

@@ -22,6 +22,8 @@ export interface PaymentRequestDto {
   child: Child | null;
   instalmentId: string | null;
   planMonths: number | null;
+  /** PD-30: the lessons a subscription / renewal buys (credited when paid in full). */
+  lessonsIncluded: number | null;
   periodStart: string | null;
   periodEnd: string | null;
   expiresAt: string;
@@ -231,6 +233,7 @@ export class PaymentsReadService {
         child: childOf(r),
         instalmentId: r.instalmentId,
         planMonths: r.planMonths,
+        lessonsIncluded: r.lessonsIncluded,
         periodStart: r.periodStart ? day(r.periodStart) : null,
         periodEnd: r.periodEnd ? day(r.periodEnd) : null,
         expiresAt: r.expiresAt.toISOString(),
