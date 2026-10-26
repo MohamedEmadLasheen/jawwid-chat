@@ -32,6 +32,12 @@ export interface SubscriptionLockReader {
   lockedChildren(conversationId: string): Promise<LockedChild[]>;
   /** Whether one child is locked (state, whatever the switch says). */
   isLocked(learnerId: string): Promise<boolean>;
+  /**
+   * PD-30 <-> PD-31 interface (department head, 2026-10-26): chat.learner_lesson_lock --
+   * null when open (grace included), else why: 'balance' | 'overdue' ('overdue' wins).
+   * The state, whatever the switch says; check `enforced` before refusing.
+   */
+  lockOf(learnerId: string): Promise<'balance' | 'overdue' | null>;
 }
 
 export function subscriptionLockEnforced(): boolean {
@@ -43,6 +49,7 @@ export const NO_SUBSCRIPTION_LOCK: SubscriptionLockReader = Object.freeze({
   enforced: false,
   lockedChildren: async () => [],
   isLocked: async () => false,
+  lockOf: async () => null,
 });
 
 @Injectable()
@@ -61,7 +68,7 @@ export class SqlSubscriptionLock implements SubscriptionLockReader {
         FROM chat.learner_access a
         JOIN chat.learner l ON l.id = a.learner_id
         LEFT JOIN chat.family_instalment i ON i.id = a.overdue_instalment_id
-       WHERE a.state = 'locked'
+       WHERE chat.learner_lesson_lock(a.learner_id) IS NOT NULL
          AND a.learner_id IN (
            SELECT cl.learner_id FROM chat.conversation_learner cl
              JOIN chat.conversation c ON c.id = cl.conversation_id
@@ -80,7 +87,13 @@ export class SqlSubscriptionLock implements SubscriptionLockReader {
   }
 
   async isLocked(learnerId: string): Promise<boolean> {
-    const row = await this.prisma.learnerAccess.findUnique({ where: { learnerId }, select: { state: true } });
-    return row?.state === 'locked';
+    return (await this.lockOf(learnerId)) !== null;
+  }
+
+  /** chat.learner_lesson_lock: null when open (grace included), else 'balance' | 'overdue' ('overdue' wins). */
+  async lockOf(learnerId: string): Promise<'balance' | 'overdue' | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ lock: 'balance' | 'overdue' | null }>>`
+      SELECT chat.learner_lesson_lock(${learnerId}::uuid) AS lock`;
+    return rows[0]?.lock ?? null;
   }
 }

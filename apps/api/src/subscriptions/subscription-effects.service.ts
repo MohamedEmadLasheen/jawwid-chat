@@ -114,14 +114,17 @@ export class SubscriptionEffects {
 
   /** held := locked AND enforced, for every child where that is not so yet. */
   async reconcileHolds(): Promise<{ held: number; released: number }> {
+    // chat.learner_lesson_lock is the one answer to "is this child locked"
+    // (PD-30 <-> PD-31 interface): the hold follows it, and the switch.
     const enforced = this.locks.enforced;
     const toHold = enforced
-      ? await this.prisma.learnerAccess.findMany({ where: { state: 'locked', held: false }, select: { learnerId: true } })
+      ? await this.prisma.$queryRaw<Array<{ learnerId: string }>>`
+          SELECT learner_id::text AS "learnerId" FROM chat.learner_access
+           WHERE NOT held AND chat.learner_lesson_lock(learner_id) IS NOT NULL`
       : [];
-    const toRelease = await this.prisma.learnerAccess.findMany({
-      where: enforced ? { held: true, state: { not: 'locked' } } : { held: true },
-      select: { learnerId: true },
-    });
+    const toRelease = await this.prisma.$queryRaw<Array<{ learnerId: string }>>`
+      SELECT learner_id::text AS "learnerId" FROM chat.learner_access
+       WHERE held AND (${!enforced} OR chat.learner_lesson_lock(learner_id) IS NULL)`;
     let held = 0;
     for (const { learnerId } of toHold) if (await this.hold(learnerId)) held += 1;
     let released = 0;
@@ -223,7 +226,7 @@ export class SubscriptionEffects {
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<Array<{ state: string; held: boolean }>>`
         SELECT state, held FROM chat.learner_access WHERE learner_id = ${learnerId}::uuid FOR UPDATE`;
-      if (!rows[0] || rows[0].state !== 'locked' || rows[0].held || !this.locks.enforced) return false;
+      if (!rows[0] || rows[0].held || !this.locks.enforced || (await this.locks.lockOf(learnerId)) === null) return false;
       const lessons = await tx.$queryRaw<Array<{ id: string }>>`
         UPDATE chat.lesson
            SET outcome = 'suspended', outcome_note = 'subscription', outcome_by_kind = 'system', outcome_by = NULL
@@ -246,7 +249,7 @@ export class SubscriptionEffects {
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<Array<{ state: string; held: boolean }>>`
         SELECT state, held FROM chat.learner_access WHERE learner_id = ${learnerId}::uuid FOR UPDATE`;
-      if (!rows[0] || !rows[0].held || (rows[0].state === 'locked' && this.locks.enforced)) return false;
+      if (!rows[0] || !rows[0].held || (this.locks.enforced && (await this.locks.lockOf(learnerId)) !== null)) return false;
       await tx.learnerAccess.update({ where: { learnerId }, data: { held: false } });
       await this.audit.audit(tx, {
         action: 'subscription.lessons_released',

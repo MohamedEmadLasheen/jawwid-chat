@@ -35,6 +35,9 @@ class FakeLock implements SubscriptionLockReader {
   async isLocked() {
     return this.locked.length > 0;
   }
+  async lockOf() {
+    return this.locked.length > 0 ? ('balance' as const) : null;
+  }
 }
 
 const ADAM: LockedChild = { learnerId: 'l-1', learnerName: 'Adam', reasons: ['balance'], instalmentLabel: null, overdueDueOn: null };

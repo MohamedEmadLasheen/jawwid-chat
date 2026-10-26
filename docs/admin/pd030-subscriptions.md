@@ -34,6 +34,16 @@ because an instalment becomes overdue by the calendar.
   still unpaid), not voided, due before today and **on or after `subscription.overdue_from`**
   (go-live, set by the migration to its day).
 
+## The one question: `chat.learner_lesson_lock(learner)`
+
+`chat.learner_lesson_lock(p_learner uuid) returns text`: NULL when the child is open (grace included);
+`'balance'` or `'overdue'` when locked, `'overdue'` winning when both apply; an active exception covering a
+reason has already removed it. SECURITY DEFINER, fixed `search_path`, EXECUTE granted to `chat_app`.
+It answers the STATE, whatever `SUBSCRIPTION_LOCK_ENFORCED` says; callers apply the switch. Every PD-30
+check goes through it (`SubscriptionLockReader.lockOf` / `isLocked`: canSend, calls, reactions, booking,
+the hold that stops the materializer), and other features ask it too (PD-31's moves and bookings, via
+`SchedulingService.lockOf()`).
+
 ## What "locked" does (when `SUBSCRIPTION_LOCK_ENFORCED=true`)
 
 | | Parent | Teacher | Staff (supervisor, managers, super admin) |

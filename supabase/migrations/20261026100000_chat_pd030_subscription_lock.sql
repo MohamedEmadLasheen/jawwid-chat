@@ -527,6 +527,31 @@ begin
 end;
 $$;
 
+-- THE ONE QUESTION other features ask (PD-31's moves and bookings, and this
+-- PD's own enforcement): is this child's lesson-taking locked for payment, and
+-- why? NULL = open (grace included); 'balance' or 'overdue' when locked --
+-- 'overdue' wins when both apply. An active exception covering a reason has
+-- already removed it (chat.compute_learner_access). The STATE, whatever
+-- SUBSCRIPTION_LOCK_ENFORCED says; callers in the API apply the switch.
+create or replace function chat.learner_lesson_lock(p_learner uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = chat, pg_temp
+as $$
+  select case
+           when a.state <> 'locked' then null
+           when 'overdue' = any(a.reasons) then 'overdue'
+           else 'balance'
+         end
+    from chat.learner_access a
+   where a.learner_id = p_learner;
+$$;
+
+revoke all on function chat.learner_lesson_lock(uuid) from public;
+grant execute on function chat.learner_lesson_lock(uuid) to chat_app;
+
 -- ===========================================================================
 -- 6. Every writer refreshes the state, in its own transaction
 -- ===========================================================================
