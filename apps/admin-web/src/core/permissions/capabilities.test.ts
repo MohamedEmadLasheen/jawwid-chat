@@ -119,15 +119,17 @@ describe('the legacy Inbox is routable but never offered', () => {
     }
   })
 
-  it('nothing else is hidden: navigation is the openable areas minus Inbox -- and minus Teacher statistics, Instalments, Parents, Payments and Materials until the server confirms the department', () => {
+  it('nothing else is hidden: navigation is the openable areas minus Inbox -- and minus Teacher statistics, Instalments, Parents, Payments, Materials and the Schedule until the server confirms the department', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
       expect(navAreas(role)).toEqual(
-        visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'trials' && a !== 'materials' && !money(a)),
+        visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a)),
       )
-      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'materials' && !money(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'materials'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
+      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'materials' && a !== 'schedule' && !money(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'materials' && a !== 'schedule'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'schedule'))
+      // PD-38: the Schedule on GET /lessons/access's `calendar`.
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
     }
   })
 

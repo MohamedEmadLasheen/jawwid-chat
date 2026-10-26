@@ -90,7 +90,20 @@ export interface TeacherDetail {
   rates: { attendance: number | null; completion: number | null; teacherReliability: number | null }
   reports: { reports: number; onTime: number; onTimeRate: number | null; medianDelayMinutes: number | null }
   replies: { familyMessages: number; answeredWithin: number; rate: number | null; medianReplyMinutes: number | null }
-  workload: { availableMinutes: number | null; scheduledMinutes: number; freeMinutes: number | null }
+  /**
+   * PD-38: one partition of the working hours --
+   * available = bookedWithin + pausedWithin + free; outside = booked time beyond them.
+   * scheduledMinutes counts every lesson (outside the hours too). Newer fields are
+   * optional for an older server.
+   */
+  workload: {
+    availableMinutes: number | null
+    scheduledMinutes: number
+    freeMinutes: number | null
+    bookedWithinMinutes?: number | null
+    pausedWithinMinutes?: number | null
+    outsideMinutes?: number | null
+  }
   movements?: { transfersIn: number; transfersOut: number; paused: number; stopped: number }
   previous: { month: string; held: Bucket }
   /** PD-31: lessons the teacher moved this month. Information, NOT a violation. */
@@ -98,8 +111,8 @@ export interface TeacherDetail {
 }
 
 export const statsApi = {
-  /** `sales` / `operations`: PD-11 T4's Trials and New Students pages (optional: older servers omit them). */
-  access: () => api.get<{ lessonManager: boolean; sales?: boolean; operations?: boolean }>('/lessons/access'),
+  /** `sales` / `operations`: PD-11 T4's Trials and New Students pages; `calendar`: PD-38's schedule (optional: older servers omit them). */
+  access: () => api.get<{ lessonManager: boolean; sales?: boolean; operations?: boolean; calendar?: boolean }>('/lessons/access'),
   teachers: (month: string) => api.get<{ month: string; zone: string; teachers: TeacherRow[] }>('/stats/teachers', { month }),
   teacher: (id: string, month: string) =>
     api.get<TeacherDetail>(`/stats/teachers/${encodeURIComponent(id)}`, { month }),

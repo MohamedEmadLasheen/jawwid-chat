@@ -44,6 +44,7 @@ claimed. The decision text itself still lives in
 | PD-33 | Hand over to backup: a temporary cover with automatic return (built on PD-8 backup links) | `claude/pd33-backup-handover-3bb0f2` | in progress |
 | PD-35 | Teacher supervisors: the visible seat (join/leave by choice), teacher assignment and scope, report corrections, evaluations, escalation | `claude/pd35-teacher-supervisors-8efcc6` | in progress |
 | PD-37 | Chat parity with WhatsApp/Messenger: read receipts (author-only ticks + Message info), typing, presence; first PR closes RT-012 (receipt roster leak) | `claude/pd37-chat-parity-*` | in progress |
+| PD-38 | Scheduling calendar: academy and teacher views, shifts by category, supervisor colors, filters, capacity statistics | `claude/pd38-schedule-calendar-b9fe8f`, `claude/pd38-admin-web` | P1: PR #139 (API) + #142 (Admin Web) |
 
 ## Migration slots claimed on 2026-10-22
 
@@ -66,7 +67,9 @@ claimed. The decision text itself still lives in
 | `20261026130000` | PD-33 — `chat_pd033_supervisor_cover` |
 | `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
 | `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (later PD-35 PRs: `…160001`, `…160002`) |
+| `20261026160003` | PD-35 — `chat_pd035_seat_security_fixes` (security-review fixes for #131, fixed forward) |
 | `20261026180000` | PD-37 — chat read cursors / presence (P1a; sub-slots `180001…`). The RT-012 fix PR has no migration. |
 | `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |
+| `20261026210000` | PD-38 — `chat_pd038_schedule_calendar` |
 
-The next free slot is `20261026210000` (fixed slot map: 130000 PD-33, 140000 PD-30, 160000 PD-35, 170000 PD-36, 180000 PD-37, 190000 PD-34, 200000 PD-29 amendment).
+The next free slot is `20261026220000` (fixed slot map: 130000 PD-33, 140000 PD-30, 160000 PD-35, 170000 PD-36, 180000 PD-37, 190000 PD-34, 200000 PD-29 amendment, 210000 PD-38).

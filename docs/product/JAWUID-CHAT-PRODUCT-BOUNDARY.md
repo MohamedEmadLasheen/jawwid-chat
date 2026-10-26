@@ -596,7 +596,7 @@ and workload analytics:
 | Monthly scheduled hours | sum of lesson durations in the month, all outcomes |
 | Actual teaching hours | sum of durations of `held` lessons that have a report |
 | Cancellation / apology hours | sum of durations of non-`held` lessons, split by outcome |
-| Available scheduled hours | availability-template hours in the month, minus extra days off, minus scheduled lesson hours (fixed-shift teachers only) |
+| Available / free hours (PD-38) | one partition of the month's working hours, from `chat.calendar_capacity` (days of the academy's zone): **available** = the shift (full/part-shift teachers) or the availability in force that day (hourly, or no pattern yet), minus approved leave and days off; available = **booked within** (lessons, overlaps merged) + **paused within** + **free**. Booked time outside the hours is **outside**. *Scheduled hours* (above) still count every lesson, outside the hours too, so available − scheduled is not free. Read by the Teacher File and by the teacher's own workload (`GET /stats/me`). |
 | Trial lessons | `kind = trial` and `held`, split into converted / not converted |
 
 **Implementation phase.** Not yet scheduled against a milestone. Order: **L1** lesson + outcome +
@@ -3186,6 +3186,16 @@ PD-8 decision unchanged, else `seated`); `ConversationSeatService` is the only
 writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
 `POST conversations/:id/leave`, `GET me/seats`. Proven by
 `apps/api/test/integration/conversation-seat-pd035.spec.ts`.
+
+**Security review (department head, 2026-10-26), fixed forward in
+`20261026160003_chat_pd035_seat_security_fixes.sql` and the API.**
+- A seat's member row never counts as PD-8 standing, and never lends access to
+  whoever acts for its holder.
+- It is never the admin role that may change membership.
+- A seat holder gets no approvals and no internal-note fan-out, and is pushed
+  only while the seat still gives access.
+- Leaving and absorbing one seat never interleave (one lock; leave checks its
+  row count).
 
 ---
 
