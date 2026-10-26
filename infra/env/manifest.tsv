@@ -162,6 +162,14 @@ STRIPE_WEBHOOK_SECRET	payments	yes	opt	opt	opt
 # https://api.jawwid.com/api/v1. Unset = the origin of the request that made
 # the link (fine locally; set it wherever a proxy rewrites the host).
 PAYMENT_LINK_BASE_URL	payments	no	opt	opt	opt
+# SUBSCRIPTION_LOCK_ENFORCED is CONSUMED by apps/api/src/platform/subscription-lock.ts
+# (PD-30) in the API and the worker: 'true' enforces the payment lock -- a locked
+# child's group is read-only for the parent and teacher, calls and bookings are
+# refused, lessons are put on hold and the cards go out. Anything else (or
+# unset) = off: the ledger, the balance and the state are still computed and
+# shown, and nothing is refused. Owner decision 2026-10-26: on in staging, off in
+# production until the owner turns it on (the deploy workflows default it so).
+SUBSCRIPTION_LOCK_ENFORCED	payments	no	opt	opt	opt
 # SENTRY_DSN is CONSUMED: when set, the API and the worker report 5xx responses,
 # swallowed worker-subsystem failures and process-level faults to Sentry
 # (apps/api/src/infra/observability/sentry-error-tracker.ts); when unset or

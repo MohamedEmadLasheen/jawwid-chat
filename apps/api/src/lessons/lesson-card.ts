@@ -119,9 +119,44 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
       return ar ? `▶️ عادت حصص ${learner}` : `▶️ ${learner}'s lessons have resumed`;
     case CardKind.TEACHER_BONUS:
       return join(ar ? '🏅 مكافأة' : '🏅 A bonus for you', line(ar ? 'السبب' : 'Reason', p.reason));
+    case CardKind.SUBSCRIPTION_GRACE:
+      return ar
+        ? `⏳ انتهت حصص اشتراك ${learner}. ${graceLeftLabel(Number(p.graceLeft), true)} حتى التجديد.`
+        : `⏳ ${learner}'s subscription lessons are used up. ${graceLeftLabel(Number(p.graceLeft), false)} until renewal.`;
+    case CardKind.SUBSCRIPTION_LOCKED:
+      return join(
+        ar ? `⏸️ توقفت حصص ${learner}` : `⏸️ ${learner}'s lessons are paused`,
+        lockReasonLines(p, ar),
+        ar ? 'جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».' : 'Renew or pay the instalment in Subscriptions.',
+      );
+    case CardKind.LESSONS_PAUSED:
+      return ar ? `⏸️ توقفت حصص ${learner} مؤقتًا.` : `⏸️ ${learner}'s lessons are paused.`;
+    case CardKind.SUBSCRIPTION_UNLOCKED:
+      return ar ? `▶️ عادت حصص ${learner}.` : `▶️ ${learner}'s lessons are back on.`;
+    case CardKind.RENEWAL_REQUESTED:
+      return ar ? `🔁 طلب ولي الأمر تجديد اشتراك ${learner}.` : `🔁 The parent asked to renew ${learner}'s subscription.`;
     default:
       return ar ? 'تحديث على الحصة' : 'Lesson update';
   }
+}
+
+/** PD-30: "2 grace lessons left" / "1 grace lesson left". */
+function graceLeftLabel(n: number, ar: boolean): string {
+  if (ar) return n === 1 ? 'تبقّت حصة سماح واحدة' : n === 2 ? 'تبقّت حصتا سماح' : `تبقّت ${n} حصص سماح`;
+  return n === 1 ? '1 grace lesson left' : `${n} grace lessons left`;
+}
+
+/** PD-30: why a child's lessons are paused, one line per reason. */
+function lockReasonLines(p: Record<string, unknown>, ar: boolean): string | null {
+  const reasons = Array.isArray(p.reasons) ? p.reasons.map(String) : [];
+  const lines: string[] = [];
+  if (reasons.includes('balance')) lines.push(ar ? 'انتهت حصص الاشتراك' : 'The subscription\'s lessons are used up');
+  if (reasons.includes('overdue')) {
+    const label = String(p.instalmentLabel ?? '');
+    const since = String(p.overdueSince ?? '');
+    lines.push(ar ? `القسط ${label} متأخر منذ ${since}` : `Instalment ${label} overdue since ${since}`);
+  }
+  return lines.length ? lines.join('\n') : null;
 }
 
 /** The report's own lines, shared by the report card and a correction to held. */
@@ -133,7 +168,13 @@ function reportBody(p: Record<string, unknown>, ar: boolean, title: string | nul
   const performance = typeof p.rating === 'number' ? performanceLabel(p.rating, ar) : null;
   return [
     title,
-    line(ar ? 'رقم الحصة' : 'Lesson no.', p.lessonNumber),
+    // PD-30: "2 of 24" when the report kept its subscription's lessons.
+    line(
+      ar ? 'رقم الحصة' : 'Lesson no.',
+      typeof p.lessonNumber === 'number' && typeof p.lessonTotal === 'number'
+        ? ar ? `${p.lessonNumber} من ${p.lessonTotal}` : `${p.lessonNumber} of ${p.lessonTotal}`
+        : p.lessonNumber,
+    ),
     line(ar ? 'ما تمت دراسته' : 'Covered', list(p.coveredTopics, topicLabel)),
     line(ar ? 'التفاصيل' : 'Details', p.covered),
     line(ar ? 'مستوى الأداء' : 'Performance', performance),

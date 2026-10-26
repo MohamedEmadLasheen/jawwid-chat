@@ -132,7 +132,7 @@ export class PaymentsService {
           action: 'payment_request.created',
           entity: 'family',
           entityId: family.id,
-          after: { requestId: created.id, purpose: terms.purpose, amountMinor, currency, learnerId, planMonths: terms.planMonths },
+          after: { requestId: created.id, purpose: terms.purpose, amountMinor, currency, learnerId, planMonths: terms.planMonths, lessonsIncluded: terms.lessonsIncluded },
           reason: 'payment link created',
         });
         return created;
@@ -199,7 +199,7 @@ export class PaymentsService {
         action: 'payment_request.created',
         entity: 'lesson',
         entityId: payer.trialLessonId,
-        after: { requestId: created.id, purpose: terms.purpose, amountMinor, currency, planMonths: terms.planMonths },
+        after: { requestId: created.id, purpose: terms.purpose, amountMinor, currency, planMonths: terms.planMonths, lessonsIncluded: terms.lessonsIncluded },
         reason: 'payment link created for a trial before Assign',
       });
       return created;
@@ -646,10 +646,20 @@ export class PaymentsService {
     const periodStart = optionalDate('periodStart', body.periodStart);
     const periodEnd = optionalDate('periodEnd', body.periodEnd);
     if (periodStart && periodEnd && periodEnd < periodStart) throw invalid('periodEnd: on or after periodStart');
+    // PD-30: a subscription or renewal says how many lessons it buys; the
+    // child's ledger is credited when it is paid in full (a database trigger).
+    let lessonsIncluded: number | null = null;
+    if (body.lessonsIncluded !== undefined && body.lessonsIncluded !== null) {
+      const n = body.lessonsIncluded;
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 500) throw invalid('lessonsIncluded: an integer from 1 to 500');
+      if (purpose !== 'subscription' && purpose !== 'renewal') throw invalid('lessonsIncluded: only a subscription or a renewal buys lessons');
+      lessonsIncluded = n;
+    }
     return {
       purpose,
       label,
       planMonths,
+      lessonsIncluded,
       periodStart: periodStart ? dateOnly(periodStart) : null,
       periodEnd: periodEnd ? dateOnly(periodEnd) : null,
     };
