@@ -141,7 +141,8 @@ class ChildScheduleScreen extends ConsumerWidget {
 String childLessonStatus(BuildContext context, ScheduledLesson l) {
   final l10n = L10n.of(context);
   return switch (l.outcome) {
-    'rescheduled' => l.movedTo != null ? l10n.childLessonMovedTo(lessonWhen(context, l.movedTo!)) : l10n.outcomeRescheduled,
+    // The pill stays short; where the lesson went is a line of its own (_LessonRow).
+    'rescheduled' => l10n.outcomeRescheduled,
     'held' => l10n.outcomeHeld,
     'student_apology' => l10n.childLessonExcused,
     'student_no_show' => l10n.outcomeStudentNoShow,
@@ -170,7 +171,19 @@ class _LessonRow extends StatelessWidget {
         lessonWhen(context, lesson.startsAt),
         style: moved ? TextStyle(decoration: TextDecoration.lineThrough, color: theme.colorScheme.onSurfaceVariant) : null,
       ),
-      subtitle: Text([?lesson.teacherName, l10n.makeupLength(lesson.durationMinutes)].join(' · ')),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text([?lesson.teacherName, l10n.makeupLength(lesson.durationMinutes)].join(' · ')),
+          if (moved && lesson.movedTo != null)
+            Text(
+              l10n.childLessonMovedTo(lessonWhen(context, lesson.movedTo!)),
+              key: ValueKey('child-lesson-moved-to-${lesson.id}'),
+              style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w600),
+            ),
+        ],
+      ),
       trailing: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 160),
         child: Chip(

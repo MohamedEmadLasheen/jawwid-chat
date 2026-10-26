@@ -367,6 +367,10 @@ void main() {
         );
 
     testWidgets('weekly times, then each lesson with its status; one "Change lesson time" button', (tester) async {
+      // A tall screen, so every row of the lazily built list exists.
+      tester.view.physicalSize = const Size(1170, 6000);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
       final movedTo = at(3, 18);
       final repo = _Lessons()
         ..schedule = ChildSchedule(slots: [GroupChildSlot(weekday: 1, start: '17:00', durationMinutes: 30, nextStartsAt: DateTime(2026, 11, 2, 17))])
@@ -398,7 +402,12 @@ void main() {
           .data!;
       expect(status('held'), 'Held');
       expect(status('next'), 'Upcoming');
-      expect(status('moved'), 'Moved to ${m.formatMediumDate(movedTo)} · ${m.formatTimeOfDay(TimeOfDay.fromDateTime(movedTo))}');
+      expect(status('moved'), 'Moved');
+      // Where it went is its own line, so the pill never truncates it.
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('child-lesson-moved-to-moved'))).data,
+        'Moved to ${m.formatMediumDate(movedTo)} · ${m.formatTimeOfDay(TimeOfDay.fromDateTime(movedTo))}',
+      );
       expect(status('makeup'), 'Make-up');
       expect(status('excused'), 'Excused');
       expect(status('cancelled'), 'Cancelled');
