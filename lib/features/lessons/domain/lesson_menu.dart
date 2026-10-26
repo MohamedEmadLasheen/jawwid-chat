@@ -13,12 +13,13 @@ import '../../../shared/models/lesson.dart';
 ///   counted in [otherUnreported] and reached from the Schedule. Otherwise "I can't
 ///   teach this lesson" for the NEXT upcoming lesson only;
 /// * parent: "Apologise for the lesson" for the NEXT upcoming lesson only, and one
-///   "Reschedule a make-up class" (the oldest lesson still owed one);
+///   "Book the make-up lesson" (the oldest lesson still owed one);
 /// * everything set aside is in [more], one tap further ("Other lessons (N)"), so no
 ///   lesson becomes unreachable -- a parent has no Schedule tab.
 ///
-/// A late apology and a regular-time change pass through as offered. This decides what
-/// is drawn, never what is allowed -- the server decides each ticket again on submit.
+/// A late apology and "Change lesson time" (one per child, PD-31) pass through as
+/// offered. This decides what is drawn, never what is allowed -- the server decides
+/// each ticket again on submit.
 class LessonMenu {
   const LessonMenu({this.tickets = const [], this.otherUnreported = 0, this.more = const []});
 

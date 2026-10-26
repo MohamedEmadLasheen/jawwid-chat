@@ -66,3 +66,39 @@
 .ts-plain-rows th[scope='row'] { background: transparent; font-weight: 600; color: var(--text); }
 .ts-actions-cell { white-space: nowrap; }
 .ts-actions-cell .btn + .btn { margin-inline-start: var(--space-2); }
+
+/* PD-31: weekly times, moving lessons, changing the teacher. Colour is never the
+   only signal: every free / busy flag also says it in words. */
+.ts-weekly { list-style: none; margin: 0 0 var(--space-2); padding: 0; display: grid; gap: var(--space-2); }
+.ts-weekly__card { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.ts-weekly__card--changed, .ts-weekly__card--added { border-color: var(--brand-700); }
+.ts-weekly__card--removed { background: var(--surface-sunken); }
+.ts-weekly__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ts-weekly__time { font-variant-numeric: tabular-nums; }
+.ts-weekly__old { color: var(--text-muted); text-decoration: line-through; }
+.ts-summary { margin-block: var(--space-3); padding: var(--space-2) var(--space-3); border-inline-start: 3px solid var(--accent-line); background: var(--surface-sunken); border-radius: var(--radius-sm); }
+.ts-summary p { margin: var(--space-1) 0; }
+.ts-summary .ts-subtitle { margin-block-start: 0; }
+.ts-fieldset { border: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: var(--space-1); }
+.ts-teacher-list { display: grid; gap: 2px; max-block-size: 14rem; overflow-y: auto; padding: var(--space-1); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.ts-teacher { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); cursor: pointer; }
+.ts-teacher:hover { background: var(--surface-hover); }
+.ts-teacher--off { color: var(--text-muted); cursor: not-allowed; }
+.ts-teacher__why { font-size: var(--fs-sm); }
+.ts-preview { display: grid; gap: var(--space-3); margin-block: var(--space-3); }
+.ts-preview__learner { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.ts-preview__learner > p { margin: 0; }
+.ts-preview__slots, .ts-diff__slots { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ts-preview__slots li { display: grid; gap: var(--space-2); }
+.ts-preview__slots li > span { font-variant-numeric: tabular-nums; }
+.ts-preview__unmovable { margin: var(--space-1) 0 0; padding-inline-start: var(--space-4); }
+.ts-slot--free { color: var(--ok); }
+.ts-slot--busy { color: var(--danger); }
+.ts-slot--free .sp, .ts-slot--busy .sp, .ts-preview__slots .btn { color: var(--text); }
+.ts-diff { display: grid; grid-template-columns: max-content 1fr; gap: 2px var(--space-3); margin: var(--space-1) 0; }
+.ts-diff dt { color: var(--text-muted); }
+.ts-diff dd { margin: 0; font-variant-numeric: tabular-nums; }
+.ts-diff__slots { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ts-slot__flag { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.ts-row--stale { border-color: var(--warn); }
+.ts-stale { margin: var(--space-1) 0 0; }

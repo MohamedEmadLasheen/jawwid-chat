@@ -31,6 +31,7 @@ import { useCallsCopy } from '@/features/calls-page/hooks'
 import { useLessonCards } from '@/features/journey/LessonCardDialogs'
 import { LessonRecordDialog } from '@/features/journey/LessonRecordDialog'
 import { LESSON_CARD_KINDS } from '@/features/journey/api'
+import { LessonMovedCard, readLessonMovedCard } from '@/features/journey/LessonMovedCard'
 import { journeyCopyFor } from '@/features/journey/journeyCopyFor'
 import {
   SCHEDULED_CALL_CARD_KINDS,
@@ -852,6 +853,8 @@ function MessageItem({
     live && m.type === 'card' && m.card && SCHEDULED_CALL_CARD_KINDS.has(m.card.kind)
       ? readScheduledCallCard(m.card.payload)
       : null
+  // PD-31: a moved lesson's card draws "previous → new" on the academy's clock.
+  const movedCard = live && m.type === 'card' && m.card?.kind === 'lesson_moved' ? readLessonMovedCard(m.card.payload) : null
   const reactions = summarize(m.reactions ?? [], selfId)
   // A lesson report's card is changed only from its lesson record (PD-15).
   const reportCard = m.type === 'card' && m.card?.kind === 'lesson_report'
@@ -946,6 +949,8 @@ function MessageItem({
             <em className="bubble__deleted">{copy.deleted}</em>
           ) : callCard && m.card && m.conversationId ? (
             <ScheduledCallCard cardKind={m.card.kind} card={callCard} conversationId={m.conversationId} />
+          ) : movedCard ? (
+            <LessonMovedCard card={movedCard} />
           ) : (
             <>
               {m.attachments.map((a) => (

@@ -113,6 +113,129 @@ export const O = {
   packageUnknown: { en: 'Kept in Core', ar: 'في النظام الأساسي' },
   noneList: { en: 'Nobody here.', ar: 'لا أحد هنا.' },
 
+  // PD-31: weekly times
+  weeklyTitle: { en: 'Weekly times — {name}', ar: 'المواعيد الأسبوعية — {name}' },
+  weeklyHint: {
+    en: 'Change one time, add or remove one; the others stay as they are. Only free times are offered.',
+    ar: 'غيّر موعدًا أو أضف موعدًا أو احذفه؛ تبقى المواعيد الأخرى كما هي. لا تُعرض إلا الأوقات المتاحة.',
+  },
+  currentTimes: { en: 'Current weekly times', ar: 'المواعيد الأسبوعية الحالية' },
+  noWeeklyTimes: { en: 'No weekly times yet.', ar: 'لا توجد مواعيد أسبوعية بعد.' },
+  change: { en: 'Change', ar: 'تغيير' },
+  undo: { en: 'Undo', ar: 'تراجع' },
+  newTime: { en: 'New time', ar: 'الموعد الجديد' },
+  pickReplacement: { en: 'Pick its new time', ar: 'اختر موعده الجديد' },
+  pickNewTime: { en: 'Pick the new time', ar: 'اختر الموعد الجديد' },
+  addedTime: { en: 'New weekly time', ar: 'موعد أسبوعي جديد' },
+  removed: { en: 'Removed', ar: 'محذوف' },
+  fromDate: { en: 'From', ar: 'ابتداءً من' },
+  summary: { en: 'Summary', ar: 'الملخص' },
+  noChange: { en: 'Nothing changed yet.', ar: 'لم يتغيّر شيء بعد.' },
+  sumChanged: { en: '{from} → {to} from {date}', ar: '{from} ← {to} ابتداءً من {date}' },
+  sumAdded: { en: '{to} added from {date}', ar: 'إضافة {to} ابتداءً من {date}' },
+  sumRemoved: { en: '{from} removed from {date}', ar: 'حذف {from} ابتداءً من {date}' },
+  sumUnchanged: { en: '{from} unchanged', ar: '{from} بلا تغيير' },
+  sumSkipped: {
+    en: 'No lesson at {time} on {dates}: the teacher already has another lesson then.',
+    ar: 'لا حصة في {time} يوم {dates}: لدى المعلم حصة أخرى في ذلك الوقت.',
+  },
+  pickPending: { en: 'Pick a time for every changed or added row, or remove it.', ar: 'اختر وقتًا لكل موعد مُغيَّر أو مُضاف، أو احذفه.' },
+
+  // PD-31: one-off lessons and moving lessons
+  addLesson: { en: 'Add a lesson', ar: 'إضافة حصة' },
+  addLessonTitle: { en: 'Add a lesson — {name}', ar: 'إضافة حصة — {name}' },
+  addLessonHint: { en: "One extra lesson at one of the teacher's free times. Weekly times are not changed.", ar: 'حصة إضافية واحدة في أحد أوقات المعلم المتاحة. لا تتغيّر المواعيد الأسبوعية.' },
+  freeTime: { en: 'Free time', ar: 'الوقت المتاح' },
+  addLessonSave: { en: 'Add the lesson', ar: 'إضافة الحصة' },
+  lessons: { en: 'Lessons', ar: 'الحصص' },
+  lessonsTitle: { en: 'Lessons — {name}', ar: 'الحصص — {name}' },
+  lessonsHint: { en: 'The next four weeks. A lesson that has not started can be moved to a free time.', ar: 'الأسابيع الأربعة القادمة. يمكن نقل الحصة التي لم تبدأ إلى وقت متاح.' },
+  noLessons: { en: 'No lessons in the next four weeks.', ar: 'لا توجد حصص في الأسابيع الأربعة القادمة.' },
+  move: { en: 'Move', ar: 'نقل' },
+  moveTitle: { en: 'Move the lesson — {name}', ar: 'نقل الحصة — {name}' },
+  moveHint: { en: 'Only this lesson moves; weekly times stay. It is not an apology and counts against nobody.', ar: 'تنتقل هذه الحصة وحدها وتبقى المواعيد الأسبوعية. ليس اعتذارًا ولا يُحتسب على أحد.' },
+  moveSave: { en: 'Move the lesson', ar: 'نقل الحصة' },
+  backToLessons: { en: 'Back to the lessons', ar: 'العودة إلى الحصص' },
+  movedToAt: { en: 'Moved to {when}', ar: 'نُقلت إلى {when}' },
+  movedHere: { en: 'Moved here', ar: 'منقولة' },
+  makeup: { en: 'Make-up', ar: 'تعويضية' },
+  regular: { en: 'Regular', ar: 'أساسية' },
+  trial: { en: 'Trial', ar: 'تجريبية' },
+  statusUpcoming: { en: 'Upcoming', ar: 'قادمة' },
+  statusClosed: { en: 'Closed', ar: 'مغلقة' },
+  statusInProgress: { en: 'In progress', ar: 'جارية' },
+  summaryMove: { en: '{from} → {to}', ar: '{from} ← {to}' },
+  chooseTimeFirst: { en: 'Choose a free time.', ar: 'اختر وقتًا متاحًا.' },
+  justTaken: { en: 'That time was just taken. The free times were refreshed: pick another.', ar: 'حُجز هذا الوقت للتو. حُدّثت الأوقات المتاحة: اختر وقتًا آخر.' },
+  refusalStarted: { en: 'This lesson has started; it can no longer be moved.', ar: 'بدأت هذه الحصة؛ لا يمكن نقلها الآن.' },
+  refusalNotMovable: { en: 'This lesson cannot be moved (it is closed, cancelled or already moved).', ar: 'لا يمكن نقل هذه الحصة (مغلقة أو ملغاة أو نُقلت من قبل).' },
+  refusalFamilyMoved: { en: 'The family has already moved this lesson once.', ar: 'نقلت الأسرة هذه الحصة مرة من قبل.' },
+  refusalFamilyLimit: { en: "The family has used this month's moves.", ar: 'استنفدت الأسرة مرات النقل لهذا الشهر.' },
+  refusalTooLate: { en: 'Too close to the start to move.', ar: 'الوقت قريب جدًا من بداية الحصة للنقل.' },
+
+  // PD-31: Needs action
+  requestedByFamily: { en: 'Asked by the family ({name})', ar: 'بطلب من الأسرة ({name})' },
+  requestedByTeacher: { en: 'Asked by the teacher ({name})', ar: 'بطلب من المعلم ({name})' },
+  before: { en: 'Now', ar: 'الحالي' },
+  after: { en: 'Requested', ar: 'المطلوب' },
+  free: { en: 'free', ar: 'متاح' },
+  notFree: { en: 'no longer free', ar: 'لم يعد متاحًا' },
+  noLongerFree: {
+    en: 'No longer free: a requested time was taken after the request was sent. Approving would fail; reject it, or agree other times with the family.',
+    ar: 'لم يعد متاحًا: حُجز أحد المواعيد المطلوبة بعد إرسال الطلب. لا يمكن اعتماده؛ ارفضه أو اتفق على مواعيد أخرى.',
+  },
+  blocked: { en: 'Weekly lessons not scheduled', ar: 'حصص أسبوعية لم تُجدول' },
+  blockedHint: {
+    en: 'The teacher already had another lesson at these weekly times, so these lessons were not created. Schedule each at another time, or dismiss it.',
+    ar: 'كان لدى المعلم حصة أخرى في هذه المواعيد الأسبوعية، فلم تُنشأ هذه الحصص. جدول كلًّا منها في وقت آخر أو تجاهله.',
+  },
+  blockedBy: { en: 'Blocked by a {kind} lesson at {time}', ar: 'تعارضت مع حصة {kind} في {time}' },
+  blockedTeacherChanged: {
+    en: 'Could not move with the change of teacher — the new teacher is busy then',
+    ar: 'لم تنتقل مع تغيير المعلم — المعلم الجديد مشغول في هذا الوقت',
+  },
+  scheduleElsewhere: { en: 'Schedule at another time', ar: 'جدولة في وقت آخر' },
+  scheduleElsewhereTitle: { en: 'Schedule — {name}', ar: 'جدولة — {name}' },
+  dismiss: { en: 'Dismiss', ar: 'تجاهل' },
+  scheduleSave: { en: 'Schedule the lesson', ar: 'جدولة الحصة' },
+
+  // PD-31: changing the teacher
+  changeTeacher: { en: 'Change teacher', ar: 'تغيير المعلم' },
+  changeTeacherTitle: { en: 'Change teacher — {name}', ar: 'تغيير المعلم — {name}' },
+  changeTeacherHint: {
+    en: 'Past lessons and reports stay with the current teacher. Future lessons and weekly times move to the new one, in one step.',
+    ar: 'تبقى الحصص السابقة وتقاريرها مع المعلم الحالي. تنتقل الحصص القادمة والمواعيد الأسبوعية إلى المعلم الجديد دفعة واحدة.',
+  },
+  currentTeacher: { en: 'Current teacher', ar: 'المعلم الحالي' },
+  onLeaveUntil: { en: 'on leave until {date}', ar: 'في إجازة حتى {date}' },
+  suspendedUntil: { en: 'suspended until {date}', ar: 'موقوف حتى {date}' },
+  inactiveTeacher: { en: 'inactive', ar: 'غير نشط' },
+  isCurrent: { en: 'current teacher', ar: 'المعلم الحالي' },
+  whichReplaced: { en: 'Which teacher is being replaced?', ar: 'أي معلم سيُستبدل؟' },
+  whichReplacedHint: { en: 'This group has children with more than one teacher. Only the children of the teacher you pick move.', ar: 'في هذه المجموعة أطفال لدى أكثر من معلم. ينتقل أطفال المعلم الذي تختاره فقط.' },
+  previewTitle: { en: 'The new teacher at these times', ar: 'المعلم الجديد في هذه المواعيد' },
+  slotFree: { en: 'free', ar: 'متاح' },
+  slotBusy: { en: 'busy — pick another time', ar: 'مشغول — اختر وقتًا آخر' },
+  slotZoneShift: {
+    en: 'cannot be kept: the two time zones change their clocks on different days — pick another time',
+    ar: 'لا يمكن الإبقاء عليه: المنطقتان الزمنيتان تغيّران التوقيت في أيام مختلفة — اختر وقتًا آخر',
+  },
+  futureLessons: { en: '{n} future lessons follow', ar: 'تنتقل {n} حصة قادمة' },
+  unmovableTitle: { en: 'These lessons cannot follow (the new teacher is busy then):', ar: 'لا يمكن نقل هذه الحصص (المعلم الجديد مشغول وقتها):' },
+  resolveBusy: { en: 'Pick a free time for every busy weekly time first.', ar: 'اختر وقتًا متاحًا لكل موعد أسبوعي مشغول أولًا.' },
+  chooseNewTeacher: { en: 'Choose the new teacher.', ar: 'اختر المعلم الجديد.' },
+  chooseReplaced: { en: 'Choose which teacher is being replaced.', ar: 'اختر المعلم الذي سيُستبدل.' },
+  confirmChange: { en: 'Change teacher', ar: 'تغيير المعلم' },
+  sumTeacher: { en: '{name}: {from} → {to}', ar: '{name}: {from} ← {to}' },
+  sumKept: { en: '{time} kept', ar: '{time} كما هو' },
+  noTeacher: { en: 'no teacher', ar: 'بلا معلم' },
+  groupChanged: { en: 'Teacher changed for {n} children.', ar: 'تم تغيير المعلم لـ {n} من الأطفال.' },
+  timesNotFree: {
+    en: 'The new teacher is no longer free at one of these times. The preview was refreshed: check it again.',
+    ar: 'لم يعد المعلم الجديد متاحًا في أحد هذه المواعيد. حُدّثت المعاينة: راجعها مرة أخرى.',
+  },
+  lockedRefusal: { en: 'Lessons are paused for payment; nothing can be changed until it is settled.', ar: 'الحصص متوقفة بسبب الدفع؛ لا يمكن تغيير شيء حتى تتم التسوية.' },
+
   // Dialog
   save: { en: 'Save', ar: 'حفظ' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
@@ -165,6 +288,9 @@ export function describeOpsError(error: unknown, locale: 'ar' | 'en'): string {
       case 'COMM.LESSON_NOT_FOUND':
         return pick({ en: 'Not found — it may have been changed. Refresh.', ar: 'غير موجود — ربما تغيّر. حدّث الصفحة.' })
       default:
+        // PD-31 / PD-30: two refusals carry a code word, not a sentence.
+        if (error.messageEn === 'locked') return pick(O.lockedRefusal)
+        if (error.messageEn === 'times_not_free') return pick(O.timesNotFree)
         // LESSON_STATE and validation carry the server's own precise reason.
         return error.localized(locale)
     }
@@ -180,6 +306,16 @@ export function formatDay(day: string, locale: 'ar' | 'en'): string {
   const d = new Date(`${day}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) return day
   return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { dateStyle: 'medium', timeZone: 'UTC' }).format(d)
+}
+
+/** "from → to" in the reading direction: in Arabic the arrow points left, to the new value. */
+export function arrow(locale: 'ar' | 'en'): string {
+  return locale === 'ar' ? ' ← ' : ' → '
+}
+
+/** "{name}" placeholders filled in. */
+export function fill(template: string, params: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
 }
 
 /** A lesson length, "30 min" / "٣٠ دقيقة". */
