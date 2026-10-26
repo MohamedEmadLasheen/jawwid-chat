@@ -6295,11 +6295,11 @@ abstract class L10n {
   /// **'Couldn\'t load the schedule.'**
   String get childScheduleLoadFailed;
 
-  /// PD-31: a lesson moved away, with its new time.
+  /// PD-31: a lesson moved here, with the time it was moved from.
   ///
   /// In en, this message translates to:
-  /// **'Moved to {when}'**
-  String childLessonMovedTo(String when);
+  /// **'Was {when}'**
+  String childLessonMovedFrom(String when);
 
   /// PD-31: the family apologised for this lesson.
   ///

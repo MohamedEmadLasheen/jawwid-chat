@@ -3656,8 +3656,8 @@ class L10nAr extends L10n {
   String get childScheduleLoadFailed => 'تعذّر تحميل المواعيد.';
 
   @override
-  String childLessonMovedTo(String when) {
-    return 'نُقلت إلى $when';
+  String childLessonMovedFrom(String when) {
+    return 'كانت $when';
   }
 
   @override

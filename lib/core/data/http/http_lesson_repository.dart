@@ -286,6 +286,7 @@ class HttpLessonRepository implements LessonRepository {
       movedFrom: raw['movedFrom'] as String?,
       movedTo: AppClock.parse(raw['movedTo']),
       movedBy: raw['movedBy'] as String?,
+      movedFromStartsAt: AppClock.parse(raw['movedFromStartsAt']),
       acts: [
         for (final a in (raw['acts'] as List?) ?? const []) ?LessonTicketKind.parse(a as String?),
       ],

@@ -202,6 +202,7 @@ class ScheduledLesson {
     this.movedFrom,
     this.movedTo,
     this.movedBy,
+    this.movedFromStartsAt,
   });
 
   final String id;
@@ -231,6 +232,9 @@ class ScheduledLesson {
 
   /// PD-31: `family` / `teacher` / `staff` -- who moved THIS lesson here.
   final String? movedBy;
+
+  /// PD-31: for a lesson moved here, the start of the lesson it replaced.
+  final DateTime? movedFromStartsAt;
 
   int get durationMinutes => endsAt.difference(startsAt).inMinutes;
 

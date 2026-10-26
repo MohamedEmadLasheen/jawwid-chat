@@ -3598,8 +3598,8 @@ class L10nEn extends L10n {
   String get childScheduleLoadFailed => 'Couldn\'t load the schedule.';
 
   @override
-  String childLessonMovedTo(String when) {
-    return 'Moved to $when';
+  String childLessonMovedFrom(String when) {
+    return 'Was $when';
   }
 
   @override

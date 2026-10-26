@@ -98,7 +98,10 @@ class ChildScheduleScreen extends ConsumerWidget {
             ],
           ),
           data: (data) {
-            final (schedule, lessons) = data;
+            final (schedule, all) = data;
+            // A lesson moved away is shown once, where it now is: the replacement
+            // says it was moved and from when (QA 2026-10-26).
+            final lessons = [for (final l in all) if (l.outcome != 'rescheduled') l];
             final weekly = [...schedule.slots]..sort((a, b) => (a.nextStartsAt ?? DateTime(9999)).compareTo(b.nextStartsAt ?? DateTime(9999)));
             return ListView(
               padding: const EdgeInsets.symmetric(vertical: Spacing.spacing3),
@@ -141,11 +144,12 @@ class ChildScheduleScreen extends ConsumerWidget {
 String childLessonStatus(BuildContext context, ScheduledLesson l) {
   final l10n = L10n.of(context);
   return switch (l.outcome) {
-    // The pill stays short; where the lesson went is a line of its own (_LessonRow).
     'rescheduled' => l10n.outcomeRescheduled,
     'held' => l10n.outcomeHeld,
     'student_apology' => l10n.childLessonExcused,
     'student_no_show' => l10n.outcomeStudentNoShow,
+    // A lesson moved here reads "Moved"; its previous time is a line of its own (_LessonRow).
+    null when l.movedFrom != null && l.phase != 'in_progress' => l10n.outcomeRescheduled,
     null => l.kind == 'makeup'
         ? l10n.lessonKindMakeup
         : (l.phase == 'in_progress' ? l10n.phaseInProgress : l10n.phaseUpcoming),
@@ -164,6 +168,7 @@ class _LessonRow extends StatelessWidget {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final moved = lesson.outcome == 'rescheduled';
+    final from = lesson.movedFromStartsAt;
     return ListTile(
       key: ValueKey('child-lesson-${lesson.id}'),
       leading: Icon(lesson.kind == 'makeup' ? Icons.event_repeat_outlined : Icons.event_outlined),
@@ -176,10 +181,10 @@ class _LessonRow extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text([?lesson.teacherName, l10n.makeupLength(lesson.durationMinutes)].join(' · ')),
-          if (moved && lesson.movedTo != null)
+          if (from != null)
             Text(
-              l10n.childLessonMovedTo(lessonWhen(context, lesson.movedTo!)),
-              key: ValueKey('child-lesson-moved-to-${lesson.id}'),
+              l10n.childLessonMovedFrom(lessonWhen(context, from)),
+              key: ValueKey('child-lesson-moved-from-${lesson.id}'),
               style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w600),
             ),
         ],
