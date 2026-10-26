@@ -3269,7 +3269,8 @@ things M4 will run into:
 
 ### PD-34 · Notifications: one pipeline and a Notification Center for every account (P1)
 
-**Decided 2026-10-26.** The owner asked for a comprehensive notification system
+**Decided 2026-10-26** (the architecture; the defaults marked PROPOSED below
+await the owner). The owner asked for a comprehensive notification system
 (real-time, proactive, campaigns, a per-account Notification Center and an Admin
 Web dashboard). The department head approved the Phase-0 plan (five phases) and
 P1 is built with **defaults held in `chat.config`**, so the owner's open answers
@@ -3294,25 +3295,33 @@ notification is rendered in the recipient's own zone; teachers follow their phon
    paid or voided instalment, a recipient taken out of service: the waiting push
    and the not-yet-shown entry are withdrawn, by every path including SQL (a
    trigger). A lifecycle re-schedule revives them (teacher transfer).
-4. **Chats.** One entry per conversation with a count. The first message pushes
+4. **Chats.** Pushed only to the conversation's audience (live members; a PD-35
+   seat only while it still gives access; PD-33's backup for an away
+   supervisor) -- checked again just before a deferred push is sent, and
+   withdrawn when someone leaves. One entry per conversation with a count. The first message pushes
    at once; later ones within `notification.message_coalesce_seconds` (60) go as
    one trailing push. Someone reading the chat is pushed
    `notification.message_reading_grace_seconds` (20) late, and reading withdraws
-   it. Reading on one device reads the entry and tells the person's other
+   it -- only what the read covers: a push or entry that also stands for a later
+   message stays. Reading on one device reads the entry and tells the person's other
    devices (`conversation.read`). Muting withdraws a waiting push at once.
 5. **Preferences.** A person switches categories off for push; the entry still
    appears. Lessons, payments, calls, tasks and system cannot be switched off
    (`notification.locked_categories`).
-6. **Quiet hours** default to 22:00–08:00 in the person's own zone for everyone
-   (`notification.quiet_hours.default_*`); a person may change or disable them.
-   Calls and the T-30/T-15 lesson reminders are exempt by their rules. Deferred,
-   never dropped.
-7. **The lock screen names nobody** by default. A person may turn names on
-   (`showPreviews`); the academy default is `notification.lock_screen_names_default`
-   (false). The payment reminder no longer shows the amount on the lock screen.
-8. **Rate limit.** At most `notification.push_per_hour` (6) pushes an hour in
-   the chat, announcement and marketing categories; beyond it, the Center only.
-   Critical pushes are never limited.
+6. **Quiet hours: PROPOSED, OFF until the owner decides.** Each person may set
+   their own window (in their own zone); someone who has not gets none. The
+   proposal -- 22:00–08:00 for everyone -- is one switch away
+   (`notification.quiet_hours.default_enabled`, `…default_start_minute`,
+   `…default_end_minute`). Calls and the T-30/T-15 lesson reminders are exempt
+   by their rules. Deferred, never dropped.
+7. **The lock screen names nobody** by default (PROPOSED; the privacy-safe
+   default). A person may turn names on (`showPreviews`); the academy default is
+   `notification.lock_screen_names_default` (false). The payment reminder no
+   longer shows the amount on the lock screen (PROPOSED, privacy-safe).
+8. **Rate limit: PROPOSED, OFF until the owner decides.** The proposal is at most
+   6 pushes an hour per person in the chat, announcement and marketing
+   categories, the rest to the Center only (`notification.push_per_hour`; 0 = no
+   cap, the default). Critical pushes would never be limited.
 9. **Retention.** Pushes are kept 90 days, entries 365
    (`notification.delivery_retention_days`, `notification.item_retention_days`).
 

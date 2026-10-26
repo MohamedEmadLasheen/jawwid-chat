@@ -377,6 +377,13 @@ async function bootstrap(): Promise<void> {
     // complete at both ends and disconnected in the middle. dispatchDue()
     // claims each row with a conditional update, so running it on every replica
     // at once cannot double-send.
+    // PD-34: a deferred chat push is re-authorized against the conversation's
+    // audience right before it can be sent (the dispatcher is unchanged).
+    try {
+      await pipeline.guardDueMessages();
+    } catch (e) {
+      report(log, 'notification audience guard', 'notifications.guard', e);
+    }
     try {
       await notifications.dispatchDue();
     } catch (e) {

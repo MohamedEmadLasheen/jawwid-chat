@@ -97,8 +97,11 @@ create index if not exists notification_item_inbox_idx
   on chat.notification_item (recipient_id, visible_at desc) where cancelled_at is null;
 create index if not exists notification_item_subject_idx
   on chat.notification_item (subject_id) where cancelled_at is null;
-create index if not exists notification_item_group_idx
-  on chat.notification_item (recipient_id, group_key) where read_at is null and cancelled_at is null;
+-- At most ONE open entry per person per group (a conversation's new
+-- messages): concurrent workers upsert into it (ON CONFLICT) instead of racing.
+create unique index if not exists notification_item_open_group_uniq
+  on chat.notification_item (recipient_id, group_key)
+  where group_key is not null and read_at is null and cancelled_at is null;
 create index if not exists notification_item_announce_idx
   on chat.notification_item (visible_at) where announced_at is null and cancelled_at is null;
 
@@ -184,6 +187,48 @@ create trigger notification_item_follows_delivery
   for each row execute function chat.notification_item_follows_delivery();
 
 -- ===========================================================================
+-- 4b. Leaving a conversation withdraws its waiting chat pushes
+-- ===========================================================================
+--
+-- A chat push may wait (coalescing, the reading grace, quiet hours). Someone
+-- who leaves the conversation, or whose PD-35 seat closes, in that time must
+-- not be pushed. Every writer of left_at is covered, whatever the code path.
+-- (A seat whose access lapses before the sweep closes it is caught at send
+-- time by NotificationPipeline.guardDueMessages.) failure_code AUDIENCE also
+-- withdraws the Center entry, by the trigger above.
+
+create or replace function chat.cancel_message_pushes_on_leave()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_actor uuid;
+begin
+  if old.left_at is not null or new.left_at is null then
+    return new;
+  end if;
+  v_actor := case when tg_table_name = 'conversation_seat' then new.staff_id else new.actor_id end;
+  update chat.notification
+     set status = 'cancelled', failure_code = 'AUDIENCE'
+   where recipient_id = v_actor
+     and conversation_id = new.conversation_id
+     and event_type = 'message_published'
+     and status = 'scheduled';
+  return new;
+end;
+$$;
+
+drop trigger if exists member_left_cancels_message_pushes on chat.conversation_member;
+create trigger member_left_cancels_message_pushes
+  after update of left_at on chat.conversation_member
+  for each row execute function chat.cancel_message_pushes_on_leave();
+
+drop trigger if exists seat_left_cancels_message_pushes on chat.conversation_seat;
+create trigger seat_left_cancels_message_pushes
+  after update of left_at on chat.conversation_seat
+  for each row execute function chat.cancel_message_pushes_on_leave();
+
+-- ===========================================================================
 -- 5. Templates
 -- ===========================================================================
 
@@ -247,3 +292,4 @@ alter table chat.notification_settings enable row level security;
 revoke all on chat.notification_item, chat.notification_preference, chat.notification_settings
   from public, anon, authenticated, chat_app;
 revoke all on function chat.notification_item_follows_delivery() from public;
+revoke all on function chat.cancel_message_pushes_on_leave() from public;
