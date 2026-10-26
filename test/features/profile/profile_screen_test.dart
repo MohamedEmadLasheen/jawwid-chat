@@ -17,7 +17,7 @@ import 'package:jawwid_chat/features/conversations/presentation/chats_screen.dar
 import 'package:jawwid_chat/features/conversations/presentation/conversation_tile.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
 import 'package:jawwid_chat/features/profile/data/profile_photo_repository.dart';
-import 'package:jawwid_chat/features/profile/presentation/profile_photos_section.dart';
+import 'package:jawwid_chat/features/profile/presentation/my_profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_sections.dart';
 import 'package:jawwid_chat/features/settings/presentation/settings_screen.dart';
@@ -41,6 +41,7 @@ void main() {
       overrides: [
         currentRoleProvider.overrideWithValue(role),
         if (photoUrl != null) profilePhotoRepositoryProvider.overrideWithValue(_OnePhoto(photoUrl)),
+        profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
         conversationRepositoryProvider
             .overrideWithValue(FakeConversationRepository(backend)),
         messageRepositoryProvider
@@ -171,58 +172,33 @@ void main() {
     });
   });
 
+  // Owner 2026-10-24: a parent had a Settings row to "My account" (initials, a
+  // "Profile photo" section, "Children's photos", and "No children are linked to your
+  // account yet") AND a separate "My profile" row with another photo control. One
+  // profile per account now: My account IS the parent's own profile, with each child.
   group('my account', () {
-    testWidgets('a parent sees their children, collapsed', (tester) async {
+    testWidgets("a parent's account is their one profile, with their children", (tester) async {
       await tester.pumpWidget(
         harness(role: UserRole.parent, child: const MyAccountScreen()),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Children'), findsOneWidget);
-      // Two learners in the parent fixture.
-      expect(find.byType(ChildTile), findsNWidgets(2));
+      expect(find.byType(MyProfileScreen), findsOneWidget);
+      // The children come from the server's parent profile (PD-17), not from the
+      // chats: the parent fixture has two.
       expect(find.text('أحمد'), findsOneWidget);
-
-      // Progressive disclosure: the detail rows are not on screen until expanded.
-      expect(find.text('Level'), findsNothing);
-      expect(find.text('Subscription'), findsNothing);
+      expect(find.text('يوسف'), findsOneWidget);
+      expect(find.text('No children are linked to your account yet.'), findsNothing);
+      // No second photo section beside the cards' own photo controls.
+      expect(find.text("Children's photos"), findsNothing);
+      expect(find.text('Profile photo'), findsNothing);
     });
 
-    testWidgets('expanding a child reveals real data and names the gaps',
-        (tester) async {
-      await tester.pumpWidget(
-        harness(role: UserRole.parent, child: const MyAccountScreen()),
-      );
+    testWidgets('Settings has one entry into it, not two', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.parent, child: const SettingsScreen()));
       await tester.pumpAndSettle();
-
-      await tester.tap(find.text('أحمد'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Group'), findsOneWidget);
-      expect(find.text('Teacher'), findsOneWidget);
-      expect(find.text('Level'), findsOneWidget);
-      expect(find.text('Subscription'), findsOneWidget);
-      expect(find.text('Schedule'), findsOneWidget);
-
-      // Level, subscription and schedule are on no contract this client can reach. They
-      // say so, rather than rendering blank — a blank reads as "this child has none".
-      expect(find.text('Not available yet'), findsNWidgets(3));
-    });
-
-    testWidgets('the contact file section says plainly that it holds nothing',
-        (tester) async {
-      await tester.pumpWidget(
-        harness(role: UserRole.parent, child: const MyAccountScreen()),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Contact information'), findsOneWidget);
-      expect(
-        find.text(
-          'Jawwid does not hold phone numbers or email addresses in this app yet.',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('My profile'), findsNothing);
+      expect(find.text('Your photo, name and about'), findsNothing);
     });
 
     testWidgets('a teacher account has no children section at all', (tester) async {
@@ -279,7 +255,7 @@ void main() {
     });
 
     testWidgets('the My account header', (tester) async {
-      await tester.pumpWidget(harness(role: UserRole.parent, photoUrl: url, child: const MyAccountScreen()));
+      await tester.pumpWidget(harness(role: UserRole.sales, photoUrl: url, child: const MyAccountScreen()));
       await tester.pumpAndSettle();
       expect(avatarIn(tester, find.byType(ProfileHeader)), url);
     });
@@ -366,7 +342,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('فريق المبيعات'), findsWidgets);
-      expect(find.byType(ProfilePhotosSection), findsNothing);
+      expect(find.text('Profile photo'), findsNothing);
       expect(find.text('Children'), findsNothing);
     });
   });

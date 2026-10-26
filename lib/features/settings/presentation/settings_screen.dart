@@ -114,24 +114,10 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-          // A teacher has ONE profile (owner 2026-10-24): the row above opens it --
-          // photo, name, role and the professional sections families read. There is
-          // no second "Professional profile" row and no second photo upload.
-          // Parent only, and deliberately a SEPARATE row from the identity header above.
-          //
-          // The header opens My account, a read-only summary both roles share. This opens
-          // the parent's own editable profile — their photo, name and About, and the same
-          // three for each child. A teacher has no parent profile (the server refuses them
-          // outright), so offering them the row would be offering a screen that can only
-          // fail.
-          if (user != null && user.isParent)
-            ListTile(
-              leading: const Icon(Icons.badge_outlined),
-              title: Text(l10n.myProfileTitle),
-              subtitle: Text(l10n.myProfileSettingsSubtitle),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => context.push(Routes.myProfile),
-            ),
+          // ONE profile per account (owner 2026-10-24): the row above opens it. For a
+          // teacher that is their professional profile; for a parent, their own profile
+          // with each child's -- photo, name and About, one photo control each. There is
+          // no second "Professional profile" or "My profile" row and no second upload.
           // PD-17: the parent's own payments. Absent for a teacher, never refused: a
           // teacher has no payments here and must never see a family's.
           if (user != null && user.role == UserRole.parent)
