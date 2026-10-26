@@ -250,21 +250,19 @@ export class CalendarService {
     const f = this.filtersFor(scope, query);
     const zone = await this.zone();
     const ctes = this.ctes(actor.organizationId as string, f, zone);
-    const [teachers, cells] = await Promise.all([
-      this.teacherRows(ctes),
-      this.prisma.$queryRaw<Array<CapRow & { lessons: number; matching: number }>>`
-        ${ctes}
-        SELECT c.teacher_id::text AS teacher_id, to_char(c.day, 'YYYY-MM-DD') AS day,
-               c.shift_m, c.work_m, c.leave_m, c.booked_m, c.paused_m,
-               c.in_shift_booked_m, c.in_shift_paused_m, c.in_shift_leave_m, c.empty_m, c.free_m, c.outside_m,
-               (SELECT count(*) FROM m WHERE m.teacher_id = c.teacher_id AND m.st <> 'moved'
-                   AND (m.starts_at AT TIME ZONE ${zone})::date = c.day)::int AS lessons,
-               (SELECT count(*) FROM m WHERE m.teacher_id = c.teacher_id AND m.matches
-                   AND (m.starts_at AT TIME ZONE ${zone})::date = c.day)::int AS matching
-          FROM cap c
-         WHERE c.teacher_id IN (SELECT teacher_id FROM shown)
-         ORDER BY c.teacher_id, c.day`,
-    ]);
+    // One statement: the capacity is computed once for the rows and the cells.
+    const [{ teachers, cells }] = await this.prisma.$queryRaw<Array<{ teachers: TeacherRow[]; cells: Array<CapRow & { lessons: number; matching: number }> }>>`
+      ${ctes}
+      SELECT
+        (SELECT coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) FROM (${this.teacherSelect()}) t) AS teachers,
+        (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.teacher_id, x.day), '[]'::jsonb) FROM (
+           SELECT c.teacher_id::text AS teacher_id, to_char(c.day, 'YYYY-MM-DD') AS day,
+                  c.shift_m, c.work_m, c.leave_m, c.booked_m, c.paused_m,
+                  c.in_shift_booked_m, c.in_shift_paused_m, c.in_shift_leave_m, c.empty_m, c.free_m, c.outside_m,
+                  coalesce(md.lessons, 0) AS lessons, coalesce(md.matching, 0) AS matching
+             FROM cap c
+             LEFT JOIN m_day md ON md.teacher_id = c.teacher_id AND md.day = c.day
+            WHERE c.teacher_id IN (SELECT teacher_id FROM shown)) x) AS cells`;
     return {
       zone,
       from: f.from,
@@ -306,7 +304,7 @@ export class CalendarService {
                count(*)::int AS lessons
           FROM m, win
          WHERE m.matches AND m.st IN ('active', 'trial') AND m.teacher_id IN (SELECT teacher_id FROM shown)
-         GROUP BY m.teacher_id
+         GROUP BY m.teacher_id, win.lo, win.hi
       )
       SELECT
         (SELECT coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) FROM (${this.teacherSelect()}) t) AS teachers,
@@ -430,6 +428,17 @@ export class CalendarService {
          WHERE (${f.weekdays}::int[] IS NULL OR extract(isodow FROM l.starts_at AT TIME ZONE ${zone})::int = ANY (${f.weekdays}::int[]))
            AND (chat.calendar_status(l.kind, l.outcome) <> 'moved' OR 'moved' = ANY (${statuses}::text[]))
       ),
+      -- Lesson counts, grouped once (a correlated count per cell scanned the
+      -- window's lessons once per cell: 4.7 s for a month of 100 teachers).
+      m_t AS (
+        SELECT m.teacher_id, count(*) FILTER (WHERE m.st <> 'moved')::int AS lessons, count(*) FILTER (WHERE m.matches)::int AS matching
+          FROM m GROUP BY m.teacher_id
+      ),
+      m_day AS (
+        SELECT m.teacher_id, (m.starts_at AT TIME ZONE ${zone})::date AS day,
+               count(*) FILTER (WHERE m.st <> 'moved')::int AS lessons, count(*) FILTER (WHERE m.matches)::int AS matching
+          FROM m GROUP BY 1, 2
+      ),
       shown AS (
         SELECT t.*,
                CASE WHEN t.shift_m - t.in_shift_leave_m > 0
@@ -453,10 +462,10 @@ export class CalendarService {
                       (SELECT min(a.timezone) FROM chat.teacher_availability a WHERE a.teacher_id = t.teacher_id)) AS zone,
              t.shift_m, t.work_m, t.leave_m, t.booked_m, t.paused_m, t.in_shift_booked_m, t.in_shift_paused_m,
              t.in_shift_leave_m, t.empty_m, t.free_m, t.outside_m,
-             (SELECT count(*) FROM m WHERE m.teacher_id = t.teacher_id AND m.st <> 'moved')::int AS lessons,
-             (SELECT count(*) FROM m WHERE m.teacher_id = t.teacher_id AND m.matches)::int AS matching
+             coalesce(mt.lessons, 0) AS lessons, coalesce(mt.matching, 0) AS matching
         FROM shown t
         JOIN chat.teacher te ON te.id = t.teacher_id
+        LEFT JOIN m_t mt ON mt.teacher_id = t.teacher_id
        ORDER BY te.name`;
   }
 

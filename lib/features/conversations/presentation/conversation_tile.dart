@@ -289,6 +289,9 @@ String previewText(Conversation conversation, L10n l10n) {
       'group.supervisor_changed' => l10n.systemGroupSupervisorChangedNoName,
       'direct.supervisor_changed' => l10n.systemDirectSupervisorChangedNoName,
       'group.learner_detached' => l10n.systemGroupLearnerDetached,
+      'seat.joined' => l10n.systemSeatJoinedNoName,
+      'seat.stepped_in' => l10n.systemSeatSteppedInNoName,
+      'seat.left' => l10n.systemSeatLeftNoName,
       _ => l10n.systemUpdate,
     };
   }

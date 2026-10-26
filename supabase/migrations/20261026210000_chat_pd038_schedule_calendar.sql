@@ -236,10 +236,14 @@ as $$
      and l.starts_at >= p_from - interval '4 hours' and l.starts_at < p_to
      and l.ends_at > p_from
      and chat.calendar_status(l.kind, l.outcome) <> 'void'
-     and not (l.outcome = 'suspended' and l.outcome_by_kind = 'system'
-              and exists (select 1 from chat.lesson x
-                           where x.schedule_slot_id = l.schedule_slot_id and x.starts_at = l.starts_at
-                             and x.id <> l.id and (x.outcome is null or x.outcome <> 'suspended')));
+     -- CASE, not AND: with a NULL outcome `NOT (NULL AND EXISTS ...)` still
+     -- runs the subquery, once per lesson of the window (17 s for a month of
+     -- 100 teachers). Only a system hold ever asks.
+     and case when l.outcome = 'suspended' and l.outcome_by_kind = 'system' and l.schedule_slot_id is not null
+              then not exists (select 1 from chat.lesson x
+                                where x.schedule_slot_id = l.schedule_slot_id and x.starts_at = l.starts_at
+                                  and x.id <> l.id and (x.outcome is null or x.outcome <> 'suspended'))
+              else true end;
 $$;
 
 -- A teacher's capacity per day of the viewer's zone (p_zone), over the days
@@ -279,6 +283,11 @@ returns table (
 )
 language sql
 stable
+-- JIT compiling this plan cost ~420 ms against ~45 ms of work (a month of 100
+-- teachers, PG 17): many small multirange operations, nothing to vectorize.
+-- (Only here: a SET clause stops a SQL function being inlined, and
+-- chat.calendar_lessons must stay inlinable to keep its index scan.)
+set jit = off
 as $$
   with span as (
     select (p_from::timestamp at time zone p_zone) as lo, (p_to::timestamp at time zone p_zone) as hi
