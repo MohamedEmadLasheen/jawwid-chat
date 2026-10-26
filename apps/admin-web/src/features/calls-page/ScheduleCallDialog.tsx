@@ -5,16 +5,21 @@ import { Avatar } from '@/shared/components/Avatar'
 import { Dialog } from '@/shared/components/Dialog'
 import type { ChatConversation } from '@/features/chat/chatApi'
 import { useCallsCopy, useConversationNaming, useCreateScheduled } from './hooks'
-import { localDateTime, toDateInput, toTimeInput } from './model'
+import { ACADEMY_ZONE, zoneLabel } from '@/core/time/academyTime'
+import { academyDateTime, toDateInput, toTimeInput } from './model'
 import './calls-page.css'
 
 export const TITLE_MAX = 120
 
-/** The next half hour from now, as a sensible default start. */
+/**
+ * The next half hour from now, as a sensible default start. Rounded on the UTC
+ * clock, which is the academy's half hour too (Cairo is a whole-hour offset),
+ * whatever the browser's zone.
+ */
 function nextHalfHour(now = new Date()): Date {
   const d = new Date(now)
-  d.setSeconds(0, 0)
-  d.setMinutes(d.getMinutes() < 30 ? 30 : 60)
+  d.setUTCSeconds(0, 0)
+  d.setUTCMinutes(d.getUTCMinutes() < 30 ? 30 : 60)
   return d
 }
 
@@ -48,7 +53,7 @@ export function ScheduleCallDialog({
   const [touched, setTouched] = useState(false)
   const chatName = name(conversation)
 
-  const at = localDateTime(date, time)
+  const at = academyDateTime(date, time)
   const problem = !at ? copy.pickDateTime : at.getTime() < Date.now() ? copy.inPast : title.trim().length > TITLE_MAX ? copy.titleTooLong : null
 
   async function submit() {
@@ -138,6 +143,8 @@ export function ScheduleCallDialog({
             />
           </div>
         </div>
+        {/* PD-22: the time typed is the academy's, and says so. */}
+        <p className="field__hint" data-testid="schedule-call-zone">{zoneLabel(ACADEMY_ZONE, locale)}</p>
         <div className="field">
           <label className="field__label" htmlFor={ids.title}>
             {copy.titleLabel}

@@ -125,3 +125,18 @@ export function isoWeekdayIn(iso: string, zone = ACADEMY_ZONE): number {
   const d = new Date(`${date}T12:00:00Z`).getUTCDay()
   return d === 0 ? 7 : d
 }
+
+/**
+ * `days` whole academy days from the start of TODAY in the academy's zone, as
+ * ISO instants: { from: today 00:00 Cairo, to: (today + days) 00:00 Cairo }.
+ * The browser's own midnight is never used (PD-22). Each end gets its own
+ * daylight-saving offset, so a range across a clock change is still whole days.
+ */
+export function academyDayRange(days: number, now: Date = new Date(), zone = ACADEMY_ZONE): { from: string; to: string } {
+  const { date } = isoToAcademyWallClock(now.toISOString(), zone)
+  const end = new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)) + days))
+  return {
+    from: academyWallClockToIso(date, '00:00', zone) as string,
+    to: academyWallClockToIso(end.toISOString().slice(0, 10), '00:00', zone) as string,
+  }
+}

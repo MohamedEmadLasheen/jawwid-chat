@@ -8,6 +8,7 @@ import { useTeacherDetail } from '@/features/teachers/hooks'
 import { opsApi, type Availability, type LessonDto } from '@/features/teachers/opsApi'
 import { useAvailability } from '@/features/teachers/opsHooks'
 import { WEEKDAY } from '@/features/teachers/opsCopy'
+import { academyDayRange } from '@/core/time/academyTime'
 import { T, useCopy, type Pair } from './copy'
 
 /**
@@ -18,7 +19,6 @@ import { T, useCopy, type Pair } from './copy'
  */
 
 const SCHEDULE_DAYS = 14
-const DAY_MS = 86_400_000
 
 /** Links into the Teachers area. The super admin's copy of the file has no such area, so it gets none. */
 export interface TeacherWorkLinks {
@@ -37,12 +37,9 @@ export function teacherAreaLinks(basePath: string): TeacherWorkLinks | undefined
 export function TeacherScheduleSection({ teacherId, links }: { teacherId: string; links?: TeacherWorkLinks }) {
   const tx = useCopy()
   const hours = useAvailability(teacherId)
-  // Fixed for the life of the page, so the query key stays stable.
-  const [range] = useState(() => {
-    const start = new Date()
-    start.setHours(0, 0, 0, 0)
-    return { from: start.toISOString(), to: new Date(start.getTime() + SCHEDULE_DAYS * DAY_MS).toISOString() }
-  })
+  // Fixed for the life of the page, so the query key stays stable. Today starts
+  // at the ACADEMY's midnight, not the browser's (PD-22).
+  const [range] = useState(() => academyDayRange(SCHEDULE_DAYS))
   const lessons = useQuery({
     queryKey: ['lessons-ops', 'teacher-lessons', teacherId, range.from],
     queryFn: () => opsApi.lessons({ teacherId, ...range }),
