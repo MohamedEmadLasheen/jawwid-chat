@@ -65,6 +65,6 @@ claimed. The decision text itself still lives in
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
 | `20261026130000` | PD-33 — `chat_pd033_supervisor_cover` |
-| `20261026170000` | PD-36 — `chat_pd036_mentions` (assigned by the department head; 140000–160000 are PD-30, PD-34, PD-35) |
+| `20261026170000` | PD-36 — `chat_pd036_mentions` (sub-slots `170001…` if needed; slot map fixed by the department head 2026-10-26) |
 
 The next free slot is `20261026140000`.

@@ -62,6 +62,13 @@ String systemMessageText(String body, L10n l10n) {
       return supervisor is String && supervisor.isNotEmpty
           ? l10n.systemCoverEnded(supervisor)
           : l10n.systemCoverEndedNoName;
+    // PD-36: someone asked into a family 1:1 stepped in, or out (no seat: a 1:1 never grows).
+    case 'mention.stepped_in':
+      final name = facts['name'];
+      return name is String && name.isNotEmpty ? l10n.systemMentionSteppedIn(name) : l10n.systemMentionSteppedInNoName;
+    case 'mention.stepped_out':
+      final name = facts['name'];
+      return name is String && name.isNotEmpty ? l10n.systemMentionSteppedOut(name) : l10n.systemMentionSteppedOutNoName;
     default:
       return l10n.systemUpdate;
   }

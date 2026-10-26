@@ -59,6 +59,7 @@ class ConversationTile extends StatelessWidget {
       if (conversation.handledByLabel != null)
         l10n.handledBy(conversation.handledByLabel!),
       if (unread) l10n.unreadCount(conversation.unreadCount),
+      if (conversation.isMentioned) l10n.mentionedMark,
       if (conversation.isPinned) l10n.favoriteLabel,
       if (conversation.isMuted) l10n.mutedLabel,
       if (conversation.isArchived) l10n.archivedLabel,
@@ -147,6 +148,19 @@ class ConversationTile extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // PD-36: mentioned here, not opened since.
+                          if (conversation.isMentioned)
+                            Padding(
+                              key: const ValueKey('conversation-mentioned'),
+                              padding: const EdgeInsetsDirectional.only(
+                                end: Spacing.spacing2,
+                              ),
+                              child: Icon(
+                                Icons.alternate_email,
+                                size: 14,
+                                color: tokens.colorAccentStrong,
+                              ),
+                            ),
                           if (conversation.isPinned)
                             Padding(
                               padding: const EdgeInsetsDirectional.only(

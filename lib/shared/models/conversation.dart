@@ -98,6 +98,7 @@ class Conversation {
     this.themeKey,
     this.wallpaperUrl,
     this.cover,
+    this.isMentioned = false,
   });
 
   final String id;
@@ -162,6 +163,10 @@ class Conversation {
   /// PD-33: who covers for the away supervisor here, and until when; null when nobody.
   final ConversationCover? cover;
 
+  /// PD-36: the viewer was @mentioned here and has not opened the chat since (server
+  /// `viewerState.mention`, unseen). An "@" on the row until then.
+  final bool isMentioned;
+
   bool get hasUnread => unreadCount > 0;
 
   /// The name to show: the server's title, except for a supervision conversation, which
@@ -179,6 +184,7 @@ class Conversation {
     int? unreadCount,
     String? themeKey,
     String? wallpaperUrl,
+    bool? isMentioned,
   }) {
     return Conversation(
       id: id,
@@ -203,6 +209,7 @@ class Conversation {
       themeKey: themeKey ?? this.themeKey,
       wallpaperUrl: wallpaperUrl ?? this.wallpaperUrl,
       cover: cover,
+      isMentioned: isMentioned ?? this.isMentioned,
     );
   }
 }

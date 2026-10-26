@@ -3816,4 +3816,67 @@ class L10nAr extends L10n {
 
   @override
   String get feedbackFailed => 'تعذّر إرسال ملاحظتك. حاول مرة أخرى.';
+
+  @override
+  String get mentionListLabel => 'الإشارة إلى شخص';
+
+  @override
+  String get mentionNoMatch => 'لا يوجد أحد بهذا الاسم هنا';
+
+  @override
+  String get mentionAskedToJoin => 'دعوة للانضمام';
+
+  @override
+  String get mentionRoleSupervisor => 'المشرف';
+
+  @override
+  String get mentionRoleAdmin => 'الإدارة';
+
+  @override
+  String get mentionRoleSupervisorHint => 'مشرف الطفل';
+
+  @override
+  String get mentionRoleAdminHint => 'المشرف ومدير العمليات';
+
+  @override
+  String get mentionStaffManager => 'مدير';
+
+  @override
+  String get mentionStaffSupervisor => 'مشرف';
+
+  @override
+  String get mentionStaffCoverage => 'مشرف تغطية';
+
+  @override
+  String get mentionWaiting => 'إشارة — بانتظار الانضمام';
+
+  @override
+  String get mentionSteppedInRow => 'داخل المحادثة';
+
+  @override
+  String mentionAskedBy(String name, String date) {
+    return 'بطلب من $name، $date';
+  }
+
+  @override
+  String get mentionSomeoneHere => 'أحد أعضاء المحادثة';
+
+  @override
+  String get mentionedMark => 'تمت الإشارة إليك';
+
+  @override
+  String systemMentionSteppedIn(String name) {
+    return 'انضمام $name إلى المحادثة';
+  }
+
+  @override
+  String get systemMentionSteppedInNoName => 'انضمام من الإدارة إلى المحادثة';
+
+  @override
+  String systemMentionSteppedOut(String name) {
+    return 'خروج $name من المحادثة';
+  }
+
+  @override
+  String get systemMentionSteppedOutNoName => 'خروج من الإدارة من المحادثة';
 }

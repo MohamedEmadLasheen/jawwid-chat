@@ -181,6 +181,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    // PD-36: opening the chat is seeing its mention; the "@" on the list row goes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.read(conversationsControllerProvider.notifier).markMentionsSeen(widget.conversationId));
+    });
     if (widget.startVoiceRecording && !widget.isReadOnly) {
       // After the frame: the composer that renders the recording is built then,
       // and a provider must not be written during build.
@@ -1084,6 +1089,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             onAttach: widget.isReadOnly ? null : _attach,
             onSend: (body) {
               controller.send(body, replyTo: _replyingTo);
+              setState(() => _replyingTo = null);
+              if (_isAwayFromBottom) _jumpToNewest();
+            },
+            // PD-36: the @ list asks the server who it would accept here.
+            mentionCandidates: ref.read(mentionRepositoryProvider).isAvailable
+                ? (query) => ref.read(mentionRepositoryProvider).candidates(widget.conversationId, query)
+                : null,
+            onSendWithMentions: (body, mentions) {
+              controller.send(body, replyTo: _replyingTo, mentions: mentions);
               setState(() => _replyingTo = null);
               if (_isAwayFromBottom) _jumpToNewest();
             },

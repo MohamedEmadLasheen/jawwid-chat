@@ -9,6 +9,8 @@ import '../../../shared/models/trial.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../application/voice_composer_controller.dart';
+import '../data/mention_repository.dart';
+import '../domain/mentions.dart';
 import 'voice_recorder_bar.dart';
 
 /// The message composer.
@@ -34,9 +36,17 @@ class MessageComposer extends StatefulWidget {
     this.isReadOnly = false,
     this.requiresApproval = false,
     this.maxCharacters = 4000,
+    this.mentionCandidates,
+    this.onSendWithMentions,
   });
 
   final void Function(String body) onSend;
+
+  /// PD-36: the @ list's source -- who the server would accept here. Null offers no @ list.
+  final Future<MentionCandidates> Function(String query)? mentionCandidates;
+
+  /// PD-36: used instead of [onSend] when set, with the "@..." spans found in the text.
+  final void Function(String body, List<MessageMention> mentions)? onSendWithMentions;
   final ReplyPreview? replyingTo;
   final VoidCallback? onCancelReply;
   final VoidCallback? onAttach;
@@ -68,6 +78,12 @@ class _MessageComposerState extends State<MessageComposer> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
 
+  // PD-36: who was picked from the @ list, and the list for the query being typed.
+  final _picked = <PickedMention>[];
+  MentionQuery? _query;
+  MentionCandidates? _options;
+  int _request = 0;
+
   bool get _canSend => _controller.text.trim().isNotEmpty;
 
   @override
@@ -84,7 +100,44 @@ class _MessageComposerState extends State<MessageComposer> {
     super.dispose();
   }
 
-  void _onChanged() => setState(() {});
+  void _onChanged() {
+    setState(() {});
+    final source = widget.mentionCandidates;
+    if (source == null) return;
+    final caret = _controller.selection.baseOffset;
+    final q = caret < 0 ? null : activeMentionQuery(_controller.text, caret);
+    if (q == _query) return;
+    _query = q;
+    if (q == null) {
+      setState(() => _options = null);
+      return;
+    }
+    // Only the latest request is drawn: a slow answer for "@La" never replaces "@Lai".
+    final ticket = ++_request;
+    source(q.query).then((found) {
+      if (!mounted || ticket != _request) return;
+      setState(() => _options = found);
+    }, onError: (Object _) {
+      if (!mounted || ticket != _request) return;
+      setState(() => _options = const MentionCandidates());
+    });
+  }
+
+  void _pick(String label, PickedMention picked) {
+    final q = _query;
+    if (q == null) return;
+    final caret = _controller.selection.baseOffset;
+    final next = insertMention(_controller.text, caret, q.start, label);
+    _picked.add(picked);
+    _query = null;
+    _options = null;
+    _request++;
+    _controller.value = TextEditingValue(
+      text: next.text,
+      selection: TextSelection.collapsed(offset: next.caret),
+    );
+    _focus.requestFocus();
+  }
 
   void _send() {
     final body = _controller.text.trim();
@@ -92,7 +145,13 @@ class _MessageComposerState extends State<MessageComposer> {
     // even if the button somehow became enabled.
     if (body.isEmpty) return;
 
-    widget.onSend(body);
+    final withMentions = widget.onSendWithMentions;
+    if (withMentions != null) {
+      withMentions(body, spansFor(body, _picked));
+    } else {
+      widget.onSend(body);
+    }
+    _picked.clear();
     _controller.clear();
     // Keep focus so a parent can send several messages without re-tapping the field.
     _focus.requestFocus();
@@ -121,6 +180,11 @@ class _MessageComposerState extends State<MessageComposer> {
             VoiceFailureNotice(
               failure: failure,
               onDismiss: widget.onDismissVoiceFailure ?? () {},
+            ),
+          if (_query != null && _options != null)
+            _MentionList(
+              options: _options!,
+              onPick: _pick,
             ),
           if (widget.replyingTo != null)
             _ReplyBanner(
@@ -563,4 +627,72 @@ Future<ComposerChoice?> showComposerMenu(
       );
     },
   );
+}
+
+/// PD-36: the @ list above the text field -- the people (and, for a parent, the two roles)
+/// the server would accept here. Someone not in the chat is marked "Asked to join".
+class _MentionList extends StatelessWidget {
+  const _MentionList({required this.options, required this.onPick});
+
+  final MentionCandidates options;
+  final void Function(String label, PickedMention picked) onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    String roleLabel(String role) => role == 'admin' ? l10n.mentionRoleAdmin : l10n.mentionRoleSupervisor;
+    String roleHint(String role) => role == 'admin' ? l10n.mentionRoleAdminHint : l10n.mentionRoleSupervisorHint;
+    String? staffRole(String? role) => switch (role) {
+          'super_admin' => l10n.roleSuperAdmin,
+          'manager' => l10n.mentionStaffManager,
+          'admin' => l10n.mentionStaffSupervisor,
+          'coverage' => l10n.mentionStaffCoverage,
+          _ => null,
+        };
+    final empty = options.people.isEmpty && options.roles.isEmpty;
+
+    // A Material of its own, so the rows' ink is drawn on it rather than hidden under a fill.
+    return Material(
+      color: theme.colorScheme.surface,
+      child: Container(
+        constraints: const BoxConstraints(maxHeight: 220),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+        ),
+        child: Semantics(
+          label: l10n.mentionListLabel,
+          container: true,
+          child: empty
+              ? Padding(
+                  padding: const EdgeInsets.all(Spacing.spacing4),
+                  child: Text(l10n.mentionNoMatch, style: theme.textTheme.bodySmall),
+                )
+              : ListView(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    for (final role in options.roles)
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.alternate_email),
+                        title: Text('@${roleLabel(role)}'),
+                        subtitle: Text(roleHint(role)),
+                        onTap: () => onPick(roleLabel(role), PickedMention.role(roleLabel(role), role)),
+                      ),
+                    for (final p in options.people)
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.person_outline),
+                        title: Text('@${p.displayName}'),
+                        subtitle: staffRole(p.staffRole) == null ? null : Text(staffRole(p.staffRole)!),
+                        trailing: p.isMember ? null : Text(l10n.mentionAskedToJoin, style: theme.textTheme.labelSmall),
+                        onTap: () => onPick(p.displayName, PickedMention.person(p.displayName, p.actorId)),
+                      ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
 }
