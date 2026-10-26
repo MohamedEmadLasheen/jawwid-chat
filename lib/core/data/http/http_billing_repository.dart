@@ -84,6 +84,11 @@ class HttpBillingRepository implements BillingRepository {
   }
 
   @override
+  Future<void> requestRenewal(String learnerId) async {
+    await _client.post<Object?>('/me/subscriptions/${Uri.encodeComponent(learnerId)}/renewal-request');
+  }
+
+  @override
   Future<String> invoiceLink(String invoiceId) async =>
       _url((await _client.get<Map<String, Object?>>('/me/billing/invoices/${Uri.encodeComponent(invoiceId)}/link')).data, 'invoice link');
 
@@ -162,6 +167,7 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
       childName: childName(raw['child']),
       instalmentId: text(raw['instalmentId']),
       planMonths: months(raw['planMonths']),
+      lessonsIncluded: months(raw['lessonsIncluded']),
       periodStart: parseCalendarDay(raw['periodStart']),
       periodEnd: parseCalendarDay(raw['periodEnd']),
       expiresAt: instant(raw['expiresAt']),
@@ -193,6 +199,7 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
       label: text(raw['label']) ?? '',
       childName: childName(raw['child']),
       planMonths: months(raw['planMonths']),
+      lessonsIncluded: months(raw['lessonsIncluded']),
       periodStart: parseCalendarDay(raw['periodStart']),
       periodEnd: parseCalendarDay(raw['periodEnd']),
     ));
@@ -217,6 +224,48 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
       fileUrl: text(raw['fileUrl']),
       mimeType: text(raw['mimeType']),
       rejectReason: text(raw['rejectReason']),
+    ));
+  }
+
+  // PD-30: each child's subscription. A row without its child is dropped; every other
+  // field may be absent (an older server) and reads as unknown, never as zero.
+  final subscriptions = <ChildSubscription>[];
+  for (final raw in rows(d['subscriptions'])) {
+    final child = raw['child'] is Map ? raw['child'] as Map : null;
+    final childId = text(child?['id']);
+    if (childId == null) continue;
+    final current = raw['current'] is Map ? raw['current'] as Map : null;
+    final currentLessons = whole(current?['lessonsIncluded']);
+    final overdue = raw['overdue'] is Map ? raw['overdue'] as Map : null;
+    final overdueDue = parseCalendarDay(overdue?['dueDate']);
+    subscriptions.add(ChildSubscription(
+      childId: childId,
+      childName: text(child?['name']) ?? '',
+      current: currentLessons == null
+          ? null
+          : CurrentSubscription(
+              planMonths: months(current?['planMonths']),
+              lessonsIncluded: currentLessons,
+              startsOn: parseCalendarDay(current?['startsOn']),
+            ),
+      lessonsIncluded: whole(raw['lessonsIncluded']),
+      lessonsUsed: whole(raw['lessonsUsed']),
+      lessonsLeft: whole(raw['lessonsLeft']),
+      graceLeft: whole(raw['graceLeft']),
+      state: SubscriptionState.tryParse(raw['state']) ?? SubscriptionState.open,
+      lockReasons: [
+        if (raw['lockReasons'] is List)
+          for (final r in raw['lockReasons'] as List) ?LockReason.tryParse(r),
+      ],
+      overdue: overdueDue == null
+          ? null
+          : OverdueInstalment(
+              instalmentId: text(overdue?['instalmentId']),
+              label: text(overdue?['label']) ?? '',
+              dueDate: overdueDue,
+            ),
+      hasOpenPayment: raw['hasOpenPayment'] == true,
+      renewalRequestedToday: raw['renewalRequestedToday'] == true,
     ));
   }
 
@@ -253,5 +302,6 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
             note: text(bank?['note']),
           ),
     cardAvailable: d['cardAvailable'] == true,
+    subscriptions: subscriptions,
   );
 }

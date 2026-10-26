@@ -118,17 +118,8 @@ class SettingsScreen extends ConsumerWidget {
           // teacher that is their professional profile; for a parent, their own profile
           // with each child's -- photo, name and About, one photo control each. There is
           // no second "Professional profile" or "My profile" row and no second upload.
-          // PD-17: the parent's own payments. Absent for a teacher, never refused: a
-          // teacher has no payments here and must never see a family's.
-          if (user != null && user.role == UserRole.parent)
-            ListTile(
-              key: const ValueKey('settings-my-payments'),
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: Text(l10n.myPaymentsTitle),
-              subtitle: Text(l10n.myPaymentsSettingsSubtitle),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => context.push(Routes.myPayments),
-            ),
+          // PD-30: the parent's payments are no longer here -- they are the
+          // Subscriptions tab, beside Settings.
           const Divider(),
 
           // Language and Appearance are one row each, showing the current value; the

@@ -105,6 +105,9 @@ export interface NewInstalments {
   count?: number
   everyMonths?: number
   learnerId?: string | null
+  /** PD-30: a plan for one child's subscription credits these lessons when it is created. */
+  lessonsIncluded?: number
+  planMonths?: number
 }
 
 /** PD-27: a custom schedule, 1-24 rows, instead of the equal split. */
@@ -113,6 +116,8 @@ export interface CustomInstalments {
   currency?: string
   learnerId?: string | null
   items: Array<{ amountMinor: number; dueDate: string }>
+  lessonsIncluded?: number
+  planMonths?: number
 }
 
 export interface NewPaymentRequest {
@@ -123,6 +128,8 @@ export interface NewPaymentRequest {
   learnerId?: string
   instalmentId?: string
   planMonths?: PlanMonths
+  /** PD-30: a subscription / renewal buys these lessons (credited when paid in full). */
+  lessonsIncluded?: number
   periodStart?: string
   periodEnd?: string
   expiresInDays?: number

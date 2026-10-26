@@ -288,13 +288,13 @@ void main() {
     });
   });
 
-  group('PD-17: Settings offers Payments to a parent only', () {
-    testWidgets('a parent sees the Payments row', (tester) async {
+  group('PD-30: Payments left Settings for the Subscriptions tab', () {
+    testWidgets('a parent no longer sees a Payments row in Settings', (tester) async {
       await tester.pumpWidget(harness(role: UserRole.parent, child: const SettingsScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('settings-my-payments')), findsOneWidget);
-      expect(find.text('Payments'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-my-payments')), findsNothing);
+      expect(find.text('Payments'), findsNothing);
     });
 
     testWidgets('a teacher does not -- absent, not disabled', (tester) async {
@@ -362,7 +362,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(NavigationDestination), findsNWidgets(3));
+      // PD-30: Chats, Calls, Subscriptions, Settings -- and still no Profile.
+      expect(find.byType(NavigationDestination), findsNWidgets(4));
       expect(find.text('Profile'), findsNothing);
       expect(find.text('My account'), findsNothing);
       expect(

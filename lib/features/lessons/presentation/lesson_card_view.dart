@@ -50,6 +50,12 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
     'learner_return_soon' => (Icons.notifications_active_outlined, l10n.cardReturnSoonTitle),
     'learner_resumed' => (Icons.play_circle_outline, l10n.cardResumedTitle),
     'teacher_bonus' => (Icons.military_tech_outlined, l10n.cardBonusTitle),
+    // PD-30: a child's lessons paused for payment (the group: no reason), why and where
+    // to pay (the family's direct chat), and back on. Grace and renewal-request cards
+    // keep the server's plain text.
+    'lessons_paused' => (Icons.pause_circle_outline, l10n.cardLessonsPausedTitle),
+    'subscription_locked' => (Icons.pause_circle_outline, l10n.cardSubscriptionLockedTitle),
+    'subscription_unlocked' => (Icons.play_circle_outline, l10n.cardSubscriptionUnlockedTitle),
     _ => null,
   };
   if (title == null) return null;
@@ -96,6 +102,7 @@ class _LessonCard extends ConsumerWidget {
     final editable = card.kind == 'lesson_report' && lessonId != null && ref.watch(currentRoleProvider) == UserRole.teacher;
     List<String> codes(String key) => [for (final c in (card.payload[key] as List?) ?? const []) if (c is String) c];
     final topics = [for (final c in codes('coveredTopics')) topicLabel(l10n, c)];
+    final lockReasons = codes('reasons');
     final tasks = [for (final c in codes('nextTasks')) taskLabel(l10n, c)];
     final level = performanceLabel(l10n, card.integer('rating'));
     final corrected = card.kind == 'lesson_corrected' ? _outcomeLabel(l10n, card.text('outcome'), card.text('apologyTiming')) : null;
@@ -162,9 +169,19 @@ class _LessonCard extends ConsumerWidget {
         (l10n.cardHandoverNote, card.text('handoverNote')!),
       if (card.kind == 'learner_suspended' && day('returnOn') != null) ('', l10n.cardPausedUntil(day('returnOn')!)),
       if (card.kind == 'learner_return_soon' && day('returnOn') != null) ('', l10n.cardReturnOn(day('returnOn')!)),
+      if (card.kind == 'subscription_locked') ...[
+        if (lockReasons.contains('balance')) ('', l10n.subscriptionLessonsUsedUp),
+        if (lockReasons.contains('overdue') && day('overdueSince') != null)
+          ('', l10n.subscriptionOverdueSince(card.text('instalmentLabel') ?? '', day('overdueSince')!)),
+        ('', l10n.cardSubscriptionLockedHint),
+      ],
       for (final w in weekly) ('', w),
       ?corrected == null ? null : (l10n.cardCorrectedNow, corrected),
-      if (card.integer('lessonNumber') case final n?) (l10n.cardLessonNumber, '$n'),
+      if (card.integer('lessonNumber') case final n?)
+        (l10n.cardLessonNumber, switch (card.integer('lessonTotal')) {
+          final total? => l10n.cardLessonNumberOf(n, total),
+          null => '$n',
+        }),
       if ([...topics, ?card.text('covered')] case final c when c.isNotEmpty) (l10n.cardCovered, c.join('، ')),
       ?level == null ? null : (l10n.cardPerformance, level),
       if (tasks.isNotEmpty) (l10n.cardNextLesson, tasks.join('، ')),
