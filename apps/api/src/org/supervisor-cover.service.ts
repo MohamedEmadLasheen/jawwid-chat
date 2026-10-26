@@ -437,7 +437,9 @@ export class SupervisorCoverService {
               INSERT INTO chat.supervisor_cover_line (announcement_id, conversation_id)
               VALUES (${a.id}::uuid, ${conversationId}::uuid) ON CONFLICT DO NOTHING`;
             if (claimed !== 1) continue;
-            const messageId = await this.conversations.postAnnouncement(tx, conversationId, a.kind, a.payload as Record<string, unknown>);
+            const messageId = await this.conversations.postAnnouncement(tx, conversationId, a.kind, a.payload as Record<string, unknown>, {
+              touchActivity: false, // informational: never reorders the chat list
+            });
             await tx.supervisorCoverLine.update({
               where: { announcementId_conversationId: { announcementId: a.id, conversationId } },
               data: { messageId },

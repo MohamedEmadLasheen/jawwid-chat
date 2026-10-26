@@ -1051,6 +1051,55 @@ class L10nAr extends L10n {
   }
 
   @override
+  String systemSeatJoined(String who) {
+    return 'انضم $who للمساندة';
+  }
+
+  @override
+  String systemSeatSteppedIn(String who) {
+    return '$who يتابع هذه المحادثة';
+  }
+
+  @override
+  String systemSeatLeft(String name) {
+    return 'غادر $name';
+  }
+
+  @override
+  String systemSeatLeftIdle(String name) {
+    return 'غادر $name (لا نشاط)';
+  }
+
+  @override
+  String systemSeatWho(String name, String role) {
+    return '$name ($role)';
+  }
+
+  @override
+  String get systemSeatSomeone => 'أحد أعضاء الفريق';
+
+  @override
+  String get systemSeatJoinedNoName => 'انضم أحد أعضاء الفريق';
+
+  @override
+  String get systemSeatSteppedInNoName => 'أحد أعضاء الفريق يتابع هذه المحادثة';
+
+  @override
+  String get systemSeatLeftNoName => 'غادر أحد أعضاء الفريق';
+
+  @override
+  String get seatRoleTeacherSupervisor => 'مشرف المعلمين';
+
+  @override
+  String get seatRoleSupervisor => 'مشرف';
+
+  @override
+  String get seatRoleManager => 'مدير';
+
+  @override
+  String get seatRoleAdministration => 'الإدارة';
+
+  @override
   String get systemUpdate => 'تحديث من النظام';
 
   @override

@@ -630,6 +630,62 @@
   "systemCoverEndedNoName": "The cover has ended",
   "conversationCoverLine": "{cover} is covering until {date}",
   "@conversationCoverLine": {"placeholders": {"cover": {"type": "String"}, "date": {"type": "String"}}},
+  "systemSeatJoined": "{who} joined to support",
+  "@systemSeatJoined": {
+    "description": "PD-35 system line: a staff member took a visible seat in the group. who = systemSeatWho or a name.",
+    "placeholders": {
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSeatSteppedIn": "{who} is following this chat",
+  "@systemSeatSteppedIn": {
+    "description": "PD-35 system line: a staff member follows a family 1:1 (no seat in the pair).",
+    "placeholders": {
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSeatLeft": "{name} left",
+  "@systemSeatLeft": {
+    "description": "PD-35 system line: a staff member left their seat.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSeatLeftIdle": "{name} left (no activity)",
+  "@systemSeatLeftIdle": {
+    "description": "PD-35 system line: a seat ended after days with no message.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSeatWho": "{name} ({role})",
+  "@systemSeatWho": {
+    "description": "PD-35: a name with its role word, inside a seat line.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSeatSomeone": "A team member",
+  "systemSeatJoinedNoName": "A team member joined",
+  "systemSeatSteppedInNoName": "A team member is following this chat",
+  "systemSeatLeftNoName": "A team member left",
+  "seatRoleTeacherSupervisor": "teacher supervisor",
+  "seatRoleSupervisor": "supervisor",
+  "seatRoleManager": "manager",
+  "seatRoleAdministration": "administration",
   "systemUpdate": "System update",
   "lessonTicketsHeader": "Lesson",
   "@lessonTicketsHeader": {

@@ -14,6 +14,7 @@ import { PaymentReminders } from './billing/payment-reminders.service';
 import { SupervisorCoverService } from './org/supervisor-cover.service';
 import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
 import { subscriptionLockEnforced } from './platform/subscription-lock';
+import { ConversationSeatService } from './communication/seats/conversation-seat.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -107,6 +108,13 @@ const SUBSCRIPTION_SWEEP_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS ?? 60_000
 const SIGNUP_FAILURE_PURGE_MS = 6 * 60 * 60_000;
 
 /**
+ * PD-35: how often seats that no longer hold, or went idle, are ended. Access
+ * never waits for it -- a seat's eligibility is re-checked on every access --
+ * so this only tidies the member list and posts the line.
+ */
+const SEAT_SWEEP_MS = 60_000;
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -156,6 +164,7 @@ async function bootstrap(): Promise<void> {
   const paymentReminders = app.get(PaymentReminders);
   const covers = app.get(SupervisorCoverService);
   const subscriptions = app.get(SubscriptionEffects);
+  const seats = app.get(ConversationSeatService);
   const prisma = app.get(PrismaService);
 
   let running = true;
@@ -198,6 +207,7 @@ async function bootstrap(): Promise<void> {
   let nextPaymentReminderSweep = 0;
   let nextCoverSweep = 0;
   let nextSignupFailurePurge = 0;
+  let nextSeatSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
   log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
@@ -337,6 +347,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextSignupFailurePurge = Date.now() + SIGNUP_FAILURE_PURGE_MS;
+      }
+    }
+
+    // PD-35: seats that no longer hold, or went idle, end with a visible line.
+    if (Date.now() >= nextSeatSweep) {
+      draining = true;
+      try {
+        await seats.sweep();
+      } catch (e) {
+        report(log, 'seat sweep', 'seats.sweep', e);
+      } finally {
+        draining = false;
+        nextSeatSweep = Date.now() + SEAT_SWEEP_MS;
       }
     }
 

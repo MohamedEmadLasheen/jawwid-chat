@@ -214,6 +214,17 @@ describe('PD-14: who may edit or delete a sent message they did not write', () =
   it('system messages and cards are never moderated', () => {
     expect(authz.moderatableAuthorKinds(admin('owner', 'super_admin'), StaffAccessBasis.SUPER_ADMIN)).not.toContain('system');
   });
+
+  it('PD-35: a seated person moderates nobody, decides no approval and changes no membership -- a seat is presence, not charge', () => {
+    expect(authz.moderatableAuthorKinds(admin('seated'), StaffAccessBasis.SEATED)).toEqual([]);
+    expect(authz.canApprove(admin('seated'), StaffAccessBasis.SEATED).allowed).toBe(false);
+    expect(
+      authz.canManageMembershipIn(admin('seated'), {
+        type: 'student_group', organizationId: admin('seated').organizationId as string,
+        actorBasis: StaffAccessBasis.SEATED, actorMemberRole: 'admin',
+      }).allowed,
+    ).toBe(false);
+  });
 });
 
 /** Legacy: decides only messages held BEFORE PD-14; nothing new joins the queue. */

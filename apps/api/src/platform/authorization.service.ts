@@ -710,12 +710,15 @@ export class AuthorizationService {
    *   other staff            the department manager or the super admin only, so
    *                          a supervisor never rewrites a colleague
    *   system                 never: system messages and cards are records
+   *   (a seat, PD-35)        nobody's: 'seated' is presence, not charge
    *
    * An actor's OWN message is not moderation; the author rules (window) apply.
    * `basis` is chat.staff_conversation_access for this conversation, now.
    */
   moderatableAuthorKinds(actor: Actor, basis: StaffAccessBasis | null): string[] {
     if (actor.kind !== ActorKind.STAFF || !actor.isActive || !isConversationStaff(actor) || basis === null) return [];
+    // PD-35: a seat is presence by choice, never charge of the conversation.
+    if (basis === StaffAccessBasis.SEATED) return [];
     if (basis === StaffAccessBasis.MANAGER || basis === StaffAccessBasis.SUPER_ADMIN) {
       return [ActorKind.TEACHER, ActorKind.CONTACT, ActorKind.STAFF];
     }
@@ -735,6 +738,8 @@ export class AuthorizationService {
     switch (basis) {
       case StaffAccessBasis.RESPONSIBLE:
       case StaffAccessBasis.MEMBER:
+      // PD-35: a seated person speaks as themselves, a party to the chat.
+      case StaffAccessBasis.SEATED:
         return OnBehalfMode.OWNER;
       case StaffAccessBasis.BACKUP:
         return OnBehalfMode.COVERAGE;
