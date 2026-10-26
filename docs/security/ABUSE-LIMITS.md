@@ -58,7 +58,7 @@ because each is a rolling 24-hour count that must survive a Redis restart:
 |---|---|---|
 | `feedback.limit.per_child_day` | 3 | `POST /me/feedback` about one child, rolling 24 h → `429 COMM.FEEDBACK_LIMIT` |
 | `feedback.limit.per_family_day` | 10 | `POST /me/feedback` by one family, rolling 24 h → `429 COMM.FEEDBACK_LIMIT` |
-| `signup.wrong_codes_per_day` | 10 | wrong parent sign-up codes per e-mail, rolling 24 h, across codes → `403 AUTH.SIGNUP_LOCKED` until the window rolls or staff reset it |
+| `signup.wrong_codes_per_day` | 10 | wrong parent sign-up codes per enrolled parent's account (per e-mail hash for any other e-mail), rolling 24 h, across codes, decided under an advisory lock → `403 AUTH.SIGNUP_LOCKED` until the window rolls or staff reset it. Rows purged after 7 days by the worker. |
 
 - These are set well above human use on purpose. A limit a busy admin can hit on a
   hard morning gets raised in a panic and then forgotten.

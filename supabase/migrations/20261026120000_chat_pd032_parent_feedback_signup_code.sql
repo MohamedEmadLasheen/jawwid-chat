@@ -19,11 +19,15 @@
 --     parent_feedback_id         ladder" are PD-26's, unchanged. It has no staff
 --                                author; its handler starts empty and is set
 --                                once, by the Teachers department.
---   chat.parent_signup_failure   one wrong sign-up code, by the e-mail's hash
---                                (known e-mail or not, so the cap tells nobody
---                                which e-mails are enrolled). Ten in 24 hours
---                                stop the e-mail until the window rolls or staff
---                                reset it.
+--   chat.parent_signup_failure   one wrong sign-up code: by ACCOUNT when the
+--                                e-mail is an enrolled parent's (so changing the
+--                                e-mail does not reset it), by the e-mail's hash
+--                                otherwise (counted for unknown e-mails too, so
+--                                the cap tells nobody which are enrolled). Ten in
+--                                24 hours stop it until the window rolls or staff
+--                                reset it. Purged after 7 days by the worker
+--                                (chat.purge_parent_signup_failures), the one
+--                                delete allowed.
 --   parent_signup_code           expires_at is null for new codes: a code lives
 --     .expires_at nullable       until used, superseded, spent by five wrong
 --                                tries, or invalidated. Codes issued before keep
@@ -278,19 +282,24 @@ create trigger account_inactive_ends_signup_code after update of is_active, stat
 
 create table chat.parent_signup_failure (
   id            uuid primary key default gen_random_uuid(),
-  -- subjectHash() of the e-mail the parent typed: never the e-mail itself.
-  subject_hash  text not null check (subject_hash ~ '^[0-9a-f]{32}$'),
+  -- The enrolled parent's account, when the e-mail typed is one ...
+  account_id    uuid references chat.account (id),
+  -- ... otherwise subjectHash() of the e-mail typed: never the e-mail itself.
+  subject_hash  text check (subject_hash ~ '^[0-9a-f]{32}$'),
   created_at    timestamptz not null default now(),
   -- Staff "Reset attempts" clears the window; the row stays.
   cleared_at    timestamptz,
   cleared_by    uuid references chat.staff (id),
-  constraint parent_signup_failure_clear_is_whole check ((cleared_at is null) = (cleared_by is null))
+  constraint parent_signup_failure_clear_is_whole check ((cleared_at is null) = (cleared_by is null)),
+  constraint parent_signup_failure_one_key check (num_nonnulls(account_id, subject_hash) = 1)
 );
 
 comment on table chat.parent_signup_failure is
-  'PD-32: one wrong parent sign-up code, by e-mail hash. Ten uncleared in 24 hours refuse further tries for that e-mail. Cleared (never deleted) by staff Reset attempts.';
+  'PD-32: one wrong parent sign-up code, by account (an enrolled parent) or e-mail hash (anything else). Ten uncleared in 24 hours refuse further tries. Cleared by staff Reset attempts; deleted only by the 7-day purge.';
 
-create index parent_signup_failure_subject_idx on chat.parent_signup_failure (subject_hash, created_at);
+create index parent_signup_failure_account_idx on chat.parent_signup_failure (account_id, created_at) where account_id is not null;
+create index parent_signup_failure_subject_idx on chat.parent_signup_failure (subject_hash, created_at) where subject_hash is not null;
+create index parent_signup_failure_age_idx on chat.parent_signup_failure (created_at);
 
 create or replace function chat.guard_parent_signup_failure()
 returns trigger
@@ -298,7 +307,12 @@ language plpgsql
 as $$
 begin
   if tg_op = 'DELETE' then
-    raise exception 'a sign-up failure is never deleted' using errcode = 'check_violation';
+    -- Only the purge, and only what is past its week.
+    if current_setting('chat.purging_signup_failures', true) = 'on'
+       and old.created_at < now() - interval '7 days' then
+      return old;
+    end if;
+    raise exception 'a sign-up failure is deleted only by the 7-day purge' using errcode = 'check_violation';
   end if;
   if tg_op = 'INSERT' then
     new.created_at := now();
@@ -306,7 +320,7 @@ begin
     new.cleared_by := null;
     return new;
   end if;
-  if (new.id, new.subject_hash, new.created_at) is distinct from (old.id, old.subject_hash, old.created_at)
+  if (new.id, new.account_id, new.subject_hash, new.created_at) is distinct from (old.id, old.account_id, old.subject_hash, old.created_at)
      or old.cleared_at is not null then
     raise exception 'a sign-up failure is only cleared, once' using errcode = 'check_violation';
   end if;
@@ -317,6 +331,24 @@ $$;
 create trigger parent_signup_failure_is_coherent
   before insert or update or delete on chat.parent_signup_failure
   for each row execute function chat.guard_parent_signup_failure();
+
+-- Retention: a failure counts for 24 hours and is kept a week for the record.
+-- Unauthenticated requests insert these rows (any e-mail typed), so they must
+-- not accumulate forever. Called by the worker; returns how many it removed.
+create or replace function chat.purge_parent_signup_failures()
+returns integer
+language plpgsql
+as $$
+declare
+  v_count integer;
+begin
+  perform set_config('chat.purging_signup_failures', 'on', true);
+  delete from chat.parent_signup_failure where created_at < now() - interval '7 days';
+  get diagnostics v_count = row_count;
+  perform set_config('chat.purging_signup_failures', 'off', true);
+  return v_count;
+end;
+$$;
 
 -- ===========================================================================
 -- 5. The limits, as operations-tunable configuration
@@ -346,3 +378,4 @@ revoke all on function chat.guard_teacher_supervision_entry_change() from public
 revoke all on function chat.supersede_signup_code_on_credential() from public;
 revoke all on function chat.supersede_signup_code_on_account() from public;
 revoke all on function chat.guard_parent_signup_failure() from public;
+revoke all on function chat.purge_parent_signup_failures() from public, anon, authenticated, chat_app;

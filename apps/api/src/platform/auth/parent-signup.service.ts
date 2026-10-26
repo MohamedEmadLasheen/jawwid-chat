@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma.service';
 import { AUDIT_SERVICE } from '../tokens';
 import type { AuditService } from '../audit.service';
 import { AuthError, AuthErrorCode } from './auth.errors';
-import { hashPassword, spendComparableTime } from './password';
+import { hashPassword } from './password';
 import { subjectHash } from './subject-hash';
 
 /** Wrong tries before a code is spent and a new one must be asked for. */
@@ -69,8 +69,8 @@ export class ParentSignupService {
     const email = normalizeEmail(rawEmail);
     const account = email ? await this.signupAccount(email) : null;
     if (!account) return { ok: true, delivery: 'relay' };
-    // A capped e-mail gets no new code: it could not be used anyway.
-    if (await this.locked(email as string)) return { ok: true, delivery: 'relay' };
+    // A capped account gets no new code: it could not be used anyway.
+    if ((await signupWrongCodes(this.prisma, { accountId: account.id })).locked) return { ok: true, delivery: 'relay' };
 
     const recent = await this.prisma.parentSignupCode.count({
       where: { accountId: account.id, createdAt: { gte: new Date(Date.now() - 3_600_000) } },
@@ -97,54 +97,56 @@ export class ParentSignupService {
     return { ok: true, delivery: 'relay' };
   }
 
+  /**
+   * ONE DECISION PER ATTEMPT, SERIALISED (PD-32). Everything that decides an
+   * attempt -- the 24-hour cap, the code's five tries, spending it -- happens in
+   * one transaction holding an advisory lock on the attempt's key (the account,
+   * or the e-mail's hash when it is not an enrolled parent's). A burst of
+   * parallel guesses therefore queues: exactly `cap` of them are compared, the
+   * rest are refused as locked. Nothing is checked outside the lock and acted
+   * on inside it.
+   */
   async verify(rawEmail: string, rawCode: string, password: string): Promise<{ ok: true }> {
     const email = normalizeEmail(rawEmail);
     const code = rawCode.trim();
     if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
       throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
     }
-    if (email && (await this.locked(email))) {
-      await spendComparableTime(password);
-      throw new AuthError(AuthErrorCode.SIGNUP_LOCKED);
-    }
-    const account = email && /^[0-9]{6}$/.test(code) ? await this.signupAccount(email) : null;
-    const live = account
-      ? await this.prisma.parentSignupCode.findFirst({
-          // Codes from before PD-32 keep their expiry; it is still honoured.
-          where: { accountId: account.id, usedAt: null, supersededAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
-        })
-      : null;
-    if (!account || !live || live.attempts >= SIGNUP_CODE_TRIES) {
-      // A wrong try, whatever the e-mail: the cap must not tell known from unknown.
-      if (email) await this.recordFailure(email);
-      // As costly as a real attempt, so timing does not tell a known e-mail apart.
-      await spendComparableTime(password);
-      throw new AuthError(AuthErrorCode.SIGNUP_CODE_INVALID);
-    }
-
-    if (!sameHash(live.codeHash, codeHash(account.id, code))) {
-      const attempts = live.attempts + 1;
-      await this.prisma.$transaction([
-        this.prisma.parentSignupCode.update({
-          where: { id: live.id },
-          data: attempts >= SIGNUP_CODE_TRIES
-            ? { attempts, supersededAt: new Date(), relayCode: null }
-            : { attempts },
-        }),
-        this.prisma.parentSignupFailure.create({ data: { subjectHash: subjectHash(email as string) } }),
-      ]);
-      await spendComparableTime(password);
-      throw new AuthError(AuthErrorCode.SIGNUP_CODE_INVALID);
-    }
-
+    // Hashed for every attempt, before anything is looked up: as costly for an
+    // unknown e-mail or a wrong code as for a right one, so timing tells nothing.
     const passwordHash = await hashPassword(password);
-    await this.prisma.$transaction(async (tx) => {
-      // Re-read under the transaction: two submissions of one code finish once.
+    if (!email) throw new AuthError(AuthErrorCode.SIGNUP_CODE_INVALID);
+    const key = await failureKey(this.prisma, email);
+    const account = await this.signupAccount(email);
+
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockName(key)}, 0))`;
+      if ((await signupWrongCodes(tx, key)).locked) return 'locked' as const;
+
+      const live = account && /^[0-9]{6}$/.test(code)
+        ? await tx.parentSignupCode.findFirst({
+            // Codes from before PD-32 keep their expiry; it is still honoured.
+            where: { accountId: account.id, usedAt: null, supersededAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+          })
+        : null;
+      if (!account || !live || !sameHash(live.codeHash, codeHash(account.id, code))) {
+        // A wrong try, whatever the e-mail: the cap must not tell known from unknown.
+        await tx.parentSignupFailure.create({ data: key });
+        if (live) {
+          const tried = await tx.parentSignupCode.update({ where: { id: live.id }, data: { attempts: { increment: 1 } } });
+          if (tried.attempts >= SIGNUP_CODE_TRIES) {
+            await tx.parentSignupCode.update({ where: { id: live.id }, data: { supersededAt: new Date(), relayCode: null } });
+          }
+        }
+        return 'invalid' as const;
+      }
+
+      // Two submissions of one code finish once (the lock already serialises them).
       const spent = await tx.parentSignupCode.updateMany({
         where: { id: live.id, usedAt: null, supersededAt: null },
         data: { usedAt: new Date(), relayCode: null },
       });
-      if (spent.count !== 1) throw new AuthError(AuthErrorCode.SIGNUP_CODE_INVALID);
+      if (spent.count !== 1) return 'invalid' as const;
       await tx.accountCredential.create({ data: { accountId: account.id, passwordHash } });
       // The parent is not staff (audit_log.actor_id names staff): no actor, the account as entity.
       await this.audit.audit(tx, {
@@ -155,17 +157,13 @@ export class ParentSignupService {
         after: { familyId: account.familyId, contactId: account.contactId },
         reason: 'parent completed sign-up with a one-time code',
       });
+      return 'ok' as const;
     });
-    this.log.log(`account ${account.id} completed its parent sign-up`);
+
+    if (outcome === 'locked') throw new AuthError(AuthErrorCode.SIGNUP_LOCKED);
+    if (outcome === 'invalid') throw new AuthError(AuthErrorCode.SIGNUP_CODE_INVALID);
+    this.log.log(`account ${(account as { id: string }).id} completed its parent sign-up`);
     return { ok: true };
-  }
-
-  private async locked(email: string): Promise<boolean> {
-    return (await signupWrongCodes(this.prisma, email)).locked;
-  }
-
-  private async recordFailure(email: string): Promise<void> {
-    await this.prisma.parentSignupFailure.create({ data: { subjectHash: subjectHash(email) } });
   }
 
   /**
@@ -186,16 +184,32 @@ export class ParentSignupService {
 }
 
 /**
- * PD-32: an e-mail's wrong sign-up codes in the last 24 hours that staff have
- * not reset, against the cap. Shared with the New Students page.
+ * PD-32: whose wrong codes an attempt counts against -- the enrolled parent's
+ * ACCOUNT when the e-mail is one (so a changed e-mail does not reset the count),
+ * otherwise the hash of the e-mail typed (never the e-mail itself).
+ */
+export type FailureKey = { accountId: string } | { subjectHash: string };
+
+export async function failureKey(prisma: Pick<PrismaService, 'account'>, email: string): Promise<FailureKey> {
+  const account = await prisma.account.findUnique({ where: { subject: email }, select: { id: true, kind: true } });
+  return account && account.kind === 'family' ? { accountId: account.id } : { subjectHash: subjectHash(email) };
+}
+
+function lockName(key: FailureKey): string {
+  return 'accountId' in key ? `pd032-signup:account:${key.accountId}` : `pd032-signup:subject:${key.subjectHash}`;
+}
+
+/**
+ * PD-32: the wrong sign-up codes counted against a key in the last 24 hours that
+ * staff have not reset, against the cap. Shared with the New Students page.
  */
 export async function signupWrongCodes(
   prisma: Pick<PrismaService, 'parentSignupFailure' | 'config'>,
-  email: string,
+  key: FailureKey,
 ): Promise<{ wrong: number; cap: number; locked: boolean }> {
   const [wrong, row] = await Promise.all([
     prisma.parentSignupFailure.count({
-      where: { subjectHash: subjectHash(email), clearedAt: null, createdAt: { gte: new Date(Date.now() - DAY_MS) } },
+      where: { ...key, clearedAt: null, createdAt: { gte: new Date(Date.now() - DAY_MS) } },
     }),
     prisma.config.findUnique({ where: { key: WRONG_CODES_KEY } }),
   ]);

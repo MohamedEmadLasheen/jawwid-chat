@@ -356,6 +356,16 @@ describe('PD-32: feedback about teachers on the Parent Profile', () => {
     expect(within(section).queryByRole('button', { name: /Take|Reply/ })).not.toBeInTheDocument()
   })
 
+  it('is simply not there for staff outside the family (404, as for no such family)', async () => {
+    on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
+    on('GET', /\/families\/f-1\/billing$/, () => json(billing()))
+    on('GET', /\/families\/f-1\/parent-feedback$/, () => json({ code: 'COMM.FEEDBACK_NOT_FOUND', message: 'family not found' }, 404))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    expect(await screen.findByRole('region', { name: 'Payment information' })).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /parent-feedback$/).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('region', { name: 'Feedback about teachers' })).not.toBeInTheDocument()
+  })
+
   it('is simply not there for a viewer the server refuses', async () => {
     on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
     on('GET', /\/families\/f-1\/billing$/, () => json(billing()))

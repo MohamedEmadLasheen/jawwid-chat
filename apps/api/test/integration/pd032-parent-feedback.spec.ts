@@ -234,10 +234,39 @@ describe('4. who reaches it', () => {
       s.otherAdminId,
     );
     expect((await feedback.forFamily(s.otherAdminId, s.familyId)).feedback.map((f) => f.category)).toEqual(['suggestion']);
-    // Staff who supervise none of the family: refused; the list route is the department's.
-    expect(await code(feedback.forFamily(s.managerId, s.familyId))).toBe(CommErrorCode.FEEDBACK_DENIED);
+    // Staff who supervise none of the family: the same 404 as no such family (no
+    // existence oracle); the list route is the department's.
+    expect(await code(feedback.forFamily(s.managerId, s.familyId))).toBe(CommErrorCode.FEEDBACK_NOT_FOUND);
     expect(await code(feedback.list(s.ownerId, {}))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
     expect(await code(feedback.forFamily(tsupId, randomUUID()))).toBe(CommErrorCode.FEEDBACK_NOT_FOUND);
+  });
+});
+
+describe('4b. a transfer racing the filing', () => {
+  it('a teacher change between the read and the insert is a clean 409, never filed against the wrong teacher', async () => {
+    // The pre-read sees the old teacher; the transfer has already happened in the database.
+    await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${s.unrelatedTeacherId}'::uuid where id = '${s.learnerId}'::uuid`);
+    const stale = jest.spyOn(g.prisma.learner, 'findFirst').mockResolvedValueOnce({ id: s.learnerId, teacherId: s.teacherId } as never);
+    try {
+      expect(await status(file('complaint'))).toBe(409);
+    } finally {
+      stale.mockRestore();
+    }
+    expect(await g.prisma.parentFeedback.count()).toBe(0);
+    expect(await g.prisma.teacherSupervisionEntry.count()).toBe(0);
+    // Retried, it goes to the child's teacher now.
+    const filed = await file('complaint');
+    expect((await g.prisma.parentFeedback.findUniqueOrThrow({ where: { id: filed.id } })).teacherId).toBe(s.unrelatedTeacherId);
+  });
+
+  it('a child left without a teacher mid-filing is the same 409', async () => {
+    await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = null where id = '${s.learnerId}'::uuid`);
+    const stale = jest.spyOn(g.prisma.learner, 'findFirst').mockResolvedValueOnce({ id: s.learnerId, teacherId: s.teacherId } as never);
+    try {
+      expect(await code(file('praise'))).toBe(CommErrorCode.FEEDBACK_STATE);
+    } finally {
+      stale.mockRestore();
+    }
   });
 });
 

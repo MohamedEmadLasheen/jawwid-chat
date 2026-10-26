@@ -83,21 +83,19 @@ export class NewStudentEnrolmentService {
       : [];
     const supervisorOf = new Map(supervision.map((r) => [r.learner_id, { id: r.id, name: r.name }]));
     const accounts = enrolments.map((e) => e.accountId);
-    const [credentials, codes, subjects] = await Promise.all([
+    const [credentials, codes] = await Promise.all([
       this.prisma.accountCredential.findMany({ where: { accountId: { in: accounts } }, select: { accountId: true } }),
       this.prisma.parentSignupCode.findMany({
         // PD-32: no time expiry; codes from before it keep theirs.
         where: { accountId: { in: accounts }, usedAt: null, supersededAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
       }),
-      this.prisma.account.findMany({ where: { id: { in: accounts } }, select: { id: true, subject: true } }),
     ]);
     const signedUp = new Set(credentials.map((c) => c.accountId));
     const codeOf = new Map(codes.map((c) => [c.accountId, c]));
-    const subjectOf = new Map(subjects.map((a) => [a.id, a.subject]));
-    // PD-32: the wrong-code cap, for the accounts still signing up.
-    const waiting = accounts.filter((a) => !signedUp.has(a) && subjectOf.has(a));
+    // PD-32: the wrong-code cap, counted by account, for the accounts still signing up.
+    const waiting = accounts.filter((a) => !signedUp.has(a));
     const wrongOf = new Map(
-      await Promise.all(waiting.map(async (a) => [a, await signupWrongCodes(this.prisma, subjectOf.get(a) as string)] as const)),
+      await Promise.all(waiting.map(async (a) => [a, await signupWrongCodes(this.prisma, { accountId: a })] as const)),
     );
     const mine = new Set(viewer.supervised);
 
@@ -373,8 +371,9 @@ export class NewStudentEnrolmentService {
     const { actor, enrolment } = await this.responsibleFor(actorId, trialId);
     const account = await this.prisma.account.findUniqueOrThrow({ where: { id: enrolment.accountId }, select: { subject: true } });
     const cleared = await this.prisma.$transaction(async (tx) => {
+      // By account; and any counted against the current e-mail before it was the parent's.
       const rows = await tx.parentSignupFailure.updateMany({
-        where: { subjectHash: subjectHash(account.subject), clearedAt: null },
+        where: { clearedAt: null, OR: [{ accountId: enrolment.accountId }, { subjectHash: subjectHash(account.subject) }] },
         data: { clearedAt: new Date(), clearedBy: actor.actorId },
       });
       await this.audit.audit(tx, {

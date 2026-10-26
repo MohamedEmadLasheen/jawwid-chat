@@ -444,4 +444,51 @@ describe('5. PD-32: valid until used or invalidated; ten wrong codes a day lock 
     await g.prisma.accountCredential.create({ data: { accountId, passwordHash: 'x'.repeat(40) } });
     expect(await g.prisma.parentSignupCode.count({ where: { usedAt: null, supersededAt: null } })).toBe(0);
   });
+
+  it('20 parallel wrong codes: exactly the cap is compared, the rest are refused as locked', async () => {
+    await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    await signup.request(EMAIL);
+    const right = await relayed();
+    const results = await Promise.all(Array.from({ length: 20 }, () => code(signup.verify(EMAIL, wrongFor(right), PASSWORD))));
+    expect(results.filter((r) => r === AuthErrorCode.SIGNUP_CODE_INVALID)).toHaveLength(10);
+    expect(results.filter((r) => r === AuthErrorCode.SIGNUP_LOCKED)).toHaveLength(10);
+    const account = await g.prisma.account.findUniqueOrThrow({ where: { subject: LOWER } });
+    expect(await g.prisma.parentSignupFailure.count({ where: { accountId: account.id } })).toBe(10);
+    // The code itself took exactly its five tries, then was spent.
+    const tried = await g.prisma.parentSignupCode.findFirstOrThrow({ where: { accountId: account.id }, orderBy: { createdAt: 'desc' } });
+    expect(tried.attempts).toBe(5);
+    expect(tried.supersededAt).not.toBeNull();
+  });
+
+  it('the cap is kept by account: changing the e-mail mid-cap does not reset it; Reset attempts clears it by account', async () => {
+    await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    const account = await g.prisma.account.findUniqueOrThrow({ where: { subject: LOWER } });
+    for (let i = 0; i < 6; i++) await code(signup.verify(EMAIL, '000000', PASSWORD));
+    // Staff (or PD-25) change the sign-in e-mail.
+    const renamed = `renamed.${randomUUID().slice(0, 8)}@example.test`;
+    await g.prisma.account.update({ where: { id: account.id }, data: { subject: renamed } });
+    for (let i = 0; i < 4; i++) expect(await code(signup.verify(renamed, '000000', PASSWORD))).toBe(AuthErrorCode.SIGNUP_CODE_INVALID);
+    expect(await code(signup.verify(renamed, '000000', PASSWORD))).toBe(AuthErrorCode.SIGNUP_LOCKED);
+    expect(await signupOf(s.ownerId)).toMatchObject({ attempts: { wrong: 10, locked: true } });
+    // The old e-mail is no one's now: counted apart, by its hash.
+    expect(await code(signup.verify(EMAIL, '000000', PASSWORD))).toBe(AuthErrorCode.SIGNUP_CODE_INVALID);
+    expect(await enrolment.resetSignupAttempts(s.ownerId, trialId)).toEqual({ cleared: 10 });
+    await signup.request(renamed);
+    expect(await signup.verify(renamed, await relayed(), PASSWORD)).toEqual({ ok: true });
+  });
+
+  it('wrong codes are purged after a week, by the purge only', async () => {
+    await code(signup.verify('nobody@example.test', '123456', PASSWORD));
+    await code(signup.verify('nobody@example.test', '123456', PASSWORD));
+    const [old] = await g.prisma.parentSignupFailure.findMany({ take: 1 });
+    await expect(g.prisma.$executeRawUnsafe(`delete from chat.parent_signup_failure where id = $1::uuid`, old!.id)).rejects.toThrow();
+    await g.prisma.$executeRawUnsafe(`alter table chat.parent_signup_failure disable trigger parent_signup_failure_is_coherent`);
+    await g.prisma.$executeRawUnsafe(`update chat.parent_signup_failure set created_at = now() - interval '8 days' where id = $1::uuid`, old!.id);
+    await g.prisma.$executeRawUnsafe(`alter table chat.parent_signup_failure enable trigger parent_signup_failure_is_coherent`);
+    // Even a week-old row cannot be deleted outside the purge.
+    await expect(g.prisma.$executeRawUnsafe(`delete from chat.parent_signup_failure where id = $1::uuid`, old!.id)).rejects.toThrow();
+    const [{ n }] = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(`select chat.purge_parent_signup_failures() as n`);
+    expect(n).toBe(1);
+    expect(await g.prisma.parentSignupFailure.count()).toBe(1);
+  });
 });

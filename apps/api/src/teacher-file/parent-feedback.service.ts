@@ -106,6 +106,12 @@ export class ParentFeedbackService {
       async (tx) => {
         // Counted inside the transaction (serializable), so two quick submissions
         // cannot both pass the last free slot.
+        // The child's teacher, read again under a row lock: a transfer between the
+        // read above and this insert must not file the parent's words against a
+        // teacher they did not name. Changed -> the parent retries and sees who.
+        const [now] = await tx.$queryRaw<Array<{ teacher_id: string | null }>>`
+          SELECT teacher_id::text AS teacher_id FROM chat.learner WHERE id = ${learner.id}::uuid FOR SHARE`;
+        if (!now || now.teacher_id !== teacherId) throw teacherChanged();
         const since = new Date(Date.now() - DAY_MS);
         const [childCount, familyCount] = await Promise.all([
           tx.parentFeedback.count({ where: { learnerId: learner.id, createdAt: { gte: since } } }),
@@ -272,7 +278,8 @@ export class ParentFeedbackService {
         where: { supervisorId: actor.actorId, learnerId: { in: (await this.familyLearners(family.id)).map((l) => l.id) } },
         select: { learnerId: true },
       });
-      if (!mine.length) throw new CommError(CommErrorCode.FEEDBACK_DENIED, 'parent feedback is read by the children\'s supervisor');
+      // The same answer as an unknown family: a refusal must not confirm the family exists.
+      if (!mine.length) throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'family not found');
       learnerFilter = { learnerId: { in: mine.map((m) => m.learnerId) } };
     }
     const rows = await this.prisma.parentFeedback.findMany({
@@ -404,10 +411,16 @@ function invalid(reason: string) {
   return new CommError(CommErrorCode.VALIDATION, reason, 400);
 }
 
+function teacherChanged() {
+  return new CommError(CommErrorCode.FEEDBACK_STATE, "the child's teacher has just changed; please check and send again", 409);
+}
+
 /** Two submissions racing for the last slot: the loser is told what the winner was not. */
 function serializationAsLimit(e: unknown): unknown {
   const code = (e as { code?: string })?.code ?? '';
   const text = e instanceof Error ? e.message : String(e);
+  // The database's own guard saw a teacher other than the child's (a transfer won the race).
+  if (/feedback is about a child of the parent's own family and that child's teacher/.test(text)) return teacherChanged();
   if (code === 'P2034' || /40001|could not serialize/.test(text)) {
     return new CommError(CommErrorCode.FEEDBACK_LIMIT, 'please try again in a moment', 429);
   }

@@ -2738,6 +2738,18 @@ department head and the design note approved the same day. **Amends PD-26**
    the responsible staff press **Reset attempts** (audited). A new code does not
    reset it. The cap counts wrong tries for any e-mail typed, known or not, so
    reaching it tells nobody which e-mails are enrolled.
+   - Counted by the parent's **account** when the e-mail is an enrolled
+     parent's (changing the e-mail does not reset it), by the e-mail's hash
+     otherwise. Each attempt is decided atomically under a per-key advisory
+     lock, so a burst of parallel guesses gets exactly the cap compared.
+   - Wrong-code rows are **purged after 7 days** by the worker; nothing else
+     may delete them.
+   - **Accepted risk:** anyone who knows a parent's e-mail can lock that
+     parent's sign-up for 24 hours by guessing; the parent's supervisor resets
+     it.
+   - **Reset attempts** is the children's supervisor's, the Operations
+     manager's and the super admin's (the same people who see the code) -- by
+     design.
 5. **The Trial label (item 14).** A "Trial" / "تجريبية" badge on every trial
    group: the app's chat list, header and group info; Admin Web's chat list,
    header and info, the admin conversations view, the Calls page and the trials
@@ -2756,8 +2768,10 @@ who reads            the filing family (status + reply) | Teachers dept + super
                      -- never the teacher (confined to src/teacher-file)
 sign-up code live    unused AND not superseded AND (expires_at IS NULL, or a
                      pre-PD-32 code's expiry still ahead)
-wrong-code cap       count(parent_signup_failure by e-mail hash, uncleared,
-                     last 24 h) >= signup.wrong_codes_per_day (10)
+wrong-code cap       count(parent_signup_failure by account -- or by e-mail hash
+                     when no enrolled parent has it -- uncleared, last 24 h)
+                     >= signup.wrong_codes_per_day (10); decided under
+                     pg_advisory_xact_lock(key); rows purged after 7 days
 ```
 
 **Implementation phase.** Delivered with the decision: migration
