@@ -381,7 +381,8 @@ export class TeacherPayrollService {
       select: { id: true, name: true },
     });
     const teacherName = new Map(teachers.map((t) => [t.id, t.name]));
-    const staff = await this.names(entries.map((e) => e.createdBy));
+    // A bonus always has a staff author (only an app complaint has none).
+    const staff = await this.names(entries.map((e) => e.createdBy as string));
     const priced = access.canViewFinance
       ? new Map(
           liveAdjustments(
@@ -401,7 +402,7 @@ export class TeacherPayrollService {
           teacher: { id: e.teacherId, name: teacherName.get(e.teacherId) ?? '' },
           reason: e.body,
           recordedAt: e.createdAt,
-          recordedBy: { id: e.createdBy, name: staff.get(e.createdBy) ?? '' },
+          recordedBy: { id: e.createdBy as string, name: staff.get(e.createdBy as string) ?? '' },
           ...(priced ? { amount: a ? { amount: money(a.amount), currency: a.currency, month: ym(a.month) } : null } : {}),
         };
       }),

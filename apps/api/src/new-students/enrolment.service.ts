@@ -11,7 +11,8 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { LessonService } from '../lessons/lesson.service';
 import { SchedulingService } from '../lessons/scheduling.service';
-import { normalizeEmail } from '../platform/auth/parent-signup.service';
+import { normalizeEmail, signupWrongCodes } from '../platform/auth/parent-signup.service';
+import { subjectHash } from '../platform/auth/subject-hash';
 import { PaymentLedger } from '../billing/payment-ledger.service';
 import { NewStudentsService } from './new-students.service';
 import { seedFromEnrolment } from '../parent-profile/parent-record.service';
@@ -82,14 +83,22 @@ export class NewStudentEnrolmentService {
       : [];
     const supervisorOf = new Map(supervision.map((r) => [r.learner_id, { id: r.id, name: r.name }]));
     const accounts = enrolments.map((e) => e.accountId);
-    const [credentials, codes] = await Promise.all([
+    const [credentials, codes, subjects] = await Promise.all([
       this.prisma.accountCredential.findMany({ where: { accountId: { in: accounts } }, select: { accountId: true } }),
       this.prisma.parentSignupCode.findMany({
-        where: { accountId: { in: accounts }, usedAt: null, supersededAt: null, expiresAt: { gt: new Date() } },
+        // PD-32: no time expiry; codes from before it keep theirs.
+        where: { accountId: { in: accounts }, usedAt: null, supersededAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
       }),
+      this.prisma.account.findMany({ where: { id: { in: accounts } }, select: { id: true, subject: true } }),
     ]);
     const signedUp = new Set(credentials.map((c) => c.accountId));
     const codeOf = new Map(codes.map((c) => [c.accountId, c]));
+    const subjectOf = new Map(subjects.map((a) => [a.id, a.subject]));
+    // PD-32: the wrong-code cap, for the accounts still signing up.
+    const waiting = accounts.filter((a) => !signedUp.has(a) && subjectOf.has(a));
+    const wrongOf = new Map(
+      await Promise.all(waiting.map(async (a) => [a, await signupWrongCodes(this.prisma, subjectOf.get(a) as string)] as const)),
+    );
     const mine = new Set(viewer.supervised);
 
     const visible = forms.filter((f) => {
@@ -106,6 +115,9 @@ export class NewStudentEnrolmentService {
         const supervisor = supervisorOf.get(e.learnerIds[0]) ?? null;
         const code = codeOf.get(e.accountId);
         const responsible = viewer.superAdmin || viewer.opsManager || e.learnerIds.some((l) => mine.has(l));
+        const wrong = wrongOf.get(e.accountId);
+        // Only whoever is responsible sees the code, the wrong tries, and may act on them.
+        const attempts = responsible && wrong ? { attempts: { wrong: wrong.wrong, cap: wrong.cap, locked: wrong.locked } } : {};
         return {
           ...f,
           enrolment: {
@@ -120,10 +132,12 @@ export class NewStudentEnrolmentService {
               : code
                 ? {
                     state: 'code_waiting' as const,
-                    // The code the supervisor relays on WhatsApp -- only to whoever is responsible.
-                    ...(responsible ? { code: code.relayCode, expiresAt: code.expiresAt.toISOString() } : {}),
+                    // The code the supervisor relays on WhatsApp -- only to whoever is
+                    // responsible. PD-32: it is valid until used or invalidated.
+                    ...(responsible ? { code: code.relayCode, issuedAt: code.createdAt.toISOString() } : {}),
+                    ...attempts,
                   }
-                : { state: 'not_started' as const },
+                : { state: 'not_started' as const, ...attempts },
           },
         };
       }),
@@ -327,6 +341,66 @@ export class NewStudentEnrolmentService {
       }
     }
     return { conversationId: conv.id };
+  }
+
+  /**
+   * PD-32: staff end the parent's live sign-up code (it leaked, or was sent to
+   * the wrong number). The parent asks for a new one. The wrong-code count stays.
+   */
+  async invalidateSignupCode(actorId: string, trialId: string) {
+    const { actor, enrolment } = await this.responsibleFor(actorId, trialId);
+    const done = await this.prisma.$transaction(async (tx) => {
+      const ended = await tx.parentSignupCode.updateMany({
+        where: { accountId: enrolment.accountId, usedAt: null, supersededAt: null },
+        data: { supersededAt: new Date(), relayCode: null },
+      });
+      if (ended.count > 0) {
+        await this.audit.audit(tx, {
+          actorId: actor.actorId, action: 'parent.signup_code_invalidated', entity: 'account', entityId: enrolment.accountId,
+          after: { trialId }, reason: 'staff invalidated the parent sign-up code',
+        });
+      }
+      return ended.count;
+    });
+    return { invalidated: done > 0 };
+  }
+
+  /**
+   * PD-32: staff clear the parent's wrong-code count (the cap of ten in 24
+   * hours), after checking with the parent. Audited; the rows are kept.
+   */
+  async resetSignupAttempts(actorId: string, trialId: string) {
+    const { actor, enrolment } = await this.responsibleFor(actorId, trialId);
+    const account = await this.prisma.account.findUniqueOrThrow({ where: { id: enrolment.accountId }, select: { subject: true } });
+    const cleared = await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.parentSignupFailure.updateMany({
+        where: { subjectHash: subjectHash(account.subject), clearedAt: null },
+        data: { clearedAt: new Date(), clearedBy: actor.actorId },
+      });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId, action: 'parent.signup_attempts_reset', entity: 'account', entityId: enrolment.accountId,
+        after: { trialId, cleared: rows.count }, reason: 'staff reset the parent sign-up wrong-code count',
+      });
+      return rows.count;
+    });
+    return { cleared };
+  }
+
+  /** The enrolment, for its children's supervisor (or the Operations manager, or the super admin). */
+  private async responsibleFor(actorId: string, trialId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    if (!isUuid(trialId)) throw notFound();
+    const viewer = await this.viewer(actor);
+    const enrolment = await this.prisma.studentEnrolment.findFirst({ where: { lessonId: trialId, organizationId: actor.organizationId ?? '' } });
+    if (!enrolment) throw notFound();
+    const mine = new Set(viewer.supervised);
+    if (!viewer.superAdmin && !viewer.opsManager && !enrolment.learnerIds.some((l) => mine.has(l))) {
+      throw new CommError(CommErrorCode.LESSON_DENIED, 'the parent\'s sign-up is handled by the children\'s supervisor');
+    }
+    if (await this.prisma.accountCredential.findUnique({ where: { accountId: enrolment.accountId }, select: { accountId: true } })) {
+      throw new CommError(CommErrorCode.LESSON_STATE, 'the parent has already signed up', 409);
+    }
+    return { actor, enrolment };
   }
 
   // ------------------------------------------------------------------

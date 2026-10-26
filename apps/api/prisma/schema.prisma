@@ -1449,16 +1449,19 @@ model TeacherSupervisionEntry {
   body           String
   period         DateTime? @db.Date
   conversationId String?   @map("conversation_id") @db.Uuid
-  createdBy      String    @map("created_by") @db.Uuid
+  /// Null only on a complaint a parent filed in the app (PD-32, complaintSource parent_app).
+  createdBy      String?   @map("created_by") @db.Uuid
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
   /// PD-10: a complaint_resolution's complaint.
   refersTo       String?   @map("refers_to") @db.Uuid
   /// PD-10: a complaint's source message (in conversation_id).
   sourceMessageId String?  @map("source_message_id") @db.Uuid
-  /// PD-26: a complaint's source, management | parent (null before PD-26).
+  /// PD-26: a complaint's source, management | parent | parent_app (PD-32) (null before PD-26).
   complaintSource String?  @map("complaint_source")
   /// PD-26: the Teachers department supervisor handling a complaint.
   handledBy       String?  @map("handled_by") @db.Uuid
+  /// PD-32: the parent feedback an app complaint was filed as.
+  parentFeedbackId String? @unique @map("parent_feedback_id") @db.Uuid
 
   @@map("teacher_supervision_entry")
   @@schema("chat")
@@ -1899,12 +1902,53 @@ model ParentSignupCode {
   relayCode      String?   @map("relay_code")
   delivery       String    @default("relay")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  /// PD-32: null from then on -- a code lives until used or invalidated.
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz
   attempts       Int       @default(0)
   usedAt         DateTime? @map("used_at") @db.Timestamptz
   supersededAt   DateTime? @map("superseded_at") @db.Timestamptz
 
   @@map("parent_signup_code")
+  @@schema("chat")
+}
+
+/// PD-32: one wrong sign-up code, by subjectHash() of the e-mail typed. Ten
+/// uncleared in 24 hours refuse further tries. 20261026120000 owns the DDL.
+model ParentSignupFailure {
+  id          String    @id @default(uuid()) @db.Uuid
+  subjectHash String    @map("subject_hash")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  clearedAt   DateTime? @map("cleared_at") @db.Timestamptz
+  clearedBy   String?   @map("cleared_by") @db.Uuid
+
+  @@index([subjectHash, createdAt])
+  @@map("parent_signup_failure")
+  @@schema("chat")
+}
+
+/// PD-32: a parent's praise, suggestion or complaint about their child's
+/// teacher. Never read by a teacher. 20261026120000 owns the DDL and the rules
+/// (what the parent wrote never changes; the status only moves forward).
+model ParentFeedback {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  familyId       String    @map("family_id") @db.Uuid
+  contactId      String    @map("contact_id") @db.Uuid
+  learnerId      String    @map("learner_id") @db.Uuid
+  teacherId      String    @map("teacher_id") @db.Uuid
+  /// praise | suggestion | complaint
+  category       String
+  body           String
+  /// received | in_review | resolved
+  status         String    @default("received")
+  parentResponse String?   @map("parent_response")
+  respondedBy    String?   @map("responded_by") @db.Uuid
+  respondedAt    DateTime? @map("responded_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@index([familyId, createdAt])
+  @@map("parent_feedback")
   @@schema("chat")
 }
 
