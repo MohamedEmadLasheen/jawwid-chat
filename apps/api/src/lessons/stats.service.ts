@@ -61,10 +61,14 @@ export class StatsService {
     const actor = await this.conversations.requireActor(actorId);
     const staff = actor.kind === ActorKind.STAFF && actor.isActive && !!actor.organizationId;
     const superAdmin = staff && actor.staffRole === StaffRole.SUPER_ADMIN;
+    const lessonManager = await this.isStatsReader(actor);
+    const operations = staff && (superAdmin || (await this.lessons.inDepartment(actor, 'operations')));
     return {
-      lessonManager: await this.isStatsReader(actor),
+      lessonManager,
       sales: staff && (superAdmin || (await this.lessons.inDepartment(actor, 'sales'))),
-      operations: staff && (superAdmin || (await this.lessons.inDepartment(actor, 'operations'))),
+      operations,
+      // PD-38: the scheduling calendar -- the Teachers department, Operations, the super admin.
+      calendar: lessonManager || operations,
     };
   }
 
@@ -248,7 +252,7 @@ export class StatsService {
     const counted = sum(rows.filter((r) => COUNTED.has(r.category)));
     const closedCounted = counted.lessons;
     const teacherCaused = total('teacher_apology').lessons + total('teacher_no_show').lessons;
-    const available = await this.availableMinutes(teacherId, period);
+    const capacity = await this.capacityMinutes(org, teacherId, period);
     const scheduledMinutes = sum(allRows.filter((r) => r.category !== 'rescheduled' && r.category !== 'suspended')).minutes;
     const report = reports[0];
     const reply = replies[0];
@@ -281,9 +285,9 @@ export class StatsService {
       replies: reply
         ? { familyMessages: reply.family_messages, answeredWithin: reply.answered_within, rate: rate(reply.answered_within, reply.family_messages), medianReplyMinutes: reply.median_reply_minutes }
         : { familyMessages: 0, answeredWithin: 0, rate: null, medianReplyMinutes: null },
-      workload: available === null
+      workload: capacity === null
         ? { availableMinutes: null, scheduledMinutes, freeMinutes: null }
-        : { availableMinutes: available, scheduledMinutes, freeMinutes: Math.max(0, available - scheduledMinutes) },
+        : { availableMinutes: capacity.available, scheduledMinutes, freeMinutes: capacity.free },
       ...(forManager ? { movements: await this.movements(org, teacherId, period) } : {}),
       previous: { month: previous.month, held: sum(prevRows.filter((r) => r.category === 'held' && r.kind !== 'trial')) },
     };
@@ -350,13 +354,23 @@ export class StatsService {
     return rows.map((r) => ({ ...r, family_messages: Number(r.family_messages), answered_within: Number(r.answered_within) }));
   }
 
-  /** Null when the teacher has no recorded availability: "no data", not "zero hours". */
-  private async availableMinutes(teacherId: string, p: Period): Promise<number | null> {
-    const has = await this.prisma.teacherAvailability.count({ where: { teacherId } });
-    if (has === 0) return null;
-    const rows = await this.prisma.$queryRaw<Array<{ m: number }>>`
-      SELECT chat.teacher_available_minutes(${teacherId}::uuid, ${p.firstDay}::date, ${p.nextFirstDay}::date) AS m`;
-    return Number(rows[0]?.m ?? 0);
+  /**
+   * PD-38: the month's working time and what is left of it, from
+   * chat.calendar_capacity -- the calendar's one definition. Available = the
+   * shift (or, for an hourly teacher, the availability) minus leave and days
+   * off; free = the part no lesson holds, overlaps merged, lessons outside the
+   * hours not subtracted. Null when the teacher has neither a work pattern nor
+   * availability: "no data", not "zero hours".
+   */
+  private async capacityMinutes(org: string, teacherId: string, p: Period): Promise<{ available: number; free: number } | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ known: boolean; available: number; free: number }>>`
+      SELECT (EXISTS (SELECT 1 FROM chat.teacher_availability a WHERE a.teacher_id = ${teacherId}::uuid)
+              OR EXISTS (SELECT 1 FROM chat.teacher_work_pattern w WHERE w.teacher_id = ${teacherId}::uuid)) AS known,
+             coalesce(sum(chat.mr_minutes((c.shift + c.work) - c.leave)), 0)::int AS available,
+             coalesce(sum(chat.mr_minutes(c.empty + c.free)), 0)::int AS free
+        FROM chat.calendar_capacity(${org}::uuid, ARRAY[${teacherId}::uuid], ${p.firstDay}::date, ${p.nextFirstDay}::date, ${p.zone}) c`;
+    const r = rows[0];
+    return r?.known ? { available: Number(r.available), free: Number(r.free) } : null;
   }
 
   private async movements(org: string, teacherId: string, p: Period) {
