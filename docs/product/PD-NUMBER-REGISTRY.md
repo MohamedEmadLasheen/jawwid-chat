@@ -62,8 +62,9 @@ claimed. The decision text itself still lives in
 |------|--------|
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
+| `20261026130000` | PD-33 — backup handover (claimed; PR #130 merged without a migration in it) |
 | `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
 | `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (later PD-35 PRs: `…160001`, `…160002`) |
 | `20261026210000` | PD-38 — `chat_pd038_schedule_calendar` |
 
-The next free slot is `20261026150000`.
+The next free slot is `20261026220000`.

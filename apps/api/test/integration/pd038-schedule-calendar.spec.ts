@@ -112,10 +112,42 @@ async function cancel(lessonId: string) {
   );
 }
 
+/**
+ * Work patterns as history: the service accepts a change from today only (a
+ * past month keeps the shift it was worked under), so past patterns are
+ * written as the data they would be -- one transaction, windows with their
+ * pattern, the default shift (Saturday-Thursday) of the category.
+ */
+async function history(teacherId: string, rows: Array<{ category: 'full_shift' | 'part_shift' | 'hourly'; from: string; to?: string }>) {
+  for (const r of rows) {
+    const [start, end] = r.category === 'full_shift' ? [720, 1140] : [840, 1080];
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.teacher_work_pattern (id, organization_id, teacher_id, category, timezone, valid_from, valid_to, created_by)
+         values ($1::uuid, chat.default_organization_id(), $2::uuid, $3, '${TZ}', $4::date, $5::date, $6::uuid)`,
+        randomUUID(), teacherId, r.category, r.from, r.to ?? null, tmgrId,
+      ),
+      ...(r.category === 'hourly' ? [] : [g.prisma.$executeRawUnsafe(
+        `insert into chat.teacher_work_window (organization_id, pattern_id, weekday, start_minute, end_minute)
+         select p.organization_id, p.id, d, $3::int, $4::int
+           from chat.teacher_work_pattern p, unnest(array[6, 7, 1, 2, 3, 4]) d
+          where p.teacher_id = $1::uuid and p.valid_from = $2::date`,
+        teacherId, r.from, start, end,
+      )]),
+    ]);
+  }
+}
+
 async function fullShift(teacherId: string, validFrom: string) {
-  await patterns.setPattern(tmgrId, teacherId, {
-    category: 'full_shift', timezone: TZ, validFrom, applyToAvailability: false,
-  });
+  await history(teacherId, [{ category: 'full_shift', from: validFrom }]);
+}
+
+/** Today on the academy's calendar, and days from it. */
+async function academyDay(offset = 0): Promise<string> {
+  const [{ d }] = await g.prisma.$queryRawUnsafe<Array<{ d: string }>>(
+    `select to_char((now() at time zone '${TZ}')::date + $1::int, 'YYYY-MM-DD') as d`, offset,
+  );
+  return d;
 }
 
 /** Minutes covered by [[from, to], ...] intervals. */
@@ -248,12 +280,18 @@ describe('the numbers: one definition, nothing counted twice', () => {
     expect(kids.teachers.map((t) => t.id)).toEqual([s.teacherId]);
   });
 
-  it('the Teacher File workload reads the same function: leave is not available, overlaps are not free', async () => {
+  it('the Teacher File workload reads the same function, as one partition: available = booked + paused + free', async () => {
     const d = await stats.teacher(tsupId, s.teacherId, '2026-09');
     // September from the 1st: 26 Saturday-Thursday days less the day off, 7 hours each.
-    expect(d.workload.availableMinutes).toBe(25 * 420);
-    // The 14th's empty 210 minutes, plus every other working day whole.
-    expect(d.workload.freeMinutes).toBe(24 * 420 + 210);
+    expect(d.workload).toMatchObject({
+      availableMinutes: 25 * 420,
+      bookedWithinMinutes: 150, // 90 merged + 30 + the 30-minute trial
+      pausedWithinMinutes: 60,
+      freeMinutes: 24 * 420 + 210, // the 14th's empty 210 minutes, every other working day whole
+      outsideMinutes: 30,
+    });
+    const w = d.workload as { availableMinutes: number; bookedWithinMinutes: number; pausedWithinMinutes: number; freeMinutes: number };
+    expect(w.bookedWithinMinutes + w.pausedWithinMinutes + w.freeMinutes).toBe(w.availableMinutes);
   });
 });
 
@@ -273,8 +311,10 @@ describe('the clock change (Cairo, Thursday 2026-10-29 at midnight)', () => {
   });
 
   it('a pattern change mid-month: each day counts under the pattern in force', async () => {
-    await fullShift(s.teacherId, '2026-09-01');
-    await patterns.setPattern(tmgrId, s.teacherId, { category: 'part_shift', timezone: TZ, validFrom: '2026-09-16', applyToAvailability: false });
+    await history(s.teacherId, [
+      { category: 'full_shift', from: '2026-09-01', to: '2026-09-16' },
+      { category: 'part_shift', from: '2026-09-16' },
+    ]);
     const sum = await calendar.summary(tsupId, { from: '2026-09-14', to: '2026-09-18', teacherIds: s.teacherId });
     expect(sum.cells.map((c) => c.shiftMinutes)).toEqual([420, 420, 240, 240]);
     expect(sum.teachers[0].category).toBe('part_shift');
@@ -335,38 +375,144 @@ describe('who sees what', () => {
   });
 });
 
+describe('who counts, and history that stays put', () => {
+  it('a teacher who left has no shift after leaving; one inactive without a date, or gone before the window, is not listed', async () => {
+    await fullShift(s.newTeacherId, '2026-09-01');
+    await fullShift(s.unrelatedTeacherId, '2026-09-01');
+    // Left on Tuesday the 15th at 13:00 Cairo: one hour of that day's shift remains.
+    await g.prisma.$executeRawUnsafe(
+      `update chat.teacher set is_active = false, left_at = '2026-09-15 13:00'::timestamp at time zone '${TZ}' where id = $1::uuid`, s.newTeacherId,
+    );
+    const sum = await calendar.summary(tsupId, { from: '2026-09-14', to: '2026-09-17', teacherIds: s.newTeacherId });
+    expect(sum.cells.map((c) => [c.day, c.shiftMinutes, c.emptyMinutes])).toEqual([
+      ['2026-09-14', 420, 420], ['2026-09-15', 60, 60], ['2026-09-16', 0, 0],
+    ]);
+    // Inactive with no leaving date: not part of the academy's capacity at all.
+    await g.prisma.$executeRawUnsafe(`update chat.teacher set is_active = false where id = $1::uuid`, s.unrelatedTeacherId);
+    const all = await calendar.stats(tsupId, { from: '2026-09-14', to: '2026-09-17' });
+    expect(all.teachers.map((t) => t.id)).not.toContain(s.unrelatedTeacherId);
+    expect(all.teachers.map((t) => t.id)).toContain(s.newTeacherId);
+    // A window that starts after the teacher left does not list them.
+    const later = await calendar.stats(tsupId, { from: '2026-09-21', to: '2026-09-22' });
+    expect(later.teachers.map((t) => t.id)).not.toContain(s.newTeacherId);
+  });
+
+  it('a past month keeps the hours it was worked under after a new shift replaces the bookable hours', async () => {
+    await scheduling.setAvailability(tmgrId, s.teacherId, {
+      timezone: TZ, windows: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, start: '10:00', end: '12:00' })),
+    });
+    const week = { from: '2026-09-14', to: '2026-09-21', teacherIds: s.teacherId };
+    const before = await calendar.summary(tsupId, week);
+    const kpiBefore = (await stats.teacher(tsupId, s.teacherId, '2026-09')).workload;
+    expect(before.teachers[0].totals.workMinutes).toBe(7 * 120);
+    expect(kpiBefore.availableMinutes).toBe(30 * 120);
+
+    // Today: a full shift that also becomes the bookable hours (12:00-19:00, Saturday-Thursday).
+    await patterns.setPattern(tmgrId, s.teacherId, { category: 'full_shift', timezone: TZ, validFrom: await academyDay() });
+    expect((await scheduling.availability(tmgrId, s.teacherId)).windows[0]).toMatchObject({ start: '12:00', end: '19:00' });
+
+    const after = await calendar.summary(tsupId, week);
+    expect(after.cells).toEqual(before.cells);
+    expect((await stats.teacher(tsupId, s.teacherId, '2026-09')).workload).toEqual(kpiBefore);
+  });
+
+  it('filters naming another organization\'s teacher or child return nothing', async () => {
+    const orgB = randomUUID();
+    const staffB = randomUUID();
+    const teacherB = randomUUID();
+    const familyB = randomUUID();
+    const learnerB = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'org_b')`, orgB, `pd38-${orgB.slice(0, 8)}`);
+    await g.prisma.$executeRawUnsafe(`insert into chat.staff (id, organization_id, name, role, is_active) values ($1::uuid, $2::uuid, 'admin_z', 'admin', true)`, staffB, orgB);
+    await g.prisma.$executeRawUnsafe(`insert into chat.teacher (id, organization_id, name, is_active) values ($1::uuid, $2::uuid, 'teacher_z', true)`, teacherB, orgB);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.family (id, organization_id, display_name, owner_id, language) values ($1::uuid, $2::uuid, 'family_z', $3::uuid, 'ar')`, familyB, orgB, staffB,
+    );
+    await withAssignmentGate(
+      g.prisma,
+      `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
+       values ('${learnerB}'::uuid, '${orgB}'::uuid, '${familyB}'::uuid, 'learner_z', '${teacherB}'::uuid)`,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.lesson (organization_id, learner_id, teacher_id, kind, starts_at, ends_at, created_by, created_by_kind)
+       values ($1::uuid, $2::uuid, $3::uuid, 'regular', '2026-09-14 10:00+00', '2026-09-14 11:00+00', $4::uuid, 'staff')`,
+      orgB, learnerB, teacherB, staffB,
+    );
+    const w = { from: '2026-09-14', to: '2026-09-15' };
+    const byTeacher = await calendar.calendar(tsupId, { ...w, teacherIds: teacherB });
+    expect(byTeacher.teachers).toEqual([]);
+    expect(byTeacher.lessons).toEqual([]);
+    const byChild = await calendar.stats(tsupId, { ...w, learnerIds: learnerB });
+    expect(byChild.teachers).toEqual([]);
+    expect(byChild.students.distinct).toBe(0);
+    expect(byChild.teaching.lessons).toBe(0);
+  });
+});
+
 describe('changing a shift and a color', () => {
-  it('only the Teachers Manager or the super admin sets a shift; defaults fill it; it can become the bookable hours', async () => {
-    expect(await code(patterns.setPattern(tsupId, s.teacherId, { category: 'full_shift', timezone: TZ, validFrom: '2026-09-01' })))
+  it('only the Teachers Manager or the super admin sets a shift; defaults fill it; from today it becomes the bookable hours', async () => {
+    const today = await academyDay();
+    expect(await code(patterns.setPattern(tsupId, s.teacherId, { category: 'full_shift', timezone: TZ, validFrom: today })))
       .toBe(CommErrorCode.LESSON_DENIED);
-    const r = await patterns.setPattern(tmgrId, s.teacherId, { category: 'part_shift', timezone: TZ, validFrom: '2026-09-01' });
-    expect(r.patterns[0]).toMatchObject({ category: 'part_shift', validTo: null });
+    const r = await patterns.setPattern(tmgrId, s.teacherId, { category: 'part_shift', timezone: TZ, validFrom: today });
+    expect(r.today).toBe(today);
+    expect(r.patterns[0]).toMatchObject({ category: 'part_shift', validFrom: today, validTo: null });
     expect(r.patterns[0].windows).toEqual(SAT_TO_THU.map((weekday) => ({ weekday, start: '14:00', end: '18:00' })).sort((a, b) => a.weekday - b.weekday));
     const av = await scheduling.availability(tmgrId, s.teacherId);
     expect(av.windows).toHaveLength(6);
     expect(av.windows[0]).toMatchObject({ start: '14:00', end: '18:00' });
   });
 
-  it('a change closes the pattern in force; one that began the same day is replaced; an earlier start is refused', async () => {
+  it('a change closes the pattern in force; one that began the same day is replaced; a past or earlier start is refused', async () => {
+    const today = await academyDay();
+    const in10 = await academyDay(10);
+    const in30 = await academyDay(30);
     await fullShift(s.teacherId, '2026-09-01');
-    await patterns.setPattern(tmgrId, s.teacherId, { category: 'hourly', timezone: TZ, validFrom: '2026-10-01' });
+    await patterns.setPattern(tmgrId, s.teacherId, { category: 'hourly', timezone: TZ, validFrom: today });
     let r = await patterns.pattern(tsupId, s.teacherId);
     expect(r.patterns.map((p) => [p.category, p.validFrom, p.validTo])).toEqual([
-      ['hourly', '2026-10-01', null],
-      ['full_shift', '2026-09-01', '2026-10-01'],
+      ['hourly', today, null],
+      ['full_shift', '2026-09-01', today],
     ]);
-    await patterns.setPattern(tmgrId, s.teacherId, { category: 'part_shift', timezone: TZ, validFrom: '2026-10-01', applyToAvailability: false });
+    await patterns.setPattern(tmgrId, s.teacherId, { category: 'part_shift', timezone: TZ, validFrom: today, applyToAvailability: false });
     r = await patterns.pattern(tsupId, s.teacherId);
     expect(r.patterns.map((p) => p.category)).toEqual(['part_shift', 'full_shift']);
-    expect(await code(patterns.setPattern(tmgrId, s.teacherId, { category: 'hourly', timezone: TZ, validFrom: '2026-09-15' })))
+    // A future change, without bookable hours (they change at once).
+    await patterns.setPattern(tmgrId, s.teacherId, { category: 'full_shift', timezone: TZ, validFrom: in30 });
+    expect(await code(patterns.setPattern(tmgrId, s.teacherId, { category: 'hourly', timezone: TZ, validFrom: in10 })))
       .toBe(CommErrorCode.LESSON_STATE);
+    expect(await code(patterns.setPattern(tmgrId, s.teacherId, { category: 'hourly', timezone: TZ, validFrom: '2026-09-15' })))
+      .toBe(CommErrorCode.VALIDATION);
     expect(await code(patterns.setPattern(tmgrId, s.teacherId, {
-      category: 'hourly', timezone: TZ, validFrom: '2026-11-01', windows: [{ weekday: 1, start: '10:00', end: '12:00' }],
+      category: 'full_shift', timezone: TZ, validFrom: in30, applyToAvailability: true,
+    }))).toBe(CommErrorCode.VALIDATION);
+    expect(await code(patterns.setPattern(tmgrId, s.teacherId, {
+      category: 'hourly', timezone: TZ, validFrom: in30, windows: [{ weekday: 1, start: '10:00', end: '12:00' }],
     }))).toBe(CommErrorCode.VALIDATION);
     const rows = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(
       `select count(*)::int as n from chat.audit_log where action = 'teacher.work_pattern_set' and entity_id = $1::uuid`, s.teacherId,
     );
     expect(rows[0].n).toBe(3);
+  });
+
+  it('a shift and its bookable hours commit together: when the hours are refused, nothing is written', async () => {
+    // A weekly lesson in another zone: PD-11 refuses bookable hours in Cairo.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.learner_schedule_slot (organization_id, learner_id, teacher_id, weekday, start_minute, duration_minutes, timezone, valid_from, created_by)
+       values (chat.default_organization_id(), $1::uuid, $2::uuid, 1, 1020, 30, 'Asia/Riyadh', '2026-09-01', $3::uuid)`,
+      s.learnerId, s.teacherId, tmgrId,
+    );
+    expect(await code(patterns.setPattern(tmgrId, s.teacherId, { category: 'full_shift', timezone: TZ, validFrom: await academyDay() })))
+      .toBe(CommErrorCode.LESSON_STATE);
+    expect(await g.prisma.$queryRawUnsafe<unknown[]>(`select 1 from chat.teacher_work_pattern where teacher_id = $1::uuid`, s.teacherId)).toHaveLength(0);
+    expect(await g.prisma.$queryRawUnsafe<unknown[]>(`select 1 from chat.teacher_availability where teacher_id = $1::uuid`, s.teacherId)).toHaveLength(0);
+  });
+
+  it('a change\'s reason is the Teachers department\'s; Operations reads the shift without it', async () => {
+    await patterns.setPattern(tmgrId, s.teacherId, { category: 'part_shift', timezone: TZ, validFrom: await academyDay(), reason: 'reason_x' });
+    expect((await patterns.pattern(tsupId, s.teacherId)).patterns[0].reason).toBe('reason_x');
+    expect((await patterns.pattern(s.managerId, s.teacherId)).patterns[0]).toMatchObject({ category: 'part_shift', reason: null });
+    expect((await patterns.pattern(s.otherAdminId, s.teacherId)).patterns[0].reason).toBeNull();
   });
 
   it('the database keeps a pattern append-only', async () => {
@@ -449,13 +595,15 @@ describe('a month of 100 teachers', () => {
     const [sum, sumMs] = await time(() => calendar.summary(tmgrId, month));
     const [st, statsMs] = await time(() => calendar.stats(tmgrId, month));
     const [filtered, filteredMs] = await time(() => calendar.stats(tmgrId, { ...month, categories: 'full_shift', utilization: 'gte80' }));
+    // The week view: every teacher's intervals and lessons, one statement.
+    const [week, weekMs] = await time(() => calendar.calendar(tmgrId, { from: '2026-10-24', to: '2026-10-31' }));
     const [{ 'QUERY PLAN': plan }] = await g.prisma.$queryRawUnsafe<Array<{ 'QUERY PLAN': Array<{ 'Execution Time': number }> }>>(
       `explain (analyze, format json)
        select chat.mr_minutes(empty) from chat.calendar_capacity(chat.default_organization_id(), null, '2026-10-01', '2026-11-01', '${TZ}')`,
     );
     // eslint-disable-next-line no-console
     console.log(`PD-38 perf (100 teachers, ${n} lessons, one month): summary ${sumMs} ms, stats ${statsMs} ms, ` +
-      `filtered stats ${filteredMs} ms, calendar_capacity ${Math.round(plan[0]['Execution Time'])} ms`);
+      `filtered stats ${filteredMs} ms, week calendar ${weekMs} ms, calendar_capacity ${Math.round(plan[0]['Execution Time'])} ms`);
 
     expect(sum.teachers.filter((t) => t.name === 'perf_t')).toHaveLength(100);
     expect(sum.cells.filter((c) => c.lessons === 8)).toHaveLength(100 * 31);
@@ -470,7 +618,10 @@ describe('a month of 100 teachers', () => {
     // The budget, with room for a loaded CI runner or laptop (measured there:
     // summary ~0.7-0.9 s, stats ~0.5 s, calendar_capacity ~0.2 s). Two traps
     // this guards: a per-lesson subquery (17 s) and a per-cell count (4.7 s).
+    expect(week.lessons.filter((l) => l.teacherId !== s.teacherId)).toHaveLength(100 * 8 * 7);
+    expect(week.days.filter((d) => (teacherIds as string[]).includes(d.teacherId))).toHaveLength(100 * 7);
     expect(sumMs).toBeLessThan(3_000);
     expect(statsMs).toBeLessThan(3_000);
+    expect(weekMs).toBeLessThan(3_000);
   });
 });

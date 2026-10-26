@@ -285,9 +285,21 @@ export class StatsService {
       replies: reply
         ? { familyMessages: reply.family_messages, answeredWithin: reply.answered_within, rate: rate(reply.answered_within, reply.family_messages), medianReplyMinutes: reply.median_reply_minutes }
         : { familyMessages: 0, answeredWithin: 0, rate: null, medianReplyMinutes: null },
+      // PD-38: one partition of the working hours (chat.calendar_capacity):
+      //   availableMinutes = bookedWithinMinutes + pausedWithinMinutes + freeMinutes
+      // scheduledMinutes stays every scheduled lesson's length (outside the
+      // hours too), so available - scheduled is NOT free; outsideMinutes is
+      // the booked time the hours do not hold.
       workload: capacity === null
-        ? { availableMinutes: null, scheduledMinutes, freeMinutes: null }
-        : { availableMinutes: capacity.available, scheduledMinutes, freeMinutes: capacity.free },
+        ? { availableMinutes: null, scheduledMinutes, bookedWithinMinutes: null, pausedWithinMinutes: null, freeMinutes: null, outsideMinutes: null }
+        : {
+            availableMinutes: capacity.available,
+            scheduledMinutes,
+            bookedWithinMinutes: capacity.bookedWithin,
+            pausedWithinMinutes: capacity.pausedWithin,
+            freeMinutes: capacity.free,
+            outsideMinutes: capacity.outside,
+          },
       ...(forManager ? { movements: await this.movements(org, teacherId, period) } : {}),
       previous: { month: previous.month, held: sum(prevRows.filter((r) => r.category === 'held' && r.kind !== 'trial')) },
     };
@@ -355,22 +367,39 @@ export class StatsService {
   }
 
   /**
-   * PD-38: the month's working time and what is left of it, from
-   * chat.calendar_capacity -- the calendar's one definition. Available = the
-   * shift (or, for an hourly teacher, the availability) minus leave and days
-   * off; free = the part no lesson holds, overlaps merged, lessons outside the
-   * hours not subtracted. Null when the teacher has neither a work pattern nor
-   * availability: "no data", not "zero hours".
+   * PD-38: the month's working hours, partitioned, from chat.calendar_capacity
+   * -- the calendar's one definition, days of the academy's zone. The hours
+   * are the shift (or, for an hourly teacher, the availability in force that
+   * day) minus leave and days off; within them, time is booked (overlaps
+   * merged), paused, or free. Booked time outside them is `outside`. Null when
+   * the teacher has neither a work pattern nor availability: "no data", not
+   * "zero hours".
    */
-  private async capacityMinutes(org: string, teacherId: string, p: Period): Promise<{ available: number; free: number } | null> {
-    const rows = await this.prisma.$queryRaw<Array<{ known: boolean; available: number; free: number }>>`
+  private async capacityMinutes(org: string, teacherId: string, p: Period): Promise<{
+    available: number; bookedWithin: number; pausedWithin: number; free: number; outside: number;
+  } | null> {
+    const rows = await this.prisma.$queryRaw<Array<{
+      known: boolean; available: number; booked_within: number; paused_within: number; free: number; outside: number;
+    }>>`
       SELECT (EXISTS (SELECT 1 FROM chat.teacher_availability a WHERE a.teacher_id = ${teacherId}::uuid)
+              OR EXISTS (SELECT 1 FROM chat.teacher_availability_archive a WHERE a.teacher_id = ${teacherId}::uuid)
               OR EXISTS (SELECT 1 FROM chat.teacher_work_pattern w WHERE w.teacher_id = ${teacherId}::uuid)) AS known,
              coalesce(sum(chat.mr_minutes((c.shift + c.work) - c.leave)), 0)::int AS available,
-             coalesce(sum(chat.mr_minutes(c.empty + c.free)), 0)::int AS free
+             coalesce(sum(chat.mr_minutes(c.booked * ((c.shift + c.work) - c.leave))), 0)::int AS booked_within,
+             coalesce(sum(chat.mr_minutes(c.paused * ((c.shift + c.work) - c.leave))), 0)::int AS paused_within,
+             coalesce(sum(chat.mr_minutes(c.empty + c.free)), 0)::int AS free,
+             coalesce(sum(chat.mr_minutes(c.outside)), 0)::int AS outside
         FROM chat.calendar_capacity(${org}::uuid, ARRAY[${teacherId}::uuid], ${p.firstDay}::date, ${p.nextFirstDay}::date, ${p.zone}) c`;
     const r = rows[0];
-    return r?.known ? { available: Number(r.available), free: Number(r.free) } : null;
+    return r?.known
+      ? {
+          available: Number(r.available),
+          bookedWithin: Number(r.booked_within),
+          pausedWithin: Number(r.paused_within),
+          free: Number(r.free),
+          outside: Number(r.outside),
+        }
+      : null;
   }
 
   private async movements(org: string, teacherId: string, p: Period) {
