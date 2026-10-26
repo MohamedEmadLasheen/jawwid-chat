@@ -1322,11 +1322,18 @@ export class ConversationService {
     }
     const now = new Date();
     const own = await this.membershipOf(conv.id, actor.actorId);
+    // PD-35: a seat's member row is presence, never the admin role that may
+    // change a conversation's membership.
+    const ownIsSeat = own
+      ? (await this.prisma.$queryRaw<Array<{ n: number }>>`
+          SELECT count(*)::int AS n FROM chat.conversation_seat
+           WHERE member_id = ${own.id}::uuid AND left_at IS NULL`)[0].n > 0
+      : false;
     const scoped = this.authz.canManageMembershipIn(actor, {
       type: conv.type,
       organizationId: conv.organizationId,
       actorBasis: await this.authz.staffAccess(actor, conv, now),
-      actorMemberRole: own?.memberRole ?? null,
+      actorMemberRole: own && !ownIsSeat ? own.memberRole : null,
     });
     if (!scoped.allowed) {
       const status = scoped.code === CommErrorCode.CONVERSATION_NOT_FOUND ? 404 : 403;
@@ -1691,6 +1698,8 @@ export class ConversationService {
    * leaving it later can never take away a membership that is not the seat's.
    */
   private async absorbSeat(tx: Prisma.TransactionClient, conversationId: string, staffId: string): Promise<void> {
+    // The seat service's own lock: a leave and an absorb of one seat never interleave.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'seat:' + conversationId + ':' + staffId}))`;
     await tx.$executeRaw`
       UPDATE chat.conversation_seat SET left_at = now(), left_kind = 'absorbed'
        WHERE conversation_id = ${conversationId}::uuid AND staff_id = ${staffId}::uuid
