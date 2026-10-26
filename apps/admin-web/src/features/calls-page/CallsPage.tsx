@@ -30,6 +30,7 @@ import { MemberPickerDialog, type PickerMode } from './MemberPickerDialog'
 import { ScheduleCallDialog } from './ScheduleCallDialog'
 import { CallLinkDialog } from './CallLinkDialog'
 import './calls-page.css'
+import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 type Flow =
   | { kind: 'none' }
@@ -185,6 +186,7 @@ function RecentRow({
       <span className="cp-row__body">
         <span className="cp-row__top">
           <span className={missed ? 'cp-row__name cp-row__name--missed' : 'cp-row__name'}>{name}</span>
+          {isTrialGroup(conversation) && <TrialBadge />}
           <time className="cp-row__time" dateTime={row.startedAt} title={dateTime(row.startedAt)}>
             {listTime(row.startedAt, locale)}
           </time>
@@ -343,7 +345,9 @@ export function CallsPage() {
                     <li className="cp-row" key={c.id} data-testid="favorite-row">
                       <Avatar name={n} seed={c.id} size="sm" />
                       <span className="cp-row__body">
-                        <span className="cp-row__name">{n}</span>
+                        <span className="cp-row__name">
+                          {n} {isTrialGroup(c) && <TrialBadge />}
+                        </span>
                         <span className="cp-row__sub">{chat.kind[c.type] ?? c.type}</span>
                       </span>
                       <span className="cp-row__end">

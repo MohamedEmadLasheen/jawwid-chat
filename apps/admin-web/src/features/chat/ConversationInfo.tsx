@@ -19,6 +19,7 @@ import { GroupChildren } from '@/features/journey/GroupChildren'
 import { Link } from 'react-router-dom'
 import { parentPath } from '@/features/profiles/api'
 import { useMayOpenParentProfiles } from '@/features/profiles/hooks'
+import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 /**
  * Contact info / group info: who is in the conversation, and this viewer's
@@ -43,6 +44,7 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
         <ConversationAvatar c={c} name={name} size="lg" selfId={staff?.id} />
         <div className="dp-hero__text">
           <span className="dp-hero__name" dir="auto">{name}</span>
+          {isTrialGroup(c) && <TrialBadge />}
           <span className="thread-head__sub">
             {copy.kind[c.type] ?? c.type} · {copy.membersCount(members.length)}
           </span>

@@ -14,6 +14,7 @@ import { useTrialOp, useTrialSlots, useTrialTeachers, useTrials } from './hooks'
 import { TrialCardDialog } from './TrialCardDialog'
 import '../teachers/teachers.css'
 import './trials.css'
+import { TrialBadge } from '@/shared/components/TrialBadge'
 import { ACADEMY_ZONE } from '@/core/time/academyTime'
 
 type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
@@ -129,6 +130,7 @@ export function TrialsPage() {
                           </td>
                           <td className="ts-actions-cell">
                             <button type="button" className="btn btn--sm" onClick={() => void openGroup(t.teacher.id)}>{tx(TR.openGroup)}</button>
+                            <TrialBadge />
                             {t.outcome === 'awaiting' && powers.noShow && (
                               <button type="button" className="btn btn--sm btn--primary" onClick={() => setCard(t)}>{tx(TR.recordOutcome)}</button>
                             )}
