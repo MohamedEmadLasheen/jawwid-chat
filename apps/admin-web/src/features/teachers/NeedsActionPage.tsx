@@ -143,6 +143,7 @@ export function NeedsActionPage() {
                       <span className="ts-muted">
                         {b.teacher.name} · {whenIn(b.startsAt, ACADEMY_ZONE, locale)} · {formatMinutes(minutesBetween(b.startsAt, b.endsAt), locale)}
                       </span>
+                      {b.reason === 'teacher_changed' && <span className="ts-muted">{tx(O.blockedTeacherChanged)}</span>}
                       <span className="ts-muted">
                         {fill(tx(O.blockedBy), {
                           kind: tx(BLOCKER_KIND[b.blockedBy.kind] ?? BLOCKER_KIND.regular!),

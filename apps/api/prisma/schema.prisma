@@ -1418,7 +1418,10 @@ model LessonBlockedOccurrence {
   organizationId String    @map("organization_id") @db.Uuid
   learnerId      String    @map("learner_id") @db.Uuid
   teacherId      String    @map("teacher_id") @db.Uuid
-  scheduleSlotId String    @map("schedule_slot_id") @db.Uuid
+  /// weekly (a passed-over weekly occurrence) | teacher_changed (a one-off a change of teacher stranded).
+  reason         String    @default("weekly")
+  scheduleSlotId String?   @map("schedule_slot_id") @db.Uuid
+  strandedLesson String?   @unique @map("stranded_lesson") @db.Uuid
   startsAt       DateTime  @map("starts_at") @db.Timestamptz
   endsAt         DateTime  @map("ends_at") @db.Timestamptz
   blockedBy      String    @map("blocked_by") @db.Uuid

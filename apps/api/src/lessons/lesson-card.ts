@@ -79,6 +79,10 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
     case CardKind.LESSON_MOVED:
       // The times are the card's own timestamps, which clients draw in the reader's zone.
       return ar ? `📅 تغيّر موعد حصة ${learner}` : `📅 ${learner}'s lesson was moved`;
+    case CardKind.LESSON_UNSCHEDULED:
+      return ar
+        ? `📅 لا يستطيع المعلم الجديد حضور إحدى حصص ${learner} في موعدها؛ ستحدد الإدارة موعدًا جديدًا لها`
+        : `📅 The new teacher cannot take one of ${learner}'s lessons at its time; the team will set a new time`;
     case CardKind.LESSON_MAKEUP_BOOKED:
       return ar ? `📅 تم تحديد موعد حصة تعويضية لـ ${learner}` : `📅 A make-up lesson is scheduled for ${learner}`;
     case CardKind.LESSON_MAKEUP_RESOLVED:

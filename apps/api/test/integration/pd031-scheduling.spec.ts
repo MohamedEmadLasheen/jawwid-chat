@@ -441,3 +441,143 @@ describe('5. tickets and the payment lock', () => {
     expect((await refusal(scheduling.requestScheduleChange(s.parentId, s.learnerId, { slots: [{ weekday: 1, start: '10:00' }] }))).message).toBe('locked');
   });
 });
+
+describe('6. review fixes', () => {
+  async function zoneAllWeek(teacherId: string, timezone: string) {
+    await scheduling.setAvailability(tsupId, teacherId, {
+      timezone,
+      windows: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, start: '00:00', end: '24:00' })),
+    });
+  }
+  async function openStarts(learnerId: string): Promise<string[]> {
+    const rows = await g.prisma.lesson.findMany({
+      where: { learnerId, outcome: null, startsAt: { gt: new Date() } },
+      orderBy: { startsAt: 'asc' },
+    });
+    return rows.map((r) => r.startsAt.toISOString());
+  }
+
+  it('a kept weekly time keeps its INSTANTS across zones: Riyadh 18:00 becomes Dubai 19:00', async () => {
+    await zoneAllWeek(s.teacherId, 'Asia/Riyadh');
+    await zoneAllWeek(s.newTeacherId, 'Asia/Dubai');
+    const wd = await weekdayIn(3);
+    await scheduling.setSchedule(tsupId, s.learnerId, { slots: [{ weekday: wd, start: '18:00', durationMinutes: 30 }] });
+    const before = await openStarts(s.learnerId);
+
+    const preview = await lifecycle.transferPreview(tsupId, s.learnerId, s.newTeacherId);
+    expect(preview.learners[0].slots[0]).toEqual(expect.objectContaining({ start: '18:00', keptAs: { weekday: wd, start: '19:00' }, free: true, zoneShift: false }));
+
+    await lifecycle.transfer(tsupId, s.learnerId, { toTeacherId: s.newTeacherId, reason: 'schedule_fit' });
+    const slots = await g.prisma.learnerScheduleSlot.findMany({ where: { learnerId: s.learnerId, validTo: null } });
+    expect(slots.map((x) => [x.timezone, x.weekday, x.startMinute])).toEqual([['Asia/Dubai', wd, 19 * 60]]);
+    // The family's lessons did not move by a minute.
+    expect((await openStarts(s.learnerId)).slice(0, 3)).toEqual(before.slice(0, 3));
+  });
+
+  it('a time two zones cannot keep exactly (one changes its clocks) is refused, never shifted', async () => {
+    // Cairo changes its clocks; Riyadh never does.
+    await zoneAllWeek(s.newTeacherId, 'Asia/Riyadh');
+    const wd = await weekdayIn(3);
+    await scheduling.setSchedule(tsupId, s.learnerId, { slots: [{ weekday: wd, start: '18:00', durationMinutes: 30 }] });
+    const preview = await lifecycle.transferPreview(tsupId, s.learnerId, s.newTeacherId);
+    expect(preview.learners[0].slots[0]).toEqual(expect.objectContaining({ keptAs: null, zoneShift: true, free: false }));
+    const r = await refusal(lifecycle.transfer(tsupId, s.learnerId, { toTeacherId: s.newTeacherId, reason: 'schedule_fit' }));
+    expect(r.message).toMatch(/^times_not_free.*clocks/);
+    expect((await g.prisma.learner.findUniqueOrThrow({ where: { id: s.learnerId } })).teacherId).toBe(s.teacherId);
+    // Chosen times in the new teacher's zone are accepted.
+    await lifecycle.transfer(tsupId, s.learnerId, { toTeacherId: s.newTeacherId, reason: 'schedule_fit', slots: [{ weekday: wd, start: '19:00' }] });
+    expect((await g.prisma.learnerScheduleSlot.findFirstOrThrow({ where: { learnerId: s.learnerId, validTo: null } })).timezone).toBe('Asia/Riyadh');
+  });
+
+  it('a group preview tells someone who may not change the teacher nothing, not even names', async () => {
+    const fam = await g.conversations.createFamilyGroup(s.ownerId, {
+      learnerIds: [s.learnerId, s.secondLearnerId], contactIds: [s.parentId], teacherIds: [s.teacherId, s.newTeacherId],
+    });
+    for (const who of [s.parentId, s.otherParentId, s.otherAdminId, s.teacherId]) {
+      const c = await code(lifecycle.groupPreview(who, fam.id, s.newTeacherId, undefined));
+      expect([CommErrorCode.LESSON_NOT_FOUND, CommErrorCode.LESSON_DENIED]).toContain(c);
+    }
+    const ok = await lifecycle.groupPreview(s.ownerId, fam.id, s.newTeacherId, undefined);
+    expect(ok.groupTeachers?.map((t) => t.name).sort()).toEqual(['teacher_c', 'teacher_d']);
+    expect(ok.learners).toEqual([]);
+  });
+
+  it('two parallel family moves at 3 of 4: exactly one succeeds', async () => {
+    const ids: string[] = [];
+    for (let d = 3; d <= 7; d++) {
+      ids.push((await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(d * DAY), endsAt: at(d * DAY + HOUR / 2) })).id);
+    }
+    const free = (await scheduling.moveSlots(s.parentId, ids[0])).slots;
+    const pick = (i: number) => free[40 + i * 7];
+    for (let i = 0; i < 3; i++) await scheduling.moveLesson(s.parentId, ids[i], { startsAt: pick(i) });
+    expect((await scheduling.moveSlots(s.parentId, ids[3])).familyMovesLeft).toBe(1);
+    const results = await Promise.allSettled([
+      scheduling.moveLesson(s.parentId, ids[3], { startsAt: pick(3) }),
+      scheduling.moveLesson(s.parentId, ids[4], { startsAt: pick(4) }),
+    ]);
+    expect(results.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    const lost = results.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+    expect((lost.reason as CommError).code).toBe(CommErrorCode.LESSON_STATE);
+    const [{ n }] = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(
+      `select count(*)::int as n from chat.lesson where learner_id = $1::uuid and moved_from is not null and created_by_kind = 'contact'`, s.learnerId,
+    );
+    expect(n).toBe(4);
+  });
+
+  it('the database continues only a lesson moved away in the SAME transaction', async () => {
+    const wd = await weekdayIn(3);
+    await scheduling.setSchedule(tsupId, s.learnerId, { slots: [{ weekday: wd, start: '17:00', durationMinutes: 30 }] });
+    await scheduling.setSchedule(tsupId, s.learnerId, { slots: [{ weekday: wd, start: '18:00', durationMinutes: 30 }] });
+    // An older rescheduled lesson (the weekly change above), with no successor.
+    const old = await g.prisma.lesson.findFirstOrThrow({ where: { learnerId: s.learnerId, outcome: 'rescheduled' }, orderBy: { startsAt: 'asc' } });
+    await expect(g.prisma.$executeRawUnsafe(
+      `insert into chat.lesson (organization_id, learner_id, teacher_id, kind, starts_at, ends_at, created_by_kind, created_by, moved_from)
+       values (chat.default_organization_id(), $1::uuid, $2::uuid, 'regular', now() + interval '10 days', now() + interval '10 days 30 minutes', 'contact', $3::uuid, $4::uuid)`,
+      s.learnerId, s.teacherId, s.parentId, old.id,
+    )).rejects.toThrow(/moved away/);
+  });
+
+  it('PD-30\'s lock: any answer locks ("other" when unknown); tables without the function fail loudly', async () => {
+    const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(3 * DAY), endsAt: at(3 * DAY + HOUR / 2) })).id;
+    try {
+      await g.prisma.$executeRawUnsafe(`create function chat.learner_lesson_lock(p uuid) returns text language sql as $$ select 'frozen'::text $$`);
+      expect((await scheduling.moveSlots(s.parentId, id)).locked).toBe('other');
+      await g.prisma.$executeRawUnsafe(`drop function chat.learner_lesson_lock(uuid)`);
+      await g.prisma.$executeRawUnsafe(`create table chat.learner_access (learner_id uuid)`);
+      await expect(scheduling.lockOf(s.learnerId)).rejects.toThrow(/learner_lesson_lock/);
+      await expect(scheduling.onApplicationBootstrap()).rejects.toThrow(/learner_lesson_lock/);
+    } finally {
+      await g.prisma.$executeRawUnsafe(`drop function if exists chat.learner_lesson_lock(uuid)`);
+      await g.prisma.$executeRawUnsafe(`drop table if exists chat.learner_access`);
+    }
+    expect(await scheduling.lockOf(s.learnerId)).toBeNull();
+  });
+
+  it('a one-off the new teacher is busy for is listed and the family told -- never left behind', async () => {
+    const clashAt = await cairo(3, '16:00');
+    const oneOff = await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: clashAt.toISOString(), endsAt: new Date(clashAt.getTime() + HOUR / 2).toISOString() });
+    const busy = await lessons.schedule(tsupId, { learnerId: s.secondLearnerId, startsAt: clashAt.toISOString(), endsAt: new Date(clashAt.getTime() + HOUR / 2).toISOString() });
+    const out = await lifecycle.transfer(tsupId, s.learnerId, { toTeacherId: s.newTeacherId, reason: 'schedule_fit' });
+    expect(out.lessonsRescheduled).toBe(1);
+    const row = await g.prisma.lessonBlockedOccurrence.findFirstOrThrow({ where: { strandedLesson: oneOff.id } });
+    expect(row).toEqual(expect.objectContaining({ reason: 'teacher_changed', teacherId: s.newTeacherId, blockedBy: busy.id, resolution: null }));
+    expect((await cards()).some((m) => m.card?.kind === 'lesson_unscheduled')).toBe(true);
+    const queue = await scheduling.enrichNeedsAction(tsupId, await lessons.needsAction(tsupId));
+    expect(queue.blockedOccurrences).toEqual([expect.objectContaining({ reason: 'teacher_changed', lessonKind: 'regular' })]);
+    const free = await scheduling.blockedSlots(tsupId, row.id);
+    const again = await scheduling.scheduleBlocked(tsupId, row.id, { startsAt: free.slots[5] });
+    expect(again.teacher.id).toBe(s.newTeacherId);
+  });
+
+  it('a teacher moves a lesson only with notice', async () => {
+    const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(HOUR), endsAt: at(1.5 * HOUR) })).id;
+    expect((await scheduling.moveSlots(s.teacherId, id)).refusal).toBe('too_late');
+    expect((await scheduling.moveSlots(tsupId, id)).refusal).toBeNull();
+  });
+
+  it('only staff who may change some child\'s teacher list the candidates', async () => {
+    expect((await lifecycle.candidates(s.ownerId)).teachers.length).toBeGreaterThan(0);
+    expect((await lifecycle.candidates(s.managerId)).teachers.length).toBeGreaterThan(0);
+    expect(await code(lifecycle.candidates(s.otherAdminId))).toBe(CommErrorCode.LESSON_DENIED);
+  });
+});

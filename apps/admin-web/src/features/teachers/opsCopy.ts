@@ -190,6 +190,10 @@ export const O = {
     ar: 'كان لدى المعلم حصة أخرى في هذه المواعيد الأسبوعية، فلم تُنشأ هذه الحصص. جدول كلًّا منها في وقت آخر أو تجاهله.',
   },
   blockedBy: { en: 'Blocked by a {kind} lesson at {time}', ar: 'تعارضت مع حصة {kind} في {time}' },
+  blockedTeacherChanged: {
+    en: 'Could not move with the change of teacher — the new teacher is busy then',
+    ar: 'لم تنتقل مع تغيير المعلم — المعلم الجديد مشغول في هذا الوقت',
+  },
   scheduleElsewhere: { en: 'Schedule at another time', ar: 'جدولة في وقت آخر' },
   scheduleElsewhereTitle: { en: 'Schedule — {name}', ar: 'جدولة — {name}' },
   dismiss: { en: 'Dismiss', ar: 'تجاهل' },
@@ -212,6 +216,10 @@ export const O = {
   previewTitle: { en: 'The new teacher at these times', ar: 'المعلم الجديد في هذه المواعيد' },
   slotFree: { en: 'free', ar: 'متاح' },
   slotBusy: { en: 'busy — pick another time', ar: 'مشغول — اختر وقتًا آخر' },
+  slotZoneShift: {
+    en: 'cannot be kept: the two time zones change their clocks on different days — pick another time',
+    ar: 'لا يمكن الإبقاء عليه: المنطقتان الزمنيتان تغيّران التوقيت في أيام مختلفة — اختر وقتًا آخر',
+  },
   futureLessons: { en: '{n} future lessons follow', ar: 'تنتقل {n} حصة قادمة' },
   unmovableTitle: { en: 'These lessons cannot follow (the new teacher is busy then):', ar: 'لا يمكن نقل هذه الحصص (المعلم الجديد مشغول وقتها):' },
   resolveBusy: { en: 'Pick a free time for every busy weekly time first.', ar: 'اختر وقتًا متاحًا لكل موعد أسبوعي مشغول أولًا.' },

@@ -24,7 +24,8 @@
 --                                Manager -- chat.staff_principals) may change the
 --                                teacher, beside the Teachers department and the
 --                                super admin.
---   6. card kind `lesson_moved`.
+--   6. card kinds `lesson_moved`, and `lesson_unscheduled` (a one-off a change
+--      of teacher could not carry: the family is told a new time follows).
 
 -- ===========================================================================
 -- 1. Moved lessons
@@ -116,13 +117,16 @@ begin
       end if;
     end if;
     -- PD-31: a moved lesson continues the one it replaces -- same learner, kind
-    -- and missed lesson -- which was moved away (rescheduled) in this
-    -- transaction, and is in the future. A system lesson is never a move.
+    -- and missed lesson -- which was moved away (rescheduled) in THIS
+    -- transaction (outcome_at is now(), the transaction's clock), and is in the
+    -- future. So an old rescheduled lesson can never be "continued" to slip past
+    -- the make-up rule. A system lesson is never a move.
     if new.moved_from is not null then
       select * into v_from from chat.lesson where id = new.moved_from;
       if v_from.id is null or v_from.learner_id is distinct from new.learner_id
          or v_from.kind is distinct from new.kind or v_from.makeup_for is distinct from new.makeup_for
-         or v_from.outcome is distinct from 'rescheduled' or new.created_by_kind = 'system' then
+         or v_from.outcome is distinct from 'rescheduled' or v_from.outcome_at is distinct from now()
+         or new.created_by_kind = 'system' then
         raise exception 'a moved lesson continues a lesson of the same learner that was moved away'
           using errcode = 'check_violation';
       end if;
@@ -284,7 +288,12 @@ create table chat.lesson_blocked_occurrence (
   organization_id   uuid not null references chat.organization (id),
   learner_id        uuid not null references chat.learner (id),
   teacher_id        uuid not null references chat.teacher (id),
-  schedule_slot_id  uuid not null references chat.learner_schedule_slot (id),
+  -- A weekly occurrence the materializer passed over (reason weekly), or a
+  -- one-off lesson (a make-up, a moved lesson) a change of teacher could not
+  -- carry because the new teacher was busy (reason teacher_changed).
+  reason            text not null default 'weekly' check (reason in ('weekly', 'teacher_changed')),
+  schedule_slot_id  uuid references chat.learner_schedule_slot (id),
+  stranded_lesson   uuid references chat.lesson (id),
   starts_at         timestamptz not null,
   ends_at           timestamptz not null check (ends_at > starts_at),
   blocked_by        uuid not null references chat.lesson (id),
@@ -294,6 +303,9 @@ create table chat.lesson_blocked_occurrence (
   resolved_by       uuid references chat.staff (id),
   lesson_id         uuid references chat.lesson (id),
   note              text check (note is null or length(btrim(note)) between 1 and 1000),
+  constraint lesson_blocked_occurrence_names_its_lesson
+    check ((reason = 'weekly') = (schedule_slot_id is not null)
+           and (reason = 'teacher_changed') = (stranded_lesson is not null)),
   constraint lesson_blocked_occurrence_resolution_is_whole
     check ((resolution is null) = (resolved_at is null)
            and (resolution = 'scheduled') = (lesson_id is not null)
@@ -303,7 +315,10 @@ create table chat.lesson_blocked_occurrence (
 comment on table chat.lesson_blocked_occurrence is
   'PD-31: a weekly lesson chat.materialize_lessons could not create because the teacher already had another lesson at that time. Staff schedule it elsewhere or dismiss it; it clears itself when the time frees up and the lesson is created.';
 
-create unique index lesson_blocked_occurrence_once on chat.lesson_blocked_occurrence (schedule_slot_id, starts_at);
+create unique index lesson_blocked_occurrence_once on chat.lesson_blocked_occurrence (schedule_slot_id, starts_at)
+  where schedule_slot_id is not null;
+create unique index lesson_blocked_occurrence_stranded_once on chat.lesson_blocked_occurrence (stranded_lesson)
+  where stranded_lesson is not null;
 create index lesson_blocked_occurrence_open on chat.lesson_blocked_occurrence (organization_id) where resolution is null;
 
 create or replace function chat.guard_lesson_blocked_occurrence()
@@ -319,10 +334,10 @@ begin
       raise exception 'a resolved blocked lesson is final' using errcode = 'check_violation';
     end if;
     if (new.id, new.organization_id, new.learner_id, new.teacher_id, new.schedule_slot_id, new.starts_at,
-        new.ends_at, new.blocked_by, new.detected_at)
+        new.ends_at, new.blocked_by, new.detected_at, new.reason, new.stranded_lesson)
        is distinct from
        (old.id, old.organization_id, old.learner_id, old.teacher_id, old.schedule_slot_id, old.starts_at,
-        old.ends_at, old.blocked_by, old.detected_at) then
+        old.ends_at, old.blocked_by, old.detected_at, old.reason, old.stranded_lesson) then
       raise exception 'only the resolution of a blocked lesson may be written' using errcode = 'check_violation';
     end if;
     new.resolved_at := now();
@@ -375,13 +390,13 @@ begin
   select m.organization_id, m.learner_id, m.teacher_id, m.id, m.at,
          m.at + make_interval(mins => m.duration_minutes), m.blocker
     from missing m
-  on conflict (schedule_slot_id, starts_at) do nothing;
+  on conflict (schedule_slot_id, starts_at) where schedule_slot_id is not null do nothing;
   get diagnostics v_count = row_count;
 
   -- Cleared: the lesson exists now (the blocker moved away), or the weekly time
   -- ended, or the learner changed teacher.
   update chat.lesson_blocked_occurrence b set resolution = 'cleared'
-   where b.resolution is null
+   where b.resolution is null and b.reason = 'weekly'
      and (exists (select 1 from chat.lesson z
                    where z.schedule_slot_id = b.schedule_slot_id and z.starts_at = b.starts_at
                      and (z.outcome is null or z.outcome not in ('suspended', 'rescheduled')))
@@ -582,7 +597,7 @@ $$;
 -- 6. Cards and request roles
 -- ===========================================================================
 
-insert into chat.message_card_kind (kind) values ('lesson_moved');
+insert into chat.message_card_kind (kind) values ('lesson_moved'), ('lesson_unscheduled');
 
 alter table chat.lesson_blocked_occurrence enable row level security;
 revoke all on chat.lesson_blocked_occurrence from public, anon, authenticated, chat_app;

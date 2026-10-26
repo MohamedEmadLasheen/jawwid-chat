@@ -63,6 +63,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'lesson.makeup_horizon_days': 14,
   /** PD-31: a family moves at most this many of one child's lessons per calendar month (stats.zone). */
   'lesson.family_moves_per_month': 4,
+  /** PD-31: a teacher moves one of their lessons at least this long before it starts. */
+  'lesson.teacher_move_lead_minutes': 120,
   /** Free times are offered on this grid (minutes). */
   'lesson.slot_step_minutes': 30,
   /** PD-11 T3: the family and the team hear this many days before a paused learner returns. */

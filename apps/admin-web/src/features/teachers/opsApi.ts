@@ -30,7 +30,7 @@ export interface LessonDto {
 
 export type MovedBy = 'family' | 'teacher' | 'staff'
 /** PD-30's lock; always null until PD-30 lands. When set, every write is refused. */
-export type Locked = 'balance' | 'overdue' | null
+export type Locked = 'balance' | 'overdue' | 'other' | null
 
 export interface RulingDto {
   id: string
@@ -66,6 +66,9 @@ export interface BlockedOccurrence {
   startsAt: string
   endsAt: string
   blockedBy: { lessonId: string; kind: 'regular' | 'makeup' | 'trial'; startsAt: string; endsAt: string }
+  /** weekly: the generator passed it over; teacher_changed: a one-off the new teacher could not take. */
+  reason?: 'weekly' | 'teacher_changed'
+  lessonKind?: string
 }
 
 export interface NeedsAction {
@@ -122,7 +125,17 @@ export interface TransferPreview {
     id: string
     name: string
     fromTeacher: { id: string; name: string } | null
-    slots: Array<{ weekday: number; start: string; durationMinutes: number; nextStartsAt: string; free: boolean }>
+    slots: Array<{
+      weekday: number
+      start: string
+      durationMinutes: number
+      nextStartsAt: string
+      free: boolean
+      /** The same instants on the new teacher's clock; null when they cannot be kept exactly. */
+      keptAs?: { weekday: number; start: string } | null
+      /** The two zones change their clocks on different days: this time cannot be kept. */
+      zoneShift?: boolean
+    }>
     allFree: boolean
     futureLessons: number
     unmovable: Array<{ lessonId: string; kind: string; startsAt: string }>

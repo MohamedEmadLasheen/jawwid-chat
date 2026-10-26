@@ -27,8 +27,8 @@ import './slot-picker.css'
 
 type Pair = { en: string; ar: string }
 export type DayPart = 'morning' | 'afternoon' | 'evening'
-/** PD-30's `locked`: always null until PD-30 lands. */
-export type LockReason = 'balance' | 'overdue' | null
+/** PD-30's `locked`: any non-null value locks ('other' when PD-30 names a reason this build does not know). */
+export type LockReason = 'balance' | 'overdue' | 'other' | null
 
 export const SLOT_COPY = {
   day: { en: 'Day', ar: 'اليوم' },

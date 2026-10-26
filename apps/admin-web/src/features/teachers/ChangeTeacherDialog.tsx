@@ -292,8 +292,9 @@ function LearnerPreview({
   const [editing, setEditing] = useState<number | null>(busy.length ? l.slots.indexOf(busy[0]!) : null)
 
   // A kept time is sent in the NEW teacher's terms (their zone's weekday and
-  // clock), matched by its next start; as it was when no option matches.
+  // clock): the server's exact conversion, else matched by its next start.
   const keptAs = (s: PreviewLearner['slots'][number]) => {
+    if (s.keptAs) return s.keptAs
     const o = options.data?.options.find((x) => x.nextStartsAt === s.nextStartsAt)
     return o ? { weekday: o.weekday, start: o.start } : { weekday: s.weekday, start: s.start }
   }
@@ -335,7 +336,7 @@ function LearnerPreview({
           return (
             <li key={i} className={s.free ? 'ts-slot--free' : 'ts-slot--busy'}>
               <span>
-                {label} — {s.free ? tx(O.slotFree) : tx(O.slotBusy)}
+                {label} — {s.free ? tx(O.slotFree) : s.zoneShift ? tx(O.slotZoneShift) : tx(O.slotBusy)}
                 {choice && (
                   <>
                     {arrow(locale)}

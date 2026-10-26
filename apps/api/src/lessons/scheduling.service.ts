@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Learner, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
@@ -80,7 +80,8 @@ const CLOCK_SHIFT_GONE = 'CLOCK_SHIFT_GONE';
  * the same transaction as the record they describe.
  */
 @Injectable()
-export class SchedulingService {
+export class SchedulingService implements OnApplicationBootstrap {
+  private readonly log = new Logger(SchedulingService.name);
   private nextClockShiftSweepAt = 0;
 
   constructor(
@@ -681,16 +682,26 @@ export class SchedulingService {
     const free = await this.freeSlots(lesson.teacherId, duration);
     if (!free.some((d) => d.getTime() === startsAt.getTime())) {
       if (actor.kind !== ActorKind.STAFF) throw stateError('that time is not free any more; choose another');
-      await this.assertAgreedTime(lesson.teacherId, startsAt);
+      await this.assertAgreedTime(lesson.teacherId, startsAt, 'a lesson');
     }
     const by = actor.kind === ActorKind.CONTACT ? 'contact' : actor.kind === ActorKind.TEACHER ? 'teacher' : 'staff';
     const lang = await this.lessons.languageOf(lesson);
+    const familyLimit = Number(await this.config.get('lesson.family_moves_per_month'));
     const moved = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
-        await tx.lesson.update({
-          where: { id: lesson.id },
+        // One writer per child at a time: two moves, or a move and a change of
+        // teacher (chat.transfer_learner locks the same row), queue here, and the
+        // family's limits are counted again behind the lock.
+        await tx.$queryRaw`SELECT id FROM chat.learner WHERE id = ${lesson.learnerId}::uuid FOR UPDATE`;
+        if (actor.kind === ActorKind.CONTACT) {
+          if (await this.familyMovedChain(lesson, tx)) throw stateError(MOVE_REFUSALS.family_already_moved);
+          if ((await this.familyMovesThisMonth(lesson.learnerId, tx)) >= familyLimit) throw stateError(MOVE_REFUSALS.family_monthly_limit);
+        }
+        const closed = await tx.lesson.updateMany({
+          where: { id: lesson.id, outcome: null, teacherId: lesson.teacherId },
           data: { outcome: LessonOutcome.RESCHEDULED, outcomeNote: 'moved to another time', outcomeByKind: by, outcomeBy: actor.actorId, outcomeAt: new Date() },
         });
+        if (closed.count !== 1) throw stateError('this lesson changed meanwhile; open it again');
         await cancelReminders(tx, lesson.id);
         const created = await tx.lesson.create({
           data: {
@@ -733,29 +744,32 @@ export class SchedulingService {
       const limit = Number(await this.config.get('lesson.family_moves_per_month'));
       familyMovesLeft = Math.max(0, limit - (await this.familyMovesThisMonth(lesson.learnerId)));
     }
-    const lead = Number(await this.config.get('lesson.booking_lead_minutes'));
+    // The family books with the make-up lead; a teacher moves with their own notice (PD-31).
+    const lead = family
+      ? Number(await this.config.get('lesson.booking_lead_minutes'))
+      : actor.kind === ActorKind.TEACHER ? Number(await this.config.get('lesson.teacher_move_lead_minutes')) : 0;
     if (lesson.outcome !== null || (lesson.kind !== LessonKind.REGULAR && lesson.kind !== LessonKind.MAKEUP)) refusal = 'not_movable';
     else if (lesson.startsAt.getTime() <= Date.now()) refusal = 'started';
-    else if (family && lesson.startsAt.getTime() <= Date.now() + lead * 60_000) refusal = 'too_late';
+    else if (lead > 0 && lesson.startsAt.getTime() <= Date.now() + lead * 60_000) refusal = 'too_late';
     else if (family && (await this.familyMovedChain(lesson))) refusal = 'family_already_moved';
     else if (family && familyMovesLeft === 0) refusal = 'family_monthly_limit';
     return { locked, refusal, familyMovesLeft };
   }
 
   /** Was this lesson -- or one it continues -- already moved by the family? */
-  private async familyMovedChain(lesson: { movedFrom: string | null; createdByKind: string }): Promise<boolean> {
+  private async familyMovedChain(lesson: { movedFrom: string | null; createdByKind: string }, db: Pick<Tx, 'lesson'> = this.prisma): Promise<boolean> {
     let at: { movedFrom: string | null; createdByKind: string } | null = lesson;
     for (let hops = 0; at && at.movedFrom && hops < 50; hops++) {
       if (at.createdByKind === 'contact') return true;
-      at = await this.prisma.lesson.findUnique({ where: { id: at.movedFrom }, select: { movedFrom: true, createdByKind: true } });
+      at = await db.lesson.findUnique({ where: { id: at.movedFrom }, select: { movedFrom: true, createdByKind: true } });
     }
     return false;
   }
 
   /** The child's lessons the family moved in this calendar month (stats.zone). */
-  private async familyMovesThisMonth(learnerId: string): Promise<number> {
+  private async familyMovesThisMonth(learnerId: string, db: Pick<Tx, '$queryRaw'> = this.prisma): Promise<number> {
     const zone = String(await this.config.get('stats.zone'));
-    const rows = await this.prisma.$queryRaw<Array<{ n: number }>>`
+    const rows = await db.$queryRaw<Array<{ n: number }>>`
       SELECT count(*)::int AS n FROM chat.lesson l
        WHERE l.learner_id = ${learnerId}::uuid AND l.moved_from IS NOT NULL AND l.created_by_kind = 'contact'
          AND date_trunc('month', l.created_at AT TIME ZONE ${zone}) = date_trunc('month', now() AT TIME ZONE ${zone})`;
@@ -789,14 +803,17 @@ export class SchedulingService {
     const rows = await this.prisma.$queryRaw<Array<{
       id: string; learner_id: string; learner_name: string; teacher_id: string; teacher_name: string;
       starts_at: Date; ends_at: Date; blocker_id: string; blocker_kind: string; blocker_starts: Date; blocker_ends: Date;
+      reason: string; lesson_kind: string;
     }>>`
       SELECT b.id::text, b.learner_id::text, l.name AS learner_name, b.teacher_id::text, t.name AS teacher_name,
              b.starts_at, b.ends_at, x.id::text AS blocker_id, x.kind AS blocker_kind,
-             x.starts_at AS blocker_starts, x.ends_at AS blocker_ends
+             x.starts_at AS blocker_starts, x.ends_at AS blocker_ends,
+             b.reason, coalesce(st.kind, 'regular') AS lesson_kind
         FROM chat.lesson_blocked_occurrence b
         JOIN chat.learner l ON l.id = b.learner_id
         JOIN chat.teacher t ON t.id = b.teacher_id
         JOIN chat.lesson x ON x.id = b.blocked_by
+        LEFT JOIN chat.lesson st ON st.id = b.stranded_lesson
        WHERE b.organization_id = ${organizationId}::uuid AND b.resolution IS NULL AND b.starts_at > now()
        ORDER BY b.starts_at
        LIMIT 500`;
@@ -807,6 +824,10 @@ export class SchedulingService {
       startsAt: r.starts_at.toISOString(),
       endsAt: r.ends_at.toISOString(),
       blockedBy: { lessonId: r.blocker_id, kind: r.blocker_kind, startsAt: r.blocker_starts.toISOString(), endsAt: r.blocker_ends.toISOString() },
+      // weekly: the generator passed it over; teacher_changed: a one-off (a make-up, a
+      // moved lesson) the new teacher could not take at its time.
+      reason: r.reason as 'weekly' | 'teacher_changed',
+      lessonKind: r.lesson_kind,
     }));
   }
 
@@ -833,7 +854,13 @@ export class SchedulingService {
     const startsAt = dateField(body, 'startsAt');
     const { actor, row } = await this.openBlocked(actorId, id);
     const duration = minutesBetween(row.startsAt, row.endsAt);
-    await this.assertAgreedTime(row.teacherId, startsAt);
+    const learner = await this.prisma.learner.findUnique({ where: { id: row.learnerId }, select: { teacherId: true } });
+    if (learner?.teacherId !== row.teacherId) throw stateError('the student has another teacher now; dismiss this and book with them');
+    await this.assertAgreedTime(row.teacherId, startsAt, 'a lesson');
+    // A stranded make-up is booked again as the make-up of the same missed lesson.
+    const stranded = row.strandedLesson
+      ? await this.prisma.lesson.findUnique({ where: { id: row.strandedLesson }, select: { kind: true, makeupFor: true } })
+      : null;
     const lesson = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
         const created = await tx.lesson.create({
@@ -841,7 +868,8 @@ export class SchedulingService {
             organizationId: row.organizationId,
             learnerId: row.learnerId,
             teacherId: row.teacherId,
-            kind: LessonKind.REGULAR,
+            kind: stranded?.kind === LessonKind.MAKEUP ? LessonKind.MAKEUP : LessonKind.REGULAR,
+            makeupFor: stranded?.kind === LessonKind.MAKEUP ? stranded.makeupFor : null,
             startsAt,
             endsAt: new Date(startsAt.getTime() + duration * 60_000),
             createdBy: actor.actorId,
@@ -881,9 +909,9 @@ export class SchedulingService {
   }
 
   /** Record the weekly lessons the materializer passed over (PD-31). */
-  async collectBlocked(): Promise<number> {
+  async collectBlocked(db: Pick<Tx, '$queryRaw'> = this.prisma): Promise<number> {
     const weeks = Number(await this.config.get('lesson.materialize_weeks'));
-    const rows = await this.prisma.$queryRaw<Array<{ n: number }>>`
+    const rows = await db.$queryRaw<Array<{ n: number }>>`
       SELECT chat.collect_blocked_occurrences(now(), now() + make_interval(weeks => ${weeks}::int)) AS n`;
     return Number(rows[0]?.n ?? 0);
   }
@@ -978,9 +1006,9 @@ export class SchedulingService {
     return { materialized, reminded, clockWarnings };
   }
 
-  async materialize(): Promise<number> {
+  async materialize(db: Pick<Tx, '$queryRaw'> = this.prisma): Promise<number> {
     const weeks = Number(await this.config.get('lesson.materialize_weeks'));
-    const rows = await this.prisma.$queryRaw<Array<{ n: number }>>`
+    const rows = await db.$queryRaw<Array<{ n: number }>>`
       SELECT chat.materialize_lessons(now(), now() + make_interval(weeks => ${weeks}::int)) AS n`;
     return Number(rows[0]?.n ?? 0);
   }
@@ -1163,7 +1191,8 @@ export class SchedulingService {
         if (then) await then(tx);
       }),
     );
-    await this.materialize();
+    // The change is committed; the worker's sweep creates the lessons if this does not.
+    await this.materialize().catch((e: unknown) => this.log.error(`materialize after a schedule change: ${String(e)}`));
   }
 
   /**
@@ -1279,21 +1308,62 @@ export class SchedulingService {
   }
 
   /**
-   * PD-30's payment lock for a child: 'balance' | 'overdue', or null when the
-   * child's lessons may be booked and moved (grace and an active exception
-   * included). PD-30 owns the state and exposes it as
-   * chat.learner_lesson_lock(uuid); until that function exists nothing is
-   * locked, so this works whichever of the two lands first. Every PD-31 picker
-   * and write asks this ONE method.
+   * PD-30's payment lock for a child, or null when the child's lessons may be
+   * booked and moved (grace and an active exception included). PD-30 owns the
+   * state and exposes it as chat.learner_lesson_lock(uuid): ANY non-null answer
+   * locks -- 'balance' and 'overdue' by name, anything else as 'other'. Until
+   * PD-30 is installed nothing is locked; once its tables exist the function
+   * must exist too, or this throws (and startup fails), never answering "open".
+   * Every PD-31 picker and write asks this ONE method.
    */
-  async lockOf(learnerId: string): Promise<'balance' | 'overdue' | null> {
-    const [fn] = await this.prisma.$queryRaw<Array<{ present: boolean }>>`
-      SELECT to_regprocedure('chat.learner_lesson_lock(uuid)') IS NOT NULL AS present`;
-    if (!fn?.present) return null;
+  async lockOf(learnerId: string): Promise<'balance' | 'overdue' | 'other' | null> {
+    if (!(await this.lockInstalled())) return null;
     const [row] = await this.prisma.$queryRawUnsafe<Array<{ lock: string | null }>>(
       'SELECT chat.learner_lesson_lock($1::uuid) AS lock', learnerId,
     );
-    return row?.lock === 'balance' || row?.lock === 'overdue' ? row.lock : null;
+    const lock = row?.lock ?? null;
+    if (lock === null) return null;
+    return lock === 'balance' || lock === 'overdue' ? lock : 'other';
+  }
+
+  /** Is PD-30's lock function there? Throws when PD-30's tables are but it is not. */
+  private async lockInstalled(): Promise<boolean> {
+    const [r] = await this.prisma.$queryRaw<Array<{ fn: boolean; pd30: boolean }>>`
+      SELECT to_regprocedure('chat.learner_lesson_lock(uuid)') IS NOT NULL AS fn,
+             (to_regclass('chat.learner_access') IS NOT NULL OR to_regclass('chat.learner_subscription') IS NOT NULL) AS pd30`;
+    if (!r.fn && r.pd30) {
+      throw new Error('PD-30 is installed but chat.learner_lesson_lock(uuid) is missing: lessons would never lock');
+    }
+    return r.fn;
+  }
+
+  /** Fail at startup, not at the first lesson, when the payment lock is half-installed. */
+  async onApplicationBootstrap() {
+    await this.lockInstalled();
+  }
+
+  /**
+   * A weekly time kept across zones (PD-31 change of teacher): the same
+   * INSTANTS, expressed on the new teacher's wall clock -- PD-22 anchors a
+   * weekly lesson in its teacher's zone. Null when the instants do not stay one
+   * weekly time over the coming year, i.e. one of the two zones changes its
+   * clocks and the other does not; the time cannot then be kept exactly.
+   */
+  async convertWeekly(s: WeeklySlot, fromZone: string, toZone: string): Promise<WeeklySlot | null> {
+    if (fromZone === toZone) return s;
+    const rows = await this.prisma.$queryRaw<Array<{ weekday: number; minute: number }>>`
+      WITH first AS (
+        SELECT d + ((${s.weekday}::int - extract(isodow FROM d)::int + 7) % 7) AS f
+          FROM (SELECT (now() AT TIME ZONE ${fromZone})::date AS d) t
+      ), occ AS (
+        SELECT (((f + 7 * k) + make_interval(mins => ${s.startMinute}::int)) AT TIME ZONE ${fromZone}) AT TIME ZONE ${toZone} AS local
+          FROM first CROSS JOIN generate_series(0, 52) k
+      )
+      SELECT DISTINCT extract(isodow FROM local)::int AS weekday,
+             (extract(hour FROM local) * 60 + extract(minute FROM local))::int AS minute
+        FROM occ`;
+    if (rows.length !== 1) return null;
+    return { weekday: rows[0].weekday, startMinute: rows[0].minute, durationMinutes: s.durationMinutes };
   }
 
   /** The learner's current weekly times, each with its next real start. */
@@ -1403,7 +1473,7 @@ export class SchedulingService {
    * within the booking horizon, and not on one of the teacher's days off (in
    * the teacher's own zone). Overlaps are the database's to refuse.
    */
-  private async assertAgreedTime(teacherId: string, startsAt: Date) {
+  private async assertAgreedTime(teacherId: string, startsAt: Date, what = 'a make-up') {
     const horizon = Number(await this.config.get('lesson.makeup_horizon_days'));
     const rows = await this.prisma.$queryRaw<Array<{ future: boolean; within: boolean; day_off: boolean }>>`
       SELECT ${startsAt}::timestamptz > now() AS future,
@@ -1417,8 +1487,8 @@ export class SchedulingService {
                         'Africa/Cairo'))::date
              ) AS day_off`;
     const r = rows[0];
-    if (!r.future) throw stateError('a make-up is scheduled in the future');
-    if (!r.within) throw stateError(`a make-up is scheduled within ${horizon} days`);
+    if (!r.future) throw stateError(`${what} is scheduled in the future`);
+    if (!r.within) throw stateError(`${what} is scheduled within ${horizon} days`);
     if (r.day_off) throw stateError('that is one of the teacher\'s days off; agree on another day');
   }
 

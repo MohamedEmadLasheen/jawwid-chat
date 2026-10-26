@@ -2767,6 +2767,16 @@ payment lock   a child PD-30 locks is offered no time and every change above is 
 - The app: `SlotChipPicker`, the "Change lesson time" sheet and the child schedule screen.
 - Protected by `apps/api/test/integration/pd031-scheduling.spec.ts`.
 
+**Review changes (department head, 2026-10-26).**
+- **Kept weekly times keep their instants.** On a change of teacher, each weekly time is read in its own zone and written on the new teacher's clock (PD-22). A time two zones cannot keep exactly, because one of them changes its clocks, is refused with `times_not_free`, and new times are chosen.
+- **The family's move limits are checked under a lock.** They are recounted inside the transaction, behind `SELECT … FOR UPDATE` on the learner, and the old row is closed only while still open. Two parallel moves at the limit yield exactly one.
+- **The guard accepts a move only within its transaction.** A moved lesson may continue only a lesson rescheduled in the same transaction (`outcome_at = now()`).
+- **Any lock answer locks.** Any non-null answer from `chat.learner_lesson_lock` locks; an unknown answer locks as `other`. If PD-30's tables exist without the function, `lockOf` throws and startup fails.
+- **A stranded one-off is listed and announced.** A one-off a change of teacher strands is recorded in Needs action (`reason teacher_changed`), and the family reads a `lesson_unscheduled` card. Lessons are generated inside the transfer's transaction.
+- **Teachers need notice to move a lesson.** A teacher's single move needs `lesson.teacher_move_lead_minutes` (120) of notice.
+- **The teacher list is open to anyone who may change some teacher.** That is anyone with transfer standing on some child.
+- **Previews say nothing before authorization.** The group preview authorizes every child of the group before it reads anything.
+
 **Consequences.**
 - PD-11's table gains `move_lesson` (family, teacher, supervisor, manager). `request_schedule_change` gains the teacher, and `transfer` gains the supervisor.
 - `chat.materialize_lessons` is unchanged. The trigger keeps a moved weekly lesson moved, so PD-30's rewrite of it does not collide.

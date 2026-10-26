@@ -97,14 +97,14 @@ export class LifecycleService {
   async transferPreview(actorId: string, learnerId: string, toTeacherId: string | undefined) {
     const actor = await this.conversations.requireActor(actorId);
     const { learner } = await this.scheduling.learnerFor(actor, learnerId, 'transfer');
-    return this.preview([learner], toTeacherId, null);
+    return this.preview(actor, [learner], toTeacherId, null);
   }
 
   /** What a change of teacher would do, for a group's children. */
   async groupPreview(actorId: string, conversationId: string, toTeacherId: string | undefined, fromTeacherId: string | undefined) {
     const actor = await this.conversations.requireActor(actorId);
     const { learners, groupTeachers } = await this.groupLearners(actor, conversationId, fromTeacherId, true);
-    return this.preview(learners, toTeacherId, groupTeachers);
+    return this.preview(actor, learners, toTeacherId, groupTeachers);
   }
 
   /**
@@ -114,10 +114,16 @@ export class LifecycleService {
    */
   async candidates(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
+    // Whoever may change some child's teacher: the super admin, the Teachers
+    // department, or a staff member acting for some child's PD-8 supervisor
+    // (themselves, an active backup, the supervisor's manager).
     const allowed = actor.kind === ActorKind.STAFF && actor.isActive && (
       actor.staffRole === 'super_admin'
-      || (await this.lessons.inDepartment(actor, 'teachers'))
-      || (await this.lessons.inDepartment(actor, 'operations')));
+      || (await this.lessons.isManager(actor))
+      || (await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+           SELECT EXISTS (SELECT 1 FROM chat.learner_supervision ls
+                           WHERE ls.organization_id = ${actor.organizationId}::uuid
+                             AND ls.supervisor_id IN (SELECT chat.staff_principals(${actor.actorId}::uuid, now()))) AS ok`)[0]?.ok === true);
     if (!allowed) throw new CommError(CommErrorCode.LESSON_DENIED, 'the teachers list is for the staff who change teachers');
     const rows = await this.prisma.$queryRaw<Array<{ id: string; name: string; active: boolean; kind: string | null; until: Date | null }>>`
       SELECT t.id::text, t.name, (t.is_active AND t.left_at IS NULL) AS active, a.kind, a.until
@@ -140,9 +146,18 @@ export class LifecycleService {
     if (conv.organizationId !== actor.organizationId) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'conversation not found');
     const ids = await this.lessons.learnersOf(conv);
     if (ids.length === 0) throw stateError('this conversation is not about a student');
-    const all = await this.prisma.learner.findMany({ where: { id: { in: ids } }, orderBy: { name: 'asc' } });
+    // Authorize EVERY child of the group before anything about it is read: a
+    // reader who may not change each child's teacher learns nothing, not even
+    // the teachers' names. (A PD-8 family group has one supervisor, so the
+    // staff who may act on one child may act on all.)
+    const all: Learner[] = [];
+    for (const id of ids) all.push((await this.scheduling.learnerFor(actor, id, 'transfer')).learner);
+    all.sort((a, b) => a.name.localeCompare(b.name));
     const teacherIds = [...new Set(all.map((l) => l.teacherId).filter((t): t is string => !!t))];
-    const groupTeachers = await this.prisma.teacher.findMany({ where: { id: { in: teacherIds } }, select: { id: true, name: true } });
+    const groupTeachers = await this.prisma.teacher.findMany({
+      where: { id: { in: teacherIds }, organizationId: actor.organizationId as string },
+      select: { id: true, name: true },
+    });
     let from: string;
     if (fromTeacher !== undefined && fromTeacher !== null && fromTeacher !== '') {
       if (typeof fromTeacher !== 'string' || !teacherIds.includes(fromTeacher)) throw invalid('fromTeacherId: a teacher of this group');
@@ -154,17 +169,12 @@ export class LifecycleService {
     } else {
       throw invalid(teacherIds.length ? 'fromTeacherId: the group has several teachers; name the one being replaced' : 'this group has no teacher');
     }
-    const learners: Learner[] = [];
-    for (const l of all.filter((x) => x.teacherId === from)) {
-      learners.push((await this.scheduling.learnerFor(actor, l.id, 'transfer')).learner);
-    }
-    return { learners, groupTeachers };
+    return { learners: all.filter((x) => x.teacherId === from), groupTeachers };
   }
 
-  private async preview(learners: Learner[], toTeacherId: string | undefined, groupTeachers: Array<{ id: string; name: string }> | null) {
+  private async preview(actor: Actor, learners: Learner[], toTeacherId: string | undefined, groupTeachers: Array<{ id: string; name: string }> | null) {
     if (typeof toTeacherId !== 'string' || !isUuid(toTeacherId)) throw invalid('toTeacherId: must be a uuid');
-    const org = learners[0]?.organizationId;
-    const toTeacher = await this.prisma.teacher.findFirst({ where: { id: toTeacherId, ...(org ? { organizationId: org } : {}) }, select: { id: true, name: true } });
+    const toTeacher = await this.prisma.teacher.findFirst({ where: { id: toTeacherId, organizationId: actor.organizationId as string }, select: { id: true, name: true } });
     if (!toTeacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const [away] = await this.prisma.$queryRaw<Array<{ kind: string; until: Date }>>`
       SELECT kind, until FROM chat.teacher_away(${toTeacher.id}::uuid, chat.academy_today())`;
@@ -172,10 +182,19 @@ export class LifecycleService {
     for (const l of learners) {
       const duration = await this.scheduling.currentDuration(l.id);
       const current = await this.scheduling.currentSlots(l.id);
+      const zones = await this.zonesFor(l.id, toTeacher.id);
       const slots = [];
       for (const c of current) {
         const s = { weekday: c.weekday, startMinute: minuteField(c.start, 'start'), durationMinutes: c.durationMinutes ?? duration };
-        slots.push({ ...c, free: await this.scheduling.isFree(toTeacher.id, l.id, s) });
+        // The same instants on the new teacher's clock (PD-22); null when a clock
+        // change in one zone only means the time cannot be kept exactly.
+        const kept = zones ? await this.scheduling.convertWeekly(s, zones.from, zones.to) : null;
+        slots.push({
+          ...c,
+          keptAs: kept ? { weekday: kept.weekday, start: hhmm(kept.startMinute) } : null,
+          zoneShift: zones !== null && kept === null,
+          free: kept ? await this.scheduling.isFree(toTeacher.id, l.id, kept) : false,
+        });
       }
       const future = await this.prisma.lesson.count({ where: { learnerId: l.id, outcome: null, startsAt: { gt: new Date() } } });
       const unmovable = await this.prisma.$queryRaw<Array<{ id: string; kind: string; starts_at: Date }>>`
@@ -239,10 +258,21 @@ export class LifecycleService {
       const asked = slotsBy[learner.id];
       let slots: WeeklySlot[];
       if (asked === undefined) {
-        slots = old.map((s) => ({ weekday: s.weekday, startMinute: s.startMinute, durationMinutes: s.durationMinutes }));
+        // Keep the same INSTANTS: each weekly time is read in its own zone and
+        // written on the new teacher's clock (PD-22 anchors a weekly lesson in
+        // its teacher's zone). A wall-clock copy would shift a family's lesson by
+        // the zones' difference.
+        const toZone = old.length ? await this.scheduling.teacherZone(toTeacher.id) : null;
+        slots = [];
         const busy: string[] = [];
-        for (const s of slots) if (!(await this.scheduling.isFree(toTeacher.id, learner.id, s))) busy.push(`${WEEKDAY[s.weekday]} ${hhmm(s.startMinute)}`);
-        if (busy.length) throw stateError(`times_not_free: ${toTeacher.name} is not free at ${busy.join(', ')} for ${learner.name}; choose new times`);
+        for (const o of old) {
+          const was = { weekday: o.weekday, startMinute: o.startMinute, durationMinutes: o.durationMinutes };
+          const kept = await this.scheduling.convertWeekly(was, o.timezone, toZone as string);
+          if (!kept) busy.push(`${WEEKDAY[o.weekday]} ${hhmm(o.startMinute)} (the two zones change their clocks on different days)`);
+          else if (!(await this.scheduling.isFree(toTeacher.id, learner.id, kept))) busy.push(`${WEEKDAY[o.weekday]} ${hhmm(o.startMinute)}`);
+          else slots.push(kept);
+        }
+        if (busy.length) throw stateError(`times_not_free: ${toTeacher.name} cannot keep ${busy.join(', ')} for ${learner.name}; choose new times`);
       } else {
         slots = slotsField(asked, false).map((s) => ({ ...s, durationMinutes: duration }));
         await this.scheduling.assertFree(toTeacher.id, learner.id, slots);
@@ -312,8 +342,13 @@ export class LifecycleService {
             toTeacherId: toTeacher.id,
             reasonCode: opts.reasonCode,
           });
+          await this.recordStranded(tx, learner, toTeacher, plan.before, lang, actor);
           results.push({ learnerId: learner.id, transferId: record.id, evictions: rows });
         }
+        // The new weekly times' lessons, and any week the new teacher is busy, in
+        // the same transaction: nothing after the commit can fail the change.
+        await this.scheduling.materialize(tx);
+        await this.scheduling.collectBlocked(tx);
         return results;
       }),
     );
@@ -324,8 +359,6 @@ export class LifecycleService {
     const evictions = done.flatMap((d) => d.evictions);
     for (const e of evictions) this.revocation.leaveConversation([e.removed_teacher_id], e.conversation_id);
     if (evictions.length) await this.revocation.confirmRevoked();
-    await this.scheduling.materialize();
-    await this.scheduling.collectBlocked();
 
     const out = [];
     for (const d of done) {
@@ -655,6 +688,65 @@ export class LifecycleService {
   private async localToday(zone: string): Promise<string> {
     const rows = await this.prisma.$queryRaw<Array<{ d: string }>>`SELECT to_char((now() AT TIME ZONE ${zone})::date, 'YYYY-MM-DD') AS d`;
     return rows[0].d;
+  }
+
+  /**
+   * A one-off lesson (a make-up, a moved or added lesson) the change of
+   * teacher could not carry -- chat.transfer_learner rescheduled it because the
+   * new teacher was busy -- is never left behind in silence: it is listed in
+   * Needs action (reason teacher_changed) with what blocks it, and the family
+   * is told a new time follows. Weekly lessons are re-created at the new times.
+   */
+  private async recordStranded(
+    tx: Tx,
+    learner: Learner,
+    toTeacher: { id: string; name: string },
+    before: string[],
+    lang: 'ar' | 'en',
+    actor: Actor,
+  ) {
+    const stranded = await tx.$queryRaw<Array<{ id: string; starts_at: Date; ends_at: Date; kind: string; blocker: string | null }>>`
+      SELECT l.id::text, l.starts_at, l.ends_at, l.kind,
+             (SELECT x.id::text FROM chat.lesson x
+               WHERE x.teacher_id = ${toTeacher.id}::uuid
+                 AND (x.outcome IS NULL OR x.outcome IN ('held', 'student_no_show', 'teacher_no_show'))
+                 AND tstzrange(x.starts_at, x.ends_at) && tstzrange(l.starts_at, l.ends_at)
+               ORDER BY x.starts_at LIMIT 1) AS blocker
+        FROM chat.lesson l
+       WHERE l.id = ANY(${before}::uuid[]) AND l.schedule_slot_id IS NULL AND l.outcome = 'rescheduled'
+         AND NOT EXISTS (SELECT 1 FROM chat.lesson y WHERE y.moved_from = l.id)`;
+    for (const l of stranded) {
+      if (!l.blocker) continue;
+      await tx.lessonBlockedOccurrence.create({
+        data: {
+          organizationId: learner.organizationId,
+          learnerId: learner.id,
+          teacherId: toTeacher.id,
+          reason: 'teacher_changed',
+          strandedLesson: l.id,
+          startsAt: l.starts_at,
+          endsAt: l.ends_at,
+          blockedBy: l.blocker,
+        },
+      });
+      const subject = { id: l.id, learnerId: learner.id, organizationId: learner.organizationId, teacherId: toTeacher.id };
+      await this.lessons.postCard(tx, subject, actor, CardKind.LESSON_UNSCHEDULED, {
+        lessonId: l.id,
+        learnerName: learner.name,
+        teacherName: toTeacher.name,
+        startsAt: l.starts_at.toISOString(),
+        endsAt: l.ends_at.toISOString(),
+        kind: l.kind,
+      }, lang);
+    }
+  }
+
+  /** The learner's weekly zone and the new teacher's, or null when there are no weekly times. */
+  private async zonesFor(learnerId: string, toTeacherId: string): Promise<{ from: string; to: string } | null> {
+    const slot = await this.prisma.learnerScheduleSlot.findFirst({ where: { learnerId, validTo: null }, select: { timezone: true } });
+    if (!slot) return null;
+    const to = await this.prisma.teacherAvailability.findFirst({ where: { teacherId: toTeacherId }, select: { timezone: true } });
+    return to ? { from: slot.timezone, to: to.timezone } : null;
   }
 
   private async futureOpenLessonIds(learnerId: string): Promise<string[]> {
