@@ -3124,7 +3124,7 @@ writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
 5. **Not changed:** Operations' scope, staff↔staff 1:1s (Q2: department rooms
    come in part 3), and the PD-31 change-teacher rules beyond scope.
 
-**Canonical rule (part 2).** `supabase/migrations/20261026160001_chat_pd035_teacher_supervisor.sql`;
+**Canonical rule (part 2).** `supabase/migrations/20261026160004_chat_pd035_teacher_supervisor.sql`;
 `apps/api/src/platform/teacher-scope.ts` (the one narrowing);
 `apps/api/src/teacher-supervisors/`. Routes:
 - `GET org/teacher-assignments`
