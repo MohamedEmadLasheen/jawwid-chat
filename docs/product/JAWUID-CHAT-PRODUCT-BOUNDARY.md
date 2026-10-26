@@ -596,7 +596,7 @@ and workload analytics:
 | Monthly scheduled hours | sum of lesson durations in the month, all outcomes |
 | Actual teaching hours | sum of durations of `held` lessons that have a report |
 | Cancellation / apology hours | sum of durations of non-`held` lessons, split by outcome |
-| Available scheduled hours | availability-template hours in the month, minus extra days off, minus scheduled lesson hours (fixed-shift teachers only) |
+| Available / free hours (PD-38) | one partition of the month's working hours, from `chat.calendar_capacity` (days of the academy's zone): **available** = the shift (full/part-shift teachers) or the availability in force that day (hourly, or no pattern yet), minus approved leave and days off; available = **booked within** (lessons, overlaps merged) + **paused within** + **free**. Booked time outside the hours is **outside**. *Scheduled hours* (above) still count every lesson, outside the hours too, so available − scheduled is not free. Read by the Teacher File and by the teacher's own workload (`GET /stats/me`). |
 | Trial lessons | `kind = trial` and `held`, split into converted / not converted |
 
 **Implementation phase.** Not yet scheduled against a milestone. Order: **L1** lesson + outcome +
