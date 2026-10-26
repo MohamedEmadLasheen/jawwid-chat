@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 import 'tokens.dart';
@@ -13,6 +14,30 @@ abstract final class JawwidTheme {
 
   static ThemeData dark({required bool isArabic}) =>
       _build(JawwidTokens.dark, Brightness.dark, isArabic);
+
+  /// How a pushed screen arrives and leaves, per platform. Stated rather than left to
+  /// Flutter's defaults, because back navigation must feel native and a framework
+  /// upgrade must not quietly change it:
+  ///
+  ///  * **iOS / macOS** -- the Cupertino slide, which carries the edge swipe-back. Edge
+  ///    only, as in every iPhone app: the drag starts in the leading 20pt of the
+  ///    screen, so a horizontal gesture anywhere else (a photo pager, a story) is left
+  ///    alone. The edge follows [Directionality] -- in Arabic it is the RIGHT edge and
+  ///    the swipe goes right-to-left, which is what an Arabic iPhone does.
+  ///  * **Android** -- predictive back (Android 14+): the system back gesture previews
+  ///    the screen underneath and commits on release. Needs
+  ///    `android:enableOnBackInvokedCallback` in the manifest; older Android gets the
+  ///    same builder's ordinary transition and the classic back.
+  ///
+  /// Every route the app pushes is a page route built from this theme (go_router's
+  /// default pages and `MaterialPageRoute`), so none has to opt in.
+  static const pageTransitions = PageTransitionsTheme(
+    builders: {
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+    },
+  );
 
   static ThemeData _build(
     JawwidTokens tokens,
@@ -83,6 +108,7 @@ abstract final class JawwidTheme {
       // §4: no blur, no glass, no gradients — all three are expensive on the low-end
       // Android devices that dominate the parent audience.
       splashFactory: InkRipple.splashFactory,
+      pageTransitionsTheme: pageTransitions,
       appBarTheme: AppBarTheme(
         backgroundColor: tokens.colorSurfaceDefault,
         foregroundColor: tokens.colorTextPrimary,
