@@ -262,9 +262,11 @@ begin
   -- Everything else: through a live staff member of the conversation. For a
   -- family conversation that member must still reach the family, so a
   -- supervisor whose children were all reassigned away loses the parent's 1:1.
+  -- PD-35 (part 1): never through a member row a seat opened.
   for m in
     select cm.actor_id from chat.conversation_member cm
      where cm.conversation_id = c.id and cm.left_at is null and cm.actor_kind = 'staff'
+       and not exists (select 1 from chat.conversation_seat st where st.member_id = cm.id and st.left_at is null)
   loop
     v := chat.staff_acts_for(p_staff, m.actor_id, p_at);
     continue when v is null;
