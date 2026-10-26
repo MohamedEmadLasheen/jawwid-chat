@@ -40,8 +40,9 @@ export interface SubscriptionLockReader {
   lockOf(learnerId: string): Promise<'balance' | 'overdue' | null>;
 }
 
+/** 'true' / '1' / 'yes' / 'on', any case: enforced. Anything else, or unset: off. */
 export function subscriptionLockEnforced(): boolean {
-  return process.env.SUBSCRIPTION_LOCK_ENFORCED === 'true';
+  return ['true', '1', 'yes', 'on'].includes((process.env.SUBSCRIPTION_LOCK_ENFORCED ?? '').trim().toLowerCase());
 }
 
 /** No locks at all: what a construction without the reader gets (unit harnesses). */
@@ -61,22 +62,33 @@ export class SqlSubscriptionLock implements SubscriptionLockReader {
   }
 
   async lockedChildren(conversationId: string): Promise<LockedChild[]> {
+    // Computed now (chat.compute_learner_access, as chat.learner_lesson_lock
+    // does), never read from a possibly stale state row. The children a group
+    // is about: its chat.conversation_learner rows, its student; a group with
+    // neither falls back to every child of its family (fail closed).
     const rows = await this.prisma.$queryRaw<
       Array<{ learner_id: string; name: string; reasons: string[]; label: string | null; due: string | null }>
     >`
-      SELECT a.learner_id::text, l.name, a.reasons, i.label, to_char(a.overdue_due_on, 'YYYY-MM-DD') AS due
-        FROM chat.learner_access a
-        JOIN chat.learner l ON l.id = a.learner_id
-        LEFT JOIN chat.family_instalment i ON i.id = a.overdue_instalment_id
-       WHERE chat.learner_lesson_lock(a.learner_id) IS NOT NULL
-         AND a.learner_id IN (
-           SELECT cl.learner_id FROM chat.conversation_learner cl
-             JOIN chat.conversation c ON c.id = cl.conversation_id
-            WHERE c.id = ${conversationId}::uuid AND c.type = 'family_group'
-           UNION
-           SELECT c.learner_id FROM chat.conversation c
-            WHERE c.id = ${conversationId}::uuid AND c.type = 'student_group' AND c.learner_id IS NOT NULL)
-       ORDER BY l.name, a.learner_id`;
+      WITH conv AS (
+        SELECT c.id, c.type, c.family_id, c.learner_id FROM chat.conversation c
+         WHERE c.id = ${conversationId}::uuid AND c.type IN ('family_group', 'student_group')
+      ), named AS (
+        SELECT cl.learner_id FROM chat.conversation_learner cl JOIN conv ON conv.id = cl.conversation_id
+        UNION
+        SELECT conv.learner_id FROM conv WHERE conv.learner_id IS NOT NULL
+      ), children AS (
+        SELECT learner_id FROM named
+        UNION
+        SELECT l.id FROM chat.learner l JOIN conv ON conv.family_id = l.family_id
+         WHERE NOT EXISTS (SELECT 1 FROM named)
+      )
+      SELECT l.id::text AS learner_id, l.name, c.reasons, i.label, to_char(c.overdue_due_on, 'YYYY-MM-DD') AS due
+        FROM children ch
+        JOIN chat.learner l ON l.id = ch.learner_id
+        CROSS JOIN LATERAL chat.compute_learner_access(l.id) c
+        LEFT JOIN chat.family_instalment i ON i.id = c.overdue_instalment_id
+       WHERE c.state = 'locked'
+       ORDER BY l.name, l.id`;
     return rows.map((r) => ({
       learnerId: r.learner_id,
       learnerName: r.name,

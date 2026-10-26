@@ -651,7 +651,7 @@ export class PaymentsService {
     let lessonsIncluded: number | null = null;
     if (body.lessonsIncluded !== undefined && body.lessonsIncluded !== null) {
       const n = body.lessonsIncluded;
-      if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 500) throw invalid('lessonsIncluded: an integer from 1 to 500');
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 1000) throw invalid('lessonsIncluded: an integer from 1 to 1000');
       if (purpose !== 'subscription' && purpose !== 'renewal') throw invalid('lessonsIncluded: only a subscription or a renewal buys lessons');
       lessonsIncluded = n;
     }

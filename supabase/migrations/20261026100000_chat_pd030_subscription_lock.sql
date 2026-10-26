@@ -7,8 +7,10 @@
 --                               Append-only; a row is voided, never edited.
 --                               Written when a subscription / renewal request
 --                               is paid in full (by the trigger below), when an
---                               instalment plan is created with lessons, and by
---                               staff ("Add subscription").
+--                               instalment plan is created with lessons, and --
+--                               free lessons, with a reason -- by the super
+--                               admin, the Operations Manager or the Sales
+--                               Manager ("Add subscription"; the guard checks).
 --   chat.subscription_exception lets a child go on past the balance and / or an
 --                               overdue instalment until a date (at most 90
 --                               days). Append-only; revoked once.
@@ -34,8 +36,11 @@
 --
 -- ENFORCEMENT is the API's (canSend / calls / booking) and is switched by
 -- SUBSCRIPTION_LOCK_ENFORCED. The database computes and records the state
--- whatever the switch says. chat.learner_access.held -- set by the API only
--- when enforcement is on -- is what stops the materializer.
+-- whatever the switch says; chat.learner_lesson_lock(learner) is the one
+-- answer every check asks (computed now, fail closed). chat.learner_access.held
+-- -- set by the API only when enforcement is on -- stops the materializer.
+-- WHO may grant exceptions and add free lessons is the database's to enforce
+-- too (chat.can_grant_subscription_exception).
 --
 -- Down:
 --   drop trigger lesson_refreshes_access on chat.lesson; (and the other
@@ -47,7 +52,7 @@
 --   restore chat.learner_suspended_on from 20261018160000 and the three lesson
 --   outcome constraints from 20261021120000;
 --   delete from chat.notification_template where key like 'subscription_%';
---   delete from chat.config where key = 'subscription.overdue_from';
+--   delete from chat.config where key in ('subscription.overdue_from', 'subscription.enforced_since');
 
 -- ===========================================================================
 -- 1. Settings
@@ -72,22 +77,18 @@ as $$
 $$;
 
 -- Owner decision (2026-10-26, Q2): only instalments due on or after go-live
--- lock a group. Older unpaid ones are listed for staff instead.
-insert into chat.config (key, value, description)
-values ('subscription.overdue_from',
-        to_jsonb(to_char((now() at time zone coalesce(
-          (select value #>> '{}' from chat.config where key = 'schedule.timezone'), 'Africa/Cairo'))::date, 'YYYY-MM-DD')),
-        'PD-30: instalments due on or after this day lock a group when overdue (go-live).')
-on conflict (key) do nothing;
-
+-- lock a group; older unpaid ones are listed for staff instead. Go-live is
+-- the academy day enforcement (SUBSCRIPTION_LOCK_ENFORCED) was FIRST seen on:
+-- the API records 'subscription.overdue_from' and 'subscription.enforced_since'
+-- once, at that moment (SubscriptionEffects). Until then the setting is
+-- absent and NO instalment locks: there is no silent default day.
 create or replace function chat.pd030_overdue_from()
 returns date
 language sql
 stable
 set search_path = chat, pg_temp
 as $$
-  select coalesce((select (value #>> '{}')::date from chat.config where key = 'subscription.overdue_from'),
-                  date '2026-10-26');
+  select (value #>> '{}')::date from chat.config where key = 'subscription.overdue_from';
 $$;
 
 create or replace function chat.pd030_grace_lessons()
@@ -97,6 +98,26 @@ stable
 set search_path = chat, pg_temp
 as $$
   select coalesce((select (value #>> '{}')::integer from chat.config where key = 'subscription.grace_lessons'), 2);
+$$;
+
+-- Owner (2026-10-26): only the super admin, the Operations Manager and the
+-- Sales Manager let a child go on past the lock -- an exception, or a
+-- subscription added by hand with no payment behind it. The database refuses
+-- anyone else, whatever called it (the API's canGrantSubscriptionException
+-- asks the same question first, to answer 403).
+create or replace function chat.can_grant_subscription_exception(p_staff uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = chat, pg_temp
+as $$
+  select exists (
+    select 1 from chat.staff s
+     where s.id = p_staff and s.is_active and s.left_at is null
+       and (s.role = 'super_admin'
+            or (s.role = 'manager' and chat.operations_department_role(s.id) = 'manager')
+            or chat.sales_department_role(s.id) = 'manager'));
 $$;
 
 -- ===========================================================================
@@ -109,7 +130,8 @@ create table chat.learner_subscription (
   learner_id        uuid not null references chat.learner (id) on delete restrict,
   family_id         uuid not null references chat.family (id) on delete restrict,
   plan_months       smallint check (plan_months in (1, 3, 6, 12)),
-  lessons_included  integer not null check (lessons_included between 1 and 500),
+  -- 1..1000, as PD-15's package size: the backfill copies those.
+  lessons_included  integer not null check (lessons_included between 1 and 1000),
   starts_on         date not null,
   source            text not null check (source in ('payment_request', 'instalment_plan', 'staff', 'backfill')),
   -- No foreign key: a request is never deleted (chat.guard_payment_request),
@@ -164,6 +186,20 @@ begin
     if new.created_by is not null and not chat.staff_of(new.created_by, new.organization_id) then
       raise exception 'a subscription is added by staff of its organization' using errcode = 'insufficient_privilege';
     end if;
+    -- A subscription with no payment behind it is free lessons: the three
+    -- roles only, with a reason, starting from a week ago to a month ahead.
+    if new.source = 'staff' then
+      if not chat.can_grant_subscription_exception(new.created_by) then
+        raise exception 'a subscription with no payment is added by the super admin, the Operations Manager or the Sales Manager'
+          using errcode = 'insufficient_privilege';
+      end if;
+      if new.note is null then
+        raise exception 'a subscription with no payment says why' using errcode = 'check_violation';
+      end if;
+      if new.starts_on < chat.pd030_today() - 7 or new.starts_on > chat.pd030_today() + 30 then
+        raise exception 'a subscription added by hand starts from a week ago to a month ahead' using errcode = 'check_violation';
+      end if;
+    end if;
     if new.request_id is not null and not exists (
       select 1 from chat.payment_request r
        where r.id = new.request_id and r.family_id = new.family_id and r.learner_id = new.learner_id) then
@@ -199,7 +235,7 @@ create trigger learner_subscription_guard
 
 -- A subscription / renewal request carries the lessons it buys.
 alter table chat.payment_request add column lessons_included integer
-  check (lessons_included is null or lessons_included between 1 and 500);
+  check (lessons_included is null or lessons_included between 1 and 1000);
 alter table chat.payment_request add constraint payment_request_lessons_are_a_subscriptions
   check (lessons_included is null or purpose in ('subscription', 'renewal'));
 
@@ -270,8 +306,10 @@ begin
     end if;
     new.organization_id := v_learner.organization_id;
     new.family_id := v_learner.family_id;
-    if not chat.staff_of(new.granted_by, new.organization_id) then
-      raise exception 'an exception is granted by staff of its organization' using errcode = 'insufficient_privilege';
+    if not chat.staff_of(new.granted_by, new.organization_id)
+       or not chat.can_grant_subscription_exception(new.granted_by) then
+      raise exception 'an exception is granted by the super admin, the Operations Manager or the Sales Manager'
+        using errcode = 'insufficient_privilege';
     end if;
     if new.valid_until < v_today or new.valid_until > v_today + 90 then
       raise exception 'an exception lasts until a day from today to 90 days ahead' using errcode = 'check_violation';
@@ -293,8 +331,11 @@ begin
   if old.revoked_at is not null then
     raise exception 'a revoked exception is final' using errcode = 'check_violation';
   end if;
-  if new.revoked_by is not null and not chat.staff_of(new.revoked_by, new.organization_id) then
-    raise exception 'an exception is revoked by staff of its organization' using errcode = 'insufficient_privilege';
+  if new.revoked_by is not null
+     and (not chat.staff_of(new.revoked_by, new.organization_id)
+          or not chat.can_grant_subscription_exception(new.revoked_by)) then
+    raise exception 'an exception is revoked by the super admin, the Operations Manager or the Sales Manager'
+      using errcode = 'insufficient_privilege';
   end if;
   return new;
 end;
@@ -434,6 +475,7 @@ begin
      and (i.learner_id is null or i.learner_id = p_learner)
      and i.voided_at is null and i.paid_on is null
      and i.due_date < v_today
+     and chat.pd030_overdue_from() is not null
      and i.due_date >= chat.pd030_overdue_from()
    order by i.due_date, i.created_at
    limit 1;
@@ -481,19 +523,28 @@ begin
             or cur.reasons is distinct from c.reasons
             or (c.state = 'grace' and cur.grace_left is distinct from c.grace_left);
 
-  update chat.learner_access
-     set organization_id = v_learner.organization_id,
-         family_id = v_learner.family_id,
-         state = c.state,
-         reasons = c.reasons,
-         excepted = c.excepted,
-         balance = c.balance,
-         grace_left = c.grace_left,
-         overdue_instalment_id = c.overdue_instalment_id,
-         overdue_due_on = c.overdue_due_on,
-         changed_at = case when v_changed then now() else cur.changed_at end,
-         computed_at = now()
-   where learner_id = p_learner;
+  -- Written only when something differs, so the minute's sweep over every
+  -- child is reads, not a write per row.
+  if v_changed
+     or (cur.organization_id, cur.family_id, cur.excepted, cur.balance, cur.grace_left,
+         cur.overdue_instalment_id, cur.overdue_due_on)
+        is distinct from
+        (v_learner.organization_id, v_learner.family_id, c.excepted, c.balance, c.grace_left,
+         c.overdue_instalment_id, c.overdue_due_on) then
+    update chat.learner_access
+       set organization_id = v_learner.organization_id,
+           family_id = v_learner.family_id,
+           state = c.state,
+           reasons = c.reasons,
+           excepted = c.excepted,
+           balance = c.balance,
+           grace_left = c.grace_left,
+           overdue_instalment_id = c.overdue_instalment_id,
+           overdue_due_on = c.overdue_due_on,
+           changed_at = case when v_changed then now() else cur.changed_at end,
+           computed_at = now()
+     where learner_id = p_learner;
+  end if;
 
   if v_changed then
     insert into chat.learner_access_event
@@ -533,6 +584,11 @@ $$;
 -- 'overdue' wins when both apply. An active exception covering a reason has
 -- already removed it (chat.compute_learner_access). The STATE, whatever
 -- SUBSCRIPTION_LOCK_ENFORCED says; callers in the API apply the switch.
+--
+-- Computed NOW from the inputs (chat.compute_learner_access): an instalment
+-- that fell overdue at midnight, or an exception that ran out, counts at
+-- once, whether or not the worker has swept -- a stale or missing
+-- chat.learner_access row never opens a group the inputs lock.
 create or replace function chat.learner_lesson_lock(p_learner uuid)
 returns text
 language sql
@@ -541,12 +597,12 @@ security definer
 set search_path = chat, pg_temp
 as $$
   select case
-           when a.state <> 'locked' then null
-           when 'overdue' = any(a.reasons) then 'overdue'
+           when c.state <> 'locked' then null
+           when 'overdue' = any(c.reasons) then 'overdue'
            else 'balance'
          end
-    from chat.learner_access a
-   where a.learner_id = p_learner;
+    from chat.compute_learner_access(p_learner) c
+   where exists (select 1 from chat.learner l where l.id = p_learner);
 $$;
 
 revoke all on function chat.learner_lesson_lock(uuid) from public;
@@ -573,6 +629,32 @@ $$;
 create trigger lesson_refreshes_access
   after update of outcome on chat.lesson
   for each row execute function chat.pd030_lesson_refreshes_access();
+
+-- ONE LOCK ORDER: a child's chat.learner_access row, then its lesson rows.
+-- The hold (SubscriptionEffects) locks the access row and then suspends
+-- lessons; an outcome written on a lesson takes the access row here, in a
+-- BEFORE trigger -- before the lesson's own row lock -- so the two can never
+-- wait on each other in opposite orders.
+create or replace function chat.pd030_lesson_locks_access_first()
+returns trigger
+language plpgsql
+security definer
+set search_path = chat, pg_temp
+as $$
+begin
+  if new.learner_id is not null and new.kind <> 'trial' and new.outcome is distinct from old.outcome then
+    insert into chat.learner_access (learner_id, organization_id, family_id)
+    select l.id, l.organization_id, l.family_id from chat.learner l where l.id = new.learner_id
+    on conflict (learner_id) do nothing;
+    perform 1 from chat.learner_access where learner_id = new.learner_id for update;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger lesson_locks_access_first
+  before update of outcome on chat.lesson
+  for each row execute function chat.pd030_lesson_locks_access_first();
 
 create or replace function chat.pd030_child_row_refreshes_access()
 returns trigger
@@ -623,7 +705,14 @@ begin
   if new.lessons_included is null or new.learner_id is null or new.family_id is null then
     return null;
   end if;
-  if new.paid_at is not null and new.cancelled_at is null then
+  -- Only on the TRANSITION to paid in full -- or, for a request paid before
+  -- Assign, when Assign names its child. Any later update of a paid request
+  -- (a reminder stamp, a webhook retry) credits nothing: a voided credit
+  -- stays voided until a new payment pays the request again.
+  if new.paid_at is not null and new.cancelled_at is null
+     and (tg_op = 'INSERT'
+          or old.paid_at is null
+          or (old.learner_id is null or old.family_id is null)) then
     insert into chat.learner_subscription
       (learner_id, organization_id, family_id, plan_months, lessons_included, starts_on, source, request_id)
     values
@@ -807,6 +896,8 @@ revoke all on function chat.refresh_learner_access(uuid) from public;
 revoke all on function chat.refresh_family_access(uuid, uuid) from public;
 revoke all on function chat.learner_on_payment_hold(uuid) from public;
 revoke all on function chat.pd030_lesson_refreshes_access() from public;
+revoke all on function chat.pd030_lesson_locks_access_first() from public;
+revoke all on function chat.can_grant_subscription_exception(uuid) from public;
 revoke all on function chat.pd030_child_row_refreshes_access() from public;
 revoke all on function chat.pd030_instalment_refreshes_access() from public;
 revoke all on function chat.pd030_request_credits_lessons() from public;

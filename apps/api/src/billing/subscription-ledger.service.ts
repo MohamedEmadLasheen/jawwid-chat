@@ -11,7 +11,7 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/vocab';
 import { BillingService } from './billing.service';
 import { academyToday, childSubscriptions } from './subscription-reads';
-import { dateOnly, day, invalid, optionalDate, optionalText, requireDate, requireText } from './validate';
+import { dateOnly, day, invalid, optionalDate, requireDate, requireText } from './validate';
 
 const EXCEPTION_KINDS = ['balance', 'overdue', 'both'] as const;
 const MAX_EXCEPTION_DAYS = 90;
@@ -21,7 +21,11 @@ const MAX_EXCEPTION_DAYS = 90;
  *
  *   read     billingAccessOf's readers, in scope (PD-17): the ledger, the
  *            balance, the state, every exception and renewal request
- *   ledger   the payment recorders (canRecord): add a subscription, void one
+ *   void     the payment recorders (canRecord)
+ *   add      a subscription with no payment behind it is free lessons: the
+ *            same three roles as an exception, with a reason, starting from a
+ *            week ago to a month ahead (the database checks it too). Paid
+ *            lessons arrive by themselves -- a paid link, an instalment plan
  *   except   the super admin, the Operations Manager and the Sales Manager
  *            only (canGrantSubscriptionException): grant, revoke
  *
@@ -45,14 +49,18 @@ export class SubscriptionLedger {
     return this.present(actor, learner);
   }
 
-  /** { lessonsIncluded, planMonths?, startsOn?, note? } -- the payment recorders. */
+  /** { lessonsIncluded, reason, planMonths?, startsOn? } -- the three roles (free lessons). */
   async add(actorId: string, learnerId: string, body: Record<string, unknown>) {
-    const { actor, access } = await this.billing.requireRecorder(actorId);
+    const { actor, access } = await this.requireGrantor(actorId);
     const learner = await this.requireLearner(actor, access, learnerId);
     const lessonsIncluded = lessonsField(body.lessonsIncluded);
     const planMonths = planMonthsField(body.planMonths);
-    const startsOn = optionalDate('startsOn', body.startsOn) ?? (await academyToday(this.prisma));
-    const note = optionalText('note', body.note, 500);
+    const today = await academyToday(this.prisma);
+    const startsOn = optionalDate('startsOn', body.startsOn) ?? today;
+    const earliest = day(new Date(dateOnly(today).getTime() - 7 * 86_400_000));
+    const latest = day(new Date(dateOnly(today).getTime() + 30 * 86_400_000));
+    if (startsOn < earliest || startsOn > latest) throw invalid(`startsOn: from ${earliest} to ${latest}`);
+    const note = requireText('reason', body.reason ?? body.note, 500);
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       const row = await tx.learnerSubscription.create({
@@ -74,7 +82,7 @@ export class SubscriptionLedger {
         entity: 'learner',
         entityId: learner.id,
         after: { subscriptionId: row.id, planMonths, lessonsIncluded, startsOn },
-        reason: note ?? 'subscription added',
+        reason: note,
       });
     });
     return this.present(actor, learner);
@@ -222,6 +230,8 @@ export class SubscriptionLedger {
     return {
       enforced: this.locks.enforced,
       canRecord: (await this.billing.accessOf(actor)).canRecord,
+      // A subscription with no payment is free lessons: the same three roles.
+      canAddSubscription: grant,
       canGrantException: grant,
       standing,
       subscriptions: ledger.map((r) => ({
@@ -266,7 +276,7 @@ export class SubscriptionLedger {
     if (!(await this.canGrant(actor))) {
       throw new CommError(
         CommErrorCode.SUBSCRIPTION_DENIED,
-        'exceptions are granted by the super admin, the Operations Manager or the Sales Manager',
+        'exceptions and subscriptions with no payment are the super admin\'s, the Operations Manager\'s or the Sales Manager\'s',
       );
     }
     return { actor, access };
@@ -288,7 +298,7 @@ export class SubscriptionLedger {
 }
 
 function lessonsField(v: unknown): number {
-  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 500) throw invalid('lessonsIncluded: an integer from 1 to 500');
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 1000) throw invalid('lessonsIncluded: an integer from 1 to 1000');
   return v;
 }
 

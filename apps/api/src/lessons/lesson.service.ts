@@ -129,9 +129,10 @@ export class LessonService {
     // PD-29: practice and memorization marks written with the report. Optional
     // so the positional construction in the unit harnesses does not change.
     @Optional() readonly reportMaterials?: ReportMaterials,
-    // PD-30: a child locked for payment gets no new lesson. Optional for the
-    // same reason; without it nothing is refused.
-    @Optional() @Inject(SUBSCRIPTION_LOCK) private readonly locks?: SubscriptionLockReader,
+    // PD-30: a child locked for payment gets no new lesson. Required from the
+    // container (a missing provider fails boot); a positional harness
+    // construction without it refuses nothing.
+    @Inject(SUBSCRIPTION_LOCK) private readonly locks?: SubscriptionLockReader,
   ) {}
 
   /**
@@ -251,18 +252,24 @@ export class LessonService {
       throw new CommError(CommErrorCode.LESSON_DENIED, 'only people take part in lessons');
     }
 
-    const found = await this.prisma.lesson.findMany({
+    // PD-30: a lesson held for payment whose slot was filled again after the
+    // unlock is history, not a second lesson at that time. Left out IN THE
+    // QUERY, so the row limit counts only what is shown.
+    const superseded = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT h.id::text FROM chat.lesson h
+       WHERE h.organization_id = ${actor.organizationId}::uuid
+         AND h.outcome = 'suspended' AND h.outcome_by_kind = 'system'
+         AND h.starts_at >= ${from} AND h.starts_at < ${to}
+         AND EXISTS (SELECT 1 FROM chat.lesson x
+                      WHERE x.schedule_slot_id = h.schedule_slot_id AND x.starts_at = h.starts_at
+                        AND x.id <> h.id AND (x.outcome IS NULL OR x.outcome <> 'suspended'))`;
+    if (superseded.length > 0) where.id = { notIn: superseded.map((r) => r.id) };
+    const rows = await this.prisma.lesson.findMany({
       where,
       include: LESSON_INCLUDE,
       orderBy: { startsAt: 'asc' },
       take: 1000,
     });
-    // PD-30: a lesson held for payment whose slot was filled again after the
-    // unlock is history, not a second lesson at that time.
-    const live = new Set(
-      found.filter((r) => r.outcome !== LessonOutcome.SUSPENDED && r.scheduleSlotId).map((r) => `${r.scheduleSlotId}@${r.startsAt.getTime()}`),
-    );
-    const rows = found.filter((r) => !(isPaymentHold(r) && live.has(`${r.scheduleSlotId}@${r.startsAt.getTime()}`)));
     const escalation = await this.escalationMs();
     return {
       lessons: rows.map((r) => {
@@ -1208,13 +1215,17 @@ export class LessonService {
       phase: phaseOf(lesson, now, escalationMs),
       outcome: lesson.outcome,
       // PD-30: suspended by the system because the group is locked for payment
-      // -- the Schedule says "Suspended — payment" (no amount, no reason).
-      ...(isPaymentHold(lesson) ? { suspendedFor: 'payment' } : {}),
+      // -- "Suspended — payment" for the family and staff. A teacher reads only
+      // "suspended": nothing financial reaches a teacher.
+      ...(isPaymentHold(lesson) && standing !== 'teacher' ? { suspendedFor: 'payment' } : {}),
       apologyTiming: lesson.apologyTiming,
       // PD-15: internal reasons (a teacher's apology, a supervisor's excuse, a
       // correction) are staff's. A family reads only its own apology's reason
       // and a cancellation's, which its card already told it.
-      outcomeNote: staffView || standing === 'teacher' || familyMayReadNote(lesson) ? lesson.outcomeNote : null,
+      outcomeNote:
+        (staffView || standing === 'teacher' || familyMayReadNote(lesson)) && !(standing === 'teacher' && isPaymentHold(lesson))
+          ? lesson.outcomeNote
+          : null,
       outcomeAt: lesson.outcomeAt?.toISOString() ?? null,
       // Who recorded it is staff-facing; a family sees what happened, not whom to blame.
       outcomeBy: staffView

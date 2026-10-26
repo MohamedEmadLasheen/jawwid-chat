@@ -33,7 +33,7 @@ export class ConversationController {
     // shift; without it no labels are attached.
     @Optional() private readonly tools?: StaffToolsService,
     // PD-30: whether the group is locked for payment, for the banner.
-    @Optional() @Inject(SUBSCRIPTION_LOCK) private readonly locks?: SubscriptionLockReader,
+    @Inject(SUBSCRIPTION_LOCK) private readonly locks?: SubscriptionLockReader,
   ) {}
 
   /**

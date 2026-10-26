@@ -20,7 +20,7 @@ export class SubscriptionsController {
     return this.ledger.view(actorId, id);
   }
 
-  /** { lessonsIncluded, planMonths?, startsOn?, note? } */
+  /** { lessonsIncluded, reason, planMonths?, startsOn? } -- the three roles; the lessons are free. */
   @Post('learners/:id/subscriptions')
   add(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.ledger.add(actorId, id, body ?? {});

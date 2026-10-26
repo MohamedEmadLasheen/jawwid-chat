@@ -2713,9 +2713,11 @@ the ledger          chat.learner_subscription, per child: plan months, lessons
                     lessonsIncluded is PAID IN FULL (a database trigger; a void
                     that leaves it short takes the lessons back), when an
                     instalment plan is created for a child with lessonsIncluded
-                    (it credits at creation), and by the payment recorders
-                    ("Add subscription"). PD-15's package size became each
-                    child's first row at go-live, starting that day
+                    (it credits at creation), and -- free lessons, with a reason
+                    -- by the super admin, the Operations Manager or the Sales
+                    Manager ("Add subscription"; the database checks it).
+                    PD-15's package size became each child's first row,
+                    starting the deploy day
 used                the child's regular and make-up lessons whose outcome is
                     held or student_no_show, from the first subscription's start
                     day (academy zone). An apology does not count (its make-up
@@ -2726,8 +2728,9 @@ balance             included - used; grace lessons are taken from the next
                     subscription
 grace               balance 0: "2 grace lessons left"; -1: "1 left"; -2: locked
 overdue             an instalment of the family (or of this child) due on or
-                    after go-live, unpaid the day after its due date (academy
-                    zone): locked. Older ones are listed for staff (Instalment
+                    after go-live -- the day enforcement was first switched on
+                    -- unpaid the day after its due date (academy zone):
+                    locked. Older ones are listed for staff (Instalment
                     Payments, "before go-live"), never locking
 state               open | grace | locked, per child, in chat.learner_access,
                     recomputed by chat.refresh_learner_access in the SAME
@@ -2740,8 +2743,9 @@ locked means        the child's family / student group is read-only for the
                     still write; a DIRECT chat is never locked; no lesson is
                     booked for the child (make-ups, the Teachers department's);
                     the child's regular lessons that have not started are
-                    suspended by the system ("Suspended — payment", owed to
-                    no one, counted nowhere) and none is materialized; a group
+                    suspended by the system ("Suspended — payment" for staff and
+                    the family, plain "suspended" for the teacher; owed to no
+                    one, counted nowhere) and none is materialized; a group
                     with several children locks when any one is locked, but
                     lessons stay per child
 unlocking           the payment, approved receipt or recorded cash that covers it,
@@ -2768,7 +2772,9 @@ Lesson N of M       N = the next lesson's place in the subscription it falls in;
 switch              SUBSCRIPTION_LOCK_ENFORCED: on in staging, off in production
                     until the owner turns it on. Off = the ledger, the counting,
                     the state and the screens work; nothing is refused, held or
-                    announced
+                    announced. The first time it is seen on, go-live is
+                    recorded and every family already in grace or locked is
+                    told; holds begin on the next pass
 ```
 
 **Implementation phase.** Migration `20261026100000_chat_pd030_subscription_lock`
@@ -2793,9 +2799,7 @@ moved to the Subscriptions tab).
 **Defaults adopted at closing** (the owner may override without reopening PD-30):
 1. Make-ups already booked before a lock are not suspended (they replace a
    lesson already owed); only regular lessons are held.
-2. Switching enforcement on does not announce locks that already existed; the
-   banner explains them.
-3. Two grace lessons (`subscription.grace_lessons` in chat.config).
+2. Two grace lessons (`subscription.grace_lessons` in chat.config).
 
 **Closed.** 2026-10-26.
 

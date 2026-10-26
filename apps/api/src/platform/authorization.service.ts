@@ -229,9 +229,10 @@ export class AuthorizationService {
     // PD-8: the staff conversation scope. Defaults to nobody-in-scope, so a
     // construction that forgets it narrows staff access instead of widening it.
     @Optional() @Inject(STAFF_SCOPE) private readonly scope: StaffScope = NO_STAFF_SCOPE,
-    // PD-30: a child's group locked for payment. Defaults to no locks, so the
-    // positional harness constructions keep their meaning.
-    @Optional() @Inject(SUBSCRIPTION_LOCK) private readonly locks: SubscriptionLockReader = NO_SUBSCRIPTION_LOCK,
+    // PD-30: a child's group locked for payment. REQUIRED from the container --
+    // an app without the provider fails to boot rather than run with no lock;
+    // only the positional harness constructions get the no-lock default.
+    @Inject(SUBSCRIPTION_LOCK) private readonly locks: SubscriptionLockReader = NO_SUBSCRIPTION_LOCK,
   ) {}
 
   // ------------------------------------------------------------------
