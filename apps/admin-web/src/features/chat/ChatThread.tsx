@@ -10,7 +10,9 @@ import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
-import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatConversation, type ChatMessage, type UploadedAttachment } from './chatApi'
+import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatConversation, type ChatMessage, type SendMention, type UploadedAttachment } from './chatApi'
+import { MentionBanner } from './MentionBanner'
+import { MentionText } from './MentionText'
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type EditTarget, type ReplyTarget } from './ChatComposer'
 import { ForwardDialog } from './ForwardDialog'
@@ -49,6 +51,8 @@ interface PendingSend {
   visibility: 'customer' | 'internal'
   files: File[]
   replyToMessageId?: string
+  /** PD-36: the "@..." spans in `body`. */
+  mentions?: SendMention[]
   /** Uploaded once; a retry re-sends the message without uploading again. */
   uploaded?: UploadedAttachment[]
   status: 'sending' | 'failed'
@@ -299,6 +303,17 @@ export function ChatThread({
     return () => document.removeEventListener('visibilitychange', report)
   }, [conversationId, newestSeq, queryClient])
 
+  // PD-36: opening the chat is seeing its mention -- the list's "Mentioned"
+  // badge goes. An open summons stays until it is answered.
+  const viewerMention = details.data?.viewerState?.mention ?? null
+  useEffect(() => {
+    if (!viewerMention || viewerMention.seen) return
+    void chatApi
+      .markMentionsSeen(conversationId)
+      .then(() => queryClient.invalidateQueries({ queryKey: chatKeys.list }))
+      .catch(() => undefined)
+  }, [conversationId, viewerMention?.mentionId, viewerMention?.seen, queryClient])
+
   // Open at the newest message, and follow new ones while the reader is at the
   // bottom; someone scrolled up into history is left where they are.
   const scroller = useRef<HTMLDivElement>(null)
@@ -326,9 +341,12 @@ export function ChatThread({
         visibility: p.visibility,
         replyToMessageId: p.replyToMessageId,
         attachments: uploaded,
+        mentions: p.mentions,
       })
     },
-    onSuccess: async (_saved, p) => {
+    onSuccess: async (saved, p) => {
+      // PD-36: over a mention limit the message still went; say who was not pinged.
+      if (saved.mentionsLimited) flash(copy.mentionsLimited)
       await queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })
       setPending((all) => all.filter((x) => x.clientMessageId !== p.clientMessageId))
       void queryClient.invalidateQueries({ queryKey: chatKeys.list })
@@ -360,6 +378,7 @@ export function ChatThread({
       visibility: input.visibility,
       files: input.files,
       replyToMessageId: reply?.messageId,
+      mentions: input.mentions,
       status: 'sending',
     }
     setReply(null)
@@ -401,6 +420,13 @@ export function ChatThread({
   // A group always names its senders; so does a 1:1 the viewer is only
   // overseeing (two other people talking), but not one the viewer is in.
   const showsSenders = group || !(conv?.members ?? []).some((x) => x.actorId === staff?.id)
+  // PD-36: asked in while not a member -- the banner asks them to join (or step
+  // into a 1:1) visibly; until then the composer waits (a client choice, PD-8 unchanged).
+  const isMember = (conv?.members ?? []).some((x) => x.actorId === staff?.id)
+  const summons =
+    conv && viewerMention?.kind === 'summons' && !isMember && (viewerMention.state === 'pending' || viewerMention.state === 'stepped_in')
+      ? viewerMention
+      : null
 
   return (
     <>
@@ -693,13 +719,14 @@ export function ChatThread({
         </div>
       ) : (
         <>
+        {summons && conv && <MentionBanner conversation={conv} mention={summons} onError={setActionError} />}
         {trialGroup && (
           <TrialGroupBar
             conversationId={conversationId}
             onChanged={() => void queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) })}
           />
         )}
-        <ChatComposer
+        {summons?.state !== 'pending' && <ChatComposer
           extraItems={[
             ...(trialGroup ? [{ key: 'trial', label: trialCopy(TR.cardLabel), icon: 'calendar' as const, onSelect: () => setTrialCard(true) }] : []),
             ...lessonCards.items,
@@ -714,7 +741,7 @@ export function ChatThread({
           autoStartVoice={searchParams.get('voice') === '1'}
           onVoiceAutoStarted={() => setSearchParams({}, { replace: true })}
           onVoiceSent={() => void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })}
-        />
+        />}
         </>
       )}
       {lessonCards.dialog}
@@ -895,7 +922,7 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
       onClick={selectMode ? onToggleSelect : undefined}
@@ -964,7 +991,11 @@ function MessageItem({
               {m.attachments.map((a) => (
                 <AttachmentView key={a.id} a={a} copy={copy} />
               ))}
-              {m.body && <span dir="auto">{highlight ? <Highlighted text={m.body} query={highlight} /> : m.body}</span>}
+              {m.body && (
+                <span dir="auto">
+                  {highlight ? <Highlighted text={m.body} query={highlight} /> : <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />}
+                </span>
+              )}
             </>
           )}
           <span className="bubble__meta">

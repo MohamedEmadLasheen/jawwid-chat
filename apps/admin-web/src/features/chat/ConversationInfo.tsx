@@ -24,6 +24,7 @@ import { Link } from 'react-router-dom'
 import { parentPath } from '@/features/profiles/api'
 import { useMayOpenParentProfiles } from '@/features/profiles/hooks'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
+import { ROLE_LABEL } from '@/features/profile/copy'
 
 /**
  * Contact info / group info: who is in the conversation, and this viewer's
@@ -31,7 +32,7 @@ import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
  * a 1:1 never changes members, so it offers none.
  */
 export function ConversationInfo({ c }: { c: ChatConversation }) {
-  const { locale } = useI18n()
+  const { locale, dateTime } = useI18n()
   const copy = chatCopyFor(locale)
   const { staff } = useSession()
   const mayOpenParents = useMayOpenParentProfiles()
@@ -89,6 +90,23 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
           )}
         </div>
         <ul className="cw-members">
+          {/* PD-36: asked in, not (yet) a member -- at the top, highlighted, with who asked and when. */}
+          {(c.summoned ?? []).map((x) => (
+            <li key={`summoned-${x.actorId}`} className="cw-member cw-member--summoned">
+              <Avatar name={x.displayName || '?'} seed={x.actorId} size="sm" />
+              <span className="cw-member__name">
+                <span dir="auto">{x.displayName}</span>
+                <span className="cw-member__note">
+                  {x.state === 'stepped_in' ? copy.mentionSteppedInRow : copy.mentionWaiting}
+                  {' · '}
+                  {copy.mentionedBy(x.mentionedByName ?? copy.mentionSomeoneHere, dateTime(x.at))}
+                </span>
+              </span>
+              <span className="kind-chip kind-chip--staff">
+                {ROLE_LABEL[x.staffRole]?.[locale === 'ar' ? 'ar' : 'en'] ?? copy.role.staff}
+              </span>
+            </li>
+          ))}
           {members.map((m) => (
             <li key={m.actorId} className="cw-member">
               <Avatar name={m.displayName || '?'} seed={m.actorId} size="sm" src={m.avatarUrl} />
