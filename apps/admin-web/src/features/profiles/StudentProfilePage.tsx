@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
@@ -5,12 +7,15 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { formatDay } from '@/features/instalments/copy'
 import { WEEKDAY } from '@/features/trials/copy'
-import { parentPath, type StudentProfile } from './api'
+import { parentPath, profileKeys, type StudentProfile } from './api'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useStudent } from './hooks'
 import { familyTime } from '@/core/time/academyTime'
 import { ProgressMapPanel } from '@/features/materials/ProgressMapPanel'
 import { SubscriptionPanel } from '@/features/subscriptions/SubscriptionPanel'
+import { ChangeTeacherDialog } from '@/features/teachers/ChangeTeacherDialog'
+import { O } from '@/features/teachers/opsCopy'
+import { useMayChangeTeacher } from '@/features/teachers/hooks'
 import './profiles.css'
 
 /**
@@ -74,6 +79,12 @@ export function StudentProfilePage() {
 function StudentCard({ s }: { s: StudentProfile }) {
   const tx = useCopy()
   const { locale } = useI18n()
+  const otx = (p: { en: string; ar: string }) => (locale === 'ar' ? p.ar : p.en)
+  const queryClient = useQueryClient()
+  // PD-31: "Change teacher" for the administration; the server decides (PD-8 scope).
+  const mayChangeTeacher = useMayChangeTeacher()
+  const [changing, setChanging] = useState(false)
+  const [done, setDone] = useState<string | null>(null)
   const notSet = <span className="tf-muted">{tx(P.notSet)}</span>
   const zones = [...new Set(s.schedule.map((x) => x.timezone))]
   return (
@@ -82,7 +93,24 @@ function StudentCard({ s }: { s: StudentProfile }) {
         <h2 id="st-info" className="tf-section__title">
           {tx(P.studentInfo)}
         </h2>
+        {mayChangeTeacher && s.teacher && (
+          <button type="button" className="btn btn--sm" onClick={() => { setDone(null); setChanging(true) }}>
+            {otx(O.changeTeacher)}
+          </button>
+        )}
       </div>
+      {done && <p className="banner banner--info" role="status">{done}</p>}
+      {changing && (
+        <ChangeTeacherDialog
+          target={{ kind: 'learner', id: s.id, name: s.name, currentTeacherId: s.teacher?.id ?? null }}
+          onClose={() => setChanging(false)}
+          onDone={(text) => {
+            setChanging(false)
+            setDone(text)
+            void queryClient.invalidateQueries({ queryKey: profileKeys.student(s.id) })
+          }}
+        />
+      )}
       <div className="pf-contact">
         <div className="pf-photo">
           <Avatar name={s.name} seed={s.id} src={s.avatarUrl} size="lg" />

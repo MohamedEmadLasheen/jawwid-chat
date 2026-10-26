@@ -47,3 +47,10 @@
 .jr-stat__value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .jr-stat__split { font-size: var(--fs-sm); color: var(--text-muted); }
 .jr-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* PD-31: the lesson_moved card in a chat thread. */
+.jr-moved { display: grid; gap: 2px; min-inline-size: 12rem; }
+.jr-moved__title { font-weight: var(--fw-semibold); }
+.jr-moved__line { font-variant-numeric: tabular-nums; }
+.jr-moved__old { color: var(--text-muted); }
+.jr-moved__sub { font-size: var(--fs-sm); color: var(--text-muted); }

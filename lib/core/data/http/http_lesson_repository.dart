@@ -31,7 +31,7 @@ class HttpLessonRepository implements LessonRepository {
       // A ticket this build does not know, or a malformed row, is not offered: a
       // lesson ticket needs its lesson, a child ticket its child.
       if (kind == null) continue;
-      if (kind == LessonTicketKind.requestScheduleChange ? learnerId.isEmpty : (lessonId == null || startsAt == null)) {
+      if (kind == LessonTicketKind.changeLessonTime ? learnerId.isEmpty : (lessonId == null || startsAt == null)) {
         continue;
       }
       tickets.add(LessonTicket(
@@ -160,11 +160,65 @@ class HttpLessonRepository implements LessonRepository {
     final data = (await _client.get<Map<String, Object?>>('/lessons/$lessonId/makeup-slots')).data ?? const {};
     return MakeupOffer(
       durationMinutes: (data['durationMinutes'] as num?)?.toInt() ?? 0,
-      slots: [
-        for (final raw in (data['slots'] as List?) ?? const [])
-          if (raw is String && DateTime.tryParse(raw) != null) AppClock.view(DateTime.parse(raw)),
-      ],
+      slots: _instants(data['slots']),
+      locked: data['locked'] as String?,
     );
+  }
+
+  /// ISO instants, shown in the reader's clock; anything unreadable is dropped.
+  static List<DateTime> _instants(Object? raw) => [
+        for (final v in (raw as List?) ?? const []) ?AppClock.parse(v),
+      ];
+
+  static GroupChildSlot? _weeklySlot(Object? s) => s is Map && s['weekday'] is num && s['start'] is String
+      ? GroupChildSlot(
+          weekday: (s['weekday'] as num).toInt(),
+          start: s['start'] as String,
+          durationMinutes: (s['durationMinutes'] as num?)?.toInt() ?? 0,
+          nextStartsAt: AppClock.parse(s['nextStartsAt']),
+        )
+      : null;
+
+  @override
+  Future<MoveOffer> moveSlots(String lessonId) async {
+    final d = (await _client.get<Map<String, Object?>>('/lessons/$lessonId/move-slots')).data ?? const {};
+    return MoveOffer(
+      lessonId: d['lessonId'] as String? ?? lessonId,
+      startsAt: AppClock.parse(d['startsAt']) ?? AppClock.now(),
+      durationMinutes: (d['durationMinutes'] as num?)?.toInt() ?? 0,
+      timezone: d['timezone'] as String?,
+      slots: _instants(d['slots']),
+      locked: d['locked'] as String?,
+      refusal: d['refusal'] as String?,
+      familyMovesLeft: (d['familyMovesLeft'] as num?)?.toInt(),
+    );
+  }
+
+  /// Sends the instant exactly as the server offered it (UTC), never a re-rendered local time.
+  @override
+  Future<void> moveLesson(String lessonId, DateTime startsAt) async {
+    await _client.post<Object?>('/lessons/$lessonId/move', data: {'startsAt': startsAt.toUtc().toIso8601String()});
+  }
+
+  @override
+  Future<ChildSchedule> childSchedule(String learnerId) async {
+    final d = (await _client.get<Map<String, Object?>>('/learners/$learnerId/schedule')).data ?? const {};
+    final teacher = d['teacher'] is Map ? d['teacher'] as Map : null;
+    return ChildSchedule(
+      slots: [for (final s in (d['slots'] as List?) ?? const []) ?_weeklySlot(s)],
+      teacherName: teacher?['name'] as String?,
+      hasPendingRequest: d['pendingRequest'] is Map,
+    );
+  }
+
+  @override
+  Future<List<ScheduledLesson>> learnerLessons(String learnerId, DateTime from, DateTime to) async {
+    final data = (await _client.get<Map<String, Object?>>('/lessons', query: {
+      'learnerId': learnerId,
+      'from': from.toUtc().toIso8601String(),
+      'to': to.toUtc().toIso8601String(),
+    })).data ?? const {};
+    return [for (final raw in (data['lessons'] as List?) ?? const []) ?_lesson(raw)];
   }
 
   /// Sends the instant exactly as the server offered it (UTC), never a re-rendered local time.
@@ -174,23 +228,31 @@ class HttpLessonRepository implements LessonRepository {
   }
 
   @override
-  Future<List<WeeklyOption>> scheduleOptions(String learnerId) async {
+  Future<ScheduleOptions> scheduleOptions(String learnerId) async {
     final data = (await _client.get<Map<String, Object?>>('/learners/$learnerId/schedule-options')).data ?? const {};
-    return [
-      for (final raw in (data['options'] as List?) ?? const [])
-        if (raw is Map && raw['weekday'] is num && raw['start'] is String && DateTime.tryParse('${raw['nextStartsAt']}') != null)
-          WeeklyOption(
-            weekday: (raw['weekday'] as num).toInt(),
-            start: raw['start'] as String,
-            nextStartsAt: AppClock.view(DateTime.parse(raw['nextStartsAt'] as String)),
-          ),
-    ];
+    return ScheduleOptions(
+      timezone: data['timezone'] as String?,
+      durationMinutes: (data['durationMinutes'] as num?)?.toInt() ?? 0,
+      locked: data['locked'] as String?,
+      current: [for (final s in (data['current'] as List?) ?? const []) ?_weeklySlot(s)],
+      options: [
+        for (final raw in (data['options'] as List?) ?? const [])
+          if (raw is Map && raw['weekday'] is num && raw['start'] is String && AppClock.parse(raw['nextStartsAt']) != null)
+            WeeklyOption(
+              weekday: (raw['weekday'] as num).toInt(),
+              start: raw['start'] as String,
+              nextStartsAt: AppClock.parse(raw['nextStartsAt'])!,
+              except: _instants(raw['except']),
+            ),
+      ],
+    );
   }
 
   @override
-  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note}) async {
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyKey> slots, {String? effectiveFrom, String? note}) async {
     await _client.post<Object?>('/learners/$learnerId/schedule-change-requests', data: {
       'slots': [for (final s in slots) {'weekday': s.weekday, 'start': s.start}],
+      'effectiveFrom': ?effectiveFrom,
       'note': ?note,
     });
   }
@@ -201,30 +263,37 @@ class HttpLessonRepository implements LessonRepository {
       'from': from.toUtc().toIso8601String(),
       'to': to.toUtc().toIso8601String(),
     })).data ?? const {};
-    final out = <ScheduledLesson>[];
-    for (final raw in (data['lessons'] as List?) ?? const []) {
-      if (raw is! Map) continue;
-      final starts = DateTime.tryParse('${raw['startsAt']}');
-      final ends = DateTime.tryParse('${raw['endsAt']}');
-      final id = raw['id'];
-      if (id is! String || starts == null || ends == null) continue;
-      final learner = raw['learner'] is Map ? raw['learner'] as Map : const {};
-      out.add(ScheduledLesson(
-        id: id,
-        learnerId: learner['id'] as String? ?? '',
-        learnerName: learner['name'] as String? ?? '',
-        startsAt: AppClock.view(starts),
-        endsAt: AppClock.view(ends),
-        kind: raw['kind'] as String? ?? 'regular',
-        phase: raw['phase'] as String? ?? 'upcoming',
-        outcome: raw['outcome'] as String?,
-        suspendedFor: raw['suspendedFor'] is String ? raw['suspendedFor'] as String : null,
-        acts: [
-          for (final a in (raw['acts'] as List?) ?? const []) ?LessonTicketKind.parse(a as String?),
-        ],
-      ));
-    }
-    return out;
+    return [for (final raw in (data['lessons'] as List?) ?? const []) ?_lesson(raw)];
+  }
+
+  /// One lesson DTO (`GET /lessons`), or null for a malformed row.
+  static ScheduledLesson? _lesson(Object? raw) {
+    if (raw is! Map) return null;
+    final starts = AppClock.parse(raw['startsAt']);
+    final ends = AppClock.parse(raw['endsAt']);
+    final id = raw['id'];
+    if (id is! String || starts == null || ends == null) return null;
+    final learner = raw['learner'] is Map ? raw['learner'] as Map : const {};
+    final teacher = raw['teacher'] is Map ? raw['teacher'] as Map : const {};
+    return ScheduledLesson(
+      id: id,
+      learnerId: learner['id'] as String? ?? '',
+      learnerName: learner['name'] as String? ?? '',
+      teacherName: teacher['name'] as String?,
+      startsAt: starts,
+      endsAt: ends,
+      kind: raw['kind'] as String? ?? 'regular',
+      phase: raw['phase'] as String? ?? 'upcoming',
+      outcome: raw['outcome'] as String?,
+      movedFrom: raw['movedFrom'] as String?,
+      movedTo: AppClock.parse(raw['movedTo']),
+      movedBy: raw['movedBy'] as String?,
+      // PD-30: staff and the family read why a lesson is suspended ("payment").
+      suspendedFor: raw['suspendedFor'] is String ? raw['suspendedFor'] as String : null,
+      acts: [
+        for (final a in (raw['acts'] as List?) ?? const []) ?LessonTicketKind.parse(a as String?),
+      ],
+    );
   }
 
   @override
@@ -298,6 +367,7 @@ class HttpLessonRepository implements LessonRepository {
       unreported: n(cat('unreported')['lessons']),
       reportsOnTimeRate: (reports['onTimeRate'] as num?)?.toDouble(),
       availableMinutes: (workload['availableMinutes'] as num?)?.toInt(),
+      movesByTeacher: (d['movesByTeacher'] as num?)?.toInt(),
     );
   }
 }

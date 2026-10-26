@@ -13,7 +13,6 @@ import 'package:jawwid_chat/features/lessons/presentation/group_children_section
 import 'package:jawwid_chat/features/lessons/presentation/lesson_report_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/lesson_ticket_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/makeup_sheet.dart';
-import 'package:jawwid_chat/features/lessons/presentation/schedule_change_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/teacher_schedule_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_composer.dart';
@@ -371,7 +370,7 @@ void main() {
       await tester.pumpWidget(app(const MakeupSheet(ticket: ticket), lessons: _RecordingLessons(), role: UserRole.teacher));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('makeup-other-time')), findsOneWidget);
-      expect(find.text('Reschedule a make-up class'), findsOneWidget);
+      expect(find.text('Book the make-up lesson'), findsOneWidget);
       await tester.pumpWidget(app(const MakeupSheet(ticket: ticket), lessons: _RecordingLessons(), role: UserRole.parent));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('makeup-other-time')), findsNothing);
@@ -382,21 +381,6 @@ void main() {
       await tester.pumpWidget(app(const MakeupSheet(ticket: ticket), lessons: _RecordingLessons()));
       await tester.pumpAndSettle();
       expect(find.textContaining('supervision team will arrange'), findsOneWidget);
-    });
-
-    testWidgets('a regular-time change sends exactly the times picked', (tester) async {
-      final mon = WeeklyOption(weekday: 1, start: '17:00', nextStartsAt: DateTime(2026, 10, 19, 17));
-      final wed = WeeklyOption(weekday: 3, start: '18:30', nextStartsAt: DateTime(2026, 10, 21, 18, 30));
-      final repo = _RecordingLessons()..options = [mon, wed];
-      const ticket = LessonTicket(kind: LessonTicketKind.requestScheduleChange, learnerId: 'k1', learnerName: 'learner_l');
-      await tester.pumpWidget(app(const ScheduleChangeSheet(ticket: ticket), lessons: repo));
-      await tester.pumpAndSettle();
-      expect(find.text('Monday 5:00 PM'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('weekly-3-18:30')));
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('schedule-change-send')));
-      await tester.pumpAndSettle();
-      expect(repo.requested.single.map((o) => '${o.weekday} ${o.start}'), ['3 18:30']);
     });
 
     Widget scheduleApp(_RecordingLessons repo) => ProviderScope(
@@ -657,9 +641,7 @@ class _RecordingLessons implements LessonRepository {
 
   /// What makeupSlots answers; and what was booked / requested.
   MakeupOffer offer = const MakeupOffer(durationMinutes: 30, slots: []);
-  List<WeeklyOption> options = const [];
   final booked = <DateTime>[];
-  final requested = <List<WeeklyOption>>[];
   List<ScheduledLesson> mine = const [];
 
   @override
@@ -671,14 +653,9 @@ class _RecordingLessons implements LessonRepository {
     booked.add(startsAt);
   }
 
+  /// PD-31's weekly and move flows have their own fake (change_lesson_time_test.dart).
   @override
-  Future<List<WeeklyOption>> scheduleOptions(String learnerId) async => options;
-
-  @override
-  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note}) async {
-    _maybeRefuse();
-    requested.add(slots);
-  }
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError('${invocation.memberName}');
 
   @override
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => mine;

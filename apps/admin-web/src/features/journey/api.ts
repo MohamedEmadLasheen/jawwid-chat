@@ -121,6 +121,8 @@ export const journeyKeys = {
 export const LESSON_CARD_KINDS: ReadonlySet<string> = new Set([
   'lesson_report', 'lesson_absence', 'lesson_apology', 'lesson_teacher_apology', 'lesson_cancelled',
   'lesson_late_apology', 'lesson_ruling', 'lesson_corrected', 'lesson_makeup_booked',
+  // PD-31: a moved lesson's card opens the NEW lesson's record.
+  'lesson_moved',
 ])
 
 /** The report's quick choices -- the same codes as apps/api/src/lessons/report-vocab.ts. */

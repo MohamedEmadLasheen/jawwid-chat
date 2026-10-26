@@ -1,7 +1,7 @@
 # PD-30: Subscriptions, lesson balance, the payment lock and its exceptions
 
 Record: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-30.
-Migration: `supabase/migrations/20261026100000_chat_pd030_subscription_lock.sql`.
+Migration: `supabase/migrations/20261026140000_chat_pd030_subscription_lock.sql`.
 Code: `apps/api/src/platform/subscription-lock.ts` (enforcement reader),
 `apps/api/src/platform/subscription-policy.ts` (who grants exceptions),
 `apps/api/src/billing/subscription-ledger.service.ts` + `subscription-reads.ts` (ledger, balance,

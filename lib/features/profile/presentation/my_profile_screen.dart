@@ -8,6 +8,7 @@ import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/parent_profile.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../lessons/presentation/child_schedule_screen.dart';
 import '../../materials/presentation/child_materials_entry.dart';
 import '../application/parent_profile_controller.dart';
 
@@ -191,9 +192,12 @@ class _SubjectCardState extends ConsumerState<_SubjectCard> {
                   ),
               ],
             ),
-            // PD-29: each child's Materials, from the parent's own profile.
-            if (!subject.isParent && subject.id != null)
+            // PD-29: each child's Materials, and PD-31: their Schedule, from the parent's
+            // own profile.
+            if (!subject.isParent && subject.id != null) ...[
               ChildMaterialsEntry(learnerId: subject.id!, childName: subject.displayName),
+              ChildScheduleEntry(learnerId: subject.id!, childName: subject.displayName),
+            ],
             const SizedBox(height: Spacing.spacing4),
             if (_editing)
               _EditForm(

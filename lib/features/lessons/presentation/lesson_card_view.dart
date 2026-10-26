@@ -11,7 +11,7 @@ import '../../../shared/utils/text_direction.dart';
 import '../../materials/data/materials_repository.dart';
 import '../domain/report_vocab.dart';
 import 'lesson_report_sheet.dart' show showEditReportSheet;
-import 'schedule_change_sheet.dart' show weeklyLabel;
+import 'lesson_ticket_sheet.dart' show lessonWhen, weeklyLabel;
 
 /// PD-11: a ticket's card, drawn inside its message bubble.
 ///
@@ -36,6 +36,7 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
         ? (Icons.check_circle_outline, l10n.cardRulingExcusedTitle)
         : (Icons.info_outline, l10n.cardRulingCreditedTitle),
     'lesson_makeup_booked' => (Icons.event_available_outlined, l10n.cardMakeupBookedTitle),
+    'lesson_moved' => (Icons.event_repeat_outlined, l10n.cardMovedTitle),
     'lesson_makeup_resolved' => (Icons.task_alt_outlined, l10n.cardMakeupResolvedTitle),
     'schedule_change_requested' => (Icons.edit_calendar_outlined, l10n.cardScheduleRequestedTitle),
     'schedule_change_decided' => card.text('decision') == 'approved'
@@ -108,6 +109,16 @@ class _LessonCard extends ConsumerWidget {
     final learner = card.text('learnerName');
     final starts = card.time('startsAt');
     final rating = card.integer('rating');
+    // PD-31: a moved lesson reads "previous -> new", both in the reader's own clock.
+    final previous = card.kind == 'lesson_moved' ? card.time('previousStartsAt') : null;
+    final movedBy = card.kind == 'lesson_moved'
+        ? switch (card.text('movedBy')) {
+            'family' => l10n.cardMovedByFamily,
+            'teacher' => l10n.cardMovedByTeacher,
+            'staff' => l10n.cardMovedByStaff,
+            _ => null,
+          }
+        : null;
 
     final action = switch (card.text('action')) {
       'substitute_teacher' => l10n.cardMakeupActionSubstitute,
@@ -147,6 +158,8 @@ class _LessonCard extends ConsumerWidget {
           }(),
     ];
     final rows = <(String, String)>[
+      if (previous != null && starts != null)
+        ('', l10n.changeTimeSummary(lessonWhen(context, previous), lessonWhen(context, starts))),
       ?action == null ? null : (l10n.cardMakeupResolvedTitle, action),
       if (card.kind == 'learner_transferred' && card.text('teacherName') != null)
         ('', l10n.cardTransferredBody(card.text('teacherName')!)),
@@ -241,6 +254,7 @@ class _LessonCard extends ConsumerWidget {
             ),
           if (card.kind == 'lesson_late_apology' || card.kind == 'schedule_change_requested')
             _Footnote(text: l10n.cardUnderReview, color: muted),
+          if (movedBy != null) _Footnote(text: movedBy, color: muted),
           if (card.flag('makeupOwed'))
             _Footnote(text: l10n.cardMakeupOwed, color: muted),
           if (card.flag('corrected'))

@@ -308,7 +308,8 @@ class _LessonRow extends ConsumerWidget {
 };
 
 /// The teacher's month at a glance: lessons held and hours, reports still owed,
-/// and how many reports went in on time. Nothing if the server has no answer.
+/// how many reports went in on time and (PD-31) how many lessons they moved. Nothing
+/// if the server has no answer.
 class _WorkloadSummary extends ConsumerWidget {
   const _WorkloadSummary();
 
@@ -332,6 +333,9 @@ class _WorkloadSummary extends ConsumerWidget {
             Text(l10n.workloadHeld(w.heldLessons, hours), style: theme.textTheme.titleMedium),
             if (w.unreported > 0) Text(l10n.workloadNeedsReport(w.unreported), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
             if (w.reportsOnTimeRate != null) Text(l10n.workloadOnTime('${(w.reportsOnTimeRate! * 100).round()}%'), style: theme.textTheme.bodySmall),
+            // PD-31: a fact about the month, not a violation -- neutral, like the line above.
+            if ((w.movesByTeacher ?? 0) > 0)
+              Text(l10n.workloadMoved(w.movesByTeacher!), key: const ValueKey('workload-moved'), style: theme.textTheme.bodySmall),
           ],
         ),
       ),

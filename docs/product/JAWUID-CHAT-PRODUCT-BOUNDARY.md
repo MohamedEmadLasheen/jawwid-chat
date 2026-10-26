@@ -148,6 +148,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-27 was closed by the product owner on 2026-10-22** (payments: payment links, card payments through Stripe, bank-transfer receipts, cash, invoices, instalment reminders). It builds on PD-17.
 **PD-28 was closed by the product owner on 2026-10-24** (teachers use their portal in a laptop browser: the same app and the same account, teacher-only on the web for now). It extends PD-23's browser session rules to teachers.
 **PD-30 was closed by the department head on 2026-10-26** at the owner's request (subscriptions carry lessons; a child's group locks when they are used up or an instalment is overdue; three roles grant exceptions). It builds on PD-15, PD-17 and PD-27.
+**PD-31 was closed on 2026-10-26** (scheduling made direct: time chips, a child's schedule, moving one lesson or every week, changing the teacher).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -180,6 +181,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-27** | **Payments: links, card, bank transfer, cash, invoices, reminders** (2026-10-22) | **CLOSED** — a payment request carries a unique link that works before the parent has an account; card payments through Stripe Checkout are recorded only from a verified webhook, exactly once; parents upload bank-transfer receipts that staff approve or reject with a reason; staff record cash; instalments may be paid in part and by several methods; every payment issues a numbered invoice the parent downloads as a PDF; a trial's payments move onto the family at Assign; append-only, audited, reminders before and after the due date |
 | **PD-28** | **The teacher portal in a browser** (2026-10-24) | **CLOSED** — a teacher signs in at Admin Web's address under `/teacher/` with the same account and gets the same portal as on the phone (the Flutter app built for the web, nothing rebuilt); only teachers on the web for now, everyone else is told to use the app (or Admin Web for staff); the browser keeps the session as Admin Web does (this tab only, or "keep me signed in" on this device) with Admin Web's lifetimes (12 h / 7 d, kept signed in 7 d / 30 d); no push, app lock or voice-note recording in the browser. Record: `../mobile/teacher-web-portal.md` |
 | **PD-30** | **Subscriptions, lesson balance, the payment lock and its exceptions** (2026-10-26) | **CLOSED** — each subscription says how many lessons it includes; held lessons and no-shows use them; two grace lessons follow, then the child's group is read-only for the parent and the teacher (staff still write; the parent's chat with the supervisor never locks), calls and bookings are refused and the lessons are put on hold; an instalment unpaid after its due date locks the same way; paying unlocks at once; the super admin, the Operations Manager and the Sales Manager grant dated exceptions; the parent's app gets a Subscriptions tab; the report says "Lesson N of M". Record: `../admin/pd030-subscriptions.md` |
+| **PD-31** | **Scheduling made direct** (2026-10-26) | **CLOSED** — one time-chip picker everywhere; "Change lesson time" asks "this lesson only" (instant, a new row naming the old, never an apology or a violation; family limits) or "every week" (before → after, from a date; family and teacher request, the Teachers department decides, a request no longer free is flagged first); a weekly lesson the materializer cannot create is listed, never lost; the child's PD-8 supervisor, their backup, the Operations Manager, the Teachers department and the super admin change a group's teacher in one transaction, never dropping weekly times; parents see each child's schedule |
 
 ---
 
@@ -2777,7 +2779,7 @@ switch              SUBSCRIPTION_LOCK_ENFORCED: on in staging, off in production
                     told; holds begin on the next pass
 ```
 
-**Implementation phase.** Migration `20261026100000_chat_pd030_subscription_lock`
+**Implementation phase.** Migration `20261026140000_chat_pd030_subscription_lock`
 (the ledger, exceptions, state and events, renewal requests, the request's and
 the report's new columns, the triggers, system-recorded `suspended`, the
 materializer's hold). `SubscriptionLockReader` (platform), `SubscriptionLedger`
@@ -2805,7 +2807,109 @@ moved to the Subscriptions tab).
 
 ---
 
-### Decisions still open after PD-1 to PD-29
+### PD-31 · Scheduling made direct: time chips, a child's schedule, moving lessons, changing the teacher
+
+**Closed 2026-10-26.** Items 1, 7, 10 and 12 of the owner's list of 2026-10-26. The design and the audit below were approved by the department head the same day, with the owner's answers to three questions.
+
+The owner asked for four things:
+- show a trial's available times directly instead of in a dropdown;
+- give parents each child's schedule;
+- make "change class time" easier, faster and more intuitive;
+- let the super admin, the Operations supervisors and the Teacher Supervisors change a group's teacher without losing its history, lessons or records.
+
+**What the audit found** (before PD-31):
+1. No flow moved ONE lesson.
+   - A family had to file an apology and then book a make-up.
+   - A teacher could only file "I can't teach". That is `teacher_apology`, which is a ladder violation (PD-15), so a move the family agreed to was counted against the teacher.
+   - Staff added a one-off lesson next to the old one instead of moving it.
+2. "Change regular lesson times":
+   - It was one flat cloud of weekly chips, with the current times not shown.
+   - Picking one chip silently replaced *every* weekly time.
+   - It had no "from when".
+   - A time taken while the request waited failed only at approval.
+   - Teachers had no way to ask at all.
+3. Staff typed weekdays and times blind and saw a clash only after saving.
+4. Two silent losses:
+   - The materializer skipped a weekly lesson that collided with another lesson of the teacher, without telling anyone.
+   - A transfer dropped the weekly times when the new teacher was not free at them (`scheduleKept: false`).
+
+The PD-11 approval rules were not the problem and are kept.
+
+**Final decision.**
+
+```
+the picker     ONE component in Admin Web and in the app: day chips with a count of
+               free times, then time chips grouped Morning / Afternoon / Evening (in the
+               reader's zone, PD-22; Cairo in Admin Web); only free times are shown, so a
+               clash cannot be chosen; a time taken meanwhile is refused and the chips reload
+"Change lesson time" (one entry per child, family and teacher; staff in Admin Web)
+  this lesson only   instant; the old row becomes `rescheduled` (counted for nobody), the
+                     lesson continues as a new row naming it (chat.lesson.moved_from); a
+                     `lesson_moved` card "previous -> new"; NOT an apology, NOT a violation
+                     family: into free times only, at least lesson.booking_lead_minutes
+                       ahead, each lesson once (over its whole moved chain), at most
+                       lesson.family_moves_per_month (4) per child per calendar month
+                     teacher: into free times; counted as "moves by teacher" in their month
+                       (statistics), never on the ladder
+                     staff: unlimited; also an agreed time not on a day off
+  every week         the current times as cards; replace / add / remove; from a date; a
+                     before -> after summary that names the weeks another lesson already
+                     holds ("except 2 Nov"); family AND teacher send a request, the Teachers
+                     department decides (PD-11); staff apply directly
+approval       Needs action shows before -> after, who asked, from when, and re-checks every
+               requested time NOW: "no longer free" is flagged before anyone approves
+nothing lost   a weekly lesson the materializer could not create is recorded
+               (chat.lesson_blocked_occurrence) and listed in Needs action: give it
+               another time, or dismiss it; it clears itself when the time frees up
+change teacher the super admin; the Teachers department (manager and supervisors); the
+               child's PD-8 supervisor, their active backup and the Operations Manager
+               (chat.staff_principals). From the group's info panel (every child of the
+               group taught by the old teacher moves together), the Student Profile, or
+               Schedules. A teacher on leave or suspended cannot be chosen (PD-26).
+               The weekly times move only if the new teacher is free at them; otherwise the
+               dialog requires new ones and the server refuses (times_not_free). Then ONE
+               transaction: chat.transfer_learner (the assignment gate; same conversation,
+               old teacher leaves, new joins, past lessons stay the old teacher's), the new
+               weekly times, the family's card, the handover, the audit, Core's event
+child schedule the parent's profile: each child's weekly times and next four weeks of lessons
+               (date, time in the parent's zone, teacher, length, status), read-only, with
+               "Change lesson time"; the existing family-scoped routes
+payment lock   a child PD-30 locks is offered no time and every change above is refused
+               (SchedulingService.lockOf, wired to PD-30's state)
+```
+
+**Implementation phase.** Built 2026-10-26.
+- Migration: `20261026110000_chat_pd031_scheduling.sql`. It adds `lesson.moved_from`, rebuilds `chat.guard_lesson` from `20261021120000` with the moved-lesson branch, widens `rescheduled` to the family and the teacher, and adds the trigger `chat.skip_moved_occurrence`. It also adds `chat.lesson_blocked_occurrence` and `chat.collect_blocked_occurrences`, the teacher's request and its date, the supervisor check in `chat.transfer_learner`, and the card kind `lesson_moved`.
+- API routes: `GET/POST /lessons/:id/move[-slots]`, `GET /learners/:id/free-slots`, `GET /learners/:id/schedule-options?teacherId=`, `/lessons/blocked/:id/{slots,schedule,dismiss}`, `GET /learners/:id/transfer-preview`, `GET/POST /conversations/:id/teacher[-preview]` and `GET /teachers/candidates`.
+- Admin Web: `shared/components/SlotPicker`, the trial dialog, Schedules, Needs action and `ChangeTeacherDialog`.
+- The app: `SlotChipPicker`, the "Change lesson time" sheet and the child schedule screen.
+- Protected by `apps/api/test/integration/pd031-scheduling.spec.ts`.
+
+**Review changes (department head, 2026-10-26).**
+- **Kept weekly times keep their instants.** On a change of teacher, each weekly time is read in its own zone and written on the new teacher's clock (PD-22). A time two zones cannot keep exactly, because one of them changes its clocks, is refused with `times_not_free`, and new times are chosen.
+- **The family's move limits are checked under a lock.** They are recounted inside the transaction, behind `SELECT … FOR UPDATE` on the learner, and the old row is closed only while still open. Two parallel moves at the limit yield exactly one.
+- **The guard accepts a move only within its transaction.** A moved lesson may continue only a lesson rescheduled in the same transaction (`outcome_at = now()`).
+- **Any lock answer locks.** Any non-null answer from `chat.learner_lesson_lock` locks; an unknown answer locks as `other`. If PD-30's tables exist without the function, `lockOf` throws and startup fails.
+- **A stranded one-off is listed and announced.** A one-off a change of teacher strands is recorded in Needs action (`reason teacher_changed`), and the family reads a `lesson_unscheduled` card. Lessons are generated inside the transfer's transaction.
+- **Teachers need notice to move a lesson.** A teacher's single move needs `lesson.teacher_move_lead_minutes` (120) of notice.
+- **The teacher list is open to anyone who may change some teacher.** That is anyone with transfer standing on some child.
+- **Previews say nothing before authorization.** The group preview authorizes every child of the group before it reads anything.
+
+**Consequences.**
+- PD-11's table gains `move_lesson` (family, teacher, supervisor, manager). `request_schedule_change` gains the teacher, and `transfer` gains the supervisor.
+- `chat.materialize_lessons` is unchanged. The trigger keeps a moved weekly lesson moved, so PD-30's rewrite of it does not collide.
+- A moved lesson is a new row, so a count of a child's lessons must count a moved chain once (PD-30's "Lesson N of M").
+
+**Deprecated behaviour.**
+- "Reschedule a make-up class" becomes **"Book the make-up lesson"**.
+- The app's flat "Change regular lesson times" sheet is replaced; the `request_schedule_change` ticket is still emitted for older builds.
+- A transfer's `scheduleKept: false` and `keepTimes` are gone.
+
+**Closed.** 2026-10-26.
+
+---
+
+### Decisions still open after PD-1 to PD-31
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

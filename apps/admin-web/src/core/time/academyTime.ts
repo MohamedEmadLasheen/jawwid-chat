@@ -108,3 +108,20 @@ export function isoToAcademyWallClock(iso: string, zone = ACADEMY_ZONE): { date:
   const shifted = new Date(at.getTime() + offsetMinutes(at, zone) * 60_000).toISOString()
   return { date: shifted.slice(0, 10), time: shifted.slice(11, 16) }
 }
+
+/** "3 Nov" / "٣ نوفمبر" -- the calendar day of an instant in a zone. */
+export function dayMonthIn(iso: string, zone: string, locale: TimeLocale): string {
+  return new Intl.DateTimeFormat(tag(locale), { timeZone: zone, day: 'numeric', month: 'short' }).format(new Date(iso))
+}
+
+/** "Mon 27 Oct 17:00" -- an instant as one short line in a zone (PD-31 summaries). */
+export function whenIn(iso: string, zone: string, locale: TimeLocale): string {
+  return `${weekdayIn(iso, zone, locale)} ${dayMonthIn(iso, zone, locale)} ${clockIn(iso, zone, locale)}`
+}
+
+/** The ISO weekday (1 = Monday … 7 = Sunday) of an instant in a zone. */
+export function isoWeekdayIn(iso: string, zone = ACADEMY_ZONE): number {
+  const { date } = isoToAcademyWallClock(iso, zone)
+  const d = new Date(`${date}T12:00:00Z`).getUTCDay()
+  return d === 0 ? 7 : d
+}

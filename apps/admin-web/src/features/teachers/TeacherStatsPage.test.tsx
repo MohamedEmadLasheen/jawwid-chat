@@ -36,6 +36,7 @@ const ROWS: TeacherRow[] = [
     attendanceRate: 0.9,
     reportsOnTimeRate: 0.75,
     trials: { total: 7, conducted: 5, subscribed: 3, notSubscribed: 1, noShow: 2, awaiting: 1, upcoming: 2, cancelled: 1, conversionRate: 0.75 },
+    movesByTeacher: 4,
     summary: {
       totalScheduled: 130, conducted: 99, studentAttended: 99, studentNoShow: 10,
       studentExcuses: { total: 12, beforeStart: 9, afterStart: 3 }, teacherExcuses: 4, teacherNoShow: 1, cancelled: 2,
@@ -53,6 +54,7 @@ const ROWS: TeacherRow[] = [
     attendanceRate: null,
     reportsOnTimeRate: null,
     trials: { total: 0, conducted: 0, subscribed: 0, notSubscribed: 0, noShow: 0, awaiting: 0, upcoming: 0, cancelled: 0, conversionRate: null },
+    movesByTeacher: 0,
     summary: {
       totalScheduled: 0, conducted: 0, studentAttended: 0, studentNoShow: 0,
       studentExcuses: { total: 0, beforeStart: 0, afterStart: 0 }, teacherExcuses: 0, teacherNoShow: 0, cancelled: 0,
@@ -98,6 +100,7 @@ const DETAIL: TeacherDetail = {
   workload: { availableMinutes: 9600, scheduledMinutes: 3978, freeMinutes: 5622 },
   movements: { transfersIn: 1, transfersOut: 0, paused: 2, stopped: 0 },
   previous: { month: '2026-09', held: { lessons: 90, minutes: 3600 } },
+  movesByTeacher: 4,
 }
 
 beforeEach(() => {
@@ -147,9 +150,11 @@ describe('the statistics', () => {
     const two = within(table).getByRole('button', { name: 'Teacher Two' }).closest('tr')!
     expect(within(two).getByText(/Inactive/)).toBeInTheDocument()
     expect(within(two).getAllByText('—')).toHaveLength(2)
-    // Trials this month, and how many subscribed.
+    // Trials this month, and how many subscribed; then (PD-31) lessons the teacher moved, a plain figure.
     const cells = within(one).getAllByRole('cell').map((c) => c.textContent)
-    expect(cells.slice(-2)).toEqual(['7', '3'])
+    expect(cells.slice(-3)).toEqual(['7', '3', '4'])
+    expect(within(table).getByRole('columnheader', { name: 'Moved by teacher' })).toBeInTheDocument()
+    expect(within(one).getAllByRole('cell').at(-1)).not.toHaveClass('ts-attention')
     expect(calls(/\/stats\/teachers\?month=2026-10$/)).toBeGreaterThan(0)
   })
 
@@ -179,6 +184,10 @@ describe('the statistics', () => {
     expect(within(metric('Conversion')).getByText('75%')).toBeInTheDocument()
     expect(within(trials).getByText('2 upcoming and 1 cancelled are not counted.')).toBeInTheDocument()
     expect(screen.getByText('60 h held in 2026-09')).toBeInTheDocument()
+    // PD-31: moving a lesson is information, never a violation.
+    const moves = screen.getByRole('article', { name: 'Lessons moved by teacher' })
+    expect(within(moves).getByText('4')).toBeInTheDocument()
+    expect(within(moves).getByText(/not a violation/)).toBeInTheDocument()
   })
 
   it('a refusal from the server is shown, not hidden', async () => {
