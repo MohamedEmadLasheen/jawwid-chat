@@ -87,7 +87,7 @@ export class ConversationController {
           // PD-14: nothing is held for approval. Still sent, as false, for
           // clients built before it.
           viewerRequiresApproval: false,
-          viewerState: viewerState(states.get(c.id), c.id, actor.actorId, seats ? (seats.get(c.id) ?? null) : undefined),
+          viewerState: viewerState(states.get(c.id), c.id, actor.actorId, seats?.get(c.id)),
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
           learnerAvatarUrl: c.learner
             ? signAvatar('learner', c.learner.id, c.id, actor.actorId, c.learner.avatarObjectKey)
@@ -195,7 +195,7 @@ export class ConversationController {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: false, // PD-14
       viewerModerates: this.authz.moderatableAuthorKinds(actor, await this.conversations.staffAccess(actor, conversation)),
-      viewerState: viewerState(states.get(conversation.id), conversation.id, actor.actorId, seats ? (seats.get(conversation.id) ?? null) : undefined),
+      viewerState: viewerState(states.get(conversation.id), conversation.id, actor.actorId, seats?.get(conversation.id)),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
       learnerAvatarUrl: conversation.learner
         ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
@@ -324,11 +324,11 @@ function viewerState(
     | undefined,
   conversationId: string,
   viewerId: string,
-  /** PD-35, staff only (undefined for anyone else, so the field is absent). */
+  /** PD-35: the viewer's open seat here, if any. Absent otherwise, so the shape is unchanged for everyone else. */
   seat?: ConversationViewerStateDto['seat'],
 ): ConversationViewerStateDto {
   return {
-    ...(seat !== undefined ? { seat } : {}),
+    ...(seat ? { seat } : {}),
     pinned: !!row?.pinnedAt,
     favorite: !!row?.favoritedAt,
     archived: !!row?.archivedAt,

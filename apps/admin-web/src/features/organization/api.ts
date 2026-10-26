@@ -95,6 +95,8 @@ export interface TeacherAssignments {
   teachers: TeacherAssignment[]
   /** The Teachers department's primary supervisors. */
   supervisors: Array<{ id: string; name: string }>
+}
+
 /** PD-33: a supervisor away, a backup covering, as GET/POST /org/covers return it. */
 export interface Cover {
   id: string
