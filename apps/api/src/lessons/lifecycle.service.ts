@@ -530,8 +530,24 @@ export class LifecycleService {
     if (actor.kind !== ActorKind.STAFF || !actor.organizationId || !actor.isActive) {
       throw new CommError(CommErrorCode.LESSON_DENIED, 'staff only');
     }
-    const manager = actor.staffRole === 'super_admin' || (await this.lessons.isManager(actor));
-    const scope = manager ? null : await this.lessons.supervisedLearnerIds(actor, new Date());
+    const department = actor.staffRole !== 'super_admin' && (await this.lessons.isManager(actor));
+    const teachers = department ? await this.lessons.teacherScope.scopeOf(actor) : null;
+    const manager = actor.staffRole === 'super_admin' || (teachers?.all ?? false);
+    // PD-35: a narrowed teacher supervisor sees their teachers' children's pauses
+    // and, like anyone, the children they supervise.
+    const scope = manager
+      ? null
+      : [
+          ...new Set([
+            ...(await this.lessons.supervisedLearnerIds(actor, new Date())),
+            ...(teachers && !teachers.all
+              ? (await this.prisma.learner.findMany({
+                  where: { organizationId: actor.organizationId, teacherId: { in: [...teachers.teacherIds] } },
+                  select: { id: true },
+                })).map((l) => l.id)
+              : []),
+          ]),
+        ];
     if (scope !== null && scope.length === 0) return { suspensions: [] };
     const rows = await this.prisma.learnerSuspension.findMany({
       where: {

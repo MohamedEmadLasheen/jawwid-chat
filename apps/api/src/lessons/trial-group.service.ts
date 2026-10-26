@@ -106,6 +106,8 @@ export class TrialGroupService {
          AND s.is_active AND s.left_at IS NULL
          AND s.role IN ('admin', 'coverage', 'manager')
          AND chat.teachers_department_role(s.id) IS NOT NULL
+         -- PD-35: with the switch on, the teacher's own supervisor and the Teachers Manager.
+         AND (NOT chat.teacher_scope_strict() OR chat.staff_teacher_scope(s.id, ${teacherId}::uuid) IN ('self', 'manager'))
        ORDER BY s.id`;
     const wanted = new Set(staff.map((s) => s.id));
 
@@ -160,7 +162,13 @@ export class TrialGroupService {
     // A seat ends only for someone who may no longer sit here at all; a Sales
     // supervisor's own choice to stay is never undone by a sync.
     const sales = liveStaff.size === 0 ? new Set<string>() : await this.inSales(tx, [...liveStaff]);
-    const leaving = [...liveStaff].filter((id) => !wanted.has(id) && !sales.has(id));
+    // PD-35: nor is a visible seat taken by choice -- it is the seat service's to end.
+    const seated = new Set(
+      (await tx.$queryRaw<Array<{ staff_id: string }>>`
+        SELECT staff_id::text AS staff_id FROM chat.conversation_seat
+         WHERE conversation_id = ${conv.id}::uuid AND left_at IS NULL AND member_id IS NOT NULL`).map((r) => r.staff_id),
+    );
+    const leaving = [...liveStaff].filter((id) => !wanted.has(id) && !sales.has(id) && !seated.has(id));
     if (leaving.length > 0) {
       await tx.conversationMember.updateMany({
         where: { conversationId: conv.id, actorId: { in: leaving }, leftAt: null },
@@ -227,7 +235,7 @@ export class TrialGroupService {
    */
   async leave(actor: Actor, conversationId: string) {
     const conv = await this.trialGroup(actor, conversationId);
-    if (actor.kind !== ActorKind.STAFF || (await this.isPermanentStaff(actor.actorId))) {
+    if (actor.kind !== ActorKind.STAFF || (await this.isPermanentStaff(actor.actorId, conv.trialTeacherId as string))) {
       throw new CommError(CommErrorCode.LESSON_DENIED, 'the teacher and the Teacher Supervisors are permanent members of a trial group');
     }
     await this.prisma.$transaction(async (tx) => {
@@ -252,7 +260,7 @@ export class TrialGroupService {
     const teacher = await this.prisma.teacher.findUnique({ where: { id: conv.trialTeacherId as string }, select: { id: true, name: true } });
     const seated = actor.kind === ActorKind.STAFF
       && (await this.prisma.conversationMember.count({ where: { conversationId: conv.id, actorId: actor.actorId, leftAt: null } })) > 0;
-    const permanent = actor.kind === ActorKind.STAFF && (await this.isPermanentStaff(actor.actorId));
+    const permanent = actor.kind === ActorKind.STAFF && (await this.isPermanentStaff(actor.actorId, conv.trialTeacherId as string));
     const sales = await this.canSitAsSales(actor);
     return {
       conversationId: conv.id,
@@ -281,10 +289,13 @@ export class TrialGroupService {
     return (await this.inSales(this.prisma, [actor.actorId])).has(actor.actorId);
   }
 
-  private async isPermanentStaff(staffId: string): Promise<boolean> {
-    const rows = await this.prisma.$queryRaw<Array<{ role: string | null }>>`
-      SELECT chat.teachers_department_role(${staffId}::uuid) AS role`;
-    return rows[0]?.role !== null && rows[0]?.role !== undefined;
+  /** The Teachers department -- with PD-35's switch on, the teacher's own supervisor and the Teachers Manager. */
+  private async isPermanentStaff(staffId: string, teacherId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ permanent: boolean }>>`
+      SELECT chat.teachers_department_role(${staffId}::uuid) IS NOT NULL
+             AND (NOT chat.teacher_scope_strict()
+                  OR chat.staff_teacher_scope(${staffId}::uuid, ${teacherId}::uuid) IN ('self', 'manager')) AS permanent`;
+    return rows[0]?.permanent === true;
   }
 
   /** Of `ids`, the live conversation staff of the trial desk (Sales or Operations). */

@@ -179,9 +179,11 @@ export class ConversationSeatService {
       await this.lock(tx, conv.id, staff.actorId);
       const open = await this.openSeat(tx, conv.id, staff.actorId);
       if (!open) throw new CommError(CommErrorCode.SEAT_NOT_FOUND, 'no open seat here');
-      await tx.$executeRaw`
+      const ended = await tx.$executeRaw`
         UPDATE chat.conversation_seat SET left_at = now(), left_kind = 'left'
          WHERE id = ${open.id}::uuid AND left_at IS NULL`;
+      // Absorbed (or swept) meanwhile: the member row is no longer the seat's to end.
+      if (ended === 0) throw new CommError(CommErrorCode.SEAT_NOT_FOUND, 'no open seat here');
       await this.endSeatInTx(tx, open, 'left', staff.actorId, staff.displayName);
       return open;
     });

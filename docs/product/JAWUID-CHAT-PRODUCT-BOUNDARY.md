@@ -596,7 +596,7 @@ and workload analytics:
 | Monthly scheduled hours | sum of lesson durations in the month, all outcomes |
 | Actual teaching hours | sum of durations of `held` lessons that have a report |
 | Cancellation / apology hours | sum of durations of non-`held` lessons, split by outcome |
-| Available scheduled hours | availability-template hours in the month, minus extra days off, minus scheduled lesson hours (fixed-shift teachers only) |
+| Available / free hours (PD-38) | one partition of the month's working hours, from `chat.calendar_capacity` (days of the academy's zone): **available** = the shift (full/part-shift teachers) or the availability in force that day (hourly, or no pattern yet), minus approved leave and days off; available = **booked within** (lessons, overlaps merged) + **paused within** + **free**. Booked time outside the hours is **outside**. *Scheduled hours* (above) still count every lesson, outside the hours too, so available − scheduled is not free. Read by the Teacher File and by the teacher's own workload (`GET /stats/me`). |
 | Trial lessons | `kind = trial` and `held`, split into converted / not converted |
 
 **Implementation phase.** Not yet scheduled against a milestone. Order: **L1** lesson + outcome +
@@ -3186,6 +3186,75 @@ PD-8 decision unchanged, else `seated`); `ConversationSeatService` is the only
 writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
 `POST conversations/:id/leave`, `GET me/seats`. Proven by
 `apps/api/test/integration/conversation-seat-pd035.spec.ts`.
+
+**Security review (department head, 2026-10-26), fixed forward in
+`20261026160003_chat_pd035_seat_security_fixes.sql` and the API.**
+- A seat's member row never counts as PD-8 standing, and never lends access to
+  whoever acts for its holder.
+- It is never the admin role that may change membership.
+- A seat holder gets no approvals and no internal-note fan-out, and is pushed
+  only while the seat still gives access.
+- Leaving and absorbing one seat never interleave (one lock; leave checks its
+  row count).
+
+**Final decision (part 2: teacher supervisors).** Department head, approved
+2026-10-26; owner answers Q1–Q4 relayed the same day.
+1. **Each teacher has ONE teacher supervisor**, a primary supervisor of the
+   Teachers department (`chat.teacher_supervisor_assignment`). It is set by the
+   Teachers Manager or the super admin on Organization → *Teachers &
+   supervisors*, which shows how many teachers have none. Every change is
+   audited. The database keeps an assigned supervisor in the department.
+2. **The scope** (`chat.staff_teacher_scope`):
+   - the super admin and the Teachers Manager cover every teacher;
+   - a teacher supervisor covers their own teachers. PD-8 backup links (and PD-33
+     covers) are the Operations department's only, so a teacher supervisor has
+     no backup today; the scope would follow one through `staff_acts_for` if a
+     later decision adds them.
+3. **The switch `TEACHER_SUPERVISOR_STRICT_SCOPE`** (Q1, changed by the department
+   head). It is **off by default everywhere**.
+   - **Off:** the Teachers department works department-wide exactly as before
+     PD-35, while teachers are assigned.
+   - **On:** a teacher supervisor sees and acts only on their own teachers. This
+     covers:
+     - the Teacher File and its lists;
+     - lessons, the Needs-action queue and statistics;
+     - trials, pauses, leave, discipline and certificates;
+     - complaints, rewards and parent feedback;
+     - the supervision conversation and the trial group, whose staff seats become
+       the teacher's own supervisor and the Teachers Manager.
+
+     Anything else reads as not found.
+   - The API and the worker write the switch into `chat.config` at boot, so the
+     database and the API read one value. The worker re-seats every supervision
+     conversation and trial group once at start.
+4. **The `supervision` seat.** A teacher supervisor (or the Teachers Manager)
+   joins, visibly, one of these, and only these:
+   - the Student Group or family group of a child taught by a teacher in their
+     scope;
+   - that teacher's supervision conversation or trial group.
+
+   The rules for this seat:
+   - It is decided by assignment, whatever the switch says.
+   - Anything else is refused: *ask the Teachers Manager*.
+   - It grants the `seated` basis while it holds. A change of teacher or of
+     supervisor ends access at once, and the sweep ends the seat.
+   - It is never taken in a 1:1, and BR-1 / PD-7 are untouched.
+   - It ends after 14 idle days (Q3, configurable on its `chat.seat_reason` row).
+   - In Admin Web, joined groups sit under a **Joined** filter and never crowd
+     the main list. *Join a group* lists the groups of the caller's teachers:
+     titles, teacher and children, never a message. A bar over the composer
+     offers **Leave**.
+5. **Not changed:** Operations' scope, staff↔staff 1:1s (Q2: department rooms
+   come in part 3), and the PD-31 change-teacher rules beyond scope.
+
+**Canonical rule (part 2).** `supabase/migrations/20261026160004_chat_pd035_teacher_supervisor.sql`;
+`apps/api/src/platform/teacher-scope.ts` (the one narrowing);
+`apps/api/src/teacher-supervisors/`. Routes:
+- `GET org/teacher-assignments`
+- `POST org/teachers/:id/supervisor {supervisorId|null, reason?}`
+- `GET seats/candidates?teacherId&q`
+
+Proven by `apps/api/test/integration/teacher-supervisor-pd035.spec.ts`.
 
 ---
 

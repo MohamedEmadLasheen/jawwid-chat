@@ -64,10 +64,11 @@ describe('The navigation registry', () => {
     expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
-    // Accounts (PD-21: where every staff role administers accounts) and
-    // Materials (PD-29: the library the super admin manages).
-    expect(keys).toHaveLength(24)
-    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials'].sort())
+    // Accounts (PD-21: where every staff role administers accounts),
+    // Materials (PD-29: the library the super admin manages) and the Schedule
+    // (PD-38: the academy's calendar).
+    expect(keys).toHaveLength(25)
+    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
     const more = destinations.find((d) => d.key === 'more')!
@@ -92,6 +93,8 @@ describe('The navigation registry', () => {
         const withheld = [
           ...(visibleAreas(role).includes('inbox') ? ['inbox'] : []),
           ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
+          // PD-38: the Schedule waits for GET /lessons/access to say `calendar`.
+          ...(visibleAreas(role).includes('schedule') ? ['schedule'] : []),
           ...(!billingReader && visibleAreas(role).includes('instalments') ? ['instalments'] : []),
           // PD-17: the Parent Profile follows the money's rule (GET /instalments/access).
           ...(!billingReader && visibleAreas(role).includes('parents') ? ['parents'] : []),
@@ -107,10 +110,17 @@ describe('The navigation registry', () => {
     }
     // And the super admin's navigation is the portal, not the operator screens
     // -- except Chat, the one workspace it writes in (PD-8), Accounts, the
-    // one page every staff role shares (PD-21), and Materials, the library it
-    // manages with the Teachers manager (PD-29).
+    // one page every staff role shares (PD-21), the Schedule it shares with
+    // the Teachers department and Operations (PD-38), and Materials, the
+    // library it manages with the Teachers manager (PD-29).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/materials'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/materials'])
+    // PD-38: an operator is offered the Schedule on the server's word only
+    // (the department roles -- finance, technical, academic -- never are).
+    for (const role of ['manager', 'admin', 'coverage'] as const) {
+      expect(destinationsFor(role, { calendar: true }).flatMap((d) => entriesOf(d).map((e) => e.path)), role).toContain('/schedule')
+      expect(destinationsFor(role, {}).flatMap((d) => entriesOf(d).map((e) => e.path)), role).not.toContain('/schedule')
+    }
     // The Teachers manager is offered Materials on the server's word only.
     expect(destinationsFor('manager', { materialsManager: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).toContain('/materials')
     expect(destinationsFor('admin', { materialsManager: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).not.toContain('/materials')
@@ -249,8 +259,11 @@ describe('The desktop rail', () => {
     // PD-10: then the Teachers page,
     expect(document.activeElement).toHaveAccessibleName('Teachers')
     await userEvent.keyboard('{ArrowDown}')
-    // PD-21: then Accounts, closing the People group,
+    // PD-21: then Accounts,
     expect(document.activeElement).toHaveAccessibleName('Accounts')
+    await userEvent.keyboard('{ArrowDown}')
+    // PD-38: then the Schedule, closing the first People group,
+    expect(document.activeElement).toHaveAccessibleName('Schedule')
     await userEvent.keyboard('{ArrowDown}')
     // PD-17: then Parents (an Operations section under People), then the menu wraps.
     expect(document.activeElement).toHaveAccessibleName('Parents')
@@ -331,7 +344,7 @@ describe('The drawer, below desktop width', () => {
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
     expect(within(more).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
-    expect(within(nav).getAllByRole('link')).toHaveLength(24)
+    expect(within(nav).getAllByRole('link')).toHaveLength(25)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {
