@@ -11,6 +11,7 @@ import { NotificationService } from './communication/notifications/notification.
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
+import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
@@ -76,6 +77,16 @@ const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
 const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
 
 /**
+ * PD-30: how often every child's subscription state is recomputed (an
+ * instalment becomes overdue by the calendar, not by a write), its changes
+ * announced and the lesson holds made to follow. The state a write changes is
+ * already current -- the database recomputes it in the writer's transaction --
+ * so this bounds only how late an overdue lock, a card or a hold can be.
+ * Exactly-once per event (SubscriptionEffects), so every replica may run it.
+ */
+const SUBSCRIPTION_SWEEP_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS ?? 60_000);
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -123,6 +134,7 @@ async function bootstrap(): Promise<void> {
   const scheduling = app.get(SchedulingService);
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
+  const subscriptions = app.get(SubscriptionEffects);
 
   let running = true;
   let draining = false;
@@ -161,6 +173,7 @@ async function bootstrap(): Promise<void> {
   let lastSweepAt = 0;
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
+  let nextSubscriptionSweep = 0;
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
   // short (OutboxPacer). Without Redis there are no hints and the loop simply
@@ -223,6 +236,20 @@ async function bootstrap(): Promise<void> {
         // Same rule as the drain: a failed sweep is retried on the next pass.
         // The calls it did not expire are still ringing and still match.
         report(log, 'call sweep', 'calls.expireRinging', e);
+      }
+    }
+
+    // PD-30: subscription states, their cards and the lesson holds -- before
+    // the lesson sweep, so a held child gets no new lesson on this pass.
+    if (Date.now() >= nextSubscriptionSweep) {
+      draining = true;
+      try {
+        await subscriptions.sweep();
+      } catch (e) {
+        report(log, 'subscription sweep', 'subscriptions.sweep', e);
+      } finally {
+        draining = false;
+        nextSubscriptionSweep = Date.now() + SUBSCRIPTION_SWEEP_MS;
       }
     }
 

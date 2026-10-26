@@ -730,7 +730,11 @@ insert into chat.notification_template (key, locale, title, body) values
   ('subscription_unlocked', 'ar', 'جَوِّد',
    'عادت حصص {learner}. شكرًا لكم.'),
   ('subscription_unlocked', 'en', 'Jawwid',
-   '{learner}''s lessons are back on. Thank you.')
+   '{learner}''s lessons are back on. Thank you.'),
+  ('subscription_renewal_requested', 'ar', 'جَوِّد',
+   'طلب ولي الأمر تجديد اشتراك {learner}.'),
+  ('subscription_renewal_requested', 'en', 'Jawwid',
+   'A parent asked to renew {learner}''s subscription.')
 on conflict (key, locale, version) do nothing;
 
 -- ===========================================================================

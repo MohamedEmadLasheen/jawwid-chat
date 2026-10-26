@@ -251,12 +251,18 @@ export class LessonService {
       throw new CommError(CommErrorCode.LESSON_DENIED, 'only people take part in lessons');
     }
 
-    const rows = await this.prisma.lesson.findMany({
+    const found = await this.prisma.lesson.findMany({
       where,
       include: LESSON_INCLUDE,
       orderBy: { startsAt: 'asc' },
       take: 1000,
     });
+    // PD-30: a lesson held for payment whose slot was filled again after the
+    // unlock is history, not a second lesson at that time.
+    const live = new Set(
+      found.filter((r) => r.outcome !== LessonOutcome.SUSPENDED && r.scheduleSlotId).map((r) => `${r.scheduleSlotId}@${r.startsAt.getTime()}`),
+    );
+    const rows = found.filter((r) => !(isPaymentHold(r) && live.has(`${r.scheduleSlotId}@${r.startsAt.getTime()}`)));
     const escalation = await this.escalationMs();
     return {
       lessons: rows.map((r) => {
@@ -1201,6 +1207,9 @@ export class LessonService {
       durationMinutes: Math.round((lesson.endsAt.getTime() - lesson.startsAt.getTime()) / 60_000),
       phase: phaseOf(lesson, now, escalationMs),
       outcome: lesson.outcome,
+      // PD-30: suspended by the system because the group is locked for payment
+      // -- the Schedule says "Suspended — payment" (no amount, no reason).
+      ...(isPaymentHold(lesson) ? { suspendedFor: 'payment' } : {}),
       apologyTiming: lesson.apologyTiming,
       // PD-15: internal reasons (a teacher's apology, a supervisor's excuse, a
       // correction) are staff's. A family reads only its own apology's reason
@@ -1291,6 +1300,11 @@ export function availableActs(lesson: Pick<Lesson, 'outcome' | 'startsAt'> & { r
 export const MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'student_apology'] as const;
 /** The ones the follow-up queue escalates when no make-up is booked: the teacher's (PD-11 T2). */
 export const TEACHER_MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show'] as const;
+
+/** PD-30: suspended by the system for payment (SubscriptionEffects' hold). */
+export function isPaymentHold(lesson: Pick<Lesson, 'outcome' | 'outcomeByKind'>): boolean {
+  return lesson.outcome === LessonOutcome.SUSPENDED && lesson.outcomeByKind === 'system';
+}
 
 function familyMayReadNote(lesson: Pick<Lesson, 'outcome' | 'outcomeByKind'>): boolean {
   return lesson.outcome === LessonOutcome.ADMIN_CANCELLED
