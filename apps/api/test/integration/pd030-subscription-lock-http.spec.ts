@@ -267,6 +267,11 @@ describe('PD-30 over HTTP', () => {
   it('lessons used up: Lesson N of M, two grace lessons, then the group locks for the parent and the teacher only', async () => {
     const { child, teacher, parent, supervisor, groupId, directId, f } = family();
     await addSubscription(child.id, 3);
+    // PD-15's package is now the ledger's: shown from it, no longer typed.
+    const kids = await http(supervisor.subject, 'GET', `/conversations/${groupId}/learners`);
+    expect(kids.json.learners.find((l: any) => l.id === child.id)).toMatchObject({ packageLessons: 3, packageFromSubscription: true });
+    expect((await http(supervisor.subject, 'POST', `/learners/${child.id}/enrollment`, { packageLessons: 99 })).status).toBe(201);
+    expect((await http(supervisor.subject, 'GET', `/conversations/${groupId}/learners`)).json.learners.find((l: any) => l.id === child.id).packageLessons).toBe(3);
     const ids: string[] = [];
     for (let i = 0; i < 5; i++) ids.push(await pastLesson(child.id));
     const future = await http(m.teachersManager.subject, 'POST', '/lessons', {
