@@ -9,6 +9,7 @@ import type { Actor } from '../platform/types';
 import type { TeacherFileAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind } from '../communication/contracts/vocab';
+import { staffComplaintSource } from '../supervision/complaint-source';
 
 /**
  * What the Teacher File writes. The first three are entries on PD-11's
@@ -352,10 +353,7 @@ export class TeacherFileService {
         // PD-26: every new complaint says where it came from and who handles it
         // (the writer, unless another Teachers department supervisor is named;
         // the database refuses anyone else).
-        if (typeof body.source !== 'string' || !COMPLAINT_SOURCES.has(body.source)) {
-          throw invalid('source', 'must be management or parent');
-        }
-        data.complaintSource = body.source;
+        data.complaintSource = staffComplaintSource(body);
         data.handledBy = body.handledBy === undefined || body.handledBy === null ? actor.actorId : requireUuid('handledBy', body.handledBy);
         if (body.sourceConversationId !== undefined && body.sourceConversationId !== null) {
           data.conversationId = await this.readableSource(actor, body.sourceConversationId);
