@@ -178,17 +178,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(),
           ],
-          // Offered only when this build reaches the star routes.
-          if (ref.watch(messageMarksRepositoryProvider).isAvailable) ...[
-            ListTile(
-              key: const ValueKey('settings-starred'),
-              leading: const Icon(Icons.star_border),
-              title: Text(l10n.starredMessagesTitle),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push(Routes.starred),
-            ),
-            const Divider(),
-          ],
+          // PD-32: Starred messages moved to the Chats screen's "Starred" chip.
           // PD-22: the account's time zone, under the same name a phone uses.
           ListTile(
             key: const ValueKey('settings-date-time'),

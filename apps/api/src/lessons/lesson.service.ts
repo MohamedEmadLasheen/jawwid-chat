@@ -49,6 +49,7 @@ export type LessonWithRelations = Lesson & {
   teacher: { id: string; name: string };
   /** PD-31: where a moved lesson went (LESSON_INCLUDE loads it). */
   movedToLesson?: { startsAt: Date } | null;
+  movedFromLesson?: { startsAt: Date } | null;
 };
 
 /** The `where` fragment that keeps trials out of every learner-lesson query. */
@@ -81,8 +82,9 @@ export const LESSON_INCLUDE = {
   corrections: { orderBy: { correctedAt: 'asc' } },
   learner: { select: { id: true, name: true, familyId: true } },
   teacher: { select: { id: true, name: true } },
-  // PD-31: where a moved lesson went.
+  // PD-31: where a moved lesson went, and where a moved-in lesson came from.
   movedToLesson: { select: { startsAt: true } },
+  movedFromLesson: { select: { startsAt: true } },
 } as const;
 
 /** Where an open lesson is in its day, as the needs-action list and the clients sort it. */
@@ -1244,6 +1246,7 @@ export class LessonService {
       // PD-31: a lesson moved to another time continues as a new row.
       movedFrom: lesson.movedFrom,
       movedTo: lesson.movedToLesson?.startsAt.toISOString() ?? null,
+      movedFromStartsAt: lesson.movedFromLesson?.startsAt.toISOString() ?? null,
       movedBy: lesson.movedFrom ? movedByOf(lesson.createdByKind) : null,
       startsAt: lesson.startsAt.toISOString(),
       endsAt: lesson.endsAt.toISOString(),

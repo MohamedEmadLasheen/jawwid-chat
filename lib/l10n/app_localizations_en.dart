@@ -3730,8 +3730,8 @@ class L10nEn extends L10n {
   String get childScheduleLoadFailed => 'Couldn\'t load the schedule.';
 
   @override
-  String childLessonMovedTo(String when) {
-    return 'Moved to $when';
+  String childLessonMovedFrom(String when) {
+    return 'Was $when';
   }
 
   @override
@@ -3759,4 +3759,110 @@ class L10nEn extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get filterStarred => 'Starred';
+
+  @override
+  String get trialBadge => 'Trial';
+
+  @override
+  String get signupLocked =>
+      'Too many wrong codes. Please contact your supervisor.';
+
+  @override
+  String get feedbackEntryTitle => 'Feedback about the teacher';
+
+  @override
+  String get feedbackEntrySubtitle => 'Praise, a suggestion or a complaint';
+
+  @override
+  String feedbackTeacherLine(String name) {
+    return 'Teacher: $name';
+  }
+
+  @override
+  String get feedbackHistoryTitle => 'Your earlier feedback';
+
+  @override
+  String get feedbackEmpty => 'No feedback sent yet';
+
+  @override
+  String get feedbackEmptyBody =>
+      'Tell the administration what is going well, or what could be better.';
+
+  @override
+  String get feedbackNoTeacher => 'No teacher is assigned to this child yet.';
+
+  @override
+  String get feedbackNew => 'New feedback';
+
+  @override
+  String feedbackSentOn(String date) {
+    return 'Sent $date';
+  }
+
+  @override
+  String get feedbackStatusReceived => 'Received';
+
+  @override
+  String get feedbackStatusInReview => 'In review';
+
+  @override
+  String get feedbackStatusResolved => 'Resolved';
+
+  @override
+  String get feedbackResponseLabel => 'Reply from the administration';
+
+  @override
+  String get feedbackCategoryLabel => 'What kind of feedback is it?';
+
+  @override
+  String get feedbackCategoryPraise => 'Praise';
+
+  @override
+  String get feedbackCategorySuggestion => 'Suggestion';
+
+  @override
+  String get feedbackCategoryComplaint => 'Complaint';
+
+  @override
+  String get feedbackChooseCategory => 'Choose the kind of feedback.';
+
+  @override
+  String get feedbackBodyLabel => 'Your feedback';
+
+  @override
+  String get feedbackBodyHint =>
+      'Write what happened, or what you would like to change.';
+
+  @override
+  String get feedbackBodyRequired => 'Write your feedback first.';
+
+  @override
+  String get feedbackPrivacyNote =>
+      'The administration reviews every message. The teacher does not see who wrote it.';
+
+  @override
+  String get feedbackSubmit => 'Send';
+
+  @override
+  String get feedbackSent =>
+      'Thank you. Your feedback has reached the administration.';
+
+  @override
+  String get feedbackLimit =>
+      'You have sent a lot of feedback today. Please try again tomorrow.';
+
+  @override
+  String get feedbackNotFound =>
+      'This child has no teacher to give feedback about right now.';
+
+  @override
+  String get feedbackDenied =>
+      'Only a parent can send feedback about a teacher.';
+
+  @override
+  String get feedbackFailed =>
+      'Your feedback could not be sent. Please try again.';
 }

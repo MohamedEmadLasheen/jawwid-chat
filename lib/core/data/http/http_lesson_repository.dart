@@ -288,6 +288,7 @@ class HttpLessonRepository implements LessonRepository {
       movedFrom: raw['movedFrom'] as String?,
       movedTo: AppClock.parse(raw['movedTo']),
       movedBy: raw['movedBy'] as String?,
+      movedFromStartsAt: AppClock.parse(raw['movedFromStartsAt']),
       // PD-30: staff and the family read why a lesson is suspended ("payment").
       suspendedFor: raw['suspendedFor'] is String ? raw['suspendedFor'] as String : null,
       acts: [

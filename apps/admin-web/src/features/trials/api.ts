@@ -102,10 +102,21 @@ export interface NewStudentEnrolment {
   assignedAt: string
   groupConversationId: string | null
   canCreateGroup: boolean
+  /**
+   * PD-32: a code has no time expiry -- it is valid until used or invalidated.
+   * `code` and `attempts` reach only whoever is responsible for the family.
+   */
   parentSignup:
-    | { state: 'not_started' }
-    | { state: 'code_waiting'; code?: string | null; expiresAt?: string }
+    | { state: 'not_started'; attempts?: SignupAttempts }
+    | { state: 'code_waiting'; code?: string | null; issuedAt?: string; attempts?: SignupAttempts }
     | { state: 'signed_up' }
+}
+
+/** PD-32: wrong sign-up codes in the last 24 hours, against the cap that locks them out. */
+export interface SignupAttempts {
+  wrong: number
+  cap: number
+  locked: boolean
 }
 
 export interface AssignResult {
@@ -166,6 +177,12 @@ export const trialsApi = {
     api.post<TransferResult>(`/trials/new-students/${id(trialId)}/supervisor`, body),
   /** PD-16: the responsible supervisor opens the family's group. */
   createNewStudentGroup: (trialId: string) => api.post<{ conversationId: string }>(`/trials/new-students/${id(trialId)}/group`),
+  /** PD-32: end the parent's live sign-up code; they ask for a new one in the app. */
+  invalidateSignupCode: (trialId: string) =>
+    api.post<{ invalidated: boolean }>(`/trials/new-students/${id(trialId)}/signup-code/invalidate`),
+  /** PD-32: clear the parent's wrong-code count (audited). */
+  resetSignupAttempts: (trialId: string) =>
+    api.post<{ cleared: number }>(`/trials/new-students/${id(trialId)}/signup-attempts/reset`),
 }
 
 export const trialKeys = {

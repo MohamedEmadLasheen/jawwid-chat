@@ -13,6 +13,7 @@ import { useTeacherList } from '@/features/teacher-files/hooks'
 import { useMoney } from '@/features/teacher-files/Payroll'
 import { ComplaintItem, UpholdDialog } from '@/features/teacher-files/Complaint'
 import { AddEntryDialog, type EntryIntent } from '@/features/teacher-files/TeacherFileDialogs'
+import type { ComplaintSource } from '@/features/teacher-files/api'
 import type { SupervisedComplaint } from './api'
 import { H, useCopy } from './copy'
 import { useDeductionDefaults, useRecordReward, useRewards, useSetDeductionDefault, useSupervisedComplaints } from './hooks'
@@ -272,7 +273,7 @@ function DeductionDefaults() {
 // 5. Complaints
 // ---------------------------------------------------------------------------
 
-type Source = 'all' | 'management' | 'parent'
+type Source = 'all' | ComplaintSource
 
 export function ComplaintsSection() {
   const tx = useCopy()
@@ -297,7 +298,10 @@ export function ComplaintsSection() {
             <button
               type="button"
               className="btn btn--sm"
-              onClick={() => setIntent({ teacherId: null, intent: { kind: 'complaint', ...(source !== 'all' ? { source } : {}) } })}
+              // Staff record management or parent complaints; an app complaint is the parent's own (PD-32).
+              onClick={() =>
+                setIntent({ teacherId: null, intent: { kind: 'complaint', ...(source === 'management' || source === 'parent' ? { source } : {}) } })
+              }
             >
               {tx(H.recordComplaint)}
             </button>
@@ -313,6 +317,7 @@ export function ComplaintsSection() {
             { value: 'all', label: tx(H.all) },
             { value: 'management', label: tx(H.fromManagement) },
             { value: 'parent', label: tx(H.fromParents) },
+            { value: 'parent_app', label: tx(H.fromParentApp) },
           ]}
         />
       </div>

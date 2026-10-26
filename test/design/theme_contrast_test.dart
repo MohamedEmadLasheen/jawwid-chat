@@ -75,6 +75,7 @@ void main() {
           'danger': (tokens.colorStatusDangerFg, tokens.colorStatusDangerBg),
           'info': (tokens.colorStatusInfoFg, tokens.colorStatusInfoBg),
           'neutral': (tokens.colorStatusNeutralFg, tokens.colorStatusNeutralBg),
+          'trial badge': (tokens.trialBadgeFg, tokens.trialBadgeBg),
           'incoming bubble': (tokens.colorMessageIncomingText, tokens.colorMessageIncomingBg),
           'outgoing bubble': (tokens.colorMessageOutgoingText, tokens.colorMessageOutgoingBg),
           'system message': (tokens.colorMessageSystemText, tokens.colorMessageSystemBg),
