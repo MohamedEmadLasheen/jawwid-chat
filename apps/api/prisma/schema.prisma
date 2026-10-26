@@ -313,8 +313,43 @@ model Message {
   receipts    MessageReceipt[]
   hiddenFor   MessageHiddenFor[]
   approval    MessageApproval?
+  /// PD-36: the @mentions in this message (chips, notifications, summonses).
+  mentions    MessageMention[]
 
   @@map("message")
+  @@schema("chat")
+}
+
+/// PD-36: one @mention of one person in one message. SQL owns the DDL and the
+/// floor (chat.guard_message_mention): a summons names only staff with a PD-8
+/// basis on the conversation, and a role mention never names the super admin.
+model MessageMention {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  conversationId  String    @map("conversation_id") @db.Uuid
+  messageId       String    @map("message_id") @db.Uuid
+  message         Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  mentionedBy     String    @map("mentioned_by") @db.Uuid
+  mentionedByKind String    @map("mentioned_by_kind")
+  targetActorId   String    @map("target_actor_id") @db.Uuid
+  targetKind      String    @map("target_kind")
+  /// A parent's role mention ('supervisor' | 'admin'), expanded per person; null for a named person.
+  viaRole         String?   @map("via_role")
+  /// The target was not a live member when mentioned.
+  isSummons       Boolean   @map("is_summons")
+  /// UTF-16 offsets of the "@..." in message.body.
+  spanStart       Int       @map("span_start")
+  spanLength      Int       @map("span_length")
+  state           String
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz
+  seenAt          DateTime? @map("seen_at") @db.Timestamptz
+  resolvedAt      DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedBy      String?   @map("resolved_by") @db.Uuid
+  lastActiveAt    DateTime? @map("last_active_at") @db.Timestamptz
+
+  @@unique([messageId, targetActorId, spanStart])
+  @@map("message_mention")
   @@schema("chat")
 }
 
