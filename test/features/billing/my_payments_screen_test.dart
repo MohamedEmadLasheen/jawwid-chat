@@ -96,7 +96,8 @@ void main() {
       await tester.pumpWidget(app(_Billing()..answer = billing));
       await tester.pumpAndSettle();
 
-      expect(find.text('Payments'), findsOneWidget);
+      // PD-30: the screen is the parent's Subscriptions tab.
+      expect(find.text('Subscriptions'), findsOneWidget);
       expect(within('billing-plan', find.text('3-month plan')), findsOneWidget);
       expect(within('billing-method', find.text('Bank transfer')), findsOneWidget);
       expect(within('billing-paid-AED', find.text('AED 1,250.50')), findsOneWidget);
@@ -197,7 +198,7 @@ void main() {
       await tester.pumpWidget(app(_Billing()..answer = billing, locale: ar));
       await tester.pumpAndSettle();
 
-      expect(find.text('المدفوعات'), findsOneWidget);
+      expect(find.text('الاشتراكات'), findsOneWidget);
       expect(within('billing-plan', find.text('خطة 3 أشهر')), findsOneWidget);
       expect(within('billing-method', find.text('تحويل بنكي')), findsOneWidget);
       expect(within('billing-paid-AED', find.text(formatMoney(125050, 'AED', 'ar'))), findsOneWidget);
@@ -260,4 +261,7 @@ class _Billing implements BillingRepository {
 
   @override
   Future<String> invoiceLink(String invoiceId) => throw UnimplementedError();
+
+  @override
+  Future<void> requestRenewal(String learnerId) => throw UnimplementedError();
 }

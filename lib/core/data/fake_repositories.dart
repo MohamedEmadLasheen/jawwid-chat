@@ -281,6 +281,11 @@ class FakeBillingRepository implements BillingRepository {
   @override
   Future<String> invoiceLink(String invoiceId) =>
       throw const AppError(AppErrorKind.notFound, code: 'COMM.BILLING_NOT_FOUND');
+
+  // No child is locked in the fixture world, so there is nothing to renew.
+  @override
+  Future<void> requestRenewal(String learnerId) =>
+      throw const AppError(AppErrorKind.notFound, code: 'COMM.BILLING_NOT_FOUND');
 }
 
 class FakeProfileRepository implements ProfileRepository {

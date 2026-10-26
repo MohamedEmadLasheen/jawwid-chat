@@ -296,6 +296,9 @@ class _LessonRow extends ConsumerWidget {
   'student_no_show' => (l10n.outcomeStudentNoShow, false),
   'teacher_no_show' => (l10n.outcomeTeacherNoShow, false),
   'rescheduled' => (l10n.outcomeRescheduled, false),
+  // PD-30: held by the system while the child's group is locked for payment. No amount,
+  // no reason beyond that.
+  'suspended' => (l.suspendedFor == 'payment' ? l10n.outcomeSuspendedPayment : l10n.outcomeSuspended, false),
   _ => switch (l.phase) {
     'in_progress' => (l10n.phaseInProgress, false),
     'awaiting_close' => (l10n.phaseAwaitingClose, true),
