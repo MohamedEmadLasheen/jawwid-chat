@@ -162,7 +162,9 @@ void main() {
   });
 
   group('navigation shell', () {
-    testWidgets('a parent gets exactly Chats, Calls and Settings; a teacher adds only their Schedule; Sales only Payments', (tester) async {
+    testWidgets('a parent gets exactly Chats, Calls, Subscriptions and Settings; a teacher adds only their Schedule; Sales only Payments', (tester) async {
+      // PD-30 (2026-10-26): a parent's payments moved out of Settings into their own
+      // Subscriptions tab -- the one destination the parent shell gained.
       // Three destinations for a parent, and no fourth. Home, Jawwid and Groups were all
       // views of the same conversations; keeping them as destinations is what made "where
       // are my chats?" a question with three answers. PD-9/PD-10 (2026-10-18) reopened the
@@ -181,12 +183,13 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.byType(NavigationDestination), findsNWidgets(role == UserRole.parent ? 3 : 4));
+        // PD-30: every role has four tabs now -- a parent's fourth is Subscriptions.
+        expect(find.byType(NavigationDestination), findsNWidgets(4));
       }
 
       expect(
         Shells.forRole(UserRole.parent).map((d) => d.route),
-        ['/chats', '/calls', '/settings'],
+        ['/chats', '/calls', '/subscriptions', '/settings'],
       );
       expect(
         Shells.forRole(UserRole.teacher).map((d) => d.route),

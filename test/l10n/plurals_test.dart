@@ -94,6 +94,11 @@ void main() {
       // «إرسال رمز جديد بعد {seconds} ث» — an abbreviated unit symbol, like
       // callDuration; it does not inflect.
       'recoveryResendIn': 'abbreviated unit symbol, which does not inflect',
+      // «الحصة {number} من {total}» -- PD-30: which lesson of the subscription,
+      // a position like searchPosition; the noun names one lesson whatever N is.
+      'reportLessonOf': 'a position (lesson of total), not a count',
+      // «{number} من {total}» -- the same position on the report card.
+      'cardLessonNumberOf': 'a position (lesson of total), not a count',
     };
 
     /// Counted strings that predate this guard and still put a number beside a

@@ -6,6 +6,7 @@ import { formatMoney } from '@/features/instalments/copy'
 import type { Payment, PaymentRequest, PlanMonths, RequestPurpose } from '@/features/payments/api'
 import { METHOD, PAY, PURPOSE_LABEL, fromMinor, owed } from '@/features/payments/copy'
 import { LinkPanel, ReasonDialog, ServerError as PaymentError } from '@/features/payments/PaymentParts'
+import { S as SUB, monthsLabel } from '@/features/subscriptions/copy'
 import type { FamilyBilling, InstalmentPaymentMethod, NewFamilyPayment, NewPaymentRequest, ParentProfile, ParentUpdate, PaymentMethod, TimelineInstalment } from './api'
 import { COUNTRIES, EMIRATES, METHOD_LABEL, P, PLAN_MONTHS, countryName, describeError, planLabel, toMinor, useCopy } from './copy'
 import {
@@ -251,8 +252,16 @@ export function NewInstalmentsDialog({
   const [every, setEvery] = useState('1')
   const [rows, setRows] = useState<Array<{ amount: string; dueDate: string }>>([{ amount: '', dueDate: billing.today }])
   const [learnerId, setLearnerId] = useState('')
+  // PD-30: a plan for one child's subscription may carry its lessons.
+  const [lessons, setLessons] = useState('')
+  const [lessonPlan, setLessonPlan] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const modeName = useId()
+  const lessonsMinor = lessons.trim() === '' ? null : Number(lessons)
+  const lessonsValid = lessonsMinor === null || (Number.isInteger(lessonsMinor) && lessonsMinor >= 1 && lessonsMinor <= 1000)
+  const withLessons = learnerId && lessonsMinor !== null && lessonsValid
+    ? { lessonsIncluded: lessonsMinor, ...(lessonPlan ? { planMonths: Number(lessonPlan) } : {}) }
+    : {}
 
   const setRow = (i: number, patch: Partial<{ amount: string; dueDate: string }>) =>
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
@@ -262,6 +271,7 @@ export function NewInstalmentsDialog({
   const submit = () => {
     const next: Record<string, string> = {}
     if (label.trim() === '') next.label = tx(P.required)
+    if (!lessonsValid) next.lessons = tx(SUB.invalidLessons)
     if (mode === 'equal') {
       const amountMinor = toMinor(amount, currency)
       if (amountMinor === null) next.amount = tx(P.invalidAmount)
@@ -277,6 +287,7 @@ export function NewInstalmentsDialog({
           count: Number(count),
           everyMonths: Number(every),
           learnerId: learnerId || null,
+          ...withLessons,
         },
         { onSuccess: onClose },
       )
@@ -294,6 +305,7 @@ export function NewInstalmentsDialog({
         currency,
         learnerId: learnerId || null,
         items: rows.map((r, i) => ({ amountMinor: rowMinor[i]!, dueDate: r.dueDate })),
+        ...withLessons,
       },
       { onSuccess: onClose },
     )
@@ -425,6 +437,27 @@ export function NewInstalmentsDialog({
           )}
         </Field>
       )}
+      {learnerId && (
+        <div className="pf-row">
+          <Field label={tx(SUB.lessons)} hint={tx(SUB.lessonsHint)} error={errors.lessons}>
+            {(id, d) => (
+              <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={1000} value={lessons} aria-describedby={d} onChange={(e) => setLessons(e.target.value)} />
+            )}
+          </Field>
+          <Field label={tx(SUB.plan)}>
+            {(id) => (
+              <select id={id} className="select" value={lessonPlan} onChange={(e) => setLessonPlan(e.target.value)}>
+                <option value="">{tx(SUB.noPlan)}</option>
+                {PLAN_MONTHS.map((n) => (
+                  <option key={n} value={n}>
+                    {monthsLabel(n, locale)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+        </div>
+      )}
     </Dialog>
   )
 }
@@ -539,6 +572,7 @@ export function RequestPaymentDialog({
   const [periodStart, setPeriodStart] = useState('')
   const [periodEnd, setPeriodEnd] = useState('')
   const [days, setDays] = useState('14')
+  const [lessons, setLessons] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   if (created) {
@@ -565,12 +599,15 @@ export function RequestPaymentDialog({
     if (amountMinor === null) next.amount = tx(PAY.invalidAmount)
     if (expiresInDays === null) next.days = tx(PAY.invalidDays)
     if (periodStart && periodEnd && periodEnd < periodStart) next.period = tx(PAY.periodOrder)
+    const lessonCount = lessons.trim() === '' ? null : Number(lessons)
+    if (lessonCount !== null && !(Number.isInteger(lessonCount) && lessonCount >= 1 && lessonCount <= 1000)) next.lessons = tx(SUB.invalidLessons)
     setErrors(next)
     if (Object.keys(next).length > 0 || amountMinor === null || expiresInDays === null) return
     const pkg = takesPackage(purpose)
     const body: NewPaymentRequest = { purpose, label: label.trim(), amountMinor, currency, expiresInDays }
     if (learnerId) body.learnerId = learnerId
     if (pkg && plan) body.planMonths = Number(plan) as PlanMonths
+    if (pkg && lessonCount !== null) body.lessonsIncluded = lessonCount
     if (pkg && periodStart) body.periodStart = periodStart
     if (pkg && periodEnd) body.periodEnd = periodEnd
     create.mutate(body, { onSuccess: ({ request }) => setCreated(request) })
@@ -640,6 +677,11 @@ export function RequestPaymentDialog({
                   </option>
                 ))}
               </select>
+            )}
+          </Field>
+          <Field label={tx(SUB.lessons)} hint={tx(SUB.lessonsHint)} error={errors.lessons}>
+            {(id, d) => (
+              <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={1000} value={lessons} aria-describedby={d} onChange={(e) => setLessons(e.target.value)} />
             )}
           </Field>
           <div className="pf-row">
