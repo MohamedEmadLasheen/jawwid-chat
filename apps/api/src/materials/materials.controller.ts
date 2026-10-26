@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Header, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
+import { CommError, CommErrorCode } from '../platform/errors';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { manifestTemplate } from './manifest';
 import { MaterialsAdminService } from './materials-admin.service';
@@ -99,8 +100,8 @@ export class MaterialsController {
 
   /** The access decision: a signed URL to play one item. */
   @Post('materials/items/:id/open')
-  open(@ActorId() actorId: string, @Param('id') id: string) {
-    return this.reader.open(actorId, id);
+  open(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.reader.open(actorId, id, body ?? {});
   }
 
   @Post('materials/recitations/:surah/open')
@@ -118,18 +119,33 @@ export class MaterialsController {
     return this.reader.practice(actorId, id);
   }
 
+  /** PD-29 amendment: what was opened for this child this academy week (Saturday to Friday). */
+  @Get('learners/:id/materials/opened')
+  opened(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.reader.opened(actorId, id);
+  }
+
+  /**
+   * PD-29 amendment (2026-10-26): the memorization map left the product. Its
+   * routes answer 410 Gone to every caller; its data (chat.memorization_mark)
+   * is kept, append-only.
+   */
   @Get('learners/:id/materials/progress')
-  progress(@ActorId() actorId: string, @Param('id') id: string) {
-    return this.reader.progress(actorId, id);
+  progress() {
+    return retired();
   }
 
   @Get('learners/:id/materials/progress/:surah')
-  history(@ActorId() actorId: string, @Param('id') id: string, @Param('surah') surah: string) {
-    return this.reader.history(actorId, id, surah);
+  history() {
+    return retired();
   }
 
   @Post('learners/:id/materials/progress/:surah/correct')
-  correct(@ActorId() actorId: string, @Param('id') id: string, @Param('surah') surah: string, @Body() body: Record<string, unknown>) {
-    return this.reader.correct(actorId, id, surah, body ?? {});
+  correct() {
+    return retired();
   }
+}
+
+function retired(): never {
+  throw new CommError(CommErrorCode.MATERIAL_RETIRED, 'the memorization map was retired', 410);
 }
