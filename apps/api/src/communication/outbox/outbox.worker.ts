@@ -322,24 +322,49 @@ export class OutboxWorker {
     }
   }
 
+  /**
+   * The live staff members, plus (PD-33) the backup covering for any of them --
+   * approvals and internal notes go to them; a covering backup decides
+   * approvals and reads internal notes on the PD-8 `backup` basis. PD-35: a seat
+   * is presence, never charge, so a member row a seat opened (or an effective
+   * seat in a 1:1) is not one.
+   */
   private async staffMemberIds(conversationId: string): Promise<string[]> {
-    const members = await this.prisma.conversationMember.findMany({
-      where: { conversationId, leftAt: null, actorKind: ActorKind.STAFF },
-      select: { actorId: true },
-    });
-    return [...new Set([...members.map((m) => m.actorId), ...(await this.effectiveSeatIds(conversationId))])];
+    const rows = await this.prisma.$queryRaw<Array<{ actor_id: string }>>`
+      SELECT cm.actor_id::text AS actor_id FROM chat.conversation_member cm
+       WHERE cm.conversation_id = ${conversationId}::uuid AND cm.left_at IS NULL AND cm.actor_kind = 'staff'
+         AND NOT EXISTS (SELECT 1 FROM chat.conversation_seat st WHERE st.member_id = cm.id AND st.left_at IS NULL)`;
+    const ids = rows.map((r) => r.actor_id);
+    const covers = await this.coversFor(ids);
+    return [...new Set([...ids, ...covers.values()])];
   }
 
   /**
-   * PD-35: staff with an EFFECTIVE seat here -- a family 1:1, whose two members
-   * are its identity, so the seat has no member row. They hear what a member
-   * hears for as long as the seat is open.
+   * PD-33: for each of these staff members who is away under a live cover, the
+   * backup covering for them (chat.live_covers -- the cover window AND a live
+   * backup link, the same moment access ends).
    */
-  private async effectiveSeatIds(conversationId: string): Promise<string[]> {
-    const rows = await this.prisma.$queryRaw<Array<{ staff_id: string }>>`
-      SELECT staff_id::text AS staff_id FROM chat.conversation_seat
-       WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL AND member_id IS NULL`;
-    return rows.map((r) => r.staff_id);
+  private async coversFor(staffIds: readonly string[]): Promise<Map<string, string>> {
+    if (staffIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ primary_id: string; backup_id: string }>>`
+      SELECT primary_id::text AS primary_id, backup_id::text AS backup_id
+        FROM chat.live_covers(now())
+       WHERE primary_id = ANY(${[...staffIds]}::uuid[])`;
+    return new Map(rows.map((r) => [r.primary_id, r.backup_id]));
+  }
+
+  /**
+   * PD-35: the open seats here, and whether each still gives its holder access
+   * now. A seat that stopped holding keeps its member row until the sweep ends
+   * it; the holder hears nothing meanwhile.
+   */
+  private async seats(conversationId: string): Promise<Array<{ staffId: string; memberId: string | null; holds: boolean }>> {
+    const rows = await this.prisma.$queryRaw<Array<{ staff_id: string; member_id: string | null; holds: boolean }>>`
+      SELECT st.staff_id::text AS staff_id, st.member_id::text AS member_id,
+             chat.staff_conversation_access(st.staff_id, st.conversation_id, now()) IS NOT NULL AS holds
+        FROM chat.conversation_seat st
+       WHERE st.conversation_id = ${conversationId}::uuid AND st.left_at IS NULL`;
+    return rows.map((r) => ({ staffId: r.staff_id, memberId: r.member_id, holds: r.holds }));
   }
 
   /**
@@ -499,12 +524,25 @@ export class OutboxWorker {
     if (payload.silent === true) return;
 
     const authorId = payload.authorId as string | null;
-    const seated = await this.prisma.conversationMember.findMany({
+    const live = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },
-      select: { actorId: true },
+      select: { id: true, actorId: true },
     });
-    const effective = (await this.effectiveSeatIds(conversationId)).map((actorId) => ({ actorId }));
-    const members = [...new Map([...seated, ...effective].map((m) => [m.actorId, m])).values()];
+    // PD-35: a seat holder -- in a member row or an effective seat in a 1:1 --
+    // is notified only while the seat still gives them access.
+    const seats = await this.seats(conversationId);
+    const seatRows = new Set(seats.map((x) => x.memberId).filter((id): id is string => id !== null));
+    const reachable = [
+      ...live.filter((m) => !seatRows.has(m.id)).map((m) => m.actorId),
+      ...seats.filter((x) => x.holds).map((x) => x.staffId),
+    ];
+    // The author first: their own seat is never pushed -- nor remapped, so an
+    // away supervisor's own message does not push the backup covering for them.
+    const recipients = [...new Set(reachable)].filter((id) => id !== authorId);
+    // PD-33: an away supervisor's push goes to the backup covering for them,
+    // once per person even when the backup has a seat of their own.
+    const covers = await this.coversFor(recipients);
+    const members = [...new Set(recipients.map((id) => covers.get(id) ?? id))].map((actorId) => ({ actorId }));
 
     const state = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId },

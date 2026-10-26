@@ -12,6 +12,7 @@ import { NotificationPipeline } from './communication/notifications/notification
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
+import { SupervisorCoverService } from './org/supervisor-cover.service';
 import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
 import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { ConversationSeatService } from './communication/seats/conversation-seat.service';
@@ -82,6 +83,14 @@ const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
 /** PD-34: adopt legacy deliveries into the Notification Center; purge once a day. */
 const NOTIFICATION_ADOPT_MS = Number(process.env.NOTIFICATION_ADOPT_MS ?? 10_000);
 const NOTIFICATION_PURGE_MS = 24 * 60 * 60_000;
+
+/**
+ * PD-33: how often supervisor covers are announced (a future-dated start) and
+ * returned (the window is over). NOT what ends access -- the backup link's
+ * active_until does that to the second -- only how late the return line and
+ * the "welcome back" push can be. Idempotent claims, so every replica may run it.
+ */
+const COVER_SWEEP_MS = Number(process.env.COVER_SWEEP_MS ?? 60_000);
 
 /**
  * PD-30: how often every child's subscription state is recomputed (an
@@ -158,6 +167,7 @@ async function bootstrap(): Promise<void> {
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
   const pipeline = app.get(NotificationPipeline);
+  const covers = app.get(SupervisorCoverService);
   const subscriptions = app.get(SubscriptionEffects);
   const seats = app.get(ConversationSeatService);
   const prisma = app.get(PrismaService);
@@ -200,6 +210,7 @@ async function bootstrap(): Promise<void> {
   let lastSweepAt = 0;
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
+  let nextCoverSweep = 0;
   let nextSignupFailurePurge = 0;
   let nextNotificationAdopt = 0;
   let nextNotificationPurge = 0;
@@ -302,6 +313,20 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextLessonSweep = Date.now() + LESSON_SWEEP_MS;
+      }
+    }
+
+    // PD-33: covers that began or ended -- their lines and pushes. Before
+    // dispatch, so a "welcome back" push queued now goes out on this pass.
+    if (Date.now() >= nextCoverSweep) {
+      draining = true;
+      try {
+        await covers.sweep();
+      } catch (e) {
+        report(log, 'cover sweep', 'org.covers', e);
+      } finally {
+        draining = false;
+        nextCoverSweep = Date.now() + COVER_SWEEP_MS;
       }
     }
 

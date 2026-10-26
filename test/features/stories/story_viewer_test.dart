@@ -131,6 +131,42 @@ void main() {
     return container;
   }
 
+  group('native back (iOS edge swipe)', () {
+    // Two stories, so the pager has somewhere to turn: the edge swipe must still win at
+    // the leading edge, and a swipe from the middle must still turn the page.
+    for (final (language, rtl) in [('en', false), ('ar', true)]) {
+      testWidgets('[$language] a swipe from the leading edge closes the viewer', (tester) async {
+        await pumpViewer(
+          tester,
+          stories: [
+            story(id: 'a', body: 'First', publishedAt: DateTime.now()),
+            story(id: 'b', body: 'Second', publishedAt: DateTime.now().subtract(const Duration(hours: 1))),
+          ],
+          storyId: 'a',
+          locale: Locale(language),
+        );
+        expect(find.byType(StoryViewerScreen), findsOneWidget);
+        // The iOS slide is longer than [settleRoute]; a gesture is only taken by a route
+        // that has finished arriving.
+        for (var i = 0; i < 4; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+
+        final width = tester.view.physicalSize.width / tester.view.devicePixelRatio;
+        final gesture = await tester.startGesture(Offset(rtl ? width - 4 : 4, 300));
+        for (var i = 0; i < 12; i++) {
+          await gesture.moveBy(Offset((rtl ? -1 : 1) * width / 20, 0));
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        await gesture.up();
+        await settleRoute(tester);
+
+        expect(find.byType(StoryViewerScreen), findsNothing);
+        expect(find.text('open'), findsOneWidget);
+      }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+    }
+  });
+
   group('opening', () {
     testWidgets('opens the story that was asked for, not the first one', (tester) async {
       await pumpViewer(
