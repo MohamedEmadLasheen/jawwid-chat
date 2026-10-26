@@ -129,6 +129,19 @@ export class SchedulingService {
     const actor = await this.conversations.requireActor(actorId);
     await this.lessons.requireManager(actor);
     const teacher = await this.orgTeacher(actor, teacherId);
+    const checked = await this.checkAvailability(teacher.id, body);
+    await this.lessons.write(() =>
+      this.prisma.$transaction((tx) => this.writeAvailability(tx, actor.actorId, teacher, checked, 'weekly availability replaced')),
+    );
+    return this.availability(actorId, teacher.id);
+  }
+
+  /**
+   * Validate a whole weekly availability for a teacher, before any write. PD-38
+   * uses it with writeAvailability so a shift and its bookable hours are saved
+   * in ONE transaction.
+   */
+  async checkAvailability(teacherId: string, body: Record<string, unknown>): Promise<{ timezone: string; windows: Array<{ weekday: number; start: number; end: number }> }> {
     const timezone = textField(body, 'timezone', 64, true) as string;
     const raw = body.windows;
     if (!Array.isArray(raw) || raw.length > 28) throw invalid('windows: an array of at most 28 windows');
@@ -151,40 +164,47 @@ export class SchedulingService {
     const zoned = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT chat.is_time_zone(${timezone}) AS ok`;
     if (!zoned[0]?.ok) throw invalid('timezone: an IANA time zone, e.g. Africa/Cairo');
     const otherZone = await this.prisma.learnerScheduleSlot.findFirst({
-      where: { teacherId: teacher.id, validTo: null, NOT: { timezone } },
+      where: { teacherId, validTo: null, NOT: { timezone } },
       select: { id: true },
     });
     if (otherZone) {
       throw stateError('this teacher has regular lessons in another time zone; change those first');
     }
+    return { timezone, windows };
+  }
 
-    await this.lessons.write(() =>
-      this.prisma.$transaction(async (tx) => {
-        await tx.teacherAvailability.deleteMany({ where: { teacherId: teacher.id } });
-        if (windows.length > 0) {
-          await tx.teacherAvailability.createMany({
-            data: windows.map((w) => ({
-              organizationId: teacher.organizationId,
-              teacherId: teacher.id,
-              weekday: w.weekday,
-              startMinute: w.start,
-              endMinute: w.end,
-              timezone,
-              createdBy: actor.actorId,
-            })),
-          });
-        }
-        await this.audit.audit(tx, {
-          actorId: actor.actorId,
-          action: 'teacher.availability_set',
-          entity: 'teacher',
-          entityId: teacher.id,
-          after: { timezone, windows },
-          reason: 'weekly availability replaced',
-        });
-      }),
-    );
-    return this.availability(actorId, teacher.id);
+  /** Replace the windows inside the caller's transaction, audited there. */
+  async writeAvailability(
+    tx: Tx,
+    actorId: string,
+    teacher: { id: string; organizationId: string },
+    v: { timezone: string; windows: Array<{ weekday: number; start: number; end: number }> },
+    reason: string,
+  ): Promise<void> {
+    // PD-38: the rows removed here are archived by a trigger, with the span
+    // they were in force, so past months keep the hours they were worked under.
+    await tx.teacherAvailability.deleteMany({ where: { teacherId: teacher.id } });
+    if (v.windows.length > 0) {
+      await tx.teacherAvailability.createMany({
+        data: v.windows.map((w) => ({
+          organizationId: teacher.organizationId,
+          teacherId: teacher.id,
+          weekday: w.weekday,
+          startMinute: w.start,
+          endMinute: w.end,
+          timezone: v.timezone,
+          createdBy: actorId,
+        })),
+      });
+    }
+    await this.audit.audit(tx, {
+      actorId,
+      action: 'teacher.availability_set',
+      entity: 'teacher',
+      entityId: teacher.id,
+      after: { timezone: v.timezone, windows: v.windows },
+      reason,
+    });
   }
 
   async addDayOff(actorId: string, teacherId: string, body: Record<string, unknown>) {
