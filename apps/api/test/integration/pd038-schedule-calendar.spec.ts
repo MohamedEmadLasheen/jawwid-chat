@@ -16,6 +16,7 @@ import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { StatsService } from '../../src/lessons/stats.service';
 import { CalendarService } from '../../src/calendar/calendar.service';
 import { WorkPatternService } from '../../src/calendar/work-pattern.service';
+import { TeacherScopeService } from '@platform/teacher-scope';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 jest.setTimeout(240_000);
@@ -515,6 +516,38 @@ describe('a teacher\'s own schedule (P2)', () => {
     expect(await code(calendar.mine(tsupId, w))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(calendar.mine(s.parentId, w))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(calendar.mine(s.teacherId, { from: '2026-09-01', to: '2026-10-14' }))).toBe(CommErrorCode.VALIDATION);
+  });
+});
+
+describe('PD-35 strict scope', () => {
+  const strict = (on: boolean) =>
+    g.prisma.$executeRaw`UPDATE chat.config SET value = ${JSON.stringify(on)}::jsonb WHERE key = 'teacher_supervisor.strict_scope'`;
+
+  it('a teacher supervisor reads only their assigned teachers; another is not found; the Teachers Manager reads all', async () => {
+    const scoped = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit, undefined, undefined, new TeacherScopeService(g.prisma));
+    const cal = new CalendarService(g.prisma, g.conversations, scoped, g.config);
+    const pats = new WorkPatternService(g.prisma, g.conversations, scoped, scheduling, cal, g.config, audit);
+    await fullShift(s.teacherId, '2026-09-01');
+    await fullShift(s.newTeacherId, '2026-09-01');
+    await lessonAt(s.learnerId, '2026-09-14 13:00', 60);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id) values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
+      s.teacherId, tsupId,
+    );
+    const w = { from: '2026-09-14', to: '2026-09-15' };
+    // Off (the default): the whole department, as before PD-35.
+    expect((await cal.stats(tsupId, w)).teachers.map((t) => t.id)).toEqual(expect.arrayContaining([s.teacherId, s.newTeacherId]));
+    await strict(true);
+    try {
+      expect((await cal.stats(tsupId, w)).teachers.map((t) => t.id)).toEqual([s.teacherId]);
+      expect((await cal.calendar(tsupId, w)).lessons.map((l) => l.teacherId)).toEqual([s.teacherId]);
+      expect((await cal.options(tsupId)).teachers.map((t) => t.id)).toEqual([s.teacherId]);
+      expect(await code(cal.calendar(tsupId, { ...w, teacherIds: s.newTeacherId }))).toBe(CommErrorCode.LESSON_NOT_FOUND);
+      expect(await code(pats.pattern(tsupId, s.newTeacherId))).toBe(CommErrorCode.LESSON_NOT_FOUND);
+      expect((await cal.stats(tmgrId, w)).teachers.map((t) => t.id)).toEqual(expect.arrayContaining([s.teacherId, s.newTeacherId]));
+    } finally {
+      await strict(false);
+    }
   });
 });
 

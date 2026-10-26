@@ -84,7 +84,7 @@ own calendar in the app and on the teacher web portal.
 |---|---|---|---|---|
 | Super admin | academy | all | edit | edit |
 | Teachers Manager | academy | all | edit | — |
-| Teachers department member | academy (PD-35 will narrow this to assigned teachers) | all | — | — |
+| Teachers department member | academy with PD-35's strict switch off; with it on, **their assigned teachers only** (`staff_supervised_teacher_ids`; another teacher answers 404). The Teachers Manager always sees the academy | all, within scope | — | — |
 | Operations Manager | academy | all | — | edit |
 | Operations supervisor | academy capacity | own children only; other lessons are anonymous colored blocks | — | — |
 | Teacher, parent, Sales | refused (`COMM.LESSON_DENIED`) | | | |

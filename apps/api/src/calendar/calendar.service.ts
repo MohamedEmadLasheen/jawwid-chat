@@ -27,6 +27,8 @@ type Query = Record<string, string | string[] | undefined>;
  */
 export type CalendarScope =
   | { kind: 'academy'; staffId: string }
+  // PD-35 strict scope: a teacher supervisor's own teachers, nobody else's.
+  | { kind: 'teachers'; staffId: string; teacherIds: ReadonlySet<string> }
   | { kind: 'supervisor'; staffId: string; ownLearners: ReadonlySet<string> };
 
 /** One teacher row's totals over the window, in minutes. */
@@ -76,11 +78,16 @@ export class CalendarService {
   async scopeOf(actor: Actor): Promise<CalendarScope | null> {
     if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
     if (actor.staffRole === StaffRole.SUPER_ADMIN) return { kind: 'academy', staffId: actor.actorId };
-    // PD-35 will narrow a teacher supervisor to their assigned teachers; until
-    // then the Teachers department reads the academy, as GET /lessons does.
-    if ((await this.lessons.isManager(actor)) || (await this.managesDepartment(actor, 'operations'))) {
-      return { kind: 'academy', staffId: actor.actorId };
+    // PD-35: the Teachers department reads the teachers in its scope -- every
+    // teacher with the strict switch off (and always for the Teachers Manager),
+    // a supervisor's assigned teachers with it on -- as GET /lessons does.
+    const teachers = await this.lessons.teachersFacts(actor);
+    if (teachers.department) {
+      return teachers.scope.all
+        ? { kind: 'academy', staffId: actor.actorId }
+        : { kind: 'teachers', staffId: actor.actorId, teacherIds: teachers.scope.teacherIds };
     }
+    if (await this.managesDepartment(actor, 'operations')) return { kind: 'academy', staffId: actor.actorId };
     if (await this.lessons.inDepartment(actor, 'operations')) {
       const own = await this.lessons.supervisedLearnerIds(actor, new Date());
       return { kind: 'supervisor', staffId: actor.actorId, ownLearners: new Set(own) };
@@ -143,10 +150,15 @@ export class CalendarService {
       zone,
       viewer: { staffId: actor.actorId, scope: scope.kind, canEditShifts: editShifts, canEditColors: editColors },
       palette: PALETTE_KEYS,
-      teachers: teachers.map((t) => ({ id: t.id, name: t.name, isActive: t.is_active, category: t.category, timezone: t.timezone })),
+      teachers: teachers
+        .filter((t) => scope.kind !== 'teachers' || scope.teacherIds.has(t.id))
+        .map((t) => ({ id: t.id, name: t.name, isActive: t.is_active, category: t.category, timezone: t.timezone })),
       supervisors,
       learners: learners
-        .filter((l) => scope.kind === 'academy' || scope.ownLearners.has(l.id))
+        .filter((l) =>
+          scope.kind === 'academy' ||
+          (scope.kind === 'teachers' && l.teacher_id !== null && scope.teacherIds.has(l.teacher_id)) ||
+          (scope.kind === 'supervisor' && scope.ownLearners.has(l.id)))
         .map((l) => ({ id: l.id, name: l.name, teacherId: l.teacher_id })),
     };
   }
@@ -218,7 +230,7 @@ export class CalendarService {
         shift: d.shift, work: d.work, leave: d.leave, empty: d.empty, free: d.free,
       })),
       lessons: lessons.map((l) => {
-        const named = scope.kind === 'academy' || (l.learner_id !== null && scope.ownLearners.has(l.learner_id));
+        const named = scope.kind !== 'supervisor' || (l.learner_id !== null && scope.ownLearners.has(l.learner_id));
         const shift = categoryOf.get(l.teacher_id) === 'full_shift' || categoryOf.get(l.teacher_id) === 'part_shift';
         return {
           id: l.id,
@@ -454,6 +466,13 @@ export class CalendarService {
   /** Parse, then hold an Operations supervisor to their own children for the student filter. */
   private filtersFor(scope: CalendarScope, query: Query): CalendarFilters {
     const f = parseFilters(query);
+    if (scope.kind === 'teachers') {
+      // A teacher outside the scope is not found, never "forbidden" (PD-35).
+      if (f.teacherIds?.some((id) => !scope.teacherIds.has(id))) {
+        throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+      }
+      return { ...f, teacherIds: f.teacherIds ?? [...scope.teacherIds] };
+    }
     if (scope.kind === 'supervisor' && f.learnerIds?.some((id) => !scope.ownLearners.has(id))) {
       // As GET /lessons: a child outside the scope is not found, never "forbidden".
       throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'student not found');

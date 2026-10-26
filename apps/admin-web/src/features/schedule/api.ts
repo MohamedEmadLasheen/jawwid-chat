@@ -130,7 +130,8 @@ export interface Supervisor {
 
 export interface CalendarOptions {
   zone: string
-  viewer: { staffId: string; scope: 'academy' | 'supervisor'; canEditShifts: boolean; canEditColors: boolean }
+  /** `teachers`: a teacher supervisor under PD-35's strict scope -- their assigned teachers only. */
+  viewer: { staffId: string; scope: 'academy' | 'teachers' | 'supervisor'; canEditShifts: boolean; canEditColors: boolean }
   palette: string[]
   teachers: Array<{ id: string; name: string; isActive: boolean; category: Category; timezone: string | null }>
   supervisors: Supervisor[]

@@ -80,8 +80,11 @@ export class WorkPatternService {
   ) {}
 
   async pattern(actorId: string, teacherId: string) {
-    const { actor } = await this.calendar.requireScope(actorId);
+    const { actor, scope } = await this.calendar.requireScope(actorId);
     const teacher = await this.orgTeacher(actor, teacherId);
+    if (scope.kind === 'teachers' && !scope.teacherIds.has(teacher.id)) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    }
     // A change's free-text reason is the Teachers department's (and the super
     // admin's); Operations reads the shift itself, not why it changed.
     const readsReasons = actor.staffRole === StaffRole.SUPER_ADMIN || (await this.lessons.isManager(actor));
