@@ -65,4 +65,4 @@ claimed. The decision text itself still lives in
 | `20261026130000` | PD-33 — `chat_pd033_supervisor_cover` |
 | `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
 
-The next free slot is `20261026150000`.
+The next free slot is `20261026210000` (fixed slot map: 130000 PD-33, 140000 PD-30, 160000 PD-35, 170000 PD-36, 180000 PD-37, 190000 PD-34, 200000 PD-29 amendment).
