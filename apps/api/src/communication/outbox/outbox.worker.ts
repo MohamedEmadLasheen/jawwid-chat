@@ -6,6 +6,7 @@ import { actorRefKey } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName, room } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
+import { mentionRuleFor } from '../mentions/mention-policy';
 import { ActorKind, CallOutcome, CallType, StoryState, Visibility } from '../contracts/vocab';
 
 /**
@@ -84,6 +85,28 @@ export class OutboxWorker {
           await this.realtime.toThread(conversationId, type, payload as never);
         }
         await this.notifyNewMessage(conversationId, payload);
+        return;
+      }
+
+      /**
+       * PD-36: to the mentioned person's own actor room (a summoned non-member
+       * is in no thread room, and their chat list must move the row to the top
+       * now), and their push. One event per person.
+       */
+      case CommEvent.MENTION_CREATED: {
+        const target = payload.targetActorId as string | undefined;
+        if (!target || !conversationId) return;
+        await this.realtime.toUsers([target], type, payload as never);
+        await this.notifyMention(conversationId, payload);
+        return;
+      }
+
+      /** PD-36: a summons answered or closed -- Group Info re-reads; so does the target's list. */
+      case CommEvent.MENTION_UPDATED: {
+        const target = payload.targetActorId as string | undefined;
+        if (!conversationId) return;
+        await this.realtime.toThread(conversationId, type, payload as never);
+        if (target) await this.realtime.toUsers([target], type, payload as never);
         return;
       }
 
@@ -488,10 +511,28 @@ export class OutboxWorker {
     // PD-33: an away supervisor's push goes to the backup covering for them,
     // once per person even when the backup has a seat of their own.
     const covers = await this.coversFor(seated.filter((m) => m.actorKind === ActorKind.STAFF).map((m) => m.actorId));
+    // PD-36: whoever stepped into this family 1:1 on a summons hears it too,
+    // while they keep a PD-8 basis (re-checked here, not left to the sweep).
+    const steppedIn = await this.prisma.$queryRaw<Array<{ actor_id: string }>>`
+      SELECT DISTINCT mm.target_actor_id::text AS actor_id
+        FROM chat.message_mention mm
+       WHERE mm.conversation_id = ${conversationId}::uuid AND mm.state = 'stepped_in'
+         AND chat.staff_conversation_access(mm.target_actor_id, mm.conversation_id, now()) IS NOT NULL`;
+    // PD-36: someone mentioned in THIS message gets the mention push instead --
+    // one ping, and it is the one that names why.
+    const mentioned = new Set(
+      (
+        await this.prisma.messageMention.findMany({
+          where: { messageId: payload.messageId as string },
+          select: { targetActorId: true },
+        })
+      ).map((m) => m.targetActorId),
+    );
     const seen = new Set<string>();
-    const members = seated
-      .map((m) => ({ actorId: covers.get(m.actorId) ?? m.actorId }))
-      .filter((m) => !seen.has(m.actorId) && seen.add(m.actorId));
+    const members = [
+      ...seated.map((m) => ({ actorId: covers.get(m.actorId) ?? m.actorId })),
+      ...steppedIn.map((r) => ({ actorId: r.actor_id })),
+    ].filter((m) => !mentioned.has(m.actorId) && !seen.has(m.actorId) && seen.add(m.actorId));
 
     const state = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId },
@@ -522,5 +563,30 @@ export class OutboxWorker {
         scheduledAt: now,
       });
     }
+  }
+
+  /**
+   * PD-36: the mention push. Lock-screen safe like every message push: no
+   * name and no text -- "You were mentioned in a family group" (rule
+   * `mention_group`) or "...in a conversation" (`mention`). It BREAKS THROUGH
+   * the person's mute for this chat (owner decision 2026-10-26); quiet hours
+   * still hold (the rule's respect_quiet_hours). A mention the author took back
+   * before this ran (edited or deleted away) sends nothing.
+   */
+  private async notifyMention(conversationId: string, payload: Record<string, unknown>): Promise<void> {
+    const mentionId = payload.mentionId as string;
+    const target = payload.targetActorId as string;
+    const row = await this.prisma.messageMention.findUnique({ where: { id: mentionId }, select: { state: true } });
+    if (!row || row.state === 'removed') return;
+    const recipient = await this.identity.resolveActor(target);
+    if (!recipient || !recipient.isActive) return;
+    await this.notifications.scheduleByRule(mentionRuleFor(String(payload.conversationType ?? '')), {
+      recipientId: target,
+      // One per message per person: a role and a name reaching the same person are one ping.
+      dedupeKey: `mention:${payload.messageId as string}:${target}`,
+      locale: recipient.locale,
+      conversationId,
+      variables: {},
+    });
   }
 }

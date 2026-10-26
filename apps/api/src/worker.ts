@@ -12,6 +12,7 @@ import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
 import { SupervisorCoverService } from './org/supervisor-cover.service';
+import { MentionService } from './communication/mentions/mention.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -86,6 +87,12 @@ const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
 const COVER_SWEEP_MS = Number(process.env.COVER_SWEEP_MS ?? 60_000);
 
 /**
+ * PD-36: how often unanswered summonses expire and quiet step-ins end. Nothing
+ * waits on it for access -- a summons grants none -- so a minute is plenty.
+ */
+const MENTION_SWEEP_MS = Number(process.env.MENTION_SWEEP_MS ?? 60_000);
+
+/**
  * PD-32: how often wrong parent sign-up codes older than a week are purged
  * (chat.purge_parent_signup_failures). Unauthenticated requests insert them, so
  * they must not pile up; one delete statement, safe on every replica.
@@ -141,6 +148,7 @@ async function bootstrap(): Promise<void> {
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
   const covers = app.get(SupervisorCoverService);
+  const mentions = app.get(MentionService);
   const prisma = app.get(PrismaService);
 
   let running = true;
@@ -181,6 +189,7 @@ async function bootstrap(): Promise<void> {
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
   let nextCoverSweep = 0;
+  let nextMentionSweep = 0;
   let nextSignupFailurePurge = 0;
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
@@ -276,6 +285,20 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextCoverSweep = Date.now() + COVER_SWEEP_MS;
+      }
+    }
+
+    // PD-36: summonses past their window, and step-ins gone quiet. Safe on
+    // every replica: each row moves by a conditional update.
+    if (Date.now() >= nextMentionSweep) {
+      draining = true;
+      try {
+        await mentions.sweep();
+      } catch (e) {
+        report(log, 'mention sweep', 'communication.mentions', e);
+      } finally {
+        draining = false;
+        nextMentionSweep = Date.now() + MENTION_SWEEP_MS;
       }
     }
 

@@ -9,6 +9,7 @@ import { AuthorizationService } from '../../platform/authorization.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { signWallpaper } from '../themes/wallpaper-urls';
+import { MentionService, type ViewerMentionDto } from '../mentions/mention.service';
 
 @Controller('conversations')
 @UseFilters(CommErrorFilter)
@@ -29,6 +30,8 @@ export class ConversationController {
     // Optional only so the positional constructions the harnesses share do not
     // shift; without it no labels are attached.
     @Optional() private readonly tools?: StaffToolsService,
+    // PD-36, optional for the same reason: without it no mention is attached.
+    @Optional() private readonly mentions?: MentionService,
   ) {}
 
   /**
@@ -51,7 +54,7 @@ export class ConversationController {
     // authorized, each in one batch: unread counts (the caller's own
     // receipts), members with names, the viewer's own preferences, and the
     // newest message THIS viewer may see.
-    const [unread, members, states, last, children, covers] = await Promise.all([
+    const [unread, members, states, last, children, covers, mentions] = await Promise.all([
       this.messages.unreadCountsFor(ids, actorId),
       this.conversations.membersOfMany(ids, actor),
       this.conversations.viewerStates(ids, actor.actorId),
@@ -60,6 +63,8 @@ export class ConversationController {
       this.conversations.soleChildOf(rows.filter((c) => c.type !== 'direct')),
       // PD-33: which rows are under a live cover (one query for the whole list).
       this.conversations.coversOf(ids),
+      // PD-36: the viewer's own open or unseen mention per row (one query).
+      this.mentions ? this.mentions.viewerMentions(ids, actor.actorId) : Promise.resolve(new Map<string, ViewerMentionDto>()),
     ]);
     // The viewer's PRIVATE labels (staff only); families never get the field.
     const labels = actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, ids) : null;
@@ -80,7 +85,7 @@ export class ConversationController {
           // PD-14: nothing is held for approval. Still sent, as false, for
           // clients built before it.
           viewerRequiresApproval: false,
-          viewerState: viewerState(states.get(c.id), c.id, actor.actorId),
+          viewerState: { ...viewerState(states.get(c.id), c.id, actor.actorId), mention: mentions.get(c.id) ?? null },
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
           learnerAvatarUrl: c.learner
             ? signAvatar('learner', c.learner.id, c.id, actor.actorId, c.learner.avatarObjectKey)
@@ -169,11 +174,17 @@ export class ConversationController {
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
     const actor = await this.conversations.requireActor(actorId);
-    const [states, last, children, covers] = await Promise.all([
+    const [states, last, children, covers, mentions, summoned] = await Promise.all([
       this.conversations.viewerStates([conversation.id], actor.actorId),
       this.messages.lastVisibleMessages([conversation.id], actor),
       conversation.type === 'direct' ? new Map() : this.conversations.soleChildOf([conversation]),
       this.conversations.coversOf([conversation.id]),
+      this.mentions
+        ? this.mentions.viewerMentions([conversation.id], actor.actorId)
+        : Promise.resolve(new Map<string, ViewerMentionDto>()),
+      // PD-36: who has been asked in and is not a member -- every reader sees
+      // them at the top of Group Info (owner: a parent sees name and role).
+      this.mentions ? this.mentions.summonedIn(conversation.id, new Set(members.map((m) => m.actorId))) : Promise.resolve([]),
     ]);
     const child = children.get(conversation.id) as { id: string; avatarObjectKey: string | null } | undefined;
     const labels =
@@ -186,7 +197,10 @@ export class ConversationController {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: false, // PD-14
       viewerModerates: this.authz.moderatableAuthorKinds(actor, await this.conversations.staffAccess(actor, conversation)),
-      viewerState: viewerState(states.get(conversation.id), conversation.id, actor.actorId),
+      viewerState: {
+        ...viewerState(states.get(conversation.id), conversation.id, actor.actorId),
+        mention: mentions.get(conversation.id) ?? null,
+      },
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
       learnerAvatarUrl: conversation.learner
         ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
@@ -194,6 +208,7 @@ export class ConversationController {
       avatarUrl: child ? signAvatar('learner', child.id, conversation.id, actor.actorId, child.avatarObjectKey) : null,
       ...(labels ? { labels: labels.get(conversation.id) ?? [] } : {}),
       cover: covers.get(conversation.id) ?? null,
+      ...(this.mentions ? { summoned } : {}),
     });
   }
 

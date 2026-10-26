@@ -46,6 +46,8 @@ import { RelayRealtimePublisher } from '../infra/realtime/relay.publisher';
 import { RealtimeRelay } from '../infra/realtime/realtime-relay.service';
 
 import { ConversationController } from './api/conversation.controller';
+import { MentionController } from './api/mention.controller';
+import { MentionService } from './mentions/mention.service';
 import { MessageController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
@@ -70,6 +72,7 @@ import { ParentProfileService } from './profile/parent-profile.service';
   imports: [PlatformModule, AuthModule],
   controllers: [
     ConversationController,
+    MentionController,
     MessageController,
     ApprovalController,
     CallController,
@@ -93,6 +96,7 @@ import { ParentProfileService } from './profile/parent-profile.service';
     RedisClientShutdown,
     ConversationService,
     TeacherProfileService,
+    MentionService,
     MessageService,
     ApprovalService,
     CallService,
@@ -142,6 +146,8 @@ import { ParentProfileService } from './profile/parent-profile.service';
   ],
   exports: [
     ConversationService,
+    // PD-36: the worker's sweep, and PD-35's 'mention' seat policy.
+    MentionService,
     OutboxService,
     MessageService,
     ApprovalService,

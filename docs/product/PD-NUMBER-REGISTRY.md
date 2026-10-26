@@ -42,6 +42,7 @@ claimed. The decision text itself still lives in
 | PD-31 | Scheduling: trial time slots, reschedule redesign, a parent's child schedule, change teacher | `claude/pd31-scheduling-*` | in progress |
 | PD-32 | Parent feedback about the teacher (amends PD-26), Starred in Chats, New Students redesign, sign-up code without time expiry (amends PD-16), Trial labels | `claude/pd32-feedback-ui-*` | in progress |
 | PD-33 | Hand over to backup: a temporary cover with automatic return (built on PD-8 backup links) | `claude/pd33-backup-handover-3bb0f2` | in progress |
+| PD-36 | @mentions that summon a non-member in charge (admin, manager, super admin) to step in; parents' @supervisor / @admin; never widens authorization; joins through PD-35's seat primitive | `claude/pd36-mentions-b0f99d` | in progress |
 | PD-34 | next free number | — | — |
 
 ## Migration slots claimed on 2026-10-22
@@ -64,5 +65,6 @@ claimed. The decision text itself still lives in
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
 | `20261026130000` | PD-33 — `chat_pd033_supervisor_cover` |
+| `20261026170000` | PD-36 — `chat_pd036_mentions` (assigned by the department head; 140000–160000 are PD-30, PD-34, PD-35) |
 
 The next free slot is `20261026140000`.
