@@ -84,6 +84,15 @@ export type LessonPhase = 'upcoming' | 'in_progress' | 'awaiting_close' | 'overd
 
 /** A late apology is accepted this long after the start -- chat.guard_lesson_ruling's rule. */
 const LATE_APOLOGY_HOURS = 48;
+/**
+ * How far back "+" looks for a lesson still owed its report. A report has no
+ * deadline (close() refuses only a closed lesson), but the ticket query used to
+ * look back only LATE_APOLOGY_HOURS, so a lesson left unreported for two days
+ * vanished from the chat while the Schedule still counted it as "needs a
+ * report" (owner, 2026-10-24). The Teachers department's needs-action queue
+ * escalates it in the meantime; this only bounds the query.
+ */
+export const REPORT_LOOKBACK_DAYS = 60;
 const MAX_TEXT = 1000;
 const MAX_NOTE = 2000;
 /** PD-15: the short "details" lines beside the quick choices. */
@@ -226,13 +235,34 @@ export class LessonService {
       take: 1000,
     });
     const escalation = await this.escalationMs();
-    return { lessons: rows.map((l) => this.toDto(learnerLesson(l), standing, now, escalation)) };
+    return {
+      lessons: rows.map((r) => {
+        const l = learnerLesson(r);
+        return { ...this.toDto(l, standing, now, escalation), acts: this.actsFor(actor, standing, l, now) };
+      }),
+    };
   }
 
   async get(actorId: string, lessonId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.load(actor, lessonId);
-    return this.toDto(lesson, standing, new Date(), await this.escalationMs());
+    const now = new Date();
+    const acts = this.actsFor(actor, standing, lesson, now);
+    return {
+      ...this.toDto(lesson, standing, now, await this.escalationMs()),
+      acts,
+      // PD-15: the number the report form starts from, as "+" offers it.
+      ...(acts.includes('report') ? { suggestedLessonNumber: await this.nextLessonNumber(lesson.learnerId) } : {}),
+    };
+  }
+
+  /**
+   * The tickets the caller may open on this one lesson now -- what "+" would
+   * offer for it, so the teacher's Schedule can act on any lesson, not only the
+   * one a chat shows. Advisory, like ticketsFor: each is decided again on submit.
+   */
+  actsFor(actor: Actor, standing: LessonStanding, lesson: LessonWithRelations, now: Date): LessonAct[] {
+    return availableActs(lesson, now).filter((act) => this.authz.canRecordLessonAct(actor, standing, act).allowed);
   }
 
   /**
@@ -366,7 +396,11 @@ export class LessonService {
       where: {
         learnerId: { in: learnerIds },
         organizationId: conv.organizationId,
-        startsAt: { gte: new Date(now.getTime() - LATE_APOLOGY_HOURS * 3_600_000), lte: new Date(now.getTime() + 14 * 86_400_000) },
+        OR: [
+          { startsAt: { gte: new Date(now.getTime() - LATE_APOLOGY_HOURS * 3_600_000), lte: new Date(now.getTime() + 14 * 86_400_000) } },
+          // An open lesson from before that is still owed its report.
+          { outcome: null, startsAt: { gte: new Date(now.getTime() - REPORT_LOOKBACK_DAYS * 86_400_000), lte: now } },
+        ],
       },
       include: LESSON_INCLUDE,
       orderBy: { startsAt: 'asc' },

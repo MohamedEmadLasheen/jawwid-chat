@@ -80,7 +80,7 @@ class _PinnedBannerState extends ConsumerState<PinnedBanner> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(label, style: theme.textTheme.labelSmall?.copyWith(color: tokens.colorBrandPrimary, fontWeight: FontWeight.w700)),
+                        Text(label, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w700)),
                         ContentText(
                           _preview(shown, l10n),
                           maxLines: 1,

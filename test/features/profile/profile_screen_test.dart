@@ -7,6 +7,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/app/shells/app_shell.dart';
 import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
+import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/design/widgets/jawwid_avatar.dart';
@@ -14,7 +15,9 @@ import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/conversations/presentation/chats_screen.dart';
 import 'package:jawwid_chat/features/conversations/presentation/conversation_tile.dart';
-import 'package:jawwid_chat/features/profile/presentation/profile_photos_section.dart';
+import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
+import 'package:jawwid_chat/features/profile/data/profile_photo_repository.dart';
+import 'package:jawwid_chat/features/profile/presentation/my_profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_sections.dart';
 import 'package:jawwid_chat/features/settings/presentation/settings_screen.dart';
@@ -29,6 +32,7 @@ void main() {
     required Widget child,
     Locale locale = const Locale('en'),
     bool superAdmin = false,
+    String? photoUrl,
   }) {
     final backend = FakeBackend(role: role);
     addTearDown(backend.dispose);
@@ -36,6 +40,8 @@ void main() {
     return ProviderScope(
       overrides: [
         currentRoleProvider.overrideWithValue(role),
+        if (photoUrl != null) profilePhotoRepositoryProvider.overrideWithValue(_OnePhoto(photoUrl)),
+        profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
         conversationRepositoryProvider
             .overrideWithValue(FakeConversationRepository(backend)),
         messageRepositoryProvider
@@ -65,78 +71,59 @@ void main() {
     );
   }
 
-  group('tapping an avatar or a name opens the profile, not the conversation', () {
-    testWidgets('the avatar opens the profile', (tester) async {
+  // Owner 2026-10-24, WhatsApp-style: the WHOLE row opens the conversation --
+  // its avatar and its name included. Group Info / a person's profile is reached
+  // from the chat header (the last test in this group).
+  group('tapping any part of a row opens the conversation, never the profile', () {
+    Future<String?> tapIn(WidgetTester tester, Finder Function() target) async {
       String? openedConversation;
-      String? openedProfile;
-
       await tester.pumpWidget(
         harness(
           role: UserRole.parent,
-          child: ChatsScreen(
-            onOpenConversation: (id) => openedConversation = id,
-            onOpenProfile: (id) => openedProfile = id,
-          ),
+          child: ChatsScreen(onOpenConversation: (id) => openedConversation = id),
         ),
       );
       await tester.pumpAndSettle();
-
-      await tester.tap(find.byType(JawwidAvatar).first);
+      await tester.tap(target());
       await tester.pumpAndSettle();
+      return openedConversation;
+    }
 
-      expect(openedProfile, isNotNull);
-      expect(
-        openedConversation,
-        isNull,
-        reason: 'the avatar tap must not also open the conversation underneath',
-      );
-    });
-
-    testWidgets('the name opens the profile', (tester) async {
-      String? openedConversation;
-      String? openedProfile;
-
-      await tester.pumpWidget(
-        harness(
-          role: UserRole.parent,
-          child: ChatsScreen(
-            onOpenConversation: (id) => openedConversation = id,
-            onOpenProfile: (id) => openedProfile = id,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
+    testWidgets('the avatar opens the conversation', (tester) async {
       final firstTile = find.byType(ConversationTile).first;
-      final title = tester.widget<ConversationTile>(firstTile).conversation.title;
-      await tester.tap(find.descendant(of: firstTile, matching: find.text(title)));
-      await tester.pumpAndSettle();
-
-      expect(openedProfile, isNotNull);
-      expect(openedConversation, isNull);
+      final opened = await tapIn(tester, () => find.descendant(of: firstTile, matching: find.byType(JawwidAvatar)));
+      expect(opened, isNotNull);
+      expect(find.byType(ConversationProfileScreen), findsNothing);
     });
 
-    testWidgets('the rest of the row still opens the conversation', (tester) async {
-      String? openedConversation;
-      String? openedProfile;
+    testWidgets('the name opens the conversation', (tester) async {
+      final firstTile = find.byType(ConversationTile).first;
+      final opened = await tapIn(tester, () {
+        final title = tester.widget<ConversationTile>(firstTile).conversation.title;
+        return find.descendant(of: firstTile, matching: find.text(title));
+      });
+      expect(opened, isNotNull);
+    });
 
+    testWidgets('the rest of the row opens the conversation', (tester) async {
+      final opened = await tapIn(tester, () => find.text('تم تأكيد موعد الحصة القادمة.').first);
+      expect(opened, isNotNull);
+    });
+
+    testWidgets("inside the chat, the header's name and avatar open Group Info", (tester) async {
+      var openedProfile = 0;
       await tester.pumpWidget(
         harness(
           role: UserRole.parent,
-          child: ChatsScreen(
-            onOpenConversation: (id) => openedConversation = id,
-            onOpenProfile: (id) => openedProfile = id,
-          ),
+          child: ChatScreen(conversationId: 'c_group_1', title: 'Header title', onOpenProfile: () => openedProfile++),
         ),
       );
       await tester.pumpAndSettle();
-
-      // The preview line — clear of both the avatar and the name.
-      await tester.tap(find.text('تم تأكيد موعد الحصة القادمة.').first);
+      await tester.tap(find.text('Header title'));
       await tester.pumpAndSettle();
-
-      expect(openedConversation, isNotNull);
-      expect(openedProfile, isNull);
+      await tester.tap(find.descendant(of: find.byType(AppBar), matching: find.byType(JawwidAvatar)));
+      await tester.pumpAndSettle();
+      expect(openedProfile, 2);
     });
   });
 
@@ -185,58 +172,33 @@ void main() {
     });
   });
 
+  // Owner 2026-10-24: a parent had a Settings row to "My account" (initials, a
+  // "Profile photo" section, "Children's photos", and "No children are linked to your
+  // account yet") AND a separate "My profile" row with another photo control. One
+  // profile per account now: My account IS the parent's own profile, with each child.
   group('my account', () {
-    testWidgets('a parent sees their children, collapsed', (tester) async {
+    testWidgets("a parent's account is their one profile, with their children", (tester) async {
       await tester.pumpWidget(
         harness(role: UserRole.parent, child: const MyAccountScreen()),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Children'), findsOneWidget);
-      // Two learners in the parent fixture.
-      expect(find.byType(ChildTile), findsNWidgets(2));
+      expect(find.byType(MyProfileScreen), findsOneWidget);
+      // The children come from the server's parent profile (PD-17), not from the
+      // chats: the parent fixture has two.
       expect(find.text('أحمد'), findsOneWidget);
-
-      // Progressive disclosure: the detail rows are not on screen until expanded.
-      expect(find.text('Level'), findsNothing);
-      expect(find.text('Subscription'), findsNothing);
+      expect(find.text('يوسف'), findsOneWidget);
+      expect(find.text('No children are linked to your account yet.'), findsNothing);
+      // No second photo section beside the cards' own photo controls.
+      expect(find.text("Children's photos"), findsNothing);
+      expect(find.text('Profile photo'), findsNothing);
     });
 
-    testWidgets('expanding a child reveals real data and names the gaps',
-        (tester) async {
-      await tester.pumpWidget(
-        harness(role: UserRole.parent, child: const MyAccountScreen()),
-      );
+    testWidgets('Settings has one entry into it, not two', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.parent, child: const SettingsScreen()));
       await tester.pumpAndSettle();
-
-      await tester.tap(find.text('أحمد'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Group'), findsOneWidget);
-      expect(find.text('Teacher'), findsOneWidget);
-      expect(find.text('Level'), findsOneWidget);
-      expect(find.text('Subscription'), findsOneWidget);
-      expect(find.text('Schedule'), findsOneWidget);
-
-      // Level, subscription and schedule are on no contract this client can reach. They
-      // say so, rather than rendering blank — a blank reads as "this child has none".
-      expect(find.text('Not available yet'), findsNWidgets(3));
-    });
-
-    testWidgets('the contact file section says plainly that it holds nothing',
-        (tester) async {
-      await tester.pumpWidget(
-        harness(role: UserRole.parent, child: const MyAccountScreen()),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Contact information'), findsOneWidget);
-      expect(
-        find.text(
-          'Jawwid does not hold phone numbers or email addresses in this app yet.',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('My profile'), findsNothing);
+      expect(find.text('Your photo, name and about'), findsNothing);
     });
 
     testWidgets('a teacher account has no children section at all', (tester) async {
@@ -275,6 +237,27 @@ void main() {
           }
         }
       }
+    });
+  });
+
+  // Owner 2026-10-24: "uploaded photos don't show". The photo is kept in one place
+  // (`/me/photo`, written by `/me/avatar`), but Settings and My account read the
+  // session's user, which carries none -- so they showed initials after an upload.
+  group('my own photo shows wherever my own face is drawn', () {
+    const url = 'https://api.example/media/avatars/contact.p1.self?s=sig&k=abcd1234';
+    String? avatarIn(WidgetTester tester, Finder scope) =>
+        tester.widget<JawwidAvatar>(find.descendant(of: scope, matching: find.byType(JawwidAvatar)).first).imageUrl;
+
+    testWidgets('the Settings row', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.parent, photoUrl: url, child: const SettingsScreen()));
+      await tester.pumpAndSettle();
+      expect(avatarIn(tester, find.byType(SettingsScreen)), url);
+    });
+
+    testWidgets('the My account header', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.sales, photoUrl: url, child: const MyAccountScreen()));
+      await tester.pumpAndSettle();
+      expect(avatarIn(tester, find.byType(ProfileHeader)), url);
     });
   });
 
@@ -359,7 +342,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('فريق المبيعات'), findsWidgets);
-      expect(find.byType(ProfilePhotosSection), findsNothing);
+      expect(find.text('Profile photo'), findsNothing);
       expect(find.text('Children'), findsNothing);
     });
   });
@@ -413,4 +396,22 @@ class _SignedIn extends AuthController {
 
   @override
   AuthState build() => AuthAuthenticated(_user);
+}
+
+class _OnePhoto implements ProfilePhotoRepository {
+  _OnePhoto(this.url);
+
+  final String url;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<MyPhotos> mine() async => MyPhotos(avatarUrl: url);
+
+  @override
+  Future<String?> set(PendingAttachment photo, {String? childId}) async => url;
+
+  @override
+  Future<void> remove({String? childId}) async {}
 }

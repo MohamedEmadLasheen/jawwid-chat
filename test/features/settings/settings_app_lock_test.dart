@@ -79,7 +79,7 @@ void main() {
 
   testWidgets('turning it on prompts, then offers the timeouts (1 minute by default)',
       (tester) async {
-    await pumpSettings(tester);
+    final l10n = await pumpSettings(tester);
     expect(toggle(tester).value, isFalse);
     expect(find.byKey(const ValueKey('settings-app-lock-1m')), findsNothing);
 
@@ -89,10 +89,17 @@ void main() {
 
     expect(world.authenticator.prompts, 1);
     expect(toggle(tester).value, isTrue);
+    // The timeout is one row showing its value; the options open in a sheet.
+    expect(find.text(l10n.appLockTimeoutOneMinute), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('settings-app-lock-timeout')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-app-lock-timeout')));
+    await tester.pumpAndSettle();
     final oneMinute = tester.widget<RadioListTile<AppLockTimeout>>(
       find.byKey(const ValueKey('settings-app-lock-1m')),
     );
     expect(oneMinute.value, AppLockTimeout.oneMinute);
+    expect(tester.widget<RadioGroup<AppLockTimeout>>(find.byType(RadioGroup<AppLockTimeout>)).groupValue, AppLockTimeout.oneMinute);
     expect(container.read(appLockControllerProvider).settings.timeout, AppLockTimeout.oneMinute);
 
     await tester.ensureVisible(find.byKey(const ValueKey('settings-app-lock-1h')));
@@ -100,6 +107,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-app-lock-1h')));
     await tester.pumpAndSettle();
     expect(world.store.stored['u_parent']?.timeout, AppLockTimeout.oneHour);
+    // Choosing closes the sheet, and the row now names the new value.
+    expect(find.byType(RadioGroup<AppLockTimeout>), findsNothing);
+    expect(find.text(l10n.appLockTimeoutOneHour), findsOneWidget);
   });
 
   testWidgets('staff (on by default) can turn it off', (tester) async {
@@ -115,5 +125,38 @@ void main() {
 
     expect(toggle(tester).value, isFalse);
     expect(world.store.stored['u_sales']?.enabled, isFalse);
+  });
+
+  // Owner 2026-10-24: Language and Appearance are single rows naming the current
+  // value; the options open in a sheet instead of filling the screen.
+  testWidgets('Language and Appearance are one row each; a sheet holds the options', (tester) async {
+    final l10n = await pumpSettings(tester);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('settings-language')), -200);
+    await tester.pumpAndSettle();
+
+    // No radio lists on the page itself.
+    expect(find.byType(RadioListTile<String>), findsNothing);
+    expect(find.byType(RadioListTile<ThemeMode>), findsNothing);
+    final language = find.byKey(const ValueKey('settings-language'));
+    expect(find.descendant(of: language, matching: find.text(l10n.settingsLanguage)), findsOneWidget);
+    expect(find.descendant(of: language, matching: find.text(l10n.settingsLanguageSystem)), findsOneWidget);
+    final appearance = find.byKey(const ValueKey('settings-appearance'));
+    expect(find.descendant(of: appearance, matching: find.text(l10n.settingsAppearanceAuto)), findsOneWidget);
+
+    await tester.tap(appearance);
+    await tester.pumpAndSettle();
+    expect(find.byType(RadioListTile<ThemeMode>), findsNWidgets(3));
+    await tester.tap(find.text(l10n.settingsAppearanceDark));
+    await tester.pumpAndSettle();
+    expect(container.read(themeModeProvider), ThemeMode.dark);
+    expect(find.byType(RadioListTile<ThemeMode>), findsNothing);
+    expect(find.descendant(of: appearance, matching: find.text(l10n.settingsAppearanceDark)), findsOneWidget);
+
+    await tester.tap(language);
+    await tester.pumpAndSettle();
+    expect(find.byType(RadioListTile<String>), findsNWidgets(3));
+    await tester.tap(find.text(l10n.settingsLanguageArabic));
+    await tester.pumpAndSettle();
+    expect(container.read(localeOverrideProvider), const Locale('ar'));
   });
 }

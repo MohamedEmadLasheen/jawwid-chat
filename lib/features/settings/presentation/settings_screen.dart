@@ -14,6 +14,7 @@ import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../app_lock/application/app_lock_controller.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
+import '../../profile/presentation/profile_photos_section.dart';
 import '../application/theme_mode_controller.dart';
 import 'date_time_screen.dart';
 
@@ -68,7 +69,9 @@ class SettingsScreen extends ConsumerWidget {
                       children: [
                         JawwidAvatar(
                           displayName: user.displayName,
-                          imageUrl: user.avatarUrl,
+                          // The one photo, from where it is kept (`GET /me/photo`);
+                          // the session's user carries none.
+                          imageUrl: ref.watch(myPhotosProvider).value?.avatarUrl ?? user.avatarUrl,
                           size: Sizes.avatarLg,
                         ),
                         const SizedBox(width: Spacing.spacing4),
@@ -111,33 +114,10 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-          // Teachers only. A parent has no professional profile in this
-          // product, so the row is ABSENT for them rather than present and
-          // refused -- the same rule the rest of this app follows for an
-          // affordance with nothing behind it.
-          if (user != null && user.isTeacher)
-            ListTile(
-              leading: const Icon(Icons.workspace_premium_outlined),
-              title: Text(l10n.teacherProfileSettingsEntry),
-              subtitle: Text(l10n.teacherProfileSettingsSubtitle),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push(Routes.teacherProfile),
-            ),
-          // Parent only, and deliberately a SEPARATE row from the identity header above.
-          //
-          // The header opens My account, a read-only summary both roles share. This opens
-          // the parent's own editable profile — their photo, name and About, and the same
-          // three for each child. A teacher has no parent profile (the server refuses them
-          // outright), so offering them the row would be offering a screen that can only
-          // fail.
-          if (user != null && user.isParent)
-            ListTile(
-              leading: const Icon(Icons.badge_outlined),
-              title: Text(l10n.myProfileTitle),
-              subtitle: Text(l10n.myProfileSettingsSubtitle),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => context.push(Routes.myProfile),
-            ),
+          // ONE profile per account (owner 2026-10-24): the row above opens it. For a
+          // teacher that is their professional profile; for a parent, their own profile
+          // with each child's -- photo, name and About, one photo control each. There is
+          // no second "Professional profile" or "My profile" row and no second upload.
           // PD-17: the parent's own payments. Absent for a teacher, never refused: a
           // teacher has no payments here and must never see a family's.
           if (user != null && user.role == UserRole.parent)
@@ -151,9 +131,19 @@ class SettingsScreen extends ConsumerWidget {
             ),
           const Divider(),
 
-          _SectionHeading(text: l10n.settingsLanguage),
-          RadioGroup<String>(
-            groupValue: locale?.languageCode ?? 'system',
+          // Language and Appearance are one row each, showing the current value; the
+          // options open in a sheet (owner 2026-10-24: two full radio lists took
+          // half the screen for two settings nobody changes twice).
+          SettingChoiceRow<String>(
+            key: const ValueKey('settings-language'),
+            icon: Icons.language_outlined,
+            title: l10n.settingsLanguage,
+            value: locale?.languageCode ?? 'system',
+            options: [
+              ('system', l10n.settingsLanguageSystem),
+              ('ar', l10n.settingsLanguageArabic),
+              ('en', l10n.settingsLanguageEnglish),
+            ],
             onChanged: (value) => ref.read(localeOverrideProvider.notifier).set(
                   switch (value) {
                     'ar' => const Locale('ar'),
@@ -161,50 +151,21 @@ class SettingsScreen extends ConsumerWidget {
                     _ => null,
                   },
                 ),
-            child: Column(
-              children: [
-                RadioListTile<String>(
-                  value: 'system',
-                  title: Text(l10n.settingsLanguageSystem),
-                ),
-                RadioListTile<String>(
-                  value: 'ar',
-                  title: Text(l10n.settingsLanguageArabic),
-                ),
-                RadioListTile<String>(
-                  value: 'en',
-                  title: Text(l10n.settingsLanguageEnglish),
-                ),
-              ],
-            ),
           ),
-          const Divider(),
-
-          // "Appearance", not "Theme": the section above is Language, whose Auto
-          // reads "Follow device". Two rows both offering "Follow device" for
-          // different things is how someone changes the wrong one.
-          _SectionHeading(text: l10n.settingsAppearance),
-          RadioGroup<ThemeMode>(
-            groupValue: themeMode,
-            onChanged: (value) => ref
-                .read(themeModeProvider.notifier)
-                .set(value ?? ThemeMode.system),
-            child: Column(
-              children: [
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.system,
-                  title: Text(l10n.settingsAppearanceAuto),
-                ),
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.light,
-                  title: Text(l10n.settingsAppearanceLight),
-                ),
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.dark,
-                  title: Text(l10n.settingsAppearanceDark),
-                ),
-              ],
-            ),
+          // "Appearance", not "Theme": Language's Auto reads "Follow device". Two
+          // rows both offering "Follow device" for different things is how someone
+          // changes the wrong one.
+          SettingChoiceRow<ThemeMode>(
+            key: const ValueKey('settings-appearance'),
+            icon: Icons.contrast_outlined,
+            title: l10n.settingsAppearance,
+            value: themeMode,
+            options: [
+              (ThemeMode.system, l10n.settingsAppearanceAuto),
+              (ThemeMode.light, l10n.settingsAppearanceLight),
+              (ThemeMode.dark, l10n.settingsAppearanceDark),
+            ],
+            onChanged: (value) => ref.read(themeModeProvider.notifier).set(value),
           ),
           const Divider(),
 
@@ -336,41 +297,22 @@ class _AppLockSection extends ConsumerWidget {
               : (value) => controller.setEnabled(value, reason: l10n.appLockReason),
         ),
         if (enabled)
-          RadioGroup<AppLockTimeout>(
-            groupValue: lock.settings.timeout,
-            onChanged: (value) {
-              if (value != null) controller.setTimeout(value);
-            },
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsetsDirectional.fromSTEB(
-                    Spacing.spacing5,
-                    Spacing.spacing2,
-                    Spacing.spacing5,
-                    0,
-                  ),
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Text(
-                      l10n.appLockTimeoutLabel,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-                ),
-                for (final timeout in AppLockTimeout.values)
-                  RadioListTile<AppLockTimeout>(
-                    key: ValueKey('settings-app-lock-${timeout.wire}'),
-                    value: timeout,
-                    title: Text(switch (timeout) {
-                      AppLockTimeout.immediately => l10n.appLockTimeoutImmediately,
-                      AppLockTimeout.oneMinute => l10n.appLockTimeoutOneMinute,
-                      AppLockTimeout.fifteenMinutes => l10n.appLockTimeoutFifteenMinutes,
-                      AppLockTimeout.oneHour => l10n.appLockTimeoutOneHour,
-                    }),
-                  ),
-              ],
-            ),
+          SettingChoiceRow<AppLockTimeout>(
+            key: const ValueKey('settings-app-lock-timeout'),
+            icon: Icons.timer_outlined,
+            title: l10n.appLockTimeoutLabel,
+            value: lock.settings.timeout,
+            options: [
+              for (final timeout in AppLockTimeout.values)
+                (timeout, switch (timeout) {
+                  AppLockTimeout.immediately => l10n.appLockTimeoutImmediately,
+                  AppLockTimeout.oneMinute => l10n.appLockTimeoutOneMinute,
+                  AppLockTimeout.fifteenMinutes => l10n.appLockTimeoutFifteenMinutes,
+                  AppLockTimeout.oneHour => l10n.appLockTimeoutOneHour,
+                }),
+            ],
+            optionKey: (timeout) => ValueKey('settings-app-lock-${timeout.wire}'),
+            onChanged: controller.setTimeout,
           ),
       ],
     );
@@ -400,6 +342,79 @@ class _SectionHeading extends StatelessWidget {
               ),
         ),
       ),
+    );
+  }
+}
+
+/// One setting with a few options, WhatsApp-style: a single row naming the setting
+/// and its current value ("Language · Follow device"); tapping it opens the options
+/// in a sheet, and choosing one closes it.
+class SettingChoiceRow<T> extends StatelessWidget {
+  const SettingChoiceRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    this.optionKey,
+  });
+
+  final IconData icon;
+  final String title;
+  final T value;
+
+  /// Each option and its label, in display order.
+  final List<(T, String)> options;
+  final ValueChanged<T> onChanged;
+
+  /// A key for each option's row in the sheet (tests find options by it).
+  final Key Function(T value)? optionKey;
+
+  String get _current => options.firstWhere((o) => o.$1 == value, orElse: () => options.first).$2;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(_current),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () async {
+        final picked = await showModalBottomSheet<(T,)>(
+          context: context,
+          useRootNavigator: true,
+          showDragHandle: true,
+          builder: (sheet) => SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, 0, Spacing.spacing5, Spacing.spacing2),
+                    child: Semantics(
+                      header: true,
+                      child: Text(title, style: Theme.of(sheet).textTheme.titleMedium),
+                    ),
+                  ),
+                  RadioGroup<T>(
+                    groupValue: value,
+                    onChanged: (v) => Navigator.of(sheet).pop((v as T,)),
+                    child: Column(
+                      children: [
+                        for (final (option, label) in options)
+                          RadioListTile<T>(key: optionKey?.call(option), value: option, title: Text(label)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        if (picked != null && picked.$1 != value) onChanged(picked.$1);
+      },
     );
   }
 }

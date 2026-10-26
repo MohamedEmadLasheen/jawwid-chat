@@ -19,26 +19,53 @@ abstract final class JawwidTheme {
     Brightness brightness,
     bool isArabic,
   ) {
+    // EVERY role is named. A role left out of this constructor falls back to
+    // another (secondaryContainer -> secondary, onSecondaryContainer ->
+    // onSecondary, surfaceContainer* -> surface ...), and those fallbacks put
+    // white text on the gold accent (3.40:1) wherever Material reached for a
+    // container -- a selected chip, a notice. test/design/theme_contrast_test.dart
+    // measures every on-X / X pair below against WCAG AA.
+    //
+    // The gold is split by job: `secondary` is the text-capable gold
+    // (accent-700 in light), `colorAccent` stays decorative.
+    final dark = brightness == Brightness.dark;
     final scheme = ColorScheme(
       brightness: brightness,
-      primary: tokens.colorBrandPrimary,
-      onPrimary: tokens.colorBrandOnPrimary,
+      // In dark, teal-500 is a fill only (2.83:1 as text on the dark surface);
+      // the role Material uses for headings, radios, switches and badges is the
+      // light teal, with dark ink on it.
+      primary: dark ? tokens.colorTextLink : tokens.colorBrandPrimary,
+      onPrimary: dark ? tokens.colorTextInverse : tokens.colorBrandOnPrimary,
       primaryContainer: tokens.colorBrandSubtle,
       onPrimaryContainer: tokens.colorTextPrimary,
-      secondary: tokens.colorAccent,
-      onSecondary: tokens.colorBrandOnPrimary,
+      secondary: tokens.colorAccentStrong,
+      onSecondary: dark ? tokens.colorTextInverse : tokens.colorSurfaceDefault,
+      secondaryContainer: tokens.colorAccentSubtle,
+      onSecondaryContainer: dark ? tokens.colorAccentStrong : tokens.colorTextPrimary,
+      tertiary: tokens.colorStatusInfoFg,
+      onTertiary: dark ? tokens.colorTextInverse : tokens.colorSurfaceDefault,
+      tertiaryContainer: tokens.colorStatusInfoBg,
+      onTertiaryContainer: dark ? tokens.colorStatusInfoFg : tokens.colorTextPrimary,
       surface: tokens.colorSurfaceDefault,
       onSurface: tokens.colorTextPrimary,
+      surfaceDim: tokens.colorBackgroundSunken,
+      surfaceBright: tokens.colorSurfaceDefault,
+      surfaceContainerLowest: dark ? tokens.colorBackgroundSunken : tokens.colorSurfaceDefault,
+      surfaceContainerLow: dark ? tokens.colorBackgroundPage : tokens.colorBackgroundPage,
+      surfaceContainer: tokens.colorSurfaceMuted,
+      surfaceContainerHigh: tokens.colorSurfaceDefault,
       surfaceContainerHighest: tokens.colorSurfaceMuted,
       onSurfaceVariant: tokens.colorTextSecondary,
       outline: tokens.colorBorderStrong,
       outlineVariant: tokens.colorBorderDefault,
       error: tokens.colorStatusDangerFg,
-      onError: tokens.colorBrandOnPrimary,
+      onError: dark ? tokens.colorTextInverse : tokens.colorSurfaceDefault,
       errorContainer: tokens.colorStatusDangerBg,
       onErrorContainer: tokens.colorStatusDangerFg,
       inverseSurface: tokens.colorSurfaceInverse,
       onInverseSurface: tokens.colorTextInverse,
+      inversePrimary: dark ? tokens.colorBrandSubtle : tokens.colorTextLink,
+      surfaceTint: Colors.transparent,
     );
 
     final textTheme = JawwidTypography.textTheme(
@@ -104,13 +131,15 @@ abstract final class JawwidTheme {
         ),
         labelStyle: textTheme.bodyMedium,
         hintStyle: textTheme.bodyMedium?.copyWith(color: tokens.colorTextMuted),
+        // A text field is identified by its border, so the border is a UI
+        // component and needs 3:1 (WCAG 1.4.11) -- colorBorderDefault was 1.43:1.
         border: OutlineInputBorder(
           borderRadius: Radii.control,
-          borderSide: BorderSide(color: tokens.colorBorderDefault),
+          borderSide: BorderSide(color: tokens.colorBorderStrong),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: Radii.control,
-          borderSide: BorderSide(color: tokens.colorBorderDefault),
+          borderSide: BorderSide(color: tokens.colorBorderStrong),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: Radii.control,
@@ -153,7 +182,9 @@ abstract final class JawwidTheme {
                 : tokens.colorBrandPrimary,
           );
         }),
-        labelTextStyle: WidgetStatePropertyAll(JawwidTypography.caption(isArabic)),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => JawwidTypography.caption(isArabic).copyWith(
+              color: states.contains(WidgetState.selected) ? tokens.colorTextPrimary : tokens.colorTextSecondary,
+            )),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
@@ -167,11 +198,25 @@ abstract final class JawwidTheme {
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(borderRadius: Radii.sheet),
       ),
+      // A theme's chip labelStyle REPLACES Material's default rather than merging
+      // into it, so a style with no colour drew every plain Chip's label in the
+      // engine's default -- white on the light pill: the Schedule's unreadable
+      // "Upcoming". The colour is stated, per state.
       chipTheme: ChipThemeData(
         backgroundColor: tokens.colorSurfaceMuted,
-        side: BorderSide(color: tokens.colorBorderDefault),
+        disabledColor: tokens.colorSurfaceMuted,
+        selectedColor: scheme.secondaryContainer,
+        side: BorderSide(color: tokens.colorBorderStrong),
         shape: const StadiumBorder(),
-        labelStyle: JawwidTypography.label(isArabic),
+        labelStyle: JawwidTypography.label(isArabic).copyWith(
+          color: WidgetStateColor.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) return tokens.colorTextMuted;
+            if (states.contains(WidgetState.selected)) return scheme.onSecondaryContainer;
+            return tokens.colorTextPrimary;
+          }),
+        ),
+        checkmarkColor: scheme.onSecondaryContainer,
+        iconTheme: IconThemeData(color: tokens.colorTextSecondary, size: 18),
       ),
       listTileTheme: const ListTileThemeData(
         minVerticalPadding: Spacing.spacing4,

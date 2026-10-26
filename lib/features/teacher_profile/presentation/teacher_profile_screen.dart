@@ -92,7 +92,9 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     final state = ref.watch(teacherProfileControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.teacherProfileTitle)),
+      // The teacher's one profile screen, reached from their row at the top of
+      // Settings: "My profile", not a second, professional-only page.
+      appBar: AppBar(title: Text(l10n.myProfileTitle)),
       body: switch (state) {
         AsyncLoading() => const JawwidLoadingView(),
         AsyncError(:final error) => _Error(

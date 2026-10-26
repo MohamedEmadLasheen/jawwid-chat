@@ -730,6 +730,10 @@ abstract interface class LessonRepository {
   /// `GET /lessons?from&to` -- for a teacher, their own lessons.
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to);
 
+  /// `GET /lessons/:id` -- the tickets the reader may open on this one lesson now,
+  /// as "+" would offer them (`acts`). Advisory, like [tickets].
+  Future<List<LessonTicket>> lessonTickets(String lessonId);
+
   /// `GET /learners/:id/progress` -- this month, in the academy's zone.
   Future<ChildProgress> progress(String learnerId);
 
@@ -840,6 +844,9 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => const [];
+
+  @override
+  Future<List<LessonTicket>> lessonTickets(String lessonId) async => const [];
 
   @override
   Future<ChildProgress> progress(String learnerId) =>

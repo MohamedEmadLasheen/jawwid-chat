@@ -21,8 +21,10 @@ import '../../conversations/application/open_direct_controller.dart';
 import '../../lessons/presentation/child_progress_card.dart';
 import '../../lessons/presentation/group_children_section.dart';
 import '../../materials/presentation/child_materials_entry.dart';
+import '../../teacher_profile/presentation/teacher_profile_screen.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_view.dart';
+import 'my_profile_screen.dart';
 import 'profile_photos_section.dart';
 import 'profile_sections.dart';
 
@@ -93,11 +95,23 @@ class ConversationProfileScreen extends ConsumerWidget {
 /// A separate entry point from [ConversationProfileScreen] on purpose: "my account" and
 /// "someone else's profile" are different things with different audiences, and collapsing
 /// them into one screen with a flag is how a viewer check eventually gets missed.
+///
+/// ONE profile screen per account (owner 2026-10-24). A TEACHER's account IS their
+/// professional profile ([TeacherProfileScreen]); a PARENT's is their own editable
+/// profile with each child's ([MyProfileScreen]) -- one photo control per person, and
+/// the children as the server lists them (PD-17). What is left here is staff's.
 class MyAccountScreen extends ConsumerWidget {
   const MyAccountScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    switch (ref.watch(currentRoleProvider)) {
+      case UserRole.teacher:
+        return const TeacherProfileScreen();
+      case UserRole.parent:
+        return const MyProfileScreen();
+      case _:
+    }
     final l10n = L10n.of(context);
     final state = ref.watch(myAccountProvider);
 
@@ -109,16 +123,14 @@ class MyAccountScreen extends ConsumerWidget {
             error: error,
             onRetry: () => ref.invalidate(myAccountProvider),
           ),
-        // The viewer's own photo (and, for a parent, the children's) sits
-        // right under the header, where WhatsApp puts it.
-        // Not for Sales (PD-20): the server refuses a staff member's own photo writes,
-        // so the controls would offer only a failure.
+        // Staff set their photo on their staff profile in Admin Web (PD-20: the server
+        // refuses a staff member's own photo writes here), so no photo controls.
         AsyncData(:final value) => ProfileBody(
             view: value,
-            actions: [
-              if (ref.watch(currentRoleProvider) != UserRole.sales)
-                ProfilePhotosSection(displayName: value.subject.displayName),
-            ],
+            // The one photo, from the one place it is kept (`GET /me/photo`): the
+            // session's user carries none, so this header used to show initials
+            // even after a photo was set.
+            headerAvatarUrl: ref.watch(myPhotosProvider).value?.avatarUrl ?? value.subject.avatarUrl,
           ),
       },
     );
@@ -127,9 +139,12 @@ class MyAccountScreen extends ConsumerWidget {
 
 /// The shared body: header, then whatever sections this viewer is entitled to.
 class ProfileBody extends ConsumerWidget {
-  const ProfileBody({super.key, required this.view, this.actions = const []});
+  const ProfileBody({super.key, required this.view, this.actions = const [], this.headerAvatarUrl});
 
   final ProfileView view;
+
+  /// The viewer's own photo on their own account, read fresh; null elsewhere.
+  final String? headerAvatarUrl;
 
   /// Conversation-scoped controls, rendered under the header. Empty on an
   /// account profile, which has no conversation to act on.
@@ -142,7 +157,7 @@ class ProfileBody extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: Spacing.spacing9),
       children: [
-        ProfileHeader(view: view),
+        ProfileHeader(view: view, avatarUrl: headerAvatarUrl),
 
         if (actions.isNotEmpty) ...[
           const ProfileDivider(),
@@ -275,9 +290,12 @@ class ProfileBody extends ConsumerWidget {
 
 /// Large avatar, name, and one quiet line of role or context.
 class ProfileHeader extends StatelessWidget {
-  const ProfileHeader({super.key, required this.view});
+  const ProfileHeader({super.key, required this.view, this.avatarUrl});
 
   final ProfileView view;
+
+  /// Overrides the subject's photo link (own account: the fresh one).
+  final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -303,7 +321,7 @@ class ProfileHeader extends StatelessWidget {
         children: [
           JawwidAvatar(
             displayName: view.subject.displayName,
-            imageUrl: view.subject.avatarUrl,
+            imageUrl: avatarUrl ?? view.subject.avatarUrl,
             size: Sizes.avatarXl,
           ),
           const SizedBox(height: Spacing.spacing5),

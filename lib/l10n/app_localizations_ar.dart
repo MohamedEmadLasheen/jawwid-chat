@@ -1034,6 +1034,67 @@ class L10nAr extends L10n {
   String get ticketReport => 'تقرير الحصة';
 
   @override
+  String get ticketWriteReport => 'كتابة تقرير الحصة';
+
+  @override
+  String lessonsOtherLessons(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة أخرى',
+      many: '$count حصة أخرى',
+      few: '$count حصص أخرى',
+      two: 'حصتان أخريان',
+      one: 'حصة أخرى',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lessonsOtherLessonsTitle => 'حصص أخرى';
+
+  @override
+  String lessonsOtherUnreported(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة أخرى بلا تقرير',
+      many: '$count حصة أخرى بلا تقرير',
+      few: '$count حصص أخرى بلا تقرير',
+      two: 'حصتان أخريان بلا تقرير',
+      one: 'حصة أخرى بلا تقرير',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get scheduleFilterAll => 'الكل';
+
+  @override
+  String scheduleFilterNeedsReport(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تحتاج تقريرًا ($count)',
+      many: 'تحتاج تقريرًا ($count)',
+      few: 'تحتاج تقريرًا ($count)',
+      two: 'تحتاج تقريرًا (2)',
+      one: 'تحتاج تقريرًا (1)',
+      zero: 'تحتاج تقريرًا',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get scheduleNeedsReportHeader => 'حصص لم يُكتب تقريرها';
+
+  @override
+  String get scheduleLessonNoActions => 'لا يوجد إجراء لهذه الحصة الآن.';
+
+  @override
+  String get scheduleLessonLoadFailed => 'تعذّر تحميل الحصة. حاول مرة أخرى.';
+
+  @override
   String get ticketAbsence => 'غياب الطالب';
 
   @override
