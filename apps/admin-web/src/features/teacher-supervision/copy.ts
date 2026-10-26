@@ -80,14 +80,14 @@ export const H = {
     en: 'Leave it empty to price it later from the teacher’s Payroll.',
     ar: 'اتركه فارغًا لتحديده لاحقًا من قسم الرواتب في ملف المعلم.',
   },
+  rewardNoTerms: {
+    en: 'This teacher has no pay terms for this month, so the reward was not recorded. Set the pay terms in the teacher’s Payroll, then record it again.',
+    ar: 'لا توجد شروط راتب لهذا المعلم في هذا الشهر، لذلك لم تُسجَّل المكافأة. حدّد شروط الراتب من قسم الرواتب في ملف المعلم ثم سجّلها مجددًا.',
+  },
   amountInvalid: { en: 'An amount with at most two decimals.', ar: 'مبلغ بحد أقصى منزلتين عشريتين.' },
   awaitingAmount: { en: 'Amount not set yet', ar: 'لم يُحدَّد المبلغ بعد' },
   date: { en: 'Date', ar: 'التاريخ' },
   recordedBy: { en: 'Recorded by', ar: 'سجّلها' },
-  rewardSavedNoAmount: {
-    en: 'The reward is recorded, but its amount was not saved: {why} Set it from the teacher’s Payroll.',
-    ar: 'سُجّلت المكافأة، لكن لم يُحفظ مبلغها: {why} حدده من قسم الرواتب في ملف المعلم.',
-  },
 
   // Deduction defaults
   defaultsTitle: { en: 'Default deduction amounts', ar: 'مبالغ الخصم الافتراضية' },

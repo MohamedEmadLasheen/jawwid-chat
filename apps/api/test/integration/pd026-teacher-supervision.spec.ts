@@ -30,6 +30,7 @@ import { NewStudentsService } from '../../src/new-students/new-students.service'
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
 import { TeacherPayrollService } from '../../src/teacher-file/teacher-payroll.service';
+import { SupervisionService } from '../../src/lessons/supervision.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -44,7 +45,8 @@ const leave = new LeaveService(g.prisma, g.conversations, supervision, cards, le
 const discipline = new DisciplineService(g.prisma, g.conversations, supervision, cards, lessons, g.outbox, g.config, audit, trials);
 const lifecycle = new LifecycleService(g.prisma, g.conversations, lessons, scheduling, g.outbox, g.config, audit, supervision);
 const files = new TeacherFileService(g.prisma, g.authz, g.conversations, audit);
-const payroll = new TeacherPayrollService(g.prisma, files, audit);
+const timeline = new SupervisionService(g.prisma, g.conversations, lessons, g.outbox, supervision, audit);
+const payroll = new TeacherPayrollService(g.prisma, files, audit, timeline);
 
 // Each test truncates and seeds the database first; on a loaded machine that alone outruns Jest's 5 s default.
 jest.setTimeout(120_000);
@@ -347,5 +349,72 @@ describe('5. lateness, trial or regular', () => {
     await lessons.report(s.teacherId, held, { covered: 'Al-Mulk' });
     const late = await discipline.recordLateness(tsupId, held, { minutes: 15 });
     expect(late.violation.lesson).toMatchObject({ id: held, kind: 'regular' });
+  });
+});
+
+describe('6. the known limits, closed (PD-26 amendment 2026-10-26)', () => {
+  async function terms(currency: string) {
+    await g.prisma.teacherPayTerms.create({
+      data: {
+        organizationId: (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId,
+        teacherId: s.teacherId,
+        effectiveMonth: new Date(`${today.slice(0, 7)}-01T00:00:00Z`),
+        salaryType: 'shift',
+        currency,
+        monthlyAmount: '9000',
+        reason: 'contract',
+        createdBy: superId,
+      },
+    });
+  }
+  const bonuses = () => g.prisma.teacherSupervisionEntry.count({ where: { teacherId: s.teacherId, kind: 'bonus' } });
+
+  it('a reward with an amount is one act: the bonus, its card and its amount, together', async () => {
+    await terms('EGP');
+    const out = await payroll.recordReward(superId, s.teacherId, { reason: 'Ten perfect reports', amount: '300' });
+    expect(out.amount).toEqual({ amount: '300.00', currency: 'EGP', month: today.slice(0, 7) });
+    const priced = await g.prisma.teacherPayAdjustment.findMany({ where: { bonusEntryId: out.id } });
+    expect(priced.map((a) => [a.kind, String(a.amount), a.currency])).toEqual([['bonus', '300', 'EGP']]);
+    // The card reached the teacher's supervision conversation, as for a bonus without an amount.
+    const card = await g.prisma.message.findFirst({ where: { type: 'card', card: { kind: 'teacher_bonus' } } });
+    expect(card).not.toBeNull();
+    expect((await payroll.rewards(superId)).rewards[0]).toMatchObject({ id: out.id, amount: { amount: '300.00' } });
+  });
+
+  it('without pay terms the whole reward is refused: no bonus, no card, no amount', async () => {
+    const before = await bonuses();
+    const err = await payroll.recordReward(superId, s.teacherId, { reason: 'x', amount: '300' }).catch((e) => e);
+    expect(err).toBeInstanceOf(CommError);
+    expect(err.code).toBe(CommErrorCode.TEACHER_FILE_CONFLICT);
+    expect(err.message).toMatch(/pay terms/);
+    expect(await bonuses()).toBe(before);
+    expect(await g.prisma.teacherPayAdjustment.count()).toBe(0);
+  });
+
+  it('a reward with an amount is the super admin\'s; the Teachers department records one without', async () => {
+    await terms('EGP');
+    expect(await code(payroll.recordReward(tmgrId, s.teacherId, { reason: 'x', amount: '10' }))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
+    await expect(timeline.bonus(tmgrId, s.teacherId, { reason: 'Covered a class' })).resolves.toMatchObject({ kind: 'bonus' });
+  });
+
+  it('PD-11\'s timeline route requires a complaint\'s source too; the writer handles it; old rows stay', async () => {
+    const org = (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId;
+    // A complaint written before the rule: still valid, still listed.
+    const old = await g.prisma.teacherSupervisionEntry.create({
+      data: { organizationId: org, teacherId: s.teacherId, kind: 'complaint', body: 'before PD-26', createdBy: tsupId },
+    });
+
+    const refused = await timeline.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'no source' }).catch((e) => e);
+    expect([refused.code, refused.status, refused.message]).toEqual([CommErrorCode.VALIDATION, 400, 'source: must be management or parent']);
+    expect(await code(timeline.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'x', source: 'parent_app' }))).toBe(CommErrorCode.VALIDATION);
+
+    const ok = await timeline.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'Late again', source: 'management' });
+    const row = await g.prisma.teacherSupervisionEntry.findUniqueOrThrow({ where: { id: ok.id } });
+    expect([row.complaintSource, row.handledBy]).toEqual(['management', tsupId]);
+    // A note or a monthly comment is not asked for a source.
+    await expect(timeline.addEntry(tsupId, s.teacherId, { kind: 'note', body: 'fine' })).resolves.toBeDefined();
+
+    const listed = (await files.detail(tsupId, s.teacherId)).supervision.complaints.map((c) => [c.id, c.from]);
+    expect(listed).toEqual(expect.arrayContaining([[old.id, null], [ok.id, 'management']]));
   });
 });

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AuthorizationService } from '../platform/authorization.service';
@@ -6,9 +6,11 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { DEPARTMENT_WIDE_SCOPE, TeacherScopeService, scopeCovers } from '../platform/teacher-scope';
 import type { TeacherFileAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind } from '../communication/contracts/vocab';
+import { staffComplaintSource } from '../supervision/complaint-source';
 
 /**
  * What the Teacher File writes. The first three are entries on PD-11's
@@ -63,6 +65,9 @@ export class TeacherFileService {
     private readonly authz: AuthorizationService,
     private readonly conversations: ConversationService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-35: which teachers a Teachers-department member works on. A positional
+    // harness construction without it is department-wide (the switch's default).
+    @Optional() readonly teacherScope: TeacherScopeService = DEPARTMENT_WIDE_SCOPE,
   ) {}
 
   // ------------------------------------------------------------------
@@ -74,8 +79,10 @@ export class TeacherFileService {
     const { actor, access } = await this.gate(actorId, (a) => a.canView);
     const org = actor.organizationId as string;
 
+    // PD-35: the teachers in the caller's scope (every one, with the switch off).
+    const scope = await this.teacherScope.scopeOf(actor);
     const teachers = await this.prisma.teacher.findMany({
-      where: { organizationId: org },
+      where: { organizationId: org, ...(scope.all ? {} : { id: { in: [...scope.teacherIds] } }) },
       select: { id: true, name: true, isActive: true, leftAt: true },
       orderBy: { name: 'asc' },
     });
@@ -209,8 +216,15 @@ export class TeacherFileService {
       throw invalid('from', 'must be management, parent or parent_app');
     }
     const org = actor.organizationId as string;
+    const scope = await this.teacherScope.scopeOf(actor);
     const roots = await this.prisma.teacherSupervisionEntry.findMany({
-      where: { organizationId: org, kind: TeacherFileEntryKind.COMPLAINT, ...(query.from ? { complaintSource: query.from } : {}) },
+      where: {
+        organizationId: org,
+        kind: TeacherFileEntryKind.COMPLAINT,
+        ...(query.from ? { complaintSource: query.from } : {}),
+        // PD-35: the complaints about the teachers in the caller's scope.
+        ...(scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: 500,
     });
@@ -352,10 +366,7 @@ export class TeacherFileService {
         // PD-26: every new complaint says where it came from and who handles it
         // (the writer, unless another Teachers department supervisor is named;
         // the database refuses anyone else).
-        if (typeof body.source !== 'string' || !COMPLAINT_SOURCES.has(body.source)) {
-          throw invalid('source', 'must be management or parent');
-        }
-        data.complaintSource = body.source;
+        data.complaintSource = staffComplaintSource(body);
         data.handledBy = body.handledBy === undefined || body.handledBy === null ? actor.actorId : requireUuid('handledBy', body.handledBy);
         if (body.sourceConversationId !== undefined && body.sourceConversationId !== null) {
           data.conversationId = await this.readableSource(actor, body.sourceConversationId);
@@ -477,6 +488,8 @@ export class TeacherFileService {
     if (!isUuid(teacherId)) throw notFound;
     const teacher = await this.prisma.teacher.findUnique({ where: { id: teacherId } });
     if (!teacher || teacher.organizationId !== actor.organizationId) throw notFound;
+    // PD-35: a teacher outside the caller's scope reads as unknown.
+    if (!scopeCovers(await this.teacherScope.scopeOf(actor), teacher.id)) throw notFound;
     return teacher;
   }
 

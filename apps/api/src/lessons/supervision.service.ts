@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
@@ -10,6 +11,7 @@ import { CommEvent } from '../communication/contracts/events';
 import { CardKind, SupervisionKind } from '../communication/contracts/vocab';
 import { LessonService, invalid, textField } from './lesson.service';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
+import { staffComplaintSource } from '../supervision/complaint-source';
 
 const ENTRY_KINDS: ReadonlySet<string> = new Set([SupervisionKind.COMPLAINT, SupervisionKind.MONTHLY_COMMENT, SupervisionKind.NOTE]);
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -140,6 +142,10 @@ export class SupervisionService {
     const kind = body.kind;
     if (typeof kind !== 'string' || !ENTRY_KINDS.has(kind)) throw invalid(`kind: one of ${[...ENTRY_KINDS].join(', ')}`);
     const text = textField(body, 'body', 2000, true) as string;
+    // PD-26: a complaint names its source here too, as on the Teacher File, and
+    // the writer handles it. Older sourceless rows stay valid; new ones are refused.
+    const complaint =
+      kind === SupervisionKind.COMPLAINT ? { complaintSource: staffComplaintSource(body), handledBy: actor.actorId } : {};
     let period: Date | null = null;
     if (kind === SupervisionKind.MONTHLY_COMMENT) {
       if (typeof body.period !== 'string' || !MONTH_RE.test(body.period)) throw invalid('period: a month as YYYY-MM');
@@ -147,7 +153,7 @@ export class SupervisionService {
     }
     const entry = await this.prisma.$transaction(async (tx) => {
       const created = await tx.teacherSupervisionEntry.create({
-        data: { organizationId: teacher.organizationId, teacherId: teacher.id, kind, body: text, period, createdBy: actor.actorId },
+        data: { organizationId: teacher.organizationId, teacherId: teacher.id, kind, body: text, period, createdBy: actor.actorId, ...complaint },
       });
       await this.audit.audit(tx, {
         actorId: actor.actorId, action: `teacher.supervision_${kind}`, entity: 'teacher', entityId: teacher.id,
@@ -166,31 +172,47 @@ export class SupervisionService {
     const actor = await this.conversations.requireActor(actorId);
     const teacher = await this.supervisedTeacher(actor, teacherId);
     const reason = textField(body, 'reason', 2000, true) as string;
-    let chatId = '';
-    const entry = await this.lessons.write(() =>
-      this.prisma.$transaction(async (tx) => {
-        const chat = await this.supervisionChats.ensureInTx(tx, teacher.id, teacher.organizationId, actor.actorId);
-        chatId = chat.id;
-        const created = await tx.teacherSupervisionEntry.create({
-          data: {
-            organizationId: teacher.organizationId,
-            teacherId: teacher.id,
-            kind: SupervisionKind.BONUS,
-            body: reason,
-            conversationId: chat.id,
-            createdBy: actor.actorId,
-          },
-        });
-        await this.lessons.postCardInto(tx, chat, null, actor, CardKind.TEACHER_BONUS, { teacherName: teacher.name, reason }, 'ar');
-        await this.outbox.enqueue(tx, CommEvent.TEACHER_BONUS_RECORDED, { teacherId: teacher.id, entryId: created.id });
-        await this.audit.audit(tx, {
-          actorId: actor.actorId, action: 'teacher.bonus', entity: 'teacher', entityId: teacher.id,
-          after: { entryId: created.id }, reason,
-        });
-        return created;
-      }),
+    const { entry, conversationId } = await this.lessons.write(() =>
+      this.prisma.$transaction((tx) => this.bonusInTx(tx, actor, teacher, reason)),
     );
-    return { id: entry.id, kind: entry.kind, conversationId: chatId };
+    return { id: entry.id, kind: entry.kind, conversationId };
+  }
+
+  /**
+   * The bonus ticket inside the caller's transaction -- the entry, its card and
+   * the Core/HR note -- so a caller may add to the same act. PD-26: the
+   * payroll's reward-with-amount prices it in that transaction, so a refused
+   * amount leaves no half-recorded reward.
+   */
+  async bonusInTx(
+    tx: Prisma.TransactionClient,
+    actor: Actor,
+    teacher: { id: string; organizationId: string; name: string },
+    reason: string,
+  ) {
+    const chat = await this.supervisionChats.ensureInTx(tx, teacher.id, teacher.organizationId, actor.actorId);
+    const entry = await tx.teacherSupervisionEntry.create({
+      data: {
+        organizationId: teacher.organizationId,
+        teacherId: teacher.id,
+        kind: SupervisionKind.BONUS,
+        body: reason,
+        conversationId: chat.id,
+        createdBy: actor.actorId,
+      },
+    });
+    await this.lessons.postCardInto(tx, chat, null, actor, CardKind.TEACHER_BONUS, { teacherName: teacher.name, reason }, 'ar');
+    await this.outbox.enqueue(tx, CommEvent.TEACHER_BONUS_RECORDED, { teacherId: teacher.id, entryId: entry.id });
+    await this.audit.audit(tx, {
+      actorId: actor.actorId, action: 'teacher.bonus', entity: 'teacher', entityId: teacher.id,
+      after: { entryId: entry.id }, reason,
+    });
+    return { entry, conversationId: chat.id };
+  }
+
+  /** Who may record a bonus for this teacher: the Teachers department and the super admin (see supervisedTeacher). */
+  async requireSupervisedTeacher(actor: Actor, teacherId: string) {
+    return this.supervisedTeacher(actor, teacherId);
   }
 
   /** The teacher's supervision conversation (one per teacher, with the Teachers department), opened if needed. */
@@ -210,7 +232,10 @@ export class SupervisionService {
       && (actor.staffRole === 'super_admin' || (await this.lessons.isManager(actor)));
     if (!allowed) throw new CommError(CommErrorCode.LESSON_DENIED, 'the supervision section belongs to the Teachers department');
     const teacher = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId } });
-    if (!teacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    // PD-35: a teacher outside the caller's scope reads as unknown.
+    if (!teacher || !(await this.lessons.teacherScope.covers(actor, teacher.id))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    }
     return teacher;
   }
 }

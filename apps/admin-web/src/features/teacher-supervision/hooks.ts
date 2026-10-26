@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { payrollApi, supervisionTimelineApi, teacherFileKeys } from '@/features/teacher-files/api'
+import { supervisionTimelineApi, teacherFileKeys } from '@/features/teacher-files/api'
 import type { ComplaintSource } from '@/features/teacher-files/api'
 import { parentFeedbackApi, parentFeedbackKeys, supervisionHubApi, supervisionHubKeys, type FeedbackQuery } from './api'
 
@@ -43,9 +43,9 @@ export function useRecordReward() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ teacherId, reason, amount }: { teacherId: string; reason: string; amount?: string }) => {
-      const entry = await supervisionTimelineApi.bonus(teacherId, reason)
-      if (amount) await payrollApi.addAdjustment(teacherId, { kind: 'bonus', bonusEntryId: entry.id, amount, reason })
-      return entry
+      // PD-26: with an amount, the bonus and its amount are one server transaction.
+      if (amount) return supervisionHubApi.recordReward(teacherId, { reason, amount })
+      return supervisionTimelineApi.bonus(teacherId, reason)
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: supervisionHubKeys.all })
