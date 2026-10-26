@@ -105,6 +105,15 @@ create unique index if not exists notification_item_open_group_uniq
 create index if not exists notification_item_announce_idx
   on chat.notification_item (visible_at) where announced_at is null and cancelled_at is null;
 
+-- Which messages an entry stands for (new messages in one conversation): a
+-- message is counted the first time it is recorded here, never again, in any
+-- order two workers commit in.
+create table if not exists chat.notification_item_message (
+  item_id     uuid not null references chat.notification_item (id) on delete cascade,
+  message_id  uuid not null,
+  primary key (item_id, message_id)
+);
+
 -- ===========================================================================
 -- 2. Deliveries link to their item
 -- ===========================================================================
@@ -305,7 +314,9 @@ select v.key, v.locale, 2, v.title, v.body
 alter table chat.notification_item enable row level security;
 alter table chat.notification_preference enable row level security;
 alter table chat.notification_settings enable row level security;
-revoke all on chat.notification_item, chat.notification_preference, chat.notification_settings
+alter table chat.notification_item_message enable row level security;
+revoke all on chat.notification_item, chat.notification_preference, chat.notification_settings,
+  chat.notification_item_message
   from public, anon, authenticated, chat_app;
 revoke all on function chat.notification_item_follows_delivery() from public;
 revoke all on function chat.cancel_message_pushes_on_member_left() from public;

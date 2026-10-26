@@ -229,6 +229,7 @@ export class NotificationPipeline {
         recipientId: r.actorId,
         conversationId: input.conversationId,
         groupKey,
+        messageId: input.messageId,
         locale: actor.locale === 'en' ? 'en' : 'ar',
         seq,
         pushState,
@@ -250,7 +251,7 @@ export class NotificationPipeline {
           // It goes as one push; it now stands for this message too.
           await tx.notification.update({
             where: { id: pending.id },
-            data: { variables: { ...((pending.variables ?? {}) as Record<string, unknown>), lastSeq: seq } as Prisma.InputJsonValue },
+            data: { variables: { ...((pending.variables ?? {}) as Record<string, unknown>), lastSeq: maxSeq((pending.variables as Record<string, unknown> | null)?.lastSeq, seq) } as Prisma.InputJsonValue },
           });
           return;
         }
@@ -292,9 +293,16 @@ export class NotificationPipeline {
   }
 
   /**
-   * The person's open entry for this chat, created or counted up in ONE
-   * statement (unique open group_key), so concurrent workers converge. Returns
-   * null when this message was already counted.
+   * The person's open entry for this chat, and whether THIS message is new to
+   * it. Safe under concurrent workers and in any commit order:
+   *
+   *   1. the open entry is created or found in one statement (unique open
+   *      group_key); lastSeq only ever moves up (max), for the read rule;
+   *   2. the message is recorded against the entry (primary key item+message);
+   *      only a first recording counts it, so a replay -- however late, and
+   *      whatever its seq -- adds nothing, and no message is mistaken for one.
+   *
+   * Returns the entry id, or null when this message was already counted.
    */
   private async upsertMessageItem(x: {
     organizationId: string;
@@ -302,6 +310,7 @@ export class NotificationPipeline {
     recipientId: string;
     conversationId: string;
     groupKey: string;
+    messageId: string;
     locale: 'ar' | 'en';
     seq: string | null;
     pushState: string;
@@ -311,26 +320,42 @@ export class NotificationPipeline {
     const action = JSON.stringify({ kind: 'open_conversation', conversationId: x.conversationId });
     const variables = JSON.stringify({ count: 1, lastSeq: x.seq });
     try {
-      const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
-        INSERT INTO chat.notification_item
-          (organization_id, dedupe_key, recipient_id, rule_key, rule_version, event_type, category, severity, basis,
-           subject_type, subject_id, refs, action, group_key, template_key, locale, variables, push_state, visible_at)
-        VALUES
-          (${x.organizationId}::uuid, ${x.dedupeKey}, ${x.recipientId}::uuid, 'new_message',
-           ${catalogEntry('new_message', 'message_published').version}, 'message_published', 'conversation', 'normal', 'member',
-           'conversation', ${x.conversationId}, ${refs}::jsonb, ${action}::jsonb, ${x.groupKey}, 'inbox.new_messages',
-           ${x.locale}, ${variables}::jsonb, ${x.pushState}, ${x.now})
-        ON CONFLICT (recipient_id, group_key) WHERE group_key IS NOT NULL AND read_at IS NULL AND cancelled_at IS NULL
-        DO UPDATE SET item_count = chat.notification_item.item_count + 1,
-                      variables = chat.notification_item.variables
-                        || jsonb_build_object('count', chat.notification_item.item_count + 1, 'lastSeq', EXCLUDED.variables -> 'lastSeq'),
-                      visible_at = EXCLUDED.visible_at,
-                      announced_at = NULL,
-                      updated_at = now()
-          WHERE coalesce((chat.notification_item.variables ->> 'lastSeq')::numeric, -1)
-              < coalesce((EXCLUDED.variables ->> 'lastSeq')::numeric, 0)
-        RETURNING id::text AS id`;
-      return rows[0]?.id ?? null;
+      return await this.prisma.$transaction(async (tx) => {
+        const [entry] = await tx.$queryRaw<Array<{ id: string; created: boolean }>>`
+          INSERT INTO chat.notification_item
+            (organization_id, dedupe_key, recipient_id, rule_key, rule_version, event_type, category, severity, basis,
+             subject_type, subject_id, refs, action, group_key, template_key, locale, variables, push_state, visible_at)
+          VALUES
+            (${x.organizationId}::uuid, ${x.dedupeKey}, ${x.recipientId}::uuid, 'new_message',
+             ${catalogEntry('new_message', 'message_published').version}, 'message_published', 'conversation', 'normal', 'member',
+             'conversation', ${x.conversationId}, ${refs}::jsonb, ${action}::jsonb, ${x.groupKey}, 'inbox.new_messages',
+             ${x.locale}, ${variables}::jsonb, ${x.pushState}, ${x.now})
+          ON CONFLICT (recipient_id, group_key) WHERE group_key IS NOT NULL AND read_at IS NULL AND cancelled_at IS NULL
+          DO UPDATE SET
+            variables = chat.notification_item.variables || jsonb_build_object('lastSeq',
+              CASE WHEN (EXCLUDED.variables ->> 'lastSeq') IS NULL THEN chat.notification_item.variables -> 'lastSeq'
+                   WHEN (chat.notification_item.variables ->> 'lastSeq') IS NULL
+                     OR (EXCLUDED.variables ->> 'lastSeq')::numeric > (chat.notification_item.variables ->> 'lastSeq')::numeric
+                   THEN EXCLUDED.variables -> 'lastSeq'
+                   ELSE chat.notification_item.variables -> 'lastSeq' END),
+            updated_at = now()
+          RETURNING id::text AS id, (xmax = 0) AS created`;
+        if (!entry) return null;
+        const recorded = await tx.$executeRaw`
+          INSERT INTO chat.notification_item_message (item_id, message_id)
+          VALUES (${entry.id}::uuid, ${x.messageId}::uuid)
+          ON CONFLICT DO NOTHING`;
+        if (recorded === 0) return null; // this message was already counted
+        if (!entry.created) {
+          await tx.$executeRaw`
+            UPDATE chat.notification_item
+               SET item_count = item_count + 1,
+                   variables = variables || jsonb_build_object('count', item_count + 1),
+                   visible_at = ${x.now}, announced_at = NULL, updated_at = now()
+             WHERE id = ${entry.id}::uuid`;
+        }
+        return entry.id;
+      });
     } catch (e) {
       // The same message replayed after its entry was read: dedupe_key already
       // taken. Already counted; nothing to do.
@@ -338,6 +363,7 @@ export class NotificationPipeline {
       throw e;
     }
   }
+
 
   // ------------------------------------------------------------------
   // Cancel and read
@@ -748,4 +774,12 @@ function deferForQuiet(
   let delta = w.endMinute - local;
   if (delta <= 0) delta += 24 * 60;
   return new Date(at.getTime() + delta * 60_000);
+}
+
+/** The larger of two seqs held as strings (null when neither is known). */
+function maxSeq(a: unknown, b: string | null): string | null {
+  const x = typeof a === 'string' ? a : null;
+  if (x === null) return b;
+  if (b === null) return x;
+  return BigInt(b) > BigInt(x) ? b : x;
 }
