@@ -49,7 +49,7 @@ void main() {
 
     test('what may not leave is not offered: a held message, a ticket card', () {
       expect(actionsFor(message(approval: ApprovalState.pending), withMarks: true), isNot(contains(MessageAction.forward)));
-      final card = MessageCard(kind: 'lesson_report', payload: const {});
+      const card = MessageCard(kind: 'lesson_report', payload: const {});
       expect(actionsFor(message(card: card), withMarks: true), isNot(contains(MessageAction.forward)));
     });
   });
