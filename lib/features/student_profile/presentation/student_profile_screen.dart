@@ -104,9 +104,9 @@ class _Body extends StatelessWidget {
           missing: l10n.groupChildNoSchedule,
           note: zones.length == 1 ? l10n.studentProfileTimeZone(zones.single) : null,
         ),
-        // PD-29: the child's memorization map, which their teacher can correct.
+        // PD-29: the child's Materials (library, opened this week).
         Divider(height: 1, color: tokens.colorBorderSubtle),
-        ChildMaterialsEntry(learnerId: profile.id, childName: profile.name, progress: true),
+        ChildMaterialsEntry(learnerId: profile.id, childName: profile.name),
       ],
     );
   }

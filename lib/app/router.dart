@@ -132,11 +132,11 @@ abstract final class Routes {
   static String studentProfile(String learnerId) => '$studentsPrefix/$learnerId';
   static const studentsPrefix = '/students';
 
-  /// PD-29: one child's Materials (Library, Practice this week, Progress map) -- for the
-  /// family, the child's own teacher and staff the server allows; the server decides.
-  /// `?tab=progress` opens on the map.
-  static String childMaterials(String learnerId, {bool progress = false}) =>
-      '/children/$learnerId/materials${progress ? '?tab=progress' : ''}';
+  /// PD-29: one child's Materials (Library, Opened this week) -- for the family, the
+  /// child's own teacher and staff the server allows; the server decides.
+  /// `?tab=opened` opens on "Opened this week".
+  static String childMaterials(String learnerId, {bool opened = false}) =>
+      '/children/$learnerId/materials${opened ? '?tab=opened' : ''}';
 
   /// PD-31: one child's weekly times and lessons for the next four weeks, read-only,
   /// with "Change lesson time". The family's own; the server decides.
@@ -315,7 +315,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _page(state, ChildMaterialsScreen(
           learnerId: state.pathParameters['learnerId']!,
           childName: state.extra is String ? state.extra! as String : null,
-          initialTab: state.uri.queryParameters['tab'] == 'progress' ? 2 : 0,
+          initialTab: state.uri.queryParameters['tab'] == 'opened' ? 1 : 0,
         )),
       ),
       GoRoute(

@@ -200,7 +200,6 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
         homework: _optional(_homework),
         note: _optional(_note),
         practice: _materials.draftPractice,
-        memorization: _materials.draftMarks,
       );
 
   Future<void> _submit() async {
@@ -343,7 +342,7 @@ class _QuickReportFormState extends ConsumerState<QuickReportForm> {
                   maxLength: 500,
                   decoration: InputDecoration(labelText: l10n.reportHomeworkDetailsLabel, border: const OutlineInputBorder()),
                 ),
-                // PD-29: what to practise this week, and surah statuses for the map.
+                // PD-29: what to practise, shown on the report's card.
                 ReportMaterialsSection(controller: _materials),
                 const SizedBox(height: Spacing.spacing2),
                 TextField(

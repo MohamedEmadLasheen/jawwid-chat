@@ -267,7 +267,6 @@ class LessonReportDraft {
     this.homework,
     this.note,
     this.practice,
-    this.memorization,
     this.lessonTotal,
   });
 
@@ -287,10 +286,9 @@ class LessonReportDraft {
   final String? homework;
   final String? note;
 
-  /// PD-29: "practice this week" and surah statuses for the memorization map. Null
-  /// means "not sent": on an edit the server then keeps what the report has.
+  /// PD-29: the report's practice (ayah ranges and library items, shown on its card).
+  /// Null means "not sent": on an edit the server then keeps what the report has.
   final List<PracticeDraft>? practice;
-  final List<MarkDraft>? memorization;
 
   bool get isComplete => coveredTopics.isNotEmpty || (covered?.trim().isNotEmpty ?? false);
 
@@ -303,7 +301,6 @@ class LessonReportDraft {
         'homework': ?homework,
         'note': ?note,
         if (practice != null) 'practice': [for (final p in practice!) p.toJson()],
-        if (memorization != null) 'memorization': [for (final m in memorization!) m.toJson()],
       };
 }
 

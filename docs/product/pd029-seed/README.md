@@ -38,6 +38,11 @@ only until then.
   `age_groups` column filled updates the same rows).
 - `surah` on each Quran lesson, so it appears with that surah in the teacher's
   picker.
+- **Row order is the library's order** (PD-29 amendment 2026-10-26): an
+  import stores each new item's row number as its `sort_order` (a
+  `sort_order` column overrides it), and a re-import keeps it through `ref`.
+  Quran is listed by surah regardless -- Al-Fatihah first, then 114 down to 78.
+  Arabic and Islamic studies keep the order of this file.
 - `status` `draft`. Nothing reaches families until a manager publishes it:
   per item on the Materials page, or by re-importing with `published`.
 
