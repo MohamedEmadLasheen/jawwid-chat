@@ -517,6 +517,8 @@ export class SupervisorCoverService {
       name: r.name,
       linked: r.linked,
       covering: r.covering,
+      /** Why they cannot cover now, for a client to word: inactive | away | at_limit | null. */
+      blocked: (!r.live ? 'inactive' : r.away ? 'away' : r.covering >= max ? 'at_limit' : null) as 'inactive' | 'away' | 'at_limit' | null,
       blockedReason: !r.live
         ? `${r.name} is not an active staff member`
         : r.away

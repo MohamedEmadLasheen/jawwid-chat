@@ -415,6 +415,11 @@ export function ChatThread({
                 {copy.kind[conv.type] ?? conv.type}
                 {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
               </span>
+              {conv.cover && (
+                <span className="thread-head__cover" dir="auto">
+                  {copy.coverLine(conv.cover)}
+                </span>
+              )}
               {(conv.labels ?? []).length > 0 && (
                 <span className="cw-row__labels" aria-label={copy.labels}>
                   {conv.labels!.map((l) => (

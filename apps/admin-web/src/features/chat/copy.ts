@@ -3,8 +3,22 @@
  * in core/i18n/messages.ts so the workspace can be reviewed and merged on its
  * own; the shared dictionary carries only the nav label.
  */
+import { ACADEMY_ZONE } from '@/core/time/academyTime'
+
+/** PD-33: "3 Nov" -- a cover's end day, in the academy's zone like every staff date. */
+function coverDay(iso: unknown, tag: string): string {
+  const d = typeof iso === 'string' ? new Date(iso) : null
+  return d && !Number.isNaN(d.getTime())
+    ? new Intl.DateTimeFormat(tag, { day: 'numeric', month: 'short', timeZone: ACADEMY_ZONE }).format(d)
+    : ''
+}
+
 export const chatCopy = {
   ar: {
+    // PD-33: the cover line under a chat's name, and the backup's chip.
+    coverLine: (c: { coverName: string; supervisorName: string; until: string }) =>
+      `التغطية: ${c.coverName} بدلًا من ${c.supervisorName} حتى ${coverDay(c.until, 'ar-EG')}`,
+    coveringFor: (name: string) => `تغطية عن ${name}`,
     search: 'ابحث بالاسم',
     searchList: 'ابحث في المحادثات والرسائل',
     clearSearch: 'مسح البحث',
@@ -224,10 +238,19 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `أصبح ${String(p.supervisor)} مشرفك؛ سجلّ المحادثة كما هو` : 'تغيّر مشرفك؛ سجلّ المحادثة كما هو',
       'group.learner_detached': () => 'انتقل طفل من هذه المجموعة إلى مشرف آخر',
+      // PD-33. Worded without a gendered verb: the names are anyone's.
+      'cover.started': (p: Record<string, unknown>) =>
+        `التغطية: ${String(p.cover ?? '')} بدلًا من ${String(p.supervisor ?? '')} حتى ${coverDay(p.until, 'ar-EG')}`,
+      'cover.extended': (p: Record<string, unknown>) =>
+        `مُدّدت التغطية: ${String(p.cover ?? '')} بدلًا من ${String(p.supervisor ?? '')} حتى ${coverDay(p.until, 'ar-EG')}`,
+      'cover.ended': (p: Record<string, unknown>) => `انتهت التغطية؛ عادت المتابعة إلى ${String(p.supervisor ?? '')}`,
       fallback: () => 'تحديث من النظام',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },
   en: {
+    coverLine: (c: { coverName: string; supervisorName: string; until: string }) =>
+      `${c.coverName} is covering for ${c.supervisorName} until ${coverDay(c.until, 'en-GB')}`,
+    coveringFor: (name: string) => `Covering for ${name}`,
     search: 'Search by name',
     searchList: 'Search chats and messages',
     clearSearch: 'Clear search',
@@ -447,6 +470,11 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `${String(p.supervisor)} is now your supervisor; the chat history is kept` : 'Your supervisor changed; the chat history is kept',
       'group.learner_detached': () => 'A child of this group moved to another supervisor',
+      'cover.started': (p: Record<string, unknown>) =>
+        `${String(p.cover ?? '')} is covering for ${String(p.supervisor ?? '')} until ${coverDay(p.until, 'en-GB')}`,
+      'cover.extended': (p: Record<string, unknown>) =>
+        `${String(p.cover ?? '')}'s cover for ${String(p.supervisor ?? '')} is extended until ${coverDay(p.until, 'en-GB')}`,
+      'cover.ended': (p: Record<string, unknown>) => `${String(p.supervisor ?? '')} is back; the cover has ended`,
       fallback: () => 'System update',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },
