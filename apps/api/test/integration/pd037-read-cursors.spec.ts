@@ -64,51 +64,58 @@ async function advancedRows() {
   return rows.map((r) => r.payload as Record<string, string>);
 }
 
+/**
+ * Three messages from the parent, with their seqs. A Student Group opens with
+ * its own system message, so the parent's are NOT seq 1..3: every cursor in
+ * these tests is taken from a real seq, never assumed.
+ */
 async function threeFromParent() {
-  const ids: string[] = [];
+  const sent: Array<{ id: string; seq: string }> = [];
   for (const body of ['one', 'two', 'three']) {
-    ids.push((await g.messages.send({ conversationId: groupId, senderId: s.parentId, body })).id);
+    const m = await g.messages.send({ conversationId: groupId, senderId: s.parentId, body });
+    sent.push({ id: m.id, seq: m.seq! });
   }
-  return ids;
+  return sent;
 }
+const big = (seq: string) => BigInt(seq);
 
 describe('PD-37: cursors move forward only', () => {
   it('a later, lower read changes nothing; a read past the end stops at the last message', async () => {
     const [m1, , m3] = await threeFromParent();
-    await g.messages.markReadUpTo(groupId, s.teacherId, '3');
-    const at3 = await cursorOf(s.teacherId);
-    expect(at3!.lastReadSeq).toBe(3n);
-    expect(at3!.lastReadAt).not.toBeNull();
+    await g.messages.markReadUpTo(groupId, s.teacherId, m3.seq);
+    const atEnd = await cursorOf(s.teacherId);
+    expect(atEnd!.lastReadSeq).toBe(big(m3.seq));
+    expect(atEnd!.lastReadAt).not.toBeNull();
 
-    await g.messages.markReadUpTo(groupId, s.teacherId, '1'); // replayed / late
-    expect((await cursorOf(s.teacherId))!.lastReadSeq).toBe(3n);
-    expect((await cursorOf(s.teacherId))!.lastReadAt).toEqual(at3!.lastReadAt);
-    const r1 = await g.prisma.messageReceipt.findFirstOrThrow({ where: { messageId: m1, actorId: s.teacherId } });
+    await g.messages.markReadUpTo(groupId, s.teacherId, m1.seq); // replayed / late
+    expect((await cursorOf(s.teacherId))!.lastReadSeq).toBe(big(m3.seq));
+    expect((await cursorOf(s.teacherId))!.lastReadAt).toEqual(atEnd!.lastReadAt);
+    const r1 = await g.prisma.messageReceipt.findFirstOrThrow({ where: { messageId: m1.id, actorId: s.teacherId } });
     expect(r1.state).toBe('read');
 
     await g.messages.markReadUpTo(groupId, s.ownerId, '999');
-    expect((await cursorOf(s.ownerId))!.lastReadSeq).toBe(3n);
-    const r3 = await g.prisma.messageReceipt.findFirstOrThrow({ where: { messageId: m3, actorId: s.ownerId } });
+    expect((await cursorOf(s.ownerId))!.lastReadSeq).toBe(big(m3.seq)); // the last message, not 999
+    const r3 = await g.prisma.messageReceipt.findFirstOrThrow({ where: { messageId: m3.id, actorId: s.ownerId } });
     expect(r3.state).toBe('read');
   });
 
   it('a read implies delivered; delivered never passes read backwards', async () => {
-    await threeFromParent();
-    await g.messages.markReadUpTo(groupId, s.teacherId, '2');
-    expect((await cursorOf(s.teacherId))!.lastDeliveredSeq).toBe(2n);
-    await g.messages.markDeliveredUpTo(groupId, s.teacherId, '1');
-    expect((await cursorOf(s.teacherId))!.lastDeliveredSeq).toBe(2n);
-    await g.messages.markDeliveredUpTo(groupId, s.teacherId, '3');
+    const [m1, m2, m3] = await threeFromParent();
+    await g.messages.markReadUpTo(groupId, s.teacherId, m2.seq);
+    expect((await cursorOf(s.teacherId))!.lastDeliveredSeq).toBe(big(m2.seq));
+    await g.messages.markDeliveredUpTo(groupId, s.teacherId, m1.seq);
+    expect((await cursorOf(s.teacherId))!.lastDeliveredSeq).toBe(big(m2.seq));
+    await g.messages.markDeliveredUpTo(groupId, s.teacherId, m3.seq);
     const c = await cursorOf(s.teacherId);
-    expect([c!.lastReadSeq, c!.lastDeliveredSeq]).toEqual([2n, 3n]);
+    expect([c!.lastReadSeq, c!.lastDeliveredSeq]).toEqual([big(m2.seq), big(m3.seq)]);
   });
 
   it('delivered moves receipts from sent to delivered and never downgrades a read', async () => {
     const [m1, m2, m3] = await threeFromParent();
-    await g.messages.markReadUpTo(groupId, s.ownerId, '1');
-    await g.messages.markDeliveredUpTo(groupId, s.ownerId, '2');
+    await g.messages.markReadUpTo(groupId, s.ownerId, m1.seq);
+    await g.messages.markDeliveredUpTo(groupId, s.ownerId, m2.seq);
     const states = await Promise.all(
-      [m1, m2, m3].map((id) => g.prisma.messageReceipt.findFirstOrThrow({ where: { messageId: id, actorId: s.ownerId } })),
+      [m1, m2, m3].map((m) => g.prisma.messageReceipt.findFirstOrThrow({ where: { messageId: m.id, actorId: s.ownerId } })),
     );
     expect(states.map((r) => r.state)).toEqual(['read', 'delivered', 'sent']);
     expect(states[1].deliveredAt).not.toBeNull();
@@ -125,16 +132,16 @@ describe('PD-37: cursors move forward only', () => {
 
 describe('PD-37: receipts.advanced', () => {
   it('one row per forward move of a seated reader, none for a repeat, none without a seat', async () => {
-    await threeFromParent();
-    await g.messages.markReadUpTo(groupId, s.teacherId, '2');
-    await g.messages.markReadUpTo(groupId, s.teacherId, '2'); // repeat
-    await g.messages.markReadUpTo(groupId, s.teacherId, '1'); // backwards
-    await g.messages.markReadUpTo(groupId, s.managerId, '3'); // standing, no seat
-    await g.messages.markDeliveredUpTo(groupId, s.ownerId, '3');
+    const [m1, m2, m3] = await threeFromParent();
+    await g.messages.markReadUpTo(groupId, s.teacherId, m2.seq);
+    await g.messages.markReadUpTo(groupId, s.teacherId, m2.seq); // repeat
+    await g.messages.markReadUpTo(groupId, s.teacherId, m1.seq); // backwards
+    await g.messages.markReadUpTo(groupId, s.managerId, m3.seq); // standing, no seat
+    await g.messages.markDeliveredUpTo(groupId, s.ownerId, m3.seq);
 
     expect(await advancedRows()).toEqual([
-      { conversationId: groupId, actorId: s.teacherId, kind: 'read', fromSeq: '0', toSeq: '2' },
-      { conversationId: groupId, actorId: s.ownerId, kind: 'delivered', fromSeq: '0', toSeq: '3' },
+      { conversationId: groupId, actorId: s.teacherId, kind: 'read', fromSeq: '0', toSeq: m2.seq },
+      { conversationId: groupId, actorId: s.ownerId, kind: 'delivered', fromSeq: '0', toSeq: m3.seq },
     ]);
   });
 });
@@ -143,8 +150,8 @@ describe('PD-37: the worker tells authors, never the room', () => {
   it("each author gets their own ticks through an audience of one; the reader's row never reaches the room", async () => {
     const [m1, m2] = await threeFromParent();
     const fromTeacher = await g.messages.send({ conversationId: groupId, senderId: s.teacherId, body: 'noted' });
-    for (const id of [s.otherParentId, s.teacherId]) await g.messages.markReadUpTo(groupId, id, '4');
-    await g.messages.markReadUpTo(groupId, s.ownerId, '2');
+    for (const id of [s.otherParentId, s.teacherId]) await g.messages.markReadUpTo(groupId, id, fromTeacher.seq!);
+    await g.messages.markReadUpTo(groupId, s.ownerId, m2.seq);
 
     const recorder = new Recorder();
     const worker = new OutboxWorker(g.prisma, g.notifications, recorder, g.identity);
@@ -165,17 +172,17 @@ describe('PD-37: the worker tells authors, never the room', () => {
       const into = target === s.parentId ? forParent : forTeacher;
       for (const it of items) into.set(it.messageId, it.status);
     }
-    // Messages 1 and 2: everyone seated has read them once the supervisor reads to 2.
-    expect(forParent.get(m1)).toBe('read');
-    expect(forParent.get(m2)).toBe('read');
-    // The teacher's message (seq 4): the supervisor read only to 2 -- not blue.
+    // The parent's first two: everyone seated has read them once the supervisor reads to the second.
+    expect(forParent.get(m1.id)).toBe('read');
+    expect(forParent.get(m2.id)).toBe('read');
+    // The teacher's message (the newest): the supervisor stopped earlier -- not blue.
     expect(forTeacher.get(fromTeacher.id)).not.toBe('read');
     expect(forParent.has(fromTeacher.id)).toBe(false);
   });
 
   it('fails -- and keeps the row -- rather than fall back to the whole room', async () => {
-    await threeFromParent();
-    await g.messages.markReadUpTo(groupId, s.teacherId, '3');
+    const [, , m3] = await threeFromParent();
+    await g.messages.markReadUpTo(groupId, s.teacherId, m3.seq);
     const roomOnly: RealtimePublisher = { toThread: async () => {}, toUsers: async () => {} };
     const worker = new OutboxWorker(g.prisma, g.notifications, roomOnly, g.identity);
     await worker.drain(500);
