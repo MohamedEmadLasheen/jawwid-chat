@@ -8,8 +8,10 @@
  *   2. who sees which entry on New Students
  *   3. the responsible supervisor opens the family's group (parent, teacher,
  *      supervisor) and the parent's direct chat with them
- *   4. the parent's sign-up: a relayed code, ten minutes, five tries, no
- *      enumeration; the parent lands signed in
+ *   4. the parent's sign-up: a relayed code, five tries, no enumeration; the
+ *      parent lands signed in
+ *   5. PD-32: no time expiry; invalidated by staff, by any password, by an
+ *      inactive account; ten wrong codes a day lock the e-mail until staff reset
  *
  * Synthetic fixtures only (QA gate G-16).
  */
@@ -319,7 +321,7 @@ describe('4. the parent signs up', () => {
     expect(await g.prisma.auditLog.count({ where: { action: 'parent.signed_up' } })).toBe(1);
   });
 
-  it('five wrong tries spend the code; an expired code is refused; a new request supersedes the old', async () => {
+  it('five wrong tries spend the code; a code from before PD-32 keeps its expiry; a new request supersedes the old', async () => {
     await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
     await signup.request(EMAIL);
     const first = await g.prisma.parentSignupCode.findFirstOrThrow({ where: { usedAt: null, supersededAt: null } });
@@ -349,5 +351,97 @@ describe('4. the parent signs up', () => {
     // An e-mail Chat holds for an unassigned form is not an account yet either.
     expect(await signup.request(EMAIL)).toEqual({ ok: true, delivery: 'relay' });
     expect(await g.prisma.parentSignupCode.count()).toBe(0);
+  });
+});
+
+describe('5. PD-32: valid until used or invalidated; ten wrong codes a day lock the e-mail', () => {
+  const relayed = async () => (await g.prisma.parentSignupCode.findFirstOrThrow({ where: { usedAt: null, supersededAt: null } })).relayCode as string;
+  const wrongFor = (right: string) => (right === '000000' ? '111111' : '000000');
+  const signupOf = async (viewer: string) => (await enrolment.page(viewer)).students[0].enrolment?.parentSignup as Record<string, unknown>;
+
+  it('a code has no expiry and still works a month later; the page shows no deadline', async () => {
+    await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    await signup.request(EMAIL);
+    const row = await g.prisma.parentSignupCode.findFirstOrThrow({ where: { usedAt: null, supersededAt: null } });
+    expect(row.expiresAt).toBeNull();
+    const shown = await signupOf(s.ownerId);
+    expect(shown).toMatchObject({ state: 'code_waiting', code: row.relayCode, attempts: { wrong: 0, cap: 10, locked: false } });
+    expect(shown).not.toHaveProperty('expiresAt');
+    // A month old (a fixture: created_at is part of the code's identity).
+    await g.prisma.$executeRawUnsafe(`alter table chat.parent_signup_code disable trigger parent_signup_code_is_coherent`);
+    await g.prisma.$executeRawUnsafe(`update chat.parent_signup_code set created_at = now() - interval '30 days' where id = $1::uuid`, row.id);
+    await g.prisma.$executeRawUnsafe(`alter table chat.parent_signup_code enable trigger parent_signup_code_is_coherent`);
+    expect(await signup.verify(EMAIL, row.relayCode as string, PASSWORD)).toEqual({ ok: true });
+    // A code is never issued with a deadline.
+    await expect(g.prisma.$executeRawUnsafe(
+      `insert into chat.parent_signup_code (organization_id, account_id, code_hash, expires_at)
+       select organization_id, id, repeat('a', 64), now() + interval '1 hour' from chat.account where subject = $1`, LOWER,
+    )).rejects.toThrow();
+  });
+
+  it('staff invalidate the live code; only the responsible may; the parent asks for a new one', async () => {
+    await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    await signup.request(EMAIL);
+    const old = await relayed();
+    expect(await code(enrolment.invalidateSignupCode(salesId, trialId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await enrolment.invalidateSignupCode(s.ownerId, trialId)).toEqual({ invalidated: true });
+    expect(await signupOf(s.ownerId)).toMatchObject({ state: 'not_started' });
+    expect(await code(signup.verify(EMAIL, old, PASSWORD))).toBe(AuthErrorCode.SIGNUP_CODE_INVALID);
+    expect(await g.prisma.auditLog.count({ where: { action: 'parent.signup_code_invalidated' } })).toBe(1);
+    await signup.request(EMAIL);
+    expect(await signup.verify(EMAIL, await relayed(), PASSWORD)).toEqual({ ok: true });
+    // Signed up: nothing left to invalidate.
+    expect(await code(enrolment.invalidateSignupCode(s.ownerId, trialId))).toBe(CommErrorCode.LESSON_STATE);
+  });
+
+  it('ten wrong codes in a day lock the e-mail across codes; a new code does not reset it; staff Reset attempts does', async () => {
+    await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    for (let round = 0; round < 2; round++) {
+      await signup.request(EMAIL);
+      const right = await relayed();
+      for (let i = 0; i < 5; i++) expect(await code(signup.verify(EMAIL, wrongFor(right), PASSWORD))).toBe(AuthErrorCode.SIGNUP_CODE_INVALID);
+    }
+    // Ten wrong: locked, even with a right code, and no new code is issued.
+    await signup.request(EMAIL);
+    expect(await g.prisma.parentSignupCode.count({ where: { usedAt: null, supersededAt: null } })).toBe(0);
+    expect(await signupOf(s.ownerId)).toMatchObject({ state: 'not_started', attempts: { wrong: 10, cap: 10, locked: true } });
+    expect(await code(signup.verify(EMAIL, '123456', PASSWORD))).toBe(AuthErrorCode.SIGNUP_LOCKED);
+
+    // Invalidating codes is not a reset.
+    await enrolment.invalidateSignupCode(s.ownerId, trialId);
+    expect(await code(signup.verify(EMAIL, '123456', PASSWORD))).toBe(AuthErrorCode.SIGNUP_LOCKED);
+
+    expect(await code(enrolment.resetSignupAttempts(salesId, trialId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await enrolment.resetSignupAttempts(s.ownerId, trialId)).toEqual({ cleared: 10 });
+    expect(await g.prisma.auditLog.count({ where: { action: 'parent.signup_attempts_reset' } })).toBe(1);
+    expect(await g.prisma.parentSignupFailure.count()).toBe(10); // cleared, never deleted
+    await signup.request(EMAIL);
+    expect(await signup.verify(EMAIL, await relayed(), PASSWORD)).toEqual({ ok: true });
+  });
+
+  it('an unknown e-mail locks exactly the same way, so the lock enumerates nothing', async () => {
+    for (let i = 0; i < 10; i++) {
+      expect(await code(signup.verify('nobody@example.test', '123456', PASSWORD))).toBe(AuthErrorCode.SIGNUP_CODE_INVALID);
+    }
+    expect(await code(signup.verify('nobody@example.test', '123456', PASSWORD))).toBe(AuthErrorCode.SIGNUP_LOCKED);
+    // Stored by hash only.
+    const rows = await g.prisma.parentSignupFailure.findMany();
+    expect(JSON.stringify(rows)).not.toContain('nobody');
+  });
+
+  it('a password set by another path, or an account that stops being active, ends the live code', async () => {
+    const done = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    const contact = await g.prisma.contact.findFirstOrThrow({ where: { familyId: done.familyId } });
+    const accountId = contact.accountId as string;
+    await signup.request(EMAIL);
+    await g.prisma.account.update({ where: { id: accountId }, data: { status: 'suspended', isActive: false } });
+    expect(await g.prisma.parentSignupCode.count({ where: { usedAt: null, supersededAt: null } })).toBe(0);
+    expect(await g.prisma.parentSignupCode.count({ where: { relayCode: { not: null } } })).toBe(0);
+    await g.prisma.account.update({ where: { id: accountId }, data: { status: 'active', isActive: true } });
+
+    await signup.request(EMAIL);
+    expect(await g.prisma.parentSignupCode.count({ where: { usedAt: null, supersededAt: null } })).toBe(1);
+    await g.prisma.accountCredential.create({ data: { accountId, passwordHash: 'x'.repeat(40) } });
+    expect(await g.prisma.parentSignupCode.count({ where: { usedAt: null, supersededAt: null } })).toBe(0);
   });
 });
