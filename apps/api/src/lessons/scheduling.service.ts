@@ -1,10 +1,11 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Learner, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
 import { AuthorizationService, type LessonAct, type LessonStanding } from '../platform/authorization.service';
 import { CommError, CommErrorCode } from '../platform/errors';
-import { AUDIT_SERVICE } from '../platform/tokens';
+import { AUDIT_SERVICE, SUBSCRIPTION_LOCK } from '../platform/tokens';
+import { NO_SUBSCRIPTION_LOCK, type SubscriptionLockReader } from '../platform/subscription-lock';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -80,7 +81,7 @@ const CLOCK_SHIFT_GONE = 'CLOCK_SHIFT_GONE';
  * the same transaction as the record they describe.
  */
 @Injectable()
-export class SchedulingService implements OnApplicationBootstrap {
+export class SchedulingService {
   private readonly log = new Logger(SchedulingService.name);
   private nextClockShiftSweepAt = 0;
 
@@ -93,6 +94,9 @@ export class SchedulingService implements OnApplicationBootstrap {
     private readonly config: AppConfigService,
     private readonly reminders: ReminderService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-30: the payment lock (chat.learner_lesson_lock + the switch). Required
+    // from the container; positional harness constructions get no lock.
+    @Inject(SUBSCRIPTION_LOCK) private readonly locks: SubscriptionLockReader = NO_SUBSCRIPTION_LOCK,
   ) {}
 
   // ------------------------------------------------------------------
@@ -1310,37 +1314,18 @@ export class SchedulingService implements OnApplicationBootstrap {
 
   /**
    * PD-30's payment lock for a child, or null when the child's lessons may be
-   * booked and moved (grace and an active exception included). PD-30 owns the
-   * state and exposes it as chat.learner_lesson_lock(uuid): ANY non-null answer
-   * locks -- 'balance' and 'overdue' by name, anything else as 'other'. Until
-   * PD-30 is installed nothing is locked; once its tables exist the function
-   * must exist too, or this throws (and startup fails), never answering "open".
-   * Every PD-31 picker and write asks this ONE method.
+   * booked and moved (grace and an active exception included, and always
+   * while SUBSCRIPTION_LOCK_ENFORCED is off). PD-30 owns the state and answers
+   * through SubscriptionLockReader (chat.learner_lesson_lock, computed now,
+   * fail closed): ANY non-null answer locks -- 'balance' and 'overdue' by
+   * name, anything else as 'other'. Every PD-31 picker and write asks this ONE
+   * method.
    */
   async lockOf(learnerId: string): Promise<'balance' | 'overdue' | 'other' | null> {
-    if (!(await this.lockInstalled())) return null;
-    // Resolved by name when it runs, which is only after lockInstalled() found it.
-    const [row] = await this.prisma.$queryRaw<Array<{ lock: string | null }>>`
-      SELECT chat.learner_lesson_lock(${learnerId}::uuid)::text AS lock`;
-    const lock = row?.lock ?? null;
+    if (!this.locks.enforced) return null;
+    const lock: string | null = await this.locks.lockOf(learnerId);
     if (lock === null) return null;
     return lock === 'balance' || lock === 'overdue' ? lock : 'other';
-  }
-
-  /** Is PD-30's lock function there? Throws when PD-30's tables are but it is not. */
-  private async lockInstalled(): Promise<boolean> {
-    const [r] = await this.prisma.$queryRaw<Array<{ fn: boolean; pd30: boolean }>>`
-      SELECT to_regprocedure('chat.learner_lesson_lock(uuid)') IS NOT NULL AS fn,
-             (to_regclass('chat.learner_access') IS NOT NULL OR to_regclass('chat.learner_subscription') IS NOT NULL) AS pd30`;
-    if (!r.fn && r.pd30) {
-      throw new Error('PD-30 is installed but chat.learner_lesson_lock(uuid) is missing: lessons would never lock');
-    }
-    return r.fn;
-  }
-
-  /** Fail at startup, not at the first lesson, when the payment lock is half-installed. */
-  async onApplicationBootstrap() {
-    await this.lockInstalled();
   }
 
   /**

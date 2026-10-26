@@ -750,13 +750,16 @@ alter table chat.lesson add constraint lesson_outcome_is_whole check (
   and (outcome is null) = (outcome_by_kind is null)
   and (outcome_by is null) = (outcome is null or outcome_by_kind = 'system'));
 
+-- Rebuilt on top of PD-31's version (20261026110000: a family or a teacher
+-- writes its own `rescheduled`); this migration sorts after it on purpose.
 alter table chat.lesson drop constraint lesson_outcome_recorded_by_a_plausible_actor;
 alter table chat.lesson add constraint lesson_outcome_recorded_by_a_plausible_actor
   check (outcome is null
       or (outcome in ('held', 'student_no_show') and outcome_by_kind in ('teacher', 'staff'))
       or (outcome = 'student_apology' and outcome_by_kind in ('contact', 'staff'))
       or (outcome = 'teacher_apology' and outcome_by_kind in ('teacher', 'staff'))
-      or (outcome in ('admin_cancelled', 'teacher_no_show', 'rescheduled', 'suspended', 'voided')
+      or (outcome = 'rescheduled' and outcome_by_kind in ('contact', 'teacher', 'staff'))
+      or (outcome in ('admin_cancelled', 'teacher_no_show', 'suspended', 'voided')
           and outcome_by_kind = 'staff')
       or (outcome = 'suspended' and outcome_by_kind = 'system' and outcome_note = 'subscription'));
 

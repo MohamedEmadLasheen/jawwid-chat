@@ -653,10 +653,22 @@ describe('PD-30 over HTTP', () => {
   it('fails closed: a stale or missing state row never opens a locked group; a group with no child rows covers its family', async () => {
     const { child, parent, groupId, f } = family();
     await setGoLive(addDays(today(), -60));
+    const lesson = await http(m.teachersManager.subject, 'POST', '/lessons', {
+      learnerId: child.id, startsAt: at(11 * 24 * HOUR), endsAt: at(11 * 24 * HOUR + HOUR / 2),
+    });
+    expect(lesson.status).toBe(201);
     await http(m.operationsManager.subject, 'POST', `/families/${f.id}/instalments`, {
       label: 'Stale', amountMinor: 5000, firstDueDate: addDays(today(), -1), learnerId: child.id,
     });
     expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    // PD-31's move picker asks the same lock (SchedulingService.lockOf), and only while enforced.
+    expect((await http(parent.subject, 'GET', `/lessons/${lesson.json.id}/move-slots`)).json).toMatchObject({ locked: 'overdue', slots: [] });
+    process.env.SUBSCRIPTION_LOCK_ENFORCED = 'off';
+    try {
+      expect((await http(parent.subject, 'GET', `/lessons/${lesson.json.id}/move-slots`)).json.locked).toBeNull();
+    } finally {
+      process.env.SUBSCRIPTION_LOCK_ENFORCED = 'true';
+    }
     // The worker is not running; the stored row says open (stale), then disappears.
     await g.prisma.$executeRawUnsafe(`update chat.learner_access set state = 'open', reasons = '{}' where learner_id = $1::uuid`, child.id);
     expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);

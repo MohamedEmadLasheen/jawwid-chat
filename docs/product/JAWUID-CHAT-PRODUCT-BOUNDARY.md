@@ -147,6 +147,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 **PD-27 was closed by the product owner on 2026-10-22** (payments: payment links, card payments through Stripe, bank-transfer receipts, cash, invoices, instalment reminders). It builds on PD-17.
 **PD-28 was closed by the product owner on 2026-10-24** (teachers use their portal in a laptop browser: the same app and the same account, teacher-only on the web for now). It extends PD-23's browser session rules to teachers.
+**PD-30 was closed by the department head on 2026-10-26** at the owner's request (subscriptions carry lessons; a child's group locks when they are used up or an instalment is overdue; three roles grant exceptions). It builds on PD-15, PD-17 and PD-27.
 **PD-31 was closed on 2026-10-26** (scheduling made direct: time chips, a child's schedule, moving one lesson or every week, changing the teacher).
 
 | ID | Subject | Status |
@@ -179,6 +180,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 | **PD-27** | **Payments: links, card, bank transfer, cash, invoices, reminders** (2026-10-22) | **CLOSED** — a payment request carries a unique link that works before the parent has an account; card payments through Stripe Checkout are recorded only from a verified webhook, exactly once; parents upload bank-transfer receipts that staff approve or reject with a reason; staff record cash; instalments may be paid in part and by several methods; every payment issues a numbered invoice the parent downloads as a PDF; a trial's payments move onto the family at Assign; append-only, audited, reminders before and after the due date |
 | **PD-28** | **The teacher portal in a browser** (2026-10-24) | **CLOSED** — a teacher signs in at Admin Web's address under `/teacher/` with the same account and gets the same portal as on the phone (the Flutter app built for the web, nothing rebuilt); only teachers on the web for now, everyone else is told to use the app (or Admin Web for staff); the browser keeps the session as Admin Web does (this tab only, or "keep me signed in" on this device) with Admin Web's lifetimes (12 h / 7 d, kept signed in 7 d / 30 d); no push, app lock or voice-note recording in the browser. Record: `../mobile/teacher-web-portal.md` |
+| **PD-30** | **Subscriptions, lesson balance, the payment lock and its exceptions** (2026-10-26) | **CLOSED** — each subscription says how many lessons it includes; held lessons and no-shows use them; two grace lessons follow, then the child's group is read-only for the parent and the teacher (staff still write; the parent's chat with the supervisor never locks), calls and bookings are refused and the lessons are put on hold; an instalment unpaid after its due date locks the same way; paying unlocks at once; the super admin, the Operations Manager and the Sales Manager grant dated exceptions; the parent's app gets a Subscriptions tab; the report says "Lesson N of M". Record: `../admin/pd030-subscriptions.md` |
 | **PD-31** | **Scheduling made direct** (2026-10-26) | **CLOSED** — one time-chip picker everywhere; "Change lesson time" asks "this lesson only" (instant, a new row naming the old, never an apology or a violation; family limits) or "every week" (before → after, from a date; family and teacher request, the Teachers department decides, a request no longer free is flagged first); a weekly lesson the materializer cannot create is listed, never lost; the child's PD-8 supervisor, their backup, the Operations Manager, the Teachers department and the super admin change a group's teacher in one transaction, never dropping weekly times; parents see each child's schedule |
 
 ---
@@ -2777,7 +2779,7 @@ switch              SUBSCRIPTION_LOCK_ENFORCED: on in staging, off in production
                     told; holds begin on the next pass
 ```
 
-**Implementation phase.** Migration `20261026100000_chat_pd030_subscription_lock`
+**Implementation phase.** Migration `20261026140000_chat_pd030_subscription_lock`
 (the ledger, exceptions, state and events, renewal requests, the request's and
 the report's new columns, the triggers, system-recorded `suspended`, the
 materializer's hold). `SubscriptionLockReader` (platform), `SubscriptionLedger`
@@ -2804,8 +2806,6 @@ moved to the Subscriptions tab).
 **Closed.** 2026-10-26.
 
 ---
-
-### Decisions still open after PD-1 to PD-29
 
 ### PD-31 · Scheduling made direct: time chips, a child's schedule, moving lessons, changing the teacher
 
@@ -2908,6 +2908,8 @@ payment lock   a child PD-30 locks is offered no time and every change above is 
 **Closed.** 2026-10-26.
 
 ---
+
+### Decisions still open after PD-1 to PD-31
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

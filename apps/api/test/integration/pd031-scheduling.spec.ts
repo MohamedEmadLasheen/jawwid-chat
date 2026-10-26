@@ -24,6 +24,7 @@ import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
+import { SqlSubscriptionLock, type SubscriptionLockReader } from '@platform/subscription-lock';
 import { LifecycleService } from '../../src/lessons/lifecycle.service';
 import { StatsService } from '../../src/lessons/stats.service';
 import { SupervisionConversationService } from '../../src/supervision/supervision-conversation.service';
@@ -537,18 +538,29 @@ describe('6. review fixes', () => {
     )).rejects.toThrow(/moved away/);
   });
 
-  it('PD-30\'s lock: any answer locks ("other" when unknown); tables without the function fail loudly', async () => {
+  it('PD-30\'s lock: any answer locks ("other" when unknown), only while enforcement is on', async () => {
     const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(3 * DAY), endsAt: at(3 * DAY + HOUR / 2) })).id;
+    // PD-30's SubscriptionLockReader decides; an answer PD-31 does not know by name still locks.
+    const reader = (enforced: boolean, lock: string | null): SubscriptionLockReader => ({
+      enforced,
+      lockedChildren: async () => [],
+      isLocked: async () => lock !== null,
+      lockOf: async () => lock as 'balance' | 'overdue' | null,
+    });
+    const withLock = (r: SubscriptionLockReader) =>
+      new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit, r);
+    expect((await withLock(reader(true, 'frozen')).moveSlots(s.parentId, id)).locked).toBe('other');
+    expect(await withLock(reader(true, 'overdue')).lockOf(s.learnerId)).toBe('overdue');
+    // Enforcement off: nothing is locked, whatever the state says.
+    expect(await withLock(reader(false, 'balance')).lockOf(s.learnerId)).toBeNull();
+    // The real reader answers through chat.learner_lesson_lock (no subscription: open).
+    const inherited = process.env.SUBSCRIPTION_LOCK_ENFORCED;
+    process.env.SUBSCRIPTION_LOCK_ENFORCED = 'true';
     try {
-      await g.prisma.$executeRawUnsafe(`create function chat.learner_lesson_lock(p uuid) returns text language sql as $$ select 'frozen'::text $$`);
-      expect((await scheduling.moveSlots(s.parentId, id)).locked).toBe('other');
-      await g.prisma.$executeRawUnsafe(`drop function chat.learner_lesson_lock(uuid)`);
-      await g.prisma.$executeRawUnsafe(`create table chat.learner_access (learner_id uuid)`);
-      await expect(scheduling.lockOf(s.learnerId)).rejects.toThrow(/learner_lesson_lock/);
-      await expect(scheduling.onApplicationBootstrap()).rejects.toThrow(/learner_lesson_lock/);
+      expect(await withLock(new SqlSubscriptionLock(g.prisma)).lockOf(s.learnerId)).toBeNull();
     } finally {
-      await g.prisma.$executeRawUnsafe(`drop function if exists chat.learner_lesson_lock(uuid)`);
-      await g.prisma.$executeRawUnsafe(`drop table if exists chat.learner_access`);
+      if (inherited === undefined) delete process.env.SUBSCRIPTION_LOCK_ENFORCED;
+      else process.env.SUBSCRIPTION_LOCK_ENFORCED = inherited;
     }
     expect(await scheduling.lockOf(s.learnerId)).toBeNull();
   });
