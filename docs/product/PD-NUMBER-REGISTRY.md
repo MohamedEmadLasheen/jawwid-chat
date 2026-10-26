@@ -36,9 +36,12 @@ claimed. The decision text itself still lives in
 | PD-25 | Parent self-recovery (reset code, forgot email) | `claude/parent-account-recovery-6cd585` | MERGED #112 |
 | PD-26 | The Teacher Supervision page (leaves, absences, lateness, grants, complaints) | `claude/admin-teacher-management-41f08a` | MERGED #108 (renumbered from "PD-24") |
 | PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | MERGED #117 |
-| PD-28 | Teacher web: the Flutter app built for the browser, for teachers | `claude/pd28-teacher-web-fbd19a` | in progress |
-| PD-29 | Materials: open library by subject and age, practice this week from the lesson report, memorization progress map | `claude/pd29-materials-ef11b4` | in progress |
-| PD-30 | next free number | — | — |
+| PD-28 | Teacher web: the Flutter app built for the browser, for teachers | `claude/pd28-teacher-web-fbd19a` | MERGED #120 |
+| PD-29 | Materials: open library by subject and age, practice this week from the lesson report, memorization progress map | `claude/pd29-materials-ef11b4`, `claude/pd29-materials-clients` | MERGED #121 + #122 |
+| PD-30 | Subscriptions, lesson balance and payment-based group lock | `claude/pd30-subscription-lock-*` | in progress |
+| PD-31 | Scheduling: trial time slots, reschedule redesign, a parent's child schedule, change teacher | `claude/pd31-scheduling-*` | in progress |
+| PD-32 | Parent feedback about the teacher (amends PD-26), Starred in Chats, New Students redesign, sign-up code without time expiry (amends PD-16), Trial labels | `claude/pd32-feedback-ui-*` | in progress |
+| PD-33 | next free number | — | — |
 
 ## Migration slots claimed on 2026-10-22
 
@@ -52,4 +55,12 @@ claimed. The decision text itself still lives in
 | `20261022170000` | PD-27 — `chat_pd027_payments` |
 | `20261022180000` | PD-29 — `chat_pd029_materials` |
 
-The next free slot is `20261022190000`.
+## Migration slots claimed on 2026-10-26
+
+| Slot | Owner |
+|------|--------|
+| `20261026100000` | PD-30 — subscriptions, lesson balance, payment lock |
+| `20261026110000` | PD-31 — scheduling |
+| `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
+
+The next free slot is `20261026130000`.
