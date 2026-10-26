@@ -8,6 +8,13 @@ import { PrismaService } from './prisma.service';
  *
  * Nothing in the communication engine may hardcode one of these numbers.
  */
+/** PD-38: a category's default shift -- wall-clock "HH:MM" in the teacher's zone, ISO weekdays. */
+export interface ShiftDefault {
+  start: string;
+  end: string;
+  weekdays: number[];
+}
+
 export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** initial hypothesis - window in which a sender may delete for everyone */
   'communication.delete_for_everyone_window_minutes': 60,
@@ -99,6 +106,13 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'stats.report_grace_hours': 24,
   /** A family message counts as answered when the teacher replied within this many hours. */
   'stats.reply_within_hours': 24,
+  /**
+   * PD-38: the shift a full-shift teacher gets when the category is chosen
+   * (editable per teacher). ISO weekdays: Saturday-Thursday, Friday off.
+   */
+  'schedule.shift.full_shift': { start: '12:00', end: '19:00', weekdays: [6, 7, 1, 2, 3, 4] } as ShiftDefault,
+  /** PD-38: the same for a part-shift teacher. */
+  'schedule.shift.part_shift': { start: '14:00', end: '18:00', weekdays: [6, 7, 1, 2, 3, 4] } as ShiftDefault,
   /**
    * initial hypothesis - Phase 8 abuse limits (docs/security/ABUSE-LIMITS.md).
    * The fixed window every authenticated-action counter below is measured over.

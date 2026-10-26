@@ -34,6 +34,22 @@ export const T = {
   },
   tabChildren: { en: 'Children & supervisors', ar: 'الأطفال والمشرفون' },
   tabStructure: { en: 'Departments & backups', ar: 'الأقسام والبدلاء' },
+  // PD-35: teachers and their supervisors.
+  tabTeachers: { en: 'Teachers & supervisors', ar: 'المعلمون والمشرفون' },
+  teachersUnassigned: { en: '{n} teachers have no supervisor', ar: '{n} من المعلمين بلا مشرف' },
+  teachersAllAssigned: { en: 'Every teacher has a supervisor.', ar: 'لكل معلم مشرف.' },
+  scopeOff: {
+    en: 'Teacher supervisors currently work on every teacher. Once each teacher has a supervisor, the owner can switch them to their own teachers only.',
+    ar: 'يعمل مشرفو المعلمين حاليًا على جميع المعلمين. بعد إسناد مشرف لكل معلم، يمكن للمالك قصرهم على معلميهم فقط.',
+  },
+  scopeOn: {
+    en: 'Each teacher supervisor works on their own teachers only; you see every teacher.',
+    ar: 'يعمل كل مشرف على معلميه فقط؛ وأنت ترى جميع المعلمين.',
+  },
+  teacherSupervisor: { en: 'Teacher supervisor', ar: 'مشرف المعلم' },
+  noTeacherSupervisor: { en: 'No supervisor', ar: 'بلا مشرف' },
+  noTeachers: { en: 'No teachers to show.', ar: 'لا يوجد معلمون للعرض.' },
+  inactiveTeacher: { en: 'Inactive', ar: 'غير نشط' },
 
   // Children
   search: { en: 'Search a child or a family', ar: 'ابحث عن طفل أو أسرة' },

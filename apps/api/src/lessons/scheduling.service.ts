@@ -8,6 +8,7 @@ import { AUDIT_SERVICE, SUBSCRIPTION_LOCK } from '../platform/tokens';
 import { NO_SUBSCRIPTION_LOCK, type SubscriptionLockReader } from '../platform/subscription-lock';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { scopeCovers } from '../platform/teacher-scope';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { ReminderService } from '../communication/notifications/reminder.service';
@@ -128,6 +129,19 @@ export class SchedulingService {
     const actor = await this.conversations.requireActor(actorId);
     await this.lessons.requireManager(actor);
     const teacher = await this.orgTeacher(actor, teacherId);
+    const checked = await this.checkAvailability(teacher.id, body);
+    await this.lessons.write(() =>
+      this.prisma.$transaction((tx) => this.writeAvailability(tx, actor.actorId, teacher, checked, 'weekly availability replaced')),
+    );
+    return this.availability(actorId, teacher.id);
+  }
+
+  /**
+   * Validate a whole weekly availability for a teacher, before any write. PD-38
+   * uses it with writeAvailability so a shift and its bookable hours are saved
+   * in ONE transaction.
+   */
+  async checkAvailability(teacherId: string, body: Record<string, unknown>): Promise<{ timezone: string; windows: Array<{ weekday: number; start: number; end: number }> }> {
     const timezone = textField(body, 'timezone', 64, true) as string;
     const raw = body.windows;
     if (!Array.isArray(raw) || raw.length > 28) throw invalid('windows: an array of at most 28 windows');
@@ -150,40 +164,47 @@ export class SchedulingService {
     const zoned = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT chat.is_time_zone(${timezone}) AS ok`;
     if (!zoned[0]?.ok) throw invalid('timezone: an IANA time zone, e.g. Africa/Cairo');
     const otherZone = await this.prisma.learnerScheduleSlot.findFirst({
-      where: { teacherId: teacher.id, validTo: null, NOT: { timezone } },
+      where: { teacherId, validTo: null, NOT: { timezone } },
       select: { id: true },
     });
     if (otherZone) {
       throw stateError('this teacher has regular lessons in another time zone; change those first');
     }
+    return { timezone, windows };
+  }
 
-    await this.lessons.write(() =>
-      this.prisma.$transaction(async (tx) => {
-        await tx.teacherAvailability.deleteMany({ where: { teacherId: teacher.id } });
-        if (windows.length > 0) {
-          await tx.teacherAvailability.createMany({
-            data: windows.map((w) => ({
-              organizationId: teacher.organizationId,
-              teacherId: teacher.id,
-              weekday: w.weekday,
-              startMinute: w.start,
-              endMinute: w.end,
-              timezone,
-              createdBy: actor.actorId,
-            })),
-          });
-        }
-        await this.audit.audit(tx, {
-          actorId: actor.actorId,
-          action: 'teacher.availability_set',
-          entity: 'teacher',
-          entityId: teacher.id,
-          after: { timezone, windows },
-          reason: 'weekly availability replaced',
-        });
-      }),
-    );
-    return this.availability(actorId, teacher.id);
+  /** Replace the windows inside the caller's transaction, audited there. */
+  async writeAvailability(
+    tx: Tx,
+    actorId: string,
+    teacher: { id: string; organizationId: string },
+    v: { timezone: string; windows: Array<{ weekday: number; start: number; end: number }> },
+    reason: string,
+  ): Promise<void> {
+    // PD-38: the rows removed here are archived by a trigger, with the span
+    // they were in force, so past months keep the hours they were worked under.
+    await tx.teacherAvailability.deleteMany({ where: { teacherId: teacher.id } });
+    if (v.windows.length > 0) {
+      await tx.teacherAvailability.createMany({
+        data: v.windows.map((w) => ({
+          organizationId: teacher.organizationId,
+          teacherId: teacher.id,
+          weekday: w.weekday,
+          startMinute: w.start,
+          endMinute: w.end,
+          timezone: v.timezone,
+          createdBy: actorId,
+        })),
+      });
+    }
+    await this.audit.audit(tx, {
+      actorId,
+      action: 'teacher.availability_set',
+      entity: 'teacher',
+      entityId: teacher.id,
+      after: { timezone: v.timezone, windows: v.windows },
+      reason,
+    });
   }
 
   async addDayOff(actorId: string, teacherId: string, body: Record<string, unknown>) {
@@ -243,11 +264,15 @@ export class SchedulingService {
     const actor = await this.conversations.requireActor(actorId);
     await this.lessons.requireManager(actor);
     const org = actor.organizationId as string;
+    // PD-35: the roster of the teachers in the caller's scope (every one, with the switch off).
+    const scope = await this.lessons.teacherScope.scopeOf(actor);
+    const ours = scope.all ? {} : { id: { in: [...scope.teacherIds] } };
+    const theirs = scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } };
     const [teachers, zones, learners, slots, pauses] = await Promise.all([
-      this.prisma.teacher.findMany({ where: { organizationId: org }, select: { id: true, name: true, isActive: true, leftAt: true }, orderBy: { name: 'asc' } }),
+      this.prisma.teacher.findMany({ where: { organizationId: org, ...ours }, select: { id: true, name: true, isActive: true, leftAt: true }, orderBy: { name: 'asc' } }),
       this.prisma.teacherAvailability.findMany({ where: { organizationId: org }, select: { teacherId: true, timezone: true }, distinct: ['teacherId'] }),
       this.prisma.learner.findMany({
-        where: { organizationId: org },
+        where: { organizationId: org, ...theirs },
         include: { family: { select: { id: true, displayName: true } } },
         orderBy: { name: 'asc' },
         take: 5000,
@@ -843,7 +868,9 @@ export class SchedulingService {
     const actor = await this.conversations.requireActor(actorId);
     await this.lessons.requireManager(actor);
     const row = await this.prisma.lessonBlockedOccurrence.findUnique({ where: { id } });
-    if (!row || row.organizationId !== actor.organizationId) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'not found');
+    if (!row || row.organizationId !== actor.organizationId || !(await this.lessons.teacherScope.covers(actor, row.teacherId))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'not found');
+    }
     if (row.resolution !== null) throw stateError('this weekly lesson is already resolved');
     return { actor, row };
   }
@@ -989,7 +1016,10 @@ export class SchedulingService {
       });
     }
     const { scheduleRequests: _legacy, ...rest } = base;
-    return { ...rest, scheduleRequests, blockedOccurrences: await this.blockedOccurrences(org) };
+    // PD-35: the blocked weekly lessons of the teachers in the caller's scope.
+    const scope = await this.lessons.teacherScope.scopeOf(actor);
+    const blocked = (await this.blockedOccurrences(org)).filter((b) => scopeCovers(scope, b.teacher.id));
+    return { ...rest, scheduleRequests, blockedOccurrences: blocked };
   }
 
   // ------------------------------------------------------------------
@@ -1551,7 +1581,8 @@ export class SchedulingService {
       actor,
       { organizationId: learner.organizationId, teacherId: learner.teacherId ?? '', familyId: learner.familyId },
       {
-        teachersDepartment: staff ? await this.lessons.isManager(actor) : false,
+        // PD-35: the Teachers department stands to the learners of the teachers in its scope.
+        teachersDepartment: staff ? await this.lessons.supervisesTeacher(actor, learner.teacherId) : false,
         supervisesLearner: staff ? (await this.lessons.supervisedLearnerIds(actor, new Date(), learner.id)).length > 0 : false,
       },
     );
@@ -1570,6 +1601,10 @@ export class SchedulingService {
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const teacher = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId } });
     if (!teacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    // PD-35: staff work on the teachers in their scope; another reads as unknown.
+    if (actor.kind === ActorKind.STAFF && !(await this.lessons.teacherScope.covers(actor, teacher.id))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    }
     return teacher;
   }
 

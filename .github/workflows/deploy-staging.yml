@@ -268,6 +268,9 @@ jobs:
           # PD-30: the payment lock is on in staging, off in production until the owner
           # sets the production variable to 'true'.
           SUBSCRIPTION_LOCK_ENFORCED: ${{ vars.SUBSCRIPTION_LOCK_ENFORCED || 'true' }}
+          # PD-35: strict teacher-supervisor scope is off everywhere until the owner sets
+          # the variable to 'true' (department head, 2026-10-26).
+          TEACHER_SUPERVISOR_STRICT_SCOPE: ${{ vars.TEACHER_SUPERVISOR_STRICT_SCOPE || 'false' }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           OTEL_SERVICE_NAME: jawwid-chat-api
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}

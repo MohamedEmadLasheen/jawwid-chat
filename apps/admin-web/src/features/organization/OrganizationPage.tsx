@@ -6,17 +6,18 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { BackupLink, BackupStatus, Cover, Department, DepartmentMember, LearnerAssignment } from './api'
-import { DEPARTMENT_LABEL, POSITION_LABEL, STATUS_LABEL, T, useCopy } from './copy'
-import { useCovers, useLearners, useStructure } from './hooks'
+import { DEPARTMENT_LABEL, POSITION_LABEL, STATUS_LABEL, T, describeError, useCopy } from './copy'
+import { useAssignTeacher, useCovers, useLearners, useStructure, useTeacherAssignments } from './hooks'
 import { CoverActions } from './CoverBanner'
 import { HandOverDialog } from './HandOverDialog'
 import { AssignSupervisorDialog, BackupActionDialog, CreateBackupDialog } from './OrgDialogs'
 import type { BackupAction } from './hooks'
 import './organization.css'
 import { Link } from 'react-router-dom'
+import { SupervisorColors } from '@/features/schedule/SupervisorColors'
 import { studentPath } from '@/features/profiles/api'
 
-type Tab = 'children' | 'structure'
+type Tab = 'children' | 'teachers' | 'structure'
 
 /**
  * PD-8: the organization structure -- for the super admin (the whole
@@ -26,13 +27,21 @@ type Tab = 'children' | 'structure'
  */
 export function OrganizationPage() {
   const tx = useCopy()
+  const { staff } = useSession()
   const structure = useStructure()
   const departments = structure.data?.departments ?? []
   const operations = departments.find((d) => d.kind === 'operations') ?? null
+  // PD-35: the Teachers Manager and the super admin assign teachers to supervisors.
+  const teachersDept = departments.find((d) => d.kind === 'teachers') ?? null
+  const assignsTeachers = !!teachersDept && !!staff && (staff.role === 'super_admin' || teachersDept.manager?.id === staff.id)
   const [tab, setTab] = useState<Tab>('children')
-  const shown: Tab = operations ? tab : 'structure'
+  const shown: Tab =
+    tab === 'children' ? (operations ? 'children' : assignsTeachers ? 'teachers' : 'structure')
+    : tab === 'teachers' ? (assignsTeachers ? 'teachers' : 'structure')
+    : 'structure'
   const tabs: Array<{ key: Tab; label: string }> = [
     ...(operations ? [{ key: 'children' as const, label: tx(T.tabChildren) }] : []),
+    ...(assignsTeachers ? [{ key: 'teachers' as const, label: tx(T.tabTeachers) }] : []),
     { key: 'structure', label: tx(T.tabStructure) },
   ]
 
@@ -60,6 +69,8 @@ export function OrganizationPage() {
           <div role="tabpanel" id={`org-panel-${shown}`} aria-labelledby={`org-tab-${shown}`}>
             {shown === 'children' && operations ? (
               <ChildrenTab operations={operations} />
+            ) : shown === 'teachers' ? (
+              <TeachersTab />
             ) : departments.length === 0 ? (
               <EmptyState title={tx(T.noOperations)} />
             ) : (
@@ -69,6 +80,70 @@ export function OrganizationPage() {
         </QueryBoundary>
       </div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PD-35: teachers & their supervisors
+// ---------------------------------------------------------------------------
+
+function TeachersTab() {
+  const tx = useCopy()
+  const { number, locale } = useI18n()
+  const data = useTeacherAssignments(true)
+  const assign = useAssignTeacher()
+  const view = data.data
+  return (
+    <QueryBoundary isLoading={data.isLoading} error={data.error} onRetry={() => void data.refetch()}>
+      {view && (
+        <>
+          <p className={`banner ${view.unassigned > 0 ? 'banner--warn' : 'banner--info'}`} role="status">
+            {view.unassigned > 0 ? tx(T.teachersUnassigned, { n: number(view.unassigned) }) : tx(T.teachersAllAssigned)}{' '}
+            {tx(view.strictScope ? T.scopeOn : T.scopeOff)}
+          </p>
+          {assign.error && <p className="field__error" role="alert">{describeError(assign.error, locale)}</p>}
+          {view.teachers.length === 0 ? (
+            <EmptyState title={tx(T.noTeachers)} />
+          ) : (
+            <div className="table-wrap org-table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th scope="col">{tx(T.teacher)}</th>
+                    <th scope="col">{tx(T.teacherSupervisor)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {view.teachers.map((t) => (
+                    <tr key={t.id}>
+                      <td dir="auto">
+                        {t.name}
+                        {!t.isActive && <> <Badge tone="neutral">{tx(T.inactiveTeacher)}</Badge></>}
+                      </td>
+                      <td>
+                        <select
+                          className="select"
+                          aria-label={tx(T.assignTitle, { name: t.name })}
+                          value={t.supervisor?.id ?? ''}
+                          disabled={assign.isPending}
+                          onChange={(e) => assign.mutate({ teacherId: t.id, supervisorId: e.target.value || null })}
+                        >
+                          <option value="">{tx(T.noTeacherSupervisor)}</option>
+                          {view.supervisors.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        {!t.supervisor && t.isActive && <> <Badge tone="warn" dot>{tx(T.unassigned)}</Badge></>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </QueryBoundary>
   )
 }
 
@@ -244,6 +319,9 @@ function DepartmentCard({ department }: { department: Department }) {
           )}
         </>
       )}
+
+      {/* PD-38: each supervisor's schedule color. */}
+      {department.kind === 'operations' && <SupervisorColors />}
 
       {creating && <CreateBackupDialog members={department.members} onClose={() => setCreating(false)} />}
       {acting && <BackupActionDialog link={acting.link} action={acting.action} onClose={() => setActing(null)} />}

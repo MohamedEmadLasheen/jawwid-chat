@@ -5,6 +5,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { scopeCovers } from '../platform/teacher-scope';
 import { currentImpersonationId } from '../platform/request-context';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -176,11 +177,14 @@ export class ParentFeedbackService {
     if (query.category !== undefined && !(FEEDBACK_CATEGORIES as readonly string[]).includes(query.category)) {
       throw invalid('category: must be praise, suggestion or complaint');
     }
+    // PD-35: the feedback about the teachers in the caller's scope.
+    const scope = await this.files.teacherScope.scopeOf(actor);
     const rows = await this.prisma.parentFeedback.findMany({
       where: {
         organizationId: actor.organizationId as string,
         ...(query.status ? { status: query.status } : {}),
         ...(query.category ? { category: query.category } : {}),
+        ...(scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: 500,
@@ -273,7 +277,13 @@ export class ParentFeedbackService {
       () => false,
     );
     let learnerFilter: Prisma.ParentFeedbackWhereInput = {};
-    if (!department && actor.staffRole !== StaffRole.SUPER_ADMIN) {
+    const scope = department ? await this.files.teacherScope.scopeOf(actor) : null;
+    if (scope && !scope.all) {
+      // PD-35: a narrowed teacher supervisor reads what concerns their own teachers.
+      const ours = (await this.familyLearners(family.id)).filter((l) => scopeCovers(scope, l.teacherId));
+      if (!ours.length) throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'family not found');
+      learnerFilter = { teacherId: { in: [...scope.teacherIds] } };
+    } else if (!department && actor.staffRole !== StaffRole.SUPER_ADMIN) {
       const mine = await this.prisma.learnerSupervision.findMany({
         where: { supervisorId: actor.actorId, learnerId: { in: (await this.familyLearners(family.id)).map((l) => l.id) } },
         select: { learnerId: true },
@@ -303,6 +313,10 @@ export class ParentFeedbackService {
       where: { id: id.toLowerCase(), organizationId: actor.organizationId ?? '' },
     });
     if (!row) throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
+    // PD-35: feedback about a teacher outside the caller's scope reads as unknown.
+    if (!(await this.files.teacherScope.covers(actor, row.teacherId))) {
+      throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
+    }
     return row;
   }
 
@@ -321,7 +335,7 @@ export class ParentFeedbackService {
   }
 
   private familyLearners(familyId: string) {
-    return this.prisma.learner.findMany({ where: { familyId }, select: { id: true } });
+    return this.prisma.learner.findMany({ where: { familyId }, select: { id: true, teacherId: true } });
   }
 
   private async limit(key: keyof typeof LIMIT_DEFAULTS): Promise<number> {
