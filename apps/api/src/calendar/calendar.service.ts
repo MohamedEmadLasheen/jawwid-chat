@@ -358,6 +358,95 @@ export class CalendarService {
     };
   }
 
+  /**
+   * PD-38 P2: a teacher's own schedule -- their shift or working hours, leave,
+   * empty time and lessons, with the period's figures. The teacher is the
+   * caller, never a parameter, so no other teacher's lesson or student can be
+   * asked for; the days are the teacher's account zone (PD-22, what the app's
+   * clock shows). Nothing financial reaches a teacher: a payment hold reads
+   * "paused" (PD-30), and supervisors' colors are the office's, not shown.
+   * ONE statement, like the academy views.
+   */
+  async mine(actorId: string, query: Query) {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.TEACHER || !actor.isActive || !actor.organizationId) {
+      throw new CommError(CommErrorCode.LESSON_DENIED, 'this is a teacher\'s own schedule');
+    }
+    // Only the window: every other filter is the office's.
+    const f: CalendarFilters = {
+      ...parseFilters({ from: one(query.from), to: one(query.to) }),
+      teacherIds: [actor.actorId],
+    };
+    const zone = await this.accountZone(actor.actorId);
+    const ctes = this.ctes(actor.organizationId, f, zone);
+    type DayRow = { day: string; shift: unknown; work: unknown; leave: unknown; empty: unknown; free: unknown };
+    type LessonRow = {
+      id: string; learner_id: string | null; learner_name: string | null; prospect_name: string | null; kind: string; st: string;
+      outcome: string | null; starts_at: string; ends_at: string; moved_from: string | null; within_hours: boolean;
+    };
+    type Taught = { lessons: number; booked_m: number; held_m: number; students: number; trial_students: number };
+    const [{ teachers, days, lessons, taught }] = await this.prisma.$queryRaw<Array<{
+      teachers: TeacherRow[]; days: DayRow[]; lessons: LessonRow[]; taught: Taught;
+    }>>`
+      ${ctes}
+      SELECT
+        (SELECT coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) FROM (${this.teacherSelect()}) t) AS teachers,
+        (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.day), '[]'::jsonb) FROM (
+           SELECT to_char(c.day, 'YYYY-MM-DD') AS day,
+                  chat.mr_json(c.shift) AS shift, chat.mr_json(c.work) AS work, chat.mr_json(c.leave) AS leave,
+                  chat.mr_json(c.empty) AS empty, chat.mr_json(c.free) AS free
+             FROM cap c WHERE c.teacher_id = ${actor.actorId}::uuid) x) AS days,
+        (SELECT coalesce(jsonb_agg(to_jsonb(y) ORDER BY y.starts_at), '[]'::jsonb) FROM (
+           SELECT m.id::text AS id, m.learner_id::text AS learner_id, ln.name AS learner_name, tp.display_name AS prospect_name,
+                  m.kind, m.st, m.outcome, m.starts_at, m.ends_at, m.moved_from::text AS moved_from,
+                  coalesce(tstzrange(m.starts_at, m.ends_at) <@ t.hours, false) AS within_hours
+             FROM m
+             LEFT JOIN cap_t t ON t.teacher_id = m.teacher_id
+             LEFT JOIN chat.learner ln ON ln.id = m.learner_id
+             LEFT JOIN chat.trial_prospect tp ON tp.id = m.prospect_id
+            WHERE m.teacher_id = ${actor.actorId}::uuid) y) AS lessons,
+        (SELECT jsonb_build_object(
+                  'lessons', count(*) FILTER (WHERE m.st IN ('active', 'trial')),
+                  'booked_m', chat.mr_minutes(coalesce(range_agg(tstzrange(m.starts_at, m.ends_at)) FILTER (WHERE m.st IN ('active', 'trial')), '{}'::tstzmultirange)
+                                              * tstzmultirange(tstzrange(min(win.lo), min(win.hi)))),
+                  'held_m', chat.mr_minutes(coalesce(range_agg(tstzrange(m.starts_at, m.ends_at)) FILTER (WHERE m.outcome = 'held'), '{}'::tstzmultirange)
+                                            * tstzmultirange(tstzrange(min(win.lo), min(win.hi)))),
+                  'students', count(DISTINCT m.learner_id) FILTER (WHERE m.st = 'active'),
+                  'trial_students', count(DISTINCT m.prospect_id) FILTER (WHERE m.st = 'trial'))
+           FROM m, win WHERE m.teacher_id = ${actor.actorId}::uuid) AS taught`;
+    const me = teachers[0] ? this.teacherDto(teachers[0]) : null;
+    const shift = me?.category === 'full_shift' || me?.category === 'part_shift';
+    return {
+      zone,
+      from: f.from,
+      to: f.to,
+      category: me?.category ?? 'unset',
+      totals: me?.totals ?? null,
+      utilization: me?.utilization ?? null,
+      teaching: { lessons: Number(taught.lessons), bookedMinutes: Number(taught.booked_m), heldMinutes: Number(taught.held_m) },
+      students: { distinct: Number(taught.students), trial: Number(taught.trial_students) },
+      days,
+      lessons: lessons.map((l) => ({
+        id: l.id,
+        startsAt: new Date(l.starts_at).toISOString(),
+        endsAt: new Date(l.ends_at).toISOString(),
+        kind: l.kind,
+        status: l.st,
+        outcome: l.outcome,
+        learner: l.learner_id ? { id: l.learner_id, name: l.learner_name } : null,
+        prospect: l.prospect_name ? { name: l.prospect_name } : null,
+        movedFrom: l.moved_from,
+        outsideShift: shift && !l.within_hours,
+      })),
+    };
+  }
+
+  /** A person's own zone (PD-22: what their app's clock shows), else the academy's. */
+  private async accountZone(actorId: string): Promise<string> {
+    const row = await this.prisma.actorTimeZone.findUnique({ where: { actorId }, select: { timeZone: true } });
+    return canonicalZone(row?.timeZone) ?? (await this.zone());
+  }
+
   // ------------------------------------------------------------------
   // Internals
   // ------------------------------------------------------------------
@@ -484,6 +573,10 @@ export class CalendarService {
       utilization: utilization(totals),
     };
   }
+}
+
+function one(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
 }
 
 function totalsOf(r: CapRow | TeacherRow): TeacherTotals {

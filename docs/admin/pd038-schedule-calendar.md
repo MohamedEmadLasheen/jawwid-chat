@@ -146,6 +146,31 @@ exclusive; the window is at most 42 days). They also take the filters
 - **Organization → Operations → Schedule colors:** a swatch per supervisor.
   The Operations Manager and the super admin can change it.
 
+## The teacher's own schedule (P2)
+
+The teacher's own schedule appears in the app and on the teacher web portal (`/teacher/`), which are one Flutter codebase.
+
+- **`GET /me/calendar?from&to`:** the caller's own schedule. The response carries:
+  - their shift or working hours, leave, empty shift time and their lessons;
+  - the period's figures (`teaching`, `students`, `totals`, `utilization`).
+- **What it is computed from:**
+  - The teacher is the caller, never a parameter. Every other query parameter is ignored, so no other teacher's lesson or student can be asked for.
+  - The days are the teacher's **account zone** (`chat.actor_time_zone`, PD-22), which is the zone the app's clock shows. Without one, the academy's zone is used.
+  - It is the same `chat.calendar_capacity` and the same one-statement shape as the academy views.
+- **What a teacher never sees:**
+  - Money: a PD-30 hold reads `paused` / `suspended`, with no note.
+  - Supervisors or their colors.
+  - Another teacher.
+
+  Staff and parents are refused (`COMM.LESSON_DENIED`).
+- **Schedule tab** (`teacher_schedule_screen.dart`): `List | Day | Week | Month`. The list stays the default.
+  - **Day:** hours down the page. The shift is shaded, empty shift time is outlined in red, time outside the shift is grey, and leave is tinted. Lessons sit in their slots: solid for active, dashed for trial, dotted for paused, with a mark for a lesson outside the shift. Overlaps are shown side by side.
+  - **Week:** Saturday–Friday strips with lesson counts and empty hours. A day opens the Day view.
+  - **Month:** a grid starting on Saturday, with lesson counts and a red edge where shift time is empty. A day opens the Day view.
+  - **Figures card:** hours of lessons and held, distinct students (+ trial), shift used, and empty and outside hours.
+  - **Taps:** a lesson opens the same action sheet as the list (`openLessonActions`).
+- **Layout:** logical positioning (`PositionedDirectional`) only, so Arabic mirrors. Each view is tested at 360 px in English and Arabic.
+
 ## Rollback
 
 `db/rollback/20261026210000_pd038.down.sql` drops the patterns and the colors.

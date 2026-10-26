@@ -1,4 +1,5 @@
 import '../../../shared/models/lesson.dart';
+import '../../../shared/models/my_calendar.dart';
 import '../../../shared/models/student_profile.dart';
 import '../../../shared/utils/app_clock.dart';
 import '../../network/api_client.dart';
@@ -351,6 +352,14 @@ class HttpLessonRepository implements LessonRepository {
             ),
       ],
     );
+  }
+
+  @override
+  Future<MyCalendar> myCalendar(String from, String to) async {
+    final data = (await _client.get<Map<String, Object?>>('/me/calendar', query: {'from': from, 'to': to})).data;
+    final calendar = MyCalendar.fromJson(data);
+    if (calendar == null) throw const FormatException('GET /me/calendar: not a calendar');
+    return calendar;
   }
 
   @override

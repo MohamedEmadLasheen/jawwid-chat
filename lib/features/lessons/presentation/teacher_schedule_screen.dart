@@ -10,6 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/utils/app_clock.dart';
 import 'lesson_ticket_sheet.dart';
+import 'teacher_calendar.dart';
 
 /// How far back the Schedule looks for a lesson still owed its report -- the server's
 /// REPORT_LOOKBACK_DAYS, so the Schedule and "+" agree on what is owed.
@@ -51,12 +52,24 @@ void openScheduleNeedingReport(BuildContext context, WidgetRef ref) {
 /// say you can't teach it -- or, when nothing may, what happened to it. The actions
 /// are the server's (`GET /lessons/:id` `acts`), read fresh on the tap, and open the
 /// same forms "+" opens. Resolves true when something was sent.
-Future<bool> openScheduledLesson(BuildContext context, WidgetRef ref, ScheduledLesson lesson) async {
+Future<bool> openScheduledLesson(BuildContext context, WidgetRef ref, ScheduledLesson lesson) {
+  return openLessonActions(
+    context,
+    ref,
+    lessonId: lesson.id,
+    title: lesson.learnerName,
+    subtitle: '${lessonWhen(context, lesson.startsAt)} · ${scheduleStatus(L10n.of(context), lesson).$1}',
+  );
+}
+
+/// The same, for any lesson the teacher's own views show (PD-38: the calendar):
+/// [title] and [subtitle] head the sheet.
+Future<bool> openLessonActions(BuildContext context, WidgetRef ref, {required String lessonId, required String title, required String subtitle}) async {
   final l10n = L10n.of(context);
   final messenger = ScaffoldMessenger.of(context);
   final List<LessonTicket> offered;
   try {
-    offered = await ref.read(lessonRepositoryProvider).lessonTickets(lesson.id);
+    offered = await ref.read(lessonRepositoryProvider).lessonTickets(lessonId);
   } on AppError {
     messenger.showSnackBar(SnackBar(content: Text(l10n.scheduleLessonLoadFailed)));
     return false;
@@ -83,8 +96,8 @@ Future<bool> openScheduledLesson(BuildContext context, WidgetRef ref, ScheduledL
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ListTile(
-                    title: Text(lesson.learnerName, style: theme.textTheme.titleMedium),
-                    subtitle: Text('${lessonWhen(sheet, lesson.startsAt)} · ${scheduleStatus(l10n, lesson).$1}'),
+                    title: Text(title, style: theme.textTheme.titleMedium),
+                    subtitle: Text(subtitle),
                   ),
                   const Divider(),
                   if (tickets.isEmpty)
@@ -109,6 +122,7 @@ Future<bool> openScheduledLesson(BuildContext context, WidgetRef ref, ScheduledL
   if (sent) {
     ref.invalidate(myScheduleProvider);
     ref.invalidate(myWorkloadProvider);
+    ref.invalidate(myCalendarProvider);
     messenger.showSnackBar(SnackBar(content: Text(l10n.ticketSent)));
   }
   return sent;
@@ -129,32 +143,66 @@ class TeacherScheduleScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = L10n.of(context);
-    final async = ref.watch(myScheduleProvider);
-    final filter = ref.watch(scheduleFilterProvider);
+    final view = ref.watch(scheduleViewProvider).view;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.tabSchedule)),
-      body: RefreshIndicator(
-        onRefresh: () => ref.refresh(myScheduleProvider.future),
-        child: async.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => _Message(text: l10n.scheduleLoadFailed),
-          data: (lessons) {
-            final owed = lessons.where((l) => l.needsReport).length;
-            final shown = filter == ScheduleFilter.needsReport ? lessons.where((l) => l.needsReport).toList() : lessons;
-            return _ScheduleList(
-              lessons: shown,
-              header: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _WorkloadSummary(),
-                  _FilterBar(filter: filter, owed: owed),
-                  if (shown.isEmpty) _Message(text: l10n.scheduleEmpty, scrollable: false),
-                ],
-              ),
-            );
-          },
-        ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // PD-38: the list, or the teacher's own calendar by day, week or month.
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing3, Spacing.spacing5, 0),
+            child: SegmentedButton<ScheduleView>(
+              key: const ValueKey('schedule-view'),
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(value: ScheduleView.list, label: Text(l10n.scheduleViewList)),
+                ButtonSegment(value: ScheduleView.day, label: Text(l10n.scheduleViewDay)),
+                ButtonSegment(value: ScheduleView.week, label: Text(l10n.scheduleViewWeek)),
+                ButtonSegment(value: ScheduleView.month, label: Text(l10n.scheduleViewMonth)),
+              ],
+              selected: {view},
+              onSelectionChanged: (s) => ref.read(scheduleViewProvider.notifier).show(s.first),
+            ),
+          ),
+          Expanded(child: view == ScheduleView.list ? const _ScheduleListTab() : const TeacherCalendar()),
+        ],
+      ),
+    );
+  }
+}
+
+/// The Schedule as a list: what is coming and what is owed (PD-9/PD-10).
+class _ScheduleListTab extends ConsumerWidget {
+  const _ScheduleListTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final async = ref.watch(myScheduleProvider);
+    final filter = ref.watch(scheduleFilterProvider);
+
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(myScheduleProvider.future),
+      child: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, _) => _Message(text: l10n.scheduleLoadFailed),
+        data: (lessons) {
+          final owed = lessons.where((l) => l.needsReport).length;
+          final shown = filter == ScheduleFilter.needsReport ? lessons.where((l) => l.needsReport).toList() : lessons;
+          return _ScheduleList(
+            lessons: shown,
+            header: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _WorkloadSummary(),
+                _FilterBar(filter: filter, owed: owed),
+                if (shown.isEmpty) _Message(text: l10n.scheduleEmpty, scrollable: false),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

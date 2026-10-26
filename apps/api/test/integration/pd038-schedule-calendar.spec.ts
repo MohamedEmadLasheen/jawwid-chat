@@ -449,6 +449,75 @@ describe('who counts, and history that stays put', () => {
   });
 });
 
+describe('a teacher\'s own schedule (P2)', () => {
+  const w = { from: '2026-09-14', to: '2026-09-15' };
+
+  beforeEach(async () => {
+    await fullShift(s.teacherId, '2026-09-01');
+    await lessonAt(s.learnerId, '2026-09-14 13:00', 60);
+    await lessonAt(learnerN, '2026-09-14 15:00', 30);
+    await trialAt('2026-09-14 16:00', 30);
+    // A PD-30 payment hold on teacher_c's own lesson: "paused", nothing about money.
+    const held = await lessonAt(learnerN, '2026-09-14 17:00', 60);
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
+      g.prisma.$executeRawUnsafe(
+        `update chat.lesson set outcome = 'suspended', outcome_by_kind = 'system', outcome_by = null,
+                outcome_at = starts_at - interval '1 day', outcome_note = 'subscription' where id = $1::uuid`, held,
+      ),
+    ]);
+    // Another teacher's lesson the same day, with another child.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.lesson (organization_id, learner_id, teacher_id, kind, starts_at, ends_at, created_by, created_by_kind)
+       values (chat.default_organization_id(), $1::uuid, $2::uuid, 'regular', '2026-09-14 10:00+00', '2026-09-14 11:00+00', $3::uuid, 'staff')`,
+      s.secondLearnerId, s.newTeacherId, tsupId,
+    );
+    await patterns.setColor(s.managerId, s.ownerId, { colorKey: 'sky' });
+  });
+
+  it('shows the teacher\'s shift, empty time and own lessons -- never another teacher\'s, never money, never the office\'s colors', async () => {
+    const me = await calendar.mine(s.teacherId, w);
+    expect(me.category).toBe('full_shift');
+    expect(me.zone).toBe(TZ);
+    expect(me.days).toHaveLength(1);
+    expect((me.days[0] as { shift: unknown }).shift).toEqual([['2026-09-14T09:00:00+00:00', '2026-09-14T16:00:00+00:00']]);
+    expect(me.lessons.map((l) => l.learner?.name ?? l.prospect?.name)).toEqual(['learner_l', 'learner_n', 'prospect_p', 'learner_n']);
+    expect(me.lessons.find((l) => l.status === 'paused')).toMatchObject({ outcome: 'suspended' });
+    const json = JSON.stringify(me);
+    expect(json).not.toContain('learner_m');
+    expect(json).not.toContain(s.newTeacherId);
+    expect(json).not.toMatch(/payment|subscription|colorKey|sky|supervisor/);
+    expect(me.students).toEqual({ distinct: 2, trial: 1 });
+    expect(me.teaching).toMatchObject({ lessons: 3, bookedMinutes: 120 });
+    expect(me.totals).toMatchObject({ shiftMinutes: 420, inShiftBookedMinutes: 120, inShiftPausedMinutes: 60, emptyMinutes: 240 });
+  });
+
+  it('only from/to are read: a teacherIds parameter cannot widen it', async () => {
+    const me = await calendar.mine(s.teacherId, { ...w, teacherIds: s.newTeacherId, learnerIds: s.secondLearnerId } as Record<string, string>);
+    expect(JSON.stringify(me)).not.toContain('learner_m');
+    expect(me.lessons).toHaveLength(4);
+  });
+
+  it('the days are the teacher\'s own zone (PD-22)', async () => {
+    // 23:30 Cairo on the 13th is 00:30 on the 14th in Dubai (UTC+4).
+    await lessonAt(s.learnerId, '2026-09-13 23:30', 30);
+    expect((await calendar.mine(s.teacherId, w)).lessons).toHaveLength(4);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.actor_time_zone (actor_id, organization_id, time_zone, automatic) values ($1::uuid, chat.default_organization_id(), 'Asia/Dubai', false)`,
+      s.teacherId,
+    );
+    const dubai = await calendar.mine(s.teacherId, w);
+    expect(dubai.zone).toBe('Asia/Dubai');
+    expect(dubai.lessons).toHaveLength(5);
+  });
+
+  it('staff, a parent and a window over 42 days are refused', async () => {
+    expect(await code(calendar.mine(tsupId, w))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(calendar.mine(s.parentId, w))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(calendar.mine(s.teacherId, { from: '2026-09-01', to: '2026-10-14' }))).toBe(CommErrorCode.VALIDATION);
+  });
+});
+
 describe('changing a shift and a color', () => {
   it('only the Teachers Manager or the super admin sets a shift; defaults fill it; from today it becomes the bookable hours', async () => {
     const today = await academyDay();
