@@ -111,7 +111,8 @@ beforeEach(async () => {
   tmgrId = randomUUID();
   tsupId = randomUUID();
   await g.prisma.$executeRawUnsafe(
-    `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'tmgr_a', 'admin', true), ($2::uuid, 'tsup_a', 'admin', true)`,
+    // A department's manager holds the manager role (chat.department's guard).
+    `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'tmgr_a', 'manager', true), ($2::uuid, 'tsup_a', 'admin', true)`,
     tmgrId, tsupId,
   );
   const [{ id: dept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
