@@ -41,6 +41,7 @@ claimed. The decision text itself still lives in
 | PD-30 | Subscriptions, lesson balance and payment-based group lock | `claude/pd30-subscription-lock-*` | in progress |
 | PD-31 | Scheduling: trial time slots, reschedule redesign, a parent's child schedule, change teacher | `claude/pd31-scheduling-*` | in progress |
 | PD-32 | Parent feedback about the teacher (amends PD-26), Starred in Chats, New Students redesign, sign-up code without time expiry (amends PD-16), Trial labels | `claude/pd32-feedback-ui-*` | in progress |
+| PD-37 | Chat parity with WhatsApp/Messenger: read receipts (author-only ticks + Message info), typing, presence; first PR closes RT-012 (receipt roster leak) | `claude/pd37-chat-parity-*` | in progress |
 | PD-33 | next free number | — | — |
 
 ## Migration slots claimed on 2026-10-22
@@ -62,5 +63,6 @@ claimed. The decision text itself still lives in
 | `20261026100000` | PD-30 — subscriptions, lesson balance, payment lock |
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
+| `20261026180000` | PD-37 — chat read cursors / presence (P1a; sub-slots `180001…`). The RT-012 fix PR has no migration. |
 
 The next free slot is `20261026130000`.

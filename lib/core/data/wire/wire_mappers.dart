@@ -156,23 +156,16 @@ abstract final class WireMappers {
         _ => ApprovalState.notRequired,
       };
 
-  /// The strongest receipt across recipients.
+  /// The ticks on the viewer's own message, as the server decided them (PD-37).
   ///
-  /// The server sends per-actor receipts; a sender's bubble shows a single state, so the
-  /// weakest-link rule applies in reverse — a message is "read" only when the log says so
-  /// for someone, and otherwise falls back to delivered, then sent.
-  static DeliveryState deliveryState(List<Object?> receipts) {
-    var best = DeliveryState.sent;
-
-    for (final entry in receipts) {
-      if (entry is! Map) continue;
-      final state = entry['state'];
-
-      if (state == Wire.receiptRead) return DeliveryState.read;
-      if (state == Wire.receiptDelivered) best = DeliveryState.delivered;
-    }
-    return best;
-  }
+  /// The server sends one aggregate `status` on the author's own messages -- `read` only
+  /// when every countable reader read it -- and null on everyone else's. It no longer sends
+  /// per-recipient receipts, so the client has nothing to combine and must not try.
+  static DeliveryState deliveryState(String? status) => switch (status) {
+        Wire.receiptRead => DeliveryState.read,
+        Wire.receiptDelivered => DeliveryState.delivered,
+        _ => DeliveryState.sent,
+      };
 
   /// What a conversation row is called: the server's title when it set one (a Student
   /// Group's), else who it is WITH -- the display names the server sent for the other
@@ -370,7 +363,6 @@ abstract final class WireMappers {
   }) {
     final authorId = json['authorId'] as String?;
     final isMine = authorId != null && authorId == viewerActorId;
-    final receipts = (json['receipts'] as List?) ?? const [];
 
     final reactionsRaw = (json['reactions'] as List?) ?? const [];
     final byEmoji = <String, List<String>>{};
@@ -421,7 +413,7 @@ abstract final class WireMappers {
             mine: entry.value.contains(viewerActorId),
           ),
       ],
-      deliveryState: deliveryState(receipts),
+      deliveryState: deliveryState(json['status'] as String?),
       approvalState: approvalState(json['moderation'] as String?),
       createdAt: parseTime(json['createdAt']) ?? DateTime.now(),
       isMine: isMine,
