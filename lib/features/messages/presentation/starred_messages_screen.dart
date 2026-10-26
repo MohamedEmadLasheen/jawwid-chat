@@ -23,14 +23,35 @@ final starredFirstPageProvider = FutureProvider.autoDispose<StarredPage>((ref) a
 /// "Starred messages": the viewer's own bookmarks, newest first, across every
 /// conversation they may still read (the server drops the rest). Tapping one
 /// opens its conversation.
-class StarredMessagesScreen extends ConsumerStatefulWidget {
+///
+/// PD-32: the same list is the Chats screen's "Starred" chip; this screen stays
+/// for the route ([StarredMessagesList] is the body both share).
+class StarredMessagesScreen extends StatelessWidget {
   const StarredMessagesScreen({super.key});
 
   @override
-  ConsumerState<StarredMessagesScreen> createState() => _StarredMessagesScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(L10n.of(context).starredMessagesTitle)),
+      body: const StarredMessagesList(),
+    );
+  }
 }
 
-class _StarredMessagesScreenState extends ConsumerState<StarredMessagesScreen> {
+/// The starred list itself, with its empty state and "more" paging.
+///
+/// [onOpen] overrides the tap (tests observe it without a router); by default a
+/// tap pushes the message's conversation.
+class StarredMessagesList extends ConsumerStatefulWidget {
+  const StarredMessagesList({super.key, this.onOpen});
+
+  final void Function(String conversationId)? onOpen;
+
+  @override
+  ConsumerState<StarredMessagesList> createState() => _StarredMessagesListState();
+}
+
+class _StarredMessagesListState extends ConsumerState<StarredMessagesList> {
   final List<StarredMessage> _more = [];
   String? _cursor;
   bool _loadingMore = false;
@@ -49,31 +70,48 @@ class _StarredMessagesScreenState extends ConsumerState<StarredMessagesScreen> {
     }
   }
 
+  void _open(String conversationId) {
+    final handler = widget.onOpen;
+    if (handler != null) {
+      handler(conversationId);
+      return;
+    }
+    context.push(Routes.conversation(conversationId));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final first = ref.watch(starredFirstPageProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.starredMessagesTitle)),
-      body: switch (first) {
-        AsyncLoading() => const JawwidLoadingView(),
-        AsyncError() => JawwidEmptyView(
-            title: l10n.starredMessagesTitle,
-            body: l10n.starredMessagesEmpty,
-            icon: Icons.star_border,
-          ),
-        AsyncData(:final value) => () {
-            final items = [...value.items, ..._more];
-            final next = _cursor == null ? value.nextBefore : (_cursor!.isEmpty ? null : _cursor);
-            if (items.isEmpty) {
-              return JawwidEmptyView(
-                title: l10n.starredMessagesTitle,
-                body: l10n.starredMessagesEmpty,
-                icon: Icons.star_border,
-              );
-            }
-            return ListView.separated(
+    return switch (first) {
+      AsyncLoading() => const JawwidLoadingView(),
+      AsyncError() => JawwidEmptyView(
+          title: l10n.starredMessagesTitle,
+          body: l10n.starredMessagesEmpty,
+          icon: Icons.star_border,
+        ),
+      AsyncData(:final value) => () {
+          final items = [...value.items, ..._more];
+          final next = _cursor == null ? value.nextBefore : (_cursor!.isEmpty ? null : _cursor);
+          if (items.isEmpty) {
+            return JawwidEmptyView(
+              title: l10n.starredMessagesTitle,
+              body: l10n.starredMessagesEmpty,
+              icon: Icons.star_border,
+            );
+          }
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() {
+                _more.clear();
+                _cursor = null;
+              });
+              ref.invalidate(starredFirstPageProvider);
+              await ref.read(starredFirstPageProvider.future);
+            },
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
               itemCount: items.length + (next != null ? 1 : 0),
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, i) {
@@ -90,19 +128,20 @@ class _StarredMessagesScreenState extends ConsumerState<StarredMessagesScreen> {
                     ),
                   );
                 }
-                return _StarredTile(item: items[i]);
+                return _StarredTile(item: items[i], onTap: () => _open(items[i].conversationId));
               },
-            );
-          }(),
-      },
-    );
+            ),
+          );
+        }(),
+    };
   }
 }
 
 class _StarredTile extends StatelessWidget {
-  const _StarredTile({required this.item});
+  const _StarredTile({required this.item, required this.onTap});
 
   final StarredMessage item;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -114,7 +153,7 @@ class _StarredTile extends StatelessWidget {
     final author = m.authorName.isNotEmpty ? m.authorName : l10n.groupMemberUnresolved;
 
     return ListTile(
-      onTap: () => context.push(Routes.conversation(item.conversationId)),
+      onTap: onTap,
       leading: JawwidAvatar(displayName: author, imageUrl: m.authorAvatarUrl, size: Sizes.avatarSm),
       title: Row(
         children: [

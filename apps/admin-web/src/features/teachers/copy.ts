@@ -84,6 +84,10 @@ export const T = {
   trialsOutside: { en: '{u} upcoming and {c} cancelled are not counted.', ar: 'لا تُحتسب {u} قادمة و{c} ملغاة.' },
   colTrials: { en: 'Trials', ar: 'التجريبية' },
   colTrialsSubscribed: { en: 'Trials subscribed', ar: 'اشتركوا بعد التجريبية' },
+  // PD-31: moving a lesson is information, never a violation.
+  colMoves: { en: 'Moved by teacher', ar: 'نقلها المعلم' },
+  moves: { en: 'Lessons moved by teacher', ar: 'حصص نقلها المعلم' },
+  movesHint: { en: 'Information only: moving a lesson is not a violation.', ar: 'للاطلاع فقط: نقل الحصة ليس مخالفة.' },
   none: { en: '—', ar: '—' },
 } satisfies Record<string, Pair>
 

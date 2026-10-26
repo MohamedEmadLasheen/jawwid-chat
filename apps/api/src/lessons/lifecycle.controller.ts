@@ -22,6 +22,34 @@ export class LifecycleController {
     return this.lifecycle.transfer(actorId, id, body ?? {});
   }
 
+  /** PD-31: what a change of teacher would do -- free weekly times, lessons that cannot follow. */
+  @Get('learners/:id/transfer-preview')
+  transferPreview(@ActorId() actorId: string, @Param('id') id: string, @Query('toTeacherId') toTeacherId?: string) {
+    return this.lifecycle.transferPreview(actorId, id, toTeacherId);
+  }
+
+  /** PD-31: change the teacher of a group (every child the old teacher teaches there). */
+  @Post('conversations/:id/teacher')
+  transferGroup(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.lifecycle.transferGroup(actorId, id, body ?? {});
+  }
+
+  @Get('conversations/:id/teacher-preview')
+  groupPreview(
+    @ActorId() actorId: string,
+    @Param('id') id: string,
+    @Query('toTeacherId') toTeacherId?: string,
+    @Query('fromTeacherId') fromTeacherId?: string,
+  ) {
+    return this.lifecycle.groupPreview(actorId, id, toTeacherId, fromTeacherId);
+  }
+
+  /** PD-31: the teachers a learner may move to, with who is away (PD-26). */
+  @Get('teachers/candidates')
+  candidates(@ActorId() actorId: string) {
+    return this.lifecycle.candidates(actorId);
+  }
+
   @Get('learners/:id/transfers')
   transfers(@ActorId() actorId: string, @Param('id') id: string) {
     return this.lifecycle.transfers(actorId, id);

@@ -13,6 +13,7 @@ import '../../../core/policy/communication_policy.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../design/widgets/state_views.dart';
+import '../../../design/widgets/trial_badge.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
@@ -332,6 +333,11 @@ class ProfileHeader extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          // PD-32: a trial group says so under its name.
+          if (view.isTrialGroup) ...[
+            const SizedBox(height: Spacing.spacing2),
+            const TrialBadge(),
+          ],
           if (subtitle != null) ...[
             const SizedBox(height: Spacing.spacing2),
             ContentText(

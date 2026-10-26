@@ -34,6 +34,7 @@ import {
   type DayGroup,
 } from './copy'
 import type { AdminSection } from './sections'
+import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 /**
  * The inbox's views by kind. Groups gathers both group types; there is no
@@ -401,6 +402,7 @@ function ConversationRow({
         <span className="conv-row__body">
           <span className="conv-row__top">
             <span className="conv-row__name">{name}</span>
+            {isTrialGroup(c) && <TrialBadge />}
             <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
               {listTime(c.lastActivityAt, locale)}
             </time>
@@ -464,7 +466,9 @@ function Thread({
         </Link>
         <TypedAvatar c={c} name={name} />
         <div className="thread-head__text">
-          <h2 className="thread-head__name">{name}</h2>
+          <h2 className="thread-head__name">
+            {name} {isTrialGroup(c) && <TrialBadge />}
+          </h2>
           <span className="thread-head__sub">
             {label(CONVERSATION_TYPE, c.type)} · {plural(PLURAL.members, c.liveMembers)} ·{' '}
             {fill(tx(TEXT.lastActive), { age: relativeTime(c.lastActivityAt, locale) })}
@@ -624,6 +628,7 @@ function ConversationDetails({ c }: { c: AdminConversation }) {
         <TypedAvatar c={c} name={name} size="lg" />
         <div className="dp-hero__text">
           <div className="dp-hero__name">{name}</div>
+          {isTrialGroup(c) && <TrialBadge />}
           <ConversationStateBadge state={c.state} showOpen />
         </div>
       </div>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
+import '../../../design/widgets/trial_badge.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/utils/relative_time.dart';
@@ -54,6 +55,7 @@ class ConversationTile extends StatelessWidget {
     // rather than reading five disconnected fragments.
     final semanticLabel = [
       conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
+      if (conversation.isTrialGroup) l10n.trialBadge,
       if (conversation.handledByLabel != null)
         l10n.handledBy(conversation.handledByLabel!),
       if (unread) l10n.unreadCount(conversation.unreadCount),
@@ -95,14 +97,25 @@ class ConversationTile extends StatelessWidget {
                       children: [
                         // Laid out in the name's own direction: this UI can be in
                         // English while every name in it is Arabic, and vice versa.
-                        ContentText(
-                          conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight:
-                                unread ? FontWeight.w700 : FontWeight.w600,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: ContentText(
+                                conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight:
+                                      unread ? FontWeight.w700 : FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            // PD-32: a trial group says so beside its name.
+                            if (conversation.isTrialGroup) ...[
+                              const SizedBox(width: Spacing.spacing2),
+                              const TrialBadge(),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: Spacing.spacing1),
                         _Preview(

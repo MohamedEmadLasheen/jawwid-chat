@@ -54,6 +54,8 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
     final code = error is AppError ? error.code : null;
     return switch (code) {
       'AUTH.SIGNUP_CODE_INVALID' => l10n.signupCodeInvalid,
+      // PD-16 amendment: ten wrong codes in 24 h lock sign-up; a new code will not help.
+      'AUTH.SIGNUP_LOCKED' => l10n.signupLocked,
       'AUTH.PASSWORD_TOO_WEAK' => l10n.signupPasswordTooShort,
       'COMMON.RATE_LIMITED' => l10n.signupTooMany,
       _ => l10n.signupFailed,

@@ -2152,14 +2152,8 @@ abstract class L10n {
   /// No description provided for @ticketBookMakeup.
   ///
   /// In en, this message translates to:
-  /// **'Reschedule a make-up class'**
+  /// **'Book the make-up lesson'**
   String get ticketBookMakeup;
-
-  /// No description provided for @ticketRequestScheduleChange.
-  ///
-  /// In en, this message translates to:
-  /// **'Change regular lesson times'**
-  String get ticketRequestScheduleChange;
 
   /// Subtitle naming the child a ticket is about.
   ///
@@ -2196,12 +2190,6 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{minutes} minutes'**
   String makeupLength(int minutes);
-
-  /// No description provided for @scheduleChangePick.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose the new weekly times'**
-  String get scheduleChangePick;
 
   /// No description provided for @scheduleChangeHint.
   ///
@@ -6066,6 +6054,510 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Parents can see this reason.'**
   String get materialsCorrectReasonHint;
+
+  /// PD-31: the per-child ticket under + and the schedule button.
+  ///
+  /// In en, this message translates to:
+  /// **'Change lesson time'**
+  String get ticketChangeLessonTime;
+
+  /// PD-31 slot picker: times before 12:00.
+  ///
+  /// In en, this message translates to:
+  /// **'Morning'**
+  String get slotsMorning;
+
+  /// PD-31 slot picker: times from 12:00 to 17:00.
+  ///
+  /// In en, this message translates to:
+  /// **'Afternoon'**
+  String get slotsAfternoon;
+
+  /// PD-31 slot picker: times from 17:00.
+  ///
+  /// In en, this message translates to:
+  /// **'Evening'**
+  String get slotsEvening;
+
+  /// PD-31 slot picker: screen-reader label of a day chip.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 free time} other{{count} free times}}'**
+  String slotsFreeCount(int count);
+
+  /// PD-31: on a weekly time the teacher is busy at on these dates.
+  ///
+  /// In en, this message translates to:
+  /// **'except {dates}'**
+  String slotsExcept(String dates);
+
+  /// PD-30/31: shown instead of the time chips while lessons are locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons paused — payment'**
+  String get slotsLocked;
+
+  /// PD-31 slot picker: nothing to offer.
+  ///
+  /// In en, this message translates to:
+  /// **'No free times right now.'**
+  String get slotsNone;
+
+  /// PD-31: first choice of Change lesson time.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson only'**
+  String get changeTimeOnce;
+
+  /// PD-31: under This lesson only.
+  ///
+  /// In en, this message translates to:
+  /// **'Move one lesson to another free time'**
+  String get changeTimeOnceHint;
+
+  /// PD-31: second choice of Change lesson time.
+  ///
+  /// In en, this message translates to:
+  /// **'Every week'**
+  String get changeTimeWeekly;
+
+  /// PD-31: under Every week.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the regular weekly times'**
+  String get changeTimeWeeklyHint;
+
+  /// PD-31: above the child's upcoming lessons.
+  ///
+  /// In en, this message translates to:
+  /// **'Which lesson?'**
+  String get changeTimePickLesson;
+
+  /// PD-31: nothing to move.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming lessons in the next four weeks.'**
+  String get changeTimeNoLessons;
+
+  /// PD-31: the lesson being moved.
+  ///
+  /// In en, this message translates to:
+  /// **'Now: {when}'**
+  String changeTimeCurrent(String when);
+
+  /// PD-31: a time before and after a change.
+  ///
+  /// In en, this message translates to:
+  /// **'{from} → {to}'**
+  String changeTimeSummary(String from, String to);
+
+  /// PD-31: moves the lesson.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get changeTimeConfirm;
+
+  /// PD-31: how many lesson moves the family has left for this child this month.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No moves left this month} =1{1 move left this month} other{{count} moves left this month}}'**
+  String changeTimeMovesLeft(int count);
+
+  /// PD-31: a move refused because the time stopped being free.
+  ///
+  /// In en, this message translates to:
+  /// **'That time was just taken. Please choose another.'**
+  String get changeTimeTaken;
+
+  /// PD-31 refusal: started.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson has already started.'**
+  String get moveRefusedStarted;
+
+  /// PD-31 refusal: not_movable.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson can\'t be moved.'**
+  String get moveRefusedNotMovable;
+
+  /// PD-31 refusal: family_already_moved.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson has already been moved once.'**
+  String get moveRefusedAlreadyMoved;
+
+  /// PD-31 refusal: family_monthly_limit.
+  ///
+  /// In en, this message translates to:
+  /// **'This month\'s limit of moves for this child has been reached.'**
+  String get moveRefusedMonthlyLimit;
+
+  /// PD-31 refusal: too_late.
+  ///
+  /// In en, this message translates to:
+  /// **'It\'s too close to the start to move this lesson.'**
+  String get moveRefusedTooLate;
+
+  /// PD-31: above the weekly time cards.
+  ///
+  /// In en, this message translates to:
+  /// **'Current weekly times'**
+  String get weeklyCurrentTitle;
+
+  /// PD-31: the child has no regular times.
+  ///
+  /// In en, this message translates to:
+  /// **'No weekly times yet.'**
+  String get weeklyNoCurrent;
+
+  /// PD-31: replace one weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get weeklyChange;
+
+  /// PD-31: stop one weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get weeklyRemove;
+
+  /// PD-31: undo a change to one weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get weeklyUndo;
+
+  /// PD-31: add a weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a time'**
+  String get weeklyAdd;
+
+  /// PD-31: above the picker when replacing a weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'New time instead of {when}'**
+  String weeklyPickReplacement(String when);
+
+  /// PD-31: above the picker when adding a weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a time to add'**
+  String get weeklyPickAdded;
+
+  /// PD-31: a removed weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'Will stop'**
+  String get weeklyWillStop;
+
+  /// PD-31: when the new weekly times start.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get weeklyFrom;
+
+  /// PD-31 summary: the first date of the change.
+  ///
+  /// In en, this message translates to:
+  /// **'From {date}'**
+  String weeklySummaryFrom(String date);
+
+  /// PD-31 summary: an added weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'Add {when}'**
+  String weeklySummaryAdded(String when);
+
+  /// PD-31 summary: a removed weekly time.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop {when}'**
+  String weeklySummaryRemoved(String when);
+
+  /// PD-31 summary: a weekly time kept.
+  ///
+  /// In en, this message translates to:
+  /// **'{when} unchanged'**
+  String weeklySummaryUnchanged(String when);
+
+  /// PD-31 summary: a week the teacher already teaches at the new time.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} will be skipped'**
+  String weeklySummarySkipped(String date);
+
+  /// PD-31: a child's schedule (entry and screen title).
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get childScheduleTitle;
+
+  /// PD-31: under the Schedule entry on a child's card.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly times and upcoming lessons'**
+  String get childScheduleEntrySubtitle;
+
+  /// PD-31: section of a child's schedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly times'**
+  String get childScheduleWeekly;
+
+  /// PD-31: section of a child's schedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Next four weeks'**
+  String get childScheduleUpcoming;
+
+  /// PD-31: empty lesson list.
+  ///
+  /// In en, this message translates to:
+  /// **'No lessons in the next four weeks.'**
+  String get childScheduleNoLessons;
+
+  /// PD-31: a weekly-time request is pending.
+  ///
+  /// In en, this message translates to:
+  /// **'A change of times is waiting for the supervision team.'**
+  String get childSchedulePending;
+
+  /// PD-31: load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the schedule.'**
+  String get childScheduleLoadFailed;
+
+  /// PD-31: a lesson moved here, with the time it was moved from.
+  ///
+  /// In en, this message translates to:
+  /// **'Was {when}'**
+  String childLessonMovedFrom(String when);
+
+  /// PD-31: the family apologised for this lesson.
+  ///
+  /// In en, this message translates to:
+  /// **'Excused'**
+  String get childLessonExcused;
+
+  /// PD-31: lesson_moved card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson moved'**
+  String get cardMovedTitle;
+
+  /// PD-31: lesson_moved card footnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved by the family'**
+  String get cardMovedByFamily;
+
+  /// PD-31: lesson_moved card footnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved by the teacher'**
+  String get cardMovedByTeacher;
+
+  /// PD-31: lesson_moved card footnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved by the supervision team'**
+  String get cardMovedByStaff;
+
+  /// PD-31: lessons the teacher moved this month. Neutral, not a violation.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Lessons moved: 1} other{Lessons moved: {count}}}'**
+  String workloadMoved(int count);
+
+  /// PD-32: the Chats chip that shows the viewer's starred messages.
+  ///
+  /// In en, this message translates to:
+  /// **'Starred'**
+  String get filterStarred;
+
+  /// PD-32: the small label on a trial group, beside its name.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial'**
+  String get trialBadge;
+
+  /// PD-16 amendment: AUTH.SIGNUP_LOCKED, after 10 wrong codes in 24 hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many wrong codes. Please contact your supervisor.'**
+  String get signupLocked;
+
+  /// PD-32: the row on a child's card, and the screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Feedback about the teacher'**
+  String get feedbackEntryTitle;
+
+  /// PD-32: under the entry row.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise, a suggestion or a complaint'**
+  String get feedbackEntrySubtitle;
+
+  /// PD-32: who the feedback is about.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher: {name}'**
+  String feedbackTeacherLine(String name);
+
+  /// PD-32: heading over the list.
+  ///
+  /// In en, this message translates to:
+  /// **'Your earlier feedback'**
+  String get feedbackHistoryTitle;
+
+  /// PD-32: empty list title.
+  ///
+  /// In en, this message translates to:
+  /// **'No feedback sent yet'**
+  String get feedbackEmpty;
+
+  /// PD-32: empty list body.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell the administration what is going well, or what could be better.'**
+  String get feedbackEmptyBody;
+
+  /// PD-32: the child has no teacher, so there is no one to give feedback about.
+  ///
+  /// In en, this message translates to:
+  /// **'No teacher is assigned to this child yet.'**
+  String get feedbackNoTeacher;
+
+  /// PD-32: the action, and the form's title.
+  ///
+  /// In en, this message translates to:
+  /// **'New feedback'**
+  String get feedbackNew;
+
+  /// PD-32: when an item was sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent {date}'**
+  String feedbackSentOn(String date);
+
+  /// PD-32: status chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get feedbackStatusReceived;
+
+  /// PD-32: status chip.
+  ///
+  /// In en, this message translates to:
+  /// **'In review'**
+  String get feedbackStatusInReview;
+
+  /// PD-32: status chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get feedbackStatusResolved;
+
+  /// PD-32: over the staff reply.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply from the administration'**
+  String get feedbackResponseLabel;
+
+  /// PD-32: over the category chips.
+  ///
+  /// In en, this message translates to:
+  /// **'What kind of feedback is it?'**
+  String get feedbackCategoryLabel;
+
+  /// PD-32: category.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise'**
+  String get feedbackCategoryPraise;
+
+  /// PD-32: category.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggestion'**
+  String get feedbackCategorySuggestion;
+
+  /// PD-32: category.
+  ///
+  /// In en, this message translates to:
+  /// **'Complaint'**
+  String get feedbackCategoryComplaint;
+
+  /// PD-32: no category chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the kind of feedback.'**
+  String get feedbackChooseCategory;
+
+  /// PD-32: the text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Your feedback'**
+  String get feedbackBodyLabel;
+
+  /// PD-32: the text field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write what happened, or what you would like to change.'**
+  String get feedbackBodyHint;
+
+  /// PD-32: empty text.
+  ///
+  /// In en, this message translates to:
+  /// **'Write your feedback first.'**
+  String get feedbackBodyRequired;
+
+  /// PD-32: said once, under the field.
+  ///
+  /// In en, this message translates to:
+  /// **'The administration reviews every message. The teacher does not see who wrote it.'**
+  String get feedbackPrivacyNote;
+
+  /// PD-32: submit button.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get feedbackSubmit;
+
+  /// PD-32: after a successful submit.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you. Your feedback has reached the administration.'**
+  String get feedbackSent;
+
+  /// PD-32: COMM.FEEDBACK_LIMIT.
+  ///
+  /// In en, this message translates to:
+  /// **'You have sent a lot of feedback today. Please try again tomorrow.'**
+  String get feedbackLimit;
+
+  /// PD-32: COMM.FEEDBACK_NOT_FOUND.
+  ///
+  /// In en, this message translates to:
+  /// **'This child has no teacher to give feedback about right now.'**
+  String get feedbackNotFound;
+
+  /// PD-32: COMM.FEEDBACK_DENIED.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a parent can send feedback about a teacher.'**
+  String get feedbackDenied;
+
+  /// PD-32: any other failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Your feedback could not be sent. Please try again.'**
+  String get feedbackFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -1182,10 +1182,7 @@ class L10nEn extends L10n {
   String get cardReason => 'Reason';
 
   @override
-  String get ticketBookMakeup => 'Reschedule a make-up class';
-
-  @override
-  String get ticketRequestScheduleChange => 'Change regular lesson times';
+  String get ticketBookMakeup => 'Book the make-up lesson';
 
   @override
   String ticketFor(String name) {
@@ -1209,9 +1206,6 @@ class L10nEn extends L10n {
   String makeupLength(int minutes) {
     return '$minutes minutes';
   }
-
-  @override
-  String get scheduleChangePick => 'Choose the new weekly times';
 
   @override
   String get scheduleChangeHint =>
@@ -3449,4 +3443,320 @@ class L10nEn extends L10n {
 
   @override
   String get materialsCorrectReasonHint => 'Parents can see this reason.';
+
+  @override
+  String get ticketChangeLessonTime => 'Change lesson time';
+
+  @override
+  String get slotsMorning => 'Morning';
+
+  @override
+  String get slotsAfternoon => 'Afternoon';
+
+  @override
+  String get slotsEvening => 'Evening';
+
+  @override
+  String slotsFreeCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count free times',
+      one: '1 free time',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String slotsExcept(String dates) {
+    return 'except $dates';
+  }
+
+  @override
+  String get slotsLocked => 'Lessons paused — payment';
+
+  @override
+  String get slotsNone => 'No free times right now.';
+
+  @override
+  String get changeTimeOnce => 'This lesson only';
+
+  @override
+  String get changeTimeOnceHint => 'Move one lesson to another free time';
+
+  @override
+  String get changeTimeWeekly => 'Every week';
+
+  @override
+  String get changeTimeWeeklyHint => 'Change the regular weekly times';
+
+  @override
+  String get changeTimePickLesson => 'Which lesson?';
+
+  @override
+  String get changeTimeNoLessons =>
+      'No upcoming lessons in the next four weeks.';
+
+  @override
+  String changeTimeCurrent(String when) {
+    return 'Now: $when';
+  }
+
+  @override
+  String changeTimeSummary(String from, String to) {
+    return '$from → $to';
+  }
+
+  @override
+  String get changeTimeConfirm => 'Confirm';
+
+  @override
+  String changeTimeMovesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count moves left this month',
+      one: '1 move left this month',
+      zero: 'No moves left this month',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get changeTimeTaken =>
+      'That time was just taken. Please choose another.';
+
+  @override
+  String get moveRefusedStarted => 'This lesson has already started.';
+
+  @override
+  String get moveRefusedNotMovable => 'This lesson can\'t be moved.';
+
+  @override
+  String get moveRefusedAlreadyMoved =>
+      'This lesson has already been moved once.';
+
+  @override
+  String get moveRefusedMonthlyLimit =>
+      'This month\'s limit of moves for this child has been reached.';
+
+  @override
+  String get moveRefusedTooLate =>
+      'It\'s too close to the start to move this lesson.';
+
+  @override
+  String get weeklyCurrentTitle => 'Current weekly times';
+
+  @override
+  String get weeklyNoCurrent => 'No weekly times yet.';
+
+  @override
+  String get weeklyChange => 'Change';
+
+  @override
+  String get weeklyRemove => 'Remove';
+
+  @override
+  String get weeklyUndo => 'Undo';
+
+  @override
+  String get weeklyAdd => 'Add a time';
+
+  @override
+  String weeklyPickReplacement(String when) {
+    return 'New time instead of $when';
+  }
+
+  @override
+  String get weeklyPickAdded => 'Choose a time to add';
+
+  @override
+  String get weeklyWillStop => 'Will stop';
+
+  @override
+  String get weeklyFrom => 'From';
+
+  @override
+  String weeklySummaryFrom(String date) {
+    return 'From $date';
+  }
+
+  @override
+  String weeklySummaryAdded(String when) {
+    return 'Add $when';
+  }
+
+  @override
+  String weeklySummaryRemoved(String when) {
+    return 'Stop $when';
+  }
+
+  @override
+  String weeklySummaryUnchanged(String when) {
+    return '$when unchanged';
+  }
+
+  @override
+  String weeklySummarySkipped(String date) {
+    return '$date will be skipped';
+  }
+
+  @override
+  String get childScheduleTitle => 'Schedule';
+
+  @override
+  String get childScheduleEntrySubtitle => 'Weekly times and upcoming lessons';
+
+  @override
+  String get childScheduleWeekly => 'Weekly times';
+
+  @override
+  String get childScheduleUpcoming => 'Next four weeks';
+
+  @override
+  String get childScheduleNoLessons => 'No lessons in the next four weeks.';
+
+  @override
+  String get childSchedulePending =>
+      'A change of times is waiting for the supervision team.';
+
+  @override
+  String get childScheduleLoadFailed => 'Couldn\'t load the schedule.';
+
+  @override
+  String childLessonMovedFrom(String when) {
+    return 'Was $when';
+  }
+
+  @override
+  String get childLessonExcused => 'Excused';
+
+  @override
+  String get cardMovedTitle => 'Lesson moved';
+
+  @override
+  String get cardMovedByFamily => 'Moved by the family';
+
+  @override
+  String get cardMovedByTeacher => 'Moved by the teacher';
+
+  @override
+  String get cardMovedByStaff => 'Moved by the supervision team';
+
+  @override
+  String workloadMoved(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Lessons moved: $count',
+      one: 'Lessons moved: 1',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get filterStarred => 'Starred';
+
+  @override
+  String get trialBadge => 'Trial';
+
+  @override
+  String get signupLocked =>
+      'Too many wrong codes. Please contact your supervisor.';
+
+  @override
+  String get feedbackEntryTitle => 'Feedback about the teacher';
+
+  @override
+  String get feedbackEntrySubtitle => 'Praise, a suggestion or a complaint';
+
+  @override
+  String feedbackTeacherLine(String name) {
+    return 'Teacher: $name';
+  }
+
+  @override
+  String get feedbackHistoryTitle => 'Your earlier feedback';
+
+  @override
+  String get feedbackEmpty => 'No feedback sent yet';
+
+  @override
+  String get feedbackEmptyBody =>
+      'Tell the administration what is going well, or what could be better.';
+
+  @override
+  String get feedbackNoTeacher => 'No teacher is assigned to this child yet.';
+
+  @override
+  String get feedbackNew => 'New feedback';
+
+  @override
+  String feedbackSentOn(String date) {
+    return 'Sent $date';
+  }
+
+  @override
+  String get feedbackStatusReceived => 'Received';
+
+  @override
+  String get feedbackStatusInReview => 'In review';
+
+  @override
+  String get feedbackStatusResolved => 'Resolved';
+
+  @override
+  String get feedbackResponseLabel => 'Reply from the administration';
+
+  @override
+  String get feedbackCategoryLabel => 'What kind of feedback is it?';
+
+  @override
+  String get feedbackCategoryPraise => 'Praise';
+
+  @override
+  String get feedbackCategorySuggestion => 'Suggestion';
+
+  @override
+  String get feedbackCategoryComplaint => 'Complaint';
+
+  @override
+  String get feedbackChooseCategory => 'Choose the kind of feedback.';
+
+  @override
+  String get feedbackBodyLabel => 'Your feedback';
+
+  @override
+  String get feedbackBodyHint =>
+      'Write what happened, or what you would like to change.';
+
+  @override
+  String get feedbackBodyRequired => 'Write your feedback first.';
+
+  @override
+  String get feedbackPrivacyNote =>
+      'The administration reviews every message. The teacher does not see who wrote it.';
+
+  @override
+  String get feedbackSubmit => 'Send';
+
+  @override
+  String get feedbackSent =>
+      'Thank you. Your feedback has reached the administration.';
+
+  @override
+  String get feedbackLimit =>
+      'You have sent a lot of feedback today. Please try again tomorrow.';
+
+  @override
+  String get feedbackNotFound =>
+      'This child has no teacher to give feedback about right now.';
+
+  @override
+  String get feedbackDenied =>
+      'Only a parent can send feedback about a teacher.';
+
+  @override
+  String get feedbackFailed =>
+      'Your feedback could not be sent. Please try again.';
 }

@@ -25,13 +25,14 @@ enum LessonTicketKind {
   /// Parent: an emergency apology after the start. A supervisor rules on it.
   lateApology,
 
-  /// "Reschedule a make-up class" (PD-15): after any apology, the time the family and
-  /// the teacher agreed. A parent picks from the teacher's free times; a teacher may
-  /// record another agreed time.
+  /// "Book the make-up lesson" (PD-15, renamed by PD-31): after any apology, the time
+  /// the family and the teacher agreed. A parent picks from the teacher's free times; a
+  /// teacher may record another agreed time.
   bookMakeup,
 
-  /// Parent: ask for new regular lesson times. About a child, not one lesson.
-  requestScheduleChange;
+  /// PD-31: "Change lesson time" -- about a child, not one lesson (no lessonId). Family
+  /// and teacher: move this lesson only, or ask for new weekly times.
+  changeLessonTime;
 
   /// The server's spelling, or null for a ticket this build does not know --
   /// which is then simply not offered.
@@ -42,7 +43,9 @@ enum LessonTicketKind {
         'teacher_apology' => LessonTicketKind.teacherApology,
         'late_apology' => LessonTicketKind.lateApology,
         'book_makeup' => LessonTicketKind.bookMakeup,
-        'request_schedule_change' => LessonTicketKind.requestScheduleChange,
+        'change_lesson_time' => LessonTicketKind.changeLessonTime,
+        // PD-31: still emitted for old builds; "Change lesson time" replaces it here.
+        'request_schedule_change' => null,
         _ => null,
       };
 
@@ -80,20 +83,33 @@ class LessonTicket {
 
 /// The free times a make-up may be booked into, as instants (shown in the reader's clock).
 class MakeupOffer {
-  const MakeupOffer({required this.durationMinutes, required this.slots});
+  const MakeupOffer({required this.durationMinutes, required this.slots, this.locked});
 
   final int durationMinutes;
   final List<DateTime> slots;
+
+  /// PD-30: null, or why the child's lessons are paused (`balance` / `overdue`).
+  final String? locked;
 }
+
+/// PD-31: a regular weekly time as the server takes it back -- ISO [weekday] 1..7 and
+/// 'HH:MM' [start], both in the TEACHER's zone.
+typedef WeeklyKey = ({int weekday, String start});
 
 /// One free regular weekly time. [weekday] and [start] are in the teacher's zone and are
 /// what is sent back; [nextStartsAt] is what is SHOWN, in the reader's own clock.
 class WeeklyOption {
-  const WeeklyOption({required this.weekday, required this.start, required this.nextStartsAt});
+  const WeeklyOption({required this.weekday, required this.start, required this.nextStartsAt, this.except = const []});
 
   final int weekday;
   final String start;
   final DateTime nextStartsAt;
+
+  /// PD-31: starts in the next four weeks at which the teacher already has another
+  /// lesson -- those weeks are skipped, and the picker and the summary say so.
+  final List<DateTime> except;
+
+  WeeklyKey get key => (weekday: weekday, start: start);
 
   @override
   bool operator ==(Object other) => other is WeeklyOption && other.weekday == weekday && other.start == start;
@@ -102,7 +118,75 @@ class WeeklyOption {
   int get hashCode => Object.hash(weekday, start);
 }
 
-/// A lesson as the teacher's Schedule shows it.
+/// PD-31: `GET /lessons/:id/move-slots` -- where one lesson may move to.
+class MoveOffer {
+  const MoveOffer({
+    required this.lessonId,
+    required this.startsAt,
+    required this.durationMinutes,
+    this.timezone,
+    this.slots = const [],
+    this.locked,
+    this.refusal,
+    this.familyMovesLeft,
+  });
+
+  final String lessonId;
+
+  /// The lesson's current start, in the reader's clock.
+  final DateTime startsAt;
+  final int durationMinutes;
+  final String? timezone;
+
+  /// The free starts, in the reader's clock. Empty when [refusal] is set.
+  final List<DateTime> slots;
+
+  /// PD-30: null, or why the child's lessons are paused.
+  final String? locked;
+
+  /// Why this lesson cannot move, before anything is picked: `started`, `not_movable`,
+  /// `family_already_moved`, `family_monthly_limit` or `too_late`.
+  final String? refusal;
+
+  /// A family reader only: the moves left for this child this month.
+  final int? familyMovesLeft;
+
+  bool get isLocked => locked != null;
+}
+
+/// PD-31: `GET /learners/:id/schedule-options` -- the child's current weekly times and
+/// the teacher's free ones (which include the current).
+class ScheduleOptions {
+  const ScheduleOptions({
+    this.timezone,
+    this.durationMinutes = 0,
+    this.locked,
+    this.current = const [],
+    this.options = const [],
+  });
+
+  /// The TEACHER's zone: what a weekly [WeeklyKey] and `effectiveFrom` mean.
+  final String? timezone;
+  final int durationMinutes;
+  final String? locked;
+  final List<GroupChildSlot> current;
+  final List<WeeklyOption> options;
+
+  bool get isLocked => locked != null;
+}
+
+/// PD-31: `GET /learners/:id/schedule`, as the family's child schedule reads it.
+class ChildSchedule {
+  const ChildSchedule({this.slots = const [], this.teacherName, this.hasPendingRequest = false});
+
+  final List<GroupChildSlot> slots;
+  final String? teacherName;
+
+  /// A weekly-time request is waiting for the supervision team.
+  final bool hasPendingRequest;
+}
+
+/// A lesson as the teacher's Schedule -- and, PD-31, a child's schedule -- shows it.
 class ScheduledLesson {
   const ScheduledLesson({
     required this.id,
@@ -114,6 +198,11 @@ class ScheduledLesson {
     this.outcome,
     this.learnerId = '',
     this.acts = const [],
+    this.teacherName,
+    this.movedFrom,
+    this.movedTo,
+    this.movedBy,
+    this.movedFromStartsAt,
   });
 
   final String id;
@@ -132,6 +221,22 @@ class ScheduledLesson {
   /// What the server says the reader may open on this lesson now (`acts`). Advisory:
   /// each is decided again on submit.
   final List<LessonTicketKind> acts;
+
+  final String? teacherName;
+
+  /// PD-31: the lesson this one replaced.
+  final String? movedFrom;
+
+  /// PD-31: for a lesson moved away (`rescheduled`), its replacement's start.
+  final DateTime? movedTo;
+
+  /// PD-31: `family` / `teacher` / `staff` -- who moved THIS lesson here.
+  final String? movedBy;
+
+  /// PD-31: for a lesson moved here, the start of the lesson it replaced.
+  final DateTime? movedFromStartsAt;
+
+  int get durationMinutes => endsAt.difference(startsAt).inMinutes;
 
   /// Open, and started: the teacher still owes its report.
   bool get needsReport =>
@@ -230,6 +335,8 @@ class GroupChildSlot {
   /// PD-22: the next real start, in the account's zone. What a reader is shown: the
   /// weekday itself can differ from [weekday] in another country.
   final DateTime? nextStartsAt;
+
+  WeeklyKey get key => (weekday: weekday, start: start);
 }
 
 /// The structured half of a message of type `card`.
@@ -323,6 +430,7 @@ class TeacherWorkload {
     required this.unreported,
     this.reportsOnTimeRate,
     this.availableMinutes,
+    this.movesByTeacher,
   });
 
   final int heldLessons;
@@ -330,4 +438,7 @@ class TeacherWorkload {
   final int unreported;
   final double? reportsOnTimeRate;
   final int? availableMinutes;
+
+  /// PD-31: lessons the teacher moved this month. A fact, NOT a violation.
+  final int? movesByTeacher;
 }

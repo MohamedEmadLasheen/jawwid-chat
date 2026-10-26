@@ -656,6 +656,22 @@ describe('A trial group (trial journey)', () => {
     expect(screen.getByRole('menuitem', { name: 'Photo or video' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Trial' })).not.toBeInTheDocument()
   })
+
+  it('PD-32: a trial group carries the Trial label in the list and the header; a student group does not', async () => {
+    stubApi({
+      conversations: [conv('tg', { type: 'trial_group', title: 'Teacher One' }), conv('sg', { type: 'student_group', title: 'Group sg' })],
+      messages: { tg: [msg('m1', 1, { conversationId: 'tg' })], sg: [msg('m2', 2, { conversationId: 'sg' })] },
+    })
+    renderChat('/chat/tg')
+    await screen.findByText('body m1')
+    const rows = screen.getAllByRole('button', { name: /Teacher One|Group sg/ }).filter((b) => b.classList.contains('conv-row'))
+    const trialRow = rows.find((r) => r.textContent?.includes('Teacher One'))!
+    const groupRow = rows.find((r) => r.textContent?.includes('Group sg'))!
+    expect(within(trialRow).getByTestId('trial-badge')).toHaveTextContent('Trial')
+    expect(within(groupRow).queryByTestId('trial-badge')).not.toBeInTheDocument()
+    const head = document.querySelector('.thread-head') as HTMLElement
+    expect(within(head).getByTestId('trial-badge')).toBeInTheDocument()
+  })
 })
 
 describe('Who wrote it (WhatsApp layout)', () => {

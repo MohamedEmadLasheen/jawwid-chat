@@ -17,6 +17,7 @@ import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/search_fold.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../messages/application/search_providers.dart';
+import '../../messages/presentation/starred_messages_screen.dart';
 import '../../stories/application/stories_controller.dart';
 import '../../stories/presentation/stories_rail.dart';
 import '../application/conversations_controller.dart';
@@ -112,6 +113,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
     final role = ref.watch(currentRoleProvider);
 
     final sections = state.value ?? const <ConversationSection>[];
+    // PD-32: Starred lives here now, for every role, behind the Settings row's old gate.
+    final starredAvailable = ref.watch(messageMarksRepositoryProvider).isAvailable;
+    final filter = _filter == ChatFilter.starred && !starredAvailable ? ChatFilter.all : _filter;
     final unreadChats =
         ChatFeed.count(sections: sections, filter: ChatFilter.unread);
 
@@ -142,8 +146,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                   },
                 ),
                 ChatFilterBar(
-                  selected: _filter,
+                  selected: filter,
                   unreadCount: unreadChats,
+                  showStarred: starredAvailable,
                   onSelected: (filter) => setState(() => _filter = filter),
                 ),
                 const SizedBox(height: Spacing.spacing2),
@@ -152,17 +157,20 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
           ),
           Divider(height: 1, color: tokens.colorBorderSubtle),
           Expanded(
-            child: switch (state) {
+            // PD-32: the Starred chip shows the starred messages in place of the feed.
+            child: filter == ChatFilter.starred
+                ? StarredMessagesList(onOpen: _open)
+                : switch (state) {
               AsyncLoading() => JawwidLoadingView(label: l10n.tabChats),
               AsyncError(:final error) => _ErrorState(error: error),
               AsyncData(:final value) => _Feed(
                   conversations: ChatFeed.build(
                     sections: value,
-                    filter: _filter,
+                    filter: filter,
                     query: _query,
                   ),
                   all: [for (final section in value) ...section.conversations],
-                  filter: _filter,
+                  filter: filter,
                   query: _query,
                   role: role,
                   onOpen: _open,
@@ -629,6 +637,12 @@ class _EmptyState extends StatelessWidget {
           icon: Icons.star_outline,
           title: l10n.filterEmptyFavorites,
           body: l10n.filterEmptyFavoritesBody,
+        ),
+      // Not reached: Starred shows the starred list in place of the feed.
+      ChatFilter.starred => JawwidEmptyView(
+          icon: Icons.star_border,
+          title: l10n.starredMessagesTitle,
+          body: l10n.starredMessagesEmpty,
         ),
       ChatFilter.all => JawwidEmptyView(
           title: l10n.conversationsEmptyTitle,

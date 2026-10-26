@@ -16,6 +16,7 @@ import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } from './chatView'
 import { useConversationPreferences } from './useChatActions'
+import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 type View = 'all' | 'unread' | 'favorites' | 'groups' | 'archived'
 
@@ -247,6 +248,7 @@ function ConversationRow({
         <span className="conv-row__body">
           <span className="conv-row__top">
             <span className="conv-row__name" dir="auto">{name}</span>
+            {isTrialGroup(c) && <TrialBadge />}
             <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
               {listTime(c.lastActivityAt, locale)}
             </time>

@@ -16,6 +16,11 @@ enum ChatFilter {
   /// favourites field on the backend, and inventing one would be a fiction. The label is a
   /// UI choice; the stored state is the same pin the list has always ordered by.
   favorites,
+
+  /// PD-32: the viewer's starred MESSAGES (moved here from Settings). Not a filter of
+  /// conversations at all -- the Chats body shows the starred list in place of the feed,
+  /// so as a conversation filter it passes nothing.
+  starred,
 }
 
 /// Turns the sectioned list the controller produces into the flat, familiar feed a
@@ -54,6 +59,7 @@ abstract final class ChatFeed {
         ChatFilter.unread => conversation.hasUnread,
         ChatFilter.groups => conversation.kind == ConversationKind.studentGroup,
         ChatFilter.favorites => conversation.isPinned,
+        ChatFilter.starred => false,
       };
 
   /// Matches on the conversation title and, for a student group, the child's name.

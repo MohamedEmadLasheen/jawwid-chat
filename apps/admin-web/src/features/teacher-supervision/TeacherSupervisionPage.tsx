@@ -16,12 +16,13 @@ import '@/features/discipline/discipline.css'
 import { AwayBadge } from '@/features/teacher-files/Complaint'
 import { H, useCopy } from './copy'
 import { useLeaveOverview } from './hooks'
+import { ParentFeedbackSection } from './ParentFeedback'
 import { ComplaintsSection, RewardsSection } from './RewardsAndComplaints'
 import { SectionIntro } from './SectionIntro'
 import './teacher-supervision.css'
 
-export type HubSection = 'leave' | 'absences' | 'lateness' | 'rewards' | 'complaints'
-const SECTIONS: readonly HubSection[] = ['leave', 'absences', 'lateness', 'rewards', 'complaints']
+export type HubSection = 'leave' | 'absences' | 'lateness' | 'rewards' | 'complaints' | 'feedback'
+const SECTIONS: readonly HubSection[] = ['leave', 'absences', 'lateness', 'rewards', 'complaints', 'feedback']
 
 /** This month in the viewer's calendar -- only the filter's default; the server counts in the academy's. */
 function thisMonth(): string {
@@ -31,7 +32,8 @@ function thisMonth(): string {
 
 /**
  * PD-26: one page for the Teachers department's supervision -- leave,
- * apologies and absences, lateness, rewards, complaints. Each section is a
+ * apologies and absences, lateness, rewards, complaints, and (PD-32) the
+ * parents' feedback about their child's teacher. Each section is a
  * view over records that already exist (PD-10/11/12/18) and lands on the
  * teacher's file; nothing is typed twice. The section is in the URL, so the
  * old Leave and Discipline links can point straight at theirs.
@@ -47,6 +49,7 @@ export function TeacherSupervisionPage({ basePath, eyebrow }: { basePath: string
     lateness: tx(H.lateness),
     rewards: tx(H.rewards),
     complaints: tx(H.complaints),
+    feedback: tx(H.feedback),
   }
 
   return (
@@ -67,6 +70,7 @@ export function TeacherSupervisionPage({ basePath, eyebrow }: { basePath: string
           {section === 'lateness' && <LatenessSection />}
           {section === 'rewards' && <RewardsSection basePath={basePath} />}
           {section === 'complaints' && <ComplaintsSection />}
+          {section === 'feedback' && <ParentFeedbackSection basePath={basePath} />}
         </div>
       </div>
     </div>

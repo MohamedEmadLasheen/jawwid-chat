@@ -147,6 +147,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 **PD-27 was closed by the product owner on 2026-10-22** (payments: payment links, card payments through Stripe, bank-transfer receipts, cash, invoices, instalment reminders). It builds on PD-17.
 **PD-28 was closed by the product owner on 2026-10-24** (teachers use their portal in a laptop browser: the same app and the same account, teacher-only on the web for now). It extends PD-23's browser session rules to teachers.
+**PD-31 was closed on 2026-10-26** (scheduling made direct: time chips, a child's schedule, moving one lesson or every week, changing the teacher).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -178,6 +179,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 | **PD-27** | **Payments: links, card, bank transfer, cash, invoices, reminders** (2026-10-22) | **CLOSED** — a payment request carries a unique link that works before the parent has an account; card payments through Stripe Checkout are recorded only from a verified webhook, exactly once; parents upload bank-transfer receipts that staff approve or reject with a reason; staff record cash; instalments may be paid in part and by several methods; every payment issues a numbered invoice the parent downloads as a PDF; a trial's payments move onto the family at Assign; append-only, audited, reminders before and after the due date |
 | **PD-28** | **The teacher portal in a browser** (2026-10-24) | **CLOSED** — a teacher signs in at Admin Web's address under `/teacher/` with the same account and gets the same portal as on the phone (the Flutter app built for the web, nothing rebuilt); only teachers on the web for now, everyone else is told to use the app (or Admin Web for staff); the browser keeps the session as Admin Web does (this tab only, or "keep me signed in" on this device) with Admin Web's lifetimes (12 h / 7 d, kept signed in 7 d / 30 d); no push, app lock or voice-note recording in the browser. Record: `../mobile/teacher-web-portal.md` |
+| **PD-31** | **Scheduling made direct** (2026-10-26) | **CLOSED** — one time-chip picker everywhere; "Change lesson time" asks "this lesson only" (instant, a new row naming the old, never an apology or a violation; family limits) or "every week" (before → after, from a date; family and teacher request, the Teachers department decides, a request no longer free is flagged first); a weekly lesson the materializer cannot create is listed, never lost; the child's PD-8 supervisor, their backup, the Operations Manager, the Teachers department and the super admin change a group's teacher in one transaction, never dropping weekly times; parents see each child's schedule |
 
 ---
 
@@ -1643,7 +1645,8 @@ Create group      the responsible supervisor: family group (parent, teacher(s),
                   supervisor), named "Teacher — Child · Child" (PD-15), and the
                   parent's direct chat with the supervisor
 
-sign-up           e-mail -> 6-digit code (10 min, 5 tries, one live, hashed)
+sign-up           e-mail -> 6-digit code (5 tries, one live, hashed; no time
+                  expiry since PD-32 -- valid until used or invalidated)
                   delivery 'relay': the supervisor reads it on New Students and
                   sends it on WhatsApp; -> the parent sets a password -> signs
                   in through POST /auth/login like anyone else
@@ -1673,8 +1676,9 @@ sign-up           e-mail -> 6-digit code (10 min, 5 tries, one live, hashed)
 
 **Defaults adopted at closing** (the owner may override without reopening
 PD-16):
-1. The code lives 10 minutes and allows 5 tries; a parent may ask for 5 codes
-   an hour.
+1. ~~The code lives 10 minutes~~ (**amended by PD-32, 2026-10-26:** no time
+   expiry; see PD-32 for what ends a code and the wrong-code cap). It allows 5
+   tries; a parent may ask for 5 codes an hour.
 2. A regular lesson lasts as long as the trial did (30 minutes when unknown).
 3. A family is named after the parent; the account's e-mail is the one Sales
    recorded unless the Operations manager types another at Assign.
@@ -2354,7 +2358,9 @@ Asked the same day, the owner chose:
    resolution. Upholding a complaint makes it a violation on the teacher's
    monthly ladder; its decision is the **action taken**. A parent's complaint is
    recorded by staff, linked to the parent's message where there is one; the
-   app has no complaint form.
+   app has no complaint form. (**Amended by PD-32, 2026-10-26:** the parent app
+   now has "Feedback about the teacher"; a complaint filed there joins this
+   queue with source `parent_app`.)
 
 **Canonical rule.**
 ```
@@ -2685,6 +2691,211 @@ feed the map automatically -- a possible v2.
 
 ---
 
+### PD-31 · Scheduling made direct: time chips, a child's schedule, moving lessons, changing the teacher
+
+**Closed 2026-10-26.** Items 1, 7, 10 and 12 of the owner's list of 2026-10-26. The design and the audit below were approved by the department head the same day, with the owner's answers to three questions.
+
+The owner asked for four things:
+- show a trial's available times directly instead of in a dropdown;
+- give parents each child's schedule;
+- make "change class time" easier, faster and more intuitive;
+- let the super admin, the Operations supervisors and the Teacher Supervisors change a group's teacher without losing its history, lessons or records.
+
+**What the audit found** (before PD-31):
+1. No flow moved ONE lesson.
+   - A family had to file an apology and then book a make-up.
+   - A teacher could only file "I can't teach". That is `teacher_apology`, which is a ladder violation (PD-15), so a move the family agreed to was counted against the teacher.
+   - Staff added a one-off lesson next to the old one instead of moving it.
+2. "Change regular lesson times":
+   - It was one flat cloud of weekly chips, with the current times not shown.
+   - Picking one chip silently replaced *every* weekly time.
+   - It had no "from when".
+   - A time taken while the request waited failed only at approval.
+   - Teachers had no way to ask at all.
+3. Staff typed weekdays and times blind and saw a clash only after saving.
+4. Two silent losses:
+   - The materializer skipped a weekly lesson that collided with another lesson of the teacher, without telling anyone.
+   - A transfer dropped the weekly times when the new teacher was not free at them (`scheduleKept: false`).
+
+The PD-11 approval rules were not the problem and are kept.
+
+**Final decision.**
+
+```
+the picker     ONE component in Admin Web and in the app: day chips with a count of
+               free times, then time chips grouped Morning / Afternoon / Evening (in the
+               reader's zone, PD-22; Cairo in Admin Web); only free times are shown, so a
+               clash cannot be chosen; a time taken meanwhile is refused and the chips reload
+"Change lesson time" (one entry per child, family and teacher; staff in Admin Web)
+  this lesson only   instant; the old row becomes `rescheduled` (counted for nobody), the
+                     lesson continues as a new row naming it (chat.lesson.moved_from); a
+                     `lesson_moved` card "previous -> new"; NOT an apology, NOT a violation
+                     family: into free times only, at least lesson.booking_lead_minutes
+                       ahead, each lesson once (over its whole moved chain), at most
+                       lesson.family_moves_per_month (4) per child per calendar month
+                     teacher: into free times; counted as "moves by teacher" in their month
+                       (statistics), never on the ladder
+                     staff: unlimited; also an agreed time not on a day off
+  every week         the current times as cards; replace / add / remove; from a date; a
+                     before -> after summary that names the weeks another lesson already
+                     holds ("except 2 Nov"); family AND teacher send a request, the Teachers
+                     department decides (PD-11); staff apply directly
+approval       Needs action shows before -> after, who asked, from when, and re-checks every
+               requested time NOW: "no longer free" is flagged before anyone approves
+nothing lost   a weekly lesson the materializer could not create is recorded
+               (chat.lesson_blocked_occurrence) and listed in Needs action: give it
+               another time, or dismiss it; it clears itself when the time frees up
+change teacher the super admin; the Teachers department (manager and supervisors); the
+               child's PD-8 supervisor, their active backup and the Operations Manager
+               (chat.staff_principals). From the group's info panel (every child of the
+               group taught by the old teacher moves together), the Student Profile, or
+               Schedules. A teacher on leave or suspended cannot be chosen (PD-26).
+               The weekly times move only if the new teacher is free at them; otherwise the
+               dialog requires new ones and the server refuses (times_not_free). Then ONE
+               transaction: chat.transfer_learner (the assignment gate; same conversation,
+               old teacher leaves, new joins, past lessons stay the old teacher's), the new
+               weekly times, the family's card, the handover, the audit, Core's event
+child schedule the parent's profile: each child's weekly times and next four weeks of lessons
+               (date, time in the parent's zone, teacher, length, status), read-only, with
+               "Change lesson time"; the existing family-scoped routes
+payment lock   a child PD-30 locks is offered no time and every change above is refused
+               (SchedulingService.lockOf, wired to PD-30's state)
+```
+
+**Implementation phase.** Built 2026-10-26.
+- Migration: `20261026110000_chat_pd031_scheduling.sql`. It adds `lesson.moved_from`, rebuilds `chat.guard_lesson` from `20261021120000` with the moved-lesson branch, widens `rescheduled` to the family and the teacher, and adds the trigger `chat.skip_moved_occurrence`. It also adds `chat.lesson_blocked_occurrence` and `chat.collect_blocked_occurrences`, the teacher's request and its date, the supervisor check in `chat.transfer_learner`, and the card kind `lesson_moved`.
+- API routes: `GET/POST /lessons/:id/move[-slots]`, `GET /learners/:id/free-slots`, `GET /learners/:id/schedule-options?teacherId=`, `/lessons/blocked/:id/{slots,schedule,dismiss}`, `GET /learners/:id/transfer-preview`, `GET/POST /conversations/:id/teacher[-preview]` and `GET /teachers/candidates`.
+- Admin Web: `shared/components/SlotPicker`, the trial dialog, Schedules, Needs action and `ChangeTeacherDialog`.
+- The app: `SlotChipPicker`, the "Change lesson time" sheet and the child schedule screen.
+- Protected by `apps/api/test/integration/pd031-scheduling.spec.ts`.
+
+**Review changes (department head, 2026-10-26).**
+- **Kept weekly times keep their instants.** On a change of teacher, each weekly time is read in its own zone and written on the new teacher's clock (PD-22). A time two zones cannot keep exactly, because one of them changes its clocks, is refused with `times_not_free`, and new times are chosen.
+- **The family's move limits are checked under a lock.** They are recounted inside the transaction, behind `SELECT … FOR UPDATE` on the learner, and the old row is closed only while still open. Two parallel moves at the limit yield exactly one.
+- **The guard accepts a move only within its transaction.** A moved lesson may continue only a lesson rescheduled in the same transaction (`outcome_at = now()`).
+- **Any lock answer locks.** Any non-null answer from `chat.learner_lesson_lock` locks; an unknown answer locks as `other`. If PD-30's tables exist without the function, `lockOf` throws and startup fails.
+- **A stranded one-off is listed and announced.** A one-off a change of teacher strands is recorded in Needs action (`reason teacher_changed`), and the family reads a `lesson_unscheduled` card. Lessons are generated inside the transfer's transaction.
+- **Teachers need notice to move a lesson.** A teacher's single move needs `lesson.teacher_move_lead_minutes` (120) of notice.
+- **The teacher list is open to anyone who may change some teacher.** That is anyone with transfer standing on some child.
+- **Previews say nothing before authorization.** The group preview authorizes every child of the group before it reads anything.
+
+**Consequences.**
+- PD-11's table gains `move_lesson` (family, teacher, supervisor, manager). `request_schedule_change` gains the teacher, and `transfer` gains the supervisor.
+- `chat.materialize_lessons` is unchanged. The trigger keeps a moved weekly lesson moved, so PD-30's rewrite of it does not collide.
+- A moved lesson is a new row, so a count of a child's lessons must count a moved chain once (PD-30's "Lesson N of M").
+
+**Deprecated behaviour.**
+- "Reschedule a make-up class" becomes **"Book the make-up lesson"**.
+- The app's flat "Change regular lesson times" sheet is replaced; the `request_schedule_change` ticket is still emitted for older builds.
+- A transfer's `scheduleKept: false` and `keepTimes` are gone.
+
+**Closed.** 2026-10-26.
+
+---
+
+### PD-32 · A parent's feedback about the teacher; Starred in Chats; New Students redesign; the sign-up code without a time limit; the Trial label
+
+**Closed 2026-10-26** by the product owner (items 6, 8, 11, 13 and 14 of the
+owner's 14-item request of 2026-10-26), with the details decided by the
+department head and the design note approved the same day. **Amends PD-26**
+(complaints: the app now has a form) and **PD-16** (the sign-up code's life).
+
+**Final decision.**
+1. **Feedback about the teacher (item 6).** A parent picks a child of their
+   family (and so that child's teacher), a category -- praise, suggestion or
+   complaint -- and writes. It goes to the administration.
+   - The parent reads each one's **status** (received, in review, resolved) and
+     the **one reply** staff write for them. Never internal notes, the handler,
+     follow-ups or what was decided.
+   - A **complaint** is also a PD-26 complaint, source `parent_app`: the Teachers
+     department takes it (becoming its handler, once), follows up and resolves
+     it on the Teacher File; **upholding it joins the monthly ladder** as any
+     complaint does. The parent's status follows (a follow-up = in review, the
+     resolution = resolved). Praise and suggestions are replied to and resolved
+     on the Supervision page's Parent feedback list.
+   - The **children's supervisor** reads their own children's feedback on the
+     family's Parent File (PD-17).
+   - **The teacher never sees it** -- who filed it, nor the text -- unless staff
+     relay it themselves. No route returns it to a teacher.
+   - **Rate-limited:** 3 per child and 10 per family per rolling 24 hours
+     (`feedback.limit.per_child_day`, `feedback.limit.per_family_day`).
+2. **Starred in Chats (item 8).** "Starred" is a filter chip after Favourites at
+   the top of Chats, for every role that has starred messages; the Settings row
+   is gone.
+3. **New Students redesign (item 11).** Behaviour unchanged. Each card has a
+   header (parent, status badge, recorded by and when), the trial it came from,
+   three blocks (Contact, Payment, Setup), and the children in one aligned table
+   (numbers end-aligned, whole amounts without ".00", the reader's digits).
+   Name search and a status filter were added (client-side only).
+4. **The sign-up code without a time limit (item 13).** A code is valid until it
+   is used or invalidated. Kept: single use; one live code per account, and a
+   new code supersedes the old; 5 wrong tries spend a code; 5 codes per account
+   an hour; the login limiter (10 per e-mail and 30 per source per 15 minutes);
+   stored hashed, in plain text only while a supervisor relays it. A code also
+   ends when **any** password is set on the account (sign-up, PD-21 reset, PD-25
+   recovery), when the account is **suspended or deactivated**, or when the
+   responsible staff press **Invalidate code**. New: **10 wrong codes per e-mail
+   in a rolling 24 hours**, across all codes, refuse further tries
+   (`AUTH.SIGNUP_LOCKED`, "contact your supervisor") until the window rolls or
+   the responsible staff press **Reset attempts** (audited). A new code does not
+   reset it. The cap counts wrong tries for any e-mail typed, known or not, so
+   reaching it tells nobody which e-mails are enrolled.
+   - Counted by the parent's **account** when the e-mail is an enrolled
+     parent's (changing the e-mail does not reset it), by the e-mail's hash
+     otherwise. Each attempt is decided atomically under a per-key advisory
+     lock, so a burst of parallel guesses gets exactly the cap compared.
+   - Wrong-code rows are **purged after 7 days** by the worker; nothing else
+     may delete them.
+   - **Accepted risk:** anyone who knows a parent's e-mail can lock that
+     parent's sign-up for 24 hours by guessing; the parent's supervisor resets
+     it.
+   - **Reset attempts** is the children's supervisor's, the Operations
+     manager's and the super admin's (the same people who see the code) -- by
+     design.
+5. **The Trial label (item 14).** A "Trial" / "تجريبية" badge on every trial
+   group: the app's chat list, header and group info; Admin Web's chat list,
+   header and info, the admin conversations view, the Calls page and the trials
+   page. One violet colour pair in both clients, at least 4.5:1 in light and dark.
+
+**Canonical rule.**
+```
+parent_feedback      (family, contact, learner, teacher = the child's teacher when
+                     filed, category, body, status, parent_response)
+                     what the parent wrote never changes; status only moves forward
+complaint            parent_feedback(complaint) + teacher_supervision_entry
+                     (kind complaint, complaint_source parent_app, created_by NULL,
+                     parent_feedback_id) -- handler set once by the department
+who reads            the filing family (status + reply) | Teachers dept + super
+                     admin (all) | the children's supervisor (their children)
+                     -- never the teacher (confined to src/teacher-file)
+sign-up code live    unused AND not superseded AND (expires_at IS NULL, or a
+                     pre-PD-32 code's expiry still ahead)
+wrong-code cap       count(parent_signup_failure by account -- or by e-mail hash
+                     when no enrolled parent has it -- uncleared, last 24 h)
+                     >= signup.wrong_codes_per_day (10); decided under
+                     pg_advisory_xact_lock(key); rows purged after 7 days
+```
+
+**Implementation phase.** Delivered with the decision: migration
+`20261026120000_chat_pd032_parent_feedback_signup_code`; API (`/me/feedback`,
+`/parent-feedback`, `/families/:id/parent-feedback`,
+`/trials/new-students/:id/signup-code/invalidate` and `…/signup-attempts/reset`);
+Admin Web (New Students, Supervision > Parent feedback, the Parent File section,
+the Trial badge); the app (Starred chip, Trial badge, Feedback about the
+teacher, the locked sign-up message).
+
+**Consequences.** Parent complaints arrive without staff transcribing them;
+staff-recorded complaints (management or parent, PD-26) are unchanged. A
+relayed code can sit in WhatsApp indefinitely; Invalidate code is the remedy if
+it leaks.
+
+**Deprecated behaviour.** The 10-minute code life (PD-16 default 1); "the app
+has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
+
+**Closed.** 2026-10-26.
+
+---
+
 ### PD-33 · Hand over to backup: a temporary cover with automatic return
 
 **Closed 2026-10-26** by the product owner (request) and the department head
@@ -2740,7 +2951,7 @@ frozen; a call still rings the members).
 
 ---
 
-### Decisions still open after PD-1 to PD-29
+### Decisions still open after PD-1 to PD-33
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

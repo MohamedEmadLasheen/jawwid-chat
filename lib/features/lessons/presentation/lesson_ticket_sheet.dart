@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import 'change_lesson_time_sheet.dart';
 import 'lesson_report_sheet.dart';
 import 'makeup_sheet.dart';
-import 'schedule_change_sheet.dart';
 
 /// The tickets "+" may offer in one conversation. Prefetched while the chat is open so
 /// the menu opens instantly; invalidated after every submission, because a ticket
@@ -26,7 +27,7 @@ String lessonTicketLabel(L10n l10n, LessonTicketKind kind) => switch (kind) {
       LessonTicketKind.teacherApology => l10n.ticketTeacherApology,
       LessonTicketKind.lateApology => l10n.ticketLateApology,
       LessonTicketKind.bookMakeup => l10n.ticketBookMakeup,
-      LessonTicketKind.requestScheduleChange => l10n.ticketRequestScheduleChange,
+      LessonTicketKind.changeLessonTime => l10n.ticketChangeLessonTime,
     };
 
 IconData lessonTicketIcon(LessonTicketKind kind) => switch (kind) {
@@ -35,7 +36,7 @@ IconData lessonTicketIcon(LessonTicketKind kind) => switch (kind) {
       LessonTicketKind.apology || LessonTicketKind.teacherApology => Icons.front_hand_outlined,
       LessonTicketKind.lateApology => Icons.schedule_outlined,
       LessonTicketKind.bookMakeup => Icons.event_available_outlined,
-      LessonTicketKind.requestScheduleChange => Icons.edit_calendar_outlined,
+      LessonTicketKind.changeLessonTime => Icons.edit_calendar_outlined,
     };
 
 /// Which lesson a ticket is about, in the reader's own calendar and clock.
@@ -44,13 +45,21 @@ String lessonWhen(BuildContext context, DateTime startsAt) {
   return '${m.formatMediumDate(startsAt)} · ${m.formatTimeOfDay(TimeOfDay.fromDateTime(startsAt))}';
 }
 
+/// A regular weekly time, "Monday 17:00", in the reader's locale and clock -- from its
+/// next start, so a family abroad sees its own weekday and time, not the teacher's.
+String weeklyLabel(BuildContext context, DateTime nextStartsAt) {
+  final locale = Localizations.localeOf(context).toLanguageTag();
+  final m = MaterialLocalizations.of(context);
+  return '${DateFormat.EEEE(locale).format(nextStartsAt)} ${m.formatTimeOfDay(TimeOfDay.fromDateTime(nextStartsAt))}';
+}
+
 /// Open whichever sheet a ticket needs. Resolves true when something was sent.
 Future<bool> openLessonTicket(BuildContext context, LessonTicket ticket) {
   return switch (ticket.kind) {
     // PD-15: one entry -- Student attended (the quick report) or did not attend.
     LessonTicketKind.report => showLessonReportEntry(context, ticket),
     LessonTicketKind.bookMakeup => showMakeupSheet(context, ticket),
-    LessonTicketKind.requestScheduleChange => showScheduleChangeSheet(context, ticket),
+    LessonTicketKind.changeLessonTime => showChangeLessonTimeSheet(context, ticket),
     _ => showLessonTicketSheet(context, ticket),
   };
 }
@@ -124,7 +133,7 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
           await repo.absence(id, note: _optional(_main));
         case LessonTicketKind.apology || LessonTicketKind.teacherApology || LessonTicketKind.lateApology:
           await repo.apologise(id, _kind, _main.text.trim());
-        case LessonTicketKind.bookMakeup || LessonTicketKind.requestScheduleChange:
+        case LessonTicketKind.bookMakeup || LessonTicketKind.changeLessonTime:
           return; // their own sheets (openLessonTicket)
       }
       if (mounted) Navigator.of(context).pop(true);

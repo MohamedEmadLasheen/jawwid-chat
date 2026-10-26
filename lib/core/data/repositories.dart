@@ -7,6 +7,7 @@ import '../../shared/models/parent_profile.dart';
 import '../../shared/models/story.dart';
 import '../../shared/models/student_profile.dart';
 import '../../shared/models/supervision.dart';
+import '../../shared/models/teacher_feedback.dart';
 import '../../shared/models/teacher_profile.dart';
 import '../../shared/models/trial.dart';
 import '../../shared/models/user_role.dart';
@@ -721,11 +722,25 @@ abstract interface class LessonRepository {
   /// `POST /lessons/:id/makeup`
   Future<void> bookMakeup(String lessonId, DateTime startsAt);
 
-  /// `GET /learners/:id/schedule-options`
-  Future<List<WeeklyOption>> scheduleOptions(String learnerId);
+  /// `GET /learners/:id/schedule-options` -- PD-31: the current weekly times too.
+  Future<ScheduleOptions> scheduleOptions(String learnerId);
 
-  /// `POST /learners/:id/schedule-change-requests`
-  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note});
+  /// `POST /learners/:id/schedule-change-requests` -- PD-31: [slots] is the FULL new
+  /// weekly set; [effectiveFrom] is 'YYYY-MM-DD' in the teacher's zone.
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyKey> slots, {String? effectiveFrom, String? note});
+
+  /// PD-31: `GET /lessons/:id/move-slots` -- where one lesson may move, or why it cannot.
+  Future<MoveOffer> moveSlots(String lessonId);
+
+  /// PD-31: `POST /lessons/:id/move` -- [startsAt] exactly as offered.
+  Future<void> moveLesson(String lessonId, DateTime startsAt);
+
+  /// PD-31: `GET /learners/:id/schedule` -- a child's weekly times.
+  Future<ChildSchedule> childSchedule(String learnerId);
+
+  /// PD-31: `GET /lessons?learnerId&from&to` -- one child's lessons (a parent: their
+  /// own family's only; a teacher: their own lessons only).
+  Future<List<ScheduledLesson>> learnerLessons(String learnerId, DateTime from, DateTime to);
 
   /// `GET /lessons?from&to` -- for a teacher, their own lessons.
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to);
@@ -835,12 +850,25 @@ class NoLessonRepository implements LessonRepository {
       throw UnsupportedError('no lesson server in this build');
 
   @override
-  Future<List<WeeklyOption>> scheduleOptions(String learnerId) =>
+  Future<ScheduleOptions> scheduleOptions(String learnerId) =>
       throw UnsupportedError('no lesson server in this build');
 
   @override
-  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note}) =>
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyKey> slots, {String? effectiveFrom, String? note}) =>
       throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<MoveOffer> moveSlots(String lessonId) => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> moveLesson(String lessonId, DateTime startsAt) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<ChildSchedule> childSchedule(String learnerId) => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<List<ScheduledLesson>> learnerLessons(String learnerId, DateTime from, DateTime to) async => const [];
 
   @override
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => const [];
@@ -977,4 +1005,58 @@ class NoTrialRepository implements TrialRepository {
 
   @override
   Future<void> joinGroup(String conversationId) => throw UnsupportedError('no trial server in this build');
+}
+
+/// PD-32: a parent's feedback about their child's teacher. The administration reviews it;
+/// the teacher never sees who wrote it.
+abstract interface class FeedbackRepository {
+  /// False in a build with no feedback server: the profile offers no entry.
+  bool get isAvailable;
+
+  /// `GET /me/feedback` -- the parent's children (with each one's teacher) and every item
+  /// they sent, newest first. `403 COMM.FEEDBACK_DENIED` for anyone but a parent.
+  Future<MyFeedback> mine();
+
+  /// `POST /me/feedback`. [body] is trimmed and 1..2000 characters. Refused with
+  /// [FeedbackErrors.notFound] (the child is not in the family, or has no teacher) and
+  /// [FeedbackErrors.limit] (too many today).
+  Future<FeedbackItem> submit({
+    required String learnerId,
+    required FeedbackCategory category,
+    required String body,
+  });
+}
+
+/// PD-32: the refusals the feedback screens answer in their own words.
+abstract final class FeedbackErrors {
+  /// 403: the signed-in account is not a parent.
+  static const denied = 'COMM.FEEDBACK_DENIED';
+
+  /// 404: the child is not in the family, or has no teacher.
+  static const notFound = 'COMM.FEEDBACK_NOT_FOUND';
+
+  /// 429: too many submissions today.
+  static const limit = 'COMM.FEEDBACK_LIMIT';
+
+  /// The longest body the server accepts.
+  static const maxLength = 2000;
+}
+
+/// The build with no feedback server: the entry is not offered, and nothing is sent.
+class NoFeedbackRepository implements FeedbackRepository {
+  const NoFeedbackRepository();
+
+  @override
+  bool get isAvailable => false;
+
+  @override
+  Future<MyFeedback> mine() async => const MyFeedback();
+
+  @override
+  Future<FeedbackItem> submit({
+    required String learnerId,
+    required FeedbackCategory category,
+    required String body,
+  }) =>
+      throw UnsupportedError('no feedback server in this build');
 }
