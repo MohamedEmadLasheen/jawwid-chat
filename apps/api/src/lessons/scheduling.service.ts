@@ -1318,9 +1318,9 @@ export class SchedulingService implements OnApplicationBootstrap {
    */
   async lockOf(learnerId: string): Promise<'balance' | 'overdue' | 'other' | null> {
     if (!(await this.lockInstalled())) return null;
-    const [row] = await this.prisma.$queryRawUnsafe<Array<{ lock: string | null }>>(
-      'SELECT chat.learner_lesson_lock($1::uuid) AS lock', learnerId,
-    );
+    // Resolved by name when it runs, which is only after lockInstalled() found it.
+    const [row] = await this.prisma.$queryRaw<Array<{ lock: string | null }>>`
+      SELECT chat.learner_lesson_lock(${learnerId}::uuid)::text AS lock`;
     const lock = row?.lock ?? null;
     if (lock === null) return null;
     return lock === 'balance' || lock === 'overdue' ? lock : 'other';
