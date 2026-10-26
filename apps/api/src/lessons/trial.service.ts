@@ -5,6 +5,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { ALL_TEACHERS } from '../platform/teacher-scope';
 import { ActorKind, CardKind, LessonKind, LessonOutcome, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { LessonService, cancelReminders, dateField, invalid, stateError, textField } from './lesson.service';
@@ -200,6 +201,8 @@ export class TrialService {
   async list(actorId: string, query: { from?: string; to?: string; teacherId?: string }) {
     const actor = await this.conversations.requireActor(actorId);
     const standing = await this.listStanding(actor);
+    // PD-35: the Teachers department lists the trials of the teachers in its scope.
+    const scope = standing === 'manager' ? await this.lessons.teacherScope.scopeOf(actor) : ALL_TEACHERS;
     const now = Date.now();
     const from = query.from ? parse(query.from, 'from') : new Date(now - 31 * 86_400_000);
     const to = query.to ? parse(query.to, 'to') : new Date(now + 31 * 86_400_000);
@@ -213,6 +216,7 @@ export class TrialService {
         // A moved trial lives on as its new row; the old one is history.
         OR: [{ outcome: null }, { outcome: { not: LessonOutcome.RESCHEDULED } }],
         ...(standing === 'teacher' ? { teacherId: actor.actorId } : query.teacherId ? { teacherId: query.teacherId } : {}),
+        ...(scope.all ? {} : { AND: [{ teacherId: { in: [...scope.teacherIds] } }] }),
       },
       include: TRIAL_INCLUDE,
       orderBy: { startsAt: 'asc' },
@@ -679,7 +683,11 @@ export class TrialService {
       || (await this.lessons.inDepartment(actor, 'sales'))
       || (await this.lessons.inDepartment(actor, 'operations'))
     ) return 'sales';
-    if (await this.lessons.isManager(actor)) return 'manager';
+    if (await this.lessons.isManager(actor)) {
+      // PD-35: one teacher's trials are the Teachers department's for a teacher in its scope.
+      if (teacherId && !(await this.lessons.teacherScope.covers(actor, teacherId))) return null;
+      return 'manager';
+    }
     return null;
   }
 

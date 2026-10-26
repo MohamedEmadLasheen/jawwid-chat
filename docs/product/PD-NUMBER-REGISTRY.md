@@ -66,8 +66,9 @@ claimed. The decision text itself still lives in
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
 | `20261026130000` | PD-33 — `chat_pd033_supervisor_cover` |
 | `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
-| `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (later PD-35 PRs: `…160001`, `…160002`) |
-| `20261026160003` | PD-35 — `chat_pd035_seat_security_fixes` (security-review fixes for #131, fixed forward) |
+| `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (PR #131) |
+| `20261026160003` | PD-35 — `chat_pd035_seat_security_fixes` (security-review fixes for #131, fixed forward; PR #143) |
+| `20261026160004` | PD-35 — `chat_pd035_teacher_supervisor` (PR #136; renumbered from 160001 to sort after 160003) |
 | `20261026180000` | PD-37 — chat read cursors / presence (P1a; sub-slots `180001…`). The RT-012 fix PR has no migration. |
 | `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |
 | `20261026210000` | PD-38 — `chat_pd038_schedule_calendar` |
