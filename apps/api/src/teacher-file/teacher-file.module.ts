@@ -5,6 +5,9 @@ import { TeacherFileService } from './teacher-file.service';
 import { TeacherPayrollService } from './teacher-payroll.service';
 import { ParentFeedbackController } from './parent-feedback.controller';
 import { ParentFeedbackService } from './parent-feedback.service';
+import { SupervisionModule } from '../supervision/supervision.module';
+import { TeacherEvaluationController } from './teacher-evaluation.controller';
+import { TeacherEvaluationService } from './teacher-evaluation.service';
 
 /**
  * PD-10: the administration-only Teacher File. The only module that may read
@@ -13,11 +16,12 @@ import { ParentFeedbackService } from './parent-feedback.service';
  * complaint's source conversation; nothing flows the other way. PD-18 payroll
  * (TeacherPayrollService) lives here too, behind the same confinement, and so
  * does PD-32 parent feedback (ParentFeedbackService): a parent's complaint is a
- * supervision entry.
+ * supervision entry. PD-35's evaluations and improvement plans live here too;
+ * SupervisionModule posts their cards in the teacher's supervision conversation.
  */
 @Module({
-  imports: [CommunicationModule],
-  controllers: [TeacherFileController, ParentFeedbackController],
-  providers: [TeacherFileService, TeacherPayrollService, ParentFeedbackService],
+  imports: [CommunicationModule, SupervisionModule],
+  controllers: [TeacherFileController, ParentFeedbackController, TeacherEvaluationController],
+  providers: [TeacherFileService, TeacherPayrollService, ParentFeedbackService, TeacherEvaluationService],
 })
 export class TeacherFileModule {}

@@ -37,3 +37,14 @@
 /* Payroll (Payroll.tsx) */
 .tf-inline-actions { display: inline-flex; margin-inline-start: var(--space-2); vertical-align: middle; }
 .tf-badges { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+
+/* PD-35: evaluations and improvement plans. */
+.tf-eval__actions { display: inline-flex; gap: var(--space-2); flex-wrap: wrap; }
+.tf-eval { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.tf-eval__item { border-block-start: 1px solid var(--border); padding-block-start: var(--space-3); display: grid; gap: var(--space-2); }
+.tf-eval__item:first-child { border-block-start: 0; padding-block-start: 0; }
+.tf-eval__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.tf-eval__scores { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); font-size: var(--fs-sm); }
+.tf-eval__goals { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-1); }
+.tf-eval__period, .tf-eval__goal-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+.tf-eval__goal-row .field { flex: 1 1 10rem; }
