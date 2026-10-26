@@ -63,6 +63,17 @@ class LearnerRef {
   final String? avatarUrl;
 }
 
+/// PD-33: the supervisor here is away and a backup covers for them until [until]
+/// ("Amira is covering for Noura until 3 Nov"). Straight from the server's
+/// `cover`; the client never works it out.
+class ConversationCover {
+  const ConversationCover({required this.supervisorName, required this.coverName, required this.until});
+
+  final String supervisorName;
+  final String coverName;
+  final DateTime until;
+}
+
 /// PD-30: a family / student group locked for payment, as `GET /conversations/:id`
 /// describes it to THIS viewer (`paymentLock`). Null when nothing is locked, when
 /// enforcement is off, or from a server that predates PD-30.
@@ -126,6 +137,7 @@ class Conversation {
     this.namedByServer = false,
     this.themeKey,
     this.wallpaperUrl,
+    this.cover,
     this.paymentLock,
   });
 
@@ -188,6 +200,8 @@ class Conversation {
   /// The viewer's OWN wallpaper photo for this chat, a link signed for them.
   final String? wallpaperUrl;
 
+  /// PD-33: who covers for the away supervisor here, and until when; null when nobody.
+  final ConversationCover? cover;
   /// PD-30: the group is locked for payment (only `GET /conversations/:id` says so).
   final PaymentLock? paymentLock;
 
@@ -231,6 +245,7 @@ class Conversation {
       namedByServer: namedByServer,
       themeKey: themeKey ?? this.themeKey,
       wallpaperUrl: wallpaperUrl ?? this.wallpaperUrl,
+      cover: cover,
       paymentLock: paymentLock,
     );
   }

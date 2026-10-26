@@ -9,6 +9,7 @@ import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/rea
 import { isConversationStaff, type Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { StaffRole } from '../communication/contracts/vocab';
+import { SupervisorCoverService } from './supervisor-cover.service';
 
 export const DepartmentKind = { OPERATIONS: 'operations', TEACHERS: 'teachers', SALES: 'sales' } as const;
 const DEPARTMENT_KINDS: ReadonlySet<string> = new Set(Object.values(DepartmentKind));
@@ -43,6 +44,9 @@ export class OrgStructureService {
     @Optional()
     @Inject(REALTIME_REVOCATION)
     private readonly revocation: RealtimeRevocation = NO_REALTIME_REVOCATION,
+    // PD-33: a link that is deactivated or ended takes its open cover with it.
+    // Optional so the positional constructions the harnesses share do not shift.
+    @Optional() private readonly covers?: SupervisorCoverService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -702,6 +706,9 @@ export class OrgStructureService {
 
     return this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      // PD-33: a running cover owns this link's window. Checked under the link's
+      // row lock, inside this transaction, so a cover starting now is seen.
+      await this.covers?.lockAndAssertNoCover(tx, link.id);
       const updated = await tx.supervisorBackup.update({
         where: { id: link.id },
         data: { activatedAt: now, activeUntil: until, activatedBy: actor.actorId, deactivatedAt: null, deactivatedBy: null },
@@ -723,8 +730,10 @@ export class OrgStructureService {
     const { actor, link } = await this.loadBackupForChange(actorId, id);
     const reason = requireText('reason', body.reason, 500);
     const now = new Date();
+    let afterCommit: (() => Promise<void>) | null = null;
     const view = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      afterCommit = (await this.covers?.closeForLink(tx, link.id, actor.actorId)) ?? null;
       const updated = await tx.supervisorBackup.update({
         where: { id: link.id },
         data: { deactivatedAt: now, deactivatedBy: actor.actorId },
@@ -742,6 +751,7 @@ export class OrgStructureService {
     });
     // The backup's access just ended: confirm no node still delivers on it.
     await this.revocation.confirmRevoked();
+    await (afterCommit as (() => Promise<void>) | null)?.();
     return view;
   }
 
@@ -749,8 +759,10 @@ export class OrgStructureService {
     const { actor, link } = await this.loadBackupForChange(actorId, id);
     const reason = requireText('reason', body.reason, 500);
     const now = new Date();
+    let afterCommit: (() => Promise<void>) | null = null;
     const view = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      afterCommit = (await this.covers?.closeForLink(tx, link.id, actor.actorId)) ?? null;
       const updated = await tx.supervisorBackup.update({
         where: { id: link.id },
         data: { endedAt: now, endedBy: actor.actorId, deactivatedAt: link.deactivatedAt ?? now },
@@ -767,6 +779,7 @@ export class OrgStructureService {
       return this.backupView(updated, now);
     });
     await this.revocation.confirmRevoked();
+    await (afterCommit as (() => Promise<void>) | null)?.();
     return view;
   }
 
@@ -809,6 +822,9 @@ export class OrgStructureService {
     });
     const now = new Date();
     for (const link of live) {
+      // PD-33: the cover ends with its link. Its return push is skipped here
+      // (the person is leaving the department); the return line is posted.
+      await this.covers?.closeForLink(tx, link.id, actor.actorId);
       await tx.supervisorBackup.update({
         where: { id: link.id },
         data: { endedAt: now, endedBy: actor.actorId, deactivatedAt: link.deactivatedAt ?? now },

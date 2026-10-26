@@ -3016,14 +3016,69 @@ has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
 
 ---
 
-### Decisions still open after PD-1 to PD-32
+### PD-33 · Hand over to backup: a temporary cover with automatic return
 
-None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
-The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
-phase starts and do not reopen either decision. Any new product question is
-recorded here with a new `PD-n` and the same six fields: decision, canonical
-rule, implementation phase, consequences, deprecated behaviour, and the date it
-was closed.
+**Closed 2026-10-26** by the product owner (request) and the department head
+(decisions). Builds on PD-1/PD-3 (coverage is temporary and explicit) and PD-8
+(activated backup links). PD-24 remains the PERMANENT supervisor change.
+
+**Final decision.**
+
+```
+one action     "Hand over to backup": Admin Web Organization team table (manager,
+               super admin) and "I'm away" on the supervisor's chat home
+fields         backup (pre-filled: the linked backup), from (now), until
+               (required, <= cover.max_days = 30), note; one confirm summary
+               "N families, M groups, K open items move to X until <date>"
+backup choice  "I'm away" (the supervisor): only a backup a manager has already
+               linked to them (PD-8 canConfigureBackup). A manager or the super
+               admin: any eligible backup supervisor of the same department,
+               the link created as part of the start
+the model      a cover IS an activation of the pair's chat.supervisor_backup link
+               for [from, until) -- staff_principals / staff_acts_for unchanged,
+               so the backup reaches every covered conversation and queue during
+               the window and nothing after it, to the second, with no job
+seats          effective, not membership rows (BR-1 caps a 1:1 at two members):
+               access through the link; the away supervisor's pushes and staff
+               realtime go to the backup (chat.live_covers); the conversation
+               DTO carries `cover` for every viewer
+away rule      the supervisor keeps every chat (read and reply), gets no pushes,
+               and sees an "Away" banner with End cover now
+items          created during a cover follow the live learner_supervision: they
+               are the supervisor's; acts the backup authored stay attributed to
+               the backup; Instalments "mine" includes covered rows in the window
+visible        one silent system line per affected group / parent 1:1 (started,
+               extended, ended; no push); one summary push to the backup, one
+               "welcome back" push to the supervisor; Covering / Away badges
+return         automatic at `until` (worker cover sweep posts the lines); early
+               "End cover now" by the supervisor, the backup, the manager or the
+               super admin; Extend = the same window again, one tap
+who            start/extend: the supervisor, their department manager, the super
+               admin; end: also the covering backup. Audited (cover.*)
+safety         one open cover per supervisor; the backup must be active, not away
+               and cover fewer than cover.max_concurrent (= 2), re-checked on
+               Extend; the change is one short transaction under the link's row
+               lock (a manual activation cannot overwrite a cover's window, nor
+               leave access open before a future cover begins); closing a cover
+               clamps its link to that moment; deactivating / ending the link
+               ends its cover
+lines          posted after the change commits, 25 conversations per
+               transaction, each recorded once (retries never duplicate); the
+               worker finishes any left over; they do not reorder the chat list
+               or count as unread
+```
+
+**Implementation phase.** Migration `20261026130000_chat_pd033_supervisor_cover`
+(chat.supervisor_cover, guard trigger, chat.cover_of, chat.live_covers, config
+keys, two push templates); `SupervisorCoverService` + routes `GET
+/org/covers/preview`, `GET|POST /org/covers`, `POST /org/covers/:id/extend|end`,
+`GET /me/cover`; worker `coverSweep`; Admin Web `HandOverDialog`, `CoverBanner`;
+app cover line and system lines.
+
+**Follow-up.** PD-33b: ring the backup for calls in covered conversations (W7/W8
+frozen; a call still rings the members).
+
+**Closed.** 2026-10-26.
 
 ---
 
@@ -3073,6 +3128,17 @@ PD-8 decision unchanged, else `seated`); `ConversationSeatService` is the only
 writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
 `POST conversations/:id/leave`, `GET me/seats`. Proven by
 `apps/api/test/integration/conversation-seat-pd035.spec.ts`.
+
+---
+
+### Decisions still open after PD-1 to PD-35
+
+None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
+The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
+phase starts and do not reopen either decision. Any new product question is
+recorded here with a new `PD-n` and the same six fields: decision, canonical
+rule, implementation phase, consequences, deprecated behaviour, and the date it
+was closed.
 
 ---
 
