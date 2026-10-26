@@ -90,6 +90,10 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.call_start_actor': 20,
   /** initial hypothesis - inbound WebSocket frames one socket may send per minute. */
   'abuse.realtime.frames_per_socket_per_minute': 600,
+  /** PD-33: how many supervisors one backup may cover at the same time. */
+  'cover.max_concurrent': 2,
+  /** PD-33: the longest a cover may run; longer is a change of supervisor (PD-24). */
+  'cover.max_days': 30,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

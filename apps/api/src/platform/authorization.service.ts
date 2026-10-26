@@ -1449,6 +1449,30 @@ export class AuthorizationService {
     );
   }
 
+  /**
+   * PD-33: starting, extending or ending a supervisor's cover. The supervisor
+   * themself, the manager of their department, or the super admin -- and, to
+   * END it only, the backup who is covering. `actsForPrimary` is
+   * chat.staff_acts_for(actor, primary); a backup's 'backup' basis never counts
+   * here, so covering for someone gives no power over the arrangement itself.
+   */
+  canManageCover(
+    actor: Actor,
+    target: { organizationId: string; actsForPrimary: ActsFor; isCoveringBackup: boolean },
+    action: 'start' | 'extend' | 'end',
+  ): Decision {
+    return this.orgAuthority(
+      actor,
+      target.organizationId,
+      (a) =>
+        a.staffRole === StaffRole.SUPER_ADMIN ||
+        (a.staffRole === StaffRole.MANAGER && target.actsForPrimary === 'manager') ||
+        (a.staffRole === StaffRole.ADMIN && target.actsForPrimary === 'self') ||
+        (action === 'end' && target.isCoveringBackup),
+      action === 'end' ? 'end this cover' : 'hand this supervisor over to a backup',
+    );
+  }
+
   /** Reading the structure: the super admin (all of it) and managers (their department). */
   /**
    * PD-10: what this actor may see and change in a Teacher File. The caller

@@ -1,6 +1,11 @@
 import 'dart:convert';
 
+import 'package:intl/intl.dart';
+
 import '../../../l10n/app_localizations.dart';
+
+/// PD-33: "3 Nov" -- a cover's end day, in the reader's language and clock.
+String coverDay(DateTime until, L10n l10n) => DateFormat.MMMd(l10n.localeName).format(until.toLocal());
 
 /// A system message's body is the backend's `{ "kind": ..., ...facts }`
 /// (`ConversationService.systemMessage`): it is rendered, never shown raw.
@@ -43,6 +48,20 @@ String systemMessageText(String body, L10n l10n) {
           : l10n.systemDirectSupervisorChangedNoName;
     case 'group.learner_detached':
       return l10n.systemGroupLearnerDetached;
+    case 'cover.started':
+    case 'cover.extended':
+      final cover = facts['cover'];
+      final supervisor = facts['supervisor'];
+      final until = facts['until'] is String ? DateTime.tryParse(facts['until'] as String) : null;
+      if (cover is! String || supervisor is! String || until == null) return l10n.systemCoverStartedNoName;
+      return facts['kind'] == 'cover.started'
+          ? l10n.systemCoverStarted(cover, supervisor, coverDay(until, l10n))
+          : l10n.systemCoverExtended(cover, supervisor, coverDay(until, l10n));
+    case 'cover.ended':
+      final supervisor = facts['supervisor'];
+      return supervisor is String && supervisor.isNotEmpty
+          ? l10n.systemCoverEnded(supervisor)
+          : l10n.systemCoverEndedNoName;
     default:
       return l10n.systemUpdate;
   }

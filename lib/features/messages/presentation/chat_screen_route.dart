@@ -10,6 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../trials/presentation/trial_group_join_banner.dart';
 import 'chat_screen.dart';
+import 'system_message_text.dart' show coverDay;
 
 /// Resolves a conversation id — which may have arrived from a deep link or a notification —
 /// into the header data [ChatScreen] needs.
@@ -92,6 +93,9 @@ class ChatScreenRoute extends ConsumerWidget {
           subtitle: switch (value) {
             Conversation(isTeacherSupervision: true) => l10n.supervisionChatSubtitle,
             Conversation(isTrialGroup: true) => l10n.trialGroupSubtitle,
+            // PD-33: the supervisor is away; the parent is told who answers, until when.
+            Conversation(cover: final cover?) =>
+              l10n.conversationCoverLine(cover.coverName, coverDay(cover.until, l10n)),
             Conversation(handledByLabel: final handler?) =>
               l10n.handledBy(handler),
             Conversation(learner: final learner?) =>

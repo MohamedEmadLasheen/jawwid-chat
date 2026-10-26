@@ -51,13 +51,15 @@ export class ConversationController {
     // authorized, each in one batch: unread counts (the caller's own
     // receipts), members with names, the viewer's own preferences, and the
     // newest message THIS viewer may see.
-    const [unread, members, states, last, children] = await Promise.all([
+    const [unread, members, states, last, children, covers] = await Promise.all([
       this.messages.unreadCountsFor(ids, actorId),
       this.conversations.membersOfMany(ids, actor),
       this.conversations.viewerStates(ids, actor.actorId),
       this.messages.lastVisibleMessages(ids, actor),
       // A group's picture: its one child's photo (one query for the whole list).
       this.conversations.soleChildOf(rows.filter((c) => c.type !== 'direct')),
+      // PD-33: which rows are under a live cover (one query for the whole list).
+      this.conversations.coversOf(ids),
     ]);
     // The viewer's PRIVATE labels (staff only); families never get the field.
     const labels = actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, ids) : null;
@@ -87,6 +89,7 @@ export class ConversationController {
             ? signAvatar('learner', children.get(c.id)!.id, c.id, actor.actorId, children.get(c.id)!.avatarObjectKey)
             : null,
           ...(labels ? { labels: labels.get(c.id) ?? [] } : {}),
+          cover: covers.get(c.id) ?? null,
         }),
       ),
     };
@@ -166,10 +169,11 @@ export class ConversationController {
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
     const actor = await this.conversations.requireActor(actorId);
-    const [states, last, children] = await Promise.all([
+    const [states, last, children, covers] = await Promise.all([
       this.conversations.viewerStates([conversation.id], actor.actorId),
       this.messages.lastVisibleMessages([conversation.id], actor),
       conversation.type === 'direct' ? new Map() : this.conversations.soleChildOf([conversation]),
+      this.conversations.coversOf([conversation.id]),
     ]);
     const child = children.get(conversation.id) as { id: string; avatarObjectKey: string | null } | undefined;
     const labels =
@@ -189,6 +193,7 @@ export class ConversationController {
         : null,
       avatarUrl: child ? signAvatar('learner', child.id, conversation.id, actor.actorId, child.avatarObjectKey) : null,
       ...(labels ? { labels: labels.get(conversation.id) ?? [] } : {}),
+      cover: covers.get(conversation.id) ?? null,
     });
   }
 

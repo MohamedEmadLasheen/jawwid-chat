@@ -2691,109 +2691,6 @@ feed the map automatically -- a possible v2.
 
 ---
 
-### PD-32 · A parent's feedback about the teacher; Starred in Chats; New Students redesign; the sign-up code without a time limit; the Trial label
-
-**Closed 2026-10-26** by the product owner (items 6, 8, 11, 13 and 14 of the
-owner's 14-item request of 2026-10-26), with the details decided by the
-department head and the design note approved the same day. **Amends PD-26**
-(complaints: the app now has a form) and **PD-16** (the sign-up code's life).
-
-**Final decision.**
-1. **Feedback about the teacher (item 6).** A parent picks a child of their
-   family (and so that child's teacher), a category -- praise, suggestion or
-   complaint -- and writes. It goes to the administration.
-   - The parent reads each one's **status** (received, in review, resolved) and
-     the **one reply** staff write for them. Never internal notes, the handler,
-     follow-ups or what was decided.
-   - A **complaint** is also a PD-26 complaint, source `parent_app`: the Teachers
-     department takes it (becoming its handler, once), follows up and resolves
-     it on the Teacher File; **upholding it joins the monthly ladder** as any
-     complaint does. The parent's status follows (a follow-up = in review, the
-     resolution = resolved). Praise and suggestions are replied to and resolved
-     on the Supervision page's Parent feedback list.
-   - The **children's supervisor** reads their own children's feedback on the
-     family's Parent File (PD-17).
-   - **The teacher never sees it** -- who filed it, nor the text -- unless staff
-     relay it themselves. No route returns it to a teacher.
-   - **Rate-limited:** 3 per child and 10 per family per rolling 24 hours
-     (`feedback.limit.per_child_day`, `feedback.limit.per_family_day`).
-2. **Starred in Chats (item 8).** "Starred" is a filter chip after Favourites at
-   the top of Chats, for every role that has starred messages; the Settings row
-   is gone.
-3. **New Students redesign (item 11).** Behaviour unchanged. Each card has a
-   header (parent, status badge, recorded by and when), the trial it came from,
-   three blocks (Contact, Payment, Setup), and the children in one aligned table
-   (numbers end-aligned, whole amounts without ".00", the reader's digits).
-   Name search and a status filter were added (client-side only).
-4. **The sign-up code without a time limit (item 13).** A code is valid until it
-   is used or invalidated. Kept: single use; one live code per account, and a
-   new code supersedes the old; 5 wrong tries spend a code; 5 codes per account
-   an hour; the login limiter (10 per e-mail and 30 per source per 15 minutes);
-   stored hashed, in plain text only while a supervisor relays it. A code also
-   ends when **any** password is set on the account (sign-up, PD-21 reset, PD-25
-   recovery), when the account is **suspended or deactivated**, or when the
-   responsible staff press **Invalidate code**. New: **10 wrong codes per e-mail
-   in a rolling 24 hours**, across all codes, refuse further tries
-   (`AUTH.SIGNUP_LOCKED`, "contact your supervisor") until the window rolls or
-   the responsible staff press **Reset attempts** (audited). A new code does not
-   reset it. The cap counts wrong tries for any e-mail typed, known or not, so
-   reaching it tells nobody which e-mails are enrolled.
-   - Counted by the parent's **account** when the e-mail is an enrolled
-     parent's (changing the e-mail does not reset it), by the e-mail's hash
-     otherwise. Each attempt is decided atomically under a per-key advisory
-     lock, so a burst of parallel guesses gets exactly the cap compared.
-   - Wrong-code rows are **purged after 7 days** by the worker; nothing else
-     may delete them.
-   - **Accepted risk:** anyone who knows a parent's e-mail can lock that
-     parent's sign-up for 24 hours by guessing; the parent's supervisor resets
-     it.
-   - **Reset attempts** is the children's supervisor's, the Operations
-     manager's and the super admin's (the same people who see the code) -- by
-     design.
-5. **The Trial label (item 14).** A "Trial" / "تجريبية" badge on every trial
-   group: the app's chat list, header and group info; Admin Web's chat list,
-   header and info, the admin conversations view, the Calls page and the trials
-   page. One violet colour pair in both clients, at least 4.5:1 in light and dark.
-
-**Canonical rule.**
-```
-parent_feedback      (family, contact, learner, teacher = the child's teacher when
-                     filed, category, body, status, parent_response)
-                     what the parent wrote never changes; status only moves forward
-complaint            parent_feedback(complaint) + teacher_supervision_entry
-                     (kind complaint, complaint_source parent_app, created_by NULL,
-                     parent_feedback_id) -- handler set once by the department
-who reads            the filing family (status + reply) | Teachers dept + super
-                     admin (all) | the children's supervisor (their children)
-                     -- never the teacher (confined to src/teacher-file)
-sign-up code live    unused AND not superseded AND (expires_at IS NULL, or a
-                     pre-PD-32 code's expiry still ahead)
-wrong-code cap       count(parent_signup_failure by account -- or by e-mail hash
-                     when no enrolled parent has it -- uncleared, last 24 h)
-                     >= signup.wrong_codes_per_day (10); decided under
-                     pg_advisory_xact_lock(key); rows purged after 7 days
-```
-
-**Implementation phase.** Delivered with the decision: migration
-`20261026120000_chat_pd032_parent_feedback_signup_code`; API (`/me/feedback`,
-`/parent-feedback`, `/families/:id/parent-feedback`,
-`/trials/new-students/:id/signup-code/invalidate` and `…/signup-attempts/reset`);
-Admin Web (New Students, Supervision > Parent feedback, the Parent File section,
-the Trial badge); the app (Starred chip, Trial badge, Feedback about the
-teacher, the locked sign-up message).
-
-**Consequences.** Parent complaints arrive without staff transcribing them;
-staff-recorded complaints (management or parent, PD-26) are unchanged. A
-relayed code can sit in WhatsApp indefinitely; Invalidate code is the remedy if
-it leaks.
-
-**Deprecated behaviour.** The 10-minute code life (PD-16 default 1); "the app
-has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
-
-**Closed.** 2026-10-26.
-
-### Decisions still open after PD-1 to PD-32
-
 ### PD-31 · Scheduling made direct: time chips, a child's schedule, moving lessons, changing the teacher
 
 **Closed 2026-10-26.** Items 1, 7, 10 and 12 of the owner's list of 2026-10-26. The design and the audit below were approved by the department head the same day, with the owner's answers to three questions.
@@ -2895,6 +2792,166 @@ payment lock   a child PD-30 locks is offered no time and every change above is 
 **Closed.** 2026-10-26.
 
 ---
+
+### PD-32 · A parent's feedback about the teacher; Starred in Chats; New Students redesign; the sign-up code without a time limit; the Trial label
+
+**Closed 2026-10-26** by the product owner (items 6, 8, 11, 13 and 14 of the
+owner's 14-item request of 2026-10-26), with the details decided by the
+department head and the design note approved the same day. **Amends PD-26**
+(complaints: the app now has a form) and **PD-16** (the sign-up code's life).
+
+**Final decision.**
+1. **Feedback about the teacher (item 6).** A parent picks a child of their
+   family (and so that child's teacher), a category -- praise, suggestion or
+   complaint -- and writes. It goes to the administration.
+   - The parent reads each one's **status** (received, in review, resolved) and
+     the **one reply** staff write for them. Never internal notes, the handler,
+     follow-ups or what was decided.
+   - A **complaint** is also a PD-26 complaint, source `parent_app`: the Teachers
+     department takes it (becoming its handler, once), follows up and resolves
+     it on the Teacher File; **upholding it joins the monthly ladder** as any
+     complaint does. The parent's status follows (a follow-up = in review, the
+     resolution = resolved). Praise and suggestions are replied to and resolved
+     on the Supervision page's Parent feedback list.
+   - The **children's supervisor** reads their own children's feedback on the
+     family's Parent File (PD-17).
+   - **The teacher never sees it** -- who filed it, nor the text -- unless staff
+     relay it themselves. No route returns it to a teacher.
+   - **Rate-limited:** 3 per child and 10 per family per rolling 24 hours
+     (`feedback.limit.per_child_day`, `feedback.limit.per_family_day`).
+2. **Starred in Chats (item 8).** "Starred" is a filter chip after Favourites at
+   the top of Chats, for every role that has starred messages; the Settings row
+   is gone.
+3. **New Students redesign (item 11).** Behaviour unchanged. Each card has a
+   header (parent, status badge, recorded by and when), the trial it came from,
+   three blocks (Contact, Payment, Setup), and the children in one aligned table
+   (numbers end-aligned, whole amounts without ".00", the reader's digits).
+   Name search and a status filter were added (client-side only).
+4. **The sign-up code without a time limit (item 13).** A code is valid until it
+   is used or invalidated. Kept: single use; one live code per account, and a
+   new code supersedes the old; 5 wrong tries spend a code; 5 codes per account
+   an hour; the login limiter (10 per e-mail and 30 per source per 15 minutes);
+   stored hashed, in plain text only while a supervisor relays it. A code also
+   ends when **any** password is set on the account (sign-up, PD-21 reset, PD-25
+   recovery), when the account is **suspended or deactivated**, or when the
+   responsible staff press **Invalidate code**. New: **10 wrong codes per e-mail
+   in a rolling 24 hours**, across all codes, refuse further tries
+   (`AUTH.SIGNUP_LOCKED`, "contact your supervisor") until the window rolls or
+   the responsible staff press **Reset attempts** (audited). A new code does not
+   reset it. The cap counts wrong tries for any e-mail typed, known or not, so
+   reaching it tells nobody which e-mails are enrolled.
+   - Counted by the parent's **account** when the e-mail is an enrolled
+     parent's (changing the e-mail does not reset it), by the e-mail's hash
+     otherwise. Each attempt is decided atomically under a per-key advisory
+     lock, so a burst of parallel guesses gets exactly the cap compared.
+   - Wrong-code rows are **purged after 7 days** by the worker; nothing else
+     may delete them.
+   - **Accepted risk:** anyone who knows a parent's e-mail can lock that
+     parent's sign-up for 24 hours by guessing; the parent's supervisor resets
+     it.
+   - **Reset attempts** is the children's supervisor's, the Operations
+     manager's and the super admin's (the same people who see the code) -- by
+     design.
+5. **The Trial label (item 14).** A "Trial" / "تجريبية" badge on every trial
+   group: the app's chat list, header and group info; Admin Web's chat list,
+   header and info, the admin conversations view, the Calls page and the trials
+   page. One violet colour pair in both clients, at least 4.5:1 in light and dark.
+
+**Canonical rule.**
+```
+parent_feedback      (family, contact, learner, teacher = the child's teacher when
+                     filed, category, body, status, parent_response)
+                     what the parent wrote never changes; status only moves forward
+complaint            parent_feedback(complaint) + teacher_supervision_entry
+                     (kind complaint, complaint_source parent_app, created_by NULL,
+                     parent_feedback_id) -- handler set once by the department
+who reads            the filing family (status + reply) | Teachers dept + super
+                     admin (all) | the children's supervisor (their children)
+                     -- never the teacher (confined to src/teacher-file)
+sign-up code live    unused AND not superseded AND (expires_at IS NULL, or a
+                     pre-PD-32 code's expiry still ahead)
+wrong-code cap       count(parent_signup_failure by account -- or by e-mail hash
+                     when no enrolled parent has it -- uncleared, last 24 h)
+                     >= signup.wrong_codes_per_day (10); decided under
+                     pg_advisory_xact_lock(key); rows purged after 7 days
+```
+
+**Implementation phase.** Delivered with the decision: migration
+`20261026120000_chat_pd032_parent_feedback_signup_code`; API (`/me/feedback`,
+`/parent-feedback`, `/families/:id/parent-feedback`,
+`/trials/new-students/:id/signup-code/invalidate` and `…/signup-attempts/reset`);
+Admin Web (New Students, Supervision > Parent feedback, the Parent File section,
+the Trial badge); the app (Starred chip, Trial badge, Feedback about the
+teacher, the locked sign-up message).
+
+**Consequences.** Parent complaints arrive without staff transcribing them;
+staff-recorded complaints (management or parent, PD-26) are unchanged. A
+relayed code can sit in WhatsApp indefinitely; Invalidate code is the remedy if
+it leaks.
+
+**Deprecated behaviour.** The 10-minute code life (PD-16 default 1); "the app
+has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
+
+**Closed.** 2026-10-26.
+
+---
+
+### PD-33 · Hand over to backup: a temporary cover with automatic return
+
+**Closed 2026-10-26** by the product owner (request) and the department head
+(decisions). Builds on PD-1/PD-3 (coverage is temporary and explicit) and PD-8
+(activated backup links). PD-24 remains the PERMANENT supervisor change.
+
+**Final decision.**
+
+```
+one action     "Hand over to backup": Admin Web Organization team table (manager,
+               super admin) and "I'm away" on the supervisor's chat home
+fields         backup (pre-filled: the linked backup; only another backup
+               supervisor of the same department), from (now), until (required,
+               <= cover.max_days = 30), note; one confirm summary
+               "N families, M groups, K open items move to X until <date>"
+the model      a cover IS an activation of the pair's chat.supervisor_backup link
+               for [from, until) -- staff_principals / staff_acts_for unchanged,
+               so the backup reaches every covered conversation and queue during
+               the window and nothing after it, to the second, with no job
+seats          effective, not membership rows (BR-1 caps a 1:1 at two members):
+               access through the link; the away supervisor's pushes and staff
+               realtime go to the backup (chat.live_covers); the conversation
+               DTO carries `cover` for every viewer
+away rule      the supervisor keeps every chat (read and reply), gets no pushes,
+               and sees an "Away" banner with End cover now
+items          created during a cover follow the live learner_supervision: they
+               are the supervisor's; acts the backup authored stay attributed to
+               the backup; Instalments "mine" includes covered rows in the window
+visible        one silent system line per affected group / parent 1:1 (started,
+               extended, ended; no push); one summary push to the backup, one
+               "welcome back" push to the supervisor; Covering / Away badges
+return         automatic at `until` (worker cover sweep posts the lines); early
+               "End cover now" by the supervisor, the backup, the manager or the
+               super admin; Extend = the same window again, one tap
+who            start/extend: the supervisor, their department manager, the super
+               admin; end: also the covering backup. Audited (cover.*)
+safety         one open cover per supervisor; the backup must be active, not away
+               and cover fewer than cover.max_concurrent (= 2); all in one
+               transaction; deactivating / ending the link ends its cover
+```
+
+**Implementation phase.** Migration `20261026130000_chat_pd033_supervisor_cover`
+(chat.supervisor_cover, guard trigger, chat.cover_of, chat.live_covers, config
+keys, two push templates); `SupervisorCoverService` + routes `GET
+/org/covers/preview`, `GET|POST /org/covers`, `POST /org/covers/:id/extend|end`,
+`GET /me/cover`; worker `coverSweep`; Admin Web `HandOverDialog`, `CoverBanner`;
+app cover line and system lines.
+
+**Follow-up.** PD-33b: ring the backup for calls in covered conversations (W7/W8
+frozen; a call still rings the members).
+
+**Closed.** 2026-10-26.
+
+---
+
+### Decisions still open after PD-1 to PD-33
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

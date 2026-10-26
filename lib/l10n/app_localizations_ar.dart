@@ -1025,6 +1025,32 @@ class L10nAr extends L10n {
       'انتقل طفل من هذه المجموعة إلى مشرف آخر';
 
   @override
+  String systemCoverStarted(String cover, String supervisor, String date) {
+    return 'التغطية: $cover بدلًا من $supervisor حتى $date';
+  }
+
+  @override
+  String systemCoverExtended(String cover, String supervisor, String date) {
+    return 'مُدّدت التغطية: $cover بدلًا من $supervisor حتى $date';
+  }
+
+  @override
+  String systemCoverEnded(String supervisor) {
+    return 'انتهت التغطية؛ عادت المتابعة إلى $supervisor';
+  }
+
+  @override
+  String get systemCoverStartedNoName => 'التغطية: مشرف بديل يتابع مؤقتًا';
+
+  @override
+  String get systemCoverEndedNoName => 'انتهت التغطية';
+
+  @override
+  String conversationCoverLine(String cover, String date) {
+    return 'التغطية: $cover حتى $date';
+  }
+
+  @override
   String get systemUpdate => 'تحديث من النظام';
 
   @override
