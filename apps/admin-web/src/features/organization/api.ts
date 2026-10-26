@@ -99,7 +99,7 @@ export interface EligibleBackup {
   linked: boolean
   covering: number
   /** Why this backup cannot cover now; null when they can. */
-  blocked: 'inactive' | 'away' | 'at_limit' | null
+  blocked: 'inactive' | 'away' | 'at_limit' | 'not_linked' | null
   blockedReason: string | null
 }
 

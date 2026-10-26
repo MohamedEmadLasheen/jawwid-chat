@@ -25,13 +25,15 @@ export interface ItemFields {
   sitePath: string | null;
   file: string | null;
   status: ItemStatus | null;
+  /** PD-29 amendment: an explicit position; on an import a new item otherwise takes its row number. */
+  sortOrder: number | null;
 }
 
 export const MAX_IMPORT_ROWS = 1000;
 
 /** The manifest's column names, in the order the template lists them. */
 export const MANIFEST_COLUMNS = [
-  'ref', 'title_ar', 'title_en', 'subject', 'strand', 'kind', 'age_groups', 'surah', 'description', 'path', 'url', 'file', 'status',
+  'ref', 'title_ar', 'title_en', 'subject', 'strand', 'kind', 'age_groups', 'surah', 'description', 'path', 'url', 'file', 'status', 'sort_order',
 ] as const;
 
 const ALIASES: Record<string, string> = {
@@ -43,6 +45,7 @@ const ALIASES: Record<string, string> = {
   surah: 'surah', description: 'description', url: 'url', link: 'url',
   path: 'path', site_path: 'path', sitepath: 'path', lesson_path: 'path',
   file: 'file', file_name: 'file', filename: 'file', status: 'status',
+  sort_order: 'sort_order', sortorder: 'sort_order', order: 'sort_order', position: 'sort_order',
 };
 
 function norm(key: string): string {
@@ -152,8 +155,16 @@ export function parseItemRow(raw: Record<string, unknown>): { fields: ItemFields
   const status = statusRaw ? (statusRaw.toLowerCase() as ItemStatus) : null;
   if (status && !(ITEM_STATUSES as readonly string[]).includes(status)) errors.push(`status: one of ${ITEM_STATUSES.join(', ')}`);
 
+  let sortOrder: number | null = null;
+  const orderRaw = text(r.sort_order);
+  if (orderRaw) {
+    const n = Number(orderRaw);
+    if (!Number.isInteger(n) || n < 1 || n > 1_000_000) errors.push('sort_order: a whole number from 1');
+    else sortOrder = n;
+  }
+
   return {
-    fields: { externalRef, titleAr, titleEn, subject, strand, kind, ageGroups, surah, description, url, sitePath, file, status },
+    fields: { externalRef, titleAr, titleEn, subject, strand, kind, ageGroups, surah, description, url, sitePath, file, status, sortOrder },
     errors,
   };
 }

@@ -153,6 +153,7 @@ export const T = {
   blockedInactive: { en: 'not an active staff member', ar: 'ليس عضوًا نشطًا' },
   blockedAway: { en: 'away themselves', ar: 'غائب أيضًا' },
   blockedAtLimit: { en: 'already covers {n} supervisors', ar: 'يغطي {n} مشرفين بالفعل' },
+  blockedNotLinked: { en: 'not linked to you — ask your manager', ar: 'غير مرتبط بك — اطلب ذلك من مديرك' },
   noBackup: { en: 'No backup supervisor in this department can cover now.', ar: 'لا يوجد مشرف بديل متاح في هذا القسم الآن.' },
   alreadyAway: { en: '{name} is already handed over to {backup} until {date}.', ar: 'تم تسليم {name} بالفعل إلى {backup} حتى {date}.' },
   untilInvalid: { en: 'Choose an end within {n} days.', ar: 'اختر نهاية خلال {n} يومًا.' },

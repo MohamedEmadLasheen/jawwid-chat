@@ -2573,7 +2573,7 @@ the app has always sent and which only a browser checks.
 
 ---
 
-### PD-29 · Materials: the open library, practice this week, the memorization map
+### PD-29 · Materials: the open library, practice this week, the memorization map (amended 2026-10-26: opened this week, no map)
 
 **Closed 2026-10-24** by the product owner, with the access model chosen by the
 department head at the owner's request. Builds on PD-15 (the lesson report
@@ -2687,9 +2687,67 @@ needs one environment variable; not done. (4) Age bands per lesson (none in
 the content). (5) A completion event from the lessons site (postMessage) to
 feed the map automatically -- a possible v2.
 
-**Deprecated behaviour.** None.
+**Deprecated behaviour.** None at closing; the amendment below retires the
+memorization map and Practice this week.
 
 **Closed.** 2026-10-24.
+
+**Amendment 2026-10-26** (the department head for the owner; no new PD number,
+migration `20261026200000_chat_pd029_material_opens`).
+
+```
+no subject "All"    the child's Library shows one subject at a time and opens
+                    on Quran (the first subject); the age band's "All ages"
+                    stays. Admin Web's Library subject chips are the same
+                    concept and lose "All" too (opening on Quran); its status
+                    and age filters keep theirs
+map retired         the memorization map leaves every screen: the child page's
+                    tab (app and PD-28 teacher web), Admin Web's Student Profile
+                    panel and its corrections, the teacher report's Memorization
+                    section. GET /learners/:id/materials/progress,
+                    GET .../progress/:surah and POST .../progress/:surah/correct
+                    stay routed and answer 410 Gone (COMM.MATERIAL_RETIRED) to
+                    everyone. The data is KEPT: chat.memorization_mark stays,
+                    append-only, nothing deleted or dropped; a report from an
+                    older app build that still carries `memorization` is
+                    accepted and recorded as before, just never shown.
+                    LESSON_ACTS.correct_memorization is no longer reachable
+opened this week    replaces Practice this week on the child page: what was
+                    opened FOR this child in the current academy week -- each
+                    item once, with its last opening, most recent first; an
+                    item since retired is listed, not playable. Recorded by
+                    POST /materials/items/:id/open with a body `learnerId`
+                    (authorized like a library read, LESSON_ACTS.read_materials,
+                    and the item must be the child's organization's) in
+                    chat.material_open (learner, item, opened_by + kind,
+                    opened_at = now()), APPEND-ONLY by trigger, no request-role
+                    grants. Read with GET /learners/:id/materials/opened, which
+                    the same readers see: the family, staff with standing, a
+                    teacher for their own students. An open without learnerId
+                    (an admin preview) records nothing
+the week            Saturday 00:00 to Friday 24:00 in the academy's time zone
+                    (config schedule.timezone, Africa/Cairo by default -- the
+                    Egypt academy week), DST-correct; the response carries
+                    weekStartsAt and timeZone
+practice kept       the teacher still attaches Practice to a lesson report, and
+                    the report's card in the chat still shows it; only the
+                    parent tab was replaced
+one order           everywhere a list of materials appears (the child's
+                    Library, Admin Web's Library, the teacher's report picker),
+                    the server orders it: Quran by surah -- Al-Fatihah (1)
+                    first, then An-Nas (114), Al-Falaq (113), Al-Ikhlas (112) ...
+                    down to An-Naba' (78), i.e. Fatihah then surah descending;
+                    every other material in the order it was provided.
+                    chat.material_item.sort_order holds that order: filled from
+                    the manifest's row number on import (or a `sort_order`
+                    column), kept by a re-import through `ref`, editable on the
+                    item form; the migration backfills the 83 seed rows from
+                    docs/product/pd029-seed's row order. Ties and unnumbered
+                    items fall back to the Arabic title, then creation time
+```
+
+PD-35's planned "not progressing" flag, which was to read this map, is dropped
+with it (the department head tells PD-35).
 
 ---
 
@@ -3027,10 +3085,13 @@ has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
 ```
 one action     "Hand over to backup": Admin Web Organization team table (manager,
                super admin) and "I'm away" on the supervisor's chat home
-fields         backup (pre-filled: the linked backup; only another backup
-               supervisor of the same department), from (now), until (required,
-               <= cover.max_days = 30), note; one confirm summary
+fields         backup (pre-filled: the linked backup), from (now), until
+               (required, <= cover.max_days = 30), note; one confirm summary
                "N families, M groups, K open items move to X until <date>"
+backup choice  "I'm away" (the supervisor): only a backup a manager has already
+               linked to them (PD-8 canConfigureBackup). A manager or the super
+               admin: any eligible backup supervisor of the same department,
+               the link created as part of the start
 the model      a cover IS an activation of the pair's chat.supervisor_backup link
                for [from, until) -- staff_principals / staff_acts_for unchanged,
                so the backup reaches every covered conversation and queue during
@@ -3053,8 +3114,16 @@ return         automatic at `until` (worker cover sweep posts the lines); early
 who            start/extend: the supervisor, their department manager, the super
                admin; end: also the covering backup. Audited (cover.*)
 safety         one open cover per supervisor; the backup must be active, not away
-               and cover fewer than cover.max_concurrent (= 2); all in one
-               transaction; deactivating / ending the link ends its cover
+               and cover fewer than cover.max_concurrent (= 2), re-checked on
+               Extend; the change is one short transaction under the link's row
+               lock (a manual activation cannot overwrite a cover's window, nor
+               leave access open before a future cover begins); closing a cover
+               clamps its link to that moment; deactivating / ending the link
+               ends its cover
+lines          posted after the change commits, 25 conversations per
+               transaction, each recorded once (retries never duplicate); the
+               worker finishes any left over; they do not reorder the chat list
+               or count as unread
 ```
 
 **Implementation phase.** Migration `20261026130000_chat_pd033_supervisor_cover`
@@ -3068,6 +3137,65 @@ app cover line and system lines.
 frozen; a call still rings the members).
 
 **Closed.** 2026-10-26.
+
+---
+
+### PD-35 · Teacher supervisors (part 1: the visible seat)
+
+**In progress, part 1 of 3** (owner request 2026-10-26; design approved by the
+department head the same day, `pd35-design.md` in the shared notes). Part 1 is
+the shared **visible seat**: the one way any staff member joins a conversation
+by choice and leaves it again. PD-35's teacher-supervisor rule (part 2) and
+PD-36's @mentions are both built on it.
+
+**Final decision (part 1).**
+1. **A seat is visible.** Taking one posts a line every member reads ("Ola
+   (teacher supervisor) joined to support"); leaving posts one too ("Ola left",
+   "… (no activity)"). The lines are silent: they reach open screens and push
+   nobody. Each is audited (`seat.joined`, `seat.left`).
+2. **A seat has a reason** (`chat.seat_reason`, a row each): `manual` (a staff
+   member with their own PD-8 basis makes their presence visible), `mention`
+   (PD-36; refused until PD-36 registers its policy) and, in part 2,
+   `supervision`. Each reason says whether its seat **grants** access, whether
+   it may be taken in a family 1:1, and after how many idle days it ends
+   (default 14; 0 = never).
+3. **Access.** Only a granting reason makes the seat a basis, `seated`, and
+   only while the reason's eligibility still holds: it is re-checked on every
+   access, so a lost reason ends access at once. `seated` is the **weakest**
+   basis: anyone with a PD-8 basis keeps theirs (a manager seated by a mention
+   is still the manager, with PD-14 moderation and the escalation mode). A
+   seated person reads and writes as a party, may start a group call as a
+   member (PD-19), and is never in charge: no moderation of others, no
+   membership changes, no approvals.
+4. **In a group** the seat is a live, non-silent member row. **In a family
+   1:1** it is an *effective* seat: no member row (a 1:1 is its two members,
+   BR-1), but the holder is notified as a member is. A granting reason is never
+   taken in a 1:1. BR-1 / PD-7 and C-4 are untouched: the seat never bypasses
+   the membership triggers.
+5. **Nothing else ends a seat.** The Student Group reconcile, a PD-31 change of
+   teacher and a PD-24 supervisor swap leave it in place; a seat holder who
+   becomes the group's supervisor keeps the row and the seat ends as
+   *absorbed*. A member row ended by a membership edit ends its seat.
+6. **Leaving, and the sweep.** Leaving, and the worker's sweep (a lost reason
+   or idle days), end the seat with its line; a holder left with no access
+   leaves the live room (RT-009) before the operation reports success.
+
+**Canonical rule.** `supabase/migrations/20261026160000_chat_pd035_conversation_seat.sql`
+(`chat.staff_conversation_access` = `chat.staff_conversation_standing`, the
+PD-8 decision unchanged, else `seated`); `ConversationSeatService` is the only
+writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
+`POST conversations/:id/leave`, `GET me/seats`. Proven by
+`apps/api/test/integration/conversation-seat-pd035.spec.ts`.
+
+**Security review (department head, 2026-10-26), fixed forward in
+`20261026160003_chat_pd035_seat_security_fixes.sql` and the API.**
+- A seat's member row never counts as PD-8 standing, and never lends access to
+  whoever acts for its holder.
+- It is never the admin role that may change membership.
+- A seat holder gets no approvals and no internal-note fan-out, and is pushed
+  only while the seat still gives access.
+- Leaving and absorbing one seat never interleave (one lock; leave checks its
+  row count).
 
 ---
 
@@ -3148,55 +3276,6 @@ phase starts and do not reopen either decision. Any new product question is
 recorded here with a new `PD-n` and the same six fields: decision, canonical
 rule, implementation phase, consequences, deprecated behaviour, and the date it
 was closed.
-
----
-
-### PD-35 · Teacher supervisors (part 1: the visible seat)
-
-**In progress, part 1 of 3** (owner request 2026-10-26; design approved by the
-department head the same day, `pd35-design.md` in the shared notes). Part 1 is
-the shared **visible seat**: the one way any staff member joins a conversation
-by choice and leaves it again. PD-35's teacher-supervisor rule (part 2) and
-PD-36's @mentions are both built on it.
-
-**Final decision (part 1).**
-1. **A seat is visible.** Taking one posts a line every member reads ("Ola
-   (teacher supervisor) joined to support"); leaving posts one too ("Ola left",
-   "… (no activity)"). The lines are silent: they reach open screens and push
-   nobody. Each is audited (`seat.joined`, `seat.left`).
-2. **A seat has a reason** (`chat.seat_reason`, a row each): `manual` (a staff
-   member with their own PD-8 basis makes their presence visible), `mention`
-   (PD-36; refused until PD-36 registers its policy) and, in part 2,
-   `supervision`. Each reason says whether its seat **grants** access, whether
-   it may be taken in a family 1:1, and after how many idle days it ends
-   (default 14; 0 = never).
-3. **Access.** Only a granting reason makes the seat a basis, `seated`, and
-   only while the reason's eligibility still holds: it is re-checked on every
-   access, so a lost reason ends access at once. `seated` is the **weakest**
-   basis: anyone with a PD-8 basis keeps theirs (a manager seated by a mention
-   is still the manager, with PD-14 moderation and the escalation mode). A
-   seated person reads and writes as a party, may start a group call as a
-   member (PD-19), and is never in charge: no moderation of others, no
-   membership changes, no approvals.
-4. **In a group** the seat is a live, non-silent member row. **In a family
-   1:1** it is an *effective* seat: no member row (a 1:1 is its two members,
-   BR-1), but the holder is notified as a member is. A granting reason is never
-   taken in a 1:1. BR-1 / PD-7 and C-4 are untouched: the seat never bypasses
-   the membership triggers.
-5. **Nothing else ends a seat.** The Student Group reconcile, a PD-31 change of
-   teacher and a PD-24 supervisor swap leave it in place; a seat holder who
-   becomes the group's supervisor keeps the row and the seat ends as
-   *absorbed*. A member row ended by a membership edit ends its seat.
-6. **Leaving, and the sweep.** Leaving, and the worker's sweep (a lost reason
-   or idle days), end the seat with its line; a holder left with no access
-   leaves the live room (RT-009) before the operation reports success.
-
-**Canonical rule.** `supabase/migrations/20261026160000_chat_pd035_conversation_seat.sql`
-(`chat.staff_conversation_access` = `chat.staff_conversation_standing`, the
-PD-8 decision unchanged, else `seated`); `ConversationSeatService` is the only
-writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
-`POST conversations/:id/leave`, `GET me/seats`. Proven by
-`apps/api/test/integration/conversation-seat-pd035.spec.ts`.
 
 ---
 

@@ -475,3 +475,176 @@ describe('9. the backup link and the cover stay one decision', () => {
       .toBe(CommErrorCode.ORG_STRUCTURE_INVALID);
   });
 });
+
+describe('10. review fixes (#130)', () => {
+  const linkOf = (primaryId: string, backupId: string) =>
+    g.prisma.supervisorBackup.findFirstOrThrow({ where: { primaryId, backupId, endedAt: null } });
+
+  it('an Extend between the sweep\'s read and its claim keeps the cover open and the link aligned', async () => {
+    const p = m.supervisors[0]!;
+    const c = await covers.start(p.id, { supervisorId: p.id, until: inHours(2) });
+    const observed = new Date(c.endsAt); // what the sweep read
+    const extended = await covers.extend(p.id, c.id); // commits before the claim
+    expect(await covers.returnDue(c.id, observed)).toBe(false);
+    const row = await g.prisma.supervisorCover.findUniqueOrThrow({ where: { id: c.id } });
+    expect(row.endedAt).toBeNull();
+    expect(row.endsAt.toISOString()).toBe(extended.endsAt);
+    expect((await linkOf(p.id, c.backup.id)).activeUntil?.toISOString()).toBe(extended.endsAt);
+    for (const id of caseload(p.id).groups) expect(await lines(id, 'cover.ended')).toBe(0);
+  });
+
+  it('closing a cover clamps its link to the moment it ended', async () => {
+    const p = m.supervisors[0]!;
+    const c = await covers.start(p.id, { supervisorId: p.id, until: inHours(5) });
+    const ended = await covers.end(p.id, c.id);
+    const link = await linkOf(p.id, c.backup.id);
+    expect(link.activeUntil!.getTime()).toBeLessThanOrEqual(new Date(ended.endedAt!).getTime());
+    expect(link.deactivatedAt).not.toBeNull();
+  });
+
+  it('a future cover activates the link only from its start; over a live manual activation it is refused', async () => {
+    const p = m.supervisors[0]!;
+    const b = backupOf(p.id);
+    const from = inHours(24);
+    const c = await covers.start(p.id, { supervisorId: p.id, from, until: inHours(48) });
+    expect((await linkOf(p.id, b.id)).activatedAt?.toISOString()).toBe(new Date(from).toISOString());
+    expect(await principals(b.id, new Date())).not.toContain(p.id); // no gap access
+    await covers.end(p.id, c.id);
+
+    const link = await linkOf(p.id, b.id);
+    await org.activateBackup(m.operationsManager.id, link.id, { reason: 'manual help', until: inHours(10) });
+    expect(await code(covers.start(p.id, { supervisorId: p.id, from: inHours(24), until: inHours(48) }))).toBe(CommErrorCode.ORG_STRUCTURE_INVALID);
+    expect(await g.prisma.supervisorCover.count({ where: { primaryId: p.id, endedAt: null } })).toBe(0);
+    // Starting NOW takes the manual activation over (the cover owns the end).
+    const now = await covers.start(p.id, { supervisorId: p.id, until: inHours(5) });
+    expect((await linkOf(p.id, b.id)).activeUntil?.toISOString()).toBe(now.endsAt);
+  });
+
+  it('"I\'m away" picks only a backup a manager linked; a manager may pick any eligible one and link it', async () => {
+    const p = m.supervisors[0]!;
+    const other = m.backups.find((b) => !b.covers.includes(p.id))!;
+    const linksBefore = await g.prisma.supervisorBackup.count({ where: { primaryId: p.id, backupId: other.id } });
+    const preview = await covers.preview(p.id, { supervisorId: p.id });
+    expect(preview.eligibleBackups.find((x) => x.id === other.id)?.blocked).toBe('not_linked');
+    expect(await code(covers.start(p.id, { supervisorId: p.id, backupId: other.id, until: inHours(3) }))).toBe(CommErrorCode.ORG_STRUCTURE_INVALID);
+    expect(await g.prisma.supervisorBackup.count({ where: { primaryId: p.id, backupId: other.id } })).toBe(linksBefore);
+
+    const c = await covers.start(m.operationsManager.id, { supervisorId: p.id, backupId: other.id, until: inHours(3) });
+    expect(c.backup.id).toBe(other.id);
+    expect((await linkOf(p.id, other.id)).createdBy).toBe(m.operationsManager.id);
+  });
+
+  it('a manual activation racing a start never leaves a cover with a misaligned link', async () => {
+    const p = m.supervisors[0]!;
+    const b = backupOf(p.id);
+    for (let round = 0; round < 5; round++) {
+      const link = await linkOf(p.id, b.id);
+      if (link.activatedAt && !link.deactivatedAt) await org.deactivateBackup(m.operationsManager.id, link.id, { reason: 'reset' });
+      await Promise.allSettled([
+        covers.start(m.operationsManager.id, { supervisorId: p.id, until: inHours(4) }),
+        org.activateBackup(m.operationsManager.id, link.id, { reason: 'race', until: inHours(80) }),
+      ]);
+      const open = await g.prisma.supervisorCover.findFirst({ where: { primaryId: p.id, endedAt: null } });
+      if (open) {
+        const after = await linkOf(p.id, b.id);
+        expect({ round, until: after.activeUntil?.toISOString(), off: after.deactivatedAt })
+          .toEqual({ round, until: open.endsAt.toISOString(), off: null });
+        await covers.end(m.superAdmin.id, open.id);
+      }
+    }
+  });
+
+  it('two sweeps at once announce a future cover once', async () => {
+    const p = m.supervisors[0]!;
+    const c = await covers.start(p.id, { supervisorId: p.id, from: inHours(1), until: inHours(3) });
+    const later = new Date(Date.now() + 2 * HOUR);
+    const [a, b] = await Promise.all([covers.sweep(later), covers.sweep(later)]);
+    expect(a.started + b.started).toBe(1);
+    for (const id of [...caseload(p.id).groups, ...caseload(p.id).directs]) expect(await lines(id, 'cover.started')).toBe(1);
+    expect(await g.prisma.supervisorCoverAnnouncement.count({ where: { coverId: c.id, lineKey: 'started' } })).toBe(1);
+    expect(await covers.deliver(c.id)).toBe(0); // a retry posts nothing twice
+  });
+
+  it('cover lines neither reorder the chat list nor count as unread', async () => {
+    const p = m.supervisors[0]!;
+    const group = caseload(p.id).groups[0]!;
+    const before = await g.prisma.conversation.findUniqueOrThrow({ where: { id: group } });
+    const parent = m.families.find((f) => f.groups.some((x) => x.conversationId === group))!.parent.id;
+    const unreadBefore = await g.messages.unreadCount(group, parent);
+    await covers.start(p.id, { supervisorId: p.id, until: inHours(5) });
+    const after = await g.prisma.conversation.findUniqueOrThrow({ where: { id: group } });
+    expect(after.lastActivityAt.toISOString()).toBe(before.lastActivityAt.toISOString());
+    expect(after.lastSeq).toBeGreaterThan(before.lastSeq);
+    expect(await g.messages.unreadCount(group, parent)).toBe(unreadBefore);
+  });
+
+  it('the away supervisor\'s own message pushes neither them nor the backup', async () => {
+    const p = m.supervisors[0]!;
+    const b = backupOf(p.id);
+    const fam = m.families.find((f) => f.directs.some((d) => d.supervisorId === p.id))!;
+    const direct = fam.directs.find((d) => d.supervisorId === p.id)!.conversationId;
+    await covers.start(p.id, { supervisorId: p.id, until: inHours(5) });
+    await g.outboxWorker.drain(1000);
+    const sent = await g.messages.send({ senderId: p.id, conversationId: direct, body: 'A reply while away', clientMessageId: randomUUID() } as never);
+    await g.outboxWorker.drain(1000);
+    const pushed = await g.prisma.notification.findMany({ where: { templateKey: 'new_message', dedupeKey: { contains: sent.id } } });
+    expect(pushed.map((n) => n.recipientId)).toEqual([fam.parent.id]);
+    expect(pushed.map((n) => n.recipientId)).not.toContain(b.id);
+  });
+
+  it('extend re-checks the backup: one who has left cannot be extended', async () => {
+    const p = m.supervisors[0]!;
+    const b = backupOf(p.id);
+    const c = await covers.start(p.id, { supervisorId: p.id, until: inHours(5) });
+    // Make the backup inactive without the link ending (as if the staff file changed).
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+      await tx.staff.update({ where: { id: b.id }, data: { isActive: false, leftAt: new Date() } });
+    });
+    try {
+      expect(await code(covers.extend(p.id, c.id))).toBe(CommErrorCode.ORG_STRUCTURE_INVALID);
+    } finally {
+      await g.prisma.staff.update({ where: { id: b.id }, data: { isActive: true, leftAt: null } });
+    }
+  });
+
+  it('a large caseload (~150 families) is announced in batches, each line once', async () => {
+    const p = m.supervisors[3]!;
+    const made: string[] = [];
+    for (let i = 0; i < 150; i++) {
+      const fam = await g.prisma.family.create({ data: { organizationId: orgId, displayName: `PD-33 bulk family ${i}`, ownerId: p.id } });
+      const contact = await g.prisma.contact.create({
+        data: {
+          organizationId: orgId,
+          familyId: fam.id,
+          name: `Bulk Parent ${i}`,
+          rolePreset: 'primary_guardian',
+          canMessage: true,
+          canViewProgress: true,
+          canManageSchedule: false,
+          canManageBilling: false,
+          canManageContacts: false,
+          canCancel: false,
+        },
+      });
+      const conv = await g.prisma.conversation.create({
+        data: { organizationId: orgId, type: 'direct', familyId: fam.id, directKey: [contact.id, p.id].sort().join(':') },
+      });
+      await g.prisma.conversationMember.createMany({
+        data: [
+          { conversationId: conv.id, actorId: p.id, actorKind: 'staff', memberRole: 'admin' },
+          { conversationId: conv.id, actorId: contact.id, actorKind: 'contact', memberRole: 'parent' },
+        ],
+      });
+      made.push(conv.id);
+    }
+    const c = await covers.start(m.superAdmin.id, { supervisorId: p.id, until: inHours(5) });
+    const announcement = await g.prisma.supervisorCoverAnnouncement.findFirstOrThrow({ where: { coverId: c.id, lineKey: 'started' } });
+    expect(announcement.doneAt).not.toBeNull();
+    for (const id of made) expect(await lines(id, 'cover.started')).toBe(1);
+    expect(await g.prisma.supervisorCoverLine.count({ where: { announcementId: announcement.id } })).toBeGreaterThanOrEqual(150);
+    // A retry after a partial delivery posts only what is missing.
+    await g.prisma.supervisorCoverAnnouncement.update({ where: { id: announcement.id }, data: { doneAt: null } });
+    expect(await covers.deliver(c.id)).toBe(0);
+  });
+});

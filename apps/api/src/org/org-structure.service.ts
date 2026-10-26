@@ -689,9 +689,6 @@ export class OrgStructureService {
   async activateBackup(actorId: string, id: string, body: { until?: unknown; reason?: unknown }) {
     const { actor, link } = await this.loadBackupForChange(actorId, id);
     const reason = requireText('reason', body.reason, 500);
-    if (await this.covers?.linkHasOpenCover(link.id)) {
-      throw new CommError(CommErrorCode.ORG_STRUCTURE_INVALID, 'a cover runs on this link; extend or end the cover instead', 409);
-    }
     const now = new Date();
     let until: Date | null = null;
     if (body.until !== undefined && body.until !== null) {
@@ -709,6 +706,9 @@ export class OrgStructureService {
 
     return this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      // PD-33: a running cover owns this link's window. Checked under the link's
+      // row lock, inside this transaction, so a cover starting now is seen.
+      await this.covers?.lockAndAssertNoCover(tx, link.id);
       const updated = await tx.supervisorBackup.update({
         where: { id: link.id },
         data: { activatedAt: now, activeUntil: until, activatedBy: actor.actorId, deactivatedAt: null, deactivatedBy: null },

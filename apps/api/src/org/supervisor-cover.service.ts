@@ -25,6 +25,9 @@ export interface CoverScope {
   openItems: { approvals: number; instalments: number; newStudents: number; total: number };
 }
 
+/** Conversations per transaction when posting announcement lines (a large caseload never holds one long transaction). */
+const LINE_BATCH = 25;
+
 /** A push owed after the transaction that earned it commits. */
 type Push = { key: string; template: 'cover_started' | 'cover_ended'; recipientId: string; variables: Record<string, unknown> };
 
@@ -78,7 +81,7 @@ export class SupervisorCoverService {
     const primary = await this.requirePrimary(org, primaryId);
     await this.authorize(actor, org, primaryId, null, 'start');
 
-    const eligible = await this.eligibleBackups(this.prisma, primaryId, new Date());
+    const eligible = await this.eligibleBackups(this.prisma, primaryId, new Date(), actor.actorId === primaryId);
     const chosenId = query.backupId === undefined || query.backupId === '' ? null : requireUuid('backupId', query.backupId);
     const backup = chosenId ? eligible.find((b) => b.id === chosenId) ?? null : eligible.find((b) => b.linked) ?? eligible[0] ?? null;
     const open = await this.prisma.supervisorCover.findFirst({ where: { primaryId, endedAt: null } });
@@ -88,7 +91,7 @@ export class SupervisorCoverService {
       backup: backup ? { id: backup.id, name: backup.name } : null,
       eligibleBackups: eligible,
       maxDays: await this.maxDays(),
-      openCover: open ? await this.view(open, actor) : null,
+      openCover: open ? (await this.views([open], actor))[0]! : null,
       counts: {
         families: scope.families.length,
         groups: scope.groups.length,
@@ -118,7 +121,7 @@ export class SupervisorCoverService {
       where.OR = [{ primaryId: actor.actorId }, { backupId: actor.actorId }];
     }
     const rows = await this.prisma.supervisorCover.findMany({ where, orderBy: { startsAt: 'desc' }, take: 100 });
-    return { covers: await Promise.all(rows.map((c) => this.view(c, actor))) };
+    return { covers: await this.views(rows, actor) };
   }
 
   /** The signed-in staff member's own state: may they hand over, are they away, whom do they cover. */
@@ -131,10 +134,11 @@ export class SupervisorCoverService {
       where: { backupId: actor.actorId, endedAt: null },
       orderBy: { startsAt: 'asc' },
     });
+    const views = await this.views(away ? [away, ...covering] : covering, actor);
     return {
       canHandOver: isPrimary && actor.staffRole === StaffRole.ADMIN,
-      away: away ? await this.view(away, actor) : null,
-      covering: await Promise.all(covering.map((c) => this.view(c, actor))),
+      away: away ? views[0]! : null,
+      covering: away ? views.slice(1) : views,
     };
   }
 
@@ -143,10 +147,16 @@ export class SupervisorCoverService {
   // ------------------------------------------------------------------
 
   /**
-   * Start a cover: the link is activated for [from, until), the cover row is
-   * written (the trigger re-checks eligibility and the one-open-cover rule),
-   * and -- when it starts now -- every affected conversation gets its line and
-   * the backup their one push. One transaction.
+   * Start a cover. One SHORT transaction: the pair's link (locked) is activated
+   * for [from, until), the cover row is written (the trigger re-checks
+   * eligibility and the one-open-cover rule), and -- when it starts now -- the
+   * start is claimed and its announcement queued. The lines themselves are
+   * posted after commit, in batches (deliver).
+   *
+   * Who chooses the backup: a supervisor handing themself over ("I'm away")
+   * only to a backup a manager has ALREADY linked to them (PD-8
+   * canConfigureBackup); a manager or the super admin to any eligible backup,
+   * creating the link as part of the start.
    */
   async start(actorId: string, body: { supervisorId?: unknown; backupId?: unknown; from?: unknown; until?: unknown; note?: unknown }) {
     const actor = await this.conversations.requireActor(actorId);
@@ -154,11 +164,13 @@ export class SupervisorCoverService {
     const primaryId = requireUuid('supervisorId', body.supervisorId);
     const primary = await this.requirePrimary(org, primaryId);
     await this.authorize(actor, org, primaryId, null, 'start');
+    const selfService = actor.actorId === primaryId;
 
     const now = new Date();
     const from = body.from === undefined || body.from === null || body.from === '' ? now : requireInstant('from', body.from);
     if (from.getTime() < now.getTime() - 5 * 60_000) throw invalid('from', 'cannot be in the past');
     const fromAt = from < now ? now : from;
+    const future = fromAt > now;
     const until = requireInstant('until', body.until);
     const maxDays = await this.maxDays();
     if (until <= fromAt) throw invalid('until', 'must be after the start');
@@ -167,12 +179,14 @@ export class SupervisorCoverService {
     }
     const note = optionalText('note', body.note, 500);
 
-    const eligible = await this.eligibleBackups(this.prisma, primaryId, now);
+    const eligible = await this.eligibleBackups(this.prisma, primaryId, now, selfService);
     const backupId =
       body.backupId === undefined || body.backupId === null || body.backupId === ''
-        ? (eligible.find((b) => b.linked) ?? eligible[0])?.id ?? null
+        ? (eligible.find((b) => b.linked) ?? (selfService ? undefined : eligible[0]))?.id ?? null
         : requireUuid('backupId', body.backupId);
-    if (!backupId) throw structure('this supervisor has no backup supervisor to hand over to');
+    if (!backupId) {
+      throw structure(selfService ? 'no backup is linked to you yet; ask your manager to link one' : 'this supervisor has no backup supervisor to hand over to');
+    }
     const choice = eligible.find((b) => b.id === backupId);
     if (!choice) throw structure('the cover must be a backup supervisor of the same department');
     if (choice.blockedReason) throw structure(choice.blockedReason);
@@ -183,8 +197,10 @@ export class SupervisorCoverService {
       if (await tx.supervisorCover.findFirst({ where: { primaryId, endedAt: null }, select: { id: true } })) {
         throw structure(`${primary.name} is already handed over; extend or end that cover first`);
       }
-      let link = await tx.supervisorBackup.findFirst({ where: { primaryId, backupId, endedAt: null } });
+      let link = await this.lockLink(tx, primaryId, backupId);
       if (!link) {
+        // Re-checked inside the transaction: a manager may have ended the link since.
+        if (selfService) throw structure('only a manager links a new backup; choose your linked backup');
         link = await tx.supervisorBackup.create({ data: { organizationId: org, primaryId, backupId, createdBy: actor.actorId } });
         await this.audit.audit(tx, {
           actorId: actor.actorId,
@@ -195,12 +211,17 @@ export class SupervisorCoverService {
           reason: 'PD-33: handed over to this backup',
         });
       }
-      // An activation already running keeps its start; the cover owns the end.
-      const live = link.activatedAt && link.activatedAt <= fromAt && !link.deactivatedAt && (!link.activeUntil || link.activeUntil > now);
+      const manuallyLive =
+        !!link.activatedAt && link.activatedAt <= now && !link.deactivatedAt && (!link.activeUntil || link.activeUntil > now);
+      if (future && manuallyLive) {
+        // Otherwise the backup would keep access through the gap before the cover begins.
+        throw structure('this backup link is already active; end the manual activation first');
+      }
       await tx.supervisorBackup.update({
         where: { id: link.id },
         data: {
-          activatedAt: live ? link.activatedAt : fromAt,
+          // Starting now over a live manual activation keeps its start; the cover owns the end.
+          activatedAt: !future && manuallyLive ? link.activatedAt : fromAt,
           activeUntil: until,
           activatedBy: actor.actorId,
           deactivatedAt: null,
@@ -228,11 +249,12 @@ export class SupervisorCoverService {
         after: { primaryId, backupId, startsAt: fromAt, endsAt: until },
         reason: note ?? 'PD-33: hand over to backup',
       });
-      if (fromAt <= now) return this.announceStart(tx, created, pushes);
-      return created;
+      if (!future) await this.claimStart(tx, created.id, pushes);
+      return tx.supervisorCover.findUniqueOrThrow({ where: { id: created.id } });
     });
     await this.sendPushes(pushes);
-    return this.view(cover, actor);
+    await this.deliverQuietly(cover.id);
+    return (await this.views([cover], actor))[0]!;
   }
 
   /** One tap: the same window again, never past cover.max_days from now. */
@@ -244,11 +266,17 @@ export class SupervisorCoverService {
     const endsAt = new Date(cover.endsAt.getTime() + cover.windowSeconds * 1000);
     const latest = new Date(Math.max(cover.startsAt.getTime(), now.getTime()) + maxDays * 86_400_000);
     if (endsAt > latest) throw invalid('until', `a cover runs at most ${maxDays} days; for longer, change the supervisor`);
+    // The backup must still be able to cover: active, in the department, not away.
+    const backup = (await this.eligibleBackups(this.prisma, cover.primaryId, now, false)).find((b) => b.id === cover.backupId);
+    if (!backup || backup.blocked === 'inactive' || backup.blocked === 'away') {
+      throw structure(backup?.blockedReason ?? 'the backup can no longer cover this supervisor');
+    }
 
     const updated = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       const claimed = await tx.supervisorCover.updateMany({ where: { id: cover.id, endedAt: null }, data: { endsAt } });
       if (claimed.count === 0) throw structure('this cover has already ended');
+      await tx.$queryRaw`SELECT id FROM chat.supervisor_backup WHERE id = ${cover.backupLinkId}::uuid FOR UPDATE`;
       await tx.supervisorBackup.update({ where: { id: cover.backupLinkId }, data: { activeUntil: endsAt } });
       const row = await tx.supervisorCover.findUniqueOrThrow({ where: { id: cover.id } });
       await this.audit.audit(tx, {
@@ -260,16 +288,17 @@ export class SupervisorCoverService {
         after: { endsAt },
         reason: 'PD-33: extended for the same window',
       });
-      if (row.startAnnouncedAt) await this.postLines(tx, row, 'cover.extended');
+      if (row.startAnnouncedAt) await this.queueAnnouncement(tx, row, 'cover.extended');
       return row;
     });
-    return this.view(updated, actor);
+    await this.deliverQuietly(updated.id);
+    return (await this.views([updated], actor))[0]!;
   }
 
   /**
    * "End cover now" -- by the supervisor, the backup, their manager or the
    * super admin. Claimed with a conditional update, so racing the sweep (or a
-   * second tap) ends it once and posts ONE return line.
+   * second tap) ends it once and queues ONE return announcement.
    */
   async end(actorId: string, coverId: string) {
     const { actor, cover } = await this.loadOpen(actorId, coverId, 'end');
@@ -278,26 +307,43 @@ export class SupervisorCoverService {
       await this.conversations.assertActorLive(tx, actor);
       return this.close(tx, cover.id, 'ended_early', actor.actorId, new Date(), pushes);
     });
-    await this.revocation.confirmRevoked();
-    await this.sendPushes(pushes);
-    return this.view(ended ?? (await this.prisma.supervisorCover.findUniqueOrThrow({ where: { id: cover.id } })), actor);
+    try {
+      await this.revocation.confirmRevoked();
+    } finally {
+      // The cover IS ended whatever the barrier says: the supervisor hears it.
+      await this.sendPushes(pushes);
+      await this.deliverQuietly(cover.id);
+    }
+    const row = ended ?? (await this.prisma.supervisorCover.findUniqueOrThrow({ where: { id: cover.id } }));
+    return (await this.views([row], actor))[0]!;
   }
 
   /**
    * The backup link a cover runs on was deactivated or ended by another path
    * (the Organization page, a department change): its open cover ends with it,
-   * inside the caller's transaction. Returns the pushes to send after commit.
+   * inside the caller's transaction. Returns what to do after commit (the
+   * pushes and the lines).
    */
   async closeForLink(tx: Tx, linkId: string, actorId: string | null): Promise<() => Promise<void>> {
     const open = await tx.supervisorCover.findMany({ where: { backupLinkId: linkId, endedAt: null }, select: { id: true } });
     const pushes: Push[] = [];
     for (const c of open) await this.close(tx, c.id, 'link_ended', actorId, new Date(), pushes);
-    return () => this.sendPushes(pushes);
+    return async () => {
+      await this.sendPushes(pushes);
+      for (const c of open) await this.deliverQuietly(c.id);
+    };
   }
 
-  /** Is a cover running on this link? (A manual activation must not overwrite its window.) */
-  async linkHasOpenCover(linkId: string): Promise<boolean> {
-    return (await this.prisma.supervisorCover.count({ where: { backupLinkId: linkId, endedAt: null } })) > 0;
+  /**
+   * A manual activation must not overwrite a running cover's window. Called
+   * INSIDE the activation's transaction: the link row is locked, so a cover
+   * starting at the same moment (which locks it too) is seen or waits.
+   */
+  async lockAndAssertNoCover(tx: Tx, linkId: string): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM chat.supervisor_backup WHERE id = ${linkId}::uuid FOR UPDATE`;
+    if ((await tx.supervisorCover.count({ where: { backupLinkId: linkId, endedAt: null } })) > 0) {
+      throw structure('a cover runs on this link; extend or end the cover instead');
+    }
   }
 
   // ------------------------------------------------------------------
@@ -305,12 +351,13 @@ export class SupervisorCoverService {
   // ------------------------------------------------------------------
 
   /**
-   * Announce covers that have begun (a future-dated start) and close covers
-   * whose window is over, posting the return lines. Access never waits for
-   * this: the link's active_until already ended it. Every step is a claim by
-   * conditional update, so every replica may run it at once.
+   * Announce covers that have begun (a future-dated start), close covers whose
+   * window is over, and finish any announcement whose lines are not all posted
+   * yet. Access never waits for this: the link's active_until already ended
+   * it. Every step is a claim by conditional update, so every replica may run
+   * it at once.
    */
-  async sweep(now = new Date()): Promise<{ started: number; returned: number }> {
+  async sweep(now = new Date()): Promise<{ started: number; returned: number; delivered: number }> {
     let started = 0;
     let returned = 0;
     const starting = await this.prisma.supervisorCover.findMany({
@@ -321,13 +368,7 @@ export class SupervisorCoverService {
     for (const { id } of starting) {
       const pushes: Push[] = [];
       try {
-        const done = await this.write(async (tx) => {
-          const row = await tx.supervisorCover.findUnique({ where: { id } });
-          if (!row || row.endedAt || row.startAnnouncedAt) return false;
-          await this.announceStart(tx, row, pushes);
-          return true;
-        });
-        if (done) {
+        if (await this.write((tx) => this.claimStart(tx, id, pushes))) {
           started += 1;
           await this.sendPushes(pushes);
         }
@@ -341,28 +382,135 @@ export class SupervisorCoverService {
       take: 200,
     });
     for (const { id, endsAt } of due) {
-      const pushes: Push[] = [];
       try {
-        const closed = await this.write((tx) => this.close(tx, id, 'returned', null, endsAt, pushes));
-        if (closed) {
-          returned += 1;
-          await this.sendPushes(pushes);
-        }
+        if (await this.returnDue(id, endsAt)) returned += 1;
       } catch (e) {
         this.log.warn(`cover ${id}: return failed: ${e instanceof Error ? e.message : 'unknown'}`);
       }
     }
-    return { started, returned };
+    const delivered = await this.deliver();
+    return { started, returned, delivered };
+  }
+
+  /**
+   * Close a cover the sweep found due, AS SEEN: `observedEndsAt` is the end it
+   * read. An Extend that committed in between moved ends_at past it, so the
+   * claim finds nothing and the cover stays open (and its link aligned).
+   */
+  async returnDue(coverId: string, observedEndsAt: Date): Promise<boolean> {
+    const pushes: Push[] = [];
+    const closed = await this.write((tx) => this.close(tx, coverId, 'returned', null, observedEndsAt, pushes));
+    if (!closed) return false;
+    await this.sendPushes(pushes);
+    return true;
+  }
+
+  /**
+   * Post the queued announcement lines -- for one cover, or every pending one --
+   * in batches of LINE_BATCH conversations per transaction. Each line is
+   * claimed in chat.supervisor_cover_line first, so a retry (or a second
+   * runner) never posts it twice. Returns the number of lines posted.
+   */
+  async deliver(coverId?: string): Promise<number> {
+    let posted = 0;
+    const pending = await this.prisma.supervisorCoverAnnouncement.findMany({
+      where: { doneAt: null, ...(coverId ? { coverId } : {}) },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+    for (const a of pending) {
+      const cover = await this.prisma.supervisorCover.findUnique({ where: { id: a.coverId }, select: { primaryId: true } });
+      if (!cover) continue;
+      const scope = await this.scopeOf(this.prisma, cover.primaryId);
+      const already = new Set(
+        (await this.prisma.supervisorCoverLine.findMany({ where: { announcementId: a.id }, select: { conversationId: true } })).map(
+          (l) => l.conversationId,
+        ),
+      );
+      const todo = [...scope.groups, ...scope.directs].filter((id) => !already.has(id));
+      for (let i = 0; i < todo.length; i += LINE_BATCH) {
+        const batch = todo.slice(i, i + LINE_BATCH);
+        posted += await this.write(async (tx) => {
+          let n = 0;
+          for (const conversationId of batch) {
+            const claimed = await tx.$executeRaw`
+              INSERT INTO chat.supervisor_cover_line (announcement_id, conversation_id)
+              VALUES (${a.id}::uuid, ${conversationId}::uuid) ON CONFLICT DO NOTHING`;
+            if (claimed !== 1) continue;
+            const messageId = await this.conversations.postAnnouncement(tx, conversationId, a.kind, a.payload as Record<string, unknown>, {
+              touchActivity: false, // informational: never reorders the chat list
+            });
+            await tx.supervisorCoverLine.update({
+              where: { announcementId_conversationId: { announcementId: a.id, conversationId } },
+              data: { messageId },
+            });
+            n += 1;
+          }
+          return n;
+        });
+      }
+      await this.prisma.supervisorCoverAnnouncement.updateMany({ where: { id: a.id, doneAt: null }, data: { doneAt: new Date() } });
+    }
+    return posted;
   }
 
   // ------------------------------------------------------------------
   // Internals
   // ------------------------------------------------------------------
 
+  /** Deliver after a change commits; a failure is left to the sweep, never to the caller. */
+  private async deliverQuietly(coverId: string): Promise<void> {
+    try {
+      await this.deliver(coverId);
+    } catch (e) {
+      this.log.warn(`cover ${coverId}: lines left for the sweep: ${e instanceof Error ? e.message : 'unknown'}`);
+    }
+  }
+
   /**
-   * End one open cover: the claim, the link, the lines, the audit. Returns the
-   * ended row, or null when somebody else ended it first (then nothing else
-   * happens here -- exactly one return line, whoever wins).
+   * Claim a cover's start: set start_announced_at only if nobody has, and only
+   * while the cover is open -- then queue its announcement and the backup's
+   * summary push. Two sweeps (or a sweep and the start itself) claim it once.
+   */
+  private async claimStart(tx: Tx, coverId: string, pushes: Push[]): Promise<boolean> {
+    const claimed = await tx.$queryRaw<Array<{ id: string }>>`
+      UPDATE chat.supervisor_cover SET start_announced_at = now()
+       WHERE id = ${coverId}::uuid AND start_announced_at IS NULL AND ended_at IS NULL
+      RETURNING id::text AS id`;
+    if (claimed.length === 0) return false;
+    const cover = await tx.supervisorCover.findUniqueOrThrow({ where: { id: coverId } });
+    await this.queueAnnouncement(tx, cover, 'cover.started');
+    const scope = await this.scopeOf(tx, cover.primaryId);
+    const names = await this.names(tx, [cover.primaryId]);
+    pushes.push({
+      key: `cover_started:${cover.id}`,
+      template: 'cover_started',
+      recipientId: cover.backupId,
+      variables: { supervisor: names.get(cover.primaryId) ?? '', families: scope.families.length, startsAt: cover.endsAt.toISOString() },
+    });
+    return true;
+  }
+
+  /** One announcement per event (started / extended to a new end / ended); a repeat is a no-op. */
+  private async queueAnnouncement(tx: Tx, cover: SupervisorCover, kind: 'cover.started' | 'cover.extended' | 'cover.ended') {
+    const names = await this.names(tx, [cover.primaryId, cover.backupId]);
+    const payload = {
+      supervisor: names.get(cover.primaryId) ?? null,
+      cover: names.get(cover.backupId) ?? null,
+      ...(kind === 'cover.ended' ? {} : { until: cover.endsAt.toISOString() }),
+    };
+    const lineKey = kind === 'cover.started' ? 'started' : kind === 'cover.ended' ? 'ended' : `extended:${cover.endsAt.toISOString()}`;
+    await tx.supervisorCoverAnnouncement.createMany({
+      data: [{ coverId: cover.id, kind, lineKey, payload }],
+      skipDuplicates: true,
+    });
+  }
+
+  /**
+   * End one open cover: the claim, the link, the audit, the return
+   * announcement. Returns the ended row, or null when the claim found nothing
+   * -- somebody else ended it first, or (for `returned`) an Extend moved its
+   * end past `at`. Then nothing else happens here: one return line, whoever wins.
    */
   private async close(
     tx: Tx,
@@ -373,17 +521,24 @@ export class SupervisorCoverService {
     pushes: Push[],
   ): Promise<SupervisorCover | null> {
     const claimed = await tx.supervisorCover.updateMany({
-      where: { id: coverId, endedAt: null },
+      where: { id: coverId, endedAt: null, ...(kind === 'returned' ? { endsAt: { lte: at } } : {}) },
       data: { endedAt: at, endedBy: actorId, endKind: kind },
     });
     if (claimed.count === 0) return null;
     const cover = await tx.supervisorCover.findUniqueOrThrow({ where: { id: coverId } });
-    if (kind === 'ended_early') {
-      // Access ends now, not at the planned `until`.
-      const link = await tx.supervisorBackup.findUnique({ where: { id: cover.backupLinkId } });
-      if (link && !link.endedAt && !link.deactivatedAt) {
-        await tx.supervisorBackup.update({ where: { id: link.id }, data: { deactivatedAt: at, deactivatedBy: actorId } });
-      }
+    // The link never outlives its cover: clamp its window to `at` (or, for a
+    // cover that had not begun yet, switch it off).
+    await tx.$queryRaw`SELECT id FROM chat.supervisor_backup WHERE id = ${cover.backupLinkId}::uuid FOR UPDATE`;
+    const link = await tx.supervisorBackup.findUnique({ where: { id: cover.backupLinkId } });
+    if (link && !link.endedAt) {
+      const begun = !!link.activatedAt && link.activatedAt < at;
+      await tx.supervisorBackup.update({
+        where: { id: link.id },
+        data: {
+          ...(begun && (!link.activeUntil || link.activeUntil > at) ? { activeUntil: at } : {}),
+          ...((!begun || kind === 'ended_early') && !link.deactivatedAt ? { deactivatedAt: at, deactivatedBy: actorId } : {}),
+        },
+      });
     }
     await this.audit.audit(tx, {
       actorId,
@@ -395,7 +550,7 @@ export class SupervisorCoverService {
       reason: kind === 'returned' ? 'PD-33: the cover reached its end' : kind === 'link_ended' ? 'PD-33: the backup link ended' : 'PD-33: ended early',
     });
     if (cover.startAnnouncedAt) {
-      await this.postLines(tx, cover, 'cover.ended');
+      await this.queueAnnouncement(tx, cover, 'cover.ended');
       const names = await this.names(tx, [cover.backupId]);
       pushes.push({
         key: `cover_ended:${cover.id}`,
@@ -407,32 +562,13 @@ export class SupervisorCoverService {
     return cover;
   }
 
-  private async announceStart(tx: Tx, cover: SupervisorCover, pushes: Push[]): Promise<SupervisorCover> {
-    const row = await tx.supervisorCover.update({ where: { id: cover.id }, data: { startAnnouncedAt: new Date() } });
-    const scope = await this.postLines(tx, row, 'cover.started');
-    const names = await this.names(tx, [row.primaryId]);
-    pushes.push({
-      key: `cover_started:${row.id}`,
-      template: 'cover_started',
-      recipientId: row.backupId,
-      variables: { supervisor: names.get(row.primaryId) ?? '', families: scope.families.length, startsAt: row.endsAt.toISOString() },
-    });
-    return row;
-  }
-
-  /** One silent line in every conversation the cover touches. */
-  private async postLines(tx: Tx, cover: SupervisorCover, kind: 'cover.started' | 'cover.extended' | 'cover.ended'): Promise<CoverScope> {
-    const scope = await this.scopeOf(tx, cover.primaryId);
-    const names = await this.names(tx, [cover.primaryId, cover.backupId]);
-    const payload = {
-      supervisor: names.get(cover.primaryId) ?? null,
-      cover: names.get(cover.backupId) ?? null,
-      ...(kind === 'cover.ended' ? {} : { until: cover.endsAt.toISOString() }),
-    };
-    for (const id of [...scope.groups, ...scope.directs]) {
-      await this.conversations.postAnnouncement(tx, id, kind, payload);
-    }
-    return scope;
+  /** The pair's live link, locked for the rest of the transaction; null when there is none. */
+  private async lockLink(tx: Tx, primaryId: string, backupId: string) {
+    const [row] = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.supervisor_backup
+       WHERE primary_id = ${primaryId}::uuid AND backup_id = ${backupId}::uuid AND ended_at IS NULL
+       FOR UPDATE`;
+    return row ? tx.supervisorBackup.findUnique({ where: { id: row.id } }) : null;
   }
 
   /**
@@ -497,7 +633,7 @@ export class SupervisorCoverService {
    * The backup supervisors of the primary's department, linked one first, each
    * with why they cannot cover now (inactive, away, at the limit) or null.
    */
-  private async eligibleBackups(db: Db, primaryId: string, now: Date) {
+  private async eligibleBackups(db: Db, primaryId: string, now: Date, selfService: boolean) {
     const max = await this.config.get('cover.max_concurrent');
     const rows = await db.$queryRaw<Array<{ id: string; name: string; live: boolean; linked: boolean; covering: number; away: boolean }>>`
       SELECT s.id::text AS id, s.name, (s.is_active AND s.left_at IS NULL) AS live,
@@ -517,37 +653,56 @@ export class SupervisorCoverService {
       name: r.name,
       linked: r.linked,
       covering: r.covering,
-      /** Why they cannot cover now, for a client to word: inactive | away | at_limit | null. */
-      blocked: (!r.live ? 'inactive' : r.away ? 'away' : r.covering >= max ? 'at_limit' : null) as 'inactive' | 'away' | 'at_limit' | null,
+      /**
+       * Why they cannot cover now, for a client to word: inactive | away |
+       * at_limit | not_linked (a supervisor handing themself over may choose
+       * only a backup a manager has linked to them) | null.
+       */
+      blocked: (!r.live
+        ? 'inactive'
+        : r.away
+          ? 'away'
+          : r.covering >= max
+            ? 'at_limit'
+            : selfService && !r.linked
+              ? 'not_linked'
+              : null) as 'inactive' | 'away' | 'at_limit' | 'not_linked' | null,
       blockedReason: !r.live
         ? `${r.name} is not an active staff member`
         : r.away
           ? `${r.name} is away themselves`
           : r.covering >= max
             ? `${r.name} already covers ${r.covering} supervisors`
-            : null,
+            : selfService && !r.linked
+              ? `${r.name} is not linked to you; only a manager links a new backup`
+              : null,
     }));
   }
 
-  private async view(c: SupervisorCover, actor: Actor) {
+  /** Many covers in one go: one names query, one actsFor per distinct supervisor. */
+  private async views(covers: SupervisorCover[], actor: Actor) {
+    if (covers.length === 0) return [];
     const now = new Date();
-    const names = await this.names(this.prisma, [c.primaryId, c.backupId]);
-    const status: CoverStatus = c.endedAt || c.endsAt <= now ? 'ended' : c.startsAt > now ? 'scheduled' : 'active';
-    const acts = await this.authz.actsFor(actor, c.primaryId, now);
-    const ctx = { organizationId: c.organizationId, actsForPrimary: acts, isCoveringBackup: actor.actorId === c.backupId };
-    return {
-      id: c.id,
-      supervisor: { id: c.primaryId, name: names.get(c.primaryId) ?? '' },
-      backup: { id: c.backupId, name: names.get(c.backupId) ?? '' },
-      startsAt: c.startsAt.toISOString(),
-      endsAt: c.endsAt.toISOString(),
-      endedAt: c.endedAt?.toISOString() ?? null,
-      endKind: c.endKind,
-      note: c.note,
-      status,
-      canExtend: status !== 'ended' && this.authz.canManageCover(actor, ctx, 'extend').allowed,
-      canEnd: status !== 'ended' && this.authz.canManageCover(actor, ctx, 'end').allowed,
-    };
+    const names = await this.names(this.prisma, [...new Set(covers.flatMap((c) => [c.primaryId, c.backupId]))]);
+    const primaries = [...new Set(covers.map((c) => c.primaryId))];
+    const acts = new Map(await Promise.all(primaries.map(async (p) => [p, await this.authz.actsFor(actor, p, now)] as const)));
+    return covers.map((c) => {
+      const status: CoverStatus = c.endedAt || c.endsAt <= now ? 'ended' : c.startsAt > now ? 'scheduled' : 'active';
+      const ctx = { organizationId: c.organizationId, actsForPrimary: acts.get(c.primaryId) ?? null, isCoveringBackup: actor.actorId === c.backupId };
+      return {
+        id: c.id,
+        supervisor: { id: c.primaryId, name: names.get(c.primaryId) ?? '' },
+        backup: { id: c.backupId, name: names.get(c.backupId) ?? '' },
+        startsAt: c.startsAt.toISOString(),
+        endsAt: c.endsAt.toISOString(),
+        endedAt: c.endedAt?.toISOString() ?? null,
+        endKind: c.endKind,
+        note: c.note,
+        status,
+        canExtend: status !== 'ended' && this.authz.canManageCover(actor, ctx, 'extend').allowed,
+        canEnd: status !== 'ended' && this.authz.canManageCover(actor, ctx, 'end').allowed,
+      };
+    });
   }
 
   private async loadOpen(actorId: string, coverId: string, action: 'extend' | 'end') {
@@ -614,7 +769,11 @@ export class SupervisorCoverService {
     }
   }
 
-  /** One transaction; a database refusal of an unlawful cover becomes 409, never a 500. */
+  /**
+   * One short transaction. A database refusal of an unlawful cover becomes
+   * 409; a transaction that could not finish in time (P2028) a clean 503 --
+   * nothing was committed and retrying is safe. Never a 500.
+   */
   private async write<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     try {
       return await this.prisma.$transaction(fn);
@@ -624,15 +783,26 @@ export class SupervisorCoverService {
   }
 }
 
-function refusal(e: unknown): unknown {
+/** A failed cover transaction as the caller should see it (exported for its unit test). */
+export function refusal(e: unknown): unknown {
   if (e instanceof CommError) return e;
   const text = e instanceof Error ? e.message : String(e);
   const code = (e as { meta?: { code?: string } })?.meta?.code ?? (e as { code?: string })?.code ?? '';
+  if (code === 'P2028') {
+    return new CommError(CommErrorCode.ORG_STRUCTURE_BUSY, 'the change could not finish in time; nothing was saved -- try again', 503);
+  }
   if (code === 'P2002' || /supervisor_cover_one_open/.test(text)) {
     return structure('this supervisor is already handed over; extend or end that cover first');
   }
-  if (['23514', '42501', '23503', '23505', 'P2003'].includes(code) || /check_violation|insufficient_privilege|violates/.test(text)) {
-    const why = /ERROR:\s*([^\n]+)/.exec(text)?.[1] ?? /Message: `([^`]+)`/.exec(text)?.[1] ?? 'the cover was refused';
+  // A trigger's RAISE reaches us as Prisma text: `PostgresError { code: "23514", message: "..." }`.
+  const pgCode = /code: "(\w+)"/.exec(text)?.[1] ?? '';
+  if (
+    ['23514', '42501', '23503', '23505', 'P2003'].includes(code) ||
+    ['23514', '42501', '23503', '23505'].includes(pgCode) ||
+    /check_violation|insufficient_privilege|violates/.test(text)
+  ) {
+    const why =
+      /message: "([^"]+)"/.exec(text)?.[1] ?? /ERROR:\s*([^\n]+)/.exec(text)?.[1] ?? /Message: `([^`]+)`/.exec(text)?.[1] ?? 'the cover was refused';
     return structure(why.replace(/^.*?ERROR:\s*/, ''));
   }
   return e;
