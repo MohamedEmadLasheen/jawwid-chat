@@ -111,7 +111,7 @@ export function currencyName(code: string, locale: 'ar' | 'en'): string {
 /** "18:30" in the reader's digits. */
 export function formatClock(hhmm: string, locale: 'ar' | 'en'): string {
   const [h, m] = hhmm.split(':').map(Number)
-  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm
+  if (h === undefined || m === undefined || Number.isNaN(h) || Number.isNaN(m)) return hhmm
   const n = new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', { minimumIntegerDigits: 2, useGrouping: false })
   return `${n.format(h)}:${n.format(m)}`
 }

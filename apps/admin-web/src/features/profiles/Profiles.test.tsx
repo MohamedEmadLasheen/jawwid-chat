@@ -335,3 +335,34 @@ describe('the Parents entry in navigation', () => {
     expect(destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))).toContain('/admin/parents')
   })
 })
+
+describe('PD-32: feedback about teachers on the Parent Profile', () => {
+  const row = {
+    id: 'pf-1', familyId: 'f-1', parent: { id: 'p-1', name: 'Parent Alpha' }, child: { id: 'k-1', name: 'Child One' },
+    teacher: { id: 't-1', name: 'Teacher Omega' }, category: 'complaint', body: 'Lessons start late.', status: 'in_review',
+    response: 'We are looking into it.', respondedBy: { id: 's-9', name: 'Teachers Dept' }, respondedAt: '2026-10-25T09:00:00Z',
+    createdAt: '2026-10-24T09:00:00Z', complaint: { entryId: 'e-1', handledBy: { id: 's-9', name: 'Teachers Dept' } },
+  }
+
+  it('lists what the family sent, read only', async () => {
+    on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
+    on('GET', /\/families\/f-1\/billing$/, () => json(billing()))
+    on('GET', /\/families\/f-1\/parent-feedback$/, () => json({ feedback: [row] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    const section = await screen.findByRole('region', { name: 'Feedback about teachers' })
+    expect(await within(section).findByText('Lessons start late.')).toBeInTheDocument()
+    expect(within(section).getByText('We are looking into it.')).toBeInTheDocument()
+    // Taking and replying belong to the Supervision page.
+    expect(within(section).queryByRole('button', { name: /Take|Reply/ })).not.toBeInTheDocument()
+  })
+
+  it('is simply not there for a viewer the server refuses', async () => {
+    on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
+    on('GET', /\/families\/f-1\/billing$/, () => json(billing()))
+    on('GET', /\/families\/f-1\/parent-feedback$/, () => json({ code: 'COMM.FEEDBACK_DENIED', message: 'no' }, 403))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    expect(await screen.findByRole('region', { name: 'Payment information' })).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /parent-feedback$/).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('region', { name: 'Feedback about teachers' })).not.toBeInTheDocument()
+  })
+})
