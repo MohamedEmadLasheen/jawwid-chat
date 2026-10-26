@@ -1180,6 +1180,8 @@ model Lesson {
   createdByKind  String    @default("staff") @map("created_by_kind")
   createdBy      String?   @map("created_by") @db.Uuid
   scheduleSlotId String?   @map("schedule_slot_id") @db.Uuid
+  /// PD-31: the lesson this one replaces after a move (that row is rescheduled). Insert only.
+  movedFrom      String?   @map("moved_from") @db.Uuid
   remindersScheduledAt DateTime? @map("reminders_scheduled_at") @db.Timestamptz
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
@@ -1389,7 +1391,11 @@ model ScheduleChangeRequest {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
   learnerId      String    @map("learner_id") @db.Uuid
+  /// A contact (requestedByKind contact) or the learner's teacher (teacher, PD-31).
   requestedBy    String    @map("requested_by") @db.Uuid
+  requestedByKind String   @default("contact") @map("requested_by_kind")
+  /// PD-31: the day the new times start, in the teacher's zone; null = when approved.
+  effectiveFrom  DateTime? @map("effective_from") @db.Date
   slots          Json
   note           String?
   status         String    @default("pending")
@@ -1399,6 +1405,29 @@ model ScheduleChangeRequest {
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
 
   @@map("schedule_change_request")
+  @@schema("chat")
+}
+
+/// PD-31: a weekly lesson the materializer could not create because the teacher
+/// already had another lesson then. Resolved by staff, or cleared by itself.
+model LessonBlockedOccurrence {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  learnerId      String    @map("learner_id") @db.Uuid
+  teacherId      String    @map("teacher_id") @db.Uuid
+  scheduleSlotId String    @map("schedule_slot_id") @db.Uuid
+  startsAt       DateTime  @map("starts_at") @db.Timestamptz
+  endsAt         DateTime  @map("ends_at") @db.Timestamptz
+  blockedBy      String    @map("blocked_by") @db.Uuid
+  detectedAt     DateTime  @default(now()) @map("detected_at") @db.Timestamptz
+  resolution     String?
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedBy     String?   @map("resolved_by") @db.Uuid
+  lessonId       String?   @map("lesson_id") @db.Uuid
+  note           String?
+
+  @@unique([scheduleSlotId, startsAt])
+  @@map("lesson_blocked_occurrence")
   @@schema("chat")
 }
 
