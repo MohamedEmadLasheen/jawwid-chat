@@ -3083,8 +3083,10 @@ writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
    audited. The database keeps an assigned supervisor in the department.
 2. **The scope** (`chat.staff_teacher_scope`):
    - the super admin and the Teachers Manager cover every teacher;
-   - a teacher supervisor covers their own teachers, plus those of a supervisor
-     they actively back up (PD-8 links; a PD-33 cover works the same way).
+   - a teacher supervisor covers their own teachers. PD-8 backup links (and PD-33
+     covers) are the Operations department's only, so a teacher supervisor has
+     no backup today; the scope would follow one through `staff_acts_for` if a
+     later decision adds them.
 3. **The switch `TEACHER_SUPERVISOR_STRICT_SCOPE`** (Q1, changed by the department
    head). It is **off by default everywhere**.
    - **Off:** the Teachers department works department-wide exactly as before

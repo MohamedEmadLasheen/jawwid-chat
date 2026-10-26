@@ -7,8 +7,8 @@
  *      supervisor of the Teachers department is assigned; it is audited, and the
  *      database keeps an assigned supervisor in the department
  *   2. switch OFF: the department works department-wide, exactly as before
- *   3. switch ON: a teacher supervisor works on their own teachers (and a
- *      supervisor they back up); the Teachers Manager on every teacher; anything
+ *   3. switch ON: a teacher supervisor works on their own teachers; the
+ *      Teachers Manager on every teacher; anything
  *      else reads as not found -- Teacher File, lessons, the supervision chat
  *   4. the 'supervision' seat: a teacher supervisor joins their teacher's
  *      child's group, visibly; anyone else is refused; a change of teacher ends
@@ -183,11 +183,11 @@ describe('3. switch ON', () => {
     expect((await files.list(tmgr)).teachers.map((t) => t.id)).toEqual(expect.arrayContaining([s.teacherId, s.newTeacherId]));
     expect(await access(tmgr, chat.conversationId)).toBe('member');
 
-    // A backup of tsupA works on tsupA's teachers while the link is active.
+    // PD-8 backup links are the Operations department's only: a Teachers-department
+    // backup supervisor has no teacher of their own, and so none of this.
     expect(await access(tbak, chat.conversationId)).toBeNull();
-    await activateBackup(g.prisma, tsupA, tbak);
-    expect(await access(tbak, chat.conversationId)).toBe('member');
-    await expect(files.detail(tbak, s.teacherId)).resolves.toBeDefined();
+    await expect(activateBackup(g.prisma, tsupA, tbak)).rejects.toThrow(/Operations department has a backup/);
+    expect(await code(files.detail(tbak, s.teacherId))).toBe(CommErrorCode.TEACHER_FILE_NOT_FOUND);
   });
 });
 
