@@ -41,8 +41,8 @@ claimed. The decision text itself still lives in
 | PD-30 | Subscriptions, lesson balance and payment-based group lock | `claude/pd30-api`, `claude/pd30-subscription-lock-f3e070` | PR #126 + #127 |
 | PD-31 | Scheduling: trial time slots, reschedule redesign, a parent's child schedule, change teacher | `claude/pd31-scheduling-*` | in progress |
 | PD-32 | Parent feedback about the teacher (amends PD-26), Starred in Chats, New Students redesign, sign-up code without time expiry (amends PD-16), Trial labels | `claude/pd32-feedback-ui-*` | in progress |
-| PD-38 | Scheduling calendar: academy and teacher views, shifts by category, supervisor colors, filters, capacity statistics | `claude/pd38-schedule-calendar-b9fe8f` | P1 (API + Admin Web) in review |
-| PD-33 | next free number | — | — |
+| PD-35 | Teacher supervisors: the visible seat (join/leave by choice), teacher assignment and scope, report corrections, evaluations, escalation | `claude/pd35-teacher-supervisors-8efcc6` | in progress |
+| PD-38 | Scheduling calendar: academy and teacher views, shifts by category, supervisor colors, filters, capacity statistics | `claude/pd38-schedule-calendar-b9fe8f`, `claude/pd38-admin-web` | P1: PR #139 (API) + #142 (Admin Web) |
 
 ## Migration slots claimed on 2026-10-22
 
@@ -63,6 +63,7 @@ claimed. The decision text itself still lives in
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
 | `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
+| `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (later PD-35 PRs: `…160001`, `…160002`) |
 | `20261026210000` | PD-38 — `chat_pd038_schedule_calendar` |
 
 The next free slot is `20261026150000`.
