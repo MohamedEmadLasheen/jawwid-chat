@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, Lesson, LessonCorrection, LessonReport, LessonRuling, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
@@ -29,6 +29,7 @@ import {
 } from '../communication/contracts/vocab';
 import { renderCardBody, type CardLanguage } from './lesson-card';
 import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
+import { ReportMaterials, hasMaterials, parseReportMaterials, type CardPractice, type ReportMaterialsInput } from '../materials/report-materials';
 
 export type Tx = Prisma.TransactionClient;
 
@@ -123,6 +124,9 @@ export class LessonService {
     private readonly outbox: OutboxService,
     private readonly config: AppConfigService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-29: practice and memorization marks written with the report. Optional
+    // so the positional construction in the unit harnesses does not change.
+    @Optional() readonly reportMaterials?: ReportMaterials,
   ) {}
 
   // ------------------------------------------------------------------
@@ -499,20 +503,37 @@ export class LessonService {
    */
   async report(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const fields = reportFields(body);
+    // PD-29: optional "practice this week" and surah statuses for the map.
+    const materials = parseReportMaterials(body);
     return this.close(actorId, lessonId, 'report', LessonOutcome.HELD, null, async (tx, lesson, actor, lang) => {
+      const practice = await this.prepareMaterials(tx, lesson, actor, materials);
       await tx.lessonReport.create({
         data: {
           lessonId: lesson.id, organizationId: lesson.organizationId, teacherId: lesson.teacherId,
           ...fields, enteredByKind: 'teacher', enteredBy: actor.actorId,
         },
       });
-      const messageId = await this.postCard(tx, lesson, actor, CardKind.LESSON_REPORT, this.reportPayload(lesson, fields), lang);
+      await this.reportMaterials?.writeNew(tx, lesson, actor, materials);
+      const messageId = await this.postCard(tx, lesson, actor, CardKind.LESSON_REPORT, this.reportPayload(lesson, fields, practice), lang);
       if (messageId) await tx.lessonReport.update({ where: { lessonId: lesson.id }, data: { messageId } });
     });
   }
 
-  /** What a report card carries: everything but the private note. */
-  reportPayload(lesson: LessonWithRelations, f: ReportFields) {
+  /**
+   * PD-29: check a report's Materials before anything is written -- a trial
+   * has no child to practise, staff do not mark the map from a report, and a
+   * library item must be a published item of this organization. The practice
+   * as the card shows it, or undefined when the body names none.
+   */
+  async prepareMaterials(tx: Tx, lesson: LessonWithRelations, actor: Actor, materials: ReportMaterialsInput): Promise<CardPractice[] | undefined> {
+    if (!hasMaterials(materials)) return undefined;
+    if (!this.reportMaterials) throw invalid('practice and memorization are not available on this server');
+    this.reportMaterials.assertApplies(lesson, materials, actor);
+    return this.reportMaterials.resolve(tx, lesson.organizationId, materials);
+  }
+
+  /** What a report card carries: everything but the private note (PD-29: and its practice, when it has any). */
+  reportPayload(lesson: LessonWithRelations, f: ReportFields, practice?: CardPractice[]) {
     return {
       ...this.cardBase(lesson),
       lessonNumber: f.lessonNumber,
@@ -521,6 +542,7 @@ export class LessonService {
       rating: f.rating,
       nextTasks: f.nextTasks,
       homework: f.homework,
+      ...(practice && practice.length > 0 ? { practice } : {}),
     };
   }
 

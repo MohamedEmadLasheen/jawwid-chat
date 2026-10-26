@@ -138,11 +138,11 @@ describe('Admin Portal registry and navigation', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
     const nav = await screen.findByRole('navigation')
 
-    // Five destinations hold all twenty-one sections plus Chat and (PD-21)
-    // Accounts. Below desktop width the drawer lists every one of them, none
-    // behind a toggle. (The desktop rail's menus are covered in
-    // app/Navigation.test.tsx.)
-    expect(within(nav).getAllByRole('link')).toHaveLength(23)
+    // Five destinations hold all twenty-one sections plus Chat, (PD-21)
+    // Accounts and (PD-29) Materials. Below desktop width the drawer lists
+    // every one of them, none behind a toggle. (The desktop rail's menus are
+    // covered in app/Navigation.test.tsx.)
+    expect(within(nav).getAllByRole('link')).toHaveLength(24)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })

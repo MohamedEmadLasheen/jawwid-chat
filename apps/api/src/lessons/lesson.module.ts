@@ -20,6 +20,7 @@ import { EnrollmentService } from './enrollment.service';
 import { JourneyController } from './journey.controller';
 import { LessonRecordService } from './lesson-record.service';
 import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
+import { ReportMaterials } from '../materials/report-materials';
 
 /**
  * PD-9 / PD-11: lessons, their one outcome, the tickets that record it, and
@@ -44,7 +45,10 @@ import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
     // PD-16: enrolling a new student. The file lives in src/new-students (it reads
     // the confined form); it is provided here, beside the scheduling it calls.
     NewStudentEnrolmentService,
+    // PD-29: a report's practice and memorization marks, written in the
+    // report's transaction. The file lives in src/materials.
+    ReportMaterials,
   ],
-  exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService],
+  exports: [LessonService, SchedulingService, ReportMaterials, LifecycleService, SupervisionService, StatsService, TrialService],
 })
 export class LessonModule {}

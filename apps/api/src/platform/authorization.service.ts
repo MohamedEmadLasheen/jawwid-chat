@@ -85,7 +85,9 @@ export type LessonAct =
   | 'edit_report'
   | 'delete_report'
   | 'manage_enrollment'
-  | 'read_profile';
+  | 'read_profile'
+  | 'read_materials'
+  | 'correct_memorization';
 
 /**
  * Who may record what (PD-11's table, extended by PD-15). The report is the
@@ -129,6 +131,13 @@ const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
   // the super admin, the child's supervisor) and the child's own teacher. Not
   // the family: parents see their children on their own profile.
   read_profile: ['manager', 'supervisor', 'teacher'],
+  // PD-29: a child's Materials page -- the library, practice this week and the
+  // memorization map -- for the family, the child's own teacher and the staff
+  // whose PD-8 scope reaches the child. A surah marked in a report rides on
+  // `report` / `edit_report`; a correction outside a report names its reason
+  // and is the teacher's or the supervisors'.
+  read_materials: ['manager', 'supervisor', 'teacher', 'family'],
+  correct_memorization: ['manager', 'supervisor', 'teacher'],
 };
 
 export interface SendIntent {

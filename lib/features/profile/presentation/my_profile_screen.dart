@@ -8,6 +8,7 @@ import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/parent_profile.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../materials/presentation/child_materials_entry.dart';
 import '../application/parent_profile_controller.dart';
 
 /// The parent's own editable profile, and their children's.
@@ -190,6 +191,9 @@ class _SubjectCardState extends ConsumerState<_SubjectCard> {
                   ),
               ],
             ),
+            // PD-29: each child's Materials, from the parent's own profile.
+            if (!subject.isParent && subject.id != null)
+              ChildMaterialsEntry(learnerId: subject.id!, childName: subject.displayName),
             const SizedBox(height: Spacing.spacing4),
             if (_editing)
               _EditForm(

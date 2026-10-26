@@ -1,5 +1,6 @@
 import { CardKind, LessonOutcome, RulingDecision } from '../communication/contracts/vocab';
 import { performanceLabel, taskLabel, topicLabel } from './report-vocab';
+import { surahOf } from '../materials/quran-surahs';
 
 export type CardLanguage = 'ar' | 'en';
 
@@ -138,7 +139,23 @@ function reportBody(p: Record<string, unknown>, ar: boolean, title: string | nul
     line(ar ? 'مستوى الأداء' : 'Performance', performance),
     line(ar ? 'المطلوب للحصة القادمة' : 'For next lesson', list(p.nextTasks, taskLabel)),
     line(ar ? 'الواجب' : 'Homework', p.homework),
+    line(ar ? 'تدريب هذا الأسبوع' : 'Practice this week', practiceLabel(p.practice, ar)),
   ].filter((x): x is string => x !== null).join('\n');
+}
+
+/** PD-29: a report's practice in one line -- "Al-Mulk 1–10، <item title>". */
+function practiceLabel(v: unknown, ar: boolean): string | null {
+  if (!Array.isArray(v) || v.length === 0) return null;
+  const parts = v.map((raw) => {
+    const p = (raw ?? {}) as Record<string, unknown>;
+    if (p.kind === 'item') return String(p.title ?? '');
+    const surah = surahOf(Number(p.surah));
+    if (!surah) return '';
+    const name = ar ? `سورة ${surah.nameAr}` : surah.nameEn;
+    const whole = p.ayahFrom === 1 && p.ayahTo === surah.ayahCount;
+    return whole ? name : `${name} ${String(p.ayahFrom)}–${String(p.ayahTo)}`;
+  }).filter((x) => x !== '');
+  return parts.length ? parts.join(ar ? '، ' : ', ') : null;
 }
 
 /** A lesson outcome as a family reads it. */

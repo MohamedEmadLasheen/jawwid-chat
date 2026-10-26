@@ -64,7 +64,9 @@ EXCLUDED_GROUPS = ("backup",)
 # (apps/admin-web/infra-nginx/default.conf.template). Not secrets, not in the
 # manifest (the manifest is the API process), always required: an empty origin
 # silently narrows the CSP until calls or voice notes stop working.
-ADMIN_WEB_ENV = ("API_ORIGIN", "REALTIME_ORIGIN", "LIVEKIT_ORIGIN", "STORAGE_ORIGIN")
+# MATERIALS_FRAME_ORIGINS (PD-29) is the exception: optional (the manifest row
+# the API shares), because empty only means "no lessons site is framed".
+ADMIN_WEB_ENV = ("API_ORIGIN", "REALTIME_ORIGIN", "LIVEKIT_ORIGIN", "STORAGE_ORIGIN", "MATERIALS_FRAME_ORIGINS")
 
 # Placeholders the resolver derives instead of reading. Each domain is the host
 # of a URL the workflow already holds, so the two can never disagree.

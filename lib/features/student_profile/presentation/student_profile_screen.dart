@@ -10,6 +10,7 @@ import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/student_profile.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../materials/presentation/child_materials_entry.dart';
 import '../application/student_profile_provider.dart';
 
 /// PD-17: a teacher's view of one of their own students -- photo, name, age, course,
@@ -103,6 +104,9 @@ class _Body extends StatelessWidget {
           missing: l10n.groupChildNoSchedule,
           note: zones.length == 1 ? l10n.studentProfileTimeZone(zones.single) : null,
         ),
+        // PD-29: the child's memorization map, which their teacher can correct.
+        Divider(height: 1, color: tokens.colorBorderSubtle),
+        ChildMaterialsEntry(learnerId: profile.id, childName: profile.name, progress: true),
       ],
     );
   }
