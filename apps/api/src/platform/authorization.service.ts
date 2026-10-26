@@ -139,11 +139,10 @@ const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
   // the super admin, the child's supervisor) and the child's own teacher. Not
   // the family: parents see their children on their own profile.
   read_profile: ['manager', 'supervisor', 'teacher'],
-  // PD-29: a child's Materials page -- the library, practice this week and the
-  // memorization map -- for the family, the child's own teacher and the staff
-  // whose PD-8 scope reaches the child. A surah marked in a report rides on
-  // `report` / `edit_report`; a correction outside a report names its reason
-  // and is the teacher's or the supervisors'.
+  // PD-29: a child's Materials page -- the library and opened this week -- for
+  // the family, the child's own teacher and the staff whose PD-8 scope reaches
+  // the child. correct_memorization served the memorization map, retired on
+  // 2026-10-26 (its routes answer 410); no route asks for it any more.
   read_materials: ['manager', 'supervisor', 'teacher', 'family'],
   correct_memorization: ['manager', 'supervisor', 'teacher'],
 };
@@ -1489,6 +1488,30 @@ export class AuthorizationService {
       target.organizationId,
       (a) => a.staffRole === StaffRole.SUPER_ADMIN || (a.staffRole === StaffRole.MANAGER && target.actsForPrimary === 'manager'),
       'configure backup supervisors',
+    );
+  }
+
+  /**
+   * PD-33: starting, extending or ending a supervisor's cover. The supervisor
+   * themself, the manager of their department, or the super admin -- and, to
+   * END it only, the backup who is covering. `actsForPrimary` is
+   * chat.staff_acts_for(actor, primary); a backup's 'backup' basis never counts
+   * here, so covering for someone gives no power over the arrangement itself.
+   */
+  canManageCover(
+    actor: Actor,
+    target: { organizationId: string; actsForPrimary: ActsFor; isCoveringBackup: boolean },
+    action: 'start' | 'extend' | 'end',
+  ): Decision {
+    return this.orgAuthority(
+      actor,
+      target.organizationId,
+      (a) =>
+        a.staffRole === StaffRole.SUPER_ADMIN ||
+        (a.staffRole === StaffRole.MANAGER && target.actsForPrimary === 'manager') ||
+        (a.staffRole === StaffRole.ADMIN && target.actsForPrimary === 'self') ||
+        (action === 'end' && target.isCoveringBackup),
+      action === 'end' ? 'end this cover' : 'hand this supervisor over to a backup',
     );
   }
 

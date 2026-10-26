@@ -10,10 +10,14 @@
          fallback). The local_auth plugin declares it too; stated here so the app's own
          manifest says what it asks for. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- enableOnBackInvokedCallback: predictive back (Android 14+). The system back
+         gesture previews the screen underneath before it commits; Flutter drives it
+         through the PredictiveBackPageTransitionsBuilder in lib/design/theme.dart. -->
     <application
         android:label="jawwid_chat"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

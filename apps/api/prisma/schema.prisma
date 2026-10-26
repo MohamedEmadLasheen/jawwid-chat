@@ -1140,6 +1140,58 @@ model SupervisorBackup {
   @@schema("chat")
 }
 
+/// PD-33: a supervisor away, their backup covering for a window. Access is the
+/// backup link's activation; this row is the event, the routing input and the
+/// history (20261026130000).
+model SupervisorCover {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  primaryId        String    @map("primary_id") @db.Uuid
+  backupId         String    @map("backup_id") @db.Uuid
+  backupLinkId     String    @map("backup_link_id") @db.Uuid
+  startsAt         DateTime  @map("starts_at") @db.Timestamptz
+  endsAt           DateTime  @map("ends_at") @db.Timestamptz
+  windowSeconds    Int       @map("window_seconds")
+  note             String?
+  startedBy        String    @map("started_by") @db.Uuid
+  createdAt        DateTime  @map("created_at") @db.Timestamptz @default(now())
+  startAnnouncedAt DateTime? @map("start_announced_at") @db.Timestamptz
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz
+  endedBy          String?   @map("ended_by") @db.Uuid
+  endKind          String?   @map("end_kind")
+
+  @@map("supervisor_cover")
+  @@schema("chat")
+}
+
+/// PD-33: one announcement event of a cover (started / extended / ended); its
+/// lines are delivered in batches after the change commits.
+model SupervisorCoverAnnouncement {
+  id        String    @id @default(uuid()) @db.Uuid
+  coverId   String    @map("cover_id") @db.Uuid
+  kind      String
+  lineKey   String    @map("line_key")
+  payload   Json
+  createdAt DateTime  @map("created_at") @db.Timestamptz @default(now())
+  doneAt    DateTime? @map("done_at") @db.Timestamptz
+
+  @@unique([coverId, lineKey], map: "supervisor_cover_announcement_once")
+  @@map("supervisor_cover_announcement")
+  @@schema("chat")
+}
+
+/// PD-33: a cover line already posted in a conversation (the idempotency key).
+model SupervisorCoverLine {
+  announcementId String   @map("announcement_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  messageId      String?  @map("message_id") @db.Uuid
+  postedAt       DateTime @map("posted_at") @db.Timestamptz @default(now())
+
+  @@id([announcementId, conversationId])
+  @@map("supervisor_cover_line")
+  @@schema("chat")
+}
+
 model ConversationLearner {
   conversationId String   @map("conversation_id") @db.Uuid
   learnerId      String   @map("learner_id") @db.Uuid
@@ -2330,6 +2382,8 @@ model MaterialItem {
   surah          Int?     @db.SmallInt
   /// draft | published | retired
   status         String   @default("draft")
+  /// PD-29 amendment: the order provided (manifest row order); Quran orders by surah instead.
+  sortOrder      Int?     @map("sort_order")
   createdBy      String   @map("created_by") @db.Uuid
   updatedBy      String   @map("updated_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -2424,6 +2478,21 @@ model MemorizationMark {
   at             DateTime @default(now()) @db.Timestamptz
 
   @@map("memorization_mark")
+  @@schema("chat")
+}
+
+/// PD-29 amendment: each time an item was opened for a child. Append-only.
+model MaterialOpen {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  learnerId      String   @map("learner_id") @db.Uuid
+  itemId         String   @map("item_id") @db.Uuid
+  openedBy       String   @map("opened_by") @db.Uuid
+  /// contact | teacher | staff
+  openedByKind   String   @map("opened_by_kind")
+  openedAt       DateTime @default(now()) @map("opened_at") @db.Timestamptz
+
+  @@map("material_open")
   @@schema("chat")
 }
 

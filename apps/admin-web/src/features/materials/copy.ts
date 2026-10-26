@@ -1,5 +1,5 @@
 import { ApiError } from '@/core/api/errors'
-import type { AgeGroup, ItemStatus, Kind, MarkStatus, Strand, Subject } from './api'
+import type { AgeGroup, ItemStatus, Kind, Strand, Subject } from './api'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
 import type { Pair } from '@/features/organization/copy'
@@ -38,6 +38,12 @@ export const M = {
   titleEn: { en: 'Title (English)', ar: 'العنوان (بالإنجليزية)' },
   description: { en: 'Description', ar: 'الوصف' },
   ref: { en: 'Ref (stable key for imports)', ar: 'المرجع (مفتاح ثابت للاستيراد)' },
+  sortOrder: { en: 'Order', ar: 'الترتيب' },
+  sortOrderHint: {
+    en: 'Its place in the list: 1 comes first. Set from the import row; Quran always lists Al-Fatihah first, then by surah from An-Nas down.',
+    ar: 'مكانها في القائمة: ١ أولًا. يُؤخذ من صف الاستيراد؛ والقرآن يُعرض دائمًا بالفاتحة أولًا ثم بالسور من الناس نزولًا.',
+  },
+  sortOrderShort: { en: 'Order {n}', ar: 'الترتيب {n}' },
   source: { en: 'Source', ar: 'المصدر' },
   sourceSite: { en: 'A lesson of the lessons site', ar: 'درس من موقع الدروس' },
   sitePath: { en: 'Lesson path', ar: 'مسار الدرس' },
@@ -122,22 +128,6 @@ export const M = {
   retireSource: { en: 'Retire', ar: 'إيقاف' },
   restoreSource: { en: 'Restore', ar: 'استعادة' },
   useSource: { en: 'Use this source', ar: 'استخدام هذا المصدر' },
-
-  // Progress map (Student Profile)
-  progressTitle: { en: 'Memorization map', ar: 'خريطة الحفظ' },
-  progressHint: {
-    en: 'Filled from lesson reports. A correction adds to the history and names its reason; nothing is overwritten.',
-    ar: 'تُملأ من تقارير الحصص. التصحيح يُضاف إلى السجل مع سببه، ولا يُستبدل شيء.',
-  },
-  juz: { en: 'Juz’ {n}', ar: 'الجزء {n}' },
-  history: { en: 'History', ar: 'السجل' },
-  correct: { en: 'Correct', ar: 'تصحيح' },
-  newStatus: { en: 'New status', ar: 'الحالة الجديدة' },
-  reason: { en: 'Reason', ar: 'السبب' },
-  reasonHint: { en: 'Required. Parents can see this reason.', ar: 'مطلوب. يرى أولياء الأمور هذا السبب.' },
-  noHistory: { en: 'Nothing recorded for this surah yet.', ar: 'لم يُسجَّل شيء لهذه السورة بعد.' },
-  byTeacher: { en: 'Teacher', ar: 'المعلم' },
-  byStaff: { en: 'Administration', ar: 'الإدارة' },
 } satisfies Record<string, Pair>
 
 export const SUBJECT_LABEL: Record<Subject, Pair> = {
@@ -174,19 +164,6 @@ export const AGE_LABEL: Record<AgeGroup, Pair> = {
   '10-12': { en: '10–12 years', ar: '١٠–١٢ سنة' },
   '13-17': { en: '13–17 years', ar: '١٣–١٧ سنة' },
   '18+': { en: '18+', ar: '١٨ فأكثر' },
-}
-
-export const MARK_LABEL: Record<MarkStatus, Pair> = {
-  not_started: { en: 'Not started', ar: 'لم يبدأ' },
-  in_progress: { en: 'In progress', ar: 'قيد الحفظ' },
-  memorized: { en: 'Memorized', ar: 'محفوظة' },
-  needs_revision: { en: 'Needs revision', ar: 'تحتاج مراجعة' },
-}
-
-export const SOURCE_LABEL: Record<'report' | 'report_edit' | 'correction', Pair> = {
-  report: { en: 'Lesson report', ar: 'تقرير الحصة' },
-  report_edit: { en: 'Edited report', ar: 'تقرير معدّل' },
-  correction: { en: 'Correction', ar: 'تصحيح' },
 }
 
 const BY_CODE: Record<string, Pair> = {

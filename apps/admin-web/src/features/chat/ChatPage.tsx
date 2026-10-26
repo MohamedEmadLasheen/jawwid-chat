@@ -22,6 +22,7 @@ import { StarredDialog } from './StarredDialog'
 import { JoinGroupDialog } from './SeatParts'
 import { Icon } from '@/shared/components/Icon'
 import { isGroup } from './chatView'
+import { MyCoverBanner } from '@/features/organization/CoverBanner'
 import './chat.css'
 
 export { conversationName } from './chatView'
@@ -126,6 +127,8 @@ export function ChatPage() {
             {copy.offline}
           </div>
         )}
+        {/* PD-33: "I'm away", or who covers until when. */}
+        <MyCoverBanner />
         {list.isLoading ? (
           <LoadingState />
         ) : list.error ? (

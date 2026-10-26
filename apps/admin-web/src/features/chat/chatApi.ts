@@ -92,8 +92,18 @@ export interface ChatConversation {
   avatarUrl?: string | null
   /** The viewer's OWN private labels on this chat (staff only). */
   labels?: ChatLabel[]
+  /** PD-33: the supervisor here is away and this backup covers until `until`; null when nobody covers. */
+  cover?: ChatCover | null
   /** PD-30: the group is locked for payment (detail route only); null otherwise. */
   paymentLock?: PaymentLock | null
+}
+
+export interface ChatCover {
+  supervisorId: string
+  supervisorName: string
+  coverId: string
+  coverName: string
+  until: string
 }
 
 /** A staff member's private label. `color` is a palette tone '1'..'8'. */

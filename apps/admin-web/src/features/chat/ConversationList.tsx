@@ -264,6 +264,11 @@ function ConversationRow({
           <span className="conv-row__bottom">
             <span className="conv-row__sub" dir="auto">{preview}</span>
             {c.needsReply && <Badge tone="now">{copy.needsReply}</Badge>}
+            {c.cover && c.cover.coverId === selfId && (
+              <span title={copy.coveringFor(c.cover.supervisorName)} aria-label={copy.coveringFor(c.cover.supervisorName)}>
+                <Badge tone="coverage">{copy.covering}</Badge>
+              </span>
+            )}
             {favorite && (
               <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
                 <Icon name="heart" size={14} />

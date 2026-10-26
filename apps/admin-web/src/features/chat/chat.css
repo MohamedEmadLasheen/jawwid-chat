@@ -549,3 +549,6 @@ mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; 
 .cw-join__main { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
 .cw-join__title { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cw-join__meta { font-size: var(--fs-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* PD-33: "Amira is covering for Noura until 3 Nov" under a chat's name. */
+.thread-head__cover { font-size: var(--fs-xs); color: var(--text-link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
