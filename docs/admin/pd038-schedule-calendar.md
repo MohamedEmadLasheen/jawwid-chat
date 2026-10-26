@@ -89,6 +89,39 @@ exclusive; the window is at most 42 days). They also take the filters
 | `POST /teachers/:id/work-pattern` | `{category, timezone, validFrom, windows?, reason?, applyToAvailability?}`. For a shift, `windows` defaults to the category's default. `applyToAvailability` (default on) also makes the shift the bookable hours |
 | `POST /org/staff/:id/calendar-color` | `{colorKey}`, or `null` to clear it |
 
+## Admin Web (`/schedule`)
+
+- **Navigation:** offered under People when `GET /lessons/access` says
+  `calendar`. The super admin has it beside the portal's sections.
+- **Views:**
+  - Day: teacher rows × hours.
+  - Week: Saturday–Friday, each cell a strip of that day.
+  - Month: teacher × day heat cells from `/calendar/summary`; clicking a
+    cell opens that day.
+  - Times are on the academy's clock and labelled as such.
+- **One state, in the URL:** the view, the date and every filter, so a
+  filtered view can be shared. The calendar and the stats bar send the same
+  query string.
+- **Operations supervisors** open on their own students (`supervisorIds`
+  defaults to them once per visit). Clearing the filter shows the academy.
+- **Built in-house**, with no calendar library:
+  - CSS grid with logical properties, so `dir="rtl"` mirrors the time axis;
+  - rows use `content-visibility: auto`, so 100+ teachers stay cheap.
+- **Legend**, matching the owner's reference:
+  - supervisor chips (clicking one filters);
+  - a red outline for empty time, grey for outside the shift, hatching
+    for leave;
+  - solid, dashed or dotted borders for active, trial or paused lessons.
+
+  Every state is a shape as well as a color.
+- **Palette:** `features/schedule/palette.tsx` holds every fill, border and
+  text color for light and dark, and generates the CSS. `palette.test.ts`
+  measures each one: text at least 4.5:1, borders at least 3:1.
+- **Teacher File → Shift:** the category and windows by day, plus
+  history. The Teachers Manager and the super admin can change it.
+- **Organization → Operations → Schedule colors:** a swatch per supervisor.
+  The Operations Manager and the super admin can change it.
+
 ## Rollback
 
 `db/rollback/20261026210000_pd038.down.sql` drops the patterns and the colors.
