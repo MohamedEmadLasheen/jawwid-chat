@@ -147,6 +147,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 **PD-27 was closed by the product owner on 2026-10-22** (payments: payment links, card payments through Stripe, bank-transfer receipts, cash, invoices, instalment reminders). It builds on PD-17.
 **PD-28 was closed by the product owner on 2026-10-24** (teachers use their portal in a laptop browser: the same app and the same account, teacher-only on the web for now). It extends PD-23's browser session rules to teachers.
+**PD-30 was closed by the department head on 2026-10-26** at the owner's request (subscriptions carry lessons; a child's group locks when they are used up or an instalment is overdue; three roles grant exceptions). It builds on PD-15, PD-17 and PD-27.
 **PD-31 was closed on 2026-10-26** (scheduling made direct: time chips, a child's schedule, moving one lesson or every week, changing the teacher).
 
 | ID | Subject | Status |
@@ -179,6 +180,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 | **PD-27** | **Payments: links, card, bank transfer, cash, invoices, reminders** (2026-10-22) | **CLOSED** — a payment request carries a unique link that works before the parent has an account; card payments through Stripe Checkout are recorded only from a verified webhook, exactly once; parents upload bank-transfer receipts that staff approve or reject with a reason; staff record cash; instalments may be paid in part and by several methods; every payment issues a numbered invoice the parent downloads as a PDF; a trial's payments move onto the family at Assign; append-only, audited, reminders before and after the due date |
 | **PD-28** | **The teacher portal in a browser** (2026-10-24) | **CLOSED** — a teacher signs in at Admin Web's address under `/teacher/` with the same account and gets the same portal as on the phone (the Flutter app built for the web, nothing rebuilt); only teachers on the web for now, everyone else is told to use the app (or Admin Web for staff); the browser keeps the session as Admin Web does (this tab only, or "keep me signed in" on this device) with Admin Web's lifetimes (12 h / 7 d, kept signed in 7 d / 30 d); no push, app lock or voice-note recording in the browser. Record: `../mobile/teacher-web-portal.md` |
+| **PD-30** | **Subscriptions, lesson balance, the payment lock and its exceptions** (2026-10-26) | **CLOSED** — each subscription says how many lessons it includes; held lessons and no-shows use them; two grace lessons follow, then the child's group is read-only for the parent and the teacher (staff still write; the parent's chat with the supervisor never locks), calls and bookings are refused and the lessons are put on hold; an instalment unpaid after its due date locks the same way; paying unlocks at once; the super admin, the Operations Manager and the Sales Manager grant dated exceptions; the parent's app gets a Subscriptions tab; the report says "Lesson N of M". Record: `../admin/pd030-subscriptions.md` |
 | **PD-31** | **Scheduling made direct** (2026-10-26) | **CLOSED** — one time-chip picker everywhere; "Change lesson time" asks "this lesson only" (instant, a new row naming the old, never an apology or a violation; family limits) or "every week" (before → after, from a date; family and teacher request, the Teachers department decides, a request no longer free is flagged first); a weekly lesson the materializer cannot create is listed, never lost; the child's PD-8 supervisor, their backup, the Operations Manager, the Teachers department and the super admin change a group's teacher in one transaction, never dropping weekly times; parents see each child's schedule |
 
 ---
@@ -2691,108 +2693,123 @@ feed the map automatically -- a possible v2.
 
 ---
 
-### PD-32 · A parent's feedback about the teacher; Starred in Chats; New Students redesign; the sign-up code without a time limit; the Trial label
+### PD-30 · Subscriptions, lesson balance, the payment lock and its exceptions
 
-**Closed 2026-10-26** by the product owner (items 6, 8, 11, 13 and 14 of the
-owner's 14-item request of 2026-10-26), with the details decided by the
-department head and the design note approved the same day. **Amends PD-26**
-(complaints: the app now has a form) and **PD-16** (the sign-up code's life).
+**Closed 2026-10-26** by the department head, at the owner's request, with the
+lock, grace and exception policy the head set (the owner may override it).
+Builds on PD-15 (lesson outcomes, the lesson number), PD-17 (instalments) and
+PD-27 (payment requests, payments).
+
+The owner's request of 2026-10-26 (items 2, 3, 4, 5 and 9 of fourteen): move
+Payments into the parent's bottom navigation as **Subscriptions**
+(الاشتراكات); show each plan's lesson count beside its duration ("3 Months —
+24 Lessons"); when a child's allocated lessons are used up, lock the
+teacher–student group but allow exactly two more lessons while payment is
+awaited; when an instalment is unpaid by its due date, lock the group; some
+parents may continue beyond the limit, an exception only the Super Admin, the
+Operations Manager and the Sales Manager may grant, tracked and enforced; the
+teacher's report shows "Lesson 2 of 24".
 
 **Final decision.**
-1. **Feedback about the teacher (item 6).** A parent picks a child of their
-   family (and so that child's teacher), a category -- praise, suggestion or
-   complaint -- and writes. It goes to the administration.
-   - The parent reads each one's **status** (received, in review, resolved) and
-     the **one reply** staff write for them. Never internal notes, the handler,
-     follow-ups or what was decided.
-   - A **complaint** is also a PD-26 complaint, source `parent_app`: the Teachers
-     department takes it (becoming its handler, once), follows up and resolves
-     it on the Teacher File; **upholding it joins the monthly ladder** as any
-     complaint does. The parent's status follows (a follow-up = in review, the
-     resolution = resolved). Praise and suggestions are replied to and resolved
-     on the Supervision page's Parent feedback list.
-   - The **children's supervisor** reads their own children's feedback on the
-     family's Parent File (PD-17).
-   - **The teacher never sees it** -- who filed it, nor the text -- unless staff
-     relay it themselves. No route returns it to a teacher.
-   - **Rate-limited:** 3 per child and 10 per family per rolling 24 hours
-     (`feedback.limit.per_child_day`, `feedback.limit.per_family_day`).
-2. **Starred in Chats (item 8).** "Starred" is a filter chip after Favourites at
-   the top of Chats, for every role that has starred messages; the Settings row
-   is gone.
-3. **New Students redesign (item 11).** Behaviour unchanged. Each card has a
-   header (parent, status badge, recorded by and when), the trial it came from,
-   three blocks (Contact, Payment, Setup), and the children in one aligned table
-   (numbers end-aligned, whole amounts without ".00", the reader's digits).
-   Name search and a status filter were added (client-side only).
-4. **The sign-up code without a time limit (item 13).** A code is valid until it
-   is used or invalidated. Kept: single use; one live code per account, and a
-   new code supersedes the old; 5 wrong tries spend a code; 5 codes per account
-   an hour; the login limiter (10 per e-mail and 30 per source per 15 minutes);
-   stored hashed, in plain text only while a supervisor relays it. A code also
-   ends when **any** password is set on the account (sign-up, PD-21 reset, PD-25
-   recovery), when the account is **suspended or deactivated**, or when the
-   responsible staff press **Invalidate code**. New: **10 wrong codes per e-mail
-   in a rolling 24 hours**, across all codes, refuse further tries
-   (`AUTH.SIGNUP_LOCKED`, "contact your supervisor") until the window rolls or
-   the responsible staff press **Reset attempts** (audited). A new code does not
-   reset it. The cap counts wrong tries for any e-mail typed, known or not, so
-   reaching it tells nobody which e-mails are enrolled.
-   - Counted by the parent's **account** when the e-mail is an enrolled
-     parent's (changing the e-mail does not reset it), by the e-mail's hash
-     otherwise. Each attempt is decided atomically under a per-key advisory
-     lock, so a burst of parallel guesses gets exactly the cap compared.
-   - Wrong-code rows are **purged after 7 days** by the worker; nothing else
-     may delete them.
-   - **Accepted risk:** anyone who knows a parent's e-mail can lock that
-     parent's sign-up for 24 hours by guessing; the parent's supervisor resets
-     it.
-   - **Reset attempts** is the children's supervisor's, the Operations
-     manager's and the super admin's (the same people who see the code) -- by
-     design.
-5. **The Trial label (item 14).** A "Trial" / "تجريبية" badge on every trial
-   group: the app's chat list, header and group info; Admin Web's chat list,
-   header and info, the admin conversations view, the Calls page and the trials
-   page. One violet colour pair in both clients, at least 4.5:1 in light and dark.
 
-**Canonical rule.**
 ```
-parent_feedback      (family, contact, learner, teacher = the child's teacher when
-                     filed, category, body, status, parent_response)
-                     what the parent wrote never changes; status only moves forward
-complaint            parent_feedback(complaint) + teacher_supervision_entry
-                     (kind complaint, complaint_source parent_app, created_by NULL,
-                     parent_feedback_id) -- handler set once by the department
-who reads            the filing family (status + reply) | Teachers dept + super
-                     admin (all) | the children's supervisor (their children)
-                     -- never the teacher (confined to src/teacher-file)
-sign-up code live    unused AND not superseded AND (expires_at IS NULL, or a
-                     pre-PD-32 code's expiry still ahead)
-wrong-code cap       count(parent_signup_failure by account -- or by e-mail hash
-                     when no enrolled parent has it -- uncleared, last 24 h)
-                     >= signup.wrong_codes_per_day (10); decided under
-                     pg_advisory_xact_lock(key); rows purged after 7 days
+the ledger          chat.learner_subscription, per child: plan months, lessons
+                    included, start day. Append-only; voided with a reason.
+                    Written when a subscription / renewal request carrying
+                    lessonsIncluded is PAID IN FULL (a database trigger; a void
+                    that leaves it short takes the lessons back), when an
+                    instalment plan is created for a child with lessonsIncluded
+                    (it credits at creation), and -- free lessons, with a reason
+                    -- by the super admin, the Operations Manager or the Sales
+                    Manager ("Add subscription"; the database checks it).
+                    PD-15's package size became each child's first row,
+                    starting the deploy day
+used                the child's regular and make-up lessons whose outcome is
+                    held or student_no_show, from the first subscription's start
+                    day (academy zone). An apology does not count (its make-up
+                    does, when held); nor do teacher absences, cancellations,
+                    suspensions, voided or pending lessons. A query: corrections
+                    move it by themselves
+balance             included - used; grace lessons are taken from the next
+                    subscription
+grace               balance 0: "2 grace lessons left"; -1: "1 left"; -2: locked
+overdue             an instalment of the family (or of this child) due on or
+                    after go-live -- the day enforcement was first switched on
+                    -- unpaid the day after its due date (academy zone):
+                    locked. Older ones are listed for staff (Instalment
+                    Payments, "before go-live"), never locking
+state               open | grace | locked, per child, in chat.learner_access,
+                    recomputed by chat.refresh_learner_access in the SAME
+                    transaction as every lesson outcome, ledger row, exception,
+                    instalment and request change, and by the worker each minute
+locked means        the child's family / student group is read-only for the
+                    parent and the teacher -- messages, reactions, calls (one
+                    rule in canSend, so canCall follows) -- with a banner naming
+                    the child and (parent and staff only) the reason; staff
+                    still write; a DIRECT chat is never locked; no lesson is
+                    booked for the child (make-ups, the Teachers department's);
+                    the child's regular lessons that have not started are
+                    suspended by the system ("Suspended — payment" for staff and
+                    the family, plain "suspended" for the teacher; owed to no
+                    one, counted nowhere) and none is materialized; a group
+                    with several children locks when any one is locked, but
+                    lessons stay per child
+unlocking           the payment, approved receipt or recorded cash that covers it,
+                    or an exception: at once (same transaction); the lessons come
+                    back at the next worker pass, one per regular time
+exceptions          chat.subscription_exception per child: balance | overdue |
+                    both, a reason, valid until a day at most 90 days ahead;
+                    revoked once; append-only; granted and revoked only by the
+                    super admin, the Operations Manager and the Sales Manager;
+                    audited. The parent never sees one
+told                grace: the family's direct chat (parent + supervisor) and a
+                    push to the parents -- never the group, the teacher sees
+                    nothing financial; locked: "paused" in the group (no
+                    reason), why and where to pay in the direct chat, a push;
+                    unlocked: "back on" in the group, a push. Exactly once per
+                    change (chat.learner_access_event)
+renewal request     a locked child with nothing to pay yet: the parent taps
+                    "Request renewal" -- once per child per academy day; a card
+                    in the direct chat, a push to the Sales department, a list
+                    for staff
+Lesson N of M       N = the next lesson's place in the subscription it falls in;
+                    M = that subscription's lessons, kept on the report; past the
+                    last subscription N > M ("Lesson 25 of 24"); no ledger: "Lesson N"
+switch              SUBSCRIPTION_LOCK_ENFORCED: on in staging, off in production
+                    until the owner turns it on. Off = the ledger, the counting,
+                    the state and the screens work; nothing is refused, held or
+                    announced. The first time it is seen on, go-live is
+                    recorded and every family already in grace or locked is
+                    told; holds begin on the next pass
 ```
 
-**Implementation phase.** Delivered with the decision: migration
-`20261026120000_chat_pd032_parent_feedback_signup_code`; API (`/me/feedback`,
-`/parent-feedback`, `/families/:id/parent-feedback`,
-`/trials/new-students/:id/signup-code/invalidate` and `…/signup-attempts/reset`);
-Admin Web (New Students, Supervision > Parent feedback, the Parent File section,
-the Trial badge); the app (Starred chip, Trial badge, Feedback about the
-teacher, the locked sign-up message).
+**Implementation phase.** Migration `20261026140000_chat_pd030_subscription_lock`
+(the ledger, exceptions, state and events, renewal requests, the request's and
+the report's new columns, the triggers, system-recorded `suspended`, the
+materializer's hold). `SubscriptionLockReader` (platform), `SubscriptionLedger`
+(billing), `SubscriptionEffects` (worker sweep). Admin Web: the Student
+Profile's Subscription section, Instalment Payments' "before go-live" filter,
+renewal requests, the group banner. App: the Subscriptions tab, the locked
+banner, "Lesson N of M". Contract: `../admin/pd030-subscriptions.md`.
 
-**Consequences.** Parent complaints arrive without staff transcribing them;
-staff-recorded complaints (management or parent, PD-26) are unchanged. A
-relayed code can sit in WhatsApp indefinitely; Invalidate code is the remedy if
-it leaks.
+**Consequences.** PD-15's package size is read-only; the ledger is the
+package. A lesson's `suspended` outcome may now be recorded by the system
+(note `subscription`) as well as by staff. PD-4's system messages arrive for
+the first time: in the family's direct chat. The pay page and the app say
+Subscriptions where they said Settings → Payments. Sales' Payments tab is
+unchanged.
 
-**Deprecated behaviour.** The 10-minute code life (PD-16 default 1); "the app
-has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
+**Deprecated behaviour.** The parent's Settings → Payments entry (the screen
+moved to the Subscriptions tab).
+
+**Defaults adopted at closing** (the owner may override without reopening PD-30):
+1. Make-ups already booked before a lock are not suspended (they replace a
+   lesson already owed); only regular lessons are held.
+2. Two grace lessons (`subscription.grace_lessons` in chat.config).
 
 **Closed.** 2026-10-26.
 
-### Decisions still open after PD-1 to PD-32
+---
 
 ### PD-31 · Scheduling made direct: time chips, a child's schedule, moving lessons, changing the teacher
 
@@ -2896,6 +2913,111 @@ payment lock   a child PD-30 locks is offered no time and every change above is 
 
 ---
 
+### PD-32 · A parent's feedback about the teacher; Starred in Chats; New Students redesign; the sign-up code without a time limit; the Trial label
+
+**Closed 2026-10-26** by the product owner (items 6, 8, 11, 13 and 14 of the
+owner's 14-item request of 2026-10-26), with the details decided by the
+department head and the design note approved the same day. **Amends PD-26**
+(complaints: the app now has a form) and **PD-16** (the sign-up code's life).
+
+**Final decision.**
+1. **Feedback about the teacher (item 6).** A parent picks a child of their
+   family (and so that child's teacher), a category -- praise, suggestion or
+   complaint -- and writes. It goes to the administration.
+   - The parent reads each one's **status** (received, in review, resolved) and
+     the **one reply** staff write for them. Never internal notes, the handler,
+     follow-ups or what was decided.
+   - A **complaint** is also a PD-26 complaint, source `parent_app`: the Teachers
+     department takes it (becoming its handler, once), follows up and resolves
+     it on the Teacher File; **upholding it joins the monthly ladder** as any
+     complaint does. The parent's status follows (a follow-up = in review, the
+     resolution = resolved). Praise and suggestions are replied to and resolved
+     on the Supervision page's Parent feedback list.
+   - The **children's supervisor** reads their own children's feedback on the
+     family's Parent File (PD-17).
+   - **The teacher never sees it** -- who filed it, nor the text -- unless staff
+     relay it themselves. No route returns it to a teacher.
+   - **Rate-limited:** 3 per child and 10 per family per rolling 24 hours
+     (`feedback.limit.per_child_day`, `feedback.limit.per_family_day`).
+2. **Starred in Chats (item 8).** "Starred" is a filter chip after Favourites at
+   the top of Chats, for every role that has starred messages; the Settings row
+   is gone.
+3. **New Students redesign (item 11).** Behaviour unchanged. Each card has a
+   header (parent, status badge, recorded by and when), the trial it came from,
+   three blocks (Contact, Payment, Setup), and the children in one aligned table
+   (numbers end-aligned, whole amounts without ".00", the reader's digits).
+   Name search and a status filter were added (client-side only).
+4. **The sign-up code without a time limit (item 13).** A code is valid until it
+   is used or invalidated. Kept: single use; one live code per account, and a
+   new code supersedes the old; 5 wrong tries spend a code; 5 codes per account
+   an hour; the login limiter (10 per e-mail and 30 per source per 15 minutes);
+   stored hashed, in plain text only while a supervisor relays it. A code also
+   ends when **any** password is set on the account (sign-up, PD-21 reset, PD-25
+   recovery), when the account is **suspended or deactivated**, or when the
+   responsible staff press **Invalidate code**. New: **10 wrong codes per e-mail
+   in a rolling 24 hours**, across all codes, refuse further tries
+   (`AUTH.SIGNUP_LOCKED`, "contact your supervisor") until the window rolls or
+   the responsible staff press **Reset attempts** (audited). A new code does not
+   reset it. The cap counts wrong tries for any e-mail typed, known or not, so
+   reaching it tells nobody which e-mails are enrolled.
+   - Counted by the parent's **account** when the e-mail is an enrolled
+     parent's (changing the e-mail does not reset it), by the e-mail's hash
+     otherwise. Each attempt is decided atomically under a per-key advisory
+     lock, so a burst of parallel guesses gets exactly the cap compared.
+   - Wrong-code rows are **purged after 7 days** by the worker; nothing else
+     may delete them.
+   - **Accepted risk:** anyone who knows a parent's e-mail can lock that
+     parent's sign-up for 24 hours by guessing; the parent's supervisor resets
+     it.
+   - **Reset attempts** is the children's supervisor's, the Operations
+     manager's and the super admin's (the same people who see the code) -- by
+     design.
+5. **The Trial label (item 14).** A "Trial" / "تجريبية" badge on every trial
+   group: the app's chat list, header and group info; Admin Web's chat list,
+   header and info, the admin conversations view, the Calls page and the trials
+   page. One violet colour pair in both clients, at least 4.5:1 in light and dark.
+
+**Canonical rule.**
+```
+parent_feedback      (family, contact, learner, teacher = the child's teacher when
+                     filed, category, body, status, parent_response)
+                     what the parent wrote never changes; status only moves forward
+complaint            parent_feedback(complaint) + teacher_supervision_entry
+                     (kind complaint, complaint_source parent_app, created_by NULL,
+                     parent_feedback_id) -- handler set once by the department
+who reads            the filing family (status + reply) | Teachers dept + super
+                     admin (all) | the children's supervisor (their children)
+                     -- never the teacher (confined to src/teacher-file)
+sign-up code live    unused AND not superseded AND (expires_at IS NULL, or a
+                     pre-PD-32 code's expiry still ahead)
+wrong-code cap       count(parent_signup_failure by account -- or by e-mail hash
+                     when no enrolled parent has it -- uncleared, last 24 h)
+                     >= signup.wrong_codes_per_day (10); decided under
+                     pg_advisory_xact_lock(key); rows purged after 7 days
+```
+
+**Implementation phase.** Delivered with the decision: migration
+`20261026120000_chat_pd032_parent_feedback_signup_code`; API (`/me/feedback`,
+`/parent-feedback`, `/families/:id/parent-feedback`,
+`/trials/new-students/:id/signup-code/invalidate` and `…/signup-attempts/reset`);
+Admin Web (New Students, Supervision > Parent feedback, the Parent File section,
+the Trial badge); the app (Starred chip, Trial badge, Feedback about the
+teacher, the locked sign-up message).
+
+**Consequences.** Parent complaints arrive without staff transcribing them;
+staff-recorded complaints (management or parent, PD-26) are unchanged. A
+relayed code can sit in WhatsApp indefinitely; Invalidate code is the remedy if
+it leaks.
+
+**Deprecated behaviour.** The 10-minute code life (PD-16 default 1); "the app
+has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
+
+**Closed.** 2026-10-26.
+
+---
+
+### Decisions still open after PD-1 to PD-32
+
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
 phase starts and do not reopen either decision. Any new product question is
@@ -2961,3 +3083,61 @@ things M4 will run into:
 * **`RT-029` and `RT-030`** (`red-team/findings.md`) are open tenancy defects,
   both contained and failing closed today. Neither blocks M4 and neither is
   closed by it; they are tracked separately so M4 does not quietly absorb them.
+
+### PD-34 · Notifications: one pipeline and a Notification Center for every account (P1)
+
+**Decided 2026-10-26.** The owner asked for a comprehensive notification system
+(real-time, proactive, campaigns, a per-account Notification Center and an Admin
+Web dashboard). The department head approved the Phase-0 plan (five phases) and
+P1 is built with **defaults held in `chat.config`**, so the owner's open answers
+change settings, not code. **PD-22 is kept** (owner, 2026-10-26): every time in a
+notification is rendered in the recipient's own zone; teachers follow their phone.
+
+**Final decision (P1).**
+1. **One pipeline.** A rule (`chat.notification_rule` for timing and the on/off
+   switch, `notification-catalog.ts` for category, severity, in-app text and the
+   button) produces a **Center entry** (`chat.notification_item`) per recipient,
+   and a **push** (`chat.notification`, unchanged) when the person should be
+   pushed. Both carry the same dedupe key, so a retry, a replay or a producer
+   moved onto the pipeline converges on one entry and one push.
+2. **The Notification Center** (`GET /me/notifications`): tabs All, Unread,
+   Requires action, Lessons, Payments (parents, and staff who receive payment
+   entries), Conversations, Announcements. Each entry has a title and body
+   rendered at read time in the reader's language and zone, the time, and an
+   action (`open_conversation`, `view_lesson`, `view_payments`, `open_stories`,
+   `open_calls`). Read, read-all and "acted" are per person; another person's id
+   reads as not found.
+3. **The reason gone, the notification gone.** A cancelled or moved lesson, a
+   paid or voided instalment, a recipient taken out of service: the waiting push
+   and the not-yet-shown entry are withdrawn, by every path including SQL (a
+   trigger). A lifecycle re-schedule revives them (teacher transfer).
+4. **Chats.** One entry per conversation with a count. The first message pushes
+   at once; later ones within `notification.message_coalesce_seconds` (60) go as
+   one trailing push. Someone reading the chat is pushed
+   `notification.message_reading_grace_seconds` (20) late, and reading withdraws
+   it. Reading on one device reads the entry and tells the person's other
+   devices (`conversation.read`). Muting withdraws a waiting push at once.
+5. **Preferences.** A person switches categories off for push; the entry still
+   appears. Lessons, payments, calls, tasks and system cannot be switched off
+   (`notification.locked_categories`).
+6. **Quiet hours** default to 22:00–08:00 in the person's own zone for everyone
+   (`notification.quiet_hours.default_*`); a person may change or disable them.
+   Calls and the T-30/T-15 lesson reminders are exempt by their rules. Deferred,
+   never dropped.
+7. **The lock screen names nobody** by default. A person may turn names on
+   (`showPreviews`); the academy default is `notification.lock_screen_names_default`
+   (false). The payment reminder no longer shows the amount on the lock screen.
+8. **Rate limit.** At most `notification.push_per_hour` (6) pushes an hour in
+   the chat, announcement and marketing categories; beyond it, the Center only.
+   Critical pushes are never limited.
+9. **Retention.** Pushes are kept 90 days, entries 365
+   (`notification.delivery_retention_days`, `notification.item_retention_days`).
+
+**Not changed.** Call pushes (W7/W8, closed): the dispatcher, routing, templates
+and VoIP gate are untouched; a sent missed call is adopted into the Center by the
+worker. Android push still needs the Firebase project (owner/infra).
+
+**Later phases.** P2 payment intelligence, lesson lifecycle extras and
+supervisor tasks with SLAs; P3 proactive rules, digests and the Admin Web
+Notification Center; P4 the Campaign Center with consent; P5 e-mail and
+WhatsApp. Plan: the department head's notes, `pd34-notification-plan.md`.
