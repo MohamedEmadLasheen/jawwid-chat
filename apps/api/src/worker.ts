@@ -11,6 +11,8 @@ import { NotificationService } from './communication/notifications/notification.
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
+import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
+import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -77,6 +79,18 @@ const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
 const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
 
 /**
+ * PD-30: how often every child's subscription state is recomputed (an
+ * instalment becomes overdue by the calendar, not by a write), its changes
+ * announced and the lesson holds made to follow. The state a write changes is
+ * already current -- the database recomputes it in the writer's transaction --
+ * so this bounds only how late an overdue lock, a card or a hold can be.
+ * Exactly-once per event (SubscriptionEffects), so every replica may run it.
+ * It runs on its OWN loop, beside the outbox loop rather than inside it: a
+ * sweep over every child never delays a message's delivery.
+ */
+const SUBSCRIPTION_SWEEP_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS ?? 60_000);
+
+/**
  * PD-32: how often wrong parent sign-up codes older than a week are purged
  * (chat.purge_parent_signup_failures). Unauthenticated requests insert them, so
  * they must not pile up; one delete statement, safe on every replica.
@@ -131,10 +145,12 @@ async function bootstrap(): Promise<void> {
   const scheduling = app.get(SchedulingService);
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
+  const subscriptions = app.get(SubscriptionEffects);
   const prisma = app.get(PrismaService);
 
   let running = true;
   let draining = false;
+  let subscriptionBusy = false;
 
   const stop = (signal: string) => {
     if (!running) return;
@@ -144,7 +160,7 @@ async function bootstrap(): Promise<void> {
     // mid-publish would leave rows claimed but unpublished, and at-least-once
     // delivery only holds if a claimed row is either published or released.
     const wait = setInterval(() => {
-      if (!draining) {
+      if (!draining && !subscriptionBusy) {
         clearInterval(wait);
         void flushErrorTracker(errors)
           .then(() => app.close())
@@ -171,6 +187,24 @@ async function bootstrap(): Promise<void> {
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
   let nextSignupFailurePurge = 0;
+
+  // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
+  log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
+  const subscriptionLoop = (async () => {
+    while (running) {
+      subscriptionBusy = true;
+      try {
+        await subscriptions.sweep();
+      } catch (e) {
+        report(log, 'subscription sweep', 'subscriptions.sweep', e);
+      } finally {
+        subscriptionBusy = false;
+      }
+      for (let waited = 0; running && waited < SUBSCRIPTION_SWEEP_MS; waited += 500) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  })();
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
   // short (OutboxPacer). Without Redis there are no hints and the loop simply
@@ -302,6 +336,7 @@ async function bootstrap(): Promise<void> {
     // Either sleep is cut short by the next hint.
     await pacer.pause(pacer.delayAfter(published));
   }
+  await subscriptionLoop;
   await closeWake?.();
 }
 

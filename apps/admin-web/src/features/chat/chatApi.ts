@@ -1,4 +1,5 @@
 import { api, download } from '@/core/api/client'
+import type { PaymentLock } from '@/features/subscriptions/api'
 
 /**
  * The conversation API Admin Web chats through -- the SAME routes the parent
@@ -77,6 +78,8 @@ export interface ChatConversation {
   avatarUrl?: string | null
   /** The viewer's OWN private labels on this chat (staff only). */
   labels?: ChatLabel[]
+  /** PD-30: the group is locked for payment (detail route only); null otherwise. */
+  paymentLock?: PaymentLock | null
 }
 
 /** A staff member's private label. `color` is a palette tone '1'..'8'. */

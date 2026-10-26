@@ -15,6 +15,8 @@ import { PaymentsReadService } from './payments-read.service';
 import { PaymentsService } from './payments.service';
 import { STRIPE_GATEWAY, StripeSdkGateway } from './stripe.gateway';
 import { StripeWebhookController } from './stripe-webhook.controller';
+import { SubscriptionLedger } from './subscription-ledger.service';
+import { SubscriptionsController } from './subscriptions.controller';
 
 /**
  * Instalment Payments (PD-12 S3), each family's money (PD-17), and how money
@@ -25,7 +27,7 @@ import { StripeWebhookController } from './stripe-webhook.controller';
  */
 @Module({
   imports: [CommunicationModule],
-  controllers: [BillingController, PaymentsController, PayLinkController, StripeWebhookController, BillingMediaController],
+  controllers: [BillingController, PaymentsController, PayLinkController, StripeWebhookController, BillingMediaController, SubscriptionsController],
   providers: [
     BillingService,
     PaymentLedger,
@@ -34,9 +36,11 @@ import { StripeWebhookController } from './stripe-webhook.controller';
     PaymentsService,
     ParentPaymentsService,
     CheckoutService,
+    // PD-30: a child's lesson ledger and its exceptions.
+    SubscriptionLedger,
     { provide: STRIPE_GATEWAY, useFactory: () => new StripeSdkGateway() },
     { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage },
   ],
-  exports: [BillingService, PaymentLedger, PaymentsService, PaymentReminders],
+  exports: [BillingService, PaymentLedger, PaymentsService, PaymentReminders, SubscriptionLedger],
 })
 export class BillingModule {}

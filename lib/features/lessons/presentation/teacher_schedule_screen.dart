@@ -220,8 +220,10 @@ class _ScheduleList extends StatelessWidget {
     final items = <Widget>[?header];
     // Earlier days hold only lessons still owed a report: one section on top, newest
     // first, before the days to come.
+    // Today's midnight in the ACCOUNT's zone (PD-22), as an instant: the device's
+    // own midnight would put an early lesson on the wrong side of "today".
     final now = AppClock.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = AppClock.wallClock(now.year, now.month, now.day);
     final owed = [
       for (final l in sorted.reversed)
         if (l.startsAt.isBefore(today)) l,
@@ -296,6 +298,9 @@ class _LessonRow extends ConsumerWidget {
   'student_no_show' => (l10n.outcomeStudentNoShow, false),
   'teacher_no_show' => (l10n.outcomeTeacherNoShow, false),
   'rescheduled' => (l10n.outcomeRescheduled, false),
+  // PD-30: held by the system while the child's group is locked for payment. No amount,
+  // no reason beyond that.
+  'suspended' => (l.suspendedFor == 'payment' ? l10n.outcomeSuspendedPayment : l10n.outcomeSuspended, false),
   _ => switch (l.phase) {
     'in_progress' => (l10n.phaseInProgress, false),
     'awaiting_close' => (l10n.phaseAwaitingClose, true),

@@ -920,6 +920,11 @@ abstract interface class BillingRepository {
 
   /// `GET /me/billing/invoices/:id/link`: a short-lived signed PDF link for this viewer.
   Future<String> invoiceLink(String invoiceId);
+
+  /// PD-30: `POST /me/subscriptions/:learnerId/renewal-request` -- a locked child with
+  /// nothing to pay yet. Once per child per academy day: the second time answers
+  /// `409 COMM.SUBSCRIPTION_STATE` ([BillingErrors.subscriptionState]).
+  Future<void> requestRenewal(String learnerId);
 }
 
 /// PD-27: the refusals a payment screen answers in its own words.
@@ -929,6 +934,12 @@ abstract final class BillingErrors {
 
   /// 409: already paid, cancelled, expired or decided.
   static const state = 'COMM.BILLING_STATE';
+
+  /// PD-30, 409: a renewal was already requested for this child today.
+  static const subscriptionState = 'COMM.SUBSCRIPTION_STATE';
+
+  /// PD-30, 403: the child's group is locked for payment (a send, a reaction, a call).
+  static const subscriptionLocked = 'COMM.SUBSCRIPTION_LOCKED';
 }
 
 /// PD-27: one bank-transfer receipt, before it is sent. Pays exactly one of
@@ -975,6 +986,9 @@ class NoBillingRepository implements BillingRepository {
 
   @override
   Future<String> invoiceLink(String invoiceId) => throw UnsupportedError('no billing server in this build');
+
+  @override
+  Future<void> requestRenewal(String learnerId) => throw UnsupportedError('no billing server in this build');
 }
 
 /// PD-11 T4: the teacher's trial group -- the trials they may report under "+", and the

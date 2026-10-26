@@ -1214,6 +1214,8 @@ model LessonReport {
   submittedAt    DateTime @map("submitted_at") @db.Timestamptz @default(now())
   /// PD-15 quick-report fields.
   lessonNumber   Int?     @map("lesson_number")
+  /// PD-30: the M of "Lesson N of M" -- the current subscription's lessons when the report was written.
+  lessonTotal    Int?     @map("lesson_total")
   coveredTopics  String[] @default([]) @map("covered_topics")
   nextTasks      String[] @default([]) @map("next_tasks")
   enteredByKind  String   @default("teacher") @map("entered_by_kind")
@@ -2107,6 +2109,8 @@ model PaymentRequest {
   cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz
   cancelledBy    String?   @map("cancelled_by") @db.Uuid
   cancelReason   String?   @map("cancel_reason")
+  /// PD-30: the lessons a subscription / renewal request buys, credited when it is paid in full.
+  lessonsIncluded Int?     @map("lessons_included")
 
   @@map("payment_request")
   @@schema("chat")
@@ -2420,5 +2424,101 @@ model MemorizationMark {
   at             DateTime @default(now()) @db.Timestamptz
 
   @@map("memorization_mark")
+  @@schema("chat")
+}
+
+/// PD-30: a child's subscriptions and the lessons each includes. Append-only
+/// (chat.guard_learner_subscription): voided, never edited.
+model LearnerSubscription {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  learnerId       String    @map("learner_id") @db.Uuid
+  familyId        String    @map("family_id") @db.Uuid
+  planMonths      Int?      @map("plan_months") @db.SmallInt
+  lessonsIncluded Int       @map("lessons_included")
+  startsOn        DateTime  @map("starts_on") @db.Date
+  source          String
+  requestId       String?   @map("request_id") @db.Uuid
+  planRef         String?   @map("plan_ref") @db.Uuid
+  note            String?
+  createdBy       String?   @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  voidedAt        DateTime? @map("voided_at") @db.Timestamptz
+  voidedBy        String?   @map("voided_by") @db.Uuid
+  voidReason      String?   @map("void_reason")
+
+  @@map("learner_subscription")
+  @@schema("chat")
+}
+
+/// PD-30: a dated exception to the lock. Revoked once, never edited.
+model SubscriptionException {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  learnerId      String    @map("learner_id") @db.Uuid
+  familyId       String    @map("family_id") @db.Uuid
+  kind           String
+  reason         String
+  validUntil     DateTime  @map("valid_until") @db.Date
+  grantedBy      String    @map("granted_by") @db.Uuid
+  grantedAt      DateTime  @default(now()) @map("granted_at") @db.Timestamptz
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
+  revokedBy      String?   @map("revoked_by") @db.Uuid
+  revokeReason   String?   @map("revoke_reason")
+
+  @@map("subscription_exception")
+  @@schema("chat")
+}
+
+/// PD-30: a child's subscription state now (chat.refresh_learner_access).
+model LearnerAccess {
+  learnerId           String    @id @map("learner_id") @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  familyId            String    @map("family_id") @db.Uuid
+  state               String
+  reasons             String[]
+  excepted            String[]
+  balance             Int?
+  graceLeft           Int?      @map("grace_left")
+  overdueInstalmentId String?   @map("overdue_instalment_id") @db.Uuid
+  overdueDueOn        DateTime? @map("overdue_due_on") @db.Date
+  held                Boolean   @default(false)
+  changedAt           DateTime  @default(now()) @map("changed_at") @db.Timestamptz
+  computedAt          DateTime  @default(now()) @map("computed_at") @db.Timestamptz
+
+  @@map("learner_access")
+  @@schema("chat")
+}
+
+/// PD-30: one change of a child's state; applied_at once its cards and pushes went out.
+model LearnerAccessEvent {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  learnerId           String    @map("learner_id") @db.Uuid
+  familyId            String    @map("family_id") @db.Uuid
+  fromState           String    @map("from_state")
+  toState             String    @map("to_state")
+  reasons             String[]
+  graceLeft           Int?      @map("grace_left")
+  overdueInstalmentId String?   @map("overdue_instalment_id") @db.Uuid
+  overdueDueOn        DateTime? @map("overdue_due_on") @db.Date
+  at                  DateTime  @default(now()) @db.Timestamptz
+  appliedAt           DateTime? @map("applied_at") @db.Timestamptz
+
+  @@map("learner_access_event")
+  @@schema("chat")
+}
+
+/// PD-30: a parent's "please renew", at most once per child per academy day.
+model RenewalRequest {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  learnerId      String   @map("learner_id") @db.Uuid
+  familyId       String   @map("family_id") @db.Uuid
+  requestedBy    String   @map("requested_by") @db.Uuid
+  requestedOn    DateTime @map("requested_on") @db.Date
+  requestedAt    DateTime @default(now()) @map("requested_at") @db.Timestamptz
+
+  @@map("renewal_request")
   @@schema("chat")
 }
