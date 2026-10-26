@@ -82,6 +82,9 @@ export class WorkPatternService {
   async pattern(actorId: string, teacherId: string) {
     const { actor } = await this.calendar.requireScope(actorId);
     const teacher = await this.orgTeacher(actor, teacherId);
+    // A change's free-text reason is the Teachers department's (and the super
+    // admin's); Operations reads the shift itself, not why it changed.
+    const readsReasons = actor.staffRole === StaffRole.SUPER_ADMIN || (await this.lessons.isManager(actor));
     const [patterns, full, part] = await Promise.all([
       this.prisma.$queryRaw<Array<{
         id: string; category: string; timezone: string; valid_from: string; valid_to: string | null;
@@ -107,23 +110,31 @@ export class WorkPatternService {
       timezone: p.timezone,
       validFrom: p.valid_from,
       validTo: p.valid_to,
-      reason: p.reason,
+      reason: readsReasons ? p.reason : null,
       createdAt: p.created_at.toISOString(),
       windows: p.windows.map((w) => ({ weekday: w.weekday, start: hhmm(w.start), end: hhmm(w.end) })),
     });
     return {
       teacherId: teacher.id,
+      // The first day a change may start: today on the academy's calendar.
+      today: await this.academyToday(),
       patterns: patterns.map(dto),
       defaults: { full_shift: full, part_shift: part },
     };
   }
 
   /**
-   * A new pattern from `validFrom`. It closes the pattern in force on that day
-   * (one that began the same day is replaced: it covers nothing). A change may
-   * not start before the latest pattern began -- that would rewrite a later
-   * decision. For a shift, `applyToAvailability` (default on) also makes the
-   * shift the teacher's bookable hours, so the pickers offer the same times.
+   * A new pattern from `validFrom`, today or later (academy calendar): a past
+   * month keeps the shift it was worked under. It closes the pattern in force
+   * on that day (one that began the same day is replaced: it covers nothing).
+   * A change may not start before the latest pattern began -- that would
+   * rewrite a later decision.
+   *
+   * For a shift starting TODAY, `applyToAvailability` (default on) also makes
+   * the shift the teacher's bookable hours, in the same transaction, so the
+   * pickers offer the same times. Bookable hours change at once, so a future
+   * shift cannot carry them; they are set on its first day. The replaced
+   * availability is archived (20261026210000), so past months keep their hours.
    */
   async setPattern(actorId: string, teacherId: string, body: Record<string, unknown>) {
     const actor = await this.conversations.requireActor(actorId);
@@ -140,6 +151,8 @@ export class WorkPatternService {
     const zoned = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT chat.is_time_zone(${timezone}) AS ok`;
     if (!zoned[0]?.ok) throw invalid('timezone: an IANA time zone, e.g. Africa/Cairo');
     const validFrom = dayField(typeof body.validFrom === 'string' ? body.validFrom : undefined, 'validFrom');
+    const today = await this.academyToday();
+    if (validFrom < today) throw invalid(`validFrom: today (${today}) or later -- a past month keeps the shift it was worked under`);
     let reason: string | null = null;
     if (body.reason !== undefined && body.reason !== null) {
       if (typeof body.reason !== 'string' || body.reason.trim().length === 0 || body.reason.trim().length > 500) {
@@ -158,7 +171,10 @@ export class WorkPatternService {
     if (body.applyToAvailability !== undefined && typeof body.applyToAvailability !== 'boolean') {
       throw invalid('applyToAvailability: true or false');
     }
-    const applyToAvailability = isShift && body.applyToAvailability !== false;
+    if (body.applyToAvailability === true && (!isShift || validFrom !== today)) {
+      throw invalid('applyToAvailability: only for a shift starting today -- bookable hours change at once; set them on the shift\'s first day');
+    }
+    const applyToAvailability = isShift && validFrom === today && body.applyToAvailability !== false;
 
     const latest = await this.prisma.$queryRaw<Array<{ valid_from: string; valid_to: string | null }>>`
       SELECT to_char(valid_from, 'YYYY-MM-DD') AS valid_from, to_char(valid_to, 'YYYY-MM-DD') AS valid_to
@@ -168,15 +184,16 @@ export class WorkPatternService {
       throw conflict(`a pattern begins on ${latest[0].valid_from}; a change can begin on or after that day`);
     }
 
-    // The bookable hours first: PD-11 refuses a zone that the teacher's weekly
-    // lessons do not share, and then nothing of this change is written.
-    if (applyToAvailability) {
-      await this.scheduling.setAvailability(actorId, teacher.id, {
-        timezone,
-        windows: windows.map((w) => ({ weekday: w.weekday, start: hhmm(w.start), end: w.end === 1440 ? '24:00' : hhmm(w.end) })),
-      });
-    }
+    // PD-11 refuses bookable hours in a zone the teacher's weekly lessons do
+    // not share: checked before anything is written.
+    const availability = applyToAvailability
+      ? await this.scheduling.checkAvailability(teacher.id, {
+          timezone,
+          windows: windows.map((w) => ({ weekday: w.weekday, start: hhmm(w.start), end: w.end === 1440 ? '24:00' : hhmm(w.end) })),
+        })
+      : null;
 
+    // ONE transaction: the shift and its bookable hours commit together or not at all.
     await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
         // Serialize changes to one teacher's patterns.
@@ -198,6 +215,9 @@ export class WorkPatternService {
           await tx.$executeRaw`
             INSERT INTO chat.teacher_work_window (organization_id, pattern_id, weekday, start_minute, end_minute)
             VALUES (${teacher.organizationId}::uuid, ${patternId}::uuid, ${w.weekday}::smallint, ${w.start}::int, ${w.end}::int)`;
+        }
+        if (availability) {
+          await this.scheduling.writeAvailability(tx, actor.actorId, teacher, availability, 'bookable hours follow the shift (PD-38)');
         }
         await this.audit.audit(tx, {
           actorId: actor.actorId,
@@ -246,6 +266,12 @@ export class WorkPatternService {
       }),
     );
     return (await this.calendar.supervisors(org)).find((s) => s.id === staffId);
+  }
+
+  private async academyToday(): Promise<string> {
+    const rows = await this.prisma.$queryRaw<Array<{ d: string }>>`
+      SELECT to_char((now() AT TIME ZONE ${await this.calendar.zone()})::date, 'YYYY-MM-DD') AS d`;
+    return rows[0]!.d;
   }
 
   private async requireShiftEditor(actor: Actor) {

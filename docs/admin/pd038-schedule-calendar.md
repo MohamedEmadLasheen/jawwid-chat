@@ -23,9 +23,22 @@ own calendar in the app and on the teacher web portal.
 - **Patterns are effective-dated.** `chat.teacher_work_pattern` holds a
   category, a time zone and `valid_from`/`valid_to`, with
   `chat.teacher_work_window` rows for the shift windows.
-  - A change closes the pattern in force on that day, so a past month keeps
-    the shift it was worked under.
+  - A change starts **today or later** (academy calendar). It closes the
+    pattern in force on that day, so a past month keeps the shift it was
+    worked under.
   - A change may not start before the latest pattern began.
+  - "Also make these the bookable hours" is offered only for a shift that
+    starts today, because bookable hours change at once. The shift and the
+    hours are written in **one transaction**.
+- **Working hours keep their history.** Availability is still replaced as a
+  whole (PD-11), but a trigger archives the removed rows with the span they
+  were in force (`chat.teacher_availability_archive`). The capacity reads the
+  version in force on each day, so a past month's numbers do not move when
+  the hours change. Days before the first recorded version use that first
+  version.
+- **Teachers who left.** After `left_at`, a teacher has no shift or hours, so
+  no red empty time. A teacher who is inactive with no leaving date is not
+  listed.
 - **What fills a shift.** The shift is split into four parts, in this order:
   1. *Booked*: any lesson reserved for a student, whatever its outcome.
      Trials count; overlapping lessons are merged, so nothing is counted twice.
@@ -40,7 +53,18 @@ own calendar in the app and on the teacher web portal.
   from, to, zone)` computes everything above per teacher and per day of the
   viewer's zone, with multirange arithmetic, so DST is handled. The calendar's
   red blocks, the month cells, the statistics bar and the Teacher File's
-  available/free hours all read it.
+  workload all read it.
+  - The workload is one partition:
+    `available = bookedWithin + pausedWithin + free`, plus `outside`.
+  - `scheduledMinutes` keeps its PD-11 meaning (every lesson), so
+    available − scheduled is not free.
+  - The teacher's own `GET /stats/me` workload changes with it.
+- **Performance.** For a month of 100 teachers (24,800 lessons), the capacity
+  alone takes about 0.2 s, and stats and the month summary well under a second
+  (measured in the integration spec).
+  - Each read is **one statement**, so the capacity is computed once.
+  - JIT is off for the capacity function.
+  - The PD-30 superseded-hold check runs only for system holds.
 - **Filters.**
   - *Teacher-level* filters (teacher, category, utilization band, empty hours)
     choose the rows.
@@ -85,7 +109,7 @@ exclusive; the window is at most 42 days). They also take the filters
 | `GET /calendar` | `teachers[]` (category, totals, utilization); `days[]` per teacher and day: `shift`, `work`, `leave`, `empty`, `free` as `[[from, to], …]`; `lessons[]` (status, `colorKey`, `matches`, `outsideShift`; named or `anonymous`) |
 | `GET /calendar/summary` | `teachers[]`, plus `cells[]` per teacher and day: minutes, utilization, lesson and match counts |
 | `GET /calendar/stats` | `teaching {lessons, bookedMinutes, heldMinutes}`; `students {distinct, trial, paused}`; `capacity {…minutes, utilization}`; `teachers[]` |
-| `GET /teachers/:id/work-pattern` | patterns, newest first, and the category defaults |
+| `GET /teachers/:id/work-pattern` | `today` (the earliest start), patterns newest first, and the category defaults. A change's `reason` is shown to the Teachers department and the super admin only |
 | `POST /teachers/:id/work-pattern` | `{category, timezone, validFrom, windows?, reason?, applyToAvailability?}`. For a shift, `windows` defaults to the category's default. `applyToAvailability` (default on) also makes the shift the bookable hours |
 | `POST /org/staff/:id/calendar-color` | `{colorKey}`, or `null` to clear it |
 

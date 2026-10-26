@@ -9,6 +9,13 @@
 --                                past month keeps the shift it was worked under.
 --                                An hourly teacher's working hours are their
 --                                availability (PD-11), never a second table.
+--   1b. chat.teacher_availability_archive
+--                                every availability row a replacement removes,
+--                                with the span it was in force. The capacity
+--                                reads the version in force on each day, so a
+--                                past month keeps the hours it was worked under
+--                                (the writers -- PD-11's replace-as-a-whole --
+--                                are untouched: a trigger archives).
 --   2. chat.staff_calendar_color  an Operations supervisor's color: a key of the
 --                                curated palette (each key has an AA-checked text
 --                                color in the clients), never a free hex. Data, not
@@ -136,6 +143,62 @@ $$;
 create trigger teacher_work_window_is_coherent before insert or update or delete on chat.teacher_work_window
   for each row execute function chat.guard_teacher_work_window();
 
+-- ---------------------------------------------------------------------------
+-- 1b. Availability history
+-- ---------------------------------------------------------------------------
+
+create table chat.teacher_availability_archive (
+  id               uuid primary key default gen_random_uuid(),
+  organization_id  uuid not null references chat.organization (id),
+  teacher_id       uuid not null references chat.teacher (id) on delete cascade,
+  weekday          smallint not null check (weekday between 1 and 7),
+  start_minute     integer not null check (start_minute between 0 and 1439),
+  end_minute       integer not null check (end_minute between 1 and 1440),
+  timezone         text not null,
+  valid_from       timestamptz not null,   -- the removed row's created_at
+  valid_to         timestamptz not null,   -- when a replacement removed it
+  constraint teacher_availability_archive_has_a_span check (valid_to >= valid_from)
+);
+
+comment on table chat.teacher_availability_archive is
+  'PD-38: availability windows a replacement removed, with the span they were in force. Written by a trigger; read by chat.calendar_capacity so past days keep their hours.';
+
+create index teacher_availability_archive_teacher_idx on chat.teacher_availability_archive (teacher_id, valid_to);
+
+create or replace function chat.archive_teacher_availability()
+returns trigger
+language plpgsql
+as $$
+begin
+  -- Not when the teacher itself is being deleted (the cascade): nothing to keep.
+  if exists (select 1 from chat.teacher t where t.id = old.teacher_id) then
+    insert into chat.teacher_availability_archive
+      (organization_id, teacher_id, weekday, start_minute, end_minute, timezone, valid_from, valid_to)
+    values (old.organization_id, old.teacher_id, old.weekday, old.start_minute, old.end_minute, old.timezone,
+            old.created_at, greatest(now(), old.created_at));
+  end if;
+  return old;
+end;
+$$;
+
+create trigger teacher_availability_is_archived after delete on chat.teacher_availability
+  for each row execute function chat.archive_teacher_availability();
+
+create or replace function chat.guard_teacher_availability_archive()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'UPDATE' or (tg_op = 'DELETE' and exists (select 1 from chat.teacher t where t.id = old.teacher_id)) then
+    raise exception 'availability history is never rewritten' using errcode = 'check_violation';
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+create trigger teacher_availability_archive_is_history before update or delete on chat.teacher_availability_archive
+  for each row execute function chat.guard_teacher_availability_archive();
+
 -- ===========================================================================
 -- 2. Supervisor colors
 -- ===========================================================================
@@ -211,10 +274,11 @@ as $$
     from unnest(p) r;
 $$;
 
+-- STABLE, not IMMUTABLE: a timestamptz's text depends on the session TimeZone.
 create or replace function chat.mr_json(p tstzmultirange)
 returns jsonb
 language sql
-immutable
+stable
 as $$
   select coalesce(jsonb_agg(jsonb_build_array(lower(r), upper(r)) order by lower(r)), '[]'::jsonb)
     from unnest(p) r;
@@ -252,7 +316,13 @@ $$;
 -- cut into the viewer's days. Per (teacher, day):
 --
 --   shift      the shift windows (full / part shift), or empty
---   work       working hours = availability (hourly, or no pattern yet), or empty
+--   work       working hours = the availability IN FORCE THAT DAY (hourly, or no
+--              pattern yet), or empty. Days before the first known version use
+--              the first version (no history was kept before PD-38).
+--
+-- A teacher who has left (chat.teacher.left_at) has no shift or hours after
+-- leaving, and is not listed for a window that starts after it; a teacher
+-- inactive without a leaving date is not listed at all.
 --   leave      approved leave and days off, whole local days
 --   booked     every lesson reserved for a student (active + trial, whatever its
 --              outcome) -- overlaps merged
@@ -294,11 +364,28 @@ as $$
   ),
   teachers as (
     select t.id,
-           (select min(a.timezone) from chat.teacher_availability a where a.teacher_id = t.id) as avail_tz
-      from chat.teacher t
+           coalesce((select min(a.timezone) from chat.teacher_availability a where a.teacher_id = t.id),
+                    (select h.timezone from chat.teacher_availability_archive h where h.teacher_id = t.id
+                      order by h.valid_to desc limit 1)) as avail_tz,
+           -- After leaving: no shift, no hours, so no red empty time either.
+           case when t.left_at is null then '{}'::tstzmultirange
+                else tstzmultirange(tstzrange(t.left_at, null)) end as gone
+      from span, chat.teacher t
      where t.organization_id = p_org
        and (p_teachers is null or t.id = any (p_teachers))
+       and ((t.is_active and t.left_at is null) or t.left_at > span.lo)
   ),
+  -- Availability versions: the rows in force now, and those a replacement
+  -- removed. A set replaced in the transaction that wrote it covered nothing.
+  avail as (
+    select a.teacher_id, a.weekday, a.start_minute, a.end_minute, a.timezone, a.created_at as vf, null::timestamptz as vt
+      from chat.teacher_availability a join teachers t on t.id = a.teacher_id
+    union all
+    select h.teacher_id, h.weekday, h.start_minute, h.end_minute, h.timezone, h.valid_from, h.valid_to
+      from chat.teacher_availability_archive h join teachers t on t.id = h.teacher_id
+     where h.valid_to > h.valid_from
+  ),
+  avail_first as (select a.teacher_id, min(a.vf) as vf from avail a group by a.teacher_id),
   -- Every teacher's local days around the span (a day either side covers any
   -- zone offset), with the pattern in force that day.
   local_days as (
@@ -324,8 +411,12 @@ as $$
            tstzrange((d.ld + make_interval(mins => a.start_minute)) at time zone a.timezone,
                      (d.ld + make_interval(mins => a.end_minute)) at time zone a.timezone) as r
       from local_days d
-      join chat.teacher_availability a on a.teacher_id = d.teacher_id and a.weekday = extract(isodow from d.ld)
+      join avail a on a.teacher_id = d.teacher_id and a.weekday = extract(isodow from d.ld)
+      join avail_first f on f.teacher_id = a.teacher_id
      where d.category in ('hourly', 'unset')
+       -- the version in force at the start of that day (or the first version, before it)
+       and (a.vf <= d.ld::timestamp at time zone a.timezone or a.vf = f.vf)
+       and (a.vt is null or d.ld::timestamp at time zone a.timezone < a.vt)
   ),
   leave_pieces as (
     select d.teacher_id,
@@ -352,8 +443,8 @@ as $$
   ),
   per_teacher as (
     select t.id as teacher_id,
-           coalesce(s.m, '{}'::tstzmultirange) as shift,
-           coalesce(w.m, '{}'::tstzmultirange) as work,
+           coalesce(s.m, '{}'::tstzmultirange) - t.gone as shift,
+           coalesce(w.m, '{}'::tstzmultirange) - t.gone as work,
            coalesce(v.m, '{}'::tstzmultirange) as leave,
            coalesce(l.booked, '{}'::tstzmultirange) as booked,
            coalesce(l.paused, '{}'::tstzmultirange) as paused
@@ -398,12 +489,15 @@ $$;
 alter table chat.teacher_work_pattern enable row level security;
 alter table chat.teacher_work_window enable row level security;
 alter table chat.staff_calendar_color enable row level security;
-revoke all on chat.teacher_work_pattern, chat.teacher_work_window, chat.staff_calendar_color
+alter table chat.teacher_availability_archive enable row level security;
+revoke all on chat.teacher_work_pattern, chat.teacher_work_window, chat.staff_calendar_color, chat.teacher_availability_archive
   from public, anon, authenticated, chat_app;
 
 revoke all on function chat.guard_teacher_work_pattern() from public;
 revoke all on function chat.guard_teacher_work_window() from public;
 revoke all on function chat.guard_staff_calendar_color() from public;
+revoke all on function chat.archive_teacher_availability() from public;
+revoke all on function chat.guard_teacher_availability_archive() from public;
 revoke all on function chat.calendar_status(text, text) from public;
 revoke all on function chat.mr_minutes(tstzmultirange) from public;
 revoke all on function chat.mr_json(tstzmultirange) from public;

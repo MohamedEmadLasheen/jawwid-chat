@@ -16,6 +16,11 @@ drop function chat.calendar_status(text, text);
 
 drop index chat.lesson_org_starts_idx;
 
+drop trigger teacher_availability_is_archived on chat.teacher_availability;
+drop function chat.archive_teacher_availability();
+drop table chat.teacher_availability_archive;
+drop function chat.guard_teacher_availability_archive();
+
 drop table chat.staff_calendar_color;
 drop function chat.guard_staff_calendar_color();
 drop table chat.teacher_work_window;

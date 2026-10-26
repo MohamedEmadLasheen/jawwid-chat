@@ -176,34 +176,35 @@ export class CalendarService {
     const org = actor.organizationId as string;
     const ctes = this.ctes(org, f, zone);
 
-    const [teachers, days, lessons] = await Promise.all([
-      this.teacherRows(ctes),
-      this.prisma.$queryRaw<Array<{ teacher_id: string; day: string; shift: unknown; work: unknown; leave: unknown; empty: unknown; free: unknown }>>`
-        ${ctes}
-        SELECT c.teacher_id::text AS teacher_id, to_char(c.day, 'YYYY-MM-DD') AS day,
-               chat.mr_json(c.shift) AS shift, chat.mr_json(c.work) AS work, chat.mr_json(c.leave) AS leave,
-               chat.mr_json(c.empty) AS empty, chat.mr_json(c.free) AS free
-          FROM cap c
-         WHERE c.teacher_id IN (SELECT teacher_id FROM shown)
-         ORDER BY c.teacher_id, c.day`,
-      this.prisma.$queryRaw<Array<{
-        id: string; teacher_id: string; learner_id: string | null; learner_name: string | null; prospect_name: string | null;
-        kind: string; st: string; outcome: string | null; payment_hold: boolean; starts_at: Date; ends_at: Date;
-        moved_from: string | null; matches: boolean; color_key: string | null; within_hours: boolean;
-      }>>`
-        ${ctes}
-        SELECT m.id::text AS id, m.teacher_id::text AS teacher_id, m.learner_id::text AS learner_id,
-               ln.name AS learner_name, tp.display_name AS prospect_name,
-               m.kind, m.st, m.outcome, (m.outcome = 'suspended' AND m.outcome_by_kind = 'system') AS payment_hold,
-               m.starts_at, m.ends_at, m.moved_from::text AS moved_from, m.matches, col.color_key,
-               (tstzrange(m.starts_at, m.ends_at) <@ t.hours) AS within_hours
-          FROM m
-          JOIN shown t ON t.teacher_id = m.teacher_id
-          LEFT JOIN chat.learner ln ON ln.id = m.learner_id
-          LEFT JOIN chat.trial_prospect tp ON tp.id = m.prospect_id
-          LEFT JOIN chat.staff_calendar_color col ON col.staff_id = m.supervisor_id
-         ORDER BY m.starts_at, m.teacher_id`,
-    ]);
+    // ONE statement: chat.calendar_capacity is computed once for the rows, the
+    // days and the lessons (three queries computed it three times).
+    type DayRow = { teacher_id: string; day: string; shift: unknown; work: unknown; leave: unknown; empty: unknown; free: unknown };
+    type LessonRow = {
+      id: string; teacher_id: string; learner_id: string | null; learner_name: string | null; prospect_name: string | null;
+      kind: string; st: string; outcome: string | null; payment_hold: boolean; starts_at: string; ends_at: string;
+      moved_from: string | null; matches: boolean; color_key: string | null; within_hours: boolean;
+    };
+    const [{ teachers, days, lessons }] = await this.prisma.$queryRaw<Array<{ teachers: TeacherRow[]; days: DayRow[]; lessons: LessonRow[] }>>`
+      ${ctes}
+      SELECT
+        (SELECT coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) FROM (${this.teacherSelect()}) t) AS teachers,
+        (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.teacher_id, x.day), '[]'::jsonb) FROM (
+           SELECT c.teacher_id::text AS teacher_id, to_char(c.day, 'YYYY-MM-DD') AS day,
+                  chat.mr_json(c.shift) AS shift, chat.mr_json(c.work) AS work, chat.mr_json(c.leave) AS leave,
+                  chat.mr_json(c.empty) AS empty, chat.mr_json(c.free) AS free
+             FROM cap c
+            WHERE c.teacher_id IN (SELECT teacher_id FROM shown)) x) AS days,
+        (SELECT coalesce(jsonb_agg(to_jsonb(y) ORDER BY y.starts_at, y.teacher_id), '[]'::jsonb) FROM (
+           SELECT m.id::text AS id, m.teacher_id::text AS teacher_id, m.learner_id::text AS learner_id,
+                  ln.name AS learner_name, tp.display_name AS prospect_name,
+                  m.kind, m.st, m.outcome, (m.outcome = 'suspended' AND m.outcome_by_kind = 'system') AS payment_hold,
+                  m.starts_at, m.ends_at, m.moved_from::text AS moved_from, m.matches, col.color_key,
+                  (tstzrange(m.starts_at, m.ends_at) <@ t.hours) AS within_hours
+             FROM m
+             JOIN shown t ON t.teacher_id = m.teacher_id
+             LEFT JOIN chat.learner ln ON ln.id = m.learner_id
+             LEFT JOIN chat.trial_prospect tp ON tp.id = m.prospect_id
+             LEFT JOIN chat.staff_calendar_color col ON col.staff_id = m.supervisor_id) y) AS lessons`;
 
     const categoryOf = new Map(teachers.map((t) => [t.teacher_id, t.category]));
     return {
@@ -222,8 +223,8 @@ export class CalendarService {
         return {
           id: l.id,
           teacherId: l.teacher_id,
-          startsAt: l.starts_at.toISOString(),
-          endsAt: l.ends_at.toISOString(),
+          startsAt: new Date(l.starts_at).toISOString(),
+          endsAt: new Date(l.ends_at).toISOString(),
           kind: l.kind,
           status: l.st,
           colorKey: l.color_key,
@@ -467,10 +468,6 @@ export class CalendarService {
         JOIN chat.teacher te ON te.id = t.teacher_id
         LEFT JOIN m_t mt ON mt.teacher_id = t.teacher_id
        ORDER BY te.name`;
-  }
-
-  private teacherRows(ctes: Prisma.Sql): Promise<TeacherRow[]> {
-    return this.prisma.$queryRaw<TeacherRow[]>`${ctes} ${this.teacherSelect()}`;
   }
 
   private teacherDto(t: TeacherRow) {
