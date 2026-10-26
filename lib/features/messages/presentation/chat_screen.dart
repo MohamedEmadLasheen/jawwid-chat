@@ -275,6 +275,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       context,
       tickets: lessons.tickets,
       otherUnreportedLessons: lessons.otherUnreported,
+      moreLessons: lessons.more,
       supervisionTickets: supervision.kinds,
       trialTickets: trials,
     );
@@ -286,6 +287,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         return;
       case UnreportedLessonsChoice():
         openScheduleNeedingReport(context, ref);
+        return;
+      case MoreLessonsChoice(:final tickets):
+        final picked = await showMoreLessonTickets(context, tickets);
+        if (picked != null && mounted) await _openTicket(picked);
         return;
       case SupervisionChoice(:final kind):
         await _openSupervisionTicket(kind, supervision.learners);

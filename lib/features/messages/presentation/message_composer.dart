@@ -374,6 +374,51 @@ class UnreportedLessonsChoice extends ComposerChoice {
   const UnreportedLessonsChoice();
 }
 
+/// "Other lessons (N)": the later lessons and owed make-ups, to pick one from.
+class MoreLessonsChoice extends ComposerChoice {
+  const MoreLessonsChoice(this.tickets);
+  final List<LessonTicket> tickets;
+}
+
+/// The tickets set aside under "Other lessons", each naming its child and date.
+/// Resolves to the one picked, or null.
+Future<LessonTicket?> showMoreLessonTickets(BuildContext context, List<LessonTicket> tickets) {
+  return showModalBottomSheet<LessonTicket>(
+    context: context,
+    useRootNavigator: true,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheet) {
+      final l10n = L10n.of(sheet);
+      return SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, 0, Spacing.spacing5, Spacing.spacing2),
+                child: Text(l10n.lessonsOtherLessonsTitle, style: Theme.of(sheet).textTheme.titleMedium),
+              ),
+              for (final t in tickets)
+                ListTile(
+                  key: ValueKey('more-ticket-${t.kind.name}-${t.lessonId}'),
+                  leading: Icon(lessonTicketIcon(t.kind)),
+                  title: Text(lessonTicketLabel(l10n, t.kind)),
+                  subtitle: Text([
+                    if (t.learnerName.isNotEmpty) t.learnerName,
+                    if (t.startsAt != null) lessonWhen(sheet, t.startsAt!),
+                  ].join(' · ')),
+                  onTap: () => Navigator.of(sheet).pop(t),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 /// PD-12: a request filed in the teacher's supervision conversation.
 class SupervisionChoice extends ComposerChoice {
   const SupervisionChoice(this.kind);
@@ -395,10 +440,14 @@ class TrialChoice extends ComposerChoice {
 ///
 /// [otherUnreportedLessons]: lessons still owed a report beyond the one offered
 /// (lessonMenu); when there are any, a link to the Schedule filtered to them follows.
+///
+/// [moreLessons]: the later lessons and owed make-ups set aside (lessonMenu), behind
+/// one "Other lessons (N)" entry.
 Future<ComposerChoice?> showComposerMenu(
   BuildContext context, {
   List<LessonTicket> tickets = const [],
   int otherUnreportedLessons = 0,
+  List<LessonTicket> moreLessons = const [],
   List<SupervisionTicketKind> supervisionTickets = const [],
   List<TrialTicket> trialTickets = const [],
 }) {
@@ -498,6 +547,14 @@ Future<ComposerChoice?> showComposerMenu(
                   title: Text(l10n.lessonsOtherUnreported(otherUnreportedLessons)),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => pick(const UnreportedLessonsChoice()),
+                ),
+              if (moreLessons.isNotEmpty)
+                ListTile(
+                  key: const ValueKey('ticket-more-lessons'),
+                  leading: const Icon(Icons.more_time_outlined),
+                  title: Text(l10n.lessonsOtherLessons(moreLessons.length)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => pick(MoreLessonsChoice(moreLessons)),
                 ),
               ],
             ],

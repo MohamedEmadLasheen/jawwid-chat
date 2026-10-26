@@ -1037,6 +1037,23 @@ class L10nAr extends L10n {
   String get ticketWriteReport => 'كتابة تقرير الحصة';
 
   @override
+  String lessonsOtherLessons(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة أخرى',
+      many: '$count حصة أخرى',
+      few: '$count حصص أخرى',
+      two: 'حصتان أخريان',
+      one: 'حصة أخرى',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lessonsOtherLessonsTitle => 'حصص أخرى';
+
+  @override
   String lessonsOtherUnreported(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

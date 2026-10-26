@@ -208,6 +208,31 @@ void main() {
       await tester.pumpAndSettle();
       expect(picked, isA<UnreportedLessonsChoice>());
     });
+
+    testWidgets('later lessons are one "Other lessons" entry, and each can still be picked', (tester) async {
+      final later = LessonTicket(kind: LessonTicketKind.apology, lessonId: 'l9', learnerName: 'Adam', startsAt: DateTime(2026, 11, 3, 17));
+      ComposerChoice? picked;
+      LessonTicket? chosen;
+      await tester.pumpWidget(app(Builder(
+        builder: (context) => TextButton(
+          onPressed: () async {
+            picked = await showComposerMenu(context, tickets: [report], moreLessons: [later]);
+            if (picked case MoreLessonsChoice(:final tickets) when context.mounted) {
+              chosen = await showMoreLessonTickets(context, tickets);
+            }
+          },
+          child: const Text('+'),
+        ),
+      )));
+      await tester.tap(find.text('+'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Other lessons (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Apologise for the lesson'), findsOneWidget);
+      await tester.tap(find.text('Apologise for the lesson'));
+      await tester.pumpAndSettle();
+      expect(chosen?.lessonId, 'l9');
+    });
   });
 
   group('the ticket form', () {

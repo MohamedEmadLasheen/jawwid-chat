@@ -29,6 +29,8 @@ void main() {
     final m = lessonMenu(upcoming);
     expect(names(m), 'teacherApology:oct25');
     expect(m.otherUnreported, 0);
+    // The later ones are one tap further, soonest first -- never gone.
+    expect(m.more.map((x) => x.lessonId), ['oct28', 'nov1', 'nov4']);
   });
 
   test('past unreported lessons: the most recent report, the others counted, no apology', () {
@@ -71,11 +73,45 @@ void main() {
     expect(names(m), 'report:aya-now, teacherApology:nader-next');
   });
 
-  test('what is not a teacher\'s lesson ticket passes through as offered', () {
-    final makeup = t(LessonTicketKind.bookMakeup, 'old', const Duration(days: -9));
-    const change = LessonTicket(kind: LessonTicketKind.requestScheduleChange, learnerId: 'yahya');
-    final apology = t(LessonTicketKind.apology, 'oct25', const Duration(days: 1));
-    final apology2 = t(LessonTicketKind.apology, 'oct28', const Duration(days: 4));
-    expect(lessonMenu([makeup, change, apology, apology2]).tickets, [makeup, change, apology, apology2]);
+  // The parent's menu (owner 2026-10-24, parent Tarek in "Adam El-Sayed · Jawwid"):
+  // "Apologise for the lesson" four times, "Reschedule a make-up class" twice, then
+  // "Change regular lesson times".
+  group('a parent', () {
+    final apologies = [
+      t(LessonTicketKind.apology, 'sat24', const Duration(hours: 3), learner: 'adam'),
+      t(LessonTicketKind.apology, 'tue27', const Duration(days: 3), learner: 'adam'),
+      t(LessonTicketKind.apology, 'sat31', const Duration(days: 7), learner: 'adam'),
+      t(LessonTicketKind.apology, 'nov3', const Duration(days: 10), learner: 'adam'),
+    ];
+    final makeups = [
+      t(LessonTicketKind.bookMakeup, 'oct21-1441', const Duration(days: -3), learner: 'adam'),
+      t(LessonTicketKind.bookMakeup, 'oct21-1641', const Duration(days: -3, hours: 2), learner: 'adam'),
+    ];
+    const change = LessonTicket(kind: LessonTicketKind.requestScheduleChange, learnerId: 'adam', learnerName: 'adam');
+
+    test('the next lesson\'s apology, one make-up, one regular-time change; the rest one tap further', () {
+      final m = lessonMenu([...apologies, ...makeups, change]);
+      expect(names(m), 'apology:sat24, bookMakeup:oct21-1441, requestScheduleChange:null');
+      expect(m.more.map((x) => '${x.kind.name}:${x.lessonId}'),
+          ['bookMakeup:oct21-1641', 'apology:tue27', 'apology:sat31', 'apology:nov3']);
+      expect(m.otherUnreported, 0);
+    });
+
+    test('the same lesson offered twice is one entry', () {
+      final m = lessonMenu([makeups.first, makeups.first, apologies.first, apologies.first]);
+      expect(names(m), 'bookMakeup:oct21-1441, apology:sat24');
+      expect(m.more, isEmpty);
+    });
+
+    test('several children: the next lesson of each', () {
+      final m = lessonMenu([
+        t(LessonTicketKind.apology, 'aya-1', const Duration(days: 1), learner: 'aya'),
+        t(LessonTicketKind.apology, 'nader-1', const Duration(hours: 5), learner: 'nader'),
+        t(LessonTicketKind.apology, 'aya-2', const Duration(days: 2), learner: 'aya'),
+        t(LessonTicketKind.lateApology, 'aya-0', const Duration(minutes: -20), learner: 'aya'),
+      ]);
+      expect(names(m), 'apology:aya-1, apology:nader-1, lateApology:aya-0');
+      expect(m.more.map((x) => x.lessonId), ['aya-2']);
+    });
   });
 }

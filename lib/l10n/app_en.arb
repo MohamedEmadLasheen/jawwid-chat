@@ -627,6 +627,12 @@
   },
   "ticketReport": "Lesson report",
   "ticketWriteReport": "Write lesson report",
+  "lessonsOtherLessons": "Other lessons ({count})",
+  "@lessonsOtherLessons": {
+    "description": "In the chat's + menu, under the one upcoming lesson it offers per child: the child's later lessons and owed make-ups, one tap further.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "lessonsOtherLessonsTitle": "Other lessons",
   "lessonsOtherUnreported": "Other unreported lessons ({count})",
   "@lessonsOtherUnreported": {
     "description": "In the chat's + menu, under the one lesson report it offers: a link to the Schedule, filtered to the lessons still owed a report.",

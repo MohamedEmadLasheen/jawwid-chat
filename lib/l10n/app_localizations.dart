@@ -1867,6 +1867,18 @@ abstract class L10n {
   /// **'Write lesson report'**
   String get ticketWriteReport;
 
+  /// In the chat's + menu, under the one upcoming lesson it offers per child: the child's later lessons and owed make-ups, one tap further.
+  ///
+  /// In en, this message translates to:
+  /// **'Other lessons ({count})'**
+  String lessonsOtherLessons(int count);
+
+  /// No description provided for @lessonsOtherLessonsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Other lessons'**
+  String get lessonsOtherLessonsTitle;
+
   /// In the chat's + menu, under the one lesson report it offers: a link to the Schedule, filtered to the lessons still owed a report.
   ///
   /// In en, this message translates to:

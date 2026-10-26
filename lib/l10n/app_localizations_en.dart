@@ -1019,6 +1019,14 @@ class L10nEn extends L10n {
   String get ticketWriteReport => 'Write lesson report';
 
   @override
+  String lessonsOtherLessons(int count) {
+    return 'Other lessons ($count)';
+  }
+
+  @override
+  String get lessonsOtherLessonsTitle => 'Other lessons';
+
+  @override
   String lessonsOtherUnreported(int count) {
     return 'Other unreported lessons ($count)';
   }
