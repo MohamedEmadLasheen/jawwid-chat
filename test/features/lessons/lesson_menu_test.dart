@@ -74,8 +74,8 @@ void main() {
   });
 
   // The parent's menu (owner 2026-10-24, parent Tarek in "Adam El-Sayed · Jawwid"):
-  // "Apologise for the lesson" four times, "Reschedule a make-up class" twice, then
-  // "Change regular lesson times".
+  // "Apologise for the lesson" four times, "Book the make-up lesson" twice, then
+  // "Change lesson time".
   group('a parent', () {
     final apologies = [
       t(LessonTicketKind.apology, 'sat24', const Duration(hours: 3), learner: 'adam'),
@@ -87,11 +87,11 @@ void main() {
       t(LessonTicketKind.bookMakeup, 'oct21-1441', const Duration(days: -3), learner: 'adam'),
       t(LessonTicketKind.bookMakeup, 'oct21-1641', const Duration(days: -3, hours: 2), learner: 'adam'),
     ];
-    const change = LessonTicket(kind: LessonTicketKind.requestScheduleChange, learnerId: 'adam', learnerName: 'adam');
+    const change = LessonTicket(kind: LessonTicketKind.changeLessonTime, learnerId: 'adam', learnerName: 'adam');
 
-    test('the next lesson\'s apology, one make-up, one regular-time change; the rest one tap further', () {
+    test('the next lesson\'s apology, one make-up, one "Change lesson time"; the rest one tap further', () {
       final m = lessonMenu([...apologies, ...makeups, change]);
-      expect(names(m), 'apology:sat24, bookMakeup:oct21-1441, requestScheduleChange:null');
+      expect(names(m), 'apology:sat24, bookMakeup:oct21-1441, changeLessonTime:null');
       expect(m.more.map((x) => '${x.kind.name}:${x.lessonId}'),
           ['bookMakeup:oct21-1641', 'apology:tue27', 'apology:sat31', 'apology:nov3']);
       expect(m.otherUnreported, 0);

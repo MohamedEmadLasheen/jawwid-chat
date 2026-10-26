@@ -1198,10 +1198,7 @@ class L10nAr extends L10n {
   String get cardReason => 'السبب';
 
   @override
-  String get ticketBookMakeup => 'جدولة حصة تعويضية';
-
-  @override
-  String get ticketRequestScheduleChange => 'تغيير مواعيد الحصص الثابتة';
+  String get ticketBookMakeup => 'حجز حصة التعويض';
 
   @override
   String ticketFor(String name) {
@@ -1225,9 +1222,6 @@ class L10nAr extends L10n {
   String makeupLength(int minutes) {
     return '$minutes دقيقة';
   }
-
-  @override
-  String get scheduleChangePick => 'اختر المواعيد الأسبوعية الجديدة';
 
   @override
   String get scheduleChangeHint => 'ستؤكد الإدارة التغيير.';
@@ -3475,4 +3469,224 @@ class L10nAr extends L10n {
 
   @override
   String get materialsCorrectReasonHint => 'يرى أولياء الأمور هذا السبب.';
+
+  @override
+  String get ticketChangeLessonTime => 'تغيير موعد الحصة';
+
+  @override
+  String get slotsMorning => 'الصباح';
+
+  @override
+  String get slotsAfternoon => 'بعد الظهر';
+
+  @override
+  String get slotsEvening => 'المساء';
+
+  @override
+  String slotsFreeCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count وقت متاح',
+      many: '$count وقتًا متاحًا',
+      few: '$count أوقات متاحة',
+      two: 'وقتان متاحان',
+      one: 'وقت واحد متاح',
+      zero: 'لا أوقات متاحة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String slotsExcept(String dates) {
+    return 'عدا $dates';
+  }
+
+  @override
+  String get slotsLocked => 'الحصص متوقفة — الدفع';
+
+  @override
+  String get slotsNone => 'لا توجد أوقات متاحة حاليًا.';
+
+  @override
+  String get changeTimeOnce => 'هذه الحصة فقط';
+
+  @override
+  String get changeTimeOnceHint => 'انقل حصة واحدة إلى وقت متاح آخر';
+
+  @override
+  String get changeTimeWeekly => 'كل أسبوع';
+
+  @override
+  String get changeTimeWeeklyHint => 'غيّر المواعيد الأسبوعية الثابتة';
+
+  @override
+  String get changeTimePickLesson => 'أيّ حصة؟';
+
+  @override
+  String get changeTimeNoLessons =>
+      'لا توجد حصص قادمة خلال الأسابيع الأربعة القادمة.';
+
+  @override
+  String changeTimeCurrent(String when) {
+    return 'الموعد الحالي: $when';
+  }
+
+  @override
+  String changeTimeSummary(String from, String to) {
+    return '$from ← $to';
+  }
+
+  @override
+  String get changeTimeConfirm => 'تأكيد';
+
+  @override
+  String changeTimeMovesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تبقّى $count تغيير هذا الشهر',
+      many: 'تبقّى $count تغييرًا هذا الشهر',
+      few: 'تبقّت $count تغييرات هذا الشهر',
+      two: 'تبقّى تغييران هذا الشهر',
+      one: 'تبقّى تغيير واحد هذا الشهر',
+      zero: 'لم يتبقَّ أي تغيير هذا الشهر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get changeTimeTaken => 'حُجز هذا الوقت للتو. اختر وقتًا آخر من فضلك.';
+
+  @override
+  String get moveRefusedStarted => 'بدأت هذه الحصة بالفعل.';
+
+  @override
+  String get moveRefusedNotMovable => 'لا يمكن نقل هذه الحصة.';
+
+  @override
+  String get moveRefusedAlreadyMoved => 'سبق نقل هذه الحصة مرة واحدة.';
+
+  @override
+  String get moveRefusedMonthlyLimit =>
+      'بلغتَ الحدّ الشهري لتغيير مواعيد حصص هذا الطفل.';
+
+  @override
+  String get moveRefusedTooLate =>
+      'اقترب موعد الحصة كثيرًا، فلا يمكن نقلها الآن.';
+
+  @override
+  String get weeklyCurrentTitle => 'المواعيد الأسبوعية الحالية';
+
+  @override
+  String get weeklyNoCurrent => 'لا توجد مواعيد أسبوعية بعد.';
+
+  @override
+  String get weeklyChange => 'تغيير';
+
+  @override
+  String get weeklyRemove => 'إزالة';
+
+  @override
+  String get weeklyUndo => 'تراجع';
+
+  @override
+  String get weeklyAdd => 'إضافة موعد';
+
+  @override
+  String weeklyPickReplacement(String when) {
+    return 'الموعد الجديد بدلًا من $when';
+  }
+
+  @override
+  String get weeklyPickAdded => 'اختر موعدًا لإضافته';
+
+  @override
+  String get weeklyWillStop => 'سيتوقف';
+
+  @override
+  String get weeklyFrom => 'ابتداءً من';
+
+  @override
+  String weeklySummaryFrom(String date) {
+    return 'ابتداءً من $date';
+  }
+
+  @override
+  String weeklySummaryAdded(String when) {
+    return 'إضافة $when';
+  }
+
+  @override
+  String weeklySummaryRemoved(String when) {
+    return 'إيقاف $when';
+  }
+
+  @override
+  String weeklySummaryUnchanged(String when) {
+    return '$when دون تغيير';
+  }
+
+  @override
+  String weeklySummarySkipped(String date) {
+    return 'لن تُعقد حصة $date';
+  }
+
+  @override
+  String get childScheduleTitle => 'المواعيد';
+
+  @override
+  String get childScheduleEntrySubtitle => 'المواعيد الأسبوعية والحصص القادمة';
+
+  @override
+  String get childScheduleWeekly => 'المواعيد الأسبوعية';
+
+  @override
+  String get childScheduleUpcoming => 'الأسابيع الأربعة القادمة';
+
+  @override
+  String get childScheduleNoLessons =>
+      'لا توجد حصص خلال الأسابيع الأربعة القادمة.';
+
+  @override
+  String get childSchedulePending =>
+      'طلب تغيير المواعيد بانتظار تأكيد الإدارة.';
+
+  @override
+  String get childScheduleLoadFailed => 'تعذّر تحميل المواعيد.';
+
+  @override
+  String childLessonMovedTo(String when) {
+    return 'نُقلت إلى $when';
+  }
+
+  @override
+  String get childLessonExcused => 'بعذر';
+
+  @override
+  String get cardMovedTitle => 'تغيّر موعد الحصة';
+
+  @override
+  String get cardMovedByFamily => 'غيّرته الأسرة';
+
+  @override
+  String get cardMovedByTeacher => 'غيّره المعلم';
+
+  @override
+  String get cardMovedByStaff => 'غيّرته الإدارة';
+
+  @override
+  String workloadMoved(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'نُقلت $count حصة',
+      many: 'نُقلت $count حصة',
+      few: 'نُقلت $count حصص',
+      two: 'نُقلت حصتان',
+      one: 'نُقلت حصة واحدة',
+      zero: 'لم تُنقل أي حصة',
+    );
+    return '$_temp0';
+  }
 }

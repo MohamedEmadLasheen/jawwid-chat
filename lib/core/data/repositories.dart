@@ -721,11 +721,25 @@ abstract interface class LessonRepository {
   /// `POST /lessons/:id/makeup`
   Future<void> bookMakeup(String lessonId, DateTime startsAt);
 
-  /// `GET /learners/:id/schedule-options`
-  Future<List<WeeklyOption>> scheduleOptions(String learnerId);
+  /// `GET /learners/:id/schedule-options` -- PD-31: the current weekly times too.
+  Future<ScheduleOptions> scheduleOptions(String learnerId);
 
-  /// `POST /learners/:id/schedule-change-requests`
-  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note});
+  /// `POST /learners/:id/schedule-change-requests` -- PD-31: [slots] is the FULL new
+  /// weekly set; [effectiveFrom] is 'YYYY-MM-DD' in the teacher's zone.
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyKey> slots, {String? effectiveFrom, String? note});
+
+  /// PD-31: `GET /lessons/:id/move-slots` -- where one lesson may move, or why it cannot.
+  Future<MoveOffer> moveSlots(String lessonId);
+
+  /// PD-31: `POST /lessons/:id/move` -- [startsAt] exactly as offered.
+  Future<void> moveLesson(String lessonId, DateTime startsAt);
+
+  /// PD-31: `GET /learners/:id/schedule` -- a child's weekly times.
+  Future<ChildSchedule> childSchedule(String learnerId);
+
+  /// PD-31: `GET /lessons?learnerId&from&to` -- one child's lessons (a parent: their
+  /// own family's only; a teacher: their own lessons only).
+  Future<List<ScheduledLesson>> learnerLessons(String learnerId, DateTime from, DateTime to);
 
   /// `GET /lessons?from&to` -- for a teacher, their own lessons.
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to);
@@ -835,12 +849,25 @@ class NoLessonRepository implements LessonRepository {
       throw UnsupportedError('no lesson server in this build');
 
   @override
-  Future<List<WeeklyOption>> scheduleOptions(String learnerId) =>
+  Future<ScheduleOptions> scheduleOptions(String learnerId) =>
       throw UnsupportedError('no lesson server in this build');
 
   @override
-  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note}) =>
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyKey> slots, {String? effectiveFrom, String? note}) =>
       throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<MoveOffer> moveSlots(String lessonId) => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> moveLesson(String lessonId, DateTime startsAt) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<ChildSchedule> childSchedule(String learnerId) => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<List<ScheduledLesson>> learnerLessons(String learnerId, DateTime from, DateTime to) async => const [];
 
   @override
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => const [];
