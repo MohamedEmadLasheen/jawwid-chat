@@ -36,19 +36,7 @@
 .mt-override .input { flex: 1 1 12rem; min-inline-size: 0; inline-size: auto; }
 .mt-override .select { flex: 1 1 14rem; min-inline-size: 0; inline-size: auto; }
 .mt-add-source { display: grid; gap: var(--space-2); max-inline-size: 40rem; }
-/* The memorization map on the Student Profile. */
-.mt-map { display: grid; gap: var(--space-3); }
-.mt-counts { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.mt-juz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: var(--space-3); align-items: start; }
-.mt-juz { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.mt-juz h4 { margin: 0; font-size: var(--fs-sm); color: var(--text-muted); }
-.mt-surahs { display: flex; flex-wrap: wrap; gap: var(--space-1); list-style: none; margin: 0; padding: 0; }
-.mt-surah { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-1) var(--space-2); background: var(--surface, transparent); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
-.mt-surah--memorized { border-color: var(--ok, #12805c); background: color-mix(in srgb, var(--ok, #12805c) 12%, transparent); }
-.mt-surah--in_progress { border-color: var(--info, #1f6feb); background: color-mix(in srgb, var(--info, #1f6feb) 10%, transparent); }
-.mt-surah--needs_revision { border-color: var(--warn, #b54708); background: color-mix(in srgb, var(--warn, #b54708) 12%, transparent); }
 .dialog--sheet .mt-form { min-inline-size: 0; }
-.mt-history { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 @media (max-width: 560px) {
   .mt-item { grid-template-columns: 1fr; }
   .mt-item__actions { justify-content: flex-start; }

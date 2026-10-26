@@ -15,20 +15,13 @@ abstract interface class MaterialsRepository {
   /// `GET /learners/:id/materials/library?subject&ageGroup`
   Future<ChildLibrary> library(String learnerId, {String? subject, String? ageGroup});
 
-  /// `GET /learners/:id/materials/practice`
-  Future<PracticeWeek> practice(String learnerId);
+  /// `GET /learners/:id/materials/opened` -- what was opened for this child this
+  /// academy week (Saturday to Friday).
+  Future<OpenedThisWeek> opened(String learnerId);
 
-  /// `GET /learners/:id/materials/progress`
-  Future<ProgressMap> progress(String learnerId);
-
-  /// `GET /learners/:id/materials/progress/:surah`
-  Future<SurahHistory> history(String learnerId, int surah);
-
-  /// `POST /learners/:id/materials/progress/:surah/correct`
-  Future<SurahHistory> correct(String learnerId, int surah, {required String status, required String reason});
-
-  /// `POST /materials/items/:id/open` -- a short-lived URL to play.
-  Future<OpenedMaterial> open(String itemId);
+  /// `POST /materials/items/:id/open` -- a short-lived URL to play. With
+  /// [learnerId], the opening is recorded for that child ("Opened this week").
+  Future<OpenedMaterial> open(String itemId, {String? learnerId});
 
   /// `POST /materials/recitations/:surah/open`
   Future<String> recitation(int surah);
@@ -49,15 +42,9 @@ class NoMaterialsRepository implements MaterialsRepository {
   @override
   Future<ChildLibrary> library(String learnerId, {String? subject, String? ageGroup}) async => _none();
   @override
-  Future<PracticeWeek> practice(String learnerId) async => _none();
+  Future<OpenedThisWeek> opened(String learnerId) async => _none();
   @override
-  Future<ProgressMap> progress(String learnerId) async => _none();
-  @override
-  Future<SurahHistory> history(String learnerId, int surah) async => _none();
-  @override
-  Future<SurahHistory> correct(String learnerId, int surah, {required String status, required String reason}) async => _none();
-  @override
-  Future<OpenedMaterial> open(String itemId) async => _none();
+  Future<OpenedMaterial> open(String itemId, {String? learnerId}) async => _none();
   @override
   Future<String> recitation(int surah) async => _none();
   @override
@@ -103,112 +90,28 @@ class HttpMaterialsRepository implements MaterialsRepository {
   }
 
   @override
-  Future<PracticeWeek> practice(String learnerId) async {
-    final d = await _get('/learners/$learnerId/materials/practice');
-    final reports = <PracticeReport>[];
-    for (final r in (d['reports'] as List?) ?? const []) {
-      if (r is! Map || r['lessonId'] is! String) continue;
-      final submitted = DateTime.tryParse(r['submittedAt'] as String? ?? '');
-      if (submitted == null) continue;
-      final practice = <PracticeEntry>[];
-      for (final p in (r['practice'] as List?) ?? const []) {
-        if (p is! Map) continue;
-        if (p['kind'] == 'item') {
-          practice.add(ItemPractice(MaterialItem.fromJson(p['item'])));
-        } else if (p['kind'] == 'ayah_range' && p['surah'] is num) {
-          practice.add(AyahPractice(
-            surah: (p['surah'] as num).toInt(),
-            nameAr: p['nameAr'] as String? ?? '',
-            nameEn: p['nameEn'] as String? ?? '',
-            ayahFrom: (p['ayahFrom'] as num?)?.toInt() ?? 1,
-            ayahTo: (p['ayahTo'] as num?)?.toInt() ?? 1,
-            wholeSurah: p['wholeSurah'] == true,
-            hasRecitation: p['hasRecitation'] == true,
-          ));
-        }
-      }
-      reports.add(PracticeReport(
-        lessonId: r['lessonId'] as String,
-        submittedAt: AppClock.view(submitted),
-        lessonNumber: (r['lessonNumber'] as num?)?.toInt(),
-        nextTasks: [for (final t in (r['nextTasks'] as List?) ?? const []) if (t is String) t],
-        homework: r['homework'] as String?,
-        practice: practice,
+  Future<OpenedThisWeek> opened(String learnerId) async {
+    final d = await _get('/learners/$learnerId/materials/opened');
+    final items = <OpenedItem>[];
+    for (final r in (d['items'] as List?) ?? const []) {
+      if (r is! Map) continue;
+      final item = MaterialItem.fromJson(r['item']);
+      final at = DateTime.tryParse(r['lastOpenedAt'] as String? ?? '');
+      if (item == null || at == null) continue;
+      items.add(OpenedItem(
+        item: item,
+        available: r['available'] != false,
+        lastOpenedAt: AppClock.view(at),
+        times: (r['times'] as num?)?.toInt() ?? 1,
       ));
     }
-    return PracticeWeek(current: d['current'] != false, reports: reports);
+    final week = DateTime.tryParse(d['weekStartsAt'] as String? ?? '');
+    return OpenedThisWeek(weekStartsAt: week == null ? DateTime.now() : AppClock.view(week), items: items);
   }
 
   @override
-  Future<ProgressMap> progress(String learnerId) async {
-    final d = await _get('/learners/$learnerId/materials/progress');
-    final child = d['child'] is Map ? d['child'] as Map : const {};
-    final counts = <String, int>{};
-    if (d['counts'] is Map) {
-      (d['counts'] as Map).forEach((k, v) {
-        if (k is String && v is num) counts[k] = v.toInt();
-      });
-    }
-    return ProgressMap(
-      childName: child['name'] as String? ?? '',
-      counts: counts,
-      canCorrect: d['canCorrect'] == true,
-      juz: [
-        for (final j in (d['juz'] as List?) ?? const [])
-          if (j is Map && j['juz'] is num)
-            JuzGroup(
-              juz: (j['juz'] as num).toInt(),
-              surahs: [for (final s in (j['surahs'] as List?) ?? const []) ?_surah(s)],
-            ),
-      ],
-    );
-  }
-
-  ProgressSurah? _surah(Object? s) {
-    if (s is! Map || s['number'] is! num) return null;
-    return ProgressSurah(
-      number: (s['number'] as num).toInt(),
-      nameAr: s['nameAr'] as String? ?? '',
-      nameEn: s['nameEn'] as String? ?? '',
-      status: s['status'] as String? ?? 'not_started',
-      hasRecitation: s['hasRecitation'] == true,
-    );
-  }
-
-  SurahHistory _history(Map<String, Object?> d) {
-    final s = d['surah'] is Map ? d['surah'] as Map : const {};
-    return SurahHistory(
-      surah: ProgressSurah(
-        number: (s['number'] as num?)?.toInt() ?? 0,
-        nameAr: s['nameAr'] as String? ?? '',
-        nameEn: s['nameEn'] as String? ?? '',
-        status: '',
-      ),
-      marks: [
-        for (final m in (d['marks'] as List?) ?? const [])
-          if (m is Map && DateTime.tryParse(m['at'] as String? ?? '') != null)
-            SurahMark(
-              status: m['status'] as String? ?? '',
-              source: m['source'] as String? ?? '',
-              byKind: (m['by'] is Map ? (m['by'] as Map)['kind'] : null) as String? ?? 'staff',
-              byName: (m['by'] is Map ? (m['by'] as Map)['name'] : null) as String?,
-              reason: m['reason'] as String?,
-              at: AppClock.view(DateTime.parse(m['at'] as String)),
-            ),
-      ],
-    );
-  }
-
-  @override
-  Future<SurahHistory> history(String learnerId, int surah) async =>
-      _history(await _get('/learners/$learnerId/materials/progress/$surah'));
-
-  @override
-  Future<SurahHistory> correct(String learnerId, int surah, {required String status, required String reason}) async =>
-      _history(await _post('/learners/$learnerId/materials/progress/$surah/correct', {'status': status, 'reason': reason}));
-
-  @override
-  Future<OpenedMaterial> open(String itemId) async => OpenedMaterial.fromJson(await _post('/materials/items/$itemId/open'));
+  Future<OpenedMaterial> open(String itemId, {String? learnerId}) async =>
+      OpenedMaterial.fromJson(await _post('/materials/items/$itemId/open', {'learnerId': ?learnerId}));
 
   @override
   Future<String> recitation(int surah) async => (await _post('/materials/recitations/$surah/open'))['url'] as String? ?? '';

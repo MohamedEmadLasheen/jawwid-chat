@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { materialsApi, materialsKeys, type ItemInput, type ItemQuery, type MarkStatus } from './api'
+import { materialsApi, materialsKeys, type ItemInput, type ItemQuery } from './api'
 
 /** Whether to offer the Materials page. A refusal reads as "no". */
 export function useMaterialsAccess(enabled = true) {
@@ -41,29 +41,4 @@ export function useRecitationMutations() {
       onSuccess: (data) => qc.setQueryData(materialsKeys.recitations, data),
     }),
   }
-}
-
-/** A child's memorization map. A refusal (not this viewer's child) hides the panel. */
-export function useProgress(learnerId: string) {
-  return useQuery({ queryKey: materialsKeys.progress(learnerId), queryFn: () => materialsApi.progress(learnerId), retry: false })
-}
-
-export function useSurahHistory(learnerId: string, surah: number | null) {
-  return useQuery({
-    queryKey: materialsKeys.history(learnerId, surah ?? 0),
-    queryFn: () => materialsApi.history(learnerId, surah as number),
-    enabled: surah !== null,
-  })
-}
-
-export function useCorrectSurah(learnerId: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ surah, status, reason }: { surah: number; status: MarkStatus; reason: string }) =>
-      materialsApi.correct(learnerId, surah, { status, reason }),
-    onSuccess: (data, v) => {
-      qc.setQueryData(materialsKeys.history(learnerId, v.surah), data)
-      void qc.invalidateQueries({ queryKey: materialsKeys.progress(learnerId), exact: true })
-    },
-  })
 }
