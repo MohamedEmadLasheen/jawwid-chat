@@ -676,6 +676,12 @@ describe('PD-30 over HTTP', () => {
     expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
     const [{ lock }] = await g.prisma.$queryRawUnsafe<Array<{ lock: string | null }>>(`select chat.learner_lesson_lock($1::uuid) as lock`, child.id);
     expect(lock).toBe('overdue');
+    // A request role learns only about children it may see: with no session identity, nothing.
+    const asApp = await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local role chat_app`);
+      return tx.$queryRawUnsafe<Array<{ lock: string | null }>>(`select chat.learner_lesson_lock($1::uuid) as lock`, child.id);
+    });
+    expect(asApp[0]?.lock ?? null).toBeNull();
     // A family group whose child rows are missing (legacy data): it covers every child of its family.
     await g.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
