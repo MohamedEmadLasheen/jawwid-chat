@@ -737,6 +737,13 @@ insert into chat.notification_template (key, locale, title, body) values
    'A parent asked to renew {learner}''s subscription.')
 on conflict (key, locale, version) do nothing;
 
+-- The cards SubscriptionEffects posts (PD-4: the direct chat for what is
+-- financial, the group only for "paused" / "back on").
+insert into chat.message_card_kind (kind) values
+  ('subscription_grace'), ('subscription_locked'), ('lessons_paused'),
+  ('subscription_unlocked'), ('subscription_renewal_requested')
+on conflict do nothing;
+
 -- ===========================================================================
 -- 10. Backfill: PD-15's package size becomes each child's first subscription
 -- ===========================================================================
