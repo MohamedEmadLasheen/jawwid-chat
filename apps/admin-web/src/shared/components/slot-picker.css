@@ -1,0 +1,44 @@
+/* PD-31: the shared time-chip picker (SlotPicker.tsx). Tokens only; the chosen
+   chip uses the design system's pressed-chip colours (brand-700 on white, the
+   lighter accent in dark mode), both above 4.5:1 with white text. */
+.sp { display: grid; gap: var(--space-2); }
+.sp-days { display: flex; gap: var(--space-2); overflow-x: auto; padding-block-end: var(--space-1); scrollbar-width: thin; }
+.sp-part { display: grid; gap: var(--space-1); }
+.sp-part__title { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-muted); }
+.sp-times { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.sp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-block-size: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.sp-chip:hover { background: var(--surface-hover); border-color: var(--border-control); }
+.sp-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sp-chip[aria-checked='true'] { background: var(--brand-700); border-color: var(--brand-700); color: #ffffff; font-weight: var(--fw-semibold); }
+.sp-chip__note { color: var(--warn); font-weight: var(--fw-regular); }
+.sp-chip[aria-checked='true'] .sp-chip__note { color: #ffffff; }
+/* The day that holds the chosen time, while another day is open. */
+.sp-day--has-choice[aria-checked='false'] { border-color: var(--brand-700); border-width: 2px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .sp-chip[aria-checked='true'] { background: var(--accent); border-color: var(--accent); }
+  :root:not([data-theme='light']) .sp-day--has-choice[aria-checked='false'] { border-color: var(--accent); }
+}
+@media (pointer: coarse) {
+  .sp-chip { min-block-size: var(--tap); }
+}
+.sp-zone { margin: 0; font-size: var(--fs-xs); color: var(--text-muted); }
+.sp-locked { margin: 0; }
+.sp-empty, .sp-wait { margin: 0; }

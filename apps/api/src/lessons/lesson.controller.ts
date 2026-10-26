@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/c
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { LessonService } from './lesson.service';
+import { SchedulingService } from './scheduling.service';
 
 /**
  * PD-9 / PD-11 lessons and their tickets. Every route is behind the global
@@ -12,7 +13,10 @@ import { LessonService } from './lesson.service';
 @Controller()
 @UseFilters(CommErrorFilter)
 export class LessonController {
-  constructor(private readonly lessons: LessonService) {}
+  constructor(
+    private readonly lessons: LessonService,
+    private readonly scheduling: SchedulingService,
+  ) {}
 
   @Get('lessons')
   list(
@@ -27,8 +31,10 @@ export class LessonController {
 
   /** The Teachers department's queue: overdue lessons and open rulings. */
   @Get('lessons/needs-action')
-  needsAction(@ActorId() actorId: string) {
-    return this.lessons.needsAction(actorId);
+  async needsAction(@ActorId() actorId: string) {
+    // PD-31: requests re-checked against the teacher's time now, and the
+    // weekly lessons the materializer could not create.
+    return this.scheduling.enrichNeedsAction(actorId, await this.lessons.needsAction(actorId));
   }
 
   @Get('lessons/:id')

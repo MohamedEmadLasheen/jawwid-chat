@@ -76,6 +76,7 @@ export type LessonAct =
   | 'decide_ruling'
   | 'book_makeup'
   | 'request_schedule_change'
+  | 'move_lesson'
   | 'decide_schedule_change'
   | 'resolve_makeup'
   | 'read_schedule'
@@ -120,13 +121,19 @@ const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
   // regular-time change it may only ask for. PD-15: the teacher and the
   // child's supervisor record the make-up time the family and teacher agreed.
   book_makeup: ['family', 'manager', 'supervisor', 'teacher'],
-  request_schedule_change: ['family'],
+  // PD-31: a teacher may ask for new weekly times too; the Teachers department
+  // still decides. Moving ONE lesson is instant for everyone who takes part in
+  // it -- the family within its limits (SchedulingService), never a violation.
+  request_schedule_change: ['family', 'teacher'],
+  move_lesson: ['family', 'teacher', 'manager', 'supervisor'],
   decide_schedule_change: ['manager'],
   resolve_makeup: ['manager'],
   read_schedule: ['manager', 'supervisor', 'teacher', 'family'],
   // PD-11 T3: moving a child between teachers is the Teachers department's; a
   // pause or a stop may also be recorded by the child's own (Operations) supervisor.
-  transfer: ['manager'],
+  // PD-31: so may the change of teacher -- the child's PD-8 supervisor, their
+  // active backup and the Operations Manager (chat.transfer_learner agrees).
+  transfer: ['manager', 'supervisor'],
   suspend: ['manager', 'supervisor'],
   // PD-17: the Student Profile -- the administration (the Teachers department,
   // the super admin, the child's supervisor) and the child's own teacher. Not

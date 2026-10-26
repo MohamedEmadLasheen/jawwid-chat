@@ -110,6 +110,7 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                   <th scope="col" className="num">{jx(S.teacherExcuses)}</th>
                   <th scope="col" className="num">{tx(T.colTrials)}</th>
                   <th scope="col" className="num">{tx(T.colTrialsSubscribed)}</th>
+                  <th scope="col" className="num" title={tx(T.movesHint)}>{tx(T.colMoves)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,6 +135,7 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                     <td className="num">{r.summary ? fmt.number(r.summary.teacherExcuses) : '—'}</td>
                     <td className="num">{fmt.number(r.trials?.total ?? 0)}</td>
                     <td className="num">{fmt.number(r.trials?.subscribed ?? 0)}</td>
+                    <td className="num">{r.movesByTeacher === undefined ? '—' : fmt.number(r.movesByTeacher)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -244,6 +246,11 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
             <Metric label={tx(T.transfersOut)} value={fmt.number(d.movements.transfersOut)} />
             <Metric label={tx(T.paused)} value={fmt.number(d.movements.paused)} />
             <Metric label={tx(T.stopped)} value={fmt.number(d.movements.stopped)} />
+          </Fact>
+        )}
+        {d.movesByTeacher !== undefined && (
+          <Fact title={tx(T.moves)}>
+            <Metric label={tx(T.moves)} value={fmt.number(d.movesByTeacher)} hint={tx(T.movesHint)} />
           </Fact>
         )}
         <Fact title={tx(T.makeups)}>

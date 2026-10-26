@@ -54,11 +54,17 @@ const TRIALS: TrialDto[] = [
 
 const SLOTS = ['2026-11-02T15:00:00Z', '2026-11-02T15:30:00Z']
 
-/** The free-time list, once it can be used (it is shown, disabled, until then). */
-async function freeTime(dialog: HTMLElement): Promise<HTMLElement> {
-  const select = within(dialog).getByLabelText('Free time')
-  await waitFor(() => expect(select).toBeEnabled())
-  return select
+/** PD-31: the free times as chips, once they are offered (the block says what comes first until then). */
+async function freeTimes(dialog: HTMLElement): Promise<HTMLElement[]> {
+  const picker = await within(dialog).findByRole('group', { name: 'Free time' })
+  return [...picker.querySelectorAll<HTMLElement>('[data-slot]')]
+}
+
+/** One click on the time chip of `iso`. */
+async function pickTime(dialog: HTMLElement, iso: string): Promise<void> {
+  const chip = (await freeTimes(dialog)).find((c) => c.dataset.slot === iso)!
+  await userEvent.click(chip)
+  expect(chip).toHaveAttribute('aria-checked', 'true')
 }
 
 function access(a: { lessonManager?: boolean; sales?: boolean; operations?: boolean }) {
@@ -201,9 +207,9 @@ describe('Trial lessons, as Sales', () => {
     const dialog = await screen.findByRole('dialog')
     const book = within(dialog).getByRole('button', { name: 'Book' })
     expect(within(dialog).queryByLabelText('Prospect')).not.toBeInTheDocument()
-    // Day and time are there from the start, saying what comes first.
-    expect(within(dialog).getByLabelText('Day')).toBeDisabled()
-    expect(within(dialog).getByLabelText('Free time')).toHaveDisplayValue('Choose the teacher first')
+    // The time block is there from the start, saying what comes first.
+    expect(within(dialog).getByText('Choose the teacher first')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument()
 
     await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
     await userEvent.type(within(dialog).getByLabelText('Level (optional)'), 'beginner')
@@ -215,11 +221,14 @@ describe('Trial lessons, as Sales', () => {
 
     await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
     await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
-    const time = await freeTime(dialog)
-    expect(within(time).getAllByRole('option')).toHaveLength(SLOTS.length + 1)
+    const times = await freeTimes(dialog)
+    expect(times).toHaveLength(SLOTS.length)
+    // PD-31 chips: the day with its count, then its times under Evening (17:00 and 17:30 Cairo).
+    expect(within(dialog).getByRole('radio', { name: 'Mon 2 · 2 times' })).toHaveAttribute('aria-checked', 'true')
+    expect(within(within(dialog).getByRole('radiogroup', { name: 'Evening' })).getAllByRole('radio')).toHaveLength(2)
     // A 12-hour clock with AM / PM, as the academy reads it.
-    for (const o of within(time).getAllByRole('option').slice(1)) expect(o.textContent).toMatch(/^\d{2}:\d{2}\s?(AM|PM)$/)
-    await userEvent.selectOptions(time, SLOTS[1]!)
+    for (const o of times) expect(o.textContent).toMatch(/^\d{2}:\d{2}\s?(AM|PM)$/)
+    await pickTime(dialog, SLOTS[1]!)
     await userEvent.click(book)
     await waitFor(() =>
       expect(sent('POST', /\/trials$/)).toEqual([{
@@ -249,7 +258,7 @@ describe('Trial lessons, as Sales', () => {
     expect(within(dialog).queryByLabelText('Student name')).not.toBeInTheDocument()
     await waitFor(() => expect(within(dialog).getByLabelText('Teacher')).toHaveValue('t-1'))
     await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
-    await userEvent.selectOptions(await freeTime(dialog), SLOTS[1]!)
+    await pickTime(dialog, SLOTS[1]!)
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() =>
       expect(sent('POST', /\/trials\/tr-up\/reschedule$/)).toEqual([{ teacherId: 't-2', startsAt: SLOTS[1], durationMinutes: 30 }]),
@@ -273,7 +282,7 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add another student' }))
     await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
     await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
-    await userEvent.selectOptions(await freeTime(dialog), SLOTS[0]!)
+    await pickTime(dialog, SLOTS[0]!)
     await userEvent.click(book)
     // The empty second row is the reason, and it can simply be removed.
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter a name for every student, or remove the empty one.')
@@ -296,13 +305,13 @@ describe('Trial lessons, as Sales', () => {
     expect(length).toHaveValue(30)
     await userEvent.clear(length)
     await userEvent.type(length, '5')
-    expect(within(dialog).getByLabelText('Free time')).toBeDisabled()
-    expect(within(dialog).getByLabelText('Free time')).toHaveDisplayValue('Enter the length first')
+    expect(within(dialog).getByText('Enter the length first')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Book' }))
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter a length from 15 to 120 minutes.')
     await userEvent.clear(length)
     await userEvent.type(length, '40')
-    await userEvent.selectOptions(await freeTime(dialog), SLOTS[0]!)
+    await pickTime(dialog, SLOTS[0]!)
     expect(fetchMock.mock.calls.some(([u]) => /\/trials\/slots\?.*durationMinutes=40/.test(String(u)))).toBe(true)
     await userEvent.click(within(dialog).getByRole('button', { name: 'Book' }))
     await waitFor(() => expect(sent('POST', /\/trials$/)).toEqual([{ students: [{ name: 'Karim' }], teacherId: 't-2', startsAt: SLOTS[0], durationMinutes: 40 }]))
@@ -318,7 +327,7 @@ describe('Trial lessons, as Sales', () => {
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Choose the teacher.')
     await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
     await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
-    await freeTime(dialog)
+    await freeTimes(dialog)
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Choose a free time.')
   })
 })
