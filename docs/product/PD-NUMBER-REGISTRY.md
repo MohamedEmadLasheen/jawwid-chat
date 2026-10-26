@@ -41,7 +41,8 @@ claimed. The decision text itself still lives in
 | PD-30 | Subscriptions, lesson balance and payment-based group lock | `claude/pd30-subscription-lock-*` | in progress |
 | PD-31 | Scheduling: trial time slots, reschedule redesign, a parent's child schedule, change teacher | `claude/pd31-scheduling-*` | in progress |
 | PD-32 | Parent feedback about the teacher (amends PD-26), Starred in Chats, New Students redesign, sign-up code without time expiry (amends PD-16), Trial labels | `claude/pd32-feedback-ui-*` | in progress |
-| PD-33 | next free number | — | — |
+| PD-33 | Hand over to backup: a temporary cover with automatic return (built on PD-8 backup links) | `claude/pd33-backup-handover-3bb0f2` | in progress |
+| PD-34 | next free number | — | — |
 
 ## Migration slots claimed on 2026-10-22
 
@@ -62,5 +63,6 @@ claimed. The decision text itself still lives in
 | `20261026100000` | PD-30 — subscriptions, lesson balance, payment lock |
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
+| `20261026130000` | PD-33 — `chat_pd033_supervisor_cover` |
 
-The next free slot is `20261026130000`.
+The next free slot is `20261026140000`.
