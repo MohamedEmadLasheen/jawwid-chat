@@ -38,6 +38,7 @@ import {
   ScheduledCallCard,
   readScheduledCallCard,
 } from '@/features/calls-page/ScheduledCallCard'
+import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 /** The quick reactions, the same six as the mobile app. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
@@ -411,7 +412,9 @@ export function ChatThread({
           <button type="button" className="cw-head__who" onClick={onToggleInfo} aria-label={group ? copy.groupInfo : copy.contactInfo}>
             <ConversationAvatar c={conv} name={name} selfId={staff?.id} />
             <span className="thread-head__text">
-              <span className="thread-head__name" dir="auto">{name}</span>
+              <span className="thread-head__name" dir="auto">
+                {name} {isTrialGroup(conv) && <TrialBadge />}
+              </span>
               <span className="thread-head__sub">
                 {copy.kind[conv.type] ?? conv.type}
                 {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}

@@ -16,6 +16,7 @@ import { InvoiceDownloadButton, InvoiceStatusBadge, PaymentList, ReceiptFile, Re
 import { parentPath, studentPath, type FamilyBilling, type ParentProfile, type TimelineInstalment, type TimelineStatus } from './api'
 import { METHOD_LABEL, P, TIMELINE_STATUS, countryName, describeError, isProfileRefusal, planLabel, useCopy } from './copy'
 import { useFamilyBilling, useParent, useParentPhoto } from './hooks'
+import { FamilyFeedbackSection } from './FamilyFeedbackSection'
 import {
   CancelRequestDialog,
   EditBillingDialog,
@@ -94,6 +95,7 @@ export function ParentProfilePage({ eyebrow }: { eyebrow?: string }) {
                 <ContactSection profile={data} onEdit={() => setDialog({ kind: 'contact' })} />
                 <NoteSection profile={data} onEdit={() => setDialog({ kind: 'note' })} />
                 <ChildrenSection profile={data} />
+                <FamilyFeedbackSection familyId={data.family.id} />
                 {isProfileRefusal(billing.error) ? (
                   <Section id="pf-payments" title={tx(P.payments)}>
                     <p className="tf-muted">{describeError(billing.error, locale)}</p>

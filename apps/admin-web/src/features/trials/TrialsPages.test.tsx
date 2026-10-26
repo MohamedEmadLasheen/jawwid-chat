@@ -478,12 +478,12 @@ describe('New students', () => {
     expect(within(card).getByText('+99 000 222')).toBeInTheDocument()
     expect(within(card).getByText('gamma@example.test')).toBeInTheDocument()
     expect(within(card).getByText('Bank account transfer')).toBeInTheDocument()
-    expect(within(card).getByText('USD')).toBeInTheDocument()
+    expect(within(card).getByText('US Dollar (USD)')).toBeInTheDocument()
     const rows = within(card).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(within(rows[0]!).getByText('Child G1')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('$1,200.00')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('$150.00')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('$1,200')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('$150')).toBeInTheDocument()
     expect(within(rows[0]!).getByText(/Monday/)).toBeInTheDocument()
     expect(within(rows[0]!).getByText(/Thursday/)).toBeInTheDocument()
     expect(within(rows[1]!).getByText('Teacher Two')).toBeInTheDocument()
@@ -554,15 +554,22 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
       ...BASE,
       enrolment: {
         familyId: 'f-1', learnerIds: ['k-1'], supervisor: { id: 'sup-1', name: 'Supervisor One' }, assignedAt: '2026-10-21T08:00:00Z',
-        groupConversationId: null, canCreateGroup: true, parentSignup: { state: 'code_waiting', code: '482913', expiresAt: '2026-10-21T08:10:00Z' },
+        groupConversationId: null, canCreateGroup: true, parentSignup: { state: 'code_waiting', code: '482913', issuedAt: '2026-10-21T08:00:00Z' },
       },
     }
     on('GET', /\/trials\/new-students$/, () => json({ students: [assigned], canAssign: false }))
     on('POST', /\/trials\/new-students\/tr-new\/group$/, () => json({ conversationId: 'c-new' }))
+    on('POST', /\/trials\/new-students\/tr-new\/signup-code\/invalidate$/, () => json({ invalidated: true }, 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
     const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
     expect(within(card).getByText('Supervisor One')).toBeInTheDocument()
     expect(within(card).getByText('482913')).toBeInTheDocument()
+    // PD-32: no deadline -- valid until used or invalidated; staff can end it.
+    expect(within(card).getByText('Valid until the parent uses it or it is invalidated.')).toBeInTheDocument()
+    expect(within(card).queryByText(/valid until \d/i)).not.toBeInTheDocument()
+    await userEvent.click(within(card).getByRole('button', { name: 'Invalidate code' }))
+    await waitFor(() => expect(sent('POST', /signup-code\/invalidate$/)).toHaveLength(1))
+    expect(await within(card).findByText('Code invalidated.')).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: 'Assign' })).not.toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: 'Edit subscription' })).not.toBeInTheDocument()
     await userEvent.click(within(card).getByRole('button', { name: 'Create group' }))
@@ -605,5 +612,57 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/supervisor$/)).toEqual([{ supervisorId: 'sup-2', reason: 'supervisor on leave' }]))
     expect(await within(card).findByText('Child D1 moved to Supervisor Two. The chat history is unchanged.')).toBeInTheDocument()
   })
+
+  it('PD-32: a locked sign-up says so, with the wrong-code count; Reset attempts clears it', async () => {
+    access({ operations: true })
+    const locked: NewStudentDto = {
+      ...BASE,
+      enrolment: {
+        familyId: 'f-1', learnerIds: ['k-1'], supervisor: { id: 'sup-1', name: 'Supervisor One' }, assignedAt: '2026-10-21T08:00:00Z',
+        groupConversationId: 'c-new', canCreateGroup: false, parentSignup: { state: 'not_started', attempts: { wrong: 10, cap: 10, locked: true } },
+      },
+    }
+    on('GET', /\/trials\/new-students$/, () => json({ students: [locked], canAssign: false }))
+    on('POST', /\/trials\/new-students\/tr-new\/signup-attempts\/reset$/, () => json({ cleared: 10 }, 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
+    expect(within(card).getByText('Sign-up locked')).toBeInTheDocument()
+    expect(within(card).getByText(/too many wrong codes/)).toBeInTheDocument()
+    await userEvent.click(within(card).getByRole('button', { name: 'Reset attempts' }))
+    await waitFor(() => expect(sent('POST', /signup-attempts\/reset$/)).toHaveLength(1))
+    expect(await within(card).findByText('Attempts reset. The parent can ask for a new code.')).toBeInTheDocument()
+  })
+
+  it('PD-32: search by parent or child name, and filter by setup status, with counts', async () => {
+    access({ operations: true })
+    const signedUp: NewStudentDto = {
+      ...BASE,
+      trialId: 'tr-2',
+      parent: { ...BASE.parent, name: 'Parent Echo' },
+      children: [{ ...BASE.children[0]!, name: 'Child Ē' }],
+      enrolment: {
+        familyId: 'f-2', learnerIds: ['k-2'], supervisor: { id: 'sup-1', name: 'Supervisor One' }, assignedAt: '2026-10-21T08:00:00Z',
+        groupConversationId: 'c-2', canCreateGroup: false, parentSignup: { state: 'signed_up' },
+      },
+    }
+    on('GET', /\/trials\/new-students$/, () => json({ students: [BASE, signedUp], canAssign: false }))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    await screen.findByRole('heading', { name: 'Parent Delta' })
+    expect(screen.getByRole('heading', { name: 'Parent Echo' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Parent signed up/ }))
+    expect(screen.queryByRole('heading', { name: 'Parent Delta' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Parent Echo' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^All/ }))
+    // A child's name finds the family, ignoring case and diacritics.
+    await userEvent.type(screen.getByRole('searchbox'), 'child e')
+    expect(screen.queryByRole('heading', { name: 'Parent Delta' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Parent Echo' })).toBeInTheDocument()
+    await userEvent.clear(screen.getByRole('searchbox'))
+    await userEvent.type(screen.getByRole('searchbox'), 'nobody')
+    expect(screen.getByText('No new student matches this search.')).toBeInTheDocument()
+  })
+
 })
 

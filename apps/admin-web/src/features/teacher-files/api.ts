@@ -44,11 +44,29 @@ export interface EntryBrief {
 
 export type ComplaintStatus = 'open' | 'upheld' | 'actioned' | 'resolved'
 
-export interface Complaint extends EntryBrief {
+/** PD-26 sources a supervisor records; PD-32 adds `parent_app`, filed by the parent in the app. */
+export type ComplaintSource = 'management' | 'parent' | 'parent_app'
+
+/** PD-32: the parent feedback an app complaint was filed as -- what the parent reads back. */
+export interface ComplaintParentFeedback {
+  id: string
+  familyId: string
+  parent: Person
+  child: Person
+  status: 'received' | 'in_review' | 'resolved'
+  response: string | null
+  respondedAt: string | null
+}
+
+export interface Complaint extends Omit<EntryBrief, 'author'> {
+  /** Null on a PD-32 app complaint: the parent filed it, not staff (see `parentFeedback`). */
+  author: Person | null
   source: { conversationId: string; messageId: string | null } | null
   resolution: EntryBrief | null
   /** PD-26 (optional on older servers). Null on complaints recorded before it. */
-  from?: 'management' | 'parent' | null
+  from?: ComplaintSource | null
+  /** PD-32: set on a `parent_app` complaint (optional on older servers). */
+  parentFeedback?: ComplaintParentFeedback | null
   handledBy?: Person | null
   followUps?: EntryBrief[]
   /** Upheld: the violation on the ladder, and its decision once taken -- the action. */

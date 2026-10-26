@@ -3656,8 +3656,8 @@ class L10nAr extends L10n {
   String get childScheduleLoadFailed => 'تعذّر تحميل المواعيد.';
 
   @override
-  String childLessonMovedTo(String when) {
-    return 'نُقلت إلى $when';
+  String childLessonMovedFrom(String when) {
+    return 'كانت $when';
   }
 
   @override
@@ -3689,4 +3689,105 @@ class L10nAr extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get filterStarred => 'المميّزة بنجمة';
+
+  @override
+  String get trialBadge => 'تجريبية';
+
+  @override
+  String get signupLocked => 'أدخلت رمزًا خاطئًا مرات كثيرة. تواصل مع المشرف.';
+
+  @override
+  String get feedbackEntryTitle => 'ملاحظات عن المعلّم';
+
+  @override
+  String get feedbackEntrySubtitle => 'إشادة أو اقتراح أو شكوى';
+
+  @override
+  String feedbackTeacherLine(String name) {
+    return 'المعلّم: $name';
+  }
+
+  @override
+  String get feedbackHistoryTitle => 'ملاحظاتك السابقة';
+
+  @override
+  String get feedbackEmpty => 'لم ترسل أي ملاحظة بعد';
+
+  @override
+  String get feedbackEmptyBody =>
+      'أخبر الإدارة بما يسير على ما يرام، أو بما يمكن أن يكون أفضل.';
+
+  @override
+  String get feedbackNoTeacher => 'لم يُعيَّن معلّم لهذا الطفل بعد.';
+
+  @override
+  String get feedbackNew => 'ملاحظة جديدة';
+
+  @override
+  String feedbackSentOn(String date) {
+    return 'أُرسلت في $date';
+  }
+
+  @override
+  String get feedbackStatusReceived => 'وصلت';
+
+  @override
+  String get feedbackStatusInReview => 'قيد المراجعة';
+
+  @override
+  String get feedbackStatusResolved => 'تمّت معالجتها';
+
+  @override
+  String get feedbackResponseLabel => 'ردّ الإدارة';
+
+  @override
+  String get feedbackCategoryLabel => 'ما نوع ملاحظتك؟';
+
+  @override
+  String get feedbackCategoryPraise => 'إشادة';
+
+  @override
+  String get feedbackCategorySuggestion => 'اقتراح';
+
+  @override
+  String get feedbackCategoryComplaint => 'شكوى';
+
+  @override
+  String get feedbackChooseCategory => 'اختر نوع الملاحظة.';
+
+  @override
+  String get feedbackBodyLabel => 'ملاحظتك';
+
+  @override
+  String get feedbackBodyHint => 'اكتب ما حدث، أو ما تودّ أن يتغيّر.';
+
+  @override
+  String get feedbackBodyRequired => 'اكتب ملاحظتك أولًا.';
+
+  @override
+  String get feedbackPrivacyNote =>
+      'تراجع الإدارة كل ملاحظة، ولا يرى المعلّم اسم كاتبها.';
+
+  @override
+  String get feedbackSubmit => 'إرسال';
+
+  @override
+  String get feedbackSent => 'شكرًا لك. وصلت ملاحظتك إلى الإدارة.';
+
+  @override
+  String get feedbackLimit => 'أرسلت ملاحظات كثيرة اليوم. حاول مرة أخرى غدًا.';
+
+  @override
+  String get feedbackNotFound =>
+      'لا يوجد الآن معلّم لهذا الطفل لتُرسل ملاحظة عنه.';
+
+  @override
+  String get feedbackDenied =>
+      'إرسال الملاحظات عن المعلّمين متاح لأولياء الأمور فقط.';
+
+  @override
+  String get feedbackFailed => 'تعذّر إرسال ملاحظتك. حاول مرة أخرى.';
 }

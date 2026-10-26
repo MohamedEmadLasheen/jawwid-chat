@@ -6295,11 +6295,11 @@ abstract class L10n {
   /// **'Couldn\'t load the schedule.'**
   String get childScheduleLoadFailed;
 
-  /// PD-31: a lesson moved away, with its new time.
+  /// PD-31: a lesson moved here, with the time it was moved from.
   ///
   /// In en, this message translates to:
-  /// **'Moved to {when}'**
-  String childLessonMovedTo(String when);
+  /// **'Was {when}'**
+  String childLessonMovedFrom(String when);
 
   /// PD-31: the family apologised for this lesson.
   ///
@@ -6336,6 +6336,192 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{count, plural, =1{Lessons moved: 1} other{Lessons moved: {count}}}'**
   String workloadMoved(int count);
+
+  /// PD-32: the Chats chip that shows the viewer's starred messages.
+  ///
+  /// In en, this message translates to:
+  /// **'Starred'**
+  String get filterStarred;
+
+  /// PD-32: the small label on a trial group, beside its name.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial'**
+  String get trialBadge;
+
+  /// PD-16 amendment: AUTH.SIGNUP_LOCKED, after 10 wrong codes in 24 hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many wrong codes. Please contact your supervisor.'**
+  String get signupLocked;
+
+  /// PD-32: the row on a child's card, and the screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Feedback about the teacher'**
+  String get feedbackEntryTitle;
+
+  /// PD-32: under the entry row.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise, a suggestion or a complaint'**
+  String get feedbackEntrySubtitle;
+
+  /// PD-32: who the feedback is about.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher: {name}'**
+  String feedbackTeacherLine(String name);
+
+  /// PD-32: heading over the list.
+  ///
+  /// In en, this message translates to:
+  /// **'Your earlier feedback'**
+  String get feedbackHistoryTitle;
+
+  /// PD-32: empty list title.
+  ///
+  /// In en, this message translates to:
+  /// **'No feedback sent yet'**
+  String get feedbackEmpty;
+
+  /// PD-32: empty list body.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell the administration what is going well, or what could be better.'**
+  String get feedbackEmptyBody;
+
+  /// PD-32: the child has no teacher, so there is no one to give feedback about.
+  ///
+  /// In en, this message translates to:
+  /// **'No teacher is assigned to this child yet.'**
+  String get feedbackNoTeacher;
+
+  /// PD-32: the action, and the form's title.
+  ///
+  /// In en, this message translates to:
+  /// **'New feedback'**
+  String get feedbackNew;
+
+  /// PD-32: when an item was sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent {date}'**
+  String feedbackSentOn(String date);
+
+  /// PD-32: status chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get feedbackStatusReceived;
+
+  /// PD-32: status chip.
+  ///
+  /// In en, this message translates to:
+  /// **'In review'**
+  String get feedbackStatusInReview;
+
+  /// PD-32: status chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get feedbackStatusResolved;
+
+  /// PD-32: over the staff reply.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply from the administration'**
+  String get feedbackResponseLabel;
+
+  /// PD-32: over the category chips.
+  ///
+  /// In en, this message translates to:
+  /// **'What kind of feedback is it?'**
+  String get feedbackCategoryLabel;
+
+  /// PD-32: category.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise'**
+  String get feedbackCategoryPraise;
+
+  /// PD-32: category.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggestion'**
+  String get feedbackCategorySuggestion;
+
+  /// PD-32: category.
+  ///
+  /// In en, this message translates to:
+  /// **'Complaint'**
+  String get feedbackCategoryComplaint;
+
+  /// PD-32: no category chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the kind of feedback.'**
+  String get feedbackChooseCategory;
+
+  /// PD-32: the text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Your feedback'**
+  String get feedbackBodyLabel;
+
+  /// PD-32: the text field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write what happened, or what you would like to change.'**
+  String get feedbackBodyHint;
+
+  /// PD-32: empty text.
+  ///
+  /// In en, this message translates to:
+  /// **'Write your feedback first.'**
+  String get feedbackBodyRequired;
+
+  /// PD-32: said once, under the field.
+  ///
+  /// In en, this message translates to:
+  /// **'The administration reviews every message. The teacher does not see who wrote it.'**
+  String get feedbackPrivacyNote;
+
+  /// PD-32: submit button.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get feedbackSubmit;
+
+  /// PD-32: after a successful submit.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you. Your feedback has reached the administration.'**
+  String get feedbackSent;
+
+  /// PD-32: COMM.FEEDBACK_LIMIT.
+  ///
+  /// In en, this message translates to:
+  /// **'You have sent a lot of feedback today. Please try again tomorrow.'**
+  String get feedbackLimit;
+
+  /// PD-32: COMM.FEEDBACK_NOT_FOUND.
+  ///
+  /// In en, this message translates to:
+  /// **'This child has no teacher to give feedback about right now.'**
+  String get feedbackNotFound;
+
+  /// PD-32: COMM.FEEDBACK_DENIED.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a parent can send feedback about a teacher.'**
+  String get feedbackDenied;
+
+  /// PD-32: any other failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Your feedback could not be sent. Please try again.'**
+  String get feedbackFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

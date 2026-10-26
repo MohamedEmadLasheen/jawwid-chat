@@ -24,7 +24,6 @@ export const TR = {
   duration: { en: 'Length (minutes)', ar: 'المدة (بالدقائق)' },
   lengthHint: { en: 'From 15 to 120 minutes.', ar: 'من ١٥ إلى ١٢٠ دقيقة.' },
   missingLength: { en: 'Enter a length from 15 to 120 minutes.', ar: 'اكتب مدة من ١٥ إلى ١٢٠ دقيقة.' },
-  day: { en: 'Day', ar: 'اليوم' },
   time: { en: 'Free time', ar: 'الوقت المتاح' },
   noSlots: {
     en: 'This teacher has no free time in the coming weeks (or no working hours recorded).',
@@ -32,8 +31,6 @@ export const TR = {
   },
   chooseTeacherFirst: { en: 'Choose the teacher first', ar: 'اختر المعلم أولًا' },
   enterLengthFirst: { en: 'Enter the length first', ar: 'اكتب المدة أولًا' },
-  noSlotsShort: { en: 'No free time', ar: 'لا يوجد وقت متاح' },
-  loadingSlots: { en: 'Loading free times…', ar: 'جارٍ تحميل الأوقات المتاحة…' },
   students: { en: 'Students', ar: 'الطلاب' },
   student: { en: 'Student', ar: 'الطالب' },
   studentName: { en: 'Student name', ar: 'اسم الطالب' },

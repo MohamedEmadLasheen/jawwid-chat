@@ -1,0 +1,19 @@
+/* PD-32: the "Trial" label on a trial group, everywhere one is listed or opened.
+   Its own violet pair -- the same as the app's (lib/design/tokens.dart
+   trialBadgeFg/Bg) -- not a status colour: a trial group is not a success, a
+   warning or a state. Both pairs exceed 4.5:1 (TrialBadge.test.tsx measures them). */
+:root {
+  --trial-fg: #5b21b6;
+  --trial-bg: #ede9fe;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --trial-fg: #ddd6fe;
+    --trial-bg: #3b2a6b;
+  }
+}
+:root[data-theme='dark'] {
+  --trial-fg: #ddd6fe;
+  --trial-bg: #3b2a6b;
+}
+.badge.badge--trial { background: var(--trial-bg); color: var(--trial-fg); flex: none; }

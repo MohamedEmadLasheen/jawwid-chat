@@ -13,6 +13,7 @@ import '../../../core/media/media_picker.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../design/widgets/state_views.dart';
+import '../../../design/widgets/trial_badge.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/lesson.dart';
@@ -995,11 +996,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      ContentText(
-                        widget.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: ContentText(
+                              widget.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          // PD-32: a trial group says so beside its name.
+                          if (widget.isTrialGroup) ...[
+                            const SizedBox(width: Spacing.spacing2),
+                            const TrialBadge(),
+                          ],
+                        ],
                       ),
                       if (widget.subtitle != null)
                         ContentText(

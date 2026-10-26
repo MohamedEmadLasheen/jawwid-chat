@@ -361,9 +361,12 @@ void main() {
   group('the child\'s schedule', () {
     final now = DateTime.now();
     DateTime at(int days, int hour) => DateTime(now.year, now.month, now.day + days, hour);
-    ScheduledLesson lesson(String id, DateTime start, {String? outcome, String kind = 'regular', DateTime? movedTo}) => ScheduledLesson(
+    ScheduledLesson lesson(String id, DateTime start,
+            {String? outcome, String kind = 'regular', DateTime? movedTo, String? movedFrom, DateTime? movedFromStartsAt}) =>
+        ScheduledLesson(
           id: id, learnerName: 'learner_k', teacherName: 'teacher_t', startsAt: start,
           endsAt: start.add(const Duration(minutes: 30)), kind: kind, phase: 'upcoming', outcome: outcome, movedTo: movedTo,
+          movedFrom: movedFrom, movedFromStartsAt: movedFromStartsAt,
         );
 
     testWidgets('weekly times, then each lesson with its status; one "Change lesson time" button', (tester) async {
@@ -377,7 +380,9 @@ void main() {
         ..lessons = [
           lesson('held', at(0, 0), outcome: 'held'),
           lesson('next', at(1, 17)),
+          // The parent moved Tuesday's lesson: the old row (rescheduled) and its replacement.
           lesson('moved', at(2, 17), outcome: 'rescheduled', movedTo: movedTo),
+          lesson('movedHere', movedTo, movedFrom: 'moved', movedFromStartsAt: at(2, 17)),
           lesson('makeup', at(4, 17), kind: 'makeup'),
           lesson('excused', at(5, 17), outcome: 'student_apology'),
           lesson('cancelled', at(6, 17), outcome: 'teacher_apology'),
@@ -402,11 +407,14 @@ void main() {
           .data!;
       expect(status('held'), 'Held');
       expect(status('next'), 'Upcoming');
-      expect(status('moved'), 'Moved');
-      // Where it went is its own line, so the pill never truncates it.
+      // QA 2026-10-26: a moved lesson appears ONCE, where it now is, saying it was
+      // moved and from when; the row moved away is not listed again.
+      expect(find.byKey(const ValueKey('child-lesson-moved')), findsNothing);
+      expect(status('movedHere'), 'Moved');
+      final was = at(2, 17);
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('child-lesson-moved-to-moved'))).data,
-        'Moved to ${m.formatMediumDate(movedTo)} · ${m.formatTimeOfDay(TimeOfDay.fromDateTime(movedTo))}',
+        tester.widget<Text>(find.byKey(const ValueKey('child-lesson-moved-from-movedHere'))).data,
+        'Was ${m.formatMediumDate(was)} · ${m.formatTimeOfDay(TimeOfDay.fromDateTime(was))}',
       );
       expect(status('makeup'), 'Make-up');
       expect(status('excused'), 'Excused');

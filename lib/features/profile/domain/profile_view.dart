@@ -107,6 +107,7 @@ class ProfileView {
     this.children = const [],
     this.handledByLabel,
     this.requiresApproval = false,
+    this.isTrialGroup = false,
   });
 
   final ProfileAudience audience;
@@ -129,6 +130,9 @@ class ProfileView {
 
   final String? handledByLabel;
   final bool requiresApproval;
+
+  /// PD-32: a trial group, labelled "Trial" beside its name. From the server's type.
+  final bool isTrialGroup;
 
   /// Whether a contact file may be shown at all.
   ///
@@ -183,6 +187,7 @@ abstract final class ProfileViewBuilder {
       ],
       handledByLabel: conversation.handledByLabel,
       requiresApproval: conversation.requiresApproval || (group?.requiresApproval ?? false),
+      isTrialGroup: conversation.isTrialGroup,
     );
   }
 

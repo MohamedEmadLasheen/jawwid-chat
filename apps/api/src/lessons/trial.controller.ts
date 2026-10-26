@@ -109,6 +109,18 @@ export class TrialController {
     return this.enrolment.createGroup(actorId, trialId);
   }
 
+  /** PD-32: end the parent's live sign-up code. */
+  @Post('new-students/:trialId/signup-code/invalidate')
+  invalidateSignupCode(@ActorId() actorId: string, @Param('trialId') trialId: string) {
+    return this.enrolment.invalidateSignupCode(actorId, trialId);
+  }
+
+  /** PD-32: clear the parent's wrong-code count (audited). */
+  @Post('new-students/:trialId/signup-attempts/reset')
+  resetSignupAttempts(@ActorId() actorId: string, @Param('trialId') trialId: string) {
+    return this.enrolment.resetSignupAttempts(actorId, trialId);
+  }
+
   @Get()
   list(@ActorId() actorId: string, @Query('from') from?: string, @Query('to') to?: string, @Query('teacherId') teacherId?: string) {
     return this.trials.list(actorId, { from, to, teacherId });

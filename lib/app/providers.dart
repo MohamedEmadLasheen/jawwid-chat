@@ -120,6 +120,12 @@ final billingRepositoryProvider = Provider<BillingRepository>((ref) {
   return const NoBillingRepository();
 });
 
+/// PD-32: a parent's feedback about the teacher. A harmless default: a build without the
+/// routes offers no entry.
+final feedbackRepositoryProvider = Provider<FeedbackRepository>((ref) {
+  return const NoFeedbackRepository();
+});
+
 /// PD-11 T4. A harmless default too: a build without a trial server offers no trial report.
 final trialRepositoryProvider = Provider<TrialRepository>((ref) {
   return const NoTrialRepository();

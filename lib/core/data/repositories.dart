@@ -7,6 +7,7 @@ import '../../shared/models/parent_profile.dart';
 import '../../shared/models/story.dart';
 import '../../shared/models/student_profile.dart';
 import '../../shared/models/supervision.dart';
+import '../../shared/models/teacher_feedback.dart';
 import '../../shared/models/teacher_profile.dart';
 import '../../shared/models/trial.dart';
 import '../../shared/models/user_role.dart';
@@ -1004,4 +1005,58 @@ class NoTrialRepository implements TrialRepository {
 
   @override
   Future<void> joinGroup(String conversationId) => throw UnsupportedError('no trial server in this build');
+}
+
+/// PD-32: a parent's feedback about their child's teacher. The administration reviews it;
+/// the teacher never sees who wrote it.
+abstract interface class FeedbackRepository {
+  /// False in a build with no feedback server: the profile offers no entry.
+  bool get isAvailable;
+
+  /// `GET /me/feedback` -- the parent's children (with each one's teacher) and every item
+  /// they sent, newest first. `403 COMM.FEEDBACK_DENIED` for anyone but a parent.
+  Future<MyFeedback> mine();
+
+  /// `POST /me/feedback`. [body] is trimmed and 1..2000 characters. Refused with
+  /// [FeedbackErrors.notFound] (the child is not in the family, or has no teacher) and
+  /// [FeedbackErrors.limit] (too many today).
+  Future<FeedbackItem> submit({
+    required String learnerId,
+    required FeedbackCategory category,
+    required String body,
+  });
+}
+
+/// PD-32: the refusals the feedback screens answer in their own words.
+abstract final class FeedbackErrors {
+  /// 403: the signed-in account is not a parent.
+  static const denied = 'COMM.FEEDBACK_DENIED';
+
+  /// 404: the child is not in the family, or has no teacher.
+  static const notFound = 'COMM.FEEDBACK_NOT_FOUND';
+
+  /// 429: too many submissions today.
+  static const limit = 'COMM.FEEDBACK_LIMIT';
+
+  /// The longest body the server accepts.
+  static const maxLength = 2000;
+}
+
+/// The build with no feedback server: the entry is not offered, and nothing is sent.
+class NoFeedbackRepository implements FeedbackRepository {
+  const NoFeedbackRepository();
+
+  @override
+  bool get isAvailable => false;
+
+  @override
+  Future<MyFeedback> mine() async => const MyFeedback();
+
+  @override
+  Future<FeedbackItem> submit({
+    required String learnerId,
+    required FeedbackCategory category,
+    required String body,
+  }) =>
+      throw UnsupportedError('no feedback server in this build');
 }
