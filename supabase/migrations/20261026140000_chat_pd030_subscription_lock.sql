@@ -602,7 +602,15 @@ as $$
            else 'balance'
          end
     from chat.compute_learner_access(p_learner) c
-   where exists (select 1 from chat.learner l where l.id = p_learner);
+   where exists (
+     select 1 from chat.learner l
+      where l.id = p_learner
+        -- A request role (chat_app) learns only about a child it may see: one
+        -- of its own family's, or -- staff -- one of its organization's. The
+        -- server-side path (the API's own connection) asks about any child.
+        and (chat.caller_is_server_side()
+             or l.family_id in (select chat.current_contact_family_ids())
+             or (chat.current_staff_id() is not null and l.organization_id = chat.current_organization_id())));
 $$;
 
 revoke all on function chat.learner_lesson_lock(uuid) from public;
