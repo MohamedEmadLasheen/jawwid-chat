@@ -197,23 +197,39 @@ create trigger notification_item_follows_delivery
 -- time by NotificationPipeline.guardDueMessages.) failure_code AUDIENCE also
 -- withdraws the Center entry, by the trigger above.
 
-create or replace function chat.cancel_message_pushes_on_leave()
+-- One function per table: each reads only its own table's columns (a shared
+-- function branching on TG_TABLE_NAME still fails, because PL/pgSQL resolves
+-- every NEW.<field> it plans, and conversation_member has no staff_id).
+create or replace function chat.cancel_message_pushes_on_member_left()
 returns trigger
 language plpgsql
 as $$
-declare
-  v_actor uuid;
 begin
-  if old.left_at is not null or new.left_at is null then
-    return new;
+  if old.left_at is null and new.left_at is not null then
+    update chat.notification
+       set status = 'cancelled', failure_code = 'AUDIENCE'
+     where recipient_id = new.actor_id
+       and conversation_id = new.conversation_id
+       and event_type = 'message_published'
+       and status = 'scheduled';
   end if;
-  v_actor := case when tg_table_name = 'conversation_seat' then new.staff_id else new.actor_id end;
-  update chat.notification
-     set status = 'cancelled', failure_code = 'AUDIENCE'
-   where recipient_id = v_actor
-     and conversation_id = new.conversation_id
-     and event_type = 'message_published'
-     and status = 'scheduled';
+  return new;
+end;
+$$;
+
+create or replace function chat.cancel_message_pushes_on_seat_left()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.left_at is null and new.left_at is not null then
+    update chat.notification
+       set status = 'cancelled', failure_code = 'AUDIENCE'
+     where recipient_id = new.staff_id
+       and conversation_id = new.conversation_id
+       and event_type = 'message_published'
+       and status = 'scheduled';
+  end if;
   return new;
 end;
 $$;
@@ -221,12 +237,12 @@ $$;
 drop trigger if exists member_left_cancels_message_pushes on chat.conversation_member;
 create trigger member_left_cancels_message_pushes
   after update of left_at on chat.conversation_member
-  for each row execute function chat.cancel_message_pushes_on_leave();
+  for each row execute function chat.cancel_message_pushes_on_member_left();
 
 drop trigger if exists seat_left_cancels_message_pushes on chat.conversation_seat;
 create trigger seat_left_cancels_message_pushes
   after update of left_at on chat.conversation_seat
-  for each row execute function chat.cancel_message_pushes_on_leave();
+  for each row execute function chat.cancel_message_pushes_on_seat_left();
 
 -- ===========================================================================
 -- 5. Templates
@@ -292,4 +308,5 @@ alter table chat.notification_settings enable row level security;
 revoke all on chat.notification_item, chat.notification_preference, chat.notification_settings
   from public, anon, authenticated, chat_app;
 revoke all on function chat.notification_item_follows_delivery() from public;
-revoke all on function chat.cancel_message_pushes_on_leave() from public;
+revoke all on function chat.cancel_message_pushes_on_member_left() from public;
+revoke all on function chat.cancel_message_pushes_on_seat_left() from public;
