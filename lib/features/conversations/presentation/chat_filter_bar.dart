@@ -4,7 +4,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/chat_feed.dart';
 
-/// The All · Unread · Groups · Favourites chips.
+/// The All · Unread · Groups · Favourites · Starred chips.
 ///
 /// Chips, not tabs: they filter one feed rather than navigating anywhere, and they are
 /// sized to say so. A tab bar here would cost twice the height and would re-introduce
@@ -15,6 +15,7 @@ class ChatFilterBar extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     required this.unreadCount,
+    this.showStarred = false,
   });
 
   final ChatFilter selected;
@@ -22,6 +23,10 @@ class ChatFilterBar extends StatelessWidget {
 
   /// Shown on the Unread chip. Real, from the loaded conversations.
   final int unreadCount;
+
+  /// PD-32: the Starred chip, offered only when this build reaches the star routes
+  /// (the gate the Settings row used to have).
+  final bool showStarred;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +39,7 @@ class ChatFilterBar extends StatelessWidget {
               : l10n.filterUnread,
           ChatFilter.groups => l10n.filterGroups,
           ChatFilter.favorites => l10n.filterFavorites,
+          ChatFilter.starred => l10n.filterStarred,
         };
 
     return SizedBox(
@@ -45,14 +51,16 @@ class ChatFilterBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing5),
         children: [
           for (final filter in ChatFilter.values)
-            Padding(
-              padding: const EdgeInsetsDirectional.only(end: Spacing.spacing3),
-              child: _FilterChip(
-                label: label(filter),
-                selected: filter == selected,
-                onTap: () => onSelected(filter),
+            if (filter != ChatFilter.starred || showStarred)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: Spacing.spacing3),
+                child: _FilterChip(
+                  key: ValueKey('chat-filter-${filter.name}'),
+                  label: label(filter),
+                  selected: filter == selected,
+                  onTap: () => onSelected(filter),
+                ),
               ),
-            ),
         ],
       ),
     );
@@ -66,6 +74,7 @@ class ChatFilterBar extends StatelessWidget {
 /// not distinguish the two tints (§53).
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,

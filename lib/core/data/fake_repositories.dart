@@ -5,6 +5,7 @@ import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/parent_billing.dart';
 import '../../shared/models/parent_profile.dart';
+import '../../shared/models/teacher_feedback.dart';
 import '../../shared/models/trial.dart';
 import '../errors/app_error.dart';
 import '../storage/secure_token_store.dart';
@@ -367,5 +368,82 @@ class FakeProfileRepository implements ProfileRepository {
       ],
     );
     return _profile;
+  }
+}
+
+/// PD-32, in memory: the fixture parent's feedback about their children's teachers.
+///
+/// Behaves like the contract where a screen depends on it: the body is trimmed and
+/// bounded, a child with no teacher is refused with `COMM.FEEDBACK_NOT_FOUND`, and the
+/// newest item comes first. [refuseWith] makes every submission fail with that code, for
+/// the error paths.
+class FakeFeedbackRepository implements FeedbackRepository {
+  FakeFeedbackRepository({
+    List<FeedbackChild>? children,
+    List<FeedbackItem> items = const [],
+    this.refuseWith,
+  })  : _children = children ??
+            const [
+              FeedbackChild(learnerId: 'learner_1', name: 'أحمد', teacherName: 'أ. يوسف'),
+              FeedbackChild(learnerId: 'learner_2', name: 'مريم', teacherName: 'أ. فاطمة'),
+            ],
+        _items = [...items];
+
+  final List<FeedbackChild> _children;
+  final List<FeedbackItem> _items;
+
+  /// Every submission is refused with this code (and the matching kind), when set.
+  String? refuseWith;
+
+  /// What was submitted, oldest first.
+  final submitted = <FeedbackItem>[];
+
+  int _next = 0;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<MyFeedback> mine() async => MyFeedback(children: _children, items: List.unmodifiable(_items));
+
+  @override
+  Future<FeedbackItem> submit({
+    required String learnerId,
+    required FeedbackCategory category,
+    required String body,
+  }) async {
+    final code = refuseWith;
+    if (code != null) {
+      throw AppError(
+        switch (code) {
+          FeedbackErrors.limit => AppErrorKind.rateLimited,
+          FeedbackErrors.notFound => AppErrorKind.notFound,
+          FeedbackErrors.denied => AppErrorKind.forbidden,
+          _ => AppErrorKind.validation,
+        },
+        code: code,
+      );
+    }
+    final text = body.trim();
+    if (text.isEmpty || text.length > FeedbackErrors.maxLength) {
+      throw const AppError(AppErrorKind.validation, code: 'COMMON.VALIDATION');
+    }
+    final child = _children.where((c) => c.learnerId == learnerId).firstOrNull;
+    if (child == null || child.teacherName == null) {
+      throw const AppError(AppErrorKind.notFound, code: FeedbackErrors.notFound);
+    }
+    final item = FeedbackItem(
+      id: 'feedback_${_next++}',
+      learnerId: learnerId,
+      childName: child.name,
+      teacherName: child.teacherName,
+      category: category,
+      body: text,
+      status: FeedbackStatus.received,
+      createdAt: DateTime.now(),
+    );
+    _items.insert(0, item);
+    submitted.add(item);
+    return item;
   }
 }
