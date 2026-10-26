@@ -183,7 +183,10 @@ export class LessonService {
       where: { id: learnerId, organizationId: actor.organizationId },
       select: { id: true, teacherId: true },
     });
-    if (!learner) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'learner not found');
+    // PD-35: a learner of a teacher outside the caller's scope reads as unknown.
+    if (!learner || (learner.teacherId && !(await this.teacherScope.covers(actor, learner.teacherId)))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'learner not found');
+    }
     if (!learner.teacherId) throw stateError('the learner has no assigned teacher');
     await this.assertMayBook(learner.id);
 

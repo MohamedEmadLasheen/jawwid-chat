@@ -8,6 +8,7 @@ import { AUDIT_SERVICE, SUBSCRIPTION_LOCK } from '../platform/tokens';
 import { NO_SUBSCRIPTION_LOCK, type SubscriptionLockReader } from '../platform/subscription-lock';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { scopeCovers } from '../platform/teacher-scope';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { ReminderService } from '../communication/notifications/reminder.service';
@@ -243,11 +244,15 @@ export class SchedulingService {
     const actor = await this.conversations.requireActor(actorId);
     await this.lessons.requireManager(actor);
     const org = actor.organizationId as string;
+    // PD-35: the roster of the teachers in the caller's scope (every one, with the switch off).
+    const scope = await this.lessons.teacherScope.scopeOf(actor);
+    const ours = scope.all ? {} : { id: { in: [...scope.teacherIds] } };
+    const theirs = scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } };
     const [teachers, zones, learners, slots, pauses] = await Promise.all([
-      this.prisma.teacher.findMany({ where: { organizationId: org }, select: { id: true, name: true, isActive: true, leftAt: true }, orderBy: { name: 'asc' } }),
+      this.prisma.teacher.findMany({ where: { organizationId: org, ...ours }, select: { id: true, name: true, isActive: true, leftAt: true }, orderBy: { name: 'asc' } }),
       this.prisma.teacherAvailability.findMany({ where: { organizationId: org }, select: { teacherId: true, timezone: true }, distinct: ['teacherId'] }),
       this.prisma.learner.findMany({
-        where: { organizationId: org },
+        where: { organizationId: org, ...theirs },
         include: { family: { select: { id: true, displayName: true } } },
         orderBy: { name: 'asc' },
         take: 5000,
@@ -843,7 +848,9 @@ export class SchedulingService {
     const actor = await this.conversations.requireActor(actorId);
     await this.lessons.requireManager(actor);
     const row = await this.prisma.lessonBlockedOccurrence.findUnique({ where: { id } });
-    if (!row || row.organizationId !== actor.organizationId) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'not found');
+    if (!row || row.organizationId !== actor.organizationId || !(await this.lessons.teacherScope.covers(actor, row.teacherId))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'not found');
+    }
     if (row.resolution !== null) throw stateError('this weekly lesson is already resolved');
     return { actor, row };
   }
@@ -989,7 +996,10 @@ export class SchedulingService {
       });
     }
     const { scheduleRequests: _legacy, ...rest } = base;
-    return { ...rest, scheduleRequests, blockedOccurrences: await this.blockedOccurrences(org) };
+    // PD-35: the blocked weekly lessons of the teachers in the caller's scope.
+    const scope = await this.lessons.teacherScope.scopeOf(actor);
+    const blocked = (await this.blockedOccurrences(org)).filter((b) => scopeCovers(scope, b.teacher.id));
+    return { ...rest, scheduleRequests, blockedOccurrences: blocked };
   }
 
   // ------------------------------------------------------------------
@@ -1562,6 +1572,10 @@ export class SchedulingService {
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const teacher = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId } });
     if (!teacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    // PD-35: staff work on the teachers in their scope; another reads as unknown.
+    if (actor.kind === ActorKind.STAFF && !(await this.lessons.teacherScope.covers(actor, teacher.id))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    }
     return teacher;
   }
 
