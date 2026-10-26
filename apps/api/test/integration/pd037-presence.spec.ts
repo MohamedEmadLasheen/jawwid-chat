@@ -66,11 +66,11 @@ beforeEach(async () => {
     await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
     await tx.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ('${x.superAdmin}'::uuid, 'super_s', 'super_admin', true)`);
   });
-  await exec(`insert into chat.staff (id, name, role, is_active, hide_last_seen) values
-    ('${x.teachersManager}'::uuid, 'tmanager_t', 'manager', true, false),
-    ('${x.teachersMember}'::uuid, 'tsupervisor_t', 'admin', true, false),
-    ('${x.hider}'::uuid, 'hider_h', 'admin', true, true),
-    ('${x.gone}'::uuid, 'gone_g', 'admin', false, false)`);
+  await exec(`insert into chat.staff (id, name, role, is_active, left_at, hide_last_seen) values
+    ('${x.teachersManager}'::uuid, 'tmanager_t', 'manager', true, null, false),
+    ('${x.teachersMember}'::uuid, 'tsupervisor_t', 'admin', true, null, false),
+    ('${x.hider}'::uuid, 'hider_h', 'admin', true, null, true),
+    ('${x.gone}'::uuid, 'gone_g', 'admin', false, now(), false)`);
   await exec(`insert into chat.department (kind, display_name, manager_id)
               values ('teachers', 'teachers', '${x.teachersManager}'::uuid)`);
   await exec(`insert into chat.department_member (staff_id, organization_id, department_id, position)
