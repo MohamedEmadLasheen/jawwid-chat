@@ -45,6 +45,8 @@ export type LessonWithRelations = Lesson & {
   corrections?: LessonCorrection[];
   learner: { id: string; name: string; familyId: string };
   teacher: { id: string; name: string };
+  /** PD-31: where a moved lesson went (LESSON_INCLUDE loads it). */
+  movedToLesson?: { startsAt: Date } | null;
 };
 
 /** The `where` fragment that keeps trials out of every learner-lesson query. */
@@ -77,6 +79,8 @@ export const LESSON_INCLUDE = {
   corrections: { orderBy: { correctedAt: 'asc' } },
   learner: { select: { id: true, name: true, familyId: true } },
   teacher: { select: { id: true, name: true } },
+  // PD-31: where a moved lesson went.
+  movedToLesson: { select: { startsAt: true } },
 } as const;
 
 /** Where an open lesson is in its day, as the needs-action list and the clients sort it. */
@@ -406,7 +410,7 @@ export class LessonService {
       orderBy: { startsAt: 'asc' },
     }).then((found) => found.map(learnerLesson));
     const tickets: Array<{
-      ticket: LessonAct;
+      ticket: LessonAct | 'change_lesson_time';
       /** Null for a ticket about the learner rather than one lesson (a regular-time change). */
       lessonId: string | null;
       learner: { id: string; name: string };
@@ -486,6 +490,34 @@ export class LessonService {
             endsAt: null,
           });
         }
+      }
+    }
+    // PD-31: one "Change lesson time" per child for the family and the child's
+    // teacher -- the client asks "this lesson only" or "every week" and each
+    // path is decided again on submit. `request_schedule_change` above stays for
+    // builds that predate it.
+    if (actor.kind === ActorKind.CONTACT || actor.kind === ActorKind.TEACHER) {
+      const learners = await this.prisma.learner.findMany({
+        where: {
+          id: { in: learnerIds },
+          organizationId: conv.organizationId,
+          ...(actor.kind === ActorKind.CONTACT ? { familyId: actor.familyId } : { teacherId: actor.actorId }),
+        },
+        select: { id: true, name: true, teacherId: true, familyId: true },
+        orderBy: { name: 'asc' },
+      });
+      for (const learner of learners) {
+        if (!learner.teacherId) continue;
+        const scope = { organizationId: conv.organizationId, teacherId: learner.teacherId, familyId: learner.familyId };
+        const standing = this.authz.lessonStanding(actor, scope, { teachersDepartment: false, supervisesLearner: false });
+        if (!standing || !this.authz.canRecordLessonAct(actor, standing, 'move_lesson').allowed) continue;
+        tickets.push({
+          ticket: 'change_lesson_time',
+          lessonId: null,
+          learner: { id: learner.id, name: learner.name },
+          startsAt: null,
+          endsAt: null,
+        });
       }
     }
     return { tickets };
@@ -1148,6 +1180,10 @@ export class LessonService {
       teacher: { id: lesson.teacher.id, name: lesson.teacher.name },
       kind: lesson.kind,
       makeupFor: lesson.makeupFor,
+      // PD-31: a lesson moved to another time continues as a new row.
+      movedFrom: lesson.movedFrom,
+      movedTo: lesson.movedToLesson?.startsAt.toISOString() ?? null,
+      movedBy: lesson.movedFrom ? movedByOf(lesson.createdByKind) : null,
       startsAt: lesson.startsAt.toISOString(),
       endsAt: lesson.endsAt.toISOString(),
       durationMinutes: Math.round((lesson.endsAt.getTime() - lesson.startsAt.getTime()) / 60_000),
@@ -1294,6 +1330,11 @@ function lessonNumberField(body: Record<string, unknown>): number | null {
 }
 
 /** ReminderService.cancelForSubject, inside the caller's transaction. */
+/** PD-31: who moved a lesson, by the kind that created its new row. */
+export function movedByOf(createdByKind: string): 'family' | 'teacher' | 'staff' {
+  return createdByKind === 'contact' ? 'family' : createdByKind === 'teacher' ? 'teacher' : 'staff';
+}
+
 export async function cancelReminders(tx: Tx, lessonId: string): Promise<void> {
   await tx.notification.updateMany({
     where: { status: 'scheduled', dedupeKey: { contains: `:${lessonId}:` } },

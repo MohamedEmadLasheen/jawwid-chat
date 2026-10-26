@@ -74,12 +74,13 @@ export class StatsService {
     await this.requireStatsReader(actor);
     const period = await this.period(month);
     const org = actor.organizationId as string;
-    const [teachers, rows, reports, trials, timings] = await Promise.all([
+    const [teachers, rows, reports, trials, timings, moves] = await Promise.all([
       this.prisma.teacher.findMany({ where: { organizationId: org }, select: { id: true, name: true, isActive: true }, orderBy: { name: 'asc' } }),
       this.lessonRows(org, period),
       this.reportRows(org, period),
       this.trialRows(org, period),
       this.timingRows(org, period),
+      this.teacherMoves(org, period),
     ]);
     const byTeacher = groupBy(rows, (r) => r.teacher_id);
     const reportsOf = new Map(reports.map((r) => [r.teacher_id, r]));
@@ -104,6 +105,7 @@ export class StatsService {
           attendanceRate: rate(held.lessons, held.lessons + total('student_no_show').lessons),
           reportsOnTimeRate: r ? rate(r.on_time, r.reports) : null,
           trials: trialBlock(trialsOf.get(t.id)),
+          movesByTeacher: moves.get(t.id) ?? 0,
           summary: monthSummary(mine, timingsOf.get(t.id) ?? []),
         };
       }),
@@ -264,6 +266,9 @@ export class StatsService {
       makeups: { lessons: makeups.lessons, held: makeupsHeld.lessons },
       // Each trial once, by its one outcome, from Chat's records (chat.teacher_trial_stats).
       trials: trialBlock(trials[0]),
+      // PD-31: lessons the teacher moved to another time this month. A figure to
+      // read, never a violation.
+      movesByTeacher: (await this.teacherMoves(org, period, teacherId)).get(teacherId) ?? 0,
       rates: {
         attendance: rate(held.lessons, held.lessons + total('student_no_show').lessons),
         // Of the lessons closed and counted, how many took place.
@@ -282,6 +287,17 @@ export class StatsService {
       ...(forManager ? { movements: await this.movements(org, teacherId, period) } : {}),
       previous: { month: previous.month, held: sum(prevRows.filter((r) => r.category === 'held' && r.kind !== 'trial')) },
     };
+  }
+
+  /** PD-31: lessons each teacher moved this month (the new row's author is the teacher). */
+  private async teacherMoves(org: string, p: Period, teacherId?: string): Promise<Map<string, number>> {
+    const rows = await this.prisma.$queryRaw<Array<{ teacher_id: string; n: number }>>`
+      SELECT l.teacher_id::text AS teacher_id, count(*)::int AS n FROM chat.lesson l
+       WHERE l.organization_id = ${org}::uuid AND l.moved_from IS NOT NULL AND l.created_by_kind = 'teacher'
+         AND l.created_at >= ${p.from}::timestamptz AND l.created_at < ${p.to}::timestamptz
+         AND (${teacherId ?? null}::uuid IS NULL OR l.teacher_id = ${teacherId ?? null}::uuid)
+       GROUP BY l.teacher_id`;
+    return new Map(rows.map((r) => [r.teacher_id, Number(r.n)]));
   }
 
   private async lessonRows(org: string, p: Period, teacherId?: string): Promise<Row[]> {

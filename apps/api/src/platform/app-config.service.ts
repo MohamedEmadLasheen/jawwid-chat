@@ -61,6 +61,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** A family books a make-up at least this long ahead, and at most this many days out. */
   'lesson.booking_lead_minutes': 120,
   'lesson.makeup_horizon_days': 14,
+  /** PD-31: a family moves at most this many of one child's lessons per calendar month (stats.zone). */
+  'lesson.family_moves_per_month': 4,
   /** Free times are offered on this grid (minutes). */
   'lesson.slot_step_minutes': 30,
   /** PD-11 T3: the family and the team hear this many days before a paused learner returns. */

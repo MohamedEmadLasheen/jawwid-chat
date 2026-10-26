@@ -1181,7 +1181,10 @@ model Lesson {
   createdBy      String?   @map("created_by") @db.Uuid
   scheduleSlotId String?   @map("schedule_slot_id") @db.Uuid
   /// PD-31: the lesson this one replaces after a move (that row is rescheduled). Insert only.
-  movedFrom      String?   @map("moved_from") @db.Uuid
+  movedFrom      String?   @unique @map("moved_from") @db.Uuid
+  movedFromLesson Lesson?  @relation("LessonMove", fields: [movedFrom], references: [id])
+  /// PD-31: the lesson that replaced this one, when it was moved.
+  movedToLesson  Lesson?   @relation("LessonMove")
   remindersScheduledAt DateTime? @map("reminders_scheduled_at") @db.Timestamptz
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt

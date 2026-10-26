@@ -37,6 +37,18 @@ comment on column chat.lesson.moved_from is
 
 create unique index lesson_moved_from_once on chat.lesson (moved_from) where moved_from is not null;
 
+-- A family or a teacher moving a lesson writes its `rescheduled` themselves
+-- (20261021120000's list, with rescheduled widened to them).
+alter table chat.lesson drop constraint lesson_outcome_recorded_by_a_plausible_actor;
+alter table chat.lesson add constraint lesson_outcome_recorded_by_a_plausible_actor
+  check (outcome is null
+      or (outcome in ('held', 'student_no_show') and outcome_by_kind in ('teacher', 'staff'))
+      or (outcome = 'student_apology' and outcome_by_kind in ('contact', 'staff'))
+      or (outcome = 'teacher_apology' and outcome_by_kind in ('teacher', 'staff'))
+      or (outcome = 'rescheduled' and outcome_by_kind in ('contact', 'teacher', 'staff'))
+      or (outcome in ('admin_cancelled', 'teacher_no_show', 'suspended', 'voided')
+          and outcome_by_kind = 'staff'));
+
 create or replace function chat.guard_lesson()
 returns trigger
 language plpgsql

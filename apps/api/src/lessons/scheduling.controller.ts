@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { SchedulingService } from './scheduling.service';
@@ -50,9 +50,16 @@ export class SchedulingController {
     return this.scheduling.setSchedule(actorId, id, body ?? {});
   }
 
+  /** PD-31: `teacherId` -- another teacher's options, for staff changing the teacher. */
   @Get('learners/:id/schedule-options')
-  scheduleOptions(@ActorId() actorId: string, @Param('id') id: string) {
-    return this.scheduling.scheduleOptions(actorId, id);
+  scheduleOptions(@ActorId() actorId: string, @Param('id') id: string, @Query('teacherId') teacherId?: string) {
+    return this.scheduling.scheduleOptions(actorId, id, teacherId);
+  }
+
+  /** PD-31: the child's teacher's free one-off starts, for staff adding a lesson. */
+  @Get('learners/:id/free-slots')
+  learnerFreeSlots(@ActorId() actorId: string, @Param('id') id: string, @Query('durationMinutes') durationMinutes?: string) {
+    return this.scheduling.learnerFreeSlots(actorId, id, durationMinutes);
   }
 
   @Post('learners/:id/schedule-change-requests')
@@ -73,6 +80,33 @@ export class SchedulingController {
   @Post('lessons/:id/makeup')
   bookMakeup(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.scheduling.bookMakeup(actorId, id, body ?? {});
+  }
+
+  /** PD-31: moving ONE lesson to another time. */
+  @Get('lessons/:id/move-slots')
+  moveSlots(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.scheduling.moveSlots(actorId, id);
+  }
+
+  @Post('lessons/:id/move')
+  move(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.scheduling.moveLesson(actorId, id, body ?? {});
+  }
+
+  /** PD-31: a weekly lesson the teacher's other lessons blocked (Needs action). */
+  @Get('lessons/blocked/:id/slots')
+  blockedSlots(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.scheduling.blockedSlots(actorId, id);
+  }
+
+  @Post('lessons/blocked/:id/schedule')
+  scheduleBlocked(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.scheduling.scheduleBlocked(actorId, id, body ?? {});
+  }
+
+  @Post('lessons/blocked/:id/dismiss')
+  dismissBlocked(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.scheduling.dismissBlocked(actorId, id, body ?? {});
   }
 
   @Post('lessons/:id/makeup-resolution')
