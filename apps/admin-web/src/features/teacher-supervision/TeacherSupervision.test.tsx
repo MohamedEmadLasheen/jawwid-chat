@@ -220,8 +220,9 @@ describe('4. grants and rewards', () => {
     on('POST', /\/teacher-files\/finance\/deduction-defaults$/, () =>
       json({ currencies: ['EGP'], defaults: [{ kind: 'deduction_1', currency: 'EGP', amount: '150.00', setAt: '2026-10-22T09:00:00Z', setBy: { id: 'a', name: 'Admin' } }] }),
     )
-    on('POST', /\/teachers\/t-1\/bonus$/, () => json({ id: 'b-9', kind: 'bonus', conversationId: 'x' }, 201))
-    on('POST', /\/teacher-files\/t-1\/finance\/adjustments$/, () => json({ id: 'a-1', kind: 'bonus', month: '2026-10', amount: '250.00', currency: 'EGP' }, 201))
+    on('POST', /\/teacher-files\/t-1\/rewards$/, () =>
+      json({ id: 'b-9', kind: 'bonus', amount: { amount: '250.00', currency: 'EGP', month: '2026-10' } }, 201),
+    )
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/supervision?section=rewards' })
     const priced = (await screen.findByText('Ten perfect reports')).closest('tr')!
     expect(within(priced).getByText(/300\.00/)).toBeInTheDocument()
@@ -239,9 +240,30 @@ describe('4. grants and rewards', () => {
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason' }), 'Helped a new teacher')
     await userEvent.type(within(dialog).getByRole('textbox', { name: /Amount/ }), '250')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Record a reward' }))
-    await waitFor(() => expect(calls('POST', /\/finance\/adjustments$/)).toHaveLength(1))
-    expect(bodyOf(calls('POST', /\/bonus$/)[0])).toEqual({ reason: 'Helped a new teacher' })
-    expect(bodyOf(calls('POST', /\/finance\/adjustments$/)[0])).toEqual({ kind: 'bonus', bonusEntryId: 'b-9', amount: '250', reason: 'Helped a new teacher' })
+    // PD-26 amendment: ONE request records the bonus and its amount together.
+    await waitFor(() => expect(calls('POST', /\/rewards$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/rewards$/)[0])).toEqual({ reason: 'Helped a new teacher', amount: '250' })
+    expect(calls('POST', /\/bonus$/)).toHaveLength(0)
+    expect(calls('POST', /\/adjustments$/)).toHaveLength(0)
+  })
+
+  it('a refused amount records nothing, and says so', async () => {
+    on('GET', /\/teacher-files\/rewards$/, () => json({ canViewAmounts: true, rewards: [] }))
+    on('GET', /\/teacher-files\/finance\/deduction-defaults$/, () => json({ currencies: [], defaults: [] }))
+    on('POST', /\/teacher-files\/t-1\/rewards$/, () =>
+      json({ error: { code: 'COMM.TEACHER_FILE_CONFLICT', message: "record this teacher's pay terms for 2026-10 first; the reward was not recorded" } }, 409),
+    )
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/supervision?section=rewards' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a reward' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason' }), 'Helped a new teacher')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Amount/ }), '250')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Record a reward' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/no pay terms for this month, so the reward was not recorded/)
+    // No half-recorded reward: nothing else was sent, and the dialog does not claim the reward was saved.
+    expect(calls('POST', /\/bonus$/)).toHaveLength(0)
+    expect(within(dialog).queryByText(/The reward is recorded/)).not.toBeInTheDocument()
   })
 
   it('a supervisor records the reward without an amount and sees no amounts', async () => {

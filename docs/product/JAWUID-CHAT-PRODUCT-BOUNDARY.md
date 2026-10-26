@@ -2392,6 +2392,14 @@ priced deduction     = decided deduction_1|2 + terms(month).currency +
 
 **Deprecated behaviour.** PD-12's separate Leave requests and Discipline tabs.
 
+**Amendment, 2026-10-26: the known limits, closed** (owner request, no new
+number). A reward with its amount is one transaction, refused whole when the
+month has no pay terms. Every staff complaint names its source on every route
+(PD-11's supervision timeline too); older sourceless rows stay valid. The app's
+"on leave" notice updates on the conversation's realtime signals, on reconnect,
+on app resume and when the shown leave ends, never by polling. Record:
+`docs/admin/pd026-teacher-supervision.md` §Known limits, closed.
+
 **Closed.** 2026-10-22.
 
 ---
