@@ -1007,6 +1007,82 @@ class L10nEn extends L10n {
       'A child of this group moved to another supervisor';
 
   @override
+  String systemCoverStarted(String cover, String supervisor, String date) {
+    return '$cover is covering for $supervisor until $date';
+  }
+
+  @override
+  String systemCoverExtended(String cover, String supervisor, String date) {
+    return '$cover\'s cover for $supervisor is extended until $date';
+  }
+
+  @override
+  String systemCoverEnded(String supervisor) {
+    return '$supervisor is back; the cover has ended';
+  }
+
+  @override
+  String get systemCoverStartedNoName => 'A backup supervisor is covering';
+
+  @override
+  String get systemCoverEndedNoName => 'The cover has ended';
+
+  @override
+  String conversationCoverLine(String cover, String date) {
+    return '$cover is covering until $date';
+  }
+
+  @override
+  String systemSeatJoined(String who) {
+    return '$who joined to support';
+  }
+
+  @override
+  String systemSeatSteppedIn(String who) {
+    return '$who is following this chat';
+  }
+
+  @override
+  String systemSeatLeft(String name) {
+    return '$name left';
+  }
+
+  @override
+  String systemSeatLeftIdle(String name) {
+    return '$name left (no activity)';
+  }
+
+  @override
+  String systemSeatWho(String name, String role) {
+    return '$name ($role)';
+  }
+
+  @override
+  String get systemSeatSomeone => 'A team member';
+
+  @override
+  String get systemSeatJoinedNoName => 'A team member joined';
+
+  @override
+  String get systemSeatSteppedInNoName =>
+      'A team member is following this chat';
+
+  @override
+  String get systemSeatLeftNoName => 'A team member left';
+
+  @override
+  String get seatRoleTeacherSupervisor => 'teacher supervisor';
+
+  @override
+  String get seatRoleSupervisor => 'supervisor';
+
+  @override
+  String get seatRoleManager => 'manager';
+
+  @override
+  String get seatRoleAdministration => 'administration';
+
+  @override
   String get systemUpdate => 'System update';
 
   @override

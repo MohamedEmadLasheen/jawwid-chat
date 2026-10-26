@@ -3,8 +3,45 @@
  * in core/i18n/messages.ts so the workspace can be reviewed and merged on its
  * own; the shared dictionary carries only the nav label.
  */
+import { ACADEMY_ZONE } from '@/core/time/academyTime'
+
+/** PD-33: "3 Nov" -- a cover's end day, in the academy's zone like every staff date. */
+function coverDay(iso: unknown, tag: string): string {
+  const d = typeof iso === 'string' ? new Date(iso) : null
+  return d && !Number.isNaN(d.getTime())
+    ? new Intl.DateTimeFormat(tag, { day: 'numeric', month: 'short', timeZone: ACADEMY_ZONE }).format(d)
+    : ''
+}
+
+/** PD-35: the role word a seat line carries (the server sends the word's key, never wording). */
+const SEAT_ROLE_EN: Record<string, string> = {
+  teacher_supervisor: 'teacher supervisor',
+  supervisor: 'supervisor',
+  manager: 'manager',
+  super_admin: 'administration',
+}
+const SEAT_ROLE_AR: Record<string, string> = {
+  teacher_supervisor: 'مشرف المعلمين',
+  supervisor: 'مشرف',
+  manager: 'مدير',
+  super_admin: 'الإدارة',
+}
+const seatName = (p: Record<string, unknown>, fallback: string) =>
+  typeof p.name === 'string' && p.name.trim() ? p.name : fallback
+/** "Ola (teacher supervisor)", or the name alone for a role word this client does not know. */
+const seatWho = (p: Record<string, unknown>, roles: Record<string, string>) => {
+  const name = seatName(p, roles === SEAT_ROLE_AR ? 'أحد أعضاء الفريق' : 'A team member')
+  const role = typeof p.role === 'string' ? roles[p.role] : undefined
+  return role ? `${name} (${role})` : name
+}
+
 export const chatCopy = {
   ar: {
+    // PD-33: the cover line under a chat's name, and the backup's chip.
+    coverLine: (c: { coverName: string; supervisorName: string; until: string }) =>
+      `التغطية: ${c.coverName} بدلًا من ${c.supervisorName} حتى ${coverDay(c.until, 'ar-EG')}`,
+    coveringFor: (name: string) => `تغطية عن ${name}`,
+    covering: 'تغطية',
     search: 'ابحث بالاسم',
     searchList: 'ابحث في المحادثات والرسائل',
     clearSearch: 'مسح البحث',
@@ -224,10 +261,31 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `أصبح ${String(p.supervisor)} مشرفك؛ سجلّ المحادثة كما هو` : 'تغيّر مشرفك؛ سجلّ المحادثة كما هو',
       'group.learner_detached': () => 'انتقل طفل من هذه المجموعة إلى مشرف آخر',
+      // PD-33. Worded without a gendered verb: the names are anyone's.
+      // A list preview carries the kind only: then the line is generic.
+      'cover.started': (p: Record<string, unknown>) =>
+        p.cover && p.supervisor
+          ? `التغطية: ${String(p.cover)} بدلًا من ${String(p.supervisor)} حتى ${coverDay(p.until, 'ar-EG')}`
+          : 'التغطية: مشرف بديل يتابع مؤقتًا',
+      'cover.extended': (p: Record<string, unknown>) =>
+        p.cover && p.supervisor
+          ? `مُدّدت التغطية: ${String(p.cover)} بدلًا من ${String(p.supervisor)} حتى ${coverDay(p.until, 'ar-EG')}`
+          : 'مُدّدت التغطية',
+      'cover.ended': (p: Record<string, unknown>) =>
+        p.supervisor ? `انتهت التغطية؛ عادت المتابعة إلى ${String(p.supervisor)}` : 'انتهت التغطية',
+      // PD-35: a visible seat, taken or left.
+      'seat.joined': (p: Record<string, unknown>) => `انضم ${seatWho(p, SEAT_ROLE_AR)} للمساندة`,
+      'seat.stepped_in': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_AR)} يتابع هذه المحادثة`,
+      'seat.left': (p: Record<string, unknown>) =>
+        `غادر ${seatName(p, 'أحد أعضاء الفريق')}${p.ended === 'idle' ? ' (لا نشاط)' : ''}`,
       fallback: () => 'تحديث من النظام',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },
   en: {
+    coverLine: (c: { coverName: string; supervisorName: string; until: string }) =>
+      `${c.coverName} is covering for ${c.supervisorName} until ${coverDay(c.until, 'en-GB')}`,
+    coveringFor: (name: string) => `Covering for ${name}`,
+    covering: 'Covering',
     search: 'Search by name',
     searchList: 'Search chats and messages',
     clearSearch: 'Clear search',
@@ -447,6 +505,21 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `${String(p.supervisor)} is now your supervisor; the chat history is kept` : 'Your supervisor changed; the chat history is kept',
       'group.learner_detached': () => 'A child of this group moved to another supervisor',
+      'cover.started': (p: Record<string, unknown>) =>
+        p.cover && p.supervisor
+          ? `${String(p.cover)} is covering for ${String(p.supervisor)} until ${coverDay(p.until, 'en-GB')}`
+          : 'A backup supervisor is covering',
+      'cover.extended': (p: Record<string, unknown>) =>
+        p.cover && p.supervisor
+          ? `${String(p.cover)}'s cover for ${String(p.supervisor)} is extended until ${coverDay(p.until, 'en-GB')}`
+          : 'The cover is extended',
+      'cover.ended': (p: Record<string, unknown>) =>
+        p.supervisor ? `${String(p.supervisor)} is back; the cover has ended` : 'The cover has ended',
+      // PD-35: a visible seat, taken or left.
+      'seat.joined': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_EN)} joined to support`,
+      'seat.stepped_in': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_EN)} is following this chat`,
+      'seat.left': (p: Record<string, unknown>) =>
+        `${seatName(p, 'A team member')} left${p.ended === 'idle' ? ' (no activity)' : ''}`,
       fallback: () => 'System update',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },

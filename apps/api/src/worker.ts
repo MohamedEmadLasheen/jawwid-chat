@@ -11,8 +11,10 @@ import { NotificationService } from './communication/notifications/notification.
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
+import { SupervisorCoverService } from './org/supervisor-cover.service';
 import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
 import { subscriptionLockEnforced } from './platform/subscription-lock';
+import { ConversationSeatService } from './communication/seats/conversation-seat.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -79,6 +81,14 @@ const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
 const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
 
 /**
+ * PD-33: how often supervisor covers are announced (a future-dated start) and
+ * returned (the window is over). NOT what ends access -- the backup link's
+ * active_until does that to the second -- only how late the return line and
+ * the "welcome back" push can be. Idempotent claims, so every replica may run it.
+ */
+const COVER_SWEEP_MS = Number(process.env.COVER_SWEEP_MS ?? 60_000);
+
+/**
  * PD-30: how often every child's subscription state is recomputed (an
  * instalment becomes overdue by the calendar, not by a write), its changes
  * announced and the lesson holds made to follow. The state a write changes is
@@ -96,6 +106,13 @@ const SUBSCRIPTION_SWEEP_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS ?? 60_000
  * they must not pile up; one delete statement, safe on every replica.
  */
 const SIGNUP_FAILURE_PURGE_MS = 6 * 60 * 60_000;
+
+/**
+ * PD-35: how often seats that no longer hold, or went idle, are ended. Access
+ * never waits for it -- a seat's eligibility is re-checked on every access --
+ * so this only tidies the member list and posts the line.
+ */
+const SEAT_SWEEP_MS = 60_000;
 
 /**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
@@ -145,7 +162,9 @@ async function bootstrap(): Promise<void> {
   const scheduling = app.get(SchedulingService);
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
+  const covers = app.get(SupervisorCoverService);
   const subscriptions = app.get(SubscriptionEffects);
+  const seats = app.get(ConversationSeatService);
   const prisma = app.get(PrismaService);
 
   let running = true;
@@ -186,7 +205,9 @@ async function bootstrap(): Promise<void> {
   let lastSweepAt = 0;
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
+  let nextCoverSweep = 0;
   let nextSignupFailurePurge = 0;
+  let nextSeatSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
   log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
@@ -288,6 +309,20 @@ async function bootstrap(): Promise<void> {
       }
     }
 
+    // PD-33: covers that began or ended -- their lines and pushes. Before
+    // dispatch, so a "welcome back" push queued now goes out on this pass.
+    if (Date.now() >= nextCoverSweep) {
+      draining = true;
+      try {
+        await covers.sweep();
+      } catch (e) {
+        report(log, 'cover sweep', 'org.covers', e);
+      } finally {
+        draining = false;
+        nextCoverSweep = Date.now() + COVER_SWEEP_MS;
+      }
+    }
+
     // PD-27: payment reminders for open instalments (a parent added since the
     // instalment was created is reached here). Before dispatch, like lessons.
     if (Date.now() >= nextPaymentReminderSweep) {
@@ -312,6 +347,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextSignupFailurePurge = Date.now() + SIGNUP_FAILURE_PURGE_MS;
+      }
+    }
+
+    // PD-35: seats that no longer hold, or went idle, end with a visible line.
+    if (Date.now() >= nextSeatSweep) {
+      draining = true;
+      try {
+        await seats.sweep();
+      } catch (e) {
+        report(log, 'seat sweep', 'seats.sweep', e);
+      } finally {
+        draining = false;
+        nextSeatSweep = Date.now() + SEAT_SWEEP_MS;
       }
     }
 

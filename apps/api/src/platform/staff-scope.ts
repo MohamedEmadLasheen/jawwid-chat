@@ -26,6 +26,13 @@ export const StaffAccessBasis = {
   BACKUP: 'backup',
   /** Department manager of one of the above. */
   MANAGER: 'manager',
+  /**
+   * PD-35: an open seat whose reason grants access (chat.seat_reason), while it
+   * still holds. The WEAKEST basis: anyone with one of the above keeps theirs.
+   * A seated person reads and writes as a party but is not in charge: no
+   * moderation of others, no membership changes, no approvals.
+   */
+  SEATED: 'seated',
 } as const;
 export type StaffAccessBasis = (typeof StaffAccessBasis)[keyof typeof StaffAccessBasis];
 

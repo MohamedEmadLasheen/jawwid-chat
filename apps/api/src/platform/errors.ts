@@ -222,6 +222,8 @@ export enum CommErrorCode {
   ORG_STRUCTURE_DENIED = 'COMM.ORG_STRUCTURE_DENIED',
   /** PD-8: the requested structure is not lawful (wrong department, ended link, mixed supervisors). 409. */
   ORG_STRUCTURE_INVALID = 'COMM.ORG_STRUCTURE_INVALID',
+  /** PD-33: the change could not finish in time (a busy database); nothing was committed. 503; safe to retry. */
+  ORG_STRUCTURE_BUSY = 'COMM.ORG_STRUCTURE_BUSY',
   /** PD-11: no such lesson, or none this caller may see. 404. */
   LESSON_NOT_FOUND = 'COMM.LESSON_NOT_FOUND',
   /** PD-11: this caller may see the lesson but may not record this on it. 403. */
@@ -380,6 +382,20 @@ export enum CommErrorCode {
   MATERIAL_NOT_UPLOADED = 'COMM.MATERIAL_NOT_UPLOADED',
   /** The lessons site is not configured on this deployment (MATERIALS_SITE_BASE_URL). 409. */
   MATERIAL_UNAVAILABLE = 'COMM.MATERIAL_UNAVAILABLE',
+
+  // --- PD-35: the visible seat (joining a conversation by choice) ---
+  /** No such seat reason, or no feature on this deployment takes seats for it. 400. */
+  SEAT_REASON_UNKNOWN = 'COMM.SEAT_REASON_UNKNOWN',
+  /** This reason does not give the caller a seat here, now. 403. */
+  SEAT_NOT_ELIGIBLE = 'COMM.SEAT_NOT_ELIGIBLE',
+  /** A seat for this reason cannot be taken in this kind of conversation (a 1:1). 409. */
+  SEAT_NOT_ALLOWED_HERE = 'COMM.SEAT_NOT_ALLOWED_HERE',
+  /** The caller is already a member in their own right: there is no seat to take. 409. */
+  SEAT_ALREADY_MEMBER = 'COMM.SEAT_ALREADY_MEMBER',
+  /** The caller holds no open seat here. 404. */
+  SEAT_NOT_FOUND = 'COMM.SEAT_NOT_FOUND',
+  /** A join's note or source failed validation. 400. */
+  SEAT_INVALID = 'COMM.SEAT_INVALID',
 }
 
 export class CommError extends Error {

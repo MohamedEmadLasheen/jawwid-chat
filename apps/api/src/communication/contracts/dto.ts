@@ -272,6 +272,23 @@ export interface ConversationDto {
   avatarUrl?: string | null;
   /** The VIEWER's own private labels (owner decision 2026-10-19: per staff member). Staff only. */
   labels?: Array<{ id: string; name: string; color: string }>;
+
+  /**
+   * PD-33: the supervisor here is away and their backup covers for them until
+   * `until` ("Amira is covering for Noura until 3 Nov"). Null when nobody is
+   * covering; absent when not computed. Every viewer of the conversation may
+   * see it: the parent is told who answers.
+   */
+  cover?: ConversationCoverDto | null;
+}
+
+export interface ConversationCoverDto {
+  supervisorId: string;
+  supervisorName: string;
+  coverId: string;
+  coverName: string;
+  /** ISO-8601: the cover ends (and the supervisor is back) at this moment. */
+  until: string;
 }
 
 export interface ConversationViewerStateDto {
@@ -400,6 +417,8 @@ export function toConversationDto(
     avatarUrl?: string | null;
     /** The VIEWER's own private labels (staff only). Omitted for anyone else. */
     labels?: Array<{ id: string; name: string; color: string }>;
+    /** PD-33: the live cover, or null; omitted when not computed. */
+    cover?: ConversationCoverDto | null;
   },
 ): ConversationDto {
   return {
@@ -438,6 +457,7 @@ export function toConversationDto(
     lastMessage: extra?.lastMessage,
     avatarUrl: c.type === 'direct' ? undefined : (extra?.avatarUrl ?? null),
     ...(extra?.labels ? { labels: extra.labels } : {}),
+    ...(extra?.cover !== undefined ? { cover: extra.cover } : {}),
   };
 }
 

@@ -710,12 +710,15 @@ export class AuthorizationService {
    *   other staff            the department manager or the super admin only, so
    *                          a supervisor never rewrites a colleague
    *   system                 never: system messages and cards are records
+   *   (a seat, PD-35)        nobody's: 'seated' is presence, not charge
    *
    * An actor's OWN message is not moderation; the author rules (window) apply.
    * `basis` is chat.staff_conversation_access for this conversation, now.
    */
   moderatableAuthorKinds(actor: Actor, basis: StaffAccessBasis | null): string[] {
     if (actor.kind !== ActorKind.STAFF || !actor.isActive || !isConversationStaff(actor) || basis === null) return [];
+    // PD-35: a seat is presence by choice, never charge of the conversation.
+    if (basis === StaffAccessBasis.SEATED) return [];
     if (basis === StaffAccessBasis.MANAGER || basis === StaffAccessBasis.SUPER_ADMIN) {
       return [ActorKind.TEACHER, ActorKind.CONTACT, ActorKind.STAFF];
     }
@@ -735,6 +738,8 @@ export class AuthorizationService {
     switch (basis) {
       case StaffAccessBasis.RESPONSIBLE:
       case StaffAccessBasis.MEMBER:
+      // PD-35: a seated person speaks as themselves, a party to the chat.
+      case StaffAccessBasis.SEATED:
         return OnBehalfMode.OWNER;
       case StaffAccessBasis.BACKUP:
         return OnBehalfMode.COVERAGE;
@@ -1484,6 +1489,30 @@ export class AuthorizationService {
       target.organizationId,
       (a) => a.staffRole === StaffRole.SUPER_ADMIN || (a.staffRole === StaffRole.MANAGER && target.actsForPrimary === 'manager'),
       'configure backup supervisors',
+    );
+  }
+
+  /**
+   * PD-33: starting, extending or ending a supervisor's cover. The supervisor
+   * themself, the manager of their department, or the super admin -- and, to
+   * END it only, the backup who is covering. `actsForPrimary` is
+   * chat.staff_acts_for(actor, primary); a backup's 'backup' basis never counts
+   * here, so covering for someone gives no power over the arrangement itself.
+   */
+  canManageCover(
+    actor: Actor,
+    target: { organizationId: string; actsForPrimary: ActsFor; isCoveringBackup: boolean },
+    action: 'start' | 'extend' | 'end',
+  ): Decision {
+    return this.orgAuthority(
+      actor,
+      target.organizationId,
+      (a) =>
+        a.staffRole === StaffRole.SUPER_ADMIN ||
+        (a.staffRole === StaffRole.MANAGER && target.actsForPrimary === 'manager') ||
+        (a.staffRole === StaffRole.ADMIN && target.actsForPrimary === 'self') ||
+        (action === 'end' && target.isCoveringBackup),
+      action === 'end' ? 'end this cover' : 'hand this supervisor over to a backup',
     );
   }
 

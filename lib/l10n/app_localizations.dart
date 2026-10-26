@@ -1843,6 +1843,120 @@ abstract class L10n {
   /// **'A child of this group moved to another supervisor'**
   String get systemGroupLearnerDetached;
 
+  /// No description provided for @systemCoverStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover} is covering for {supervisor} until {date}'**
+  String systemCoverStarted(String cover, String supervisor, String date);
+
+  /// No description provided for @systemCoverExtended.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover}\'s cover for {supervisor} is extended until {date}'**
+  String systemCoverExtended(String cover, String supervisor, String date);
+
+  /// No description provided for @systemCoverEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'{supervisor} is back; the cover has ended'**
+  String systemCoverEnded(String supervisor);
+
+  /// No description provided for @systemCoverStartedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'A backup supervisor is covering'**
+  String get systemCoverStartedNoName;
+
+  /// No description provided for @systemCoverEndedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'The cover has ended'**
+  String get systemCoverEndedNoName;
+
+  /// No description provided for @conversationCoverLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover} is covering until {date}'**
+  String conversationCoverLine(String cover, String date);
+
+  /// PD-35 system line: a staff member took a visible seat in the group. who = systemSeatWho or a name.
+  ///
+  /// In en, this message translates to:
+  /// **'{who} joined to support'**
+  String systemSeatJoined(String who);
+
+  /// PD-35 system line: a staff member follows a family 1:1 (no seat in the pair).
+  ///
+  /// In en, this message translates to:
+  /// **'{who} is following this chat'**
+  String systemSeatSteppedIn(String who);
+
+  /// PD-35 system line: a staff member left their seat.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} left'**
+  String systemSeatLeft(String name);
+
+  /// PD-35 system line: a seat ended after days with no message.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} left (no activity)'**
+  String systemSeatLeftIdle(String name);
+
+  /// PD-35: a name with its role word, inside a seat line.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({role})'**
+  String systemSeatWho(String name, String role);
+
+  /// No description provided for @systemSeatSomeone.
+  ///
+  /// In en, this message translates to:
+  /// **'A team member'**
+  String get systemSeatSomeone;
+
+  /// No description provided for @systemSeatJoinedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'A team member joined'**
+  String get systemSeatJoinedNoName;
+
+  /// No description provided for @systemSeatSteppedInNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'A team member is following this chat'**
+  String get systemSeatSteppedInNoName;
+
+  /// No description provided for @systemSeatLeftNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'A team member left'**
+  String get systemSeatLeftNoName;
+
+  /// No description provided for @seatRoleTeacherSupervisor.
+  ///
+  /// In en, this message translates to:
+  /// **'teacher supervisor'**
+  String get seatRoleTeacherSupervisor;
+
+  /// No description provided for @seatRoleSupervisor.
+  ///
+  /// In en, this message translates to:
+  /// **'supervisor'**
+  String get seatRoleSupervisor;
+
+  /// No description provided for @seatRoleManager.
+  ///
+  /// In en, this message translates to:
+  /// **'manager'**
+  String get seatRoleManager;
+
+  /// No description provided for @seatRoleAdministration.
+  ///
+  /// In en, this message translates to:
+  /// **'administration'**
+  String get seatRoleAdministration;
+
   /// No description provided for @systemUpdate.
   ///
   /// In en, this message translates to:

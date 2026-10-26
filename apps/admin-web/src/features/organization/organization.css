@@ -13,3 +13,14 @@
 .org-filter { display: flex; align-items: center; gap: var(--space-2); }
 .org-filter .field__label { margin: 0; white-space: nowrap; }
 .org-filter .select { inline-size: auto; min-inline-size: 12rem; }
+
+/* PD-33: hand over to backup. */
+.cover-cell { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.cover-actions { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.cover-banner { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; }
+.cover-banner--quiet { justify-content: flex-end; padding-block: var(--space-1); padding-inline: var(--space-3); }
+.handover { display: grid; gap: var(--space-2); }
+.handover__choices { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.handover__choice { display: inline-flex; gap: var(--space-1); align-items: center; }
+.handover__date { inline-size: auto; }
+.handover__summary { font-size: var(--fs-lg); font-weight: 600; margin: 0; }

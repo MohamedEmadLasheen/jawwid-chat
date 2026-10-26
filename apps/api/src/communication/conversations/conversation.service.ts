@@ -1,6 +1,6 @@
 import { signActorAvatar } from '../profile/avatar-urls';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { Conversation, ConversationMember, Prisma } from '@prisma/client';
+import { Conversation, ConversationMember, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import type { LiveMember } from '../../platform/authorization.service';
@@ -22,7 +22,7 @@ import type { AuditService } from '../../platform/audit.service';
 import type { StaffAccessBasis } from '../../platform/staff-scope';
 import { Actor, SYSTEM_ACTOR, isConversationStaff } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
-import type { ConversationWithLearner, MemberAwayDto, ResolvedMember } from '../contracts/dto';
+import type { ConversationCoverDto, ConversationWithLearner, MemberAwayDto, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
 import {
   ActorKind,
@@ -804,11 +804,21 @@ export class ConversationService {
       where: { conversationId: conv.id, leftAt: null },
     });
     const currentIds = new Set(current.map((m) => m.actorId));
+    // PD-35: a seat is taken by choice and a reconcile never ends one. A seat
+    // holder now wanted here in their own right keeps the row; the seat ends
+    // as absorbed, so leaving it can never take that membership away.
+    const seated = new Set(await this.seatHolderIds(this.prisma, conv.id));
+    const toAbsorb = [...seated].filter((id) => desired.has(id));
 
     const toAdd = [...desired.values()].filter((m) => !currentIds.has(m.actorId));
-    const toRemove = current.filter((m) => !desired.has(m.actorId));
+    const toRemove = current.filter((m) => !desired.has(m.actorId) && !seated.has(m.actorId));
 
     if (toAdd.length === 0 && toRemove.length === 0) {
+      if (toAbsorb.length > 0) {
+        await this.prisma.$transaction(async (tx) => {
+          for (const id of toAbsorb) await this.absorbSeat(tx, conv.id, id);
+        });
+      }
       // RT-009: nothing changed NOW, but this may be the retry of a sync whose
       // removal committed and was not confirmed. Never report it complete
       // without the barrier.
@@ -817,6 +827,7 @@ export class ConversationService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      for (const id of toAbsorb) await this.absorbSeat(tx, conv.id, id);
       if (toRemove.length > 0) {
         await tx.conversationMember.updateMany({
           where: { id: { in: toRemove.map((m) => m.id) } },
@@ -1117,6 +1128,9 @@ export class ConversationService {
       const present = await tx.conversationMember.findFirst({
         where: { conversationId, actorId: newSupervisorId, leftAt: null },
       });
+      // PD-35: the new supervisor may already sit here by choice; the row is
+      // theirs now as supervisor, and the seat ends as absorbed.
+      if (present) await this.absorbSeat(tx, conversationId, newSupervisorId);
       if (!present) {
         await tx.conversationMember.create({
           data: {
@@ -1633,13 +1647,115 @@ export class ConversationService {
     });
   }
 
+  /**
+   * A visible line ("Amira is covering for Noura until 3 Nov", "Ola joined to
+   * support"), posted inside the caller's transaction and announced to open
+   * screens with no push (MessageCreatedPayload.silent). PD-33 and PD-35.
+   * `touchActivity: false` (PD-33's cover lines) leaves the chat list's order
+   * alone; a system message never counts as unread (it carries no receipts).
+   */
+  async postAnnouncement(
+    tx: Prisma.TransactionClient,
+    conversationId: string,
+    kind: string,
+    payload: Record<string, unknown>,
+    opts: { touchActivity?: boolean } = {},
+  ): Promise<string> {
+    const message = await this.systemMessage(tx, conversationId, kind, payload, opts);
+    await this.outbox.enqueue(tx, CommEvent.MESSAGE_CREATED, {
+      conversationId,
+      messageId: message.id,
+      seq: message.seq?.toString() ?? '0',
+      authorKind: message.authorType,
+      authorId: null,
+      type: message.type,
+      visibility: message.visibility,
+      moderation: message.moderation,
+      createdAt: message.createdAt.toISOString(),
+      silent: true,
+    });
+    return message.id;
+  }
+
+  /**
+   * PD-33: the live cover each conversation is under, if any -- a staff member
+   * of it (or the supervisor responsible for a group's children) is away and
+   * a backup covers for them (chat.live_covers). One query for the whole list.
+   */
+  async coversOf(conversationIds: readonly string[]): Promise<Map<string, ConversationCoverDto>> {
+    if (conversationIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<
+      Array<{ conversation_id: string; primary_id: string; primary_name: string; backup_id: string; backup_name: string; ends_at: Date }>
+    >`
+      WITH ids AS (SELECT unnest(${[...conversationIds]}::uuid[]) AS id),
+           principals AS (
+             SELECT cm.conversation_id, cm.actor_id AS staff_id
+               FROM chat.conversation_member cm JOIN ids ON ids.id = cm.conversation_id
+              WHERE cm.left_at IS NULL AND cm.actor_kind = 'staff'
+             UNION
+             SELECT c.id, ls.supervisor_id
+               FROM chat.conversation c JOIN ids ON ids.id = c.id
+               JOIN chat.learner_supervision ls ON ls.learner_id = c.learner_id
+              WHERE c.type = 'student_group'
+             UNION
+             SELECT cl.conversation_id, ls.supervisor_id
+               FROM chat.conversation_learner cl JOIN ids ON ids.id = cl.conversation_id
+               JOIN chat.learner_supervision ls ON ls.learner_id = cl.learner_id)
+      SELECT DISTINCT ON (p.conversation_id)
+             p.conversation_id::text AS conversation_id,
+             lc.primary_id::text AS primary_id, ps.name AS primary_name,
+             lc.backup_id::text AS backup_id, bs.name AS backup_name, lc.ends_at
+        FROM principals p
+        JOIN chat.live_covers(now()) lc ON lc.primary_id = p.staff_id
+        JOIN chat.staff ps ON ps.id = lc.primary_id
+        JOIN chat.staff bs ON bs.id = lc.backup_id
+       ORDER BY p.conversation_id, lc.ends_at`;
+    return new Map(
+      rows.map((r) => [
+        r.conversation_id,
+        {
+          supervisorId: r.primary_id,
+          supervisorName: r.primary_name,
+          coverId: r.backup_id,
+          coverName: r.backup_name,
+          until: r.ends_at.toISOString(),
+        },
+      ]),
+    );
+  }
+
+  /**
+   * PD-35: the staff holding an open seat in this conversation. A reconcile
+   * keeps them: a seat is taken by choice and ends only through the seat
+   * service (leave, or the sweep when it no longer holds).
+   */
+  private async seatHolderIds(db: Prisma.TransactionClient | PrismaService, conversationId: string): Promise<string[]> {
+    const rows = await db.$queryRaw<Array<{ staff_id: string }>>`
+      SELECT staff_id::text AS staff_id FROM chat.conversation_seat
+       WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL AND member_id IS NOT NULL`;
+    return rows.map((r) => r.staff_id);
+  }
+
+  /**
+   * PD-35: a seat holder who becomes a member in their own right (the group's
+   * new supervisor) keeps the member row; the seat itself ends as 'absorbed', so
+   * leaving it later can never take away a membership that is not the seat's.
+   */
+  private async absorbSeat(tx: Prisma.TransactionClient, conversationId: string, staffId: string): Promise<void> {
+    await tx.$executeRaw`
+      UPDATE chat.conversation_seat SET left_at = now(), left_kind = 'absorbed'
+       WHERE conversation_id = ${conversationId}::uuid AND staff_id = ${staffId}::uuid
+         AND left_at IS NULL AND member_id IS NOT NULL`;
+  }
+
   /** System messages are generated by the backend and never by a client. */
   private async systemMessage(
     tx: Prisma.TransactionClient,
     conversationId: string,
     kind: string,
     payload: Record<string, unknown>,
-  ): Promise<void> {
+    opts: { touchActivity?: boolean } = {},
+  ): Promise<Message> {
     // The conversation's own row, locked, is the authority for the message's
     // tenant (RT-030): the column default is the seeded organization, which is
     // wrong for every other tenant and is refused by message_same_organization.
@@ -1652,7 +1768,7 @@ export class ConversationService {
     }
     const seq = locked[0].last_seq + BigInt(1);
 
-    await tx.message.create({
+    const message = await tx.message.create({
       data: {
         organizationId: locked[0].organization_id,
         conversationId,
@@ -1668,8 +1784,9 @@ export class ConversationService {
     });
     await tx.conversation.update({
       where: { id: conversationId },
-      data: { lastSeq: seq, lastActivityAt: new Date() },
+      data: opts.touchActivity === false ? { lastSeq: seq } : { lastSeq: seq, lastActivityAt: new Date() },
     });
+    return message;
   }
 }
 
