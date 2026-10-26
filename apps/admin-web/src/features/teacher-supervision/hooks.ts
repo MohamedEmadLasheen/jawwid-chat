@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { payrollApi, supervisionTimelineApi, teacherFileKeys } from '@/features/teacher-files/api'
-import { supervisionHubApi, supervisionHubKeys } from './api'
+import type { ComplaintSource } from '@/features/teacher-files/api'
+import { parentFeedbackApi, parentFeedbackKeys, supervisionHubApi, supervisionHubKeys, type FeedbackQuery } from './api'
 
 export function useLeaveOverview() {
   return useQuery({ queryKey: supervisionHubKeys.leave(), queryFn: () => supervisionHubApi.leaveOverview(), staleTime: 15_000 })
 }
 
-export function useSupervisedComplaints(from?: 'management' | 'parent') {
+export function useSupervisedComplaints(from?: ComplaintSource) {
   return useQuery({ queryKey: supervisionHubKeys.complaints(from), queryFn: () => supervisionHubApi.complaints(from), staleTime: 15_000 })
 }
 
@@ -50,5 +51,47 @@ export function useRecordReward() {
       void qc.invalidateQueries({ queryKey: supervisionHubKeys.all })
       void qc.invalidateQueries({ queryKey: teacherFileKeys.all })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// PD-32 parent feedback
+// ---------------------------------------------------------------------------
+
+export function useParentFeedback(q: FeedbackQuery) {
+  return useQuery({ queryKey: parentFeedbackKeys.list(q), queryFn: () => parentFeedbackApi.list(q), staleTime: 15_000 })
+}
+
+/** A family's Parent File. A refusal hides the section, so it is never retried. */
+export function useFamilyFeedback(familyId: string | undefined) {
+  return useQuery({
+    queryKey: parentFeedbackKeys.family(familyId ?? ''),
+    queryFn: () => parentFeedbackApi.forFamily(familyId!),
+    enabled: !!familyId,
+    retry: false,
+  })
+}
+
+/** Taking or replying changes the feedback, its PD-26 complaint (handler, status) and the Teacher File. */
+function useInvalidateFeedback() {
+  const qc = useQueryClient()
+  return () => {
+    void qc.invalidateQueries({ queryKey: parentFeedbackKeys.all })
+    void qc.invalidateQueries({ queryKey: supervisionHubKeys.all })
+    void qc.invalidateQueries({ queryKey: teacherFileKeys.all })
+  }
+}
+
+export function useTakeFeedback() {
+  const refresh = useInvalidateFeedback()
+  return useMutation({ mutationFn: (id: string) => parentFeedbackApi.take(id), onSettled: refresh })
+}
+
+export function useReplyFeedback() {
+  const refresh = useInvalidateFeedback()
+  return useMutation({
+    mutationFn: ({ id, response, resolve }: { id: string; response: string; resolve?: boolean }) =>
+      parentFeedbackApi.reply(id, { response, ...(resolve ? { resolve: true } : {}) }),
+    onSettled: refresh,
   })
 }

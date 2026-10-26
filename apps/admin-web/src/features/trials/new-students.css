@@ -1,0 +1,137 @@
+/* PD-32: the New Students page, redesigned. One card per family, read top to
+   bottom: who and how far (header), where it came from (the trial), three
+   blocks side by side (contact, payment, setup), the children in one aligned
+   table. Logical properties only, so Arabic and English mirror exactly.
+   Tokens only. */
+
+.ns-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+.ns-toolbar__search { flex: 1 1 18rem; max-inline-size: 26rem; }
+
+.ns-list { display: grid; gap: var(--space-4); }
+
+.ns-card { display: grid; gap: var(--space-4); padding: var(--space-5); }
+
+/* Header: the parent and the status on one line, the byline under it, actions at the end. */
+.ns-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.ns-card__who { display: grid; gap: var(--space-1); min-inline-size: 0; }
+.ns-card__title-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ns-card__title { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-semibold); line-height: var(--lh-tight); }
+.ns-card__byline { margin: 0; font-size: var(--fs-sm); color: var(--text-muted); }
+.ns-card__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* The trial it came from: one quiet strip. */
+.ns-card__trial {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.ns-card__trial .icon { flex: none; }
+.ns-card__trial-label { font-weight: var(--fw-semibold); color: var(--text); }
+
+/* The three blocks. */
+.ns-card__blocks {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+.ns-block {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-inline-size: 0;
+}
+.ns-block--setup { grid-column: span 1; }
+.ns-block__title {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+:root[lang='ar'] .ns-block__title { letter-spacing: 0; text-transform: none; font-size: var(--fs-sm); }
+
+.ns-pairs { display: grid; gap: var(--space-3); margin: 0; }
+.ns-pairs > div { display: grid; gap: 2px; min-inline-size: 0; }
+.ns-pairs dt { font-size: var(--fs-sm); color: var(--text-muted); }
+.ns-pairs dd { margin: 0; overflow-wrap: anywhere; }
+.ns-inline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* Phone numbers and e-mails are identifiers: always left to right, at the start edge. */
+.ns-ltr { unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+.ns-note { font-size: var(--fs-sm); }
+
+/* The sign-up code: large, spaced, with what it is and what can be done. */
+.ns-code { display: grid; justify-items: start; gap: var(--space-1); }
+.ns-code__value {
+  font-family: var(--font-mono);
+  font-size: 1.375rem;
+  letter-spacing: 0.25em;
+  font-variant-numeric: tabular-nums;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.ns-lock { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block-start: var(--space-2); font-size: var(--fs-sm); }
+.ns-lock--on {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--text);
+}
+.ns-lock--on .icon { color: var(--danger); vertical-align: -2px; }
+
+/* The children. */
+.ns-children { display: grid; gap: var(--space-2); }
+.ns-count {
+  display: inline-block;
+  min-inline-size: 1.5em;
+  margin-inline-start: var(--space-1);
+  padding-inline: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  text-align: center;
+  color: var(--text);
+}
+.ns-table th,
+.ns-table td { vertical-align: top; text-align: start; }
+.ns-table tbody th { font-weight: var(--fw-semibold); }
+/* Numbers line up on their end edge, digit under digit. */
+.ns-table .ns-num { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ns-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.ns-slot {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.ns-slot__time { font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); }
+
+@media (max-width: 40rem) {
+  .ns-card { padding: var(--space-4); }
+  .ns-card__actions { inline-size: 100%; }
+}

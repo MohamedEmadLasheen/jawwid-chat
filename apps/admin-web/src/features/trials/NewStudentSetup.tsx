@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { useStructure } from '@/features/organization/hooks'
 import { describeOpsError } from '../teachers/opsCopy'
@@ -11,6 +12,7 @@ import { trialKeys, trialsApi, type AssignResult, type NewStudentDto } from './a
 import { ChangeSupervisorDialog, transferNotice } from '@/features/organization/ChangeSupervisorDialog'
 import { useCopy } from '@/features/organization/copy'
 import { orgKeys } from '@/features/organization/api'
+import { NS } from './newStudentsCopy'
 
 const S: Record<string, Pair> = {
   setup: { en: 'Setup', ar: 'التجهيز' },
@@ -46,7 +48,6 @@ const S: Record<string, Pair> = {
     en: 'The parent asked for a code. Send it to them on WhatsApp:',
     ar: 'طلب ولي الأمر رمزًا. أرسله إليه عبر واتساب:',
   },
-  codeExpires: { en: 'valid until', ar: 'صالح حتى' },
   signedUp: { en: 'Signed up', ar: 'أنشأ حسابه' },
   timesNotSet: {
     en: 'Assigned. Some weekly lesson times could not be set from the form; the Teachers department sets them in Schedules:',
@@ -61,7 +62,7 @@ const S: Record<string, Pair> = {
  * relays on WhatsApp. Every step is decided by the server.
  */
 export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign: boolean }) {
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
   const tx = (p: Pair | undefined) => (p ? (locale === 'ar' ? p.ar : p.en) : '')
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -87,14 +88,33 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
     }
   }
 
+  // PD-32: the code has no time limit; the responsible staff end it, or clear the
+  // wrong-code lock after checking with the parent. Both are the server's decision.
+  const signupAction = async (run: () => Promise<unknown>, message: string) => {
+    setPending(true)
+    setError(null)
+    try {
+      await run()
+      setDone(message)
+      void qc.invalidateQueries({ queryKey: trialKeys.newStudents })
+    } catch (err) {
+      setError(err)
+    } finally {
+      setPending(false)
+    }
+  }
+  const signup = e?.parentSignup
+  const attempts = signup && signup.state !== 'signed_up' ? signup.attempts : undefined
+
   return (
-    <section className="tj-setup" aria-label={tx(S.setup)}>
-      <dl className="tj-facts">
+    <section className="ns-block ns-block--setup" aria-label={tx(S.setup)}>
+      <h3 className="ns-block__title">{tx(NS.setup)}</h3>
+      <dl className="ns-pairs">
         <div>
           <dt>{tx(S.supervisor)}</dt>
-          <dd>
+          <dd className="ns-inline">
             {e?.supervisor ? (
-              <span className="tj-setup__supervisor">
+              <>
                 <span dir="auto">{e.supervisor.name}</span>
                 {canAssign && (
                   // PD-24: the Operations manager changes the supervisor at any time after Assign.
@@ -102,7 +122,7 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
                     {tx(S.change)}
                   </button>
                 )}
-              </span>
+              </>
             ) : canAssign ? (
               <button type="button" className="btn btn--sm btn--primary" onClick={() => setAssigning(true)}>
                 {tx(S.assign)}
@@ -115,7 +135,7 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
         {e && (
           <div>
             <dt>{tx(S.group)}</dt>
-            <dd>
+            <dd className="ns-inline">
               {e.groupConversationId ? (
                 <button type="button" className="btn btn--sm" onClick={() => navigate(`/chat/${e.groupConversationId}`)}>
                   <Icon name="messages" size={14} />
@@ -132,30 +152,58 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
             </dd>
           </div>
         )}
-        {e && (
-          <div className="tj-setup__parent">
+        {e && signup && (
+          <div>
             <dt>{tx(S.parent)}</dt>
             <dd>
-              {e.parentSignup.state === 'signed_up' && (
-                <span className="badge badge--success">
+              {signup.state === 'signed_up' && (
+                <Badge tone="ok">
                   <Icon name="check" size={12} /> {tx(S.signedUp)}
-                </span>
+                </Badge>
               )}
-              {e.parentSignup.state === 'not_started' && <span className="ts-muted">{tx(S.notStarted)}</span>}
-              {e.parentSignup.state === 'code_waiting' && (
-                <span>
-                  {tx(S.codeWaiting)}{' '}
-                  {e.parentSignup.code && (
-                    <strong className="tj-code" dir="ltr" aria-live="polite">{e.parentSignup.code}</strong>
+              {signup.state === 'not_started' && !attempts?.locked && <span className="ts-muted ns-note">{tx(S.notStarted)}</span>}
+              {signup.state === 'code_waiting' && (
+                <div className="ns-code">
+                  <span className="ns-note">{tx(S.codeWaiting)}</span>
+                  {signup.code && (
+                    <strong className="ns-code__value" dir="ltr" aria-live="polite" aria-label={`${tx(NS.codeLabel)} ${signup.code.split('').join(' ')}`}>
+                      {signup.code}
+                    </strong>
                   )}
-                  {e.parentSignup.expiresAt && (
+                  <span className="ts-muted ns-note">{tx(NS.codeValid)}</span>
+                  {signup.code && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={pending}
+                      title={tx(NS.invalidateHint)}
+                      onClick={() => void signupAction(() => trialsApi.invalidateSignupCode(s.trialId), tx(NS.invalidated))}
+                    >
+                      {tx(NS.invalidate)}
+                    </button>
+                  )}
+                </div>
+              )}
+              {attempts && attempts.wrong > 0 && (
+                <div className={attempts.locked ? 'ns-lock ns-lock--on' : 'ns-lock'} role={attempts.locked ? 'status' : undefined}>
+                  {attempts.locked ? (
+                    <span>
+                      <Icon name="lock" size={14} /> {tx(NS.lockedNote)}
+                    </span>
+                  ) : (
                     <span className="ts-muted">
-                      {' '}
-                      ({tx(S.codeExpires)}{' '}
-                      {new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).format(new Date(e.parentSignup.expiresAt))})
+                      {tx(NS.wrongTries)}: {number(attempts.wrong)} / {number(attempts.cap)}
                     </span>
                   )}
-                </span>
+                  <button
+                    type="button"
+                    className={attempts.locked ? 'btn btn--sm btn--primary' : 'btn btn--sm'}
+                    disabled={pending}
+                    onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
+                  >
+                    {tx(NS.reset)}
+                  </button>
+                </div>
               )}
             </dd>
           </div>
