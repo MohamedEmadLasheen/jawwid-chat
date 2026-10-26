@@ -78,6 +78,25 @@ export interface NewFamilyGroup {
   title?: string
 }
 
+/** PD-35: a teacher and their supervisor in the Teachers department. */
+export interface TeacherAssignment {
+  id: string
+  name: string
+  isActive: boolean
+  supervisor: { id: string; name: string } | null
+  assignedAt: string | null
+}
+
+export interface TeacherAssignments {
+  /** TEACHER_SUPERVISOR_STRICT_SCOPE on this deployment: supervisors work on their own teachers only. */
+  strictScope: boolean
+  /** Active teachers with no supervisor. */
+  unassigned: number
+  teachers: TeacherAssignment[]
+  /** The Teachers department's primary supervisors. */
+  supervisors: Array<{ id: string; name: string }>
+}
+
 export const orgApi = {
   structure: () => api.get<{ departments: Department[] }>('/org/structure'),
   learners: () => api.get<{ learners: LearnerAssignment[] }>('/org/learners'),
@@ -97,10 +116,15 @@ export const orgApi = {
   endBackup: (id: string, body: { reason: string }) => api.post(`/org/backups/${encodeURIComponent(id)}/end`, body),
   groupCandidates: () => api.get<{ families: CandidateFamily[] }>('/org/group-candidates'),
   createFamilyGroup: (body: NewFamilyGroup) => api.post<ChatConversation>('/conversations/family-group', body),
+  /** PD-35: the Teachers Manager's and the super admin's. */
+  teacherAssignments: () => api.get<TeacherAssignments>('/org/teacher-assignments'),
+  assignTeacher: (teacherId: string, supervisorId: string | null) =>
+    api.post<{ teacherId: string; supervisorId: string | null }>(`/org/teachers/${encodeURIComponent(teacherId)}/supervisor`, { supervisorId }),
 }
 
 export const orgKeys = {
   structure: ['org', 'structure'] as const,
   learners: ['org', 'learners'] as const,
   candidates: ['org', 'group-candidates'] as const,
+  teacherAssignments: ['org', 'teacher-assignments'] as const,
 }

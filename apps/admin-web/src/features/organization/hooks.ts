@@ -10,6 +10,19 @@ export function useLearners(enabled: boolean) {
   return useQuery({ queryKey: orgKeys.learners, queryFn: orgApi.learners, enabled, staleTime: 30_000 })
 }
 
+/** PD-35: every teacher with their supervisor (the Teachers Manager and the super admin). */
+export function useTeacherAssignments(enabled: boolean) {
+  return useQuery({ queryKey: orgKeys.teacherAssignments, queryFn: orgApi.teacherAssignments, enabled, staleTime: 30_000 })
+}
+
+export function useAssignTeacher() {
+  const done = useInvalidateOrg()
+  return useMutation({
+    mutationFn: (v: { teacherId: string; supervisorId: string | null }) => orgApi.assignTeacher(v.teacherId, v.supervisorId),
+    onSuccess: done,
+  })
+}
+
 export function useGroupCandidates() {
   return useQuery({ queryKey: orgKeys.candidates, queryFn: orgApi.groupCandidates, staleTime: 30_000 })
 }
