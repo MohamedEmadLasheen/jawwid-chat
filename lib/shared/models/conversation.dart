@@ -63,6 +63,17 @@ class LearnerRef {
   final String? avatarUrl;
 }
 
+/// PD-33: the supervisor here is away and a backup covers for them until [until]
+/// ("Amira is covering for Noura until 3 Nov"). Straight from the server's
+/// `cover`; the client never works it out.
+class ConversationCover {
+  const ConversationCover({required this.supervisorName, required this.coverName, required this.until});
+
+  final String supervisorName;
+  final String coverName;
+  final DateTime until;
+}
+
 class Conversation {
   const Conversation({
     required this.id,
@@ -86,6 +97,7 @@ class Conversation {
     this.namedByServer = false,
     this.themeKey,
     this.wallpaperUrl,
+    this.cover,
   });
 
   final String id;
@@ -147,6 +159,9 @@ class Conversation {
   /// The viewer's OWN wallpaper photo for this chat, a link signed for them.
   final String? wallpaperUrl;
 
+  /// PD-33: who covers for the away supervisor here, and until when; null when nobody.
+  final ConversationCover? cover;
+
   bool get hasUnread => unreadCount > 0;
 
   /// The name to show: the server's title, except for a supervision conversation, which
@@ -187,6 +202,7 @@ class Conversation {
       namedByServer: namedByServer,
       themeKey: themeKey ?? this.themeKey,
       wallpaperUrl: wallpaperUrl ?? this.wallpaperUrl,
+      cover: cover,
     );
   }
 }

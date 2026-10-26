@@ -1843,6 +1843,42 @@ abstract class L10n {
   /// **'A child of this group moved to another supervisor'**
   String get systemGroupLearnerDetached;
 
+  /// No description provided for @systemCoverStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover} is covering for {supervisor} until {date}'**
+  String systemCoverStarted(String cover, String supervisor, String date);
+
+  /// No description provided for @systemCoverExtended.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover}\'s cover for {supervisor} is extended until {date}'**
+  String systemCoverExtended(String cover, String supervisor, String date);
+
+  /// No description provided for @systemCoverEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'{supervisor} is back; the cover has ended'**
+  String systemCoverEnded(String supervisor);
+
+  /// No description provided for @systemCoverStartedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'A backup supervisor is covering'**
+  String get systemCoverStartedNoName;
+
+  /// No description provided for @systemCoverEndedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'The cover has ended'**
+  String get systemCoverEndedNoName;
+
+  /// No description provided for @conversationCoverLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover} is covering for {supervisor} until {date}'**
+  String conversationCoverLine(String cover, String supervisor, String date);
+
   /// No description provided for @systemUpdate.
   ///
   /// In en, this message translates to:
