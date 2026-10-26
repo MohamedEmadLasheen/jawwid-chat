@@ -220,8 +220,10 @@ class _ScheduleList extends StatelessWidget {
     final items = <Widget>[?header];
     // Earlier days hold only lessons still owed a report: one section on top, newest
     // first, before the days to come.
+    // Today's midnight in the ACCOUNT's zone (PD-22), as an instant: the device's
+    // own midnight would put an early lesson on the wrong side of "today".
     final now = AppClock.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = AppClock.wallClock(now.year, now.month, now.day);
     final owed = [
       for (final l in sorted.reversed)
         if (l.startsAt.isBefore(today)) l,
