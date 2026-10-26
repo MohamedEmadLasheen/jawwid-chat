@@ -509,7 +509,9 @@ export function systemText(body: string | null, copy: ChatCopy): string {
   try {
     parsed = body ? (JSON.parse(body) as Record<string, unknown>) : {}
   } catch {
-    return copy.system.fallback!({})
+    // A card the system posted (PD-11 / PD-30: "the lessons are paused", "back
+    // on") carries its own words, not a { kind } event: show them as written.
+    return body && body.trim() !== '' ? body : copy.system.fallback!({})
   }
   const render = copy.system[String(parsed.kind)] ?? copy.system.fallback!
   return render(parsed)

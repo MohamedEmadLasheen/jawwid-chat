@@ -88,6 +88,7 @@ export class PayLinkController {
       label: request.label,
       purpose: request.purpose,
       planMonths: request.planMonths,
+      lessonsIncluded: request.lessonsIncluded,
       periodStart: request.periodStart?.toISOString().slice(0, 10) ?? null,
       periodEnd: request.periodEnd?.toISOString().slice(0, 10) ?? null,
       amountMinor: amount,

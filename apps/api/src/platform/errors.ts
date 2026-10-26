@@ -282,6 +282,18 @@ export enum CommErrorCode {
   BILLING_STATE = 'COMM.BILLING_STATE',
   /** PD-27: card payments are not configured on this deployment (no STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET). 503. */
   PAYMENTS_UNAVAILABLE = 'COMM.PAYMENTS_UNAVAILABLE',
+  /**
+   * PD-30: the child's group is read-only for the parent and the teacher -- the
+   * subscription's lessons are used up (after the grace lessons) or an
+   * instalment is overdue. Staff still write; the parent's direct chat with
+   * their supervisor is never locked. Also refuses calls in the group and
+   * booking a lesson for the child. 403. Retry after paying.
+   */
+  SUBSCRIPTION_LOCKED = 'COMM.SUBSCRIPTION_LOCKED',
+  /** PD-30: granting or revoking an exception is the super admin's, the Operations Manager's and the Sales Manager's alone; the ledger is the payment recorders'. 403. */
+  SUBSCRIPTION_DENIED = 'COMM.SUBSCRIPTION_DENIED',
+  /** PD-30: already voided / revoked, or a renewal was already asked for today. 409. */
+  SUBSCRIPTION_STATE = 'COMM.SUBSCRIPTION_STATE',
   /** PD-17: Parent Profiles are the administration's -- Operations (in scope), the Operations Manager and the super admin. Never a teacher. 403. */
   PARENT_PROFILE_DENIED = 'COMM.PARENT_PROFILE_DENIED',
   /** PD-17: no such parent in the caller's organization, or none this caller may see. 404. */

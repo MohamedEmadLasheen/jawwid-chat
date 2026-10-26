@@ -46,6 +46,8 @@ export interface PaymentRequest {
   child: Child | null
   instalmentId: string | null
   planMonths: PlanMonths | null
+  /** PD-30: the lessons a subscription / renewal buys. */
+  lessonsIncluded?: number | null
   periodStart: string | null
   periodEnd: string | null
   expiresAt: string

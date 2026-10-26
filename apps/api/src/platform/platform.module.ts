@@ -9,6 +9,7 @@ import { PrismaRelationshipService } from './relationship.service';
 import { RealtimeRevocationHub } from './realtime-revocation';
 import { SqlStaffScope } from './staff-scope';
 import { TimeZoneService } from './time-zone.service';
+import { SqlSubscriptionLock } from './subscription-lock';
 import {
   AUDIT_SERVICE,
   COVERAGE_SERVICE,
@@ -16,6 +17,7 @@ import {
   REALTIME_REVOCATION,
   RELATIONSHIP_SERVICE,
   STAFF_SCOPE,
+  SUBSCRIPTION_LOCK,
 } from './tokens';
 
 /**
@@ -38,6 +40,8 @@ import {
     { provide: AUDIT_SERVICE, useClass: PrismaAuditService },
     // PD-8. The staff conversation scope; the rule itself is SQL.
     { provide: STAFF_SCOPE, useClass: SqlStaffScope },
+    // PD-30. Whether a child's group is locked for payment; the state is SQL.
+    { provide: SUBSCRIPTION_LOCK, useClass: SqlSubscriptionLock },
     // PD-6. The ONE place the teacher<->parent relationship is resolved.
     // ConversationService, MessageService and CallService read it through this
     // token and hand the resolved boolean to AuthorizationService, which stays
@@ -58,6 +62,7 @@ import {
     AUDIT_SERVICE,
     RELATIONSHIP_SERVICE,
     STAFF_SCOPE,
+    SUBSCRIPTION_LOCK,
     RealtimeRevocationHub,
     REALTIME_REVOCATION,
   ],

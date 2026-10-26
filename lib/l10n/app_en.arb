@@ -1546,6 +1546,191 @@
   "billingDeniedTitle": "Payments are shown to the family's parents",
   "billingDeniedBody": "If you have a question, ask the academy.",
   "tabPayments": "Payments",
+  "tabSubscriptions": "Subscriptions",
+  "@tabSubscriptions": {
+    "description": "PD-30: the parent's bottom tab and screen for each child's subscription and the family's payments."
+  },
+  "subscriptionMonthCount": "{months, plural, =1{1 Month} other{{months} Months}}",
+  "@subscriptionMonthCount": {
+    "description": "PD-30: a plan's length, as in \"3 Months — 24 Lessons\".",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "subscriptionLessonCount": "{count, plural, =1{1 Lesson} other{{count} Lessons}}",
+  "@subscriptionLessonCount": {
+    "description": "PD-30: a plan's lessons, as in \"3 Months — 24 Lessons\".",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subscriptionPlanLessons": "{months} — {lessons}",
+  "@subscriptionPlanLessons": {
+    "description": "PD-30: a plan's length beside its lessons: \"3 Months — 24 Lessons\".",
+    "placeholders": {
+      "months": {
+        "type": "String"
+      },
+      "lessons": {
+        "type": "String"
+      }
+    }
+  },
+  "subscriptionNone": "No subscription yet",
+  "@subscriptionNone": {
+    "description": "PD-30: a child with no subscription on record."
+  },
+  "subscriptionLessonsLeft": "{count, plural, =0{No lessons left} =1{1 lesson left} other{{count} lessons left}}",
+  "@subscriptionLessonsLeft": {
+    "description": "PD-30: a child's lessons left in their subscriptions.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subscriptionGraceLeft": "{count, plural, =0{No grace lessons left} =1{1 grace lesson left} other{{count} grace lessons left}}",
+  "@subscriptionGraceLeft": {
+    "description": "PD-30: lessons used up; the lessons that may still happen while renewal is awaited.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subscriptionStateOpen": "Active",
+  "@subscriptionStateOpen": {
+    "description": "PD-30: a child's subscription chip: lessons go on."
+  },
+  "subscriptionStateGrace": "Renewal due",
+  "@subscriptionStateGrace": {
+    "description": "PD-30: a child's subscription chip: lessons used up, grace lessons left."
+  },
+  "subscriptionStateLocked": "Paused",
+  "@subscriptionStateLocked": {
+    "description": "PD-30: a child's subscription chip: locked for payment."
+  },
+  "subscriptionLessonsUsedUp": "Lessons used up",
+  "@subscriptionLessonsUsedUp": {
+    "description": "PD-30: why a child is locked: the subscription's lessons are used up."
+  },
+  "subscriptionOverdueSince": "Instalment {label} overdue since {date}",
+  "@subscriptionOverdueSince": {
+    "description": "PD-30: why a child is locked: an instalment unpaid since the day after its due date.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "subscriptionRequestRenewal": "Request renewal",
+  "@subscriptionRequestRenewal": {
+    "description": "PD-30: a locked child with nothing to pay yet: ask the academy to renew."
+  },
+  "subscriptionRenewalRequested": "Renewal requested",
+  "@subscriptionRenewalRequested": {
+    "description": "PD-30: the renewal was asked for today."
+  },
+  "lockBannerTitle": "Lessons are paused",
+  "@lockBannerTitle": {
+    "description": "PD-30: the banner that replaces the composer in a group locked for payment."
+  },
+  "lockBannerChildBalance": "{name}: lessons used up",
+  "@lockBannerChildBalance": {
+    "description": "PD-30: the locked banner, a parent's line: the child's lessons are used up.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lockBannerChildOverdue": "{name}: instalment {label} overdue since {date}",
+  "@lockBannerChildOverdue": {
+    "description": "PD-30: the locked banner, a parent's line: an instalment is overdue.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "label": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "lockBannerChildPaused": "{name}'s lessons are paused",
+  "@lockBannerChildPaused": {
+    "description": "PD-30: the locked banner, a teacher's line: no reason, nothing financial.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lockBannerGeneric": "This group is paused for now.",
+  "@lockBannerGeneric": {
+    "description": "PD-30: the locked banner when the server refused a send but named no child."
+  },
+  "lockBannerOpenSubscriptions": "Go to Subscriptions",
+  "@lockBannerOpenSubscriptions": {
+    "description": "PD-30: the locked banner's button for a parent."
+  },
+  "reportLessonOf": "Lesson {number} of {total}",
+  "@reportLessonOf": {
+    "description": "PD-30: the report's lesson number within the child's subscription.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "cardLessonNumberOf": "{number} of {total}",
+  "@cardLessonNumberOf": {
+    "description": "PD-30: a report card's lesson number within the subscription.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "outcomeSuspended": "Suspended",
+  "@outcomeSuspended": {
+    "description": "PD-30: a Schedule lesson suspended."
+  },
+  "outcomeSuspendedPayment": "Suspended — payment",
+  "@outcomeSuspendedPayment": {
+    "description": "PD-30: a Schedule lesson the system suspended while the child's group is locked for payment. No amount, no reason."
+  },
+  "cardLessonsPausedTitle": "Lessons paused",
+  "@cardLessonsPausedTitle": {
+    "description": "PD-30: the group card when a child's lessons are paused (no reason)."
+  },
+  "cardSubscriptionLockedTitle": "Lessons paused — payment",
+  "@cardSubscriptionLockedTitle": {
+    "description": "PD-30: the family's direct-chat card when a child is locked."
+  },
+  "cardSubscriptionLockedHint": "Renew or pay in Subscriptions.",
+  "@cardSubscriptionLockedHint": {
+    "description": "PD-30: where to pay, on the locked card."
+  },
+  "cardSubscriptionUnlockedTitle": "Lessons are back on",
+  "@cardSubscriptionUnlockedTitle": {
+    "description": "PD-30: the group card when a locked child's lessons resume."
+  },
   "roleSales": "Sales",
   "roleSuperAdmin": "Super admin",
   "conversationsEmptyBodySales": "Trial groups and your conversations will appear here.",

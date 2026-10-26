@@ -74,6 +74,46 @@ class ConversationCover {
   final DateTime until;
 }
 
+/// PD-30: a family / student group locked for payment, as `GET /conversations/:id`
+/// describes it to THIS viewer (`paymentLock`). Null when nothing is locked, when
+/// enforcement is off, or from a server that predates PD-30.
+///
+/// ADVISORY. The server refuses every send, reaction and call on its own
+/// (`COMM.SUBSCRIPTION_LOCKED`); this only decides what the screen draws.
+class PaymentLock {
+  const PaymentLock({required this.readOnly, required this.canPay, this.children = const []});
+
+  /// The viewer's: a parent and a teacher may not write; staff still may.
+  final bool readOnly;
+
+  /// A parent: offer the way to Subscriptions.
+  final bool canPay;
+
+  /// Each locked child. A teacher's carry no reasons (nothing financial).
+  final List<LockedChild> children;
+}
+
+/// One child whose lessons are paused.
+class LockedChild {
+  const LockedChild({
+    required this.id,
+    required this.name,
+    this.reasons = const [],
+    this.overdueLabel,
+    this.overdueDueDate,
+  });
+
+  final String id;
+  final String name;
+
+  /// `balance` / `overdue`; empty for a teacher.
+  final List<String> reasons;
+  final String? overdueLabel;
+
+  /// The instalment's due day; it is overdue from the day after.
+  final DateTime? overdueDueDate;
+}
+
 class Conversation {
   const Conversation({
     required this.id,
@@ -98,6 +138,7 @@ class Conversation {
     this.themeKey,
     this.wallpaperUrl,
     this.cover,
+    this.paymentLock,
   });
 
   final String id;
@@ -161,6 +202,8 @@ class Conversation {
 
   /// PD-33: who covers for the away supervisor here, and until when; null when nobody.
   final ConversationCover? cover;
+  /// PD-30: the group is locked for payment (only `GET /conversations/:id` says so).
+  final PaymentLock? paymentLock;
 
   bool get hasUnread => unreadCount > 0;
 
@@ -203,6 +246,7 @@ class Conversation {
       themeKey: themeKey ?? this.themeKey,
       wallpaperUrl: wallpaperUrl ?? this.wallpaperUrl,
       cover: cover,
+      paymentLock: paymentLock,
     );
   }
 }

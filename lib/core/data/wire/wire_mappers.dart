@@ -325,6 +325,41 @@ abstract final class WireMappers {
       // Sales sees every teacher's trial group; the server's title (the teacher's name)
       // is what tells them apart, so it is not replaced by "Trial lessons".
       namedByServer: viewerRole == UserRole.sales,
+      paymentLock: paymentLock(json['paymentLock']),
+    );
+  }
+
+  /// PD-30: `paymentLock` off `GET /conversations/:id`. Absent, null or malformed reads
+  /// as not locked -- the server refuses a locked send on its own, and the screen then
+  /// learns of the lock from that refusal.
+  static PaymentLock? paymentLock(Object? raw) {
+    if (raw is! Map) return null;
+    final children = <LockedChild>[];
+    for (final c in (raw['children'] is List ? raw['children'] as List : const [])) {
+      if (c is! Map) continue;
+      final id = c['id'];
+      if (id is! String || id.isEmpty) continue;
+      final overdue = c['overdue'] is Map ? c['overdue'] as Map : null;
+      final due = overdue?['dueDate'];
+      final dueMatch = due is String ? RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(due) : null;
+      children.add(LockedChild(
+        id: id,
+        name: c['name'] is String ? c['name'] as String : '',
+        reasons: [
+          if (c['reasons'] is List)
+            for (final r in c['reasons'] as List)
+              if (r is String) r,
+        ],
+        overdueLabel: overdue?['label'] is String ? overdue!['label'] as String : null,
+        overdueDueDate: dueMatch == null
+            ? null
+            : DateTime(int.parse(dueMatch[1]!), int.parse(dueMatch[2]!), int.parse(dueMatch[3]!)),
+      ));
+    }
+    return PaymentLock(
+      readOnly: raw['readOnly'] == true,
+      canPay: raw['canPay'] == true,
+      children: children,
     );
   }
 

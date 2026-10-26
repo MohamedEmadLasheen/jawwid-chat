@@ -265,6 +265,9 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           PAYMENT_LINK_BASE_URL: ${{ vars.PAYMENT_LINK_BASE_URL }}
+          # PD-30: the payment lock is on in staging, off in production until the owner
+          # sets the production variable to 'true'.
+          SUBSCRIPTION_LOCK_ENFORCED: ${{ vars.SUBSCRIPTION_LOCK_ENFORCED || 'true' }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           OTEL_SERVICE_NAME: jawwid-chat-api
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}

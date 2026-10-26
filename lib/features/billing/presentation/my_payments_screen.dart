@@ -20,6 +20,7 @@ import '../domain/money_format.dart';
 import 'bank_transfer_screen.dart';
 import 'pay_sheet.dart';
 import 'payment_sections.dart';
+import 'subscription_cards.dart';
 
 /// PD-17: "Payments" -- the parent's own plan, what has been paid and what is still
 /// owed, then every instalment in due-date order.
@@ -34,8 +35,14 @@ import 'payment_sections.dart';
 /// marks anything paid: after a card checkout the screen re-reads on return to the app
 /// and says "we're confirming your payment" until the server -- from Stripe's verified
 /// webhook -- answers that it is paid.
+///
+/// PD-30 makes this the parent's **Subscriptions** tab: a card per child (plan, lessons
+/// left, grace, locked and why -- with Pay or Request renewal) above everything above.
 class MyPaymentsScreen extends ConsumerStatefulWidget {
-  const MyPaymentsScreen({super.key});
+  const MyPaymentsScreen({super.key, this.focusChildId});
+
+  /// Opened at this child's card (the locked banner's "Go to Subscriptions").
+  final String? focusChildId;
 
   /// How often, and for how long, a confirming payment is re-read after the parent
   /// comes back from the payment page.
@@ -53,6 +60,14 @@ class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
   Timer? _poll;
   var _polls = 0;
 
+  /// PD-30: children whose renewal was asked for in this session, and the one in flight.
+  final _renewalRequested = <String>{};
+  String? _requesting;
+  final _scroll = ScrollController();
+  final _dueSection = GlobalKey();
+  final _childCards = <String, GlobalKey>{};
+  bool _focusDone = false;
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +78,72 @@ class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
   void dispose() {
     _poll?.cancel();
     _lifecycle.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  GlobalKey _cardKey(String childId) => _childCards.putIfAbsent(childId, GlobalKey.new);
+
+  /// PD-30: a locked child's Pay -- what can be paid is listed under "Amount due", so go
+  /// there.
+  Future<void> _jumpToDue() => _scrollTo(_dueSection, animate: true);
+
+  /// Bring [key]'s widget into view. The list builds lazily, so step down until it has
+  /// been built.
+  Future<void> _scrollTo(GlobalKey key, {bool animate = false}) async {
+    for (var i = 0; i < 20; i++) {
+      if (!mounted) return;
+      final target = key.currentContext;
+      if (target != null && target.mounted) {
+        await Scrollable.ensureVisible(
+          target,
+          alignment: animate ? 0 : 0.1,
+          duration: animate ? const Duration(milliseconds: 300) : Duration.zero,
+          curve: Curves.easeOut,
+        );
+        return;
+      }
+      if (!_scroll.hasClients) return;
+      final position = _scroll.position;
+      if (position.pixels >= position.maxScrollExtent) return;
+      _scroll.jumpTo((position.pixels + position.viewportDimension).clamp(0, position.maxScrollExtent));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  /// Opened at a child (the locked banner): bring their card into view once it is drawn.
+  void _focusChild(ParentBilling billing) {
+    final id = widget.focusChildId;
+    if (_focusDone || id == null) return;
+    _focusDone = true;
+    if (!billing.subscriptions.any((s) => s.childId == id)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_scrollTo(_cardKey(id)));
+    });
+  }
+
+  /// PD-30: "Request renewal" -- once per child per academy day. A second request the
+  /// same day (409 `COMM.SUBSCRIPTION_STATE`) means it is already asked for: said as
+  /// such, not as an error.
+  Future<void> _requestRenewal(ChildSubscription s) async {
+    if (_requesting != null) return;
+    setState(() => _requesting = s.childId);
+    try {
+      await ref.read(billingRepositoryProvider).requestRenewal(s.childId);
+      if (!mounted) return;
+      setState(() => _renewalRequested.add(s.childId));
+      unawaited(_refresh());
+    } catch (error) {
+      if (!mounted) return;
+      final appError = asAppErrorOf(error);
+      if (appError.code == BillingErrors.subscriptionState) {
+        setState(() => _renewalRequested.add(s.childId));
+      } else {
+        _snack(billingFailureText(appError, L10n.of(context)));
+      }
+    } finally {
+      if (mounted) setState(() => _requesting = null);
+    }
   }
 
   Future<void> _refresh() => ref.refresh(myBillingProvider.future).then((_) {}, onError: (_) {});
@@ -134,22 +214,39 @@ class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.myPaymentsTitle)),
+      appBar: AppBar(title: Text(l10n.tabSubscriptions)),
       // A pull keeps the list on screen while it reloads (`when` skips the loading
       // state on a refresh); a principal change still blanks it.
       body: state.when(
         loading: () => const JawwidLoadingView(),
         error: (error, _) => _Error(error: error, onRetry: () => ref.invalidate(myBillingProvider)),
-        data: (billing) => RefreshIndicator(
+        data: (billing) {
+          _focusChild(billing);
+          return RefreshIndicator(
           onRefresh: _refresh,
           child: _Body(
             billing: billing,
+            controller: _scroll,
+            dueSectionKey: _dueSection,
+            subscriptions: [
+              for (final s in billing.subscriptions)
+                ChildSubscriptionCard(
+                  key: _cardKey(s.childId),
+                  subscription: s,
+                  focused: s.childId == widget.focusChildId,
+                  renewalRequested: _renewalRequested.contains(s.childId),
+                  requesting: _requesting == s.childId,
+                  onPay: () => unawaited(_jumpToDue()),
+                  onRequestRenewal: () => unawaited(_requestRenewal(s)),
+                ),
+            ],
             confirming: _confirming,
             onPay: (item) => _pay(item, billing),
             onDownload: (invoice) => _open(() => ref.read(billingRepositoryProvider).invoiceLink(invoice.id)),
             onOpenReceipt: (receipt) => _open(() async => receipt.fileUrl!),
           ),
-        ),
+        );
+        },
       ),
     );
   }
@@ -158,6 +255,9 @@ class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
 class _Body extends StatelessWidget {
   const _Body({
     required this.billing,
+    required this.controller,
+    required this.dueSectionKey,
+    required this.subscriptions,
     required this.confirming,
     required this.onPay,
     required this.onDownload,
@@ -165,6 +265,13 @@ class _Body extends StatelessWidget {
   });
 
   final ParentBilling billing;
+  final ScrollController controller;
+
+  /// PD-30: where a locked child's Pay takes the parent.
+  final GlobalKey dueSectionKey;
+
+  /// PD-30: one card per child, above the payments.
+  final List<Widget> subscriptions;
   final Set<String> confirming;
   final ValueChanged<DueItem> onPay;
   final ValueChanged<BillingInvoice> onDownload;
@@ -176,13 +283,21 @@ class _Body extends StatelessWidget {
     final due = amountsDue(billing);
 
     return ListView(
+      controller: controller,
       // Always scrollable, so a short list can still be pulled to refresh.
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsetsDirectional.only(bottom: Spacing.spacing9),
       children: [
+        if (subscriptions.isNotEmpty) ...[
+          const SizedBox(height: Spacing.spacing2),
+          ...subscriptions,
+        ],
         _Summary(billing: billing),
         if (due.isNotEmpty) ...[
-          ProfileSectionHeading(key: const ValueKey('billing-due-section'), text: l10n.billingAmountDueTitle),
+          KeyedSubtree(
+            key: dueSectionKey,
+            child: ProfileSectionHeading(key: const ValueKey('billing-due-section'), text: l10n.billingAmountDueTitle),
+          ),
           for (final item in due)
             DueTile(item: item, confirming: confirming.contains(item.key), onPay: () => onPay(item)),
         ],

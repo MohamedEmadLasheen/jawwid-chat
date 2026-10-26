@@ -25,6 +25,8 @@ export interface PayPageModel {
   label: string;
   purpose: string;
   planMonths: number | null;
+  /** PD-30: the lessons the package includes. */
+  lessonsIncluded?: number | null;
   periodStart: string | null;
   periodEnd: string | null;
   amountMinor: number;
@@ -53,14 +55,14 @@ const T = {
     payCard: 'ادفع بالبطاقة',
     cardNote: 'تتم عملية الدفع بأمان عبر Stripe. لا نحتفظ ببيانات بطاقتك.',
     bankTitle: 'أو حوّل إلى حسابنا البنكي',
-    bankNote: 'بعد التحويل أرسل صورة الإيصال من تطبيق جَوِّد (الإعدادات ← المدفوعات) أو إلى مشرفكم.',
+    bankNote: 'بعد التحويل أرسل صورة الإيصال من تطبيق جَوِّد (الاشتراكات) أو إلى مشرفكم.',
     bankName: 'البنك',
     accountName: 'اسم الحساب',
     iban: 'IBAN',
     accountNumber: 'رقم الحساب',
     swift: 'SWIFT',
     expires: 'صالح حتى',
-    statusPaid: 'تم الدفع. شكرًا لكم! ستجدون الفاتورة في تطبيق جَوِّد ضمن المدفوعات.',
+    statusPaid: 'تم الدفع. شكرًا لكم! ستجدون الفاتورة في تطبيق جَوِّد ضمن الاشتراكات.',
     statusCancelled: 'تم إلغاء طلب الدفع هذا. تواصلوا مع مشرفكم للحصول على رابط جديد.',
     statusExpired: 'انتهت صلاحية رابط الدفع. تواصلوا مع مشرفكم للحصول على رابط جديد.',
     statusNotFound: 'رابط الدفع غير صحيح. تأكدوا من نسخ الرابط كاملًا.',
@@ -68,6 +70,7 @@ const T = {
     cancelledCheckout: 'لم تكتمل عملية الدفع. يمكنكم المحاولة مرة أخرى.',
     other: 'English',
     months: (n: number) => (n === 1 ? 'شهر واحد' : n === 12 ? 'سنة' : `${n} أشهر`),
+    lessons: (n: number) => (n === 1 ? 'حصة واحدة' : n === 2 ? 'حصتان' : n <= 10 ? `${n} حصص` : `${n} حصة`),
     purposes: { subscription: 'اشتراك', renewal: 'تجديد الباقة', instalment: 'قسط', balance: 'رصيد مستحق', other: 'دفعة' } as Record<string, string>,
   },
   en: {
@@ -83,14 +86,14 @@ const T = {
     payCard: 'Pay by card',
     cardNote: 'Payments are processed securely by Stripe. We never store your card details.',
     bankTitle: 'Or transfer to our bank account',
-    bankNote: 'After transferring, send a photo of the receipt from the Jawwid app (Settings → Payments) or to your supervisor.',
+    bankNote: 'After transferring, send a photo of the receipt from the Jawwid app (Subscriptions) or to your supervisor.',
     bankName: 'Bank',
     accountName: 'Account name',
     iban: 'IBAN',
     accountNumber: 'Account number',
     swift: 'SWIFT',
     expires: 'Valid until',
-    statusPaid: 'Paid — thank you! Your invoice is in the Jawwid app under Payments.',
+    statusPaid: 'Paid — thank you! Your invoice is in the Jawwid app under Subscriptions.',
     statusCancelled: 'This payment request was cancelled. Ask your supervisor for a new link.',
     statusExpired: 'This payment link has expired. Ask your supervisor for a new link.',
     statusNotFound: 'This payment link is not valid. Check that the whole link was copied.',
@@ -98,6 +101,7 @@ const T = {
     cancelledCheckout: 'The payment was not completed. You can try again.',
     other: 'العربية',
     months: (n: number) => (n === 1 ? '1 month' : `${n} months`),
+    lessons: (n: number) => (n === 1 ? '1 lesson' : `${n} lessons`),
     purposes: { subscription: 'Subscription', renewal: 'Package renewal', instalment: 'Instalment', balance: 'Outstanding balance', other: 'Payment' } as Record<string, string>,
   },
 };
@@ -118,7 +122,9 @@ export function renderPayPage(m: PayPageModel, lang: PayLang, ctx: { token: stri
   const rows: string[] = [];
   if (m.status !== 'not_found') {
     if (m.childFirstName) rows.push(row(t.student, `<bdi>${e(m.childFirstName)}</bdi>`));
-    if (m.planMonths) rows.push(row(t.package, e(t.months(m.planMonths))));
+    // PD-30: "3 months — 24 lessons".
+    const pkg = [m.planMonths ? t.months(m.planMonths) : null, m.lessonsIncluded ? t.lessons(m.lessonsIncluded) : null].filter((x): x is string => x !== null);
+    if (pkg.length > 0) rows.push(row(t.package, e(pkg.join(' — '))));
     if (m.periodStart || m.periodEnd) rows.push(row(t.period, `<bdi dir="ltr">${e(m.periodStart ?? '…')} → ${e(m.periodEnd ?? '…')}</bdi>`));
     rows.push(row(t.amount, money(m.amountMinor)));
     if (m.paidMinor > 0) rows.push(row(t.paid, money(m.paidMinor)));

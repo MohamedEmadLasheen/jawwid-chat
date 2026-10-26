@@ -63,6 +63,8 @@ export interface GroupLearner {
   birthDate?: string | null
   course: { id: string; name: string } | null
   packageLessons: number | null
+  /** PD-30: the package is the current subscription (Student Profile → Subscription), not typed here. */
+  packageFromSubscription?: boolean
   teacher: { id: string; name: string } | null
   schedule: Array<{ weekday: number; start: string; durationMinutes: number; timezone: string }>
   canEdit: boolean

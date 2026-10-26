@@ -147,6 +147,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 **PD-27 was closed by the product owner on 2026-10-22** (payments: payment links, card payments through Stripe, bank-transfer receipts, cash, invoices, instalment reminders). It builds on PD-17.
 **PD-28 was closed by the product owner on 2026-10-24** (teachers use their portal in a laptop browser: the same app and the same account, teacher-only on the web for now). It extends PD-23's browser session rules to teachers.
+**PD-30 was closed by the department head on 2026-10-26** at the owner's request (subscriptions carry lessons; a child's group locks when they are used up or an instalment is overdue; three roles grant exceptions). It builds on PD-15, PD-17 and PD-27.
 **PD-31 was closed on 2026-10-26** (scheduling made direct: time chips, a child's schedule, moving one lesson or every week, changing the teacher).
 
 | ID | Subject | Status |
@@ -179,6 +180,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 | **PD-27** | **Payments: links, card, bank transfer, cash, invoices, reminders** (2026-10-22) | **CLOSED** — a payment request carries a unique link that works before the parent has an account; card payments through Stripe Checkout are recorded only from a verified webhook, exactly once; parents upload bank-transfer receipts that staff approve or reject with a reason; staff record cash; instalments may be paid in part and by several methods; every payment issues a numbered invoice the parent downloads as a PDF; a trial's payments move onto the family at Assign; append-only, audited, reminders before and after the due date |
 | **PD-28** | **The teacher portal in a browser** (2026-10-24) | **CLOSED** — a teacher signs in at Admin Web's address under `/teacher/` with the same account and gets the same portal as on the phone (the Flutter app built for the web, nothing rebuilt); only teachers on the web for now, everyone else is told to use the app (or Admin Web for staff); the browser keeps the session as Admin Web does (this tab only, or "keep me signed in" on this device) with Admin Web's lifetimes (12 h / 7 d, kept signed in 7 d / 30 d); no push, app lock or voice-note recording in the browser. Record: `../mobile/teacher-web-portal.md` |
+| **PD-30** | **Subscriptions, lesson balance, the payment lock and its exceptions** (2026-10-26) | **CLOSED** — each subscription says how many lessons it includes; held lessons and no-shows use them; two grace lessons follow, then the child's group is read-only for the parent and the teacher (staff still write; the parent's chat with the supervisor never locks), calls and bookings are refused and the lessons are put on hold; an instalment unpaid after its due date locks the same way; paying unlocks at once; the super admin, the Operations Manager and the Sales Manager grant dated exceptions; the parent's app gets a Subscriptions tab; the report says "Lesson N of M". Record: `../admin/pd030-subscriptions.md` |
 | **PD-31** | **Scheduling made direct** (2026-10-26) | **CLOSED** — one time-chip picker everywhere; "Change lesson time" asks "this lesson only" (instant, a new row naming the old, never an apology or a violation; family limits) or "every week" (before → after, from a date; family and teacher request, the Teachers department decides, a request no longer free is flagged first); a weekly lesson the materializer cannot create is listed, never lost; the child's PD-8 supervisor, their backup, the Operations Manager, the Teachers department and the super admin change a group's teacher in one transaction, never dropping weekly times; parents see each child's schedule |
 
 ---
@@ -2688,6 +2690,124 @@ feed the map automatically -- a possible v2.
 **Deprecated behaviour.** None.
 
 **Closed.** 2026-10-24.
+
+---
+
+### PD-30 · Subscriptions, lesson balance, the payment lock and its exceptions
+
+**Closed 2026-10-26** by the department head, at the owner's request, with the
+lock, grace and exception policy the head set (the owner may override it).
+Builds on PD-15 (lesson outcomes, the lesson number), PD-17 (instalments) and
+PD-27 (payment requests, payments).
+
+The owner's request of 2026-10-26 (items 2, 3, 4, 5 and 9 of fourteen): move
+Payments into the parent's bottom navigation as **Subscriptions**
+(الاشتراكات); show each plan's lesson count beside its duration ("3 Months —
+24 Lessons"); when a child's allocated lessons are used up, lock the
+teacher–student group but allow exactly two more lessons while payment is
+awaited; when an instalment is unpaid by its due date, lock the group; some
+parents may continue beyond the limit, an exception only the Super Admin, the
+Operations Manager and the Sales Manager may grant, tracked and enforced; the
+teacher's report shows "Lesson 2 of 24".
+
+**Final decision.**
+
+```
+the ledger          chat.learner_subscription, per child: plan months, lessons
+                    included, start day. Append-only; voided with a reason.
+                    Written when a subscription / renewal request carrying
+                    lessonsIncluded is PAID IN FULL (a database trigger; a void
+                    that leaves it short takes the lessons back), when an
+                    instalment plan is created for a child with lessonsIncluded
+                    (it credits at creation), and -- free lessons, with a reason
+                    -- by the super admin, the Operations Manager or the Sales
+                    Manager ("Add subscription"; the database checks it).
+                    PD-15's package size became each child's first row,
+                    starting the deploy day
+used                the child's regular and make-up lessons whose outcome is
+                    held or student_no_show, from the first subscription's start
+                    day (academy zone). An apology does not count (its make-up
+                    does, when held); nor do teacher absences, cancellations,
+                    suspensions, voided or pending lessons. A query: corrections
+                    move it by themselves
+balance             included - used; grace lessons are taken from the next
+                    subscription
+grace               balance 0: "2 grace lessons left"; -1: "1 left"; -2: locked
+overdue             an instalment of the family (or of this child) due on or
+                    after go-live -- the day enforcement was first switched on
+                    -- unpaid the day after its due date (academy zone):
+                    locked. Older ones are listed for staff (Instalment
+                    Payments, "before go-live"), never locking
+state               open | grace | locked, per child, in chat.learner_access,
+                    recomputed by chat.refresh_learner_access in the SAME
+                    transaction as every lesson outcome, ledger row, exception,
+                    instalment and request change, and by the worker each minute
+locked means        the child's family / student group is read-only for the
+                    parent and the teacher -- messages, reactions, calls (one
+                    rule in canSend, so canCall follows) -- with a banner naming
+                    the child and (parent and staff only) the reason; staff
+                    still write; a DIRECT chat is never locked; no lesson is
+                    booked for the child (make-ups, the Teachers department's);
+                    the child's regular lessons that have not started are
+                    suspended by the system ("Suspended — payment" for staff and
+                    the family, plain "suspended" for the teacher; owed to no
+                    one, counted nowhere) and none is materialized; a group
+                    with several children locks when any one is locked, but
+                    lessons stay per child
+unlocking           the payment, approved receipt or recorded cash that covers it,
+                    or an exception: at once (same transaction); the lessons come
+                    back at the next worker pass, one per regular time
+exceptions          chat.subscription_exception per child: balance | overdue |
+                    both, a reason, valid until a day at most 90 days ahead;
+                    revoked once; append-only; granted and revoked only by the
+                    super admin, the Operations Manager and the Sales Manager;
+                    audited. The parent never sees one
+told                grace: the family's direct chat (parent + supervisor) and a
+                    push to the parents -- never the group, the teacher sees
+                    nothing financial; locked: "paused" in the group (no
+                    reason), why and where to pay in the direct chat, a push;
+                    unlocked: "back on" in the group, a push. Exactly once per
+                    change (chat.learner_access_event)
+renewal request     a locked child with nothing to pay yet: the parent taps
+                    "Request renewal" -- once per child per academy day; a card
+                    in the direct chat, a push to the Sales department, a list
+                    for staff
+Lesson N of M       N = the next lesson's place in the subscription it falls in;
+                    M = that subscription's lessons, kept on the report; past the
+                    last subscription N > M ("Lesson 25 of 24"); no ledger: "Lesson N"
+switch              SUBSCRIPTION_LOCK_ENFORCED: on in staging, off in production
+                    until the owner turns it on. Off = the ledger, the counting,
+                    the state and the screens work; nothing is refused, held or
+                    announced. The first time it is seen on, go-live is
+                    recorded and every family already in grace or locked is
+                    told; holds begin on the next pass
+```
+
+**Implementation phase.** Migration `20261026140000_chat_pd030_subscription_lock`
+(the ledger, exceptions, state and events, renewal requests, the request's and
+the report's new columns, the triggers, system-recorded `suspended`, the
+materializer's hold). `SubscriptionLockReader` (platform), `SubscriptionLedger`
+(billing), `SubscriptionEffects` (worker sweep). Admin Web: the Student
+Profile's Subscription section, Instalment Payments' "before go-live" filter,
+renewal requests, the group banner. App: the Subscriptions tab, the locked
+banner, "Lesson N of M". Contract: `../admin/pd030-subscriptions.md`.
+
+**Consequences.** PD-15's package size is read-only; the ledger is the
+package. A lesson's `suspended` outcome may now be recorded by the system
+(note `subscription`) as well as by staff. PD-4's system messages arrive for
+the first time: in the family's direct chat. The pay page and the app say
+Subscriptions where they said Settings → Payments. Sales' Payments tab is
+unchanged.
+
+**Deprecated behaviour.** The parent's Settings → Payments entry (the screen
+moved to the Subscriptions tab).
+
+**Defaults adopted at closing** (the owner may override without reopening PD-30):
+1. Make-ups already booked before a lock are not suspended (they replace a
+   lesson already owed); only regular lessons are held.
+2. Two grace lessons (`subscription.grace_lessons` in chat.config).
+
+**Closed.** 2026-10-26.
 
 ---
 

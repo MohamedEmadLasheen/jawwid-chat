@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { planLabel } from '@/features/profiles/copy'
+import { packageLabel } from '@/features/subscriptions/copy'
 import type { InvoiceStatus, Payment, PaymentRequest, ReceiptStatus, RequestStatus } from './api'
 import {
   INVOICE_STATUS,
@@ -242,7 +242,8 @@ function RequestItem({ request: r, canCancel, onCancel }: { request: PaymentRequ
       <p className="pf-entry__meta pf-amount">{tx(PAY.amountLine, { amount: money(r.amountMinor), paid: money(r.paidMinor), remaining: money(r.remainingMinor) })}</p>
       <div className="pf-entry__meta">
         {r.child && <span dir="auto">{r.child.name}</span>}
-        {r.planMonths && <span>{planLabel(r.planMonths, locale)}</span>}
+        {/* PD-30 (3): "3 months — 24 lessons". */}
+        {(r.planMonths || r.lessonsIncluded) && <span>{packageLabel(r.planMonths, r.lessonsIncluded, locale)}</span>}
         {r.periodStart && r.periodEnd && <span>{tx(PAY.period, { from: formatDay(r.periodStart, locale), to: formatDay(r.periodEnd, locale) })}</span>}
         {open && <span>{tx(PAY.expires, { date: dateTime(r.expiresAt) })}</span>}
         {r.createdBy && <span dir="auto">{tx(PAY.createdBy, { name: r.createdBy.name })}</span>}

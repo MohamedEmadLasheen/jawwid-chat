@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States
 import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatConversation, type ChatMessage, type UploadedAttachment } from './chatApi'
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type EditTarget, type ReplyTarget } from './ChatComposer'
+import { PaymentLockBanner } from '@/features/subscriptions/PaymentLockBanner'
 import { ForwardDialog } from './ForwardDialog'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ExportDialog } from './ExportDialog'
@@ -634,6 +635,9 @@ export function ChatThread({
           {notice}
         </div>
       )}
+
+      {/* PD-30: read-only for the parent and the teacher; staff still write. */}
+      <PaymentLockBanner lock={details.data?.paymentLock} />
 
       {selecting ? (
         <div className="cw-select-bar" role="toolbar" aria-label={copy.selectedCount(selected.length)}>

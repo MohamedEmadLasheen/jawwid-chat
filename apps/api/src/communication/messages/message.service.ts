@@ -711,6 +711,14 @@ export class MessageService {
         'BR-1: a teacher and a parent communicate only inside the Student Group, never directly',
       );
     }
+    // PD-30: a group locked for payment is read-only for the parent and the
+    // teacher; a reaction is a write.
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: message.conversationId! },
+      select: { id: true, type: true },
+    });
+    const locked = conv ? await this.authz.refusePaymentLockFor(actor, conv) : null;
+    if (locked && !locked.allowed) throw new CommError(locked.code, locked.reason);
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor); // RT-032
       await tx.messageReaction.upsert({
@@ -1283,6 +1291,10 @@ export class MessageService {
     if (!isAuthor && !isManager && !moderating) {
       throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'not the author of this message');
     }
+    // PD-30: a group locked for payment is read-only for the parent and the
+    // teacher -- deleting for everyone is a write too (staff are not asked).
+    const locked = await this.authz.refusePaymentLockFor(actor, conv);
+    if (locked && !locked.allowed) throw new CommError(locked.code, locked.reason);
     if (isAuthor && !isManager) {
       const ageMs = Date.now() - message.createdAt.getTime();
       if (ageMs > windowMinutes * 60_000) {

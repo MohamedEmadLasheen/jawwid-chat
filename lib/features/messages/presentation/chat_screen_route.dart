@@ -106,6 +106,9 @@ class ChatScreenRoute extends ConsumerWidget {
           requiresApproval: value.requiresApproval,
           isReadOnly: value.isReadOnly,
           startVoiceRecording: startVoiceRecording,
+          // PD-30: a parent's way out of a locked group -- the Subscriptions tab, at
+          // the child. `go`, not `push`: Subscriptions is a tab, not a page over this.
+          onOpenSubscriptions: (childId) => context.go(Routes.subscriptionsFor(childId)),
           // PD-20: Sales sees every trial group but must join one to take part in it.
           banner: value.isTrialGroup
               ? TrialGroupJoinBanner(

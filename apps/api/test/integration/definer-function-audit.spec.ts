@@ -46,6 +46,9 @@ const REQUEST_ROLE_ALLOWLIST: Record<string, string> = {
   current_teacher_ids: 'session identity, read by RLS policies',
   current_can_review_teacher_profile: 'policy helper about the caller',
   teacher_profile_organization_id: "policy helper: a profile row's tenant",
+  // 20261026140000 (PD-30) -- the one lock answer, as the department head specified; a request
+  // role learns only about a child of its own family, or (staff) of its own organization:
+  learner_lesson_lock: "PD-30: is this child's lesson-taking locked for payment, scoped to the caller",
 };
 
 let s: Scenario;

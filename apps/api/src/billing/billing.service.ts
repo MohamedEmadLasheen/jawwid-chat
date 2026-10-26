@@ -18,6 +18,7 @@ import { BANK_ACCOUNT_KEY, PaymentLedger, type PaymentMethod } from './payment-l
 import { PaymentsReadService, type MoneyView } from './payments-read.service';
 import { PaymentReminders } from './payment-reminders.service';
 import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
+import { childSubscriptions, forParent } from './subscription-reads';
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 const RESPONSIBLE = ['all', 'me', 'none'] as const;
@@ -59,6 +60,8 @@ export interface InstalmentRow {
   responsibleBasis: 'child' | 'family';
   /** The family's direct conversation this viewer may open, if any. */
   conversationId: string | null;
+  /** PD-30: overdue, but due before the lock's go-live -- it never locks the group. */
+  beforeGoLive: boolean;
 }
 
 /** One row of a family's payment timeline (PD-17). */
@@ -143,17 +146,21 @@ export class BillingService {
    * `responsible`: all (default), me (I am the responsible supervisor), none
    * (no responsible supervisor -- the manager's "No billing supervisor" list).
    */
-  async list(actorId: string, query: { responsible?: string; paid?: string }) {
+  async list(actorId: string, query: { responsible?: string; paid?: string; beforeGoLive?: string }) {
     const { actor, access } = await this.requireReader(actorId);
     const responsible = (query.responsible ?? 'all') as Responsible;
     if (!RESPONSIBLE.includes(responsible)) throw invalid('responsible: all | me | none');
     const includePaid = query.paid === 'true' || query.paid === '1';
+    const beforeGoLive = query.beforeGoLive === 'true' || query.beforeGoLive === '1';
     const org = actor.organizationId as string;
     const today = todayIn(await this.timeZone());
+    // PD-30: only instalments due from this day lock a group when overdue --
+    // the day enforcement was first switched on; null until then (none locks).
+    const lockFrom = (await this.prisma.$queryRaw<{ d: string | null }[]>`SELECT chat.pd030_overdue_from()::text AS d`)[0]?.d ?? null;
 
     const families = await this.familiesInScope(actor, access, org);
     if (families.length === 0) {
-      return { today, canAssignBillingSupervisor: access.canAssign, items: [], counts: emptyCounts() };
+      return { today, lockFrom, canAssignBillingSupervisor: access.canAssign, items: [], counts: emptyCounts() };
     }
     const familyIds = families.map((f) => f.id);
     const familyById = new Map(families.map((f) => [f.id, f]));
@@ -211,6 +218,7 @@ export class BillingService {
         responsibleSupervisor: person(responsibleId),
         responsibleBasis: inv.learnerId ? 'child' : 'family',
         conversationId: conversationOf.get(family.id) ?? null,
+        beforeGoLive: status === 'overdue' && (lockFrom === null || dueDate < lockFrom),
       });
     }
 
@@ -218,6 +226,7 @@ export class BillingService {
     for (const r of rows) {
       counts[r.status] += 1;
       if (!r.responsibleSupervisor && r.status !== 'paid') counts.unassigned += 1;
+      if (r.beforeGoLive) counts.beforeGoLive += 1;
     }
     // PD-33: "mine" is also the rows of every supervisor I cover for right now.
     const mine = new Set([actor.actorId]);
@@ -227,6 +236,7 @@ export class BillingService {
       for (const c of covered) mine.add(c.primary_id);
     }
     const items = rows
+      .filter((r) => !beforeGoLive || r.beforeGoLive)
       .filter((r) =>
         responsible === 'me'
           ? r.responsibleSupervisor !== null && mine.has(r.responsibleSupervisor.id)
@@ -235,7 +245,7 @@ export class BillingService {
             : true,
       )
       .sort(compareInstalments);
-    return { today, canAssignBillingSupervisor: access.canAssign, items, counts };
+    return { today, lockFrom, canAssignBillingSupervisor: access.canAssign, items, counts };
   }
 
   // ------------------------------------------------------------------
@@ -359,6 +369,20 @@ export class BillingService {
       const child = await this.prisma.learner.findFirst({ where: { id: learnerId, familyId: family.id }, select: { id: true } });
       if (!child) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'that child is not in this family');
     }
+    // PD-30: a plan for a child's subscription credits its lessons when it is
+    // created (owner, Q3); its instalments' due dates do the rest.
+    let lessons: { lessonsIncluded: number; planMonths: number | null; startsOn: string } | null = null;
+    if (body.lessonsIncluded !== undefined && body.lessonsIncluded !== null) {
+      const n = body.lessonsIncluded;
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 1000) throw invalid('lessonsIncluded: an integer from 1 to 1000');
+      if (!learnerId) throw invalid('lessonsIncluded: name the child (learnerId) the lessons are for');
+      const pm = body.planMonths;
+      if (pm !== undefined && pm !== null && !(SUBSCRIPTION_PLAN_MONTHS as readonly unknown[]).includes(pm)) throw invalid('planMonths: 1, 3, 6 or 12');
+      const startsOn = body.startsOn === undefined || body.startsOn === null
+        ? (schedule[0] as { dueDate: string }).dueDate
+        : requireDate('startsOn', body.startsOn);
+      lessons = { lessonsIncluded: n, planMonths: (pm as number | null | undefined) ?? null, startsOn };
+    }
 
     const count = schedule.length;
     const planId = count > 1 ? randomUUID() : null;
@@ -376,6 +400,21 @@ export class BillingService {
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       await tx.familyInstalment.createMany({ data: rows });
+      if (lessons && learnerId) {
+        await tx.learnerSubscription.create({
+          data: {
+            organizationId: actor.organizationId as string,
+            learnerId,
+            familyId: family.id,
+            planMonths: lessons.planMonths,
+            lessonsIncluded: lessons.lessonsIncluded,
+            startsOn: new Date(`${lessons.startsOn}T00:00:00Z`),
+            source: 'instalment_plan',
+            planRef: planId ?? (rows[0] as { id: string }).id,
+            createdBy: actor.actorId,
+          },
+        });
+      }
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'instalment.created',
@@ -389,6 +428,7 @@ export class BillingService {
           currency,
           learnerId,
           label,
+          ...(lessons ? { lessons } : {}),
         },
         reason: count > 1 ? 'instalment plan created' : 'instalment created',
       });
@@ -556,6 +596,7 @@ export class BillingService {
       this.reads.forFamily(contact.familyId, contact.organizationId, { actorId, staff: false }),
       this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } }),
     ]);
+    const subscriptions = await this.subscriptionsForParent(contact.familyId, rows, money.requests);
     const learnerIds = [...new Set(rows.flatMap((i) => (i.learnerId ? [i.learnerId] : [])))];
     const learners = await this.prisma.learner.findMany({
       where: { id: { in: learnerIds }, familyId: contact.familyId },
@@ -598,7 +639,34 @@ export class BillingService {
       receipts: money.receipts,
       bankAccount: parseBankAccount(bank?.value),
       cardAvailable: this.stripe.checkoutAvailable,
+      subscriptions,
     };
+  }
+
+  /**
+   * PD-30: each child's subscription as the parent sees it -- plan, lessons,
+   * what is left, the grace lessons, whether the group is locked and why --
+   * never an exception. `hasOpenPayment`: something can be paid for this child
+   * now (an open instalment or request of the child or of the whole family);
+   * without one the app offers "Request renewal" instead of Pay.
+   */
+  private async subscriptionsForParent(
+    familyId: string,
+    instalments: FamilyInstalment[],
+    requests: Array<{ status: string; child: { id: string | null } | null }>,
+  ) {
+    const children = await childSubscriptions(this.prisma, familyId);
+    const renewed = await this.prisma.$queryRaw<{ learner_id: string }[]>`
+      SELECT learner_id::text FROM chat.renewal_request
+       WHERE family_id = ${familyId}::uuid AND requested_on = chat.pd030_today()`;
+    const askedToday = new Set(renewed.map((r) => r.learner_id));
+    return children.map((c) => {
+      const open = (id: string | null) => id === null || id === c.child.id;
+      const hasOpenPayment =
+        instalments.some((i) => !i.paidOn && !i.voidedAt && open(i.learnerId)) ||
+        requests.some((r) => r.status === 'open' && open(r.child?.id ?? null));
+      return { ...forParent(c), hasOpenPayment, renewalRequestedToday: askedToday.has(c.child.id) };
+    });
   }
 
   /** The signed-in parent and their family (PD-17's rule: any active contact of it). */
@@ -771,7 +839,7 @@ export class BillingService {
 }
 
 function emptyCounts() {
-  return { overdue: 0, due: 0, upcoming: 0, paid: 0, unassigned: 0 };
+  return { overdue: 0, due: 0, upcoming: 0, paid: 0, unassigned: 0, beforeGoLive: 0 };
 }
 
 function present(
