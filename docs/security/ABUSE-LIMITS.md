@@ -51,6 +51,15 @@ Every abuse case this product has is an *authorized* action:
 | `abuse.throttle.call_start_actor` | 20 | `POST /calls`, `POST /scheduled-calls/:id/join` |
 | `abuse.realtime.frames_per_socket_per_minute` | 600 | every inbound WebSocket frame |
 
+PD-32 adds three limits counted in the database rather than in the action store,
+because each is a rolling 24-hour count that must survive a Redis restart:
+
+| Key | Default | What |
+|---|---|---|
+| `feedback.limit.per_child_day` | 3 | `POST /me/feedback` about one child, rolling 24 h → `429 COMM.FEEDBACK_LIMIT` |
+| `feedback.limit.per_family_day` | 10 | `POST /me/feedback` by one family, rolling 24 h → `429 COMM.FEEDBACK_LIMIT` |
+| `signup.wrong_codes_per_day` | 10 | wrong parent sign-up codes per e-mail, rolling 24 h, across codes → `403 AUTH.SIGNUP_LOCKED` until the window rolls or staff reset it |
+
 - These are set well above human use on purpose. A limit a busy admin can hit on a
   hard morning gets raised in a panic and then forgotten.
 - Shared budgets are deliberate. A forward is a send. A story upload grant is an
