@@ -450,7 +450,7 @@ export async function legacyHeldMessage(
 
 /** Order matters: children before parents. */
 export async function truncate(prisma: PrismaService): Promise<void> {
-  await prisma.$executeRawUnsafe(`
+  const sql = `
     truncate chat.story_cta_click, chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
              chat.message_receipt, chat.message_reaction, chat.message_attachment,
              chat.message_hidden_for, chat.message_approval, chat.call_participant,
@@ -463,7 +463,24 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.payment_refund, chat.invoice, chat.invoice_counter, chat.payment_checkout,
              chat.payment_receipt, chat.payment, chat.payment_request, chat.stripe_event,
              chat.family_instalment, chat.family_billing, chat.parent_file,
-             chat.actor_time_zone, chat.notification_item, chat.notification_preference,
-             chat.notification_settings, chat.quiet_hours
-    restart identity cascade`);
+             chat.actor_time_zone
+    restart identity cascade`;
+  // A truncate that cannot get its locks is a session another suite left open
+  // in a transaction. Waiting for it hangs every later suite at its hook (seen
+  // in CI, 2026-10-26); failing after a bounded wait names the blocker instead.
+  try {
+    await prisma.$transaction([
+      prisma.$executeRawUnsafe(`set local lock_timeout = '60s'`),
+      prisma.$executeRawUnsafe(sql),
+    ]);
+  } catch (e) {
+    if (!/lock timeout/i.test(String((e as Error).message))) throw e;
+    const blockers = await prisma.$queryRawUnsafe<Array<{ pid: number; state: string; age: string; query: string }>>(
+      `select pid, state, (now() - xact_start)::text as age, left(query, 300) as query
+         from pg_stat_activity
+        where datname = current_database() and pid <> pg_backend_pid() and xact_start is not null
+        order by xact_start`,
+    );
+    throw new Error(`truncate could not lock its tables within 60 s; open transactions: ${JSON.stringify(blockers)}`);
+  }
 }
