@@ -200,3 +200,57 @@ describe('who reaches the page', () => {
     expect(await screen.findByText('Child Alpha')).toBeInTheDocument()
   })
 })
+
+// PD-35: the Teachers Manager assigns each teacher to a teacher supervisor.
+describe('teachers and their supervisors', () => {
+  const TEACHERS: Department = {
+    id: 'dept-t',
+    kind: 'teachers',
+    displayName: 'Teachers',
+    manager: person('mgr-t', 'Teachers Manager', 'manager'),
+    members: [{ ...person('tsup-1', 'Tsup One'), position: 'supervisor', learnerCount: 0 }],
+    backups: [],
+  }
+  const ASSIGNMENTS = {
+    strictScope: false,
+    unassigned: 1,
+    teachers: [
+      { id: 't-1', name: 'Teacher T', isActive: true, supervisor: { id: 'tsup-1', name: 'Tsup One' }, assignedAt: '2026-10-26T08:00:00Z' },
+      { id: 't-2', name: 'Teacher U', isActive: true, supervisor: null, assignedAt: null },
+    ],
+    supervisors: [{ id: 'tsup-1', name: 'Tsup One' }, { id: 'tsup-2', name: 'Tsup Two' }],
+  }
+  const teachersManager = makeStaff({ id: 'mgr-t', name: 'Teachers Manager', role: 'manager' })
+
+  beforeEach(() => {
+    on('GET', /\/org\/structure$/, () => json({ departments: [TEACHERS] }))
+    on('GET', /\/org\/teacher-assignments$/, () => json(ASSIGNMENTS))
+  })
+
+  it('shows every teacher with their supervisor, and how many have none', async () => {
+    renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/organization' })
+    expect(await screen.findByRole('tab', { name: 'Teachers & supervisors', selected: true })).toBeInTheDocument()
+    expect(await screen.findByText(/1 teachers have no supervisor/)).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher T' })).toHaveValue('tsup-1')
+    expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher U' })).toHaveValue('')
+  })
+
+  it('assigns, and takes away, a teacher\'s supervisor', async () => {
+    on('POST', /\/org\/teachers\/t-2\/supervisor$/, () => json({ teacherId: 't-2', supervisorId: 'tsup-2' }))
+    on('POST', /\/org\/teachers\/t-1\/supervisor$/, () => json({ teacherId: 't-1', supervisorId: null }))
+    renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/organization' })
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Supervisor for Teacher U' }), 'tsup-2')
+    await waitFor(() => expect(calls('POST', /\/org\/teachers\/t-2\/supervisor$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/org\/teachers\/t-2\/supervisor$/)[0]!)).toEqual({ supervisorId: 'tsup-2' })
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Supervisor for Teacher T' }), '')
+    await waitFor(() => expect(calls('POST', /\/org\/teachers\/t-1\/supervisor$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/org\/teachers\/t-1\/supervisor$/)[0]!)).toEqual({ supervisorId: null })
+  })
+
+  it('is not offered to a manager of another department', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'other-mgr', role: 'manager' }), route: '/organization' })
+    expect(await screen.findByRole('heading', { level: 2, name: 'Teachers' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Teachers & supervisors' })).not.toBeInTheDocument()
+    expect(calls('GET', /\/org\/teacher-assignments/)).toHaveLength(0)
+  })
+})

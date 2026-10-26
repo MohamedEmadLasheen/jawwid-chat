@@ -290,6 +290,11 @@ export interface ConversationViewerStateDto {
   theme: string | null;
   /** The viewer's OWN wallpaper photo for this chat, as a link signed for them; null when none. */
   wallpaperUrl: string | null;
+  /**
+   * PD-35: the viewer's open visible seat here (joined by choice). Present only
+   * while they hold one -- only staff ever do; absent for everyone else.
+   */
+  seat?: { reason: string; joinedAt: string; effective: boolean };
 }
 
 export interface LastMessageDto {

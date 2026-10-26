@@ -78,8 +78,14 @@ export class StatsService {
     await this.requireStatsReader(actor);
     const period = await this.period(month);
     const org = actor.organizationId as string;
+    // PD-35: the teachers in the caller's scope (every one, with the switch off).
+    const scope = await this.lessons.teacherScope.scopeOf(actor);
     const [teachers, rows, reports, trials, timings, moves] = await Promise.all([
-      this.prisma.teacher.findMany({ where: { organizationId: org }, select: { id: true, name: true, isActive: true }, orderBy: { name: 'asc' } }),
+      this.prisma.teacher.findMany({
+        where: { organizationId: org, ...(scope.all ? {} : { id: { in: [...scope.teacherIds] } }) },
+        select: { id: true, name: true, isActive: true },
+        orderBy: { name: 'asc' },
+      }),
       this.lessonRows(org, period),
       this.reportRows(org, period),
       this.trialRows(org, period),
@@ -120,7 +126,9 @@ export class StatsService {
   async teacher(actorId: string, teacherId: string, month?: string) {
     const actor = await this.conversations.requireActor(actorId);
     await this.requireStatsReader(actor);
-    if (!isUuid(teacherId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    if (!isUuid(teacherId) || !(await this.lessons.teacherScope.covers(actor, teacherId))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    }
     return this.detail(actor.organizationId as string, teacherId, month, true);
   }
 

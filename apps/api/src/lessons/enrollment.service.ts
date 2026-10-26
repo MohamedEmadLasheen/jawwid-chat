@@ -5,6 +5,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { ALL_TEACHERS, scopeCovers } from '../platform/teacher-scope';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { LessonService, invalid, textField } from './lesson.service';
@@ -55,7 +56,7 @@ export class EnrollmentService implements OnModuleInit {
     if (ids.length === 0) return { learners: [] };
     const staff = actor.kind === ActorKind.STAFF;
     const now = new Date();
-    const [learners, enrollments, slots, teachersDepartment, supervised] = await Promise.all([
+    const [learners, enrollments, slots, teachers, supervised] = await Promise.all([
       this.prisma.learner.findMany({
         where: { id: { in: ids }, organizationId: conversation.organizationId },
         select: { id: true, name: true, familyId: true, teacherId: true, teacher: { select: { id: true, name: true } } },
@@ -69,7 +70,7 @@ export class EnrollmentService implements OnModuleInit {
         where: { learnerId: { in: ids }, validTo: null },
         orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
       }),
-      staff ? this.lessons.isManager(actor) : Promise.resolve(false),
+      staff ? this.lessons.teachersFacts(actor) : Promise.resolve({ department: false, scope: ALL_TEACHERS }),
       staff ? this.lessons.supervisedLearnerIds(actor, now) : Promise.resolve([] as string[]),
     ]);
     const enrollmentOf = new Map(enrollments.map((e) => [e.learnerId, e]));
@@ -88,7 +89,8 @@ export class EnrollmentService implements OnModuleInit {
         const standing = this.authz.lessonStanding(
           actor,
           { organizationId: conversation.organizationId, teacherId: l.teacherId ?? '', familyId: l.familyId },
-          { teachersDepartment, supervisesLearner: supervisedSet.has(l.id) },
+          // PD-35: the Teachers department stands to its scope's teachers' children.
+          { teachersDepartment: teachers.department && scopeCovers(teachers.scope, l.teacherId), supervisesLearner: supervisedSet.has(l.id) },
         );
         const staffView = standing === 'manager' || standing === 'supervisor';
         return {

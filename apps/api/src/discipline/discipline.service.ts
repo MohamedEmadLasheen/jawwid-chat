@@ -92,8 +92,11 @@ export class DisciplineService {
     if (query.teacherId !== undefined && !isUuid(query.teacherId)) throw invalid('teacherId: a uuid');
     if (query.kind !== undefined && !(query.kind in KIND_FILTERS)) throw invalid(`kind: ${Object.keys(KIND_FILTERS).join(' | ')}`);
 
+    // PD-35: the violations of the teachers in the caller's scope.
+    const scope = await this.supervision.teacherScope.scopeOf(actor);
     const where: Prisma.TeacherViolationWhereInput = {
       organizationId: actor.organizationId,
+      ...(scope.all ? {} : { AND: [{ teacherId: { in: [...scope.teacherIds] } }] }),
       ...(state === 'open' ? { decision: null } : state === 'decided' ? { decision: { not: null } } : {}),
       ...(query.month ? { month: new Date(`${query.month}-01T00:00:00Z`) } : {}),
       ...(query.teacherId ? { teacherId: query.teacherId } : {}),
@@ -149,6 +152,7 @@ export class DisciplineService {
     if (!isUuid(lessonId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
     const lesson = await this.prisma.lesson.findFirst({ where: { id: lessonId, organizationId: actor.organizationId } });
     if (!lesson) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+    await this.supervision.requireTeacherInScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
     const minutes = body.minutes;
     if (typeof minutes !== 'number' || !Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
       throw invalid('minutes: a whole number of minutes, 1 to 240');
@@ -245,6 +249,7 @@ export class DisciplineService {
       where: { id: complaintId, organizationId: actor.organizationId ?? '', kind: 'complaint' },
     });
     if (!complaint) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
+    await this.supervision.requireTeacherInScope(actor, complaint.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
     const note = textField(body, 'note', false);
     const row = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
@@ -554,6 +559,7 @@ export class DisciplineService {
     if (!isUuid(id)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
     const v = await this.prisma.teacherViolation.findFirst({ where: { id, organizationId: actor.organizationId } });
     if (!v || (await this.standing([v])).length === 0) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
+    await this.supervision.requireTeacherInScope(actor, v.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
     return v;
   }
 
@@ -590,6 +596,7 @@ export class DisciplineService {
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'teacher not found');
     const t = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId ?? '' } });
     if (!t) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'teacher not found');
+    await this.supervision.requireTeacherInScope(actor, t.id, CommErrorCode.DISCIPLINE_NOT_FOUND);
     return t;
   }
 

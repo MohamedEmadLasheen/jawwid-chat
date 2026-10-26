@@ -210,7 +210,10 @@ export class SupervisionService {
       && (actor.staffRole === 'super_admin' || (await this.lessons.isManager(actor)));
     if (!allowed) throw new CommError(CommErrorCode.LESSON_DENIED, 'the supervision section belongs to the Teachers department');
     const teacher = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId } });
-    if (!teacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    // PD-35: a teacher outside the caller's scope reads as unknown.
+    if (!teacher || !(await this.lessons.teacherScope.covers(actor, teacher.id))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    }
     return teacher;
   }
 }
