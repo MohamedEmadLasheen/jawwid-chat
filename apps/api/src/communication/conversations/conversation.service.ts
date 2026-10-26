@@ -1643,8 +1643,10 @@ export class ConversationService {
     conversationId: string,
     kind: string,
     payload: Record<string, unknown>,
-  ): Promise<void> {
-    const message = await this.systemMessage(tx, conversationId, kind, payload);
+  ): Promise<string> {
+    // Informational: it neither reorders the chat list (no last activity) nor
+    // counts as unread (a system message carries no receipts).
+    const message = await this.systemMessage(tx, conversationId, kind, payload, { touchActivity: false });
     await this.outbox.enqueue(tx, CommEvent.MESSAGE_CREATED, {
       conversationId,
       messageId: message.id,
@@ -1657,6 +1659,7 @@ export class ConversationService {
       createdAt: message.createdAt.toISOString(),
       silent: true,
     });
+    return message.id;
   }
 
   /**
@@ -1712,6 +1715,7 @@ export class ConversationService {
     conversationId: string,
     kind: string,
     payload: Record<string, unknown>,
+    opts: { touchActivity?: boolean } = {},
   ): Promise<Message> {
     // The conversation's own row, locked, is the authority for the message's
     // tenant (RT-030): the column default is the seeded organization, which is
@@ -1741,7 +1745,7 @@ export class ConversationService {
     });
     await tx.conversation.update({
       where: { id: conversationId },
-      data: { lastSeq: seq, lastActivityAt: new Date() },
+      data: opts.touchActivity === false ? { lastSeq: seq } : { lastSeq: seq, lastActivityAt: new Date() },
     });
     return message;
   }

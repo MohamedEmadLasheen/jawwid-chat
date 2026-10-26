@@ -195,6 +195,42 @@ revoke all on function chat.guard_supervisor_cover() from public;
 alter table chat.supervisor_cover enable row level security;
 revoke all on chat.supervisor_cover from public, anon, authenticated, chat_app;
 
+-- The announcement lines, posted OUTSIDE the transaction that started, extended
+-- or ended the cover (a supervisor may have hundreds of conversations): the
+-- change writes one announcement row; the lines follow in small batches, each
+-- recorded in supervisor_cover_line, so a retry -- by the API or by the worker's
+-- sweep -- never posts a line twice. done_at marks an announcement delivered.
+create table chat.supervisor_cover_announcement (
+  id          uuid primary key default gen_random_uuid(),
+  cover_id    uuid not null references chat.supervisor_cover (id) on delete cascade,
+  kind        text not null check (kind in ('cover.started', 'cover.extended', 'cover.ended')),
+  -- 'started' | 'ended' | 'extended:<new ends_at>': one announcement per event.
+  line_key    text not null,
+  payload     jsonb not null,
+  created_at  timestamptz not null default now(),
+  done_at     timestamptz,
+  constraint supervisor_cover_announcement_once unique (cover_id, line_key)
+);
+
+create index supervisor_cover_announcement_pending on chat.supervisor_cover_announcement (created_at)
+  where done_at is null;
+
+create table chat.supervisor_cover_line (
+  announcement_id uuid not null references chat.supervisor_cover_announcement (id) on delete cascade,
+  conversation_id uuid not null references chat.conversation (id) on delete cascade,
+  message_id      uuid,
+  posted_at       timestamptz not null default now(),
+  primary key (announcement_id, conversation_id)
+);
+
+comment on table chat.supervisor_cover_line is
+  'PD-33: the cover line already posted in a conversation for an announcement -- the idempotency key of the batched delivery.';
+
+alter table chat.supervisor_cover_announcement enable row level security;
+alter table chat.supervisor_cover_line enable row level security;
+revoke all on chat.supervisor_cover_announcement, chat.supervisor_cover_line
+  from public, anon, authenticated, chat_app;
+
 -- Two pushes, staff to staff: the backup when the cover starts, the supervisor
 -- when it ends. {day} is the end date in the recipient's own zone
 -- (NotificationService.inRecipientZone reads `startsAt`).

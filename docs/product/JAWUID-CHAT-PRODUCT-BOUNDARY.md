@@ -2907,10 +2907,13 @@ has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
 ```
 one action     "Hand over to backup": Admin Web Organization team table (manager,
                super admin) and "I'm away" on the supervisor's chat home
-fields         backup (pre-filled: the linked backup; only another backup
-               supervisor of the same department), from (now), until (required,
-               <= cover.max_days = 30), note; one confirm summary
+fields         backup (pre-filled: the linked backup), from (now), until
+               (required, <= cover.max_days = 30), note; one confirm summary
                "N families, M groups, K open items move to X until <date>"
+backup choice  "I'm away" (the supervisor): only a backup a manager has already
+               linked to them (PD-8 canConfigureBackup). A manager or the super
+               admin: any eligible backup supervisor of the same department,
+               the link created as part of the start
 the model      a cover IS an activation of the pair's chat.supervisor_backup link
                for [from, until) -- staff_principals / staff_acts_for unchanged,
                so the backup reaches every covered conversation and queue during
@@ -2933,8 +2936,16 @@ return         automatic at `until` (worker cover sweep posts the lines); early
 who            start/extend: the supervisor, their department manager, the super
                admin; end: also the covering backup. Audited (cover.*)
 safety         one open cover per supervisor; the backup must be active, not away
-               and cover fewer than cover.max_concurrent (= 2); all in one
-               transaction; deactivating / ending the link ends its cover
+               and cover fewer than cover.max_concurrent (= 2), re-checked on
+               Extend; the change is one short transaction under the link's row
+               lock (a manual activation cannot overwrite a cover's window, nor
+               leave access open before a future cover begins); closing a cover
+               clamps its link to that moment; deactivating / ending the link
+               ends its cover
+lines          posted after the change commits, 25 conversations per
+               transaction, each recorded once (retries never duplicate); the
+               worker finishes any left over; they do not reorder the chat list
+               or count as unread
 ```
 
 **Implementation phase.** Migration `20261026130000_chat_pd033_supervisor_cover`

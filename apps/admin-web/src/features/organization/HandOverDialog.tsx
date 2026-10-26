@@ -66,7 +66,9 @@ export function HandOverDialog({
         ? tx(T.blockedAway)
         : b.blocked === 'at_limit'
           ? tx(T.blockedAtLimit, { n: b.covering })
-          : ''
+          : b.blocked === 'not_linked'
+            ? tx(T.blockedNotLinked)
+            : ''
 
   const review = () => {
     setTouched(true)

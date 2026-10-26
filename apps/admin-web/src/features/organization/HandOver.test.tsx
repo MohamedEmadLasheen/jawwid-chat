@@ -55,6 +55,7 @@ const preview: CoverPreview = {
   eligibleBackups: [
     { id: 'bk-1', name: 'Backup Amira', linked: true, covering: 0, blocked: null, blockedReason: null },
     { id: 'bk-2', name: 'Backup Dalia', linked: false, covering: 2, blocked: 'at_limit', blockedReason: 'Backup Dalia already covers 2 supervisors' },
+    { id: 'bk-3', name: 'Backup Hala', linked: false, covering: 0, blocked: 'not_linked', blockedReason: 'not linked' },
   ],
   maxDays: 30,
   openCover: null,
@@ -93,6 +94,8 @@ describe('"I\'m away": the supervisor hands over in one step', () => {
     expect(options.map((o) => [o.textContent, o.disabled])).toEqual([
       ['Backup Amira · linked backup', false],
       ['Backup Dalia — already covers 2 supervisors', true],
+      // "I'm away" offers only a backup a manager linked (PD-8 canConfigureBackup).
+      ['Backup Hala — not linked to you — ask your manager', true],
     ])
     await userEvent.click(within(dialog).getByRole('button', { name: '1 week' }))
     await userEvent.type(within(dialog).getByLabelText('Note (optional)'), 'family matter')

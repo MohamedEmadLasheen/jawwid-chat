@@ -1164,6 +1164,34 @@ model SupervisorCover {
   @@schema("chat")
 }
 
+/// PD-33: one announcement event of a cover (started / extended / ended); its
+/// lines are delivered in batches after the change commits.
+model SupervisorCoverAnnouncement {
+  id        String    @id @default(uuid()) @db.Uuid
+  coverId   String    @map("cover_id") @db.Uuid
+  kind      String
+  lineKey   String    @map("line_key")
+  payload   Json
+  createdAt DateTime  @map("created_at") @db.Timestamptz @default(now())
+  doneAt    DateTime? @map("done_at") @db.Timestamptz
+
+  @@unique([coverId, lineKey], map: "supervisor_cover_announcement_once")
+  @@map("supervisor_cover_announcement")
+  @@schema("chat")
+}
+
+/// PD-33: a cover line already posted in a conversation (the idempotency key).
+model SupervisorCoverLine {
+  announcementId String   @map("announcement_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  messageId      String?  @map("message_id") @db.Uuid
+  postedAt       DateTime @map("posted_at") @db.Timestamptz @default(now())
+
+  @@id([announcementId, conversationId])
+  @@map("supervisor_cover_line")
+  @@schema("chat")
+}
+
 model ConversationLearner {
   conversationId String   @map("conversation_id") @db.Uuid
   learnerId      String   @map("learner_id") @db.Uuid

@@ -482,9 +482,13 @@ export class OutboxWorker {
     if (payload.silent === true) return;
 
     const authorId = payload.authorId as string | null;
-    const seated = await this.prisma.conversationMember.findMany({
-      where: { conversationId, leftAt: null },
-    });
+    // The author first: their own seat is never pushed -- nor remapped, so an
+    // away supervisor's own message does not push the backup covering for them.
+    const seated = (
+      await this.prisma.conversationMember.findMany({
+        where: { conversationId, leftAt: null },
+      })
+    ).filter((m) => m.actorId !== authorId);
     // PD-33: an away supervisor's push goes to the backup covering for them,
     // once per person even when the backup has a seat of their own.
     const covers = await this.coversFor(seated.filter((m) => m.actorKind === ActorKind.STAFF).map((m) => m.actorId));
