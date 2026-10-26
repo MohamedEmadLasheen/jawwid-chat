@@ -303,12 +303,15 @@ describe('3. messages: one entry per chat, coalesced pushes, read withdraws', ()
     expect(told.some((t) => t.event === CommEvent.INBOX_CHANGED && t.users.join() === s.parentId)).toBe(true);
   });
 
-  it('MessageService.markReadUpTo (the read endpoint) does the same', async () => {
+  it('MessageService.markReadUpTo (the read endpoint) does the same, through the outbox', async () => {
     const conv = await directWithParent();
     const sent = await g.messages.send({ conversationId: conv, senderId: s.ownerId, body: 'hello', clientMessageId: randomUUID() });
     await g.outboxWorker.drain();
     expect(await g.prisma.notificationItem.count({ where: { recipientId: s.parentId, readAt: null } })).toBe(1);
     await g.messages.markReadUpTo(conv, s.parentId, String(sent.seq));
+    // The read is an outbox event (conversation.read); the worker applies it.
+    expect(await g.prisma.outboxEvent.count({ where: { type: 'conversation.read' } })).toBe(1);
+    await g.outboxWorker.drain();
     expect(await g.prisma.notificationItem.count({ where: { recipientId: s.parentId, readAt: null } })).toBe(0);
   });
 

@@ -1,5 +1,5 @@
 import { signActorAvatar } from '../profile/avatar-urls';
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Conversation, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
@@ -18,7 +18,6 @@ import { ConversationService, isUuid } from '../conversations/conversation.servi
 import { AttachmentService } from '../attachments/attachment.service';
 import { objectKeyBelongsToConversation } from '../attachments/object-key';
 import { OutboxService } from '../outbox/outbox.service';
-import { NotificationPipeline } from '../notifications/notification-pipeline.service';
 import { CommEvent } from '../contracts/events';
 import {
   MessageDto,
@@ -102,12 +101,7 @@ export class MessageService {
     private readonly attachments: AttachmentService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
-    // PD-34: reading a chat withdraws its waiting push and syncs the person's
-    // other devices. Optional, so a hand-built service reads exactly as before.
-    @Optional() private readonly pipeline?: NotificationPipeline,
   ) {}
-
-  private readonly log = new Logger(MessageService.name);
 
   /**
    * The authors of these messages, resolved in a bounded number of queries.
@@ -613,18 +607,23 @@ export class MessageService {
     });
     await this.markState(ids.map((m) => m.id), actor.actorId, ReceiptState.READ);
 
-    await this.prisma.conversationParticipantState.upsert({
-      where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
-      create: { conversationId, actorId: actor.actorId, lastReadSeq: target },
-      update: { lastReadSeq: target },
+    // PD-34: the read is an event too. The outbox worker withdraws the push still
+    // waiting for this chat, reads its Notification Center entry and tells the
+    // reader's other devices (conversation.read, their own room only). Through
+    // the outbox rather than a call from here: MessageService is a dependency of
+    // the realtime gateway, so it must not depend on the realtime publisher.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.conversationParticipantState.upsert({
+        where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
+        create: { conversationId, actorId: actor.actorId, lastReadSeq: target },
+        update: { lastReadSeq: target },
+      });
+      await this.outbox.enqueue(tx, CommEvent.CONVERSATION_READ, {
+        conversationId,
+        actorId: actor.actorId,
+        lastReadSeq: target.toString(),
+      });
     });
-
-    try {
-      await this.pipeline?.conversationRead(conversationId, actor.actorId, target);
-    } catch (e) {
-      // The read is recorded; a stale push or badge must not undo it.
-      this.log.error(`read sync failed: ${(e as Error).name}`);
-    }
   }
 
   /**
