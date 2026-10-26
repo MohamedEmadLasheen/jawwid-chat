@@ -21,12 +21,15 @@
  * here: PD-35's own 'supervision' policy lands with the teacher assignment.
  * Synthetic fixtures only (G-16).
  */
+import { randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
 import type { RealtimeRevocation } from '@platform/realtime-revocation';
 import { ConversationSeatService } from '@communication/seats/conversation-seat.service';
 import { SeatPolicyRegistry, SeatReason } from '@communication/seats/seat-policy';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { OutboxWorker } from '@communication/outbox/outbox.worker';
+import { SupervisionConversationService } from '../../src/supervision/supervision-conversation.service';
+import { activateBackup, buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -343,5 +346,159 @@ describe('9. the database guards the tables', () => {
     // A member row ended by a membership edit ends the seat it carried.
     await g.prisma.conversationMember.updateMany({ where: { conversationId: groupId, actorId: s.otherAdminId, leftAt: null }, data: { leftAt: new Date() } });
     expect((await seatRow(groupId, s.otherAdminId)).left_kind).toBe('removed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Security review of #131 (department head, 2026-10-26): each finding proven
+// by a test that failed before its fix.
+
+/** A conversation outside the groups: no learner, so standing is through its live staff members. */
+async function ungrouped(type: 'official' | 'class_group', staffId: string): Promise<string> {
+  const [{ id }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `insert into chat.conversation (type, title) values ($1, $2) returning id::text as id`, type, `${type}_x`,
+  );
+  await g.prisma.conversationMember.create({ data: { conversationId: id, actorId: staffId, actorKind: 'staff', memberRole: 'admin' } });
+  return id;
+}
+
+describe('10. security review', () => {
+  it('P1-1a: a seat never props up its own standing -- a backup whose link ends loses an official conversation', async () => {
+    const official = await ungrouped('official', s.ownerId);
+    const link = await activateBackup(g.prisma, s.ownerId, s.otherAdminId);
+    expect(await access(s.otherAdminId, official)).toBe('backup');
+    await seats.join(await actor(s.otherAdminId), official, { reason: SeatReason.MANUAL });
+
+    await g.prisma.$executeRaw`UPDATE chat.supervisor_backup SET deactivated_at = now() WHERE id = ${link}::uuid`;
+    expect(await access(s.otherAdminId, official)).toBeNull();
+    expect(await seats.sweep()).toBe(1);
+    expect((await seatRow(official, s.otherAdminId)).left_kind).toBe('ineligible');
+  });
+
+  it('P1-1b: a seat lends nobody else access -- the seat holder\'s own backup does not reach the conversation', async () => {
+    const official = await ungrouped('official', s.ownerId);
+    await activateBackup(g.prisma, s.ownerId, s.otherAdminId);
+    await seats.join(await actor(s.otherAdminId), official, { reason: SeatReason.MANUAL });
+    // A third supervisor who backs up otherAdmin, not the owner.
+    const third = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'bak_z', 'coverage', true)`, third);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.department_member (staff_id, organization_id, department_id, position)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, 'backup_supervisor')`, third, s.departmentId,
+    );
+    await activateBackup(g.prisma, s.otherAdminId, third);
+    expect(await access(third, official)).toBeNull();
+    const visible = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text FROM chat.staff_visible_conversation_ids(${third}::uuid, now()) AS id`;
+    expect(visible.map((r) => r.id)).not.toContain(official);
+  });
+
+  it('P1-1c: a seated manager stays the manager in a class group, whatever the row order', async () => {
+    const klass = await ungrouped('class_group', s.ownerId);
+    expect(await access(s.managerId, klass)).toBe('manager');
+    await seats.join(await actor(s.managerId), klass, { reason: SeatReason.MANUAL });
+    // Put the seat's row first, whichever order the planner reads them in.
+    await g.prisma.$executeRaw`
+      UPDATE chat.conversation_member SET joined_at = now() - interval '1 day'
+       WHERE conversation_id = ${klass}::uuid AND actor_id = ${s.managerId}::uuid`;
+    expect(await access(s.managerId, klass)).toBe('manager');
+    expect(g.authz.moderatableAuthorKinds(await actor(s.managerId), 'manager')).toContain('staff');
+  });
+
+  it('P1-2: a seat never makes its holder an admin who may change membership', async () => {
+    // A Teachers-department supervisor who joined after the supervision chat was opened.
+    const tmgr = randomUUID();
+    const tsup = randomUUID();
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'tmgr_q', 'manager', true), ($2::uuid, 'tsup_q', 'admin', true)`, tmgr, tsup,
+    );
+    const [{ id: dept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.department (kind, display_name, manager_id) values ('teachers', 'teachers', $1::uuid) returning id::text as id`, tmgr,
+    );
+    const chats = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
+    const [{ org }] = await g.prisma.$queryRaw<Array<{ org: string }>>`SELECT chat.default_organization_id()::text AS org`;
+    const conv = await g.prisma.$transaction((tx) => chats.ensureInTx(tx, s.teacherId, org, tmgr));
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.department_member (staff_id, organization_id, department_id, position)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, 'supervisor')`, tsup, dept,
+    );
+    await seats.join(await actor(tsup), conv.id, { reason: SeatReason.MANUAL });
+    expect(await code(g.conversations.setMembership(conv.id, tsup, { actorId: s.teacherId, actorKind: 'teacher', memberRole: 'teacher' }, 'remove', 'test')))
+      .toBe(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP);
+    expect(await g.prisma.conversationMember.count({ where: { conversationId: conv.id, actorId: s.teacherId, leftAt: null } })).toBe(1);
+  });
+
+  it('P2-1: leave and absorb never both win -- an absorbed seat\'s member row stays the new supervisor\'s', async () => {
+    for (let i = 0; i < 5; i++) {
+      await g.prisma.$executeRaw`UPDATE chat.learner_supervision SET supervisor_id = ${s.ownerId}::uuid WHERE learner_id = ${s.learnerId}::uuid`;
+      await g.conversations.syncStudentGroup(s.learnerId, s.ownerId);
+      await allow(s.otherAdminId, groupId);
+      await seats.join(await actor(s.otherAdminId), groupId, { reason: SPEC_REASON });
+      await Promise.allSettled([
+        seats.leave(await actor(s.otherAdminId), groupId),
+        g.prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`UPDATE chat.learner_supervision SET supervisor_id = ${s.otherAdminId}::uuid WHERE learner_id = ${s.learnerId}::uuid`;
+          await g.conversations.reconcileSupervisionChange(tx, s.learnerId, s.ownerId, s.otherAdminId, s.managerId);
+        }),
+      ]);
+      const [row] = await g.prisma.$queryRaw<Array<{ left_kind: string }>>`
+        SELECT left_kind FROM chat.conversation_seat WHERE conversation_id = ${groupId}::uuid AND staff_id = ${s.otherAdminId}::uuid
+         ORDER BY joined_at DESC LIMIT 1`;
+      const member = await liveMember(groupId, s.otherAdminId);
+      // Whichever came first, the new supervisor is a live member of their group.
+      expect(row.left_kind === 'left' || row.left_kind === 'absorbed').toBe(true);
+      expect(member).not.toBeNull();
+      await disallow(s.otherAdminId);
+    }
+  });
+
+  it('P2-2 / P2-3: a seat holder hears no approvals or internal notes, and nothing at all once the seat stops holding', async () => {
+    const delivered: Array<{ users: string[]; type: string }> = [];
+    const realtime = { toThread: async () => undefined, toUsers: async (users: string[], type: string) => void delivered.push({ users, type }) };
+    const worker = new OutboxWorker(g.prisma, g.notifications, realtime as never, g.identity);
+    await allow(s.otherAdminId, groupId);
+    await seats.join(await actor(s.otherAdminId), groupId, { reason: SPEC_REASON });
+    await g.prisma.outboxEvent.deleteMany({});
+
+    await g.messages.send({ conversationId: groupId, senderId: s.ownerId, body: 'staff only', visibility: 'internal' });
+    await worker.drain(100);
+    const internal = delivered.filter((d) => d.type === 'message.created');
+    expect(internal.length).toBeGreaterThan(0);
+    expect(internal.flatMap((d) => d.users)).not.toContain(s.otherAdminId);
+
+    // P2-3: the seat stops holding; until the sweep its member row is still live.
+    await disallow(s.otherAdminId);
+    await g.messages.send({ conversationId: groupId, senderId: s.parentId, body: 'hello' });
+    await worker.drain(100);
+    expect(await g.prisma.notification.count({ where: { recipientId: s.otherAdminId } })).toBe(0);
+  });
+
+  it('P2-2 / P2-3 through the PD-34 notification pipeline: the same rules for Center entries and pushes', async () => {
+    // The harness worker carries the pipeline, as production wires it.
+    const worker = g.outboxWorker;
+    const holder = { recipientId: s.otherAdminId, groupKey: `conversation:${groupId}` };
+    const pushes = () => g.prisma.notification.count({ where: { recipientId: s.otherAdminId, conversationId: groupId } });
+    await allow(s.otherAdminId, groupId);
+    await seats.join(await actor(s.otherAdminId), groupId, { reason: SPEC_REASON });
+    await g.prisma.outboxEvent.deleteMany({});
+
+    // While the seat holds, the holder hears a message: one entry, one push.
+    await g.messages.send({ conversationId: groupId, senderId: s.parentId, body: 'hello' });
+    await worker.drain(100);
+    expect(await g.prisma.notificationItem.count({ where: holder })).toBe(1);
+    expect(await pushes()).toBe(1);
+
+    // P2-2: an internal note reaches no seat holder through the pipeline either.
+    await g.messages.send({ conversationId: groupId, senderId: s.ownerId, body: 'staff only', visibility: 'internal' });
+    await worker.drain(100);
+    expect((await g.prisma.notificationItem.findFirstOrThrow({ where: holder })).itemCount).toBe(1);
+    expect(await pushes()).toBe(1);
+
+    // P2-3: the seat stops holding; its member row is still live until the sweep.
+    await disallow(s.otherAdminId);
+    await g.messages.send({ conversationId: groupId, senderId: s.parentId, body: 'again' });
+    await worker.drain(100);
+    expect((await g.prisma.notificationItem.findFirstOrThrow({ where: holder })).itemCount).toBe(1);
+    expect(await pushes()).toBe(1);
   });
 });
