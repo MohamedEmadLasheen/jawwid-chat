@@ -296,12 +296,33 @@ export class OutboxWorker {
     }
   }
 
+  /**
+   * The live staff members, plus (PD-33) the backup covering for any of them:
+   * a covering backup decides approvals and reads internal notes on the PD-8
+   * `backup` basis, so they hear of them as the away supervisor would have.
+   */
   private async staffMemberIds(conversationId: string): Promise<string[]> {
     const members = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null, actorKind: ActorKind.STAFF },
       select: { actorId: true },
     });
-    return members.map((m) => m.actorId);
+    const ids = members.map((m) => m.actorId);
+    const covers = await this.coversFor(ids);
+    return [...new Set([...ids, ...covers.values()])];
+  }
+
+  /**
+   * PD-33: for each of these staff members who is away under a live cover, the
+   * backup covering for them (chat.live_covers -- the cover window AND a live
+   * backup link, the same moment access ends).
+   */
+  private async coversFor(staffIds: readonly string[]): Promise<Map<string, string>> {
+    if (staffIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ primary_id: string; backup_id: string }>>`
+      SELECT primary_id::text AS primary_id, backup_id::text AS backup_id
+        FROM chat.live_covers(now())
+       WHERE primary_id = ANY(${[...staffIds]}::uuid[])`;
+    return new Map(rows.map((r) => [r.primary_id, r.backup_id]));
   }
 
   /**
@@ -457,11 +478,20 @@ export class OutboxWorker {
     payload: Record<string, unknown>,
   ): Promise<void> {
     if (payload.visibility === Visibility.INTERNAL) return;
+    // PD-33: a cover line is seen, not pushed (one per conversation is a storm).
+    if (payload.silent === true) return;
 
     const authorId = payload.authorId as string | null;
-    const members = await this.prisma.conversationMember.findMany({
+    const seated = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },
     });
+    // PD-33: an away supervisor's push goes to the backup covering for them,
+    // once per person even when the backup has a seat of their own.
+    const covers = await this.coversFor(seated.filter((m) => m.actorKind === ActorKind.STAFF).map((m) => m.actorId));
+    const seen = new Set<string>();
+    const members = seated
+      .map((m) => ({ actorId: covers.get(m.actorId) ?? m.actorId }))
+      .filter((m) => !seen.has(m.actorId) && seen.add(m.actorId));
 
     const state = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId },

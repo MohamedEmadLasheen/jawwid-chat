@@ -11,6 +11,7 @@ import { NotificationService } from './communication/notifications/notification.
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
+import { SupervisorCoverService } from './org/supervisor-cover.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
@@ -76,6 +77,14 @@ const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
 const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
 
 /**
+ * PD-33: how often supervisor covers are announced (a future-dated start) and
+ * returned (the window is over). NOT what ends access -- the backup link's
+ * active_until does that to the second -- only how late the return line and
+ * the "welcome back" push can be. Idempotent claims, so every replica may run it.
+ */
+const COVER_SWEEP_MS = Number(process.env.COVER_SWEEP_MS ?? 60_000);
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -123,6 +132,7 @@ async function bootstrap(): Promise<void> {
   const scheduling = app.get(SchedulingService);
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
+  const covers = app.get(SupervisorCoverService);
 
   let running = true;
   let draining = false;
@@ -161,6 +171,7 @@ async function bootstrap(): Promise<void> {
   let lastSweepAt = 0;
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
+  let nextCoverSweep = 0;
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
   // short (OutboxPacer). Without Redis there are no hints and the loop simply
@@ -241,6 +252,20 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextLessonSweep = Date.now() + LESSON_SWEEP_MS;
+      }
+    }
+
+    // PD-33: covers that began or ended -- their lines and pushes. Before
+    // dispatch, so a "welcome back" push queued now goes out on this pass.
+    if (Date.now() >= nextCoverSweep) {
+      draining = true;
+      try {
+        await covers.sweep();
+      } catch (e) {
+        report(log, 'cover sweep', 'org.covers', e);
+      } finally {
+        draining = false;
+        nextCoverSweep = Date.now() + COVER_SWEEP_MS;
       }
     }
 

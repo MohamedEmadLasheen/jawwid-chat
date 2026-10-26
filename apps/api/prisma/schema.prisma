@@ -1140,6 +1140,30 @@ model SupervisorBackup {
   @@schema("chat")
 }
 
+/// PD-33: a supervisor away, their backup covering for a window. Access is the
+/// backup link's activation; this row is the event, the routing input and the
+/// history (20261026130000).
+model SupervisorCover {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  primaryId        String    @map("primary_id") @db.Uuid
+  backupId         String    @map("backup_id") @db.Uuid
+  backupLinkId     String    @map("backup_link_id") @db.Uuid
+  startsAt         DateTime  @map("starts_at") @db.Timestamptz
+  endsAt           DateTime  @map("ends_at") @db.Timestamptz
+  windowSeconds    Int       @map("window_seconds")
+  note             String?
+  startedBy        String    @map("started_by") @db.Uuid
+  createdAt        DateTime  @map("created_at") @db.Timestamptz @default(now())
+  startAnnouncedAt DateTime? @map("start_announced_at") @db.Timestamptz
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz
+  endedBy          String?   @map("ended_by") @db.Uuid
+  endKind          String?   @map("end_kind")
+
+  @@map("supervisor_cover")
+  @@schema("chat")
+}
+
 model ConversationLearner {
   conversationId String   @map("conversation_id") @db.Uuid
   learnerId      String   @map("learner_id") @db.Uuid
