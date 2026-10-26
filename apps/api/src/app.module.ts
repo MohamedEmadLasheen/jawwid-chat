@@ -19,6 +19,7 @@ import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
 import { AccountAdminModule } from './account-admin/account-admin.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 import { MaterialsModule } from './materials/materials.module';
+import { SubscriptionModule } from './subscriptions/subscription.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -63,6 +64,8 @@ import { MaterialsModule } from './materials/materials.module';
     AccountRecoveryModule,
     // PD-29: the Materials library, practice this week and the memorization map.
     MaterialsModule,
+    // PD-30: subscription locks -- cards, pushes, lesson holds, renewal requests.
+    SubscriptionModule,
   ],
 })
 export class AppModule {}

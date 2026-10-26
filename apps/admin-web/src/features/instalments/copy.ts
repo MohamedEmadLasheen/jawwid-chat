@@ -18,6 +18,13 @@ export const I = {
   mine: { en: 'Mine', ar: 'مسؤوليتي' },
   noSupervisor: { en: 'No billing supervisor', ar: 'بلا مشرف تحصيل' },
   showPaid: { en: 'Show paid', ar: 'إظهار المدفوع' },
+  // PD-30: overdue before the payment lock started -- these never lock a group.
+  beforeGoLive: { en: 'Overdue before go-live', ar: 'متأخر قبل التفعيل' },
+  beforeGoLiveHint: {
+    en: 'Due before {date}: these never lock a group. Follow them up by hand.',
+    ar: 'مستحق قبل {date}: لا يوقف المجموعة. تابِعه يدويًا.',
+  },
+  beforeGoLiveBadge: { en: 'Before go-live', ar: 'قبل التفعيل' },
   account: { en: 'Responsible account', ar: 'الحساب المسؤول' },
   forWhom: { en: 'For', ar: 'عن' },
   family: { en: 'The family', ar: 'الأسرة' },

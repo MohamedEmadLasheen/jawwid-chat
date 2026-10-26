@@ -305,6 +305,9 @@ String previewText(Conversation conversation, L10n l10n) {
       'group.learner_detached' => l10n.systemGroupLearnerDetached,
       'cover.started' || 'cover.extended' => l10n.systemCoverStartedNoName,
       'cover.ended' => l10n.systemCoverEndedNoName,
+      'seat.joined' => l10n.systemSeatJoinedNoName,
+      'seat.stepped_in' => l10n.systemSeatSteppedInNoName,
+      'seat.left' => l10n.systemSeatLeftNoName,
       _ => l10n.systemUpdate,
     };
   }

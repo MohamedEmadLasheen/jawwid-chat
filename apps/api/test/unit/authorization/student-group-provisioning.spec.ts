@@ -211,6 +211,8 @@ function stubService(opts: {
     },
     conversationMember: { findMany: async () => [], createMany: write, updateMany: write },
     message: { create: write },
+    // PD-35: the reconcile asks which members hold a seat (none here).
+    $queryRaw: async () => [],
     $transaction: async () => write(),
   };
   const identity = { resolveActor: async (id: string) => opts.actors[id] ?? null };

@@ -1033,6 +1033,56 @@ class L10nEn extends L10n {
   }
 
   @override
+  String systemSeatJoined(String who) {
+    return '$who joined to support';
+  }
+
+  @override
+  String systemSeatSteppedIn(String who) {
+    return '$who is following this chat';
+  }
+
+  @override
+  String systemSeatLeft(String name) {
+    return '$name left';
+  }
+
+  @override
+  String systemSeatLeftIdle(String name) {
+    return '$name left (no activity)';
+  }
+
+  @override
+  String systemSeatWho(String name, String role) {
+    return '$name ($role)';
+  }
+
+  @override
+  String get systemSeatSomeone => 'A team member';
+
+  @override
+  String get systemSeatJoinedNoName => 'A team member joined';
+
+  @override
+  String get systemSeatSteppedInNoName =>
+      'A team member is following this chat';
+
+  @override
+  String get systemSeatLeftNoName => 'A team member left';
+
+  @override
+  String get seatRoleTeacherSupervisor => 'teacher supervisor';
+
+  @override
+  String get seatRoleSupervisor => 'supervisor';
+
+  @override
+  String get seatRoleManager => 'manager';
+
+  @override
+  String get seatRoleAdministration => 'administration';
+
+  @override
   String get systemUpdate => 'System update';
 
   @override
@@ -2883,6 +2933,138 @@ class L10nEn extends L10n {
   String get tabPayments => 'Payments';
 
   @override
+  String get tabSubscriptions => 'Subscriptions';
+
+  @override
+  String subscriptionMonthCount(int months) {
+    String _temp0 = intl.Intl.pluralLogic(
+      months,
+      locale: localeName,
+      other: '$months Months',
+      one: '1 Month',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionLessonCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Lessons',
+      one: '1 Lesson',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionPlanLessons(String months, String lessons) {
+    return '$months — $lessons';
+  }
+
+  @override
+  String get subscriptionNone => 'No subscription yet';
+
+  @override
+  String subscriptionLessonsLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lessons left',
+      one: '1 lesson left',
+      zero: 'No lessons left',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionGraceLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count grace lessons left',
+      one: '1 grace lesson left',
+      zero: 'No grace lessons left',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get subscriptionStateOpen => 'Active';
+
+  @override
+  String get subscriptionStateGrace => 'Renewal due';
+
+  @override
+  String get subscriptionStateLocked => 'Paused';
+
+  @override
+  String get subscriptionLessonsUsedUp => 'Lessons used up';
+
+  @override
+  String subscriptionOverdueSince(String label, String date) {
+    return 'Instalment $label overdue since $date';
+  }
+
+  @override
+  String get subscriptionRequestRenewal => 'Request renewal';
+
+  @override
+  String get subscriptionRenewalRequested => 'Renewal requested';
+
+  @override
+  String get lockBannerTitle => 'Lessons are paused';
+
+  @override
+  String lockBannerChildBalance(String name) {
+    return '$name: lessons used up';
+  }
+
+  @override
+  String lockBannerChildOverdue(String name, String label, String date) {
+    return '$name: instalment $label overdue since $date';
+  }
+
+  @override
+  String lockBannerChildPaused(String name) {
+    return '$name\'s lessons are paused';
+  }
+
+  @override
+  String get lockBannerGeneric => 'This group is paused for now.';
+
+  @override
+  String get lockBannerOpenSubscriptions => 'Go to Subscriptions';
+
+  @override
+  String reportLessonOf(int number, int total) {
+    return 'Lesson $number of $total';
+  }
+
+  @override
+  String cardLessonNumberOf(int number, int total) {
+    return '$number of $total';
+  }
+
+  @override
+  String get outcomeSuspended => 'Suspended';
+
+  @override
+  String get outcomeSuspendedPayment => 'Suspended — payment';
+
+  @override
+  String get cardLessonsPausedTitle => 'Lessons paused';
+
+  @override
+  String get cardSubscriptionLockedTitle => 'Lessons paused — payment';
+
+  @override
+  String get cardSubscriptionLockedHint => 'Renew or pay in Subscriptions.';
+
+  @override
+  String get cardSubscriptionUnlockedTitle => 'Lessons are back on';
+
+  @override
   String get roleSales => 'Sales';
 
   @override
@@ -3795,9 +3977,6 @@ class L10nEn extends L10n {
   String get mentionWaiting => 'Mentioned — waiting';
 
   @override
-  String get mentionSteppedInRow => 'Stepped in';
-
-  @override
   String mentionAskedBy(String name, String date) {
     return 'asked by $name, $date';
   }
@@ -3807,20 +3986,4 @@ class L10nEn extends L10n {
 
   @override
   String get mentionedMark => 'You were mentioned';
-
-  @override
-  String systemMentionSteppedIn(String name) {
-    return '$name stepped in';
-  }
-
-  @override
-  String get systemMentionSteppedInNoName => 'Jawwid stepped in';
-
-  @override
-  String systemMentionSteppedOut(String name) {
-    return '$name stepped out';
-  }
-
-  @override
-  String get systemMentionSteppedOutNoName => 'Jawwid stepped out';
 }

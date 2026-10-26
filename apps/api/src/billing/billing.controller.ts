@@ -27,10 +27,19 @@ export class BillingController {
     return this.billing.access(actorId);
   }
 
-  /** ?responsible=all|me|none &paid=true -- the open (and paid) instalments in scope. */
+  /**
+   * ?responsible=all|me|none &paid=true -- the open (and paid) instalments in scope.
+   * PD-30: &beforeGoLive=true -- only the overdue ones due before the lock's go-live
+   * (they never lock a group, so they are listed for staff to chase).
+   */
   @Get('instalments')
-  list(@ActorId() actorId: string, @Query('responsible') responsible?: string, @Query('paid') paid?: string) {
-    return this.billing.list(actorId, { responsible, paid });
+  list(
+    @ActorId() actorId: string,
+    @Query('responsible') responsible?: string,
+    @Query('paid') paid?: string,
+    @Query('beforeGoLive') beforeGoLive?: string,
+  ) {
+    return this.billing.list(actorId, { responsible, paid, beforeGoLive });
   }
 
   /** { paidOn, method?, reference? } -- once; a mistake is voided. */

@@ -1,4 +1,5 @@
 import { api, download } from '@/core/api/client'
+import type { PaymentLock } from '@/features/subscriptions/api'
 
 /**
  * The conversation API Admin Web chats through -- the SAME routes the parent
@@ -128,6 +129,8 @@ export interface ChatConversation {
   cover?: ChatCover | null
   /** PD-36: people asked to step in who are not members (detail route). */
   summoned?: ChatSummoned[]
+  /** PD-30: the group is locked for payment (detail route only); null otherwise. */
+  paymentLock?: PaymentLock | null
 }
 
 export interface ChatCover {

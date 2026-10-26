@@ -70,7 +70,6 @@ class HttpGroupRepository implements GroupRepository {
               displayName: row['displayName']! as String,
               staffRole: row['staffRole'] as String? ?? '',
               at: WireMappers.parseTime(row['at'])!,
-              steppedIn: row['state'] == 'stepped_in',
               mentionedByName: row['mentionedByName'] as String?,
             ),
       ],

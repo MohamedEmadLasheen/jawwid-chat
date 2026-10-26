@@ -38,12 +38,13 @@ claimed. The decision text itself still lives in
 | PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | MERGED #117 |
 | PD-28 | Teacher web: the Flutter app built for the browser, for teachers | `claude/pd28-teacher-web-fbd19a` | MERGED #120 |
 | PD-29 | Materials: open library by subject and age, practice this week from the lesson report, memorization progress map | `claude/pd29-materials-ef11b4`, `claude/pd29-materials-clients` | MERGED #121 + #122 |
-| PD-30 | Subscriptions, lesson balance and payment-based group lock | `claude/pd30-subscription-lock-*` | in progress |
+| PD-30 | Subscriptions, lesson balance and payment-based group lock | `claude/pd30-api`, `claude/pd30-subscription-lock-f3e070` | PR #126 + #127 |
 | PD-31 | Scheduling: trial time slots, reschedule redesign, a parent's child schedule, change teacher | `claude/pd31-scheduling-*` | in progress |
 | PD-32 | Parent feedback about the teacher (amends PD-26), Starred in Chats, New Students redesign, sign-up code without time expiry (amends PD-16), Trial labels | `claude/pd32-feedback-ui-*` | in progress |
 | PD-33 | Hand over to backup: a temporary cover with automatic return (built on PD-8 backup links) | `claude/pd33-backup-handover-3bb0f2` | in progress |
+| PD-35 | Teacher supervisors: the visible seat (join/leave by choice), teacher assignment and scope, report corrections, evaluations, escalation | `claude/pd35-teacher-supervisors-8efcc6` | in progress |
 | PD-36 | @mentions that summon a non-member in charge (admin, manager, super admin) to step in; parents' @supervisor / @admin; never widens authorization; joins through PD-35's seat primitive | `claude/pd36-mentions-b0f99d` | in progress |
-| PD-34 | next free number | — | — |
+| PD-38 | next free number | — | — |
 
 ## Migration slots claimed on 2026-10-22
 
@@ -61,10 +62,11 @@ claimed. The decision text itself still lives in
 
 | Slot | Owner |
 |------|--------|
-| `20261026100000` | PD-30 — subscriptions, lesson balance, payment lock |
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
 | `20261026130000` | PD-33 — `chat_pd033_supervisor_cover` |
+| `20261026140000` | PD-30 — `chat_pd030_subscription_lock` (moved from `100000`: it rebuilds PD-31's lesson-outcome constraint, so it runs after 110000) |
+| `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (later PD-35 PRs: `…160001`, `…160002`) |
 | `20261026170000` | PD-36 — `chat_pd036_mentions` (sub-slots `170001…` if needed; slot map fixed by the department head 2026-10-26) |
 
-The next free slot is `20261026140000`.
+The slot map is fixed by the department head (2026-10-26): 180000 PD-37, 190000 PD-34, 200000 the PD-29 amendment.

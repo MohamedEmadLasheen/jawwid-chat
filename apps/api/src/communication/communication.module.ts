@@ -64,6 +64,9 @@ import { TeacherMediaController } from './api/teacher-media.controller';
 import { TeacherProfileService } from './teacher-profile/teacher-profile.service';
 import { ParentProfileController } from './api/parent-profile.controller';
 import { ParentProfileService } from './profile/parent-profile.service';
+import { ConversationSeatService } from './seats/conversation-seat.service';
+import { SeatPolicyRegistry } from './seats/seat-policy';
+import { SeatController } from './seats/seat.controller';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -90,11 +93,15 @@ import { ParentProfileService } from './profile/parent-profile.service';
     TeacherProfileController,
     TeacherMediaController,
     ParentProfileController,
+    SeatController,
   ],
   providers: [
     redisProvider,
     RedisClientShutdown,
     ConversationService,
+    // PD-35: the visible seat; features register their reasons' policies.
+    SeatPolicyRegistry,
+    ConversationSeatService,
     TeacherProfileService,
     MentionService,
     MessageService,
@@ -148,6 +155,8 @@ import { ParentProfileService } from './profile/parent-profile.service';
     ConversationService,
     // PD-36: the worker's sweep, and PD-35's 'mention' seat policy.
     MentionService,
+    SeatPolicyRegistry,
+    ConversationSeatService,
     OutboxService,
     MessageService,
     ApprovalService,

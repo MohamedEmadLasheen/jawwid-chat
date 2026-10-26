@@ -331,7 +331,7 @@ export class OutboxWorker {
     });
     const ids = members.map((m) => m.actorId);
     const covers = await this.coversFor(ids);
-    return [...new Set([...ids, ...covers.values()])];
+    return [...new Set([...ids, ...covers.values(), ...(await this.effectiveSeatIds(conversationId))])];
   }
 
   /**
@@ -346,6 +346,18 @@ export class OutboxWorker {
         FROM chat.live_covers(now())
        WHERE primary_id = ANY(${[...staffIds]}::uuid[])`;
     return new Map(rows.map((r) => [r.primary_id, r.backup_id]));
+  }
+
+  /**
+   * PD-35: staff with an EFFECTIVE seat here -- a family 1:1, whose two members
+   * are its identity, so the seat has no member row. They hear what a member
+   * hears for as long as the seat is open.
+   */
+  private async effectiveSeatIds(conversationId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ staff_id: string }>>`
+      SELECT staff_id::text AS staff_id FROM chat.conversation_seat
+       WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL AND member_id IS NULL`;
+    return rows.map((r) => r.staff_id);
   }
 
   /**
@@ -501,23 +513,20 @@ export class OutboxWorker {
     payload: Record<string, unknown>,
   ): Promise<void> {
     if (payload.visibility === Visibility.INTERNAL) return;
-    // PD-33: a cover line is seen, not pushed (one per conversation is a storm).
+    // PD-33 / PD-35: an announcement line is seen, not pushed.
     if (payload.silent === true) return;
 
     const authorId = payload.authorId as string | null;
     const seated = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },
+      select: { actorId: true, actorKind: true },
     });
     // PD-33: an away supervisor's push goes to the backup covering for them,
     // once per person even when the backup has a seat of their own.
     const covers = await this.coversFor(seated.filter((m) => m.actorKind === ActorKind.STAFF).map((m) => m.actorId));
-    // PD-36: whoever stepped into this family 1:1 on a summons hears it too,
-    // while they keep a PD-8 basis (re-checked here, not left to the sweep).
-    const steppedIn = await this.prisma.$queryRaw<Array<{ actor_id: string }>>`
-      SELECT DISTINCT mm.target_actor_id::text AS actor_id
-        FROM chat.message_mention mm
-       WHERE mm.conversation_id = ${conversationId}::uuid AND mm.state = 'stepped_in'
-         AND chat.staff_conversation_access(mm.target_actor_id, mm.conversation_id, now()) IS NOT NULL`;
+    // PD-35: an effective seat (a family 1:1 -- including one taken on a PD-36
+    // mention) hears what a member hears while it is open.
+    const effective = await this.effectiveSeatIds(conversationId);
     // PD-36: someone mentioned in THIS message gets the mention push instead --
     // one ping, and it is the one that names why.
     const mentioned = new Set(
@@ -531,7 +540,7 @@ export class OutboxWorker {
     const seen = new Set<string>();
     const members = [
       ...seated.map((m) => ({ actorId: covers.get(m.actorId) ?? m.actorId })),
-      ...steppedIn.map((r) => ({ actorId: r.actor_id })),
+      ...effective.map((actorId) => ({ actorId })),
     ].filter((m) => !mentioned.has(m.actorId) && !seen.has(m.actorId) && seen.add(m.actorId));
 
     const state = await this.prisma.conversationParticipantState.findMany({

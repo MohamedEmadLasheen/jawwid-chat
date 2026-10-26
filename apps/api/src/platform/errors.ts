@@ -280,6 +280,18 @@ export enum CommErrorCode {
   BILLING_STATE = 'COMM.BILLING_STATE',
   /** PD-27: card payments are not configured on this deployment (no STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET). 503. */
   PAYMENTS_UNAVAILABLE = 'COMM.PAYMENTS_UNAVAILABLE',
+  /**
+   * PD-30: the child's group is read-only for the parent and the teacher -- the
+   * subscription's lessons are used up (after the grace lessons) or an
+   * instalment is overdue. Staff still write; the parent's direct chat with
+   * their supervisor is never locked. Also refuses calls in the group and
+   * booking a lesson for the child. 403. Retry after paying.
+   */
+  SUBSCRIPTION_LOCKED = 'COMM.SUBSCRIPTION_LOCKED',
+  /** PD-30: granting or revoking an exception is the super admin's, the Operations Manager's and the Sales Manager's alone; the ledger is the payment recorders'. 403. */
+  SUBSCRIPTION_DENIED = 'COMM.SUBSCRIPTION_DENIED',
+  /** PD-30: already voided / revoked, or a renewal was already asked for today. 409. */
+  SUBSCRIPTION_STATE = 'COMM.SUBSCRIPTION_STATE',
   /** PD-17: Parent Profiles are the administration's -- Operations (in scope), the Operations Manager and the super admin. Never a teacher. 403. */
   PARENT_PROFILE_DENIED = 'COMM.PARENT_PROFILE_DENIED',
   /** PD-17: no such parent in the caller's organization, or none this caller may see. 404. */
@@ -381,6 +393,20 @@ export enum CommErrorCode {
   MENTION_NOT_FOUND = 'COMM.MENTION_NOT_FOUND',
   /** PD-36: the mention was already answered, has expired, or the caller lost their standing. 409. */
   MENTION_CLOSED = 'COMM.MENTION_CLOSED',
+
+  // --- PD-35: the visible seat (joining a conversation by choice) ---
+  /** No such seat reason, or no feature on this deployment takes seats for it. 400. */
+  SEAT_REASON_UNKNOWN = 'COMM.SEAT_REASON_UNKNOWN',
+  /** This reason does not give the caller a seat here, now. 403. */
+  SEAT_NOT_ELIGIBLE = 'COMM.SEAT_NOT_ELIGIBLE',
+  /** A seat for this reason cannot be taken in this kind of conversation (a 1:1). 409. */
+  SEAT_NOT_ALLOWED_HERE = 'COMM.SEAT_NOT_ALLOWED_HERE',
+  /** The caller is already a member in their own right: there is no seat to take. 409. */
+  SEAT_ALREADY_MEMBER = 'COMM.SEAT_ALREADY_MEMBER',
+  /** The caller holds no open seat here. 404. */
+  SEAT_NOT_FOUND = 'COMM.SEAT_NOT_FOUND',
+  /** A join's note or source failed validation. 400. */
+  SEAT_INVALID = 'COMM.SEAT_INVALID',
 }
 
 export class CommError extends Error {

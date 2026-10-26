@@ -13,6 +13,9 @@ import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-
 import { PaymentReminders } from './billing/payment-reminders.service';
 import { SupervisorCoverService } from './org/supervisor-cover.service';
 import { MentionService } from './communication/mentions/mention.service';
+import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
+import { subscriptionLockEnforced } from './platform/subscription-lock';
+import { ConversationSeatService } from './communication/seats/conversation-seat.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -93,11 +96,30 @@ const COVER_SWEEP_MS = Number(process.env.COVER_SWEEP_MS ?? 60_000);
 const MENTION_SWEEP_MS = Number(process.env.MENTION_SWEEP_MS ?? 60_000);
 
 /**
+ * PD-30: how often every child's subscription state is recomputed (an
+ * instalment becomes overdue by the calendar, not by a write), its changes
+ * announced and the lesson holds made to follow. The state a write changes is
+ * already current -- the database recomputes it in the writer's transaction --
+ * so this bounds only how late an overdue lock, a card or a hold can be.
+ * Exactly-once per event (SubscriptionEffects), so every replica may run it.
+ * It runs on its OWN loop, beside the outbox loop rather than inside it: a
+ * sweep over every child never delays a message's delivery.
+ */
+const SUBSCRIPTION_SWEEP_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS ?? 60_000);
+
+/**
  * PD-32: how often wrong parent sign-up codes older than a week are purged
  * (chat.purge_parent_signup_failures). Unauthenticated requests insert them, so
  * they must not pile up; one delete statement, safe on every replica.
  */
 const SIGNUP_FAILURE_PURGE_MS = 6 * 60 * 60_000;
+
+/**
+ * PD-35: how often seats that no longer hold, or went idle, are ended. Access
+ * never waits for it -- a seat's eligibility is re-checked on every access --
+ * so this only tidies the member list and posts the line.
+ */
+const SEAT_SWEEP_MS = 60_000;
 
 /**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
@@ -149,10 +171,13 @@ async function bootstrap(): Promise<void> {
   const paymentReminders = app.get(PaymentReminders);
   const covers = app.get(SupervisorCoverService);
   const mentions = app.get(MentionService);
+  const subscriptions = app.get(SubscriptionEffects);
+  const seats = app.get(ConversationSeatService);
   const prisma = app.get(PrismaService);
 
   let running = true;
   let draining = false;
+  let subscriptionBusy = false;
 
   const stop = (signal: string) => {
     if (!running) return;
@@ -162,7 +187,7 @@ async function bootstrap(): Promise<void> {
     // mid-publish would leave rows claimed but unpublished, and at-least-once
     // delivery only holds if a claimed row is either published or released.
     const wait = setInterval(() => {
-      if (!draining) {
+      if (!draining && !subscriptionBusy) {
         clearInterval(wait);
         void flushErrorTracker(errors)
           .then(() => app.close())
@@ -191,6 +216,25 @@ async function bootstrap(): Promise<void> {
   let nextCoverSweep = 0;
   let nextMentionSweep = 0;
   let nextSignupFailurePurge = 0;
+  let nextSeatSweep = 0;
+
+  // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
+  log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
+  const subscriptionLoop = (async () => {
+    while (running) {
+      subscriptionBusy = true;
+      try {
+        await subscriptions.sweep();
+      } catch (e) {
+        report(log, 'subscription sweep', 'subscriptions.sweep', e);
+      } finally {
+        subscriptionBusy = false;
+      }
+      for (let waited = 0; running && waited < SUBSCRIPTION_SWEEP_MS; waited += 500) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  })();
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
   // short (OutboxPacer). Without Redis there are no hints and the loop simply
@@ -329,6 +373,19 @@ async function bootstrap(): Promise<void> {
       }
     }
 
+    // PD-35: seats that no longer hold, or went idle, end with a visible line.
+    if (Date.now() >= nextSeatSweep) {
+      draining = true;
+      try {
+        await seats.sweep();
+      } catch (e) {
+        report(log, 'seat sweep', 'seats.sweep', e);
+      } finally {
+        draining = false;
+        nextSeatSweep = Date.now() + SEAT_SWEEP_MS;
+      }
+    }
+
     // Deliver the notifications the outbox scheduled.
     //
     // Nothing called this before, so a notification could be scheduled by the
@@ -350,6 +407,7 @@ async function bootstrap(): Promise<void> {
     // Either sleep is cut short by the next hint.
     await pacer.pause(pacer.delayAfter(published));
   }
+  await subscriptionLoop;
   await closeWake?.();
 }
 

@@ -1,6 +1,6 @@
 import { StaffToolsService } from '../staff-tools/staff-tools.service';
 import { signAvatar } from '../profile/avatar-urls';
-import { Body, Controller, Optional, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Inject, Optional, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
 import { CallService } from '../calls/call.service';
@@ -10,6 +10,9 @@ import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { signWallpaper } from '../themes/wallpaper-urls';
 import { MentionService, type ViewerMentionDto } from '../mentions/mention.service';
+import { SUBSCRIPTION_LOCK } from '../../platform/tokens';
+import type { SubscriptionLockReader } from '../../platform/subscription-lock';
+import type { Actor } from '../../platform/types';
 
 @Controller('conversations')
 @UseFilters(CommErrorFilter)
@@ -30,7 +33,9 @@ export class ConversationController {
     // Optional only so the positional constructions the harnesses share do not
     // shift; without it no labels are attached.
     @Optional() private readonly tools?: StaffToolsService,
-    // PD-36, optional for the same reason: without it no mention is attached.
+    // PD-30: whether the group is locked for payment, for the banner.
+    @Inject(SUBSCRIPTION_LOCK) private readonly locks?: SubscriptionLockReader,
+    // PD-36, optional like `tools`: without it no mention is attached.
     @Optional() private readonly mentions?: MentionService,
   ) {}
 
@@ -193,7 +198,8 @@ export class ConversationController {
       members.filter((m) => m.actorKind === 'teacher' && m.actorId !== actor.actorId).map((m) => m.actorId),
       actor.kind === 'staff',
     );
-    return toConversationDto(conversation, members.map((m) => (away.has(m.actorId) ? { ...m, away: away.get(m.actorId) } : m)), {
+    const paymentLock = await this.paymentLockView(actor, conversation);
+    const dto = toConversationDto(conversation, members.map((m) => (away.has(m.actorId) ? { ...m, away: away.get(m.actorId) } : m)), {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: false, // PD-14
       viewerModerates: this.authz.moderatableAuthorKinds(actor, await this.conversations.staffAccess(actor, conversation)),
@@ -210,6 +216,36 @@ export class ConversationController {
       cover: covers.get(conversation.id) ?? null,
       ...(this.mentions ? { summoned } : {}),
     });
+    return { ...dto, paymentLock };
+  }
+
+  /**
+   * PD-30: the banner of a group locked for payment, or null. Advisory -- every
+   * send, reaction and call is refused by the server on its own. It names each
+   * locked child; the parent and staff also read why ("lessons used up",
+   * "instalment 2/3 overdue since ..."), the teacher only that the lessons are
+   * paused (nothing financial). `readOnly` is the viewer's: staff still write.
+   */
+  private async paymentLockView(actor: Actor, conversation: { id: string; type: string }) {
+    if (!this.locks?.enforced) return null;
+    if (conversation.type !== 'family_group' && conversation.type !== 'student_group') return null;
+    const locked = await this.locks.lockedChildren(conversation.id);
+    if (locked.length === 0) return null;
+    const financial = actor.kind !== 'teacher';
+    return {
+      readOnly: actor.kind !== 'staff',
+      canPay: actor.kind === 'contact',
+      children: locked.map((c) =>
+        financial
+          ? {
+              id: c.learnerId,
+              name: c.learnerName,
+              reasons: c.reasons,
+              overdue: c.overdueDueOn ? { label: c.instalmentLabel, dueDate: c.overdueDueOn } : null,
+            }
+          : { id: c.learnerId, name: c.learnerName },
+      ),
+    };
   }
 
   /**

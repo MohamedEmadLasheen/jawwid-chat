@@ -4,7 +4,7 @@ import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
 import { AuthorizationService, type LessonAct, type LessonStanding } from '../platform/authorization.service';
 import { CommError, CommErrorCode } from '../platform/errors';
-import { AUDIT_SERVICE } from '../platform/tokens';
+import { AUDIT_SERVICE, SUBSCRIPTION_LOCK } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -29,6 +29,8 @@ import {
 } from '../communication/contracts/vocab';
 import { renderCardBody, type CardLanguage } from './lesson-card';
 import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
+import { lessonPosition } from '../billing/subscription-reads';
+import type { SubscriptionLockReader } from '../platform/subscription-lock';
 import { ReportMaterials, hasMaterials, parseReportMaterials, type CardPractice, type ReportMaterialsInput } from '../materials/report-materials';
 
 export type Tx = Prisma.TransactionClient;
@@ -133,7 +135,28 @@ export class LessonService {
     // PD-29: practice and memorization marks written with the report. Optional
     // so the positional construction in the unit harnesses does not change.
     @Optional() readonly reportMaterials?: ReportMaterials,
+    // PD-30: a child locked for payment gets no new lesson. Required from the
+    // container (a missing provider fails boot); a positional harness
+    // construction without it refuses nothing.
+    @Inject(SUBSCRIPTION_LOCK) private readonly locks?: SubscriptionLockReader,
   ) {}
+
+  /**
+   * PD-30: no lesson is booked for a child whose group is locked for payment
+   * (lessons used up after the grace lessons, or an instalment overdue) --
+   * not a make-up, not one the Teachers department adds. An exception lifts
+   * the lock; staff grant it rather than booking around it. Off with
+   * SUBSCRIPTION_LOCK_ENFORCED.
+   */
+  async assertMayBook(learnerId: string): Promise<void> {
+    if (!this.locks?.enforced) return;
+    if (await this.locks.isLocked(learnerId)) {
+      throw new CommError(
+        CommErrorCode.SUBSCRIPTION_LOCKED,
+        'this child\'s lessons are paused until the subscription is renewed or the overdue instalment is paid',
+      );
+    }
+  }
 
   // ------------------------------------------------------------------
   // Scheduling
@@ -155,6 +178,7 @@ export class LessonService {
     });
     if (!learner) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'learner not found');
     if (!learner.teacherId) throw stateError('the learner has no assigned teacher');
+    await this.assertMayBook(learner.id);
 
     const lesson = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
@@ -234,6 +258,18 @@ export class LessonService {
       throw new CommError(CommErrorCode.LESSON_DENIED, 'only people take part in lessons');
     }
 
+    // PD-30: a lesson held for payment whose slot was filled again after the
+    // unlock is history, not a second lesson at that time. Left out IN THE
+    // QUERY, so the row limit counts only what is shown.
+    const superseded = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT h.id::text FROM chat.lesson h
+       WHERE h.organization_id = ${actor.organizationId}::uuid
+         AND h.outcome = 'suspended' AND h.outcome_by_kind = 'system'
+         AND h.starts_at >= ${from} AND h.starts_at < ${to}
+         AND EXISTS (SELECT 1 FROM chat.lesson x
+                      WHERE x.schedule_slot_id = h.schedule_slot_id AND x.starts_at = h.starts_at
+                        AND x.id <> h.id AND (x.outcome IS NULL OR x.outcome <> 'suspended'))`;
+    if (superseded.length > 0) where.id = { notIn: superseded.map((r) => r.id) };
     const rows = await this.prisma.lesson.findMany({
       where,
       include: LESSON_INCLUDE,
@@ -258,7 +294,8 @@ export class LessonService {
       ...this.toDto(lesson, standing, now, await this.escalationMs()),
       acts,
       // PD-15: the number the report form starts from, as "+" offers it.
-      ...(acts.includes('report') ? { suggestedLessonNumber: await this.nextLessonNumber(lesson.learnerId) } : {}),
+      // PD-30: with M, the lessons of the subscription it falls in.
+      ...(acts.includes('report') ? await this.suggestedNumbering(lesson.learnerId) : {}),
     };
   }
 
@@ -420,6 +457,8 @@ export class LessonService {
       endsAt: string | null;
       /** PD-15, a report ticket only: the number the report form starts from. */
       suggestedLessonNumber?: number;
+      /** PD-30: the M of "Lesson N of M", when the child has a subscription. */
+      suggestedLessonTotal?: number;
     }> = [];
     // PD-15: a staff member's standing is computed exactly as load() computes
     // it, so the child's supervisor sees the excuse cards in the group.
@@ -428,16 +467,16 @@ export class LessonService {
     const supervised = new Set(staff && !teachersDepartment ? await this.supervisedLearnerIds(actor, now) : []);
     const standingFor = (l: { learnerId: string } & Parameters<LessonService['scopeOf']>[0]) =>
       this.authz.lessonStanding(actor, this.scopeOf(l), { teachersDepartment, supervisesLearner: supervised.has(l.learnerId) });
-    const lessonNumbers = new Map<string, number>();
+    const lessonNumbers = new Map<string, { suggestedLessonNumber: number; suggestedLessonTotal?: number }>();
     for (const l of rows) {
       const standing = standingFor(l);
       if (!standing) continue;
       for (const act of availableActs(l, now)) {
         if (this.authz.canRecordLessonAct(actor, standing, act).allowed) {
-          let suggestedLessonNumber: number | undefined;
+          let numbering: { suggestedLessonNumber: number; suggestedLessonTotal?: number } | undefined;
           if (act === 'report') {
-            if (!lessonNumbers.has(l.learnerId)) lessonNumbers.set(l.learnerId, await this.nextLessonNumber(l.learnerId));
-            suggestedLessonNumber = lessonNumbers.get(l.learnerId);
+            if (!lessonNumbers.has(l.learnerId)) lessonNumbers.set(l.learnerId, await this.suggestedNumbering(l.learnerId));
+            numbering = lessonNumbers.get(l.learnerId);
           }
           tickets.push({
             ticket: act,
@@ -445,7 +484,7 @@ export class LessonService {
             learner: { id: l.learner.id, name: l.learner.name },
             startsAt: l.startsAt.toISOString(),
             endsAt: l.endsAt.toISOString(),
-            ...(suggestedLessonNumber !== undefined ? { suggestedLessonNumber } : {}),
+            ...(numbering ?? {}),
           });
         }
       }
@@ -541,14 +580,19 @@ export class LessonService {
     const materials = parseReportMaterials(body);
     return this.close(actorId, lessonId, 'report', LessonOutcome.HELD, null, async (tx, lesson, actor, lang) => {
       const practice = await this.prepareMaterials(tx, lesson, actor, materials);
+      // PD-30: the M of "Lesson N of M" -- the lessons of the subscription this
+      // lesson falls in, kept with the report so the card never changes later.
+      const lessonTotal = (await lessonPosition(this.prisma, lesson.learnerId))?.m ?? null;
       await tx.lessonReport.create({
         data: {
           lessonId: lesson.id, organizationId: lesson.organizationId, teacherId: lesson.teacherId,
-          ...fields, enteredByKind: 'teacher', enteredBy: actor.actorId,
+          ...fields, lessonTotal, enteredByKind: 'teacher', enteredBy: actor.actorId,
         },
       });
       await this.reportMaterials?.writeNew(tx, lesson, actor, materials);
-      const messageId = await this.postCard(tx, lesson, actor, CardKind.LESSON_REPORT, this.reportPayload(lesson, fields, practice), lang);
+      const messageId = await this.postCard(
+        tx, lesson, actor, CardKind.LESSON_REPORT, this.reportPayload(lesson, fields, practice, lessonTotal), lang,
+      );
       if (messageId) await tx.lessonReport.update({ where: { lessonId: lesson.id }, data: { messageId } });
     });
   }
@@ -566,11 +610,17 @@ export class LessonService {
     return this.reportMaterials.resolve(tx, lesson.organizationId, materials);
   }
 
-  /** What a report card carries: everything but the private note (PD-29: and its practice, when it has any). */
-  reportPayload(lesson: LessonWithRelations, f: ReportFields, practice?: CardPractice[]) {
+  /**
+   * What a report card carries: everything but the private note (PD-29: and its
+   * practice, when it has any). PD-30: the M of "Lesson N of M" -- given when
+   * the report is first written, else the one the report kept.
+   */
+  reportPayload(lesson: LessonWithRelations, f: ReportFields, practice?: CardPractice[], lessonTotal?: number | null) {
+    const total = lessonTotal === undefined ? lesson.report?.lessonTotal ?? null : lessonTotal;
     return {
       ...this.cardBase(lesson),
       lessonNumber: f.lessonNumber,
+      ...(total !== null && f.lessonNumber !== null ? { lessonTotal: total } : {}),
       coveredTopics: f.coveredTopics,
       covered: f.covered,
       rating: f.rating,
@@ -578,6 +628,17 @@ export class LessonService {
       homework: f.homework,
       ...(practice && practice.length > 0 ? { practice } : {}),
     };
+  }
+
+  /**
+   * PD-30 (9): what the report form starts from. With a subscription, the next
+   * lesson's place in it ("Lesson 2 of 24"); without one, PD-15's running
+   * number alone.
+   */
+  async suggestedNumbering(learnerId: string): Promise<{ suggestedLessonNumber: number; suggestedLessonTotal?: number }> {
+    const position = await lessonPosition(this.prisma, learnerId);
+    if (position) return { suggestedLessonNumber: position.n, suggestedLessonTotal: position.m };
+    return { suggestedLessonNumber: await this.nextLessonNumber(learnerId) };
   }
 
   /** The number a new report starts from: the child's live reported lessons, plus one. */
@@ -1192,11 +1253,18 @@ export class LessonService {
       durationMinutes: Math.round((lesson.endsAt.getTime() - lesson.startsAt.getTime()) / 60_000),
       phase: phaseOf(lesson, now, escalationMs),
       outcome: lesson.outcome,
+      // PD-30: suspended by the system because the group is locked for payment
+      // -- "Suspended — payment" for the family and staff. A teacher reads only
+      // "suspended": nothing financial reaches a teacher.
+      ...(isPaymentHold(lesson) && standing !== 'teacher' ? { suspendedFor: 'payment' } : {}),
       apologyTiming: lesson.apologyTiming,
       // PD-15: internal reasons (a teacher's apology, a supervisor's excuse, a
       // correction) are staff's. A family reads only its own apology's reason
       // and a cancellation's, which its card already told it.
-      outcomeNote: staffView || standing === 'teacher' || familyMayReadNote(lesson) ? lesson.outcomeNote : null,
+      outcomeNote:
+        (staffView || standing === 'teacher' || familyMayReadNote(lesson)) && !(standing === 'teacher' && isPaymentHold(lesson))
+          ? lesson.outcomeNote
+          : null,
       outcomeAt: lesson.outcomeAt?.toISOString() ?? null,
       // Who recorded it is staff-facing; a family sees what happened, not whom to blame.
       outcomeBy: staffView
@@ -1205,6 +1273,7 @@ export class LessonService {
       report: lesson.report && (lesson.report.deletedAt === null || staffView)
         ? {
             lessonNumber: lesson.report.lessonNumber,
+            lessonTotal: lesson.report.lessonTotal,
             coveredTopics: lesson.report.coveredTopics,
             covered: lesson.report.covered,
             rating: lesson.report.rating,
@@ -1281,6 +1350,11 @@ export function availableActs(lesson: Pick<Lesson, 'outcome' | 'startsAt'> & { r
 export const MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'student_apology'] as const;
 /** The ones the follow-up queue escalates when no make-up is booked: the teacher's (PD-11 T2). */
 export const TEACHER_MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show'] as const;
+
+/** PD-30: suspended by the system for payment (SubscriptionEffects' hold). */
+export function isPaymentHold(lesson: Pick<Lesson, 'outcome' | 'outcomeByKind'>): boolean {
+  return lesson.outcome === LessonOutcome.SUSPENDED && lesson.outcomeByKind === 'system';
+}
 
 function familyMayReadNote(lesson: Pick<Lesson, 'outcome' | 'outcomeByKind'>): boolean {
   return lesson.outcome === LessonOutcome.ADMIN_CANCELLED

@@ -20,6 +20,7 @@ import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/supervision.dart';
 import '../../../shared/models/trial.dart';
+import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/search_fold.dart';
@@ -47,6 +48,7 @@ import 'media_viewer.dart';
 import 'message_actions.dart';
 import 'message_bubble.dart';
 import 'message_composer.dart';
+import 'payment_lock_banner.dart';
 import 'pinned_banner.dart';
 import 'teacher_away_banner.dart';
 
@@ -73,9 +75,14 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.conversation,
     this.startVoiceRecording = false,
     this.banner,
+    this.onOpenSubscriptions,
   });
 
   final String conversationId;
+
+  /// PD-30: the locked banner's "Go to Subscriptions", opened at that child. Null hides
+  /// the button.
+  final ValueChanged<String>? onOpenSubscriptions;
 
   /// A strip above the thread for something about THIS conversation (PD-20: Sales'
   /// "Join this group" on a trial group). Null for nothing.
@@ -173,6 +180,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _searchLoading = false;
   int _hitIndex = 0;
   bool _focusDone = false;
+
+  /// PD-30: the lock as learned from a refused send (`COMM.SUBSCRIPTION_LOCKED`) --
+  /// the group locked after the screen opened. Wins over the conversation's own.
+  PaymentLock? _lockFromRefusal;
+  bool _lockLookup = false;
+
+  /// What the screen draws for a payment lock: the newest word on it.
+  PaymentLock? get _paymentLock => _lockFromRefusal ?? widget.conversation?.paymentLock;
+  bool get _lockedForMe => _paymentLock?.readOnly ?? false;
+
+  /// A send was refused because the group is locked: ask the server which child and
+  /// why (the conversation says), and draw the banner instead of a failure to retry.
+  /// Without an answer the banner still stands, naming no one.
+  Future<void> _onLockedRefusal() async {
+    if (_lockLookup || _lockFromRefusal != null) return;
+    _lockLookup = true;
+    final role = ref.read(currentRoleProvider);
+    var lock = PaymentLock(readOnly: true, canPay: role == UserRole.parent);
+    try {
+      final fresh = await ref.read(conversationRepositoryProvider).byId(widget.conversationId);
+      final described = fresh.paymentLock;
+      if (described != null && described.readOnly) lock = described;
+    } catch (_) {
+      // The refusal already said enough: the group is locked for this viewer.
+    }
+    if (!mounted) return;
+    // The call capability changed with the lock; ask again.
+    ref.invalidate(callCapabilityProvider(widget.conversationId));
+    setState(() => _lockFromRefusal = lock);
+  }
 
   /// The term to mark in bubbles while searching.
   String? get _highlightTerm => _searching && isSearchable(_searchedFor) ? _searchedFor : null;
@@ -948,6 +985,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final voiceController =
         ref.read(voiceComposerProvider(widget.conversationId).notifier);
 
+    // PD-30: a send refused because the group is locked shows the lock, not an error.
+    if (!_lockedForMe &&
+        state.log.messages.any((m) =>
+            m.deliveryState == DeliveryState.failed && m.failureCode == BillingErrors.subscriptionLocked)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_onLockedRefusal());
+      });
+    }
+    final paymentLock = _paymentLock;
+
     // Count arrivals while the user is reading history, so the pill can say there is
     // something new without ever moving the viewport under them.
     final length = state.log.length;
@@ -1039,11 +1086,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           // W7: the call affordance. ABSENT unless the server authorizes a call
           // for this conversation, never disabled — `screens/call.md` §4. The
           // answer is advisory and uncached; `POST /calls` decides again.
-          _CallAction(
-            conversationId: widget.conversationId,
-            title: widget.title,
-            kind: widget.kind,
-          ),
+          // PD-30: a group locked for this viewer offers no call (the server
+          // answers canCall:false with COMM.SUBSCRIPTION_LOCKED as well).
+          if (!_lockedForMe)
+            _CallAction(
+              conversationId: widget.conversationId,
+              title: widget.title,
+              kind: widget.kind,
+            ),
           if (ref.watch(messageSearchRepositoryProvider).isAvailable)
             IconButton(
               onPressed: () => setState(() => _searching = true),
@@ -1085,6 +1135,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: _body(state, controller, l10n),
             ),
           ),
+          // PD-30: locked for payment -- the banner stands where the composer was.
+          if (paymentLock != null && paymentLock.readOnly)
+            PaymentLockBanner(lock: paymentLock, onOpenSubscriptions: widget.onOpenSubscriptions)
+          else
           MessageComposer(
             onAttach: widget.isReadOnly ? null : _attach,
             onSend: (body) {

@@ -230,7 +230,8 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(r).getByText('Open')).toBeInTheDocument()
     expect(within(r).getByText('3-month subscription')).toBeInTheDocument()
     expect(within(r).getByText(/^Amount .*1,200\.00 · paid .*0\.00 · remaining .*1,200\.00$/)).toBeInTheDocument()
-    expect(within(r).getByText('3-month plan')).toBeInTheDocument()
+    // PD-30 (3): the package reads "3 months" (and "— N lessons" when the request buys lessons).
+    expect(within(r).getByText('3 months')).toBeInTheDocument()
     expect(within(r).getByRole('link', { name: 'Send on WhatsApp' })).toHaveAttribute('target', '_blank')
     expect(within(r).getByRole('button', { name: 'Cancel the request: 3-month subscription' })).toBeInTheDocument()
 

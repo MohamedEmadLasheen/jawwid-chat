@@ -384,7 +384,7 @@ class SummonedTile extends StatelessWidget {
     };
     final when = MaterialLocalizations.of(context).formatMediumDate(person.at.toLocal());
     final note = [
-      person.steppedIn ? l10n.mentionSteppedInRow : l10n.mentionWaiting,
+      l10n.mentionWaiting,
       l10n.mentionAskedBy(person.mentionedByName ?? l10n.mentionSomeoneHere, when),
     ].join(' · ');
 

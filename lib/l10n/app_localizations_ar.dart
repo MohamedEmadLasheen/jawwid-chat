@@ -1051,6 +1051,55 @@ class L10nAr extends L10n {
   }
 
   @override
+  String systemSeatJoined(String who) {
+    return 'انضم $who للمساندة';
+  }
+
+  @override
+  String systemSeatSteppedIn(String who) {
+    return '$who يتابع هذه المحادثة';
+  }
+
+  @override
+  String systemSeatLeft(String name) {
+    return 'غادر $name';
+  }
+
+  @override
+  String systemSeatLeftIdle(String name) {
+    return 'غادر $name (لا نشاط)';
+  }
+
+  @override
+  String systemSeatWho(String name, String role) {
+    return '$name ($role)';
+  }
+
+  @override
+  String get systemSeatSomeone => 'أحد أعضاء الفريق';
+
+  @override
+  String get systemSeatJoinedNoName => 'انضم أحد أعضاء الفريق';
+
+  @override
+  String get systemSeatSteppedInNoName => 'أحد أعضاء الفريق يتابع هذه المحادثة';
+
+  @override
+  String get systemSeatLeftNoName => 'غادر أحد أعضاء الفريق';
+
+  @override
+  String get seatRoleTeacherSupervisor => 'مشرف المعلمين';
+
+  @override
+  String get seatRoleSupervisor => 'مشرف';
+
+  @override
+  String get seatRoleManager => 'مدير';
+
+  @override
+  String get seatRoleAdministration => 'الإدارة';
+
+  @override
   String get systemUpdate => 'تحديث من النظام';
 
   @override
@@ -2937,6 +2986,152 @@ class L10nAr extends L10n {
   String get tabPayments => 'المدفوعات';
 
   @override
+  String get tabSubscriptions => 'الاشتراكات';
+
+  @override
+  String subscriptionMonthCount(int months) {
+    String _temp0 = intl.Intl.pluralLogic(
+      months,
+      locale: localeName,
+      other: '$months شهر',
+      many: '$months شهرًا',
+      few: '$months أشهر',
+      two: 'شهران',
+      one: 'شهر واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionLessonCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة',
+      many: '$count حصة',
+      few: '$count حصص',
+      two: 'حصتان',
+      one: 'حصة واحدة',
+      zero: '0 حصة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionPlanLessons(String months, String lessons) {
+    return '$months — $lessons';
+  }
+
+  @override
+  String get subscriptionNone => 'لا يوجد اشتراك بعد';
+
+  @override
+  String subscriptionLessonsLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'بقيت $count حصة',
+      many: 'بقيت $count حصة',
+      few: 'بقيت $count حصص',
+      two: 'بقيت حصتان',
+      one: 'بقيت حصة واحدة',
+      zero: 'لم تبقَ حصص',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String subscriptionGraceLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تبقّت $count حصة سماح',
+      many: 'تبقّت $count حصة سماح',
+      few: 'تبقّت $count حصص سماح',
+      two: 'تبقّت حصتا سماح',
+      one: 'تبقّت حصة سماح واحدة',
+      zero: 'لم تبقَ حصص سماح',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get subscriptionStateOpen => 'فعّال';
+
+  @override
+  String get subscriptionStateGrace => 'بانتظار التجديد';
+
+  @override
+  String get subscriptionStateLocked => 'متوقف';
+
+  @override
+  String get subscriptionLessonsUsedUp => 'انتهت الحصص';
+
+  @override
+  String subscriptionOverdueSince(String label, String date) {
+    return 'القسط $label متأخر منذ $date';
+  }
+
+  @override
+  String get subscriptionRequestRenewal => 'طلب التجديد';
+
+  @override
+  String get subscriptionRenewalRequested => 'تم طلب التجديد';
+
+  @override
+  String get lockBannerTitle => 'الحصص متوقفة مؤقتًا';
+
+  @override
+  String lockBannerChildBalance(String name) {
+    return '$name: انتهت الحصص';
+  }
+
+  @override
+  String lockBannerChildOverdue(String name, String label, String date) {
+    return '$name: القسط $label متأخر منذ $date';
+  }
+
+  @override
+  String lockBannerChildPaused(String name) {
+    return 'حصص $name متوقفة مؤقتًا';
+  }
+
+  @override
+  String get lockBannerGeneric => 'هذه المجموعة متوقفة مؤقتًا.';
+
+  @override
+  String get lockBannerOpenSubscriptions => 'الذهاب إلى الاشتراكات';
+
+  @override
+  String reportLessonOf(int number, int total) {
+    return 'الحصة $number من $total';
+  }
+
+  @override
+  String cardLessonNumberOf(int number, int total) {
+    return '$number من $total';
+  }
+
+  @override
+  String get outcomeSuspended => 'موقوفة';
+
+  @override
+  String get outcomeSuspendedPayment => 'موقوفة — الدفع';
+
+  @override
+  String get cardLessonsPausedTitle => 'توقفت الحصص مؤقتًا';
+
+  @override
+  String get cardSubscriptionLockedTitle => 'توقفت الحصص — الدفع';
+
+  @override
+  String get cardSubscriptionLockedHint =>
+      'جدّدوا الاشتراك أو ادفعوا من «الاشتراكات».';
+
+  @override
+  String get cardSubscriptionUnlockedTitle => 'عادت الحصص';
+
+  @override
   String get roleSales => 'المبيعات';
 
   @override
@@ -3851,9 +4046,6 @@ class L10nAr extends L10n {
   String get mentionWaiting => 'إشارة — بانتظار الانضمام';
 
   @override
-  String get mentionSteppedInRow => 'داخل المحادثة';
-
-  @override
   String mentionAskedBy(String name, String date) {
     return 'بطلب من $name، $date';
   }
@@ -3863,20 +4055,4 @@ class L10nAr extends L10n {
 
   @override
   String get mentionedMark => 'تمت الإشارة إليك';
-
-  @override
-  String systemMentionSteppedIn(String name) {
-    return 'انضمام $name إلى المحادثة';
-  }
-
-  @override
-  String get systemMentionSteppedInNoName => 'انضمام من الإدارة إلى المحادثة';
-
-  @override
-  String systemMentionSteppedOut(String name) {
-    return 'خروج $name من المحادثة';
-  }
-
-  @override
-  String get systemMentionSteppedOutNoName => 'خروج من الإدارة من المحادثة';
 }

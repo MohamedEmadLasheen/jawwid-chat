@@ -13,6 +13,28 @@ function coverDay(iso: unknown, tag: string): string {
     : ''
 }
 
+/** PD-35: the role word a seat line carries (the server sends the word's key, never wording). */
+const SEAT_ROLE_EN: Record<string, string> = {
+  teacher_supervisor: 'teacher supervisor',
+  supervisor: 'supervisor',
+  manager: 'manager',
+  super_admin: 'administration',
+}
+const SEAT_ROLE_AR: Record<string, string> = {
+  teacher_supervisor: 'مشرف المعلمين',
+  supervisor: 'مشرف',
+  manager: 'مدير',
+  super_admin: 'الإدارة',
+}
+const seatName = (p: Record<string, unknown>, fallback: string) =>
+  typeof p.name === 'string' && p.name.trim() ? p.name : fallback
+/** "Ola (teacher supervisor)", or the name alone for a role word this client does not know. */
+const seatWho = (p: Record<string, unknown>, roles: Record<string, string>) => {
+  const name = seatName(p, roles === SEAT_ROLE_AR ? 'أحد أعضاء الفريق' : 'A team member')
+  const role = typeof p.role === 'string' ? roles[p.role] : undefined
+  return role ? `${name} (${role})` : name
+}
+
 export const chatCopy = {
   ar: {
     // PD-33: the cover line under a chat's name, and the backup's chip.
@@ -272,10 +294,11 @@ export const chatCopy = {
           : 'مُدّدت التغطية',
       'cover.ended': (p: Record<string, unknown>) =>
         p.supervisor ? `انتهت التغطية؛ عادت المتابعة إلى ${String(p.supervisor)}` : 'انتهت التغطية',
-      'mention.stepped_in': (p: Record<string, unknown>) =>
-        p.name ? `انضمام ${String(p.name)} إلى المحادثة` : 'انضمام من الإدارة إلى المحادثة',
-      'mention.stepped_out': (p: Record<string, unknown>) =>
-        p.name ? `خروج ${String(p.name)} من المحادثة` : 'خروج من الإدارة من المحادثة',
+      // PD-35: a visible seat, taken or left.
+      'seat.joined': (p: Record<string, unknown>) => `انضم ${seatWho(p, SEAT_ROLE_AR)} للمساندة`,
+      'seat.stepped_in': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_AR)} يتابع هذه المحادثة`,
+      'seat.left': (p: Record<string, unknown>) =>
+        `غادر ${seatName(p, 'أحد أعضاء الفريق')}${p.ended === 'idle' ? ' (لا نشاط)' : ''}`,
       fallback: () => 'تحديث من النظام',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },
@@ -534,8 +557,11 @@ export const chatCopy = {
           : 'The cover is extended',
       'cover.ended': (p: Record<string, unknown>) =>
         p.supervisor ? `${String(p.supervisor)} is back; the cover has ended` : 'The cover has ended',
-      'mention.stepped_in': (p: Record<string, unknown>) => (p.name ? `${String(p.name)} stepped in` : 'Jawwid stepped in'),
-      'mention.stepped_out': (p: Record<string, unknown>) => (p.name ? `${String(p.name)} stepped out` : 'Jawwid stepped out'),
+      // PD-35: a visible seat, taken or left.
+      'seat.joined': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_EN)} joined to support`,
+      'seat.stepped_in': (p: Record<string, unknown>) => `${seatWho(p, SEAT_ROLE_EN)} is following this chat`,
+      'seat.left': (p: Record<string, unknown>) =>
+        `${seatName(p, 'A team member')} left${p.ended === 'idle' ? ' (no activity)' : ''}`,
       fallback: () => 'System update',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },
@@ -557,7 +583,9 @@ export function systemText(body: string | null, copy: ChatCopy): string {
   try {
     parsed = body ? (JSON.parse(body) as Record<string, unknown>) : {}
   } catch {
-    return copy.system.fallback!({})
+    // A card the system posted (PD-11 / PD-30: "the lessons are paused", "back
+    // on") carries its own words, not a { kind } event: show them as written.
+    return body && body.trim() !== '' ? body : copy.system.fallback!({})
   }
   const render = copy.system[String(parsed.kind)] ?? copy.system.fallback!
   return render(parsed)
