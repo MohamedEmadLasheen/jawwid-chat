@@ -111,8 +111,10 @@ describe('1. transfers', () => {
     const clash = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(3 * DAY), endsAt: at(3 * DAY + HOUR / 2) })).id;
     await lessons.schedule(tsupId, { learnerId: s.secondLearnerId, startsAt: at(3 * DAY), endsAt: at(3 * DAY + HOUR / 2) });
 
-    expect(await code(lifecycle.transfer(s.ownerId, s.learnerId, { toTeacherId: s.newTeacherId, reason: 'schedule_fit' })))
-      .toBe(CommErrorCode.LESSON_DENIED);
+    // PD-31: the child's own supervisor may change the teacher; an Operations
+    // supervisor of other children may not (pd031-scheduling.spec.ts).
+    expect(await code(lifecycle.transfer(s.otherAdminId, s.learnerId, { toTeacherId: s.newTeacherId, reason: 'schedule_fit' })))
+      .toBe(CommErrorCode.LESSON_NOT_FOUND);
     expect(await code(lifecycle.transfer(tsupId, s.learnerId, { toTeacherId: s.newTeacherId, reason: 'because' })))
       .toBe(CommErrorCode.VALIDATION);
 
@@ -155,11 +157,12 @@ describe('1. transfers', () => {
     expect(await code(lifecycle.transfers(s.teacherId, s.learnerId))).toBe(CommErrorCode.LESSON_NOT_FOUND);
   });
 
-  it('the database refuses a transfer by someone outside the Teachers department, and a transfer to the same teacher', async () => {
+  it('the database refuses a transfer by someone outside the Teachers department and the child\'s supervision, and a transfer to the same teacher', async () => {
+    // PD-31: an Operations supervisor of OTHER children (the child's own may).
     await expect(g.prisma.$queryRawUnsafe(
       `select * from chat.transfer_learner($1::uuid, $2::uuid, 'other', null, null, $3::uuid)`,
-      s.learnerId, s.newTeacherId, s.ownerId,
-    )).rejects.toThrow(/only the Teachers department/);
+      s.learnerId, s.newTeacherId, s.otherAdminId,
+    )).rejects.toThrow(/only the Teachers department or the learner's supervisor/);
     await expect(g.prisma.$queryRawUnsafe(
       `select * from chat.transfer_learner($1::uuid, $2::uuid, 'other', null, null, $3::uuid)`,
       s.learnerId, s.teacherId, tsupId,

@@ -953,7 +953,8 @@ export class SchedulingService {
         slots: r.slots,
       });
     }
-    return { ...base, scheduleRequests, blockedOccurrences: await this.blockedOccurrences(org) };
+    const { scheduleRequests: _legacy, ...rest } = base;
+    return { ...rest, scheduleRequests, blockedOccurrences: await this.blockedOccurrences(org) };
   }
 
   // ------------------------------------------------------------------
@@ -1279,12 +1280,20 @@ export class SchedulingService {
 
   /**
    * PD-30's payment lock for a child: 'balance' | 'overdue', or null when the
-   * child's lessons may be booked and moved. PD-30 provides the state; until
-   * it lands, nothing is locked. Every PD-31 picker and write asks this ONE
-   * method.
+   * child's lessons may be booked and moved (grace and an active exception
+   * included). PD-30 owns the state and exposes it as
+   * chat.learner_lesson_lock(uuid); until that function exists nothing is
+   * locked, so this works whichever of the two lands first. Every PD-31 picker
+   * and write asks this ONE method.
    */
-  async lockOf(_learnerId: string): Promise<'balance' | 'overdue' | null> {
-    return null;
+  async lockOf(learnerId: string): Promise<'balance' | 'overdue' | null> {
+    const [fn] = await this.prisma.$queryRaw<Array<{ present: boolean }>>`
+      SELECT to_regprocedure('chat.learner_lesson_lock(uuid)') IS NOT NULL AS present`;
+    if (!fn?.present) return null;
+    const [row] = await this.prisma.$queryRawUnsafe<Array<{ lock: string | null }>>(
+      'SELECT chat.learner_lesson_lock($1::uuid) AS lock', learnerId,
+    );
+    return row?.lock === 'balance' || row?.lock === 'overdue' ? row.lock : null;
   }
 
   /** The learner's current weekly times, each with its next real start. */
