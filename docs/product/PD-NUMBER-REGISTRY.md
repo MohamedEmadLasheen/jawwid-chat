@@ -44,7 +44,8 @@ claimed. The decision text itself still lives in
 | PD-33 | Hand over to backup: a temporary cover with automatic return (built on PD-8 backup links) | `claude/pd33-backup-handover-3bb0f2` | in progress |
 | PD-35 | Teacher supervisors: the visible seat (join/leave by choice), teacher assignment and scope, report corrections, evaluations, escalation | `claude/pd35-teacher-supervisors-8efcc6` | in progress |
 | PD-36 | @mentions that summon a non-member in charge (admin, manager, super admin) to step in; parents' @supervisor / @admin; never widens authorization; joins through PD-35's seat primitive | `claude/pd36-mentions-b0f99d` | in progress |
-| PD-38 | next free number | — | — |
+| PD-38 | Scheduling calendar: academy and teacher views, shifts by category, supervisor colors, filters, capacity statistics | `claude/pd38-schedule-calendar-b9fe8f`, `claude/pd38-admin-web` | P1: PR #139 (API) + #142 (Admin Web) |
+| PD-39 | next free number | — | — |
 
 ## Migration slots claimed on 2026-10-22
 
@@ -72,5 +73,6 @@ claimed. The decision text itself still lives in
 
 The slot map is fixed by the department head (2026-10-26): 180000 PD-37, 190000 PD-34, 200000 the PD-29 amendment.
 | `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |
+| `20261026210000` | PD-38 — `chat_pd038_schedule_calendar` |
 
-The next free slot is `20261026210000` (fixed slot map: 130000 PD-33, 140000 PD-30, 160000 PD-35, 170000 PD-36, 180000 PD-37, 190000 PD-34, 200000 PD-29 amendment).
+The next free slot is `20261026220000` (fixed slot map: 130000 PD-33, 140000 PD-30, 160000 PD-35, 170000 PD-36, 180000 PD-37, 190000 PD-34, 200000 PD-29 amendment, 210000 PD-38).

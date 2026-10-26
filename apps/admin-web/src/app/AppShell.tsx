@@ -51,12 +51,13 @@ function useDestinations(): Destination[] {
   const billingReader = billing.data?.billingReader === true
   const sales = access.data?.sales === true
   const operations = access.data?.operations === true
+  const calendar = access.data?.calendar === true
   // PD-29: only a manager can be the Teachers manager (the super admin's entry is a section).
   const materials = useMaterialsAccess(staff?.role === 'manager')
   const materialsManager = materials.data?.canManage === true
   return useMemo(
-    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager }) : []),
-    [staff, lessonManager, sales, operations, billingReader, materialsManager],
+    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar }) : []),
+    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar],
   )
 }
 
