@@ -14,6 +14,7 @@ import { AssignSupervisorDialog, BackupActionDialog, CreateBackupDialog } from '
 import type { BackupAction } from './hooks'
 import './organization.css'
 import { Link } from 'react-router-dom'
+import { SupervisorColors } from '@/features/schedule/SupervisorColors'
 import { studentPath } from '@/features/profiles/api'
 
 type Tab = 'children' | 'structure'
@@ -244,6 +245,9 @@ function DepartmentCard({ department }: { department: Department }) {
           )}
         </>
       )}
+
+      {/* PD-38: each supervisor's schedule color. */}
+      {department.kind === 'operations' && <SupervisorColors />}
 
       {creating && <CreateBackupDialog members={department.members} onClose={() => setCreating(false)} />}
       {acting && <BackupActionDialog link={acting.link} action={acting.action} onClose={() => setActing(null)} />}
