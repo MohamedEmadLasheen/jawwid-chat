@@ -62,5 +62,6 @@ claimed. The decision text itself still lives in
 | `20261026100000` | PD-30 — subscriptions, lesson balance, payment lock |
 | `20261026110000` | PD-31 — scheduling |
 | `20261026120000` | PD-32 — parent feedback, sign-up code expiry |
+| `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |
 
 The next free slot is `20261026130000`.

@@ -368,6 +368,8 @@ export enum CommErrorCode {
   MATERIAL_NOT_UPLOADED = 'COMM.MATERIAL_NOT_UPLOADED',
   /** The lessons site is not configured on this deployment (MATERIALS_SITE_BASE_URL). 409. */
   MATERIAL_UNAVAILABLE = 'COMM.MATERIAL_UNAVAILABLE',
+  /** A Materials feature that was retired (the memorization map, 2026-10-26). 410. */
+  MATERIAL_RETIRED = 'COMM.MATERIAL_RETIRED',
 }
 
 export class CommError extends Error {

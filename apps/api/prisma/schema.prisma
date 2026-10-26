@@ -2326,6 +2326,8 @@ model MaterialItem {
   surah          Int?     @db.SmallInt
   /// draft | published | retired
   status         String   @default("draft")
+  /// PD-29 amendment: the order provided (manifest row order); Quran orders by surah instead.
+  sortOrder      Int?     @map("sort_order")
   createdBy      String   @map("created_by") @db.Uuid
   updatedBy      String   @map("updated_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -2420,5 +2422,20 @@ model MemorizationMark {
   at             DateTime @default(now()) @db.Timestamptz
 
   @@map("memorization_mark")
+  @@schema("chat")
+}
+
+/// PD-29 amendment: each time an item was opened for a child. Append-only.
+model MaterialOpen {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  learnerId      String   @map("learner_id") @db.Uuid
+  itemId         String   @map("item_id") @db.Uuid
+  openedBy       String   @map("opened_by") @db.Uuid
+  /// contact | teacher | staff
+  openedByKind   String   @map("opened_by_kind")
+  openedAt       DateTime @default(now()) @map("opened_at") @db.Timestamptz
+
+  @@map("material_open")
   @@schema("chat")
 }
