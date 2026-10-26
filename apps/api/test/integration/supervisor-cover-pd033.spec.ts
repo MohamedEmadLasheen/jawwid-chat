@@ -71,8 +71,20 @@ const reaches = async (staffId: string, familyId: string, at: Date) =>
     await g.prisma.$queryRaw<Array<{ a: string | null }>>`
       SELECT chat.staff_reaches_family(${staffId}::uuid, ${familyId}::uuid, ${at}) AS a`
   )[0]?.a ?? null;
-const lines = (conversationId: string, kind: string) =>
-  g.prisma.message.count({ where: { conversationId, type: 'system', body: { contains: `"kind":"${kind}"` } } });
+/** Cover lines posted since this test began (earlier tests' lines are history). */
+let before = new Set<string>();
+beforeEach(async () => {
+  before = new Set(
+    (await g.prisma.message.findMany({ where: { type: 'system', body: { contains: '"kind":"cover.' } }, select: { id: true } })).map((x) => x.id),
+  );
+});
+const lines = async (conversationId: string, kind: string) =>
+  (
+    await g.prisma.message.findMany({
+      where: { conversationId, type: 'system', body: { contains: `"kind":"${kind}"` } },
+      select: { id: true },
+    })
+  ).filter((x) => !before.has(x.id)).length;
 
 /** Every conversation of supervisor `s` the cover should touch: their families' groups and 1:1s. */
 const caseload = (s: string) => {
@@ -286,11 +298,11 @@ describe('4. the eligibility trigger', () => {
   it('refuses an inactive backup', async () => {
     const p = m.supervisors[0]!;
     const b = backupOf(p.id);
-    await g.prisma.staff.update({ where: { id: b.id }, data: { isActive: false } });
+    await g.prisma.staff.update({ where: { id: b.id }, data: { isActive: false, leftAt: new Date() } });
     try {
       expect(await code(covers.start(p.id, { supervisorId: p.id, until: inHours(3) }))).toBe(CommErrorCode.ORG_STRUCTURE_INVALID);
     } finally {
-      await g.prisma.staff.update({ where: { id: b.id }, data: { isActive: true } });
+      await g.prisma.staff.update({ where: { id: b.id }, data: { isActive: true, leftAt: null } });
     }
   });
 });
@@ -346,9 +358,9 @@ describe('5. lines, pushes and the cover line', () => {
 describe('6. Extend', () => {
   it('adds the same window again, and never past cover.max_days', async () => {
     const p = m.supervisors[0]!;
-    const c = await covers.start(p.id, { supervisorId: p.id, until: new Date(Date.now() + 10 * DAY).toISOString() });
+    const c = await covers.start(p.id, { supervisorId: p.id, until: new Date(Date.now() + 12 * DAY).toISOString() });
     const once = await covers.extend(p.id, c.id);
-    expect(new Date(once.endsAt).getTime() - new Date(c.endsAt).getTime()).toBeGreaterThan(10 * DAY - 5000);
+    expect(new Date(once.endsAt).getTime() - new Date(c.endsAt).getTime()).toBeGreaterThan(12 * DAY - 5000);
     const link = await g.prisma.supervisorBackup.findFirstOrThrow({ where: { primaryId: p.id, backupId: c.backup.id, endedAt: null } });
     expect(link.activeUntil?.toISOString()).toBe(once.endsAt);
     expect(await code(covers.extend(p.id, c.id))).toBe(CommErrorCode.VALIDATION); // 30 days max
@@ -439,7 +451,8 @@ describe('8. Instalments: "mine" includes the covered supervisor\'s rows during 
     await covers.end(p.id, c.id);
     const after = await billing.list(b.id, { responsible: 'me' }).then((r) => r.items.map((i) => i.id)).catch((e: CommError) => e.code);
     expect(Array.isArray(after) ? after.includes(inst.id) : false).toBe(false);
-    await g.prisma.familyInstalment.delete({ where: { id: inst.id } });
+    // An instalment is never deleted (the database refuses); void the probe.
+    await g.prisma.familyInstalment.update({ where: { id: inst.id }, data: { voidedAt: new Date(), voidedBy: m.operationsManager.id, voidReason: 'PD-33 probe' } });
   });
 });
 
