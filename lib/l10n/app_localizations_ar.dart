@@ -3854,7 +3854,7 @@ class L10nAr extends L10n {
       'استخدام الإعداد الافتراضي للأكاديمية';
 
   @override
-  String get notificationSettingsShowNames => 'إظهار الأسماء على شاشة القفل';
+  String get notificationSettingsShowNames => 'إظهار التفاصيل على شاشة القفل';
 
   @override
   String get notificationSettingsShowNamesBody =>

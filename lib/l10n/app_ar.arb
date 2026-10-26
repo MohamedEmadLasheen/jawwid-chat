@@ -1564,7 +1564,7 @@
   "notificationSettingsFrom": "من",
   "notificationSettingsUntil": "حتى",
   "notificationSettingsUseDefault": "استخدام الإعداد الافتراضي للأكاديمية",
-  "notificationSettingsShowNames": "إظهار الأسماء على شاشة القفل",
+  "notificationSettingsShowNames": "إظهار التفاصيل على شاشة القفل",
   "notificationSettingsShowNamesBody": "إظهار اسم الطفل في تذكيرات الحصص والمبلغ في تذكيرات الدفع والهاتف مقفل.",
   "notificationSettingsShowNamesTeacherBody": "إظهار اسم الطالب في تذكيرات الحصص والهاتف مقفل.",
   "notificationSettingsCategories": "الإشعارات الفورية",
