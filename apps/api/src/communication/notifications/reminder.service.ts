@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../platform/prisma.service';
 import { NotificationService } from './notification.service';
+import { NotificationPipeline } from './notification-pipeline.service';
 
 export interface ReminderContext {
   /** Stable id of the thing being reminded about: a session, an invoice, a subscription. */
@@ -17,6 +18,10 @@ export interface ReminderContext {
    * Off by default: a payment reminder anchored in the past is still owed.
    */
   skipPast?: boolean;
+  /** PD-34: what the subject is (lesson, instalment...), for the Notification Center. */
+  subjectType?: string;
+  /** PD-34: ids the Center's button opens (lessonId, learnerId, instalmentId...). */
+  refs?: Record<string, string | null | undefined>;
 }
 
 /**
@@ -35,6 +40,10 @@ export class ReminderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationService,
+    // PD-34: with the pipeline, every reminder is also a Notification Center
+    // entry and obeys preferences and the default quiet hours. Optional so a
+    // hand-built engine behaves exactly as before.
+    @Optional() private readonly pipeline?: NotificationPipeline,
   ) {}
 
   static dedupeKey(ruleKey: string, subjectId: string, recipientId: string): string {
@@ -58,6 +67,30 @@ export class ReminderService {
       for (const recipient of ctx.recipients) {
         // A rule targets one role; "participant" means everyone given.
         if (rule.recipientRole !== 'participant' && rule.recipientRole !== recipient.role) {
+          continue;
+        }
+
+        if (this.pipeline) {
+          await this.pipeline.emit({
+            dedupeKey: ReminderService.dedupeKey(rule.key, ctx.subjectId, recipient.actorId),
+            ruleKey: rule.key,
+            templateKey: rule.templateKey,
+            eventType,
+            recipientId: recipient.actorId,
+            locale: recipient.locale ?? 'ar',
+            channel: rule.channel,
+            priority: rule.priority,
+            familyId: ctx.familyId ?? null,
+            conversationId: ctx.conversationId ?? null,
+            subject: { type: ctx.subjectType ?? eventType, id: ctx.subjectId },
+            refs: ctx.refs,
+            variables: ctx.variables ?? {},
+            scheduledAt,
+            respectQuietHours: rule.respectQuietHours,
+            basis: recipient.role,
+            reviveCancelled: true,
+          });
+          count += 1;
           continue;
         }
 
@@ -95,6 +128,9 @@ export class ReminderService {
       },
       data: { status: 'cancelled' },
     });
+    // Center entries not shown yet go too (those with a delivery already went
+    // with it, by trigger; this reaches one whose push was switched off).
+    await this.pipeline?.cancelSubject(subjectId, 'subject_gone');
     return result.count;
   }
 }

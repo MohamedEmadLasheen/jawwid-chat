@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../platform/prisma.service';
 import { IDENTITY_SERVICE, REALTIME_PUBLISHER } from '../../platform/tokens';
 import type { IdentityService } from '../../platform/identity.service';
@@ -6,6 +6,7 @@ import { actorRefKey } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName, room } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
+import { NotificationPipeline } from '../notifications/notification-pipeline.service';
 import { ActorKind, CallOutcome, CallType, StoryState, Visibility } from '../contracts/vocab';
 
 /**
@@ -24,6 +25,9 @@ export class OutboxWorker {
     private readonly notifications: NotificationService,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    // PD-34. Optional so a suite that builds a worker by hand (the call and
+    // revocation suites) gets exactly the delivery it always had.
+    @Optional() private readonly pipeline?: NotificationPipeline,
   ) {}
 
   async drain(batchSize = 100, now = new Date()): Promise<number> {
@@ -205,6 +209,20 @@ export class OutboxWorker {
         const recipients = await this.storyRecipientIds(storyId);
         await this.realtime.toUsers(recipients, type, payload as never);
         await this.notifyStoryPublished(storyId);
+        return;
+      }
+
+      // PD-34: a person's own Notification Center and read state, to their own
+      // actor room and nobody else's -- never the conversation room.
+      case CommEvent.INBOX_CHANGED: {
+        const recipientId = payload.recipientId as string | undefined;
+        if (recipientId) await this.realtime.toUsers([recipientId], type, payload as never);
+        return;
+      }
+
+      case CommEvent.CONVERSATION_READ: {
+        const actorId = payload.actorId as string | undefined;
+        if (actorId) await this.realtime.toUsers([actorId], type, payload as never);
         return;
       }
 
@@ -472,6 +490,24 @@ export class OutboxWorker {
     for (const m of members) {
       if (m.actorId === authorId) continue;
       const muted = mutedUntil.get(m.actorId);
+
+      // PD-34: the Notification Center entry and a coalesced push. A muted chat
+      // still counts in the Center; it is only not pushed.
+      if (this.pipeline) {
+        const recipient = await this.identity.resolveActor(m.actorId);
+        if (!recipient || !recipient.isActive) continue;
+        await this.pipeline.messagePublished({
+          conversationId,
+          messageId: payload.messageId as string,
+          seq: typeof payload.seq === 'string' ? BigInt(payload.seq) : null,
+          recipientId: m.actorId,
+          locale: recipient.locale,
+          muted: Boolean(muted && muted > now),
+          now,
+        });
+        continue;
+      }
+
       if (muted && muted > now) continue;
 
       const recipient = await this.identity.resolveActor(m.actorId);

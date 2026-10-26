@@ -36,6 +36,8 @@ import { NotificationService } from './notifications/notification.service';
 import { ReminderService } from './notifications/reminder.service';
 import { TemplateService } from './notifications/template.service';
 import { QuietHoursService } from './notifications/quiet-hours.service';
+import { NotificationPipeline } from './notifications/notification-pipeline.service';
+import { NotificationInboxService } from './notifications/notification-inbox.service';
 import { selectPushProvider } from './notifications/push.provider.selector';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { RevocationConfirmer } from './realtime/revocation-confirmer.service';
@@ -54,6 +56,7 @@ import { LiveKitWebhookVerifier } from './calls/livekit-webhook.verifier';
 import { LiveKitRoomControl } from './calls/media-room-control';
 import { MediaPresenceService } from './calls/media-presence.service';
 import { NotificationController } from './api/notification.controller';
+import { NotificationInboxController } from './api/notification-inbox.controller';
 import { StorageController } from './api/storage.controller';
 import { MediaController } from './api/media.controller';
 import { StoryController } from './api/story.controller';
@@ -75,6 +78,7 @@ import { ParentProfileService } from './profile/parent-profile.service';
     CallController,
     LiveKitWebhookController,
     NotificationController,
+    NotificationInboxController,
     StorageController,
     MediaController,
     ProfilePhotoController,
@@ -113,6 +117,8 @@ import { ParentProfileService } from './profile/parent-profile.service';
     ReminderService,
     TemplateService,
     QuietHoursService,
+    NotificationPipeline,
+    NotificationInboxService,
     TypingService,
     PresenceService,
     RealtimeGateway,
@@ -150,6 +156,7 @@ import { ParentProfileService } from './profile/parent-profile.service';
     StorySweeper,
     NotificationService,
     ReminderService,
+    NotificationPipeline,
     OutboxWorker,
     RealtimeRelay,
     // PD-17: the Parent and Student Profiles show and (for a parent) change photos.

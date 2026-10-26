@@ -128,6 +128,8 @@ export enum CommErrorCode {
   /** Past expires_at. A 410: it existed, it does not any more. */
   STORY_EXPIRED = 'COMM.STORY_EXPIRED',
   STORY_DELETED = 'COMM.STORY_DELETED',
+  /** PD-34: a Notification Center entry that is not the caller's, or does not exist -- one answer for both. */
+  NOTIFICATION_NOT_FOUND = 'COMM.NOTIFICATION_NOT_FOUND',
   STORY_DELETE_REASON_REQUIRED = 'COMM.STORY_DELETE_REASON_REQUIRED',
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',

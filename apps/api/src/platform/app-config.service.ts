@@ -36,6 +36,29 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'call.ring_timeout_seconds': 45,
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
+  /**
+   * PD-34 defaults (owner questions open 2026-10-26; an answer changes these
+   * values, not code). Quiet hours for someone who never set their own:
+   * 22:00-08:00 in their own zone. Calls, the T-30/T-15 lesson reminders and
+   * security are exempt by their rules (respect_quiet_hours = false).
+   */
+  'notification.quiet_hours.default_enabled': true,
+  'notification.quiet_hours.default_start_minute': 1320,
+  'notification.quiet_hours.default_end_minute': 480,
+  /** PD-34: at most this many pushes an hour per person in a rate-limited category; the rest go to the Center only. */
+  'notification.push_per_hour': 6,
+  'notification.rate_limited_categories': ['conversation', 'announcement', 'marketing'] as readonly string[],
+  /** PD-34: categories a person cannot switch off (operational). */
+  'notification.locked_categories': ['lesson', 'payment', 'call', 'task', 'system'] as readonly string[],
+  /** PD-34: after a message push, further messages in that chat wait this long and go out as one. */
+  'notification.message_coalesce_seconds': 60,
+  /** PD-34: someone reading the chat right now gets the push this late, and not at all if they read it. */
+  'notification.message_reading_grace_seconds': 20,
+  /** PD-34: names (a child's, an amount) on the lock screen, for someone who has not chosen. */
+  'notification.lock_screen_names_default': false,
+  /** PD-34: delivery rows are kept this long; Center entries this long. */
+  'notification.delivery_retention_days': 90,
+  'notification.item_retention_days': 365,
   /** initial hypothesis - how long a published story stays readable */
   'story.default_lifetime_hours': 24,
   /** initial hypothesis - longest story body accepted */

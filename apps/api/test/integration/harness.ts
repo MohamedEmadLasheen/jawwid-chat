@@ -16,6 +16,8 @@ import { NotificationService } from '@communication/notifications/notification.s
 import { ReminderService } from '@communication/notifications/reminder.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
+import { NotificationPipeline } from '@communication/notifications/notification-pipeline.service';
+import { NotificationInboxService } from '@communication/notifications/notification-inbox.service';
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { CallService } from '@communication/calls/call.service';
 import { StoryService } from '@communication/stories/story.service';
@@ -65,16 +67,23 @@ export function buildGraph(
     prisma, authz, outbox, identity, coverage, audit, relationships,
   );
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
+  const templates = new TemplateService(prisma);
+  const quietHours = new QuietHoursService(prisma);
+  const notifications = new NotificationService(prisma, templates, quietHours, config, new LoggingPushProvider());
+  // A realtime publisher that is a no-op: these suites assert on what reaches
+  // the DATABASE (notifications, outbox status), and a socket server in a jest
+  // process would be a second thing to tear down.
+  const silentRealtime = { toThread: async () => undefined, toUsers: async () => undefined };
+  // PD-34: wired as production wires it (reminders, reads, message pushes).
+  const pipeline = new NotificationPipeline(prisma, notifications, quietHours, config, identity, silentRealtime as never);
+  const inbox = new NotificationInboxService(prisma, templates, config, pipeline);
   const messages = new MessageService(
-    prisma, authz, conversations, outbox, config, attachments, audit, identity,
+    prisma, authz, conversations, outbox, config, attachments, audit, identity, pipeline,
   );
   const approvals = new ApprovalService(
     prisma, authz, conversations, attachments, outbox, audit, identity,
   );
-  const templates = new TemplateService(prisma);
-  const quietHours = new QuietHoursService(prisma);
-  const notifications = new NotificationService(prisma, templates, quietHours, config, new LoggingPushProvider());
-  const reminders = new ReminderService(prisma, notifications);
+  const reminders = new ReminderService(prisma, notifications, pipeline);
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
   );
@@ -85,15 +94,11 @@ export function buildGraph(
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
   const teacherProfiles = new TeacherProfileService(prisma, authz, identity, storage, audit);
 
-  // A worker whose realtime publisher is a no-op: these suites assert on what
-  // reaches the DATABASE (notifications, outbox status), and a socket server in
-  // a jest process would be a second thing to tear down.
-  const silentRealtime = { toThread: async () => undefined, toUsers: async () => undefined };
-  const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity);
+  const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity, pipeline);
 
   return {
     prisma, coverage, scope, identity, authz, conversations, messages, approvals,
-    attachments, notifications, reminders, templates, quietHours, calls,
+    attachments, notifications, reminders, templates, quietHours, calls, pipeline, inbox,
     stories, storyAudience, storySweeper, storage, outboxWorker,
     teacherProfiles,
     relationships,
@@ -458,6 +463,7 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.payment_refund, chat.invoice, chat.invoice_counter, chat.payment_checkout,
              chat.payment_receipt, chat.payment, chat.payment_request, chat.stripe_event,
              chat.family_instalment, chat.family_billing, chat.parent_file,
-             chat.actor_time_zone
+             chat.actor_time_zone, chat.notification_item, chat.notification_preference,
+             chat.notification_settings, chat.quiet_hours
     restart identity cascade`);
 }

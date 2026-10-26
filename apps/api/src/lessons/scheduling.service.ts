@@ -1028,7 +1028,10 @@ export class SchedulingService implements OnApplicationBootstrap {
         remindersScheduledAt: null,
         startsAt: { gt: new Date(), lte: new Date(Date.now() + 26 * 3_600_000) },
       },
-      include: { learner: { select: { familyId: true, family: { select: { language: true } } } } },
+      include: {
+        learner: { select: { familyId: true, name: true, family: { select: { language: true } } } },
+        prospect: { select: { displayName: true } },
+      },
       orderBy: { startsAt: 'asc' },
       take: 500,
     });
@@ -1050,7 +1053,11 @@ export class SchedulingService implements OnApplicationBootstrap {
         ],
         familyId: lesson.learner?.familyId ?? null,
         // PD-22: the push says the time, worded in each recipient's own zone at send time.
-        variables: { startsAt: lesson.startsAt.toISOString() },
+        // PD-34: `child` is for the Notification Center, and for the lock screen
+        // only when the person turned names on (the *_named templates).
+        variables: { startsAt: lesson.startsAt.toISOString(), child: lesson.learner?.name ?? lesson.prospect?.displayName ?? '' },
+        subjectType: 'lesson',
+        refs: { lessonId: lesson.id, learnerId: lesson.learnerId },
         skipPast: true,
       });
       await this.prisma.lesson.update({ where: { id: lesson.id }, data: { remindersScheduledAt: new Date() } });
@@ -1080,7 +1087,7 @@ export class SchedulingService implements OnApplicationBootstrap {
     });
     const learners = await this.prisma.learner.findMany({
       where: { id: { in: [...new Set(slots.map((x) => x.learnerId))] } },
-      select: { id: true, familyId: true, family: { select: { language: true } } },
+      select: { id: true, familyId: true, name: true, family: { select: { language: true } } },
     });
     const learnerOf = new Map(learners.map((l) => [l.id, l]));
     const parents = await this.prisma.contact.findMany({
@@ -1124,7 +1131,9 @@ export class SchedulingService implements OnApplicationBootstrap {
           anchorAt: at,
           recipients: parentIds.map((actorId) => ({ actorId, role: 'parent', locale })),
           familyId: learner.familyId,
-          variables: { startsAt: at.toISOString() },
+          variables: { startsAt: at.toISOString(), child: learner.name },
+          subjectType: 'lesson_slot',
+          refs: { learnerId: learner.id },
         });
         for (const id of parentIds) wanted.add(`:${subjectId}:${id}`);
       }
