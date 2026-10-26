@@ -21,6 +21,7 @@ class ParentBilling {
     this.receipts = const [],
     this.bankAccount,
     this.cardAvailable = false,
+    this.subscriptions = const [],
   });
 
   /// The empty answer: no plan, nothing billed yet.
@@ -52,6 +53,108 @@ class ParentBilling {
 
   /// False on a deployment without Stripe: no card option anywhere.
   final bool cardAvailable;
+
+  /// PD-30: each child's subscription -- plan, lessons left, grace, locked and why. Empty
+  /// from a server that predates PD-30. Never carries an exception (the parent never sees
+  /// one).
+  final List<ChildSubscription> subscriptions;
+}
+
+/// PD-30: where a child's lessons stand. The server decides it.
+enum SubscriptionState {
+  open,
+  grace,
+  locked;
+
+  static SubscriptionState? tryParse(Object? raw) => switch (raw) {
+        'open' => SubscriptionState.open,
+        'grace' => SubscriptionState.grace,
+        'locked' => SubscriptionState.locked,
+        _ => null,
+      };
+}
+
+/// PD-30: why a child is locked.
+enum LockReason {
+  /// The subscription's lessons (and the grace lessons) are used up.
+  balance,
+
+  /// An instalment is unpaid the day after its due date.
+  overdue;
+
+  static LockReason? tryParse(Object? raw) => switch (raw) {
+        'balance' => LockReason.balance,
+        'overdue' => LockReason.overdue,
+        _ => null,
+      };
+}
+
+/// PD-30: one child's subscription, from `GET /me/billing` -> `subscriptions[]`.
+class ChildSubscription {
+  const ChildSubscription({
+    required this.childId,
+    required this.childName,
+    this.current,
+    this.lessonsIncluded,
+    this.lessonsUsed,
+    this.lessonsLeft,
+    this.graceLeft,
+    this.state = SubscriptionState.open,
+    this.lockReasons = const [],
+    this.overdue,
+    this.hasOpenPayment = false,
+    this.renewalRequestedToday = false,
+  });
+
+  final String childId;
+  final String childName;
+
+  /// The subscription today falls in; null when the child has none.
+  final CurrentSubscription? current;
+
+  /// Every standing subscription's lessons together; null with no subscription.
+  final int? lessonsIncluded;
+  final int? lessonsUsed;
+
+  /// Never below 0.
+  final int? lessonsLeft;
+
+  /// Set once the balance ran out: the lessons that may still happen (2, then 1).
+  final int? graceLeft;
+
+  /// A state this build does not know reads as open: nothing is offered that the
+  /// server did not ask for.
+  final SubscriptionState state;
+  final List<LockReason> lockReasons;
+  final OverdueInstalment? overdue;
+
+  /// Something can be paid for this child now; without it the app offers "Request
+  /// renewal" instead of Pay.
+  final bool hasOpenPayment;
+
+  /// "Request renewal" was already sent today (once per child per academy day).
+  final bool renewalRequestedToday;
+}
+
+/// PD-30: the subscription a child is in now.
+class CurrentSubscription {
+  const CurrentSubscription({required this.lessonsIncluded, this.planMonths, this.startsOn});
+
+  /// 1, 3, 6 or 12; null for a staff-recorded package with no length.
+  final int? planMonths;
+  final int lessonsIncluded;
+  final DateTime? startsOn;
+}
+
+/// PD-30: the instalment that locked a child.
+class OverdueInstalment {
+  const OverdueInstalment({required this.label, required this.dueDate, this.instalmentId});
+
+  final String? instalmentId;
+  final String label;
+
+  /// The due day; the child is locked from the day after.
+  final DateTime dueDate;
 }
 
 /// How the family pays, or how one payment arrived. A value this build does not know is
@@ -216,6 +319,7 @@ class PaymentRequest {
     this.childName,
     this.instalmentId,
     this.planMonths,
+    this.lessonsIncluded,
     this.periodStart,
     this.periodEnd,
     this.expiresAt,
@@ -241,6 +345,9 @@ class PaymentRequest {
 
   /// The package: 1, 3, 6 or 12 months.
   final int? planMonths;
+
+  /// PD-30: the lessons a subscription / renewal buys; null when it names none.
+  final int? lessonsIncluded;
   final DateTime? periodStart;
   final DateTime? periodEnd;
   final DateTime? expiresAt;
@@ -280,6 +387,7 @@ class BillingInvoice {
     this.label = '',
     this.childName,
     this.planMonths,
+    this.lessonsIncluded,
     this.periodStart,
     this.periodEnd,
   });
@@ -296,6 +404,9 @@ class BillingInvoice {
   final String label;
   final String? childName;
   final int? planMonths;
+
+  /// PD-30: the lessons it paid for, when the server says.
+  final int? lessonsIncluded;
   final DateTime? periodStart;
   final DateTime? periodEnd;
 }

@@ -27,8 +27,9 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
   const { locale } = useI18n()
   const [responsible, setResponsible] = useState<Responsible>('all')
   const [paid, setPaid] = useState(false)
+  const [beforeGoLive, setBeforeGoLive] = useState(false)
   const [assigning, setAssigning] = useState<Instalment | null>(null)
-  const list = useInstalments({ responsible, paid })
+  const list = useInstalments({ responsible, paid, beforeGoLive })
   const data = list.data
 
   return (
@@ -50,7 +51,13 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
             <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} />
             {tx(I.showPaid)}
           </label>
+          <label className="in-check">
+            <input type="checkbox" checked={beforeGoLive} onChange={(e) => setBeforeGoLive(e.target.checked)} />
+            {tx(I.beforeGoLive)}
+            {data?.counts.beforeGoLive ? ` (${data.counts.beforeGoLive})` : ''}
+          </label>
         </div>
+        {beforeGoLive && data?.lockFrom && <p className="field__hint">{tx(I.beforeGoLiveHint, { date: formatDay(data.lockFrom, locale) })}</p>}
         {list.error ? (
           <EmptyState icon="alert" title={describeError(list.error, locale)} />
         ) : (
@@ -157,6 +164,7 @@ function InstalmentRow({ row, canAssign, onAssign }: { row: Instalment; canAssig
           </Badge>
           <span>{formatDay(row.dueDate, locale)}</span>
           {when && <span className="in-muted">{when}</span>}
+          {row.beforeGoLive && <Badge tone="outline">{tx(I.beforeGoLiveBadge)}</Badge>}
         </div>
       </td>
       <td>

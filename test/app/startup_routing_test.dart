@@ -244,15 +244,20 @@ void main() {
   });
 
   group('PD-17: Payments are a parent\'s', () {
-    testWidgets('a parent reaches their Payments', (tester) async {
+    testWidgets('a parent reaches their Payments -- now the Subscriptions tab (PD-30)', (tester) async {
       await pumpApp(tester);
       await controller().restore();
       await controller().signIn(username: 'parent', password: 'secret');
       await settle(tester);
 
+      // The old Settings address forwards, so an earlier link still lands.
       router().go(Routes.myPayments);
       await settle(tester);
-      expect(currentLocation(), '/settings/payments');
+      expect(currentLocation(), Routes.subscriptions);
+
+      router().go(Routes.subscriptions);
+      await settle(tester);
+      expect(currentLocation(), '/subscriptions');
       expect(tester.takeException(), isNull);
     });
 
@@ -266,9 +271,11 @@ void main() {
       await controller().signIn(username: 'teacher', password: 'secret');
       await settle(tester);
 
-      router().go(Routes.myPayments);
-      await settle(tester);
-      expect(currentLocation(), Routes.chats);
+      for (final location in [Routes.myPayments, Routes.subscriptions]) {
+        router().go(location);
+        await settle(tester);
+        expect(currentLocation(), Routes.chats, reason: location);
+      }
       expect(tester.takeException(), isNull);
     });
   });
@@ -306,6 +313,7 @@ void main() {
         Routes.myLeave,
         Routes.myProfile,
         Routes.myPayments,
+        Routes.subscriptions,
       ]) {
         router().go(location);
         await settle(tester);

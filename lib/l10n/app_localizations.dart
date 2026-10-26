@@ -5041,6 +5041,174 @@ abstract class L10n {
   /// **'Payments'**
   String get tabPayments;
 
+  /// PD-30: the parent's bottom tab and screen for each child's subscription and the family's payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscriptions'**
+  String get tabSubscriptions;
+
+  /// PD-30: a plan's length, as in "3 Months — 24 Lessons".
+  ///
+  /// In en, this message translates to:
+  /// **'{months, plural, =1{1 Month} other{{months} Months}}'**
+  String subscriptionMonthCount(int months);
+
+  /// PD-30: a plan's lessons, as in "3 Months — 24 Lessons".
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 Lesson} other{{count} Lessons}}'**
+  String subscriptionLessonCount(int count);
+
+  /// PD-30: a plan's length beside its lessons: "3 Months — 24 Lessons".
+  ///
+  /// In en, this message translates to:
+  /// **'{months} — {lessons}'**
+  String subscriptionPlanLessons(String months, String lessons);
+
+  /// PD-30: a child with no subscription on record.
+  ///
+  /// In en, this message translates to:
+  /// **'No subscription yet'**
+  String get subscriptionNone;
+
+  /// PD-30: a child's lessons left in their subscriptions.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No lessons left} =1{1 lesson left} other{{count} lessons left}}'**
+  String subscriptionLessonsLeft(int count);
+
+  /// PD-30: lessons used up; the lessons that may still happen while renewal is awaited.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No grace lessons left} =1{1 grace lesson left} other{{count} grace lessons left}}'**
+  String subscriptionGraceLeft(int count);
+
+  /// PD-30: a child's subscription chip: lessons go on.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get subscriptionStateOpen;
+
+  /// PD-30: a child's subscription chip: lessons used up, grace lessons left.
+  ///
+  /// In en, this message translates to:
+  /// **'Renewal due'**
+  String get subscriptionStateGrace;
+
+  /// PD-30: a child's subscription chip: locked for payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get subscriptionStateLocked;
+
+  /// PD-30: why a child is locked: the subscription's lessons are used up.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons used up'**
+  String get subscriptionLessonsUsedUp;
+
+  /// PD-30: why a child is locked: an instalment unpaid since the day after its due date.
+  ///
+  /// In en, this message translates to:
+  /// **'Instalment {label} overdue since {date}'**
+  String subscriptionOverdueSince(String label, String date);
+
+  /// PD-30: a locked child with nothing to pay yet: ask the academy to renew.
+  ///
+  /// In en, this message translates to:
+  /// **'Request renewal'**
+  String get subscriptionRequestRenewal;
+
+  /// PD-30: the renewal was asked for today.
+  ///
+  /// In en, this message translates to:
+  /// **'Renewal requested'**
+  String get subscriptionRenewalRequested;
+
+  /// PD-30: the banner that replaces the composer in a group locked for payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons are paused'**
+  String get lockBannerTitle;
+
+  /// PD-30: the locked banner, a parent's line: the child's lessons are used up.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: lessons used up'**
+  String lockBannerChildBalance(String name);
+
+  /// PD-30: the locked banner, a parent's line: an instalment is overdue.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: instalment {label} overdue since {date}'**
+  String lockBannerChildOverdue(String name, String label, String date);
+
+  /// PD-30: the locked banner, a teacher's line: no reason, nothing financial.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s lessons are paused'**
+  String lockBannerChildPaused(String name);
+
+  /// PD-30: the locked banner when the server refused a send but named no child.
+  ///
+  /// In en, this message translates to:
+  /// **'This group is paused for now.'**
+  String get lockBannerGeneric;
+
+  /// PD-30: the locked banner's button for a parent.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Subscriptions'**
+  String get lockBannerOpenSubscriptions;
+
+  /// PD-30: the report's lesson number within the child's subscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson {number} of {total}'**
+  String reportLessonOf(int number, int total);
+
+  /// PD-30: a report card's lesson number within the subscription.
+  ///
+  /// In en, this message translates to:
+  /// **'{number} of {total}'**
+  String cardLessonNumberOf(int number, int total);
+
+  /// PD-30: a Schedule lesson suspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended'**
+  String get outcomeSuspended;
+
+  /// PD-30: a Schedule lesson the system suspended while the child's group is locked for payment. No amount, no reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended — payment'**
+  String get outcomeSuspendedPayment;
+
+  /// PD-30: the group card when a child's lessons are paused (no reason).
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons paused'**
+  String get cardLessonsPausedTitle;
+
+  /// PD-30: the family's direct-chat card when a child is locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons paused — payment'**
+  String get cardSubscriptionLockedTitle;
+
+  /// PD-30: where to pay, on the locked card.
+  ///
+  /// In en, this message translates to:
+  /// **'Renew or pay in Subscriptions.'**
+  String get cardSubscriptionLockedHint;
+
+  /// PD-30: the group card when a locked child's lessons resume.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons are back on'**
+  String get cardSubscriptionUnlockedTitle;
+
   /// No description provided for @roleSales.
   ///
   /// In en, this message translates to:

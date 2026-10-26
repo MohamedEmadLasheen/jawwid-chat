@@ -26,17 +26,21 @@ export interface Instalment {
   responsibleSupervisor: { id: string; name: string } | null
   responsibleBasis: 'child' | 'family'
   conversationId: string | null
+  /** PD-30: overdue, but due before the payment lock's go-live -- it never locks the group. */
+  beforeGoLive?: boolean
 }
 
 export interface InstalmentList {
   today: string
+  /** PD-30: instalments due from this day lock a group when overdue (go-live). */
+  lockFrom?: string
   canAssignBillingSupervisor: boolean
   items: Instalment[]
-  counts: Record<InstalmentStatus | 'unassigned', number>
+  counts: Record<InstalmentStatus | 'unassigned', number> & { beforeGoLive?: number }
 }
 
 export type Responsible = 'all' | 'me' | 'none'
-export type InstalmentQuery = { responsible: Responsible; paid: boolean }
+export type InstalmentQuery = { responsible: Responsible; paid: boolean; beforeGoLive?: boolean }
 
 export interface BillingSupervisorView {
   familyId: string
@@ -52,7 +56,11 @@ export const instalmentsApi = {
       '/instalments/access',
     ),
   list: (q: InstalmentQuery) =>
-    api.get<InstalmentList>('/instalments', { responsible: q.responsible, ...(q.paid ? { paid: 'true' } : {}) }),
+    api.get<InstalmentList>('/instalments', {
+      responsible: q.responsible,
+      ...(q.paid ? { paid: 'true' } : {}),
+      ...(q.beforeGoLive ? { beforeGoLive: 'true' } : {}),
+    }),
   billingSupervisor: (familyId: string) =>
     api.get<BillingSupervisorView>(`/families/${encodeURIComponent(familyId)}/billing-supervisor`),
   setBillingSupervisor: (familyId: string, body: { supervisorId: string | null; reason: string }) =>

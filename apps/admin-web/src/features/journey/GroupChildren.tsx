@@ -91,7 +91,7 @@ export function EnrollmentDialog({
   conversationId,
   onClose,
 }: {
-  learner: Pick<GroupLearner, 'id' | 'name'> & Partial<Pick<GroupLearner, 'birthDate' | 'course' | 'packageLessons'>>
+  learner: Pick<GroupLearner, 'id' | 'name'> & Partial<Pick<GroupLearner, 'birthDate' | 'course' | 'packageLessons' | 'packageFromSubscription'>>
   conversationId?: string
   onClose: () => void
 }) {
@@ -116,7 +116,8 @@ export function EnrollmentDialog({
       await journeyApi.setEnrollment(learner.id, {
         birthDate: birthDate || null,
         courseId: courseId || null,
-        packageLessons: n !== null && Number.isFinite(n) ? Math.trunc(n) : null,
+        // PD-30: once the child has a subscription, the ledger is the package.
+        ...(learner.packageFromSubscription ? {} : { packageLessons: n !== null && Number.isFinite(n) ? Math.trunc(n) : null }),
       })
       if (conversationId) void qc.invalidateQueries({ queryKey: journeyKeys.learners(conversationId) })
       void qc.invalidateQueries({ queryKey: ['trials'] })
@@ -178,10 +179,12 @@ export function EnrollmentDialog({
           </div>
         </div>
       )}
-      <div className="field">
-        <label className="field__label" htmlFor={`${id}-p`}>{tx(J.packageLessons)}</label>
-        <input id={`${id}-p`} className="input jr-number" type="number" min={1} max={1000} inputMode="numeric" value={packageLessons} onChange={(e) => setPackageLessons(e.target.value)} />
-      </div>
+      {!learner.packageFromSubscription && (
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-p`}>{tx(J.packageLessons)}</label>
+          <input id={`${id}-p`} className="input jr-number" type="number" min={1} max={1000} inputMode="numeric" value={packageLessons} onChange={(e) => setPackageLessons(e.target.value)} />
+        </div>
+      )}
       {error ? <div className="banner banner--danger" role="alert">{describeError(error, locale)}</div> : null}
     </Dialog>
   )

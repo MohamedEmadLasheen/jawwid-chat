@@ -99,11 +99,19 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await truncate(g.prisma);
+  await truncateCenter();
   await g.prisma.$executeRawUnsafe(`delete from chat.config where key like 'notification.%'`);
   await g.prisma.$disconnect();
 });
+// PD-34's own tables: cleared here, not by the shared truncate() every suite runs.
+const truncateCenter = () =>
+  g.prisma.$executeRawUnsafe(
+    `truncate chat.notification_item, chat.notification_preference, chat.notification_settings, chat.quiet_hours cascade`,
+  );
+
 beforeEach(async () => {
   await truncate(g.prisma);
+  await truncateCenter();
   await g.prisma.$executeRawUnsafe(`delete from chat.config where key like 'notification.%'`);
   // Default quiet hours are exercised in section 4 on fixed clocks; elsewhere
   // they would make a run at night defer what these cases assert is "now".

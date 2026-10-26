@@ -24,7 +24,7 @@ class ShellDestination {
 }
 
 /// **Chats · Calls · Settings**, for every role (plus Schedule for a teacher, Payments
-/// for Sales).
+/// for Sales, Subscriptions for a parent).
 ///
 /// The shells used to differ (`decisions.md` DD-08): a parent got Home · Jawwid · Groups ·
 /// Settings and a teacher got Home · Groups · Settings, on the reasoning that a parent's
@@ -78,11 +78,21 @@ abstract final class Shells {
     label: _paymentsLabel,
   );
 
-  /// The destinations for a role: a parent's are [destinations]; a teacher's add
-  /// [schedule] after Chats; Sales' add [salesPayments] before Settings. This is where a
-  /// role difference belongs, not in a widget.
+  /// PD-30 (2026-10-26): the parent's Subscriptions -- each child's plan, lessons left,
+  /// grace and lock, then the family's payments (what Settings -> Payments was). Parents
+  /// only; third, before Settings.
+  static const subscriptions = ShellDestination(
+    route: '/subscriptions',
+    icon: Icons.card_membership_outlined,
+    selectedIcon: Icons.card_membership,
+    label: _subscriptionsLabel,
+  );
+
+  /// The destinations for a role: a parent's add [subscriptions] before Settings; a
+  /// teacher's add [schedule] after Chats; Sales' add [salesPayments] before Settings.
+  /// This is where a role difference belongs, not in a widget.
   static List<ShellDestination> forRole(UserRole role) => switch (role) {
-        UserRole.parent => destinations,
+        UserRole.parent => [chats, destinations[1], subscriptions, destinations[2]],
         UserRole.teacher => [chats, schedule, ...destinations.skip(1)],
         UserRole.sales => [chats, destinations[1], salesPayments, destinations[2]],
       };
@@ -92,6 +102,7 @@ abstract final class Shells {
   static String _settingsLabel(L10n l10n) => l10n.settingsTitle;
   static String _scheduleLabel(L10n l10n) => l10n.tabSchedule;
   static String _paymentsLabel(L10n l10n) => l10n.tabPayments;
+  static String _subscriptionsLabel(L10n l10n) => l10n.tabSubscriptions;
 }
 
 /// The tabbed frame around every signed-in screen.

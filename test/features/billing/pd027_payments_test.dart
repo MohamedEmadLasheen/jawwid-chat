@@ -700,6 +700,9 @@ class _Repo implements BillingRepository {
     links.add(invoiceId);
     return 'https://api.example/invoices/$invoiceId.pdf';
   }
+
+  @override
+  Future<void> requestRenewal(String learnerId) async {}
 }
 
 class _Opener implements AttachmentOpener {

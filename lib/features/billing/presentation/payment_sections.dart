@@ -13,15 +13,24 @@ import 'my_payments_screen.dart';
 /// "Invoices" sections.
 
 /// "3-month plan · Sep 1, 2026 – Nov 30, 2026", or whichever half is known; null when
-/// neither is.
-String? packageLine(int? planMonths, DateTime? start, DateTime? end, L10n l10n, String locale) {
+/// neither is. PD-30: with the lessons it buys, "3 Months — 24 Lessons · Sep 1 – Nov 30".
+String? packageLine(int? planMonths, DateTime? start, DateTime? end, L10n l10n, String locale, {int? lessons}) {
   final day = DateFormat.yMMMd(locale).format;
   final parts = [
-    if (planMonths != null) l10n.billingPlanMonths(planMonths),
+    if (lessons != null)
+      planLessonsLine(planMonths, lessons, l10n)
+    else if (planMonths != null)
+      l10n.billingPlanMonths(planMonths),
     if (start != null && end != null) l10n.billingPeriod(day(start), day(end)),
   ];
   return parts.isEmpty ? null : parts.join(' · ');
 }
+
+/// PD-30: a package as the owner asked for it -- "3 Months — 24 Lessons", or "24 Lessons"
+/// when it has no length.
+String planLessonsLine(int? planMonths, int lessons, L10n l10n) => planMonths == null || planMonths <= 0
+    ? l10n.subscriptionLessonCount(lessons)
+    : l10n.subscriptionPlanLessons(l10n.subscriptionMonthCount(planMonths), l10n.subscriptionLessonCount(lessons));
 
 class _Row extends StatelessWidget {
   const _Row({required this.lines, required this.trailing, this.onTap});
@@ -91,7 +100,7 @@ class DueTile extends StatelessWidget {
             l10n.billingDueOn(DateFormat.yMMMd(locale).format(item.dueDate!)),
             if (item.status == InstalmentStatus.overdue && days != null && days > 0) l10n.billingDaysLate(days),
           ].join(' · ');
-    final package = packageLine(item.planMonths, item.periodStart, item.periodEnd, l10n, locale);
+    final package = packageLine(item.planMonths, item.periodStart, item.periodEnd, l10n, locale, lessons: item.lessonsIncluded);
 
     return Column(
       key: ValueKey('billing-due-${item.key}'),
@@ -225,7 +234,7 @@ class InvoiceTile extends StatelessWidget {
       if (v.label.isNotEmpty) v.label,
       ?v.childName,
     ].join(' · ');
-    final package = packageLine(v.planMonths, v.periodStart, v.periodEnd, l10n, locale);
+    final package = packageLine(v.planMonths, v.periodStart, v.periodEnd, l10n, locale, lessons: v.lessonsIncluded);
     final chip = switch (v.status) {
       InvoiceStatus.paid => (l10n.billingStatusPaid, tokens.colorStatusSuccessFg, tokens.colorStatusSuccessBg),
       InvoiceStatus.partiallyRefunded =>

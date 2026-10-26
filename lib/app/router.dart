@@ -106,7 +106,18 @@ abstract final class Routes {
   /// PD-17: the parent's own payments. Parents only -- anyone else following a link here
   /// is sent to Chats (see the redirect) -- and of parents, the server answers only the
   /// one who holds billing for the family.
+  ///
+  /// PD-30: retired as a screen -- it forwards to [subscriptions], so earlier pushes and
+  /// deep links still land on the parent's payments.
   static const myPayments = '/settings/payments';
+
+  /// PD-30: the parent's Subscriptions tab -- each child's subscription above the
+  /// family's payments. Parents only (see the redirect).
+  static const subscriptions = '/subscriptions';
+
+  /// Subscriptions opened at one child's card (the locked banner's button).
+  static String subscriptionsFor(String learnerId) =>
+      '$subscriptions?child=${Uri.encodeQueryComponent(learnerId)}';
 
   /// PD-20: Sales' Payments tab -- find a family by a parent's name. Sales only (see the
   /// redirect); the server decides again on every request.
@@ -209,6 +220,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: Routes.salesPayments,
             builder: (context, state) => const SalesPaymentsScreen(),
           ),
+          GoRoute(
+            path: Routes.subscriptions,
+            builder: (context, state) => MyPaymentsScreen(
+              // A fresh key per child asked for, so following the banner again
+              // scrolls again even when the tab is already open.
+              key: ValueKey('subscriptions-${state.uri.queryParameters['child'] ?? ''}'),
+              focusChildId: state.uri.queryParameters['child'],
+            ),
+          ),
         ],
       ),
       // Conversations open full-screen, above the tab bar, so the thread gets the whole
@@ -287,9 +307,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: Routes.myProfile,
         builder: (context, state) => const MyProfileScreen(),
       ),
+      // PD-30: Payments moved into the parent's Subscriptions tab. The old address is
+      // kept, purely to forward, so an earlier push or deep link is matched rather than
+      // falling through to an error page.
       GoRoute(
         path: Routes.myPayments,
-        builder: (context, state) => const MyPaymentsScreen(),
+        redirect: (context, state) => Routes.subscriptions,
       ),
       // Outside the shell, like a conversation: pushed over the search, with a back
       // button. The family's name rides along only for the title while it loads.
@@ -391,8 +414,10 @@ String? _redirect(Ref ref, String location) {
     return Routes.chats;
   }
 
-  // Payments are a parent's (PD-17). A teacher never sees a family's money.
-  if (location == Routes.myPayments && ref.read(currentRoleProvider) != UserRole.parent) {
+  // Payments are a parent's (PD-17), and so is Subscriptions (PD-30), where they now
+  // live. A teacher never sees a family's money.
+  if ((location == Routes.myPayments || location == Routes.subscriptions) &&
+      ref.read(currentRoleProvider) != UserRole.parent) {
     return Routes.chats;
   }
 
