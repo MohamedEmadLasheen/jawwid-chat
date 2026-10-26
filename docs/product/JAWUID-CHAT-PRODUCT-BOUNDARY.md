@@ -2573,7 +2573,7 @@ the app has always sent and which only a browser checks.
 
 ---
 
-### PD-29 · Materials: the open library, practice this week, the memorization map
+### PD-29 · Materials: the open library, practice this week, the memorization map (amended 2026-10-26: opened this week, no map)
 
 **Closed 2026-10-24** by the product owner, with the access model chosen by the
 department head at the owner's request. Builds on PD-15 (the lesson report
@@ -2687,9 +2687,67 @@ needs one environment variable; not done. (4) Age bands per lesson (none in
 the content). (5) A completion event from the lessons site (postMessage) to
 feed the map automatically -- a possible v2.
 
-**Deprecated behaviour.** None.
+**Deprecated behaviour.** None at closing; the amendment below retires the
+memorization map and Practice this week.
 
 **Closed.** 2026-10-24.
+
+**Amendment 2026-10-26** (the department head for the owner; no new PD number,
+migration `20261026200000_chat_pd029_material_opens`).
+
+```
+no subject "All"    the child's Library shows one subject at a time and opens
+                    on Quran (the first subject); the age band's "All ages"
+                    stays. Admin Web's Library subject chips are the same
+                    concept and lose "All" too (opening on Quran); its status
+                    and age filters keep theirs
+map retired         the memorization map leaves every screen: the child page's
+                    tab (app and PD-28 teacher web), Admin Web's Student Profile
+                    panel and its corrections, the teacher report's Memorization
+                    section. GET /learners/:id/materials/progress,
+                    GET .../progress/:surah and POST .../progress/:surah/correct
+                    stay routed and answer 410 Gone (COMM.MATERIAL_RETIRED) to
+                    everyone. The data is KEPT: chat.memorization_mark stays,
+                    append-only, nothing deleted or dropped; a report from an
+                    older app build that still carries `memorization` is
+                    accepted and recorded as before, just never shown.
+                    LESSON_ACTS.correct_memorization is no longer reachable
+opened this week    replaces Practice this week on the child page: what was
+                    opened FOR this child in the current academy week -- each
+                    item once, with its last opening, most recent first; an
+                    item since retired is listed, not playable. Recorded by
+                    POST /materials/items/:id/open with a body `learnerId`
+                    (authorized like a library read, LESSON_ACTS.read_materials,
+                    and the item must be the child's organization's) in
+                    chat.material_open (learner, item, opened_by + kind,
+                    opened_at = now()), APPEND-ONLY by trigger, no request-role
+                    grants. Read with GET /learners/:id/materials/opened, which
+                    the same readers see: the family, staff with standing, a
+                    teacher for their own students. An open without learnerId
+                    (an admin preview) records nothing
+the week            Saturday 00:00 to Friday 24:00 in the academy's time zone
+                    (config schedule.timezone, Africa/Cairo by default -- the
+                    Egypt academy week), DST-correct; the response carries
+                    weekStartsAt and timeZone
+practice kept       the teacher still attaches Practice to a lesson report, and
+                    the report's card in the chat still shows it; only the
+                    parent tab was replaced
+one order           everywhere a list of materials appears (the child's
+                    Library, Admin Web's Library, the teacher's report picker),
+                    the server orders it: Quran by surah -- Al-Fatihah (1)
+                    first, then An-Nas (114), Al-Falaq (113), Al-Ikhlas (112) ...
+                    down to An-Naba' (78), i.e. Fatihah then surah descending;
+                    every other material in the order it was provided.
+                    chat.material_item.sort_order holds that order: filled from
+                    the manifest's row number on import (or a `sort_order`
+                    column), kept by a re-import through `ref`, editable on the
+                    item form; the migration backfills the 83 seed rows from
+                    docs/product/pd029-seed's row order. Ties and unnumbered
+                    items fall back to the Arabic title, then creation time
+```
+
+PD-35's planned "not progressing" flag, which was to read this map, is dropped
+with it (the department head tells PD-35).
 
 ---
 

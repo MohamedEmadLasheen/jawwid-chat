@@ -14,13 +14,11 @@ export type Strand = 'memorization' | 'recitation' | 'word_meanings' | 'tafsir'
 export type Kind = 'activity_package' | 'activity_link' | 'audio' | 'video' | 'pdf' | 'image'
 export type ItemStatus = 'draft' | 'published' | 'retired'
 export type AgeGroup = '4-6' | '7-9' | '10-12' | '13-17' | '18+'
-export type MarkStatus = 'not_started' | 'in_progress' | 'memorized' | 'needs_revision'
 
 export const SUBJECTS: readonly Subject[] = ['quran', 'arabic', 'islamic_studies']
 export const STRANDS: readonly Strand[] = ['memorization', 'recitation', 'word_meanings', 'tafsir']
 export const KINDS: readonly Kind[] = ['activity_package', 'activity_link', 'audio', 'video', 'pdf', 'image']
 export const AGE_GROUPS: readonly AgeGroup[] = ['4-6', '7-9', '10-12', '13-17', '18+']
-export const MARK_STATUSES: readonly MarkStatus[] = ['not_started', 'in_progress', 'memorized', 'needs_revision']
 
 export interface MaterialItem {
   id: string
@@ -41,6 +39,8 @@ export interface MaterialItem {
   surah: number | null
   description: string | null
   status: ItemStatus
+  /** Its place in the order provided (the import row); Quran lists by surah regardless. */
+  sortOrder: number | null
   createdAt: string
   updatedAt: string
   /** On a package just added: files the package held that are never served. */
@@ -58,6 +58,7 @@ export interface ItemInput {
   surah?: number | null
   description?: string | null
   status?: ItemStatus
+  sortOrder?: number
   url?: string | null
   path?: string | null
   uploadToken?: string
@@ -141,39 +142,6 @@ export interface RecitationSource {
   tracks?: Array<{ surah: number; kind: 'url' | 'file'; url: string | null }>
 }
 
-export interface ProgressSurah {
-  number: number
-  nameAr: string
-  nameEn: string
-  ayahCount: number
-  juzEnd: number
-  status: MarkStatus
-  updatedAt: string | null
-  source: 'report' | 'report_edit' | 'correction' | null
-  hasRecitation: boolean
-}
-
-export interface ProgressMap {
-  child: { id: string; name: string }
-  counts: Record<MarkStatus, number>
-  juz: Array<{ juz: number; surahs: ProgressSurah[] }>
-  canCorrect: boolean
-  viewer: 'family' | 'teacher' | 'staff'
-}
-
-export interface SurahHistory {
-  surah: { number: number; nameAr: string; nameEn: string }
-  marks: Array<{
-    id: string
-    status: MarkStatus
-    source: 'report' | 'report_edit' | 'correction'
-    lessonId: string | null
-    reason: string | null
-    by: { kind: 'teacher' | 'staff'; name: string | null }
-    at: string
-  }>
-}
-
 export interface ItemQuery {
   subject?: Subject | ''
   status?: ItemStatus | ''
@@ -206,11 +174,6 @@ export const materialsApi = {
     api.post<RecitationSource>(`/materials/admin/recitations/sources/${encodeURIComponent(id)}`, body),
   setTrack: (id: string, surah: number, body: { url: string } | { uploadToken: string } | { clear: true }) =>
     api.post<{ sources: RecitationSource[] }>(`/materials/admin/recitations/sources/${encodeURIComponent(id)}/surahs/${surah}`, body),
-  progress: (learnerId: string) => api.get<ProgressMap>(`/learners/${encodeURIComponent(learnerId)}/materials/progress`),
-  history: (learnerId: string, surah: number) =>
-    api.get<SurahHistory>(`/learners/${encodeURIComponent(learnerId)}/materials/progress/${surah}`),
-  correct: (learnerId: string, surah: number, body: { status: MarkStatus; reason: string }) =>
-    api.post<SurahHistory>(`/learners/${encodeURIComponent(learnerId)}/materials/progress/${surah}/correct`, body),
 }
 
 export const materialsKeys = {
@@ -219,8 +182,6 @@ export const materialsKeys = {
   surahs: ['materials', 'surahs'] as const,
   items: (q: ItemQuery) => ['materials', 'items', q] as const,
   recitations: ['materials', 'recitations'] as const,
-  progress: (learnerId: string) => ['materials', 'progress', learnerId] as const,
-  history: (learnerId: string, surah: number) => ['materials', 'progress', learnerId, surah] as const,
 }
 
 /**

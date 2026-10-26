@@ -131,7 +131,8 @@ function SurahSelect({ id, value, onChange, allowNone = true }: { id?: string; v
 function LibraryTab() {
   const tx = useCopy()
   const { locale } = useI18n()
-  const [subject, setSubject] = useState<Subject | ''>('')
+  // One subject at a time, Quran first (PD-29 amendment: no subject "All").
+  const [subject, setSubject] = useState<Subject>(SUBJECTS[0]!)
   const [status, setStatus] = useState<ItemStatus | ''>('')
   const [ageGroup, setAgeGroup] = useState<AgeGroup | ''>('')
   const [q, setQ] = useState('')
@@ -140,16 +141,16 @@ function LibraryTab() {
   const save = useSaveItem()
   const [editing, setEditing] = useState<MaterialItem | 'new' | null>(null)
   const [previewing, setPreviewing] = useState<MaterialItem | null>(null)
-  const filtered = subject !== '' || status !== '' || ageGroup !== '' || q.trim() !== ''
+  const filtered = status !== '' || ageGroup !== '' || q.trim() !== ''
 
   return (
     <>
       <div className="mt-toolbar">
-        <FilterChips<Subject | ''>
+        <FilterChips<Subject>
           label={tx(M.subject)}
           value={subject}
           onChange={setSubject}
-          options={[{ value: '', label: tx(M.all) }, ...SUBJECTS.map((s) => ({ value: s, label: tx(SUBJECT_LABEL[s]) }))]}
+          options={SUBJECTS.map((s) => ({ value: s, label: tx(SUBJECT_LABEL[s]) }))}
         />
         <button type="button" className="btn btn--primary" onClick={() => setEditing('new')}>
           {tx(M.add)}
@@ -232,6 +233,7 @@ function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
           <span>{item.ageGroups.length ? item.ageGroups.map((a) => tx(AGE_LABEL[a])).join('، ') : tx(M.allAges)}</span>
           {item.sitePath && item.sitePath !== item.externalRef && <span className="mt-ref" dir="ltr">{item.sitePath}</span>}
           {item.externalRef && <span className="mt-ref" dir="ltr">{item.externalRef}</span>}
+          {item.sortOrder !== null && <span>{tx(M.sortOrderShort, { n: String(item.sortOrder) })}</span>}
         </div>
       </div>
       <div className="mt-item__actions">
@@ -271,6 +273,7 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
   const [surah, setSurah] = useState<number | null>(item?.surah ?? null)
   const [description, setDescription] = useState(item?.description ?? '')
   const [externalRef, setExternalRef] = useState(item?.externalRef ?? '')
+  const [sortOrder, setSortOrder] = useState(item?.sortOrder != null ? String(item.sortOrder) : '')
   const [mode, setMode] = useState<SourceMode>(item ? 'keep' : 'link')
   const [url, setUrl] = useState(item?.source === 'url' ? item.url ?? '' : '')
   const [path, setPath] = useState(item?.sitePath ?? '')
@@ -293,6 +296,8 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
       description: description.trim() || null,
       externalRef: externalRef.trim() || null,
     }
+    // Left empty, the server keeps the item's place (a new one goes last).
+    if (sortOrder.trim()) body.sortOrder = Number(sortOrder.trim())
     try {
       if (mode === 'site') {
         body.path = path.trim()
@@ -385,6 +390,11 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
           {(id) => <textarea id={id} className="input mt-textarea" dir="auto" value={description} onChange={(e) => setDescription(e.target.value)} />}
         </Field>
         <Field label={tx(M.ref)}>{(id) => <input id={id} className="input" dir="ltr" value={externalRef} onChange={(e) => setExternalRef(e.target.value)} />}</Field>
+        <Field label={tx(M.sortOrder)} hint={tx(M.sortOrderHint)}>
+          {(id) => (
+            <input id={id} className="input" dir="ltr" type="number" min={1} step={1} inputMode="numeric" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} />
+          )}
+        </Field>
         <fieldset className="mt-mode">
           <legend className="field__label">{tx(M.source)}</legend>
           {item && (

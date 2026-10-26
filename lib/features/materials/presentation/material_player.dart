@@ -24,9 +24,11 @@ import 'activity_view.dart';
 ///  * browser (any other link) -> handed to the browser, never embedded;
 ///  * file: audio and video in-app, a picture full screen, a PDF handed to the
 ///    phone (the attachment rule).
-Future<void> openMaterial(BuildContext context, String itemId, {required String title}) {
+///
+/// With [learnerId] the opening is recorded for that child (their "Opened this week").
+Future<void> openMaterial(BuildContext context, String itemId, {required String title, String? learnerId}) {
   return Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(
-    builder: (_) => MaterialPlayerScreen(title: title, load: (repo) => repo.open(itemId)),
+    builder: (_) => MaterialPlayerScreen(title: title, load: (repo) => repo.open(itemId, learnerId: learnerId)),
   ));
 }
 
