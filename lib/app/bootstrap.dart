@@ -9,6 +9,7 @@ import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_billing_repository.dart';
 import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
+import '../core/data/http/http_feedback_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
@@ -209,6 +210,10 @@ List<Override> _httpOverrides() {
     materialsRepositoryProvider.overrideWithValue(
       HttpMaterialsRepository(client: client),
     ),
+    // PD-32: a parent's feedback about the teacher.
+    feedbackRepositoryProvider.overrideWithValue(
+      HttpFeedbackRepository(client: client),
+    ),
     // PD-20: Sales' Payments (search, a family's instalments, record / void).
     salesPaymentsRepositoryProvider.overrideWithValue(
       HttpSalesPaymentsRepository(client: client),
@@ -335,6 +340,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     accountSessionsRepositoryProvider.overrideWithValue(FakeAccountSessionsRepository()),
     // The fixture parent has billed nothing: an honest empty answer about their OWN account.
     billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
+    // PD-32: in memory, the fixture parent's OWN feedback.
+    feedbackRepositoryProvider.overrideWithValue(FakeFeedbackRepository()),
     // A Sales seat can join a fixture trial group (PD-20).
     trialRepositoryProvider.overrideWithValue(FakeTrialRepository(backend)),
     authControllerProvider.overrideWith(

@@ -3,17 +3,21 @@ import { CommunicationModule } from '../communication/communication.module';
 import { TeacherFileController } from './teacher-file.controller';
 import { TeacherFileService } from './teacher-file.service';
 import { TeacherPayrollService } from './teacher-payroll.service';
+import { ParentFeedbackController } from './parent-feedback.controller';
+import { ParentFeedbackService } from './parent-feedback.service';
 
 /**
  * PD-10: the administration-only Teacher File. The only module that may read
  * chat.teacher_file or chat.teacher_supervision_entry. ConversationService
  * comes from CommunicationModule for actor resolution and the read check on a
  * complaint's source conversation; nothing flows the other way. PD-18 payroll
- * (TeacherPayrollService) lives here too, behind the same confinement.
+ * (TeacherPayrollService) lives here too, behind the same confinement, and so
+ * does PD-32 parent feedback (ParentFeedbackService): a parent's complaint is a
+ * supervision entry.
  */
 @Module({
   imports: [CommunicationModule],
-  controllers: [TeacherFileController],
-  providers: [TeacherFileService, TeacherPayrollService],
+  controllers: [TeacherFileController, ParentFeedbackController],
+  providers: [TeacherFileService, TeacherPayrollService, ParentFeedbackService],
 })
 export class TeacherFileModule {}

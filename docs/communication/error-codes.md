@@ -135,6 +135,10 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.LEAVE_DENIED` | 403 | Leave is requested by a teacher for themselves, decided by the Teachers department, and the allowance is set by its manager or the super admin. Never retry. |
 | `COMM.LEAVE_STATE` | 409 | The leave does not allow it: already decided or withdrawn, overlapping another open or approved request, in the past, or crossing a calendar year. |
 | `COMM.LEAVE_LESSONS_COLLIDE` | 409 | Open lessons fall inside the leave. Approve again with `cancelCollidingLessons: true` to cancel them (each family is told in its group). |
+| `COMM.FEEDBACK_DENIED` | 403 | PD-32: parent feedback is filed by the family's parent and handled by the Teachers department (or the super admin); a supervisor reads their families' only. A teacher never reaches it. |
+| `COMM.FEEDBACK_NOT_FOUND` | 404 | PD-32: no such feedback, or the child is not in the parent's family, or the child has no teacher. |
+| `COMM.FEEDBACK_LIMIT` | 429 | PD-32: the child (3) or the family (10) has filed as much feedback as a rolling 24 hours allows (`feedback.limit.*` in chat.config). |
+| `COMM.FEEDBACK_STATE` | 409 | PD-32: not in a state that allows this; a complaint is resolved through its PD-26 resolution, not directly. |
 | `COMM.SUPERVISION_DENIED` | 403 | Only the teacher themselves, or the Teachers department, opens a supervision conversation. |
 | `COMM.SUPERVISION_NOT_FOUND` | 404 | No such active teacher in the caller's organization. |
 

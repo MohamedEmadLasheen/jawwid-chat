@@ -11,6 +11,7 @@ import { NotificationService } from './communication/notifications/notification.
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
+import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
@@ -76,6 +77,13 @@ const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
 const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
 
 /**
+ * PD-32: how often wrong parent sign-up codes older than a week are purged
+ * (chat.purge_parent_signup_failures). Unauthenticated requests insert them, so
+ * they must not pile up; one delete statement, safe on every replica.
+ */
+const SIGNUP_FAILURE_PURGE_MS = 6 * 60 * 60_000;
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -123,6 +131,7 @@ async function bootstrap(): Promise<void> {
   const scheduling = app.get(SchedulingService);
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
+  const prisma = app.get(PrismaService);
 
   let running = true;
   let draining = false;
@@ -161,6 +170,7 @@ async function bootstrap(): Promise<void> {
   let lastSweepAt = 0;
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
+  let nextSignupFailurePurge = 0;
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
   // short (OutboxPacer). Without Redis there are no hints and the loop simply
@@ -255,6 +265,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextPaymentReminderSweep = Date.now() + PAYMENT_REMINDER_SWEEP_MS;
+      }
+    }
+
+    // PD-32: the week-old wrong sign-up codes go.
+    if (Date.now() >= nextSignupFailurePurge) {
+      draining = true;
+      try {
+        await prisma.$queryRaw`SELECT chat.purge_parent_signup_failures()`;
+      } catch (e) {
+        report(log, 'sign-up failure purge', 'signup.purge', e);
+      } finally {
+        draining = false;
+        nextSignupFailurePurge = Date.now() + SIGNUP_FAILURE_PURGE_MS;
       }
     }
 

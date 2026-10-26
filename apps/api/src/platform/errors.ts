@@ -252,6 +252,14 @@ export enum CommErrorCode {
   LEAVE_STATE = 'COMM.LEAVE_STATE',
   /** PD-12: open lessons fall inside the leave; approve again with cancelCollidingLessons. 409. */
   LEAVE_LESSONS_COLLIDE = 'COMM.LEAVE_LESSONS_COLLIDE',
+  /** PD-32: parent feedback is filed by a family's parent and handled by the Teachers department; nobody else. 403. */
+  FEEDBACK_DENIED = 'COMM.FEEDBACK_DENIED',
+  /** PD-32: no such feedback, or no such child (with a teacher) in the parent's family. 404. */
+  FEEDBACK_NOT_FOUND = 'COMM.FEEDBACK_NOT_FOUND',
+  /** PD-32: the family or child has filed as much feedback as a day allows. 429. */
+  FEEDBACK_LIMIT = 'COMM.FEEDBACK_LIMIT',
+  /** PD-32: the feedback is not in a state that allows this (a complaint resolves through its PD-26 resolution). 409. */
+  FEEDBACK_STATE = 'COMM.FEEDBACK_STATE',
   /** PD-12: this caller may not open this teacher's supervision conversation. 403. */
   SUPERVISION_DENIED = 'COMM.SUPERVISION_DENIED',
   /** PD-12: no such active teacher in the caller's organization. 404. */

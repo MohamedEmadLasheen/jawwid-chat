@@ -60,6 +60,8 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     required this.colorMediaOnSurfaceMuted,
     required this.colorMediaScrim,
     required this.colorMediaScrimStrong,
+    required this.trialBadgeFg,
+    required this.trialBadgeBg,
   });
 
   // --- §2.2 background / surface -----------------------------------------------------
@@ -143,6 +145,14 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
   /// Laid over a photo whose upload failed, where the icon needs more contrast.
   final Color colorMediaScrimStrong;
 
+  // --- PD-32: the "Trial" label on a trial group ------------------------------------
+  //
+  // Its own violet pair rather than a status colour: a trial group is not a success, a
+  // warning or a piece of information about state, and borrowing one of those would make
+  // the label read as one. Measured in test/design/theme_contrast_test.dart.
+  final Color trialBadgeFg;
+  final Color trialBadgeBg;
+
   static const light = JawwidTokens(
     colorBackgroundPage: _neutral25,
     colorBackgroundSunken: _neutral50,
@@ -195,6 +205,8 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorMediaOnSurfaceMuted: Color(0xB3FFFFFF),
     colorMediaScrim: Color(0x40000000),
     colorMediaScrimStrong: Color(0x61000000),
+    trialBadgeFg: _violet800,
+    trialBadgeBg: _violet100,
   );
 
   /// §2.7 — mobile honours the system setting, so every token has a dark value and none is
@@ -250,6 +262,8 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorMediaOnSurfaceMuted: Color(0xB3FFFFFF),
     colorMediaScrim: Color(0x40000000),
     colorMediaScrimStrong: Color(0x61000000),
+    trialBadgeFg: _violet200,
+    trialBadgeBg: _violet900,
   );
 
   /// Read the tokens for the current theme.
@@ -312,6 +326,11 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
   static const _blue100 = Color(0xFFE8F2F7);
   static const _blue600 = Color(0xFF14607F);
   static const _blue700 = Color(0xFF0F4A62);
+
+  static const _violet100 = Color(0xFFEDE9FE);
+  static const _violet200 = Color(0xFFDDD6FE);
+  static const _violet800 = Color(0xFF5B21B6);
+  static const _violet900 = Color(0xFF3B2A6B);
 }
 
 /// §4 — 4px base grid. `spacing1` (2px) exists only for optical badge padding.

@@ -88,12 +88,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.requested, hasLength(2));
   });
+
+  // PD-16 amendment: after 10 wrong codes in 24 h the server answers 403
+  // AUTH.SIGNUP_LOCKED. Asking for a new code would not help, so the screen sends the
+  // parent to their supervisor instead of repeating the invalid-code text.
+  for (final (locale, locked, invalid) in [
+    (const Locale('en'), 'Too many wrong codes. Please contact your supervisor.',
+        'That code is not valid or has expired. Ask for a new one.'),
+    (const Locale('ar'), 'أدخلت رمزًا خاطئًا مرات كثيرة. تواصل مع المشرف.',
+        'هذا الرمز غير صالح أو انتهت صلاحيته. اطلب رمزًا جديدًا.'),
+  ]) {
+    testWidgets('a locked sign-up says to contact the supervisor (${locale.languageCode})', (tester) async {
+      final repo = _RecordingSignup(refuseVerifyWith: 'AUTH.SIGNUP_LOCKED', refuseKind: AppErrorKind.forbidden);
+      await tester.pumpWidget(app(const ParentSignupScreen(), repo, locale: locale));
+      await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
+      await tester.tap(find.byKey(const ValueKey('signup-submit')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('signup-code')), '000000');
+      await tester.enterText(find.byKey(const ValueKey('signup-password')), 'long-password-1');
+      await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'long-password-1');
+      await tester.tap(find.byKey(const ValueKey('signup-submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(locked), findsOneWidget);
+      expect(find.text(invalid), findsNothing);
+    });
+  }
 }
 
 class _RecordingSignup implements ParentSignupRepository {
-  _RecordingSignup({this.refuseVerifyWith});
+  _RecordingSignup({this.refuseVerifyWith, this.refuseKind = AppErrorKind.unauthenticated});
 
   final String? refuseVerifyWith;
+  final AppErrorKind refuseKind;
   final requested = <String>[];
   final verified = <String>[];
 
@@ -102,7 +129,7 @@ class _RecordingSignup implements ParentSignupRepository {
 
   @override
   Future<void> verify({required String email, required String code, required String password}) async {
-    if (refuseVerifyWith != null) throw AppError(AppErrorKind.unauthenticated, code: refuseVerifyWith);
+    if (refuseVerifyWith != null) throw AppError(refuseKind, code: refuseVerifyWith);
     verified.add('$email $code $password');
   }
 }

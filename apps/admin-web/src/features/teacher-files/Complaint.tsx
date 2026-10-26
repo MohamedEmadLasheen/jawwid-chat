@@ -5,6 +5,9 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { DECISION_LABEL } from '@/features/discipline/copy'
 import type { Decision } from '@/features/discipline/api'
 import { useUpholdComplaint } from '@/features/discipline/hooks'
+import { F, describeFeedbackError } from '@/features/teacher-supervision/copy'
+import { FeedbackStatusBadge, ReplyDialog } from '@/features/teacher-supervision/FeedbackParts'
+import { useTakeFeedback } from '@/features/teacher-supervision/hooks'
 import type { Away, Complaint, ComplaintStatus, EntryBrief } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
@@ -30,10 +33,27 @@ export function AwayBadge({ away }: { away: Away | null | undefined }) {
   )
 }
 
-function Byline({ entry }: { entry: EntryBrief }) {
+function Byline({ entry }: { entry: Omit<EntryBrief, 'author'> & { author: EntryBrief['author'] | null } }) {
   const tx = useCopy()
   const { dateTime } = useI18n()
+  // A PD-32 app complaint has no staff author: the parent filed it (named in its head).
+  if (!entry.author) return <span className="tf-byline">{dateTime(entry.createdAt)}</span>
   return <span className="tf-byline">{tx(T.by, { name: entry.author.name, date: dateTime(entry.createdAt) })}</span>
+}
+
+/** Where a complaint came from. An app complaint names the parent and the child (PD-32). */
+function ComplaintOrigin({ complaint: c }: { complaint: Complaint }) {
+  const tx = useCopy()
+  if (c.from === 'parent_app') {
+    const pf = c.parentFeedback
+    return (
+      <span className="tf-muted" dir="auto">
+        {pf ? tx(F.fromApp, { parent: pf.parent.name, child: pf.child.name }) : tx(F.fromAppPlain)}
+      </span>
+    )
+  }
+  if (!c.from) return null
+  return <span className="tf-muted">{tx(c.from === 'parent' ? T.fromParent : T.fromManagement)}</span>
 }
 
 /**
@@ -61,8 +81,13 @@ export function ComplaintItem({
   onDecide?: () => void
 }) {
   const tx = useCopy()
+  const { locale } = useI18n()
+  const take = useTakeFeedback()
+  const [replying, setReplying] = useState(false)
   const status: ComplaintStatus = c.status ?? (c.resolution ? 'resolved' : 'open')
   const decision = c.action?.decision as Decision | null | undefined
+  // PD-32: an app complaint is also the parent's feedback, with its own status and the one reply they read.
+  const feedback = c.from === 'parent_app' ? (c.parentFeedback ?? null) : null
   return (
     <li className="tf-entry">
       <div className="tf-entry__head">
@@ -70,7 +95,7 @@ export function ComplaintItem({
           {tx(T[STATUS[status].label])}
         </Badge>
         {teacherName && <strong dir="auto">{teacherName}</strong>}
-        {c.from && <span className="tf-muted">{tx(c.from === 'parent' ? T.fromParent : T.fromManagement)}</span>}
+        <ComplaintOrigin complaint={c} />
         <Byline entry={c} />
         {c.handledBy && <span className="tf-muted">{tx(T.handledBy, { name: c.handledBy.name })}</span>}
         {c.source && <span className="tf-muted">{tx(T.fromConversation)}</span>}
@@ -78,6 +103,20 @@ export function ComplaintItem({
       <p className="tf-entry__body" dir="auto">
         {c.body}
       </p>
+      {feedback && (
+        <div className="tf-entry__head">
+          <span className="tf-muted">{tx(F.parentSees)}</span>
+          <FeedbackStatusBadge status={feedback.status} />
+        </div>
+      )}
+      {feedback?.response && (
+        <div className="tf-followup" aria-label={tx(F.theReply)}>
+          <span className="tf-byline">{tx(F.theReply)}</span>
+          <p className="tf-entry__body" dir="auto">
+            {feedback.response}
+          </p>
+        </div>
+      )}
       {decision && <p className="tf-entry__body">{tx(T.actionTaken, { d: tx(DECISION_LABEL[decision]) })}</p>}
       {(c.followUps ?? []).length > 0 && (
         <div className="tf-followup" aria-label={tx(T.followUps)}>
@@ -101,6 +140,16 @@ export function ComplaintItem({
       )}
       {canWrite && (
         <div className="tf-entry__actions">
+          {feedback && !c.handledBy && (
+            <button type="button" className="btn btn--primary btn--sm" disabled={take.isPending} onClick={() => take.mutate(feedback.id)}>
+              {tx(F.take)}
+            </button>
+          )}
+          {feedback && (
+            <button type="button" className="btn btn--sm" onClick={() => setReplying(true)}>
+              {feedback.response ? tx(F.changeReply) : tx(F.reply)}
+            </button>
+          )}
           {status === 'open' && (
             <button type="button" className="btn btn--sm" onClick={onUphold}>
               {tx(T.uphold)}
@@ -122,6 +171,20 @@ export function ComplaintItem({
             </>
           )}
         </div>
+      )}
+      {take.error ? (
+        <div className="banner banner--danger" role="alert">
+          {describeFeedbackError(take.error, locale)}
+        </div>
+      ) : null}
+      {replying && feedback && (
+        <ReplyDialog
+          feedbackId={feedback.id}
+          category="complaint"
+          parentName={feedback.parent.name}
+          current={feedback.response}
+          onClose={() => setReplying(false)}
+        />
       )}
     </li>
   )

@@ -27,8 +27,10 @@ export const TeacherFileEntryKind = {
 } as const;
 export type TeacherFileEntryKind = (typeof TeacherFileEntryKind)[keyof typeof TeacherFileEntryKind];
 const KINDS: ReadonlySet<string> = new Set(Object.values(TeacherFileEntryKind));
-/** PD-26: where a complaint came from. */
+/** PD-26: where a complaint staff record came from. */
 const COMPLAINT_SOURCES: ReadonlySet<string> = new Set(['management', 'parent']);
+/** PD-32: and, to filter by, a complaint a parent filed in the app (never recorded by staff). */
+const COMPLAINT_FILTER_SOURCES: ReadonlySet<string> = new Set([...COMPLAINT_SOURCES, 'parent_app']);
 
 /** Same shapes the table's CHECK constraints accept; checked here first for a readable 400. */
 const PHONE = /^\+?[0-9][0-9 ()-]{5,30}$/;
@@ -134,7 +136,7 @@ export class TeacherFileService {
     const supervisorOf = new Map(supervision.map((r) => [r.learnerId, r.supervisorId]));
     const staffIds = new Set<string>([
       ...supervision.map((r) => r.supervisorId),
-      ...entries.map((e) => e.createdBy),
+      ...entries.map((e) => e.createdBy).filter((x): x is string => !!x),
       ...entries.map((e) => e.handledBy).filter((x): x is string => !!x),
       ...daysOff.map((d) => d.createdBy),
       ...deductions.map((v) => v.decidedBy as string),
@@ -175,13 +177,14 @@ export class TeacherFileService {
         };
       }),
       employment: { teachingMarket: file?.teachingMarket ?? null, studentCount: learners.length },
-      supervision: shapeTimeline(entries, daysOff, person, upheldByComplaint(upheld)),
+      supervision: shapeTimeline(entries, daysOff, person, upheldByComplaint(upheld), await this.parentFeedbackOf(entries)),
       // PD-18: what was recorded, for everyone who reads the file. The AMOUNTS are
       // payroll's and come only from GET /teacher-files/:id/finance (super admin).
       history: {
         bonuses: entries
           .filter((e) => e.kind === 'bonus')
-          .map((e) => ({ id: e.id, reason: e.body, createdAt: e.createdAt, author: person(e.createdBy) })),
+          // A bonus always has a staff author; only an app complaint has none.
+          .map((e) => ({ id: e.id, reason: e.body, createdAt: e.createdAt, author: person(e.createdBy as string) })),
         deductions: deductions.map((v) => ({
           id: v.id,
           step: v.decision as 'deduction_1' | 'deduction_2',
@@ -202,7 +205,9 @@ export class TeacherFileService {
    */
   async complaints(actorId: string, query: { from?: string; status?: string }) {
     const { actor, access } = await this.gate(actorId, (a) => a.canView);
-    if (query.from !== undefined && !COMPLAINT_SOURCES.has(query.from)) throw invalid('from', 'must be management or parent');
+    if (query.from !== undefined && !COMPLAINT_FILTER_SOURCES.has(query.from)) {
+      throw invalid('from', 'must be management, parent or parent_app');
+    }
     const org = actor.organizationId as string;
     const roots = await this.prisma.teacherSupervisionEntry.findMany({
       where: { organizationId: org, kind: TeacherFileEntryKind.COMPLAINT, ...(query.from ? { complaintSource: query.from } : {}) },
@@ -222,13 +227,20 @@ export class TeacherFileService {
     ]);
     const entries = [...roots, ...followUps];
     const staff = await this.prisma.staff.findMany({
-      where: { id: { in: [...new Set([...entries.map((e) => e.createdBy), ...entries.map((e) => e.handledBy).filter((x): x is string => !!x)])] } },
+      where: {
+        id: {
+          in: [
+            ...new Set([...entries.map((e) => e.createdBy), ...entries.map((e) => e.handledBy)].filter((x): x is string => !!x)),
+          ],
+        },
+      },
       select: { id: true, name: true },
     });
     const nameOf = new Map(staff.map((x) => [x.id, x.name]));
     const teacherOf = new Map(roots.map((r) => [r.id, r.teacherId]));
     const teacherName = new Map(teachers.map((t) => [t.id, t.name]));
-    const shaped = shapeTimeline(entries, [], (id) => ({ id, name: nameOf.get(id) ?? '' }), upheldByComplaint(upheld)).complaints
+    const feedback = await this.parentFeedbackOf(roots);
+    const shaped = shapeTimeline(entries, [], (id) => ({ id, name: nameOf.get(id) ?? '' }), upheldByComplaint(upheld), feedback).complaints
       .map((c) => {
         const teacherId = teacherOf.get(c.id) as string;
         return { ...c, teacher: { id: teacherId, name: teacherName.get(teacherId) ?? '' } };
@@ -359,6 +371,11 @@ export class TeacherFileService {
     const entry = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       const row = await tx.teacherSupervisionEntry.create({ data });
+      // PD-32: a follow-up or a resolution on a parent's app complaint is what the
+      // parent reads as "in review" / "resolved" -- never its text.
+      if (data.refersTo && (kind === TeacherFileEntryKind.COMPLAINT_FOLLOWUP || kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION)) {
+        await advanceParentFeedback(tx, data.refersTo, kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION ? 'resolved' : 'in_review');
+      }
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'teacher_file.entry_added',
@@ -493,6 +510,37 @@ export class TeacherFileService {
   }
 
   /** PD-26: the Teachers department (manager and members) and the super admin -- who may handle a complaint. */
+  /** PD-32: entry id -> the parent feedback each app complaint among `entries` was filed as. */
+  private async parentFeedbackOf(entries: Entry[]): Promise<Map<string, ParentFeedbackBrief>> {
+    const linked = entries.filter((e) => e.parentFeedbackId);
+    if (!linked.length) return new Map();
+    const rows = await this.prisma.parentFeedback.findMany({
+      where: { id: { in: linked.map((e) => e.parentFeedbackId as string) } },
+    });
+    const [contacts, learners] = await Promise.all([
+      this.prisma.contact.findMany({ where: { id: { in: rows.map((r) => r.contactId) } }, select: { id: true, name: true } }),
+      this.prisma.learner.findMany({ where: { id: { in: rows.map((r) => r.learnerId) } }, select: { id: true, name: true } }),
+    ]);
+    const contactName = new Map(contacts.map((c) => [c.id, c.name]));
+    const learnerName = new Map(learners.map((l) => [l.id, l.name]));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const out = new Map<string, ParentFeedbackBrief>();
+    for (const e of linked) {
+      const f = byId.get(e.parentFeedbackId as string);
+      if (!f) continue;
+      out.set(e.id, {
+        id: f.id,
+        familyId: f.familyId,
+        parent: { id: f.contactId, name: contactName.get(f.contactId) ?? '' },
+        child: { id: f.learnerId, name: learnerName.get(f.learnerId) ?? '' },
+        status: f.status as ParentFeedbackBrief['status'],
+        response: f.parentResponse,
+        respondedAt: f.respondedAt,
+      });
+    }
+    return out;
+  }
+
   private async supervisors(organizationId: string) {
     return this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
       SELECT s.id::text AS id, s.name
@@ -540,6 +588,7 @@ export function shapeTimeline(
   daysOff: DayOff[],
   person: (id: string) => { id: string; name: string },
   upheld: Map<string, UpheldComplaint> = new Map(),
+  parentFeedback: Map<string, ParentFeedbackBrief> = new Map(),
 ) {
   const resolutionOf = new Map<string, Entry>();
   const followUpsOf = new Map<string, Entry[]>();
@@ -548,7 +597,8 @@ export function shapeTimeline(
     if (e.kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION) resolutionOf.set(e.refersTo, e);
     else followUpsOf.set(e.refersTo, [...(followUpsOf.get(e.refersTo) ?? []), e]);
   }
-  const brief = (e: Entry) => ({ id: e.id, body: e.body, createdAt: e.createdAt, author: person(e.createdBy) });
+  // An app complaint (PD-32) has no staff author: its parent is in `parentFeedback`.
+  const brief = (e: Entry) => ({ id: e.id, body: e.body, createdAt: e.createdAt, author: e.createdBy ? person(e.createdBy) : null });
 
   const complaints = entries
     .filter((e) => e.kind === TeacherFileEntryKind.COMPLAINT)
@@ -559,7 +609,9 @@ export function shapeTimeline(
         ...brief(e),
         source: e.conversationId ? { conversationId: e.conversationId, messageId: e.sourceMessageId } : null,
         // PD-26. Null on complaints recorded before it.
-        from: (e.complaintSource as 'management' | 'parent' | null) ?? null,
+        from: (e.complaintSource as 'management' | 'parent' | 'parent_app' | null) ?? null,
+        // PD-32: who filed it in the app, about which child, and what the parent reads back.
+        parentFeedback: parentFeedback.get(e.id) ?? null,
         handledBy: e.handledBy ? person(e.handledBy) : null,
         // Oldest first: they read as the complaint's story.
         followUps: (followUpsOf.get(e.id) ?? []).slice().reverse().map(brief),
@@ -596,6 +648,34 @@ export interface Away {
   kind: 'leave' | 'suspended' | 'day_off';
   /** The last day of the unbroken run of days off, YYYY-MM-DD. */
   until: string;
+}
+
+/**
+ * PD-32: move the parent feedback behind an app complaint forward (never back:
+ * a follow-up after the resolution leaves it resolved).
+ */
+export async function advanceParentFeedback(
+  tx: Prisma.TransactionClient,
+  complaintEntryId: string,
+  to: 'in_review' | 'resolved',
+): Promise<void> {
+  const complaint = await tx.teacherSupervisionEntry.findUnique({ where: { id: complaintEntryId }, select: { parentFeedbackId: true } });
+  if (!complaint?.parentFeedbackId) return;
+  await tx.parentFeedback.updateMany({
+    where: { id: complaint.parentFeedbackId, status: { in: to === 'resolved' ? ['received', 'in_review'] : ['received'] } },
+    data: { status: to },
+  });
+}
+
+/** PD-32: the parent feedback an app complaint was filed as, for the staff who handle it. */
+export interface ParentFeedbackBrief {
+  id: string;
+  familyId: string;
+  parent: { id: string; name: string };
+  child: { id: string; name: string };
+  status: 'received' | 'in_review' | 'resolved';
+  response: string | null;
+  respondedAt: Date | null;
 }
 
 /** PD-26: an upheld complaint is a violation on the ladder; its decision is the action taken. */

@@ -1,4 +1,6 @@
+import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
+import { describeError as describeTeacherFileError } from '@/features/teacher-files/copy'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
 
@@ -19,6 +21,7 @@ export const H = {
   lateness: { en: 'Lateness', ar: 'التأخير' },
   rewards: { en: 'Grants & rewards', ar: 'المنح والمكافآت' },
   complaints: { en: 'Complaints', ar: 'الشكاوى' },
+  feedback: { en: 'Parent feedback', ar: 'آراء أولياء الأمور' },
 
   teacher: { en: 'Teacher', ar: 'المعلم' },
   month: { en: 'Month', ar: 'الشهر' },
@@ -110,6 +113,97 @@ export const H = {
   },
   fromManagement: { en: 'From management', ar: 'من الإدارة' },
   fromParents: { en: 'From parents', ar: 'من أولياء الأمور' },
+  fromParentApp: { en: 'Parent app', ar: 'تطبيق ولي الأمر' },
   all: { en: 'All', ar: 'الكل' },
   recordComplaint: { en: 'Record a complaint', ar: 'تسجيل شكوى' },
 } satisfies Record<string, Pair>
+
+/**
+ * PD-32 parent feedback copy. Wording rule: the reply is the ONE text the
+ * parent reads; every label that could be mistaken for something the parent
+ * sees says so, and a complaint is never "resolved" from here.
+ */
+export const F = {
+  hint: {
+    en: 'What parents send from the app about their child’s teacher: praise, suggestions and complaints. Take one so the parent sees it is in review, then reply. A complaint is also listed under Complaints, and is resolved there.',
+    ar: 'ما يرسله أولياء الأمور من التطبيق عن معلم طفلهم: شكر وثناء واقتراحات وشكاوى. تولَّ المتابعة ليرى ولي الأمر أنها قيد المراجعة، ثم اكتب الرد. وتظهر الشكوى أيضًا في قسم الشكاوى، وتُعالَج من هناك.',
+  },
+  category: { en: 'Type', ar: 'النوع' },
+  allCategories: { en: 'All types', ar: 'كل الأنواع' },
+  praise: { en: 'Praise', ar: 'شكر وثناء' },
+  suggestion: { en: 'Suggestion', ar: 'اقتراح' },
+  complaint: { en: 'Complaint', ar: 'شكوى' },
+  status: { en: 'Status', ar: 'الحالة' },
+  allStatuses: { en: 'Any status', ar: 'كل الحالات' },
+  received: { en: 'Received', ar: 'مستلمة' },
+  in_review: { en: 'In review', ar: 'قيد المراجعة' },
+  resolved: { en: 'Resolved', ar: 'تمت المعالجة' },
+  empty: { en: 'No feedback here.', ar: 'لا توجد آراء هنا.' },
+
+  child: { en: 'Student: {name}', ar: 'الطالب: {name}' },
+  parent: { en: 'Parent: {name}', ar: 'ولي الأمر: {name}' },
+  teacher: { en: 'Teacher: {name}', ar: 'المعلم: {name}' },
+  sentOn: { en: 'Sent {date}', ar: 'أُرسلت {date}' },
+  handledBy: { en: 'Handled by {name}', ar: 'يتابعها {name}' },
+  notTaken: { en: 'No one has taken it yet', ar: 'لم يتولَّها أحد بعد' },
+  theReply: { en: 'Reply the parent reads', ar: 'الرد الذي يقرؤه ولي الأمر' },
+  repliedBy: { en: '{name}, {date}', ar: '{name}، {date}' },
+  noReply: { en: 'No reply yet.', ar: 'لا يوجد رد بعد.' },
+
+  // On a complaint (PD-26) that came from the app
+  fromApp: { en: 'From the parent app · {parent} about {child}', ar: 'من تطبيق ولي الأمر · {parent} عن {child}' },
+  fromAppPlain: { en: 'From the parent app', ar: 'من تطبيق ولي الأمر' },
+  parentSees: { en: 'The parent sees:', ar: 'يرى ولي الأمر:' },
+
+  // Actions
+  take: { en: 'Take it', ar: 'تولَّ المتابعة' },
+  reply: { en: 'Reply to parent', ar: 'الرد على ولي الأمر' },
+  changeReply: { en: 'Change the reply', ar: 'تعديل الرد' },
+  replyTitle: { en: 'Reply to {name}', ar: 'الرد على {name}' },
+  replyLabel: { en: 'Your reply', ar: 'ردّك' },
+  replyHint: {
+    en: 'This is the only text the parent sees. Follow-ups and the resolution stay internal.',
+    ar: 'هذا هو النص الوحيد الذي يراه ولي الأمر. أما المتابعات والمعالجة فتبقى داخلية.',
+  },
+  replaces: {
+    en: 'Sending replaces the reply the parent sees now.',
+    ar: 'الإرسال يستبدل الرد الذي يراه ولي الأمر الآن.',
+  },
+  markResolved: { en: 'Mark resolved', ar: 'تحديدها كمُعالَجة' },
+  markResolvedHint: { en: 'The parent then sees it as resolved.', ar: 'وعندها يراها ولي الأمر مُعالَجة.' },
+  complaintResolves: {
+    en: 'A complaint is resolved on the Teacher File, by recording its resolution. The parent then sees it as resolved; the resolution itself stays internal.',
+    ar: 'تُعالَج الشكوى من ملف المعلم بتسجيل معالجتها، وعندها يراها ولي الأمر مُعالَجة، وتبقى تفاصيل المعالجة داخلية.',
+  },
+  openTeacherFile: { en: 'Open the teacher’s file', ar: 'فتح ملف المعلم' },
+  openComplaints: { en: 'Go to Complaints', ar: 'الانتقال إلى الشكاوى' },
+  send: { en: 'Send reply', ar: 'إرسال الرد' },
+  sending: { en: 'Sending…', ar: 'جارٍ الإرسال…' },
+  required: { en: 'Write the reply first.', ar: 'اكتب الرد أولًا.' },
+
+  // The Parent File (PD-17)
+  familyTitle: { en: 'Feedback about teachers', ar: 'آراء حول المعلمين' },
+  familyHint: {
+    en: 'What this family sent from the app about their children’s teachers, and the reply they read. The Teachers department handles it.',
+    ar: 'ما أرسلته هذه الأسرة من التطبيق عن معلمي أطفالها، والرد الذي قرأته. ويتابعها قسم المعلمين.',
+  },
+  familyEmpty: { en: 'This family has sent no feedback about a teacher.', ar: 'لم ترسل هذه الأسرة أي رأي عن معلم.' },
+} satisfies Record<string, Pair>
+
+const FEEDBACK_ERRORS: Record<string, Pair> = {
+  'COMM.FEEDBACK_STATE': {
+    en: 'A complaint is resolved on the Teacher File, by recording its resolution.',
+    ar: 'تُعالَج الشكوى من ملف المعلم بتسجيل معالجتها.',
+  },
+  'COMM.FEEDBACK_NOT_FOUND': { en: 'This feedback was not found.', ar: 'لم يُعثر على هذا الرأي.' },
+  'COMM.FEEDBACK_DENIED': {
+    en: 'Parent feedback is read by the Teachers department, the super admin and the children’s supervisor.',
+    ar: 'يطّلع على آراء أولياء الأمور قسم المعلمين والمدير العام ومشرف الأطفال فقط.',
+  },
+}
+
+export function describeFeedbackError(error: unknown, locale: 'ar' | 'en'): string {
+  const mapped = error instanceof ApiError ? FEEDBACK_ERRORS[error.code] : undefined
+  if (mapped) return locale === 'ar' ? mapped.ar : mapped.en
+  return describeTeacherFileError(error, locale)
+}
