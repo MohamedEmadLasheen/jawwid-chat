@@ -112,7 +112,10 @@ create table chat.learner_subscription (
   lessons_included  integer not null check (lessons_included between 1 and 500),
   starts_on         date not null,
   source            text not null check (source in ('payment_request', 'instalment_plan', 'staff', 'backfill')),
-  request_id        uuid references chat.payment_request (id) on delete restrict,
+  -- No foreign key: a request is never deleted (chat.guard_payment_request),
+  -- the guard below checks it on insert, and the money tables stay truncatable
+  -- on their own in the test suites.
+  request_id        uuid,
   -- The instalment plan's id (or the single instalment's id).
   plan_ref          uuid,
   note              text check (note is null or length(btrim(note)) between 1 and 500),
@@ -317,7 +320,8 @@ create table chat.learner_access (
   -- Null: no subscription (no balance to run out).
   balance                integer,
   grace_left             integer,
-  overdue_instalment_id  uuid references chat.family_instalment (id),
+  -- Derived each time; no foreign key (the instalment is never deleted).
+  overdue_instalment_id  uuid,
   overdue_due_on         date,
   -- Set by the API when enforcement is on and the lessons are suspended; the
   -- materializer creates nothing for a held child.
