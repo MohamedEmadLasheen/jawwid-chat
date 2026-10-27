@@ -12,6 +12,7 @@ import { QuietHoursService } from './quiet-hours.service';
 import { catalogEntry, severityOf, type NotificationCategory } from './notification-catalog';
 import { ACADEMY_ZONE } from '../../platform/time-zone';
 import { messageAudience } from '../outbox/message-audience';
+import { capFreesAt, deferForQuiet, heldAdd, heldCount, heldKeep, heldRead, heldTemplate, type HeldChats } from './chat-push-policy';
 
 /** One logical notification for one person. */
 export interface EmitInput {
@@ -214,7 +215,11 @@ export class NotificationPipeline {
     );
     const graceMs = Number(await this.config.get('notification.message_reading_grace_seconds')) * 1000;
     const windowMs = Number(await this.config.get('notification.message_coalesce_seconds')) * 1000;
-    const quiet = await this.quietWindows(ids, await this.quietDefaults());
+    // PD-34 amendment (owner, 2026-10-27): chat pushes take quiet hours ON by
+    // default and a rolling-hour cap whose excess is HELD into one summary,
+    // never dropped. This path only; nothing else reads these two keys.
+    const quiet = await this.quietWindows(ids, await this.chatQuietDefaults());
+    const capPerHour = Number(await this.config.get('notification.chat.pushes_per_hour'));
     const groupKey = `conversation:${input.conversationId}`;
 
     for (const r of input.recipients) {
@@ -242,19 +247,46 @@ export class NotificationPipeline {
       const reading = input.seq !== null && state !== undefined
         && now.getTime() - state.updatedAt.getTime() < 60_000 && state.lastReadSeq >= input.seq - BigInt(1);
       await this.prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${r.actorId}::text || ':' || ${input.conversationId}::text))`;
+        // One person's chat pushes are decided one at a time, across all their
+        // chats, so two workers can neither double-push nor split a summary.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${r.actorId}::text || ':chat'))`;
+
+        // 1. A HELD push (quiet hours or the cap) takes every chat message that
+        //    follows, from any chat: one combined push when it goes, not a burst.
+        const held = await tx.notification.findFirst({
+          where: { recipientId: r.actorId, eventType: 'message_published', status: NotificationStatus.SCHEDULED, variables: { path: ['held'], equals: true } },
+          select: { id: true, variables: true },
+        });
+        if (held) {
+          const v = (held.variables ?? {}) as Record<string, unknown>;
+          const chats = heldAdd((v.chats ?? {}) as HeldChats, input.conversationId, seq);
+          await tx.notification.update({
+            where: { id: held.id },
+            data: {
+              templateKey: heldTemplate(chats),
+              variables: { ...v, chats, count: heldCount(chats) } as Prisma.InputJsonValue,
+            },
+          });
+          return;
+        }
+
+        // 2. A push for this chat still waiting (coalescing, the reading grace)
+        //    goes as one; it now stands for this message too.
         const pending = await tx.notification.findFirst({
           where: { recipientId: r.actorId, conversationId: input.conversationId, eventType: 'message_published', status: NotificationStatus.SCHEDULED },
           select: { id: true, variables: true },
         });
         if (pending) {
-          // It goes as one push; it now stands for this message too.
           await tx.notification.update({
             where: { id: pending.id },
             data: { variables: { ...((pending.variables ?? {}) as Record<string, unknown>), lastSeq: maxSeq((pending.variables as Record<string, unknown> | null)?.lastSeq, seq) } as Prisma.InputJsonValue },
           });
           return;
         }
+
+        // 3. When it may go: the reading grace or the coalescing window, then
+        //    the cap (the excess waits for the window to free up), then quiet
+        //    hours (anything that would land in them waits for their end).
         let at = now;
         if (reading) at = new Date(now.getTime() + graceMs);
         else {
@@ -266,7 +298,19 @@ export class NotificationPipeline {
           const lastAt = last ? (last.sentAt ?? last.scheduledAt) : null;
           if (lastAt && now.getTime() - lastAt.getTime() < windowMs) at = new Date(lastAt.getTime() + windowMs);
         }
+        const counted = await tx.$queryRaw<Array<{ t: Date }>>`
+          SELECT coalesce(sent_at, scheduled_at) AS t FROM chat.notification
+           WHERE recipient_id = ${r.actorId}::uuid AND event_type = 'message_published' AND status <> 'cancelled'
+             AND coalesce((variables ->> 'capSummary')::boolean, false) = false
+             AND coalesce(sent_at, scheduled_at) > ${new Date(at.getTime() - 3_600_000)}
+             AND coalesce(sent_at, scheduled_at) <= ${at}`;
+        const frees = capFreesAt(at, counted.map((c) => c.t), capPerHour);
+        // A summary the cap produced never counts toward the cap itself.
+        const capSummary = frees !== null;
+        if (frees && frees > at) at = frees;
         const pushAt = (rule?.respectQuietHours ?? true) ? deferForQuiet(at, quiet.get(r.actorId)) : at;
+        const isHeld = capSummary || pushAt.getTime() > at.getTime();
+        const chats = heldAdd({}, input.conversationId, seq);
         await tx.notification.createMany({
           data: [{
             organizationId: conv.organizationId,
@@ -280,8 +324,10 @@ export class NotificationPipeline {
             priority: rule?.priority ?? 'normal',
             conversationId: input.conversationId,
             // Push privacy (owner decision 2026-10-14): no sender, no preview --
-            // only which message it stands for, for the read check.
-            variables: { lastSeq: seq } as Prisma.InputJsonValue,
+            // only which messages it stands for, for the read and audience checks.
+            variables: (isHeld
+              ? { lastSeq: seq, held: true, capSummary, chats, count: heldCount(chats) }
+              : { lastSeq: seq }) as Prisma.InputJsonValue,
             status: NotificationStatus.SCHEDULED,
             scheduledAt: pushAt,
             itemId,
@@ -394,7 +440,23 @@ export class NotificationPipeline {
       UPDATE chat.notification SET status = 'cancelled', failure_code = 'READ'
        WHERE recipient_id = ${actorId}::uuid AND conversation_id = ${conversationId}::uuid
          AND event_type = 'message_published' AND status = 'scheduled'
+         AND coalesce((variables ->> 'held')::boolean, false) = false
          AND coalesce((variables ->> 'lastSeq')::numeric, 0) <= ${seq}::numeric`;
+    // A held push (quiet hours or the cap) loses what the read covers; it is
+    // withdrawn only once nothing it stands for is still unread.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${actorId}::text || ':chat'))`;
+      const held = await tx.notification.findMany({
+        where: { recipientId: actorId, eventType: 'message_published', status: NotificationStatus.SCHEDULED, variables: { path: ['held'], equals: true } },
+        select: { id: true, conversationId: true, variables: true },
+      });
+      for (const h of held) {
+        const v = (h.variables ?? {}) as Record<string, unknown>;
+        const before = (v.chats ?? {}) as HeldChats;
+        if (!before[conversationId]) continue;
+        await this.reshapeHeld(tx, h, v, heldRead(before, conversationId, lastReadSeq), 'READ');
+      }
+    });
     const read = await this.prisma.$executeRaw`
       UPDATE chat.notification_item SET read_at = now(), updated_at = now()
        WHERE recipient_id = ${actorId}::uuid AND group_key = ${`conversation:${conversationId}`} AND read_at IS NULL
@@ -431,15 +493,35 @@ export class NotificationPipeline {
         scheduledAt: { lte: new Date(now.getTime() + horizonMs) },
         conversationId: { not: null },
       },
-      select: { id: true, recipientId: true, conversationId: true },
+      select: { id: true, recipientId: true, conversationId: true, variables: true },
       take: batch,
     });
     const byConversation = new Map<string, typeof due>();
     for (const d of due) byConversation.set(d.conversationId as string, [...(byConversation.get(d.conversationId as string) ?? []), d]);
     const drop: string[] = [];
+    const audiences = new Map<string, Set<string>>();
+    const audienceOf = async (conversationId: string) => {
+      if (!audiences.has(conversationId)) audiences.set(conversationId, new Set(await messageAudience(this.prisma, conversationId, null)));
+      return audiences.get(conversationId) as Set<string>;
+    };
     for (const [conversationId, rows] of byConversation) {
-      const audience = new Set(await messageAudience(this.prisma, conversationId, null));
-      for (const r of rows) if (!audience.has(r.recipientId)) drop.push(r.id);
+      for (const r of rows) {
+        const v = (r.variables ?? {}) as Record<string, unknown>;
+        if (v.held === true) {
+          // A held push answers for every chat it stands for, each re-checked.
+          const before = (v.chats ?? {}) as HeldChats;
+          const keep: Record<string, boolean> = {};
+          for (const id of Object.keys(before)) keep[id] = (await audienceOf(id)).has(r.recipientId);
+          const after = heldKeep(before, (id) => keep[id] === true);
+          if (Object.keys(after).length === Object.keys(before).length) continue;
+          await this.prisma.$transaction(async (tx) => {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${r.recipientId}::text || ':chat'))`;
+            await this.reshapeHeld(tx, r, v, after, 'AUDIENCE');
+          });
+          continue;
+        }
+        if (!(await audienceOf(conversationId)).has(r.recipientId)) drop.push(r.id);
+      }
     }
     if (drop.length === 0) return 0;
     const result = await this.prisma.notification.updateMany({
@@ -556,6 +638,81 @@ export class NotificationPipeline {
   // Decisions
   // ------------------------------------------------------------------
 
+  /**
+   * A held push after some of what it stood for is gone (read, or no longer
+   * audible): withdrawn when nothing is left, else re-counted and re-templated,
+   * and filed under a chat it still stands for.
+   */
+  private async reshapeHeld(
+    tx: Prisma.TransactionClient,
+    h: { id: string; conversationId: string | null },
+    v: Record<string, unknown>,
+    chats: HeldChats,
+    reason: 'READ' | 'AUDIENCE',
+  ): Promise<void> {
+    const left = Object.keys(chats);
+    if (left.length === 0) {
+      await tx.notification.updateMany({
+        where: { id: h.id, status: NotificationStatus.SCHEDULED },
+        data: { status: NotificationStatus.CANCELLED, failureCode: reason },
+      });
+      return;
+    }
+    await tx.notification.updateMany({
+      where: { id: h.id, status: NotificationStatus.SCHEDULED },
+      data: {
+        conversationId: h.conversationId && chats[h.conversationId] ? h.conversationId : left[0],
+        templateKey: heldTemplate(chats),
+        variables: { ...v, chats, count: heldCount(chats) } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  /** The chat default quiet window (owner 2026-10-27: ON), for someone who never set their own. */
+  async chatQuietDefaults(): Promise<{ enabled: boolean; startMinute: number; endMinute: number }> {
+    return {
+      enabled: Boolean(await this.config.get('notification.chat.quiet_hours.default_enabled')),
+      startMinute: Number(await this.config.get('notification.quiet_hours.default_start_minute')),
+      endMinute: Number(await this.config.get('notification.quiet_hours.default_end_minute')),
+    };
+  }
+
+  /**
+   * PD-36 mention push, under the chat policy: it takes the chat quiet hours
+   * (the person's own, else the chat default) but is NEVER capped or folded
+   * into a summary -- a mention is a summons. Otherwise exactly what
+   * NotificationService.scheduleByRule did: the rule's template, channel,
+   * priority, offset and on/off switch.
+   */
+  async mentionPublished(input: {
+    ruleKey: string;
+    recipientId: string;
+    dedupeKey: string;
+    locale?: string;
+    conversationId: string;
+    now?: Date;
+  }): Promise<string | null> {
+    const rule = await this.prisma.notificationRule.findUnique({ where: { key: input.ruleKey } });
+    if (!rule || !rule.enabled) return null;
+    const at = new Date((input.now ?? new Date()).getTime() + rule.offsetSeconds * 1000);
+    const windows = await this.quietWindows([input.recipientId], await this.chatQuietDefaults());
+    const scheduledAt = rule.respectQuietHours ? deferForQuiet(at, windows.get(input.recipientId)) : at;
+    return this.notifications.schedule({
+      dedupeKey: input.dedupeKey,
+      ruleKey: rule.key,
+      templateKey: rule.templateKey,
+      eventType: rule.eventType,
+      recipientId: input.recipientId,
+      locale: input.locale,
+      channel: rule.channel,
+      priority: rule.priority,
+      conversationId: input.conversationId,
+      variables: {},
+      scheduledAt,
+      respectQuietHours: false,
+    });
+  }
+
   /** The live actors among `ids`, in three queries whatever their number. */
   private async liveActors(ids: readonly string[]): Promise<Map<string, { organizationId: string; locale: string }>> {
     const resolved = await this.identity.resolveActors(
@@ -587,8 +744,9 @@ export class NotificationPipeline {
     }
     const limited = (await this.config.get('notification.rate_limited_categories')) as readonly string[];
     const cap = Number(await this.config.get('notification.push_per_hour'));
-    // 0 (the default until the owner decides): no cap.
-    if (cap > 0 && limited.includes(category)) {
+    // Chat has its own cap (held into a summary, never dropped: owner 2026-10-27),
+    // so this dropping limit never applies to it.
+    if (cap > 0 && category !== 'conversation' && limited.includes(category)) {
       const counts = await this.prisma.notification.groupBy({
         by: ['recipientId'],
         where: {
@@ -763,18 +921,6 @@ function compact(o: Record<string, string | null | undefined>): Record<string, s
   return out;
 }
 
-/** The end of a quiet window, or `at` itself when it is not quiet then (never dropped). */
-function deferForQuiet(
-  at: Date,
-  w: { enabled: boolean; startMinute: number; endMinute: number; zone: string } | undefined,
-): Date {
-  if (!w || !w.enabled) return at;
-  const local = QuietHoursService.minutesInZone(at, w.zone);
-  if (!QuietHoursService.isQuiet(local, w.startMinute, w.endMinute)) return at;
-  let delta = w.endMinute - local;
-  if (delta <= 0) delta += 24 * 60;
-  return new Date(at.getTime() + delta * 60_000);
-}
 
 /** The larger of two seqs held as strings (null when neither is known). */
 function maxSeq(a: unknown, b: string | null): string | null {

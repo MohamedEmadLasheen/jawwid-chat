@@ -615,10 +615,18 @@ export class OutboxWorker {
     if (!row || row.state === 'removed') return;
     const recipient = await this.identity.resolveActor(target);
     if (!recipient || !recipient.isActive) return;
-    await this.notifications.scheduleByRule(mentionRuleFor(String(payload.conversationType ?? '')), {
+    const ruleKey = mentionRuleFor(String(payload.conversationType ?? ''));
+    // One per message per person: a role and a name reaching the same person are one ping.
+    const dedupeKey = `mention:${payload.messageId as string}:${target}`;
+    // PD-34 amendment (owner 2026-10-27): with the pipeline, a mention takes the
+    // chat quiet hours (the person's own, else the chat default), never the cap.
+    if (this.pipeline) {
+      await this.pipeline.mentionPublished({ ruleKey, recipientId: target, dedupeKey, locale: recipient.locale, conversationId });
+      return;
+    }
+    await this.notifications.scheduleByRule(ruleKey, {
       recipientId: target,
-      // One per message per person: a role and a name reaching the same person are one ping.
-      dedupeKey: `mention:${payload.messageId as string}:${target}`,
+      dedupeKey,
       locale: recipient.locale,
       conversationId,
       variables: {},
