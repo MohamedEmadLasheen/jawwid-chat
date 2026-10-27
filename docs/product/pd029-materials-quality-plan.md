@@ -243,7 +243,7 @@ Proposal: **one Chat-owned, versioned, pinned dataset** that both the lessons an
 | Tajweed | A **published, reviewed annotation**, never hand classification and never a model's judgement. Candidates to evaluate: QUL's Tajweed-annotated text (it has a review and correction tool; licence not yet confirmed), or the King Fahd Complex's colour-coded Tajweed Mushaf data where its terms allow. | Before anything is shown, a **qualified Quran teacher of the academy signs off** each surah's rule list on a review sheet, as PD-39 proposes for the text. The dataset records who signed and when. A rule the reviewer rejects is not shown. |
 | Fonts | Amiri Quran (OFL 1.1), as PD-39 proposes; KFGQPC Uthmanic Hafs if its terms allow embedding | bundled, never from Google Fonts |
 
-The schema, the API and who builds what are agreed with PD-39 in `docs/product/quran-dataset-contract.md`: PD-29 P0-2 builds it, and PD-39 consumes it.
+The schema, the API and who builds what are agreed with PD-39 in `docs/product/quran-dataset-contract.md` (added by #176, which builds P0-2): PD-29 P0-2 builds it, and PD-39 consumes it.
 
 Corrections to Tajweed (#2, #13) come **only** from that reviewed dataset and the teacher's
 sign-off. This plan lists candidates for review (§B5); it does not rule on any of them.
@@ -306,7 +306,7 @@ the lessons are built only by CI.
 |---|---|---|---|
 | P0-0 | Admin Web (no code) | Retire surahs **101, 113, 89** in Materials until rebuilt (§D "do now"). | stops the wrong audio today |
 | P0-1 | Chat **#166** (open) | Full-window lesson preview with a back button and full screen | #1 |
-| P0-2 | Chat, API + migration | **Quran dataset**: `chat.quran_ayah` (Tanzil Uthmani, SHA-256 pinned, count checks) shared with PD-39, an ayah audio manifest (`SSSAAA` + SHA-256), and the Tajweed annotation table with reviewer and date. The text is served read-only to the lessons engine as a static JSON snapshot built by CI. | foundation for #2, #12, #13, #17 |
+| P0-2 | Chat, API + migration (**#176**, owner-approved 2026-10-27) | **Quran dataset**: `chat.quran_ayah` (Tanzil Uthmani, SHA-256 pinned, count checks) shared with PD-39, an ayah audio manifest (`SSSAAA` + SHA-256), and the Tajweed annotation table with reviewer and date. The text is served read-only to the lessons engine as a static JSON snapshot built by CI. | foundation for #2, #12, #13, #17 |
 | P0-3 | Chat `apps/lessons` | **Engine skeleton** on its own origin (CSP, no third-party hosts, fonts and audio self-hosted). Fixes the systemic patterns once:<br>• ayat, order and audio from the dataset (P1, P1b, P6);<br>• one audio controller that stops on change and unmount and never replays a stale object (P2–P5, P8);<br>• ayah-by-ayah playback, no timing tables (P7);<br>• options shuffled once per question, kept in state and answered by id (#16);<br>• games draw from every ayah;<br>• one section header in every lesson (#14);<br>• one star model with no farming (#15). | #2, #12, #14, #15, #16, #17 |
 | P0-4 | `apps/lessons` content | **Al-Buruj (85) rebuilt** on the engine as the reference (#18), then the other 37 surahs in batches of about 8, each one extracted as text from c231532 and reviewed | #18 → all |
 | P0-5 | `apps/lessons` content | **Arabic lesson 1 Alif/Hamza** rewritten as data: real bare-ا words, a hamza unit, and one comparison rule (no folding) used by games and quizzes alike; full tashkeel on the strict rule for lessons 1–10 | #4, #11 tashkeel |
