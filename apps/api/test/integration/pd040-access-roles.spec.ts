@@ -30,6 +30,7 @@ import { PERMISSIONS } from '@platform/permissions/catalogue';
 import { legacyBundle, legacyBundleNames, type LegacyTier, type StaffPlacement } from '@platform/permissions/legacy-bundles';
 import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { AccountAdminModule } from '../../src/account-admin/account-admin.module';
+import { AdminModule } from '../../src/admin/admin.module';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
 
@@ -121,7 +122,7 @@ beforeAll(async () => {
   designer = { id: staff.id, subject: account.subject };
 
   process.env.REDIS_URL = REDIS_URL;
-  const moduleRef = await Test.createTestingModule({ imports: [PlatformModule, AuthModule, CommunicationModule, AccountAdminModule] }).compile();
+  const moduleRef = await Test.createTestingModule({ imports: [PlatformModule, AuthModule, CommunicationModule, AccountAdminModule, AdminModule] }).compile();
   app = moduleRef.createNestApplication({ logger: false, rawBody: true });
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/live', 'health/ready'] });
   app.useGlobalFilters(new CommErrorFilter());
@@ -240,7 +241,7 @@ describe('PD-40: roles and grants', () => {
 
   it('archiving stops new grants and keeps existing ones; revoking removes the keys, once', async () => {
     const other = await g.prisma.staff.create({ data: { organizationId: orgId, name: 'QA Second Specialist', role: 'specialist', isActive: true } });
-    await g.prisma.$queryRaw`SELECT chat.archive_access_role(${designerRole}::uuid, 'spec', ${m.superAdmin.id}::uuid)`;
+    await g.prisma.$executeRaw`SELECT chat.archive_access_role(${designerRole}::uuid, 'spec', ${m.superAdmin.id}::uuid)`;
     expect(await sqlError(grant(m.superAdmin.id, other.id, designerRole))).toMatch(/archived role/);
     expect((await profile(designer.id)).permissions).toEqual(['certificates.design', 'certificates.view']);
 

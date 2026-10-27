@@ -551,7 +551,7 @@ language sql
 stable
 set search_path = chat, pg_temp
 as $$
-  select coalesce(p_key = any ((select permissions from chat.staff_access_profile(p_staff))), false);
+  select coalesce(p_key = any (p.permissions), false) from chat.staff_access_profile(p_staff) p;
 $$;
 
 -- Does the manager run the department this staff member belongs to? PD-40
