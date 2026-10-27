@@ -219,7 +219,6 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       en: 'Changes are checked by the server and recorded with their reason. Reporting lines and responsibilities stay in My profile → Organization overview.',
       ar: 'يتحقق الخادم من التغييرات ويسجّلها مع سببها. تبقى خطوط التبعية والمسؤوليات في ملفي الشخصي ← نظرة عامة على المؤسسة.',
     },
-    legacy: [{ path: '/coverage' }],
   },
   {
     key: 'teachers',
