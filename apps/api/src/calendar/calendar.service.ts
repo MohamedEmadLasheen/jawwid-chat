@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { ACADEMY_ZONE, canonicalZone } from '../platform/time-zone';
+import { TimeZoneService } from '../platform/time-zone.service';
 import type { Actor } from '../platform/types';
 import { ConversationService } from '../communication/conversations/conversation.service';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
@@ -20,14 +21,22 @@ import { PALETTE_KEYS } from './palette';
 type Query = Record<string, string | string[] | undefined>;
 
 /**
- * Who sees what (PD-38 §B3). The super admin, the Teachers department and the
- * Operations Manager read the academy. An Operations supervisor reads the
- * academy's CAPACITY too, but another supervisor's child is an anonymous block:
- * time and color, no name -- PD-8's boundary on children holds.
+ * Who sees what (PD-38 §B3) -- the UNION of every basis a person holds:
+ *   - the super admin, the Operations Manager, and the Teachers department
+ *     with PD-35's strict switch off (or the Teachers Manager): the academy;
+ *   - an Operations supervisor: the academy's CAPACITY, with their own
+ *     children named and every other child an anonymous block (time and
+ *     color, no name -- PD-8's boundary on children holds);
+ *   - a teacher supervisor under the strict switch: their assigned teachers.
+ * A person holding two bases gets both: an Operations supervisor who also
+ * supervises teachers sees those teachers' children named as well.
  */
 export type CalendarScope =
   | { kind: 'academy'; staffId: string }
-  | { kind: 'supervisor'; staffId: string; ownLearners: ReadonlySet<string> };
+  // PD-35 strict scope: a teacher supervisor's own teachers, nobody else's.
+  | { kind: 'teachers'; staffId: string; teacherIds: ReadonlySet<string> }
+  // namedTeachers: the lessons of these teachers are named too (a Teachers basis held beside Operations).
+  | { kind: 'supervisor'; staffId: string; ownLearners: ReadonlySet<string>; namedTeachers: ReadonlySet<string> };
 
 /** One teacher row's totals over the window, in minutes. */
 export interface TeacherTotals {
@@ -62,12 +71,18 @@ type TeacherRow = CapRow & { name: string; category: string; is_active: boolean;
  */
 @Injectable()
 export class CalendarService {
+  private readonly timeZones: TimeZoneService;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly conversations: ConversationService,
     private readonly lessons: LessonService,
     private readonly config: AppConfigService,
-  ) {}
+    // PD-22's resolver. Optional so positional harness constructions stay as they are.
+    @Optional() timeZones?: TimeZoneService,
+  ) {
+    this.timeZones = timeZones ?? new TimeZoneService(prisma);
+  }
 
   // ------------------------------------------------------------------
   // Access
@@ -76,15 +91,28 @@ export class CalendarService {
   async scopeOf(actor: Actor): Promise<CalendarScope | null> {
     if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
     if (actor.staffRole === StaffRole.SUPER_ADMIN) return { kind: 'academy', staffId: actor.actorId };
-    // PD-35 will narrow a teacher supervisor to their assigned teachers; until
-    // then the Teachers department reads the academy, as GET /lessons does.
-    if ((await this.lessons.isManager(actor)) || (await this.managesDepartment(actor, 'operations'))) {
-      return { kind: 'academy', staffId: actor.actorId };
-    }
+    // Every basis, then their union -- no single check is final.
+    // PD-35: the Teachers department reads the teachers in its scope -- every
+    // teacher with the strict switch off (and always for the Teachers Manager),
+    // a supervisor's assigned teachers with it on -- as GET /lessons does.
+    const teachers = await this.lessons.teachersFacts(actor);
+    if (teachers.department && teachers.scope.all) return { kind: 'academy', staffId: actor.actorId };
+    if (await this.managesDepartment(actor, 'operations')) return { kind: 'academy', staffId: actor.actorId };
+    const assigned: ReadonlySet<string> = teachers.department && !teachers.scope.all ? teachers.scope.teacherIds : new Set();
     if (await this.lessons.inDepartment(actor, 'operations')) {
       const own = await this.lessons.supervisedLearnerIds(actor, new Date());
-      return { kind: 'supervisor', staffId: actor.actorId, ownLearners: new Set(own) };
+      // The children of the assigned teachers may be asked for by name too.
+      const taught = assigned.size === 0 ? [] : await this.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT id::text AS id FROM chat.learner
+         WHERE organization_id = ${actor.organizationId}::uuid AND teacher_id = ANY (${[...assigned]}::uuid[])`;
+      return {
+        kind: 'supervisor',
+        staffId: actor.actorId,
+        ownLearners: new Set([...own, ...taught.map((r) => r.id)]),
+        namedTeachers: assigned,
+      };
     }
+    if (teachers.department) return { kind: 'teachers', staffId: actor.actorId, teacherIds: assigned };
     return null;
   }
 
@@ -143,10 +171,15 @@ export class CalendarService {
       zone,
       viewer: { staffId: actor.actorId, scope: scope.kind, canEditShifts: editShifts, canEditColors: editColors },
       palette: PALETTE_KEYS,
-      teachers: teachers.map((t) => ({ id: t.id, name: t.name, isActive: t.is_active, category: t.category, timezone: t.timezone })),
+      teachers: teachers
+        .filter((t) => scope.kind !== 'teachers' || scope.teacherIds.has(t.id))
+        .map((t) => ({ id: t.id, name: t.name, isActive: t.is_active, category: t.category, timezone: t.timezone })),
       supervisors,
       learners: learners
-        .filter((l) => scope.kind === 'academy' || scope.ownLearners.has(l.id))
+        .filter((l) =>
+          scope.kind === 'academy' ||
+          (scope.kind === 'teachers' && l.teacher_id !== null && scope.teacherIds.has(l.teacher_id)) ||
+          (scope.kind === 'supervisor' && scope.ownLearners.has(l.id)))
         .map((l) => ({ id: l.id, name: l.name, teacherId: l.teacher_id })),
     };
   }
@@ -218,7 +251,8 @@ export class CalendarService {
         shift: d.shift, work: d.work, leave: d.leave, empty: d.empty, free: d.free,
       })),
       lessons: lessons.map((l) => {
-        const named = scope.kind === 'academy' || (l.learner_id !== null && scope.ownLearners.has(l.learner_id));
+        const named =
+          scope.kind !== 'supervisor' || scope.namedTeachers.has(l.teacher_id) || (l.learner_id !== null && scope.ownLearners.has(l.learner_id));
         const shift = categoryOf.get(l.teacher_id) === 'full_shift' || categoryOf.get(l.teacher_id) === 'part_shift';
         return {
           id: l.id,
@@ -299,13 +333,12 @@ export class CalendarService {
       ${ctes},
       taught AS (
         SELECT m.teacher_id,
-               chat.mr_minutes(range_agg(tstzrange(m.starts_at, m.ends_at)) * tstzmultirange(tstzrange(win.lo, win.hi))) AS booked_m,
-               chat.mr_minutes(coalesce(range_agg(tstzrange(m.starts_at, m.ends_at)) FILTER (WHERE m.outcome = 'held'), '{}'::tstzmultirange)
-                               * tstzmultirange(tstzrange(win.lo, win.hi))) AS held_m,
+               chat.mr_minutes(range_agg(tstzrange(m.starts_at, m.ends_at))) AS booked_m,
+               chat.mr_minutes(coalesce(range_agg(tstzrange(m.starts_at, m.ends_at)) FILTER (WHERE m.outcome = 'held'), '{}'::tstzmultirange)) AS held_m,
                count(*)::int AS lessons
-          FROM m, win
+          FROM m
          WHERE m.matches AND m.st IN ('active', 'trial') AND m.teacher_id IN (SELECT teacher_id FROM shown)
-         GROUP BY m.teacher_id, win.lo, win.hi
+         GROUP BY m.teacher_id
       )
       SELECT
         (SELECT coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) FROM (${this.teacherSelect()}) t) AS teachers,
@@ -358,6 +391,98 @@ export class CalendarService {
     };
   }
 
+  /**
+   * PD-38 P2: a teacher's own schedule -- their shift or working hours, leave,
+   * empty time and lessons, with the period's figures. The teacher is the
+   * caller, never a parameter, so no other teacher's lesson or student can be
+   * asked for; the days are the teacher's account zone (PD-22, what the app's
+   * clock shows). Nothing financial reaches a teacher: a payment hold reads
+   * "paused" (PD-30), and supervisors' colors are the office's, not shown.
+   * ONE statement, like the academy views.
+   */
+  async mine(actorId: string, query: Query) {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.TEACHER || !actor.isActive || !actor.organizationId) {
+      throw new CommError(CommErrorCode.LESSON_DENIED, 'this is a teacher\'s own schedule');
+    }
+    // Only the window: every other filter is the office's.
+    const f: CalendarFilters = {
+      ...parseFilters({ from: one(query.from), to: one(query.to) }),
+      teacherIds: [actor.actorId],
+    };
+    const zone = await this.accountZone(actor.actorId);
+    const ctes = this.ctes(actor.organizationId, f, zone);
+    type DayRow = { day: string; shift: unknown; work: unknown; leave: unknown; empty: unknown; free: unknown };
+    type LessonRow = {
+      id: string; learner_id: string | null; learner_name: string | null; prospect_name: string | null; kind: string; st: string;
+      outcome: string | null; starts_at: string; ends_at: string; moved_from: string | null; within_hours: boolean;
+    };
+    type Taught = { lessons: number; booked_m: number; held_m: number; students: number; trial_students: number };
+    const [{ teachers, days, lessons, taught }] = await this.prisma.$queryRaw<Array<{
+      teachers: TeacherRow[]; days: DayRow[]; lessons: LessonRow[]; taught: Taught;
+    }>>`
+      ${ctes}
+      SELECT
+        (SELECT coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) FROM (${this.teacherSelect()}) t) AS teachers,
+        (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.day), '[]'::jsonb) FROM (
+           SELECT to_char(c.day, 'YYYY-MM-DD') AS day,
+                  chat.mr_json(c.shift) AS shift, chat.mr_json(c.work) AS work, chat.mr_json(c.leave) AS leave,
+                  chat.mr_json(c.empty) AS empty, chat.mr_json(c.free) AS free
+             FROM cap c WHERE c.teacher_id = ${actor.actorId}::uuid) x) AS days,
+        (SELECT coalesce(jsonb_agg(to_jsonb(y) ORDER BY y.starts_at), '[]'::jsonb) FROM (
+           SELECT m.id::text AS id, m.learner_id::text AS learner_id, ln.name AS learner_name, tp.display_name AS prospect_name,
+                  m.kind, m.st, m.outcome, m.starts_at, m.ends_at, m.moved_from::text AS moved_from,
+                  coalesce(tstzrange(m.starts_at, m.ends_at) <@ t.hours, false) AS within_hours
+             FROM m
+             LEFT JOIN cap_t t ON t.teacher_id = m.teacher_id
+             LEFT JOIN chat.learner ln ON ln.id = m.learner_id
+             LEFT JOIN chat.trial_prospect tp ON tp.id = m.prospect_id
+            WHERE m.teacher_id = ${actor.actorId}::uuid) y) AS lessons,
+        (SELECT jsonb_build_object(
+                  'lessons', count(*) FILTER (WHERE m.st IN ('active', 'trial')),
+                  'booked_m', chat.mr_minutes(coalesce(range_agg(tstzrange(m.starts_at, m.ends_at)) FILTER (WHERE m.st IN ('active', 'trial')), '{}'::tstzmultirange)),
+                  'held_m', chat.mr_minutes(coalesce(range_agg(tstzrange(m.starts_at, m.ends_at)) FILTER (WHERE m.outcome = 'held'), '{}'::tstzmultirange)),
+                  'students', count(DISTINCT m.learner_id) FILTER (WHERE m.st = 'active'),
+                  'trial_students', count(DISTINCT m.prospect_id) FILTER (WHERE m.st = 'trial'))
+           FROM m WHERE m.teacher_id = ${actor.actorId}::uuid) AS taught`;
+    const me = teachers[0] ? this.teacherDto(teachers[0]) : null;
+    const shift = me?.category === 'full_shift' || me?.category === 'part_shift';
+    return {
+      zone,
+      from: f.from,
+      to: f.to,
+      category: me?.category ?? 'unset',
+      totals: me?.totals ?? null,
+      utilization: me?.utilization ?? null,
+      teaching: { lessons: Number(taught.lessons), bookedMinutes: Number(taught.booked_m), heldMinutes: Number(taught.held_m) },
+      students: { distinct: Number(taught.students), trial: Number(taught.trial_students) },
+      days,
+      lessons: lessons.map((l) => ({
+        id: l.id,
+        startsAt: new Date(l.starts_at).toISOString(),
+        endsAt: new Date(l.ends_at).toISOString(),
+        kind: l.kind,
+        status: l.st,
+        outcome: l.outcome,
+        learner: l.learner_id ? { id: l.learner_id, name: l.learner_name } : null,
+        prospect: l.prospect_name ? { name: l.prospect_name } : null,
+        movedFrom: l.moved_from,
+        outsideShift: shift && !l.within_hours,
+      })),
+    };
+  }
+
+  /**
+   * A person's own zone (PD-22: what their app's clock shows), else the
+   * academy's -- both through TimeZoneService, the resolver every other reader
+   * of a person's zone uses. The response names the zone it used, and the app
+   * draws in exactly that zone, so the two can never cut a day differently.
+   */
+  private async accountZone(actorId: string): Promise<string> {
+    const own = await this.timeZones.get(actorId);
+    return canonicalZone(own.timeZone) ?? (await this.timeZones.academyZone());
+  }
+
   // ------------------------------------------------------------------
   // Internals
   // ------------------------------------------------------------------
@@ -365,6 +490,13 @@ export class CalendarService {
   /** Parse, then hold an Operations supervisor to their own children for the student filter. */
   private filtersFor(scope: CalendarScope, query: Query): CalendarFilters {
     const f = parseFilters(query);
+    if (scope.kind === 'teachers') {
+      // A teacher outside the scope is not found, never "forbidden" (PD-35).
+      if (f.teacherIds?.some((id) => !scope.teacherIds.has(id))) {
+        throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+      }
+      return { ...f, teacherIds: f.teacherIds ?? [...scope.teacherIds] };
+    }
     if (scope.kind === 'supervisor' && f.learnerIds?.some((id) => !scope.ownLearners.has(id))) {
       // As GET /lessons: a child outside the scope is not found, never "forbidden".
       throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'student not found');
@@ -428,6 +560,9 @@ export class CalendarService {
           LEFT JOIN chat.learner_supervision ls ON ls.learner_id = l.learner_id
          WHERE (${f.weekdays}::int[] IS NULL OR extract(isodow FROM l.starts_at AT TIME ZONE ${zone})::int = ANY (${f.weekdays}::int[]))
            AND (chat.calendar_status(l.kind, l.outcome) <> 'moved' OR 'moved' = ANY (${statuses}::text[]))
+           -- One rule for every list and figure: a lesson belongs to the window it
+           -- STARTS in (the day it is drawn on). Capacity alone is by time.
+           AND l.starts_at >= win.lo
       ),
       -- Lesson counts, grouped once (a correlated count per cell scanned the
       -- window's lessons once per cell: 4.7 s for a month of 100 teachers).
@@ -484,6 +619,10 @@ export class CalendarService {
       utilization: utilization(totals),
     };
   }
+}
+
+function one(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
 }
 
 function totalsOf(r: CapRow | TeacherRow): TeacherTotals {

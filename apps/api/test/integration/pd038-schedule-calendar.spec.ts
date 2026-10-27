@@ -16,6 +16,7 @@ import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { StatsService } from '../../src/lessons/stats.service';
 import { CalendarService } from '../../src/calendar/calendar.service';
 import { WorkPatternService } from '../../src/calendar/work-pattern.service';
+import { TeacherScopeService } from '@platform/teacher-scope';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 jest.setTimeout(240_000);
@@ -446,6 +447,134 @@ describe('who counts, and history that stays put', () => {
     expect(byChild.teachers).toEqual([]);
     expect(byChild.students.distinct).toBe(0);
     expect(byChild.teaching.lessons).toBe(0);
+  });
+});
+
+describe('a teacher\'s own schedule (P2)', () => {
+  const w = { from: '2026-09-14', to: '2026-09-15' };
+
+  beforeEach(async () => {
+    await fullShift(s.teacherId, '2026-09-01');
+    await lessonAt(s.learnerId, '2026-09-14 13:00', 60);
+    await lessonAt(learnerN, '2026-09-14 15:00', 30);
+    await trialAt('2026-09-14 16:00', 30);
+    // A PD-30 payment hold on teacher_c's own lesson: "paused", nothing about money.
+    const held = await lessonAt(learnerN, '2026-09-14 17:00', 60);
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
+      g.prisma.$executeRawUnsafe(
+        `update chat.lesson set outcome = 'suspended', outcome_by_kind = 'system', outcome_by = null,
+                outcome_at = starts_at - interval '1 day', outcome_note = 'subscription' where id = $1::uuid`, held,
+      ),
+    ]);
+    // Another teacher's lesson the same day, with another child.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.lesson (organization_id, learner_id, teacher_id, kind, starts_at, ends_at, created_by, created_by_kind)
+       values (chat.default_organization_id(), $1::uuid, $2::uuid, 'regular', '2026-09-14 10:00+00', '2026-09-14 11:00+00', $3::uuid, 'staff')`,
+      s.secondLearnerId, s.newTeacherId, tsupId,
+    );
+    await patterns.setColor(s.managerId, s.ownerId, { colorKey: 'sky' });
+  });
+
+  it('shows the teacher\'s shift, empty time and own lessons -- never another teacher\'s, never money, never the office\'s colors', async () => {
+    const me = await calendar.mine(s.teacherId, w);
+    expect(me.category).toBe('full_shift');
+    expect(me.zone).toBe(TZ);
+    expect(me.days).toHaveLength(1);
+    expect((me.days[0] as { shift: unknown }).shift).toEqual([['2026-09-14T09:00:00+00:00', '2026-09-14T16:00:00+00:00']]);
+    expect(me.lessons.map((l) => l.learner?.name ?? l.prospect?.name)).toEqual(['learner_l', 'learner_n', 'prospect_p', 'learner_n']);
+    expect(me.lessons.find((l) => l.status === 'paused')).toMatchObject({ outcome: 'suspended' });
+    const json = JSON.stringify(me);
+    expect(json).not.toContain('learner_m');
+    expect(json).not.toContain(s.newTeacherId);
+    expect(json).not.toMatch(/payment|subscription|colorKey|sky|supervisor/);
+    expect(me.students).toEqual({ distinct: 2, trial: 1 });
+    expect(me.teaching).toMatchObject({ lessons: 3, bookedMinutes: 120 });
+    expect(me.totals).toMatchObject({ shiftMinutes: 420, inShiftBookedMinutes: 120, inShiftPausedMinutes: 60, emptyMinutes: 240 });
+  });
+
+  it('only from/to are read: a teacherIds parameter cannot widen it', async () => {
+    const me = await calendar.mine(s.teacherId, { ...w, teacherIds: s.newTeacherId, learnerIds: s.secondLearnerId } as Record<string, string>);
+    expect(JSON.stringify(me)).not.toContain('learner_m');
+    expect(me.lessons).toHaveLength(4);
+  });
+
+  it('the days are the teacher\'s own zone (PD-22)', async () => {
+    // 23:30 Cairo on the 13th is 00:30 on the 14th in Dubai (UTC+4).
+    await lessonAt(s.learnerId, '2026-09-13 23:30', 30);
+    expect((await calendar.mine(s.teacherId, w)).lessons).toHaveLength(4);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.actor_time_zone (actor_id, organization_id, time_zone, automatic) values ($1::uuid, chat.default_organization_id(), 'Asia/Dubai', false)`,
+      s.teacherId,
+    );
+    const dubai = await calendar.mine(s.teacherId, w);
+    expect(dubai.zone).toBe('Asia/Dubai');
+    expect(dubai.lessons).toHaveLength(5);
+  });
+
+  it('the figures count exactly the lessons the views show: by the day a lesson starts', async () => {
+    // 23:30-00:30 Cairo: it starts on the 13th, so the 14th neither draws nor counts it,
+    // though half an hour of it falls in the 14th (capacity, which is by time, keeps that).
+    await lessonAt(s.learnerId, '2026-09-13 23:30', 60);
+    const me = await calendar.mine(s.teacherId, w);
+    expect(me.lessons).toHaveLength(4);
+    expect(me.teaching).toMatchObject({ lessons: 3, bookedMinutes: 120 });
+    expect(me.students).toEqual({ distinct: 2, trial: 1 });
+    const st = await calendar.stats(tsupId, { ...w, teacherIds: s.teacherId });
+    expect(st.teaching).toMatchObject({ lessons: 3, bookedMinutes: 120 });
+    const cal = await calendar.calendar(tsupId, { ...w, teacherIds: s.teacherId });
+    expect(cal.lessons).toHaveLength(4);
+  });
+
+  it('with no zone of their own, the academy\'s (schedule.timezone, as every PD-22 reader) -- and the answer names it', async () => {
+    // The row exists (20260905090100, Cairo): change it, and put it back exactly.
+    const [{ value }] = await g.prisma.$queryRawUnsafe<Array<{ value: string }>>(
+      `select value::text as value from chat.config where key = 'schedule.timezone'`,
+    );
+    await g.prisma.$executeRawUnsafe(`update chat.config set value = '"Asia/Dubai"'::jsonb where key = 'schedule.timezone'`);
+    try {
+      expect((await calendar.mine(s.teacherId, w)).zone).toBe('Asia/Dubai');
+    } finally {
+      await g.prisma.$executeRawUnsafe(`update chat.config set value = $1::jsonb where key = 'schedule.timezone'`, value);
+    }
+  });
+
+  it('staff, a parent and a window over 42 days are refused', async () => {
+    expect(await code(calendar.mine(tsupId, w))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(calendar.mine(s.parentId, w))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(calendar.mine(s.teacherId, { from: '2026-09-01', to: '2026-10-14' }))).toBe(CommErrorCode.VALIDATION);
+  });
+});
+
+describe('PD-35 strict scope', () => {
+  const strict = (on: boolean) =>
+    g.prisma.$executeRaw`UPDATE chat.config SET value = ${JSON.stringify(on)}::jsonb WHERE key = 'teacher_supervisor.strict_scope'`;
+
+  it('a teacher supervisor reads only their assigned teachers; another is not found; the Teachers Manager reads all', async () => {
+    const scoped = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit, undefined, undefined, new TeacherScopeService(g.prisma));
+    const cal = new CalendarService(g.prisma, g.conversations, scoped, g.config);
+    const pats = new WorkPatternService(g.prisma, g.conversations, scoped, scheduling, cal, g.config, audit);
+    await fullShift(s.teacherId, '2026-09-01');
+    await fullShift(s.newTeacherId, '2026-09-01');
+    await lessonAt(s.learnerId, '2026-09-14 13:00', 60);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id) values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
+      s.teacherId, tsupId,
+    );
+    const w = { from: '2026-09-14', to: '2026-09-15' };
+    // Off (the default): the whole department, as before PD-35.
+    expect((await cal.stats(tsupId, w)).teachers.map((t) => t.id)).toEqual(expect.arrayContaining([s.teacherId, s.newTeacherId]));
+    await strict(true);
+    try {
+      expect((await cal.stats(tsupId, w)).teachers.map((t) => t.id)).toEqual([s.teacherId]);
+      expect((await cal.calendar(tsupId, w)).lessons.map((l) => l.teacherId)).toEqual([s.teacherId]);
+      expect((await cal.options(tsupId)).teachers.map((t) => t.id)).toEqual([s.teacherId]);
+      expect(await code(cal.calendar(tsupId, { ...w, teacherIds: s.newTeacherId }))).toBe(CommErrorCode.LESSON_NOT_FOUND);
+      expect(await code(pats.pattern(tsupId, s.newTeacherId))).toBe(CommErrorCode.LESSON_NOT_FOUND);
+      expect((await cal.stats(tmgrId, w)).teachers.map((t) => t.id)).toEqual(expect.arrayContaining([s.teacherId, s.newTeacherId]));
+    } finally {
+      await strict(false);
+    }
   });
 });
 

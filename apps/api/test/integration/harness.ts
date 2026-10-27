@@ -16,6 +16,8 @@ import { NotificationService } from '@communication/notifications/notification.s
 import { ReminderService } from '@communication/notifications/reminder.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
+import { NotificationPipeline } from '@communication/notifications/notification-pipeline.service';
+import { NotificationInboxService } from '@communication/notifications/notification-inbox.service';
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { CallService } from '@communication/calls/call.service';
 import { StoryService } from '@communication/stories/story.service';
@@ -65,16 +67,30 @@ export function buildGraph(
     prisma, authz, outbox, identity, coverage, audit, relationships,
   );
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
+  const templates = new TemplateService(prisma);
+  const quietHours = new QuietHoursService(prisma);
+  const notifications = new NotificationService(prisma, templates, quietHours, config, new LoggingPushProvider());
+  // A realtime publisher that is a no-op: these suites assert on what reaches
+  // the DATABASE (notifications, outbox status), and a socket server in a jest
+  // process would be a second thing to tear down.
+  // PD-37: with toThreadAudience too -- without it the worker (rightly) fails a
+  // receipts.advanced row rather than widen it to the room, and every suite
+  // that reads a message and drains the outbox would see that row retried.
+  const silentRealtime = {
+    toThread: async () => undefined,
+    toUsers: async () => undefined,
+    toThreadAudience: async () => undefined,
+  };
+  // PD-34: wired as production wires it (reminders, reads, message pushes).
+  const pipeline = new NotificationPipeline(prisma, notifications, quietHours, config, identity, silentRealtime as never);
+  const inbox = new NotificationInboxService(prisma, templates, config, pipeline);
   const messages = new MessageService(
     prisma, authz, conversations, outbox, config, attachments, audit, identity,
   );
   const approvals = new ApprovalService(
     prisma, authz, conversations, attachments, outbox, audit, identity,
   );
-  const templates = new TemplateService(prisma);
-  const quietHours = new QuietHoursService(prisma);
-  const notifications = new NotificationService(prisma, templates, quietHours, config, new LoggingPushProvider());
-  const reminders = new ReminderService(prisma, notifications);
+  const reminders = new ReminderService(prisma, notifications, pipeline);
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
   );
@@ -85,22 +101,11 @@ export function buildGraph(
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
   const teacherProfiles = new TeacherProfileService(prisma, authz, identity, storage, audit);
 
-  // A worker whose realtime publisher is a no-op: these suites assert on what
-  // reaches the DATABASE (notifications, outbox status), and a socket server in
-  // a jest process would be a second thing to tear down.
-  // PD-37: with toThreadAudience too -- without it the worker (rightly) fails a
-  // receipts.advanced row rather than widen it to the room, and every suite
-  // that reads a message and drains the outbox would see that row retried.
-  const silentRealtime = {
-    toThread: async () => undefined,
-    toUsers: async () => undefined,
-    toThreadAudience: async () => undefined,
-  };
-  const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity);
+  const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity, pipeline);
 
   return {
     prisma, coverage, scope, identity, authz, conversations, messages, approvals,
-    attachments, notifications, reminders, templates, quietHours, calls,
+    attachments, notifications, reminders, templates, quietHours, calls, pipeline, inbox,
     stories, storyAudience, storySweeper, storage, outboxWorker,
     teacherProfiles,
     relationships,
@@ -452,7 +457,7 @@ export async function legacyHeldMessage(
 
 /** Order matters: children before parents. */
 export async function truncate(prisma: PrismaService): Promise<void> {
-  await prisma.$executeRawUnsafe(`
+  const sql = `
     truncate chat.story_cta_click, chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
              chat.message_receipt, chat.message_reaction, chat.message_attachment,
              chat.message_hidden_for, chat.message_approval, chat.call_participant,
@@ -466,5 +471,23 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.payment_receipt, chat.payment, chat.payment_request, chat.stripe_event,
              chat.family_instalment, chat.family_billing, chat.parent_file,
              chat.actor_time_zone
-    restart identity cascade`);
+    restart identity cascade`;
+  // A truncate that cannot get its locks is a session another suite left open
+  // in a transaction. Waiting for it hangs every later suite at its hook (seen
+  // in CI, 2026-10-26); failing after a bounded wait names the blocker instead.
+  try {
+    await prisma.$transaction([
+      prisma.$executeRawUnsafe(`set local lock_timeout = '60s'`),
+      prisma.$executeRawUnsafe(sql),
+    ]);
+  } catch (e) {
+    if (!/lock timeout/i.test(String((e as Error).message))) throw e;
+    const blockers = await prisma.$queryRawUnsafe<Array<{ pid: number; state: string; age: string; query: string }>>(
+      `select pid, state, (now() - xact_start)::text as age, left(query, 300) as query
+         from pg_stat_activity
+        where datname = current_database() and pid <> pg_backend_pid() and xact_start is not null
+        order by xact_start`,
+    );
+    throw new Error(`truncate could not lock its tables within 60 s; open transactions: ${JSON.stringify(blockers)}`);
+  }
 }

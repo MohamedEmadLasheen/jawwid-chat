@@ -81,7 +81,7 @@ export class WorkPatternService {
 
   async pattern(actorId: string, teacherId: string) {
     const { actor } = await this.calendar.requireScope(actorId);
-    const teacher = await this.orgTeacher(actor, teacherId);
+    const teacher = await this.scopedTeacher(actorId, actor, teacherId);
     // A change's free-text reason is the Teachers department's (and the super
     // admin's); Operations reads the shift itself, not why it changed.
     const readsReasons = actor.staffRole === StaffRole.SUPER_ADMIN || (await this.lessons.isManager(actor));
@@ -139,7 +139,8 @@ export class WorkPatternService {
   async setPattern(actorId: string, teacherId: string, body: Record<string, unknown>) {
     const actor = await this.conversations.requireActor(actorId);
     await this.requireShiftEditor(actor);
-    const teacher = await this.orgTeacher(actor, teacherId);
+    // Scoped exactly like the read: out of scope is "not found", before anything is written.
+    const teacher = await this.scopedTeacher(actorId, actor, teacherId);
 
     const category = body.category;
     if (typeof category !== 'string' || !(WORK_CATEGORIES as readonly string[]).includes(category)) {
@@ -279,6 +280,16 @@ export class WorkPatternService {
     if (!allowed || !actor.isActive) {
       throw new CommError(CommErrorCode.LESSON_DENIED, 'shifts are set by the Teachers Manager');
     }
+  }
+
+  /** The teacher, if in the caller's calendar scope (PD-35 strict: a supervisor's own teachers); else not found. */
+  private async scopedTeacher(actorId: string, actor: Actor, teacherId: string) {
+    const teacher = await this.orgTeacher(actor, teacherId);
+    const { scope } = await this.calendar.requireScope(actorId);
+    if (scope.kind === 'teachers' && !scope.teacherIds.has(teacher.id)) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    }
+    return teacher;
   }
 
   private async orgTeacher(actor: Actor, teacherId: string) {

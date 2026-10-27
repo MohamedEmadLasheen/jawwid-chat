@@ -725,6 +725,18 @@ export class MessageService {
            WHERE conversation_id = ${conv.id}::uuid AND actor_id = ${actor.actorId}::uuid`;
       }
 
+      // PD-34: a read is an event too -- the worker withdraws the push still
+      // waiting for this chat, reads its Notification Center entry and tells
+      // the reader's OTHER devices (conversation.read, their own room only).
+      // On every read, as PD-34 wrote it, carrying where the cursor now is.
+      if (kind === 'read') {
+        await this.outbox.enqueue(tx, CommEvent.CONVERSATION_READ, {
+          conversationId: conv.id,
+          actorId: actor.actorId,
+          lastReadSeq: (target > from ? target : from).toString(),
+        });
+      }
+
       if (announces && target > from) {
         await this.outbox.enqueue(tx, CommEvent.RECEIPTS_ADVANCED, {
           conversationId: conv.id,
