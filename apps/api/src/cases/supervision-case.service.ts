@@ -48,6 +48,8 @@ interface Row {
   lesson_starts_at: Date | null;
   owner_id: string | null;
   owner_name: string | null;
+  /** The owner still fits, now (chat.case_owner_fits: in the department, and in scope of the subject). */
+  owner_fits: boolean;
   opened_by: string;
   opener_name: string;
   due_on: string | null;
@@ -102,7 +104,7 @@ export class SupervisionCaseService {
 
     const [dept] = await this.prisma.$queryRaw<Array<{ id: string; manager_id: string | null; manager_fits: boolean }>>`
       SELECT d.id::text AS id, d.manager_id::text AS manager_id,
-             (d.manager_id IS NOT NULL AND chat.case_owner_fits(d.manager_id, d.id)) AS manager_fits
+             (d.manager_id IS NOT NULL AND chat.case_owner_fits(d.manager_id, d.id, NULL, NULL)) AS manager_fits
         FROM chat.department d
        WHERE d.organization_id = ${org}::uuid AND d.kind = ${target}
        ORDER BY d.id LIMIT 1`;
@@ -110,7 +112,8 @@ export class SupervisionCaseService {
     let ownerId: string | null = dept.manager_fits ? dept.manager_id : null;
     if (body.ownerId !== undefined && body.ownerId !== null) {
       if (typeof body.ownerId !== 'string' || !isUuid(body.ownerId)) throw invalid('ownerId: a uuid');
-      if (!(await this.ownerFits(body.ownerId, dept.id))) throw invalid('ownerId: someone in the target department');
+      // In the department here; the database also checks the subject's scope once it knows the subject.
+      if (!(await this.ownerFits(body.ownerId, dept.id, null, null))) throw invalid('ownerId: someone in the target department');
       ownerId = body.ownerId;
     }
 
@@ -151,7 +154,7 @@ export class SupervisionCaseService {
     const superAdmin = actor.staffRole === StaffRole.SUPER_ADMIN;
     const where = Prisma.sql`c.organization_id = ${actor.organizationId}::uuid AND ${
       tab === 'mine'
-        ? Prisma.sql`c.owner_id = ${me}::uuid`
+        ? Prisma.sql`c.owner_id = ${me}::uuid AND chat.case_owner_fits(c.owner_id, c.target_department_id, c.teacher_id, c.learner_id)`
         : tab === 'opened'
           ? Prisma.sql`c.opened_by = ${me}::uuid`
           : superAdmin
@@ -165,7 +168,11 @@ export class SupervisionCaseService {
           : Prisma.sql`true`
     }`;
     const rows = await this.rows(where);
-    return { cases: rows.map((r) => this.summary(r)) };
+    // "Opened by me" is the opener's while they still stand to the subject (R2).
+    const shown = tab === 'opened' && !superAdmin
+      ? (await Promise.all(rows.map(async (r) => ((await this.canSee(actor, r)) ? r : null)))).filter((r): r is Row => r !== null)
+      : rows;
+    return { cases: shown.map((r) => this.summary(r)) };
   }
 
   async get(actorId: string, caseId: string) {
@@ -199,7 +206,7 @@ export class SupervisionCaseService {
     const owners = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
       SELECT s.id::text AS id, s.name
         FROM chat.staff s
-       WHERE chat.case_owner_fits(s.id, ${row.target_department_id}::uuid)
+       WHERE chat.case_owner_fits(s.id, ${row.target_department_id}::uuid, ${row.teacher_id}::uuid, ${row.learner_id}::uuid)
        ORDER BY s.name`;
     return { owners };
   }
@@ -210,7 +217,9 @@ export class SupervisionCaseService {
     const ownerId = body.ownerId;
     if (typeof ownerId !== 'string' || !isUuid(ownerId)) throw invalid('ownerId: a uuid');
     if (ownerId === row.owner_id) return this.get(actorId, caseId);
-    if (!(await this.ownerFits(ownerId, row.target_department_id))) throw invalid('ownerId: someone in the target department');
+    if (!(await this.ownerFits(ownerId, row.target_department_id, row.teacher_id, row.learner_id))) {
+      throw invalid('ownerId: someone in the target department who stands to the subject');
+    }
     await this.asActor(actor.actorId, null, async (tx) => {
       await tx.$executeRaw`UPDATE chat.supervision_case SET owner_id = ${ownerId}::uuid WHERE id = ${row.id}::uuid`;
       await this.outbox.enqueue(tx, CommEvent.CASE_ASSIGNED, {
@@ -272,10 +281,18 @@ export class SupervisionCaseService {
     return this.get(actorId, caseId);
   }
 
-  /** { note } */
+  /**
+   * { note } -- on a live case, by whoever may act on it. On a closed case a
+   * note is a post-mortem: the target department's manager and the super admin
+   * only (the owner's part ended with the case).
+   */
   async note(actorId: string, caseId: string, body: Record<string, unknown>) {
     const { actor, row } = await this.forAct(actorId, caseId);
     const note = text(body.note, 'note', NOTE_MAX, true) as string;
+    if ((row.status === 'resolved' || row.status === 'cancelled')
+        && actor.staffRole !== StaffRole.SUPER_ADMIN && row.target_manager_id !== actor.actorId) {
+      throw closed('a closed case takes notes from the department\'s manager or the super admin only');
+    }
     await this.prisma.$executeRaw`
       INSERT INTO chat.supervision_case_event (case_id, kind, actor_id, note)
       VALUES (${row.id}::uuid, 'note', ${actor.actorId}::uuid, ${note})`;
@@ -385,20 +402,33 @@ export class SupervisionCaseService {
     }
   }
 
-  private canSee(actor: Actor, row: Row): boolean {
-    const me = actor.actorId;
-    return actor.staffRole === StaffRole.SUPER_ADMIN || row.opened_by === me || row.owner_id === me || row.target_manager_id === me;
+  /**
+   * Live, at every read (R2): the super admin; the target department's manager;
+   * the owner while they still fit (in the department, in scope of the subject);
+   * the opener while they still stand to the subject.
+   */
+  private async canSee(actor: Actor, row: Row): Promise<boolean> {
+    if (this.canAct(actor, row)) return true;
+    if (row.opened_by !== actor.actorId) return false;
+    return this.requireSubjectScope(actor, { kind: row.subject_kind, id: row.subject_id }).then(
+      () => true,
+      (e: unknown) => {
+        if (e instanceof CommError && e.code === CommErrorCode.CASE_NOT_FOUND) return false;
+        throw e;
+      },
+    );
   }
 
+  /** The owner (while they fit), the target department's manager, the super admin. */
   private canAct(actor: Actor, row: Row): boolean {
     const me = actor.actorId;
-    return actor.staffRole === StaffRole.SUPER_ADMIN || row.owner_id === me || row.target_manager_id === me;
+    return actor.staffRole === StaffRole.SUPER_ADMIN || row.target_manager_id === me || (row.owner_id === me && row.owner_fits);
   }
 
   private async visible(actor: Actor, caseId: string): Promise<Row> {
     if (!isUuid(caseId)) throw notFound();
     const row = await this.load(actor.organizationId as string, caseId).catch(() => null);
-    if (!row || !this.canSee(actor, row)) throw notFound();
+    if (!row || !(await this.canSee(actor, row))) throw notFound();
     return row;
   }
 
@@ -409,9 +439,9 @@ export class SupervisionCaseService {
     return { actor, row };
   }
 
-  private async ownerFits(staffId: string, departmentId: string): Promise<boolean> {
+  private async ownerFits(staffId: string, departmentId: string, teacherId: string | null, learnerId: string | null): Promise<boolean> {
     const [r] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
-      SELECT chat.case_owner_fits(${staffId}::uuid, ${departmentId}::uuid) AS ok`;
+      SELECT chat.case_owner_fits(${staffId}::uuid, ${departmentId}::uuid, ${teacherId}::uuid, ${learnerId}::uuid) AS ok`;
     return r?.ok === true;
   }
 
@@ -437,7 +467,7 @@ export class SupervisionCaseService {
       // The database's own refusals (chat.guard_supervision_case), named.
       const message = String((e as Error).message ?? '');
       if (/a closed case stays closed|a case moves open/.test(message)) throw closed();
-      const refused = /(a case is owned inside its target department|a case is about something that exists|a case goes to the Teachers or the Operations department of its organization)/.exec(message);
+      const refused = /(a case is owned inside its target department[^"`]*|a case is about something that exists|a case goes to the Teachers or the Operations department of its organization)/.exec(message);
       if (refused) throw invalid(refused[1]);
       throw e;
     }
@@ -458,6 +488,7 @@ export class SupervisionCaseService {
              c.learner_id::text AS learner_id, l.name AS learner_name,
              ls.starts_at AS lesson_starts_at,
              c.owner_id::text AS owner_id, o.name AS owner_name,
+             (c.owner_id IS NOT NULL AND chat.case_owner_fits(c.owner_id, c.target_department_id, c.teacher_id, c.learner_id)) AS owner_fits,
              c.opened_by::text AS opened_by, ob.name AS opener_name,
              c.due_on::text AS due_on, c.created_at, c.updated_at, c.closed_at
         FROM chat.supervision_case c

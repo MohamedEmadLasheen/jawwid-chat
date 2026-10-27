@@ -3310,6 +3310,12 @@ Canonical: `supabase/migrations/20261026160006_chat_pd035_scope_hardening.sql`,
 6. **Deviations from the design:**
    - The target is the department (`teachers | operations`), with "the manager" as the default owner; the design's separate `department` target value is not built.
    - The `case_escalated` card in the department room waits for B6, which does not exist yet.
+7. **Security review of #155** (department head, 2026-10-27):
+   - **An owner stands to the subject** in the target department's own terms (`chat.case_owner_fits`). The manager always does. A Teachers member does if the teacher is in their PD-35 scope (department-wide with the switch off). An Operations member does if they act for the child's PD-8 supervisor. Both the API and the database check it.
+   - **Standing is live.** It is decided at every read and every act, never frozen at open or assign. An owner who left the department, or whose scope narrowed, loses the case (the manager keeps it). An opener who lost scope on the subject no longer sees it.
+   - **Notes on a closed case** are a post-mortem. Only the target department's manager and the super admin may add them; the owner's part ended with the case.
+   - **The database names a live actor.** Every change to a case and every event is written by live staff of the case's organization.
+   - **Accepted:** a case about a parent's feedback sent to Operations tells the Operations side that such feedback exists. The case shows the child and teacher, never the feedback's content.
 
 Canonical: `supabase/migrations/20261026160007_chat_pd035_supervision_cases.sql`, `apps/api/src/cases/`, `apps/admin-web/src/features/cases/`. Proven by `apps/api/test/integration/supervision-cases-pd035.spec.ts` and `apps/admin-web/src/features/cases/Cases.test.tsx`.
 

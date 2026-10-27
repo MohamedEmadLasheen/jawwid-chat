@@ -61,9 +61,17 @@ create index supervision_case_target_idx on chat.supervision_case (target_depart
 create index supervision_case_opener_idx on chat.supervision_case (opened_by, created_at desc);
 create index supervision_case_due_idx on chat.supervision_case (due_on) where status in ('open', 'in_progress');
 
--- May `p_staff` own a case sent to `p_department`? Its manager, or an active
--- member of it, of the same organization.
-create or replace function chat.case_owner_fits(p_staff uuid, p_department uuid)
+-- May `p_staff` own a case sent to `p_department` about `p_teacher` /
+-- `p_learner`? Live staff of the same organization, and either the
+-- department's manager, or a member of it who stands to the subject in that
+-- department's own terms:
+--   teachers    the teacher is in their PD-35 scope (department-wide with the
+--               strict switch off; their assigned teachers with it on)
+--   operations  they act for the child's PD-8 supervisor (themselves, an active
+--               backup, the supervisor's manager)
+-- Decided live, every time: an owner who left, or whose scope narrowed, no
+-- longer fits (the API reads the same answer for who may see and act).
+create or replace function chat.case_owner_fits(p_staff uuid, p_department uuid, p_teacher uuid, p_learner uuid)
 returns boolean
 language sql
 stable
@@ -75,9 +83,29 @@ as $$
                        and s.is_active and s.left_at is null
      where d.id = p_department
        and (d.manager_id = p_staff
-            or exists (select 1 from chat.department_member m
-                        where m.department_id = d.id and m.staff_id = p_staff))
+            or (exists (select 1 from chat.department_member m
+                         where m.department_id = d.id and m.staff_id = p_staff)
+                and case d.kind
+                      when 'teachers' then
+                        p_teacher is null or not chat.teacher_scope_strict()
+                        or chat.staff_teacher_scope(p_staff, p_teacher) is not null
+                      when 'operations' then
+                        p_learner is null
+                        or exists (select 1 from chat.learner_supervision ls
+                                    where ls.learner_id = p_learner
+                                      and ls.supervisor_id in (select chat.staff_principals(p_staff, now())))
+                      else false
+                    end))
   );
+$$;
+
+create or replace function chat.case_actor_is_live(p_staff uuid, p_org uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (select 1 from chat.staff s
+                  where s.id = p_staff and s.organization_id = p_org and s.is_active and s.left_at is null);
 $$;
 
 create or replace function chat.guard_supervision_case()
@@ -96,6 +124,11 @@ begin
   end if;
   if v_actor is null then
     raise exception 'a case changes only with its actor named (chat.case_actor)' using errcode = 'insufficient_privilege';
+  end if;
+  -- Defense in depth: the actor is live staff of the case's organization (on
+  -- an insert, checked below once the subject has decided the organization).
+  if tg_op = 'UPDATE' and not chat.case_actor_is_live(v_actor::uuid, old.organization_id) then
+    raise exception 'a case is changed by live staff of its organization (chat.case_actor)' using errcode = 'insufficient_privilege';
   end if;
 
   if tg_op = 'UPDATE' then
@@ -140,8 +173,8 @@ begin
     if v_kind not in ('teachers', 'operations') or v_kind is null then
       raise exception 'a case goes to the Teachers or the Operations department of its organization' using errcode = 'check_violation';
     end if;
-    if new.opened_by::text <> v_actor then
-      raise exception 'a case is opened by its actor' using errcode = 'insufficient_privilege';
+    if new.opened_by::text <> v_actor or not chat.case_actor_is_live(v_actor::uuid, v_org) then
+      raise exception 'a case is opened by its actor, live staff of its organization' using errcode = 'insufficient_privilege';
     end if;
     if new.status <> 'open' then
       raise exception 'a case is opened open' using errcode = 'check_violation';
@@ -155,8 +188,8 @@ begin
 
   if new.owner_id is not null
      and (tg_op = 'INSERT' or new.owner_id is distinct from old.owner_id)
-     and not chat.case_owner_fits(new.owner_id, new.target_department_id) then
-    raise exception 'a case is owned inside its target department' using errcode = 'check_violation';
+     and not chat.case_owner_fits(new.owner_id, new.target_department_id, new.teacher_id, new.learner_id) then
+    raise exception 'a case is owned inside its target department, by someone who stands to its subject' using errcode = 'check_violation';
   end if;
   new.updated_at := now();
   return new;
@@ -188,6 +221,22 @@ create index supervision_case_event_actor_idx on chat.supervision_case_event (ac
 
 create trigger supervision_case_event_is_append_only before update or delete on chat.supervision_case_event
   for each row execute function chat.forbid_change();
+
+-- A note (or any event) is written by live staff of the case's organization.
+create or replace function chat.guard_supervision_case_event()
+returns trigger
+language plpgsql
+as $$
+begin
+  if not chat.case_actor_is_live(new.actor_id, (select organization_id from chat.supervision_case where id = new.case_id)) then
+    raise exception 'a case event is written by live staff of its organization (actor)' using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger supervision_case_event_has_a_live_actor before insert on chat.supervision_case_event
+  for each row execute function chat.guard_supervision_case_event();
 
 -- One event per change, in the transaction that made it. A status change may
 -- carry its note (chat.case_note), so "resolved: why" is one event.
@@ -247,6 +296,8 @@ alter table chat.supervision_case_due_notice enable row level security;
 revoke all on chat.supervision_case, chat.supervision_case_event, chat.supervision_case_due_notice
   from public, anon, authenticated, chat_app;
 
-revoke all on function chat.case_owner_fits(uuid, uuid) from public;
+revoke all on function chat.case_owner_fits(uuid, uuid, uuid, uuid) from public;
+revoke all on function chat.case_actor_is_live(uuid, uuid) from public;
+revoke all on function chat.guard_supervision_case_event() from public;
 revoke all on function chat.guard_supervision_case() from public;
 revoke all on function chat.record_supervision_case_event() from public;
