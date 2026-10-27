@@ -54,6 +54,8 @@ export const ActionScope = {
   CALL_START: 'call_start_actor',
   /** PD-37: read and delivery cursor moves (POST …/messages/read, …/delivered). */
   RECEIPT_CURSOR: 'receipt_cursor_actor',
+  /** PD-37: GET /presence (up to 100 people a question). */
+  PRESENCE_READ: 'presence_read_actor',
 } as const;
 
 export type ActionScope = (typeof ActionScope)[keyof typeof ActionScope];
