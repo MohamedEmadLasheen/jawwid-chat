@@ -257,7 +257,13 @@ class L10nEn extends L10n {
 
   @override
   String typingMany(int count) {
-    return '$count people are typing…';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people are typing…',
+      one: '$count person is typing…',
+    );
+    return '$_temp0';
   }
 
   @override

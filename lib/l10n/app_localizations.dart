@@ -529,10 +529,10 @@ abstract class L10n {
   /// **'{name} is typing…'**
   String typingSingle(String name);
 
-  /// PD-37: three or more people typing.
+  /// No description provided for @typingMany.
   ///
   /// In en, this message translates to:
-  /// **'{count} people are typing…'**
+  /// **'{count, plural, one{{count} person is typing…} other{{count} people are typing…}}'**
   String typingMany(int count);
 
   /// No description provided for @loadingOlder.
