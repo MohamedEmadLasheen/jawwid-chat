@@ -153,22 +153,42 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
     the source credited and a link to tanzil.net.
   - The alternative is the King Fahd Complex (KFGQPC) Hafs text and font. Its terms need
     to be read and confirmed before we could use it.
-- **How it is stored.**
-  - One table, `chat.quran_ayah (surah, ayah, text_uthmani, text_search)`, holding all 6,236
-    ayat.
-  - It is loaded **verbatim** from one pinned release file. The file's SHA-256 is recorded
-    in the migration and checked on load.
-  - The load is verified by count: 6,236 rows, and each surah's count equals
-    `chat.quran_surah.ayah_count`.
-  - `text_search` is a diacritic-free copy for search (Phase 2). It is derived, never shown.
-  - No role can write to the table (a trigger refuses UPDATE and DELETE). It is
-    organisation-independent reference data.
+- **One shared dataset, built by PD-29, consumed here.**
+  - PD-29's materials-quality plan (draft #170, item P0-2) needs the same verified text,
+    plus per-ayah audio and reviewed Tajweed marks.
+  - So there is **one** dataset and **one** module (`apps/api/src/quran/`). PD-29 P0-2
+    builds it, on its own migration slot. PD-39 only reads it, and its own migration does
+    not create Quran tables.
+  - The contract both PDs build to is summarised here. The full text is
+    `quran-dataset-contract.md` in the department head's notes.
+- **How it is stored (the shared contract).**
+  - `chat.quran_dataset (id, sha256, attribution, source_url, loaded_at)`: one row per
+    pinned source file, for example `tanzil-uthmani-1.1`. The config key `quran.dataset`
+    names the current one.
+  - `chat.quran_ayah (dataset_id, surah, ayah, text_uthmani, text_search, sha256)` holds all
+    6,236 ayat:
+    - `text_uthmani` is **verbatim** from the file;
+    - `sha256` is the SHA-256 of that text's UTF-8 bytes;
+    - `text_search` is a diacritic-free derived copy for search (Phase 2), never shown.
+  - The loader checks:
+    - the file's SHA-256 against a pinned constant;
+    - 6,236 rows and 114 surahs;
+    - each surah's count against `chat.quran_surah.ayah_count`;
+    - all in one transaction.
+  - No role can write to the tables (a trigger refuses UPDATE and DELETE), and request roles
+    get no grants. It is organisation-independent reference data.
+  - Tajweed marks (`chat.quran_tajweed_mark`) use Unicode code-point offsets into
+    `text_uthmani`. Only marks a Quran teacher approved are served. They are PD-29's, and
+    PD-39 Phase 2 colours letters from them.
 - **How it is inserted.**
   - The verse tool lets the teacher pick a surah (by Arabic or English name, or number),
     then an ayah range of up to 20 ayat.
-  - The board stores a **reference** — `{surah, fromAyah, toAyah, textSha256}` — never the
-    text.
-  - The text is fetched from `GET /quran/ayahs?surah=&from=&to=` and drawn with **Amiri
+  - The board stores a **reference** — `{surah, fromAyah, toAyah, datasetId, rangeSha256}` —
+    never the text. `rangeSha256` is the SHA-256 of the ayat's `sha256` values joined with
+    "\n", in ayah order.
+  - The text is fetched from `GET /quran/ayahs?surah=&from=&to=` (at most 50 ayat; it
+    returns the dataset id, its SHA-256 and attribution, and each ayah's text and SHA-256),
+    and drawn with **Amiri
     Quran** (OFL 1.1), with ayah-end markers (۝ plus the number) and line breaking that
     never splits a word.
   - The teacher can move it, resize it, change its colour and alignment, and mark it with
@@ -380,9 +400,8 @@ chat.whiteboard_asset
   state text check in ('pending','ready')
   created_at, expires_at (exports only)
 
-chat.quran_ayah            reference data, no organisation, append-only by trigger
-  surah smallint fk chat.quran_surah, ayah smallint, text_uthmani text, text_search text
-  primary key (surah, ayah)
+-- Not here: chat.quran_dataset / chat.quran_ayah / chat.quran_tajweed_mark are PD-29
+-- P0-2's migration (the shared dataset, §4.3). PD-39 reads them through QuranTextService.
 
 -- Phase 2 (its own slot later):
 chat.whiteboard_share
@@ -496,8 +515,9 @@ visibility.
    - Widget and golden tests for Arabic text and strokes, run with `--concurrency=2`.
    - Manual QA in Chrome at `/teacher/` and on a tablet, when the QA session has a device.
 3. **Quran verses.**
-   - `chat.quran_ayah` loaded from the pinned file with the hash and count checks.
-   - `GET /quran/ayahs`, the verse picker and the Amiri Quran rendering.
+   - **Waits for PD-29 P0-2**: the shared dataset, loader and `GET /quran/ayahs`. Steps 1, 2
+     and 4 do not wait.
+   - This step adds the verse picker, the verse element and the Amiri Quran rendering.
    - The review sheet goes to the academy's Quran teacher **before** the tab is shown to
      teachers.
 4. **Export**: PNG on the device; PDF through `pdfkit`; export purge in the worker.
