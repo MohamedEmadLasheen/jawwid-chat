@@ -58,7 +58,7 @@ further, and is sent `conversation.access_revoked`.
 |---|---|---|
 | `conversation.subscribe` | `{ conversationId }` | Authorized; acknowledged. |
 | `conversation.unsubscribe` | `{ conversationId }` | |
-| `typing.start` | `{ conversationId }` | Debounced server-side (Redis, before any database read; a "started" goes out at most once per 3 s); safe to call often. **PD-37: only a seated member** (live, not silent, not observer) may type; anyone else gets `{ ok: false }`. Never in a direct teacher↔parent conversation. |
+| `typing.start` | `{ conversationId }` | Debounced server-side (Redis, before any database read; a "started" goes out at most once per 3 s, and is re-announced every 5 s while pings keep coming, so clients may drop an indicator they have not heard about for 8 s); safe to call often — clients ping every 3 s while the draft changes. **PD-37: only a seated member** (live, not silent, not observer) may type; anyone else gets `{ ok: false }`. Never in a direct teacher↔parent conversation. |
 | `typing.stop` | `{ conversationId }` | Same seat rule. |
 | `presence.heartbeat` | — | Keeps this connection counted as online (`realtime.presence_ttl_seconds` = 45; send every ~30 s). |
 | `message.delivered` | `{ conversationId, upToSeq }` (PD-37, preferred) or `{ messageIds: string[] }` | The cursor form moves the caller's delivery cursor forward (never back) and turns the authors' ticks grey ✓✓ via `message.status`. The id form only changes the caller's own receipts and announces nothing. |

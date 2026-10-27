@@ -6,12 +6,14 @@ import { chatKeys } from './chatApi'
 
 /** Events that change a message the thread may be showing. */
 const MESSAGE_EVENTS = [
-  'message.created',
+  // message.created has a handler of its own (it also sends the delivery cursor).
   'message.deleted',
   // An author edited a message: the event names it, the thread re-reads it.
   'message.updated',
   'reaction.added',
   'reaction.removed',
+  // PD-37: the ticks on this viewer's own messages changed (to them only).
+  'message.status',
 ] as const
 
 /** Events that change the list (activity, unread, membership). */
@@ -24,6 +26,8 @@ const LIST_EVENTS = [
   // summons here was answered (Group Info's "waiting" rows re-read).
   'mention.created',
   'mention.updated',
+  // PD-34/PD-37: this viewer read a chat on ANOTHER device or tab; its badge goes here too.
+  'conversation.read',
 ] as const
 
 const SUBSCRIBE_ACK_MS = 8_000
@@ -113,12 +117,25 @@ export function useChatRealtime(conversationIds: readonly string[]): void {
       refreshList()
     }
 
+    // PD-37: this browser has the message -- the author's ticks go grey ✓✓
+    // once every seated member's device does. A cursor, never a list of ids;
+    // the server moves only this viewer's own receipts, forward only.
+    // One listener per event, so this one also does what onMessage does.
+    const onCreated = (payload: { conversationId?: unknown; seq?: unknown } | undefined) => {
+      if (typeof payload?.conversationId === 'string' && typeof payload.seq === 'string') {
+        socket.emit('message.delivered', { conversationId: payload.conversationId, upToSeq: payload.seq })
+      }
+      onMessage(payload)
+    }
+
     for (const event of MESSAGE_EVENTS) socket.on(event, onMessage)
     for (const event of LIST_EVENTS) socket.on(event, onList)
+    socket.on('message.created', onCreated)
     return () => {
       clearTimeout(listTimer)
       for (const event of MESSAGE_EVENTS) socket.off(event, onMessage)
       for (const event of LIST_EVENTS) socket.off(event, onList)
+      socket.off('message.created', onCreated)
     }
   }, [socket, queryClient])
 

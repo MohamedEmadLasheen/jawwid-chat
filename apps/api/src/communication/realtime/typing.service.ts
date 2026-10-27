@@ -16,6 +16,13 @@ import { AppConfigService } from '../../platform/app-config.service';
  */
 const BROADCAST_FLOOR_SECONDS = 3;
 
+/**
+ * While someone keeps typing, "started" is re-announced this often. Clients
+ * drop an indicator they have not heard about for realtime.typing_ttl_seconds
+ * (in case a stop is lost), so a long burst of typing must keep saying so.
+ */
+const REANNOUNCE_SECONDS = 5;
+
 @Injectable()
 export class TypingService {
   constructor(
@@ -31,6 +38,10 @@ export class TypingService {
     return `typing:floor:${threadId}:${userId}`;
   }
 
+  private announcedKey(threadId: string, userId: string) {
+    return `typing:announced:${threadId}:${userId}`;
+  }
+
   /**
    * Returns true when this is a new typing state worth broadcasting. Costs two
    * Redis round trips and never a database read, so the gateway can call it
@@ -41,8 +52,11 @@ export class TypingService {
     const key = this.key(threadId, userId);
     const created = await this.redis.set(key, '1', 'EX', ttl, 'NX');
     if (created === null) {
-      await this.redis.expire(key, ttl); // still typing: keep it alive, say nothing
-      return false;
+      // Still typing: keep it alive, and say so again once REANNOUNCE_SECONDS
+      // have passed since the last announcement -- never more often.
+      await this.redis.expire(key, ttl);
+      const due = await this.redis.set(this.announcedKey(threadId, userId), '1', 'EX', REANNOUNCE_SECONDS, 'NX');
+      return due !== null;
     }
     const floor = await this.redis.set(this.floorKey(threadId, userId), '1', 'EX', BROADCAST_FLOOR_SECONDS, 'NX');
     if (floor === null) {
@@ -51,11 +65,15 @@ export class TypingService {
       await this.redis.del(key);
       return false;
     }
+    await this.redis.set(this.announcedKey(threadId, userId), '1', 'EX', REANNOUNCE_SECONDS);
     return true;
   }
 
   async stop(threadId: string, userId: string): Promise<boolean> {
-    const removed = await this.redis.del(this.key(threadId, userId));
+    const [removed] = await Promise.all([
+      this.redis.del(this.key(threadId, userId)),
+      this.redis.del(this.announcedKey(threadId, userId)),
+    ]);
     return removed > 0;
   }
 }
