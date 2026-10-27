@@ -57,7 +57,6 @@ export function DashboardPage() {
           value={number(unattended)}
           label={t('dashboard.unattended')}
           alert={unattended > 0}
-          onClick={() => navigate('/families?bucket=now')}
         />
         <Metric
           value={number(header.data?.open_escalations ?? 0)}
@@ -98,15 +97,7 @@ export function DashboardPage() {
                     {row.inactivity_warning && <Badge tone="danger">inactive</Badge>}
                   </td>
                   <td><Badge tone={row.presence === 'online' ? 'ok' : 'neutral'}>{row.presence}</Badge></td>
-                  <td className="num">
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => navigate(`/families?bucket=now&owner_id=${row.staff_id}`)}
-                    >
-                      {number(row.now_count)}
-                    </button>
-                  </td>
+                  <td className="num">{number(row.now_count)}</td>
                   <td className="num">{number(row.today_count)}</td>
                   <td className="num">{number(row.late_replies)}</td>
                   <td>
