@@ -131,7 +131,7 @@ describe('1. assigning a teacher', () => {
     await supervisors.assign(tmgr, s.teacherId, { supervisorId: tsupA, reason: 'new term' });
     const view = await supervisors.assignments(tmgr);
     expect(view.strictScope).toBe(false);
-    expect(view.teachers.find((t) => t.id === s.teacherId)?.supervisor).toEqual({ id: tsupA, name: 'tsup_a' });
+    expect(view.teachers.find((t) => t.id === s.teacherId)?.supervisor).toEqual({ id: tsupA, name: 'tsup_a', isActive: true });
     expect(view.unassigned).toBe(view.teachers.filter((t) => t.isActive).length - 1);
     expect(view.supervisors.map((x) => x.name)).toEqual(['tsup_a', 'tsup_b']);
 
@@ -253,7 +253,7 @@ describe('6. switch ON: a change of supervisor re-seats the supervision conversa
     expect(await seated()).toEqual([tmgr, tsupA, tsupB, tbak].sort());
 
     await strict(true);
-    expect(await supervisors.reseatAll()).toBeGreaterThan(0);
+    expect((await supervisors.reseatAll()).reseated).toBeGreaterThan(0);
     expect(await seated()).toEqual([tmgr, tsupA].sort());
 
     await supervisors.assign(tmgr, s.teacherId, { supervisorId: tsupB });

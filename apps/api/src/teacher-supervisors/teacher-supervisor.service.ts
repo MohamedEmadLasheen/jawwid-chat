@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleInit, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleInit, Optional } from '@nestjs/common';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE, REALTIME_REVOCATION } from '../platform/tokens';
@@ -14,6 +14,12 @@ import { TrialGroupService } from '../lessons/trial-group.service';
 
 /** The reason a teacher supervisor sits in a group of their own teacher (chat.seat_reason). */
 export const SUPERVISION_SEAT = 'supervision';
+
+/** chat.config: the switch the last complete re-seat followed. */
+const RESEATED_KEY = 'teacher_supervisor.reseated_strict';
+/** A conversation whose re-seat failed is retried alone: 1 min, doubling, at most 1 h apart. */
+const RETRY_BASE_MS = 60_000;
+const RETRY_MAX_MS = 60 * 60_000;
 
 const REASON_MAX = 500;
 const CANDIDATE_LIMIT = 200;
@@ -37,7 +43,11 @@ const invalid = (reason: string) => new CommError(CommErrorCode.VALIDATION, reas
  *                else is refused: "ask the Teachers Manager".
  */
 @Injectable()
-export class TeacherSupervisorService implements OnModuleInit {
+export class TeacherSupervisorService implements OnModuleInit, OnApplicationBootstrap {
+  private readonly log = new Logger(TeacherSupervisorService.name);
+  /** The conversations a re-seat for `strict` still owes, each with its backoff. */
+  private retry: { strict: boolean; due: Map<string, { attempts: number; at: number }>; logged: string } | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly conversations: ConversationService,
@@ -83,9 +93,13 @@ export class TeacherSupervisorService implements OnModuleInit {
     const actor = await this.requireAssigner(actorId);
     const org = actor.organizationId as string;
     const [teachers, supervisors, strict] = await Promise.all([
-      this.prisma.$queryRaw<Array<{ id: string; name: string; active: boolean; supervisor_id: string | null; supervisor_name: string | null; assigned_at: Date | null }>>`
+      this.prisma.$queryRaw<Array<{ id: string; name: string; active: boolean; supervisor_id: string | null; supervisor_name: string | null; supervisor_live: boolean | null; assigned_at: Date | null }>>`
         SELECT t.id::text AS id, t.name, (t.is_active AND t.left_at IS NULL) AS active,
-               a.supervisor_id::text AS supervisor_id, s.name AS supervisor_name, a.assigned_at
+               a.supervisor_id::text AS supervisor_id, s.name AS supervisor_name, a.assigned_at,
+               -- A supervisor who left, or left the department, supervises no one.
+               (s.is_active AND s.left_at IS NULL AND EXISTS (
+                  SELECT 1 FROM chat.department_member m JOIN chat.department d ON d.id = m.department_id
+                   WHERE m.staff_id = s.id AND m.position = 'supervisor' AND d.kind = 'teachers')) AS supervisor_live
           FROM chat.teacher t
           LEFT JOIN chat.teacher_supervisor_assignment a ON a.teacher_id = t.id
           LEFT JOIN chat.staff s ON s.id = a.supervisor_id
@@ -96,12 +110,12 @@ export class TeacherSupervisorService implements OnModuleInit {
     ]);
     return {
       strictScope: strict,
-      unassigned: teachers.filter((t) => t.active && !t.supervisor_id).length,
+      unassigned: teachers.filter((t) => t.active && !(t.supervisor_id && t.supervisor_live)).length,
       teachers: teachers.map((t) => ({
         id: t.id,
         name: t.name,
         isActive: t.active,
-        supervisor: t.supervisor_id ? { id: t.supervisor_id, name: t.supervisor_name ?? '' } : null,
+        supervisor: t.supervisor_id ? { id: t.supervisor_id, name: t.supervisor_name ?? '', isActive: t.supervisor_live === true } : null,
         assignedAt: t.assigned_at?.toISOString() ?? null,
       })),
       supervisors,
@@ -150,7 +164,9 @@ export class TeacherSupervisorService implements OnModuleInit {
         reason: reason ?? (supervisorId === null ? 'teacher supervisor removed' : 'teacher supervisor assigned'),
       });
       // With the switch on, the teacher's supervision conversation and trial group
-      // seat the new supervisor and let the old one go. Never created here.
+      // seat the new supervisor and let the old one go -- an inactive teacher's
+      // too, or their supervisor could never be reassigned and leave the
+      // department. Never created here.
       const reseated: string[] = [];
       if (strict) {
         for (const type of [ConversationType.TEACHER_SUPERVISION, ConversationType.TRIAL_GROUP]) {
@@ -164,8 +180,8 @@ export class TeacherSupervisorService implements OnModuleInit {
             select: { id: true },
           });
           if (!conv) continue;
-          if (type === ConversationType.TEACHER_SUPERVISION) await this.supervisionChats.ensureInTx(tx, teacher.id, org, actor.actorId);
-          else await this.trialGroups.ensureInTx(tx, teacher.id, org, actor.actorId);
+          if (type === ConversationType.TEACHER_SUPERVISION) await this.supervisionChats.resyncStaffInTx(tx, conv.id, actor.actorId);
+          else await this.trialGroups.resyncStaffInTx(tx, conv.id, actor.actorId);
           reseated.push(conv.id);
         }
       }
@@ -182,27 +198,118 @@ export class TeacherSupervisorService implements OnModuleInit {
   }
 
   /**
-   * With the switch on, every live supervision conversation and trial group
-   * re-seated by its teacher's scope -- run once by the worker at start, so
-   * turning the switch on takes the department-wide seats away.
+   * The live supervision conversations and trial groups re-seated by the
+   * switch (or only `only`): on, each keeps its teacher's own supervisor and
+   * the Teachers Manager -- an inactive teacher's too; off, the whole
+   * department again, for active teachers only, exactly as main's sync keeps
+   * them (an inactive teacher's conversation is left as it is). One
+   * conversation's failure does not stop the rest; it is returned.
    */
-  async reseatAll(): Promise<number> {
-    if (!(await this.scope.strict())) return 0;
-    const rows = await this.prisma.conversation.findMany({
-      where: { archivedAt: null, type: { in: [ConversationType.TEACHER_SUPERVISION, ConversationType.TRIAL_GROUP] } },
-      select: { id: true, type: true, organizationId: true, supervisedTeacherId: true, trialTeacherId: true },
-    });
-    let done = 0;
+  async reseatAll(only?: readonly string[]): Promise<{ reseated: number; failed: Array<{ id: string; error: string }> }> {
+    const strict = await this.scope.strict();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; type: string }>>`
+      SELECT c.id::text AS id, c.type
+        FROM chat.conversation c
+        JOIN chat.teacher t ON t.id = coalesce(c.supervised_teacher_id, c.trial_teacher_id)
+       WHERE c.archived_at IS NULL AND c.type IN ('teacher_supervision', 'trial_group')
+         AND (${strict}::boolean OR (t.is_active AND t.left_at IS NULL))
+         AND (${only ? [...only] : null}::uuid[] IS NULL OR c.id = ANY (${only ? [...only] : null}::uuid[]))
+       ORDER BY c.id`;
+    let reseated = 0;
+    const failed: Array<{ id: string; error: string }> = [];
     for (const c of rows) {
-      const teacherId = (c.type === ConversationType.TEACHER_SUPERVISION ? c.supervisedTeacherId : c.trialTeacherId) as string;
-      await this.prisma.$transaction((tx) =>
-        c.type === ConversationType.TEACHER_SUPERVISION
-          ? this.supervisionChats.ensureInTx(tx, teacherId, c.organizationId, null)
-          : this.trialGroups.ensureInTx(tx, teacherId, c.organizationId, null),
-      ).catch(() => null); // an inactive teacher's conversation is left as it is
-      done += 1;
+      try {
+        const { removed } = await this.prisma.$transaction((tx) =>
+          c.type === ConversationType.TEACHER_SUPERVISION
+            ? this.supervisionChats.resyncStaffInTx(tx, c.id)
+            : this.trialGroups.resyncStaffInTx(tx, c.id),
+        );
+        // RT-009: the staff who lost their place leave the live room.
+        if (removed.length > 0) {
+          this.revocation.leaveConversation(removed, c.id);
+          await this.revocation.confirmRevoked();
+        }
+        reseated += 1;
+      } catch (e) {
+        failed.push({ id: c.id, error: (e as Error).message });
+      }
     }
-    return done;
+    return { reseated, failed };
+  }
+
+  /**
+   * reseatAll, when the switch differs from the one the last COMPLETE re-seat
+   * followed (chat.config 'teacher_supervisor.reseated_strict': absent reads as
+   * off, the state before PD-35; null while a re-seat is under way, so a
+   * restart part-way runs it again). Called at boot when the boot changed the
+   * switch, at worker start and on every seat sweep:
+   *   a change   every conversation, once, said once;
+   *   failures   only those conversations again, each with its own backoff
+   *              (1 min doubling to 1 h); logged when the failing set changes.
+   */
+  async reseatIfChanged(): Promise<{ reseated: number; failed: Array<{ id: string; error: string }> } | null> {
+    const [row] = await this.prisma.$queryRaw<Array<{ strict: boolean; reseated: string }>>`
+      SELECT chat.teacher_scope_strict() AS strict,
+             coalesce((SELECT value::text FROM chat.config WHERE key = ${RESEATED_KEY}), 'false') AS reseated`;
+    if (!row) return null;
+    const followed = row.reseated === 'true' ? true : row.reseated === 'false' ? false : null;
+    if (followed === row.strict) {
+      this.retry = null;
+      return null;
+    }
+    const now = Date.now();
+    if (this.retry?.strict === row.strict) {
+      const due = [...this.retry.due].filter(([, d]) => d.at <= now).map(([id]) => id);
+      if (due.length === 0) return null;
+      return this.settle(row.strict, due, await this.reseatAll(due), now);
+    }
+    this.log.warn(`teacher supervisor scope is ${row.strict ? 'strict' : 'department-wide'}; re-seating supervision conversations and trial groups`);
+    await this.writeReseated(null);
+    this.retry = null;
+    return this.settle(row.strict, null, await this.reseatAll(), now);
+  }
+
+  /** PD-35: a boot that turned the switch over re-seats before the first sweep. */
+  async onApplicationBootstrap(): Promise<void> {
+    if (!this.scope.changedAtBoot) return;
+    await this.reseatIfChanged().catch((e: unknown) =>
+      this.log.error(`teacher supervisor reseat at boot failed: ${(e as Error).message}; the worker retries`),
+    );
+  }
+
+  private settle(
+    strict: boolean,
+    attempted: readonly string[] | null,
+    result: { reseated: number; failed: Array<{ id: string; error: string }> },
+    now: number,
+  ) {
+    const tried = attempted ? new Set(attempted) : null;
+    const due = new Map<string, { attempts: number; at: number }>();
+    // A retry pass keeps the conversations that were not due yet.
+    for (const [id, d] of this.retry?.due ?? []) if (tried && !tried.has(id)) due.set(id, d);
+    for (const f of result.failed) {
+      const attempts = (this.retry?.due.get(f.id)?.attempts ?? 0) + 1;
+      due.set(f.id, { attempts, at: now + Math.min(RETRY_BASE_MS * 2 ** (attempts - 1), RETRY_MAX_MS) });
+    }
+    if (due.size === 0) {
+      this.retry = null;
+      return this.writeReseated(strict).then(() => result);
+    }
+    const key = [...due.keys()].sort().join(',');
+    if (key !== this.retry?.logged) {
+      const detail = result.failed.map((f) => `${f.id}: ${f.error}`).join('; ');
+      this.log.error(`teacher supervisor reseat: ${due.size} conversation(s) not re-seated; retried alone with backoff (${detail})`);
+    }
+    this.retry = { strict, due, logged: key };
+    return Promise.resolve(result);
+  }
+
+  private async writeReseated(strict: boolean | null): Promise<void> {
+    await this.prisma.$executeRaw`
+      INSERT INTO chat.config (key, value, scope, description)
+      VALUES (${RESEATED_KEY}, ${JSON.stringify(strict)}::jsonb, 'teachers',
+              'PD-35: the strict switch the last complete re-seat followed (null while one is under way).')
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
   }
 
   // ------------------------------------------------------------------
