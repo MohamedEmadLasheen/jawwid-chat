@@ -1,12 +1,25 @@
 # PD-43: adding a new teacher (review and plan)
 
-**State:** plan for approval. No feature code has been written.
+**State:** plan for approval, **revision 2**. The owner answered Q1–Q8 on 2026-10-27, relayed verbatim by the department head; they are recorded as DECIDED in §8. No feature code has been written.
 **Claim:** `docs/product/pd-registry/PD-43.md`. Migration slot `20261027180000` (`chat_pd043_teacher_onboarding`), later than every slot on `main` and on every open PR (the highest is #176's `20261027170000`).
 **Base:** `main` @ `6709bba7`. PD-40 is read from its open stack: #164 (plan), #167 (account-admin rule, approved), #172 (route keys, `claude/pd40-route-permissions`) and #174 (data model, `claude/pd40-access-model`). PD-42 is read from #173 (plan v2).
 
 The owner's request, verbatim:
 
 > "We need a clear plan for adding teachers to the system. How should a new teacher be added, and what is the complete workflow from creating the teacher's account to assigning their permissions and setting them up in the system?"
+
+---
+
+## What changed in revision 2
+
+The owner's answers (§8) change four things:
+
+| Answer | Change in this plan |
+|---|---|
+| Q1: "Also teacher supervisors" | A **teacher supervisor** may add a teacher. The new teacher is linked to the supervisor who added them (§3.2). Only the Teachers Manager or the super admin may set a different supervisor, or change it later. Supervisors get `teachers.create` but not `teachers.offboard`. Duplicate checks never reveal a teacher outside the adder's scope (§3.4). |
+| Q4+Q5: "Supervisor optional; students allowed" | The supervisor is **optional** when the Teachers Manager or the super admin adds a teacher. §3.7 defines what an **unsupervised teacher** means everywhere. Pickers still show "Setup incomplete"; nothing is blocked. |
+| Q8: "Super admin and Teachers Manager for now" | The Teachers Manager may **set and see pay terms**. §3.8 lists exactly what PD-18's `teacher_files.finance` reveals and recommends a **narrower key**, `teacher_files.pay_terms`, so that setting pay does not open payout accounts and amounts. Operations is unchanged. |
+| Q2, Q3, Q6, Q7 | As recommended: no change. |
 
 ---
 
@@ -17,8 +30,8 @@ The owner's request, verbatim:
   1. which supervisor the teacher has (PD-35);
   2. which students and groups the teacher is given.
   What a teacher may do in the app is fixed by the closed Teacher Account scope (Chats · Schedule · Calls · Settings) and is not configured per person.
-- **Proposed workflow** (§3): the **Teachers Manager** (or the super admin) adds the teacher with **one short form**. It asks for name, sign-in e-mail and supervisor, with phone and joining date optional. The server then does everything below in one transaction:
-  - creates the teacher, a login that waits for set-up, the Teacher File and the supervisor assignment;
+- **Proposed workflow** (§3): the **Teachers Manager**, a **teacher supervisor** or the super admin adds the teacher with **one short form**. It asks for name and sign-in e-mail, with supervisor, phone and joining date optional. A supervisor who adds a teacher becomes that teacher's supervisor. The server then does everything below in one transaction:
+  - creates the teacher, a login that waits for set-up, the Teacher File and, when one is given, the supervisor assignment;
   - opens the supervision chat;
   - produces a **set-up code**.
 
@@ -29,9 +42,14 @@ The owner's request, verbatim:
   - the teacher's own profile;
   - the first students.
 - **Offboarding** gets a proper action (§3.6). It requires that no students are left. It then closes both the teacher record and the login, ends the supervisor link and is audited. Today a teacher can only leave through the discipline ladder or an operator CLI.
-- **Permissions** (§4): two new PD-40 keys, `teachers.create` and `teachers.offboard`. Every other step uses keys that already exist (`accounts.administer`, `org.manage`, `teacher_files.*`, `leave.allowance`, `schedule.manage`, `students.manage`).
+- **Permissions** (§4): three new PD-40 keys:
+  - `teachers.create`, for the Teachers Manager and teacher supervisors;
+  - `teachers.offboard`, for the Teachers Manager;
+  - `teacher_files.pay_terms`, for the Teachers Manager.
+
+  Every other step uses keys that already exist (`accounts.administer`, `org.manage`, `teacher_files.*`, `leave.allowance`, `schedule.manage`, `students.manage`).
 - **Core migration** (§5): Core has no teacher entity, so there is nothing to import. Existing teachers are entered with the same form by the Teachers Manager. Teacher rows already in Chat without a login get **Give sign-in**. Teachers should be entered **before** PD-42's family intake, so supervisors can pick them.
-- **Six small PRs** (§7), each with its tests. **Eight owner questions** (§8), each with a recommendation.
+- **Six small PRs** (§7), each with its tests. The **eight owner questions are DECIDED** (§8). Revision 2 raises **three new questions** (§8.2), each with a recommendation.
 
 ---
 
@@ -174,19 +192,23 @@ What `deactivate_principal('teacher')` leaves behind (`20261014150000:289-373`, 
 
 | Step | Who | When |
 |---|---|---|
-| 1. Add the teacher (one form) | **Teachers Manager**, or the super admin | day 0 |
+| 1. Add the teacher (one form) | **Teachers Manager**, a **teacher supervisor** (Q1), or the super admin | day 0 |
 | 2. Hand over the set-up code | whoever added the teacher | day 0 |
 | 3. Set own password, sign in | **the teacher** | within 72 h |
-| 4. Pay terms and payout account | **super admin** (only they hold `teacher_files.finance` today) | before the first payroll month |
+| 4a. Pay terms (salary type, amount, currency) | **Teachers Manager** or the super admin (Q8; §3.8) | before the first payroll month |
+| 4b. Payout account, bonus and deduction amounts | **super admin** (`teacher_files.finance`, unchanged) | before the first payout |
+| 0. A supervisor, if none was set when the teacher was added | **Teachers Manager** or the super admin (§3.7) | any time |
 | 5. Leave allowance for the year | Teachers Manager | first week |
 | 6. Shift and category (PD-38), then availability (PD-31) | Teachers Manager (shift); Teachers department (availability, days off) | before students |
 | 7. Professional profile and photo | **the teacher** | first week |
 | 8. First students | **Sales** (subscription form) for new families; **Operations or Teachers department** via Change teacher for existing children | when ready |
 | 9. Supervisor's first check-in in the supervision chat | **the teacher supervisor** | first week |
 
-No HR or finance department exists in Chat. `finance` is a legacy staff role with no bundle (#174, `legacy-bundles.ts`). Payroll stays with the super admin until PD-40 adds an Accountant specialist (§8 Q8).
+No HR or finance department exists in Chat. `finance` is a legacy staff role with no bundle (#174, `legacy-bundles.ts`). Pay terms go to the Teachers Manager now. The rest of payroll stays with the super admin until PD-40 adds an Accountant specialist holding `teacher_files.finance` (§8 Q8).
 
 ### 3.2 Step 1: Add a teacher (the minimum)
+
+**Who:** the Teachers Manager, a **primary** teacher supervisor (`position = 'supervisor'` in the Teachers department, the only position that can hold teachers), or the super admin. Q1 made teacher supervisors eligible.
 
 **Where:**
 - Teacher Files → **Add teacher**;
@@ -199,7 +221,9 @@ No HR or finance department exists in Chat. `finance` is a legacy staff role wit
 |---|---|---|
 | Full name | **yes**, 1–120 characters | `chat.teacher.name` is `NOT NULL`. Every chat surface shows it. The teacher may rename themself later. |
 | Sign-in e-mail | **yes** (§8 Q2) | It becomes `chat.account.subject`, stored trimmed and lower-cased. It is also saved as the Teacher File e-mail. |
-| Teacher supervisor | **yes**, unless the Teachers department has no supervisor yet (§8 Q4) | Keeps PD-35's strict-scope precondition ("every active teacher has a supervisor") true by construction. |
+| Teacher supervisor | **optional** (Q4). The form behaves differently by who is adding: | |
+| | the **Teachers Manager / super admin**: a picker of primary supervisors, empty by default, with "No supervisor yet" allowed | An unsupervised teacher is handled as in §3.7. The form warns: "Until a supervisor is set, the Teachers Manager is responsible for this teacher." |
+| | a **teacher supervisor**: fixed to **themselves**, shown read-only ("You will supervise this teacher") | Under strict scope they keep sight of the teacher they added. Only the Teachers Manager or the super admin may set someone else, or remove the link, later (`org.manage`, unchanged). New question N1 asks whether this lock is right. |
 | Phone | no | Teacher File, admin-only (`20261018170000:42`) |
 | Joining date | no, defaults to today | Teacher File `joined_on` |
 | Teaching market | no | Teacher File |
@@ -210,8 +234,8 @@ No HR or finance department exists in Chat. `finance` is a legacy staff role wit
 2. `chat.account`: kind `teacher`, status **`provisioned`**, so `is_active` is false.
 3. `chat.teacher`: `account_id`, name, active.
 4. `chat.teacher_file`: e-mail, phone, joining date, market.
-5. `chat.teacher_supervisor_assignment`.
-6. The **supervision chat**, created at once (`ensureInTx`). The teacher's Chats tab is never empty, and the supervisor has a place to welcome them (closes G5).
+5. `chat.teacher_supervisor_assignment`, when a supervisor is given. For a supervisor adding the teacher, the writer **sets it to the actor** and refuses any other value. That is the one way a supervisor writes an assignment; the existing assignment guard still requires a primary supervisor (`20261026160004:60-94`).
+6. The **supervision chat**, created at once (`ensureInTx`). The teacher's Chats tab is never empty, and the supervisor, or the Teachers Manager for an unsupervised teacher, has a place to welcome them (closes G5).
 7. A **set-up code**: PD-21's `password_reset_code` with a new `purpose = 'first_login'`, valid **72 h**, 5 tries (§8 Q3).
 8. Audit rows `teacher.created` and `teacher.setup_code_issued`, with actor, reason and the resolved fields. Phone and e-mail are never written into the audit text.
 
@@ -228,11 +252,17 @@ The response returns the teacher, and the code **once**.
 
 ### 3.4 Duplicate checks
 
-| Case | Rule |
-|---|---|
-| The e-mail is already the sign-in of **any** account (any kind, compared case-insensitively) | **Blocks** with `ACCOUNT_EXISTS`. If it is a former teacher of this organization: "This person was a teacher here. Reactivate them instead" (§3.6). Otherwise: "This e-mail already signs in to Chat." No name, kind or family is disclosed. |
-| The same e-mail or phone (E.164) is on another **teacher's** file | **Blocks**, naming the teacher (staff with this key may see teachers). |
-| The same normalized name as an active teacher | **Warns** ("Possibly already added: «name»"). The creator may continue. Name normalization is PD-42's §7 rule. |
+**Scope rule (Q1).** A check may name a teacher only if the adder could already open that teacher's Teacher File:
+- the Teachers Manager and the super admin see every teacher;
+- a teacher supervisor sees the teachers in their scope: every teacher with strict scope OFF, only their own with it ON (PD-35 `TeacherScopeService`; `chat.staff_teacher_scope`, `20261026160006:81-116`).
+
+Outside that scope the answer is the same generic refusal whether or not a match exists. The Teachers Manager gets a notification naming both teachers, so the case is resolved by someone who may see it.
+
+| Case | Adder sees the match | Adder does not see the match |
+|---|---|---|
+| The e-mail is already the sign-in of **any** account (any kind, compared case-insensitively) | **Blocks** with `ACCOUNT_EXISTS`. For a former teacher of this organization, the Manager and the super admin see: "This person was a teacher here. Reactivate them instead" (§3.6). | **Blocks** with `ACCOUNT_EXISTS`: "This e-mail already signs in to Chat. Ask the Teachers Manager." No name, kind or family is disclosed. This is the same answer for a parent, staff or teacher account. |
+| The same e-mail or phone (E.164) is on another **teacher's** file | **Blocks**, naming the teacher | **Blocks**: "This contact is already on a teacher's file. Ask the Teachers Manager." |
+| The same normalized name as an active teacher | **Warns** ("Possibly already added: «name»"). The adder may continue. Normalization is PD-42's §7 rule. | **No warning.** A name match alone is too weak to justify a refusal, and naming it would disclose. |
 | Double submit | A client-chosen `id`: `on conflict do nothing`, returning the first result. |
 | Two staff adding the same e-mail at once | The advisory lock; the second gets `ACCOUNT_EXISTS`. |
 
@@ -245,9 +275,9 @@ Computed by `chat.teacher_setup_state(teacher_id)`, read-only, from the real row
 | Item | Done when | Owner |
 |---|---|---|
 | Signed in | login `active` | teacher |
-| Supervisor | an assignment to a live primary supervisor | Teachers Manager |
+| Supervisor | an assignment to a live primary supervisor. Optional (Q4), so this is a **warning** item: "Supervised by the Teachers Manager until one is set". | Teachers Manager |
 | Contact | Teacher File has a phone or an e-mail | Teachers Manager |
-| Pay terms | a `teacher_pay_terms` row effective this month | super admin |
+| Pay terms | a `teacher_pay_terms` row effective this month | Teachers Manager or super admin (Q8) |
 | Payout account | a payout row | super admin |
 | Leave allowance | a row for this year | Teachers Manager |
 | Shift | a current `teacher_work_pattern`; an `hourly` category matches an `hourly` salary type (closes G7 as a **warning**) | Teachers Manager |
@@ -257,8 +287,8 @@ Computed by `chat.teacher_setup_state(teacher_id)`, read-only, from the real row
 Where it shows:
 - **Teacher File list:** a "Setup incomplete (n)" badge and filter.
 - **Teacher File detail:** a checklist card, each line linking to the existing section.
-- **Teacher pickers** (Sales subscription form, Change teacher preview): a "Setup incomplete" or "Not signed in yet" note. This is a **warning, not a block** (§8 Q5).
-- The super admin sees the pay items; others see "Pay: set by the super admin" with no amounts.
+- **Teacher pickers** (Sales subscription form, Change teacher preview): a "Setup incomplete", "Not signed in yet" or "No supervisor" note. This is a **warning, not a block** (Q5: "students allowed").
+- The pay items show only **done / not done**, never an amount. Each item names who completes it.
 
 **Time zones (G6), kept small.** The shift and availability forms default their zone to the teacher's reported zone when one exists, else the academy zone. They are not merged into one column; that would be its own decision.
 
@@ -286,23 +316,86 @@ Where it shows:
 - `chat.teacher` gains the `is_active`/`left_at` agreement check. It is added `not valid`, then validated after a pre-flight query.
 - The supervisor assignment takes an optional reason and is audited (`teacher.supervisor_changed`, G10).
 
+### 3.7 An unsupervised teacher (Q4: "Supervisor optional")
+
+**Definition.** A teacher is **unsupervised** when no live primary supervisor holds them. That is either:
+- no `teacher_supervisor_assignment` row; or
+- a row whose supervisor has left the Teachers department or is no longer active.
+
+`chat.staff_teacher_scope` already treats both the same way: "an assignment left behind grants nothing" (`20261026160006:106-114`). This is exactly the "Unassigned" state the Organization page shows today.
+
+**The rule: until a supervisor is set, the Teachers Manager is that teacher's supervisor.** This is what the code already does under strict scope. PD-43 makes it explicit and visible.
+
+| Surface | Strict scope **OFF** (today, everywhere) | Strict scope **ON** |
+|---|---|---|
+| Who works on the teacher (Teacher File, leave, discipline, lessons, statistics, Change teacher) | the whole Teachers department, as for every teacher | the **Teachers Manager** and the super admin only. Discipline and leave already require `canSupervise` plus `requireTeacherInScope` (`apps/api/src/discipline/discipline.service.ts:587-600`). |
+| Supervision chat | the teacher plus the whole department (PD-12) | the teacher plus the **Teachers Manager**. Re-seating keeps "the teacher's own supervisor and the Teachers Manager" (`docs/admin/pd035-teacher-supervisors.md`, Re-seating), and here there is no own supervisor. |
+| Trial group | the whole department | the Teachers Manager |
+| A leave request | any department member decides | the Teachers Manager decides |
+| Join a family or student group (`supervision` seat) | only the teacher's own supervisor or the Manager, in both modes (PD-35) | the Teachers Manager |
+
+**Where the Teachers Manager sees them:**
+- **Teacher Files → filter "Unsupervised"**. The filter, a count badge and an **Assign supervisor** shortcut are visible to the Manager and the super admin; the shortcut uses `org.manage`.
+- **Organization → Teachers & supervisors** keeps its existing "{n} teachers have no supervisor" banner (`OrganizationPage.tsx:100-102`).
+- The **set-up checklist** shows "Supervised by the Teachers Manager until one is set" (§3.5).
+- A **notification to the Teachers Manager** when:
+  - a teacher is added without a supervisor; or
+  - a supervisor leaves the department or is deactivated with teachers still assigned. That cannot happen silently today for a department move, which the guard refuses (`20261026160004:98-112`), but it can when the supervisor is deactivated.
+
+**Pickers.** Students are allowed (Q5). The Sales form and Change teacher show "No supervisor" beside "Setup incomplete", as a warning only.
+
+**Strict scope readiness.** The PD-35 runbook asks for every active teacher to have a supervisor before the switch is turned on. With supervisors optional, an unsupervised teacher is no longer an error, only extra load on the Teachers Manager. New question N3 confirms this.
+
+### 3.8 Pay: what the Teachers Manager may see and set (Q8)
+
+**What `teacher_files.finance` opens today.** Every route below passes `canViewFinance`, and `canViewFinance` is **super admin only** (`apps/api/src/platform/teacher-file-policy.ts:47-48`; the service header at `apps/api/src/teacher-file/teacher-payroll.service.ts:12-30`):
+
+| Route (#174 route table) | What it reveals or does | Evidence |
+|---|---|---|
+| `GET /teacher-files/:id/finance` | **all** pay terms (type, amount, currency, reason, author); the payout method and last 4 digits; **every bonus and deduction amount** with its reason; unpriced bonuses and deductions; the monthly summary (paid minutes, base, bonuses, deductions, **net**) | `teacher-payroll.service.ts:66-122` |
+| `POST …/finance/terms` | sets pay terms | `:127` |
+| `POST …/finance/payout-account` | sets the payout account | `:168` |
+| `POST …/finance/payout-account/reveal` | shows the **full bank or wallet details** (audited, with a reason) | `:203` |
+| `POST …/finance/adjustments` | prices a bonus or deduction, or adds one | `:231` |
+| `POST /teacher-files/:id/rewards` | a reward with its amount (PD-26 #144) | `:432` |
+| `GET` / `POST /teacher-files/finance/deduction-defaults` | the default deduction amounts. The DB allows the super admin only (`20261022150000:213-226`). | `:319`, `:345` |
+| `POST /teachers/:id/bonus` | a reward without an amount. #172 maps it here; the #175 agreement moves it to `teacher_supervision.record`. | #172 route table |
+| (flag, no route) | `canViewAmounts` on `GET /teacher-files/rewards` and the Teacher Supervision page's amount column | `teacher-payroll.service.ts:397-408`; `apps/admin-web/src/features/teacher-supervision/RewardsAndComplaints.tsx:60` |
+
+Granting the key alone changes nothing. A key is necessary, never sufficient, and Layer 2's `canViewFinance` would still refuse the Manager. So any choice here changes **both** layers.
+
+**Recommendation: a narrower key, `teacher_files.pay_terms`** ("Set and see teacher pay terms", risk `finance`, PD-43), in `manager:teachers`:
+- **Layer 2:** a new flag `canSetPayTerms` in `decideTeacherFileAccess`, true for the super admin and the Teachers Manager. `canViewFinance` is unchanged.
+- **Routes:**
+  - a new `GET /teacher-files/:id/pay-terms` returns the terms history and current terms only;
+  - `POST …/finance/terms` declares `@Requires.any('teacher_files.finance', 'teacher_files.pay_terms')`;
+  - nothing else moves.
+- **DB, defence in depth:** `guard_teacher_payroll_row` lets any active staff write a pay row today (`20261021160000:155-160`). PD-43 narrows `teacher_pay_terms` writes to the super admin or the Teachers department's manager. Other payroll tables keep their rule.
+- **Admin Web:** a **Pay terms** card on the Teacher File for `canSetPayTerms`. The full Payroll section stays behind `canViewFinance`.
+- **The Manager still does NOT see:** payout accounts (not even the last 4 digits), any bonus or deduction amount, deduction defaults, the monthly base and net, or the amount column on the Supervision page.
+- **Operations is unchanged.** `OPERATIONS_MEMBER` holds neither key (#174 `legacy-bundles.ts:69-93`), and PD-26's "no amounts for Operations" holds. `canViewAmounts` stays tied to `canViewFinance`.
+- **Later**, an Accountant specialist is granted `teacher_files.finance`, plus `teacher_files.pay_terms`, with no PD-43 change. This is exactly the owner's "Later an Accountant role can be given the teacher-finance permission".
+
+**The alternative:** give `manager:teachers` the whole `teacher_files.finance` and set `canViewFinance` for the Teachers Manager. That opens everything in the table above, including revealing bank details and pricing deductions. The deduction-default writes would still be refused by the DB unless that guard is widened too. New question N2 asks the owner to choose.
+
 ---
 
 ## 4. Permissions (PD-40 keys; deny by default; row scope in Layer 2)
 
-Teachers are not staff accounts, so PD-40 PR-3's `/admin/staff-accounts` and its hierarchy rules (H1–H10) do not apply to them. Teacher accounts are administered under #167's approved rule: **the super admin and the Teachers department**. The keys below follow #172's catalogue. **Two are new.**
+Teachers are not staff accounts, so PD-40 PR-3's `/admin/staff-accounts` and its hierarchy rules (H1–H10) do not apply to them. Teacher accounts are administered under #167's approved rule: **the super admin and the Teachers department**. The keys below follow #172's catalogue. **Three are new**: `teachers.create`, `teachers.offboard` and `teacher_files.pay_terms`.
 
 | Action | Route | Key | Bundles (#174) | Layer-2 rule |
 |---|---|---|---|---|
-| Add a teacher | `POST /teachers` (new) | **`teachers.create`** (new; risk `admin`, introduced by PD-43, non-delegable) | `manager:teachers` (+ super admin `*`) | Teachers Manager of the same organization, or super admin |
-| Give sign-in to an existing teacher without one | `POST /teachers/:id/sign-in` (new) | `teachers.create` | as above | the teacher has no `account_id` |
-| Change sign-in e-mail before first sign-in | `PATCH /teachers/:id/sign-in` (new) | `teachers.create` | as above | login still `provisioned`; afterwards super admin only |
+| Add a teacher | `POST /teachers` (new) | **`teachers.create`** (new; risk `admin`, introduced by PD-43, non-delegable) | `manager:teachers`, **`supervisor:teachers`** (+ super admin `*`) | Teachers Manager, or super admin, with any supervisor or none. A **primary** teacher supervisor only with themselves as supervisor (§3.2). Duplicate answers are scoped (§3.4). |
+| Give sign-in to an existing teacher without one | `POST /teachers/:id/sign-in` (new) | `teachers.create` | as above | the teacher has no `account_id`; a supervisor only for a teacher **in their scope** |
+| Change sign-in e-mail before first sign-in | `PATCH /teachers/:id/sign-in` (new) | `teachers.create` | as above | login still `provisioned`; a supervisor only in scope; after first sign-in, super admin only |
 | Send a new set-up code / reset | `POST /admin/accounts/:id/password-reset` (exists) | `accounts.administer` (exists) | `supervisor:teachers`, `manager:teachers` | #167 `accountAdminActs(kind 'teacher')`; issues `first_login` for a `provisioned` login |
 | Suspend / reactivate the login | `/admin/accounts/:id/suspend` and `…/reactivate` (exist) | `accounts.administer` | as above | #167 |
-| Assign or change the supervisor | `POST /org/teachers/:id/supervisor` (exists) | `org.manage` (exists) | `manager:*` | `TeacherSupervisorService.requireAssigner`: Teachers Manager or super admin |
+| Assign or change the supervisor | `POST /org/teachers/:id/supervisor` (exists) | `org.manage` (exists) | `manager:*` | `TeacherSupervisorService.requireAssigner`: Teachers Manager or super admin. **Unchanged:** a supervisor's self-link at creation is written by `chat.create_teacher`, not by this route. |
 | Personal record | `POST /teacher-files/:id/personal` (exists) | `teacher_files.edit` | `manager:teachers` | `decideTeacherFileAccess` |
 | Leave allowance | `POST /teacher-files/:id/leave-allowance` (exists) | `leave.allowance` | `manager:teachers` | unchanged |
-| Pay terms, payout account | `/teacher-files/:id/finance/*` (exist) | `teacher_files.finance` | super admin only | `canViewFinance` |
+| See and set pay terms | `GET /teacher-files/:id/pay-terms` (new); `POST …/finance/terms` (exists) | **`teacher_files.pay_terms`** (new; risk `finance`, PD-43, non-delegable); the POST also accepts `teacher_files.finance` | `manager:teachers` (+ super admin) | new `canSetPayTerms`: Teachers Manager, super admin (§3.8) |
+| Payout account, amounts, payroll, deduction defaults | `/teacher-files/:id/finance/*`, `…/rewards`, `…/finance/deduction-defaults` (exist) | `teacher_files.finance` (unchanged) | super admin only | `canViewFinance` (unchanged) |
 | Shift | `POST /teachers/:id/work-pattern` (exists) | `schedule.manage` | Teachers and Operations | `canEditShifts`: Teachers Manager, super admin |
 | Availability, days off | `/teachers/:id/availability`, `…/days-off` (exist) | `schedule.manage` | as above | unchanged |
 | Open the supervision chat | `POST /teachers/:id/supervision-conversation` (exists) | `supervision.chats` | Teachers | unchanged (also done inside `POST /teachers`) |
@@ -319,9 +412,20 @@ Teachers are not staff accounts, so PD-40 PR-3's `/admin/staff-accounts` and its
 ```
 'teachers.create':   { label: { en: 'Add teachers and give them a sign-in', ar: 'إضافة المعلمين ومنحهم حساب الدخول' }, risk: 'admin', introducedBy: 'PD-43' },
 'teachers.offboard': { label: { en: 'Offboard and reactivate teachers',     ar: 'إنهاء عمل المعلمين وإعادة تفعيلهم' }, risk: 'admin', introducedBy: 'PD-43' },
+'teacher_files.pay_terms': { label: { en: 'Set and see teacher pay terms', ar: 'تحديد شروط أجر المعلم والاطلاع عليها' }, risk: 'finance', introducedBy: 'PD-43' },
 ```
 
-Both go only into `manager:teachers`. If PD-43 lands after #174, its migration seeds them into `chat.permission` and the bundle table (`PD040_WRITE_SEED=1`). The route table is regenerated (`PD040_WRITE_ROUTE_TABLE=1`).
+**Bundle changes:**
+- `teachers.create` goes into `manager:teachers` and `supervisor:teachers`;
+- `teachers.offboard` goes into `manager:teachers` only;
+- `teacher_files.pay_terms` goes into `manager:teachers` only;
+- `OPERATIONS_MEMBER` and `SALES_MEMBER` are unchanged.
+
+The `pd040-legacy-bundles` spec gains the matching Layer-2 rows:
+- `teachers.create` ⇔ the Teachers Manager or a Teachers member (Layer 2 then narrows a backup to nothing, and a primary supervisor to self-assignment);
+- `teacher_files.pay_terms` ⇔ `canSetPayTerms`.
+
+**These go to the PD-40 session only after the department head approves this revision.** If PD-43 lands after #174, its migration seeds them into `chat.permission` and the bundle table (`PD040_WRITE_SEED=1`). The route table is regenerated (`PD040_WRITE_ROUTE_TABLE=1`).
 
 **Why not reuse `accounts.administer` for creation?** It is held by every Teachers **supervisor** and by Operations and Sales (for parents). Creating a person is a hiring act, not account support.
 
@@ -330,31 +434,36 @@ Both go only into `manager:teachers`. If PD-43 lands after #174, its migration s
 ## 5. Existing teachers and the Core migration
 
 - **There is nothing to import from Core.** Core has no teacher entity (`20260910120000:42-45`; `teacher-profile.service.ts:159`), so PD-42's question of "enter by hand or import" does not arise the same way. Teachers are tens of people, not hundreds of families.
-- **Recommendation: no bulk tool.** The Teachers Manager enters each current teacher with the **same Add teacher form**, then completes the checklist. A CSV import is not worth its validation and duplicate-handling cost at this size (§8 Q7).
+- **DECIDED (Q7): by hand, before families.** There is no bulk tool. Each current teacher is entered with the **same Add teacher form**, then the checklist is completed. A CSV import is not worth its validation and duplicate-handling cost at this size (§8 Q7).
 - **Teacher rows already in Chat** (inserted by SQL) get:
   - **Give sign-in** when they have no login;
   - the checklist for everything else.
 
   A one-off read-only report on the Teacher File list ("Setup incomplete", "Not signed in", "No supervisor") replaces any SQL audit.
 - **Order with PD-42.** Teachers should be entered **before** supervisors start PD-42's family intake. The intake's teacher field is optional (PD-42 §6), but a family entered without a teacher needs a second pass. So PD-43 PR-2 and PR-3 should merge before or with PD-42 PR-2.
-- **Strict scope.** Requiring a supervisor at creation means the strict-scope precondition holds for every teacher added through PD-43. Rows inserted before PD-43 still need the existing Organization screen.
+- **Strict scope.** Supervisors are optional (Q4), so migrated teachers may arrive unsupervised. They are the Teachers Manager's until one is set (§3.7). The "Unsupervised" filter is the work list for finishing the migration. Teachers a supervisor enters are theirs from the start.
+- **Who enters them (Q1).** Each teacher supervisor may enter their own teachers, exactly as PD-42 has supervisors enter their own families. The Teachers Manager enters the rest and any teacher whose supervisor is not decided yet.
 
 ---
 
 ## 6. How it meets the other decisions
 
-- **PD-21 / #167.** Teacher logins are administered by the super admin and the Teachers department. PD-43 adds creation and offboarding as separate, manager-level keys.
+- **PD-21 / #167.** Teacher logins are administered by the super admin and the Teachers department. PD-43 adds creation (Manager and supervisors) and offboarding (Manager) as separate keys.
 - **PD-40.**
   - Two keys are added to the catalogue.
   - The `first_login` code purpose is **the same primitive PD-40 PR-3 plans for staff** (#164 §6.1). Whichever PR lands first builds it, and the other reuses it. This is a coordination item with the PD-40 session.
   - Staff keep PD-40's own minimum. Teachers keep 4 (owner, #171).
 - **PD-22.** The teacher's zone is automatic from their phone. PD-43 only defaults the shift and availability zones from it.
-- **PD-26 / #175.** The Teacher Supervision page and the discipline ladder are unchanged. Disciplinary permanent suspension stays separate from offboarding.
+- **PD-26 / #175.**
+  - The Teacher Supervision page and the discipline ladder are unchanged. Disciplinary permanent suspension stays separate from offboarding.
+  - Operations' access is unchanged: no pay key, and no amounts.
 - **PD-35.**
-  - A supervisor is set at creation. The assignment gains an optional reason and an audit row.
-  - Strict scope applies to the checklist and the new reads as it does to the Teacher File.
+  - The supervisor is optional. A supervisor who adds a teacher is linked to them; only the Manager or the super admin re-points the link.
+  - The assignment gains an optional reason and an audit row.
+  - An unsupervised teacher is the Manager's (§3.7).
+  - Strict scope applies to the checklist, the duplicate answers and the new reads, as it does to the Teacher File.
 - **PD-31 / PD-38.** They are unchanged. The checklist reads their rows.
-- **PD-18.** It is unchanged. Pay stays super admin only (§8 Q8).
+- **PD-18.** Narrowed open: the Teachers Manager sets and sees pay terms through `teacher_files.pay_terms`. Everything else in payroll stays super admin only (§3.8).
 - **Teacher Account (frozen).** No new screen. The client change is copy on the existing code screen, so "I have a code" reads as set-up as well as reset.
 - **Frozen call workstreams W1–W8.** Not touched.
 
@@ -365,9 +474,9 @@ Both go only into `manager:teachers`. If PD-43 lands after #174, its migration s
 | PR | Contents | Tests | Depends on |
 |---|---|---|---|
 | **PR-0** (this) | the plan, the PD-43 claim, slot `20261027180000` | `guards.sh` | — |
-| **PR-1, data** | Migration `20261027180000_chat_pd043_teacher_onboarding`: `password_reset_code.purpose` (`reset`/`first_login`) with its TTL; activation `provisioned → active` only through a `first_login` completion (SQL guard); `chat.create_teacher`, `chat.offboard_teacher` (students guard in SQL), `chat.reactivate_teacher`; `chat.teacher_setup_state`; the `is_active`/`left_at` check (`not valid`, then validated); audit of supervisor changes; seed rows for the two keys if #174 is in the base | Integration spec `pd043-teacher-onboarding` (CI G-19): each writer refuses a request role, a duplicate, a cross-organization supervisor, and offboarding with students. A provisioned login cannot sign in until the code is completed. The migration re-applies as a no-op. | coordinate the code purpose with PD-40 PR-3 |
-| **PR-2, API** | `TeacherOnboardingService`: create, give sign-in, change sign-in, setup, history, offboard preview, offboard, reactivate. A DB-free `decideTeacherOnboarding` matrix. Duplicate checks and the lock. Reset issues `first_login` for provisioned logins. Catalogue keys, bundles, `@Requires` on every new route, a regenerated route table. API contract and error codes. | Unit: the decision matrix, duplicates, normalization. Route spec plus the `pd040-routes` guard. Integration: create → code → login → `/me` → the supervision chat exists, with the supervisor in it. | PR-1; #172 merged |
-| **PR-3, Admin Web** | The Add teacher dialog (Teacher Files, Organization, `/admin/teachers`); the one-time code panel; the checklist card and list badge and filter; the "Setup incomplete" / "Not signed in" notes in the Sales form and the Change teacher preview; Give sign-in; Change sign-in e-mail; the supervisor reason field | Vitest: the form's validation, the code shown once, checklist rendering per role (no pay amounts for non-super-admins), buttons hidden without a key | PR-2 |
+| **PR-1, data** | Migration `20261027180000_chat_pd043_teacher_onboarding`: `password_reset_code.purpose` (`reset`/`first_login`) with its TTL; activation `provisioned → active` only through a `first_login` completion (SQL guard); `chat.create_teacher`, `chat.offboard_teacher` (students guard in SQL), `chat.reactivate_teacher`; `chat.teacher_setup_state`; the `is_active`/`left_at` check (`not valid`, then validated); audit of supervisor changes; `teacher_pay_terms` writes narrowed to the super admin or the Teachers manager; seed rows for the three keys if #174 is in the base | Integration spec `pd043-teacher-onboarding` (CI G-19): each writer refuses a request role, a duplicate, a cross-organization supervisor, and offboarding with students. `create_teacher` refuses a supervisor adder naming anyone but themselves, and refuses a backup. A Teachers member cannot write pay terms. A provisioned login cannot sign in until the code is completed. The migration re-applies as a no-op. | coordinate the code purpose with PD-40 PR-3 |
+| **PR-2, API** | `TeacherOnboardingService`: create, give sign-in, change sign-in, setup, history, offboard preview, offboard, reactivate. A DB-free `decideTeacherOnboarding` matrix: adder × supervisor choice × strict scope. Scoped duplicate checks and the lock. Reset issues `first_login` for provisioned logins. `canSetPayTerms`, `GET …/pay-terms` and the `Requires.any` on terms. Manager notifications for unsupervised teachers. Catalogue keys, bundles, `@Requires` on every new route, a regenerated route table. API contract and error codes. | Unit: the decision matrix. Duplicate answers identical in and out of scope for a strict-scope supervisor, with no disclosure. Normalization. `decideTeacherFileAccess` with `canSetPayTerms`, where Ops and Teachers members get false. Route spec plus the `pd040-routes` guard. Integration: create → code → login → `/me` → the supervision chat exists with the supervisor, or with the Manager when unsupervised. A Manager reads pay terms but gets 403 on `/finance`. | PR-1; #172 merged |
+| **PR-3, Admin Web** | The Add teacher dialog (Teacher Files, Organization, `/admin/teachers`), with the supervisor field picker or locked self; the one-time code panel; the checklist card, list badge and filters ("Setup incomplete", "Unsupervised"); the "Setup incomplete" / "Not signed in" / "No supervisor" notes in the Sales form and the Change teacher preview; Give sign-in; Change sign-in e-mail; the supervisor reason field; the **Pay terms** card | Vitest: the form's validation, the supervisor field per role, the code shown once, checklist rendering per role (never an amount), the Pay terms card only with `canSetPayTerms`, buttons hidden without a key | PR-2 |
 | **PR-4, offboarding UI** | The Offboard dialog with preview and links to Change teacher; Reactivate (super admin); the Accounts "Login suspended" note | Vitest; one integration case for the offboard refusal in PR-1/2's spec | PR-2 |
 | **PR-5, client copy** | The Flutter code screen reads "I have a set-up or reset code" (ar and en) | Flutter widget test, run locally (CI runs no Flutter) | — |
 | **PR-6, docs** | PD-43 in boundary doc §4; `docs/admin/pd043-adding-a-teacher.md` (the checklist runbook for the Teachers Manager); `AUTHORIZATION-MODEL.md` footnote 5 updated; `core-integration-contract.md` gap 5 closed | `guards.sh` | PR-2 |
@@ -376,28 +485,32 @@ PR-3 and PR-4 can be built side by side once PR-2's contract is frozen. Within t
 
 ---
 
-## 8. Owner questions (each with a recommendation)
+## 8. Owner questions
 
-1. **Who may add a teacher?**
-   *Recommendation:* the **Teachers Manager and the super admin**. Teacher supervisors complete parts of the checklist but do not hire. Alternative: any Teachers department member.
-2. **What does a teacher sign in with?**
-   *Recommendation:* **their e-mail**, required, stored in lower case. A phone stays in the Teacher File as contact only. Alternative: a phone number as the sign-in, for teachers without an e-mail. It works, but it rules out e-mail self-recovery later.
-3. **How does the teacher receive the set-up code, and for how long is it valid?**
-   *Recommendation:* **shown once to the person who added them**, to hand over in person or by WhatsApp, valid **72 hours**, 5 tries. Also e-mailed if the owner answers PD-40 Q5 "e-mail it", so staff and teachers work the same way.
-4. **Is a supervisor required when adding a teacher?**
-   *Recommendation:* **yes**. This keeps strict scope safe to turn on. The only exception is while the Teachers department has no supervisor at all.
-5. **May a teacher whose set-up is incomplete be given students?**
-   *Recommendation:* **yes, with a visible warning** ("Setup incomplete", "Not signed in yet") in the Sales form and Change teacher. A hard block would stall the migration. Alternative: block until signed in.
-6. **Offboarding: who, and what happens?**
-   *Recommendation:*
-   - the Teachers Manager or the super admin may offboard;
-   - students must be moved first;
-   - the login is closed and all history is kept read-only;
-   - **only the super admin** may reactivate a former teacher, with the same record and a new set-up code.
-7. **Existing teachers for the Core migration: a bulk import, or by hand?**
-   *Recommendation:* **by hand, with the same form**. Core holds no teacher records, and there are tens of teachers. Enter them before PD-42's family intake starts.
-8. **Who sets a teacher's pay?**
-   *Recommendation:* **the super admin, as today**. When PD-40 adds an Accountant specialist role, grant it `teacher_files.finance`; no PD-43 change is needed.
+### 8.1 DECIDED (owner, 2026-10-27, relayed verbatim by the department head)
+
+| # | Question | Owner's answer (verbatim) | Where it lands |
+|---|---|---|---|
+| Q1 | Who may add a teacher? | "Also teacher supervisors" (the Teachers Manager, the super admin **and** teacher supervisors) | §3.2, §3.4, §4 |
+| Q2 | What does a teacher sign in with? | "E-mail + one-time code (Recommended)" | §3.2, §3.3 |
+| Q3 | How is the set-up code delivered, and for how long? | "E-mail + one-time code (Recommended)": shown once to the adder, 72 h, 5 tries; also e-mailed if PD-40 Q5 says so | §3.3 |
+| Q4 | Is a supervisor required when adding a teacher? | "Supervisor optional; students allowed" | §3.2, §3.7 |
+| Q5 | May a teacher whose set-up is incomplete get students? | "Supervisor optional; students allowed" (the warning stays; nothing blocks) | §3.5, §3.7 |
+| Q6 | Offboarding: who, and what happens? | "Manager or super admin, after students move (Recommended)" | §3.6 |
+| Q7 | Existing teachers for the migration: bulk or by hand? | "By hand, before families (Recommended)" | §5 |
+| Q8 | Who sets a teacher's pay? | "Super admin and Teachers Manager for now Later an Accountant role can be given the teacher-finance permission." | §3.8 |
+
+### 8.2 New questions raised by revision 2 (each with a recommendation)
+
+1. **N1. A teacher supervisor who adds a teacher: is the supervisor link always themselves?**
+   *Recommendation:* **yes, locked to themselves.** Under strict scope this is what keeps the teacher visible to the person who added them. It also stops a supervisor placing a teacher on a colleague, which today only the Manager may do.
+   *Alternative:* they may also leave it empty. The teacher then becomes the Manager's at once, and with strict scope on, the adder loses sight of them.
+2. **N2. The Teachers Manager and pay: pay terms only, or the whole teacher payroll?**
+   *Recommendation:* **pay terms only**, through a narrower key, `teacher_files.pay_terms` (§3.8). With it the Manager sets and sees the salary type, amount and currency. They do not see payout accounts, bonus and deduction amounts, or monthly totals. The whole `teacher_files.finance` stays for the super admin and, later, the Accountant role the owner named.
+   *Alternative:* the Manager gets all of `teacher_files.finance`, including revealing bank and wallet details and pricing bonuses and deductions.
+3. **N3. Strict scope with optional supervisors: may strict scope be turned on while some teachers have no supervisor?**
+   *Recommendation:* **yes.** Those teachers are the Teachers Manager's until one is set (§3.7). The Organization count and the "Unsupervised" filter are what the owner checks before switching. They no longer block it.
+   *Alternative:* keep the PD-35 runbook's rule that every active teacher must have a supervisor before the switch.
 
 ---
 
