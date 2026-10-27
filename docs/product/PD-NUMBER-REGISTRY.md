@@ -73,6 +73,7 @@ claimed. The decision text itself still lives in
 | `20261026160003` | PD-35 — `chat_pd035_seat_security_fixes` (security-review fixes for #131, fixed forward; PR #143) |
 | `20261026160004` | PD-35 — `chat_pd035_teacher_supervisor` (PR #136; renumbered from 160001 to sort after 160003) |
 | `20261026160005` | PD-35 — `chat_pd035_reports_evaluations` (PR #138; renumbered from 160002) |
+| `20261026160006` | PD-35 — `chat_pd035_scope_hardening` (review follow-up to #136: assignment guard FOR SHARE, move guard covers `staff_id`, scope re-checks the department) |
 | `20261026170000` | PD-36 — `chat_pd036_mentions` (sub-slots `170001…` if needed; slot map fixed by the department head 2026-10-26) |
 | `20261026180000` | PD-37 — chat read cursors / presence (P1a; sub-slots `180001…`). The RT-012 fix PR has no migration. |
 | `20261026190000` | PD-34 — `chat_pd034_notifications` (P1; later P1 PRs take `190001`, `190002`…) |

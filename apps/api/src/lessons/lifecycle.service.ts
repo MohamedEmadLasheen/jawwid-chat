@@ -8,6 +8,7 @@ import { AUDIT_SERVICE, REALTIME_REVOCATION } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/realtime-revocation';
 import type { Actor } from '../platform/types';
+import { ALL_TEACHERS, scopeCovers, type TeacherScope } from '../platform/teacher-scope';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
@@ -125,6 +126,7 @@ export class LifecycleService {
                            WHERE ls.organization_id = ${actor.organizationId}::uuid
                              AND ls.supervisor_id IN (SELECT chat.staff_principals(${actor.actorId}::uuid, now()))) AS ok`)[0]?.ok === true);
     if (!allowed) throw new CommError(CommErrorCode.LESSON_DENIED, 'the teachers list is for the staff who change teachers');
+    const scope = await this.targetScope(actor);
     const rows = await this.prisma.$queryRaw<Array<{ id: string; name: string; active: boolean; kind: string | null; until: Date | null }>>`
       SELECT t.id::text, t.name, (t.is_active AND t.left_at IS NULL) AS active, a.kind, a.until
         FROM chat.teacher t
@@ -132,13 +134,23 @@ export class LifecycleService {
        WHERE t.organization_id = ${actor.organizationId}::uuid
        ORDER BY t.name`;
     return {
-      teachers: rows.map((r) => ({
+      teachers: rows.filter((r) => scopeCovers(scope, r.id)).map((r) => ({
         id: r.id,
         name: r.name,
         isActive: r.active,
         away: r.kind && r.kind !== 'day_off' && r.until ? { kind: r.kind, until: r.until.toISOString().slice(0, 10) } : null,
       })),
     };
+  }
+
+  /**
+   * PD-35: the teachers a child may be moved TO. Under strict scope a teacher
+   * supervisor moves children only to their own teachers (anything else reads
+   * as not found); the Teachers Manager, the super admin and staff outside the
+   * Teachers department (a child's PD-8 supervisor) to any teacher.
+   */
+  private async targetScope(actor: Actor): Promise<TeacherScope> {
+    return (await this.lessons.isManager(actor)) ? this.lessons.teacherScope.scopeOf(actor) : ALL_TEACHERS;
   }
 
   private async groupLearners(actor: Actor, conversationId: string, fromTeacher: unknown, previewOnly = false) {
@@ -174,6 +186,7 @@ export class LifecycleService {
 
   private async preview(actor: Actor, learners: Learner[], toTeacherId: string | undefined, groupTeachers: Array<{ id: string; name: string }> | null) {
     if (typeof toTeacherId !== 'string' || !isUuid(toTeacherId)) throw invalid('toTeacherId: must be a uuid');
+    if (!scopeCovers(await this.targetScope(actor), toTeacherId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const toTeacher = await this.prisma.teacher.findFirst({ where: { id: toTeacherId, organizationId: actor.organizationId as string }, select: { id: true, name: true } });
     if (!toTeacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const [away] = await this.prisma.$queryRaw<Array<{ kind: string; until: Date }>>`
@@ -243,6 +256,7 @@ export class LifecycleService {
     slotsBy: Record<string, unknown>,
   ) {
     if (learners.length === 0) throw stateError('no student of this group has that teacher');
+    if (!scopeCovers(await this.targetScope(actor), opts.toTeacherId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const toTeacher = await this.prisma.teacher.findFirst({ where: { id: opts.toTeacherId, organizationId: learners[0].organizationId } });
     if (!toTeacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     if (!toTeacher.isActive || toTeacher.leftAt !== null) throw stateError('an inactive teacher cannot take a learner');

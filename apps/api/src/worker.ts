@@ -181,9 +181,13 @@ async function bootstrap(): Promise<void> {
   const subscriptions = app.get(SubscriptionEffects);
   const seats = app.get(ConversationSeatService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
-  // and trial groups seat each teacher's own supervisor -- re-seated once at
-  // start, so turning the switch on takes the department-wide seats away.
-  await app.get(TeacherSupervisorService).reseatAll().catch((e: unknown) => report(log, 'teacher supervisor reseat', 'teachers.reseat', e));
+  // and trial groups seat each teacher's own supervisor; off, the department.
+  // Re-seated at boot when the boot turned the switch over (onApplicationBootstrap),
+  // and here at start and on every seat sweep whenever the switch differs from
+  // the one the last complete re-seat followed; a conversation that failed is
+  // retried alone, with backoff.
+  const supervisors = app.get(TeacherSupervisorService);
+  await supervisors.reseatIfChanged().catch((e: unknown) => report(log, 'teacher supervisor reseat', 'teachers.reseat', e));
   const prisma = app.get(PrismaService);
 
   let running = true;
@@ -393,6 +397,11 @@ async function bootstrap(): Promise<void> {
         await seats.sweep();
       } catch (e) {
         report(log, 'seat sweep', 'seats.sweep', e);
+      }
+      try {
+        await supervisors.reseatIfChanged();
+      } catch (e) {
+        report(log, 'teacher supervisor reseat', 'teachers.reseat', e);
       } finally {
         draining = false;
         nextSeatSweep = Date.now() + SEAT_SWEEP_MS;

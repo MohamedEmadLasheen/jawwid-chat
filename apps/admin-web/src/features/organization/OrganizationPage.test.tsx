@@ -213,10 +213,12 @@ describe('teachers and their supervisors', () => {
   }
   const ASSIGNMENTS = {
     strictScope: false,
-    unassigned: 1,
+    unassigned: 2,
     teachers: [
-      { id: 't-1', name: 'Teacher T', isActive: true, supervisor: { id: 'tsup-1', name: 'Tsup One' }, assignedAt: '2026-10-26T08:00:00Z' },
+      { id: 't-1', name: 'Teacher T', isActive: true, supervisor: { id: 'tsup-1', name: 'Tsup One', isActive: true }, assignedAt: '2026-10-26T08:00:00Z' },
       { id: 't-2', name: 'Teacher U', isActive: true, supervisor: null, assignedAt: null },
+      // Their supervisor was deactivated: counted as unassigned by the server.
+      { id: 't-3', name: 'Teacher V', isActive: true, supervisor: { id: 'tsup-old', name: 'Old Sup', isActive: false }, assignedAt: '2026-10-20T08:00:00Z' },
     ],
     supervisors: [{ id: 'tsup-1', name: 'Tsup One' }, { id: 'tsup-2', name: 'Tsup Two' }],
   }
@@ -230,9 +232,18 @@ describe('teachers and their supervisors', () => {
   it('shows every teacher with their supervisor, and how many have none', async () => {
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/organization' })
     expect(await screen.findByRole('tab', { name: 'Teachers & supervisors', selected: true })).toBeInTheDocument()
-    expect(await screen.findByText(/1 teachers have no supervisor/)).toBeInTheDocument()
+    expect(await screen.findByText(/2 teachers have no supervisor/)).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher T' })).toHaveValue('tsup-1')
     expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher U' })).toHaveValue('')
+  })
+
+  it('shows a teacher whose supervisor left as unassigned, naming the former supervisor', async () => {
+    renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/organization' })
+    const select = await screen.findByRole('combobox', { name: 'Supervisor for Teacher V' })
+    expect(select).toHaveValue('')
+    const row = select.closest('tr') as HTMLElement
+    expect(within(row).getByText('Unassigned')).toBeInTheDocument()
+    expect(within(row).getByText(/Former supervisor: Old Sup/)).toBeInTheDocument()
   })
 
   it('assigns, and takes away, a teacher\'s supervisor', async () => {

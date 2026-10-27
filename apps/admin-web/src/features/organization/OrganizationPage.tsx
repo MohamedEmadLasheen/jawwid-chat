@@ -114,29 +114,36 @@ function TeachersTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {view.teachers.map((t) => (
-                    <tr key={t.id}>
-                      <td dir="auto">
-                        {t.name}
-                        {!t.isActive && <> <Badge tone="neutral">{tx(T.inactiveTeacher)}</Badge></>}
-                      </td>
-                      <td>
-                        <select
-                          className="select"
-                          aria-label={tx(T.assignTitle, { name: t.name })}
-                          value={t.supervisor?.id ?? ''}
-                          disabled={assign.isPending}
-                          onChange={(e) => assign.mutate({ teacherId: t.id, supervisorId: e.target.value || null })}
-                        >
-                          <option value="">{tx(T.noTeacherSupervisor)}</option>
-                          {view.supervisors.map((s) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
-                        {!t.supervisor && t.isActive && <> <Badge tone="warn" dot>{tx(T.unassigned)}</Badge></>}
-                      </td>
-                    </tr>
-                  ))}
+                  {view.teachers.map((t) => {
+                    // A supervisor who was deactivated or left the department supervises no one.
+                    const live = t.supervisor && t.supervisor.isActive !== false ? t.supervisor : null
+                    return (
+                      <tr key={t.id}>
+                        <td dir="auto">
+                          {t.name}
+                          {!t.isActive && <> <Badge tone="neutral">{tx(T.inactiveTeacher)}</Badge></>}
+                        </td>
+                        <td>
+                          <select
+                            className="select"
+                            aria-label={tx(T.assignTitle, { name: t.name })}
+                            value={live?.id ?? ''}
+                            disabled={assign.isPending}
+                            onChange={(e) => assign.mutate({ teacherId: t.id, supervisorId: e.target.value || null })}
+                          >
+                            <option value="">{tx(T.noTeacherSupervisor)}</option>
+                            {view.supervisors.map((s) => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                          {!live && t.isActive && <> <Badge tone="warn" dot>{tx(T.unassigned)}</Badge></>}
+                          {t.supervisor && !live && (
+                            <> <span className="muted" dir="auto">{tx(T.formerSupervisor, { name: t.supervisor.name })}</span></>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
