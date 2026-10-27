@@ -100,8 +100,6 @@ export const GROUP_CALL_CONVERSATION_TYPES: ReadonlySet<string> = new Set([
   ...GROUP_CONVERSATION_TYPES,
   ConversationType.TRIAL_GROUP,
   ConversationType.TEACHER_SUPERVISION,
-  // PD-35 B6: a department room seats several staff.
-  ConversationType.DEPARTMENT_ROOM,
 ]);
 export type ConversationType = (typeof ConversationType)[keyof typeof ConversationType];
 
