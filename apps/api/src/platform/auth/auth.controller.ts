@@ -12,6 +12,7 @@ import {
   sourceAddress,
   type ClientAddressPolicy,
 } from './client-address';
+import { SelfService } from '../permissions/route-access';
 
 interface LoginBody {
   username?: unknown;
@@ -117,6 +118,7 @@ export class AuthController {
    * session id from the verified token rather than the body is what stops one
    * client revoking another's session.
    */
+  @SelfService()
   @Post('logout')
   @HttpCode(200)
   async logout(@Req() request: AuthenticatedRequest): Promise<{ ok: true }> {
@@ -139,6 +141,7 @@ export class AuthController {
  */
 @Controller('me')
 export class MeController {
+  @SelfService()
   @Get()
   me(@Req() request: AuthenticatedRequest): ActorDto {
     if (!request.actor) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
@@ -162,6 +165,7 @@ export class MeController {
 export class MeSessionsController {
   constructor(private readonly auth: AuthService) {}
 
+  @SelfService()
   @Get()
   async list(@Req() request: AuthenticatedRequest): Promise<{ sessions: SessionDto[] }> {
     const { accountId, sessionId } = verified(request);
@@ -169,6 +173,7 @@ export class MeSessionsController {
   }
 
   /** Revoking the CURRENT session is signing out; the client then clears itself. */
+  @SelfService()
   @Post(':sessionId/revoke')
   @HttpCode(200)
   async revoke(@Req() request: AuthenticatedRequest, @Param('sessionId') target: string): Promise<{ ok: true }> {
@@ -179,6 +184,7 @@ export class MeSessionsController {
     return { ok: true };
   }
 
+  @SelfService()
   @Post('revoke-others')
   @HttpCode(200)
   async revokeOthers(@Req() request: AuthenticatedRequest): Promise<{ revoked: number }> {

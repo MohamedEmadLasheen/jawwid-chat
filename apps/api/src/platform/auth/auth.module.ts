@@ -9,6 +9,7 @@ import { SupportSessionInterceptor } from './support-session.interceptor';
 import Redis from 'ioredis';
 import { AuthService } from './auth.service';
 import { AuthenticatedGuard } from './auth.guard';
+import { PermissionGuard } from '../permissions/permission.guard';
 import { ActionThrottleGuard } from './action-throttle.guard';
 import { AuthController, MeController, MeSessionsController } from './auth.controller';
 import { AuthErrorFilter } from './auth.errors';
@@ -97,6 +98,10 @@ export const loginRateLimitStoreProvider = {
     // client is identifiable.
     { provide: CLIENT_ADDRESS_POLICY, useFactory: () => readClientAddressPolicy() },
     { provide: APP_GUARD, useClass: AuthenticatedGuard },
+    // PD-40: the page and action gate. MUST stay directly after
+    // AuthenticatedGuard (it reads the actor that guard attached) and before
+    // the throttle, so a refused request spends no action budget.
+    { provide: APP_GUARD, useClass: PermissionGuard },
     // Phase 8 abuse limits. MUST stay after AuthenticatedGuard: Nest runs
     // global guards in registration order, and this one counts against the
     // actor that guard resolved from the token. It shares the login limiter's

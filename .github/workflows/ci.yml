@@ -108,6 +108,11 @@ jobs:
         # migration since 20261022130000 with no slot claim.
         run: bash scripts/qa/guards.sh pd-registry
 
+      - name: PD-40 · every API route declares the permission it asks of staff
+        # A route with no @Requires / @SelfService / @NotForStaff / @Public is
+        # refused to staff by PermissionGuard; this fails the build first.
+        run: bash scripts/qa/guards.sh pd040-routes
+
       - name: Every gate in scripts/qa/guards.sh runs in CI
         # Anti-drift: fails if guards.sh defines a gate this job never calls.
         run: bash scripts/qa/guards.sh ci-wiring

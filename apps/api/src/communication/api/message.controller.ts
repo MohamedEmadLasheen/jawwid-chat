@@ -5,6 +5,7 @@ import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.gu
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { ReceiptState } from '../contracts/vocab';
+import { Requires } from '../../platform/permissions/route-access';
 
 @Controller('conversations/:conversationId/messages')
 @UseFilters(CommErrorFilter)
@@ -19,6 +20,7 @@ export class MessageController {
    * `before` walks backwards through history; `after` catches up after a
    * reconnect. Both are deterministic regardless of device clocks.
    */
+  @Requires('chat.use')
   @Get()
   async list(
     @ActorId() actorId: string,
@@ -40,6 +42,7 @@ export class MessageController {
    * Send. Always pass clientMessageId: retrying with the same value returns the
    * original message instead of creating a duplicate.
    */
+  @Requires('chat.use')
   @Post()
   @RateLimited(ActionScope.MESSAGE_SEND)
   async send(
@@ -91,6 +94,7 @@ export class MessageController {
    * Each message must be readable here; each destination must be writable
    * (the ordinary send decision); media are copied, never shared by key.
    */
+  @Requires('chat.use')
   @Post('forward')
   // The same budget as a send: forwarding is sending, and a separate one would
   // be a second, unmetered way to flood a thread.
@@ -110,6 +114,7 @@ export class MessageController {
   }
 
   /** Authorizes an upload before any object key exists. */
+  @Requires('chat.use')
   @Post('attachments/authorize')
   @RateLimited(ActionScope.ATTACHMENT_UPLOAD)
   async authorizeUpload(
@@ -128,6 +133,7 @@ export class MessageController {
   }
 
   @RateLimited(ActionScope.RECEIPT_CURSOR)
+  @Requires('chat.use')
   @Post('read')
   async markRead(
     @ActorId() actorId: string,
@@ -145,6 +151,7 @@ export class MessageController {
    * ✓✓ through `message.status`.
    */
   @RateLimited(ActionScope.RECEIPT_CURSOR)
+  @Requires('chat.use')
   @Post('delivered')
   async markDelivered(
     @ActorId() actorId: string,
@@ -156,6 +163,7 @@ export class MessageController {
   }
 
   /** Search this chat's messages; only what the caller may read. */
+  @Requires('chat.use')
   @Get('search')
   search(
     @ActorId() actorId: string,
@@ -167,11 +175,13 @@ export class MessageController {
   }
 
   /** The conversation's pinned messages (at most three) as this viewer may see them. */
+  @Requires('chat.use')
   @Get('pins')
   async pins(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
     return this.messages.pins(conversationId, actorId);
   }
 
+  @Requires('chat.use')
   @Get('unread')
   async unread(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
     return { unread: await this.messages.unreadCount(conversationId, actorId) };
@@ -182,6 +192,7 @@ export class MessageController {
    * staff; countable readers only. The message page itself carries no
    * per-recipient read state.
    */
+  @Requires('chat.use')
   @Get(':messageId/info')
   info(
     @ActorId() actorId: string,
@@ -191,12 +202,14 @@ export class MessageController {
     return this.messages.info(conversationId, messageId, actorId);
   }
 
+  @Requires('chat.use')
   @Post(':messageId/delivered')
   async delivered(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     const updated = await this.messages.markState([messageId], actorId, ReceiptState.DELIVERED);
     return { updated };
   }
 
+  @Requires('chat.use')
   @Post(':messageId/reactions')
   async react(
     @ActorId() actorId: string,
@@ -207,6 +220,7 @@ export class MessageController {
     return { ok: true };
   }
 
+  @Requires('chat.use')
   @Delete(':messageId/reactions')
   async unreact(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.unreact(messageId, actorId);
@@ -214,12 +228,14 @@ export class MessageController {
   }
 
   /** A private bookmark; nobody else ever sees it. */
+  @Requires('chat.use')
   @Post(':messageId/star')
   async star(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.star(messageId, actorId);
     return { ok: true };
   }
 
+  @Requires('chat.use')
   @Delete(':messageId/star')
   async unstar(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.unstar(messageId, actorId);
@@ -227,12 +243,14 @@ export class MessageController {
   }
 
   /** Pinned for everyone here; anyone who may write may pin. A fourth replaces the oldest. */
+  @Requires('chat.use')
   @Post(':messageId/pin')
   async pin(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.pin(messageId, actorId);
     return { ok: true };
   }
 
+  @Requires('chat.use')
   @Delete(':messageId/pin')
   async unpin(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.unpin(messageId, actorId);
@@ -240,6 +258,7 @@ export class MessageController {
   }
 
   /** Delete for me. The message stays intact for everyone else. */
+  @Requires('chat.use')
   @Delete(':messageId/me')
   async deleteForMe(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.deleteForMe(messageId, actorId);
@@ -251,6 +270,7 @@ export class MessageController {
    * Returns the message as it now reads; the previous wording is kept server
    * side. See MessageService.edit for what may be edited.
    */
+  @Requires('chat.use')
   @Patch(':messageId')
   async edit(
     @ActorId() actorId: string,
@@ -262,6 +282,7 @@ export class MessageController {
   }
 
   /** Delete for everyone. Author within the window, or a manager. */
+  @Requires('chat.use')
   @Delete(':messageId')
   async deleteForEveryone(
     @ActorId() actorId: string,

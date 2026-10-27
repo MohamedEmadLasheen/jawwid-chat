@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, UseFilters } from '@nestjs/common'
 import { ParentProfileService } from '../profile/parent-profile.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
+import { NotForStaff } from '../../platform/permissions/route-access';
 
 /**
  * The signed-in parent's own profile, and their children's.
@@ -32,12 +33,14 @@ export class ParentProfileController {
   constructor(private readonly profile: ParentProfileService) {}
 
   /** The caller's own profile and their family's children. */
+  @NotForStaff()
   @Get('profile')
   async profileOf(@ActorId() actorId: string) {
     return this.profile.me(actorId);
   }
 
   /** Save the caller's own name and/or About. */
+  @NotForStaff()
   @Patch('profile')
   async updateProfile(
     @ActorId() actorId: string,
@@ -49,6 +52,7 @@ export class ParentProfileController {
   // ----------------------------------------------------------------- children
 
   /** Save one child's name and/or About. The server decides whose child it is. */
+  @NotForStaff()
   @Patch('children/:learnerId')
   async updateChild(
     @ActorId() actorId: string,

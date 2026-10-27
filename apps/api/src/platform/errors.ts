@@ -309,6 +309,12 @@ export enum CommErrorCode {
    * impersonation of a staff account. 403. Never retry.
    */
   ACCOUNT_ADMIN_DENIED = 'COMM.ACCOUNT_ADMIN_DENIED',
+  /**
+   * PD-40: this staff account does not hold the permission the route declares
+   * (or the route declares none, or is a parent's or a teacher's own). 403.
+   * Never retry: it changes only when the account's roles change.
+   */
+  PERMISSION_DENIED = 'COMM.PERMISSION_DENIED',
   /** PD-21: no such account in the caller's organization. 404. */
   ACCOUNT_ADMIN_NOT_FOUND = 'COMM.ACCOUNT_ADMIN_NOT_FOUND',
   /** PD-21: not in a state for this (suspend an inactive account, reactivate one that is not suspended, impersonate an inactive one). 409. */
