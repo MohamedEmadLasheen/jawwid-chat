@@ -79,10 +79,14 @@ beforeEach(async () => {
   [tmgr, tsupA, tsupB, sa] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
   await g.prisma.$executeRawUnsafe(
     `insert into chat.staff (id, name, role, is_active) values
-       ($1::uuid, 'tmgr_c', 'manager', true), ($2::uuid, 'tsup_ca', 'admin', true),
-       ($3::uuid, 'tsup_cb', 'admin', true), ($4::uuid, 'sa_c', 'super_admin', true)`,
-    tmgr, tsupA, tsupB, sa,
+       ($1::uuid, 'tmgr_c', 'manager', true), ($2::uuid, 'tsup_ca', 'admin', true), ($3::uuid, 'tsup_cb', 'admin', true)`,
+    tmgr, tsupA, tsupB,
   );
+  // super_admin exists only through the bootstrap gate (20261013120000).
+  await g.prisma.$transaction([
+    g.prisma.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`),
+    g.prisma.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'sa_c', 'super_admin', true)`, sa),
+  ]);
   const [{ id: dept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `insert into chat.department (kind, display_name, manager_id) values ('teachers', 'teachers', $1::uuid) returning id::text as id`, tmgr,
   );
