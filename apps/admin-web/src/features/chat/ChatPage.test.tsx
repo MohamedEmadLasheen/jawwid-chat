@@ -106,6 +106,10 @@ function stubApi(state: {
   conversations: ChatConversation[]
   messages: Record<string, ChatMessage[]>
   failSend?: { status: number; code: string; message: string } | null
+  /** PD-37: what GET /presence answers. */
+  presence?: Array<{ actorId: string; online: boolean; lastSeenAt: string | null }>
+  /** PD-37: what GET …/messages/:id/info answers, by message id. */
+  info?: Record<string, unknown>
 }) {
   const calls: Array<{ method: string; path: string; body: unknown }> = []
   const json = (data: unknown, status = 200) =>
@@ -122,6 +126,12 @@ function stubApi(state: {
 
       if (path === '/me') return json(ADMIN)
       if (path === '/conversations' && method === 'GET') return json({ conversations: state.conversations })
+      if (path === '/presence') return json({ presence: state.presence ?? [] })
+      const info = path.match(/^\/conversations\/[^/]+\/messages\/([^/]+)\/info$/)
+      if (info) {
+        const found = state.info?.[decodeURIComponent(info[1]!)]
+        return found ? json(found) : json({ error: { code: 'COMM.NOT_MESSAGE_AUTHOR', message: 'no' } }, 403)
+      }
       const m = path.match(/^\/conversations\/([^/]+)(\/messages(\/read)?)?$/)
       if (m) {
         const id = decodeURIComponent(m[1]!)
@@ -1674,5 +1684,124 @@ describe('signedPutHeaders', () => {
     expect(signedPutHeaders('image/png', { 'content-type': 'image/png', 'content-length': '9' }).get('content-type')).toBe('image/png')
     expect(signedPutHeaders('image/png', undefined).get('content-type')).toBe('image/png')
     expect(signedPutHeaders('image/png', {}).get('content-type')).toBe('image/png')
+  })
+})
+
+describe('PD-37: ticks, Message info, typing and presence', () => {
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("ticks on the viewer's own messages only, as the server decided them", async () => {
+    stubApi({
+      conversations: [conv('c1')],
+      messages: {
+        c1: [
+          msg('m1', 1, { authorKind: 'staff', authorId: ADMIN.id, body: 'mine and read', status: 'read' }),
+          msg('m2', 2, { authorKind: 'staff', authorId: ADMIN.id, body: 'mine and delivered', status: 'delivered' }),
+          msg('m3', 3, { body: 'the parent writes', status: null }),
+        ],
+      },
+    })
+    renderChat('/chat/c1')
+    const read = (await screen.findByText('mine and read')).closest('li')!
+    expect(within(read).getByRole('img', { name: 'Read' })).toBeInTheDocument()
+    const delivered = screen.getByText('mine and delivered').closest('li')!
+    expect(within(delivered).getByRole('img', { name: 'Delivered' })).toBeInTheDocument()
+    const theirs = screen.getByText('the parent writes').closest('li')!
+    expect(within(theirs).queryByRole('img', { name: /^(Read|Delivered|Sent)$/ })).not.toBeInTheDocument()
+  })
+
+  it('an arriving message is acknowledged as delivered, as a cursor, and message.status re-reads the thread', async () => {
+    const calls = stubApi({ conversations: [conv('c1')], messages: { c1: [msg('m1', 1)] } })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+
+    act(() => fakeSocket.serverEmits('message.created', { conversationId: 'c1', messageId: 'm2', seq: '2' }))
+    expect(fakeSocket.emitted).toContainEqual({ event: 'message.delivered', payload: { conversationId: 'c1', upToSeq: '2' } })
+
+    const reads = () => calls.filter((c) => c.method === 'GET' && c.path === '/conversations/c1/messages').length
+    await waitFor(() => expect(reads()).toBeGreaterThan(1))
+    const before = reads()
+    act(() => fakeSocket.serverEmits('message.status', { conversationId: 'c1', items: [] }))
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+  })
+
+  it('Message info lists who read it, who has it, and that nobody is still pending', async () => {
+    stubApi({
+      conversations: [conv('c1')],
+      messages: { c1: [msg('m1', 1, { authorKind: 'staff', authorId: ADMIN.id, body: 'please confirm', status: 'delivered' })] },
+      info: {
+        m1: {
+          messageId: 'm1',
+          status: 'delivered',
+          readBy: [{ actorId: 't1', actorKind: 'teacher', displayName: 'Teacher Omar', avatarUrl: null, at: '2026-10-14T08:05:00.000Z' }],
+          deliveredTo: [{ actorId: 'p1', actorKind: 'contact', displayName: 'Parent One', avatarUrl: null, at: '2026-10-14T08:01:00.000Z' }],
+          pending: [],
+        },
+      },
+    })
+    renderChat('/chat/c1')
+    const row = (await screen.findByText('please confirm')).closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Message info' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Message info' })
+    expect(await within(dialog).findByText('Teacher Omar')).toBeInTheDocument()
+    expect(within(dialog).getByText('Parent One')).toBeInTheDocument()
+    expect(within(dialog).getByText('Nobody')).toBeInTheDocument()
+  })
+
+  it("someone else's typing shows in the header; the viewer's own and another chat's never do", async () => {
+    stubApi({ conversations: [conv('c1')], messages: { c1: [msg('m1', 1)] } })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+
+    act(() => fakeSocket.serverEmits('typing.started', { conversationId: 'c2', actorId: 't9', displayName: 'Elsewhere' }))
+    act(() => fakeSocket.serverEmits('typing.started', { conversationId: 'c1', actorId: ADMIN.id, displayName: 'Me' }))
+    expect(screen.queryByText(/is typing/)).not.toBeInTheDocument()
+
+    act(() => fakeSocket.serverEmits('typing.started', { conversationId: 'c1', actorId: 't1', displayName: 'Teacher Omar' }))
+    expect(await screen.findByText('Teacher Omar is typing…')).toBeInTheDocument()
+    act(() => fakeSocket.serverEmits('typing.stopped', { conversationId: 'c1', actorId: 't1', displayName: 'Teacher Omar' }))
+    await waitFor(() => expect(screen.queryByText('Teacher Omar is typing…')).not.toBeInTheDocument())
+  })
+
+  it('typing a message says so (throttled); an internal note never does -- the family would hear it', async () => {
+    stubApi({ conversations: [conv('c1')], messages: { c1: [msg('m1', 1)] } })
+    renderChat('/chat/c1')
+    const box = await screen.findByPlaceholderText('Write a message… (Enter to send)')
+    const starts = () => fakeSocket.emitted.filter((e) => e.event === 'typing.start')
+    fireEvent.change(box, { target: { value: 'hel' } })
+    expect(starts()).toEqual([{ event: 'typing.start', payload: { conversationId: 'c1' } }])
+    fireEvent.change(box, { target: { value: 'hello' } }) // inside the ping interval: no second start
+    expect(starts()).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: /Internal note/ }))
+    expect(fakeSocket.emitted.map((e) => e.event)).toContain('typing.stop')
+    fireEvent.change(screen.getByPlaceholderText('Internal note — parents and teachers never see it'), { target: { value: 'note' } })
+    expect(starts()).toHaveLength(1)
+  })
+
+  it("a 1:1 with a colleague shows their presence as the server answered it; the viewer never asks about themselves", async () => {
+    const direct = conv('d1', {
+      type: 'direct',
+      title: null,
+      familyId: null,
+      learnerId: null,
+      members: [
+        { actorId: ADMIN.id, actorKind: 'staff', memberRole: 'admin', isSilent: false, displayName: 'Me' },
+        { actorId: 's2', actorKind: 'staff', memberRole: 'admin', isSilent: false, displayName: 'Colleague Noura' },
+      ],
+    })
+    const calls = stubApi({
+      conversations: [direct],
+      messages: { d1: [msg('m1', 1, { conversationId: 'd1', authorKind: 'staff', authorId: 's2' })] },
+      presence: [{ actorId: 's2', online: true, lastSeenAt: null }],
+    })
+    renderChat('/chat/d1')
+    expect(await screen.findByText('Online')).toBeInTheDocument()
+    const fetches = (vi.mocked(fetch).mock.calls as Array<[string]>).map(([u]) => String(u)).filter((u) => u.includes('/presence'))
+    expect(fetches.length).toBeGreaterThan(0)
+    expect(fetches.every((u) => !u.includes(ADMIN.id))).toBe(true)
+    expect(calls.some((c) => c.path === '/presence')).toBe(true)
   })
 })
