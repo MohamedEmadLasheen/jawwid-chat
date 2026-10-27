@@ -140,7 +140,9 @@ describe('1. what is a violation', () => {
     await lessons.report(s.teacherId, held, { covered: 'Al-Mulk' });
     expect(await code(discipline.recordLateness(tsupId, held, { minutes: 5 }))).toBe(CommErrorCode.DISCIPLINE_STATE);
     expect(await code(discipline.recordLateness(s.teacherId, held, { minutes: 15 }))).toBe(CommErrorCode.DISCIPLINE_DENIED);
-    expect(await code(discipline.recordLateness(s.ownerId, held, { minutes: 15 }))).toBe(CommErrorCode.DISCIPLINE_DENIED);
+    // PD-26 amendment: an Operations supervisor records it for her families' teachers
+    // only (pd026-operations-access.spec); admin_b has no charge over teacher_c.
+    expect(await code(discipline.recordLateness(s.otherAdminId, held, { minutes: 15 }))).toBe(CommErrorCode.DISCIPLINE_NOT_FOUND);
 
     const { violation } = await discipline.recordLateness(tsupId, held, { minutes: 15, note: 'joined at 18:15' });
     expect(violation).toMatchObject({ kind: 'late', lateMinutes: 15, step: 1, suggestedDecision: 'warning' });
@@ -259,19 +261,28 @@ describe('3. what each decision does', () => {
 // ---------------------------------------------------------------------------
 
 describe('4. who may, and the database backstop', () => {
-  it('only the Teachers department reads and decides', async () => {
+  it('only the Teachers department -- and, since PD-26\'s amendment, the teacher\'s Operations supervisor -- reads and decides', async () => {
     const v = await apology();
-    for (const outsider of [s.ownerId, s.managerId, s.teacherId, s.parentId]) {
+    for (const outsider of [s.teacherId, s.parentId]) {
       expect(await code(discipline.list(outsider, {}))).toBe(CommErrorCode.DISCIPLINE_DENIED);
       expect(await code(discipline.decide(outsider, v, { decision: 'warning' }))).toBe(CommErrorCode.DISCIPLINE_DENIED);
     }
+    // An Operations supervisor with no charge over teacher_c: nothing to read, and not found.
+    expect((await discipline.list(s.otherAdminId, {})).violations).toHaveLength(0);
+    expect(await code(discipline.decide(s.otherAdminId, v, { decision: 'warning' }))).toBe(CommErrorCode.DISCIPLINE_NOT_FOUND);
     expect((await discipline.list(tmgrId, {})).violations).toHaveLength(1);
+    // admin_a (learner_l is hers) and manager_c (the Operations department's families) read it,
+    // and manager_c decides it.
+    expect((await discipline.list(s.ownerId, {})).violations.map((x) => x.id)).toEqual([v]);
+    expect((await discipline.list(s.managerId, {})).violations.map((x) => x.id)).toEqual([v]);
+    const decided = await discipline.decide(s.managerId, v, { decision: 'warning' });
+    expect(decided.violation).toMatchObject({ decision: 'warning', decidedBy: { id: s.managerId } });
   });
 
   it('a violation is decided once, by the department, and never deleted', async () => {
     const v = await apology();
     expect(
-      await sqlError(g.prisma.teacherViolation.update({ where: { id: v }, data: { decision: 'warning', suggestedStep: 1, decidedBy: s.ownerId } })),
+      await sqlError(g.prisma.teacherViolation.update({ where: { id: v }, data: { decision: 'warning', suggestedStep: 1, decidedBy: s.otherAdminId } })),
     ).toMatch(/Teachers department/);
     await discipline.decide(tsupId, v, { decision: 'warning' });
     expect(

@@ -251,7 +251,8 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
     groups[0]!.entries.push({
       key: area,
-      path: AREA_PATH[area],
+      // PD-26 amendment: without the Teachers department, the Teachers area is its Supervision page.
+      path: area === 'teachers' && access.lessonManager !== true ? `${AREA_PATH.teachers}/supervision` : AREA_PATH[area],
       icon: AREA_ICON[area],
       label: { message: `nav.${area}` },
       inDevelopment: false,

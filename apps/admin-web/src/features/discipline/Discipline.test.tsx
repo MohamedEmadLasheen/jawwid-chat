@@ -141,23 +141,23 @@ describe('discipline on the Supervision page', () => {
 
   it('records lateness on a held lesson of the chosen teacher', async () => {
     on('GET', /\/discipline\/violations\?state=open&kind=late$/, () => json({ violations: [] }))
-    on('GET', /\/lessons\/roster$/, () => json({ teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, timezone: null }], learners: [] }))
-    on('GET', /\/lessons\?/, () =>
-      json({
-        lessons: [
-          { id: 'l-7', learner: { id: 'c-1', name: 'Child Alpha' }, teacher: { id: 't-1', name: 'Teacher One' }, kind: 'regular', makeupFor: null, startsAt: '2026-10-18T16:00:00Z', endsAt: '2026-10-18T16:30:00Z', durationMinutes: 30, phase: 'closed', outcome: 'held', outcomeNote: null },
-          { id: 'l-8', learner: { id: 'c-1', name: 'Child Alpha' }, teacher: { id: 't-1', name: 'Teacher One' }, kind: 'regular', makeupFor: null, startsAt: '2026-10-19T16:00:00Z', endsAt: '2026-10-19T16:30:00Z', durationMinutes: 30, phase: 'closed', outcome: 'student_no_show', outcomeNote: null },
-        ],
-      }),
+    // PD-26 amendment: the page's own reads -- its teachers, and one teacher's held
+    // lessons of the last two weeks (the server keeps held ones only).
+    on('GET', /\/teacher-supervision\/directory$/, () =>
+      json({ basis: 'teachers', access: { canWriteSupervision: true, canViewFinance: false }, teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, away: null }], supervisors: [] }),
+    )
+    on('GET', /\/teacher-supervision\/teachers\/t-1\/held-lessons\?kind=regular$/, () =>
+      json({ lessons: [{ id: 'l-7', kind: 'regular', startsAt: '2026-10-18T16:00:00Z', label: 'Child Alpha' }] }),
     )
     on('POST', /\/lessons\/l-7\/lateness$/, () => json({ violation: violation({ kind: 'late', lateMinutes: 15 }) }, 201))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=lateness' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record lateness' }))
     const dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')
+    const teacherSelect = within(dialog).getByRole('combobox', { name: 'Teacher' })
+    await waitFor(() => expect(within(teacherSelect).getAllByRole('option')).toHaveLength(2))
+    await userEvent.selectOptions(teacherSelect, 't-1')
     const lessonSelect = await within(dialog).findByRole('combobox', { name: 'Lesson' })
-    // Only held lessons are offered.
-    expect(within(lessonSelect).getAllByRole('option')).toHaveLength(2)
+    await waitFor(() => expect(within(lessonSelect).getAllByRole('option')).toHaveLength(2))
     await userEvent.selectOptions(lessonSelect, 'l-7')
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Minutes late' }), '15')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))

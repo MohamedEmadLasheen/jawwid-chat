@@ -274,7 +274,9 @@ export function ApproveLeaveDialog({ request, onClose }: { request: LeaveRequest
       </fieldset>
       {touched && days.size === 0 && <p className="field__error">{tx(S.pickADay)}</p>}
       <p className="sv-muted" aria-live="polite">
-        {tx(S.deducted, { n: number(days.size), b: after === null ? tx(S.noAllowance) : number(after) })}
+        {request.balance === undefined
+          ? tx(S.deductedOnly, { n: number(days.size) })
+          : tx(S.deducted, { n: number(days.size), b: after === null ? tx(S.noAllowance) : number(after) })}
       </p>
       {lessons.length > 0 && (
         <div className="field">
@@ -282,7 +284,7 @@ export function ApproveLeaveDialog({ request, onClose }: { request: LeaveRequest
           <ul className="sv-collisions">
             {lessons.map((l) => (
               <li key={l.id}>
-                <bdi>{l.learnerName}</bdi> — {dateTime(l.startsAt)}
+                {l.learnerName === null ? tx(S.otherFamilyLesson) : <bdi>{l.learnerName}</bdi>} — {dateTime(l.startsAt)}
               </li>
             ))}
           </ul>

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
+import { destinationsFor, entriesOf } from '@/app/navigation'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { Violation } from '@/features/discipline/api'
@@ -109,6 +110,16 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
   on('GET', /\/lessons\/roster$/, () => json(roster))
+  // PD-26 amendment: the page's own pickers, for every basis.
+  on('GET', /\/teacher-supervision\/directory$/, () =>
+    json({
+      basis: 'teachers',
+      access: { canWriteSupervision: true, canViewFinance: false },
+      teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, away: null }],
+      supervisors: [{ id: 's-2', name: 'Supervisor Two' }],
+    }),
+  )
+  on('GET', /\/lessons\/access$/, () => json({ lessonManager: true, sales: false, operations: false, calendar: true, supervisionPage: true }))
   on('GET', /\/teacher-files$/, () =>
     json({ access, teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, studentCount: 3, openComplaints: 1, away: null }], supervisors: [{ id: 's-2', name: 'Supervisor Two' }] }),
   )
@@ -179,13 +190,9 @@ describe('3. lateness', () => {
         ],
       }),
     )
-    on('GET', /\/trials\?/, () =>
-      json({
-        trials: [
-          { id: 'tr-1', prospect: { id: 'p-1', displayName: 'Prospect Beta', level: null }, students: [], teacher: { id: 't-1', name: 'Teacher One' }, startsAt: '2026-10-18T16:00:00Z', endsAt: '2026-10-18T16:30:00Z', durationMinutes: 30, attendance: 'attended', report: null, outcome: 'awaiting' },
-          { id: 'tr-2', prospect: { id: 'p-2', displayName: 'Prospect Gamma', level: null }, students: [], teacher: { id: 't-1', name: 'Teacher One' }, startsAt: '2026-10-19T16:00:00Z', endsAt: '2026-10-19T16:30:00Z', durationMinutes: 30, attendance: 'no_show', report: null, outcome: 'no_show' },
-        ],
-      }),
+    // The page's own read: the server already keeps held lessons only (attended trials).
+    on('GET', /\/teacher-supervision\/teachers\/t-1\/held-lessons\?kind=trial$/, () =>
+      json({ lessons: [{ id: 'tr-1', kind: 'trial', startsAt: '2026-10-18T16:00:00Z', label: 'Prospect Beta' }] }),
     )
     on('POST', /\/lessons\/tr-1\/lateness$/, () => json({ violation: violation({ kind: 'late' }) }, 201))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=lateness' })
@@ -504,5 +511,134 @@ describe('6. parent feedback (PD-32)', () => {
     expect(within(row).getByText('اقتراح')).toBeInTheDocument()
     expect(within(row).getByText('مستلمة')).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: 'الرد على ولي الأمر' })).toBeInTheDocument()
+  })
+})
+
+describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', () => {
+  const opsSupervisor = makeStaff({ id: 'o-1', name: 'Ops One', role: 'admin' })
+  function asOperations() {
+    on('GET', /\/lessons\/access$/, () => json({ lessonManager: false, sales: false, operations: true, calendar: true, supervisionPage: true }))
+    on('GET', /\/teacher-supervision\/directory$/, () =>
+      json({
+        basis: 'operations',
+        access: { canWriteSupervision: true, canViewFinance: false },
+        teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, away: null }],
+        supervisors: [{ id: 's-2', name: 'Supervisor Two' }, { id: 'o-1', name: 'Ops One' }],
+      }),
+    )
+  }
+
+  it('the Teachers entry is offered when the server confirms the page, and leads straight to Supervision', () => {
+    const teachersPath = (access: Parameters<typeof destinationsFor>[1]) =>
+      destinationsFor('admin', access).flatMap(entriesOf).find((e) => e.key === 'teachers')?.path
+    expect(teachersPath({ lessonManager: false, operations: true, supervisionPage: true })).toBe('/teachers/supervision')
+    expect(teachersPath({ lessonManager: true, supervisionPage: true })).toBe('/teachers')
+    expect(teachersPath({ lessonManager: false, operations: true, supervisionPage: false })).toBeUndefined()
+  })
+
+  it('shows only the Supervision tab of the Teachers area, and no Teacher File links', async () => {
+    asOperations()
+    on('GET', /\/teacher-leave-overview$/, () =>
+      // As the server sends it to Operations: no allowance, no days used, no balance.
+      json({ year: 2026, teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, pendingRequests: 0, away: null }] }),
+    )
+    on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [] }))
+    renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision' })
+    const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
+    await waitFor(() => expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Supervision']))
+    const row = (await screen.findByText('Teacher One')).closest('tr')!
+    expect(within(row).queryByRole('link')).not.toBeInTheDocument()
+    // The balance column is the Teachers department's: not there at all, not "Not tracked".
+    expect(screen.queryByRole('columnheader', { name: 'Leave balance' })).not.toBeInTheDocument()
+    expect(within(row).queryByText(/days left|Not tracked/)).not.toBeInTheDocument()
+    expect(within(row).getByText('Available')).toBeInTheDocument()
+  })
+
+  it('records an absence for a teacher of her families, chosen from the page\'s own directory', async () => {
+    asOperations()
+    on('GET', /\/discipline\/violations\?state=open&kind=absences$/, () => json({ violations: [] }))
+    on('POST', /\/teachers\/t-1\/absences$/, () => json({ violation: violation({ id: 'v-9' }) }, 201))
+    renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision?section=absences' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Record an absence' }))
+    const dialog = await screen.findByRole('dialog')
+    const teacher = within(dialog).getByRole('combobox', { name: 'Teacher' })
+    await waitFor(() => expect(within(teacher).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a teacher', 'Teacher One']))
+    await userEvent.selectOptions(teacher, 't-1')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'What happened' }), 'Missed the shift')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(calls('POST', /\/absences$/)).toHaveLength(1))
+    // Nothing of the Teachers department's own reads was asked for.
+    expect(calls('GET', /\/lessons\/roster$/)).toHaveLength(0)
+    expect(calls('GET', /\/teacher-files$/)).toHaveLength(0)
+  })
+
+  it('records lateness on a regular lesson from the page\'s held-lessons read', async () => {
+    asOperations()
+    on('GET', /\/discipline\/violations\?state=open&kind=late$/, () => json({ violations: [] }))
+    on('GET', /\/teacher-supervision\/teachers\/t-1\/held-lessons\?kind=regular$/, () =>
+      json({ lessons: [{ id: 'l-7', kind: 'regular', startsAt: '2026-10-18T16:00:00Z', label: 'Child Alpha' }] }),
+    )
+    on('POST', /\/lessons\/l-7\/lateness$/, () => json({ violation: violation({ kind: 'late' }) }, 201))
+    renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision?section=lateness' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Record lateness' }))
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(within(within(dialog).getByRole('combobox', { name: 'Teacher' })).getAllByRole('option')).toHaveLength(2))
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')
+    await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: 'Lesson' }), 'l-7')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Minutes late' }), '15')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(calls('POST', /\/lateness$/)).toHaveLength(1))
+    expect(calls('GET', /\/lessons\?/)).toHaveLength(0)
+  })
+
+  it('a parent\'s complaint about a teacher of her families names the family chat it came from', async () => {
+    asOperations()
+    on('GET', /\/teacher-supervision\/directory$/, () =>
+      json({
+        basis: 'operations',
+        access: { canWriteSupervision: true, canViewFinance: false },
+        teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, away: null, operationsOnly: true }],
+        supervisors: [{ id: 'o-1', name: 'Ops One' }],
+        familyChats: [{ conversationId: 'conv-x', learnerName: 'Child Alpha' }],
+      }),
+    )
+    on('GET', /\/teacher-files\/complaints/, () => json({ access, complaints: [] }))
+    on('GET', /\/discipline\/violations/, () => json({ violations: [] }))
+    on('POST', /\/teacher-files\/t-1\/entries$/, () => json({ id: 'c-9', kind: 'complaint', createdAt: '2026-10-27T09:00:00Z' }, 201))
+    renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision?section=complaints' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a complaint' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Source' }), 'parent')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Details' }), 'Started late.')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    // Required: nothing is sent without the family chat.
+    expect(within(dialog).getByText('Required.')).toBeInTheDocument()
+    expect(calls('POST', /\/entries$/)).toHaveLength(0)
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Family chat it came from' }), 'conv-x')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/entries$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/entries$/)[0])).toEqual({ kind: 'complaint', body: 'Started late.', source: 'parent', sourceConversationId: 'conv-x' })
+  })
+
+  it('management\'s complaint needs no family chat', async () => {
+    asOperations()
+    on('GET', /\/teacher-supervision\/directory$/, () =>
+      json({
+        basis: 'operations',
+        access: { canWriteSupervision: true, canViewFinance: false },
+        teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, away: null, operationsOnly: true }],
+        supervisors: [],
+        familyChats: [{ conversationId: 'conv-x', learnerName: 'Child Alpha' }],
+      }),
+    )
+    on('GET', /\/teacher-files\/complaints/, () => json({ access, complaints: [] }))
+    on('GET', /\/discipline\/violations/, () => json({ violations: [] }))
+    renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision?section=complaints' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a complaint' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Source' }), 'management')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')
+    expect(within(dialog).queryByRole('combobox', { name: 'Family chat it came from' })).not.toBeInTheDocument()
   })
 })

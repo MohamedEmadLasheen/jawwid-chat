@@ -60,3 +60,27 @@ export function decideTeacherFileAccess(
   }
   return NO_TEACHER_FILE_ACCESS;
 }
+
+/** The Teacher File access on the Teacher Supervision page (PD-26), and whether the page is open at all. */
+export interface TeacherFilePageAccess extends TeacherFileAccess {
+  onPage: boolean;
+}
+
+/**
+ * PD-26 amendment (owner 2026-10-27). The Teachers department and the super
+ * admin keep their access as it is. An Operations supervisor writes on the page
+ * -- complaints, follow-ups, resolutions -- for the teachers of their families,
+ * and nothing else of the Teacher File: no file, no personal record, no money.
+ */
+export function teacherFilePageAccess(
+  access: TeacherFileAccess,
+  basis: 'super_admin' | 'teachers' | 'operations' | null,
+): TeacherFilePageAccess {
+  if (basis === 'operations') {
+    return { canView: false, canEditPersonal: false, canWriteSupervision: true, canViewFinance: false, onPage: true };
+  }
+  return { ...access, onPage: basis !== null };
+}
+
+/** What an Operations supervisor may write on a teacher's timeline: the page's complaints. */
+export const OPERATIONS_ENTRY_KINDS: ReadonlySet<string> = new Set(['complaint', 'complaint_followup', 'complaint_resolution']);
