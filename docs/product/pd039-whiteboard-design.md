@@ -169,11 +169,22 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
   - `chat.quran_dataset (id, sha256, attribution, source_url, loaded_at)`: one row per
     pinned source file, for example `tanzil-uthmani-1.1`. The config key `quran.dataset`
     names the current one.
-  - `chat.quran_ayah (dataset_id, surah, ayah, text_uthmani, text_search, sha256)` holds all
-    6,236 ayat:
-    - `text_uthmani` is **verbatim** from the file;
-    - `sha256` is the SHA-256 of that text's UTF-8 bytes;
-    - `text_search` is a diacritic-free derived copy for search (Phase 2), never shown.
+  - `chat.quran_ayah` holds all 6,236 ayat, **verbatim** from the file.
+    - Each ayah is also split into `{basmala, verse}`.
+    - `verse_sha256` is the SHA-256 of the verse's UTF-8 bytes.
+    - `text_search` is a diacritic-free copy, derived in the database from the verse, for
+      search (Phase 2). It is never shown.
+  - **The Basmala** (settled on #176, 2026-10-27).
+    - Tanzil writes it in front of ayah 1 of 112 surahs, every surah except Al-Fatihah and
+      At-Tawbah. The API serves it apart: `basmala` is a string for those 112 ayat, otherwise
+      null, and `text` is the verse without it.
+    - In Al-Fatihah, 1:1 *is* the Basmala and stays the verse. At-Tawbah has none. A Basmala
+      inside an ayah (27:30) is part of the verse.
+    - A served Basmala is always one of two accepted spellings, whose hashes are fixed in
+      code (`BASMALA_SHA256`). The load refuses anything else.
+    - **Everything is defined against the verse** (`text`): the per-ayah `sha256`,
+      `rangeSha256`, Tajweed offsets and audio. The Basmala is never part of a hash or a
+      reference.
   - The loader checks:
     - the file's SHA-256 against a pinned constant;
     - 6,236 rows and 114 surahs;
@@ -181,7 +192,7 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
     - all in one transaction.
   - No role can write to the tables (a trigger refuses UPDATE and DELETE), and request roles
     get no grants. It is organisation-independent reference data.
-  - Tajweed marks use Unicode code-point offsets into `text_uthmani`. A mark is served only
+  - Tajweed marks use Unicode code-point offsets into the verse (`text`). A mark is served only
     when two things hold:
     - the mark itself is approved;
     - an academy Quran teacher has signed off its surah for the same source version.
@@ -192,17 +203,24 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
   - The verse tool lets the teacher pick a surah (by Arabic or English name, or number),
     then an ayah range of up to 20 ayat.
   - The board stores a **reference** — `{surah, fromAyah, toAyah, datasetId, rangeSha256}` —
-    never the text. `rangeSha256` is the SHA-256 of the ayat's `sha256` values joined with
-    "\n", in ayah order.
+    never the text. `rangeSha256` is the SHA-256 of the ayat's verse `sha256` values joined
+    with "\n", in ayah order. It never covers a Basmala.
   - The text is fetched from `GET /quran/ayahs?surah=&from=&to=`.
     - It allows at most 50 ayat; a bad range answers 422 `COMM.QURAN_INVALID`.
-    - It returns the dataset (id, SHA-256, attribution, source URL), each ayah's text and
-      SHA-256, and the server's own `rangeSha256` (the same formula).
+    - It returns the dataset (id, SHA-256, attribution, source URL), the server's own
+      `rangeSha256` (the same formula), and, for each ayah:
+      - `basmala` (string or null);
+      - `text` (the verse);
+      - `sha256` (of the verse only).
     - Any failed verification answers 503 `COMM.QURAN_UNAVAILABLE`. The board then shows
       "Quran text unavailable" in the verse's place, **never a fallback text**.
-  - The text is drawn with **Amiri
-    Quran** (OFL 1.1), with ayah-end markers (۝ plus the number) and line breaking that
-    never splits a word.
+  - The text is drawn with **Amiri Quran** (OFL 1.1), with ayah-end markers (۝ plus the
+    number) and line breaking that never splits a word.
+  - When the range starts at an ayah 1 whose `basmala` is not null, the Basmala is drawn as
+    **its own centred line above the verse**. It is never run into the verse and carries no
+    ayah number.
+  - Tajweed marks and the teacher's letter selection (Phase 2) apply to the verse only, never
+    to the Basmala line.
   - The teacher can move it, resize it, change its colour and alignment, and mark it with
     the highlighter or Tajweed palette. The letters cannot be edited or cut. A "Duplicate as
     text" action does not exist.
