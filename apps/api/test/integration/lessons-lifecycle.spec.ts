@@ -320,10 +320,12 @@ describe('4. Teacher Supervision', () => {
     expect(t.items.every((i) => typeof i.id === 'string')).toBe(true);
     expect(t.items.find((i) => i.type === 'bonus')).toMatchObject({ byName: 'tsup_a' });
 
+    // PD-26 amendment: admin_a is now teacher_c's Operations supervisor (pd026-operations-access.spec);
+    // admin_b, in Operations with no charge over teacher_c, is still refused.
     await expect(g.prisma.$executeRawUnsafe(
       `insert into chat.teacher_supervision_entry (organization_id, teacher_id, kind, body, created_by)
        values (chat.default_organization_id(), $1::uuid, 'note', 'x', $2::uuid)`,
-      s.teacherId, s.ownerId,
+      s.teacherId, s.otherAdminId,
     )).rejects.toThrow(/own Teachers department/);
   });
 });
