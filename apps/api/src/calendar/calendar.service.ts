@@ -21,8 +21,7 @@ type Query = Record<string, string | string[] | undefined>;
 
 /**
  * Who sees what (PD-38 §B3). The super admin, the Teachers department and the
- * Operations Manager read the academy (a teacher supervisor under PD-35's strict
- * scope reads it as a supervisor of their own teachers' children). An Operations supervisor reads the
+ * Operations Manager read the academy. An Operations supervisor reads the
  * academy's CAPACITY too, but another supervisor's child is an anonymous block:
  * time and color, no name -- PD-8's boundary on children holds.
  */
@@ -77,23 +76,10 @@ export class CalendarService {
   async scopeOf(actor: Actor): Promise<CalendarScope | null> {
     if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
     if (actor.staffRole === StaffRole.SUPER_ADMIN) return { kind: 'academy', staffId: actor.actorId };
-    if (await this.managesDepartment(actor, 'operations')) return { kind: 'academy', staffId: actor.actorId };
-    if (await this.lessons.isManager(actor)) {
-      // PD-35: the Teachers department reads the academy -- with the strict
-      // switch on, a teacher supervisor names only the children of their own
-      // teachers (and, as anyone, the children they supervise); the rest are
-      // anonymous blocks, as for an Operations supervisor.
-      const teachers = await this.lessons.teacherScope.scopeOf(actor);
-      if (teachers.all) return { kind: 'academy', staffId: actor.actorId };
-      const own = new Set(await this.lessons.supervisedLearnerIds(actor, new Date()));
-      if (teachers.teacherIds.size > 0) {
-        const taught = await this.prisma.learner.findMany({
-          where: { organizationId: actor.organizationId, teacherId: { in: [...teachers.teacherIds] } },
-          select: { id: true },
-        });
-        for (const l of taught) own.add(l.id);
-      }
-      return { kind: 'supervisor', staffId: actor.actorId, ownLearners: own };
+    // PD-35 will narrow a teacher supervisor to their assigned teachers; until
+    // then the Teachers department reads the academy, as GET /lessons does.
+    if ((await this.lessons.isManager(actor)) || (await this.managesDepartment(actor, 'operations'))) {
+      return { kind: 'academy', staffId: actor.actorId };
     }
     if (await this.lessons.inDepartment(actor, 'operations')) {
       const own = await this.lessons.supervisedLearnerIds(actor, new Date());

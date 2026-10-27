@@ -15,10 +15,14 @@ function harness(opts: { strict: boolean; marker: string | null; rows: Row[]; fa
   const state = { marker: opts.marker };
   const resynced: string[] = [];
   const prisma = {
-    $queryRaw: async (strings: TemplateStringsArray) => {
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join('?');
       if (sql.includes('AS reseated')) return [{ strict: opts.strict, reseated: state.marker ?? 'false' }];
-      if (sql.includes('FROM chat.conversation c')) return opts.rows;
+      if (sql.includes('FROM chat.conversation c')) {
+        // The database narrows to `only` (the second parameter) when given.
+        const only = values[1] as string[] | null;
+        return only ? opts.rows.filter((r) => only.includes(r.id)) : opts.rows;
+      }
       return [];
     },
     $executeRaw: async (_strings: TemplateStringsArray, ...values: unknown[]) => {

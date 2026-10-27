@@ -3275,13 +3275,21 @@ Proven by `apps/api/test/integration/teacher-supervisor-pd035.spec.ts`.
   Their teachers count as unassigned.
 - Boot writes the switch only when the variable is set. Unset leaves the stored
   value, and a change is logged as a warning.
-- Re-seating follows the switch both ways, covers inactive teachers, and retries
-  on each seat sweep until it completes. Its marker is
+- Re-seating follows the switch both ways. On, it narrows an inactive teacher's
+  conversations too; off, it restores exactly what main keeps (an inactive
+  teacher's conversation is left alone). It runs at boot when the boot changed
+  the switch, and on each seat sweep. A failing conversation is retried alone
+  with backoff, and logged once per change of the failing set. Its marker is
   `chat.config 'teacher_supervisor.reseated_strict'`.
+- Assigning an inactive teacher under strict re-seats their conversations
+  instead of refusing, so their supervisor can always be reassigned.
 - Under strict scope, a teacher supervisor moves a child only to one of their
   own teachers and lists only those.
-- The PD-38 calendar names only their own teachers' children.
+- The PD-38 calendar is PD-38's own (#145, department head 2026-10-27): a teacher
+  supervisor sees their assigned teachers only.
 - No service defaults to department-wide when it is built without the scope.
+- Admin Web shows a teacher whose supervisor left as unassigned, naming the
+  former supervisor.
 
 Canonical: `supabase/migrations/20261026160006_chat_pd035_scope_hardening.sql`,
 `docs/admin/pd035-teacher-supervisors.md` (the runbook). Proven by

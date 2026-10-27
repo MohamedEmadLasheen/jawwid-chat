@@ -174,7 +174,8 @@ SUBSCRIPTION_LOCK_ENFORCED	payments	no	opt	opt	opt
 # (PD-35) in the API and the worker, which write it into chat.config at boot so
 # the database's scope decision reads the same value: 'true' = a teacher
 # supervisor works on the teachers assigned to them only (the Teachers Manager
-# and the super admin on every teacher). Any other value = off: the Teachers
+# and the super admin on every teacher); '1', 'yes' and 'on' (any case) count
+# as 'true' too. Any other value = off: the Teachers
 # department works department-wide, as before PD-35, while teachers are being
 # assigned. UNSET writes nothing: the stored value stands (off until written);
 # a boot that changes it logs a warning. Runbook: docs/admin/pd035-teacher-supervisors.md. Department head decision 2026-10-26: off everywhere until the

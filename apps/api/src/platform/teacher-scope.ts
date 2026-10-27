@@ -53,6 +53,9 @@ const label = (strict: boolean) => (strict ? 'strict (own teachers)' : 'departme
 export class TeacherScopeService implements OnModuleInit {
   private readonly log = new Logger(TeacherScopeService.name);
 
+  /** This boot turned the stored switch over: the re-seat runs at once (TeacherSupervisorService). */
+  changedAtBoot = false;
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -72,6 +75,7 @@ export class TeacherScopeService implements OnModuleInit {
               'PD-35: written at boot from TEACHER_SUPERVISOR_STRICT_SCOPE.')
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
     if (strict !== stored) {
+      this.changedAtBoot = true;
       this.log.warn(`teacher supervisor scope CHANGED at boot: ${label(stored)} -> ${label(strict)} (TEACHER_SUPERVISOR_STRICT_SCOPE)`);
     } else {
       this.log.log(`teacher supervisor scope: ${label(strict)}`);

@@ -201,10 +201,11 @@ export class SupervisionConversationService {
   /**
    * PD-35: bring an existing supervision conversation's staff in line with the
    * strict switch, whatever the teacher's state -- an inactive teacher's
-   * conversation follows the switch too. Creates nothing and never touches the
-   * teacher's own row. Returns the staff added and removed.
+   * conversation follows the switch too (the re-seat leaves those alone when
+   * it is off, as main does). Creates nothing and never touches the teacher's
+   * own row. Returns the staff added and removed.
    */
-  async resyncStaffInTx(tx: Tx, conversationId: string): Promise<{ added: string[]; removed: string[] }> {
+  async resyncStaffInTx(tx: Tx, conversationId: string, byStaffId: string | null = null): Promise<{ added: string[]; removed: string[] }> {
     const conv = await tx.conversation.findFirst({
       where: { id: conversationId, type: ConversationType.TEACHER_SUPERVISION, archivedAt: null },
       select: { id: true, organizationId: true, supervisedTeacherId: true },
@@ -215,7 +216,7 @@ export class SupervisionConversationService {
       where: { conversationId: conv.id, leftAt: null, actorKind: ActorKind.STAFF },
       select: { actorId: true },
     });
-    const staff = await this.syncStaff(tx, conv.id, conv.supervisedTeacherId, conv.organizationId, null, new Set(live.map((m) => m.actorId)));
+    const staff = await this.syncStaff(tx, conv.id, conv.supervisedTeacherId, conv.organizationId, byStaffId, new Set(live.map((m) => m.actorId)));
     if (staff.added.length > 0 || staff.removed.length > 0) {
       await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, ...staff });
     }

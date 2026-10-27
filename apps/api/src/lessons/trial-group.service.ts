@@ -152,10 +152,11 @@ export class TrialGroupService {
   /**
    * PD-35: bring an existing trial group's staff in line with the strict
    * switch, whatever the teacher's state -- an inactive teacher's group follows
-   * the switch too. Creates nothing and never touches the teacher's own row.
-   * Returns the staff added and removed.
+   * the switch too (the re-seat leaves those alone when it is off, as main
+   * does). Creates nothing and never touches the teacher's own row. Returns the
+   * staff added and removed.
    */
-  async resyncStaffInTx(tx: Tx, conversationId: string): Promise<{ added: string[]; removed: string[] }> {
+  async resyncStaffInTx(tx: Tx, conversationId: string, byStaffId: string | null = null): Promise<{ added: string[]; removed: string[] }> {
     const conv = await tx.conversation.findFirst({
       where: { id: conversationId, type: ConversationType.TRIAL_GROUP, archivedAt: null },
       select: { id: true, organizationId: true, trialTeacherId: true },
@@ -166,7 +167,7 @@ export class TrialGroupService {
       where: { conversationId: conv.id, leftAt: null, actorKind: ActorKind.STAFF },
       select: { actorId: true },
     });
-    const staff = await this.syncStaff(tx, conv.id, conv.trialTeacherId, conv.organizationId, null, new Set(live.map((m) => m.actorId)));
+    const staff = await this.syncStaff(tx, conv.id, conv.trialTeacherId, conv.organizationId, byStaffId, new Set(live.map((m) => m.actorId)));
     if (staff.added.length > 0 || staff.removed.length > 0) {
       await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, ...staff });
     }

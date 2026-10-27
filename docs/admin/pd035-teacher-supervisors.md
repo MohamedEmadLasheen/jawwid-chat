@@ -58,14 +58,32 @@ With the switch on, each teacher's supervision conversation and trial group seat
 the teacher's own supervisor and the Teachers Manager; off, the whole Teachers
 department. The worker brings every live one of them in line:
 
-- at start, and on every seat sweep, **whenever the switch differs from the one
-  the last complete re-seat followed** (`chat.config
-  'teacher_supervisor.reseated_strict'`; absent reads as off);
-- in both directions -- turning the switch off restores the department;
-- for inactive teachers' conversations too;
-- one conversation at a time: a failure is logged and counted, the marker is not
-  written, and the next seat sweep tries again. Staff who lose their place leave
-  the live room (RT-009).
+- **at boot**, in the process whose boot turned the switch over, before it
+  serves anything; then at worker start and on every seat sweep (60 s),
+  **whenever the switch differs from the one the last complete re-seat
+  followed** (`chat.config 'teacher_supervisor.reseated_strict'`; absent reads
+  as off, `null` while a re-seat is under way, so a restart part-way runs it
+  again);
+- **on:** every live one, an inactive teacher's too;
+- **off:** exactly what main keeps -- the whole department again in an active
+  teacher's conversations; an inactive teacher's conversation is left as it is
+  (main never syncs it);
+- one conversation at a time. A conversation that fails is retried **alone**,
+  1 min after, doubling to at most 1 h apart, and the failure is logged when
+  the set of failing conversations changes -- not every sweep. The marker is
+  written once none is left. Staff who lose their place leave the live room
+  (RT-009).
+- Assigning or unassigning a teacher with the switch on re-seats that teacher's
+  conversations in the same transaction -- an inactive teacher's too, so their
+  supervisor can always be reassigned and leave the department.
+
+**The window.** When the stored switch is changed without a boot (by hand in
+`chat.config`), department-wide rows can stay up to one seat sweep (60 s)
+after it is turned on. Access in that minute is still decided per request by
+`chat.staff_conversation_standing`, which reads the switch, and a push is
+re-checked at send (PD-34's delivery guard, #133); the rows only decide who is
+listed as a member. Turning it on through the variable has no window: the
+booting process re-seats first.
 
 Seats taken by choice (the `supervision` seat, a Sales trial-desk supervisor in a
 trial group) are never ended by a re-seat; they end through the seat service.
@@ -75,6 +93,6 @@ trial group) are never ended by a re-seat; they end through the seat service.
 Everything a teacher supervisor reads or changes about a teacher outside their
 scope answers as not found -- the Teacher File, lessons, the roster, statistics,
 trials, pauses, leave, discipline, certificates, parent feedback, change of
-teacher (the children listed, and the teachers a child may be moved **to**), and
-the PD-38 calendar (other teachers' children are anonymous blocks, as for an
-Operations supervisor).
+teacher (the children listed, and the teachers a child may be moved **to**). The
+PD-38 calendar's own model (#145) narrows it the same way: a teacher supervisor
+sees their assigned teachers only.
