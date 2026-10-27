@@ -559,14 +559,25 @@ class L10nAr extends L10n {
   String get appLockTitle => 'قفل التطبيق';
 
   @override
-  String get appLockToggle => 'القفل ببصمة الوجه أو الإصبع أو رمز المرور';
+  String appLockToggle(String platform) {
+    String _temp0 = intl.Intl.selectLogic(platform, {
+      'android': 'القفل ببصمة الإصبع أو فتح القفل بالوجه أو قفل الشاشة',
+      'other': 'القفل ببصمة الوجه أو الإصبع أو رمز المرور',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get appLockToggleSubtitle => 'اطلب فتح القفل عند العودة إلى التطبيق';
 
   @override
-  String get appLockUnavailable =>
-      'لاستخدام قفل التطبيق، فعّل بصمة الوجه أو بصمة الإصبع أو رمز مرور على هذا الجهاز.';
+  String appLockUnavailable(String platform) {
+    String _temp0 = intl.Intl.selectLogic(platform, {
+      'android': 'لاستخدام قفل التطبيق، فعّل بصمة الإصبع أو فتح القفل بالوجه أو قفل الشاشة على هذا الجهاز.',
+      'other': 'لاستخدام قفل التطبيق، فعّل بصمة الوجه أو بصمة الإصبع أو رمز مرور على هذا الجهاز.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get appLockTimeoutLabel => 'القفل تلقائيًا';
@@ -602,8 +613,13 @@ class L10nAr extends L10n {
   String get appLockOfferTitle => 'قفل التطبيق؟';
 
   @override
-  String get appLockOfferBody =>
-      'استخدم بصمة الوجه أو بصمة الإصبع أو رمز المرور لفتح التطبيق، لتبقى محادثاتك خاصة إذا أمسك أحد غيرك بهاتفك. يمكنك تغيير ذلك في أي وقت من الإعدادات.';
+  String appLockOfferBody(String platform) {
+    String _temp0 = intl.Intl.selectLogic(platform, {
+      'android': 'استخدم بصمة الإصبع أو فتح القفل بالوجه أو قفل الشاشة لفتح التطبيق، لتبقى محادثاتك خاصة إذا أمسك أحد غيرك بهاتفك. يمكنك تغيير ذلك في أي وقت من الإعدادات.',
+      'other': 'استخدم بصمة الوجه أو بصمة الإصبع أو رمز المرور لفتح التطبيق، لتبقى محادثاتك خاصة إذا أمسك أحد غيرك بهاتفك. يمكنك تغيير ذلك في أي وقت من الإعدادات.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get appLockOfferAccept => 'تفعيل';

@@ -19,7 +19,7 @@
          gesture previews the screen underneath before it commits; Flutter drives it
          through the PredictiveBackPageTransitionsBuilder in lib/design/theme.dart. -->
     <application
-        android:label="jawwid_chat"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true">

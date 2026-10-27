@@ -265,9 +265,25 @@
   "devicesSignOutFailed": "Could not sign that device out. Try again.",
   "devicesEmpty": "No active sessions",
   "appLockTitle": "App lock",
-  "appLockToggle": "Lock with Face ID, fingerprint or passcode",
+  "appLockToggle": "{platform, select, android{Lock with fingerprint, face unlock or screen lock} other{Lock with Face ID, fingerprint or passcode}}",
+  "@appLockToggle": {
+    "description": "Names the unlock methods the way the platform does: Android says fingerprint, face unlock and screen lock; iOS says Face ID and passcode. platform is android or other.",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
   "appLockToggleSubtitle": "Ask to unlock when you return to the app",
-  "appLockUnavailable": "Set up Face ID, a fingerprint or a passcode on this device to use app lock.",
+  "appLockUnavailable": "{platform, select, android{Set up a fingerprint, face unlock or a screen lock on this device to use app lock.} other{Set up Face ID, a fingerprint or a passcode on this device to use app lock.}}",
+  "@appLockUnavailable": {
+    "description": "Names the unlock methods the way the platform does: Android says fingerprint, face unlock and screen lock; iOS says Face ID and passcode. platform is android or other.",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
   "appLockTimeoutLabel": "Lock automatically",
   "appLockTimeoutImmediately": "Immediately",
   "appLockTimeoutOneMinute": "After 1 minute",
@@ -279,7 +295,15 @@
   "appLockUnlockAction": "Unlock",
   "appLockFailed": "Could not unlock. Try again.",
   "appLockOfferTitle": "Lock the app?",
-  "appLockOfferBody": "Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.",
+  "appLockOfferBody": "{platform, select, android{Use your fingerprint, face unlock or screen lock to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.} other{Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.}}",
+  "@appLockOfferBody": {
+    "description": "Names the unlock methods the way the platform does: Android says fingerprint, face unlock and screen lock; iOS says Face ID and passcode. platform is android or other.",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
   "appLockOfferAccept": "Turn on",
   "appLockOfferDecline": "Not now",
   "searchHint": "Search your chats",

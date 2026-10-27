@@ -74,7 +74,38 @@ void main() {
     final l10n = await pumpSettings(tester, available: false);
 
     expect(toggle(tester).onChanged, isNull);
-    expect(find.text(l10n.appLockUnavailable), findsOneWidget);
+    // Flutter tests draw as Android unless told otherwise.
+    expect(find.text(l10n.appLockUnavailable('android')), findsOneWidget);
+  });
+
+  group('the unlock methods are named the way the platform names them', () {
+    testWidgets('Android: fingerprint, face unlock, screen lock -- never Face ID', (tester) async {
+      final l10n = await pumpSettings(tester);
+
+      expect(find.text(l10n.appLockToggle('android')), findsOneWidget);
+      expect(find.textContaining('Face ID'), findsNothing);
+      expect(find.textContaining('passcode'), findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+    testWidgets('iOS: Face ID, fingerprint, passcode', (tester) async {
+      final l10n = await pumpSettings(tester);
+
+      expect(find.text(l10n.appLockToggle('other')), findsOneWidget);
+      expect(find.textContaining('Face ID'), findsOneWidget);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    test('both languages carry both wordings', () async {
+      for (final locale in const [Locale('en'), Locale('ar')]) {
+        final l10n = await L10n.delegate.load(locale);
+        for (final message in [l10n.appLockToggle, l10n.appLockUnavailable, l10n.appLockOfferBody]) {
+          expect(message('android'), isNot(message('other')), reason: '$locale');
+        }
+      }
+      final en = await L10n.delegate.load(const Locale('en'));
+      expect(en.appLockOfferBody('android'), isNot(contains('Face ID')));
+      final ar = await L10n.delegate.load(const Locale('ar'));
+      expect(ar.appLockToggle('android'), contains('قفل الشاشة'));
+    });
   });
 
   testWidgets('turning it on prompts, then offers the timeouts (1 minute by default)',
