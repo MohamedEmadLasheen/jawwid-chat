@@ -6,9 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/data/repositories.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../application/away_teachers.dart';
 
-export '../application/away_teachers.dart' show awayTeachersProvider;
+export '../application/away_teachers.dart' show awayClockProvider, awayTeachersProvider;
 
 /// "Ustadh Omar is on leave until 3 Nov. Messages still reach them." -- above the
 /// thread, for as long as the server says a teacher here is away. Messaging is not
@@ -57,8 +58,10 @@ class _TeacherAwayBannerState extends ConsumerState<TeacherAwayBanner> with Widg
     ref.invalidate(awayTeachersProvider(widget.conversationId));
   }
 
-  /// Arms one timer for the local midnight after the earliest shown `until`: the
-  /// moment the notice may stop being true. Nothing is armed while none is shown.
+  /// Arms one timer for the midnight after the earliest shown `until`, in the
+  /// ACCOUNT's zone ([AppClock]): the moment the notice may stop being true. The wait
+  /// is instant to instant, so a 23- or 25-hour day (a clock change) is counted as it
+  /// is. Nothing is armed while none is shown.
   void _armFor(List<GroupMember> away) {
     if (away.isEmpty) {
       _leaveEnds?.cancel();
@@ -67,11 +70,13 @@ class _TeacherAwayBannerState extends ConsumerState<TeacherAwayBanner> with Widg
       return;
     }
     final last = away.map((m) => m.away!.until).reduce((a, b) => a.isBefore(b) ? a : b);
-    final over = DateTime(last.year, last.month, last.day + 1);
+    // `until` is a calendar day; the next one, normalised in UTC (no clock change there).
+    final next = DateTime.utc(last.year, last.month, last.day + 1);
+    final over = AppClock.wallClock(next.year, next.month, next.day);
     if (_armedFor == over && _leaveEnds != null) return;
     _leaveEnds?.cancel();
     _armedFor = over;
-    final wait = over.difference(DateTime.now());
+    final wait = over.difference(ref.read(awayClockProvider)());
     _leaveEnds = Timer(wait.isNegative ? Duration.zero : wait, () {
       _leaveEnds = null;
       _armedFor = null;

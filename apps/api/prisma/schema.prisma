@@ -544,8 +544,78 @@ model Notification {
   failureCode String?   @map("failure_code")
   attempts    Int       @default(0)
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
+  /// PD-34: the Notification Center entry this delivery belongs to (null: not adopted yet).
+  itemId      String?   @map("item_id") @db.Uuid
+  item        NotificationItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
 
   @@map("notification")
+  @@schema("chat")
+}
+
+/// PD-34: one Notification Center entry per recipient (20261026190000).
+model NotificationItem {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  dedupeKey      String    @unique @map("dedupe_key")
+  recipientId    String    @map("recipient_id") @db.Uuid
+  ruleKey        String?   @map("rule_key")
+  ruleVersion    Int       @default(1) @map("rule_version")
+  eventType      String    @map("event_type")
+  category       String
+  severity       String    @default("normal")
+  basis          String?
+  subjectType    String?   @map("subject_type")
+  subjectId      String?   @map("subject_id")
+  refs           Json      @default("{}")
+  action         Json?
+  groupKey       String?   @map("group_key")
+  requiresAction Boolean   @default(false) @map("requires_action")
+  ownerId        String?   @map("owner_id") @db.Uuid
+  dueAt          DateTime? @map("due_at") @db.Timestamptz
+  taskStatus     String?   @map("task_status")
+  templateKey    String    @map("template_key")
+  locale         String    @default("ar")
+  variables      Json      @default("{}")
+  itemCount      Int       @default(1) @map("item_count")
+  pushState      String    @default("none") @map("push_state")
+  visibleAt      DateTime  @map("visible_at") @db.Timestamptz
+  announcedAt    DateTime? @map("announced_at") @db.Timestamptz
+  readAt         DateTime? @map("read_at") @db.Timestamptz
+  actedAt        DateTime? @map("acted_at") @db.Timestamptz
+  cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelReason   String?   @map("cancel_reason")
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  deliveries Notification[]
+
+  @@map("notification_item")
+  @@schema("chat")
+}
+
+/// PD-34: a person's on/off per category and channel.
+model NotificationPreference {
+  actorId        String   @map("actor_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  category       String
+  channel        String   @default("push")
+  enabled        Boolean
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@id([actorId, category, channel])
+  @@map("notification_preference")
+  @@schema("chat")
+}
+
+/// PD-34: per-person notification settings (names on the lock screen).
+model NotificationSettings {
+  actorId        String   @id @map("actor_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  showPreviews   Boolean? @map("show_previews")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("notification_settings")
   @@schema("chat")
 }
 

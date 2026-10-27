@@ -55,6 +55,8 @@ export class PaymentReminders {
             currency: i.currency,
             due_date: day(i.dueDate),
           },
+          subjectType: 'instalment',
+          refs: { instalmentId: i.id, familyId, learnerId: i.learnerId },
           skipPast: true,
         });
       }

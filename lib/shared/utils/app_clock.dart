@@ -51,6 +51,18 @@ abstract final class AppClock {
     return manual == null ? instant.toLocal() : tz.TZDateTime.from(instant, manual);
   }
 
+  /// [instant] as a wall-clock time in [zoneName] -- for a view whose days the server
+  /// cut in a zone it names (PD-38's calendar), so the two can never disagree about
+  /// which day a lesson is on. An unknown name falls back to [view].
+  static DateTime viewIn(DateTime instant, String zoneName) {
+    ensureInitialized();
+    try {
+      return tz.TZDateTime.from(instant, tz.getLocation(zoneName));
+    } on Object {
+      return view(instant);
+    }
+  }
+
   /// "Now" in the account's zone -- for "today" / "yesterday" and day grouping.
   static DateTime now() => view(DateTime.now());
 
