@@ -34,6 +34,14 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'realtime.typing_ttl_seconds': 8,
   /** initial hypothesis - presence heartbeat TTL in Redis */
   'realtime.presence_ttl_seconds': 45,
+  /**
+   * PD-37: announce read/delivery ticks (receipts.advanced -> message.status).
+   * OFF by default and turned ON only once the WORKER that knows the event is
+   * deployed: a worker from before PD-37 has no case for it, and its default
+   * branch would broadcast the reader's cursor to the whole room. Off, cursors
+   * and receipts still move; only the live tick push waits. See the runbook.
+   */
+  'realtime.receipts_announce': false as boolean,
   /** initial hypothesis - max messages returned per page */
   'communication.page_size_max': 100,
   'communication.page_size_default': 50,

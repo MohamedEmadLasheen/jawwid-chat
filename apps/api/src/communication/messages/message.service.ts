@@ -681,7 +681,17 @@ export class MessageService {
     }
     if (requested < 0n) throw new CommError(CommErrorCode.VALIDATION, 'upToSeq must not be negative', 400);
     const target = requested < conv.lastSeq ? requested : conv.lastSeq;
-    const announces = membership !== null && isCountableReader(membership);
+    // Who the authors are told about, and whether at all:
+    //  - a countable (seated) reader only;
+    //  - never in a direct teacher<->parent conversation (PD-7: no signals);
+    //  - only once the switch says the worker knows the event (see
+    //    realtime.receipts_announce) -- an older worker would fan it out to
+    //    the whole room through its default branch.
+    const announces =
+      membership !== null &&
+      isCountableReader(membership) &&
+      (await this.config.get('realtime.receipts_announce')) === true &&
+      !(await this.conversations.isDirectTeacherParent(conv.id));
 
     await this.prisma.$transaction(async (tx) => {
       // The row is the lock: two devices of one person serialize here.

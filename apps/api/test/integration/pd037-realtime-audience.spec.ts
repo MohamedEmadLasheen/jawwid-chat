@@ -185,6 +185,8 @@ beforeAll(async () => {
       ack?.(await gateway.typingStart(s as never, body as never)));
     s.on('typing.stop', async (body: unknown, ack?: (r: unknown) => void) =>
       ack?.(await gateway.typingStop(s as never, body as never)));
+    s.on('message.delivered', async (body: unknown, ack?: (r: unknown) => void) =>
+      ack?.(await gateway.delivered(s as never, body as never)));
     s.on('disconnect', () => void gateway.handleDisconnect(s as never));
     void ready.then(() => s.connected && s.emit('test.ready'));
   });
@@ -253,6 +255,45 @@ describe('PD-37: typing is between seated members only', () => {
   });
 });
 
+describe('PD-37: a stop always gets through', () => {
+  it('a typist silenced mid-word can still clear "typing…" for everyone else', async () => {
+    const [parent, teacher] = await Promise.all([as('parent'), as('teacher')]);
+    expect((await parent.emitAck('typing.start', { conversationId: groupId })).ok).toBe(true);
+    await teacher.waitFor(CommEvent.TYPING_STARTED, fromParent);
+    await prisma.$executeRawUnsafe(
+      `update chat.conversation_member set is_silent = true
+        where conversation_id = '${groupId}'::uuid and actor_id = '${ids.parent}'::uuid and left_at is null`,
+    );
+    expect((await parent.emitAck('typing.stop', { conversationId: groupId })).ok).toBe(true);
+    await teacher.waitFor(CommEvent.TYPING_STOPPED, fromParent);
+  });
+});
+
+describe('PD-37: the socket cursor spends the same budget as HTTP', () => {
+  it('over budget, message.delivered { conversationId, upToSeq } is refused', async () => {
+    const parent = await as('parent');
+    const internals = gateway as unknown as { rateLimits?: unknown };
+    const reserved: string[] = [];
+    internals.rateLimits = {
+      reserve: async (keys: string[]) => {
+        reserved.push(...keys);
+        return { exceeded: 1, retryAfterSeconds: 30 };
+      },
+      drop: async () => undefined,
+    };
+    try {
+      const r = await parent.emitAck('message.delivered', { conversationId: groupId, upToSeq: '1' });
+      expect(r.ok).toBe(false);
+      expect(reserved.length).toBe(1);
+      expect(reserved[0]).toMatch(/receipt_cursor_actor/);
+    } finally {
+      internals.rateLimits = undefined;
+    }
+    // Within budget (no store: fails open, as the HTTP guard does) it goes through.
+    expect((await parent.emitAck('message.delivered', { conversationId: groupId, upToSeq: '1' })).ok).toBe(true);
+  });
+});
+
 describe('PD-37: message.status reaches its author only, and only while they may read', () => {
   const status = (marker: string) => ({
     conversationId: groupId,
@@ -270,6 +311,22 @@ describe('PD-37: message.status reaches its author only, and only while they may
     await parent.waitFor(CommEvent.MESSAGE_STATUS, carries(marker));
     await sleep(GRACE_MS);
     for (const c of [parent2, teacher, staff, manager]) expect(c.got(CommEvent.MESSAGE_STATUS)).toBe(false);
+  });
+
+  it('one delivery for many authors: each receives only their OWN payload', async () => {
+    const [parent, teacher, parent2] = await Promise.all([as('parent'), as('teacher'), as('parent2')]);
+    const forParent = randomUUID();
+    const forTeacher = randomUUID();
+    await gateway.toThreadAudience(groupId, CommEvent.MESSAGE_STATUS, { conversationId: groupId, items: [] }, {
+      onlyActors: [ids.parent, ids.teacher],
+      perActor: { [ids.parent]: status(forParent), [ids.teacher]: status(forTeacher) },
+    });
+    await parent.waitFor(CommEvent.MESSAGE_STATUS, carries(forParent));
+    await teacher.waitFor(CommEvent.MESSAGE_STATUS, carries(forTeacher));
+    await sleep(GRACE_MS);
+    expect(parent.got(CommEvent.MESSAGE_STATUS, carries(forTeacher))).toBe(false);
+    expect(teacher.got(CommEvent.MESSAGE_STATUS, carries(forParent))).toBe(false);
+    expect(parent2.got(CommEvent.MESSAGE_STATUS)).toBe(false);
   });
 
   it('RT-009 still applies: a removed author receives nothing, and is not mistaken for in-audience', async () => {

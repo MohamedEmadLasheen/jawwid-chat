@@ -40,6 +40,16 @@ insert into chat.config (key, value, scope, description) values
  'incoming message per open chat; four a second sustained is far above that.')
 on conflict (key) do nothing;
 
+-- The live tick push, OFF until the outbox WORKER that handles
+-- receipts.advanced is deployed (a worker from before PD-37 would broadcast
+-- the event to the whole room through its default branch). Turn on with:
+--   update chat.config set value = 'true'::jsonb where key = 'realtime.receipts_announce';
+-- after every worker runs PD-37. Off, cursors and receipts still move.
+insert into chat.config (key, value, scope, description) values
+('realtime.receipts_announce', 'false'::jsonb, 'realtime',
+ 'PD-37: send authors their live ticks (message.status). Turn on ONLY after the outbox worker running PD-37 is deployed everywhere; an older worker would broadcast the event to the whole room.')
+on conflict (key) do nothing;
+
 -- The cursor update joins a person's receipts to the conversation's messages
 -- by seq; message_conversation_seq_desc serves the message side and
 -- message_receipt_actor_idx (actor_id, state) the receipt side.

@@ -108,7 +108,9 @@ export const loginRateLimitStoreProvider = {
     // every request it makes is recorded.
     { provide: APP_INTERCEPTOR, useClass: SupportSessionInterceptor },
   ],
-  exports: [AuthService, LoginRateLimiter, PasswordResetService],
+  // RATE_LIMIT_STORE (PD-37): the realtime gateway spends the same per-actor
+  // action budget for a socket cursor move as ActionThrottleGuard does for HTTP.
+  exports: [AuthService, LoginRateLimiter, PasswordResetService, RATE_LIMIT_STORE],
 })
 export class AuthModule implements NestModule {
   /**
