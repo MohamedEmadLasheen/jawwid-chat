@@ -157,13 +157,13 @@ describe('who may be in a room, and speak there', () => {
     expect(await access(sa, room)).toBe('super_admin');
   });
 
-  it('a member writes; another department reads it as not found', async () => {
+  it('a member writes; another department is out of scope (the PD-8 refusal)', async () => {
     const room = (await roomOf(s.departmentId)) as string;
     expect(await members(room)).toEqual([s.managerId, s.otherAdminId, s.ownerId].sort());
     const sent = await g.messages.send({ conversationId: room, senderId: s.ownerId, body: 'handover at 5', clientMessageId: randomUUID() });
     expect(sent.body).toBe('handover at 5');
     expect(await code(g.messages.send({ conversationId: room, senderId: tmgr, body: 'x', clientMessageId: randomUUID() })))
-      .toBe(CommErrorCode.CONVERSATION_NOT_FOUND);
+      .toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 });
 
@@ -178,7 +178,7 @@ describe('B5: the case card', () => {
     const card = await g.prisma.messageCard.findUnique({ where: { messageId: message?.id ?? '' } });
     expect(card?.kind).toBe('case_escalated');
     expect(card?.payload).toMatchObject({ caseId: c.id, ownerId: tmgr, openedBy: tsupA });
-    const text = JSON.stringify({ message, card });
+    const text = JSON.stringify({ message, card }, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
     for (const secret of ['late reports again', 'three this week', s.teacherId]) expect(text).not.toContain(secret);
   });
 });
