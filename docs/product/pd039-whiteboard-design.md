@@ -2,7 +2,7 @@
 
 Status: **PROPOSED, awaiting approval** (department head, then the product owner).
 No feature code exists yet. Claimed in `pd-registry/PD-39.md`; migration slot
-`20261027110000` (`chat_pd039_whiteboards`) is claimed and will be written after approval.
+`20261027120000` (`chat_pd039_whiteboards`) is claimed and will be written after approval.
 
 The owner's request (2026-10-27): "we need to add in teacher account this one: Spahboard
 Interactive Whiteboard". The owner sent a feature analysis of Spahboard in eleven groups
@@ -351,7 +351,7 @@ off screen? `CallPresenter` pushes `/call` app-wide, and there is no `PopScope` 
 
 ## 6. Data model and authorisation
 
-### 6.1 Tables (migration `20261027110000_chat_pd039_whiteboards`)
+### 6.1 Tables (migration `20261027120000_chat_pd039_whiteboards`)
 
 ```
 chat.whiteboard
@@ -486,7 +486,7 @@ describes a general K-12 board.
 Each step is one PR, reviewed by the head, behind no feature flag except the tab's
 visibility.
 
-1. **API: boards, pages, assets, quotas, authz** (slot `20261027110000`).
+1. **API: boards, pages, assets, quotas, authz** (slot `20261027120000`).
    - Tests for §6.2 (every row of the table), §6.3 (key-is-not-a-capability, foreign asset
      in a page, the grant/confirm swap) and cross-organisation 404s.
    - Unit tests run with `--maxWorkers=2`. Integration runs in CI (G-19), or with a spec
