@@ -11,7 +11,7 @@ import '../../../shared/utils/text_direction.dart';
 /// A choice, not a command: the sheet decides *what was asked for* and the chat
 /// screen decides what to do about it. Keeping the two apart is what lets the
 /// sheet be tested without a controller, a repository or a network.
-enum MessageAction { reply, forward, select, star, pin, copy, open, deleteForMe, deleteForEveryone }
+enum MessageAction { reply, forward, select, star, pin, copy, open, info, deleteForMe, deleteForEveryone }
 
 /// The reactions a parent can leave.
 ///
@@ -64,6 +64,7 @@ Future<MessageActionResult?> showMessageActions(
   BuildContext context, {
   required Message message,
   bool withMarks = false,
+  bool withInfo = false,
 }) {
   if (!canActOn(message)) return Future.value(null);
 
@@ -73,7 +74,7 @@ Future<MessageActionResult?> showMessageActions(
     // from and its last row disappears behind the tab bar.
     useRootNavigator: true,
     showDragHandle: true,
-    builder: (sheetContext) => _MessageActionsSheet(message: message, withMarks: withMarks),
+    builder: (sheetContext) => _MessageActionsSheet(message: message, withMarks: withMarks, withInfo: withInfo),
   );
 }
 
@@ -92,7 +93,7 @@ bool canActOn(Message message) {
 /// [withMarks] offers Star and Pin -- only when this build can reach those
 /// routes. Pin is offered for a message that reached everyone; the server
 /// decides whether this viewer may write (and so pin) here.
-List<MessageAction> actionsFor(Message message, {bool withMarks = false}) {
+List<MessageAction> actionsFor(Message message, {bool withMarks = false, bool withInfo = false}) {
   final hasText = message.body.trim().isNotEmpty;
   final openable = message.attachments.any(
     (a) => a.kind == MessageKind.image || a.kind == MessageKind.file,
@@ -108,6 +109,10 @@ List<MessageAction> actionsFor(Message message, {bool withMarks = false}) {
     if (withMarks && message.approvalState == ApprovalState.notRequired) MessageAction.pin,
     if (hasText) MessageAction.copy,
     if (openable) MessageAction.open,
+    // PD-37: who read it -- one's OWN published message only; the server
+    // answers the author and refuses anyone else.
+    if (withInfo && message.isMine && message.approvalState == ApprovalState.notRequired)
+      MessageAction.info,
     MessageAction.deleteForMe,
     // Only the author's own message, and only one that actually reached
     // everyone: a message still awaiting approval has been seen by nobody, so
@@ -118,15 +123,16 @@ List<MessageAction> actionsFor(Message message, {bool withMarks = false}) {
 }
 
 class _MessageActionsSheet extends StatelessWidget {
-  const _MessageActionsSheet({required this.message, required this.withMarks});
+  const _MessageActionsSheet({required this.message, required this.withMarks, this.withInfo = false});
 
   final Message message;
   final bool withMarks;
+  final bool withInfo;
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final actions = actionsFor(message, withMarks: withMarks);
+    final actions = actionsFor(message, withMarks: withMarks, withInfo: withInfo);
     final mine = message.reactions.firstWhereOrNull((r) => r.mine)?.emoji;
 
     return SafeArea(
@@ -203,6 +209,7 @@ class _MessageActionsSheet extends StatelessWidget {
         MessageAction.pin => message.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
         MessageAction.copy => Icons.copy_outlined,
         MessageAction.open => Icons.open_in_new,
+        MessageAction.info => Icons.info_outline,
         MessageAction.deleteForMe => Icons.delete_outline,
         MessageAction.deleteForEveryone => Icons.delete_forever_outlined,
       };
@@ -215,6 +222,7 @@ class _MessageActionsSheet extends StatelessWidget {
         MessageAction.pin => message.isPinned ? l10n.unpinAction : l10n.pinAction,
         MessageAction.copy => l10n.copyAction,
         MessageAction.open => l10n.openAction,
+        MessageAction.info => l10n.messageInfoAction,
         MessageAction.deleteForMe => l10n.deleteForMeAction,
         MessageAction.deleteForEveryone => l10n.deleteForEveryoneAction,
       };

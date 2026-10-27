@@ -529,10 +529,10 @@ abstract class L10n {
   /// **'{name} is typing…'**
   String typingSingle(String name);
 
-  /// No description provided for @typingMany.
+  /// PD-37: three or more people typing.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one{{count} person is typing…} other{{count} people are typing…}}'**
+  /// **'{count} people are typing…'**
   String typingMany(int count);
 
   /// No description provided for @loadingOlder.
@@ -7104,6 +7104,54 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'You were mentioned'**
   String get mentionedMark;
+
+  /// PD-37: one person typing in the chat header.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is typing…'**
+  String typingOne(String name);
+
+  /// PD-37: two people typing.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} and {second} are typing…'**
+  String typingTwo(String first, String second);
+
+  /// PD-37: the long-press entry on one's own message.
+  ///
+  /// In en, this message translates to:
+  /// **'Message info'**
+  String get messageInfoAction;
+
+  /// PD-37: Message info section.
+  ///
+  /// In en, this message translates to:
+  /// **'Read by'**
+  String get messageInfoReadBy;
+
+  /// PD-37: Message info section.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered to'**
+  String get messageInfoDeliveredTo;
+
+  /// PD-37: Message info section.
+  ///
+  /// In en, this message translates to:
+  /// **'Not delivered yet'**
+  String get messageInfoPending;
+
+  /// PD-37: an empty Message info section.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody'**
+  String get messageInfoNobody;
+
+  /// PD-37: Message info could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load message info'**
+  String get messageInfoFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -10,6 +10,7 @@ import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../core/media/media_picker.dart';
+import '../../../core/realtime/chat_signal.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../design/widgets/state_views.dart';
@@ -41,6 +42,7 @@ import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import '../data/message_search_repository.dart';
+import '../domain/typing_sender.dart';
 import 'attachment_preview.dart';
 import 'chat_theme_sheet.dart';
 import 'forward_sheet.dart';
@@ -48,6 +50,7 @@ import 'media_viewer.dart';
 import 'message_actions.dart';
 import 'message_bubble.dart';
 import 'message_composer.dart';
+import 'message_info_sheet.dart';
 import 'payment_lock_banner.dart';
 import 'pinned_banner.dart';
 import 'teacher_away_banner.dart';
@@ -130,7 +133,7 @@ class ChatScreen extends ConsumerStatefulWidget {
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends ConsumerState<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObserver {
   final _scrollController = ScrollController();
 
   /// One key per message, so jumping to a reply's original can actually find
@@ -158,6 +161,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
   Timer? _highlightTimer;
+
+  // PD-37: typing -- what this person says, and who else is typing here. The
+  // server sends typing only between seated members; an indicator not renewed
+  // within [_typingShowFor] lapses, so a lost "stopped" cannot leave it up.
+  TypingSender? _typingSender;
+  StreamSubscription<TypingSignal>? _typingSub;
+  final Map<String, ({String name, DateTime until})> _typers = {};
+  Timer? _typersLapse;
+  static const _typingShowFor = Duration(seconds: 8);
 
   /// True when the user has scrolled away from the newest message. While true, arrivals must
   /// not auto-scroll (cross-platform §3).
@@ -217,7 +229,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
+    final realtime = ref.read(chatRealtimeClientProvider);
+    if (realtime != null) {
+      if (!widget.isReadOnly) {
+        _typingSender = TypingSender(
+          send: (typing) => realtime.send(
+            typing ? 'typing.start' : 'typing.stop',
+            {'conversationId': widget.conversationId},
+          ),
+        );
+      }
+      _typingSub = realtime.typingSignals.listen(_onTyping);
+    }
     // PD-36: opening the chat is seeing its mention; the "@" on the list row goes.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -244,6 +269,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// badge there would hide the very message they came back for.
   void _reportRead(MessagesState state) {
     if (_isAwayFromBottom) return;
+    // PD-37: and only while the app is in front. A chat left open on a phone in
+    // a pocket has not "read" what arrives -- it would turn the author's ticks
+    // blue. Coming back to the app re-reports (didChangeAppLifecycleState).
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life != null && life != AppLifecycleState.resumed) return;
 
     final newest = state.log.highestSequence;
     if (newest == null) return;
@@ -259,8 +289,57 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  void _onTyping(TypingSignal signal) {
+    if (!mounted || signal.conversationId != widget.conversationId) return;
+    // Another device of this same account, typing: not "someone else".
+    if (signal.actorId == ref.read(viewerActorIdProvider)?.call()) return;
+    setState(() {
+      if (signal.typing) {
+        _typers[signal.actorId] = (name: signal.displayName, until: AppClock.now().add(_typingShowFor));
+      } else {
+        _typers.remove(signal.actorId);
+      }
+    });
+    _scheduleTypersLapse();
+  }
+
+  void _scheduleTypersLapse() {
+    _typersLapse?.cancel();
+    if (_typers.isEmpty) return;
+    final soonest = _typers.values.map((t) => t.until).reduce((a, b) => a.isBefore(b) ? a : b);
+    final wait = soonest.difference(AppClock.now());
+    _typersLapse = Timer(wait.isNegative ? Duration.zero : wait, () {
+      if (!mounted) return;
+      final now = AppClock.now();
+      setState(() => _typers.removeWhere((_, t) => !t.until.isAfter(now)));
+      _scheduleTypersLapse();
+    });
+  }
+
+  /// "Omar is typing…", "Omar and Noura are typing…", "3 people are typing…".
+  String _typingLine(L10n l10n) {
+    final names = _typers.values.map((t) => t.name).toList();
+    return switch (names.length) {
+      1 => l10n.typingOne(names[0]),
+      2 => l10n.typingTwo(names[0], names[1]),
+      _ => l10n.typingMany(names.length),
+    };
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back in front: rebuild, so the newest message on screen is reported read.
+    if (state == AppLifecycleState.resumed && mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _typingSender?.dispose();
+    // Not awaited: on a broadcast stream a cancel can wait for the stream to close.
+    final typingSub = _typingSub;
+    if (typingSub != null) unawaited(typingSub.cancel());
+    _typersLapse?.cancel();
     _highlightTimer?.cancel();
     _searchDebounce?.cancel();
     _searchText.dispose();
@@ -446,7 +525,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref.read(messagesControllerProvider(widget.conversationId).notifier);
 
     final marks = ref.read(messageMarksRepositoryProvider);
-    final result = await showMessageActions(context, message: message, withMarks: marks.isAvailable);
+    final info = ref.read(messageInfoRepositoryProvider);
+    final result = await showMessageActions(
+      context,
+      message: message,
+      withMarks: marks.isAvailable,
+      withInfo: info.isAvailable,
+    );
     if (result == null || !mounted) return;
 
     final reaction = result.reaction;
@@ -471,11 +556,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         await _copy(message);
       case MessageAction.open:
         _openFirstAttachment(message);
+      case MessageAction.info:
+        await _showInfo(message);
       case MessageAction.deleteForMe:
         await _guard(() => controller.deleteForMe(message));
       case MessageAction.deleteForEveryone:
         await _guard(() => controller.deleteForEveryone(message));
     }
+  }
+
+  /// PD-37: who read the viewer's own message, who has it, who does not yet.
+  Future<void> _showInfo(Message message) async {
+    final id = message.id;
+    if (id == null) return;
+    final repository = ref.read(messageInfoRepositoryProvider);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => MessageInfoSheet(load: repository.info(widget.conversationId, id)),
+    );
   }
 
   /// Pick destinations and forward. The server checks the source is readable
@@ -1135,6 +1235,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: _body(state, controller, l10n),
             ),
           ),
+          // PD-37: who else is typing here, just above where this person types.
+          if (_typers.isNotEmpty) TypingRow(text: _typingLine(L10n.of(context))),
           // PD-30: locked for payment -- the banner stands where the composer was.
           if (paymentLock != null && paymentLock.readOnly)
             PaymentLockBanner(lock: paymentLock, onOpenSubscriptions: widget.onOpenSubscriptions)
@@ -1157,6 +1259,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
             replyingTo: _replyingTo,
             onCancelReply: () => setState(() => _replyingTo = null),
+            // PD-37: "typing…" -- a read-only chat says nothing.
+            onDraftChanged: _typingSender?.typed,
             conversationId: widget.conversationId,
             voice: voice,
             onStartRecording: voiceController.start,

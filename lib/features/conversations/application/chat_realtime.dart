@@ -97,6 +97,12 @@ class ChatRealtimeCoordinator {
     final id = signal.conversationId;
     switch (signal.kind) {
       case ChatSignalKind.messageCreated:
+        // PD-37: this device has the message -- the author's ticks go grey
+        // ✓✓ once every seated member's device does. A cursor, never ids; the
+        // server moves only this account's own receipts, forward only.
+        if (id != null && signal.seq != null) {
+          _client.send('message.delivered', {'conversationId': id, 'upToSeq': '${signal.seq}'});
+        }
         final thread = _openThread(id);
         if (thread != null) unawaited(thread.onMessageCreated(signal.seq));
         _scheduleListRefresh();

@@ -11,6 +11,7 @@ import '../core/media/attachment_opener.dart';
 import '../core/media/media_picker.dart';
 import '../core/media/story_video_player.dart';
 import '../core/network/api_client.dart' show TokenProvider;
+import '../core/realtime/call_realtime_client.dart';
 import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../core/time/time_zone_controller.dart' show appZoneRevisionProvider;
@@ -18,6 +19,7 @@ import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/messages/data/chat_theme_repository.dart';
 import '../features/messages/data/mention_repository.dart';
+import '../features/messages/data/message_info_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
@@ -91,6 +93,22 @@ final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
 final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
   return const NoSupervisionRepository();
 });
+
+/// PD-37: Message info. A harmless default: a build without the route offers none.
+final messageInfoRepositoryProvider = Provider<MessageInfoRepository>((ref) {
+  return const NoMessageInfoRepository();
+});
+
+/// PD-37: the session's realtime client as a chat SCREEN uses it -- typing in
+/// and out. Null by default, so a screen built in isolation (a widget test, a
+/// fixture build) has no live typing and needs no session; the signed-in app
+/// points it at the one client per session (bootstrap).
+final chatRealtimeClientProvider = Provider<CallRealtimeClient?>((ref) => null);
+
+/// PD-37: the signed-in account's own actor id, where a screen must tell "me"
+/// from others in a realtime frame (another device of mine typing). Null in a
+/// build with no session -- then nobody is filtered out as "me".
+final viewerActorIdProvider = Provider<String Function()?>((ref) => null);
 
 /// Star and pin. A harmless default: a build without those routes offers neither.
 final messageMarksRepositoryProvider = Provider<MessageMarksRepository>((ref) {

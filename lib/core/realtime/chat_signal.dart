@@ -65,6 +65,13 @@ abstract final class ChatEventNames {
   static const conversationAdded = 'conversation.added';
   static const accessRevoked = 'conversation.access_revoked';
 
+  /// PD-37: the ticks on this account's OWN messages changed (to the author only).
+  static const messageStatus = 'message.status';
+
+  /// PD-37: someone seated in the conversation started or stopped typing.
+  static const typingStarted = 'typing.started';
+  static const typingStopped = 'typing.stopped';
+
   /// PD-34: this account read the conversation on another device. Sent to the account's
   /// own room only; refetching the conversation clears its unread badge here too.
   static const conversationRead = 'conversation.read';
@@ -79,7 +86,8 @@ ChatSignal? decodeChatSignal(String event, Object? payload) {
     ChatEventNames.messageUpdated ||
     ChatEventNames.reactionAdded ||
     ChatEventNames.reactionRemoved ||
-    ChatEventNames.approvalDecided =>
+    ChatEventNames.approvalDecided ||
+    ChatEventNames.messageStatus =>
       ChatSignalKind.messageChanged,
     ChatEventNames.conversationUpdated ||
     ChatEventNames.conversationRead =>
@@ -103,4 +111,44 @@ ChatSignal? decodeChatSignal(String event, Object? payload) {
           : null;
 
   return ChatSignal(kind, conversationId: conversationId, seq: seq);
+}
+
+/// PD-37: "someone is typing" -- ephemeral, never stored. The server sends it
+/// only to seated members, and only from a seated member; this client draws it
+/// and lets it lapse.
+class TypingSignal {
+  const TypingSignal({
+    required this.conversationId,
+    required this.actorId,
+    required this.displayName,
+    required this.typing,
+  });
+
+  final String conversationId;
+  final String actorId;
+  final String displayName;
+
+  /// True for `typing.started`, false for `typing.stopped`.
+  final bool typing;
+}
+
+/// Decode a typing frame; null for anything else or anything incomplete.
+TypingSignal? decodeTypingSignal(String event, Object? payload) {
+  final typing = switch (event) {
+    ChatEventNames.typingStarted => true,
+    ChatEventNames.typingStopped => false,
+    _ => null,
+  };
+  if (typing == null || payload is! Map) return null;
+  final conversationId = payload['conversationId'];
+  final actorId = payload['actorId'];
+  if (conversationId is! String || conversationId.isEmpty) return null;
+  if (actorId is! String || actorId.isEmpty) return null;
+  final name = payload['displayName'];
+  return TypingSignal(
+    conversationId: conversationId,
+    actorId: actorId,
+    displayName: name is String ? name : '',
+    typing: typing,
+  );
 }

@@ -60,6 +60,7 @@ class CallRealtimeClient {
 
   final _events = StreamController<CallEvent>.broadcast();
   final _chat = StreamController<ChatSignal>.broadcast();
+  final _typing = StreamController<TypingSignal>.broadcast();
   final _states = StreamController<CallRealtimeState>.broadcast();
 
   /// The conversations this client WANTS to be subscribed to. Kept so a
@@ -89,6 +90,18 @@ class CallRealtimeClient {
   /// Chat signals: which conversation changed, plus [ChatSignalKind.reconnected]
   /// on every successful (re)connection. Broadcast, like [events].
   Stream<ChatSignal> get chatSignals => _chat.stream;
+
+  /// PD-37: who is typing, as the server tells seated members.
+  Stream<TypingSignal> get typingSignals => _typing.stream;
+
+  /// PD-37: send a fire-and-forget frame (typing, the delivery cursor). A no-op
+  /// on a transport that cannot send, or once disposed.
+  void send(String event, Map<String, Object?> payload) {
+    if (_disposed) return;
+    final socket = _socket;
+    // Not a subtype of RealtimeSocket, so no promotion: the cast is the check.
+    if (socket is RealtimeEmitter) (socket as RealtimeEmitter).emit(event, payload);
+  }
 
   /// The conversations currently subscribed (as far as the server last said).
   Set<String> get subscriptions => Set.unmodifiable(_wanted);
@@ -276,6 +289,11 @@ class CallRealtimeClient {
       if (!_chat.isClosed) _chat.add(chat);
       return;
     }
+    final typing = decodeTypingSignal(frame.event, frame.payload);
+    if (typing != null) {
+      if (!_typing.isClosed) _typing.add(typing);
+      return;
+    }
     try {
       final event = decodeCallEvent(frame.event, frame.payload);
       // null means "not a call event" -- typing, presence, messages. Somebody
@@ -315,6 +333,7 @@ class CallRealtimeClient {
     _setState(CallRealtimeState.idle);
     await _events.close();
     await _chat.close();
+    await _typing.close();
     await _states.close();
   }
 }

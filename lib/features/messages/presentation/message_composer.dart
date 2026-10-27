@@ -38,7 +38,12 @@ class MessageComposer extends StatefulWidget {
     this.maxCharacters = 4000,
     this.mentionCandidates,
     this.onSendWithMentions,
+    this.onDraftChanged,
   });
+
+  /// PD-37: every change of the draft (an empty one after sending), so the
+  /// screen can say "typing…". Null says nothing.
+  final void Function(String draft)? onDraftChanged;
 
   final void Function(String body) onSend;
 
@@ -102,6 +107,7 @@ class _MessageComposerState extends State<MessageComposer> {
 
   void _onChanged() {
     setState(() {});
+    widget.onDraftChanged?.call(_controller.text);
     final source = widget.mentionCandidates;
     if (source == null) return;
     final caret = _controller.selection.baseOffset;
