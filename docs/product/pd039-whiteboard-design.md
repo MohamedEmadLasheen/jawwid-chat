@@ -160,8 +160,9 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
     builds it, on its own migration slot. PD-39 only reads it, and its own migration does
     not create Quran tables.
   - PD-29 and PD-39 agreed the contract on 2026-10-27. The full text is
-    [`quran-dataset-contract.md`](quran-dataset-contract.md), added by PD-29's #170; this
-    section only summarises it.
+    [`quran-dataset-contract.md`](quran-dataset-contract.md), built by PD-29 as PR #176 (dataset `tanzil-uthmani-1.1`,
+    module `apps/api/src/quran`, which exports `QuranTextService`). This section only
+    summarises it.
   - The pinned source file lives at repo root, `data/quran/`. That way PD-29's lessons
     engine bundles the same file, and CI checks its hash and counts.
 - **How it is stored (the shared contract).**
@@ -193,9 +194,13 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
   - The board stores a **reference** — `{surah, fromAyah, toAyah, datasetId, rangeSha256}` —
     never the text. `rangeSha256` is the SHA-256 of the ayat's `sha256` values joined with
     "\n", in ayah order.
-  - The text is fetched from `GET /quran/ayahs?surah=&from=&to=` (at most 50 ayat; it
-    returns the dataset id, its SHA-256 and attribution, and each ayah's text and SHA-256),
-    and drawn with **Amiri
+  - The text is fetched from `GET /quran/ayahs?surah=&from=&to=`.
+    - It allows at most 50 ayat; a bad range answers 422 `COMM.QURAN_INVALID`.
+    - It returns the dataset (id, SHA-256, attribution, source URL), each ayah's text and
+      SHA-256, and the server's own `rangeSha256` (the same formula).
+    - Any failed verification answers 503 `COMM.QURAN_UNAVAILABLE`. The board then shows
+      "Quran text unavailable" in the verse's place, **never a fallback text**.
+  - The text is drawn with **Amiri
     Quran** (OFL 1.1), with ayah-end markers (۝ plus the number) and line breaking that
     never splits a word.
   - The teacher can move it, resize it, change its colour and alignment, and mark it with
@@ -522,8 +527,9 @@ visibility.
    - Widget and golden tests for Arabic text and strokes, run with `--concurrency=2`.
    - Manual QA in Chrome at `/teacher/` and on a tablet, when the QA session has a device.
 3. **Quran verses.**
-   - **Waits for PD-29 P0-2**: the shared dataset, loader and `GET /quran/ayahs`. Steps 1, 2
-     and 4 do not wait.
+   - **Waits for PD-29 P0-2**: the shared dataset, loader and `GET /quran/ayahs`. These are
+     built in PD-29's PR #176, so this step needs #176 merged first. Steps 1, 2 and 4 do not
+     wait.
    - This step adds the verse picker, the verse element and the Amiri Quran rendering.
    - The review sheet goes to the academy's Quran teacher **before** the tab is shown to
      teachers.
