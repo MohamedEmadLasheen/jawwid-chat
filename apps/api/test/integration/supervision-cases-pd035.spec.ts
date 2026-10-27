@@ -263,3 +263,89 @@ describe('the database keeps the record', () => {
     ).rejects.toThrow(/target department/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Security review of #155 (P2s)
+// ---------------------------------------------------------------------------
+
+describe('R1. an owner stands to the subject in the target department\'s own terms', () => {
+  it('under strict scope a Teachers case is owned only by someone whose scope covers the teacher', async () => {
+    const c = await teacherCase(tsupA);
+    await strict(true);
+    expect(await code(cases.assign(tmgr, c.id, { ownerId: tsupB }))).toBe(CommErrorCode.CASE_INVALID);
+    expect((await cases.owners(tmgr, c.id)).owners.map((o) => o.id).sort()).toEqual([tmgr, tsupA].sort());
+    expect((await cases.assign(tmgr, c.id, { ownerId: tsupA })).owner?.id).toBe(tsupA);
+    // The database refuses it too.
+    await expect(
+      g.prisma.$transaction([
+        g.prisma.$executeRawUnsafe(`select set_config('chat.case_actor', $1, true)`, tmgr),
+        g.prisma.$executeRawUnsafe(`update chat.supervision_case set owner_id = $1::uuid where id = $2::uuid`, tsupB, c.id),
+      ]),
+    ).rejects.toThrow(/target department/);
+  });
+
+  it('an Operations case about a child is owned only by the manager or a supervisor of that child', async () => {
+    const c = await cases.open(s.ownerId, { subject: { kind: 'learner', id: s.learnerId }, target: 'operations', title: 'x' });
+    expect(await code(cases.assign(s.managerId, c.id, { ownerId: s.otherAdminId }))).toBe(CommErrorCode.CASE_INVALID);
+    expect((await cases.assign(s.managerId, c.id, { ownerId: s.ownerId })).owner?.id).toBe(s.ownerId);
+  });
+});
+
+describe('R2. standing is live, never frozen at open or assign', () => {
+  it('an owner whose scope narrowed loses the case; the manager keeps it', async () => {
+    const c = await teacherCase(tsupA);
+    await cases.assign(tmgr, c.id, { ownerId: tsupB }); // department-wide: allowed
+    expect((await cases.get(tsupB, c.id)).canAct).toBe(true);
+    await strict(true);
+    expect(await code(cases.get(tsupB, c.id))).toBe(CommErrorCode.CASE_NOT_FOUND);
+    expect(await code(cases.note(tsupB, c.id, { note: 'x' }))).toBe(CommErrorCode.CASE_NOT_FOUND);
+    expect((await cases.list(tsupB, { tab: 'mine' })).cases).toEqual([]);
+    expect((await cases.get(tmgr, c.id)).canAct).toBe(true);
+  });
+
+  it('an owner who left the department loses the case', async () => {
+    const c = await teacherCase(tsupA);
+    await cases.assign(tmgr, c.id, { ownerId: tsupB });
+    await g.prisma.$executeRaw`DELETE FROM chat.department_member WHERE staff_id = ${tsupB}::uuid`;
+    expect(await code(cases.get(tsupB, c.id))).toBe(CommErrorCode.CASE_NOT_FOUND);
+  });
+
+  it('an opener who lost scope on the subject no longer sees the case', async () => {
+    const c = await teacherCase(tsupB); // department-wide: tsupB may open about tsupA's teacher
+    expect((await cases.get(tsupB, c.id)).id).toBe(c.id);
+    await strict(true);
+    expect(await code(cases.get(tsupB, c.id))).toBe(CommErrorCode.CASE_NOT_FOUND);
+    expect((await cases.list(tsupB, { tab: 'opened' })).cases).toEqual([]);
+  });
+});
+
+describe('R3. notes on a closed case', () => {
+  it('are a post-mortem: the target manager and the super admin only', async () => {
+    const c = await teacherCase(tsupA);
+    await cases.assign(tmgr, c.id, { ownerId: tsupA });
+    await cases.setStatus(tsupA, c.id, { status: 'resolved', note: 'settled' });
+    expect(await code(cases.note(tsupA, c.id, { note: 'one more thing' }))).toBe(CommErrorCode.CASE_STATE);
+    await cases.note(tmgr, c.id, { note: 'looked back: fine' });
+    await cases.note(sa, c.id, { note: 'noted' });
+    expect((await events(c.id)).filter((k) => k === 'note')).toHaveLength(2);
+  });
+});
+
+describe('R4. the database names a live actor of the case\'s organization', () => {
+  it('refuses a change or a note whose actor is inactive', async () => {
+    const c = await teacherCase(tsupA);
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${tsupB}::uuid`;
+    await expect(
+      g.prisma.$transaction([
+        g.prisma.$executeRawUnsafe(`select set_config('chat.case_actor', $1, true)`, tsupB),
+        g.prisma.$executeRawUnsafe(`update chat.supervision_case set status = 'in_progress' where id = $1::uuid`, c.id),
+      ]),
+    ).rejects.toThrow(/actor/);
+    await expect(
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.supervision_case_event (case_id, kind, actor_id, note) values ($1::uuid, 'note', $2::uuid, 'x')`, c.id, tsupB,
+      ),
+    ).rejects.toThrow(/actor/);
+  });
+});
+
