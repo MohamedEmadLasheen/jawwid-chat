@@ -17,11 +17,13 @@ import 'package:jawwid_chat/shared/models/conversation.dart';
 class _Groups implements GroupRepository {
   _Groups(this.members, {this.fails = false});
 
-  final List<GroupMember> members;
+  List<GroupMember> members;
   final bool fails;
+  int reads = 0;
 
   @override
   Future<StudentGroup> group(String conversationId) async {
+    reads++;
     if (fails) throw StateError('offline');
     return StudentGroup(
       conversationId: conversationId,
@@ -81,6 +83,40 @@ void main() {
     expect(find.byType(Text), findsNothing);
     await tester.pumpWidget(app(_Groups(const [], fails: true)));
     await tester.pumpAndSettle();
+    expect(find.byType(Text), findsNothing);
+  });
+
+  testWidgets('PD-26: coming back to the app re-reads it (the leave was approved meanwhile)', (tester) async {
+    final groups = _Groups([teacher(null)]);
+    await tester.pumpWidget(app(groups));
+    await tester.pumpAndSettle();
+    expect(find.byType(Text), findsNothing);
+
+    groups.members = [teacher({'kind': 'leave', 'until': '2026-11-03'})];
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('teacher_c is on leave until'), findsOneWidget);
+  });
+
+  testWidgets('PD-26: the notice clears itself when the leave it shows is over -- one timer, not polling', (tester) async {
+    final today = DateTime.now();
+    final until = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final groups = _Groups([teacher({'kind': 'leave', 'until': until})]);
+    await tester.pumpWidget(app(groups));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('is on leave until'), findsOneWidget);
+    final readsWhileShown = groups.reads;
+
+    // Nothing re-reads before the leave ends...
+    await tester.pump(const Duration(minutes: 30));
+    expect(groups.reads, readsWhileShown);
+
+    // ...and once its last day is over, the server is asked again (and says: back).
+    groups.members = [teacher(null)];
+    await tester.pump(const Duration(hours: 25));
+    await tester.pumpAndSettle();
+    expect(groups.reads, readsWhileShown + 1);
     expect(find.byType(Text), findsNothing);
   });
 }
