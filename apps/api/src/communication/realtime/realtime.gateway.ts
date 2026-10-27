@@ -768,12 +768,14 @@ export class RealtimeGateway
     // Only a start that was announced has a key; nothing else needs a stop.
     if (!(await this.typing.stop(conversationId, client.actor.actorId))) return { ok: true };
 
-    // A stop is ALWAYS let through, seat or not: only someone whose start was
-    // announced holds a key, and a member removed or silenced mid-word must
-    // not leave "typing…" stuck on everyone else's screen. RT-009 still holds:
-    // a dead identity sends nothing, and only seated members receive it.
+    // A stop needs no SEAT: someone silenced or made an observer mid-word can
+    // still clear "typing…" from everyone else's screen. It still needs READ
+    // access (RT-009): a member who was REMOVED broadcasts nothing into the
+    // room any more -- their indicator expires on the clients
+    // (realtime.typing_ttl_seconds) instead. Only seated members receive it.
     const actor = await this.currentActor(client);
     if (!actor) return { ok: false };
+    if (!(await this.authorize(actor, conversationId)).ok) return { ok: false };
     await this.deliverToConversation(
       conversationId,
       CommEvent.TYPING_STOPPED,
