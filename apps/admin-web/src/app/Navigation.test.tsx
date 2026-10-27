@@ -191,9 +191,9 @@ describe('Landing and deep links', () => {
 
   it('answers a page outside the role with Forbidden, and does not list it', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
-    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/coverage' })
+    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/dashboard' })
     expect(await screen.findByRole('alert')).toHaveTextContent("You don't have permission")
-    expect(within(screen.getByRole('navigation')).queryByRole('link', { name: 'Coverage' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation')).queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
   })
 })
 
