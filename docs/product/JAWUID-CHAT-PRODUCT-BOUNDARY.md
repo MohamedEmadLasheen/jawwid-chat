@@ -3454,8 +3454,8 @@ things M4 will run into:
 
 ### PD-34 · Notifications: one pipeline and a Notification Center for every account (P1)
 
-**Decided 2026-10-26** (the architecture; the defaults marked PROPOSED below
-await the owner). The owner asked for a comprehensive notification system
+**Decided 2026-10-26** (the architecture); the chat push defaults (6, 8)
+**decided by the owner 2026-10-27**; 7 remains a privacy-safe proposal. The owner asked for a comprehensive notification system
 (real-time, proactive, campaigns, a per-account Notification Center and an Admin
 Web dashboard). The department head approved the Phase-0 plan (five phases) and
 P1 is built with **defaults held in `chat.config`**, so the owner's open answers
@@ -3493,20 +3493,30 @@ notification is rendered in the recipient's own zone; teachers follow their phon
 5. **Preferences.** A person switches categories off for push; the entry still
    appears. Lessons, payments, calls, tasks and system cannot be switched off
    (`notification.locked_categories`).
-6. **Quiet hours: PROPOSED, OFF until the owner decides.** Each person may set
-   their own window (in their own zone); someone who has not gets none. The
-   proposal -- 22:00–08:00 for everyone -- is one switch away
-   (`notification.quiet_hours.default_enabled`, `…default_start_minute`,
-   `…default_end_minute`). Calls and the T-30/T-15 lesson reminders are exempt
-   by their rules. Deferred, never dropped.
+6. **Quiet hours for CHAT pushes: DECIDED (owner, 2026-10-27), ON by default.**
+   New-message pushes (and PD-36 mention pushes) wait out 22:00–08:00 in the
+   recipient's own zone (PD-22; the academy's for someone with none, daylight
+   saving included). A person's own setting always wins, off included. Nothing
+   is dropped: what arrives at night goes as ONE push at the end of the window,
+   not a burst. Lessons and class reminders, payment, instalment and renewal
+   reminders, calls (W8-W1), PD-33 cover lines, approvals and administrative
+   alerts keep their own rules and are not touched
+   (`notification.chat.quiet_hours.default_enabled`; the generic
+   `notification.quiet_hours.default_enabled` those others read stays off).
 7. **The lock screen names nobody** by default (PROPOSED; the privacy-safe
    default). A person may turn names on (`showPreviews`); the academy default is
    `notification.lock_screen_names_default` (false). The payment reminder no
    longer shows the amount on the lock screen (PROPOSED, privacy-safe).
-8. **Rate limit: PROPOSED, OFF until the owner decides.** The proposal is at most
-   6 pushes an hour per person in the chat, announcement and marketing
-   categories, the rest to the Center only (`notification.push_per_hour`; 0 = no
-   cap, the default). Critical pushes would never be limited.
+8. **Chat push cap: DECIDED (owner, 2026-10-27).** At most 6 chat-message
+   pushes per person per rolling hour (`notification.chat.pushes_per_hour`). The
+   excess is never dropped: it is HELD into one summary push ("You have N new
+   messages", generic, lock-screen safe), sent when the hour frees up, or at the
+   end of quiet hours if they hold then. Exactly one summary per person at a
+   time, under concurrent workers; it does not count toward the cap itself;
+   reading takes out what the read covers and withdraws it once nothing is left;
+   the conversation audience is re-checked before it is sent. Mentions are
+   exempt from the cap. Every message is in the Notification Center whatever
+   the cap or quiet hours do. Nothing outside chat is capped.
 9. **Retention.** Pushes are kept 90 days, entries 365
    (`notification.delivery_retention_days`, `notification.item_retention_days`).
 

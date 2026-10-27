@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ROLE_LABEL } from '@/features/profile/copy'
@@ -9,6 +9,7 @@ import { VoiceRecorder } from './VoiceRecorder'
 import { matchQuickReplies, QuickRepliesDialog, useQuickReplies } from './QuickRepliesDialog'
 import { chatApi, chatKeys, type MentionCandidates, type SendMention } from './chatApi'
 import { activeMentionQuery, insertMention, spansFor, type PickedMention } from './mentions'
+import { useTypingSignal } from './useTyping'
 
 export interface ComposerSend {
   body: string
@@ -80,6 +81,13 @@ export function ChatComposer({
   const [files, setFiles] = useState<File[]>([])
   const [visibility, setVisibility] = useState<'customer' | 'internal'>('customer')
   const isInternal = visibility === 'internal'
+  // PD-37: "typing…" reaches every seated member -- the family too -- so an
+  // internal note (staff only) and an edit announce nothing.
+  const typing = useTypingSignal(conversationId)
+  const stopTyping = typing.stop
+  useEffect(() => {
+    if (isInternal) stopTyping()
+  }, [isInternal, stopTyping])
   const input = useRef<HTMLTextAreaElement>(null)
   const media = useRef<HTMLInputElement>(null)
   const doc = useRef<HTMLInputElement>(null)
@@ -194,6 +202,7 @@ export function ChatComposer({
       return
     }
     const text = body.trim()
+    typing.stop()
     onSend({ body: text, visibility, files, mentions: spansFor(text, picked) })
     setBody('')
     setFiles([])
@@ -409,6 +418,8 @@ export function ChatComposer({
           dir="auto"
           onChange={(e) => {
             setBody(e.target.value)
+            if (!editing && !isInternal) typing.typed(e.target.value)
+            else typing.stop()
             setCaret(e.target.selectionStart ?? e.target.value.length)
             setActive(0)
           }}

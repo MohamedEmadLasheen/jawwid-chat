@@ -264,6 +264,8 @@ export class NotificationInboxService {
         });
       }
     });
+    // A push already held for later follows the new settings at once (review P2-6).
+    await this.pipeline.reevaluateHeld(new Date(), actor.actorId);
     return this.settings(actor);
   }
 

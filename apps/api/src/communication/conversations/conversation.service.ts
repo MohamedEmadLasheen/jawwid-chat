@@ -1698,10 +1698,14 @@ export class ConversationService {
     // the Center entry stays (the trigger leaves it for MUTED). Calls are not
     // message pushes and are untouched.
     if (patch.mutedUntil && patch.mutedUntil > new Date()) {
-      await this.prisma.notification.updateMany({
-        where: { recipientId: actor.actorId, conversationId, eventType: 'message_published', status: 'scheduled' },
-        data: { status: 'cancelled', failureCode: 'MUTED' },
-      });
+      // A HELD push (PD-34 amendment) can stand for several chats: muting this
+      // one takes only this chat out of it (review P1-1), never the others.
+      await this.prisma.$executeRaw`
+        UPDATE chat.notification SET status = 'cancelled', failure_code = 'MUTED'
+         WHERE recipient_id = ${actor.actorId}::uuid AND conversation_id = ${conversationId}::uuid
+           AND event_type = 'message_published' AND status = 'scheduled'
+           AND coalesce((variables ->> 'held')::boolean, false) = false`;
+      await this.prisma.$queryRaw`SELECT 1 AS ok FROM chat.held_push_drop_chat(${actor.actorId}::uuid, ${conversationId}::uuid, 'MUTED')`;
     }
   }
 

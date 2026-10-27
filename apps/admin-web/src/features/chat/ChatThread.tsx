@@ -17,6 +17,10 @@ import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type EditTarget, type ReplyTarget } from './ChatComposer'
 import { PaymentLockBanner } from '@/features/subscriptions/PaymentLockBanner'
 import { ForwardDialog } from './ForwardDialog'
+import { MessageInfoDialog, Ticks } from './receipts'
+import { useTypers } from './useTyping'
+import { usePresence } from './usePresence'
+import { liveCopyFor, typingLine } from './liveCopy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ExportDialog } from './ExportDialog'
 import { ThemeDialog } from './ThemeDialog'
@@ -142,7 +146,7 @@ export function ChatThread({
   focusMessageId?: string | null
   onFocused?: () => void
 }) {
-  const { locale } = useI18n()
+  const { locale, dateTime } = useI18n()
   const copy = chatCopyFor(locale)
   const { staff } = useSession()
   const queryClient = useQueryClient()
@@ -181,6 +185,8 @@ export function ChatThread({
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [forwarding, setForwarding] = useState<string[] | null>(null)
+  // PD-37: the message whose Message info is open.
+  const [infoOf, setInfoOf] = useState<string | null>(null)
   const [labeling, setLabeling] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [scheduling, setScheduling] = useState(false)
@@ -284,22 +290,27 @@ export function ChatThread({
   }, [focusMessageId, loaded])
 
   // Read state: report the newest seq actually on screen, once per new seq --
-  // and only while the page is visible. A tab in the background has not "read"
-  // anything; it reports when it comes back into view.
+  // and only while the page is visible AND the reader is at the bottom. A tab
+  // in the background, or someone scrolled up into history, has not "read"
+  // the newest message (PD-37: it would turn the author's ticks blue); each
+  // reports when it comes back into view.
   const newestSeq = messages.length > 0 ? messages[messages.length - 1]!.seq : null
   const reported = useRef<string | null>(null)
+  const reportRead = useRef<() => void>(() => undefined)
+  reportRead.current = () => {
+    if (!newestSeq || reported.current === newestSeq) return
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+    if (!atBottom.current) return
+    reported.current = newestSeq
+    void chatApi
+      .markRead(conversationId, newestSeq)
+      .then(() => queryClient.invalidateQueries({ queryKey: chatKeys.list }))
+      .catch(() => {
+        reported.current = null // try again on the next change
+      })
+  }
   useEffect(() => {
-    const report = () => {
-      if (!newestSeq || reported.current === newestSeq) return
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-      reported.current = newestSeq
-      void chatApi
-        .markRead(conversationId, newestSeq)
-        .then(() => queryClient.invalidateQueries({ queryKey: chatKeys.list }))
-        .catch(() => {
-          reported.current = null // try again on the next change
-        })
-    }
+    const report = () => reportRead.current()
     report()
     document.addEventListener('visibilitychange', report)
     return () => document.removeEventListener('visibilitychange', report)
@@ -406,12 +417,30 @@ export function ChatThread({
     }
   }
 
+  // PD-37 hooks: before the early returns, as every hook must be.
+  const typers = useTypers(conversationId, staff?.id)
+  const presence = usePresence(details.data?.members ?? [], staff?.id)
+
   if (latest.isLoading) return <LoadingState />
   if (latest.error) return <ErrorState error={latest.error} onRetry={() => void latest.refetch()} />
 
   const conv = details.data
   const group = conv ? isGroup(conv) : false
   const name = conv ? conversationName(conv, staff?.id, copy) : ''
+  // PD-37: "Noura is typing…" (seated members only -- the server never sends
+  // it to a reader without a seat), else, in a 1:1 with a colleague or a
+  // teacher, their online / last seen as the server lets this viewer see it.
+  const live = liveCopyFor(locale)
+  const typingNow = typingLine(typers, live)
+  const peer = !group ? (conv?.members ?? []).find((x) => x.actorId !== staff?.id) : undefined
+  const peerState = peer ? presence.get(peer.actorId) : undefined
+  const peerPresence = peerState
+    ? peerState.online
+      ? live.online
+      : peerState.lastSeenAt
+        ? live.lastSeen(dateTime(peerState.lastSeenAt))
+        : null
+    : null
   const muted = conv ? isMuted(conv) : false
   const pinned = !!conv?.viewerState?.pinned
   const archived = !!conv?.viewerState?.archived
@@ -441,10 +470,20 @@ export function ChatThread({
               <span className="thread-head__name" dir="auto">
                 {name} {isTrialGroup(conv) && <TrialBadge />}
               </span>
-              <span className="thread-head__sub">
-                {copy.kind[conv.type] ?? conv.type}
-                {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
-              </span>
+              {typingNow ? (
+                <span className="thread-head__sub thread-head__sub--typing" dir="auto" aria-live="polite">
+                  {typingNow}
+                </span>
+              ) : (
+                <span className="thread-head__sub">
+                  {peerPresence ?? (
+                    <>
+                      {copy.kind[conv.type] ?? conv.type}
+                      {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
+                    </>
+                  )}
+                </span>
+              )}
               {conv.cover && (
                 <span className="thread-head__cover" dir="auto">
                   {copy.coverLine(conv.cover)}
@@ -541,6 +580,7 @@ export function ChatThread({
         onScroll={(e) => {
           const el = e.currentTarget
           atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+          if (atBottom.current) reportRead.current()
         }}
       >
         {cursor && (
@@ -601,6 +641,7 @@ export function ChatThread({
                     onDeleteForMe={() => void act(() => chatApi.deleteForMe(conversationId, m.id))}
                     onDeleteForEveryone={() => void act(() => chatApi.deleteForEveryone(conversationId, m.id))}
                     onEdit={() => setEditing({ messageId: m.id, body: m.body ?? '' })}
+                    onInfo={() => setInfoOf(m.id)}
                     onOpenLesson={lessonIdOf(m) ? () => setRecordOf(lessonIdOf(m)) : undefined}
                   />
                 </Fragment>
@@ -766,6 +807,8 @@ export function ChatThread({
         />
       )}
 
+      {infoOf && <MessageInfoDialog conversationId={conversationId} messageId={infoOf} onClose={() => setInfoOf(null)} />}
+
       {exporting && (
         <ExportDialog
           conversationId={conversationId}
@@ -833,6 +876,7 @@ function MessageItem({
   onDeleteForMe,
   onDeleteForEveryone,
   onEdit,
+  onInfo,
   onOpenLesson,
 }: {
   m: ChatMessage
@@ -861,6 +905,8 @@ function MessageItem({
   onEdit: () => void
   /** PD-15: a lesson card opens its lesson's record (correct, edit, delete / resend). */
   onOpenLesson?: () => void
+  /** PD-37: who read it, who has it (the server answers staff and the author). */
+  onInfo: () => void
 }) {
   const { locale, time } = useI18n()
   const copy = chatCopyFor(locale)
@@ -914,6 +960,11 @@ function MessageItem({
           : []),
         ...(m.body
           ? [{ key: 'copy', label: copy.copy, icon: 'copy' as const, onSelect: () => void navigator.clipboard?.writeText(m.body ?? '') }]
+          : []),
+        // PD-37: Message info, for any published message -- Admin Web is staff,
+        // and the server answers staff (and the author) only.
+        ...(m.moderation === 'published'
+          ? [{ key: 'info', label: liveCopyFor(locale).messageInfo, icon: 'info' as const, onSelect: onInfo }]
           : []),
         { key: 'delete-me', label: copy.deleteForMe, icon: 'trash', onSelect: onDeleteForMe },
         // The server allows it to the author within the window, a manager, or an
@@ -1021,6 +1072,7 @@ function MessageItem({
               </span>
             )}
             <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
+            {mine && <Ticks status={m.status} />}
           </span>
         </div>
         {!selectMode && <Menu

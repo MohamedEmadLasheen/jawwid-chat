@@ -78,6 +78,7 @@ claimed. The decision text itself still lives in
 | `20261026170000` | PD-36 — `chat_pd036_mentions` (sub-slots `170001…` if needed; slot map fixed by the department head 2026-10-26) |
 | `20261026180000` | PD-37 — chat read cursors / presence (P1a; sub-slots `180001…`). The RT-012 fix PR has no migration. |
 | `20261026190000` | PD-34 — `chat_pd034_notifications` (P1; later P1 PRs take `190001`, `190002`…) |
+| `20261026190001` | PD-34 amendment — `chat_pd034_chat_push_policy` (owner 2026-10-27: chat quiet hours + cap with summary) |
 
 The slot map is fixed by the department head (2026-10-26): 180000 PD-37, 190000 PD-34, 200000 the PD-29 amendment.
 | `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |

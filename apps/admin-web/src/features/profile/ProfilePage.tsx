@@ -14,6 +14,7 @@ import { OrganizationPanel } from './OrganizationPanel'
 import { ReportingLineDialog } from './ReportingLineDialog'
 import { D as DEVICES } from '@/features/devices/copy'
 import './profile.css'
+import { PresencePrivacy } from '@/features/chat/PresencePrivacy'
 
 /**
  * `/profile` (the viewer's own) and `/profile/:staffId` (someone else's).
@@ -69,6 +70,8 @@ export function ProfilePage() {
         </div>
         <div className="sp-col">
           <AccountSection profile={profile} />
+          {/* PD-37: one's own presence privacy. */}
+          {own && <PresencePrivacy />}
           {profile.access.canManageReportingLine && (
             <div className="sp-inline-action">
               <button type="button" className="btn btn--sm" onClick={() => setChangingManager(true)}>

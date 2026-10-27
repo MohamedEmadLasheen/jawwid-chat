@@ -597,3 +597,18 @@ mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; 
 }
 [dir='rtl'] .cw-member--summoned { box-shadow: inset -3px 0 0 var(--gold-400); }
 .cw-member__note { display: block; font-size: var(--fs-xs); color: var(--gold-700); }
+
+/* PD-37: ticks on the viewer's own messages. Read uses the link colour (an
+   accessible blue-teal in both themes, never the gold that fails contrast). */
+.cw-ticks { display: inline-flex; align-items: center; margin-inline-start: var(--space-1, 4px); color: var(--text-subtle); }
+.cw-ticks--read { color: var(--text-link); }
+
+/* PD-37: "Noura is typing…" in the thread header. */
+.thread-head__sub--typing { color: var(--text-link); font-style: italic; }
+
+/* PD-37: Message info. */
+.cw-info-list + .cw-info-list { margin-block-start: var(--space-4, 16px); }
+.cw-info-list__people { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2, 8px); }
+.cw-info-list__person { display: flex; align-items: center; gap: var(--space-2, 8px); }
+.cw-info-list__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-info-list__person time { font-size: var(--fs-xs); color: var(--text-subtle); }

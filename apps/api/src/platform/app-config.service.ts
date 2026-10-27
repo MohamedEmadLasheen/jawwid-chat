@@ -59,6 +59,23 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
    * reminders and security are exempt from quiet hours by their rules anyway.
    */
   'notification.quiet_hours.default_enabled': false,
+  /**
+   * PD-34 amendment, DECIDED (owner, 2026-10-27), for CHAT pushes only (new
+   * messages and PD-36 mentions): quiet hours ON by default, 22:00-08:00 in
+   * each recipient's own zone; a person's own setting always wins, off
+   * included. Lessons, payments, renewals, calls, cover lines, approvals and
+   * administrative alerts keep their own rules and never read this.
+   */
+  'notification.chat.quiet_hours.default_enabled': true,
+  'notification.chat.quiet_hours.default_start_minute': 1320,
+  'notification.chat.quiet_hours.default_end_minute': 480,
+  /**
+   * PD-34 amendment, DECIDED (owner, 2026-10-27): at most this many chat-message
+   * pushes per person per rolling hour. The excess is never dropped: it is held
+   * into ONE summary push sent when the hour frees up (or when quiet hours end).
+   * Mentions are exempt. Every message is in the Notification Center regardless.
+   */
+  'notification.chat.pushes_per_hour': 6,
   'notification.quiet_hours.default_start_minute': 1320,
   'notification.quiet_hours.default_end_minute': 480,
   /** PD-34 (proposed: 6): pushes an hour per person in a rate-limited category before the rest go to the Center only. 0 = no cap. */
@@ -136,6 +153,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.call_start_actor': 20,
   /** initial hypothesis - PD-37 read/delivery cursor moves per actor per window. */
   'abuse.throttle.receipt_cursor_actor': 240,
+  /** initial hypothesis - PD-37 presence questions (GET /presence) per actor per window. */
+  'abuse.throttle.presence_read_actor': 60,
   /** initial hypothesis - inbound WebSocket frames one socket may send per minute. */
   'abuse.realtime.frames_per_socket_per_minute': 600,
   /** PD-33: how many supervisors one backup may cover at the same time. */
