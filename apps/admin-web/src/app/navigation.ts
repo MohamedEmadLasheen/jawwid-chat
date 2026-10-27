@@ -105,6 +105,8 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   materials: 'more',
   schedule: 'people',
   tasks: 'more',
+  // PD-35 B5: escalation cases, for every operator who may open or own one.
+  cases: 'people',
   dashboard: 'more',
   settings: null,
 }
@@ -128,6 +130,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   accounts: '/accounts',
   materials: '/materials',
   schedule: '/schedule',
+  cases: '/cases',
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
@@ -149,6 +152,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   accounts: 'lock',
   materials: 'book',
   schedule: 'calendar',
+  cases: 'tasks',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
@@ -159,6 +163,9 @@ export const ADMIN_MATERIALS_LABEL: Bilingual = { en: 'Materials', ar: 'المو
 
 /** PD-38: the scheduling calendar, under People. */
 export const ADMIN_SCHEDULE_LABEL: Bilingual = { en: 'Schedule', ar: 'الجدول' }
+
+/** PD-35 B5: escalation cases, under People. */
+export const ADMIN_CASES_LABEL: Bilingual = { en: 'Escalations', ar: 'التصعيدات' }
 
 /** PD-21: account administration, beside the read-only Users section. */
 export const ADMIN_ACCOUNTS_LABEL: Bilingual = { en: 'Accounts', ar: 'الحسابات' }
@@ -221,6 +228,14 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     path: AREA_PATH.materials,
     icon: AREA_ICON.materials,
     label: { text: ADMIN_MATERIALS_LABEL },
+    inDevelopment: false,
+  })
+  // PD-35 B5: the escalation cases the super admin sees and acts on, at /cases.
+  out.get('people')?.[0]?.entries.push({
+    key: 'cases',
+    path: AREA_PATH.cases,
+    icon: AREA_ICON.cases,
+    label: { text: ADMIN_CASES_LABEL },
     inDevelopment: false,
   })
   // One registry group inside a destination needs no heading.

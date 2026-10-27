@@ -22,6 +22,7 @@ import { MaterialsModule } from './materials/materials.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
 import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { SupervisionCaseModule } from './cases/supervision-case.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -72,6 +73,8 @@ import { CalendarModule } from './calendar/calendar.module';
     TeacherSupervisorModule,
     // PD-38: the academy scheduling calendar, shifts and supervisor colors.
     CalendarModule,
+    // PD-35 B5: escalation cases to the Teachers or Operations department.
+    SupervisionCaseModule,
   ],
 })
 export class AppModule {}

@@ -103,6 +103,14 @@ export const CommEvent = {
    * For Core; no conversationId.
    */
   LESSON_MAKEUP_RESOLVED: 'lesson.makeup_resolved',
+  /**
+   * PD-35 B5, for PD-34 to deliver: an escalation case was opened (to its
+   * owner), assigned to someone else (to the new owner), or is due tomorrow.
+   * No conversationId and no title or body: a consumer reads the case.
+   */
+  CASE_OPENED: 'case.opened',
+  CASE_ASSIGNED: 'case.assigned',
+  CASE_DUE_SOON: 'case.due_soon',
   /** PD-11 T3, for Core: a learner changed teacher in Chat. */
   LEARNER_TRANSFERRED: 'learner.transferred',
   /** PD-11 T3, for Core: a learner's study paused, resumed or stopped -- Core holds the package. */
@@ -385,6 +393,34 @@ export interface CommEventPayloads {
   [CommEvent.TEACHER_SUSPENDED]: TeacherSuspendedPayload;
   [CommEvent.MENTION_CREATED]: MentionCreatedPayload;
   [CommEvent.MENTION_UPDATED]: MentionUpdatedPayload;
+  [CommEvent.CASE_OPENED]: CaseOpenedPayload;
+  [CommEvent.CASE_ASSIGNED]: CaseAssignedPayload;
+  [CommEvent.CASE_DUE_SOON]: CaseDueSoonPayload;
+}
+
+/** PD-35 B5. Ids only: PD-34 reads the case through its own authorized path. */
+export interface CaseOpenedPayload {
+  caseId: string;
+  organizationId: string;
+  targetDepartmentId: string;
+  ownerId: string | null;
+  openedBy: string;
+}
+
+export interface CaseAssignedPayload {
+  caseId: string;
+  organizationId: string;
+  ownerId: string | null;
+  previousOwnerId: string | null;
+  assignedBy: string;
+}
+
+export interface CaseDueSoonPayload {
+  caseId: string;
+  organizationId: string;
+  ownerId: string | null;
+  /** YYYY-MM-DD, the academy's calendar. */
+  dueOn: string;
 }
 
 export interface LearnerTransferredPayload {

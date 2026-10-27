@@ -256,6 +256,19 @@ export class ParentFeedbackService {
     return this.one(actor, row.id);
   }
 
+  /**
+   * PD-35 B5: who one piece of feedback is about -- its teacher and child, never
+   * its content -- for an escalation case to check its subject against the
+   * caller's scope. Null when there is none in the organization.
+   */
+  async subjectOf(organizationId: string, id: string): Promise<{ teacherId: string; learnerId: string } | null> {
+    if (!isUuid(id)) return null;
+    return this.prisma.parentFeedback.findFirst({
+      where: { id: id.toLowerCase(), organizationId },
+      select: { teacherId: true, learnerId: true },
+    });
+  }
+
   // ------------------------------------------------------------------
   // A family's Parent File (PD-17): the children's supervisor reads too
   // ------------------------------------------------------------------

@@ -27,5 +27,7 @@ import { TeacherEvaluationService } from './teacher-evaluation.service';
   imports: [CommunicationModule, SupervisionModule, LessonModule],
   controllers: [TeacherFileController, ParentFeedbackController, TeacherEvaluationController],
   providers: [TeacherFileService, TeacherPayrollService, ParentFeedbackService, TeacherEvaluationService],
+  // PD-35 B5: escalation cases ask who a piece of feedback is about (ids only).
+  exports: [ParentFeedbackService],
 })
 export class TeacherFileModule {}

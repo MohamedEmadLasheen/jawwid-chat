@@ -21,6 +21,8 @@ import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
 import { SchedulesPage } from '@/features/teachers/SchedulesPage'
 import { StudentsPage } from '@/features/teachers/StudentsPage'
+import { TeachersAreaTabs } from '@/features/teachers/area'
+import { CasesPage } from '@/features/cases/CasesPage'
 import { TrialsPage } from '@/features/trials/TrialsPage'
 import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
@@ -106,6 +108,9 @@ export function AppRoutes() {
         <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
         {/* PD-26: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
+        {/* PD-35 B5: escalation cases -- a Teachers tab, and /cases for everyone else who opens or owns one. */}
+        <Route path="/teachers/cases" element={<Area area="teachers"><CasesPage header={<TeachersAreaTabs />} /></Area>} />
+        <Route path="/cases" element={<Area area="cases"><CasesPage /></Area>} />
         <Route path="/teachers/leave" element={<Navigate to="/teachers/supervision?section=leave" replace />} />
         {/* PD-11 T4: Sales' trials and Operations' new students (features/trials/area.tsx). */}
         <Route path="/trials" element={<Area area="trials"><TrialsPage /></Area>} />
