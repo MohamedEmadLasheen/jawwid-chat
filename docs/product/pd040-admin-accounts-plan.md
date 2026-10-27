@@ -451,8 +451,8 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 | **PR-1** API route layer | `catalogue.ts`, `@Requires`/`@SelfService`/`@NotForStaff` decorators, `PermissionGuard` in **shadow** mode, declarations on all 427 handlers, legacy bundles in TS, the route spec plus the generated route table, the bundle ⇔ policy consistency spec, the `pd040-routes` guard | none (shadow) | — |
 | **PR-2** Data model | The §9 migration: tables, `specialist`, `general` kind, effective-permission functions, `guard_staff_access_change`, `access_changed` journal, catalogue ⇔ table spec, the "any manager" SQL audit, `Actor.permissions` loaded per request, `/me` returns permissions | none for existing accounts | 1 slot |
 | **PR-3** Staff account lifecycle API | `decideStaffAccountAdmin` (H1–H10) plus its matrix spec, `/admin/staff-accounts` create/list/detail/patch/setup-code/history, `/admin/access-roles` CRUD, `/admin/permissions`, first-login activation, PD-25 mailer delivery, `accounts.family.manage` on PD-21 routes, realtime `chat.use` handshake | new endpoints only | maybe a sub-slot (code `purpose`) |
-| **PR-4** Certificates for the Designer | The permission basis, the design projection, the DB decider check, the seeded `designer` template, the exact-route spec | additive | sub-slot (trigger) |
-| **PR-5** Admin Web | Page registry, `visiblePages`, `<RequirePermission>`, the legacy-nav snapshot spec, `/certificates`, the Staff accounts and Roles UI, the setup-code sign-in, Flutter's "uses Admin Web" screen | legacy nav identical | — |
+| **PR-4** The Designer role | **Scope cut 2026-10-27:** PD-41 owns the certificates workflow, its pages, its `certificates.*` keys, the design projection and the certificate rules. PD-40 PR-4 only seeds the `designer` template role with PD-41's keys (`certificates.view`, `certificates.design`) and pins its exact routes. | additive | maybe a sub-slot |
+| **PR-5** Admin Web | Page registry, `visiblePages`, `<RequirePermission>`, the legacy-nav snapshot spec, the Staff accounts and Roles UI, the setup-code sign-in, Flutter's "uses Admin Web" screen. The `/certificates` page itself is PD-41's. | legacy nav identical | — |
 | **PR-6** Enforce | System-test QA pass with zero shadow denials, then flip `PERMISSION_GUARD_MODE=enforce`, rewrite `AUTHORIZATION-MODEL.md` §3/§4, record PD-40 in boundary §4, update `docs/admin/pd021-account-administration.md` | enforcement on | — |
 
 **PR-2 as built (2026-10-27)**
@@ -509,6 +509,8 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 ---
 
 ## 12. Questions for the owner (each with a recommendation)
+
+> **2026-10-27:** Q1 and Q2 moved to PD-41, which owns the certificates workflow (`docs/product/pd041-certificates-design.md`). PD-41's design already has the Designer designing and uploading, never sending, and seeing a design projection only. PD-40 still needs Q3–Q6.
 
 1. **Does the Designer send the certificate to the family, or only prepare it?** Issuing posts the file into the family's group.
    - **Recommended: the Designer uploads and issues** (that is the page's job), but **cannot decline**.
