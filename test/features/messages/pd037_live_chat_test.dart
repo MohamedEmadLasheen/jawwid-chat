@@ -16,7 +16,8 @@ import 'package:jawwid_chat/core/realtime/realtime_socket.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/conversations/application/chat_realtime.dart';
 import 'package:jawwid_chat/features/conversations/application/conversations_controller.dart';
-import 'package:jawwid_chat/features/messages/domain/typing_sender.dart';
+import 'package:jawwid_chat/features/messages/application/chat_typing_channel.dart';
+import 'package:jawwid_chat/features/messages/data/receipt_repository.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_actions.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
@@ -25,11 +26,10 @@ import 'package:jawwid_chat/shared/models/user_role.dart';
 
 import 'fake_voice_devices.dart';
 
-/// A transport that receives AND sends -- what the real socket.io one is.
-class _SendingSocket implements RealtimeSocket, RealtimeEmitter {
+/// The server side of the socket: frames in, nothing out.
+class _Socket implements RealtimeSocket {
   final _frames = StreamController<RealtimeFrame>.broadcast();
   final _states = StreamController<RealtimeSocketState>.broadcast();
-  final sent = <({String event, Map<String, Object?> payload})>[];
 
   @override
   Stream<RealtimeFrame> get frames => _frames.stream;
@@ -43,8 +43,6 @@ class _SendingSocket implements RealtimeSocket, RealtimeEmitter {
   Future<void> unsubscribe(String conversationId) async {}
   @override
   Future<void> dispose() async {}
-  @override
-  void emit(String event, Map<String, Object?> payload) => sent.add((event: event, payload: payload));
 
   /// The server publishes a frame to this socket.
   void serverSends(String event, Object? payload) => _frames.add(RealtimeFrame(event, payload));
@@ -53,22 +51,6 @@ class _SendingSocket implements RealtimeSocket, RealtimeEmitter {
     await _frames.close();
     await _states.close();
   }
-}
-
-/// A transport that only receives: the client must never try to send through it.
-class _ReceiveOnlySocket implements RealtimeSocket {
-  @override
-  Stream<RealtimeFrame> get frames => const Stream.empty();
-  @override
-  Stream<RealtimeSocketState> get states => const Stream.empty();
-  @override
-  Future<void> connect(String token) async {}
-  @override
-  Future<SubscriptionResult> subscribe(String conversationId) async => const SubscriptionResult(ok: true);
-  @override
-  Future<void> unsubscribe(String conversationId) async {}
-  @override
-  Future<void> dispose() async {}
 }
 
 class _Tokens implements TokenProvider {
@@ -80,7 +62,19 @@ class _Tokens implements TokenProvider {
   Future<void> onSessionEnded(AppError error) async {}
 }
 
-Message _mine({ApprovalState approval = ApprovalState.notRequired, bool mine = true}) => Message(
+/// Records delivery cursors; no Message info.
+class _Receipts implements ReceiptRepository {
+  final cursors = <(String, int)>[];
+
+  @override
+  bool get isAvailable => true;
+  @override
+  Future<MessageInfo> info(String conversationId, String messageId) async => const MessageInfo();
+  @override
+  Future<void> delivered(String conversationId, int upToSeq) async => cursors.add((conversationId, upToSeq));
+}
+
+Message _message({ApprovalState approval = ApprovalState.notRequired, bool mine = true}) => Message(
       id: 'm1',
       clientMessageId: 'c1',
       conversationId: 'conv',
@@ -117,36 +111,34 @@ void main() {
     });
   });
 
-  group('PD-37 client', () {
-    test('typing frames reach typingSignals; send goes out only through a transport that can send', () async {
-      final socket = _SendingSocket();
-      final client = CallRealtimeClient(socket: socket, tokens: _Tokens());
-      await client.connect();
-      final heard = <TypingSignal>[];
-      final sub = client.typingSignals.listen(heard.add);
+  group('PD-37 ChatTypingChannel', () {
+    test('passes typing frames on, ignores every other frame, and stops when disposed', () async {
+      final socket = _Socket();
+      final channel = ChatTypingChannel(socket);
+      final heard = <String>[];
+      final sub = channel.signals.listen((s) => heard.add('${s.actorId}:${s.typing}'));
 
       socket.serverSends('typing.started', {'conversationId': 'c', 'actorId': 'a', 'displayName': 'Omar'});
+      socket.serverSends('message.created', {'conversationId': 'c', 'seq': '1'});
+      socket.serverSends('typing.stopped', {'conversationId': 'c', 'actorId': 'a'});
       await pumpEventQueue();
-      expect(heard.single.actorId, 'a');
+      expect(heard, ['a:true', 'a:false']);
 
-      client.send('typing.start', {'conversationId': 'c'});
-      expect(socket.sent.single.event, 'typing.start');
-
+      channel.dispose();
+      socket.serverSends('typing.started', {'conversationId': 'c', 'actorId': 'b'});
+      await pumpEventQueue();
+      expect(heard, ['a:true', 'a:false']);
       unawaited(sub.cancel());
-      await client.dispose();
-      client.send('typing.stop', {'conversationId': 'c'});
-      expect(socket.sent, hasLength(1), reason: 'nothing is sent once disposed');
       await socket.close();
-
-      final silent = CallRealtimeClient(socket: _ReceiveOnlySocket(), tokens: _Tokens());
-      silent.send('typing.start', {'conversationId': 'c'}); // a no-op, not a crash
-      await silent.dispose();
     });
+  });
 
+  group('PD-37 delivery cursor', () {
     test('an arriving message is acknowledged as delivered, as a cursor', () async {
       final backend = FakeBackend(role: UserRole.parent);
-      final socket = _SendingSocket();
+      final socket = _Socket();
       final client = CallRealtimeClient(socket: socket, tokens: _Tokens());
+      final receipts = _Receipts();
       final coordinator = Provider<ChatRealtimeCoordinator>((ref) {
         final c = ChatRealtimeCoordinator(ref, client, listRefreshDebounce: const Duration(milliseconds: 5));
         ref.onDispose(c.dispose);
@@ -157,6 +149,7 @@ void main() {
         currentRoleProvider.overrideWithValue(UserRole.parent),
         conversationRepositoryProvider.overrideWithValue(FakeConversationRepository(backend)),
         messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
+        receiptRepositoryProvider.overrideWithValue(receipts),
       ]);
       await client.connect();
       container.read(coordinator);
@@ -164,12 +157,7 @@ void main() {
 
       socket.serverSends('message.created', {'conversationId': 'conv-9', 'seq': '42'});
       await pumpEventQueue();
-      expect(
-        socket.sent.where((s) => s.event == 'message.delivered').map((s) => s.payload),
-        [
-          {'conversationId': 'conv-9', 'upToSeq': '42'},
-        ],
-      );
+      expect(receipts.cursors, [('conv-9', 42)]);
 
       container.dispose();
       await client.dispose();
@@ -178,55 +166,24 @@ void main() {
     });
   });
 
-  group('PD-37 TypingSender', () {
-    test('one start per ping interval while typing; a pause, an empty draft or dispose is a stop', () async {
-      final sent = <bool>[];
-      var clock = DateTime.utc(2026, 10, 27);
-      // The real intervals are 3 s and 5 s; the clock is injected and the pause shortened.
-      final sender = TypingSender(send: sent.add, now: () => clock, stopAfter: const Duration(milliseconds: 40));
-
-      sender.typed('h');
-      sender.typed('he');
-      expect(sent, [true]);
-
-      clock = clock.add(const Duration(seconds: 3));
-      sender.typed('hel');
-      expect(sent, [true, true]);
-
-      await Future<void>.delayed(const Duration(milliseconds: 80)); // a pause
-      expect(sent, [true, true, false]);
-
-      sender.typed('again');
-      sender.typed(''); // cleared, or sent
-      expect(sent, [true, true, false, true, false]);
-
-      sender.dispose(); // nothing active: no second stop
-      expect(sent, [true, true, false, true, false]);
-    });
-  });
-
   group('PD-37 Message info action', () {
     test("only on one's own published message, and only where the route exists", () {
-      expect(actionsFor(_mine(), withInfo: true), contains(MessageAction.info));
-      expect(actionsFor(_mine(), withInfo: false), isNot(contains(MessageAction.info)));
-      expect(actionsFor(_mine(mine: false), withInfo: true), isNot(contains(MessageAction.info)));
-      expect(actionsFor(_mine(approval: ApprovalState.pending), withInfo: true), isNot(contains(MessageAction.info)));
+      expect(actionsFor(_message(), withInfo: true), contains(MessageAction.info));
+      expect(actionsFor(_message(), withInfo: false), isNot(contains(MessageAction.info)));
+      expect(actionsFor(_message(mine: false), withInfo: true), isNot(contains(MessageAction.info)));
+      expect(actionsFor(_message(approval: ApprovalState.pending), withInfo: true), isNot(contains(MessageAction.info)));
     });
   });
 
   group('PD-37 the chat screen', () {
-    testWidgets("shows someone else's typing above the composer, never this account's own, and says when this person types",
+    testWidgets("shows someone else's typing above the composer; never this account's own other device, never another chat",
         (tester) async {
       final backend = FakeBackend(role: UserRole.parent);
-      final socket = _SendingSocket();
-      final client = CallRealtimeClient(socket: socket, tokens: _Tokens());
+      final socket = _Socket();
+      final channel = ChatTypingChannel(socket);
       final recorder = FakeVoiceRecorder();
       final player = FakeVoicePlayer();
       final conversationId = backend.listConversations().first.id;
-      // Connected in the test's own zone, so its frames reach the screen as the
-      // test pumps (a connect inside runAsync would listen in another zone).
-      unawaited(client.connect());
-      await tester.pump();
 
       await tester.pumpWidget(ProviderScope(
         overrides: [
@@ -235,7 +192,7 @@ void main() {
           voicePlayerProvider.overrideWithValue(player),
           conversationRepositoryProvider.overrideWithValue(FakeConversationRepository(backend)),
           messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
-          chatRealtimeClientProvider.overrideWithValue(client),
+          chatTypingChannelProvider.overrideWithValue(channel),
           viewerActorIdProvider.overrideWithValue(() => 'me-id'),
         ],
         child: MaterialApp(
@@ -258,9 +215,7 @@ void main() {
         await tester.pump();
       }
 
-      // Another device of this same account: not "someone else".
       socket.serverSends('typing.started', {'conversationId': conversationId, 'actorId': 'me-id', 'displayName': 'Me'});
-      // Another chat entirely.
       socket.serverSends('typing.started', {'conversationId': 'elsewhere', 'actorId': 't9', 'displayName': 'Elsewhere'});
       await deliver();
       expect(find.textContaining('is typing'), findsNothing);
@@ -272,24 +227,12 @@ void main() {
       await deliver();
       expect(find.text('Omar is typing…'), findsNothing);
 
-      // This person types: one typing.start for this chat, throttled.
-      await tester.enterText(find.byType(TextField).last, 'hel');
-      await tester.enterText(find.byType(TextField).last, 'hello');
-      await tester.pump();
-      expect(
-        socket.sent.where((x) => x.event == 'typing.start').map((x) => x.payload),
-        [
-          {'conversationId': conversationId},
-        ],
-      );
-
-      await tester.pumpWidget(const SizedBox()); // leaving the chat is a stop
-      expect(socket.sent.last.event, 'typing.stop');
+      await tester.pumpWidget(const SizedBox());
       // Torn down without waiting: inside a widget test's fake clock, awaiting
       // a broadcast subscription's cancel can wait for good.
       unawaited(recorder.dispose());
       unawaited(player.dispose());
-      unawaited(client.dispose());
+      channel.dispose();
       unawaited(socket.close());
       backend.dispose();
     }, timeout: const Timeout(Duration(seconds: 60)));

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../core/realtime/call_realtime_client.dart';
 import '../../../core/realtime/chat_signal.dart';
 import '../../calls/application/call_session.dart';
@@ -100,8 +101,9 @@ class ChatRealtimeCoordinator {
         // PD-37: this device has the message -- the author's ticks go grey
         // ✓✓ once every seated member's device does. A cursor, never ids; the
         // server moves only this account's own receipts, forward only.
-        if (id != null && signal.seq != null) {
-          _client.send('message.delivered', {'conversationId': id, 'upToSeq': '${signal.seq}'});
+        final seq = signal.seq;
+        if (id != null && seq != null) {
+          unawaited(_ref.read(receiptRepositoryProvider).delivered(id, seq).catchError((Object _) {}));
         }
         final thread = _openThread(id);
         if (thread != null) unawaited(thread.onMessageCreated(signal.seq));

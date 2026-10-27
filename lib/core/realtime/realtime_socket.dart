@@ -37,16 +37,6 @@ abstract interface class RealtimeSocket {
   Future<void> dispose();
 }
 
-/// PD-37: a transport that can also SEND a fire-and-forget frame -- typing,
-/// and the delivery cursor. A separate interface from [RealtimeSocket] so the
-/// transports and fakes that only receive keep implementing exactly what they
-/// did; the client sends only when its transport is one of these.
-abstract interface class RealtimeEmitter {
-  /// Send `event` with `payload`. Nothing is awaited and nothing is answered:
-  /// the server decides what, if anything, it does with it.
-  void emit(String event, Map<String, Object?> payload);
-}
-
 /// One frame off the wire.
 class RealtimeFrame {
   const RealtimeFrame(this.event, this.payload);
@@ -80,7 +70,7 @@ class SubscriptionResult {
 /// Reconnection is socket.io's own, configured here rather than reimplemented:
 /// a second retry engine on top of the library's would produce two backoffs
 /// racing each other.
-class SocketIoRealtimeSocket implements RealtimeSocket, RealtimeEmitter {
+class SocketIoRealtimeSocket implements RealtimeSocket {
   SocketIoRealtimeSocket({
     required String baseUrl,
     this.subscribeAckTimeout = const Duration(seconds: 8),
@@ -252,13 +242,6 @@ class SocketIoRealtimeSocket implements RealtimeSocket, RealtimeEmitter {
       'conversation.unsubscribe',
       <String, dynamic>{'conversationId': conversationId},
     );
-  }
-
-  @override
-  void emit(String event, Map<String, Object?> payload) {
-    final socket = _socket;
-    if (socket == null || !socket.connected) return;
-    socket.emit(event, Map<String, dynamic>.from(payload));
   }
 
   /// Drop the current socket, keeping the streams. Used when [connect] is

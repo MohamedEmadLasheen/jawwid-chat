@@ -5,7 +5,7 @@ import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/text_direction.dart';
-import '../data/message_info_repository.dart';
+import '../data/receipt_repository.dart';
 
 /// PD-37: "Message info" for the viewer's own message -- who read it, who has
 /// it, who does not yet. Seated members only, exactly as the server answers;

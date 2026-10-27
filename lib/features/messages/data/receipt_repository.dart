@@ -24,30 +24,43 @@ class MessageInfo {
   final List<MessageInfoEntry> pending;
 }
 
-abstract interface class MessageInfoRepository {
+/// PD-37: read receipts beyond the message page -- Message info, and the
+/// delivery cursor ("this device has the conversation up to seq N").
+abstract interface class ReceiptRepository {
   bool get isAvailable;
 
   Future<MessageInfo> info(String conversationId, String messageId);
+
+  /// Forward-only on the server; a late or repeated one changes nothing.
+  Future<void> delivered(String conversationId, int upToSeq);
 }
 
-/// A harmless default: a build without the route offers no Message info.
-class NoMessageInfoRepository implements MessageInfoRepository {
-  const NoMessageInfoRepository();
+/// A harmless default: a build without the routes offers no Message info and
+/// reports no delivery.
+class NoReceiptRepository implements ReceiptRepository {
+  const NoReceiptRepository();
 
   @override
   bool get isAvailable => false;
 
   @override
   Future<MessageInfo> info(String conversationId, String messageId) async => const MessageInfo();
+
+  @override
+  Future<void> delivered(String conversationId, int upToSeq) async {}
 }
 
-class HttpMessageInfoRepository implements MessageInfoRepository {
-  HttpMessageInfoRepository({required ApiClient client}) : _client = client;
+class HttpReceiptRepository implements ReceiptRepository {
+  HttpReceiptRepository({required ApiClient client}) : _client = client;
 
   final ApiClient _client;
 
   @override
   bool get isAvailable => true;
+
+  @override
+  Future<void> delivered(String conversationId, int upToSeq) =>
+      _client.post<Object?>('/conversations/$conversationId/messages/delivered', data: {'upToSeq': '$upToSeq'});
 
   @override
   Future<MessageInfo> info(String conversationId, String messageId) async {

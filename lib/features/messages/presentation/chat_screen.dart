@@ -42,7 +42,6 @@ import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import '../data/message_search_repository.dart';
-import '../domain/typing_sender.dart';
 import 'attachment_preview.dart';
 import 'chat_theme_sheet.dart';
 import 'forward_sheet.dart';
@@ -162,10 +161,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   }
   Timer? _highlightTimer;
 
-  // PD-37: typing -- what this person says, and who else is typing here. The
-  // server sends typing only between seated members; an indicator not renewed
-  // within [_typingShowFor] lapses, so a lost "stopped" cannot leave it up.
-  TypingSender? _typingSender;
+  // PD-37: who else is typing here. The server sends typing only between
+  // seated members; an indicator not renewed within [_typingShowFor] lapses,
+  // so a lost "stopped" cannot leave it up.
   StreamSubscription<TypingSignal>? _typingSub;
   final Map<String, ({String name, DateTime until})> _typers = {};
   Timer? _typersLapse;
@@ -231,18 +229,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
-    final realtime = ref.read(chatRealtimeClientProvider);
-    if (realtime != null) {
-      if (!widget.isReadOnly) {
-        _typingSender = TypingSender(
-          send: (typing) => realtime.send(
-            typing ? 'typing.start' : 'typing.stop',
-            {'conversationId': widget.conversationId},
-          ),
-        );
-      }
-      _typingSub = realtime.typingSignals.listen(_onTyping);
-    }
+    _typingSub = ref.read(chatTypingChannelProvider)?.signals.listen(_onTyping);
     // PD-36: opening the chat is seeing its mention; the "@" on the list row goes.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -335,7 +322,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _typingSender?.dispose();
     // Not awaited: on a broadcast stream a cancel can wait for the stream to close.
     final typingSub = _typingSub;
     if (typingSub != null) unawaited(typingSub.cancel());
@@ -525,7 +511,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
         ref.read(messagesControllerProvider(widget.conversationId).notifier);
 
     final marks = ref.read(messageMarksRepositoryProvider);
-    final info = ref.read(messageInfoRepositoryProvider);
+    final info = ref.read(receiptRepositoryProvider);
     final result = await showMessageActions(
       context,
       message: message,
@@ -569,7 +555,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   Future<void> _showInfo(Message message) async {
     final id = message.id;
     if (id == null) return;
-    final repository = ref.read(messageInfoRepositoryProvider);
+    final repository = ref.read(receiptRepositoryProvider);
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1259,8 +1245,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             },
             replyingTo: _replyingTo,
             onCancelReply: () => setState(() => _replyingTo = null),
-            // PD-37: "typing…" -- a read-only chat says nothing.
-            onDraftChanged: _typingSender?.typed,
             conversationId: widget.conversationId,
             voice: voice,
             onStartRecording: voiceController.start,
