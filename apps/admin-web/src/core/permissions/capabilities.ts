@@ -158,6 +158,12 @@ export interface DepartmentAccess {
   materialsManager?: boolean
   /** PD-38: GET /lessons/access -- the Teachers department, Operations and the super admin open the schedule. */
   calendar?: boolean
+  /**
+   * PD-26 amendment (owner 2026-10-27): GET /lessons/access -- the Teacher
+   * Supervision page, for the Teachers department, the super admin and an
+   * Operations supervisor (the teachers of their families).
+   */
+  supervisionPage?: boolean
 }
 
 /**
@@ -166,7 +172,8 @@ export interface DepartmentAccess {
  * department (the teachers' trials) and Operations (new students).
  */
 const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => boolean>> = {
-  teachers: (a) => a.lessonManager === true,
+  // The Teachers department's area; Operations is offered its Supervision page only (PD-26 amendment).
+  teachers: (a) => a.lessonManager === true || a.supervisionPage === true,
   trials: (a) => a.lessonManager === true || a.sales === true || a.operations === true,
   instalments: (a) => a.billingReader === true,
   // PD-17: the Parent Profile follows the same rule as the money on it.

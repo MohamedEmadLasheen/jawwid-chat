@@ -278,9 +278,6 @@ export const dashboardApi = {
     api.get<Paginated<InboxRow>>('/dashboard/unattended', { cursor }),
   needsAction: () => api.get<NeedsActionItem[]>('/dashboard/needs-action'),
   thisWeek: () => api.get<ThisWeek>('/dashboard/this-week'),
-  /** Manager one-click. Never automatic in MVP (brief §4). */
-  activateBackup: (absenceId: string) =>
-    api.post<void>(`/absences/${absenceId}/activate-backup`, {}, newIdempotencyKey()),
 }
 
 export const staffApi = {

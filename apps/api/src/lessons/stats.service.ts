@@ -69,6 +69,9 @@ export class StatsService {
       operations,
       // PD-38: the scheduling calendar -- the Teachers department, Operations, the super admin.
       calendar: lessonManager || operations,
+      // PD-26 amendment: the Teacher Supervision page -- the Teachers department, the
+      // super admin, and an Operations supervisor (for the teachers of their families).
+      supervisionPage: staff && (await this.lessons.teacherScope.pageBasis(actor)) !== null,
     };
   }
 

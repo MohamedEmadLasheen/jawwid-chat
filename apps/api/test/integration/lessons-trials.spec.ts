@@ -273,10 +273,11 @@ describe('6. statistics', () => {
 
   it('access tells the Admin Web who is Sales and who is Operations', async () => {
     // PD-38: `calendar` -- the schedule is the Teachers department's and Operations', not Sales'.
-    expect(await stats.access(salesId)).toEqual({ lessonManager: false, sales: true, operations: false, calendar: false });
-    expect(await stats.access(s.ownerId)).toEqual({ lessonManager: false, sales: false, operations: true, calendar: true });
-    expect(await stats.access(tsupId)).toEqual({ lessonManager: true, sales: false, operations: false, calendar: true });
-    expect(await stats.access(s.teacherId)).toEqual({ lessonManager: false, sales: false, operations: false, calendar: false });
+    // PD-26 amendment: `supervisionPage` -- the Teacher Supervision page, for both of them too.
+    expect(await stats.access(salesId)).toEqual({ lessonManager: false, sales: true, operations: false, calendar: false, supervisionPage: false });
+    expect(await stats.access(s.ownerId)).toEqual({ lessonManager: false, sales: false, operations: true, calendar: true, supervisionPage: true });
+    expect(await stats.access(tsupId)).toEqual({ lessonManager: true, sales: false, operations: false, calendar: true, supervisionPage: true });
+    expect(await stats.access(s.teacherId)).toEqual({ lessonManager: false, sales: false, operations: false, calendar: false, supervisionPage: false });
   });
 });
 

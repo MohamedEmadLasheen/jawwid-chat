@@ -2416,6 +2416,61 @@ month has no pay terms. Every staff complaint names its source on every route
 on app resume and when the shown leave ends, never by polling. Record:
 `docs/admin/pd026-teacher-supervision.md` §Known limits, closed.
 
+**Amendment, 2026-10-27: Operations access** (owner request, no new number;
+registry `pd-registry/PD-26-amendment-operations-access.md`). The owner: "We
+need these pages to be visible to the Operations Supervision team as well,
+since they will also use them to record teacher delays and excuses." Asked to
+scope it, the owner chose **the whole page** (leave, apologies and absences,
+lateness trial and regular, rewards, complaints, parent feedback) with **the
+Teachers department's rights on it**, for **the teachers of their families**.
+
+- **Which teachers.** The current teacher of each learner whose PD-8
+  supervisor is the Operations supervisor, a supervisor they cover as an
+  active backup (PD-33), or, for the Operations manager, any member of the
+  department; and the teacher of each of those learners' lessons from 30 days
+  ago on (`chat.operations_lesson_window()`; a lesson called off ties nobody).
+  Every other teacher answers as not found, as PD-35 does. One rule, in the
+  database (`chat.operations_teacher_ids`) and read by
+  `TeacherScopeService.operationsScopeOf`.
+- **Which children.** Of a teacher reached only through Operations, rows about
+  one child or family (lessons, lateness, a parent's complaint or feedback)
+  show only for the caller's own learners; writing on another family's answers
+  as not found. Teacher-level rows and decisions (leave, suspension) do not
+  narrow. The leave allowance, days used and balance stay the Teachers
+  department's and are left out by the server. A parent's complaint is about
+  its family (its PD-32 feedback's, or the conversation it was taken from); one
+  whose family is unknown is hidden from Operations, and Operations files one
+  only from a conversation with its own family. Management's complaints are the
+  teacher's.
+- **Rights are per teacher.** Someone who holds both bases has the Teachers
+  department's rights only for the teachers in its own (PD-35) scope; for the
+  rest, Operations' rights. The Teacher File never opens through Operations.
+- **Known limits (recorded, not fixed).** (1) The database confines Operations
+  to its families only for lateness and replies to a parent
+  (`chat.may_supervise_learner_row`); a complaint's follow-up, resolution,
+  upholding, take and handler are checked per teacher there, and per family by
+  the server only. (2) A leftover lesson -- say an open one the old teacher kept
+  after a transfer, dated after the transfer -- keeps that teacher in scope
+  until it falls 30 days into the past or is closed; it is a real lesson of the
+  family, so this is accepted.
+- **What they may do there.** What the Teachers department may do on the page:
+  decide leave; record lateness and absences; decide on the ladder (warnings,
+  deductions, suspensions); record complaints, follow-ups and resolutions, and
+  uphold them; handle a complaint; record a reward; read and answer parent
+  feedback. A complaint may also be handed to them.
+- **What does not change.** Money keeps PD-18's finance tier: reward amounts,
+  default deduction amounts, payroll and the payout account stay the super
+  admin's. Operations records a reward or decides a deduction case without a
+  price; a decided deduction is still priced from the super admin's default,
+  as for anyone. The Teacher File (personal record, monthly comments, days off,
+  the leave allowance) and the rest of the Teachers area (statistics, files,
+  certificates, materials) stay the Teachers department's. Admin Web shows
+  Operations the Teachers → Supervision page only, on the server's word.
+- **Backstop.** The PD-12/PD-26 database guards that said "the Teachers
+  department" now say "the Teachers department or the teacher's Operations
+  supervisor" (`chat.may_supervise_teacher`, migration
+  `20261027160000_chat_pd026_operations_access.sql`).
+
 **Closed.** 2026-10-22.
 
 ---
