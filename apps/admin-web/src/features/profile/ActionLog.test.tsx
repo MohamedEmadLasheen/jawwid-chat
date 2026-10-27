@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { ActionLogSection } from './ActionLogSection'
@@ -51,3 +52,24 @@ describe('the action log on a profile', () => {
     expect(container.textContent).toBe('')
   })
 })
+
+describe('going further back', () => {
+  it('loads the next page with the server\'s cursor, and asks for a longer period when chosen', async () => {
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('cursor=c2')) return json({ entries: [ENTRIES[2]], nextCursor: null })
+      return json({ entries: ENTRIES.slice(0, 2), nextCursor: 'c2' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithProviders(<ActionLogSection staffId="s-1" />, { staff: makeStaff({ role: 'manager' }) })
+    await screen.findByRole('link', { name: 'Recorded a teacher lateness' })
+    expect(screen.queryByRole('link', { name: 'Assigned a child to a supervisor' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(await screen.findByRole('link', { name: 'Assigned a child to a supervisor' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Period' }), '365')
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => /from=/.test(String(u)))).toBe(true))
+  })
+})
+

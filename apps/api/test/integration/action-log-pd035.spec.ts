@@ -128,3 +128,71 @@ describe('who may read it', () => {
     expect(await code(log.list(tsupA, tmgr, {}))).toBe(CommErrorCode.ACTION_LOG_NOT_FOUND);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Review of #160
+// ---------------------------------------------------------------------------
+
+describe('P2-1. paging never loses or repeats a line, even when many share one instant', () => {
+  it('250 acts written in one transaction come back whole, across pages, once each', async () => {
+    await g.prisma.$executeRaw`
+      INSERT INTO chat.audit_log (actor_id, action, entity, entity_id, reason)
+      SELECT ${tsupA}::uuid, 'learner.supervisor_assigned', 'learner', ${s.learnerId}::uuid, 'bulk ' || n
+        FROM generate_series(1, 250) AS n`;
+    const first = await log.list(tsupA, tsupA, {});
+    expect(first.entries).toHaveLength(200);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    const second = await log.list(tsupA, tsupA, { cursor: first.nextCursor as string });
+    expect(second.entries).toHaveLength(50);
+    expect(second.nextCursor).toBeNull();
+    const ids = [...first.entries, ...second.entries].map((e) => e.id);
+    expect(new Set(ids).size).toBe(250);
+    const reasons = new Set([...first.entries, ...second.entries].map((e) => e.reason));
+    for (let n = 1; n <= 250; n += 1) expect(reasons.has(`bulk ${n}`)).toBe(true);
+    expect(await code(log.list(tsupA, tsupA, { cursor: 'not-a-cursor' }))).toBe(CommErrorCode.VALIDATION);
+  });
+});
+
+describe('P2-2. a manager reads the reasons of the time the member was theirs', () => {
+  it('a reason written before they joined the manager\'s department is withheld from the manager, never from themselves', async () => {
+    await g.prisma.$executeRaw`
+      INSERT INTO chat.audit_log (actor_id, action, entity, entity_id, reason, at)
+      VALUES (${tsupA}::uuid, 'payment.voided', 'family', ${s.familyId}::uuid, 'ops-era reason', now() - interval '5 days')`;
+    // They (re)joined the Teachers department yesterday.
+    await g.prisma.$executeRaw`UPDATE chat.department_member SET assigned_at = now() - interval '1 day' WHERE staff_id = ${tsupA}::uuid`;
+    await g.prisma.$executeRaw`
+      INSERT INTO chat.audit_log (actor_id, action, entity, entity_id, reason)
+      VALUES (${tsupA}::uuid, 'teacher.lateness_recorded', 'teacher', ${s.teacherId}::uuid, 'teachers-era reason')`;
+    const byManager = (await log.list(tmgr, tsupA, {})).entries;
+    expect(byManager.find((e) => e.action === 'payment.voided')?.reason).toBeNull();
+    expect(byManager.find((e) => e.action === 'teacher.lateness_recorded')?.reason).toBe('teachers-era reason');
+    expect((await log.list(tsupA, tsupA, {})).entries.find((e) => e.action === 'payment.voided')?.reason).toBe('ops-era reason');
+    expect((await log.list(sa, tsupA, {})).entries.find((e) => e.action === 'payment.voided')?.reason).toBe('ops-era reason');
+  });
+});
+
+describe('the edges of a request', () => {
+  it('a time needs its zone; at most 366 days; an id that is not a uuid; an inactive reader', async () => {
+    expect(await code(log.list(tsupA, tsupA, { from: '2026-10-20T10:00:00' }))).toBe(CommErrorCode.VALIDATION);
+    expect((await log.list(tsupA, tsupA, { from: '2026-10-20T10:00:00Z' })).entries).toBeDefined();
+    const now = Date.now();
+    expect(await code(log.list(tsupA, tsupA, { from: new Date(now - 400 * 86_400_000).toISOString(), to: new Date(now).toISOString() })))
+      .toBe(CommErrorCode.VALIDATION);
+    expect(await code(log.list(tsupA, 'not-a-uuid', {}))).toBe(CommErrorCode.ACTION_LOG_NOT_FOUND);
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${tmgr}::uuid`;
+    expect(await code(log.list(tmgr, tsupA, {}))).toBe(CommErrorCode.ACTION_LOG_NOT_FOUND);
+  });
+
+  it('a super admin of another organization reads it as not found', async () => {
+    const [org2, sa2] = [randomUUID(), randomUUID()];
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'org_two')`, org2, `org-two-${org2.slice(0, 8)}`);
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`),
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.staff (id, name, role, is_active, organization_id) values ($1::uuid, 'sa_two', 'super_admin', true, $2::uuid)`, sa2, org2,
+      ),
+    ]);
+    expect(await code(log.list(sa2, tsupA, {}))).toBe(CommErrorCode.ACTION_LOG_NOT_FOUND);
+  });
+});
+
