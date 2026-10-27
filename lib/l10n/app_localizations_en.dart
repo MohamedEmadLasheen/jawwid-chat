@@ -2719,13 +2719,13 @@ class L10nEn extends L10n {
   String get signupCodeLabel => '6-digit code';
 
   @override
-  String get signupPasswordLabel => 'New password (at least 8 characters)';
+  String get signupPasswordLabel => 'New password (at least 4 characters)';
 
   @override
   String get signupPasswordConfirmLabel => 'Repeat the password';
 
   @override
-  String get signupPasswordTooShort => 'Use at least 8 characters.';
+  String get signupPasswordTooShort => 'Use at least 4 characters.';
 
   @override
   String get signupPasswordsDiffer => 'The passwords do not match.';
