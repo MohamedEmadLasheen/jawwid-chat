@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/realtime/call_realtime_client.dart';
 import '../../../core/realtime/chat_signal.dart';
 import '../../calls/application/call_session.dart';
+import '../../messages/application/away_teachers.dart';
 import '../../messages/application/marks_providers.dart';
 import '../../messages/application/messages_controller.dart';
 import '../domain/conversation_list.dart';
@@ -109,8 +110,10 @@ class ChatRealtimeCoordinator {
         final thread = _openThread(id);
         if (thread != null) unawaited(thread.refreshLatest());
         if (id != null) _ref.invalidate(pinnedMessagesProvider(id));
+        _refreshAway(id);
         _scheduleListRefresh();
       case ChatSignalKind.membershipChanged:
+        _refreshAway(id);
         _scheduleListRefresh();
       case ChatSignalKind.accessRevoked:
         // The server already took the socket out of the room. Re-read what is
@@ -121,6 +124,7 @@ class ChatRealtimeCoordinator {
       case ChatSignalKind.reconnected:
         // Anything may have happened while the socket was down.
         _catchUpEverything();
+        _ref.invalidate(awayTeachersProvider);
     }
   }
 
@@ -134,6 +138,15 @@ class ChatRealtimeCoordinator {
       unawaited(thread.resync().then((_) => thread.refreshLatest()));
     }
     _scheduleListRefresh();
+  }
+
+  /// PD-26: an open chat's "on leave until" notice re-reads its member list. Only
+  /// if a screen is showing it: invalidating a family member nobody watches is a
+  /// no-op, so no chat that is not open is loaded.
+  void _refreshAway(String? conversationId) {
+    if (conversationId == null) return;
+    final provider = awayTeachersProvider(conversationId);
+    if (_ref.exists(provider)) _ref.invalidate(provider);
   }
 
   /// The thread controller for [conversationId], ONLY if a screen already

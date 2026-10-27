@@ -10,7 +10,7 @@ import {
 import type { ActorRef, ResolvedActors } from '../../platform/identity.service';
 import type { Actor } from '../../platform/types';
 import { actorRefKey } from '../../platform/identity.service';
-import { ConversationState, Moderation } from './vocab';
+import { ConversationState, Moderation, ReceiptState } from './vocab';
 
 /**
  * Safe DTOs. A Prisma entity is never returned from a controller or a gateway.
@@ -98,7 +98,18 @@ export interface MessageDto {
   starred?: boolean;
   /** Pinned for everyone in this conversation (at most three). */
   pinned?: boolean;
-  receipts: Array<{ actorId: string; state: string; deliveredAt: string | null; readAt: string | null }>;
+  /**
+   * PD-37: the ticks on the VIEWER'S OWN message -- `sent`, `delivered` (every
+   * countable recipient has it) or `read` (every countable recipient read it).
+   * Null on anyone else's message, on a message deleted for everyone, and in a
+   * direct teacher<->parent conversation (PD-7: no signals between them).
+   *
+   * There is deliberately no per-recipient detail here. It used to be a
+   * `receipts` array of every recipient's delivered/read times, sent to every
+   * reader -- silent members and deleted messages included. Who read a message
+   * and when is now `GET .../messages/:id/info`, for its author and for staff.
+   */
+  status: MessageStatus | null;
   /**
    * PD-11: present only when `type` is `card` -- what a ticket recorded, for the
    * client to draw as a card. `body` still carries a plain-text rendering, so a
@@ -261,6 +272,23 @@ export interface ConversationDto {
   avatarUrl?: string | null;
   /** The VIEWER's own private labels (owner decision 2026-10-19: per staff member). Staff only. */
   labels?: Array<{ id: string; name: string; color: string }>;
+
+  /**
+   * PD-33: the supervisor here is away and their backup covers for them until
+   * `until` ("Amira is covering for Noura until 3 Nov"). Null when nobody is
+   * covering; absent when not computed. Every viewer of the conversation may
+   * see it: the parent is told who answers.
+   */
+  cover?: ConversationCoverDto | null;
+}
+
+export interface ConversationCoverDto {
+  supervisorId: string;
+  supervisorName: string;
+  coverId: string;
+  coverName: string;
+  /** ISO-8601: the cover ends (and the supervisor is back) at this moment. */
+  until: string;
 }
 
 export interface ConversationViewerStateDto {
@@ -273,6 +301,11 @@ export interface ConversationViewerStateDto {
   theme: string | null;
   /** The viewer's OWN wallpaper photo for this chat, as a link signed for them; null when none. */
   wallpaperUrl: string | null;
+  /**
+   * PD-35: the viewer's open visible seat here (joined by choice). Present only
+   * while they hold one -- only staff ever do; absent for everyone else.
+   */
+  seat?: { reason: string; joinedAt: string; effective: boolean };
 }
 
 export interface LastMessageDto {
@@ -389,6 +422,8 @@ export function toConversationDto(
     avatarUrl?: string | null;
     /** The VIEWER's own private labels (staff only). Omitted for anyone else. */
     labels?: Array<{ id: string; name: string; color: string }>;
+    /** PD-33: the live cover, or null; omitted when not computed. */
+    cover?: ConversationCoverDto | null;
   },
 ): ConversationDto {
   return {
@@ -427,6 +462,7 @@ export function toConversationDto(
     lastMessage: extra?.lastMessage,
     avatarUrl: c.type === 'direct' ? undefined : (extra?.avatarUrl ?? null),
     ...(extra?.labels ? { labels: extra.labels } : {}),
+    ...(extra?.cover !== undefined ? { cover: extra.cover } : {}),
   };
 }
 
@@ -466,6 +502,63 @@ export function messageAuthorRef(
   return m.authorId ? { actorId: m.authorId, actorKind: m.authorType } : null;
 }
 
+/** PD-37: the ticks on a message, for its author. */
+export type MessageStatus = 'sent' | 'delivered' | 'read';
+
+/**
+ * PD-37: what the mapper needs to draw ticks, resolved by the caller in one
+ * query per page (`receipt-view.ts`). The mapper never queries.
+ */
+export interface ReceiptView {
+  viewerId: string;
+  /**
+   * The conversation's countable readers -- live members who are neither
+   * silent nor observers -- or null when the conversation shows no receipts
+   * at all (PD-7 direct teacher<->parent).
+   */
+  countableIn(conversationId: string): ReadonlySet<string> | null;
+}
+
+/**
+ * The WhatsApp group rule over countable readers only: `read` when every one
+ * of them read it, `delivered` when every one has it, otherwise `sent`. A
+ * recipient who has since left, or who reads without a seat (PD-8 standing,
+ * which never gets a receipt row), or who sits silent or as an observer,
+ * neither counts nor blocks.
+ */
+export function messageStatus(
+  m: Pick<Message, 'authorId' | 'conversationId' | 'deletedForAll'> & { receipts?: MessageReceipt[] },
+  view: ReceiptView | undefined,
+): MessageStatus | null {
+  if (!view || m.deletedForAll || !m.authorId || !m.conversationId) return null;
+  if (m.authorId !== view.viewerId) return null;
+  const countable = view.countableIn(m.conversationId);
+  if (!countable) return null;
+  const counted = (m.receipts ?? []).filter((r) => r.actorId !== m.authorId && countable.has(r.actorId));
+  if (counted.length > 0 && counted.every((r) => r.state === ReceiptState.READ)) return ReceiptState.READ;
+  if (counted.length > 0 && counted.every((r) => r.state !== ReceiptState.SENT)) return ReceiptState.DELIVERED;
+  return ReceiptState.SENT;
+}
+
+/** PD-37: one person in a message's "Message info". */
+export interface MessageInfoEntryDto {
+  actorId: string;
+  actorKind: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  /** When they read it (readBy), when it reached them (deliveredTo), or null (pending). */
+  at: string | null;
+}
+
+/** PD-37: who read a message and when. Countable readers only. */
+export interface MessageInfoDto {
+  messageId: string;
+  status: MessageStatus;
+  readBy: MessageInfoEntryDto[];
+  deliveredTo: MessageInfoEntryDto[];
+  pending: MessageInfoEntryDto[];
+}
+
 export type MessageWithRelations = Message & {
   attachments?: MessageAttachment[];
   reactions?: MessageReaction[];
@@ -487,6 +580,8 @@ export function toMessageDto(
   authors: ResolvedActors = new Map(),
   /** Signs a resolved author's photo for the viewer; absent means no photo links. */
   avatarFor?: (author: Actor) => string | null,
+  /** PD-37: who the viewer is and who counts as a reader; absent means `status: null`. */
+  receiptView?: ReceiptView,
 ): MessageDto {
   const hidden = m.deletedForAll;
   const author = messageAuthorRef(m);
@@ -527,12 +622,7 @@ export function toMessageDto(
           return toAttachmentDto(a, signed?.url ?? null, signed?.thumbnailUrl ?? null);
         }),
     reactions: (m.reactions ?? []).map((r) => ({ actorId: r.actorId, emoji: r.emoji })),
-    receipts: (m.receipts ?? []).map((r) => ({
-      actorId: r.actorId,
-      state: r.state,
-      deliveredAt: r.deliveredAt?.toISOString() ?? null,
-      readAt: r.readAt?.toISOString() ?? null,
-    })),
+    status: messageStatus(m, receiptView),
     card:
       !hidden && m.card
         ? { kind: m.card.kind, lessonId: m.card.lessonId, payload: m.card.payload as Record<string, unknown> }

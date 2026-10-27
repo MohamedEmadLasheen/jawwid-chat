@@ -121,6 +121,27 @@ describe('Reschedule a make-up class', () => {
 })
 
 describe('the lesson record', () => {
+  it('PD-35: asks the teacher to correct the report, with a reason; never without one', async () => {
+    on('GET', /\/lessons\/l-9$/, () => json(record()))
+    on('POST', /\/lessons\/l-9\/correction-requests$/, () => json({ id: 'q-1' }))
+    renderWithProviders(<LessonRecordDialog lessonId="l-9" conversationId="c-1" onClose={() => {}} />, { staff })
+    await userEvent.click(within(await screen.findByRole('dialog', { name: /Lesson record — Child Alpha/ })).getByRole('button', { name: 'Request correction' }))
+    const ask = await screen.findByRole('dialog', { name: /Request correction — Child Alpha/ })
+    await userEvent.click(within(ask).getByRole('button', { name: 'Save' }))
+    expect(sent('POST', /correction-requests$/)).toEqual([])
+    await userEvent.type(within(ask).getByLabelText('What needs correcting'), 'Wrong surah range')
+    await userEvent.click(within(ask).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(sent('POST', /\/lessons\/l-9\/correction-requests$/)).toEqual([{ reason: 'Wrong surah range', kind: 'correction' }]))
+  })
+
+  it('PD-35: a started lesson with no report offers to ask for it', async () => {
+    on('GET', /\/lessons\/l-9$/, () => json(record({ outcome: null, report: null })))
+    renderWithProviders(<LessonRecordDialog lessonId="l-9" conversationId="c-1" onClose={() => {}} />, { staff })
+    const view = await screen.findByRole('dialog', { name: /Lesson record — Child Alpha/ })
+    expect(within(view).getByRole('button', { name: 'Ask for the report' })).toBeInTheDocument()
+    expect(within(view).queryByRole('button', { name: 'Request correction' })).not.toBeInTheDocument()
+  })
+
   it('deleting a report asks how: leaving it unsent sends resend: false with the reason', async () => {
     on('GET', /\/lessons\/l-9$/, () => json(record()))
     on('POST', /\/lessons\/l-9\/report\/delete$/, () => json(record({ outcome: 'voided' })))

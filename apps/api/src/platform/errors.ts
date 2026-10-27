@@ -224,6 +224,8 @@ export enum CommErrorCode {
   ORG_STRUCTURE_DENIED = 'COMM.ORG_STRUCTURE_DENIED',
   /** PD-8: the requested structure is not lawful (wrong department, ended link, mixed supervisors). 409. */
   ORG_STRUCTURE_INVALID = 'COMM.ORG_STRUCTURE_INVALID',
+  /** PD-33: the change could not finish in time (a busy database); nothing was committed. 503; safe to retry. */
+  ORG_STRUCTURE_BUSY = 'COMM.ORG_STRUCTURE_BUSY',
   /** PD-11: no such lesson, or none this caller may see. 404. */
   LESSON_NOT_FOUND = 'COMM.LESSON_NOT_FOUND',
   /** PD-11: this caller may see the lesson but may not record this on it. 403. */
@@ -382,6 +384,8 @@ export enum CommErrorCode {
   MATERIAL_NOT_UPLOADED = 'COMM.MATERIAL_NOT_UPLOADED',
   /** The lessons site is not configured on this deployment (MATERIALS_SITE_BASE_URL). 409. */
   MATERIAL_UNAVAILABLE = 'COMM.MATERIAL_UNAVAILABLE',
+  /** A Materials feature that was retired (the memorization map, 2026-10-26). 410. */
+  MATERIAL_RETIRED = 'COMM.MATERIAL_RETIRED',
 
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */

@@ -589,12 +589,9 @@ describe('6. the report: practice this week and the memorization map', () => {
     ]);
     expect(JSON.stringify(practice.json)).not.toContain('activities.example.test');
 
-    const progress = await http(parent, 'GET', `/learners/${childId}/materials/progress`);
-    expect(progress.json.counts).toMatchObject({ memorized: 1, in_progress: 1, not_started: 112 });
-    expect(progress.json.juz).toHaveLength(28);
-    const juz30 = progress.json.juz.find((j: any) => j.juz === 30);
-    expect(juz30.surahs.find((s: any) => s.number === 78)).toMatchObject({ status: 'memorized', source: 'report' });
-    expect(progress.json.canCorrect).toBe(false);
+    // The map left the product (2026-10-26), but the marks a report carries are kept.
+    const marks = await g.prisma.memorizationMark.findMany({ where: { learnerId: childId }, orderBy: { seq: 'asc' } });
+    expect(marks.map((x) => [x.surah, x.status, x.source])).toEqual([[78, 'memorized', 'report'], [67, 'in_progress', 'report']]);
   });
 
   it('an edit replaces practice (the old rows are kept, withdrawn) and appends a mark only where the status changed', async () => {
@@ -631,24 +628,20 @@ describe('6. the report: practice this week and the memorization map', () => {
     })).rejects.toThrow(/own students/);
   });
 
-  it('a correction needs a reason; the teacher, the supervisor (PD-8) and the Teachers department may; the parent and another teacher may not', async () => {
-    const path = `/learners/${childId}/materials/progress/78/correct`;
-    expect((await http(teacher, 'POST', path, { status: 'needs_revision' })).status).toBe(400);
-    expect((await http(teacher, 'POST', path, { status: 'needs_revision', reason: 'forgot the last ayahs' })).status).toBe(201);
-    expect((await http(supervisor, 'POST', path, { status: 'memorized', reason: 'recited in full to the supervisor' })).status).toBe(201);
-    expect((await http(teacherSupervisor, 'POST', path, { status: 'memorized', reason: 'checked' })).status).toBe(201);
-    expect((await http(parent, 'POST', path, { status: 'memorized', reason: 'x' })).status).toBe(403);
-    expect((await http(otherTeacher, 'POST', path, { status: 'memorized', reason: 'x' })).status).toBe(404);
-
-    const history = await http(parent, 'GET', `/learners/${childId}/materials/progress/78`);
-    expect(history.json.marks.map((x: any) => [x.status, x.source])).toEqual([
-      ['memorized', 'correction'], ['memorized', 'correction'], ['needs_revision', 'correction'], ['memorized', 'report'],
-    ]);
-    expect(history.json.marks[2]).toMatchObject({ reason: 'forgot the last ayahs', by: { kind: 'teacher' } });
-    // Staff names are not shown to a family.
-    expect(history.json.marks[0].by).toEqual({ kind: 'staff', name: null });
-    const staffView = await http(supervisor, 'GET', `/learners/${childId}/materials/progress/78`);
-    expect(staffView.json.marks[1].by.name).toBeTruthy();
+  it('the memorization map is retired: its routes answer 410 to everyone, and its data stays', async () => {
+    const before = await g.prisma.memorizationMark.count({ where: { learnerId: childId } });
+    for (const who of [parent, teacher, supervisor, m.superAdmin.subject]) {
+      for (const [method, path, body] of [
+        ['GET', `/learners/${childId}/materials/progress`],
+        ['GET', `/learners/${childId}/materials/progress/78`],
+        ['POST', `/learners/${childId}/materials/progress/78/correct`, { status: 'memorized', reason: 'x' }],
+      ] as const) {
+        const r = await http(who, method, path, body);
+        expect({ who, path, status: r.status, code: r.code }).toEqual({ who, path, status: 410, code: CommErrorCode.MATERIAL_RETIRED });
+      }
+    }
+    expect(await g.prisma.memorizationMark.count({ where: { learnerId: childId } })).toBe(before);
+    expect(before).toBeGreaterThan(0);
   });
 });
 
@@ -658,7 +651,7 @@ describe('7. the child\'s page', () => {
       expect({ who, status: (await http(who, 'GET', `/learners/${childId}/materials/library`)).status }).toEqual({ who, status: 200 });
     }
     for (const who of [otherFamilyParent, otherTeacher, org2Owner]) {
-      expect({ who, status: (await http(who, 'GET', `/learners/${childId}/materials/progress`)).status }).toEqual({ who, status: 404 });
+      expect({ who, status: (await http(who, 'GET', `/learners/${childId}/materials/opened`)).status }).toEqual({ who, status: 404 });
     }
   });
 
@@ -698,8 +691,65 @@ describe('7. the child\'s page', () => {
     expect((await http(parent, 'POST', '/materials/recitations/67/open')).json.url).toMatch(/^https:\/\/storage\.pd29\.example\.test\//);
     await http(manager, 'POST', `/materials/admin/recitations/sources/${source.json.id}/surahs/67`, { clear: true });
     expect((await http(parent, 'POST', '/materials/recitations/67/open')).json.url).toBe('https://audio.example.test/067.mp3');
-    const progress = await http(parent, 'GET', `/learners/${childId}/materials/progress`);
-    expect(progress.json.juz[0].surahs[0].hasRecitation).toBe(true);
+  });
+
+  it('opened this week: an open FOR a child is recorded; each item once, last opened first; only those who read the child see it', async () => {
+    const a = await linkItem(manager, { titleAr: 'أ' });
+    const b = await linkItem(manager, { titleAr: 'ب' });
+    // Opening without a child records nothing.
+    await http(parent, 'POST', `/materials/items/${a.id}/open`);
+    expect(await g.prisma.materialOpen.count({ where: { itemId: a.id } })).toBe(0);
+    expect((await http(parent, 'POST', `/materials/items/${a.id}/open`, { learnerId: childId })).status).toBe(201);
+    expect((await http(teacher, 'POST', `/materials/items/${b.id}/open`, { learnerId: childId })).status).toBe(201);
+    expect((await http(parent, 'POST', `/materials/items/${a.id}/open`, { learnerId: childId })).status).toBe(201);
+    const r = await http(parent, 'GET', `/learners/${childId}/materials/opened`);
+    expect(r.status).toBe(200);
+    expect(r.json.timeZone).toBe('Africa/Cairo');
+    expect(r.json.items.map((x: any) => [x.item.id, x.times])).toEqual([[a.id, 2], [b.id, 1]]);
+    expect(Date.parse(r.json.weekStartsAt)).toBeLessThanOrEqual(Date.now());
+    // Opening for someone else's child is refused and records nothing.
+    expect((await http(otherFamilyParent, 'POST', `/materials/items/${a.id}/open`, { learnerId: childId })).status).toBe(404);
+    expect((await http(otherTeacher, 'POST', `/materials/items/${a.id}/open`, { learnerId: childId })).status).toBe(404);
+    expect(await g.prisma.materialOpen.count({ where: { learnerId: childId, itemId: a.id } })).toBe(2);
+    // Last week's openings are not this week's.
+    await g.prisma.$executeRawUnsafe(`alter table chat.material_open disable trigger material_open_is_append_only`);
+    await g.prisma.$executeRawUnsafe(`update chat.material_open set opened_at = now() - interval '8 days' where item_id = '${b.id}'::uuid`);
+    await g.prisma.$executeRawUnsafe(`alter table chat.material_open enable trigger material_open_is_append_only`);
+    expect((await http(parent, 'GET', `/learners/${childId}/materials/opened`)).json.items.map((x: any) => x.item.id)).toEqual([a.id]);
+    // Append-only.
+    await expect(g.prisma.$executeRawUnsafe(`delete from chat.material_open where item_id = '${a.id}'::uuid`)).rejects.toThrow(/never changed or removed/);
+  });
+
+  it('one order everywhere: Quran Al-Fatihah first then by surah descending; the rest in the order provided', async () => {
+    const r = await http(manager, 'POST', '/materials/admin/import', {
+      manifest: [
+        'ref,title_ar,subject,surah,path,status',
+        'ord-78,النبأ,quran,78,/lessons/quran/surah-78x,published',
+        'ord-ar-2,درس عربي ٢,arabic,,/lessons/arabic/x2,published',
+        'ord-114,الناس,quran,114,/lessons/quran/surah-114x,published',
+        'ord-ar-1,درس عربي ١,arabic,,/lessons/arabic/x1,published',
+        'ord-1,الفاتحة,quran,1,/lessons/quran/surah-1x,published',
+        'ord-112,الإخلاص,quran,112,/lessons/quran/surah-112x,published',
+        'ord-is-1,درس إسلامي,islamic_studies,,/lessons/islamic/x1,published',
+      ].join('\r\n'),
+      dryRun: false,
+    });
+    expect(r.json.committed).toBe(true);
+    const ours = (ids: string[]) => ids.filter((x) => x.startsWith('ord-'));
+    const admin = (await http(manager, 'GET', '/materials/admin/items')).json.items.map((i: any) => i.externalRef ?? '');
+    expect(ours(admin)).toEqual(['ord-1', 'ord-114', 'ord-112', 'ord-78', 'ord-ar-2', 'ord-ar-1', 'ord-is-1']);
+    const lib = await http(parent, 'GET', `/learners/${childId}/materials/library?subject=quran&ageGroup=all`);
+    const quran = lib.json.items.map((i: any) => i.titleAr);
+    expect(quran.filter((t: string) => ['الفاتحة', 'الناس', 'الإخلاص', 'النبأ'].includes(t))).toEqual(['الفاتحة', 'الناس', 'الإخلاص', 'النبأ']);
+    const arabic = (await http(teacher, 'GET', '/materials/items?subject=arabic')).json.items.map((i: any) => i.titleAr);
+    expect(arabic.filter((t: string) => t.startsWith('درس عربي'))).toEqual(['درس عربي ٢', 'درس عربي ١']);
+    // The provided order is the row number, kept by a re-import, editable later.
+    const ar2 = await g.prisma.materialItem.findFirstOrThrow({ where: { organizationId: orgId, externalRef: 'ord-ar-2' } });
+    expect(ar2.sortOrder).toBe(2);
+    await http(manager, 'POST', '/materials/admin/import', { manifest: 'ref,title_ar,subject,path\r\nord-ar-2,درس عربي ٢,arabic,/lessons/arabic/x2\r\n', dryRun: false });
+    expect((await g.prisma.materialItem.findUniqueOrThrow({ where: { id: ar2.id } })).sortOrder).toBe(2);
+    await http(manager, 'POST', `/materials/admin/items/${ar2.id}`, { sortOrder: 9 });
+    expect((await g.prisma.materialItem.findUniqueOrThrow({ where: { id: ar2.id } })).sortOrder).toBe(9);
   });
 
   it('the surah table in the database is the one the API ships', async () => {

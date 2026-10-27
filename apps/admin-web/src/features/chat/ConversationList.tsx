@@ -9,6 +9,7 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
 import { SearchField } from '@/shared/components/SearchField'
+import { SUPERVISION_SEAT } from './SeatParts'
 import { chatApi, chatKeys, type ChatConversation, type ChatLabel } from './chatApi'
 import { Highlighted, SEARCH_ACROSS_MIN, searchable, snippetAround, useDebounced } from './search'
 import { Avatar } from '@/shared/components/Avatar'
@@ -18,7 +19,7 @@ import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } f
 import { useConversationPreferences } from './useChatActions'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
-type View = 'all' | 'unread' | 'favorites' | 'groups' | 'archived'
+type View = 'all' | 'unread' | 'favorites' | 'groups' | 'joined' | 'archived'
 
 /**
  * The conversation list. What is in it is exactly what the server returned
@@ -85,9 +86,13 @@ export function ConversationList({
   const byId = useMemo(() => new Map(conversations.map((c) => [c.id, c])), [conversations])
 
   const archived = named.filter((c) => c.viewerState?.archived)
-  const active = named.filter((c) => !c.viewerState?.archived)
+  // PD-35: groups a teacher supervisor joined to support sit under their own
+  // filter, so they never crowd the main list.
+  const joined = named.filter((c) => !c.viewerState?.archived && c.viewerState?.seat?.reason === SUPERVISION_SEAT)
+  const active = named.filter((c) => !c.viewerState?.archived && c.viewerState?.seat?.reason !== SUPERVISION_SEAT)
   const inView = (v: View) =>
     v === 'archived' ? archived
+    : v === 'joined' ? joined
     : v === 'unread' ? active.filter((c) => (c.unreadCount ?? 0) > 0)
     : v === 'favorites' ? active.filter((c) => c.viewerState?.favorite)
     : v === 'groups' ? active.filter(isGroup)
@@ -100,6 +105,9 @@ export function ConversationList({
     { value: 'unread' as const, label: copy.filterUnread, count: inView('unread').length },
     { value: 'favorites' as const, label: copy.filterFavorites, count: inView('favorites').length },
     { value: 'groups' as const, label: copy.filterGroups, count: inView('groups').length },
+    ...(joined.length > 0 || view === 'joined'
+      ? [{ value: 'joined' as const, label: copy.filterJoined, count: joined.length }]
+      : []),
     ...(archived.length > 0 || view === 'archived'
       ? [{ value: 'archived' as const, label: copy.filterArchived, count: archived.length }]
       : []),
@@ -256,6 +264,11 @@ function ConversationRow({
           <span className="conv-row__bottom">
             <span className="conv-row__sub" dir="auto">{preview}</span>
             {c.needsReply && <Badge tone="now">{copy.needsReply}</Badge>}
+            {c.cover && c.cover.coverId === selfId && (
+              <span title={copy.coveringFor(c.cover.supervisorName)} aria-label={copy.coveringFor(c.cover.supervisorName)}>
+                <Badge tone="coverage">{copy.covering}</Badge>
+              </span>
+            )}
             {favorite && (
               <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
                 <Icon name="heart" size={14} />

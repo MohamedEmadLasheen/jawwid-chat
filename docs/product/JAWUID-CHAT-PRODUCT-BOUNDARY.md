@@ -596,7 +596,7 @@ and workload analytics:
 | Monthly scheduled hours | sum of lesson durations in the month, all outcomes |
 | Actual teaching hours | sum of durations of `held` lessons that have a report |
 | Cancellation / apology hours | sum of durations of non-`held` lessons, split by outcome |
-| Available scheduled hours | availability-template hours in the month, minus extra days off, minus scheduled lesson hours (fixed-shift teachers only) |
+| Available / free hours (PD-38) | one partition of the month's working hours, from `chat.calendar_capacity` (days of the academy's zone): **available** = the shift (full/part-shift teachers) or the availability in force that day (hourly, or no pattern yet), minus approved leave and days off; available = **booked within** (lessons, overlaps merged) + **paused within** + **free**. Booked time outside the hours is **outside**. *Scheduled hours* (above) still count every lesson, outside the hours too, so available − scheduled is not free. Read by the Teacher File and by the teacher's own workload (`GET /stats/me`). |
 | Trial lessons | `kind = trial` and `held`, split into converted / not converted |
 
 **Implementation phase.** Not yet scheduled against a milestone. Order: **L1** lesson + outcome +
@@ -2392,6 +2392,14 @@ priced deduction     = decided deduction_1|2 + terms(month).currency +
 
 **Deprecated behaviour.** PD-12's separate Leave requests and Discipline tabs.
 
+**Amendment, 2026-10-26: the known limits, closed** (owner request, no new
+number). A reward with its amount is one transaction, refused whole when the
+month has no pay terms. Every staff complaint names its source on every route
+(PD-11's supervision timeline too); older sourceless rows stay valid. The app's
+"on leave" notice updates on the conversation's realtime signals, on reconnect,
+on app resume and when the shown leave ends, never by polling. Record:
+`docs/admin/pd026-teacher-supervision.md` §Known limits, closed.
+
 **Closed.** 2026-10-22.
 
 ---
@@ -2573,7 +2581,7 @@ the app has always sent and which only a browser checks.
 
 ---
 
-### PD-29 · Materials: the open library, practice this week, the memorization map
+### PD-29 · Materials: the open library, practice this week, the memorization map (amended 2026-10-26: opened this week, no map)
 
 **Closed 2026-10-24** by the product owner, with the access model chosen by the
 department head at the owner's request. Builds on PD-15 (the lesson report
@@ -2687,9 +2695,67 @@ needs one environment variable; not done. (4) Age bands per lesson (none in
 the content). (5) A completion event from the lessons site (postMessage) to
 feed the map automatically -- a possible v2.
 
-**Deprecated behaviour.** None.
+**Deprecated behaviour.** None at closing; the amendment below retires the
+memorization map and Practice this week.
 
 **Closed.** 2026-10-24.
+
+**Amendment 2026-10-26** (the department head for the owner; no new PD number,
+migration `20261026200000_chat_pd029_material_opens`).
+
+```
+no subject "All"    the child's Library shows one subject at a time and opens
+                    on Quran (the first subject); the age band's "All ages"
+                    stays. Admin Web's Library subject chips are the same
+                    concept and lose "All" too (opening on Quran); its status
+                    and age filters keep theirs
+map retired         the memorization map leaves every screen: the child page's
+                    tab (app and PD-28 teacher web), Admin Web's Student Profile
+                    panel and its corrections, the teacher report's Memorization
+                    section. GET /learners/:id/materials/progress,
+                    GET .../progress/:surah and POST .../progress/:surah/correct
+                    stay routed and answer 410 Gone (COMM.MATERIAL_RETIRED) to
+                    everyone. The data is KEPT: chat.memorization_mark stays,
+                    append-only, nothing deleted or dropped; a report from an
+                    older app build that still carries `memorization` is
+                    accepted and recorded as before, just never shown.
+                    LESSON_ACTS.correct_memorization is no longer reachable
+opened this week    replaces Practice this week on the child page: what was
+                    opened FOR this child in the current academy week -- each
+                    item once, with its last opening, most recent first; an
+                    item since retired is listed, not playable. Recorded by
+                    POST /materials/items/:id/open with a body `learnerId`
+                    (authorized like a library read, LESSON_ACTS.read_materials,
+                    and the item must be the child's organization's) in
+                    chat.material_open (learner, item, opened_by + kind,
+                    opened_at = now()), APPEND-ONLY by trigger, no request-role
+                    grants. Read with GET /learners/:id/materials/opened, which
+                    the same readers see: the family, staff with standing, a
+                    teacher for their own students. An open without learnerId
+                    (an admin preview) records nothing
+the week            Saturday 00:00 to Friday 24:00 in the academy's time zone
+                    (config schedule.timezone, Africa/Cairo by default -- the
+                    Egypt academy week), DST-correct; the response carries
+                    weekStartsAt and timeZone
+practice kept       the teacher still attaches Practice to a lesson report, and
+                    the report's card in the chat still shows it; only the
+                    parent tab was replaced
+one order           everywhere a list of materials appears (the child's
+                    Library, Admin Web's Library, the teacher's report picker),
+                    the server orders it: Quran by surah -- Al-Fatihah (1)
+                    first, then An-Nas (114), Al-Falaq (113), Al-Ikhlas (112) ...
+                    down to An-Naba' (78), i.e. Fatihah then surah descending;
+                    every other material in the order it was provided.
+                    chat.material_item.sort_order holds that order: filled from
+                    the manifest's row number on import (or a `sort_order`
+                    column), kept by a re-import through `ref`, editable on the
+                    item form; the migration backfills the 83 seed rows from
+                    docs/product/pd029-seed's row order. Ties and unnumbered
+                    items fall back to the Arabic title, then creation time
+```
+
+PD-35's planned "not progressing" flag, which was to read this map, is dropped
+with it (the department head tells PD-35).
 
 ---
 
@@ -3016,14 +3082,69 @@ has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
 
 ---
 
-### Decisions still open after PD-1 to PD-32
+### PD-33 · Hand over to backup: a temporary cover with automatic return
 
-None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
-The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
-phase starts and do not reopen either decision. Any new product question is
-recorded here with a new `PD-n` and the same six fields: decision, canonical
-rule, implementation phase, consequences, deprecated behaviour, and the date it
-was closed.
+**Closed 2026-10-26** by the product owner (request) and the department head
+(decisions). Builds on PD-1/PD-3 (coverage is temporary and explicit) and PD-8
+(activated backup links). PD-24 remains the PERMANENT supervisor change.
+
+**Final decision.**
+
+```
+one action     "Hand over to backup": Admin Web Organization team table (manager,
+               super admin) and "I'm away" on the supervisor's chat home
+fields         backup (pre-filled: the linked backup), from (now), until
+               (required, <= cover.max_days = 30), note; one confirm summary
+               "N families, M groups, K open items move to X until <date>"
+backup choice  "I'm away" (the supervisor): only a backup a manager has already
+               linked to them (PD-8 canConfigureBackup). A manager or the super
+               admin: any eligible backup supervisor of the same department,
+               the link created as part of the start
+the model      a cover IS an activation of the pair's chat.supervisor_backup link
+               for [from, until) -- staff_principals / staff_acts_for unchanged,
+               so the backup reaches every covered conversation and queue during
+               the window and nothing after it, to the second, with no job
+seats          effective, not membership rows (BR-1 caps a 1:1 at two members):
+               access through the link; the away supervisor's pushes and staff
+               realtime go to the backup (chat.live_covers); the conversation
+               DTO carries `cover` for every viewer
+away rule      the supervisor keeps every chat (read and reply), gets no pushes,
+               and sees an "Away" banner with End cover now
+items          created during a cover follow the live learner_supervision: they
+               are the supervisor's; acts the backup authored stay attributed to
+               the backup; Instalments "mine" includes covered rows in the window
+visible        one silent system line per affected group / parent 1:1 (started,
+               extended, ended; no push); one summary push to the backup, one
+               "welcome back" push to the supervisor; Covering / Away badges
+return         automatic at `until` (worker cover sweep posts the lines); early
+               "End cover now" by the supervisor, the backup, the manager or the
+               super admin; Extend = the same window again, one tap
+who            start/extend: the supervisor, their department manager, the super
+               admin; end: also the covering backup. Audited (cover.*)
+safety         one open cover per supervisor; the backup must be active, not away
+               and cover fewer than cover.max_concurrent (= 2), re-checked on
+               Extend; the change is one short transaction under the link's row
+               lock (a manual activation cannot overwrite a cover's window, nor
+               leave access open before a future cover begins); closing a cover
+               clamps its link to that moment; deactivating / ending the link
+               ends its cover
+lines          posted after the change commits, 25 conversations per
+               transaction, each recorded once (retries never duplicate); the
+               worker finishes any left over; they do not reorder the chat list
+               or count as unread
+```
+
+**Implementation phase.** Migration `20261026130000_chat_pd033_supervisor_cover`
+(chat.supervisor_cover, guard trigger, chat.cover_of, chat.live_covers, config
+keys, two push templates); `SupervisorCoverService` + routes `GET
+/org/covers/preview`, `GET|POST /org/covers`, `POST /org/covers/:id/extend|end`,
+`GET /me/cover`; worker `coverSweep`; Admin Web `HandOverDialog`, `CoverBanner`;
+app cover line and system lines.
+
+**Follow-up.** PD-33b: ring the backup for calls in covered conversations (W7/W8
+frozen; a call still rings the members).
+
+**Closed.** 2026-10-26.
 
 ---
 
@@ -3073,6 +3194,86 @@ PD-8 decision unchanged, else `seated`); `ConversationSeatService` is the only
 writer. Routes: `POST conversations/:id/join {reason, sourceId?, note?}`,
 `POST conversations/:id/leave`, `GET me/seats`. Proven by
 `apps/api/test/integration/conversation-seat-pd035.spec.ts`.
+
+**Security review (department head, 2026-10-26), fixed forward in
+`20261026160003_chat_pd035_seat_security_fixes.sql` and the API.**
+- A seat's member row never counts as PD-8 standing, and never lends access to
+  whoever acts for its holder.
+- It is never the admin role that may change membership.
+- A seat holder gets no approvals and no internal-note fan-out, and is pushed
+  only while the seat still gives access.
+- Leaving and absorbing one seat never interleave (one lock; leave checks its
+  row count).
+
+**Final decision (part 2: teacher supervisors).** Department head, approved
+2026-10-26; owner answers Q1–Q4 relayed the same day.
+1. **Each teacher has ONE teacher supervisor**, a primary supervisor of the
+   Teachers department (`chat.teacher_supervisor_assignment`). It is set by the
+   Teachers Manager or the super admin on Organization → *Teachers &
+   supervisors*, which shows how many teachers have none. Every change is
+   audited. The database keeps an assigned supervisor in the department.
+2. **The scope** (`chat.staff_teacher_scope`):
+   - the super admin and the Teachers Manager cover every teacher;
+   - a teacher supervisor covers their own teachers. PD-8 backup links (and PD-33
+     covers) are the Operations department's only, so a teacher supervisor has
+     no backup today; the scope would follow one through `staff_acts_for` if a
+     later decision adds them.
+3. **The switch `TEACHER_SUPERVISOR_STRICT_SCOPE`** (Q1, changed by the department
+   head). It is **off by default everywhere**.
+   - **Off:** the Teachers department works department-wide exactly as before
+     PD-35, while teachers are assigned.
+   - **On:** a teacher supervisor sees and acts only on their own teachers. This
+     covers:
+     - the Teacher File and its lists;
+     - lessons, the Needs-action queue and statistics;
+     - trials, pauses, leave, discipline and certificates;
+     - complaints, rewards and parent feedback;
+     - the supervision conversation and the trial group, whose staff seats become
+       the teacher's own supervisor and the Teachers Manager.
+
+     Anything else reads as not found.
+   - The API and the worker write the switch into `chat.config` at boot, so the
+     database and the API read one value. The worker re-seats every supervision
+     conversation and trial group once at start.
+4. **The `supervision` seat.** A teacher supervisor (or the Teachers Manager)
+   joins, visibly, one of these, and only these:
+   - the Student Group or family group of a child taught by a teacher in their
+     scope;
+   - that teacher's supervision conversation or trial group.
+
+   The rules for this seat:
+   - It is decided by assignment, whatever the switch says.
+   - Anything else is refused: *ask the Teachers Manager*.
+   - It grants the `seated` basis while it holds. A change of teacher or of
+     supervisor ends access at once, and the sweep ends the seat.
+   - It is never taken in a 1:1, and BR-1 / PD-7 are untouched.
+   - It ends after 14 idle days (Q3, configurable on its `chat.seat_reason` row).
+   - In Admin Web, joined groups sit under a **Joined** filter and never crowd
+     the main list. *Join a group* lists the groups of the caller's teachers:
+     titles, teacher and children, never a message. A bar over the composer
+     offers **Leave**.
+5. **Not changed:** Operations' scope, staff↔staff 1:1s (Q2: department rooms
+   come in part 3), and the PD-31 change-teacher rules beyond scope.
+
+**Canonical rule (part 2).** `supabase/migrations/20261026160004_chat_pd035_teacher_supervisor.sql`;
+`apps/api/src/platform/teacher-scope.ts` (the one narrowing);
+`apps/api/src/teacher-supervisors/`. Routes:
+- `GET org/teacher-assignments`
+- `POST org/teachers/:id/supervisor {supervisorId|null, reason?}`
+- `GET seats/candidates?teacherId&q`
+
+Proven by `apps/api/test/integration/teacher-supervisor-pd035.spec.ts`.
+
+---
+
+### Decisions still open after PD-1 to PD-35
+
+None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
+The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
+phase starts and do not reopen either decision. Any new product question is
+recorded here with a new `PD-n` and the same six fields: decision, canonical
+rule, implementation phase, consequences, deprecated behaviour, and the date it
+was closed.
 
 ---
 
@@ -3135,7 +3336,8 @@ things M4 will run into:
 
 ### PD-34 · Notifications: one pipeline and a Notification Center for every account (P1)
 
-**Decided 2026-10-26.** The owner asked for a comprehensive notification system
+**Decided 2026-10-26** (the architecture; the defaults marked PROPOSED below
+await the owner). The owner asked for a comprehensive notification system
 (real-time, proactive, campaigns, a per-account Notification Center and an Admin
 Web dashboard). The department head approved the Phase-0 plan (five phases) and
 P1 is built with **defaults held in `chat.config`**, so the owner's open answers
@@ -3160,25 +3362,33 @@ notification is rendered in the recipient's own zone; teachers follow their phon
    paid or voided instalment, a recipient taken out of service: the waiting push
    and the not-yet-shown entry are withdrawn, by every path including SQL (a
    trigger). A lifecycle re-schedule revives them (teacher transfer).
-4. **Chats.** One entry per conversation with a count. The first message pushes
+4. **Chats.** Pushed only to the conversation's audience (live members; a PD-35
+   seat only while it still gives access; PD-33's backup for an away
+   supervisor) -- checked again just before a deferred push is sent, and
+   withdrawn when someone leaves. One entry per conversation with a count. The first message pushes
    at once; later ones within `notification.message_coalesce_seconds` (60) go as
    one trailing push. Someone reading the chat is pushed
    `notification.message_reading_grace_seconds` (20) late, and reading withdraws
-   it. Reading on one device reads the entry and tells the person's other
+   it -- only what the read covers: a push or entry that also stands for a later
+   message stays. Reading on one device reads the entry and tells the person's other
    devices (`conversation.read`). Muting withdraws a waiting push at once.
 5. **Preferences.** A person switches categories off for push; the entry still
    appears. Lessons, payments, calls, tasks and system cannot be switched off
    (`notification.locked_categories`).
-6. **Quiet hours** default to 22:00–08:00 in the person's own zone for everyone
-   (`notification.quiet_hours.default_*`); a person may change or disable them.
-   Calls and the T-30/T-15 lesson reminders are exempt by their rules. Deferred,
-   never dropped.
-7. **The lock screen names nobody** by default. A person may turn names on
-   (`showPreviews`); the academy default is `notification.lock_screen_names_default`
-   (false). The payment reminder no longer shows the amount on the lock screen.
-8. **Rate limit.** At most `notification.push_per_hour` (6) pushes an hour in
-   the chat, announcement and marketing categories; beyond it, the Center only.
-   Critical pushes are never limited.
+6. **Quiet hours: PROPOSED, OFF until the owner decides.** Each person may set
+   their own window (in their own zone); someone who has not gets none. The
+   proposal -- 22:00–08:00 for everyone -- is one switch away
+   (`notification.quiet_hours.default_enabled`, `…default_start_minute`,
+   `…default_end_minute`). Calls and the T-30/T-15 lesson reminders are exempt
+   by their rules. Deferred, never dropped.
+7. **The lock screen names nobody** by default (PROPOSED; the privacy-safe
+   default). A person may turn names on (`showPreviews`); the academy default is
+   `notification.lock_screen_names_default` (false). The payment reminder no
+   longer shows the amount on the lock screen (PROPOSED, privacy-safe).
+8. **Rate limit: PROPOSED, OFF until the owner decides.** The proposal is at most
+   6 pushes an hour per person in the chat, announcement and marketing
+   categories, the rest to the Center only (`notification.push_per_hour`; 0 = no
+   cap, the default). Critical pushes would never be limited.
 9. **Retention.** Pushes are kept 90 days, entries 365
    (`notification.delivery_retention_days`, `notification.item_retention_days`).
 

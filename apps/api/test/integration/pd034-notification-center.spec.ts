@@ -361,6 +361,97 @@ describe('3. messages: one entry per chat, coalesced pushes, read withdraws', ()
 });
 
 // ===========================================================================
+describe('3b. review of #133: deferred pushes, reads, races, cost', () => {
+  it('P1: removing a member withdraws the chat push still waiting for them (trigger)', async () => {
+    const group = (await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId)).id;
+    const t0 = new Date();
+    await messageAt(group, 1, t0);
+    await g.prisma.notification.updateMany({ where: { recipientId: s.parentId, conversationId: group }, data: { status: 'sent', sentAt: t0 } });
+    await messageAt(group, 2, new Date(t0.getTime() + 5000));
+    expect((await deliveriesTo(s.parentId, group))[1]!.status).toBe('scheduled');
+    await g.conversations.setMembership(group, s.ownerId, { actorId: s.parentId, actorKind: 'contact', memberRole: 'parent' }, 'remove', 'pd034');
+    expect((await deliveriesTo(s.parentId, group))[1]).toMatchObject({ status: 'cancelled', failureCode: 'AUDIENCE' });
+  });
+
+  it('P1: just before sending, a chat push for someone outside the audience is dropped; a member\'s stays', async () => {
+    const conv = await directWithParent();
+    const due = new Date(Date.now() - 1000);
+    const mk = (recipientId: string) => g.prisma.notification.create({
+      data: {
+        dedupeKey: `new_message:${randomUUID()}:${recipientId}`, ruleKey: 'new_message', templateKey: 'new_message',
+        eventType: 'message_published', recipientId, conversationId: conv, scheduledAt: due,
+      },
+    });
+    const outsider = await mk(s.otherParentId);
+    const member = await mk(s.parentId);
+    expect(await pipeline.guardDueMessages()).toBe(1);
+    expect(await g.prisma.notification.findUniqueOrThrow({ where: { id: outsider.id } })).toMatchObject({ status: 'cancelled', failureCode: 'AUDIENCE' });
+    expect((await g.prisma.notification.findUniqueOrThrow({ where: { id: member.id } })).status).toBe('scheduled');
+  });
+
+  it('P2-1: a read of N leaves what stands for N+1; a read of N+1 takes it', async () => {
+    const conv = await directWithParent();
+    const t0 = new Date();
+    await messageAt(conv, 1, t0);
+    await g.prisma.notification.updateMany({ where: { recipientId: s.parentId, conversationId: conv }, data: { status: 'sent', sentAt: t0 } });
+    await messageAt(conv, 2, new Date(t0.getTime() + 5000));
+    const item = () => g.prisma.notificationItem.findFirstOrThrow({ where: { recipientId: s.parentId, groupKey: `conversation:${conv}` } });
+    await pipeline.conversationRead(conv, s.parentId, BigInt(1));
+    expect((await deliveriesTo(s.parentId, conv))[1]!.status).toBe('scheduled');
+    expect((await item()).readAt).toBeNull();
+    await pipeline.conversationRead(conv, s.parentId, BigInt(2));
+    expect((await deliveriesTo(s.parentId, conv))[1]).toMatchObject({ status: 'cancelled', failureCode: 'READ' });
+    expect((await item()).readAt).not.toBeNull();
+  });
+
+  it('P2-2: five messages fanned out at once converge on one entry (count 5) and one push', async () => {
+    const conv = await directWithParent();
+    const now = new Date();
+    await Promise.all([1, 2, 3, 4, 5].map((n) => messageAt(conv, n, now)));
+    const items = await g.prisma.notificationItem.findMany({ where: { recipientId: s.parentId, groupKey: `conversation:${conv}` } });
+    expect(items).toHaveLength(1);
+    expect(items[0]!.itemCount).toBe(5);
+    expect(await deliveriesTo(s.parentId, conv)).toHaveLength(1);
+  });
+
+  it('P2-3: a fan-out resolves its whole audience in one batch, not one lookup per member', async () => {
+    let single = 0;
+    let batches = 0;
+    const counting = new Proxy(g.identity, {
+      get(target, prop, receiver) {
+        if (prop === 'resolveActor') return (...a: unknown[]) => { single += 1; return (target.resolveActor as (...x: unknown[]) => unknown)(...a); };
+        if (prop === 'resolveActors') return (...a: unknown[]) => { batches += 1; return (target.resolveActors as (...x: unknown[]) => unknown)(...a); };
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    const counted = new NotificationPipeline(g.prisma, g.notifications, g.quietHours, g.config, counting, recording as never);
+    const group = (await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId)).id;
+    await counted.messagePublishedMany({
+      conversationId: group, messageId: randomUUID(), seq: BigInt(1), now: new Date(),
+      recipients: [s.parentId, s.otherParentId, s.teacherId].map((actorId) => ({ actorId, muted: false })),
+    });
+    expect(single).toBe(0);
+    expect(batches).toBe(1);
+    expect(await g.prisma.notificationItem.count({ where: { groupKey: `conversation:${group}` } })).toBeGreaterThanOrEqual(2);
+  });
+
+  it('P2-4: until the owner decides, no default quiet hours and no hourly cap', async () => {
+    await g.prisma.$executeRawUnsafe(`delete from chat.config where key like 'notification.%'`);
+    g.config.invalidate();
+    await g.prisma.actorTimeZone.create({ data: { actorId: s.parentId, organizationId: (await actor(s.parentId)).organizationId!, timeZone: 'UTC' } });
+    const night = new Date('2030-01-10T23:00:00Z');
+    const conv = await directWithParent();
+    await messageAt(conv, 1, night);
+    expect((await deliveriesTo(s.parentId, conv))[0]!.scheduledAt.toISOString()).toBe(night.toISOString());
+    const groups = [s.learnerId, s.secondLearnerId];
+    for (const [i, learner] of groups.entries()) {
+      await messageAt((await g.conversations.ensureStudentGroup(learner, s.ownerId)).id, 1, new Date(night.getTime() + i));
+    }
+    expect(await g.prisma.notificationItem.count({ where: { recipientId: s.parentId, pushState: 'rate_limited' } })).toBe(0);
+  });
+});
+
+// ===========================================================================
 describe('4. preferences, locked categories, rate limit, quiet hours, names', () => {
   it('a person who switched chats off gets the entry and no push; lessons cannot be switched off', async () => {
     const parent = await actor(s.parentId);

@@ -8,6 +8,13 @@ import { PrismaService } from './prisma.service';
  *
  * Nothing in the communication engine may hardcode one of these numbers.
  */
+/** PD-38: a category's default shift -- wall-clock "HH:MM" in the teacher's zone, ISO weekdays. */
+export interface ShiftDefault {
+  start: string;
+  end: string;
+  weekdays: number[];
+}
+
 export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** initial hypothesis - window in which a sender may delete for everyone */
   'communication.delete_for_everyone_window_minutes': 60,
@@ -37,16 +44,17 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
   /**
-   * PD-34 defaults (owner questions open 2026-10-26; an answer changes these
-   * values, not code). Quiet hours for someone who never set their own:
-   * 22:00-08:00 in their own zone. Calls, the T-30/T-15 lesson reminders and
-   * security are exempt by their rules (respect_quiet_hours = false).
+   * PD-34. Every value below is a PROPOSAL awaiting the owner (2026-10-26); an
+   * answer changes these values, not code. Until then the two that would
+   * change what people receive are OFF: no default quiet hours (a person may
+   * still set their own) and no hourly push cap. Calls, the T-30/T-15 lesson
+   * reminders and security are exempt from quiet hours by their rules anyway.
    */
-  'notification.quiet_hours.default_enabled': true,
+  'notification.quiet_hours.default_enabled': false,
   'notification.quiet_hours.default_start_minute': 1320,
   'notification.quiet_hours.default_end_minute': 480,
-  /** PD-34: at most this many pushes an hour per person in a rate-limited category; the rest go to the Center only. */
-  'notification.push_per_hour': 6,
+  /** PD-34 (proposed: 6): pushes an hour per person in a rate-limited category before the rest go to the Center only. 0 = no cap. */
+  'notification.push_per_hour': 0,
   'notification.rate_limited_categories': ['conversation', 'announcement', 'marketing'] as readonly string[],
   /** PD-34: categories a person cannot switch off (operational). */
   'notification.locked_categories': ['lesson', 'payment', 'call', 'task', 'system'] as readonly string[],
@@ -54,7 +62,7 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'notification.message_coalesce_seconds': 60,
   /** PD-34: someone reading the chat right now gets the push this late, and not at all if they read it. */
   'notification.message_reading_grace_seconds': 20,
-  /** PD-34: names (a child's, an amount) on the lock screen, for someone who has not chosen. */
+  /** PD-34 (proposed; privacy-safe default): names (a child's, an amount) on the lock screen, for someone who has not chosen. */
   'notification.lock_screen_names_default': false,
   /** PD-34: delivery rows are kept this long; Center entries this long. */
   'notification.delivery_retention_days': 90,
@@ -99,6 +107,13 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** A family message counts as answered when the teacher replied within this many hours. */
   'stats.reply_within_hours': 24,
   /**
+   * PD-38: the shift a full-shift teacher gets when the category is chosen
+   * (editable per teacher). ISO weekdays: Saturday-Thursday, Friday off.
+   */
+  'schedule.shift.full_shift': { start: '12:00', end: '19:00', weekdays: [6, 7, 1, 2, 3, 4] } as ShiftDefault,
+  /** PD-38: the same for a part-shift teacher. */
+  'schedule.shift.part_shift': { start: '14:00', end: '18:00', weekdays: [6, 7, 1, 2, 3, 4] } as ShiftDefault,
+  /**
    * initial hypothesis - Phase 8 abuse limits (docs/security/ABUSE-LIMITS.md).
    * The fixed window every authenticated-action counter below is measured over.
    */
@@ -113,6 +128,10 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.call_start_actor': 20,
   /** initial hypothesis - inbound WebSocket frames one socket may send per minute. */
   'abuse.realtime.frames_per_socket_per_minute': 600,
+  /** PD-33: how many supervisors one backup may cover at the same time. */
+  'cover.max_concurrent': 2,
+  /** PD-33: the longest a cover may run; longer is a change of supervisor (PD-24). */
+  'cover.max_days': 30,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

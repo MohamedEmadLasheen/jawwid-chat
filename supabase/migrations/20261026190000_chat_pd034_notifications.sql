@@ -97,10 +97,22 @@ create index if not exists notification_item_inbox_idx
   on chat.notification_item (recipient_id, visible_at desc) where cancelled_at is null;
 create index if not exists notification_item_subject_idx
   on chat.notification_item (subject_id) where cancelled_at is null;
-create index if not exists notification_item_group_idx
-  on chat.notification_item (recipient_id, group_key) where read_at is null and cancelled_at is null;
+-- At most ONE open entry per person per group (a conversation's new
+-- messages): concurrent workers upsert into it (ON CONFLICT) instead of racing.
+create unique index if not exists notification_item_open_group_uniq
+  on chat.notification_item (recipient_id, group_key)
+  where group_key is not null and read_at is null and cancelled_at is null;
 create index if not exists notification_item_announce_idx
   on chat.notification_item (visible_at) where announced_at is null and cancelled_at is null;
+
+-- Which messages an entry stands for (new messages in one conversation): a
+-- message is counted the first time it is recorded here, never again, in any
+-- order two workers commit in.
+create table if not exists chat.notification_item_message (
+  item_id     uuid not null references chat.notification_item (id) on delete cascade,
+  message_id  uuid not null,
+  primary key (item_id, message_id)
+);
 
 -- ===========================================================================
 -- 2. Deliveries link to their item
@@ -184,6 +196,64 @@ create trigger notification_item_follows_delivery
   for each row execute function chat.notification_item_follows_delivery();
 
 -- ===========================================================================
+-- 4b. Leaving a conversation withdraws its waiting chat pushes
+-- ===========================================================================
+--
+-- A chat push may wait (coalescing, the reading grace, quiet hours). Someone
+-- who leaves the conversation, or whose PD-35 seat closes, in that time must
+-- not be pushed. Every writer of left_at is covered, whatever the code path.
+-- (A seat whose access lapses before the sweep closes it is caught at send
+-- time by NotificationPipeline.guardDueMessages.) failure_code AUDIENCE also
+-- withdraws the Center entry, by the trigger above.
+
+-- One function per table: each reads only its own table's columns (a shared
+-- function branching on TG_TABLE_NAME still fails, because PL/pgSQL resolves
+-- every NEW.<field> it plans, and conversation_member has no staff_id).
+create or replace function chat.cancel_message_pushes_on_member_left()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.left_at is null and new.left_at is not null then
+    update chat.notification
+       set status = 'cancelled', failure_code = 'AUDIENCE'
+     where recipient_id = new.actor_id
+       and conversation_id = new.conversation_id
+       and event_type = 'message_published'
+       and status = 'scheduled';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function chat.cancel_message_pushes_on_seat_left()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.left_at is null and new.left_at is not null then
+    update chat.notification
+       set status = 'cancelled', failure_code = 'AUDIENCE'
+     where recipient_id = new.staff_id
+       and conversation_id = new.conversation_id
+       and event_type = 'message_published'
+       and status = 'scheduled';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists member_left_cancels_message_pushes on chat.conversation_member;
+create trigger member_left_cancels_message_pushes
+  after update of left_at on chat.conversation_member
+  for each row execute function chat.cancel_message_pushes_on_member_left();
+
+drop trigger if exists seat_left_cancels_message_pushes on chat.conversation_seat;
+create trigger seat_left_cancels_message_pushes
+  after update of left_at on chat.conversation_seat
+  for each row execute function chat.cancel_message_pushes_on_seat_left();
+
+-- ===========================================================================
 -- 5. Templates
 -- ===========================================================================
 
@@ -244,6 +314,10 @@ select v.key, v.locale, 2, v.title, v.body
 alter table chat.notification_item enable row level security;
 alter table chat.notification_preference enable row level security;
 alter table chat.notification_settings enable row level security;
-revoke all on chat.notification_item, chat.notification_preference, chat.notification_settings
+alter table chat.notification_item_message enable row level security;
+revoke all on chat.notification_item, chat.notification_preference, chat.notification_settings,
+  chat.notification_item_message
   from public, anon, authenticated, chat_app;
 revoke all on function chat.notification_item_follows_delivery() from public;
+revoke all on function chat.cancel_message_pushes_on_member_left() from public;
+revoke all on function chat.cancel_message_pushes_on_seat_left() from public;

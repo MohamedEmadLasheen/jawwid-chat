@@ -19,7 +19,7 @@ was missing.
 | Leave | `GET /teacher-leave-overview`, PD-12's leave requests | approve / decline / cancel (PD-12) | the overview; "on leave" status everywhere; assignments refused |
 | Apologies & absences | `GET /discipline/violations?kind=absences` | decide (PD-12); `POST /teachers/:id/absences` | absence with no lesson |
 | Lateness | `GET /discipline/violations?kind=late` (split by `lesson.kind`) | `POST /lessons/:id/lateness` (trials too) | trial / regular split; trial lateness from the dialog |
-| Grants & rewards | `GET /teacher-files/rewards` | PD-11's bonus + PD-18's amount; `POST /teacher-files/finance/deduction-defaults` | the list; amount while recording; default deductions |
+| Grants & rewards | `GET /teacher-files/rewards` | `POST /teacher-files/:id/rewards {reason, amount}` (super admin, one transaction); PD-11's `POST /teachers/:id/bonus` without an amount; `POST /teacher-files/finance/deduction-defaults` | the list; amount while recording; default deductions |
 | Complaints | `GET /teacher-files/complaints?from=` | entries `complaint` / `complaint_followup` / `complaint_resolution`; `POST /discipline/complaints/:id/uphold` | source, handler, follow-ups, uphold, status |
 
 ## Away ("on leave")
@@ -79,12 +79,34 @@ complaint is still resolved once. Its status is computed:
 
 Complaints recorded before PD-26 have no source or handler.
 
-## Known limits
+## Known limits, closed (amendment 2026-10-26)
 
-- Recording a reward with an amount is two requests: the bonus, then its
-  amount. If the second fails (for example, no pay terms that month), the reward
-  stays recorded and the dialog says to set the amount in Payroll.
-- PD-11's `POST /teachers/:id/supervision` can still write a complaint without a
-  source; Admin Web uses the Teacher File route, which requires one.
-- The parent-app banner reads the conversation's member list once, when the chat
-  opens. It does not update live.
+The three limits recorded at closing were fixed by the owner's request,
+without a new PD number.
+
+- **A reward with its amount is one act.** `POST /teacher-files/:id/rewards
+  {reason, amount}` (the super admin, PD-18's finance tier) writes PD-11's bonus
+  entry, its card and its Core/HR note together with the payroll row that prices
+  it, in ONE transaction (`SupervisionService.bonusInTx` +
+  `TeacherPayrollService.recordReward`). The month is the one the reward is
+  recorded in. With no pay terms for that month the request is refused (409)
+  before anything is written: there is no half-recorded reward. A reward with no
+  amount stays `POST /teachers/:id/bonus` (the Teachers department), priced later
+  in Payroll. `TeacherFileModule` imports `LessonModule` for this; nothing under
+  `LessonModule` imports `TeacherFileModule`.
+- **Every staff complaint names its source, on every route.** PD-11's
+  `POST /teachers/:id/supervision {kind: 'complaint'}` now requires `source`
+  (`management` | `parent`), as the Teacher File route does. Both call
+  `staffComplaintSource` (`src/supervision/complaint-source.ts`); a complaint
+  without one is a 400 `source: must be management or parent`. The writer handles
+  it. Complaints written before the rule keep their null source and stay valid.
+  `parent_app` stays the parent's own form's (PD-32).
+- **The app's "on leave" notice is live, without polling.** The member list is
+  read again on the conversation's realtime signals (`conversation.updated`,
+  `conversation.membership_changed`) and after a reconnect (the chat realtime
+  coordinator invalidates `awayTeachersProvider`, only for a chat that is open),
+  when the app returns to the foreground, and once when the last day the notice
+  shows is over (one timer, armed only while a notice is shown). A leave that
+  cancels lessons already posts cards into the family's chat, which emits
+  `conversation.updated`. A leave that starts on a later day shows when the chat
+  is next opened or the app next resumes. No new server event was added.

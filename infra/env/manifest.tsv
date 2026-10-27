@@ -170,6 +170,15 @@ PAYMENT_LINK_BASE_URL	payments	no	opt	opt	opt
 # shown, and nothing is refused. Owner decision 2026-10-26: on in staging, off in
 # production until the owner turns it on (the deploy workflows default it so).
 SUBSCRIPTION_LOCK_ENFORCED	payments	no	opt	opt	opt
+# TEACHER_SUPERVISOR_STRICT_SCOPE is CONSUMED by apps/api/src/platform/teacher-scope.ts
+# (PD-35) in the API and the worker, which write it into chat.config at boot so
+# the database's scope decision reads the same value: 'true' = a teacher
+# supervisor works on the teachers assigned to them only (the Teachers Manager
+# and the super admin on every teacher). Anything else (or unset) = off: the
+# Teachers department works department-wide, as before PD-35, while teachers are
+# being assigned. Department head decision 2026-10-26: off everywhere until the
+# owner turns it on (the deploy workflows default it so).
+TEACHER_SUPERVISOR_STRICT_SCOPE	application	no	opt	opt	opt
 # SENTRY_DSN is CONSUMED: when set, the API and the worker report 5xx responses,
 # swallowed worker-subsystem failures and process-level faults to Sentry
 # (apps/api/src/infra/observability/sentry-error-tracker.ts); when unset or

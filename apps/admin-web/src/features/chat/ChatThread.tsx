@@ -27,6 +27,7 @@ import { ConversationCallControls } from '@/features/calls/ConversationCallContr
 import { useCallCapability } from '@/features/calls/useCallCapability'
 import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
 import { TrialCardDialog, TrialGroupBar } from '@/features/trials/TrialCardDialog'
+import { SeatBar } from './SeatParts'
 import { TR } from '@/features/trials/copy'
 import { useCallsCopy } from '@/features/calls-page/hooks'
 import { useLessonCards } from '@/features/journey/LessonCardDialogs'
@@ -420,6 +421,11 @@ export function ChatThread({
                 {copy.kind[conv.type] ?? conv.type}
                 {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
               </span>
+              {conv.cover && (
+                <span className="thread-head__cover" dir="auto">
+                  {copy.coverLine(conv.cover)}
+                </span>
+              )}
               {(conv.labels ?? []).length > 0 && (
                 <span className="cw-row__labels" aria-label={copy.labels}>
                   {conv.labels!.map((l) => (
@@ -692,6 +698,7 @@ export function ChatThread({
         </div>
       ) : (
         <>
+        {conv?.viewerState?.seat && !trialGroup && <SeatBar conversationId={conversationId} />}
         {trialGroup && (
           <TrialGroupBar
             conversationId={conversationId}

@@ -156,6 +156,20 @@ export class MessageController {
     return { unread: await this.messages.unreadCount(conversationId, actorId) };
   }
 
+  /**
+   * PD-37: Message info -- who read this message and when. Only its author or
+   * staff; countable readers only. The message page itself carries no
+   * per-recipient read state.
+   */
+  @Get(':messageId/info')
+  info(
+    @ActorId() actorId: string,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+  ) {
+    return this.messages.info(conversationId, messageId, actorId);
+  }
+
   @Post(':messageId/delivered')
   async delivered(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     const updated = await this.messages.markState([messageId], actorId, ReceiptState.DELIVERED);

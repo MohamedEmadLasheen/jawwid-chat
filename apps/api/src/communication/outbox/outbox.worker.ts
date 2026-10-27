@@ -7,6 +7,7 @@ import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName, room } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
 import { NotificationPipeline } from '../notifications/notification-pipeline.service';
+import { messageAudience } from './message-audience';
 import { ActorKind, CallOutcome, CallType, StoryState, Visibility } from '../contracts/vocab';
 
 /**
@@ -322,25 +323,38 @@ export class OutboxWorker {
     }
   }
 
+  /**
+   * The live staff members, plus (PD-33) the backup covering for any of them --
+   * approvals and internal notes go to them; a covering backup decides
+   * approvals and reads internal notes on the PD-8 `backup` basis. PD-35: a seat
+   * is presence, never charge, so a member row a seat opened (or an effective
+   * seat in a 1:1) is not one.
+   */
   private async staffMemberIds(conversationId: string): Promise<string[]> {
-    const members = await this.prisma.conversationMember.findMany({
-      where: { conversationId, leftAt: null, actorKind: ActorKind.STAFF },
-      select: { actorId: true },
-    });
-    return [...new Set([...members.map((m) => m.actorId), ...(await this.effectiveSeatIds(conversationId))])];
+    const rows = await this.prisma.$queryRaw<Array<{ actor_id: string }>>`
+      SELECT cm.actor_id::text AS actor_id FROM chat.conversation_member cm
+       WHERE cm.conversation_id = ${conversationId}::uuid AND cm.left_at IS NULL AND cm.actor_kind = 'staff'
+         AND NOT EXISTS (SELECT 1 FROM chat.conversation_seat st WHERE st.member_id = cm.id AND st.left_at IS NULL)`;
+    const ids = rows.map((r) => r.actor_id);
+    const covers = await this.coversFor(ids);
+    return [...new Set([...ids, ...covers.values()])];
   }
 
   /**
-   * PD-35: staff with an EFFECTIVE seat here -- a family 1:1, whose two members
-   * are its identity, so the seat has no member row. They hear what a member
-   * hears for as long as the seat is open.
+   * PD-33: for each of these staff members who is away under a live cover, the
+   * backup covering for them (chat.live_covers -- the cover window AND a live
+   * backup link, the same moment access ends).
    */
-  private async effectiveSeatIds(conversationId: string): Promise<string[]> {
-    const rows = await this.prisma.$queryRaw<Array<{ staff_id: string }>>`
-      SELECT staff_id::text AS staff_id FROM chat.conversation_seat
-       WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL AND member_id IS NULL`;
-    return rows.map((r) => r.staff_id);
+  private async coversFor(staffIds: readonly string[]): Promise<Map<string, string>> {
+    if (staffIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ primary_id: string; backup_id: string }>>`
+      SELECT primary_id::text AS primary_id, backup_id::text AS backup_id
+        FROM chat.live_covers(now())
+       WHERE primary_id = ANY(${[...staffIds]}::uuid[])`;
+    return new Map(rows.map((r) => [r.primary_id, r.backup_id]));
   }
+
+
 
   /**
    * WHO MAY RECEIVE A CALL EVENT. The single source of that answer.
@@ -499,12 +513,9 @@ export class OutboxWorker {
     if (payload.silent === true) return;
 
     const authorId = payload.authorId as string | null;
-    const seated = await this.prisma.conversationMember.findMany({
-      where: { conversationId, leftAt: null },
-      select: { actorId: true },
-    });
-    const effective = (await this.effectiveSeatIds(conversationId)).map((actorId) => ({ actorId }));
-    const members = [...new Map([...seated, ...effective].map((m) => [m.actorId, m])).values()];
+    // PD-35 seat rules and PD-33 cover substitution, in one place shared with
+    // the pipeline's send-time check (message-audience.ts).
+    const members = (await messageAudience(this.prisma, conversationId, authorId)).map((actorId) => ({ actorId }));
 
     const state = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId },
@@ -512,26 +523,26 @@ export class OutboxWorker {
     const mutedUntil = new Map(state.map((s) => [s.actorId, s.mutedUntil]));
     const now = new Date();
 
+    // PD-34: the Notification Center entries and coalesced pushes, for the whole
+    // audience at once (one batch of reads, not ~20 queries per member). A muted
+    // chat still counts in the Center; it is only not pushed.
+    if (this.pipeline) {
+      await this.pipeline.messagePublishedMany({
+        conversationId,
+        messageId: payload.messageId as string,
+        seq: typeof payload.seq === 'string' ? BigInt(payload.seq) : null,
+        recipients: members.map((m) => {
+          const muted = mutedUntil.get(m.actorId);
+          return { actorId: m.actorId, muted: Boolean(muted && muted > now) };
+        }),
+        now,
+      });
+      return;
+    }
+
     for (const m of members) {
       if (m.actorId === authorId) continue;
       const muted = mutedUntil.get(m.actorId);
-
-      // PD-34: the Notification Center entry and a coalesced push. A muted chat
-      // still counts in the Center; it is only not pushed.
-      if (this.pipeline) {
-        const recipient = await this.identity.resolveActor(m.actorId);
-        if (!recipient || !recipient.isActive) continue;
-        await this.pipeline.messagePublished({
-          conversationId,
-          messageId: payload.messageId as string,
-          seq: typeof payload.seq === 'string' ? BigInt(payload.seq) : null,
-          recipientId: m.actorId,
-          locale: recipient.locale,
-          muted: Boolean(muted && muted > now),
-          now,
-        });
-        continue;
-      }
 
       if (muted && muted > now) continue;
 

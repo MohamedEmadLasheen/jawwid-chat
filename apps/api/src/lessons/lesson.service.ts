@@ -31,7 +31,11 @@ import { renderCardBody, type CardLanguage } from './lesson-card';
 import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
 import { lessonPosition } from '../billing/subscription-reads';
 import type { SubscriptionLockReader } from '../platform/subscription-lock';
+import { DEPARTMENT_WIDE_SCOPE, TeacherScopeService, scopeCovers, type TeacherScope } from '../platform/teacher-scope';
 import { ReportMaterials, hasMaterials, parseReportMaterials, type CardPractice, type ReportMaterialsInput } from '../materials/report-materials';
+
+/** PD-35: no teacher -- the scope of someone outside the Teachers department. */
+const NO_TEACHERS: TeacherScope = { all: false, teacherIds: new Set() };
 
 export type Tx = Prisma.TransactionClient;
 
@@ -139,6 +143,9 @@ export class LessonService {
     // container (a missing provider fails boot); a positional harness
     // construction without it refuses nothing.
     @Inject(SUBSCRIPTION_LOCK) private readonly locks?: SubscriptionLockReader,
+    // PD-35: which teachers a Teachers-department member works on. A positional
+    // harness construction without it is department-wide (the switch's default).
+    @Optional() readonly teacherScope: TeacherScopeService = DEPARTMENT_WIDE_SCOPE,
   ) {}
 
   /**
@@ -176,7 +183,10 @@ export class LessonService {
       where: { id: learnerId, organizationId: actor.organizationId },
       select: { id: true, teacherId: true },
     });
-    if (!learner) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'learner not found');
+    // PD-35: a learner of a teacher outside the caller's scope reads as unknown.
+    if (!learner || (learner.teacherId && !(await this.teacherScope.covers(actor, learner.teacherId)))) {
+      throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'learner not found');
+    }
     if (!learner.teacherId) throw stateError('the learner has no assigned teacher');
     await this.assertMayBook(learner.id);
 
@@ -238,6 +248,9 @@ export class LessonService {
       ...(query.learnerId ? { learnerId: query.learnerId } : {}),
     };
     let standing: LessonStanding;
+    // PD-35: a teacher supervisor under strict scope stands as 'manager' to their
+    // own teachers' lessons only, and as the PD-8 supervisor to the rest.
+    let narrowedTo: ReadonlySet<string> | null = null;
     if (actor.kind === ActorKind.TEACHER) {
       standing = 'teacher';
       where.teacherId = actor.actorId;
@@ -248,8 +261,16 @@ export class LessonService {
     } else if (actor.kind === ActorKind.STAFF) {
       // The same rule as AuthorizationService.lessonStanding: the super admin
       // reads every lesson (PD-8), not only the learners they supervise.
-      if (actor.staffRole === StaffRole.SUPER_ADMIN || (await this.isManager(actor))) {
+      const teachers = await this.teachersFacts(actor);
+      if (actor.staffRole === StaffRole.SUPER_ADMIN || (teachers.department && teachers.scope.all)) {
         standing = 'manager';
+      } else if (teachers.department && !teachers.scope.all) {
+        standing = 'supervisor';
+        narrowedTo = teachers.scope.teacherIds;
+        where.OR = [
+          { teacherId: { in: [...narrowedTo] } },
+          { learnerId: { in: await this.supervisedLearnerIds(actor, now, query.learnerId) } },
+        ];
       } else {
         standing = 'supervisor';
         where.learnerId = { in: await this.supervisedLearnerIds(actor, now, query.learnerId) };
@@ -280,7 +301,8 @@ export class LessonService {
     return {
       lessons: rows.map((r) => {
         const l = learnerLesson(r);
-        return { ...this.toDto(l, standing, now, escalation), acts: this.actsFor(actor, standing, l, now) };
+        const own: LessonStanding = narrowedTo?.has(l.teacherId) ? 'manager' : standing;
+        return { ...this.toDto(l, own, now, escalation), acts: this.actsFor(actor, own, l, now) };
       }),
     };
   }
@@ -318,32 +340,37 @@ export class LessonService {
     await this.requireManager(actor);
     const now = new Date();
     const escalation = await this.escalationMs();
+    // PD-35: the queue of the teachers in the caller's scope.
+    const scope = await this.teacherScope.scopeOf(actor);
+    const ours = (teacherId: string | null | undefined) => scopeCovers(scope, teacherId);
     const open = await this.prisma.lesson.findMany({
       where: { ...LEARNER_LESSON, organizationId: actor.organizationId, outcome: null, endsAt: { lte: now } },
       include: LESSON_INCLUDE,
       orderBy: { endsAt: 'asc' },
       take: 500,
-    }).then((rows) => rows.map(learnerLesson));
-    const rulings = await this.prisma.lessonRuling.findMany({
+    }).then((rows) => rows.map(learnerLesson).filter((l) => ours(l.teacherId)));
+    const rulings = (await this.prisma.lessonRuling.findMany({
       where: { organizationId: actor.organizationId, decision: null },
       include: { lesson: { include: LESSON_INCLUDE } },
       orderBy: { openedAt: 'asc' },
       take: 500,
-    });
+    })).filter((r) => ours(r.lesson.teacherId));
     const lessons = open.map((l) => this.toDto(l, 'manager', now, escalation));
     // PD-11 T2: teacher-cancelled lessons nobody replaced within the window, and
     // families waiting for an answer about their regular times.
     const windowDays = Number(await this.config.get('lesson.makeup_window_days'));
-    const owed = await this.owedMakeups(actor.organizationId as string, { closedDaysAgo: windowDays });
-    const requests = await this.prisma.scheduleChangeRequest.findMany({
+    const owed = (await this.owedMakeups(actor.organizationId as string, { closedDaysAgo: windowDays })).filter((l) => ours(l.teacherId));
+    const pending = await this.prisma.scheduleChangeRequest.findMany({
       where: { organizationId: actor.organizationId, status: 'pending' },
       orderBy: { createdAt: 'asc' },
       take: 500,
     });
-    const learnerNames = new Map(
-      (await this.prisma.learner.findMany({ where: { id: { in: requests.map((r) => r.learnerId) } }, select: { id: true, name: true } }))
-        .map((l) => [l.id, l.name]),
+    const learners = new Map(
+      (await this.prisma.learner.findMany({ where: { id: { in: pending.map((r) => r.learnerId) } }, select: { id: true, name: true, teacherId: true } }))
+        .map((l) => [l.id, l]),
     );
+    const requests = pending.filter((r) => ours(learners.get(r.learnerId)?.teacherId));
+    const learnerNames = new Map([...learners.values()].map((l) => [l.id, l.name]));
     return {
       overdue: lessons.filter((l) => l.phase === 'overdue'),
       awaitingClose: lessons.filter((l) => l.phase === 'awaiting_close'),
@@ -358,8 +385,8 @@ export class LessonService {
       // learner's teacher's zone), never the database's UTC current_date: the two
       // disagreed for the hours after local midnight.
       returningSoon: (
-        await this.prisma.$queryRaw<Array<{ id: string; learner_id: string; name: string; return_on: Date }>>`
-          SELECT s.id::text AS id, s.learner_id::text AS learner_id, l.name, s.return_on
+        await this.prisma.$queryRaw<Array<{ id: string; learner_id: string; name: string; return_on: Date; teacher_id: string | null }>>`
+          SELECT s.id::text AS id, s.learner_id::text AS learner_id, l.name, s.return_on, l.teacher_id::text AS teacher_id
             FROM chat.learner_suspension s JOIN chat.learner l ON l.id = s.learner_id
            WHERE s.organization_id = ${actor.organizationId}::uuid AND s.status = 'active' AND s.kind = 'temporary'
              AND s.return_on - ${Number(await this.config.get('lesson.return_notice_days'))}::int
@@ -367,7 +394,7 @@ export class LessonService {
                       (SELECT a.timezone FROM chat.teacher_availability a WHERE a.teacher_id = l.teacher_id LIMIT 1),
                       ${DEFAULT_ZONE}))::date
            ORDER BY s.return_on`
-      ).map((r) => ({
+      ).filter((r) => ours(r.teacher_id)).map((r) => ({
         suspensionId: r.id,
         learner: { id: r.learner_id, name: r.name },
         returnOn: r.return_on.toISOString().slice(0, 10),
@@ -463,10 +490,13 @@ export class LessonService {
     // PD-15: a staff member's standing is computed exactly as load() computes
     // it, so the child's supervisor sees the excuse cards in the group.
     const staff = actor.kind === ActorKind.STAFF;
-    const teachersDepartment = staff ? await this.isManager(actor) : false;
-    const supervised = new Set(staff && !teachersDepartment ? await this.supervisedLearnerIds(actor, now) : []);
+    const teachers = staff ? await this.teachersFacts(actor) : { department: false, scope: NO_TEACHERS };
+    const supervised = new Set(staff && !(teachers.department && teachers.scope.all) ? await this.supervisedLearnerIds(actor, now) : []);
     const standingFor = (l: { learnerId: string } & Parameters<LessonService['scopeOf']>[0]) =>
-      this.authz.lessonStanding(actor, this.scopeOf(l), { teachersDepartment, supervisesLearner: supervised.has(l.learnerId) });
+      this.authz.lessonStanding(actor, this.scopeOf(l), {
+        teachersDepartment: teachers.department && scopeCovers(teachers.scope, l.teacherId),
+        supervisesLearner: supervised.has(l.learnerId),
+      });
     const lessonNumbers = new Map<string, { suggestedLessonNumber: number; suggestedLessonTotal?: number }>();
     for (const l of rows) {
       const standing = standingFor(l);
@@ -1150,7 +1180,7 @@ export class LessonService {
     const lesson = learnerLesson(row);
     const staff = actor.kind === ActorKind.STAFF;
     const standing = this.authz.lessonStanding(actor, this.scopeOf(lesson), {
-      teachersDepartment: staff ? await this.isManager(actor) : false,
+      teachersDepartment: staff ? await this.supervisesTeacher(actor, lesson.teacherId) : false,
       supervisesLearner: staff ? (await this.supervisedLearnerIds(actor, new Date(), lesson.learnerId)).length > 0 : false,
     });
     if (!standing) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
@@ -1174,6 +1204,21 @@ export class LessonService {
   /** The actor manages or belongs to the organization's Teachers department. */
   async isManager(actor: Actor): Promise<boolean> {
     return this.inDepartment(actor, 'teachers');
+  }
+
+  /**
+   * PD-35: in the Teachers department AND this teacher is in the actor's scope
+   * (always, with the switch off). What "the Teachers department" means for one
+   * teacher's lessons, transfers and records.
+   */
+  async supervisesTeacher(actor: Actor, teacherId: string | null | undefined): Promise<boolean> {
+    return (await this.isManager(actor)) && (await this.teacherScope.covers(actor, teacherId));
+  }
+
+  /** PD-35: in the Teachers department, and which teachers (all of them, with the switch off). */
+  async teachersFacts(actor: Actor): Promise<{ department: boolean; scope: TeacherScope }> {
+    const department = await this.isManager(actor);
+    return { department, scope: department ? await this.teacherScope.scopeOf(actor) : NO_TEACHERS };
   }
 
   /** The actor manages or belongs to the organization's `kind` department (PD-8). */

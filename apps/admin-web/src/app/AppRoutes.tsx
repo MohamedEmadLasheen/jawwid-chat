@@ -40,6 +40,7 @@ import { AccountsPage } from '@/features/accounts/AccountsPage'
 import { SupportSessionPage } from '@/features/support/SupportSessionPage'
 import { DevicesPage } from '@/features/devices/DevicesPage'
 import { NotificationsPage } from '@/features/notification-center/NotificationsPage'
+import { SchedulePage } from '@/features/schedule/SchedulePage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -96,6 +97,8 @@ export function AppRoutes() {
         <Route path="/teachers/needs-action" element={<Area area="teachers"><NeedsActionPage /></Area>} />
         <Route path="/teachers/schedules" element={<Area area="teachers"><SchedulesPage /></Area>} />
         <Route path="/teachers/students" element={<Area area="teachers"><StudentsPage /></Area>} />
+        {/* PD-38: the academy's scheduling calendar; the server decides each request (GET /calendar*). */}
+        <Route path="/schedule" element={<Area area="schedule"><SchedulePage /></Area>} />
         {/* PD-10 Teacher Files: a tab of the same area; the server refuses anyone else. */}
         <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />

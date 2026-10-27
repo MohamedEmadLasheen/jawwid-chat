@@ -148,6 +148,10 @@ export class CertificateService {
       where.requestedBy = actor.actorId;
     } else if (!(await this.supervision.staffAccess(actor)).canSupervise) {
       throw new CommError(CommErrorCode.CERTIFICATE_DENIED, 'only the Teachers department reviews certificates');
+    } else {
+      // PD-35: the requests of the teachers in the caller's scope.
+      const scope = await this.supervision.teacherScope.scopeOf(actor);
+      if (!scope.all) where.requestedBy = { in: [...scope.teacherIds] };
     }
     const rows = await this.prisma.learnerCertificate.findMany({
       where,
@@ -332,6 +336,7 @@ export class CertificateService {
 
   private async requireOpen(actor: Actor, certificateId: string): Promise<CertificateRow> {
     const cert = await this.load(actor, certificateId);
+    await this.supervision.requireTeacherInScope(actor, cert.requestedBy, CommErrorCode.CERTIFICATE_NOT_FOUND);
     if (cert.state !== CertificateState.REQUESTED) {
       throw new CommError(CommErrorCode.CERTIFICATE_STATE, 'this certificate has already been decided', 409);
     }

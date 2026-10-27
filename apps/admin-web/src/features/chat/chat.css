@@ -538,3 +538,17 @@ mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; 
 .cw-wall { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-block-start: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); }
 .cw-wall__preview { inline-size: 96px; block-size: 64px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-hover) center / cover no-repeat; flex: none; }
 .cw-support { font-style: normal; color: var(--danger); }
+
+/* PD-35: "Join a group" -- the groups of the viewer's teachers. */
+.cw-join { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: 2px; max-block-size: 60vh; overflow-y: auto; }
+.cw-join__row {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+}
+.cw-join__row:hover { background: var(--surface-hover); }
+.cw-join__main { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
+.cw-join__title { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-join__meta { font-size: var(--fs-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* PD-33: "Amira is covering for Noura until 3 Nov" under a chat's name. */
+.thread-head__cover { font-size: var(--fs-xs); color: var(--text-link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

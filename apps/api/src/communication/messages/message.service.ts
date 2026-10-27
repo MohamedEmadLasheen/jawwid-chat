@@ -21,8 +21,12 @@ import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import {
   MessageDto,
+  MessageInfoDto,
+  MessageInfoEntryDto,
   MessageWithRelations,
+  ReceiptView,
   messageAuthorRef,
+  messageStatus,
   toMessageDto,
   needsReply,
   conversationState,
@@ -38,6 +42,7 @@ import {
   Visibility,
 } from '../contracts/vocab';
 import { currentImpersonationId } from '../../platform/request-context';
+import { buildReceiptView, isCountableReader, isDirectTeacherParent } from './receipt-view';
 
 export interface AttachmentInput {
   kind: string;
@@ -127,6 +132,37 @@ export class MessageService {
       if (ref) refs.push(ref);
     }
     return this.identity.resolveActors(refs);
+  }
+
+  /**
+   * PD-37: the countable readers of every conversation in which the viewer
+   * wrote one of `rows` -- one query, and none at all when the page holds
+   * nothing of theirs (only an author sees ticks).
+   */
+  private async receiptViewFor(
+    viewerId: string,
+    rows: ReadonlyArray<Pick<Message, 'authorId' | 'conversationId'>>,
+  ): Promise<ReceiptView> {
+    const convIds = [
+      ...new Set(rows.filter((m) => m.authorId === viewerId && m.conversationId).map((m) => m.conversationId!)),
+    ];
+    if (convIds.length === 0) return buildReceiptView(viewerId, new Map(), []);
+    const convs = await this.prisma.conversation.findMany({
+      where: { id: { in: convIds } },
+      select: {
+        id: true,
+        type: true,
+        members: {
+          where: { leftAt: null },
+          select: { conversationId: true, actorId: true, actorKind: true, leftAt: true, isSilent: true, memberRole: true },
+        },
+      },
+    });
+    return buildReceiptView(
+      viewerId,
+      new Map(convs.map((c) => [c.id, c.type])),
+      convs.flatMap((c) => c.members),
+    );
   }
 
   // -------------------------------------------------------------------
@@ -381,6 +417,7 @@ export class MessageService {
         await this.attachments.signUrlsForMessages([created.id], actor.actorId),
         await this.authorsFor([created]),
         (author) => signActorAvatar(author, conv.id, actor.actorId),
+        await this.receiptViewFor(actor.actorId, [created]),
       );
     } catch (e) {
       // Concurrent duplicate submission of the same client_message_id.
@@ -417,6 +454,7 @@ export class MessageService {
       await this.attachments.signUrlsForMessages([found.id], authorId),
       await this.authorsFor([found]),
       (author) => signActorAvatar(author, conversationId, authorId),
+      await this.receiptViewFor(authorId, [found]),
     );
   }
 
@@ -495,9 +533,10 @@ export class MessageService {
     ]);
     const starredIds = new Set(starRows.map((r) => r.messageId));
     const pinnedIds = new Set(pinRows.map((r) => r.messageId));
+    const receiptView = await this.receiptViewFor(actor.actorId, rows);
     // Photos are signed for this viewer in THIS conversation: pure HMAC, no I/O.
     const messages = rows.map((m) => ({
-      ...toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conv.id, actor.actorId)),
+      ...toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conv.id, actor.actorId), receiptView),
       starred: starredIds.has(m.id),
       pinned: pinnedIds.has(m.id),
     }));
@@ -624,6 +663,91 @@ export class MessageService {
         lastReadSeq: target.toString(),
       });
     });
+  }
+
+  /**
+   * PD-37: "Message info" -- who read a message, who has it, who does not yet.
+   *
+   * The per-recipient detail the message page used to hand every reader now
+   * lives here, behind two gates: the reader must be able to read the message
+   * (the same check as every message route), AND be its author or staff. A
+   * parent sees who read THEIR message; never who read the teacher's.
+   *
+   * Countable readers only (`isCountableReader`): a silent or observer member
+   * is never listed, and someone reading through PD-8 standing without a seat
+   * has no receipt to list. A member who has left is not listed either.
+   */
+  async info(conversationId: string, messageId: string, actorId: string): Promise<MessageInfoDto> {
+    const { actor, message, conv } = await this.loadForActor(messageId, actorId);
+    const absent = () => new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    // A message deleted for everyone keeps its receipts for the audit trail;
+    // nobody is shown them. One the viewer deleted for themselves is gone for them.
+    if (message.conversationId !== conversationId || message.deletedForAll) throw absent();
+    const hiddenForViewer = await this.prisma.messageHiddenFor.findUnique({
+      where: { messageId_actorId: { messageId, actorId: actor.actorId } },
+    });
+    if (hiddenForViewer) throw absent();
+
+    const isAuthor = message.authorId === actor.actorId;
+    if (!isAuthor && actor.kind !== ActorKind.STAFF) {
+      throw new CommError(
+        CommErrorCode.NOT_MESSAGE_AUTHOR,
+        'only the author of a message, or staff, can see who read it',
+        403,
+      );
+    }
+
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null },
+    });
+    // PD-7: no signals between a teacher and a parent, so the parties to a
+    // direct teacher<->parent conversation see no read state. Staff, who
+    // supervise it, still may.
+    if (actor.kind !== ActorKind.STAFF && isDirectTeacherParent(conv.type, members)) {
+      throw new CommError(
+        CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+        'BR-1: a teacher and a parent communicate only inside the Student Group, never directly',
+      );
+    }
+    const countable = members.filter((m) => isCountableReader(m) && m.actorId !== message.authorId);
+    const receipts = await this.prisma.messageReceipt.findMany({
+      where: { messageId, actorId: { in: countable.map((m) => m.actorId) } },
+    });
+    const byActor = new Map(receipts.map((r) => [r.actorId, r]));
+    const people = await this.identity.resolveActors(
+      countable.filter((m) => byActor.has(m.actorId)).map((m) => ({ actorId: m.actorId, actorKind: m.actorKind })),
+    );
+
+    const readBy: MessageInfoEntryDto[] = [];
+    const deliveredTo: MessageInfoEntryDto[] = [];
+    const pending: MessageInfoEntryDto[] = [];
+    for (const m of countable) {
+      // A member who joined after the message was sent has no receipt for it:
+      // it was never addressed to them, so they are not "pending" either.
+      const r = byActor.get(m.actorId);
+      if (!r) continue;
+      const person = people.get(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }));
+      const entry = (at: Date | null): MessageInfoEntryDto => ({
+        actorId: m.actorId,
+        actorKind: m.actorKind,
+        displayName: person?.displayName ?? null,
+        avatarUrl: person ? signActorAvatar(person, conv.id, actor.actorId) : null,
+        at: at?.toISOString() ?? null,
+      });
+      if (r.state === ReceiptState.READ) readBy.push(entry(r.readAt));
+      else if (r.state === ReceiptState.DELIVERED) deliveredTo.push(entry(r.deliveredAt));
+      else pending.push(entry(null));
+    }
+    const byTime = (a: MessageInfoEntryDto, b: MessageInfoEntryDto) => (a.at ?? '').localeCompare(b.at ?? '');
+    readBy.sort(byTime);
+    deliveredTo.sort(byTime);
+
+    // The aggregate over the same readers, whoever is asking.
+    const status = messageStatus(
+      { ...message, receipts },
+      { viewerId: message.authorId ?? '', countableIn: () => new Set(countable.map((m) => m.actorId)) },
+    ) ?? ReceiptState.SENT;
+    return { messageId, status, readBy, deliveredTo, pending };
   }
 
   /**
@@ -960,7 +1084,10 @@ export class MessageService {
   private async dtosFor(rows: MessageWithRelations[], conversationId: string, actor: Actor): Promise<MessageDto[]> {
     const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id), actor.actorId);
     const authors = await this.authorsFor(rows);
-    return rows.map((m) => toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conversationId, actor.actorId)));
+    const receiptView = await this.receiptViewFor(actor.actorId, rows);
+    return rows.map((m) =>
+      toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conversationId, actor.actorId), receiptView),
+    );
   }
 
   // -------------------------------------------------------------------
@@ -1531,6 +1658,7 @@ export class MessageService {
       await this.attachments.signUrlsForMessages([updated.id], actor.actorId),
       await this.authorsFor([updated]),
       (author) => signActorAvatar(author, conv.id, actor.actorId),
+      await this.receiptViewFor(actor.actorId, [updated]),
     );
   }
 }

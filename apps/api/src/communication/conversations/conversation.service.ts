@@ -22,7 +22,7 @@ import type { AuditService } from '../../platform/audit.service';
 import type { StaffAccessBasis } from '../../platform/staff-scope';
 import { Actor, SYSTEM_ACTOR, isConversationStaff } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
-import type { ConversationWithLearner, MemberAwayDto, ResolvedMember } from '../contracts/dto';
+import type { ConversationCoverDto, ConversationWithLearner, MemberAwayDto, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
 import {
   ActorKind,
@@ -816,7 +816,10 @@ export class ConversationService {
     if (toAdd.length === 0 && toRemove.length === 0) {
       if (toAbsorb.length > 0) {
         await this.prisma.$transaction(async (tx) => {
-          for (const id of toAbsorb) await this.absorbSeat(tx, conv.id, id);
+          const reseated = await this.absorbSeats(tx, conv.id, toAbsorb, desired);
+          if (reseated.length > 0) {
+            await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added: reseated, removed: [] });
+          }
         });
       }
       // RT-009: nothing changed NOW, but this may be the retry of a sync whose
@@ -827,7 +830,9 @@ export class ConversationService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      for (const id of toAbsorb) await this.absorbSeat(tx, conv.id, id);
+      toAdd.push(
+        ...(await this.absorbSeats(tx, conv.id, toAbsorb, desired, false)).map((id) => desired.get(id) as MemberSpec),
+      );
       if (toRemove.length > 0) {
         await tx.conversationMember.updateMany({
           where: { id: { in: toRemove.map((m) => m.id) } },
@@ -1125,12 +1130,10 @@ export class ConversationService {
         });
         if (ended.count > 0) removed.push(oldId);
       }
-      const present = await tx.conversationMember.findFirst({
-        where: { conversationId, actorId: newSupervisorId, leftAt: null },
-      });
       // PD-35: the new supervisor may already sit here by choice; the row is
-      // theirs now as supervisor, and the seat ends as absorbed.
-      if (present) await this.absorbSeat(tx, conversationId, newSupervisorId);
+      // theirs now as supervisor, and the seat ends as absorbed. Read under the
+      // seat's lock, so a leave of that seat is never half-seen.
+      const present = await this.absorbSeat(tx, conversationId, newSupervisorId);
       if (!present) {
         await tx.conversationMember.create({
           data: {
@@ -1322,11 +1325,18 @@ export class ConversationService {
     }
     const now = new Date();
     const own = await this.membershipOf(conv.id, actor.actorId);
+    // PD-35: a seat's member row is presence, never the admin role that may
+    // change a conversation's membership.
+    const ownIsSeat = own
+      ? (await this.prisma.$queryRaw<Array<{ n: number }>>`
+          SELECT count(*)::int AS n FROM chat.conversation_seat
+           WHERE member_id = ${own.id}::uuid AND left_at IS NULL`)[0].n > 0
+      : false;
     const scoped = this.authz.canManageMembershipIn(actor, {
       type: conv.type,
       organizationId: conv.organizationId,
       actorBasis: await this.authz.staffAccess(actor, conv, now),
-      actorMemberRole: own?.memberRole ?? null,
+      actorMemberRole: own && !ownIsSeat ? own.memberRole : null,
     });
     if (!scoped.allowed) {
       const status = scoped.code === CommErrorCode.CONVERSATION_NOT_FOUND ? 404 : 403;
@@ -1621,6 +1631,16 @@ export class ConversationService {
     return new Map(rows.map((r) => [r.conversationId, r]));
   }
 
+  /** PD-35: the viewer's open seats among these conversations, by conversation. */
+  async viewerSeats(conversationIds: readonly string[], staffId: string) {
+    if (conversationIds.length === 0) return new Map<string, { reason: string; joinedAt: string; effective: boolean }>();
+    const rows = await this.prisma.$queryRaw<Array<{ conversation_id: string; reason: string; joined_at: Date; effective: boolean }>>`
+      SELECT conversation_id::text AS conversation_id, reason, joined_at, member_id IS NULL AS effective
+        FROM chat.conversation_seat
+       WHERE staff_id = ${staffId}::uuid AND left_at IS NULL AND conversation_id = ANY(${[...conversationIds]}::uuid[])`;
+    return new Map(rows.map((r) => [r.conversation_id, { reason: r.reason, joinedAt: r.joined_at.toISOString(), effective: r.effective }]));
+  }
+
   /** Archive / mute / pin / favorite are per-user; one user's pin never affects another. */
   async setPreferences(
     conversationId: string,
@@ -1660,17 +1680,20 @@ export class ConversationService {
   }
 
   /**
-   * A visible line ("Ola joined to support"), posted inside the caller's
-   * transaction and announced to open screens with no push
-   * (MessageCreatedPayload.silent). PD-33 and PD-35.
+   * A visible line ("Amira is covering for Noura until 3 Nov", "Ola joined to
+   * support"), posted inside the caller's transaction and announced to open
+   * screens with no push (MessageCreatedPayload.silent). PD-33 and PD-35.
+   * `touchActivity: false` (PD-33's cover lines) leaves the chat list's order
+   * alone; a system message never counts as unread (it carries no receipts).
    */
   async postAnnouncement(
     tx: Prisma.TransactionClient,
     conversationId: string,
     kind: string,
     payload: Record<string, unknown>,
-  ): Promise<void> {
-    const message = await this.systemMessage(tx, conversationId, kind, payload);
+    opts: { touchActivity?: boolean } = {},
+  ): Promise<string> {
+    const message = await this.systemMessage(tx, conversationId, kind, payload, opts);
     await this.outbox.enqueue(tx, CommEvent.MESSAGE_CREATED, {
       conversationId,
       messageId: message.id,
@@ -1683,6 +1706,54 @@ export class ConversationService {
       createdAt: message.createdAt.toISOString(),
       silent: true,
     });
+    return message.id;
+  }
+
+  /**
+   * PD-33: the live cover each conversation is under, if any -- a staff member
+   * of it (or the supervisor responsible for a group's children) is away and
+   * a backup covers for them (chat.live_covers). One query for the whole list.
+   */
+  async coversOf(conversationIds: readonly string[]): Promise<Map<string, ConversationCoverDto>> {
+    if (conversationIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<
+      Array<{ conversation_id: string; primary_id: string; primary_name: string; backup_id: string; backup_name: string; ends_at: Date }>
+    >`
+      WITH ids AS (SELECT unnest(${[...conversationIds]}::uuid[]) AS id),
+           principals AS (
+             SELECT cm.conversation_id, cm.actor_id AS staff_id
+               FROM chat.conversation_member cm JOIN ids ON ids.id = cm.conversation_id
+              WHERE cm.left_at IS NULL AND cm.actor_kind = 'staff'
+             UNION
+             SELECT c.id, ls.supervisor_id
+               FROM chat.conversation c JOIN ids ON ids.id = c.id
+               JOIN chat.learner_supervision ls ON ls.learner_id = c.learner_id
+              WHERE c.type = 'student_group'
+             UNION
+             SELECT cl.conversation_id, ls.supervisor_id
+               FROM chat.conversation_learner cl JOIN ids ON ids.id = cl.conversation_id
+               JOIN chat.learner_supervision ls ON ls.learner_id = cl.learner_id)
+      SELECT DISTINCT ON (p.conversation_id)
+             p.conversation_id::text AS conversation_id,
+             lc.primary_id::text AS primary_id, ps.name AS primary_name,
+             lc.backup_id::text AS backup_id, bs.name AS backup_name, lc.ends_at
+        FROM principals p
+        JOIN chat.live_covers(now()) lc ON lc.primary_id = p.staff_id
+        JOIN chat.staff ps ON ps.id = lc.primary_id
+        JOIN chat.staff bs ON bs.id = lc.backup_id
+       ORDER BY p.conversation_id, lc.ends_at`;
+    return new Map(
+      rows.map((r) => [
+        r.conversation_id,
+        {
+          supervisorId: r.primary_id,
+          supervisorName: r.primary_name,
+          coverId: r.backup_id,
+          coverName: r.backup_name,
+          until: r.ends_at.toISOString(),
+        },
+      ]),
+    );
   }
 
   /**
@@ -1702,11 +1773,47 @@ export class ConversationService {
    * new supervisor) keeps the member row; the seat itself ends as 'absorbed', so
    * leaving it later can never take away a membership that is not the seat's.
    */
-  private async absorbSeat(tx: Prisma.TransactionClient, conversationId: string, staffId: string): Promise<void> {
+  private async absorbSeat(tx: Prisma.TransactionClient, conversationId: string, staffId: string): Promise<boolean> {
+    // The seat service's own lock: a leave and an absorb of one seat never
+    // interleave. The member row is read only once it is held, so a leave that
+    // committed first is seen, and the caller seats the person afresh.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'seat:' + conversationId + ':' + staffId}))`;
+    const live = await tx.conversationMember.findFirst({
+      where: { conversationId, actorId: staffId, leftAt: null },
+      select: { id: true },
+    });
+    if (!live) return false;
     await tx.$executeRaw`
       UPDATE chat.conversation_seat SET left_at = now(), left_kind = 'absorbed'
        WHERE conversation_id = ${conversationId}::uuid AND staff_id = ${staffId}::uuid
          AND left_at IS NULL AND member_id IS NOT NULL`;
+    return true;
+  }
+
+  /**
+   * PD-35: absorb the seats of people wanted here in their own right. One whose
+   * seat was left meanwhile is seated afresh from `desired` (here, or by the
+   * caller's own insert when `insert` is false). Returns those ids.
+   */
+  private async absorbSeats(
+    tx: Prisma.TransactionClient,
+    conversationId: string,
+    ids: readonly string[],
+    desired: ReadonlyMap<string, MemberSpec>,
+    insert = true,
+  ): Promise<string[]> {
+    const reseat: string[] = [];
+    for (const id of ids) {
+      if (await this.absorbSeat(tx, conversationId, id)) continue;
+      reseat.push(id);
+      const spec = desired.get(id) as MemberSpec;
+      if (insert) {
+        await tx.conversationMember.create({
+          data: { conversationId, actorId: spec.actorId, actorKind: spec.actorKind, memberRole: spec.memberRole },
+        });
+      }
+    }
+    return reseat;
   }
 
   /** System messages are generated by the backend and never by a client. */
@@ -1715,6 +1822,7 @@ export class ConversationService {
     conversationId: string,
     kind: string,
     payload: Record<string, unknown>,
+    opts: { touchActivity?: boolean } = {},
   ): Promise<Message> {
     // The conversation's own row, locked, is the authority for the message's
     // tenant (RT-030): the column default is the seeded organization, which is
@@ -1744,7 +1852,7 @@ export class ConversationService {
     });
     await tx.conversation.update({
       where: { id: conversationId },
-      data: { lastSeq: seq, lastActivityAt: new Date() },
+      data: opts.touchActivity === false ? { lastSeq: seq } : { lastSeq: seq, lastActivityAt: new Date() },
     });
     return message;
   }

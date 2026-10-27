@@ -16,9 +16,9 @@ import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/lesson.dart';
 import 'package:jawwid_chat/shared/models/materials.dart';
 
-/// PD-29 on the client: a child's Materials page (Library, Practice this week,
-/// Progress map), playing an item behind the activity seam, and the lesson
-/// report's Practice and Memorization sections. The server's answers are
+/// PD-29 on the client (amended 2026-10-26): a child's Materials page (Library,
+/// Opened this week), playing an item behind the activity seam, and the lesson
+/// report's Practice section. The server's answers are
 /// stubbed; the client is held to drawing what it is given and sending exactly
 /// what the teacher chose.
 void main() {
@@ -52,25 +52,33 @@ void main() {
   }
 
   group('Library', () {
-    testWidgets('opens on the child\'s age band, filters by subject, and plays an activity behind the seam', (tester) async {
+    testWidgets('opens on Quran and the child\'s age band, has no subject "All", and plays an activity behind the seam', (tester) async {
       final materials = _Materials()..items = [game, song];
       final activity = _Activity();
       await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1', childName: 'Sara'), materials: materials, activity: activity));
       await tester.pumpAndSettle();
 
-      expect(materials.libraryCalls.single, (subject: null, ageGroup: null));
+      // One subject at a time, Quran first; the age band keeps its "All ages".
+      expect(materials.libraryCalls.single, (subject: 'quran', ageGroup: null));
+      expect(find.byKey(const ValueKey('materials-subject-all')), findsNothing);
+      expect(find.text('All'), findsNothing);
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('materials-subject-quran'))).selected, isTrue);
       expect(find.text('An-Naba game'), findsOneWidget);
-      expect(find.text('Letters song'), findsOneWidget);
+      expect(find.text('Letters song'), findsNothing);
       // The server opened on the child's band; the filter says so.
       expect(find.text('Ages 7–9 · your child\'s age'), findsOneWidget);
 
+      await tester.tap(find.byKey(const ValueKey('materials-subject-arabic')));
+      await tester.pumpAndSettle();
+      expect(materials.libraryCalls.last, (subject: 'arabic', ageGroup: null));
+      expect(find.text('Letters song'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('materials-subject-quran')));
       await tester.pumpAndSettle();
-      expect(materials.libraryCalls.last, (subject: 'quran', ageGroup: null));
 
       await tester.tap(find.text('An-Naba game'));
       await tester.pumpAndSettle();
-      expect(materials.opened, ['m-1']);
+      // Opened FOR this child: the server records it in their "Opened this week".
+      expect(materials.opens, [(itemId: 'm-1', learnerId: 'k1')]);
       expect(activity.urls, [_Materials.playUrl]);
       // An uploaded package: sandboxed WITHOUT same-origin, and never offered to the browser.
       expect(activity.sandboxes.single, 'allow-scripts allow-forms');
@@ -85,12 +93,12 @@ void main() {
 
     testWidgets('a lesson of the lessons site is framed keeping its own origin, pinned to its host', (tester) async {
       final materials = _Materials()
-        ..items = [song]
+        ..items = [game]
         ..openAs = const OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/quran/surah-78');
       final activity = _Activity();
       await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Letters song'));
+      await tester.tap(find.text('An-Naba game'));
       await tester.pumpAndSettle();
       expect(activity.sandboxes.single, 'allow-scripts allow-same-origin allow-forms');
       expect(activity.sandboxes.single, isNot(contains('allow-popups')));
@@ -105,13 +113,13 @@ void main() {
 
     testWidgets('any other link is never embedded: it goes to the browser', (tester) async {
       final materials = _Materials()
-        ..items = [song]
+        ..items = [game]
         ..openAs = const OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.browser, url: 'https://elsewhere.example.test/game');
       final activity = _Activity();
       final opener = _Opener();
       await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity, opener: opener));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Letters song'));
+      await tester.tap(find.text('An-Naba game'));
       await tester.pumpAndSettle();
       expect(opener.opened, ['https://elsewhere.example.test/game']);
       expect(activity.urls, isEmpty);
@@ -128,8 +136,8 @@ void main() {
       await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, locale: const Locale('ar')));
       await tester.pumpAndSettle();
       expect(find.text('المكتبة'), findsOneWidget);
-      expect(find.text('تدريب هذا الأسبوع'), findsOneWidget);
-      expect(find.text('خريطة الحفظ'), findsOneWidget);
+      expect(find.text('ما فُتح هذا الأسبوع'), findsOneWidget);
+      expect(find.text('خريطة الحفظ'), findsNothing);
       expect(find.text('لعبة سورة النبأ'), findsOneWidget);
     });
 
@@ -146,82 +154,51 @@ void main() {
     });
   });
 
-  group('Practice this week', () {
-    testWidgets('shows the ayahs with their recitation, the items, the tasks and the homework', (tester) async {
+  group('Opened this week', () {
+    testWidgets('lists each item once, last opened first, a retired one shown but not playable; no memorization map', (tester) async {
       final materials = _Materials()
-        ..week = PracticeWeek(current: true, reports: [
-          PracticeReport(
-            lessonId: 'l-1',
-            submittedAt: DateTime(2026, 10, 22),
-            nextTasks: const ['revise_previous'],
-            homework: 'Revise Al-Mulk 1–5',
-            practice: const [
-              AyahPractice(surah: 67, nameAr: 'الملك', nameEn: 'Al-Mulk', ayahFrom: 1, ayahTo: 10, wholeSurah: false, hasRecitation: true),
-              ItemPractice(game),
-              ItemPractice(null),
-            ],
-          ),
+        ..week = OpenedThisWeek(weekStartsAt: DateTime.utc(2026, 10, 23, 21), items: [
+          OpenedItem(item: song, available: true, lastOpenedAt: DateTime(2026, 10, 26, 18, 5), times: 3),
+          OpenedItem(item: game, available: false, lastOpenedAt: DateTime(2026, 10, 24, 9), times: 1),
         ]);
       await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('materials-tab-practice')));
+      // Two tabs only: the map is gone.
+      expect(find.byType(Tab), findsNWidgets(2));
+      expect(find.text('Memorization map'), findsNothing);
+      expect(find.text('Practice this week'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('materials-tab-opened')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Surah Al-Mulk, ayahs 1–10'), findsOneWidget);
-      expect(find.byKey(const ValueKey('listen-l-1-67')), findsOneWidget);
-      expect(find.text('An-Naba game'), findsWidgets);
+      expect(materials.openedAsked, ['k1']);
+      expect(find.text('The week runs Saturday to Friday, academy time.'), findsOneWidget);
+      final songTop = tester.getTopLeft(find.text('Letters song'));
+      final gameTop = tester.getTopLeft(find.text('An-Naba game'));
+      expect(songTop.dy, lessThan(gameTop.dy), reason: 'most recent first, as the server sent it');
+      expect(find.textContaining('Last opened'), findsOneWidget);
       expect(find.text('This item is no longer in the library.'), findsOneWidget);
-      expect(find.text('Revise previous lessons'), findsOneWidget);
-      expect(find.text('Revise Al-Mulk 1–5'), findsOneWidget);
-    });
-  });
+      expect(tester.widget<ListTile>(find.byKey(const ValueKey('material-m-1'))).enabled, isFalse);
 
-  group('Progress map', () {
-    ProgressMap map({required bool canCorrect}) => ProgressMap(
-          childName: 'Sara',
-          counts: const {'memorized': 1, 'in_progress': 0, 'needs_revision': 0, 'not_started': 113},
-          canCorrect: canCorrect,
-          juz: const [
-            JuzGroup(juz: 30, surahs: [ProgressSurah(number: 78, nameAr: 'النبأ', nameEn: 'An-Naba', status: 'memorized')]),
-          ],
-        );
-
-    testWidgets('a parent sees the map and a surah\'s history, and is offered no correction', (tester) async {
-      final materials = _Materials()..map = map(canCorrect: false);
-      await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1', initialTab: 2), materials: materials));
+      // Opening again from here is recorded for the child too, and the list refreshes.
+      await tester.tap(find.text('Letters song'));
       await tester.pumpAndSettle();
-      expect(find.text('Memorized: 1'), findsOneWidget);
-      expect(find.text('Juz’ 30'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('surah-78')));
+      expect(materials.opens.single, (itemId: 'm-2', learnerId: 'k1'));
+      await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(materials.historyAsked, [78]);
-      expect(find.textContaining('Lesson report'), findsOneWidget);
-      expect(find.byKey(const ValueKey('correct-submit')), findsNothing);
+      expect(materials.openedAsked.length, greaterThan(1));
     });
 
-    testWidgets('the teacher corrects a surah, and the correction carries its reason', (tester) async {
-      final materials = _Materials()..map = map(canCorrect: true);
-      await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1', initialTab: 2), materials: materials));
+    testWidgets('an empty week says so', (tester) async {
+      await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1', initialTab: 1), materials: _Materials()));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('surah-78')));
-      await tester.pumpAndSettle();
-      final submit = find.byKey(const ValueKey('correct-submit'));
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull, reason: 'no reason, no correction');
-      expect(find.text('Parents can see this reason.'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('correct-needs_revision')));
-      await tester.enterText(find.byKey(const ValueKey('correct-reason')), 'forgot the last ayahs');
-      await tester.pump();
-      await tester.ensureVisible(submit);
-      await tester.tap(submit);
-      await tester.pumpAndSettle();
-      expect(materials.corrections, [(surah: 78, status: 'needs_revision', reason: 'forgot the last ayahs')]);
+      expect(find.text('Nothing opened yet this week'), findsOneWidget);
     });
   });
 
   group('the lesson report', () {
     const ticket = LessonTicket(kind: LessonTicketKind.report, lessonId: 'les-1', learnerId: 'k1', learnerName: 'Sara');
 
-    testWidgets('sends the practice and the surah statuses the teacher chose', (tester) async {
+    testWidgets('sends the practice the teacher chose, and offers no memorization section', (tester) async {
       final lessons = _Lessons();
       final materials = _Materials()..items = [game];
       await tester.pumpWidget(app(const Scaffold(body: QuickReportForm(ticket: ticket)), materials: materials, lessons: lessons));
@@ -246,13 +223,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('picker-m-1')));
       await tester.pumpAndSettle();
-      // A surah status.
-      await tester.ensureVisible(find.byKey(const ValueKey('mark-add')));
-      await tester.tap(find.byKey(const ValueKey('mark-add')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('mark-status-memorized')));
-      await tester.tap(find.byKey(const ValueKey('mark-save')));
-      await tester.pumpAndSettle();
+      // The memorization map left the product: no section, no surah statuses.
+      expect(find.byKey(const ValueKey('mark-add')), findsNothing);
+      expect(find.text('Memorization map'), findsNothing);
 
       await tester.ensureVisible(find.byKey(const ValueKey('report-submit')));
       await tester.tap(find.byKey(const ValueKey('report-submit')));
@@ -262,9 +235,7 @@ void main() {
         {'surah': 67, 'ayahFrom': 1, 'ayahTo': 10},
         {'itemId': 'm-1'},
       ]);
-      expect(sent['memorization'], [
-        {'surah': 1, 'status': 'memorized'},
-      ]);
+      expect(sent.containsKey('memorization'), isFalse);
     });
 
     testWidgets('a report with no practice sends neither key', (tester) async {
@@ -344,12 +315,10 @@ class _Opener implements AttachmentOpener {
 class _Materials implements MaterialsRepository {
   static const playUrl = 'https://api.example.test/api/v1/materials/play/m-1/tok/index.html';
   List<MaterialItem> items = const [];
-  PracticeWeek week = const PracticeWeek(current: true, reports: []);
-  ProgressMap map = const ProgressMap(childName: '', counts: {}, juz: [], canCorrect: false);
+  OpenedThisWeek week = OpenedThisWeek(weekStartsAt: DateTime.utc(2026, 10, 23, 21), items: const []);
   final libraryCalls = <({String? subject, String? ageGroup})>[];
-  final opened = <String>[];
-  final historyAsked = <int>[];
-  final corrections = <({int surah, String status, String reason})>[];
+  final opens = <({String itemId, String? learnerId})>[];
+  final openedAsked = <String>[];
 
   static const _surahs = [
     Surah(number: 1, nameAr: 'الفاتحة', nameEn: 'Al-Fatihah', ayahCount: 7, juz: 1),
@@ -371,36 +340,16 @@ class _Materials implements MaterialsRepository {
   }
 
   @override
-  Future<PracticeWeek> practice(String learnerId) async => week;
-
-  @override
-  Future<ProgressMap> progress(String learnerId) async => map;
-
-  SurahHistory _history(int surah) => SurahHistory(
-        surah: const ProgressSurah(number: 78, nameAr: 'النبأ', nameEn: 'An-Naba', status: ''),
-        marks: [
-          for (final c in corrections) SurahMark(status: c.status, source: 'correction', byKind: 'teacher', byName: 'Teacher', reason: c.reason, at: DateTime(2026, 10, 24)),
-          SurahMark(status: 'memorized', source: 'report', byKind: 'teacher', byName: 'Teacher', at: DateTime(2026, 10, 20)),
-        ],
-      );
-
-  @override
-  Future<SurahHistory> history(String learnerId, int surah) async {
-    historyAsked.add(surah);
-    return _history(surah);
-  }
-
-  @override
-  Future<SurahHistory> correct(String learnerId, int surah, {required String status, required String reason}) async {
-    corrections.add((surah: surah, status: status, reason: reason));
-    return _history(surah);
+  Future<OpenedThisWeek> opened(String learnerId) async {
+    openedAsked.add(learnerId);
+    return week;
   }
 
   OpenedMaterial openAs = const OpenedMaterial(kind: 'activity_package', mode: 'package', presentation: MaterialPresentation.frameIsolated, url: playUrl);
 
   @override
-  Future<OpenedMaterial> open(String itemId) async {
-    opened.add(itemId);
+  Future<OpenedMaterial> open(String itemId, {String? learnerId}) async {
+    opens.add((itemId: itemId, learnerId: learnerId));
     return openAs;
   }
 

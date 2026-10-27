@@ -1843,6 +1843,42 @@ abstract class L10n {
   /// **'A child of this group moved to another supervisor'**
   String get systemGroupLearnerDetached;
 
+  /// No description provided for @systemCoverStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover} is covering for {supervisor} until {date}'**
+  String systemCoverStarted(String cover, String supervisor, String date);
+
+  /// No description provided for @systemCoverExtended.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover}\'s cover for {supervisor} is extended until {date}'**
+  String systemCoverExtended(String cover, String supervisor, String date);
+
+  /// No description provided for @systemCoverEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'{supervisor} is back; the cover has ended'**
+  String systemCoverEnded(String supervisor);
+
+  /// No description provided for @systemCoverStartedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'A backup supervisor is covering'**
+  String get systemCoverStartedNoName;
+
+  /// No description provided for @systemCoverEndedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'The cover has ended'**
+  String get systemCoverEndedNoName;
+
+  /// No description provided for @conversationCoverLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{cover} is covering until {date}'**
+  String conversationCoverLine(String cover, String date);
+
   /// PD-35 system line: a staff member took a visible seat in the group. who = systemSeatWho or a name.
   ///
   /// In en, this message translates to:
@@ -2544,6 +2580,168 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Progress isn\'t available right now.'**
   String get progressUnavailable;
+
+  /// No description provided for @scheduleViewList.
+  ///
+  /// In en, this message translates to:
+  /// **'List'**
+  String get scheduleViewList;
+
+  /// No description provided for @scheduleViewDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day'**
+  String get scheduleViewDay;
+
+  /// No description provided for @scheduleViewWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get scheduleViewWeek;
+
+  /// No description provided for @scheduleViewMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get scheduleViewMonth;
+
+  /// No description provided for @calendarPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get calendarPrevious;
+
+  /// No description provided for @calendarNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get calendarNext;
+
+  /// No description provided for @calendarToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get calendarToday;
+
+  /// No description provided for @calendarLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your schedule. Try again.'**
+  String get calendarLoadFailed;
+
+  /// No description provided for @calendarBooked.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h of lessons'**
+  String calendarBooked(String hours);
+
+  /// No description provided for @calendarHeld.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h held'**
+  String calendarHeld(String hours);
+
+  /// No description provided for @calendarStudents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No students} =1{1 student} other{{count} students}}'**
+  String calendarStudents(int count);
+
+  /// No description provided for @calendarTrialStudents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{+1 trial student} other{+{count} trial students}}'**
+  String calendarTrialStudents(int count);
+
+  /// No description provided for @calendarShiftUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent} of your shift booked'**
+  String calendarShiftUsed(String percent);
+
+  /// No description provided for @calendarEmptyInShift.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h empty in your shift'**
+  String calendarEmptyInShift(String hours);
+
+  /// No description provided for @calendarOutsideHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h outside your shift'**
+  String calendarOutsideHours(String hours);
+
+  /// No description provided for @calendarLegendEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Available time without a student'**
+  String get calendarLegendEmpty;
+
+  /// No description provided for @calendarLegendOutside.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside the shift'**
+  String get calendarLegendOutside;
+
+  /// No description provided for @calendarLegendLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get calendarLegendLeave;
+
+  /// No description provided for @calendarLegendWork.
+  ///
+  /// In en, this message translates to:
+  /// **'Working hours'**
+  String get calendarLegendWork;
+
+  /// No description provided for @calendarStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get calendarStatusActive;
+
+  /// No description provided for @calendarStatusTrial.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial'**
+  String get calendarStatusTrial;
+
+  /// No description provided for @calendarStatusPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporarily paused'**
+  String get calendarStatusPaused;
+
+  /// No description provided for @calendarOutsideShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside the shift'**
+  String get calendarOutsideShift;
+
+  /// No description provided for @calendarNoLessons.
+  ///
+  /// In en, this message translates to:
+  /// **'No lessons'**
+  String get calendarNoLessons;
+
+  /// No description provided for @calendarDayLessons.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No lessons} =1{1 lesson} other{{count} lessons}}'**
+  String calendarDayLessons(int count);
+
+  /// No description provided for @calendarTimesIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Times in {zone}'**
+  String calendarTimesIn(String zone);
+
+  /// No description provided for @calendarHoursShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String calendarHoursShort(String hours);
 
   /// No description provided for @workloadTitle.
   ///
@@ -5899,23 +6097,35 @@ abstract class L10n {
   /// **'Library'**
   String get materialsTabLibrary;
 
-  /// PD-29 tab.
+  /// PD-29 the practice line on a lesson report's card.
   ///
   /// In en, this message translates to:
   /// **'Practice this week'**
   String get materialsTabPractice;
 
-  /// PD-29 tab.
+  /// PD-29 amendment tab: what was opened for the child this academy week.
   ///
   /// In en, this message translates to:
-  /// **'Memorization map'**
-  String get materialsTabProgress;
+  /// **'Opened this week'**
+  String get materialsTabOpened;
 
-  /// PD-29 subject filter.
+  /// PD-29 amendment empty Opened this week.
   ///
   /// In en, this message translates to:
-  /// **'All'**
-  String get materialsSubjectAll;
+  /// **'Nothing opened yet this week'**
+  String get materialsOpenedEmpty;
+
+  /// PD-29 amendment which week Opened this week covers.
+  ///
+  /// In en, this message translates to:
+  /// **'The week runs Saturday to Friday, academy time.'**
+  String get materialsOpenedWeekNote;
+
+  /// PD-29 amendment an item's last opening this week.
+  ///
+  /// In en, this message translates to:
+  /// **'Last opened {when}'**
+  String materialsOpenedLast(String when);
 
   /// PD-29 subject.
   ///
@@ -6019,24 +6229,6 @@ abstract class L10n {
   /// **'Materials could not be loaded.'**
   String get materialsUnavailable;
 
-  /// PD-29 empty practice.
-  ///
-  /// In en, this message translates to:
-  /// **'Nothing to practise yet. It appears here when the teacher adds it to a lesson report.'**
-  String get materialsPracticeEmpty;
-
-  /// PD-29 practice older than a week.
-  ///
-  /// In en, this message translates to:
-  /// **'Nothing new this week. The latest practice:'**
-  String get materialsPracticeLatest;
-
-  /// PD-29 practice card heading.
-  ///
-  /// In en, this message translates to:
-  /// **'From the lesson of {day}'**
-  String materialsPracticeFrom(String day);
-
   /// PD-29 an ayah range to practise.
   ///
   /// In en, this message translates to:
@@ -6049,125 +6241,17 @@ abstract class L10n {
   /// **'Surah {surah}'**
   String materialsWholeSurah(String surah);
 
-  /// PD-29 play the recitation.
-  ///
-  /// In en, this message translates to:
-  /// **'Listen'**
-  String get materialsListen;
-
   /// PD-29 a retired item in practice.
   ///
   /// In en, this message translates to:
   /// **'This item is no longer in the library.'**
   String get materialsItemGone;
 
-  /// PD-29 next-lesson tasks.
-  ///
-  /// In en, this message translates to:
-  /// **'For next lesson'**
-  String get materialsNextTasks;
-
-  /// PD-29 homework.
-  ///
-  /// In en, this message translates to:
-  /// **'Homework'**
-  String get materialsHomework;
-
-  /// PD-29 surah status.
-  ///
-  /// In en, this message translates to:
-  /// **'Not started'**
-  String get materialsStatusNotStarted;
-
-  /// PD-29 surah status.
-  ///
-  /// In en, this message translates to:
-  /// **'In progress'**
-  String get materialsStatusInProgress;
-
-  /// PD-29 surah status.
-  ///
-  /// In en, this message translates to:
-  /// **'Memorized'**
-  String get materialsStatusMemorized;
-
-  /// PD-29 surah status.
-  ///
-  /// In en, this message translates to:
-  /// **'Needs revision'**
-  String get materialsStatusNeedsRevision;
-
-  /// PD-29 a juz' heading.
-  ///
-  /// In en, this message translates to:
-  /// **'Juz’ {n}'**
-  String materialsJuz(String n);
-
-  /// PD-29 a surah's history.
-  ///
-  /// In en, this message translates to:
-  /// **'History'**
-  String get materialsHistory;
-
-  /// PD-29 empty history.
-  ///
-  /// In en, this message translates to:
-  /// **'Nothing recorded for this surah yet.'**
-  String get materialsHistoryEmpty;
-
-  /// PD-29 mark source.
-  ///
-  /// In en, this message translates to:
-  /// **'Lesson report'**
-  String get materialsSourceReport;
-
-  /// PD-29 mark source.
-  ///
-  /// In en, this message translates to:
-  /// **'Edited report'**
-  String get materialsSourceReportEdit;
-
-  /// PD-29 mark source.
-  ///
-  /// In en, this message translates to:
-  /// **'Correction'**
-  String get materialsSourceCorrection;
-
-  /// PD-29 who marked.
-  ///
-  /// In en, this message translates to:
-  /// **'Teacher'**
-  String get materialsByTeacher;
-
-  /// PD-29 who marked (staff, unnamed to families).
-  ///
-  /// In en, this message translates to:
-  /// **'The academy'**
-  String get materialsByAcademy;
-
-  /// PD-29 correct a surah's status.
-  ///
-  /// In en, this message translates to:
-  /// **'Correct'**
-  String get materialsCorrect;
-
-  /// PD-29 correction reason.
-  ///
-  /// In en, this message translates to:
-  /// **'Reason (required)'**
-  String get materialsCorrectReason;
-
   /// PD-29 open an activity outside the app.
   ///
   /// In en, this message translates to:
   /// **'Open in browser'**
   String get materialsOpenExternally;
-
-  /// PD-29 web build.
-  ///
-  /// In en, this message translates to:
-  /// **'The activity opened in a new tab.'**
-  String get materialsOpenedInTab;
 
   /// PD-29 open failed.
   ///
@@ -6204,18 +6288,6 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Practice stays as it was unless you change it.'**
   String get reportPracticeKeep;
-
-  /// PD-29 report section.
-  ///
-  /// In en, this message translates to:
-  /// **'Memorization map'**
-  String get reportMemorizationLabel;
-
-  /// PD-29 report action.
-  ///
-  /// In en, this message translates to:
-  /// **'Mark a surah'**
-  String get reportMemorizationAdd;
 
   /// PD-29 surah field.
   ///
@@ -6258,12 +6330,6 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'No published items match.'**
   String get reportPickerEmpty;
-
-  /// PD-29: under the correction reason.
-  ///
-  /// In en, this message translates to:
-  /// **'Parents can see this reason.'**
-  String get materialsCorrectReasonHint;
 
   /// PD-31: the per-child ticket under + and the schedule button.
   ///

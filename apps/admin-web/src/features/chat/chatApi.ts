@@ -34,6 +34,20 @@ export interface ChatViewerState {
   theme?: ChatTheme | null
   /** The viewer's OWN wallpaper photo, signed for them; null/absent = none. */
   wallpaperUrl?: string | null
+  /** PD-35, staff: the viewer's open visible seat here (joined by choice); null/absent = none. */
+  seat?: { reason: string; joinedAt: string; effective: boolean } | null
+}
+
+/** PD-35: a group of one of the viewer's teachers that they may join. Never its messages. */
+export interface SeatCandidate {
+  conversationId: string
+  type: string
+  title: string | null
+  teacher: { id: string; name: string }
+  learners: string[]
+  lastActivityAt: string | null
+  /** 'none' = may join; 'seated' = joined (may leave); 'member' = a member in their own right. */
+  membership: 'none' | 'seated' | 'member'
 }
 
 /** The eight background presets (the server's CHAT_THEMES). */
@@ -78,8 +92,18 @@ export interface ChatConversation {
   avatarUrl?: string | null
   /** The viewer's OWN private labels on this chat (staff only). */
   labels?: ChatLabel[]
+  /** PD-33: the supervisor here is away and this backup covers until `until`; null when nobody covers. */
+  cover?: ChatCover | null
   /** PD-30: the group is locked for payment (detail route only); null otherwise. */
   paymentLock?: PaymentLock | null
+}
+
+export interface ChatCover {
+  supervisorId: string
+  supervisorName: string
+  coverId: string
+  coverName: string
+  until: string
 }
 
 /** A staff member's private label. `color` is a palette tone '1'..'8'. */
@@ -313,6 +337,13 @@ export const chatApi = {
   /** Search this chat's messages, newest first; only what this viewer may read. */
   search: (id: string, q: string, before?: string) =>
     api.get<{ hits: ChatMessage[]; nextBefore: string | null }>(`${conv(id)}/messages/search`, { q, before }),
+  /** PD-35: take a visible seat ("joined to support"). The server decides who may. */
+  joinSeat: (id: string, reason: string) => api.post<{ seatId: string }>(`${conv(id)}/join`, { reason }),
+  /** PD-35: leave one's own seat. */
+  leaveSeat: (id: string) => api.post<{ left: true }>(`${conv(id)}/leave`),
+  /** PD-35: the groups of the viewer's teachers they may join. */
+  seatCandidates: (q?: string) =>
+    api.get<{ groups: SeatCandidate[] }>('/seats/candidates', q ? { q } : undefined).then((r) => r.groups),
   /** Search message text across every chat in the viewer's list (newest matches). */
   searchAll: (q: string) => api.get<{ hits: Array<{ conversationId: string; message: ChatMessage }> }>('/me/search', { q }),
   /** The chat as a .zip (transcript + media). Super admin only; the server logs it. */
@@ -380,6 +411,7 @@ export const chatKeys = {
   quickReplies: ['chat', 'quick-replies'] as const,
   search: (id: string, q: string) => ['chat', 'search', id, q] as const,
   searchAll: (q: string) => ['chat', 'search-all', q] as const,
+  seatCandidates: (q: string) => ['chat', 'seat-candidates', q] as const,
 }
 
 /** Server order: by seq, numerically (a string compare would put "10" before "9"). */
