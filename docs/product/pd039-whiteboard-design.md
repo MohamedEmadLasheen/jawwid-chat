@@ -548,6 +548,11 @@ teachers' hands.
    font and released only after an academy Quran teacher signs off a 30-ayah review sheet.
    If the academy prefers the King Fahd Complex (Madinah Mushaf) text, we check its terms
    first.
+   **ANSWERED 2026-10-27 (owner, via the department head):** approved. The owner chose one
+   shared, verified Quran source: a single source of truth, its fingerprint checked on every
+   load, and Tajweed shown only once approved. PD-29 builds it (P0-2) to
+   [`quran-dataset-contract.md`](quran-dataset-contract.md). The verse step (§8 step 3)
+   consumes it unchanged.
 3. **Do teachers draw on phones too?**
    *Recommended: no. Drawing on a laptop (`/teacher/`) and tablets; phones open boards
    read-only.* A phone screen is too small for a toolbar and a page. The board is built
