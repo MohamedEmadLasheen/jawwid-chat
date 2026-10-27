@@ -5,8 +5,9 @@ import '../utils/app_clock.dart';
 /// the period's figures. Every number is the server's (`chat.calendar_capacity`,
 /// the same definition the administration reads); the app only lays it out.
 ///
-/// Instants are shown in the account's zone ([AppClock]); the server cuts the
-/// days in that same zone, so a day here is the teacher's own day.
+/// Every instant is shown in the [MyCalendar.zone] the server names -- the zone it cut
+/// the days in (the account's, PD-22) -- never the device's own, so a lesson always
+/// sits on the day the server put it on.
 
 /// One stretch of time, [from] to [to] (exclusive), as wall-clock in the account's zone.
 class CalendarSpan {
@@ -150,7 +151,12 @@ class MyCalendar {
     final zone = raw['zone'];
     final from = raw['from'];
     final to = raw['to'];
-    if (zone is! String || from is! String || to is! String) return null;
+    if (zone is! String || from is! String || to is! String || !_day.hasMatch(from) || !_day.hasMatch(to)) return null;
+    DateTime? at(Object? v) {
+      final parsed = v is String ? DateTime.tryParse(v) : null;
+      return parsed == null ? null : AppClock.viewIn(parsed, zone);
+    }
+
     int n(Object? v) => v is num ? v.toInt() : 0;
     final totals = raw['totals'] is Map ? raw['totals'] as Map : const {};
     final teaching = raw['teaching'] is Map ? raw['teaching'] as Map : const {};
@@ -160,8 +166,8 @@ class MyCalendar {
       from: from,
       to: to,
       category: raw['category'] is String ? raw['category'] as String : 'unset',
-      days: [for (final d in (raw['days'] as List?) ?? const []) ?_day(d)],
-      lessons: [for (final l in (raw['lessons'] as List?) ?? const []) ?_lesson(l)],
+      days: [for (final d in (raw['days'] as List?) ?? const []) ?_dayOf(d, at)],
+      lessons: [for (final l in (raw['lessons'] as List?) ?? const []) ?_lesson(l, at)],
       lessonCount: n(teaching['lessons']),
       bookedMinutes: n(teaching['bookedMinutes']),
       heldMinutes: n(teaching['heldMinutes']),
@@ -175,28 +181,30 @@ class MyCalendar {
     );
   }
 
-  static List<CalendarSpan> _spans(Object? raw) => [
+  static final _day = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+  static List<CalendarSpan> _spans(Object? raw, DateTime? Function(Object?) at) => [
     for (final pair in (raw as List?) ?? const [])
       if (pair is List && pair.length == 2)
-        if ((AppClock.parse(pair[0]), AppClock.parse(pair[1])) case (final DateTime a, final DateTime b)) CalendarSpan(a, b),
+        if ((at(pair[0]), at(pair[1])) case (final DateTime a, final DateTime b)) CalendarSpan(a, b),
   ];
 
-  static MyCalendarDay? _day(Object? raw) {
-    if (raw is! Map || raw['day'] is! String) return null;
+  static MyCalendarDay? _dayOf(Object? raw, DateTime? Function(Object?) at) {
+    if (raw is! Map || raw['day'] is! String || !_day.hasMatch(raw['day'] as String)) return null;
     return MyCalendarDay(
       day: raw['day'] as String,
-      shift: _spans(raw['shift']),
-      work: _spans(raw['work']),
-      leave: _spans(raw['leave']),
-      empty: _spans(raw['empty']),
-      free: _spans(raw['free']),
+      shift: _spans(raw['shift'], at),
+      work: _spans(raw['work'], at),
+      leave: _spans(raw['leave'], at),
+      empty: _spans(raw['empty'], at),
+      free: _spans(raw['free'], at),
     );
   }
 
-  static MyCalendarLesson? _lesson(Object? raw) {
+  static MyCalendarLesson? _lesson(Object? raw, DateTime? Function(Object?) at) {
     if (raw is! Map || raw['id'] is! String) return null;
-    final starts = AppClock.parse(raw['startsAt']);
-    final ends = AppClock.parse(raw['endsAt']);
+    final starts = at(raw['startsAt']);
+    final ends = at(raw['endsAt']);
     if (starts == null || ends == null) return null;
     final learner = raw['learner'] is Map ? raw['learner'] as Map : null;
     final prospect = raw['prospect'] is Map ? raw['prospect'] as Map : null;

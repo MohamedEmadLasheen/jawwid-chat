@@ -12,6 +12,7 @@ import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/lesson.dart';
 import 'package:jawwid_chat/shared/models/my_calendar.dart';
 import 'package:jawwid_chat/shared/utils/app_clock.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 /// PD-38 P2: the teacher's own calendar in the Schedule tab. The page's side of the
 /// contract: the right days asked for in each view, the server's intervals drawn
@@ -23,10 +24,12 @@ void main() {
   setUp(() => AppClock.useZone('Africa/Cairo'));
   tearDown(() => AppClock.useZone(null));
 
+  /// A Cairo wall-clock time as the server sends it (an instant): the response's zone.
   String at(String day, String hhmm) {
+    AppClock.ensureInitialized();
     final d = DateTime.parse('${day}T00:00:00Z');
     final (h, m) = (int.parse(hhmm.substring(0, 2)), int.parse(hhmm.substring(3)));
-    return AppClock.wallClock(d.year, d.month, d.day, h, m).toUtc().toIso8601String();
+    return tz.TZDateTime(tz.getLocation('Africa/Cairo'), d.year, d.month, d.day, h, m).toUtc().toIso8601String();
   }
 
   /// The server's answer for [from]..[to]: on [from], a 12:00-19:00 shift, three lessons
@@ -101,6 +104,41 @@ void main() {
     expect(find.text('21% of your shift booked'), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-empty-hours')), findsOneWidget);
     expect(find.text('Available time without a student'), findsOneWidget);
+  });
+
+  testWidgets('drawn in the zone the server cut the days in, whatever the device\'s clock says', (tester) async {
+    // The account's clock is 12 hours ahead of the server's zone: read on the device's
+    // clock, a 13:00 Cairo lesson would be 01:00 on the NEXT day and fall off the view.
+    AppClock.useZone('Pacific/Kiritimati');
+    final repo = await pump(tester);
+    await tester.tap(find.text('Day'));
+    await tester.pumpAndSettle();
+    expect(repo.asked, isNotEmpty);
+    expect(find.bySemanticsLabel(RegExp(r'^learner_a · 1:00\s?PM – 2:00\s?PM · Active$')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-empty')), findsNWidgets(4));
+    expect(find.text('Times in Cairo'), findsOneWidget);
+  });
+
+  testWidgets('a malformed answer is the error state, not a crash', (tester) async {
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final bad = _Calendar((from, to) => {...body(from, to), 'from': 'not-a-day'});
+    await tester.pumpWidget(ProviderScope(
+      overrides: [lessonRepositoryProvider.overrideWithValue(bad)],
+      child: MaterialApp(
+        locale: const Locale('en'),
+        theme: JawwidTheme.light(isArabic: false),
+        supportedLocales: JawwidApp.supportedLocales,
+        localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+        home: const TeacherScheduleScreen(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Week'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text("Couldn't load your schedule. Try again."), findsOneWidget);
   });
 
   testWidgets('a lesson opens the same actions as the list', (tester) async {
@@ -202,6 +240,7 @@ void main() {
     expect(c.lessons.first.startsAt.hour, 13); // Cairo wall clock
     expect((c.bookedMinutes, c.students, c.trialStudents, c.utilization), (90, 2, 1, 0.214));
     expect(MyCalendar.fromJson({'zone': 'Africa/Cairo'}), isNull);
+    expect(MyCalendar.fromJson({...body('2026-10-26', '2026-10-27'), 'to': '27/10/2026'}), isNull);
     expect(MyCalendar.fromJson('nope'), isNull);
   });
 }
@@ -216,7 +255,8 @@ class _Calendar implements LessonRepository {
   @override
   Future<MyCalendar> myCalendar(String from, String to) async {
     asked.add((from, to));
-    return MyCalendar.fromJson(body(from, to))!;
+    // As HttpLessonRepository: a body that is not a calendar is an error.
+    return MyCalendar.fromJson(body(from, to)) ?? (throw const FormatException('not a calendar'));
   }
 
   @override

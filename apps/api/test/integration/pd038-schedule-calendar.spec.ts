@@ -512,6 +512,33 @@ describe('a teacher\'s own schedule (P2)', () => {
     expect(dubai.lessons).toHaveLength(5);
   });
 
+  it('the figures count exactly the lessons the views show: by the day a lesson starts', async () => {
+    // 23:30-00:30 Cairo: it starts on the 13th, so the 14th neither draws nor counts it,
+    // though half an hour of it falls in the 14th (capacity, which is by time, keeps that).
+    await lessonAt(s.learnerId, '2026-09-13 23:30', 60);
+    const me = await calendar.mine(s.teacherId, w);
+    expect(me.lessons).toHaveLength(4);
+    expect(me.teaching).toMatchObject({ lessons: 3, bookedMinutes: 120 });
+    expect(me.students).toEqual({ distinct: 2, trial: 1 });
+    const st = await calendar.stats(tsupId, { ...w, teacherIds: s.teacherId });
+    expect(st.teaching).toMatchObject({ lessons: 3, bookedMinutes: 120 });
+    const cal = await calendar.calendar(tsupId, { ...w, teacherIds: s.teacherId });
+    expect(cal.lessons).toHaveLength(4);
+  });
+
+  it('with no zone of their own, the academy\'s (schedule.timezone, as every PD-22 reader) -- and the answer names it', async () => {
+    // The row exists (20260905090100, Cairo): change it, and put it back exactly.
+    const [{ value }] = await g.prisma.$queryRawUnsafe<Array<{ value: string }>>(
+      `select value::text as value from chat.config where key = 'schedule.timezone'`,
+    );
+    await g.prisma.$executeRawUnsafe(`update chat.config set value = '"Asia/Dubai"'::jsonb where key = 'schedule.timezone'`);
+    try {
+      expect((await calendar.mine(s.teacherId, w)).zone).toBe('Asia/Dubai');
+    } finally {
+      await g.prisma.$executeRawUnsafe(`update chat.config set value = $1::jsonb where key = 'schedule.timezone'`, value);
+    }
+  });
+
   it('staff, a parent and a window over 42 days are refused', async () => {
     expect(await code(calendar.mine(tsupId, w))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(calendar.mine(s.parentId, w))).toBe(CommErrorCode.LESSON_DENIED);

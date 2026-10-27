@@ -93,6 +93,17 @@ An Operations supervisor who filters by a child outside their scope gets
 `COMM.LESSON_NOT_FOUND`. `GET /lessons/access` returns `calendar: true` to
 everyone in the first five rows.
 
+**Scope is the union of every basis a person holds.** No single check is final:
+- An Operations Manager who also supervises teachers keeps the academy.
+- An Operations supervisor who also supervises teachers keeps their own children, and their assigned teachers' lessons are named too.
+- Reading and saving a work pattern use the same scope, so a teacher outside it is not found before anything is written.
+
+The department guards make some of these combinations unreachable today. The rule is still proven in `test/unit/calendar/calendar-scope.spec.ts`.
+
+## Lessons and figures: one rule
+
+A lesson belongs to the window it **starts** in, which is the day it is drawn on. The calendar's lesson lists, the lesson counts, distinct students and teaching hours all follow this rule, and teaching hours count the whole lesson. Capacity (shift, booked, empty, leave) is by time: it keeps the part of a lesson that falls inside the window.
+
 ## API
 
 All reads take `from` and `to` as days in the academy's zone (`to` is
@@ -155,7 +166,8 @@ The teacher's own schedule appears in the app and on the teacher web portal (`/t
   - the period's figures (`teaching`, `students`, `totals`, `utilization`).
 - **What it is computed from:**
   - The teacher is the caller, never a parameter. Every other query parameter is ignored, so no other teacher's lesson or student can be asked for.
-  - The days are the teacher's **account zone** (`chat.actor_time_zone`, PD-22), which is the zone the app's clock shows. Without one, the academy's zone is used.
+  - The days are the teacher's **account zone** (`chat.actor_time_zone`, PD-22). Without one, the academy's zone (`schedule.timezone`) is used. Both come through `TimeZoneService`, the resolver every PD-22 reader uses.
+  - The response names the zone it used, and **the app draws every time in that zone**, not the device's. A lesson therefore sits on the day the server put it on, and the figures card says "Times in …".
   - It is the same `chat.calendar_capacity` and the same one-statement shape as the academy views.
 - **What a teacher never sees:**
   - Money: a PD-30 hold reads `paused` / `suspended`, with no note.

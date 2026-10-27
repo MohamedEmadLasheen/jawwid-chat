@@ -208,6 +208,12 @@ class _Figures extends StatelessWidget {
           style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
         ),
       if (cal.outsideMinutes > 0) Text(l10n.calendarOutsideHours(_hours(cal.outsideMinutes)), style: theme.textTheme.bodySmall),
+      // The zone the server cut the days in, which is the zone every time here is drawn in.
+      Text(
+        l10n.calendarTimesIn(cal.zone.split('/').last.replaceAll('_', ' ')),
+        key: const ValueKey('calendar-zone'),
+        style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
     ];
     return Card(
       key: const ValueKey('calendar-figures'),
@@ -589,7 +595,14 @@ class _WeekView extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final (lo, hi) = _hourRange(cal);
-    final start = DateTime.parse('${cal.from}T00:00:00Z');
+    // MyCalendar.fromJson refuses a malformed day, so this parses; never throw in build regardless.
+    final start = DateTime.tryParse('${cal.from}T00:00:00Z');
+    if (start == null) {
+      return Padding(
+        padding: const EdgeInsets.all(Spacing.spacing6),
+        child: Text(l10n.calendarLoadFailed, textAlign: TextAlign.center),
+      );
+    }
     return Column(
       children: [
         for (var i = 0; i < 7; i++)
