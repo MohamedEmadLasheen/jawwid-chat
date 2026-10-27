@@ -1,378 +1,491 @@
-# PD-42: direct enrolment and adding to an existing family (review and plan)
+# PD-42: entering families by hand, without a trial (review and plan, v2)
 
-**State:** plan for approval. No feature code has been written.
+**State:** plan for approval, revision 2. No feature code has been written.
 **Claim:** `docs/product/pd-registry/PD-42.md`. Migration slot `20261027140000` (`chat_pd042_direct_enrolment`).
-**Base:** `main` @ `6e809f12`.
+**Base:** `main` @ `6e809f12`. PD-40's catalogue is read from `claude/pd40-access-model` (#174).
 
-## The request
+## What changed since v1
 
-The owner, 2026-10-27:
+The owner's answers (2026-10-27, relayed verbatim by the department head) change the shape of the feature:
 
-> "We need a way to add parents and students to the system without going through the trial lesson process, since not all students attend trial lessons."
+- **This is mainly a migration intake from Jawwid Core.** Core's data is incomplete. Each **Sales supervisor** and each **Operations supervisor** enters *their own* families and children by hand, and is scoped to those families. Each family records who entered it.
+- **The flow is no longer "Sales records, the Operations manager assigns".** A supervisor creates the family directly.
+- **Students with a running package** are entered with their total and completed lessons. The server computes the remaining lessons. There is no payment and no reset, and the entry must not trip the PD-30 lock.
+- **The form saves with a minimum of fields.**
+- **Unchanged answers:** adding a child uses the same form in one click (Q2); the second guardian stays deferred (Q4).
 
-The department head added a related gap: adding a **second child** (a sibling) to a family that already exists.
+**What v2 drops from v1:**
+- the direct form stored in `chat.trial_subscription`, because intake creates the family at once and needs no waiting form;
+- the PD-27 `subscription_form_id`.
+
+**What v2 keeps from v1:**
+- generalising `student_enrolment`;
+- adding children to an existing family and joining its group;
+- the duplicate checks;
+- the trial-sibling fix.
 
 ## Summary
 
-- **Today every student enters Chat through a trial lesson.** The database chain is `lesson` → `trial_outcome` → `trial_subscription` → `student_enrolment`. Each row is keyed by the trial's lesson id, through foreign keys. There is nowhere to put a form that has no trial.
-- **A sibling cannot be added at all.** Assign refuses any parent e-mail that already has an account. `student_enrolment.family_id` is unique, and the list of children on an enrolment can never change. No other staff path creates a learner.
-- **The plan generalises the PD-16 form; it does not copy it.**
-  - A form may now have `origin = 'direct'`, with no trial.
-  - A form may name an **existing family** to add its children to.
-  - `student_enrolment` is keyed by the form instead of by the trial.
-  - Assign, the supervisor, the family group, the sign-up code, the New Students page and the Admin Web form are all reused.
-- **Five PRs.** One migration. The second guardian (PR-4) is optional and can be dropped.
+- **One generalised enrolment record, two ways in:**
+  - **trial** (PD-16, unchanged): Sales records the form, then the Operations manager assigns;
+  - **intake** (new): a supervisor enters a family or a child and it is created immediately.
+  - Both reuse PD-16's transaction body (family, parent, children, supervision, schedule, group, sign-up code), extracted into shared functions.
+- **Ownership:**
+  - PD-8's **Operations supervisor** stays the only "responsible supervisor". That role drives chat reach, the family group, covers and PD-24 transfers.
+  - A new **Sales owner** (`chat.family_sales_owner`) gives Sales supervisors their own families.
+  - The intake record keeps **who entered** the family, and that never changes.
+- **The carried-over package** is one row in PD-30's existing ledger, `chat.learner_subscription`:
+  - with a new `source = 'carried_over'`;
+  - with a new column `lessons_used_before`.
+  - PD-30's counting subtracts it. Remaining = total − completed − lessons held in Chat since intake, computed by the database. There is no parallel balance.
+- **Required fields:** the parent's name, a phone **or** an e-mail, and each child's name. Everything else can be completed later.
 
 ---
 
 ## 1. Review: what exists, with evidence
 
+§1.1–§1.7 are the v1 review, still accurate. §1.8–§1.10 are new for v2.
+
 ### 1.1 Where a New Students entry comes from
 
-| Step | Evidence |
-|---|---|
-| A trial lesson is booked by the trial desk (Sales, Operations, or the super admin). | `apps/api/src/lessons/trial.service.ts:151` (`book`); the desk's standing is set at `:676-692`, with Sales, Operations and the super admin all treated as `'sales'` at `:681-685` |
-| The teacher reports attendance. | `trial.service.ts:237-286` |
-| **Sales records the outcome "subscribed" together with the subscription form.** The trial must already have started (`:405`) and must have been held (`:407-415`). | `trial.service.ts:394-439`. Sales-only check at `:402-404`. The form is written at `:428` (`forms.recordInTx`) |
-| Or Sales later corrects an outcome to "subscribed". | `trial.service.ts:448-500`, form written at `:487` |
-| The form is stored in `chat.trial_subscription`, keyed by the trial. | `apps/api/src/new-students/new-students.service.ts:102-115` |
-| The New Students page lists every live form. | `new-students.service.ts:138-145` (`list`). `present` reads the trial lesson for the prospect, the trial teacher and the trial date (`:178-181`, `:195-198`) |
-| The page's API is keyed by `trialId`. | `apps/api/src/lessons/trial.controller.ts:75-121` (`/trials/new-students/:trialId/...`) |
+- **The only source is a trial.** Sales records the outcome "subscribed" with the form (`apps/api/src/lessons/trial.service.ts:394-439`, form written at `:428`), or corrects an outcome to "subscribed" (`:448-500`).
+- **Who may.** The trial desk is Sales, Operations and the super admin, all with the `'sales'` standing (`:681-685`).
+- **The form** is stored keyed by the trial (`apps/api/src/new-students/new-students.service.ts:102-115`).
+- **The page** lists the live forms (`:138-145`), reading the trial lesson for its display (`:178-181`).
+- **The API** is keyed by `trialId` (`trial.controller.ts:75-121`).
 
-**Can Sales create a form directly?** No. The only writers are `recordInTx`, called from `outcome` and `correct`, and `updateInTx`, called from `updateSubscription` (`trial.service.ts:503-517`). `updateInTx` only edits a live form that already exists (`new-students.service.ts:118-122`). Every one of them is reached through a trial lesson id.
+No route creates a form without a trial.
 
-### 1.2 What blocks a non-trial enrolment: all three layers
+### 1.2 What blocks a non-trial enrolment: the DB, the API and the UI
 
-| Layer | Block | Evidence |
-|---|---|---|
-| **DB** | `trial_subscription.lesson_id` is the primary key **and** a foreign key to `trial_outcome(lesson_id)`. | `supabase/migrations/20261021100000_chat_trial_journey.sql:373-374` |
-| **DB** | `trial_outcome.lesson_id` is a foreign key to `chat.lesson`. | `supabase/migrations/20261019120000_chat_pd011_trials.sql:265-266` |
-| **DB** | The guard refuses a live form unless its trial's outcome is `subscribed`. | `20261021100000_chat_trial_journey.sql:431-433` (inside `guard_trial_subscription`, `:397-436`) |
-| **DB** | `student_enrolment.lesson_id` is the primary key and references `trial_subscription(lesson_id)`. | `supabase/migrations/20261021140000_chat_new_student_enrolment.sql:99` |
-| **DB** | The enrolment guard requires a live form for that lesson. | `20261021140000…:127-134` |
-| **API** | Every form writer takes a trial lesson id (see 1.1). Assign loads the form by `trialId` (`enrolment.service.ts:155`). Lesson length is read from the trial (`:439-443`). | `apps/api/src/new-students/enrolment.service.ts` |
-| **UI** | The form appears only inside the trial card's "subscribed" step and in the New Students "edit" dialog. There is no "New student" button. | `apps/admin-web/src/features/trials/TrialCardDialog.tsx:196`, `NewStudentsPage.tsx:281`, `NewStudentsPage.tsx:72-80` |
+- **DB:**
+  - `trial_subscription.lesson_id` is the primary key and a foreign key to `trial_outcome` (`20261021100000_chat_trial_journey.sql:373-374`). `trial_outcome` is in turn keyed to `chat.lesson` (`20261019120000_chat_pd011_trials.sql:265-266`).
+  - A form is live only while its trial is subscribed (`20261021100000…:431-433`).
+  - `student_enrolment.lesson_id` is the primary key and references the form (`20261021140000_chat_new_student_enrolment.sql:99`). The enrolment guard requires a live form (`:127-134`).
+- **API:** every writer takes a trial id. Assign reads the lesson length from the trial (`enrolment.service.ts:439-443`).
+- **UI:** the form exists only inside the trial card (`TrialCardDialog.tsx:196`) and the edit dialog (`NewStudentsPage.tsx:281`). There is no create button.
 
-### 1.3 PD-16 Assign: what it does
+### 1.3 PD-16 Assign
 
-`NewStudentEnrolmentService.assign`, `enrolment.service.ts:145-287`:
+`enrolment.service.ts:145-287`:
 
-- **Who may assign.** The Operations manager or the super admin (`:149-151`). The database enforces the same rule:
-  - `chat.is_operations_manager`, `20261021140000…:36-47`;
-  - `enrol_learner`, `:71-74`;
-  - the enrolment guard, `:139-142`.
+- **Who may assign.** The Operations manager or the super admin (`:149-151`). The DB enforces the same rule in three places: `is_operations_manager` (`20261021140000…:36-47`), `enrol_learner` (`:71-74`) and the enrolment guard (`:139-142`).
 - **One transaction** (`:178-269`) creates:
-  - the family (`:181`);
-  - the account, whose subject is the e-mail (`:184`);
-  - the contact, as primary guardian with an account (`:187-204`);
-  - the PD-17 parent file and family billing (`:206-215`, `seedFromEnrolment` at `parent-record.service.ts:274-305`);
-  - for each child (`:218-244`):
-    - the child, through `chat.enrol_learner` (`:219-220`);
-    - the PD-8 `learner_supervision` row (`:221-223`);
-    - the course and the stated age (`:224-234`);
-    - an audit row;
-  - the `student_enrolment` row (`:245-255`);
-  - the PD-27 attachment of pre-Assign payments (`:258`, `payment-ledger.service.ts:257-267`).
-- **Weekly times** are set after the transaction, on a best-effort basis (`:271-285`).
-- **The family group** is created later by the supervisor (`createGroup`, `:308-342`). Creating it also opens the parent's direct chat with the supervisor (`:332-340`).
-- **The form is frozen once it is enrolled** (`20261021140000…:176-191`).
-- **An enrolment's children never change.** The guard allows only the group to be added (`:150-156`).
+  - the family, with `owner_id` = the supervisor (`:181-183`);
+  - an account whose subject is the e-mail (`:184-186`);
+  - the primary-guardian contact (`:187-204`);
+  - the PD-17 parent file and family billing (`:206-215`);
+  - for each child: `enrol_learner` (`:219-220`), `learner_supervision` (`:221-223`), and the course and stated age (`:224-234`);
+  - `student_enrolment` (`:245-255`);
+  - the PD-27 payment attachment (`:258`).
+- **After the transaction:** the weekly times are set on a best-effort basis (`:271-285`). The supervisor creates the group later (`:308-342`).
+- **Fixed afterwards:** the form freezes once enrolled (`20261021140000…:176-191`), and an enrolment's children never change (`:150-156`).
 
-### 1.4 The parent's sign-up code
+### 1.4 Parent sign-up
 
-- `ParentSignupService` is at `apps/api/src/platform/auth/parent-signup.service.ts`.
-- **A sign-up is possible only for a family account that has a `student_enrolment` row** (`signupAccount`, `:173-185`; the enrolment check is at `:179-181`).
-- The database enforces the same rule for every code that is inserted:
-  - first at `20261021140000…:228-232`;
-  - re-created by PD-32 at `20261026120000_chat_pd032_parent_feedback_signup_code.sql:217`.
-- The code is relayed from the New Students card, and only to the responsible person (`enrolment.service.ts:115`, `:130-137`).
+- **A code is issued only to a family account that has a `student_enrolment` row.**
+  - API: `parent-signup.service.ts:173-185`, with the check at `:179-181`.
+  - DB: `20261021140000…:228-232`, re-created by PD-32 at `20261026120000…:217`.
+- **The code is relayed** only to whoever is responsible (`enrolment.service.ts:115`, `:130-137`).
 
-So a second guardian, who has no enrolment row, **cannot sign up today**.
+### 1.5 PD-17, PD-31, PD-8, PD-35
 
-### 1.5 PD-17, PD-30, PD-31 and PD-8
-
-- **PD-17 Parent Profile.** The routes are `GET /parent-profiles`, `GET /parent-profiles/:id`, `POST /parent-profiles/:id` and the photo routes (`parent-record.controller.ts:19-47`).
-  - Who may use it is `billingAccessOf` (`parent-record.service.ts:22-44`): the super admin and the Operations manager see every parent; an Operations supervisor sees the families in their reach; Sales reads every parent.
-  - Only Operations may edit (`:242-246`).
-  - **There is no "add child" and no "add guardian" route.**
-- **PD-30.** A child's lessons come from `chat.learner_subscription` (`20261026140000…:127-152`). Its `source` is one of `payment_request`, `instalment_plan`, `staff` or `backfill`.
-  - Assign does **not** create a ledger row. Paid lessons arrive by themselves, from a paid link or an instalment plan (`billing.service.ts:404`, `subscription-ledger.service.ts:19-34`).
-  - A new child therefore starts with no lessons on the ledger. When enforcement is on, the child is locked once the grace lessons are used up. This is unchanged by PD-42.
-  - The lock is computed per child, and a group is locked for its locked children (`platform/subscription-lock.ts:31-32`, `:64-90`).
-- **PD-31.** `applySchedule` sets the weekly times only where the teacher is free. Assign treats this as best effort (`enrolment.service.ts:271-285`).
+- **PD-17.** The routes are listed at `parent-record.controller.ts:19-47`. There is **no add-child or add-guardian route**.
+  - Who sees what follows `decideBillingAccess` (`platform/pd012-policy.ts:113-131`):
+    - the super admin and the Operations manager: every family;
+    - an Operations supervisor: the families in reach;
+    - **Sales: every family**, read-only for the contact record (`:129`).
+- **PD-31.** `applySchedule` is best effort. Moving a child to another teacher (`chat.transfer_learner`) is allowed to the Teachers department or **the child's supervisor** (`20261026110000_chat_pd031_scheduling.sql:500`). That function also adds the new teacher to the child's family groups (`:538-554`).
 - **PD-8: one supervisor per family group.**
-  - `createFamilyGroup` refuses children who have different supervisors (`conversation.service.ts:992-999`).
-  - It admits only teachers of the group's anchored children (`:1017-1027`).
-  - The database checks the committed state: a live family group has at least one learner, and all its learners share one supervisor (`20261015120000_chat_pd008_org_structure.sql:391-427`, constraint trigger at `:432`).
-  - **A child can be anchored to an existing family group.** The guard requires only the same family and the same organization (`:356-381`).
-  - The precedent is PD-31's `chat.transfer_learner`, which adds the new teacher to the child's family groups (`20261026110000_chat_pd031_scheduling.sql:538-554`).
-  - Today the only API writer of `conversation_learner` is group creation (`conversation.service.ts:1050`).
-- **PD-35 strict scope** (`platform/teacher-scope.ts:6-29`) narrows only which teachers a Teachers-department member works on. The trial desk gets `ALL_TEACHERS` (`trial.service.ts:205`). The form accepts any active teacher who is not away (`new-students.service.ts:82-90`).
+  - `createFamilyGroup` refuses children with different supervisors (`conversation.service.ts:992-999`) and admits only the anchored children's teachers (`:1017-1027`).
+  - The DB checks this on commit (`20261015120000_chat_pd008_org_structure.sql:391-432`).
+  - **Anchoring a child into an existing family group is DB-legal** (`:356-381`). Today, group creation is the only API writer of it (`conversation.service.ts:1050`).
+- **PD-35 strict scope** narrows only the Teachers department's reach over teachers (`platform/teacher-scope.ts:6-29`). It does not affect who enters families.
 
 ### 1.6 Admin Web
 
-- **`NewStudentsPage.tsx`** lists the forms and filters them by status (`:45-80`).
-  - Each card shows the prospect, the trial teacher and the trial date (`:171-173`). A direct form has none of these.
-  - It has no create button.
-- **`SubscriptionForm.tsx`** is the reusable form component:
-  - `emptyDraft` at `:41`, `draftFrom` at `:46`, `formErrors` at `:69`, `toInput` at `:90`;
-  - **it can be reused as it is.**
-- **`NewStudentSetup.tsx`** contains the Assign dialog, with the supervisor and the sign-in e-mail (`:256-302`). It also has the group, code-invalidation and attempt-reset actions (`:82`, `:180`, `:202`).
-- **`api.ts:164-185`**: every New Students call is keyed by `trialId`.
-- **`area.tsx:20-23`**: the "New students" tab is offered to Sales and Operations.
+- `NewStudentsPage.tsx`:
+  - lists the forms (`:45-80`);
+  - shows trial fields on each card (`:171-173`);
+  - has no create button.
+- `SubscriptionForm.tsx` can be reused (`emptyDraft :41`, `draftFrom :46`, `formErrors :69`, `toInput :90`).
+- The Assign dialog is `NewStudentSetup.tsx:256-302`.
+- `api.ts:164-185` is keyed by `trialId`.
 
-### 1.7 The sibling case: what happens today
+### 1.7 The sibling case today
 
-Suppose the same parent comes back later with another child.
+Assign refuses a parent e-mail that already has an account (`enrolment.service.ts:160-165`, 409).
 
-1. Their first child took a trial and was assigned, so the family, the parent's contact and an account with subject `normalizeEmail(email)` exist.
-2. The sibling has to take a trial too, because there is no other way in. Sales marks it "subscribed" and fills the form with the same parent e-mail.
-3. The Operations manager presses Assign. `enrolment.service.ts:160-165` normalizes the e-mail and finds an account → **409 "this e-mail already belongs to an account in Chat".** Nothing is created.
-4. The workarounds are both wrong:
-   - **A different or blank e-mail.** A blank e-mail is refused at `:162`. A different e-mail passes, and Assign then creates a **second family**, a **second contact** and a **second account** for the same person. The children land in different families, with different groups and separate billing (`:181-204`). Because `contact (family_id, account_id)` is unique only per family (`20260905090300_chat_family_domain.sql:87-88`), the database does not stop this.
-   - **Editing the existing enrolment.** Not possible. `learner_ids` is immutable (`20261021140000…:150-156`) and `family_id` is unique (`:101`).
-5. **Two siblings at the same trial.** They work, because one form allows 1–10 children (`new-students.service.ts:77-79`). **Two siblings at different trials** with the same parent e-mail run into step 3.
+- **Using a different e-mail** creates a **second family, contact and account** for the same person (`:181-204`). The DB does not stop it, because contacts are unique only per family (`20260905090300_chat_family_domain.sql:87-88`).
+- **Attaching is impossible.** `family_id` is unique in `student_enrolment` (`20261021140000…:101`) and `learner_ids` is immutable (`:150-156`).
 
-So the honest answer to "duplicate, fail, or attach?" is: **it fails on the e-mail check.** If staff work around the failure, **it creates a duplicate family**. It never attaches.
+**Verdict:** Assign fails on the e-mail. If staff work around it, they create a duplicate. It never attaches.
+
+### 1.8 Who owns a family today (new)
+
+- **PD-8 supervision is Operations-only, by DB rule.** `guard_learner_supervision` refuses any supervisor who is not a `position = 'supervisor'` member of an `operations` department (`20261015120000…:207-217`).
+- **Reach** (`chat.staff_reaches_family`) is derived only from `learner_supervision`, plus backups and managers (`20261015120000…`, function `staff_reaches_family`). Chat access, the family group, PD-33 covers and PD-24 transfers all hang on it.
+- **`family.owner_id`** is a legacy `NOT NULL` staff reference. It changes only through `chat.transfer_ownership` (`20260905090700_chat_ownership_invariants.sql:41-55`). Assign sets it to the Operations supervisor (`enrolment.service.ts:182`), and PD-24 keeps it following the supervisor (`org/org-structure.service.ts:669-670`).
+- **Sales owns no family.**
+  - `chat.sales_department_role` only says whether someone is the Sales manager or a member (`20261019130000_chat_pd011_trial_group.sql:29-41`).
+  - Sales' reach over families is **organization-wide**: `decideBillingAccess` returns `scope: 'all'` for any Sales member (`pd012-policy.ts:129`).
+  - **No column or table links a family to a Sales supervisor.**
+
+**Conclusion.** The owner's "each Sales supervisor manages only their families" has no model today. It needs a new ownership record, and Sales' existing org-wide reads must be narrowed (§4.3).
+
+### 1.9 The package model: PD-11, PD-15, PD-27, PD-30 (new)
+
+- **The ledger is `chat.learner_subscription`** (`20261026140000_chat_pd030_subscription_lock.sql:126-160`).
+  - Each row has `lessons_included`, `starts_on` and `source ∈ {payment_request, instalment_plan, staff, backfill}`.
+  - It is append-only: a row is voided with a reason and never edited (`guard_learner_subscription`, `:168-235`).
+  - **Every package in Chat lives here.** A PD-27 payment request paid in full credits a row by trigger (`pd030_request_credits_lessons`, `:706-741`). So does a PD-17 instalment plan with lessons (`billing/billing.service.ts:404`) and a staff "Add subscription" (`billing/subscription-ledger.service.ts:53-90`).
+- **Counting.** Used = the child's `regular` and `makeup` lessons with outcome `held` or `student_no_show`, from the earliest standing row's `starts_on` (`learner_lessons_used`, `:408-419`). Balance = Σ included − used (`compute_learner_access`, `:454-459`).
+- **A child with no standing row has balance NULL, is "open", and can never be balance-locked** (`:361`, `:458`).
+- **PD-15's `learner_enrollment.package_lessons`** was carried into the ledger at PD-30's go-live, starting that day so nothing already taught counted (`:877-890`). Once a ledger row exists, the ledger *is* the package (`lessons/enrollment.service.ts:206-208`).
+- **"Lesson N of M"** fills the standing rows in order with the lessons used (`billing/subscription-reads.ts:74-85`). The parent and staff views show included, used, left and state (`:10-24`, `:120-140`).
+- **A subscription with no payment** (`source = 'staff'`) is allowed only to the super admin, the Operations manager or the Sales manager. It must carry a reason and start between a week ago and a month ahead (`:108-122`, `:191-199`).
+
+### 1.10 PD-40 (new)
+
+- **Catalogue keys on #174** that PD-42 uses: `new_students.view`, `new_students.manage`, `parents.view`, `parents.edit`, `students.view`, `students.manage`, `subscriptions.view`, `subscriptions.manage`, `billing.view`, `billing.record`, `org.manage`.
+- **Bundles** (`legacy-bundles.ts` on #174):
+  - `supervisor:operations` and `supervisor:sales` both hold `new_students.manage`;
+  - only the managers hold `subscriptions.manage`;
+  - `supervisor:sales` lacks `parents.edit`.
+- **Design rule.** A key is necessary, never sufficient. Row scope stays in Layer 2.
 
 ---
 
 ## 2. Design principles
 
-1. **One form, one Assign.** Direct enrolment is a PD-16 form without a trial. There is no second enrolment service.
-2. **One form, two possible targets.** A form creates either a **new family** or **children in an existing family**. Both go through the same Assign.
-3. **Keep the separation of duties.**
-   - Sales or Operations records the form.
-   - The Operations manager or the super admin assigns it. The database still says so, through `enrol_learner`.
-   - For someone who holds both rights, one click does both ("Save and assign").
-4. **No duplicate people.** A parent is matched by e-mail; that blocks the save. A phone match is only a warning. A child is matched by name (and date of birth, when given) within the family.
-5. **G-07 confinement is unchanged.**
-   - The form, with its phone and e-mail, stays in `chat.trial_subscription`, read only from `src/new-students`.
-   - The parent file stays in `src/parent-profile`.
+1. **One enrolment record, two origins.** Trial and intake share PD-16's transaction body. There is no second enrolment service.
+2. **Responsibility does not move.** PD-8's Operations supervisor stays the one responsible supervisor. Sales ownership is added beside it and does not replace it, so chat access, groups, covers and transfers are unchanged.
+3. **Scoped by default.** A supervisor enters and edits only families they own or supervise. Managers act for their department. The super admin acts for everyone.
+4. **No parallel money.** The carried-over package is a PD-30 ledger row. The database does the counting.
+5. **Incomplete is allowed; duplicate is not.** The minimum needed to make a real record is required. Everything else is optional. Duplicates are blocked or warned about before anything is created.
+6. **G-07 is unchanged.** Phone and e-mail go only to the PD-17 parent file, through `seedFromEnrolment`, in `src/parent-profile`.
 
-## 3. Data model: one migration, slot `20261027140000`
+## 3. Ownership model
 
-### 3.1 `chat.trial_subscription` becomes "the subscription form"
+| Record | Meaning | Who | Changes by |
+|---|---|---|---|
+| `chat.learner_supervision` (PD-8, unchanged) | The **responsible Operations supervisor** of each child: chat reach, family group, covers | an Operations supervisor (DB rule) | PD-8 assign; PD-24 transfer (`changeSupervisor`/`transferLearners`) |
+| **`chat.family_sales_owner`** (new) | The **Sales supervisor accountable** for the family: renewals, payments, the intake data they entered | a member of a `sales` department, in the same organization (DB guard) | the Sales manager or the super admin (`org.manage`), audited `family.sales_owner_changed` |
+| **`student_enrolment.entered_by`, `entered_at`** (today's `assigned_by`, `assigned_at`, given a wider meaning) | **Who entered** the family or children, and when. Immutable. | whoever performed the intake (or the Assign) | never |
+| `family.owner_id` (legacy, `NOT NULL`) | Follows the Operations supervisor, as PD-24 does today | — | `chat.transfer_ownership` |
 
-- Add `id uuid not null default gen_random_uuid()` and backfill it. **The primary key moves to `id`.**
-- `lesson_id` becomes nullable and gets `UNIQUE`. A plain unique constraint still backs the incoming foreign keys and allows many nulls.
-- Add `origin text not null default 'trial' check (origin in ('trial','direct'))`, and the check `(origin = 'trial') = (lesson_id is not null)`.
-- Add `target_family_id uuid null references chat.family(id)`, meaning "add these children to this family". It is allowed on both origins. This also fixes two siblings coming from two different trials.
-- The guard:
-  - **A trial form** follows today's rule: live exactly while the trial is subscribed.
-  - **A direct form** is live until it is withdrawn. It is recorded by staff of its organization. Withdrawing it is explicit, because there is no outcome to correct.
-  - The target family must belong to the same organization.
-  - When `target_family_id` is set, the parent's name, e-mail and phone are those of the target family's primary contact. The service copies them; the form does not take them from the request.
-- The child JSON gains two optional fields:
-  - `durationMinutes` (15–240). A direct form has no trial to take the length from. For a trial form, `trialMinutes` remains the fallback.
-  - `birthDate` (an ISO date), written to `learner_enrollment.birth_date` (`schema.prisma:1460`). It replaces the stated age only when both are given.
-- **The table name stays.** The confinement spec, PD-17's backfill (`20261021150000…:285-291`) and the Prisma model all name it. A rename would be churn, so a comment records the wider meaning instead.
+**One family can have both owners.** A family may have an Operations supervisor and a Sales owner, either one, or both.
 
-### 3.2 `chat.student_enrolment` is keyed by the form
+- **Entered by an Operations supervisor:** they become the supervisor of its children. A Sales owner is optional, and the Sales manager can set it later.
+- **Entered by a Sales supervisor:**
+  - they become its Sales owner;
+  - its children have **no Operations supervisor** until one is set (§4.2);
+  - `family.owner_id` is the entering Sales supervisor until then, because the column is `NOT NULL`. It moves through `transfer_ownership` when the Operations supervisor is set.
+- **Families made through PD-16:**
+  - `family_sales_owner` is backfilled from `trial_subscription.recorded_by` when that person is a Sales member. Otherwise it is left empty.
+  - `entered_by` = `assigned_by`.
 
-- Add `form_id uuid references chat.trial_subscription(id)` and backfill it from `lesson_id`. **The primary key moves to `form_id`.** `lesson_id` becomes nullable and stays unique.
-- Add `kind text not null default 'new_family' check (kind in ('new_family','added_children'))`.
-- **Drop `UNIQUE (family_id)`.** Replace it with a partial unique index on `(family_id) where kind = 'new_family'`: a family is created once, but children may be added many times.
-- The guard:
-  - **`new_family`** follows today's rule: the contact belongs to the family and owns the account.
-  - **`added_children`** requires `form.target_family_id = family_id`. `contact_id` is the family's primary contact. `account_id` is that contact's account, or null for a family made before PD-16 that has no account. `account_id` is therefore nullable for this kind only.
-  - `learner_ids` stays immutable. Each addition is a new row, so history is never rewritten.
-- `freeze_enrolled_subscription` and `parent_signup_code`'s "has an enrolment" check keep working by `account_id`.
+## 4. Workflows
 
-### 3.3 PD-27: payment before Assign for a direct form
+### 4.1 Enter a family (intake)
 
-`payment_request`, `payment` and `invoice` gain `subscription_form_id uuid`.
+**Who:** holders of `new_students.manage` who are:
+- an **Operations supervisor** (`position = 'supervisor'` in an operations department);
+- a **Sales department member**;
+- the **Operations manager**, the **Sales manager**, or the **super admin**, acting for someone in their department, who is named as the owner.
 
-- It has no foreign key, following PD-30's rule for money tables, which keeps them truncatable.
-- `payment_request_has_a_payer` becomes `family_id OR trial_lesson_id OR subscription_form_id`.
-- `attachTrial` becomes `attachForm`, matching either key.
-- Old rows keep `trial_lesson_id`.
-- A form that targets an existing family asks for payment on the family, as PD-27 already does.
+**Where:** a new **"Add family"** button on the Parents list, and on New Students.
 
-### 3.4 PR-4 only: who may sign up
+**One request, one transaction.** It reuses PD-16's body, extracted as `createFamilyInTx` and `enrolChildrenInTx`, and creates:
+- the family;
+- the primary-guardian contact;
+- **an account only if an e-mail was given** (§4.5);
+- the parent file (phone, e-mail) and family billing (method and currency, when given);
+- for each child:
+  - `enrol_learner` (the teacher is optional, see §6);
+  - `learner_enrollment` (course, date of birth or stated age);
+  - the carried-over package, if entered (§5);
+- the PD-8 supervision: **the entering Operations supervisor themself**, and nobody else;
+- `family_sales_owner`: **the entering Sales member**, or the owner a manager names;
+- `student_enrolment(origin='intake', kind='new_family', entered_by=actor)`;
+- the audit rows `family.entered` and `learner.supervisor_assigned` (when set), plus `subscription.carried_over` per package.
 
-- Add `chat.parent_account_issue (account_id pk, contact_id, family_id, source in ('enrolment','added_guardian'), issued_by, issued_at)`, backfilled from `student_enrolment`.
-- The sign-up gate (`parent-signup.service.ts:179`) and the code guard read it in place of `student_enrolment`.
-- This is the one place that records "Chat created this parent's account and they have not signed up yet".
+**After the transaction:**
+- the weekly times, best effort, when a teacher and times were given;
+- for an Operations-supervised family, a prompt: **"Create the family group"** (PD-16 `createGroup`, unchanged).
 
-## 4. API
+**No Assign gate for the entering supervisor (recommended).** The reasons:
+- The owner asked for supervisors to self-serve, so a manager gate would bottleneck a migration of every existing family.
+- The risks a gate would catch are covered elsewhere:
+  - duplicates by §7;
+  - a wrong supervisor by PD-24's transfer;
+  - accountability by `entered_by`, the audit trail and a **"Recently entered"** filter for the Operations and Sales managers. That filter is a review list, not a gate.
+- **One step is still a manager's.** Placing children on an Operations supervisor who is *someone else* stays the Operations manager's decision (PD-8's `canAssignSupervision`). So a Sales-entered family waits for §4.2.
 
-### 4.1 Direct form (PR-2)
+### 4.2 A Sales-entered family needs an Operations supervisor
 
-All of these live in `src/new-students`, because the form is confined there.
+- It appears on New Students as **"Needs an Operations supervisor"**.
+- The Operations manager (or the super admin) picks one. This is today's Assign dialog with nothing left to create.
+  - It writes `learner_supervision` for each child and calls `transfer_ownership`.
+  - The family group can then be created.
+- **Until then:**
+  - the parent can sign up, with the code relayed by the Sales owner;
+  - Sales and the managers can see and edit the family;
+  - no group exists, because PD-8 refuses a group with an unsupervised child.
+- **The Sales supervisor may suggest a supervisor** (free choice, shown to the manager). They do not set it. **This is owner question Q1.**
 
-| Route | Who | What |
+### 4.3 Scope: "only the families they are authorized to handle"
+
+| Actor | Enter a family | Read and edit families, add a child, carried-over package | Relay the sign-up code |
+|---|---|---|---|
+| Operations supervisor | yes, supervised by self | families in **reach** (PD-8: self, backup, cover) | families in reach |
+| Sales member | yes, owned by self | families they **own** (`family_sales_owner = self`) | families they own |
+| Operations manager | yes, for an Operations supervisor | every family | every family |
+| Sales manager | yes, for a Sales member | every family **with a Sales owner** in their department; read-only elsewhere | own department's families |
+| super admin | yes | every family | every family |
+| anyone else, including Teachers and teachers | **no** (403 before any lookup) | no | no |
+
+**Sales' existing org-wide reads.** Today Sales reads every parent and records payments for every family (`pd012-policy.ts:129`). The owner's item 6 requires narrowing that.
+
+- **Recommendation:** a switch `SALES_FAMILY_SCOPE=all|own`, default `all`. Under `own`, a Sales member keeps every family they own *and* every **unassigned trial form**, because trials remain everyone's desk. The Sales manager keeps everything.
+- **Why a switch:** turning it on before the migration intake is complete would hide families from the Sales staff who serve them today. It is the same rollout PD-35's strict scope used.
+- **This is owner question Q2.**
+- PD-42's own new actions (enter, edit, add child, carried-over package) are scoped `own` **from day one**, whatever the switch says.
+
+### 4.4 Add a child to an existing family (the owner's Q2: "same form + one-click")
+
+- **"Add child"** on the Parent Profile opens the same form with the parent block read-only. One click creates the child in the family:
+  - **supervisor:** the family's current Operations supervisor, if it has one;
+  - **otherwise:** the Sales owner path (§4.2);
+  - `student_enrolment(kind='added_children')`.
+- **If the family has a live group with that supervisor**, the child joins it through `ConversationService.addLearnersToFamilyGroup`, with the same authority as `createFamilyGroup`:
+  - the child is anchored to the group;
+  - their teacher joins;
+  - the system message `group.learner_added`;
+  - the audit row `family_group.learners_added`;
+  - the outbox event `MEMBERSHIP_CHANGED`.
+- **Who:** anyone who may edit that family (§4.3).
+- **The trial sibling.** On Assign, `PARENT_EXISTS` now offers **"Add to «parent»'s family"**, which runs the same `added_children` path. This fixes §1.7.
+
+### 4.5 Parent without an e-mail
+
+The e-mail is optional at intake, because Core is incomplete.
+
+- **Without one:** the contact has no account, and New Students and the Parent Profile show **"No sign-in e-mail"**.
+- **Later:** **"Set sign-in e-mail"** on the Parent Profile (§4.3 editors) creates the account, links the contact and records it on the intake row. `student_enrolment.account_id` is nullable, and may be set from null **once**. The sign-up code then works as today.
+
+## 5. The carried-over package
+
+### 5.1 Where it lives
+
+**It lives in `chat.learner_subscription`, PD-30's one ledger.** No new balance table is added.
+
+| Change | Detail |
+|---|---|
+| `source` gains `'carried_over'` | It has no `request_id` and no `plan_ref`. `created_by` is required. |
+| new column `lessons_used_before integer not null default 0` | `check (lessons_used_before between 0 and lessons_included)`, and `check (source = 'carried_over' or lessons_used_before = 0)`. |
+| at most one standing per child | partial unique index `(learner_id) where source = 'carried_over' and voided_at is null` |
+| `starts_on` = the intake day (academy date) | Nothing before it exists in Chat, so nothing is counted twice. |
+| `plan_months` optional | as PD-30 |
+| guard | `created_by` must hold intake rights over the child's family (`chat.may_enter_family(staff, family)`, the §4.3 rules), or be one of PD-30's three roles (`can_grant_subscription_exception`). |
+
+### 5.2 Counting
+
+`compute_learner_access` (`:454-459`) becomes:
+
+```
+balance = Σ lessons_included − Σ lessons_used_before − learner_lessons_used(learner, min(starts_on))
+```
+
+Both sums are over standing rows.
+
+- **Positions.** `positionOf` and `lessonPosition` (`subscription-reads.ts:74-93`) add Σ `lessons_used_before` to `used`. The next lesson after "12 of 20 done" reads **"Lesson 13 of 20"**.
+- **Rows without the new column are unaffected.** For every existing row, `lessons_used_before = 0`, so their arithmetic is identical. PR-1 proves this with a before-and-after spec over the PD-30 suite.
+
+### 5.3 What staff and parents see
+
+These are server-computed and never entered:
+
+- **Total** = `lessons_included`.
+- **Completed** = `lessons_used_before` + lessons held in Chat since intake.
+- **Remaining** = total − completed. With 20 entered and 12 completed, Remaining shows **8**.
+- **Package status:** `active` while remaining > 0, otherwise `used_up`. This is shown beside PD-30's lock state (open, grace or locked).
+
+**`ChildSubscription` gains `lessonsUsedBefore`.** The parent's Payments screen and the staff views read the same fields.
+
+### 5.4 No payment, no reset, no lock
+
+- **No payment.** No payment request, invoice or instalment is created. A later paid renewal adds a row after it, as for any child.
+- **No reset.** The row is append-only. Re-entering means voiding the row (with a reason) and adding a new one; the lessons held in Chat since intake still count.
+- **No lock at entry.**
+  - Remaining > 0 → balance > 0 → state `open`.
+  - A package entered as fully used (completed = total) gives balance 0, which is `grace`. That is PD-30's normal two grace lessons, then `locked` **only if `SUBSCRIPTION_LOCK_ENFORCED` is on**, which it is not in production.
+  - **Whether a migrated used-up package should get a longer grace is owner question Q3.**
+- **Already on instalments in Core?** Staff create the remaining instalments with PD-17's plan **without lessons**, so the package is not credited twice. The form says so.
+
+### 5.5 Who enters it, correction, and audit
+
+- **Entering:** at intake, or afterwards from the Student Profile, by the §4.3 editors of the family. This uses a new key, **`subscriptions.carry_over`** (§8).
+- **Correcting:** void and re-add, with a reason.
+  - **Within 14 days of the child's intake:** the same editors.
+  - **After 14 days:** only PD-30's three roles (`subscriptions.manage`). Changing an opening balance late is then the same as granting free lessons.
+- **Audit:**
+  - the row itself keeps `created_by`, `created_at`, `voided_by`, `voided_at` and `void_reason`;
+  - audit rows `subscription.carried_over` (total, completed, plan months) and `subscription.voided` (reason) are written in the same transaction;
+  - the Student Profile's ledger already lists voided rows for staff.
+
+## 6. Required fields
+
+The form saves with this minimum. The rest is completed later, on the screens that already exist.
+
+| Field | Required | Why |
 |---|---|---|
-| `POST /new-students` `{ id?, subscription, targetFamilyId? }` | the trial desk standing (Sales, Operations, super admin) | Records a direct form. A client-chosen `id` makes a double submit return the same form. |
-| `POST /new-students/:formId` `{ subscription }` | same | Edits a live, unassigned form. |
-| `POST /new-students/:formId/withdraw` `{ reason }` | same | Direct forms only. Trial forms are still withdrawn by correcting the outcome. |
-| `GET /trials/new-students` | unchanged | Each entry adds `formId`, `origin` and `targetFamily: { familyId, parentName, childrenCount } \| null`. The trial fields are null for a direct form. |
-| `/trials/new-students/:id/{assign,supervisor,payment-requests,group,signup-code/invalidate,signup-attempts/reset}` | unchanged rules | `:id` accepts a **form id** and, for one release, a trial id as an alias. The Admin Web moves to form ids. |
+| Parent name | **yes** | Every chat surface and the family's display name show it. `contact.name` and `family.display_name` are `NOT NULL`. |
+| Parent phone **or** e-mail (at least one) | **yes** | Without either, the family can never be invited or reached, and duplicate detection has only a name to match, which is too weak at migration scale. Both are confined to the parent file. |
+| Child name (one or more children) | **yes** | The child is the unit of supervision, schedule and package (`enrol_learner` checks 1–120 characters). |
+| Parent e-mail | no | Needed only to sign up (§4.5) |
+| Teacher | no | `learner.teacher_id` is nullable. It is set later by the supervisor (PD-31 `transfer_learner` allows it, `:500`). Without a teacher there are no weekly times and no teacher in the group. |
+| Weekly times, lesson length | no | Need a teacher; best effort |
+| Course, date of birth or age | no | PD-15 Student Profile |
+| Payment method, currency | no | PD-17 family billing; nullable columns |
+| Carried-over package | no | When given: total (1–1000) is required and completed (0–total) is required. Remaining is never entered. |
+| Country | no | PD-17 Parent Profile |
 
-### 4.2 Assign, two kinds (PR-2 and PR-3)
+## 7. Duplicates and idempotency
 
-- **`new_family`** works as today.
-  - The parent e-mail check (`enrolment.service.ts:163-165`) now answers `409 PARENT_EXISTS` with `{ contactId, familyId, parentName }` when the e-mail belongs to a **family** account. Every caller of Assign can already see every parent (§6), so this reveals nothing new.
-  - The UI then offers "Add to this family instead", which sets `target_family_id`.
-  - A staff or teacher e-mail keeps a plain 409.
-- **`added_children`**: the form has a target family.
-  - **The supervisor** is fixed to the family's current supervisor (the one `learner_supervision` supervisor of its children), so the family group stays coherent.
-    - If the family has no supervised child, the Operations manager chooses one.
-    - If its children have more than one supervisor, the manager picks which of those supervisors' groups the new child joins.
-    - Moving the whole family to another supervisor is still PD-24 (`changeSupervisor`).
-  - **Created in one transaction:**
-    - each child, through `enrol_learner`;
-    - their `learner_supervision` row;
-    - their course, age or date of birth;
-    - the `student_enrolment(kind='added_children')` row;
-    - an audit row `family.children_added`.
-  - **Not created:** no family, no account, no contact, no parent file and no family billing, because they already exist.
-  - **The parent's sign-up is untouched.** If the parent has signed up, the new child appears in their app. If they have not, their live code still works.
-  - The weekly times are set as today, using `durationMinutes` or else the trial length.
-- **Concurrency.** Assign takes `pg_advisory_xact_lock` on the normalized parent e-mail, and on the target family. It also reads the form `FOR UPDATE`. Two forms for the same parent can then never both create a family; the second one gets `PARENT_EXISTS` and is offered "add to that family". Today, the check at `:157` and the insert at `:245` are not serialized against each other.
+| Case | Rule |
+|---|---|
+| E-mail already a **family** account | **Blocks** with `PARENT_EXISTS`. If the actor may edit that family: "Add the children to «parent»'s family". If not: "This parent is already in Chat. Ask your manager". That second message gives no name, family or supervisor. Both managers get a notification. |
+| E-mail of a staff or teacher account | **Blocks** (409, as today) |
+| Same phone as a parent on file (`ParentPhoneDirectory`, exact E.164) | **Blocks**, with the same two answers as e-mail. Phone is the most reliable key in Core's data. The number is never returned. |
+| Same normalized parent name *and* a child with the same normalized name, in a family the actor can see | **Warns** ("Possibly already entered: «family»"); the actor may continue |
+| Same child in the target family (normalized name, plus date of birth when both are given) | **Blocks** with `CHILD_EXISTS`, overridable with `confirmDuplicate` (twins) |
+| Double submit | A client-chosen enrolment `id`: `on conflict do nothing`, returning the first result |
+| Two supervisors entering the same parent at the same time | `pg_advisory_xact_lock` on the normalized e-mail and the E.164 phone inside the intake transaction. The second gets `PARENT_EXISTS`. |
 
-### 4.3 The family group for added children (PR-3)
+**Name normalization:** trim; fold case; remove tatweel; unify أ/إ/آ→ا, ى→ي, ة→ه.
 
-- `createGroup` on an `added_children` enrolment:
-  - **if the family has a live family group with that supervisor:** `ConversationService.addLearnersToFamilyGroup`. In one transaction it anchors the children (`conversation_learner`), adds any new teachers as members, posts the system message `group.learner_added`, writes the audit row `family_group.learners_added`, and sends the outbox event `MEMBERSHIP_CHANGED`. It is authorised exactly like `createFamilyGroup`: the children's supervisor, their active backup, their manager or the super admin.
-  - **otherwise:** it creates a new group, as today.
-- The group's id is recorded on the enrolment, as today.
+## 8. Permissions (PD-40 keys; deny by default; row scope in Layer 2)
 
-### 4.4 Second guardian (PR-4, optional)
+| Key | Status | Bundles | Layer-2 row scope |
+|---|---|---|---|
+| `new_students.view` | exists (#174) | as #174 | enrolments in scope (§4.3) |
+| `new_students.manage` | exists | `supervisor:operations`, `supervisor:sales`, `manager:operations`, `manager:sales` (+ super admin) | enter a family; add a child; set a sign-in e-mail. Own families (§4.3). |
+| **`subscriptions.carry_over`** | **new** | the same four bundles | own families. Corrections within 14 days of intake. |
+| `subscriptions.manage` | exists (managers) | unchanged | late corrections (PD-30's three roles) |
+| `parents.edit` | exists | **add to `supervisor:sales`** | Sales: owned families only. PD-17's `canEditParent` gains a "Sales owner of this family" basis. |
+| `org.manage` | exists (managers) | unchanged | the Operations manager sets an Operations supervisor (§4.2); the Sales manager changes a Sales owner |
 
-- `POST /parent-profiles/:contactId/guardians` `{ name, relationship, email, phone }`. Who: the PD-17 editors (`canEditParent`, which is Operations).
-- **It creates:**
-  - a contact (`role_preset 'authorized_contact'`, may message and view progress);
-  - an account whose subject is the e-mail. A matching e-mail is refused, whether it is in this family or another;
-  - the parent file;
-  - the row `parent_account_issue('added_guardian')`;
-  - an audit row `parent.guardian_added`.
-- **It adds** the contact to the family's live family groups and opens their direct chat with the supervisor.
-- **The sign-up code** is relayed from the Parent Profile, only to the responsible person, with the same invalidate and reset actions as New Students.
+**Deny by default:**
+- a key alone reaches no family; the scope is decided per request;
+- `CHILD_EXISTS` and `PARENT_EXISTS` answers never disclose a family the actor cannot reach;
+- an actor with no scope gets 403 **before** any lookup, as PD-17 does.
 
-## 5. Duplicate detection and idempotency
+**Two changes to hand to the PD-40 session:**
+- add `subscriptions.carry_over` to the catalogue;
+- add `parents.edit` to `supervisor:sales`.
 
-| Case | Rule | Strength |
-|---|---|---|
-| Same parent e-mail as an existing **family account** | `PARENT_EXISTS`, then convert the form to "add to that family". Checked on save and at Assign. | **blocks** |
-| Same parent e-mail as a **staff or teacher** account | 409, as today | **blocks** |
-| Same e-mail on another **live, unassigned form** | A warning on both cards: "another form for this e-mail awaits Assign". The second Assign then turns into "add to the family just created". | warns |
-| Same phone as a parent on file | `ParentPhoneDirectory` (PD-25), exact E.164 match. Warns "a parent with this phone exists" and offers to open the profile. The number is never returned (`parent-phone-directory.ts`). | warns |
-| Same child in the family: the normalized name, plus the date of birth when both have one | `CHILD_EXISTS`, unless `confirmDuplicate: true`. Names are compared after trimming and folding case, removing tatweel, and unifying أ/إ/آ→ا, ى→ي and ة→ه. | blocks, overridable |
-| The same child twice on one form | 400 | **blocks** |
-| Double submit | A client-chosen form `id`: `on conflict do nothing`, then return the existing form | idempotent |
-| Assign twice | The primary key on `form_id`, plus the advisory lock. The second call gets 409 "already assigned", as today. | idempotent |
+## 9. How it meets the other decisions
 
-**Audit trail.** Every audit row omits the phone and the e-mail, as today. The rows are:
-- `new_student.form_recorded`, with origin and target;
-- `new_student.form_updated`;
-- `new_student.form_withdrawn`;
-- `new_student.enrolled`, with its kind;
-- `family.children_added`;
-- `family_group.learners_added`;
-- `parent.guardian_added`;
-- `learner.supervisor_assigned`, as today.
+- **PD-8.** It is unchanged. An Operations supervisor can only place children on **themselves**. Anyone else is still placed by the Operations manager. Group coherence holds, because an added child joins the family's existing supervisor.
+- **PD-24.** A transfer moves the children, the group and `owner_id` as today. A Sales owner is moved separately (`org.manage`).
+- **PD-30.** See §5. The carried-over row is just another ledger row. The lock follows the balance.
+- **PD-31.** Weekly times are best effort. A teacher can be set later by the supervisor.
+- **PD-35.** No interplay. The teacher list is every active teacher, and the teacher supervisor reaches the child through the teacher.
+- **PD-16 trial path.** It is unchanged, except that the trial-sibling Assign attaches to the existing family (§4.4).
+- **PD-17.**
+  - Phone and e-mail stay confined to the parent file.
+  - The Parent Profile gains **Add child**, **Set sign-in e-mail**, the **Sales owner** field, and the carried-over package on the Student Profile.
 
-## 6. Who may do what: PD-8, PD-35, PD-30, PD-40
+## 10. Admin Web UX
 
-### 6.1 Permissions
+1. **"Add family"** on Parents and New Students (for `new_students.manage`).
+   - It is the same `SubscriptionForm`, with its fields made optional to match §6, and a red marker on the three required fields.
+   - Each child has a **"Current package"** block with:
+     - total lessons;
+     - completed lessons;
+     - **remaining (read-only, computed live)**;
+     - a status chip (Active / Used up);
+     - plan months (optional).
+   - The supervisor or owner line is read-only and shows the actor. A manager gets an "On behalf of" picker limited to their department.
+2. **Duplicate answers** appear inline before anything is created (§7).
+3. **New Students** becomes enrolment-centred:
+   - **Filters:** "Awaiting Assign" (trial forms), "Needs an Operations supervisor", "Waiting for sign-up", "Signed up", "Recently entered" (managers only).
+   - **Cards show the origin:** "Trial · teacher · date" or "Entered by «name» · date".
+4. **Parent Profile:** Add child; Set sign-in e-mail; the Sales owner field (the Sales manager can change it); the sign-up code relay for the responsible person.
+5. **Student Profile:** a "Current package" panel with total, completed, remaining and status, plus Correct (within the window, with a reason).
+6. **Copy:** Arabic first, in RTL, checked at phone width.
 
-These names are for PD-40's catalogue. PD-42 enforces them now through today's Layer-2 checks, so it does **not** wait for PD-40's guard.
+## 11. Tests
 
-| Permission | Allows | Legacy bundles that get it | Layer-2 check today | Risk |
-|---|---|---|---|---|
-| `new_students.view` | the New Students page (unassigned forms; assigned forms in scope) | `*@sales`, `*@operations`, `super_admin` | `page()` (`enrolment.service.ts:68-70`) | family_contact |
-| `new_students.record` | record, edit or withdraw a form, direct or from "Add child" | `manager@sales`, `supervisor@sales`, `manager@operations`, `supervisor@operations`, `super_admin` | the trial desk standing (`trial.service.ts:681-685`) | family_contact |
-| `new_students.assign` | Assign and change the supervisor | `manager@operations`, `super_admin`. **Delegable only by the super admin.** | `is_operations_manager`, in the API and the DB | admin |
-| `new_students.signup_relay` | see, invalidate and reset a parent's sign-up code | `supervisor@operations`, `manager@operations`, `super_admin` | `responsibleFor` (the children's supervisor or backup) | family_contact |
-| `parents.add_guardian` (PR-4) | add a second guardian | `manager@operations`, `supervisor@operations` in reach, `super_admin` | `canEditParent` | family_contact |
+- **Intake, as an Operations supervisor:** a family with a minimal record (name + phone + one child) → the supervisor is self → group → set e-mail later → sign-up.
+- **Intake, as a Sales member:** Sales owner = self, no supervisor → "Needs an Operations supervisor" → the Operations manager sets one → `owner_id` moves → group.
+- **Scope matrix:**
+  - Sales member A cannot see, edit, add a child to or carry over for B's family: 404;
+  - an Operations supervisor outside their reach: 404;
+  - Teachers and teachers: 403;
+  - a manager cannot act outside their department;
+  - with `SALES_FAMILY_SCOPE=own`, the PD-17 and PD-27 reads narrow and the Sales manager still sees everything.
+- **Carried-over package:**
+  - 20 entered and 12 completed shows 8; one lesson held in Chat shows 7 and "Lesson 14 of 20" next;
+  - a paid renewal afterwards adds on top;
+  - an entry of 20/20 is in grace, not locked;
+  - no `payment_request`, `invoice` or `family_instalment` is created;
+  - the void-and-re-add correction respects the 14-day window, then needs the three roles;
+  - the audit rows are present;
+  - the DB refuses `lessons_used_before > lessons_included`, a second standing carried-over row, and an unentitled `created_by`.
+- **PD-30 equivalence:** the full PD-30 suite still passes with the new compute, because every row has `lessons_used_before = 0`.
+- **Duplicates:**
+  - `PARENT_EXISTS` by e-mail and by phone, with each answer limited by scope;
+  - concurrent intakes of one parent create one family;
+  - `CHILD_EXISTS` with the Arabic name folding;
+  - a double submit is idempotent.
+- **Sibling:**
+  - Add child joins the existing group with the new teacher;
+  - a trial sibling's Assign attaches; one family, one account.
+- **DB as the backstop:** raw SQL is refused for an intake enrolment entered by someone not entitled, a second `new_family` row for a family, a non-Sales `family_sales_owner`, and an Operations supervisor placing someone else's children.
+- **Migration:** every PD-16 row is preserved; the `family_sales_owner` backfill is correct.
+- **Privacy:** the confinement specs stay green; audit rows carry no phone or e-mail; `PARENT_EXISTS` leaks nothing out of scope.
+- **Admin Web:** the form's required-field markers, the live remaining count, the duplicate answers, the filters and the profile actions.
+- **Load:** integration tests on a private DB, with capped workers. No simulator is needed.
 
-**Recommendation, as asked:** Sales, the Operations manager and the super admin may **create** a form. Operations supervisors already share the trial desk, so they keep that right; Q3 asks whether they should. **Assigning** stays with the Operations manager and the super admin. **"Add child"** on the Parent Profile is shown to anyone who holds `new_students.record` *and* can open that parent. For an Operations supervisor, that means only the families in their reach.
-
-### 6.2 How PD-42 meets the other decisions
-
-- **PD-8.** An added child joins the family's existing supervisor, so the coherence trigger is never tested. Page visibility after Assign is unchanged: the children's supervisor (and backup), the Operations manager and the super admin.
-- **PD-35 strict scope.** No change. The form's teacher list stays every active teacher, because the trial desk is not Teachers-department scoped. The new child's teacher supervisor reaches the child through the teacher assignment, as they reach any other student.
-- **PD-30 lock.**
-  - Assign does not create ledger rows. A form's prices are what Sales noted; lessons arrive with payment (a PD-27 link or a PD-17 instalment plan) or a PD-30 staff grant.
-  - **Recommendation:** when the target family already has a child locked for payment, Assign and group-join show a warning naming that child. Adding a child does not unlock the group.
-- **PD-31.** Weekly times are best effort, as today. The result names any child whose times were not set.
-
-## 7. Admin Web UX
-
-1. **New Students page** (`NewStudentsPage.tsx`):
-   - A **"New student (no trial)"** button for `new_students.record` holders. It opens `SubscriptionForm` with `emptyDraft()` and a lesson-length field per child.
-   - On save, `PARENT_EXISTS` shows "This parent is already in Chat: «name», N children. **Add to this family** / Cancel".
-   - A phone match shows a non-blocking banner with "Open profile".
-   - Cards show **"Direct"** or **"Trial · teacher · date"**, and **"Adds to «family»"** when there is a target.
-   - A filter chip for origin.
-2. **Holding both rights.** For the Operations manager and the super admin, the button reads **"Save and assign"**. It opens the Assign dialog straight after the save. If Assign fails, the form remains as a normal unassigned entry.
-3. **Assign dialog** (`NewStudentSetup.tsx`):
-   - For an added-children form, the supervisor is preselected and locked, with "Change family supervisor" linking to PD-24.
-   - There is no e-mail field, because the parent already exists.
-   - It shows the lock warning (§6.2).
-4. **Parent Profile.**
-   - An **"Add child"** button opens the same `SubscriptionForm`, with the parent block read-only from the family and `targetFamilyId` set.
-   - A "Second guardian" panel appears in PR-4.
-5. **After an added-children Assign,** the group action reads **"Add to the family group"** instead of "Create group".
-6. **Copy.** Arabic first, with English, in `newStudentsCopy.ts`. It is checked at phone width and in RTL, as PD-16 and PD-32 were.
-
-## 8. Tests
-
-- **Integration** (`new-student-enrolment-pd016.spec.ts`, extended, plus a new `pd042-direct-enrolment.spec.ts`):
-  - **Direct form:** record → page → Assign → family, contact, account, children, supervision → group → sign-up code → the parent signs up.
-  - **Sibling, later:** a trial form with an e-mail that exists gets `PARENT_EXISTS`. It converts to "added children", gets Assign, and the child joins the existing group with the new teacher as a member. There is exactly one family, one contact and one account.
-  - **Two trials, same e-mail, both pending:** the second Assign attaches to the family the first created.
-  - **Concurrent Assigns** of two forms with the same e-mail: one family is created.
-  - **Families made before PD-16:** a family with no account takes added children.
-  - `CHILD_EXISTS`, the Arabic name folding, and `confirmDuplicate`.
-  - **Withdraw:** a direct form can be withdrawn, and is frozen once enrolled.
-- **The DB is the backstop.** Raw SQL that bypasses the API is refused for each of these:
-  - a direct form with a `lesson_id`;
-  - an `added_children` enrolment whose family is not the form's target;
-  - a second `new_family` row for the same family;
-  - a change to `learner_ids`;
-  - a group anchor from another family.
-- **Migration test.** The backfill keeps every PD-16 row, and `form_id = id` of its form. The New Students page answers the same before and after on the seeded fixture.
-- **Authorization matrix** for `/new-students*` and `/parent-profiles/:id/guardians`:
-  - teacher, parent and Teachers department → 403;
-  - an Operations supervisor outside their reach → 404;
-  - Sales → may record, may not assign.
-- **Unit tests:** form validation (`durationMinutes`, `birthDate`), name folding, and the `PARENT_EXISTS` mapping.
-- **Privacy:**
-  - `new-students-confinement.spec` and `parent-file-confinement.spec` stay green with no new allowed lines outside the two modules;
-  - `no-contact-channel-columns.spec` stays green;
-  - audit rows carry no phone or e-mail.
-- **Admin Web:** `TrialsPages.test.tsx` covers the create button by permission, the `PARENT_EXISTS` conversion, the direct and target labels, the locked supervisor, "Save and assign", and "Add child" on the Parent Profile.
-- **Guards:** `scripts/qa/guards.sh` passes, including the slot claim.
-- **Load.** Integration runs follow the machine rules: capped workers and a private DB. No simulator is needed, because there is no Flutter change; parents see new children through existing screens.
-
-## 9. PR breakdown
+## 12. PR breakdown
 
 | PR | Contents | Depends on |
 |---|---|---|
-| **PR-1, data** | The migration `20261027140000`: form `id`, `origin` and `target_family_id`; `student_enrolment.form_id` and `kind`; the payment `subscription_form_id`; backfill; guards; the Prisma model. Every existing PD-16 spec stays green, with no behaviour change. | — |
-| **PR-2, direct form API + UI** | `POST /new-students` (+ edit, withdraw); routes keyed by form id with the trial-id alias; `PARENT_EXISTS`, the phone warning and `CHILD_EXISTS`; Assign lock and `FOR UPDATE`; `attachForm`; the "New student (no trial)" button and "Save and assign". **This alone answers the owner's request.** | PR-1 |
-| **PR-3, add to an existing family** | Assign `added_children`; `addLearnersToFamilyGroup`; "Add child" on the Parent Profile; the converted-form flow; the lock warning. | PR-2 |
-| **PR-4, second guardian** (optional) | `parent_account_issue` (folded into PR-1's migration if approved in time, otherwise its own slot); the guardians route; the relay on the Parent Profile. | PR-1 |
-| **PR-5, docs** | PD-42 in the boundary doc §4; `docs/admin/` operator note; permission rows handed to PD-40's catalogue. | PR-2 |
+| **PR-1, data** | Migration `20261027140000`, plus the Prisma model. No behaviour change. It contains: `student_enrolment` with `id` as primary key, `origin`, `kind`, a nullable `lesson_id` and `account_id`, `entered_*`, and the new guards; `enrol_learner` widened (intake authority, optional teacher); `chat.family_sales_owner` and its backfill; `chat.may_enter_family`; `learner_subscription` with `carried_over`, `lessons_used_before` and the new compute; the PD-30 equivalence spec. | — |
+| **PR-2, intake** | `FamilyIntakeService` (shared PD-16 body); enter family; add child; set sign-in e-mail; carried-over package; duplicates and locks; "Needs an Operations supervisor"; the Admin Web form, New Students filters and profile actions. **This answers the owner.** | PR-1 |
+| **PR-3, family group and trial sibling** | `addLearnersToFamilyGroup`; Assign's `PARENT_EXISTS` → added children | PR-2 |
+| **PR-4, Sales scope switch** | `SALES_FAMILY_SCOPE` across PD-17, PD-27 and New Students reads; the Sales owner change by the Sales manager | PR-1; switched on after the intake |
+| **PR-5, docs** | PD-42 in the boundary doc §4; `docs/admin/` intake guide for supervisors; catalogue rows handed to PD-40 | PR-2 |
 
-## 10. Owner questions (each has a recommendation)
+The second guardian is deferred (owner Q4) and is not in these PRs.
 
-1. **May Sales record a direct form on its own, or only after the Operations manager agrees?**
-   *Recommendation:* Sales records it and the Operations manager assigns, as for trials. Assign is already the approval step.
-2. **Adding a child to an existing family: must it always go through New Students and Assign, or may the Operations manager do it in one step from the Parent Profile?**
-   *Recommendation:* the same form and the same Assign, so the record is identical. The Operations manager and the super admin get one-click "Save and assign".
-3. **Should Operations supervisors also be able to record direct forms?** Today they share the trial desk with Sales.
-   *Recommendation:* yes, but only for families in their reach when using "Add child". Brand-new families from them are fine, because the Operations manager still assigns.
-4. **A second guardian (PR-4): now, or later?**
-   *Recommendation:* later, unless a family is waiting for it. PR-2 and PR-3 answer the request; PR-4 also changes the sign-up gate.
-5. **May Sales ask for payment before Assign on a direct form, as it can for a trial?**
-   *Recommendation:* yes. It is a small change (§3.3) and keeps the two paths identical.
+## 13. Owner answers so far, and remaining questions
 
-## 11. Out of scope
+**Answered on 2026-10-27:**
+- Q2: same form, one click.
+- Q4: second guardian later.
+- Q1 and Q3: Sales and Operations supervisors both enter their own families.
+- Q5: carry over running packages.
 
-- Any change to how a parent signs up in the app, or to the WhatsApp relay.
-- Merging duplicate families that already exist. If any are found, that is a one-off operational script, with the owner's approval.
-- Students without a parent account (an adult learner who is their own parent). The form still requires a parent; this would be a separate decision.
-- Flutter changes. Parents and teachers see new children through the screens they already have.
+**Remaining questions, each with a recommendation:**
+
+1. **A family entered by a Sales supervisor: who chooses its Operations supervisor?**
+   *Recommendation:* the Operations manager, from a "Needs an Operations supervisor" list. The Sales supervisor may suggest a name. This keeps today's rule that only the Operations manager places children on an Operations supervisor.
+2. **Should Sales' current access to every family (parent profiles, payments) narrow to "own families"?**
+   *Recommendation:* yes, behind a switch, turned on once the migration intake is complete. The Sales manager keeps every family. Unassigned trial forms stay visible to all of Sales.
+3. **A student whose package is already fully used when entered: the normal two grace lessons, or a longer grace period during the migration?**
+   *Recommendation:* the normal rule, so renewal starts at once. The lock is off in production anyway, and a manager can grant an exception.
+4. **Do Core packages have an expiry date that must carry over?**
+   *Recommendation:* no. Record total, completed and plan months only, because PD-30 has no date expiry. Add one later if the academy enforces it.
+5. **May the Operations manager or the Sales manager enter a family on behalf of a supervisor?**
+   *Recommendation:* yes. The supervisor is named as owner, and the manager is recorded as the one who entered it.
+
+## 14. Out of scope
+
+- The second guardian (deferred by the owner).
+- Bulk import from a Core export. Core's data is incomplete by the owner's account, and entry is by hand. A CSV import could be a later PD.
+- Merging duplicate families that already exist.
+- An adult learner who is their own parent.
+- Flutter changes. The parent's Payments screen already shows included, used and left. `lessonsUsed` is computed from the balance, so it already includes the completed-before lessons with no client change.
