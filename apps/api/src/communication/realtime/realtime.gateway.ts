@@ -1,4 +1,4 @@
-import { Logger, OnModuleDestroy, Optional } from '@nestjs/common';
+import { Inject, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -30,7 +30,8 @@ import { ConversationService, isUuid } from '../conversations/conversation.servi
 import { ActorKind, ReceiptState } from '../contracts/vocab';
 import { AuthService } from '../../platform/auth/auth.service';
 import { bearerToken } from '../../platform/auth/auth.guard';
-import { configInteger } from '../../platform/auth/action-throttle.guard';
+import { ActionScope, actionRateLimitKey, configInteger } from '../../platform/auth/action-throttle.guard';
+import { RATE_LIMIT_STORE, RateLimitStore } from '../../platform/auth/login-rate-limit';
 import { AppConfigService, COMMUNICATION_CONFIG_DEFAULTS } from '../../platform/app-config.service';
 import { FrameBudget } from './frame-budget';
 import {
@@ -291,7 +292,36 @@ export class RealtimeGateway
     // Phase 8 frame budget. Optional for the same reason; without it the
     // compiled default limit applies, never "no limit".
     @Optional() private readonly config?: AppConfigService,
+    // PD-37: the HTTP action budget's store, so the socket form of a cursor
+    // move spends the SAME per-actor budget as POST …/messages/delivered.
+    @Optional() @Inject(RATE_LIMIT_STORE) private readonly rateLimits?: RateLimitStore,
   ) {}
+
+  /**
+   * PD-37: one cursor move against `abuse.throttle.receipt_cursor_actor`, the
+   * budget the HTTP routes spend (ActionThrottleGuard). Fails OPEN like the
+   * guard: an unavailable store must not stop receipts.
+   */
+  private async withinReceiptBudget(actorId: string): Promise<boolean> {
+    if (!this.rateLimits) return true;
+    try {
+      const limit =
+        configInteger(await this.config?.get('abuse.throttle.receipt_cursor_actor'), 0) ??
+        COMMUNICATION_CONFIG_DEFAULTS['abuse.throttle.receipt_cursor_actor'];
+      const windowSeconds =
+        configInteger(await this.config?.get('abuse.throttle.window_seconds'), 1) ??
+        COMMUNICATION_CONFIG_DEFAULTS['abuse.throttle.window_seconds'];
+      const result = await this.rateLimits.reserve(
+        [actionRateLimitKey(ActionScope.RECEIPT_CURSOR, actorId)],
+        [limit],
+        windowSeconds,
+      );
+      return result.exceeded === 0;
+    } catch (e) {
+      this.log.warn(`receipt budget unavailable; allowing: ${(e as Error).name}`);
+      return true;
+    }
+  }
 
   /**
    * RT-009. Once Socket.IO has a server, revocations decided elsewhere are
@@ -670,7 +700,11 @@ export class RealtimeGateway
     // Only a start that was announced has a key; nothing else needs a stop.
     if (!(await this.typing.stop(conversationId, client.actor.actorId))) return { ok: true };
 
-    const actor = await this.typingSeat(client, conversationId);
+    // A stop is ALWAYS let through, seat or not: only someone whose start was
+    // announced holds a key, and a member removed or silenced mid-word must
+    // not leave "typing…" stuck on everyone else's screen. RT-009 still holds:
+    // a dead identity sends nothing, and only seated members receive it.
+    const actor = await this.currentActor(client);
     if (!actor) return { ok: false };
     await this.deliverToConversation(
       conversationId,
@@ -724,6 +758,7 @@ export class RealtimeGateway
       // RT-009: the identity as it is now; the service re-checks read access.
       const current = await this.currentActor(client);
       if (!current) return { ok: false, updated: 0 };
+      if (!(await this.withinReceiptBudget(current.actorId))) return { ok: false, updated: 0 };
       try {
         await this.messages.markDeliveredUpTo(body.conversationId, current.actorId, String(body.upToSeq));
         return { ok: true, updated: 0 };
@@ -902,7 +937,7 @@ export class RealtimeGateway
           if (allowed[i]) {
             // Outside the audience is not a loss of access: nothing is sent,
             // and the socket stays in the room.
-            if (wanted[i]) socket.emit(event, payload);
+            if (wanted[i]) socket.emit(event, audience?.perActor?.[actor.actorId] ?? payload);
             return;
           }
           refusedRead++;

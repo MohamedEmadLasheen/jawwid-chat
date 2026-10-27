@@ -14,6 +14,12 @@ import { CommEventName, CommEventPayloads } from '../contracts/events';
 export interface DeliveryAudience {
   onlyActors?: string[];
   countableOnly?: boolean;
+  /**
+   * A payload of its own for each of these people, in place of the shared one:
+   * one delivery pass (one set of RT-009 checks) for many authors, each of whom
+   * still receives only their own ticks.
+   */
+  perActor?: Record<string, unknown>;
 }
 
 /**

@@ -16,7 +16,7 @@ import { CommErrorCode } from '@platform/errors';
 import { CommEvent } from '@communication/contracts/events';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import type { DeliveryAudience, RealtimePublisher } from '@communication/realtime/realtime.publisher';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, legacyTeacherParentDirect, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -48,7 +48,17 @@ beforeEach(async () => {
   s = await seed(g.prisma);
   g.coverage.onDutyId = s.ownerId;
   groupId = (await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId)).id;
+  await setAnnounce(true);
 });
+
+/** The deploy switch (realtime.receipts_announce): ON once the PD-37 worker runs everywhere. */
+async function setAnnounce(on: boolean) {
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.config (key, value, scope) values ('realtime.receipts_announce', '${on}'::jsonb, 'realtime')
+     on conflict (key) do update set value = excluded.value`,
+  );
+  g.config.invalidate();
+}
 
 async function cursorOf(actorId: string) {
   return g.prisma.conversationParticipantState.findUnique({
@@ -146,6 +156,51 @@ describe('PD-37: receipts.advanced', () => {
   });
 });
 
+describe('PD-37: nothing a worker from before PD-37 could broadcast', () => {
+  /**
+   * A worker from before PD-37 has no case for receipts.advanced; its DEFAULT
+   * branch hands any event with a conversationId to the whole room -- the
+   * reader's cursor, to silent members, observers and PD-8 readers alike. So
+   * until the switch is on, the row must never be written at all.
+   */
+  it('with the deploy switch OFF (the default), no receipts.advanced row is ever written', async () => {
+    await setAnnounce(false);
+    const [, , m3] = await threeFromParent();
+    await g.messages.markReadUpTo(groupId, s.teacherId, m3.seq);
+    await g.messages.markDeliveredUpTo(groupId, s.ownerId, m3.seq);
+    expect(await advancedRows()).toEqual([]);
+    // The cursors and receipts still moved; only the live push waits.
+    expect((await cursorOf(s.teacherId))!.lastReadSeq).toBe(BigInt(m3.seq));
+  });
+
+  it('the compiled default is OFF', async () => {
+    await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'realtime.receipts_announce'`);
+    g.config.invalidate();
+    expect(await g.config.get('realtime.receipts_announce')).toBe(false);
+  });
+
+  it('PD-7: a direct teacher<->parent conversation never announces, switch on or not', async () => {
+    const directId = await legacyTeacherParentDirect(g.prisma, s.teacherId, s.parentId, s.familyId);
+    // A PD-6-era message in it, written the way that era did (triggers off).
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+      const m = await tx.message.create({
+        data: { conversationId: directId, authorType: 'contact', authorId: s.parentId, type: 'text', body: 'legacy', seq: 1n, visibility: 'customer' },
+      });
+      await tx.messageReceipt.create({ data: { messageId: m.id, actorId: s.teacherId, state: 'sent' } });
+      await tx.conversation.update({ where: { id: directId }, data: { lastSeq: 1n } });
+    });
+    await g.messages.markReadUpTo(directId, s.teacherId, '1');
+    // The read itself happened (history stays readable under PD-7)...
+    const cursor = await g.prisma.conversationParticipantState.findUnique({
+      where: { conversationId_actorId: { conversationId: directId, actorId: s.teacherId } },
+    });
+    expect(cursor!.lastReadSeq).toBe(1n);
+    // ...and announced nothing to the other side.
+    expect((await advancedRows()).filter((r) => r.conversationId === directId)).toEqual([]);
+  });
+});
+
 describe('PD-37: the worker tells authors, never the room', () => {
   it("each author gets their own ticks through an audience of one; the reader's row never reaches the room", async () => {
     const [m1, m2] = await threeFromParent();
@@ -160,17 +215,21 @@ describe('PD-37: the worker tells authors, never the room', () => {
     expect(recorder.thread.map((t) => t.event)).not.toContain(CommEvent.RECEIPTS_ADVANCED);
     expect(recorder.thread.map((t) => t.event)).not.toContain(CommEvent.MESSAGE_STATUS);
     expect(recorder.audience.every((d) => d.event === CommEvent.MESSAGE_STATUS)).toBe(true);
-    expect(recorder.audience.every((d) => d.audience.onlyActors?.length === 1)).toBe(true);
+    // One delivery per cursor move, however many authors it covers; each
+    // author's payload is their own (perActor), and only authors are in it.
+    for (const d of recorder.audience) {
+      expect(Object.keys(d.audience.perActor ?? {}).sort()).toEqual([...(d.audience.onlyActors ?? [])].sort());
+    }
 
-    // The parent's last word on each of their messages, in delivery order.
+    // Each author's last word on each of their messages, in delivery order.
     const forParent = new Map<string, string>();
     const forTeacher = new Map<string, string>();
     for (const d of recorder.audience) {
-      const target = d.audience.onlyActors![0];
-      const items = (d.payload as { items: Array<{ messageId: string; status: string }> }).items;
-      expect([s.parentId, s.teacherId]).toContain(target);
-      const into = target === s.parentId ? forParent : forTeacher;
-      for (const it of items) into.set(it.messageId, it.status);
+      for (const [target, own] of Object.entries(d.audience.perActor ?? {})) {
+        expect([s.parentId, s.teacherId]).toContain(target);
+        const into = target === s.parentId ? forParent : forTeacher;
+        for (const it of (own as { items: Array<{ messageId: string; status: string }> }).items) into.set(it.messageId, it.status);
+      }
     }
     // The parent's first two: everyone seated has read them once the supervisor reads to the second.
     expect(forParent.get(m1.id)).toBe('read');

@@ -6,7 +6,7 @@
 --
 --   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261026180000_pd037_read_cursors.down.sql
 
-delete from chat.config where key = 'abuse.throttle.receipt_cursor_actor';
+delete from chat.config where key in ('abuse.throttle.receipt_cursor_actor', 'realtime.receipts_announce');
 
 alter table chat.conversation_participant_state drop column if exists last_read_at;
 alter table chat.conversation_participant_state drop column if exists last_delivered_seq;

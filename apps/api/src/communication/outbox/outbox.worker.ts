@@ -265,11 +265,16 @@ export class OutboxWorker {
           BigInt(payload.fromSeq as string),
           BigInt(payload.toSeq as string),
         );
+        // ONE delivery for every author it covers: one pass of the RT-009
+        // checks over the room, each author receiving only their own ticks
+        // (perActor). The reader's own messages are not changed by their read.
+        const perActor: Record<string, { conversationId: string; items: typeof byAuthor extends Map<string, infer I> ? I : never }> = {};
         for (const [authorId, items] of byAuthor) {
-          // The reader's own messages are not changed by their own read.
-          if (authorId === payload.actorId) continue;
-          await send(conversationId, CommEvent.MESSAGE_STATUS, { conversationId, items }, { onlyActors: [authorId] });
+          if (authorId !== payload.actorId) perActor[authorId] = { conversationId, items };
         }
+        const authors = Object.keys(perActor);
+        if (authors.length === 0) return;
+        await send(conversationId, CommEvent.MESSAGE_STATUS, { conversationId, items: [] }, { onlyActors: authors, perActor });
         return;
       }
 

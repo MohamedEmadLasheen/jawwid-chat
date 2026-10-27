@@ -59,6 +59,8 @@ export function decodeEnvelope(raw: string): RealtimeEnvelope | null {
       parsed.audience &&
       typeof parsed.audience === 'object' &&
       (parsed.audience.onlyActors === undefined || Array.isArray(parsed.audience.onlyActors)) &&
+      (parsed.audience.perActor === undefined ||
+        (typeof parsed.audience.perActor === 'object' && parsed.audience.perActor !== null && !Array.isArray(parsed.audience.perActor))) &&
       (parsed.audience.onlyActors !== undefined || parsed.audience.countableOnly === true)
     ) {
       return parsed;
