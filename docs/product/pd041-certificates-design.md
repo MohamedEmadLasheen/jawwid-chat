@@ -256,7 +256,17 @@ keep `certificate_issued`, so the Flutter card renderer and `stats.service` keep
 
 ## 6. Permissions
 
-### 6.1 Names (proposed to PD-40, awaiting its confirmation)
+### 6.1 Names (agreed with PD-40, 2026-10-27)
+
+PD-40's PR-1 ([#172](https://github.com/MohamedEmadLasheen/jawwid-chat/pull/172), `claude/pd40-route-permissions` @ `2372b6e6`) adopted these names. Its catalogue already holds `certificates.view`, `.design` and `.deliver`; `certificates.decline` is gone.
+- Until PD-41 PR-2 replaces them, today's PD-12 routes map as follows: `GET /learner-certificates` → view, `/:id/upload` → design, and `/:id/issue` and `/:id/decline` → deliver.
+- The Teachers department's legacy bundle holds view, design and deliver. That is today's `canSupervise`, and matches the transition rule in §6.2.
+- The Designer template is `view` + `design`, and never sends. This matches §13 Q1.
+- **PD-41 PR-1 adds** `certificates.request.student`, `.request.teacher`, `.story` and `.oversee` to `catalogue.ts`, and puts `@Requires` on its new routes.
+  - The route gate `bash scripts/qa/guards.sh pd040-routes` and the route spec fail on any undeclared handler or unknown key.
+  - Regenerate `docs/security/pd040-route-permissions.md` with `PD040_WRITE_ROUTE_TABLE=1`.
+- Keys stay `delegable=false` until a policy verifies their bundle. `decideCertificateAccess` (§6.3) is that policy for the certificate keys.
+- PR-1 therefore lands **after #172**, and PR-3 shrinks to reading PD-40 PR-2's `Actor.permissions` and `chat.staff_has_permission`.
 
 | Permission | Allows | Layer 2: which rows (PD-41's service decides) | Risk |
 |---|---|---|---|
@@ -502,7 +512,7 @@ All are under `@Controller('certificates')` with `CommErrorFilter`.
 | **PR-0** (this) | the claim, the slot and this design | none | — |
 | **PR-1** API + migration | migration `20261027130000`: rename, columns, category/type/file/upload/event tables, triggers, legacy mapping, the `certificate_awarded` kind, templates. `pd041-policy.ts` plus its matrix spec. `CertificateService` rewritten around the state machine. The new controller. The `/learner-certificates` teacher routes kept. The projection spec. Integration specs (rewritten `pd012-*`, new `pd041-*`: duplicates, races, send-once, Story-once, target-changed, redaction, trigger refusals attempted directly). `docs/contracts/API-CONTRACT.md`. | additive; legacy issue/decline still work until PR-2 | — |
 | **PR-2** Admin Web | the `/certificates` page, form, drawer and history, the redirects, tests. Removes the three legacy staff routes. | the Teachers-tab page moves to `/certificates` | PR-1 |
-| **PR-3** PD-40 wiring | the policy reads `Actor.permissions`; `@Requires` on all routes; the ✱ list goes into PD-40's exact Designer spec; the DB check calls `chat.staff_has_permission`; the transition rule (§6.2) ends | the Designer can work | PD-40 PR-1, PR-2, PR-4 |
+| **PR-3** PD-40 wiring | the policy reads `Actor.permissions` (`@Requires` already lands in PR-1, on top of #172); the ✱ list goes into PD-40's exact Designer spec; the DB check calls `chat.staff_has_permission`; the transition rule (§6.2) ends | the Designer can work | PD-40 PR-2, PR-4 (PR-1 = #172 is needed by PD-41 PR-1) |
 | **PR-4** Flutter (small) | renders `certificate_awarded` in the supervision conversation (the file plus the type and period); the teacher's suggestion sheet copy says "suggest". | copy only | PR-1 |
 
 ### 12.2 Verification
