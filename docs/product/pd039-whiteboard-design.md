@@ -1,0 +1,536 @@
+# PD-39 · The teacher whiteboard — design and MVP proposal
+
+Status: **PROPOSED, awaiting approval** (department head, then the product owner).
+No feature code exists yet. Claimed in `pd-registry/PD-39.md`; migration slot
+`20261027110000` (`chat_pd039_whiteboards`) is claimed and will be written after approval.
+
+The owner's request (2026-10-27): "we need to add in teacher account this one: Spahboard
+Interactive Whiteboard". The owner sent a feature analysis of Spahboard in eleven groups
+(drawing tools, geometry, workspace, imports, games, 3D science, Quranic verses,
+calculator/timer/stamps, camera and recording, pages and export, sharing). The owner asked
+us to separate **built-in features** from **activities teachers create with the tools**.
+
+This document recommends what to build first, where to build it and how, and what to
+leave out. It ends with five questions for the owner.
+
+---
+
+## 1. Summary
+
+| | Recommendation |
+|---|---|
+| **Surface** | The **Flutter teacher portal** (`lib/`). One build serves the laptop browser (PD-28 `/teacher/`, the primary target) and tablets. Phones open boards read-only. No React and no Admin Web. |
+| **Engine** | **Build on Flutter** (`CustomPainter` / `Canvas` with CanvasKit). **No new client dependency** in the core MVP. Excalidraw, Fabric.js and Konva are MIT but would mean a JavaScript island inside a Flutter app. tldraw is ruled out: its licence forbids production use without a paid key. |
+| **MVP** | Pen, highlighter, eraser, text, shapes, lines and arrows, select/move, undo/redo, zoom/pan, colours and thickness, a small stamp set. Backgrounds (plain, ruled, narrow-ruled, grid, Arabic handwriting lines). Multiple pages. Image import. **Quran verses from a verified Uthmani source**, inserted by reference and never editable. Save to the teacher's account. Export to PNG and PDF. |
+| **MVP-b** | PDF page import, but only if the head approves one new dependency (`pdfrx`, MIT) after a lockfile and binary-source review. Otherwise teachers import a page as an image. |
+| **Phase 2** | A live "board view" for students during a lesson, with no change to call code. Plus a laser pointer, a timer, Tajweed letter colouring, verse search by words, ruler and auto-shapes, and board replay. |
+| **Out of scope / Phase 3** | Games, 3D science, the periodic table, anatomy, the calculator, website and YouTube embeds, camera, and audio/video lesson recording. Games and existing activities are reachable through PD-29 Materials, not rebuilt inside the board. |
+
+---
+
+## 2. Where it lives
+
+### What exists
+
+- **The teacher portal is the Flutter app** (`lib/`). PD-28 (2026-10-24) put the same app
+  in a laptop browser at `<admin web>/teacher/`, rendered by CanvasKit, because "teachers use
+  their portal in a laptop browser". Teachers also use it on phones and tablets.
+- **Admin Web** (React) is for staff. Teachers never sign in there, and PD-28 chose not to
+  build a second teacher client.
+- The teacher's tabs are **Chats · Schedule · Calls · Settings** (`lib/app/shells/app_shell.dart`).
+  The Teacher Account was frozen on 2026-10-01 as "a communication app". PD-9/PD-10 reopened
+  it for Schedule. This request reopens it again, by the owner's decision.
+
+### Recommendation: the Flutter teacher portal, laptop first
+
+- **One codebase for every teaching device.** The board written once in Dart runs in the
+  PD-28 browser bundle (laptop), on tablets (iPad with Apple Pencil, Android with stylus)
+  and on phones. Any web-only engine would need a WebView on mobile and an `HtmlElementView`
+  on the web: two embedding paths, two input stacks, and a JavaScript bridge to keep secure.
+- **Laptop is the primary target.** Acceptance testing happens in Chrome at `/teacher/` with
+  a mouse, a trackpad and a pen tablet. Tablets are the second target.
+- **Phones open boards read-only.** A teacher can show a saved board from a phone, but
+  drawing is not offered below 600 dp on the shortest side. A phone toolbar would cover
+  half the canvas. (Owner question 3.)
+- **Entry points.**
+  - A **Boards** tab for teachers only, after Schedule. It is shown on the web and on tablets.
+  - **Open board** on a lesson in Schedule, which opens or creates that lesson's board.
+  - The tab is the one IA change. If the owner prefers no new tab, Boards can sit under
+    Schedule instead.
+
+---
+
+## 3. Build or integrate
+
+Licences were read from published metadata only (the npm registry, pub.dev and the
+projects' LICENSE files) on 2026-10-27. Nothing was installed or run.
+
+| Option | Licence | Fit with our stack | Arabic / RTL text | Pen and touch | Bundle | Verdict |
+|---|---|---|---|---|---|---|
+| **Flutter CustomPainter** (ours) | — (our code) | Native. Same app, same auth, same API client, same tests. | SkParagraph + HarfBuzz in CanvasKit. Full Arabic shaping and bidi, with our bundled fonts (IBM Plex Sans Arabic, plus Amiri / Amiri Quran, both OFL 1.1). Already proven in chat. | `Listener` gives pressure, tilt and `PointerDeviceKind.stylus` on iPad, Android and browser Pointer Events. Palm rejection: when a pen is seen, touch pans and zooms instead of drawing. | ~0 new deps. Roughly +0.3–0.5 MB of Dart, plus about 0.5 MB of fonts. | **Recommended** |
+| Excalidraw | MIT (© 2020 Excalidraw) | A React component. It would need React inside Flutter web (`HtmlElementView`) and a WebView on mobile, with state bridged through `postMessage`. | Canvas text with long-standing RTL limitations. Only its own font set, so verses in a Quran font would need a fork. The hand-drawn (rough.js) look does not suit Quran text. | Good pen support (perfect-freehand). | npm 0.18.1: **31 dependencies**, 46.8 MB unpacked, several MB shipped. All of it needs a lockfile review on a machine with a malware history. | No |
+| tldraw | **tldraw licence**: "Not to use the Software in Production Environments" without a trial or commercial licence. Licence-key enforcement, watermark. | React, same embedding problem. | Reasonable. | Good. | Large. | **Ruled out** (paid key, plus the React island) |
+| Fabric.js | MIT (7.4.0, no runtime deps, 22 MB unpacked) | A canvas object model only. We would still build every tool, page, save and UI, in JS, behind a bridge. | Canvas `fillText`. Arabic shaping depends on the browser; no control of OpenType features for Quran marks. | Pointer events; pressure is ours to add. | Small. | No: all the work of building, plus a bridge |
+| Konva | MIT (10.9.0, no runtime deps, 1.9 MB) | Same as Fabric. | Same. | Same. | Small. | No: same reason |
+
+**Why build:**
+
+- The hard parts of a teaching board are not the canvas library. They are:
+  - Arabic text and Quran rendering;
+  - saving to our server under our authz;
+  - pages, export and pen ergonomics;
+  - in Phase 2, our realtime with per-recipient delivery checks (RT-009).
+- An embedded JS engine gives us none of those for free. It costs us a second runtime, a
+  bridge to secure, and a dependency tree to audit.
+- Flutter's canvas is GPU-backed (CanvasKit on the web, Impeller on mobile) and handles the
+  stroke volumes a lesson produces. Committed strokes are cached in one `Picture` per page
+  layer, so only the stroke being drawn repaints.
+
+**What we write ourselves:**
+
+- **Stroke smoothing.** About 200 lines. We either port the MIT perfect-freehand algorithm,
+  with attribution in the file, or write quadratic smoothing.
+- **Hit-testing** by element bounding box, then by geometry.
+- **The text editor:** a `TextField` overlay while typing, which becomes a painted element.
+- **Undo/redo** as a command stack of element operations.
+
+**Dependency rule for this PD:**
+
+- The core MVP adds **no package**.
+- Two capabilities have no flutter.dev package, so we use our own stack instead:
+  - **PDF export**: the API already ships `pdfkit` (used by certificates).
+  - **PNG download** in the browser: `package:web`, already a dependency.
+- **PDF import** is the one feature that needs a rasteriser. See §4.4.
+
+---
+
+## 4. MVP
+
+### 4.1 Built-in tools (what the board itself does)
+
+| Tool | MVP behaviour |
+|---|---|
+| Pen | Pressure-sensitive where the device reports it. 8 colours plus a custom picker, 4 thicknesses. Smoothing on. |
+| Highlighter | Translucent (opacity 35%), drawn under the ink layer so text stays readable. Includes a **Tajweed palette**: four named swatches (madd, ghunnah, ikhfa', izhar) in the academy's colours, so marking a verse by hand is one tap per rule. |
+| Eraser | Stroke eraser (removes whole strokes) and area eraser (splits strokes). |
+| Text | Arabic and English, direction from the first strong character. Two fonts: IBM Plex Sans Arabic (UI style) and Amiri (Naskh, for teaching letters with harakat). Size and colour. |
+| Shapes | Rectangle, ellipse, triangle, line, arrow (single and double). Stroke and fill colours. Shift keeps proportions. |
+| Select / move | Tap or lasso to select. Move, resize, rotate, delete, duplicate. Bring forward / send back. |
+| Undo / redo | Per page, 100 steps. Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z on a keyboard. |
+| Zoom / pan | Pinch, trackpad, Ctrl+wheel. Hand tool and space-drag on a laptop. 25%–400%. Fit page. |
+| Stamps | A small built-in set: star, check mark, heart, thumbs-up, and text stamps ("ممتاز", "أحسنت", "Excellent", "Well done"). Drawn from bundled Material icons and our fonts, never emoji (emoji render as boxes in the PD-28 browser build). |
+
+### 4.2 Pages and backgrounds
+
+- **Multiple pages**: up to 50 per board. Add, duplicate, reorder, delete. A thumbnail strip.
+- **Page size**: one fixed 16:9 page (1920 × 1080 logical units). Zoom and export are
+  predictable, and a shared board (Phase 2) looks the same on every screen. An "infinite
+  canvas" is not in the MVP.
+- **Layouts**:
+  - plain;
+  - ruled;
+  - narrow-ruled;
+  - grid;
+  - **Arabic handwriting lines**: a baseline plus an upper guide, spaced for children's
+    letter practice.
+- **Background colours**: white, cream, light grey, blackboard green, dark.
+- Isometric, graph, nine-line and four-line (Latin handwriting) are Phase 3, if maths or
+  English is ever taught.
+
+### 4.3 Quran verses (the owner's item 7)
+
+The rule: **verse text is never typed, OCR'd, generated or edited by anyone at Jawwid.**
+
+- **What exists today.**
+  - PD-29 Materials has the 114 surahs' **metadata only**: number, Arabic and English names,
+    ayah counts, juz' (`apps/api/src/materials/quran-surahs.ts` = `chat.quran_surah`).
+  - PD-29's "Practice" refers to ayah *ranges* by number.
+  - There is **no verse text anywhere in the system**, and no authorised source for it.
+  - PD-29 also left its recitation source open for the owner.
+- **Proposed source: the Tanzil Project's Uthmani (Hafs) text** (owner question 2).
+  - Licence: Creative Commons Attribution 3.0, under these terms: "Permission is granted to
+    copy and distribute verbatim copies of this text, but CHANGING IT IS NOT ALLOWED", with
+    the source credited and a link to tanzil.net.
+  - The alternative is the King Fahd Complex (KFGQPC) Hafs text and font. Its terms need
+    to be read and confirmed before we could use it.
+- **How it is stored.**
+  - One table, `chat.quran_ayah (surah, ayah, text_uthmani, text_search)`, holding all 6,236
+    ayat.
+  - It is loaded **verbatim** from one pinned release file. The file's SHA-256 is recorded
+    in the migration and checked on load.
+  - The load is verified by count: 6,236 rows, and each surah's count equals
+    `chat.quran_surah.ayah_count`.
+  - `text_search` is a diacritic-free copy for search (Phase 2). It is derived, never shown.
+  - No role can write to the table (a trigger refuses UPDATE and DELETE). It is
+    organisation-independent reference data.
+- **How it is inserted.**
+  - The verse tool lets the teacher pick a surah (by Arabic or English name, or number),
+    then an ayah range of up to 20 ayat.
+  - The board stores a **reference** — `{surah, fromAyah, toAyah, textSha256}` — never the
+    text.
+  - The text is fetched from `GET /quran/ayahs?surah=&from=&to=` and drawn with **Amiri
+    Quran** (OFL 1.1), with ayah-end markers (۝ plus the number) and line breaking that
+    never splits a word.
+  - The teacher can move it, resize it, change its colour and alignment, and mark it with
+    the highlighter or Tajweed palette. The letters cannot be edited or cut. A "Duplicate as
+    text" action does not exist.
+  - If the stored hash ever differs from the served text, the element shows "Verse text
+    updated, re-insert". It is never silently redrawn.
+- **Attribution.** The verse picker and every PDF export that contains a verse carry
+  "Quran text: Tanzil Project — tanzil.net".
+- **Review before release.**
+  - A Quran teacher at the academy signs off a printed review sheet of about 30 ayat chosen
+    for difficult marks. That means: small high letters, madd signs, sajdah, the
+    iqlab/ikhfa' marks, pause signs, and surahs with muqatta'at.
+  - The sheet is printed from the real renderer on the web build and on an iPad.
+  - The font is the only variable. If Amiri Quran draws any mark wrongly, we change the
+    font, never the text.
+- **Not in MVP:** automatic Tajweed colouring and search by words. Both are Phase 2 (§5).
+
+### 4.4 Importing images and PDF pages
+
+- **Images**: PNG, JPEG or WebP, up to 10 MB and 8,000 px on the long edge. Placed on the
+  page and scaled to fit. **SVG is refused** (it can carry script). A GIF imports as a still
+  first frame.
+- **PDF pages (MVP-b, head's call).**
+  - Flutter has no first-party PDF rasteriser, and the API image has none either.
+  - The candidate is `pdfrx` 2.10.1: MIT (© espresso3389, verified publisher), built on
+    PDFium, with web support.
+  - Before approval, review three things:
+    - its lockfile delta (`pdfrx_engine`, `pdfium_flutter`, and theirs);
+    - **where the PDFium binaries come from** at build time (native) and at runtime (the
+      web's `.wasm`). It must be self-hosted under `/teacher/`, never fetched from a CDN,
+      because the PD-28 CSP names no third-party host;
+    - whether CanvasKit's `'wasm-unsafe-eval'` already covers PDFium's wasm.
+  - Server-side rasterising is rejected. MuPDF is AGPL, and poppler or PDFium would add
+    native binaries to the API image.
+  - **Fallback if not approved:** the teacher exports the page as an image and imports that.
+    The board ships without PDF import.
+- Each imported page becomes one locked background image on a new board page, so the
+  teacher writes over it.
+
+### 4.5 Saving to the teacher's account
+
+- **Autosave.**
+  - A board saves 2 s after the last change, and on page switch and on leaving.
+  - Each page saves separately, with optimistic concurrency: `PUT .../pages/:pageId` with
+    `If-Match: <revision>`.
+  - A conflict (the same board edited in two tabs) answers 409. The client offers "Reload"
+    or "Save as a copy" and never merges silently.
+- **Offline.**
+  - Editing continues while offline, and saves are retried with backoff.
+  - The unsaved page is kept as a local draft (sqflite on mobile; on the web, the browser's
+    storage for the open board only, size-capped). A banner says "Not saved yet".
+- **Document format.**
+  - JSON per page: `{v, layout, background, elements: [...]}`.
+  - Each element has `{id, kind, z, transform, style, payload}`.
+  - Stroke points are quantised to 0.1 units and delta-encoded, with pressure as one byte.
+  - A page is capped at 1 MB, checked by the database.
+  - The format is versioned (`v`) so Phase 2 operations reuse the same element schema.
+- **Assets** (images, PDF pages, exports) go in object storage, following the existing
+  patterns. See §6.3.
+
+### 4.6 Export
+
+- **PNG**: the current page or all pages. Rendered on the device (`PictureRecorder`, 2×).
+  On the web it downloads directly (`package:web`). On a tablet it goes through the server
+  and opens the signed URL.
+- **PDF**: the client renders each page to PNG and uploads them under an **export grant**
+  bound to the board and to the page count. The API composes the PDF with **`pdfkit`**,
+  which it already uses for certificates. The verse attribution goes in the footer when a
+  verse is present. The result is a board asset with a 10-minute signed URL, and is purged
+  after 24 h. Vector PDF is not planned: a second renderer would drift from the first.
+
+### 4.7 What "built-in" versus "teacher-made" means
+
+The owner asked to keep these apart. The board ships **tools**. Teachers make
+**activities** with them:
+
+| Activity a teacher makes | Built from these MVP tools |
+|---|---|
+| Tajweed lesson on a verse | Verse tool + Tajweed highlighter palette + pen |
+| Letter-shape practice | Arabic handwriting lines + pen + Amiri text for the model letter |
+| Letter matching / sorting (shown, the teacher drags) | Text elements + select/move + shapes |
+| Vocabulary page with pictures | Image import + text + arrows |
+| Reward and feedback | Stamps |
+| Worksheet over an existing PDF | PDF page import (MVP-b) + pen |
+| Reusable lesson template | Duplicate board / duplicate page |
+
+**Interactive** activities, where the *child* plays (games, drag-and-drop by the student,
+quizzes), are not board tools. They are PD-29 Materials (existing HTML5 packages and lesson
+links). Phase 3 can add "open a material from the board".
+
+---
+
+## 5. Phase 2: during the lesson, and more tools
+
+### 5.1 Live board view for students, without touching call code
+
+**Constraint.** The W7/W8 call code is frozen. The LiveKit grant publishes `microphone` only
+(`apps/api/src/communication/calls/media-token.ts`), so screen-sharing the board into the
+call would reopen W1/W7. The board is therefore shared **beside** the call, over the
+existing chat realtime channel.
+
+**Starting a share.**
+
+- The teacher presses **Share with the class**. The request is
+  `POST /whiteboards/:id/shares {conversationId}`.
+- It is allowed when all of these hold:
+  - the teacher owns the board;
+  - the teacher is a live member of that conversation and may send in it (the same
+    `canSend` the message path runs);
+  - the conversation is a student group, a trial group, or the teacher's direct
+    conversation with a family;
+  - the conversation is in the board's organisation.
+- One active share per board. A share expires after 3 h or when the teacher ends it.
+
+**The card.**
+
+- The share posts a **system card** in that conversation: "The teacher is sharing a board ·
+  Open". It goes through the existing message and outbox pipeline (the same mechanism as
+  lesson cards).
+- So the families who see the card are exactly those who can already read the conversation
+  (PD-8, PD-14), and push follows PD-34.
+
+**Viewing.**
+
+- `GET /whiteboard-shares/:id` returns a snapshot: the current page, page documents, and
+  board-scoped signed asset URLs with a short TTL.
+- The snapshot is allowed only to a **live member who can read the conversation**, while the
+  share is active.
+- The viewer is read-only. It follows the teacher's page and viewport ("Follow teacher",
+  which the viewer can turn off).
+
+**Live updates.**
+
+- Element operations (`board.op`, the same element schema as §4.5) and an ephemeral laser
+  pointer (throttled to 20 Hz) travel on the existing Socket.IO connection.
+- **Delivery is authorised per recipient at delivery time**, exactly as RT-009
+  (`deliverToConversationLocally`, `withDeliveryLocks`): live membership, the
+  session-precise identity, `canRead`, *and* "share still active".
+- The room `wbshare:<id>` is only an index of whom to ask, never the authorisation.
+- Ending the share, removing a member or suspending a subscription (PD-30) stops delivery at
+  once, even on a node that missed an eviction.
+
+**Sending operations.**
+
+- The teacher's socket sends operations with a sequence number.
+- The server checks every operation:
+  - it is the share's owner;
+  - the share is active;
+  - the operation is at most 64 KB;
+  - the rate is at most 60 operations per second.
+- It also writes the board through, so a late joiner's snapshot is current.
+
+**Scope limit.** **No student drawing** in Phase 2. Student interaction is Phase 3, behind
+its own decision: who may draw, moderation, and saving children's input.
+
+**To verify before building.** Can a student keep the call running while the call route is
+off screen? `CallPresenter` pushes `/call` app-wide, and there is no `PopScope` on
+`ActiveCallScreen`, so back probably pops it and leaves the call running.
+
+- If returning to the call needs a new affordance, that is a **W7 exception the head must
+  grant**. It is not part of this PD.
+- On a laptop, the student's browser tab beside the call has no such issue. But students
+  are not on the web today: PD-28 is teachers only.
+
+### 5.2 Other Phase 2 tools
+
+| Feature | Why Phase 2, not MVP |
+|---|---|
+| **Laser pointer** | Only useful when someone else is watching (5.1). |
+| **Timer** | A countdown shown on the shared board. Useful for recitation turns and quizzes, and it needs 5.1 to reach the student. |
+| **Tajweed letter colouring** | Colour a letter range of an inserted verse by rule. Arabic joining survives colour runs in SkParagraph, but the UI (selecting letters inside an unbreakable verse) and the rule colours need a Quran teacher's input. Automatic Tajweed from an annotated source is a separate licensing question. |
+| **Verse search by words** | Uses `text_search` (diacritic-free) with Arabic normalisation (`lib/shared/utils/search_text.dart` already exists for chat). |
+| **Ruler and auto-shapes** | A straight-edge overlay, and shape recognition (a rough circle becomes a circle). |
+| **Board replay** | Replays the operation log of a lesson. It is privacy-safe because it contains no voice, and is cheaper than recording. |
+| **Board file export/import** | Our own JSON format, for moving boards between teachers. |
+| **Sticker library** | A curated, licensed set beyond the MVP stamps. Each pack needs its licence recorded. |
+
+---
+
+## 6. Data model and authorisation
+
+### 6.1 Tables (migration `20261027110000_chat_pd039_whiteboards`)
+
+```
+chat.whiteboard
+  id uuid pk
+  organization_id uuid      not null, = the teacher's organisation (trigger-checked)
+  teacher_id uuid           not null, the owning teacher; immutable (trigger)
+  lesson_id uuid null       set when opened from a lesson; same organisation and teacher
+  title text                1..120
+  revision int              bumped on every page save
+  bytes_total bigint        documents + assets, maintained for the quota
+  created_at, updated_at
+  deleted_at                soft delete; purged after 30 days (worker)
+
+chat.whiteboard_page
+  id uuid pk, board_id fk, position smallint (0..49), unique (board_id, position) deferrable
+  layout text check in ('plain','ruled','narrow_ruled','grid','arabic_lines')
+  background text           a palette key, not free CSS
+  document jsonb            octet_length <= 1 MB
+  revision int, updated_at
+
+chat.whiteboard_asset
+  id uuid pk, board_id fk
+  kind text check in ('image','pdf_page','export_page','export_pdf')
+  object_key text unique    whiteboards/<org>/<board>/<asset> — a NAME, never a capability
+  content_type, byte_size, sha256, width, height
+  state text check in ('pending','ready')
+  created_at, expires_at (exports only)
+
+chat.quran_ayah            reference data, no organisation, append-only by trigger
+  surah smallint fk chat.quran_surah, ayah smallint, text_uthmani text, text_search text
+  primary key (surah, ayah)
+
+-- Phase 2 (its own slot later):
+chat.whiteboard_share
+  id, board_id, conversation_id, started_by, started_at, ended_at, expires_at
+```
+
+Request roles get no table grants. Every read and write goes through the API's
+services, as with every other `chat.*` table since the blanket-RLS trap.
+
+### 6.2 Who sees and does what
+
+| Who | Read a board | Write a board |
+|---|---|---|
+| The owning teacher (active account) | yes | yes |
+| A **deactivated** teacher | no | no (boards kept; see owner question 5) |
+| Teachers department staff whose PD-35 scope covers the teacher (`TeacherScopeService.covers`): the teacher's supervisor, their active backup, the Teachers Manager | **read-only**, audited (owner question 1) | no |
+| Super admin of the organisation | read-only, audited | no |
+| Operations supervisors, Sales and other staff | no | no |
+| Other teachers | no | no |
+| Students and families | no (MVP). Phase 2: only the pages of an **active share** in a conversation they can read | never |
+| Anyone in another organisation | no: answered **404**, not 403, as PD-35 does outside scope | no |
+
+- **Organisation.** The organisation always comes from the actor, never from the request.
+  A board id from another organisation is "not found".
+- **Super admin cannot write.** Unlike PD-8's conversations, a board is the teacher's own
+  work, and a staff edit would put words in the teacher's mouth (the same reason no one
+  else writes a lesson report).
+- **Staff reads** are recorded with `whiteboard.viewed` in the audit log, with the board,
+  the teacher and the basis.
+
+### 6.3 Object storage: the signing call is the access decision
+
+The same invariant as attachments (PR #22) and PD-29 uploads: **knowing an `objectKey` is
+never enough to read an object.**
+
+- **Upload.**
+  - `POST /whiteboards/:id/assets/grant {kind, contentType, byteSize}` checks write access
+    to the board and the quota. It returns a PUT URL signed with `content-type` and
+    `content-length` (`signableHeaders`), for a key the server chose.
+  - The client never sends a key.
+- **Confirm.**
+  - `POST /whiteboards/:id/assets/:assetId/confirm` copies the upload to a key no grant can
+    name (PD-29's pattern), then checks the copy's **real bytes**:
+    - magic number;
+    - decoded dimensions;
+    - size.
+  - Only then does the asset become `ready`. Bytes put under the grant later are never
+    served.
+- **Read.**
+  - `WhiteboardAssetService.signUrlsForBoard(boardId)` is the **only** call that signs
+    board assets.
+  - It runs the board read check first, and takes the board id from the persisted
+    `asset → board` row, never from the request.
+  - The key namespace test is structural (exactly four segments), not `startsWith`.
+- **References.** A page document may name only `ready` asset ids of **the same board**.
+  The page save refuses others (403, not 500).
+
+### 6.4 Limits (configuration, with these defaults)
+
+| Limit | Default |
+|---|---|
+| Boards per teacher | 200 (deleted boards do not count) |
+| Pages per board | 50 |
+| Page document | 1 MB (JSON) |
+| Image / PDF page asset | 10 MB, 8,000 px long edge |
+| Assets per board | 60 |
+| Storage per teacher | 500 MB (documents + assets) |
+| Exports | 24 h, then purged; at most 5 in flight per teacher |
+| Writes | page save ≤ 2/s per board; grants ≤ 20/min per teacher |
+
+Over a limit, the API answers `COMM.WHITEBOARD_LIMIT` with which limit was hit, and the
+client says it plainly.
+
+---
+
+## 7. Phase 3 and out of scope
+
+Jawwid teaches **Quran, Arabic and Islamic studies** to children. The owner's analysis
+describes a general K-12 board.
+
+| Owner's item | Decision | Why |
+|---|---|---|
+| Games: Feed the Little Tree, Memory Cards, 3D balloons, 3D tic-tac-toe | **Out of scope as board features** | These are games, not board tools. PD-29 already plays the academy's existing HTML5 activities and links, sandboxed. Phase 3 can add "Open a material" from the board, which reuses PD-29's `open` decision. |
+| Arabic letter matching (interactive, the student plays) | **Phase 3** (needs student input on the board), or a PD-29 material today | The teacher-led version is possible in the MVP (§4.7). |
+| 3D science (solar system, anatomy, Earth's interior, plant cell, water cycle), periodic table | **Out of scope** | Not subjects the academy teaches. Large licensed 3D assets. |
+| Scientific calculator | **Out of scope** | No maths curriculum. Any device has one. |
+| Compass, protractor, isometric/graph paper | **Phase 3**, only if maths is added | Not used in Quran or Arabic teaching. The grid layout covers simple tables. |
+| Interactive maps | **Out of scope**. A map image can be imported. | |
+| Website and YouTube embeds | **Out of scope** | An embed inside a canvas breaks export, needs `frame-src` widening in the PD-28 CSP, and duplicates PD-29 links (which already decide framing per origin). Teachers open such links through Materials. |
+| Camera | **Out of scope** | Calls are audio-only by decision (W1). A camera in a children's lesson needs its own privacy decision. |
+| Lesson recording (audio/screen) | **Out of scope for now** | Recording children's voices needs consent and retention rules (an owner decision of its own). Board replay (Phase 2) covers "review what was written". |
+| Turbo mode for Zoom/Meet, "modern mode", fonts library | **Not applicable / out** | Jawwid lessons run on our own calls. Two fonts are enough for Arabic teaching. |
+| Tables | **Phase 2** (a simple table element) | |
+| Stamps | **MVP** (small built-in set). The library is Phase 2. | |
+| EN language | **Already there**: the app is bilingual. | |
+
+---
+
+## 8. Delivery plan (after approval)
+
+Each step is one PR, reviewed by the head, behind no feature flag except the tab's
+visibility.
+
+1. **API: boards, pages, assets, quotas, authz** (slot `20261027110000`).
+   - Tests for §6.2 (every row of the table), §6.3 (key-is-not-a-capability, foreign asset
+     in a page, the grant/confirm swap) and cross-organisation 404s.
+   - Unit tests run with `--maxWorkers=2`. Integration runs in CI (G-19), or with a spec
+     slot from the head.
+2. **Flutter: the canvas core.** Tools, pages, layouts, undo/redo, zoom, stamps, the Boards
+   tab, autosave and offline draft.
+   - Widget and golden tests for Arabic text and strokes, run with `--concurrency=2`.
+   - Manual QA in Chrome at `/teacher/` and on a tablet, when the QA session has a device.
+3. **Quran verses.**
+   - `chat.quran_ayah` loaded from the pinned file with the hash and count checks.
+   - `GET /quran/ayahs`, the verse picker and the Amiri Quran rendering.
+   - The review sheet goes to the academy's Quran teacher **before** the tab is shown to
+     teachers.
+4. **Export**: PNG on the device; PDF through `pdfkit`; export purge in the worker.
+5. **MVP-b, PDF page import**: only if `pdfrx` passes the dependency review (§4.4).
+
+Phase 2 (live view and tools) gets its own design note and slot once the MVP is in
+teachers' hands.
+
+---
+
+## 9. Open questions for the owner
+
+1. **May the teacher's supervisors look at the teacher's boards?**
+   *Recommended: yes, read-only and audited.* That means the teacher's PD-35 supervisor
+   (and active backup), the Teachers Manager and the super admin, never anyone else. Boards
+   are lesson material, which supervisors already review through reports. No one but the
+   teacher ever edits a board.
+2. **Which Quran text do we use?**
+   *Recommended: the Tanzil Project's Uthmani (Hafs) text.* Its terms are CC BY 3.0,
+   verbatim only, credited "Tanzil Project — tanzil.net". It is drawn with the Amiri Quran
+   font and released only after an academy Quran teacher signs off a 30-ayah review sheet.
+   If the academy prefers the King Fahd Complex (Madinah Mushaf) text, we check its terms
+   first.
+3. **Do teachers draw on phones too?**
+   *Recommended: no. Drawing on a laptop (`/teacher/`) and tablets; phones open boards
+   read-only.* A phone screen is too small for a toolbar and a page. The board is built
+   once, so this is a switch we can change later.
+4. **In Phase 2, what do students do with a shared board?**
+   *Recommended: watch only*, in a "board view" opened from a card in the lesson's group
+   chat, beside the call (the call itself is not changed). Students drawing on the board is
+   a later decision: it brings moderation and saving children's input.
+5. **What happens to a teacher's boards when the teacher leaves?**
+   *Recommended: they are kept.* They stay readable by the Teachers department (as in
+   question 1) for 12 months, then deleted. A department manager can give a copy of a board
+   to another teacher before that. While the teacher is active, a board the teacher deletes
+   is recoverable for 30 days, then purged.
