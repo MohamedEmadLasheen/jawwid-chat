@@ -15,6 +15,8 @@ import '../features/materials/presentation/child_materials_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/messages/presentation/starred_messages_screen.dart';
+import '../features/notifications/presentation/notification_center_screen.dart';
+import '../features/notifications/presentation/notification_settings_screen.dart';
 import '../features/profile/presentation/my_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/sales_payments/presentation/family_billing_screen.dart';
@@ -81,6 +83,12 @@ abstract final class Routes {
 
   /// PD-23: the account's own sessions -- every device signed in, and signing them out.
   static const devices = '/settings/devices';
+
+  /// PD-34: the account's own Notification Center (the bell on Chats).
+  static const notifications = '/notifications';
+
+  /// PD-34: quiet hours, names on the lock screen, which kinds push.
+  static const notificationSettings = '/settings/notifications';
 
   /// PD-22: the account's time zone -- follow the phone, or a zone picked by hand.
   static const dateTime = '/settings/date-time';
@@ -281,6 +289,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.devices,
         pageBuilder: (context, state) => _page(state, const DevicesScreen()),
+      ),
+      GoRoute(
+        path: Routes.notifications,
+        builder: (context, state) => const NotificationCenterScreen(),
+      ),
+      GoRoute(
+        path: Routes.notificationSettings,
+        builder: (context, state) => const NotificationSettingsScreen(),
       ),
       GoRoute(
         path: Routes.dateTime,

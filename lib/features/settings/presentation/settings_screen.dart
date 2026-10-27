@@ -195,7 +195,7 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.notifications_outlined),
             title: Text(l10n.settingsNotifications),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
+            onTap: () => context.push(Routes.notificationSettings),
           ),
           // PD-23: every device this account is signed in on.
           ListTile(
