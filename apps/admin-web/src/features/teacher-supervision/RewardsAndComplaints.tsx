@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import { ApiError } from '@/core/api/errors'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
@@ -99,7 +100,6 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
   const [reason, setReason] = useState('')
   const [amount, setAmount] = useState('')
   const [touched, setTouched] = useState(false)
-  const [partial, setPartial] = useState<string | null>(null)
   const missing = { teacher: !teacher, reason: !reason.trim(), amount: amount.trim() !== '' && !MONEY.test(amount.trim()) }
 
   return (
@@ -114,18 +114,13 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
             className="btn btn--primary"
             disabled={record.isPending}
             onClick={() => {
-              if (partial) return onClose()
               setTouched(true)
               if (missing.teacher || missing.reason || missing.amount) return
+              // With an amount, ONE request records the reward and prices it (PD-26):
+              // a refusal (no pay terms that month) records nothing at all.
               record.mutate(
                 { teacherId: teacher, reason: reason.trim(), ...(withAmount && amount.trim() ? { amount: amount.trim() } : {}) },
-                {
-                  onSuccess: onClose,
-                  // The bonus may be recorded even if its amount was refused (no pay terms that month).
-                  onError: (e) => {
-                    if (withAmount && amount.trim()) setPartial(describeError(e, locale))
-                  },
-                },
+                { onSuccess: onClose },
               )
             }}
           >
@@ -134,11 +129,6 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
         </>
       }
     >
-      {partial && (
-        <div className="banner banner--warn" role="status">
-          {tx(H.rewardSavedNoAmount, { why: partial })}
-        </div>
-      )}
       <p className="field__hint">{tx(H.rewardsHint)}</p>
       <div className="field">
         <label className="field__label" htmlFor={teacherId}>
@@ -173,9 +163,12 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
           {touched && missing.amount && <span className="field__error">{tx(H.amountInvalid)}</span>}
         </div>
       )}
-      {record.error && !partial ? (
+      {record.error ? (
         <div className="banner banner--danger" role="alert">
-          {describeError(record.error, locale)}
+          {/* With an amount, the one conflict a new reward meets is a month with no pay terms (PD-26). */}
+          {record.error instanceof ApiError && record.error.code === 'COMM.TEACHER_FILE_CONFLICT' && withAmount
+            ? tx(H.rewardNoTerms)
+            : describeError(record.error, locale)}
         </div>
       ) : null}
     </Dialog>

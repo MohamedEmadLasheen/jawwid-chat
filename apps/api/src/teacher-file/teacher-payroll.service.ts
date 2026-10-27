@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -6,6 +6,7 @@ import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { isUuid } from '../communication/conversations/conversation.service';
 import { TeacherFileService, mapTimelineRefusal } from './teacher-file.service';
+import { SupervisionService } from '../lessons/supervision.service';
 import { openPayout, parsePayoutKeys, sealPayout, type PayoutKeyring } from './payout-seal';
 
 /**
@@ -53,6 +54,9 @@ export class TeacherPayrollService {
     private readonly prisma: PrismaService,
     private readonly files: TeacherFileService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-26: a reward with its amount, in one transaction. Trailing and optional
+    // so the positional constructions the harnesses share do not shift.
+    @Optional() private readonly supervision?: SupervisionService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -413,6 +417,63 @@ export class TeacherPayrollService {
           ...(priced ? { amount: a ? { amount: money(a.amount), currency: a.currency, month: ym(a.month) } : null } : {}),
         };
       }),
+    };
+  }
+
+  /**
+   * PD-26: a reward and its amount as ONE act -- PD-11's bonus ticket (the
+   * entry, the card to the teacher, the Core/HR note) and the payroll row that
+   * prices it, in one transaction. The amount is the super admin's (PD-18), so
+   * this route is too. Without pay terms for the month nothing is written: the
+   * whole request is refused, never a reward left waiting for its amount.
+   * A reward WITHOUT an amount stays `POST /teachers/:id/bonus` (Teachers dept).
+   */
+  async recordReward(actorId: string, teacherId: string, body: Record<string, unknown>) {
+    const { actor } = await this.files.gate(actorId, (a) => a.canViewFinance);
+    const teacher = await this.files.requireTeacher(actor, teacherId);
+    const reason = requireText('reason', body.reason, 2000);
+    const amount = requireMoney('amount', body.amount, false);
+    if (!this.supervision) throw new Error('TeacherPayrollService needs SupervisionService to record a reward');
+    await this.supervision.requireSupervisedTeacher(actor, teacher.id);
+
+    // A bonus is paid in the month it is recorded (as when it is priced later).
+    const month = await this.currentMonth();
+    const terms = termsAt(
+      await this.prisma.teacherPayTerms.findMany({ where: { teacherId: teacher.id }, orderBy: [{ effectiveMonth: 'desc' }, { createdAt: 'desc' }] }),
+      month,
+    );
+    if (!terms) throw conflict(`record this teacher's pay terms for ${month} first; the reward was not recorded`);
+
+    const supervision = this.supervision;
+    const { entry, priced } = await this.write(async (tx) => {
+      const { entry } = await supervision.bonusInTx(tx, actor, teacher, reason);
+      const priced = await tx.teacherPayAdjustment.create({
+        data: {
+          organizationId: teacher.organizationId,
+          teacherId: teacher.id,
+          kind: 'bonus',
+          month: monthDate(month),
+          amount,
+          currency: terms.currency,
+          reason,
+          bonusEntryId: entry.id,
+          createdBy: actor.actorId,
+        },
+      });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'teacher_file.pay_adjustment_added',
+        entity: 'teacher',
+        entityId: teacher.id,
+        after: { adjustmentId: priced.id, kind: 'bonus', month, bonusEntryId: entry.id },
+        reason: 'pay adjustment: bonus',
+      });
+      return { entry, priced };
+    });
+    return {
+      id: entry.id,
+      kind: entry.kind,
+      amount: { amount: money(priced.amount), currency: priced.currency, month: ym(priced.month) },
     };
   }
 

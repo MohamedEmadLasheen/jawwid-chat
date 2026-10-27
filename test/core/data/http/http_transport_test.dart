@@ -109,7 +109,7 @@ void main() {
     String? clientMessageId,
     String moderation = 'published',
     String authorId = 'other',
-    List<Object?> receipts = const [],
+    String? status,
   }) =>
       {
         'id': id,
@@ -129,7 +129,7 @@ void main() {
         'createdAt': '2026-09-05T12:00:00.000Z',
         'attachments': const [],
         'reactions': const [],
-        'receipts': receipts,
+        'status': status,
       };
 
   group('conversation list', () {
@@ -388,13 +388,11 @@ void main() {
       expect(page.items.single.isVisibleToOthers, isTrue);
     });
 
-    test('receipts decide delivery state, never the client', () async {
+    test('the server status decides delivery state, never the client', () async {
       server.on('GET', '/conversations/c1/messages', [
         Reply.ok({
           'messages': [
-            messageDto(receipts: [
-              {'actorId': 'x', 'state': 'read'},
-            ]),
+            messageDto(status: 'read'),
           ],
           'nextBefore': null,
         }),

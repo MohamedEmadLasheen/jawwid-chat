@@ -90,6 +90,12 @@ export class TeacherFileController {
     return this.payroll.revealPayoutAccount(actorId, teacherId, body ?? {});
   }
 
+  /** PD-26: a reward and its amount in one transaction (super admin). */
+  @Post(':teacherId/rewards')
+  recordReward(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.payroll.recordReward(actorId, teacherId, body ?? {});
+  }
+
   @Post(':teacherId/finance/adjustments')
   addAdjustment(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
     return this.payroll.addAdjustment(actorId, teacherId, body ?? {});

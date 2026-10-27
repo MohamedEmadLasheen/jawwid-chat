@@ -46,6 +46,12 @@ export const supervisionHubApi = {
   complaints: (from?: ComplaintSource) =>
     api.get<{ access: TeacherFileAccessFlags; complaints: SupervisedComplaint[] }>('/teacher-files/complaints', from ? { from } : undefined),
   rewards: (month?: string) => api.get<{ canViewAmounts: boolean; rewards: Reward[] }>('/teacher-files/rewards', month ? { month } : undefined),
+  /** PD-26: a reward and its amount in one transaction (super admin); refused whole without pay terms. */
+  recordReward: (teacherId: string, body: { reason: string; amount: string }) =>
+    api.post<{ id: string; kind: string; amount: { amount: string; currency: string; month: string } }>(
+      `/teacher-files/${encodeURIComponent(teacherId)}/rewards`,
+      body,
+    ),
   deductionDefaults: () => api.get<{ currencies: string[]; defaults: DeductionDefault[] }>('/teacher-files/finance/deduction-defaults'),
   setDeductionDefault: (body: { kind: 'deduction_1' | 'deduction_2'; currency: string; amount: string }) =>
     api.post<{ currencies: string[]; defaults: DeductionDefault[] }>('/teacher-files/finance/deduction-defaults', body),
