@@ -108,7 +108,11 @@ async function setDataset(id: string) {
   );
 }
 
-/** One organization with a Teachers department manager (the reviewer) and an outsider; created once, kept. */
+/**
+ * One organization, created once and kept: a super admin (who signs in for the HTTP
+ * checks), a manager-role staff member who manages its Teachers department (the
+ * Tajweed reviewer; chat.guard_department requires the manager role), and an outsider.
+ */
 async function fixtures(): Promise<void> {
   const slug = 'qurands-fixture';
   let org = (await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(`select id::text from chat.organization where slug = $1`, slug))[0]?.id;
@@ -116,17 +120,23 @@ async function fixtures(): Promise<void> {
     org = randomUUID();
     await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'Quran dataset QA')`, org, slug);
   }
+  // Other suites truncate chat.staff (not chat.account), so a kept account may have lost its staff row.
   const staffFor = async (subject: string, role: string, name: string): Promise<string> => {
     const existing = await g.prisma.staff.findFirst({ where: { organizationId: org, account: { subject } } });
     if (existing) return existing.id;
     return g.prisma.$transaction(async (tx) => {
       if (role === 'super_admin') await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
-      const account = await tx.account.create({ data: { organizationId: org!, subject, kind: 'staff', status: 'active', isActive: true } });
-      await tx.accountCredential.create({ data: { accountId: account.id, passwordHash: await hashPassword(PASSWORD) } });
+      let account = await tx.account.findFirst({ where: { subject } });
+      if (account && account.organizationId !== org) throw new Error(`${subject} belongs to another organization; clear it first`);
+      if (!account) {
+        account = await tx.account.create({ data: { organizationId: org!, subject, kind: 'staff', status: 'active', isActive: true } });
+        await tx.accountCredential.create({ data: { accountId: account.id, passwordHash: await hashPassword(PASSWORD) } });
+      }
       return (await tx.staff.create({ data: { organizationId: org!, name, role, isActive: true, accountId: account.id } })).id;
     });
   };
-  reviewer = await staffFor(`owner@${DOMAIN}`, 'super_admin', 'QA Tajweed reviewer');
+  await staffFor(`owner@${DOMAIN}`, 'super_admin', 'QA Owner');
+  reviewer = await staffFor(`reviewer@${DOMAIN}`, 'manager', 'QA Tajweed reviewer');
   outsider = await staffFor(`outsider@${DOMAIN}`, 'admin', 'QA outsider');
   await g.prisma.$executeRawUnsafe(
     `insert into chat.department (organization_id, kind, display_name, manager_id) values ($1::uuid, 'teachers', 'Teachers', $2::uuid)
