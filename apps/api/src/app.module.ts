@@ -23,6 +23,7 @@ import { SubscriptionModule } from './subscriptions/subscription.module';
 import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { SupervisionCaseModule } from './cases/supervision-case.module';
+import { ActionLogModule } from './action-log/action-log.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -75,6 +76,8 @@ import { SupervisionCaseModule } from './cases/supervision-case.module';
     CalendarModule,
     // PD-35 B5: escalation cases to the Teachers or Operations department.
     SupervisionCaseModule,
+    // PD-35 B7: a staff member's action log.
+    ActionLogModule,
   ],
 })
 export class AppModule {}
