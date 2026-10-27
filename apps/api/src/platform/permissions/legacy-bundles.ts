@@ -89,7 +89,11 @@ const OPERATIONS_MEMBER = k(
   'cases.view',
   'cases.manage',
   'feedback.view',
-  'feedback.manage',
+  // PD-26 amendment: the Teacher Supervision page, for the teachers of their
+  // families (the services narrow by TeacherScopeService.pageScopeOf). Never
+  // the Teacher File itself: no teacher_files.* key.
+  'teacher_supervision.view',
+  'teacher_supervision.record',
 );
 
 /** The Teachers department: certificates, leave, discipline, supervision, the Teacher File (PD-10, PD-12, PD-35). */
@@ -100,10 +104,8 @@ const TEACHERS_MEMBER = k(
   'certificates.view',
   'certificates.design',
   'certificates.deliver',
-  'leave.view',
-  'leave.decide',
-  'discipline.view',
-  'discipline.manage',
+  'teacher_supervision.view',
+  'teacher_supervision.record',
   'supervision.chats',
   'teacher_files.view',
   'teacher_files.supervise',
@@ -119,7 +121,6 @@ const TEACHERS_MEMBER = k(
   'cases.view',
   'cases.manage',
   'feedback.view',
-  'feedback.manage',
 );
 
 /** Sales: enrolment, trials, payments (PD-16, PD-20). */

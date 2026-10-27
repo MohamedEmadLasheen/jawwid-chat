@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-427 routes.
+431 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -118,9 +118,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/courses` | lessons.view | `lessons/journey.controller.ts#JourneyController.courses` |
 | POST | `/api/v1/courses` | lessons.courses | `lessons/journey.controller.ts#JourneyController.createCourse` |
 | POST | `/api/v1/courses/:id` | lessons.courses | `lessons/journey.controller.ts#JourneyController.updateCourse` |
-| POST | `/api/v1/discipline/complaints/:id/uphold` | discipline.manage | `discipline/discipline.controller.ts#DisciplineController.uphold` |
-| GET | `/api/v1/discipline/violations` | discipline.view | `discipline/discipline.controller.ts#DisciplineController.list` |
-| POST | `/api/v1/discipline/violations/:id/decide` | discipline.manage | `discipline/discipline.controller.ts#DisciplineController.decide` |
+| POST | `/api/v1/discipline/complaints/:id/uphold` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.uphold` |
+| GET | `/api/v1/discipline/violations` | teacher_supervision.view | `discipline/discipline.controller.ts#DisciplineController.list` |
+| POST | `/api/v1/discipline/violations/:id/decide` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.decide` |
 | GET | `/api/v1/evaluation-criteria` | teacher_files.view | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.criteria` |
 | POST | `/api/v1/evaluation-criteria` | teacher_files.edit | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.addCriterion` |
 | POST | `/api/v1/evaluation-criteria/:id` | teacher_files.edit | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.updateCriterion` |
@@ -182,7 +182,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/lessons/:id/history` | lessons.view | `lessons/journey.controller.ts#JourneyController.history` |
 | POST | `/api/v1/lessons/:id/late-apology` | lessons.manage | `lessons/lesson.controller.ts#LessonController.lateApology` |
 | POST | `/api/v1/lessons/:id/late-excuse` | lessons.manage | `lessons/journey.controller.ts#JourneyController.lateExcuse` |
-| POST | `/api/v1/lessons/:id/lateness` | discipline.manage | `discipline/discipline.controller.ts#DisciplineController.lateness` |
+| POST | `/api/v1/lessons/:id/lateness` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.lateness` |
 | POST | `/api/v1/lessons/:id/makeup` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.bookMakeup` |
 | POST | `/api/v1/lessons/:id/makeup-resolution` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.resolveMakeup` |
 | GET | `/api/v1/lessons/:id/makeup-slots` | schedule.view | `lessons/scheduling.controller.ts#SchedulingController.makeupSlots` |
@@ -306,9 +306,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/org/structure` | org.view | `org/org-structure.controller.ts#OrgStructureController.structure` |
 | GET | `/api/v1/org/teacher-assignments` | org.view | `teacher-supervisors/teacher-supervisor.controller.ts#TeacherSupervisorController.assignments` |
 | POST | `/api/v1/org/teachers/:teacherId/supervisor` | org.manage | `teacher-supervisors/teacher-supervisor.controller.ts#TeacherSupervisorController.assign` |
-| GET | `/api/v1/parent-feedback` | feedback.view | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.list` |
-| POST | `/api/v1/parent-feedback/:id/reply` | feedback.manage | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.reply` |
-| POST | `/api/v1/parent-feedback/:id/take` | feedback.manage | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.take` |
+| GET | `/api/v1/parent-feedback` | teacher_supervision.view | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.list` |
+| POST | `/api/v1/parent-feedback/:id/reply` | teacher_supervision.record | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.reply` |
+| POST | `/api/v1/parent-feedback/:id/take` | teacher_supervision.record | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.take` |
 | GET | `/api/v1/parent-profiles` | parents.view | `parent-profile/parent-record.controller.ts#ParentRecordController.list` |
 | GET | `/api/v1/parent-profiles/:contactId` | parents.view | `parent-profile/parent-record.controller.ts#ParentRecordController.detail` |
 | POST | `/api/v1/parent-profiles/:contactId` | parents.edit | `parent-profile/parent-record.controller.ts#ParentRecordController.update` |
@@ -328,6 +328,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/quick-replies` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.createQuickReply` |
 | DELETE | `/api/v1/quick-replies/:id` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.deleteQuickReply` |
 | PATCH | `/api/v1/quick-replies/:id` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.updateQuickReply` |
+| GET | `/api/v1/quran/ayahs` | materials.view | `quran/quran.controller.ts#QuranController.ayahs` |
+| GET | `/api/v1/quran/tajweed` | materials.view | `quran/quran.controller.ts#QuranController.tajweed` |
 | POST | `/api/v1/schedule-change-requests/:id/decide` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.decideChange` |
 | GET | `/api/v1/scheduled-calls` | calls.use | `scheduled-calls/scheduled-call.controller.ts#ScheduledCallController.upcoming` |
 | POST | `/api/v1/scheduled-calls` | calls.use | `scheduled-calls/scheduled-call.controller.ts#ScheduledCallController.create` |
@@ -376,35 +378,37 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/suspensions/:id/extend` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.extend` |
 | GET | `/api/v1/teacher-files` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.list` |
 | GET | `/api/v1/teacher-files/:teacherId` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.detail` |
-| POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_files.supervise | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |
+| POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_supervision.record | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |
 | GET | `/api/v1/teacher-files/:teacherId/finance` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.finance` |
 | POST | `/api/v1/teacher-files/:teacherId/finance/adjustments` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.addAdjustment` |
 | POST | `/api/v1/teacher-files/:teacherId/finance/payout-account` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.setPayoutAccount` |
 | POST | `/api/v1/teacher-files/:teacherId/finance/payout-account/reveal` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.revealPayoutAccount` |
 | POST | `/api/v1/teacher-files/:teacherId/finance/terms` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.setTerms` |
-| GET | `/api/v1/teacher-files/:teacherId/leave` | leave.view | `leave/leave.controller.ts#LeaveController.teacherLeave` |
+| GET | `/api/v1/teacher-files/:teacherId/leave` | teacher_supervision.view | `leave/leave.controller.ts#LeaveController.teacherLeave` |
 | POST | `/api/v1/teacher-files/:teacherId/leave-allowance` | leave.allowance | `leave/leave.controller.ts#LeaveController.setAllowance` |
 | POST | `/api/v1/teacher-files/:teacherId/personal` | teacher_files.edit | `teacher-file/teacher-file.controller.ts#TeacherFileController.updatePersonal` |
 | POST | `/api/v1/teacher-files/:teacherId/rewards` | teacher_files.supervise | `teacher-file/teacher-file.controller.ts#TeacherFileController.recordReward` |
-| GET | `/api/v1/teacher-files/complaints` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.complaints` |
+| GET | `/api/v1/teacher-files/complaints` | teacher_supervision.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.complaints` |
 | GET | `/api/v1/teacher-files/finance/deduction-defaults` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.deductionDefaults` |
 | POST | `/api/v1/teacher-files/finance/deduction-defaults` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.setDeductionDefault` |
-| GET | `/api/v1/teacher-files/rewards` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.rewards` |
-| GET | `/api/v1/teacher-leave-overview` | leave.view | `leave/leave.controller.ts#LeaveController.overview` |
-| GET | `/api/v1/teacher-leave-requests` | leave.view | `leave/leave.controller.ts#LeaveController.list` |
-| POST | `/api/v1/teacher-leave-requests/:id/approve` | leave.decide | `leave/leave.controller.ts#LeaveController.approve` |
-| POST | `/api/v1/teacher-leave-requests/:id/cancel` | leave.decide | `leave/leave.controller.ts#LeaveController.cancel` |
-| POST | `/api/v1/teacher-leave-requests/:id/decline` | leave.decide | `leave/leave.controller.ts#LeaveController.decline` |
+| GET | `/api/v1/teacher-files/rewards` | teacher_supervision.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.rewards` |
+| GET | `/api/v1/teacher-leave-overview` | teacher_supervision.view | `leave/leave.controller.ts#LeaveController.overview` |
+| GET | `/api/v1/teacher-leave-requests` | teacher_supervision.view | `leave/leave.controller.ts#LeaveController.list` |
+| POST | `/api/v1/teacher-leave-requests/:id/approve` | teacher_supervision.record | `leave/leave.controller.ts#LeaveController.approve` |
+| POST | `/api/v1/teacher-leave-requests/:id/cancel` | teacher_supervision.record | `leave/leave.controller.ts#LeaveController.cancel` |
+| POST | `/api/v1/teacher-leave-requests/:id/decline` | teacher_supervision.record | `leave/leave.controller.ts#LeaveController.decline` |
 | POST | `/api/v1/teacher-profiles/certificates/:id/decide` | teacher_profiles.review | `communication/api/teacher-profile.controller.ts#TeacherProfileController.decideCertificate` |
 | GET | `/api/v1/teacher-profiles/certificates/:id/download` | teacher_profiles.review | `communication/api/teacher-profile.controller.ts#TeacherProfileController.certificateUrl` |
 | GET | `/api/v1/teacher-profiles/review` | teacher_profiles.review | `communication/api/teacher-profile.controller.ts#TeacherProfileController.reviewQueue` |
-| POST | `/api/v1/teachers/:id/absences` | discipline.manage | `discipline/discipline.controller.ts#DisciplineController.absence` |
+| GET | `/api/v1/teacher-supervision/directory` | teacher_supervision.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.directory` |
+| GET | `/api/v1/teacher-supervision/teachers/:teacherId/held-lessons` | teacher_supervision.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.heldLessons` |
+| POST | `/api/v1/teachers/:id/absences` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.absence` |
 | GET | `/api/v1/teachers/:id/availability` | schedule.view | `lessons/scheduling.controller.ts#SchedulingController.availability` |
 | POST | `/api/v1/teachers/:id/availability` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.setAvailability` |
-| POST | `/api/v1/teachers/:id/bonus` | teacher_files.finance | `lessons/lifecycle.controller.ts#LifecycleController.bonus` |
+| POST | `/api/v1/teachers/:id/bonus` | teacher_supervision.record | `lessons/lifecycle.controller.ts#LifecycleController.bonus` |
 | POST | `/api/v1/teachers/:id/days-off` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.addDayOff` |
 | POST | `/api/v1/teachers/:id/days-off/:date/remove` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.removeDayOff` |
-| GET | `/api/v1/teachers/:id/discipline` | discipline.view | `discipline/discipline.controller.ts#DisciplineController.teacherMonth` |
+| GET | `/api/v1/teachers/:id/discipline` | teacher_supervision.view | `discipline/discipline.controller.ts#DisciplineController.teacherMonth` |
 | GET | `/api/v1/teachers/:id/supervision` | teacher_files.view | `lessons/lifecycle.controller.ts#LifecycleController.timeline` |
 | POST | `/api/v1/teachers/:id/supervision` | teacher_files.supervise | `lessons/lifecycle.controller.ts#LifecycleController.addEntry` |
 | GET | `/api/v1/teachers/:id/supervision-chat` | supervision.chats | `lessons/lifecycle.controller.ts#LifecycleController.supervisionChat` |

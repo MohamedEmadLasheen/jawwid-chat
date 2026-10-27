@@ -99,7 +99,7 @@ export class LifecycleController {
     return this.supervision.addEntry(actorId, id, body ?? {});
   }
 
-  @Requires('teacher_files.finance')
+  @Requires('teacher_supervision.record')
   @Post('teachers/:id/bonus')
   bonus(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.supervision.bonus(actorId, id, body ?? {});
