@@ -28,6 +28,7 @@ import { CardPoster } from '../../src/supervision/card-poster';
 import { SupervisionCaseService } from '../../src/cases/supervision-case.service';
 import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
 import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
+import { messageAudience } from '../../src/communication/outbox/message-audience';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -181,3 +182,94 @@ describe('B5: the case card', () => {
     for (const secret of ['late reports again', 'three this week', s.teacherId]) expect(text).not.toContain(secret);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Security review of #159
+// ---------------------------------------------------------------------------
+
+const strictScope = (on: boolean) =>
+  g.prisma.$executeRaw`UPDATE chat.config SET value = ${JSON.stringify(on)}::jsonb WHERE key = 'teacher_supervisor.strict_scope'`;
+
+describe('R1. the sync is the only writer of a room\'s members', () => {
+  it('a supervisor cannot remove the manager (or anyone) through the generic membership route', async () => {
+    const room = (await roomOf(s.departmentId)) as string;
+    expect(await code(g.conversations.setMembership(room, s.ownerId, { actorId: s.managerId, actorKind: 'staff', memberRole: 'admin' }, 'remove', 'x')))
+      .toBe(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP);
+    expect(await code(g.conversations.setMembership(room, s.managerId, { actorId: s.ownerId, actorKind: 'staff', memberRole: 'admin' }, 'remove', 'x')))
+      .toBe(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP);
+    expect(await members(room)).toContain(s.managerId);
+  });
+});
+
+describe('R2. a push reaches only the room\'s live department', () => {
+  it('someone deactivated outside the structure service hears nothing, before any sweep', async () => {
+    const room = (await roomOf(s.departmentId)) as string;
+    expect(await messageAudience(g.prisma, room, s.ownerId)).toContain(s.otherAdminId);
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.otherAdminId}::uuid`;
+    expect(await members(room)).toContain(s.otherAdminId); // the row lingers until the sweep
+    expect(await messageAudience(g.prisma, room, s.ownerId)).not.toContain(s.otherAdminId);
+  });
+});
+
+describe('R5. no calls in a department room', () => {
+  it('is refused, whatever the room\'s size', async () => {
+    const room = (await roomOf(teachersDept)) as string; // the manager alone
+    await org.setDepartmentMember(sa, teachersDept, { staffId: tsupA, position: 'supervisor', reason: 'joins' }); // two members
+    expect(await code(g.calls.start(room, tmgr))).toBe(CommErrorCode.CALL_NOT_IN_ROOM);
+    expect((await g.calls.callCapability(room, tmgr)).canCall).toBe(false);
+  });
+});
+
+describe('strict scope does not narrow a room', () => {
+  it('every member of the Teachers department stays a party under strict scope', async () => {
+    await org.setDepartmentMember(sa, teachersDept, { staffId: tsupA, position: 'supervisor', reason: 'joins' });
+    const room = (await roomOf(teachersDept)) as string;
+    await strictScope(true);
+    try {
+      expect(await access(tsupA, room)).toBe('member');
+      expect(await visible(tsupA)).toContain(room);
+    } finally {
+      await strictScope(false);
+    }
+  });
+});
+
+describe('R4. concurrent moves never deadlock', () => {
+  it('two members crossing between two departments at once both land where they were sent', async () => {
+    await org.setDepartmentMember(sa, teachersDept, { staffId: tsupA, position: 'supervisor', reason: 'joins' });
+    await Promise.all([
+      org.setDepartmentMember(sa, s.departmentId, { staffId: tsupA, position: 'supervisor', reason: 'to ops' }),
+      org.setDepartmentMember(sa, teachersDept, { staffId: s.otherAdminId, position: 'supervisor', reason: 'to teachers' }),
+    ]);
+    expect(await members((await roomOf(teachersDept)) as string)).toEqual([tmgr, s.otherAdminId].sort());
+    expect(await members((await roomOf(s.departmentId)) as string)).toContain(tsupA);
+  });
+});
+
+describe('R3. a case-open sync evicts whom it removes (RT-009)', () => {
+  it('leaves the live room for a member the room sync took out', async () => {
+    const left: Array<{ ids: readonly string[]; conv: string }> = [];
+    const revocation = {
+      leaveConversation: (ids: readonly string[], conv: string) => left.push({ ids, conv }),
+      confirmRevoked: async () => undefined,
+      disconnectSessions: () => undefined,
+      disconnectAccount: () => undefined,
+      sessionRotated: () => undefined,
+    };
+    const spied = new SupervisionCaseService(g.prisma, g.conversations, lessons, g.authz, g.outbox, audit, feedback, rooms, cards, revocation);
+    await org.setDepartmentMember(sa, teachersDept, { staffId: tsupA, position: 'supervisor', reason: 'joins' });
+    const room = (await roomOf(teachersDept)) as string;
+    // Out of the department behind the service's back: the row lingers.
+    const extra = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'tsup_rx', 'admin', true)`, extra);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.department_member (staff_id, organization_id, department_id, position) values ($1::uuid, chat.default_organization_id(), $2::uuid, 'supervisor')`,
+      extra, teachersDept,
+    );
+    await rooms.syncAll();
+    await g.prisma.$executeRaw`DELETE FROM chat.department_member WHERE staff_id = ${extra}::uuid`;
+    await spied.open(tsupA, { subject: { kind: 'teacher', id: s.teacherId }, target: 'teachers', title: 'x' });
+    expect(left).toEqual([{ ids: [extra], conv: room }]);
+  });
+});
+
