@@ -27,7 +27,7 @@ Agreed 2026-10-27 between the PD-29 materials-quality session and the PD-39 sess
   - `sha256` text not null: SHA-256 of `text_uthmani`'s UTF-8 bytes
 - **Exactly one dataset is "current"**, through config (`quran.dataset` = id). There is no is_current column race.
 - **Append-only by trigger**: no UPDATE or DELETE. No request-role grants; read only through the service.
-- **Load checks** (CLI loader, `apps/api/src/cli/load-quran.ts`):
+- **Load checks** (the loader, `scripts/db/load-quran.sh`; see "Where the loader runs"):
   - the file hash equals the pinned constant;
   - 6,236 rows;
   - 114 surahs;
@@ -36,7 +36,18 @@ Agreed 2026-10-27 between the PD-29 materials-quality session and the PD-39 sess
   - all of it in one transaction.
 - The vendored file lives at the repo root, `data/quran/<id>.txt`, verbatim, with Tanzil's copyright notice kept in it.
 - `data/quran/<id>.sha256` sits next to it. The API loader and the `apps/lessons` build both read this one file, and CI compares it with the pinned constant.
-- `text_search` normalisation is defined once in the TS loader, with the same rules as `lib/shared/utils/search_text.dart`. A shared test-vector file keeps the TS and Dart versions from drifting.
+- `text_search` normalisation is defined once, with the same rules as `lib/shared/utils/search_text.dart`. Its test vectors live next to the source, in `data/quran/search-normalisation.vectors.json`. The loader's tests and the Dart tests both read that file.
+
+### Where the loader runs (agreed 2026-10-27)
+- It runs **from a repo checkout, never inside the API image** (option (c)), just like migrations:
+  - The API image is built with `apps/api` as its context (`ci.yml:435`), so it can't see `data/`.
+  - The deploy job already applies migrations from the checkout (`scripts/db/apply.sh`, `deploy-staging.yml:319`) as the migration owner role.
+- The deploy job calls the loader right after `apply.sh`, against the same `DATABASE_URL`.
+- The load is idempotent: a dataset id that is already loaded with the same `sha256` is skipped, and the same id with a different hash fails the deploy.
+- Why not copy the file into the image:
+  - The API runs as `chat_app` with no write grants on reference data, so it couldn't load it anyway.
+  - A second copy would be one more thing to keep in sync.
+- The API only reads `chat.quran_ayah`. The `apps/lessons` CI build reads `data/quran/` directly.
 
 ## API (read-only, any signed-in account)
 - `GET /quran/ayahs?surah=N&from=A&to=B`
