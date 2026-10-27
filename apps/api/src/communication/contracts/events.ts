@@ -58,6 +58,18 @@ export const CommEvent = {
   /** The media-presence counterpart of the above. Also not emitted yet. */
   CALL_PARTICIPANT_LEFT: 'call.participant_left',
   NOTIFICATION_CREATED: 'notification.created',
+  /**
+   * PD-34: the person's Notification Center changed (an entry appeared, was
+   * read or withdrawn). To that person's actor room only; carries the unread
+   * count and nothing else -- the client refetches through the authorized REST
+   * path.
+   */
+  INBOX_CHANGED: 'notification.inbox_changed',
+  /**
+   * PD-34: a person read a conversation up to a point, so their OTHER devices
+   * clear the badge. To that person's actor room only, never the thread.
+   */
+  CONVERSATION_READ: 'conversation.read',
   STORY_PUBLISHED: 'story.published',
   STORY_RETIRED: 'story.retired',
   /**
@@ -255,6 +267,17 @@ export interface CallParticipantPayload {
   actorId: string;
 }
 
+export interface InboxChangedPayload {
+  recipientId: string;
+  unread: number;
+}
+
+export interface ConversationReadPayload {
+  conversationId: string;
+  actorId: string;
+  lastReadSeq: string;
+}
+
 export interface NotificationCreatedPayload {
   notificationId: string;
   recipientId: string;
@@ -313,6 +336,8 @@ export interface CommEventPayloads {
   [CommEvent.CALL_PARTICIPANT_JOINED]: CallParticipantPayload;
   [CommEvent.CALL_PARTICIPANT_LEFT]: CallParticipantPayload;
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
+  [CommEvent.INBOX_CHANGED]: InboxChangedPayload;
+  [CommEvent.CONVERSATION_READ]: ConversationReadPayload;
   [CommEvent.STORY_PUBLISHED]: StoryPublishedPayload;
   [CommEvent.STORY_RETIRED]: StoryRetiredPayload;
   [CommEvent.LESSON_CLOSED]: LessonClosedPayload;

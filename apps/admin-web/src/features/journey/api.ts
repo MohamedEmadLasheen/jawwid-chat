@@ -102,11 +102,37 @@ export const journeyApi = {
   deleteReport: (lessonId: string, body: { reason: string; resend: boolean; report?: ReportInput }) =>
     api.post<LessonRecord>(`/lessons/${lessonId}/report/delete`, body),
 
+  // PD-35: ask the teacher to file or correct the report (they answer through the edit above).
+  requestCorrection: (lessonId: string, body: { reason: string; kind?: 'missing' | 'correction' }) =>
+    api.post<CorrectionRequest>(`/lessons/${lessonId}/correction-requests`, body),
+  corrections: (status: 'open' | 'resolved' | 'all' = 'open') =>
+    api.get<{ requests: CorrectionRequest[] }>('/correction-requests', { status }),
+  withdrawCorrection: (id: string) => api.post<CorrectionRequest>(`/correction-requests/${encodeURIComponent(id)}/withdraw`),
+
   groupLearners: (conversationId: string) => api.get<{ learners: GroupLearner[] }>(`/conversations/${conversationId}/learners`),
   setEnrollment: (learnerId: string, body: EnrollmentInput) => api.post<unknown>(`/learners/${learnerId}/enrollment`, body),
   courses: () => api.get<{ canManage: boolean; courses: Course[] }>('/courses'),
   createCourse: (name: string) => api.post<Course>('/courses', { name }),
   updateCourse: (id: string, body: { name?: string; isActive?: boolean }) => api.post<Course>(`/courses/${id}`, body),
+}
+
+/** PD-35: a request that the teacher files or corrects a lesson report. */
+export interface CorrectionRequest {
+  id: string
+  lessonId: string
+  learner: { id: string; name: string }
+  teacher: { id: string; name: string }
+  lessonStartsAt: string
+  kind: 'missing' | 'correction'
+  reason: string
+  requestedBy: { id: string; name: string }
+  requestedAt: string
+  status: 'open' | 'corrected' | 'filed' | 'withdrawn'
+  /** The change is the lesson's history between these two versions. */
+  askedVersion: number | null
+  resolvedVersion: number | null
+  resolvedAt: string | null
+  resolvedByKind: 'teacher' | 'staff' | null
 }
 
 export const journeyKeys = {
@@ -115,6 +141,7 @@ export const journeyKeys = {
   history: (lessonId: string) => ['journey', 'history', lessonId] as const,
   learners: (conversationId: string) => ['journey', 'learners', conversationId] as const,
   courses: ['journey', 'courses'] as const,
+  corrections: (status: string) => ['journey', 'corrections', status] as const,
 }
 
 /** The kinds of card that are about one lesson, and so open its record. */

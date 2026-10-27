@@ -65,6 +65,15 @@ export const J = {
   },
   timing: { en: 'When was the student excused?', ar: 'متى قُدِّم عذر الطالب؟' },
   editReport: { en: 'Edit report', ar: 'تعديل التقرير' },
+  // PD-35: the teacher corrects (or files) the report; a supervisor asks, with a reason.
+  requestCorrection: { en: 'Request correction', ar: 'طلب تصحيح' },
+  requestReport: { en: 'Ask for the report', ar: 'طلب التقرير' },
+  requestHint: {
+    en: 'The teacher gets your reason in their supervision chat and edits the report themselves. Every version is kept.',
+    ar: 'يصل سببك إلى المعلم في محادثة الإشراف ويعدّل التقرير بنفسه. تُحفظ كل النسخ.',
+  },
+  requestReason: { en: 'What needs correcting', ar: 'ما الذي يحتاج إلى تصحيح' },
+  requested: { en: 'Request sent to the teacher.', ar: 'أُرسل الطلب إلى المعلم.' },
   deleteReport: { en: 'Delete report', ar: 'حذف التقرير' },
   deleteHow: { en: 'After deleting', ar: 'بعد الحذف' },
   resend: { en: 'Resend a corrected version', ar: 'إرسال نسخة مصحّحة' },

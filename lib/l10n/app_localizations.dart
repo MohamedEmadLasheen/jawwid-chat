@@ -2581,6 +2581,168 @@ abstract class L10n {
   /// **'Progress isn\'t available right now.'**
   String get progressUnavailable;
 
+  /// No description provided for @scheduleViewList.
+  ///
+  /// In en, this message translates to:
+  /// **'List'**
+  String get scheduleViewList;
+
+  /// No description provided for @scheduleViewDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day'**
+  String get scheduleViewDay;
+
+  /// No description provided for @scheduleViewWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get scheduleViewWeek;
+
+  /// No description provided for @scheduleViewMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get scheduleViewMonth;
+
+  /// No description provided for @calendarPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get calendarPrevious;
+
+  /// No description provided for @calendarNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get calendarNext;
+
+  /// No description provided for @calendarToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get calendarToday;
+
+  /// No description provided for @calendarLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your schedule. Try again.'**
+  String get calendarLoadFailed;
+
+  /// No description provided for @calendarBooked.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h of lessons'**
+  String calendarBooked(String hours);
+
+  /// No description provided for @calendarHeld.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h held'**
+  String calendarHeld(String hours);
+
+  /// No description provided for @calendarStudents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No students} =1{1 student} other{{count} students}}'**
+  String calendarStudents(int count);
+
+  /// No description provided for @calendarTrialStudents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{+1 trial student} other{+{count} trial students}}'**
+  String calendarTrialStudents(int count);
+
+  /// No description provided for @calendarShiftUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent} of your shift booked'**
+  String calendarShiftUsed(String percent);
+
+  /// No description provided for @calendarEmptyInShift.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h empty in your shift'**
+  String calendarEmptyInShift(String hours);
+
+  /// No description provided for @calendarOutsideHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h outside your shift'**
+  String calendarOutsideHours(String hours);
+
+  /// No description provided for @calendarLegendEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Available time without a student'**
+  String get calendarLegendEmpty;
+
+  /// No description provided for @calendarLegendOutside.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside the shift'**
+  String get calendarLegendOutside;
+
+  /// No description provided for @calendarLegendLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get calendarLegendLeave;
+
+  /// No description provided for @calendarLegendWork.
+  ///
+  /// In en, this message translates to:
+  /// **'Working hours'**
+  String get calendarLegendWork;
+
+  /// No description provided for @calendarStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get calendarStatusActive;
+
+  /// No description provided for @calendarStatusTrial.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial'**
+  String get calendarStatusTrial;
+
+  /// No description provided for @calendarStatusPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporarily paused'**
+  String get calendarStatusPaused;
+
+  /// No description provided for @calendarOutsideShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside the shift'**
+  String get calendarOutsideShift;
+
+  /// No description provided for @calendarNoLessons.
+  ///
+  /// In en, this message translates to:
+  /// **'No lessons'**
+  String get calendarNoLessons;
+
+  /// No description provided for @calendarDayLessons.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No lessons} =1{1 lesson} other{{count} lessons}}'**
+  String calendarDayLessons(int count);
+
+  /// No description provided for @calendarTimesIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Times in {zone}'**
+  String calendarTimesIn(String zone);
+
+  /// No description provided for @calendarHoursShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String calendarHoursShort(String hours);
+
   /// No description provided for @workloadTitle.
   ///
   /// In en, this message translates to:

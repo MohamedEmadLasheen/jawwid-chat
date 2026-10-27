@@ -1450,6 +1450,127 @@ class L10nEn extends L10n {
   String get progressUnavailable => 'Progress isn\'t available right now.';
 
   @override
+  String get scheduleViewList => 'List';
+
+  @override
+  String get scheduleViewDay => 'Day';
+
+  @override
+  String get scheduleViewWeek => 'Week';
+
+  @override
+  String get scheduleViewMonth => 'Month';
+
+  @override
+  String get calendarPrevious => 'Previous';
+
+  @override
+  String get calendarNext => 'Next';
+
+  @override
+  String get calendarToday => 'Today';
+
+  @override
+  String get calendarLoadFailed => 'Couldn\'t load your schedule. Try again.';
+
+  @override
+  String calendarBooked(String hours) {
+    return '$hours h of lessons';
+  }
+
+  @override
+  String calendarHeld(String hours) {
+    return '$hours h held';
+  }
+
+  @override
+  String calendarStudents(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count students',
+      one: '1 student',
+      zero: 'No students',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarTrialStudents(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '+$count trial students',
+      one: '+1 trial student',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarShiftUsed(String percent) {
+    return '$percent of your shift booked';
+  }
+
+  @override
+  String calendarEmptyInShift(String hours) {
+    return '$hours h empty in your shift';
+  }
+
+  @override
+  String calendarOutsideHours(String hours) {
+    return '$hours h outside your shift';
+  }
+
+  @override
+  String get calendarLegendEmpty => 'Available time without a student';
+
+  @override
+  String get calendarLegendOutside => 'Outside the shift';
+
+  @override
+  String get calendarLegendLeave => 'Leave';
+
+  @override
+  String get calendarLegendWork => 'Working hours';
+
+  @override
+  String get calendarStatusActive => 'Active';
+
+  @override
+  String get calendarStatusTrial => 'Trial';
+
+  @override
+  String get calendarStatusPaused => 'Temporarily paused';
+
+  @override
+  String get calendarOutsideShift => 'Outside the shift';
+
+  @override
+  String get calendarNoLessons => 'No lessons';
+
+  @override
+  String calendarDayLessons(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lessons',
+      one: '1 lesson',
+      zero: 'No lessons',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarTimesIn(String zone) {
+    return 'Times in $zone';
+  }
+
+  @override
+  String calendarHoursShort(String hours) {
+    return '$hours h';
+  }
+
+  @override
   String get workloadTitle => 'This month';
 
   @override

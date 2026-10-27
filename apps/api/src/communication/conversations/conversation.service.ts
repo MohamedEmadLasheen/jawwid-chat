@@ -1691,6 +1691,18 @@ export class ConversationService {
       create: { conversationId, actorId: actor.actorId, ...patch },
       update: patch,
     });
+
+    // PD-34 / PD-37: a mute holds from the moment it is set. A message push
+    // already waiting for this person in this chat (coalesced, or deferred by
+    // quiet hours) is withdrawn now, so muting never lets one more through;
+    // the Center entry stays (the trigger leaves it for MUTED). Calls are not
+    // message pushes and are untouched.
+    if (patch.mutedUntil && patch.mutedUntil > new Date()) {
+      await this.prisma.notification.updateMany({
+        where: { recipientId: actor.actorId, conversationId, eventType: 'message_published', status: 'scheduled' },
+        data: { status: 'cancelled', failureCode: 'MUTED' },
+      });
+    }
   }
 
   /**

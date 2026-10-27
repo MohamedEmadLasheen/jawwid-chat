@@ -1491,6 +1491,133 @@ class L10nAr extends L10n {
   String get progressUnavailable => 'التقدم غير متاح حاليًا.';
 
   @override
+  String get scheduleViewList => 'قائمة';
+
+  @override
+  String get scheduleViewDay => 'يوم';
+
+  @override
+  String get scheduleViewWeek => 'أسبوع';
+
+  @override
+  String get scheduleViewMonth => 'شهر';
+
+  @override
+  String get calendarPrevious => 'السابق';
+
+  @override
+  String get calendarNext => 'التالي';
+
+  @override
+  String get calendarToday => 'اليوم';
+
+  @override
+  String get calendarLoadFailed => 'تعذّر تحميل جدولك. حاول مرة أخرى.';
+
+  @override
+  String calendarBooked(String hours) {
+    return '$hours س من الحصص';
+  }
+
+  @override
+  String calendarHeld(String hours) {
+    return '$hours س منعقدة';
+  }
+
+  @override
+  String calendarStudents(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طالبًا',
+      few: '$count طلاب',
+      two: 'طالبان',
+      one: 'طالب واحد',
+      zero: 'لا طلاب',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarTrialStudents(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '+$count طالبًا تجريبيًا',
+      few: '+$count طلاب تجريبيين',
+      two: '+طالبان تجريبيان',
+      one: '+طالب تجريبي',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarShiftUsed(String percent) {
+    return '$percent من الشيفت محجوز';
+  }
+
+  @override
+  String calendarEmptyInShift(String hours) {
+    return '$hours س فارغة في الشيفت';
+  }
+
+  @override
+  String calendarOutsideHours(String hours) {
+    return '$hours س خارج الشيفت';
+  }
+
+  @override
+  String get calendarLegendEmpty => 'وقت متاح بدون طالب';
+
+  @override
+  String get calendarLegendOutside => 'خارج الشيفت';
+
+  @override
+  String get calendarLegendLeave => 'إجازة';
+
+  @override
+  String get calendarLegendWork => 'ساعات العمل';
+
+  @override
+  String get calendarStatusActive => 'نشط';
+
+  @override
+  String get calendarStatusTrial => 'تجريبي';
+
+  @override
+  String get calendarStatusPaused => 'متوقف مؤقتاً';
+
+  @override
+  String get calendarOutsideShift => 'خارج الشيفت';
+
+  @override
+  String get calendarNoLessons => 'لا حصص';
+
+  @override
+  String calendarDayLessons(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة',
+      few: '$count حصص',
+      two: 'حصتان',
+      one: 'حصة واحدة',
+      zero: 'لا حصص',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarTimesIn(String zone) {
+    return 'الأوقات بتوقيت $zone';
+  }
+
+  @override
+  String calendarHoursShort(String hours) {
+    return '$hours س';
+  }
+
+  @override
   String get workloadTitle => 'هذا الشهر';
 
   @override

@@ -2,6 +2,7 @@ import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/my_calendar.dart';
 import '../../shared/models/parent_billing.dart';
 import '../../shared/models/parent_profile.dart';
 import '../../shared/models/story.dart';
@@ -786,6 +787,10 @@ abstract interface class LessonRepository {
   /// `GET /stats/me` -- a teacher's own month.
   Future<TeacherWorkload> myWorkload();
 
+  /// PD-38: `GET /me/calendar?from&to` -- a teacher's own schedule for the days
+  /// [from] to [to] (`YYYY-MM-DD`, [to] exclusive, at most 42 days).
+  Future<MyCalendar> myCalendar(String from, String to);
+
   /// PD-15: `GET /lessons/:id` -- the lesson's live report, to edit it (null when none).
   Future<LessonReportDraft?> reportFor(String lessonId);
 
@@ -913,6 +918,9 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<TeacherWorkload> myWorkload() => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<MyCalendar> myCalendar(String from, String to) => throw UnsupportedError('no lesson server in this build');
 
   @override
   Future<LessonReportDraft?> reportFor(String lessonId) => throw UnsupportedError('no lesson server in this build');

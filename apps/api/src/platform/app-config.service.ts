@@ -43,6 +43,30 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'call.ring_timeout_seconds': 45,
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
+  /**
+   * PD-34. Every value below is a PROPOSAL awaiting the owner (2026-10-26); an
+   * answer changes these values, not code. Until then the two that would
+   * change what people receive are OFF: no default quiet hours (a person may
+   * still set their own) and no hourly push cap. Calls, the T-30/T-15 lesson
+   * reminders and security are exempt from quiet hours by their rules anyway.
+   */
+  'notification.quiet_hours.default_enabled': false,
+  'notification.quiet_hours.default_start_minute': 1320,
+  'notification.quiet_hours.default_end_minute': 480,
+  /** PD-34 (proposed: 6): pushes an hour per person in a rate-limited category before the rest go to the Center only. 0 = no cap. */
+  'notification.push_per_hour': 0,
+  'notification.rate_limited_categories': ['conversation', 'announcement', 'marketing'] as readonly string[],
+  /** PD-34: categories a person cannot switch off (operational). */
+  'notification.locked_categories': ['lesson', 'payment', 'call', 'task', 'system'] as readonly string[],
+  /** PD-34: after a message push, further messages in that chat wait this long and go out as one. */
+  'notification.message_coalesce_seconds': 60,
+  /** PD-34: someone reading the chat right now gets the push this late, and not at all if they read it. */
+  'notification.message_reading_grace_seconds': 20,
+  /** PD-34 (proposed; privacy-safe default): names (a child's, an amount) on the lock screen, for someone who has not chosen. */
+  'notification.lock_screen_names_default': false,
+  /** PD-34: delivery rows are kept this long; Center entries this long. */
+  'notification.delivery_retention_days': 90,
+  'notification.item_retention_days': 365,
   /** initial hypothesis - how long a published story stays readable */
   'story.default_lifetime_hours': 24,
   /** initial hypothesis - longest story body accepted */

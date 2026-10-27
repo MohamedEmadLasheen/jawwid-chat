@@ -45,6 +45,12 @@ export class CalendarController {
     return this.calendar.stats(actorId, query);
   }
 
+  /** PD-38 P2: a teacher's own schedule (`from` / `to` only; the teacher is the caller). */
+  @Get('me/calendar')
+  mine(@ActorId() actorId: string, @Query() query: Q) {
+    return this.calendar.mine(actorId, query);
+  }
+
   @Get('teachers/:id/work-pattern')
   pattern(@ActorId() actorId: string, @Param('id') id: string) {
     return this.patterns.pattern(actorId, id);

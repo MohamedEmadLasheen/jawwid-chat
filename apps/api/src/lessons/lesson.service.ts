@@ -1462,6 +1462,12 @@ export async function cancelReminders(tx: Tx, lessonId: string): Promise<void> {
     where: { status: 'scheduled', dedupeKey: { contains: `:${lessonId}:` } },
     data: { status: 'cancelled' },
   });
+  // PD-34: a Notification Center entry not shown yet goes with it (one with a
+  // delivery already went by trigger; this reaches one whose push was off).
+  await tx.notificationItem.updateMany({
+    where: { subjectId: lessonId, cancelledAt: null, visibleAt: { gt: new Date() } },
+    data: { cancelledAt: new Date(), cancelReason: 'subject_gone' },
+  });
 }
 
 export function invalid(reason: string) {

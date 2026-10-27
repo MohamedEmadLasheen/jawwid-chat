@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../platform/prisma.service';
 import { IDENTITY_SERVICE, REALTIME_PUBLISHER } from '../../platform/tokens';
 import type { IdentityService } from '../../platform/identity.service';
@@ -7,6 +7,8 @@ import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName, room } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
 import { mentionRuleFor } from '../mentions/mention-policy';
+import { NotificationPipeline } from '../notifications/notification-pipeline.service';
+import { messageAudience } from './message-audience';
 import { ActorKind, CallOutcome, CallType, StoryState, Visibility } from '../contracts/vocab';
 
 /**
@@ -25,6 +27,9 @@ export class OutboxWorker {
     private readonly notifications: NotificationService,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    // PD-34. Optional so a suite that builds a worker by hand (the call and
+    // revocation suites) gets exactly the delivery it always had.
+    @Optional() private readonly pipeline?: NotificationPipeline,
   ) {}
 
   async drain(batchSize = 100, now = new Date()): Promise<number> {
@@ -231,6 +236,28 @@ export class OutboxWorker {
         return;
       }
 
+      // PD-34: a person's own Notification Center and read state, to their own
+      // actor room and nobody else's -- never the conversation room.
+      case CommEvent.INBOX_CHANGED: {
+        const recipientId = payload.recipientId as string | undefined;
+        if (recipientId) await this.realtime.toUsers([recipientId], type, payload as never);
+        return;
+      }
+
+      case CommEvent.CONVERSATION_READ: {
+        const actorId = payload.actorId as string | undefined;
+        if (!actorId || !conversationId) return;
+        // With the pipeline: withdraw the waiting push, read the entry, and tell
+        // the reader's other devices (it emits conversation.read itself).
+        if (this.pipeline) {
+          const seq = typeof payload.lastReadSeq === 'string' ? BigInt(payload.lastReadSeq) : BigInt(0);
+          await this.pipeline.conversationRead(conversationId, actorId, seq);
+          return;
+        }
+        await this.realtime.toUsers([actorId], type, payload as never);
+        return;
+      }
+
       case CommEvent.STORY_RETIRED: {
         // Same audience. A client that is showing an expired or deleted story
         // gets told to drop it rather than finding out on its next refetch --
@@ -350,19 +377,7 @@ export class OutboxWorker {
     return new Map(rows.map((r) => [r.primary_id, r.backup_id]));
   }
 
-  /**
-   * PD-35: the open seats here, and whether each still gives its holder access
-   * now. A seat that stopped holding keeps its member row until the sweep ends
-   * it; the holder hears nothing meanwhile.
-   */
-  private async seats(conversationId: string): Promise<Array<{ staffId: string; memberId: string | null; holds: boolean }>> {
-    const rows = await this.prisma.$queryRaw<Array<{ staff_id: string; member_id: string | null; holds: boolean }>>`
-      SELECT st.staff_id::text AS staff_id, st.member_id::text AS member_id,
-             chat.staff_conversation_access(st.staff_id, st.conversation_id, now()) IS NOT NULL AS holds
-        FROM chat.conversation_seat st
-       WHERE st.conversation_id = ${conversationId}::uuid AND st.left_at IS NULL`;
-    return rows.map((r) => ({ staffId: r.staff_id, memberId: r.member_id, holds: r.holds }));
-  }
+
 
   /**
    * WHO MAY RECEIVE A CALL EVENT. The single source of that answer.
@@ -521,26 +536,12 @@ export class OutboxWorker {
     if (payload.silent === true) return;
 
     const authorId = payload.authorId as string | null;
-    const live = await this.prisma.conversationMember.findMany({
-      where: { conversationId, leftAt: null },
-      select: { id: true, actorId: true },
-    });
-    // PD-35: a seat holder -- in a member row or an effective seat in a 1:1 --
-    // is notified only while the seat still gives them access.
-    const seats = await this.seats(conversationId);
-    const seatRows = new Set(seats.map((x) => x.memberId).filter((id): id is string => id !== null));
-    const reachable = [
-      ...live.filter((m) => !seatRows.has(m.id)).map((m) => m.actorId),
-      ...seats.filter((x) => x.holds).map((x) => x.staffId),
-    ];
-    // The author first: their own seat is never pushed -- nor remapped, so an
-    // away supervisor's own message does not push the backup covering for them.
-    const recipients = [...new Set(reachable)].filter((id) => id !== authorId);
-    // PD-33: an away supervisor's push goes to the backup covering for them,
-    // once per person even when the backup has a seat of their own.
-    const covers = await this.coversFor(recipients);
-    // PD-36: someone mentioned in THIS message gets the mention push instead --
-    // one ping, and it is the one that names why.
+    // PD-35 seat rules and PD-33 cover substitution, in one place shared with
+    // the pipeline's send-time check (message-audience.ts).
+    const members = (await messageAudience(this.prisma, conversationId, authorId)).map((actorId) => ({ actorId }));
+    // PD-36: someone mentioned in THIS message has the mention push (rule
+    // `mention`, through a mute); the message itself still lists in their
+    // Notification Center, but is not pushed a second time.
     const mentioned = new Set(
       (
         await this.prisma.messageMention.findMany({
@@ -549,9 +550,6 @@ export class OutboxWorker {
         })
       ).map((m) => m.targetActorId),
     );
-    const members = [...new Set(recipients.map((id) => covers.get(id) ?? id))]
-      .filter((id) => !mentioned.has(id))
-      .map((actorId) => ({ actorId }));
 
     const state = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId },
@@ -559,9 +557,27 @@ export class OutboxWorker {
     const mutedUntil = new Map(state.map((s) => [s.actorId, s.mutedUntil]));
     const now = new Date();
 
+    // PD-34: the Notification Center entries and coalesced pushes, for the whole
+    // audience at once (one batch of reads, not ~20 queries per member). A muted
+    // chat still counts in the Center; it is only not pushed.
+    if (this.pipeline) {
+      await this.pipeline.messagePublishedMany({
+        conversationId,
+        messageId: payload.messageId as string,
+        seq: typeof payload.seq === 'string' ? BigInt(payload.seq) : null,
+        recipients: members.map((m) => {
+          const muted = mutedUntil.get(m.actorId);
+          return { actorId: m.actorId, muted: Boolean(muted && muted > now) || mentioned.has(m.actorId) };
+        }),
+        now,
+      });
+      return;
+    }
+
     for (const m of members) {
-      if (m.actorId === authorId) continue;
+      if (m.actorId === authorId || mentioned.has(m.actorId)) continue;
       const muted = mutedUntil.get(m.actorId);
+
       if (muted && muted > now) continue;
 
       const recipient = await this.identity.resolveActor(m.actorId);

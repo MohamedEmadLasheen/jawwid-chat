@@ -2392,6 +2392,14 @@ priced deduction     = decided deduction_1|2 + terms(month).currency +
 
 **Deprecated behaviour.** PD-12's separate Leave requests and Discipline tabs.
 
+**Amendment, 2026-10-26: the known limits, closed** (owner request, no new
+number). A reward with its amount is one transaction, refused whole when the
+month has no pay terms. Every staff complaint names its source on every route
+(PD-11's supervision timeline too); older sourceless rows stay valid. The app's
+"on leave" notice updates on the conversation's realtime signals, on reconnect,
+on app resume and when the shown leave ends, never by polling. Record:
+`docs/admin/pd026-teacher-supervision.md` §Known limits, closed.
+
 **Closed.** 2026-10-22.
 
 ---
@@ -3394,3 +3402,70 @@ things M4 will run into:
 * **`RT-029` and `RT-030`** (`red-team/findings.md`) are open tenancy defects,
   both contained and failing closed today. Neither blocks M4 and neither is
   closed by it; they are tracked separately so M4 does not quietly absorb them.
+
+### PD-34 · Notifications: one pipeline and a Notification Center for every account (P1)
+
+**Decided 2026-10-26** (the architecture; the defaults marked PROPOSED below
+await the owner). The owner asked for a comprehensive notification system
+(real-time, proactive, campaigns, a per-account Notification Center and an Admin
+Web dashboard). The department head approved the Phase-0 plan (five phases) and
+P1 is built with **defaults held in `chat.config`**, so the owner's open answers
+change settings, not code. **PD-22 is kept** (owner, 2026-10-26): every time in a
+notification is rendered in the recipient's own zone; teachers follow their phone.
+
+**Final decision (P1).**
+1. **One pipeline.** A rule (`chat.notification_rule` for timing and the on/off
+   switch, `notification-catalog.ts` for category, severity, in-app text and the
+   button) produces a **Center entry** (`chat.notification_item`) per recipient,
+   and a **push** (`chat.notification`, unchanged) when the person should be
+   pushed. Both carry the same dedupe key, so a retry, a replay or a producer
+   moved onto the pipeline converges on one entry and one push.
+2. **The Notification Center** (`GET /me/notifications`): tabs All, Unread,
+   Requires action, Lessons, Payments (parents, and staff who receive payment
+   entries), Conversations, Announcements. Each entry has a title and body
+   rendered at read time in the reader's language and zone, the time, and an
+   action (`open_conversation`, `view_lesson`, `view_payments`, `open_stories`,
+   `open_calls`). Read, read-all and "acted" are per person; another person's id
+   reads as not found.
+3. **The reason gone, the notification gone.** A cancelled or moved lesson, a
+   paid or voided instalment, a recipient taken out of service: the waiting push
+   and the not-yet-shown entry are withdrawn, by every path including SQL (a
+   trigger). A lifecycle re-schedule revives them (teacher transfer).
+4. **Chats.** Pushed only to the conversation's audience (live members; a PD-35
+   seat only while it still gives access; PD-33's backup for an away
+   supervisor) -- checked again just before a deferred push is sent, and
+   withdrawn when someone leaves. One entry per conversation with a count. The first message pushes
+   at once; later ones within `notification.message_coalesce_seconds` (60) go as
+   one trailing push. Someone reading the chat is pushed
+   `notification.message_reading_grace_seconds` (20) late, and reading withdraws
+   it -- only what the read covers: a push or entry that also stands for a later
+   message stays. Reading on one device reads the entry and tells the person's other
+   devices (`conversation.read`). Muting withdraws a waiting push at once.
+5. **Preferences.** A person switches categories off for push; the entry still
+   appears. Lessons, payments, calls, tasks and system cannot be switched off
+   (`notification.locked_categories`).
+6. **Quiet hours: PROPOSED, OFF until the owner decides.** Each person may set
+   their own window (in their own zone); someone who has not gets none. The
+   proposal -- 22:00–08:00 for everyone -- is one switch away
+   (`notification.quiet_hours.default_enabled`, `…default_start_minute`,
+   `…default_end_minute`). Calls and the T-30/T-15 lesson reminders are exempt
+   by their rules. Deferred, never dropped.
+7. **The lock screen names nobody** by default (PROPOSED; the privacy-safe
+   default). A person may turn names on (`showPreviews`); the academy default is
+   `notification.lock_screen_names_default` (false). The payment reminder no
+   longer shows the amount on the lock screen (PROPOSED, privacy-safe).
+8. **Rate limit: PROPOSED, OFF until the owner decides.** The proposal is at most
+   6 pushes an hour per person in the chat, announcement and marketing
+   categories, the rest to the Center only (`notification.push_per_hour`; 0 = no
+   cap, the default). Critical pushes would never be limited.
+9. **Retention.** Pushes are kept 90 days, entries 365
+   (`notification.delivery_retention_days`, `notification.item_retention_days`).
+
+**Not changed.** Call pushes (W7/W8, closed): the dispatcher, routing, templates
+and VoIP gate are untouched; a sent missed call is adopted into the Center by the
+worker. Android push still needs the Firebase project (owner/infra).
+
+**Later phases.** P2 payment intelligence, lesson lifecycle extras and
+supervisor tasks with SLAs; P3 proactive rules, digests and the Admin Web
+Notification Center; P4 the Campaign Center with consent; P5 e-mail and
+WhatsApp. Plan: the department head's notes, `pd34-notification-plan.md`.

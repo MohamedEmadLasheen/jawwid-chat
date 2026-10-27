@@ -8,6 +8,7 @@ import { CallService } from './communication/calls/call.service';
 import { SchedulingService } from './lessons/scheduling.service';
 import { LifecycleService } from './lessons/lifecycle.service';
 import { NotificationService } from './communication/notifications/notification.service';
+import { NotificationPipeline } from './communication/notifications/notification-pipeline.service';
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
@@ -81,6 +82,9 @@ const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
  * it; hourly is enough for reminders measured in days.
  */
 const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
+/** PD-34: adopt legacy deliveries into the Notification Center; purge once a day. */
+const NOTIFICATION_ADOPT_MS = Number(process.env.NOTIFICATION_ADOPT_MS ?? 10_000);
+const NOTIFICATION_PURGE_MS = 24 * 60 * 60_000;
 
 /**
  * PD-33: how often supervisor covers are announced (a future-dated start) and
@@ -171,6 +175,7 @@ async function bootstrap(): Promise<void> {
   const scheduling = app.get(SchedulingService);
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
+  const pipeline = app.get(NotificationPipeline);
   const covers = app.get(SupervisorCoverService);
   const mentions = app.get(MentionService);
   const subscriptions = app.get(SubscriptionEffects);
@@ -222,6 +227,8 @@ async function bootstrap(): Promise<void> {
   let nextCoverSweep = 0;
   let nextMentionSweep = 0;
   let nextSignupFailurePurge = 0;
+  let nextNotificationAdopt = 0;
+  let nextNotificationPurge = 0;
   let nextSeatSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
@@ -399,6 +406,13 @@ async function bootstrap(): Promise<void> {
     // complete at both ends and disconnected in the middle. dispatchDue()
     // claims each row with a conditional update, so running it on every replica
     // at once cannot double-send.
+    // PD-34: a deferred chat push is re-authorized against the conversation's
+    // audience right before it can be sent (the dispatcher is unchanged).
+    try {
+      await pipeline.guardDueMessages();
+    } catch (e) {
+      report(log, 'notification audience guard', 'notifications.guard', e);
+    }
     try {
       await notifications.dispatchDue();
     } catch (e) {
@@ -406,6 +420,34 @@ async function bootstrap(): Promise<void> {
       // service itself; a throw here must not stop the drain loop.
       report(log, 'notification dispatch', 'notifications.dispatchDue', e);
     }
+    // PD-34: the Notification Center. Adopt sent legacy deliveries (calls,
+    // stories, payment receipts) into entries, tell each person whose Center
+    // gained a visible entry, and purge past retention. Each in its own try:
+    // none of them may stop delivery.
+    if (Date.now() >= nextNotificationAdopt) {
+      try {
+        await pipeline.adoptLegacy();
+      } catch (e) {
+        report(log, 'notification adoption', 'notifications.adopt', e);
+      } finally {
+        nextNotificationAdopt = Date.now() + NOTIFICATION_ADOPT_MS;
+      }
+    }
+    try {
+      await pipeline.announceDue();
+    } catch (e) {
+      report(log, 'notification announce', 'notifications.announce', e);
+    }
+    if (Date.now() >= nextNotificationPurge) {
+      try {
+        await pipeline.purge();
+      } catch (e) {
+        report(log, 'notification purge', 'notifications.purge', e);
+      } finally {
+        nextNotificationPurge = Date.now() + NOTIFICATION_PURGE_MS;
+      }
+    }
+
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not
     // hammering the database once a second for no reason -- unless a wake hint
