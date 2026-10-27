@@ -6,7 +6,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { TeacherScopeService, scopeCovers } from '../platform/teacher-scope';
+import { TeacherScopeService, pageRowVisible, scopeCovers } from '../platform/teacher-scope';
 import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
 import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -222,8 +222,9 @@ export class TeacherFileService {
       throw invalid('from', 'must be management, parent or parent_app');
     }
     const org = actor.organizationId as string;
-    const scope = await this.teacherScope.pageScopeOf(actor);
-    const roots = await this.prisma.teacherSupervisionEntry.findMany({
+    const page = await this.teacherScope.pageRowsOf(actor);
+    const scope = page.teachers;
+    const found = await this.prisma.teacherSupervisionEntry.findMany({
       where: {
         organizationId: org,
         kind: TeacherFileEntryKind.COMPLAINT,
@@ -233,6 +234,12 @@ export class TeacherFileService {
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: 500,
+    });
+    // P2-4: of an Operations-only teacher, another family's complaints do not show.
+    const familyOf = await this.teacherScope.familiesOfComplaints(found.filter((r) => !scopeCovers(page.whole, r.teacherId)));
+    const roots = found.filter((r) => {
+      const family = familyOf.get(r.id) ?? null;
+      return pageRowVisible(page, r.teacherId, family ? { familyId: family } : null);
     });
     const ids = roots.map((r) => r.id);
     const [followUps, upheld, teachers] = await Promise.all([
@@ -373,6 +380,10 @@ export class TeacherFileService {
       case TeacherFileEntryKind.COMPLAINT_RESOLUTION:
       case TeacherFileEntryKind.COMPLAINT_FOLLOWUP:
         data.refersTo = requireUuid('refersTo', body.refersTo);
+        // P2-4: another family's complaint is not the caller's to follow up.
+        if (!(await this.complaintVisible(actor, teacher.id, data.refersTo))) {
+          throw new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'complaint not found');
+        }
         break;
       case TeacherFileEntryKind.COMPLAINT:
         // PD-26: every new complaint says where it came from and who handles it
@@ -382,6 +393,11 @@ export class TeacherFileService {
         data.handledBy = body.handledBy === undefined || body.handledBy === null ? actor.actorId : requireUuid('handledBy', body.handledBy);
         if (body.sourceConversationId !== undefined && body.sourceConversationId !== null) {
           data.conversationId = await this.readableSource(actor, body.sourceConversationId);
+          // P2-4: an Operations supervisor files a parent's complaint from their own families only.
+          const family = await this.teacherScope.familyOfConversation(data.conversationId);
+          if (!pageRowVisible(await this.teacherScope.pageRowsOf(actor), teacher.id, family ? { familyId: family } : null)) {
+            throw invalid('sourceConversationId', 'is not a conversation you can read');
+          }
           if (body.sourceMessageId !== undefined && body.sourceMessageId !== null) {
             data.sourceMessageId = requireUuid('sourceMessageId', body.sourceMessageId);
           }
@@ -554,18 +570,21 @@ export class TeacherFileService {
     const { actor } = await this.pageGate(actorId, (a) => a.onPage);
     if (kind !== 'trial' && kind !== 'regular') throw invalid('kind', 'must be trial or regular');
     const teacher = await this.requireTeacher(actor, teacherId);
+    const page = await this.teacherScope.pageRowsOf(actor);
     const now = Date.now();
-    const rows = await this.prisma.lesson.findMany({
+    const held = await this.prisma.lesson.findMany({
       where: {
         teacherId: teacher.id,
         outcome: 'held',
         startsAt: { gte: new Date(now - 14 * 86_400_000), lte: new Date(now) },
         ...(kind === 'trial' ? { kind: 'trial' } : { kind: { not: 'trial' } }),
       },
-      select: { id: true, startsAt: true, learner: { select: { name: true } }, prospect: { select: { displayName: true } } },
+      select: { id: true, startsAt: true, learnerId: true, learner: { select: { name: true } }, prospect: { select: { displayName: true } } },
       orderBy: { startsAt: 'desc' },
       take: 200,
     });
+    // P2-4: an Operations supervisor sees their own families' lessons only (a trial is nobody's family yet).
+    const rows = held.filter((l) => pageRowVisible(page, teacher.id, { learnerId: l.learnerId }));
     return {
       lessons: rows.map((l) => ({
         id: l.id,
@@ -574,6 +593,19 @@ export class TeacherFileService {
         label: (kind === 'trial' ? l.prospect?.displayName : l.learner?.name) ?? '',
       })),
     };
+  }
+
+  /** Is this complaint (by id) about `teacherId`, and may the caller see it (P2-4)? */
+  private async complaintVisible(actor: Actor, teacherId: string, complaintId: string): Promise<boolean> {
+    const page = await this.teacherScope.pageRowsOf(actor);
+    if (scopeCovers(page.whole, teacherId)) return true;
+    const root = await this.prisma.teacherSupervisionEntry.findFirst({
+      where: { id: complaintId, teacherId, kind: TeacherFileEntryKind.COMPLAINT },
+      select: { id: true, parentFeedbackId: true, conversationId: true },
+    });
+    if (!root) return false;
+    const family = (await this.teacherScope.familiesOfComplaints([root])).get(root.id) ?? null;
+    return pageRowVisible(page, teacherId, family ? { familyId: family } : null);
   }
 
   async requireTeacher(actor: Actor, teacherId: string) {

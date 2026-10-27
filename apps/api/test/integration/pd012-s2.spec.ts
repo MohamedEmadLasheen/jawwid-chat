@@ -271,6 +271,12 @@ describe('4. who may, and the database backstop', () => {
     expect((await discipline.list(s.otherAdminId, {})).violations).toHaveLength(0);
     expect(await code(discipline.decide(s.otherAdminId, v, { decision: 'warning' }))).toBe(CommErrorCode.DISCIPLINE_NOT_FOUND);
     expect((await discipline.list(tmgrId, {})).violations).toHaveLength(1);
+    // admin_a (learner_l is hers) and manager_c (the Operations department's families) read it,
+    // and manager_c decides it.
+    expect((await discipline.list(s.ownerId, {})).violations.map((x) => x.id)).toEqual([v]);
+    expect((await discipline.list(s.managerId, {})).violations.map((x) => x.id)).toEqual([v]);
+    const decided = await discipline.decide(s.managerId, v, { decision: 'warning' });
+    expect(decided.violation).toMatchObject({ decision: 'warning', decidedBy: { id: s.managerId } });
   });
 
   it('a violation is decided once, by the department, and never deleted', async () => {

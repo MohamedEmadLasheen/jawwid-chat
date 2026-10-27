@@ -117,17 +117,41 @@ The owner opened the page to the Operations Supervision team: "they will also
 use them to record teacher delays and excuses". It covers the whole page, with
 the Teachers department's rights, for the teachers of their families.
 
-**Who, for which teachers.** `TeacherScopeService.pageBasis` gives each caller
-one basis:
+**Who, for which teachers.** `TeacherScopeService.pageBases` says which bases a
+caller holds, and `pageBasis` the strongest of them (the rights):
 
 | Basis | Who | Which teachers |
 |---|---|---|
 | `super_admin` | the super admin | every teacher |
 | `teachers` | the Teachers department (role re-checked as PD-12) | PD-35's scope, as before |
-| `operations` | an Operations member (admin, coverage) or the Operations manager | `chat.operations_teacher_ids`: the current teacher of, and every teacher of a lesson of, each learner whose PD-8 supervisor is in `chat.staff_principals` (themself, an active backup cover, a managed department's members) |
+| `operations` | an Operations member (admin, coverage) or the Operations manager, of their own organization's department | `chat.operations_teacher_ids`: the current teacher of each of `chat.operations_learner_ids` (learners whose PD-8 supervisor is in `chat.staff_principals`: themself, an active backup cover, a managed department's members), and the teacher of each of their lessons from `chat.operations_lesson_window()` (30 days) ago on |
 
-Someone in both departments keeps the Teachers basis. An out-of-scope teacher
+The window lets a substitute (a former teacher, after a transfer) be recorded on
+while their lessons are recent; after 30 days they drop out. A lesson called off
+or never stood (`admin_cancelled`, `rescheduled`, `student_apology`,
+`suspended`, `voided`) ties nobody; a teacher's own apology or no-show does.
+
+Someone holding both bases gets the Teachers department's rights and both sets
+of teachers. (One department per staff member, so in practice that is a manager
+of both, whose Teachers scope is already every teacher.) An out-of-scope teacher
 answers 404, like an unknown one.
+
+**Down to the child** (`pageRowsOf`, `pageRowVisible`). A teacher reached only
+through Operations shows their teacher-level rows whole: leave, suspensions, an
+absence with no lesson, a management complaint. Of their rows about one child
+or family, only the caller's own show: held lessons in the lateness picker,
+lateness and lesson-linked violations, complaints from a parent (the family of
+the PD-32 feedback, or of the conversation it was taken from), parent feedback.
+Writing on another family's lesson or complaint (lateness, deciding, a
+follow-up, upholding, take, reply) answers 404. The ladder's count stays the
+teacher's: it includes the rows the caller does not see. In a leave request's
+colliding lessons, another family's child is not named.
+
+**Leave allowance.** The allowance, the days used, the balance and the
+allowance history are the Teachers department's. The server leaves them out
+(absent, not null) for a teacher the caller reaches only through Operations, in
+the overview, one teacher's leave, and a request's balance. Admin Web drops the
+column.
 
 **Routes that admit Operations** (each narrowed by `pageScopeOf`):
 
@@ -161,9 +185,12 @@ only.
 
 **Database.** `chat.may_supervise_teacher(staff, teacher, org)` is
 `chat.is_lesson_manager` OR the teacher is in `chat.operations_teacher_ids`. It
-replaces `is_lesson_manager` in five guards: a violation recorded or decided, a
-suspension, a supervision entry, PD-32's take of an app complaint, and a
-complaint's handler.
+replaces `is_lesson_manager` in the guards of: an absence or upheld complaint
+recorded, a violation decided, a suspension, a supervision entry, PD-32's take
+of an app complaint, and a complaint's handler. For a row about one child,
+`chat.may_supervise_learner_row(staff, teacher, learner, org)` also needs the
+child to be the caller's (`chat.operations_learner_ids`): lateness on a lesson
+(`guard_teacher_violation`) and a reply to a parent (`guard_parent_feedback`).
 
 **Admin Web.** The Teachers entry is offered when `GET /lessons/access` says
 `lessonManager` or `supervisionPage`. Without `lessonManager` it leads to

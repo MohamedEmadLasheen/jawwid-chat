@@ -315,7 +315,7 @@ describe('3. teacher leave', () => {
     await allowance(20);
     const view = await leave.teacherLeave(tsupId, s.teacherId, String(NEXT_YEAR));
     expect(view.allowance).toBe(20);
-    expect(view.allowanceHistory.map((h) => h.days)).toEqual([20, 21]);
+    expect(view.allowanceHistory?.map((h) => h.days)).toEqual([20, 21]);
   });
 
   it('request -> approve writes day_off entries, and the balance is computed from them', async () => {

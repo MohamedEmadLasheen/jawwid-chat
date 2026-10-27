@@ -87,6 +87,9 @@ function LeaveSection({ basePath }: { basePath: string }) {
   const { number, locale } = useI18n()
   const overview = useLeaveOverview()
   const rows = overview.data?.teachers ?? []
+  // The balance is the Teachers department's: absent for an Operations-only teacher, and
+  // the column with it when no row has one (PD-26 amendment).
+  const balances = rows.some((t) => t.used !== undefined)
   return (
     <>
       <SectionIntro hint={tx(H.leaveHint)} />
@@ -102,7 +105,7 @@ function LeaveSection({ basePath }: { basePath: string }) {
                 <thead>
                   <tr>
                     <th scope="col">{tx(H.teacher)}</th>
-                    <th scope="col">{tx(H.balance)}</th>
+                    {balances && <th scope="col">{tx(H.balance)}</th>}
                     <th scope="col">{tx(H.status)}</th>
                     <th scope="col">{tx(H.requests)}</th>
                   </tr>
@@ -113,13 +116,17 @@ function LeaveSection({ basePath }: { basePath: string }) {
                       <td dir="auto">
                         <TeacherName basePath={basePath} teacher={t} />
                       </td>
-                      <td>
-                        {t.allowance === null ? (
-                          <span className="th-muted">{tx(H.notTracked, { used: number(t.used) })}</span>
-                        ) : (
-                          tx(H.balanceOf, { left: number(t.balance ?? 0), allowance: number(t.allowance) })
-                        )}
-                      </td>
+                      {balances && (
+                        <td>
+                          {t.used === undefined ? (
+                            <span className="th-muted">—</span>
+                          ) : t.allowance === null || t.allowance === undefined ? (
+                            <span className="th-muted">{tx(H.notTracked, { used: number(t.used) })}</span>
+                          ) : (
+                            tx(H.balanceOf, { left: number(t.balance ?? 0), allowance: number(t.allowance) })
+                          )}
+                        </td>
+                      )}
                       <td>{t.away ? <AwayBadge away={t.away} /> : <span className="th-muted">{tx(H.available)}</span>}</td>
                       <td>
                         {t.pendingRequests > 0 ? (

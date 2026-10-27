@@ -5,7 +5,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { scopeCovers } from '../platform/teacher-scope';
+import { pageRowVisible, scopeCovers } from '../platform/teacher-scope';
 import { currentImpersonationId } from '../platform/request-context';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -178,9 +178,11 @@ export class ParentFeedbackService {
     if (query.category !== undefined && !(FEEDBACK_CATEGORIES as readonly string[]).includes(query.category)) {
       throw invalid('category: must be praise, suggestion or complaint');
     }
-    // PD-35: the feedback about the teachers in the caller's scope.
-    const scope = await this.files.teacherScope.pageScopeOf(actor);
-    const rows = await this.prisma.parentFeedback.findMany({
+    // PD-35: the feedback about the teachers in the caller's scope; of an
+    // Operations-only teacher, about the caller's own learners (P2-4).
+    const page = await this.files.teacherScope.pageRowsOf(actor);
+    const scope = page.teachers;
+    const found = await this.prisma.parentFeedback.findMany({
       where: {
         organizationId: actor.organizationId as string,
         ...(query.status ? { status: query.status } : {}),
@@ -190,6 +192,7 @@ export class ParentFeedbackService {
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: 500,
     });
+    const rows = found.filter((f) => pageRowVisible(page, f.teacherId, { learnerId: f.learnerId }));
     return { canWrite: access.canWriteSupervision, feedback: await this.forStaff(rows) };
   }
 
@@ -328,7 +331,7 @@ export class ParentFeedbackService {
     });
     if (!row) throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
     // PD-35: feedback about a teacher outside the caller's scope reads as unknown.
-    if (!(await this.files.teacherScope.pageCovers(actor, row.teacherId))) {
+    if (!pageRowVisible(await this.files.teacherScope.pageRowsOf(actor), row.teacherId, { learnerId: row.learnerId })) {
       throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
     }
     return row;

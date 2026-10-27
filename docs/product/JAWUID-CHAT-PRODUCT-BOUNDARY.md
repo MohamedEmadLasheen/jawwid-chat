@@ -2408,12 +2408,20 @@ scope it, the owner chose **the whole page** (leave, apologies and absences,
 lateness trial and regular, rewards, complaints, parent feedback) with **the
 Teachers department's rights on it**, for **the teachers of their families**.
 
-- **Which teachers.** The current teacher of, and every teacher of a lesson of,
-  each learner whose PD-8 supervisor is the Operations supervisor, a supervisor
-  they cover as an active backup (PD-33), or, for the Operations manager, any
-  member of the department. Every other teacher answers as not found, as PD-35
-  does. One rule, in the database (`chat.operations_teacher_ids`) and read by
+- **Which teachers.** The current teacher of each learner whose PD-8
+  supervisor is the Operations supervisor, a supervisor they cover as an
+  active backup (PD-33), or, for the Operations manager, any member of the
+  department; and the teacher of each of those learners' lessons from 30 days
+  ago on (`chat.operations_lesson_window()`; a lesson called off ties nobody).
+  Every other teacher answers as not found, as PD-35 does. One rule, in the
+  database (`chat.operations_teacher_ids`) and read by
   `TeacherScopeService.operationsScopeOf`.
+- **Which children.** Of a teacher reached only through Operations, rows about
+  one child or family (lessons, lateness, a parent's complaint or feedback)
+  show only for the caller's own learners; writing on another family's answers
+  as not found. Teacher-level rows and decisions (leave, suspension) do not
+  narrow. The leave allowance, days used and balance stay the Teachers
+  department's and are left out by the server.
 - **What they may do there.** What the Teachers department may do on the page:
   decide leave; record lateness and absences; decide on the ladder (warnings,
   deductions, suspensions); record complaints, follow-ups and resolutions, and

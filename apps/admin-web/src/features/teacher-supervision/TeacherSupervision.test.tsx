@@ -539,7 +539,8 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
   it('shows only the Supervision tab of the Teachers area, and no Teacher File links', async () => {
     asOperations()
     on('GET', /\/teacher-leave-overview$/, () =>
-      json({ year: 2026, teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, allowance: 21, used: 1, balance: 20, pendingRequests: 0, away: null }] }),
+      // As the server sends it to Operations: no allowance, no days used, no balance.
+      json({ year: 2026, teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, pendingRequests: 0, away: null }] }),
     )
     on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [] }))
     renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision' })
@@ -547,7 +548,10 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
     await waitFor(() => expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Supervision']))
     const row = (await screen.findByText('Teacher One')).closest('tr')!
     expect(within(row).queryByRole('link')).not.toBeInTheDocument()
-    expect(within(row).getByText('20 of 21 days left')).toBeInTheDocument()
+    // The balance column is the Teachers department's: not there at all, not "Not tracked".
+    expect(screen.queryByRole('columnheader', { name: 'Leave balance' })).not.toBeInTheDocument()
+    expect(within(row).queryByText(/days left|Not tracked/)).not.toBeInTheDocument()
+    expect(within(row).getByText('Available')).toBeInTheDocument()
   })
 
   it('records an absence for a teacher of her families, chosen from the page\'s own directory', async () => {

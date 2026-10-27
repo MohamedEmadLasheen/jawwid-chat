@@ -108,9 +108,10 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                           <td>
                             <div className="sv-cell-main">
                               <span>{number(r.days)}</span>
-                              {r.state === 'requested' && (
+                              {/* Absent for Operations: the allowance is the Teachers department's (PD-26 amendment). */}
+                              {r.state === 'requested' && r.balance !== undefined && (
                                 <span className="sv-muted">
-                                  {tx(S.balanceNow)}: {r.balance === null || r.balance === undefined ? tx(S.noAllowance) : number(r.balance)}
+                                  {tx(S.balanceNow)}: {r.balance === null ? tx(S.noAllowance) : number(r.balance)}
                                 </span>
                               )}
                             </div>
