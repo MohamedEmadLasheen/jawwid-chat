@@ -1553,14 +1553,40 @@ export class ConversationService {
       }
       if (!actor.organizationId) return [];
 
-      const ids = await this.authz.visibleConversationIds(actor, new Date());
+      const now = new Date();
+      const ids = await this.authz.visibleConversationIds(actor, now);
       if (ids.length === 0) return [];
-      return this.prisma.conversation.findMany({
+      const rows = await this.prisma.conversation.findMany({
         where: { id: { in: ids }, organizationId: actor.organizationId },
         include: { learner: true },
         orderBy: { lastActivityAt: 'desc' },
         take: 200,
       });
+      // PD-36: a conversation that has asked this staff member in stays on the
+      // list past the newest 200 -- the super admin sees every conversation, and
+      // an old one is exactly where a summons is easy to miss. Only ids the
+      // scope above already returned: a summons never adds a conversation.
+      const visible = new Set(ids);
+      const listed = new Set(rows.map((c) => c.id));
+      const open = await this.prisma.messageMention.findMany({
+        where: {
+          targetActorId: actor.actorId,
+          state: 'pending',
+          expiresAt: { gt: now },
+        },
+        select: { conversationId: true },
+        distinct: ['conversationId'],
+      });
+      const missing = open.map((m) => m.conversationId).filter((id) => visible.has(id) && !listed.has(id));
+      if (missing.length > 0) {
+        rows.push(
+          ...(await this.prisma.conversation.findMany({
+            where: { id: { in: missing }, organizationId: actor.organizationId },
+            include: { learner: true },
+          })),
+        );
+      }
+      return rows;
     }
 
     // The authorization boundary for a contact or a teacher: live membership,

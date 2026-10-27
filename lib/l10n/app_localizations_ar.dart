@@ -4070,4 +4070,146 @@ class L10nAr extends L10n {
 
   @override
   String get feedbackFailed => 'تعذّر إرسال ملاحظتك. حاول مرة أخرى.';
+
+  @override
+  String get notificationsCenterTitle => 'الإشعارات';
+
+  @override
+  String get notificationsTabAll => 'الكل';
+
+  @override
+  String get notificationsTabUnread => 'غير مقروءة';
+
+  @override
+  String get notificationsTabAction => 'تتطلب إجراءً';
+
+  @override
+  String get notificationsTabLessons => 'الحصص';
+
+  @override
+  String get notificationsTabPayments => 'المدفوعات';
+
+  @override
+  String get notificationsTabConversations => 'المحادثات';
+
+  @override
+  String get notificationsTabAnnouncements => 'الإعلانات';
+
+  @override
+  String get notificationsMarkAllRead => 'تحديد الكل كمقروء';
+
+  @override
+  String get notificationsLoadOlder => 'عرض الأقدم';
+
+  @override
+  String get notificationsActionOpenConversation => 'فتح المحادثة';
+
+  @override
+  String get notificationsActionViewLesson => 'عرض الحصة';
+
+  @override
+  String get notificationsActionViewPayments => 'عرض المدفوعات';
+
+  @override
+  String get notificationsActionOpenStories => 'عرض الحالة';
+
+  @override
+  String get notificationsActionOpenCalls => 'عرض المكالمات';
+
+  @override
+  String get notificationSettingsQuietHours => 'ساعات الهدوء';
+
+  @override
+  String get notificationSettingsQuietHoursBody =>
+      'تنتظر الإشعارات حتى نهاية ساعات الهدوء بحسب توقيتك. المكالمات وتذكيرات بدء الحصة تصل دائمًا.';
+
+  @override
+  String get notificationSettingsFrom => 'من';
+
+  @override
+  String get notificationSettingsUntil => 'حتى';
+
+  @override
+  String get notificationSettingsUseDefault =>
+      'استخدام الإعداد الافتراضي للأكاديمية';
+
+  @override
+  String get notificationSettingsShowNames => 'إظهار التفاصيل على شاشة القفل';
+
+  @override
+  String get notificationSettingsShowNamesBody =>
+      'إظهار اسم الطفل في تذكيرات الحصص والمبلغ في تذكيرات الدفع والهاتف مقفل.';
+
+  @override
+  String get notificationSettingsShowNamesTeacherBody =>
+      'إظهار اسم الطالب في تذكيرات الحصص والهاتف مقفل.';
+
+  @override
+  String get notificationSettingsCategories => 'الإشعارات الفورية';
+
+  @override
+  String get notificationSettingsCategoriesBody =>
+      'عند إيقافها تظهر في الإشعارات دون تنبيه.';
+
+  @override
+  String get notificationSettingsLocked => 'مفعّلة دائمًا';
+
+  @override
+  String get notificationCategoryMessages => 'الرسائل';
+
+  @override
+  String get notificationCategoryCalls => 'المكالمات';
+
+  @override
+  String get notificationCategoryTasks => 'المهام';
+
+  @override
+  String get notificationCategoryAnnouncements => 'الإعلانات والحالات';
+
+  @override
+  String get notificationCategorySystem => 'النظام';
+
+  @override
+  String get mentionListLabel => 'الإشارة إلى شخص';
+
+  @override
+  String get mentionNoMatch => 'لا يوجد أحد بهذا الاسم هنا';
+
+  @override
+  String get mentionAskedToJoin => 'دعوة للانضمام';
+
+  @override
+  String get mentionRoleSupervisor => 'المشرف';
+
+  @override
+  String get mentionRoleAdmin => 'الإدارة';
+
+  @override
+  String get mentionRoleSupervisorHint => 'مشرف الطفل';
+
+  @override
+  String get mentionRoleAdminHint => 'المشرف ومدير العمليات';
+
+  @override
+  String get mentionStaffManager => 'مدير';
+
+  @override
+  String get mentionStaffSupervisor => 'مشرف';
+
+  @override
+  String get mentionStaffCoverage => 'مشرف تغطية';
+
+  @override
+  String get mentionWaiting => 'إشارة — بانتظار الانضمام';
+
+  @override
+  String mentionAskedBy(String name, String date) {
+    return 'بطلب من $name، $date';
+  }
+
+  @override
+  String get mentionSomeoneHere => 'أحد أعضاء المحادثة';
+
+  @override
+  String get mentionedMark => 'تمت الإشارة إليك';
 }

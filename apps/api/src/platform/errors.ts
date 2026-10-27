@@ -386,6 +386,19 @@ export enum CommErrorCode {
   MATERIAL_NOT_UPLOADED = 'COMM.MATERIAL_NOT_UPLOADED',
   /** The lessons site is not configured on this deployment (MATERIALS_SITE_BASE_URL). 409. */
   MATERIAL_UNAVAILABLE = 'COMM.MATERIAL_UNAVAILABLE',
+  /** PD-36: the mention list is malformed (shape, span outside the text, overlap, too many). 400. */
+  MENTION_INVALID = 'COMM.MENTION_INVALID',
+  /**
+   * PD-36: this person cannot be mentioned here by this sender -- not a member
+   * and not in charge of the conversation, a parent naming a non-member, a role
+   * mention from a non-parent, or a summons where none is taken. Nothing was
+   * sent: a mention never grants standing. 403.
+   */
+  MENTION_NOT_ALLOWED = 'COMM.MENTION_NOT_ALLOWED',
+  /** PD-36: no such mention of the caller. 404. */
+  MENTION_NOT_FOUND = 'COMM.MENTION_NOT_FOUND',
+  /** PD-36: the mention was already answered, has expired, or the caller lost their standing. 409. */
+  MENTION_CLOSED = 'COMM.MENTION_CLOSED',
   /** A Materials feature that was retired (the memorization map, 2026-10-26). 410. */
   MATERIAL_RETIRED = 'COMM.MATERIAL_RETIRED',
 

@@ -50,6 +50,8 @@ import { RelayRealtimePublisher } from '../infra/realtime/relay.publisher';
 import { RealtimeRelay } from '../infra/realtime/realtime-relay.service';
 
 import { ConversationController } from './api/conversation.controller';
+import { MentionController } from './api/mention.controller';
+import { MentionService } from './mentions/mention.service';
 import { MessageController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
@@ -78,6 +80,7 @@ import { SeatController } from './seats/seat.controller';
   imports: [PlatformModule, AuthModule],
   controllers: [
     ConversationController,
+    MentionController,
     MessageController,
     ApprovalController,
     CallController,
@@ -107,6 +110,7 @@ import { SeatController } from './seats/seat.controller';
     SeatPolicyRegistry,
     ConversationSeatService,
     TeacherProfileService,
+    MentionService,
     MessageService,
     ApprovalService,
     CallService,
@@ -159,6 +163,8 @@ import { SeatController } from './seats/seat.controller';
   ],
   exports: [
     ConversationService,
+    // PD-36: the worker's sweep, and PD-35's 'mention' seat policy.
+    MentionService,
     SeatPolicyRegistry,
     ConversationSeatService,
     OutboxService,

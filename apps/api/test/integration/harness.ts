@@ -83,7 +83,7 @@ export function buildGraph(
   };
   // PD-34: wired as production wires it (reminders, reads, message pushes).
   const pipeline = new NotificationPipeline(prisma, notifications, quietHours, config, identity, silentRealtime as never);
-  const inbox = new NotificationInboxService(prisma, templates, config, pipeline);
+  const inbox = new NotificationInboxService(prisma, templates, config, pipeline, conversations);
   const messages = new MessageService(
     prisma, authz, conversations, outbox, config, attachments, audit, identity,
   );

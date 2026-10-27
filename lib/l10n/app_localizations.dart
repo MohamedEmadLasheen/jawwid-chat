@@ -6834,6 +6834,276 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Your feedback could not be sent. Please try again.'**
   String get feedbackFailed;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsCenterTitle;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get notificationsTabAll;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get notificationsTabUnread;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires action'**
+  String get notificationsTabAction;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons'**
+  String get notificationsTabLessons;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get notificationsTabPayments;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversations'**
+  String get notificationsTabConversations;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Announcements'**
+  String get notificationsTabAnnouncements;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all as read'**
+  String get notificationsMarkAllRead;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show older'**
+  String get notificationsLoadOlder;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Open conversation'**
+  String get notificationsActionOpenConversation;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'View lesson'**
+  String get notificationsActionViewLesson;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'View payments'**
+  String get notificationsActionViewPayments;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'View story'**
+  String get notificationsActionOpenStories;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'View calls'**
+  String get notificationsActionOpenCalls;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiet hours'**
+  String get notificationSettingsQuietHours;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications wait until quiet hours end, in your own time zone. Calls and lesson-start reminders always come through.'**
+  String get notificationSettingsQuietHoursBody;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get notificationSettingsFrom;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Until'**
+  String get notificationSettingsUntil;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the academy\'s default'**
+  String get notificationSettingsUseDefault;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show names on the lock screen'**
+  String get notificationSettingsShowNames;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show your child\'s name in lesson reminders and the amount in payment reminders while the phone is locked.'**
+  String get notificationSettingsShowNamesBody;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the student\'s name in lesson reminders while the phone is locked.'**
+  String get notificationSettingsShowNamesTeacherBody;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Push notifications'**
+  String get notificationSettingsCategories;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Switched off, they still appear in Notifications, without an alert.'**
+  String get notificationSettingsCategoriesBody;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Always on'**
+  String get notificationSettingsLocked;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get notificationCategoryMessages;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get notificationCategoryCalls;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get notificationCategoryTasks;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Announcements and stories'**
+  String get notificationCategoryAnnouncements;
+
+  /// PD-34: the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get notificationCategorySystem;
+
+  /// PD-36: the @ list above the message box.
+  ///
+  /// In en, this message translates to:
+  /// **'Mention someone'**
+  String get mentionListLabel;
+
+  /// No description provided for @mentionNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No one here by that name'**
+  String get mentionNoMatch;
+
+  /// PD-36: on an @ list row for someone not in the chat; picking them asks them in.
+  ///
+  /// In en, this message translates to:
+  /// **'Asked to join'**
+  String get mentionAskedToJoin;
+
+  /// PD-36: the label inserted after @ for a parent's role mention of the child's supervisor.
+  ///
+  /// In en, this message translates to:
+  /// **'supervisor'**
+  String get mentionRoleSupervisor;
+
+  /// PD-36: the label inserted after @ for a parent's role mention of the administration.
+  ///
+  /// In en, this message translates to:
+  /// **'admin'**
+  String get mentionRoleAdmin;
+
+  /// No description provided for @mentionRoleSupervisorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The child\'s supervisor'**
+  String get mentionRoleSupervisorHint;
+
+  /// No description provided for @mentionRoleAdminHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The supervisor and the operations manager'**
+  String get mentionRoleAdminHint;
+
+  /// No description provided for @mentionStaffManager.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager'**
+  String get mentionStaffManager;
+
+  /// No description provided for @mentionStaffSupervisor.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor'**
+  String get mentionStaffSupervisor;
+
+  /// No description provided for @mentionStaffCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage supervisor'**
+  String get mentionStaffCoverage;
+
+  /// PD-36: Group Info, someone asked in who has not joined yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Mentioned — waiting'**
+  String get mentionWaiting;
+
+  /// PD-36: who asked them in, and when.
+  ///
+  /// In en, this message translates to:
+  /// **'asked by {name}, {date}'**
+  String mentionAskedBy(String name, String date);
+
+  /// No description provided for @mentionSomeoneHere.
+  ///
+  /// In en, this message translates to:
+  /// **'someone in this chat'**
+  String get mentionSomeoneHere;
+
+  /// PD-36: the @ marker on a chat row.
+  ///
+  /// In en, this message translates to:
+  /// **'You were mentioned'**
+  String get mentionedMark;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
