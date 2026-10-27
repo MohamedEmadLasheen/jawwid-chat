@@ -173,6 +173,8 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | POST | `/conversations/:conversationId/messages/delivered` | API | **EXISTS (new 2026-10-26, PD-37)** | Delivery cursor `{ upToSeq }`. §3.5 |
 | GET | `/conversations/:conversationId/messages/unread` | API, Flutter | EXISTS | Counts only the caller's own receipts; no membership check needed. §3.5 |
 | POST | `/conversations/:conversationId/messages/:messageId/delivered` | API | EXISTS | Duplicate of WS `message.delivered`; kept. §3.5 |
+| GET | `/presence?staff=<ids>&teachers=<ids>` | API | **EXISTS (new 2026-10-26, PD-37)** | Online / last seen of up to 100 people, ONLY those `PresencePolicy` lets the caller see (others are absent, not "offline"). Response `{ presence: [{ actorId, online, lastSeenAt }] }`. |
+| GET / PATCH | `/me/presence` | API | **EXISTS (new 2026-10-26, PD-37)** | Staff only (`COMM.PRESENCE_DENIED` 403 otherwise). `{ hideLastSeen: boolean }`: on, nobody sees the caller's last seen and the caller sees nobody's; online stays visible. |
 | GET | `/conversations/:conversationId/messages/:messageId/info` | API | **EXISTS (new 2026-10-26, PD-37)** | Message info: who read / has / lacks the message. Author or staff only; countable readers only. §3.5 |
 | POST | `/conversations/:conversationId/messages/:messageId/reactions` | API, Flutter | EXISTS | §3.5 |
 | DELETE | `/conversations/:conversationId/messages/:messageId/reactions` | API, Flutter | RECONCILE | Gains `?emoji=`; Flutter must send it. §3.5, §6 |

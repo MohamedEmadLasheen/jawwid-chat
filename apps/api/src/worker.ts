@@ -233,6 +233,7 @@ async function bootstrap(): Promise<void> {
   let nextSignupFailurePurge = 0;
   let nextNotificationAdopt = 0;
   let nextNotificationPurge = 0;
+  let nextHeldReevaluation = 0;
   let nextSeatSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
@@ -415,6 +416,17 @@ async function bootstrap(): Promise<void> {
     // complete at both ends and disconnected in the middle. dispatchDue()
     // claims each row with a conditional update, so running it on every replica
     // at once cannot double-send.
+    // PD-34 amendment: a held push follows the person's settings and zone as
+    // they are now (every minute; at once when they change their settings).
+    if (Date.now() >= nextHeldReevaluation) {
+      try {
+        await pipeline.reevaluateHeld();
+      } catch (e) {
+        report(log, 'held push re-evaluation', 'notifications.reevaluate', e);
+      } finally {
+        nextHeldReevaluation = Date.now() + 60_000;
+      }
+    }
     // PD-34: a deferred chat push is re-authorized against the conversation's
     // audience right before it can be sent (the dispatcher is unchanged).
     try {

@@ -229,6 +229,38 @@ export interface ChatMessage {
   mentionsViewer?: boolean
   /** PD-36, send response only: some mentions went over a limit and stayed plain text. */
   mentionsLimited?: boolean
+  /**
+   * PD-37: the ticks on the VIEWER'S OWN message -- 'read' only when every
+   * seated member read it. Null on anyone else's message, a deleted one, and in
+   * a direct teacher<->parent chat. Who read it is Message info.
+   */
+  status?: 'sent' | 'delivered' | 'read' | null
+}
+
+/** PD-37: one person in Message info. */
+export interface MessageInfoEntry {
+  actorId: string
+  actorKind: string
+  displayName: string | null
+  avatarUrl: string | null
+  at: string | null
+}
+
+/** PD-37: who read a message, who has it, who does not yet (seated members only). */
+export interface MessageInfo {
+  messageId: string
+  status: 'sent' | 'delivered' | 'read'
+  readBy: MessageInfoEntry[]
+  deliveredTo: MessageInfoEntry[]
+  pending: MessageInfoEntry[]
+}
+
+/** PD-37: one person's online / last seen, as the server lets this viewer see it. */
+export interface PresenceEntry {
+  actorId: string
+  online: boolean
+  /** Null when either side hides last seen. */
+  lastSeenAt: string | null
 }
 
 /** How long after sending the server lets an author edit (communication.edit_window_minutes). */
@@ -475,6 +507,19 @@ export const chatApi = {
     ),
   markRead: (id: string, upToSeq: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/read`, { upToSeq }),
+  /** PD-37: Message info -- the author or staff only; the server decides. */
+  messageInfo: (id: string, messageId: string) =>
+    api.get<MessageInfo>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/info`),
+  /** PD-37: up to 100 people; anyone this viewer may not see is simply absent. */
+  presence: (people: { staff: readonly string[]; teachers: readonly string[] }) =>
+    api
+      .get<{ presence: PresenceEntry[] }>('/presence', {
+        ...(people.staff.length ? { staff: people.staff.join(',') } : {}),
+        ...(people.teachers.length ? { teachers: people.teachers.join(',') } : {}),
+      })
+      .then((r) => r.presence),
+  presenceSettings: () => api.get<{ hideLastSeen: boolean }>('/me/presence'),
+  setHideLastSeen: (hideLastSeen: boolean) => api.patch<{ hideLastSeen: boolean }>('/me/presence', { hideLastSeen }),
 }
 
 /** Query keys for the chat workspace; realtime events invalidate through them. */
@@ -491,6 +536,9 @@ export const chatKeys = {
   searchAll: (q: string) => ['chat', 'search-all', q] as const,
   mentionCandidates: (id: string, q: string) => ['chat', 'mention-candidates', id, q] as const,
   seatCandidates: (q: string) => ['chat', 'seat-candidates', q] as const,
+  messageInfo: (id: string, messageId: string) => ['chat', 'message-info', id, messageId] as const,
+  presence: (ids: string) => ['chat', 'presence', ids] as const,
+  presenceSettings: ['chat', 'presence-settings'] as const,
 }
 
 /** Server order: by seq, numerically (a string compare would put "10" before "9"). */

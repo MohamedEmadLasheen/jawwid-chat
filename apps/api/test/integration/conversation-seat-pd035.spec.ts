@@ -474,7 +474,13 @@ describe('10. security review', () => {
   });
 
   it('P2-2 / P2-3 through the PD-34 notification pipeline: the same rules for Center entries and pushes', async () => {
-    // The harness worker carries the pipeline, as production wires it.
+    // The harness worker carries the pipeline, as production wires it. The
+    // chat quiet-hours default and cap (owner 2026-10-27) are pinned off here:
+    // this case is about the seat rules, and must not depend on the clock.
+    for (const [key, value] of [['notification.chat.quiet_hours.default_enabled', false], ['notification.chat.pushes_per_hour', 0]] as const) {
+      await g.prisma.config.upsert({ where: { key }, create: { key, value }, update: { value } });
+    }
+    g.config.invalidate();
     const worker = g.outboxWorker;
     const holder = { recipientId: s.otherAdminId, groupKey: `conversation:${groupId}` };
     const pushes = () => g.prisma.notification.count({ where: { recipientId: s.otherAdminId, conversationId: groupId } });
@@ -511,5 +517,7 @@ describe('10. security review', () => {
     // (review P1: re-authorized at send, against the same audience rule).
     await g.pipeline.guardDueMessages(new Date(), 120_000);
     expect(await g.prisma.notification.findUniqueOrThrow({ where: { id: waiting.id } })).toMatchObject({ status: 'cancelled', failureCode: 'AUDIENCE' });
+    await g.prisma.config.deleteMany({ where: { key: { in: ['notification.chat.quiet_hours.default_enabled', 'notification.chat.pushes_per_hour'] } } });
+    g.config.invalidate();
   });
 });

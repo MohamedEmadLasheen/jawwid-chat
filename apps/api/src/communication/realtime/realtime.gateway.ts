@@ -25,6 +25,7 @@ import { TypingService } from './typing.service';
 import { RevocationConfirmer } from './revocation-confirmer.service';
 import { realtimeMetrics } from '../../platform/realtime-metrics';
 import { PresenceService } from './presence.service';
+import { PresencePolicy } from './presence-policy';
 import { MessageService } from '../messages/message.service';
 import { ConversationService, isUuid } from '../conversations/conversation.service';
 import { ActorKind, ReceiptState } from '../contracts/vocab';
@@ -292,10 +293,22 @@ export class RealtimeGateway
     // Phase 8 frame budget. Optional for the same reason; without it the
     // compiled default limit applies, never "no limit".
     @Optional() private readonly config?: AppConfigService,
+    // PD-37: who may see whose presence. Optional so a test can build the
+    // gateway without it; without it nothing is announced (never "everyone").
+    @Optional() private readonly presencePolicy?: PresencePolicy,
     // PD-37: the HTTP action budget's store, so the socket form of a cursor
     // move spends the SAME per-actor budget as POST …/messages/delivered.
     @Optional() @Inject(RATE_LIMIT_STORE) private readonly rateLimits?: RateLimitStore,
   ) {}
+
+  /**
+   * PD-37: how often this node sweeps for people whose online state lapsed --
+   * after a clean disconnect's grace, a stalled connection, or a crashed node --
+   * and announces them offline. Every node sweeps; each lapse is claimed by one
+   * (PresenceService.claimLapsed), so nobody is announced twice.
+   */
+  presenceSweepMs = 5_000;
+  private presenceSweep?: NodeJS.Timeout;
 
   /**
    * PD-37: one cursor move against `abuse.throttle.receipt_cursor_actor`, the
@@ -329,6 +342,7 @@ export class RealtimeGateway
    */
   afterInit(): void {
     this.revocationHub?.attach(this);
+    this.startPresenceSweep();
     // Deliveries forwarded by another node are authorized HERE, against this
     // node's sockets -- never trusted because a peer already checked its own.
     const server = this.server as unknown as { on(event: string, fn: (...a: never[]) => void): void };
@@ -381,6 +395,7 @@ export class RealtimeGateway
 
   async onModuleDestroy(): Promise<void> {
     this.revocationConfirmer?.stop();
+    if (this.presenceSweep) clearInterval(this.presenceSweep);
     if (this.sweep) clearInterval(this.sweep);
     // Fence first, then leave the registry: nothing decided before this line
     // is emitted, so a revoker that no longer counts this node is right not to.
@@ -562,9 +577,60 @@ export class RealtimeGateway
     await client.join(room.account(authenticated.accountId));
     // Presence is a nicety; a Redis hiccup recording it must not refuse the
     // socket that has just authenticated.
-    await this.presence.online(authenticated.actor.actorId, client.id).catch((e: Error) =>
-      this.log.warn(`presence not recorded: ${e.name}`),
-    );
+    const cameOnline = await this.presence.online(authenticated.actor.actorId, client.id).catch((e: Error) => {
+      this.log.warn(`presence not recorded: ${e.name}`);
+      return false;
+    });
+    if (cameOnline) this.wentOnline(authenticated.actor);
+  }
+
+  /**
+   * PD-37: announce a change of presence to the people PresencePolicy allows,
+   * never anyone else; last seen only to those it allows that too. Addressed
+   * to actor rooms, so each recipient's identity is re-checked at delivery
+   * (RT-009). A nicety: a failure is logged, never thrown into a connection.
+   */
+  private async announcePresence(subject: Actor, state: 'online' | 'offline'): Promise<void> {
+    if (!this.presencePolicy) return;
+    try {
+      const audience = await this.presencePolicy.audienceOf(subject);
+      const seen = state === 'offline' ? ((await this.presence.lastSeen(subject.actorId))?.toISOString() ?? null) : null;
+      if (audience.withLastSeen.length > 0) {
+        await this.toUsers(audience.withLastSeen, CommEvent.PRESENCE_CHANGED, { actorId: subject.actorId, state, lastSeenAt: seen });
+      }
+      if (audience.withoutLastSeen.length > 0) {
+        await this.toUsers(audience.withoutLastSeen, CommEvent.PRESENCE_CHANGED, { actorId: subject.actorId, state, lastSeenAt: null });
+      }
+    } catch (e) {
+      this.log.warn(`presence not announced: ${(e as Error).name}`);
+    }
+  }
+
+  private wentOnline(subject: Actor): void {
+    void this.announcePresence(subject, 'online');
+  }
+
+  /**
+   * PD-37: announce offline everyone whose online state lapsed, whatever the
+   * cause. Exposed for tests; the interval below calls it.
+   */
+  async sweepPresence(now = Date.now()): Promise<void> {
+    if (!this.presencePolicy) return;
+    try {
+      for (const actorId of await this.presence.claimLapsed(now)) {
+        const subject = await this.conversations.requireActor(actorId).catch(() => null);
+        if (subject) await this.announcePresence(subject, 'offline');
+      }
+    } catch (e) {
+      this.log.warn(`presence sweep failed: ${(e as Error).name}`);
+    }
+  }
+
+  private startPresenceSweep(): void {
+    // Only with a policy to announce under, and a store that can be swept.
+    if (!this.presencePolicy || typeof this.presence.claimLapsed !== 'function' || this.presenceSweep) return;
+    this.presenceSweep = setInterval(() => void this.sweepPresence(), this.presenceSweepMs);
+    this.presenceSweep.unref?.();
   }
 
   /**
@@ -612,6 +678,8 @@ export class RealtimeGateway
   async handleDisconnect(client: AuthedSocket): Promise<void> {
     if (!client.actor) return;
     // Not awaited by Nest either: a rejection here would end the process.
+    // The last connection closing starts the grace; the sweep announces the
+    // offline once it lapses (on whichever node claims it).
     await this.presence.offline(client.actor.actorId, client.id).catch((e: Error) =>
       this.log.warn(`presence not cleared: ${e.name}`),
     );
@@ -738,7 +806,8 @@ export class RealtimeGateway
   @SubscribeMessage('presence.heartbeat')
   async heartbeat(@ConnectedSocket() client: AuthedSocket): Promise<{ ok: boolean }> {
     if (!client.actor) return { ok: false };
-    await this.presence.heartbeat(client.actor.actorId, client.id);
+    // A heartbeat after every entry lapsed (a long stall) is a return online.
+    if (await this.presence.heartbeat(client.actor.actorId, client.id)) this.wentOnline(client.actor);
     return { ok: true };
   }
 
