@@ -7,6 +7,7 @@ import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import { pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
+import { familiesOfComplaints } from '../teacher-file/complaint-family';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
@@ -258,7 +259,7 @@ export class DisciplineService {
     });
     if (!complaint) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
     await this.supervision.requireTeacherInPageScope(actor, complaint.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
-    const family = (await this.supervision.teacherScope.familiesOfComplaints([complaint])).get(complaint.id) ?? null;
+    const family = (await familiesOfComplaints(this.prisma, [complaint])).get(complaint.id) ?? null;
     if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), complaint.teacherId, family ? { familyId: family } : null)) {
       throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
     }
@@ -599,7 +600,7 @@ export class DisciplineService {
           select: { id: true, parentFeedbackId: true, conversationId: true },
         })
       : [];
-    const familyOf = await scope.familiesOfComplaints(complaints);
+    const familyOf = await familiesOfComplaints(this.prisma, complaints);
     return rows.filter((r) => {
       if (r.lessonId) return pageRowVisible(page, r.teacherId, { learnerId: learnerOf.get(r.lessonId) ?? null });
       const family = r.complaintEntryId ? familyOf.get(r.complaintEntryId) ?? null : null;

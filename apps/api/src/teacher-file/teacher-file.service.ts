@@ -7,6 +7,7 @@ import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import { TeacherScopeService, pageRowVisible, scopeCovers } from '../platform/teacher-scope';
+import { familiesOfComplaints, familyOfConversation } from './complaint-family';
 import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
 import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -236,7 +237,7 @@ export class TeacherFileService {
       take: 500,
     });
     // P2-4: of an Operations-only teacher, another family's complaints do not show.
-    const familyOf = await this.teacherScope.familiesOfComplaints(found.filter((r) => !scopeCovers(page.whole, r.teacherId)));
+    const familyOf = await familiesOfComplaints(this.prisma, found.filter((r) => !scopeCovers(page.whole, r.teacherId)));
     const roots = found.filter((r) => {
       const family = familyOf.get(r.id) ?? null;
       return pageRowVisible(page, r.teacherId, family ? { familyId: family } : null);
@@ -394,7 +395,7 @@ export class TeacherFileService {
         if (body.sourceConversationId !== undefined && body.sourceConversationId !== null) {
           data.conversationId = await this.readableSource(actor, body.sourceConversationId);
           // P2-4: an Operations supervisor files a parent's complaint from their own families only.
-          const family = await this.teacherScope.familyOfConversation(data.conversationId);
+          const family = await familyOfConversation(this.prisma, data.conversationId);
           if (!pageRowVisible(await this.teacherScope.pageRowsOf(actor), teacher.id, family ? { familyId: family } : null)) {
             throw invalid('sourceConversationId', 'is not a conversation you can read');
           }
@@ -604,7 +605,7 @@ export class TeacherFileService {
       select: { id: true, parentFeedbackId: true, conversationId: true },
     });
     if (!root) return false;
-    const family = (await this.teacherScope.familiesOfComplaints([root])).get(root.id) ?? null;
+    const family = (await familiesOfComplaints(this.prisma, [root])).get(root.id) ?? null;
     return pageRowVisible(page, teacherId, family ? { familyId: family } : null);
   }
 

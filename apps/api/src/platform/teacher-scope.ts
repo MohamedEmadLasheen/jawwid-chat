@@ -192,6 +192,7 @@ export class TeacherScopeService implements OnModuleInit {
       familyIds: new Set(rows.map((r) => r.family)),
     };
   }
+
   /** Each lesson's learner (null for a trial), for pageRowVisible. */
   async learnersOfLessons(lessonIds: Iterable<string>): Promise<Map<string, string | null>> {
     const ids = [...new Set(lessonIds)];
@@ -200,39 +201,9 @@ export class TeacherScopeService implements OnModuleInit {
     return new Map(rows.map((r) => [r.id, r.learnerId]));
   }
 
-  /** The family a conversation is with; null for any other conversation. */
-  async familyOfConversation(conversationId: string): Promise<string | null> {
-    const row = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { familyId: true } });
-    return row?.familyId ?? null;
-  }
 
-  /**
-   * The family each complaint is about, for pageRowVisible: the parent's own
-   * feedback (PD-32), else the family conversation it was taken from. Null --
-   * a teacher-level complaint -- when it has neither (management's).
-   */
-  async familiesOfComplaints(
-    entries: ReadonlyArray<{ id: string; parentFeedbackId: string | null; conversationId: string | null }>,
-  ): Promise<Map<string, string | null>> {
-    const feedbackIds = entries.map((e) => e.parentFeedbackId).filter((x): x is string => !!x);
-    const conversationIds = entries.map((e) => e.conversationId).filter((x): x is string => !!x);
-    const [feedback, conversations] = await Promise.all([
-      feedbackIds.length ? this.prisma.parentFeedback.findMany({ where: { id: { in: feedbackIds } }, select: { id: true, familyId: true } }) : [],
-      conversationIds.length
-        ? this.prisma.conversation.findMany({ where: { id: { in: conversationIds } }, select: { id: true, familyId: true } })
-        : [],
-    ]);
-    const ofFeedback = new Map(feedback.map((f) => [f.id, f.familyId]));
-    const ofConversation = new Map(conversations.map((c) => [c.id, c.familyId]));
-    return new Map(
-      entries.map((e) => [
-        e.id,
-        (e.parentFeedbackId ? ofFeedback.get(e.parentFeedbackId) : undefined) ??
-          (e.conversationId ? ofConversation.get(e.conversationId) : undefined) ??
-          null,
-      ]),
-    );
-  }
+
+
 
 }
 
