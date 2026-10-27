@@ -17,7 +17,7 @@ act (`reset_password`, `suspend`, `reactivate`, `impersonate`, `sign_out`). `sta
 the caller's department roles, read by `accountAdminStandingOf`. The department matrix is
 `apps/api/src/platform/account-admin-policy.ts`.
 
-**PD-40 (2026-10-27) narrowed the 2026-10-22 rule.** Before, every staff role (finance,
+**PD-40 (2026-10-27) narrowed the 2026-10-22 rule; the product owner approved it as proposed the same day.** Before, every staff role (finance,
 technical and academic too) could act on every parent and teacher account, impersonation
 included. Now only the departments that do that work keep it:
 
