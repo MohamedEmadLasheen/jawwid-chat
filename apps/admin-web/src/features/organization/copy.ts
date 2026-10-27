@@ -48,6 +48,7 @@ export const T = {
   },
   teacherSupervisor: { en: 'Teacher supervisor', ar: 'مشرف المعلم' },
   noTeacherSupervisor: { en: 'No supervisor', ar: 'بلا مشرف' },
+  formerSupervisor: { en: 'Former supervisor: {name}', ar: 'المشرف السابق: {name}' },
   noTeachers: { en: 'No teachers to show.', ar: 'لا يوجد معلمون للعرض.' },
   inactiveTeacher: { en: 'Inactive', ar: 'غير نشط' },
 

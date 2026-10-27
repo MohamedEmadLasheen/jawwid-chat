@@ -83,14 +83,15 @@ export interface TeacherAssignment {
   id: string
   name: string
   isActive: boolean
-  supervisor: { id: string; name: string } | null
+  /** isActive false: they were deactivated or left the department, so the teacher counts as unassigned. */
+  supervisor: { id: string; name: string; isActive: boolean } | null
   assignedAt: string | null
 }
 
 export interface TeacherAssignments {
   /** TEACHER_SUPERVISOR_STRICT_SCOPE on this deployment: supervisors work on their own teachers only. */
   strictScope: boolean
-  /** Active teachers with no supervisor. */
+  /** Active teachers with no (live) supervisor. */
   unassigned: number
   teachers: TeacherAssignment[]
   /** The Teachers department's primary supervisors. */

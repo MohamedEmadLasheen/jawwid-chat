@@ -11,6 +11,9 @@ import type { Actor } from './types';
  * database decides part of the scope itself (who is the staff side of a
  * teacher's supervision conversation and trial group). Both sides then read that
  * one row -- chat.teacher_scope_strict() -- so they cannot disagree.
+ * Only an explicit value is written: a process booted without the variable
+ * leaves the row as it is (no last-boot-wins), and a boot that turns the
+ * stored value over says so loudly.
  *
  *   off (default)  department-wide, exactly as before PD-35: every member of the
  *                  Teachers department works on every teacher. Assigning
@@ -34,26 +37,49 @@ export function teacherSupervisorStrictScope(): boolean {
   return ['true', '1', 'yes', 'on'].includes((process.env.TEACHER_SUPERVISOR_STRICT_SCOPE ?? '').trim().toLowerCase());
 }
 
+/** Was TEACHER_SUPERVISOR_STRICT_SCOPE given at all (an empty value is not)? */
+export function teacherSupervisorStrictScopeSet(): boolean {
+  return (process.env.TEACHER_SUPERVISOR_STRICT_SCOPE ?? '').trim() !== '';
+}
+
 export function scopeCovers(scope: TeacherScope, teacherId: string | null | undefined): boolean {
   if (scope.all) return true;
   return !!teacherId && scope.teacherIds.has(teacherId);
 }
 
+const label = (strict: boolean) => (strict ? 'strict (own teachers)' : 'department-wide');
+
 @Injectable()
 export class TeacherScopeService implements OnModuleInit {
   private readonly log = new Logger(TeacherScopeService.name);
 
+  /** This boot turned the stored switch over: the re-seat runs at once (TeacherSupervisorService). */
+  changedAtBoot = false;
+
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Writes the switch where the database reads it. Every process that boots the app does. */
+  /**
+   * Writes the switch where the database reads it -- only when the variable is
+   * given. Unset, the stored value stands (another process, or the owner, set it).
+   */
   async onModuleInit(): Promise<void> {
+    const stored = await this.strict();
+    if (!teacherSupervisorStrictScopeSet()) {
+      this.log.log(`teacher supervisor scope: ${label(stored)} (stored; TEACHER_SUPERVISOR_STRICT_SCOPE unset)`);
+      return;
+    }
     const strict = teacherSupervisorStrictScope();
     await this.prisma.$executeRaw`
       INSERT INTO chat.config (key, value, scope, description)
       VALUES ('teacher_supervisor.strict_scope', ${JSON.stringify(strict)}::jsonb, 'teachers',
               'PD-35: written at boot from TEACHER_SUPERVISOR_STRICT_SCOPE.')
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
-    this.log.log(`teacher supervisor scope: ${strict ? 'strict (own teachers)' : 'department-wide'}`);
+    if (strict !== stored) {
+      this.changedAtBoot = true;
+      this.log.warn(`teacher supervisor scope CHANGED at boot: ${label(stored)} -> ${label(strict)} (TEACHER_SUPERVISOR_STRICT_SCOPE)`);
+    } else {
+      this.log.log(`teacher supervisor scope: ${label(strict)}`);
+    }
   }
 
   /** The switch, as the database reads it. */
@@ -85,10 +111,3 @@ export class TeacherScopeService implements OnModuleInit {
     return scopeCovers(await this.scopeOf(actor), teacherId);
   }
 }
-
-/** For constructions without the database (unit harnesses): department-wide, the switch's default. */
-export const DEPARTMENT_WIDE_SCOPE = {
-  strict: async () => false,
-  scopeOf: async () => ALL_TEACHERS,
-  covers: async () => true,
-} as unknown as TeacherScopeService;
