@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry ci-wiring"
 
 title() {
   case "$1" in
@@ -199,6 +199,7 @@ title() {
     app-spec)      echo "App Platform specs match the manifest and DigitalOcean's schema" ;;
     backup-client) echo "The backup drill runs the pg_dump it is given" ;;
     backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
+    pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -319,6 +320,19 @@ gate_backup_encryption() {
   # plaintext and no key, and a wrong key or a modified archive is refused
   # before the target is touched. The real-database round trip is G-41.
   bash scripts/qa/check-backup-encryption.sh
+}
+
+gate_pd_registry() {
+  # One file per claim (docs/product/pd-registry/, docs/product/migration-slots/),
+  # so parallel PRs only ever ADD files. Refuses a PD number claimed twice, a
+  # duplicate migration timestamp, and a migration with no slot claim. The
+  # selftest runs first and proves each of those is caught.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the pd-registry gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/docs/registry-index.py selftest || return 1
+  "$PYTHON" -I scripts/docs/registry-index.py check
 }
 
 gate_ci_wiring() {
