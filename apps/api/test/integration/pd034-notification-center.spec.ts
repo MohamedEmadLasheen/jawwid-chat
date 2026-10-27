@@ -539,6 +539,25 @@ describe('5. scope', () => {
     expect((await g.inbox.counts(parent)).unread).toBe(0);
   });
 
+  it('P2-5: an entry about a conversation the reader can no longer read is withdrawn on read, from the list and the counts', async () => {
+    const group = (await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId)).id;
+    const direct = await directWithParent();
+    await messageAt(group, 1, new Date());
+    await messageAt(direct, 1, new Date());
+    // The pushes went out, so nothing is waiting for the leave trigger to withdraw.
+    await g.prisma.notification.updateMany({ where: { recipientId: s.parentId }, data: { status: 'sent', sentAt: new Date() } });
+    await g.conversations.setMembership(group, s.ownerId, { actorId: s.parentId, actorKind: 'contact', memberRole: 'parent' }, 'remove', 'pd034');
+    const parent = await actor(s.parentId);
+
+    const counts = await g.inbox.counts(parent);
+    expect(counts.unread).toBe(1);
+    const { entries } = await g.inbox.list(parent, {});
+    expect(entries.map((e) => e.refs.conversationId)).toEqual([direct]);
+    const gone = await g.prisma.notificationItem.findFirstOrThrow({ where: { recipientId: s.parentId, groupKey: `conversation:${group}` } });
+    expect(gone).toMatchObject({ cancelReason: 'access_lost' });
+    expect(gone.cancelledAt).not.toBeNull();
+  });
+
   it('tabs filter, and paging walks the list without repeats', async () => {
     for (let i = 0; i < 5; i += 1) await lessonReminder(s.parentId, { at: new Date(Date.now() - (i + 1) * 1000) });
     const parent = await actor(s.parentId);

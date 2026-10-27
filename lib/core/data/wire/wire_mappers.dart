@@ -307,6 +307,7 @@ abstract final class WireMappers {
       wallpaperUrl: _nonEmpty(viewerState?['wallpaperUrl']),
       handledByLabel: handledByLabel,
       cover: _cover(json['cover']),
+      isMentioned: viewerState?['mention'] is Map && (viewerState!['mention']! as Map)['seen'] == false,
       requiresApproval: requiresApproval,
       // An archived conversation is read-only for this client; the backend also refuses
       // with CONVERSATION_ARCHIVED. So is a direct teacher<->parent conversation: PD-7
@@ -403,6 +404,18 @@ abstract final class WireMappers {
     );
   }
 
+  /// PD-36: a message's "@..." chips. A malformed row is dropped, never guessed at.
+  static List<MessageMention> mentions(Object? raw) => [
+        for (final m in (raw as List?) ?? const [])
+          if (m is Map<String, Object?> && m['start'] is int && m['length'] is int)
+            MessageMention(
+              start: m['start']! as int,
+              length: m['length']! as int,
+              actorId: m['actorId'] as String?,
+              role: m['role'] as String?,
+            ),
+      ];
+
   static Message message(
     Map<String, Object?> json, {
     required String viewerActorId,
@@ -451,6 +464,8 @@ abstract final class WireMappers {
       isSentBySupport: json['sentBySupport'] == true,
       editedAt: parseTime(json['editedAt']),
       isInternal: json['visibility'] == Wire.visibilityInternal,
+      mentions: mentions(json['mentions']),
+      mentionsMe: json['mentionsViewer'] == true,
       reactions: [
         for (final entry in byEmoji.entries)
           Reaction(

@@ -4090,4 +4090,49 @@ class L10nEn extends L10n {
 
   @override
   String get notificationCategorySystem => 'System';
+
+  @override
+  String get mentionListLabel => 'Mention someone';
+
+  @override
+  String get mentionNoMatch => 'No one here by that name';
+
+  @override
+  String get mentionAskedToJoin => 'Asked to join';
+
+  @override
+  String get mentionRoleSupervisor => 'supervisor';
+
+  @override
+  String get mentionRoleAdmin => 'admin';
+
+  @override
+  String get mentionRoleSupervisorHint => 'The child\'s supervisor';
+
+  @override
+  String get mentionRoleAdminHint =>
+      'The supervisor and the operations manager';
+
+  @override
+  String get mentionStaffManager => 'Manager';
+
+  @override
+  String get mentionStaffSupervisor => 'Supervisor';
+
+  @override
+  String get mentionStaffCoverage => 'Coverage supervisor';
+
+  @override
+  String get mentionWaiting => 'Mentioned — waiting';
+
+  @override
+  String mentionAskedBy(String name, String date) {
+    return 'asked by $name, $date';
+  }
+
+  @override
+  String get mentionSomeoneHere => 'someone in this chat';
+
+  @override
+  String get mentionedMark => 'You were mentioned';
 }

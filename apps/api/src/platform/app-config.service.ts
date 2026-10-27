@@ -132,6 +132,14 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'cover.max_concurrent': 2,
   /** PD-33: the longest a cover may run; longer is a change of supervisor (PD-24). */
   'cover.max_days': 30,
+  /** PD-36: people one sender may mention in one conversation per hour; more stay plain text. */
+  'mention.per_sender_hour': 5,
+  /** PD-36: times the super admin may be mentioned in one conversation per day. */
+  'mention.super_admin_day': 3,
+  /** PD-36: "@supervisor" / "@admin" role mentions one parent may send in one conversation per day. */
+  'mention.parent_role_day': 3,
+  /** PD-36: an unanswered summons expires after this many days. */
+  'mention.expiry_days': 7,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

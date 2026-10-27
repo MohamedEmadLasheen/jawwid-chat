@@ -42,6 +42,7 @@ import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
 import '../features/materials/data/materials_repository.dart';
 import '../features/messages/data/chat_theme_repository.dart';
+import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/notifications/data/notifications_repository.dart';
@@ -201,6 +202,8 @@ List<Override> _httpOverrides() {
     messageSearchRepositoryProvider.overrideWithValue(
       HttpMessageSearchRepository(client: client, viewerActorId: session.actorId),
     ),
+    // PD-36: the @ list and "seen".
+    mentionRepositoryProvider.overrideWithValue(HttpMentionRepository(client: client)),
     trialRepositoryProvider.overrideWithValue(
       HttpTrialRepository(client: client),
     ),

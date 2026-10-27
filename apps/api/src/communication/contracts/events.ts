@@ -94,6 +94,18 @@ export const CommEvent = {
   TEACHER_DEDUCTION_APPLIED: 'teacher.deduction_applied',
   /** PD-12 S2, for Core/HR: a teacher was suspended, temporarily (with dates) or permanently. */
   TEACHER_SUSPENDED: 'teacher.suspended',
+  /**
+   * PD-36: someone was @mentioned -- one event per mentioned person. The push
+   * is scheduled from it (rule `mention` / `mention_group`); PD-34's
+   * notification pipeline subscribes to it. To the target's own actor room as
+   * well, so their chat list moves the conversation to the top at once.
+   */
+  MENTION_CREATED: 'mention.created',
+  /**
+   * PD-36: a summons changed state (joined, dismissed, expired, void, removed) -- to the thread, so an open Group Info re-reads its
+   * "Mentioned -- waiting" rows, and to the target's actor room.
+   */
+  MENTION_UPDATED: 'mention.updated',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -114,6 +126,28 @@ export interface MessageCreatedPayload {
    * conversation would be a push storm. Absent = an ordinary message.
    */
   silent?: boolean;
+}
+
+export interface MentionCreatedPayload {
+  mentionId: string;
+  conversationId: string;
+  messageId: string;
+  /** The conversation's type, so a consumer words the push without a read. */
+  conversationType: string;
+  targetActorId: string;
+  targetKind: string;
+  mentionedBy: string;
+  /** 'member': a highlight and a ping. 'summons': a non-member staff member asked to step in. */
+  kind: 'member' | 'summons';
+  viaRole: 'supervisor' | 'admin' | null;
+  createdAt: string;
+}
+
+export interface MentionUpdatedPayload {
+  mentionId: string;
+  conversationId: string;
+  targetActorId: string;
+  state: string;
 }
 
 export interface MessageDeletedPayload {
@@ -313,6 +347,8 @@ export interface CommEventPayloads {
   [CommEvent.TEACHER_BONUS_RECORDED]: TeacherBonusRecordedPayload;
   [CommEvent.TEACHER_DEDUCTION_APPLIED]: TeacherDeductionAppliedPayload;
   [CommEvent.TEACHER_SUSPENDED]: TeacherSuspendedPayload;
+  [CommEvent.MENTION_CREATED]: MentionCreatedPayload;
+  [CommEvent.MENTION_UPDATED]: MentionUpdatedPayload;
 }
 
 export interface LearnerTransferredPayload {

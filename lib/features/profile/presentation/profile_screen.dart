@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/providers.dart';
 import '../../../app/router.dart';
+import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../core/policy/communication_policy.dart';
@@ -195,6 +196,8 @@ class ProfileBody extends ConsumerWidget {
         if (view.isGroup) ...[
           const ProfileDivider(),
           ProfileSectionHeading(text: l10n.groupMembersTitle),
+          // PD-36: asked in, not (yet) members -- first, highlighted, with who asked and when.
+          for (final person in view.summoned) SummonedTile(person: person),
           for (final member in view.members)
             MemberTile(
               member: member,
@@ -361,6 +364,70 @@ class ProfileHeader extends StatelessWidget {
 /// anything. [onMessage] null means no affordance at all, and the caller decides
 /// that from `CommunicationPolicy` — which answers "may this client offer it",
 /// not "is it allowed". The server decides allowed, per action.
+/// PD-36: someone asked to step in who is not a member yet -- "Mentioned -- waiting".
+class SummonedTile extends StatelessWidget {
+  const SummonedTile({super.key, required this.person});
+
+  final SummonedPerson person;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    final tokens = JawwidTokens.of(context);
+    final role = switch (person.staffRole) {
+      'super_admin' => l10n.roleSuperAdmin,
+      'manager' => l10n.mentionStaffManager,
+      'admin' => l10n.mentionStaffSupervisor,
+      'coverage' => l10n.mentionStaffCoverage,
+      _ => '',
+    };
+    final when = MaterialLocalizations.of(context).formatMediumDate(person.at.toLocal());
+    final note = [
+      l10n.mentionWaiting,
+      l10n.mentionAskedBy(person.mentionedByName ?? l10n.mentionSomeoneHere, when),
+    ].join(' · ');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: Spacing.spacing3, vertical: Spacing.spacing1),
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing3, vertical: Spacing.spacing3),
+      decoration: BoxDecoration(
+        color: tokens.colorAccentSubtle,
+        borderRadius: const BorderRadius.all(Radii.radiusMd),
+        border: BorderDirectional(start: BorderSide(color: tokens.colorAccent, width: 3)),
+      ),
+      child: Semantics(
+        label: '${person.displayName}. $role. $note',
+        child: ExcludeSemantics(
+          child: Row(
+            children: [
+              JawwidAvatar(displayName: person.displayName, size: Sizes.avatarMd),
+              const SizedBox(width: Spacing.spacing4),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ContentText(
+                      person.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    if (role.isNotEmpty)
+                      Text(role, style: theme.textTheme.labelSmall?.copyWith(color: tokens.colorTextSecondary)),
+                    Text(note, style: theme.textTheme.labelSmall?.copyWith(color: tokens.colorAccentStrong)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class MemberTile extends StatelessWidget {
   const MemberTile({
     super.key,

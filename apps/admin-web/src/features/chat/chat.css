@@ -552,3 +552,48 @@ mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; 
 
 /* PD-33: "Amira is covering for Noura until 3 Nov" under a chat's name. */
 .thread-head__cover { font-size: var(--fs-xs); color: var(--text-link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* PD-36 @mentions. Gold is split by job: gold-700 carries text, gold-400 only rules (4.5:1). */
+.cw-mention {
+  display: inline;
+  padding: 0 3px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: var(--fw-semibold);
+  unicode-bidi: isolate;
+}
+.cw-mention--me { background: var(--gold-50); color: var(--gold-700); }
+.cw-msg--mentions-me .bubble { box-shadow: inset 3px 0 0 var(--gold-400), 0 1px 1px rgba(16, 32, 40, 0.07); }
+[dir='rtl'] .cw-msg--mentions-me .bubble { box-shadow: inset -3px 0 0 var(--gold-400), 0 1px 1px rgba(16, 32, 40, 0.07); }
+.cw-row--summoned .cw-row__main { box-shadow: inset 3px 0 0 var(--gold-400); background: var(--gold-50); }
+[dir='rtl'] .cw-row--summoned .cw-row__main { box-shadow: inset -3px 0 0 var(--gold-400); }
+.cw-row__mark--mention { color: var(--gold-700); }
+
+.cw-mention-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--gold-400);
+  border-radius: var(--radius);
+  background: var(--gold-50);
+  color: var(--text);
+}
+.cw-mention-banner > .icon, .cw-mention-banner > svg { color: var(--gold-700); flex: none; }
+.cw-mention-banner__text { flex: 1; min-inline-size: 12rem; font-size: var(--fs-sm); }
+.cw-mention-banner__time { margin-inline-start: var(--space-2); color: var(--text-subtle); font-size: var(--fs-xs); }
+.cw-mention-banner__hint { display: block; color: var(--text-muted); font-size: var(--fs-xs); }
+.cw-mention-banner__actions { display: inline-flex; gap: var(--space-2); flex: none; }
+.cw-mention-banner--in { border-color: var(--border); background: var(--surface-sunken); }
+
+.cw-member--summoned {
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--gold-50);
+  box-shadow: inset 3px 0 0 var(--gold-400);
+}
+[dir='rtl'] .cw-member--summoned { box-shadow: inset -3px 0 0 var(--gold-400); }
+.cw-member__note { display: block; font-size: var(--fs-xs); color: var(--gold-700); }

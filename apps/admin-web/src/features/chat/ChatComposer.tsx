@@ -1,16 +1,27 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { ROLE_LABEL } from '@/features/profile/copy'
 import { Icon } from '@/shared/components/Icon'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { chatCopyFor } from './copy'
 import { VoiceRecorder } from './VoiceRecorder'
 import { matchQuickReplies, QuickRepliesDialog, useQuickReplies } from './QuickRepliesDialog'
+import { chatApi, chatKeys, type MentionCandidates, type SendMention } from './chatApi'
+import { activeMentionQuery, insertMention, spansFor, type PickedMention } from './mentions'
 
 export interface ComposerSend {
   body: string
   visibility: 'customer' | 'internal'
   files: File[]
+  /** PD-36: the "@..." spans in `body`, found at send time. */
+  mentions: SendMention[]
 }
+
+/** One row of the @ list: a person, or (never for staff, but drawn if offered) a role. */
+type MentionOption =
+  | { kind: 'person'; person: MentionCandidates['people'][number] }
+  | { kind: 'role'; role: 'supervisor' | 'admin' }
 
 /** The viewer's own message being edited, and the wording it has now. */
 export interface EditTarget {
@@ -76,6 +87,12 @@ export function ChatComposer({
   const [active, setActive] = useState(0)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const listId = useId()
+  // PD-36: the @ picker. `caret` follows the text box; `picked` remembers who
+  // was chosen under which label, and the spans are found when sending.
+  const [caret, setCaret] = useState(0)
+  const [picked, setPicked] = useState<PickedMention[]>([])
+  const [mentionDismissed, setMentionDismissed] = useState<number | null>(null)
+  const mentionListId = useId()
 
   // "/" at the start of an empty box, then a shortcut with no space: suggest
   // quick replies. Picking one replaces the box; nothing is sent until Send.
@@ -85,6 +102,43 @@ export function ChatComposer({
   const { query: quick, all: replies } = useQuickReplies(suggesting || quickOpen)
   const matches = suggesting ? matchQuickReplies(replies, slash![1]!) : []
   const current = Math.min(active, Math.max(matches.length - 1, 0))
+
+  // An edit never adds a mention (the server keeps only the ones the text still has).
+  const mq = !editing && !suggesting ? activeMentionQuery(body, caret) : null
+  const mentioning = mq !== null && mentionDismissed !== mq.start
+  const candidates = useQuery({
+    queryKey: chatKeys.mentionCandidates(conversationId, mq?.query ?? ''),
+    queryFn: () => chatApi.mentionCandidates(conversationId, mq?.query ?? ''),
+    enabled: mentioning,
+    staleTime: 30_000,
+  })
+  // An internal note is staff-only: only staff can read it, so only staff are offered.
+  const mentionOptions: MentionOption[] = mentioning
+    ? [
+        ...(candidates.data?.roles ?? []).filter(() => !isInternal).map((role) => ({ kind: 'role' as const, role })),
+        ...(candidates.data?.people ?? [])
+          .filter((p) => !isInternal || p.actorKind === 'staff')
+          .map((person) => ({ kind: 'person' as const, person })),
+      ].slice(0, 8)
+    : []
+  const mentionCurrent = Math.min(active, Math.max(mentionOptions.length - 1, 0))
+  const roleWord = (role: string | null) => (role && ROLE_LABEL[role] ? ROLE_LABEL[role]![locale === 'ar' ? 'ar' : 'en'] : '')
+
+  function pickMention(o: MentionOption) {
+    if (!mq) return
+    const label = o.kind === 'role' ? copy.mentionRole[o.role] : o.person.displayName
+    const next = insertMention(body, caret, mq.start, label)
+    setBody(next.text)
+    setCaret(next.caret)
+    setActive(0)
+    setPicked((all) => [...all, { label, target: o.kind === 'role' ? { role: o.role } : { actorId: o.person.actorId } }])
+    requestAnimationFrame(() => {
+      const el = input.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(next.caret, next.caret)
+    })
+  }
 
   function insert(text: string) {
     setBody(text)
@@ -139,9 +193,11 @@ export function ChatComposer({
       onSaveEdit?.(body.trim())
       return
     }
-    onSend({ body: body.trim(), visibility, files })
+    const text = body.trim()
+    onSend({ body: text, visibility, files, mentions: spansFor(text, picked) })
     setBody('')
     setFiles([])
+    setPicked([])
   }
 
   const pick = (list: FileList | null) => {
@@ -258,6 +314,45 @@ export function ChatComposer({
         </ul>
       )}
 
+      {mentioning && (
+        <ul id={mentionListId} className="cw-suggest cw-mention-suggest" role="listbox" aria-label={copy.mentionSomeone}>
+          {candidates.isLoading ? (
+            <li className="cw-suggest__empty">…</li>
+          ) : mentionOptions.length === 0 ? (
+            <li className="cw-suggest__empty">{copy.mentionNoMatch}</li>
+          ) : (
+            mentionOptions.map((o, i) => (
+              <li
+                key={o.kind === 'role' ? `role-${o.role}` : o.person.actorId}
+                id={`${mentionListId}-${i}`}
+                role="option"
+                aria-selected={i === mentionCurrent}
+                className="cw-suggest__item"
+                onMouseDown={(e) => {
+                  e.preventDefault() // keep focus in the box
+                  pickMention(o)
+                }}
+              >
+                {o.kind === 'role' ? (
+                  <>
+                    <span className="cw-suggest__shortcut" dir="auto">@{copy.mentionRole[o.role]}</span>
+                    <span className="cw-suggest__body">{copy.mentionRoleHint[o.role]}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="cw-suggest__shortcut" dir="auto">@{o.person.displayName}</span>
+                    <span className="cw-suggest__body">
+                      {o.person.staffRole ? roleWord(o.person.staffRole) : copy.role[o.person.actorKind] ?? ''}
+                    </span>
+                    {!o.person.isMember && <span className="cw-suggest__scope">{copy.mentionWillAsk}</span>}
+                  </>
+                )}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+
       <div className="cw-composer__bar">
         {!editing && (
           <Menu
@@ -314,15 +409,23 @@ export function ChatComposer({
           dir="auto"
           onChange={(e) => {
             setBody(e.target.value)
+            setCaret(e.target.selectionStart ?? e.target.value.length)
             setActive(0)
           }}
+          onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
           placeholder={isInternal ? copy.internalPlaceholder : copy.placeholder}
           aria-label={editing ? copy.editing : isInternal ? copy.internal : copy.customer}
           role="combobox"
           aria-autocomplete="list"
-          aria-expanded={suggesting}
-          aria-controls={suggesting ? listId : undefined}
-          aria-activedescendant={suggesting && matches.length > 0 ? `${listId}-${current}` : undefined}
+          aria-expanded={suggesting || mentioning}
+          aria-controls={suggesting ? listId : mentioning ? mentionListId : undefined}
+          aria-activedescendant={
+            suggesting && matches.length > 0
+              ? `${listId}-${current}`
+              : mentioning && mentionOptions.length > 0
+                ? `${mentionListId}-${mentionCurrent}`
+                : undefined
+          }
           onKeyDown={(e) => {
             if (e.key === 'Escape' && editing) {
               e.preventDefault()
@@ -341,6 +444,24 @@ export function ChatComposer({
                 insert(matches[current]!.body)
                 return
               }
+            }
+            if (mentioning && mentionOptions.length > 0) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault()
+                const step = e.key === 'ArrowDown' ? 1 : -1
+                setActive((mentionCurrent + step + mentionOptions.length) % mentionOptions.length)
+                return
+              }
+              if ((e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) || e.key === 'Tab') {
+                e.preventDefault()
+                pickMention(mentionOptions[mentionCurrent]!)
+                return
+              }
+            }
+            if (mentioning && e.key === 'Escape' && mq) {
+              e.preventDefault()
+              setMentionDismissed(mq.start)
+              return
             }
             if (suggesting && e.key === 'Escape') {
               e.preventDefault()

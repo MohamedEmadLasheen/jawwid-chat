@@ -8,6 +8,7 @@ import { ActorKind } from '../contracts/vocab';
 import type { Actor } from '../../platform/types';
 import { TemplateService } from './template.service';
 import { NotificationPipeline } from './notification-pipeline.service';
+import { ConversationService } from '../conversations/conversation.service';
 import {
   INBOX_TABS,
   NOTIFICATION_CATEGORIES,
@@ -58,6 +59,13 @@ export interface InboxEntry {
  * Every read and write is scoped to the caller: an id that is not theirs
  * matches nothing and reads as not found. Text is rendered at read time in the
  * entry's language, with times in the READER's own zone (PD-22).
+ *
+ * An entry about a conversation is shown only while the reader can still read
+ * that conversation (the same canRead every message route uses). Leaving
+ * withdraws a waiting push and its entry by trigger; access can also end with
+ * no left_at (a PD-8 scope change, a seat lapsing before its sweep), so the
+ * list and the counts re-check, and withdraw what no longer holds
+ * (cancel_reason access_lost) -- the conversation id is not kept on show.
  */
 @Injectable()
 export class NotificationInboxService {
@@ -66,6 +74,7 @@ export class NotificationInboxService {
     private readonly templates: TemplateService,
     private readonly config: AppConfigService,
     private readonly pipeline: NotificationPipeline,
+    private readonly conversations: ConversationService,
   ) {}
 
   async list(actor: Actor, query: { tab?: unknown; before?: unknown; limit?: unknown }) {
@@ -85,11 +94,13 @@ export class NotificationInboxService {
       orderBy: [{ visibleAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
+    const lost = await this.withdrawLostAccess(actor, rows.map((r) => conversationOf(r.refs)).filter((id): id is string => id !== null));
     const page = rows.slice(0, limit);
+    const shown = page.filter((r) => !lost.has(conversationOf(r.refs) ?? ''));
     const zone = await this.zoneOf(actor.actorId);
     const cache = new Map<string, { title: string; body: string } | null>();
     const entries: InboxEntry[] = [];
-    for (const r of page) entries.push(await this.present(r, zone, cache));
+    for (const r of shown) entries.push(await this.present(r, zone, cache));
     const last = page[page.length - 1];
     return {
       tab,
@@ -100,6 +111,11 @@ export class NotificationInboxService {
 
   async counts(actor: Actor) {
     const now = new Date();
+    const referenced = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT DISTINCT refs ->> 'conversationId' AS id FROM chat.notification_item
+       WHERE recipient_id = ${actor.actorId}::uuid AND cancelled_at IS NULL AND visible_at <= ${now}
+         AND refs ->> 'conversationId' IS NOT NULL`;
+    await this.withdrawLostAccess(actor, referenced.map((r) => r.id));
     const unread = await this.prisma.notificationItem.groupBy({
       by: ['category'],
       where: { AND: [this.visible(actor.actorId, now), { readAt: null }] },
@@ -253,6 +269,32 @@ export class NotificationInboxService {
 
   // ------------------------------------------------------------------
 
+  /**
+   * The conversations among `ids` this reader can no longer read; their open
+   * entries are withdrawn. A conversation that no longer exists counts as lost.
+   */
+  private async withdrawLostAccess(actor: Actor, ids: readonly string[]): Promise<Set<string>> {
+    const lost = new Set<string>();
+    for (const id of new Set(ids)) {
+      if (!isUuid(id)) {
+        lost.add(id);
+        continue;
+      }
+      const conv = await this.prisma.conversation.findUnique({ where: { id } });
+      const allowed = conv
+        ? (await this.conversations.canReadResolved(actor, conv, await this.conversations.membershipOf(id, actor.actorId))).allowed
+        : false;
+      if (!allowed) lost.add(id);
+    }
+    if (lost.size > 0) {
+      await this.prisma.$executeRaw`
+        UPDATE chat.notification_item SET cancelled_at = now(), cancel_reason = 'access_lost', updated_at = now()
+         WHERE recipient_id = ${actor.actorId}::uuid AND cancelled_at IS NULL
+           AND refs ->> 'conversationId' = ANY(${[...lost]}::text[])`;
+    }
+    return lost;
+  }
+
   private visible(recipientId: string, now: Date): Prisma.NotificationItemWhereInput {
     return {
       recipientId,
@@ -369,4 +411,9 @@ function invalid(reason: string) {
 
 function notFound() {
   return new CommError(CommErrorCode.NOTIFICATION_NOT_FOUND, 'notification not found', 404);
+}
+
+function conversationOf(refs: Prisma.JsonValue): string | null {
+  const id = refs && typeof refs === 'object' && !Array.isArray(refs) ? (refs as Record<string, unknown>).conversationId : null;
+  return typeof id === 'string' && id.length > 0 ? id : null;
 }

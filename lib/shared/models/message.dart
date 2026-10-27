@@ -89,6 +89,40 @@ class Attachment {
   bool get isLocal => url != null && !url!.startsWith('http');
 }
 
+/// PD-36: an "@..." chip in [Message.body], by UTF-16 offset -- what a Dart string indexes
+/// by, and what the server stores -- so `body.substring(start, start + length)` is the chip in
+/// Arabic and English alike. [actorId] for a person; [role] ('supervisor' | 'admin') for a
+/// parent's role mention, which may reach several people under one chip.
+class MessageMention {
+  const MessageMention({required this.start, required this.length, this.actorId, this.role});
+
+  final int start;
+  final int length;
+  final String? actorId;
+  final String? role;
+
+  Map<String, Object?> toWire() => {
+        'start': start,
+        'length': length,
+        'actorId': ?actorId,
+        'role': ?role,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is MessageMention &&
+      other.start == start &&
+      other.length == length &&
+      other.actorId == actorId &&
+      other.role == role;
+
+  @override
+  int get hashCode => Object.hash(start, length, actorId, role);
+
+  @override
+  String toString() => 'MessageMention($start, $length, ${actorId ?? role})';
+}
+
 /// A quoted message shown above a reply.
 class ReplyPreview {
   const ReplyPreview({
@@ -148,6 +182,8 @@ class Message {
     this.isSentBySupport = false,
     this.editedAt,
     this.isInternal = false,
+    this.mentions = const [],
+    this.mentionsMe = false,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -224,6 +260,13 @@ class Message {
   /// thread so it is never mistaken for something the family read.
   final bool isInternal;
 
+  /// PD-36: the "@..." chips in [body] (server `MessageDto.mentions`).
+  final List<MessageMention> mentions;
+
+  /// PD-36: this viewer is one of the people mentioned, a role mention included
+  /// (server `MessageDto.mentionsViewer`). The bubble is highlighted.
+  final bool mentionsMe;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -264,6 +307,8 @@ class Message {
         isSentBySupport: isSentBySupport,
         editedAt: editedAt,
         isInternal: isInternal,
+        mentions: mentions,
+        mentionsMe: mentionsMe,
       );
 
   Message copyWith({
@@ -307,6 +352,8 @@ class Message {
       isSentBySupport: isSentBySupport,
       editedAt: editedAt,
       isInternal: isInternal,
+      mentions: mentions,
+      mentionsMe: mentionsMe,
     );
   }
 }

@@ -108,6 +108,7 @@ class ProfileView {
     this.handledByLabel,
     this.requiresApproval = false,
     this.isTrialGroup = false,
+    this.summoned = const [],
   });
 
   final ProfileAudience audience;
@@ -122,6 +123,9 @@ class ProfileView {
   final LearnerRef? learner;
 
   final List<ProfilePerson> members;
+
+  /// PD-36: asked to step in, not (yet) members -- drawn above [members], highlighted.
+  final List<SummonedPerson> summoned;
 
   /// Only ever populated for [ProfileAudience.owner]. A teacher must not be handed a
   /// family's roster — group membership is not a family directory (§25), and a sibling the
@@ -188,6 +192,7 @@ abstract final class ProfileViewBuilder {
       handledByLabel: conversation.handledByLabel,
       requiresApproval: conversation.requiresApproval || (group?.requiresApproval ?? false),
       isTrialGroup: conversation.isTrialGroup,
+      summoned: group?.summoned ?? const [],
     );
   }
 

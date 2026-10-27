@@ -20,6 +20,10 @@ const LIST_EVENTS = [
   'conversation.membership_changed',
   'conversation.added',
   'conversation.access_revoked',
+  // PD-36: someone asked this viewer in (their row moves to the top), or a
+  // summons here was answered (Group Info's "waiting" rows re-read).
+  'mention.created',
+  'mention.updated',
 ] as const
 
 const SUBSCRIBE_ACK_MS = 8_000
