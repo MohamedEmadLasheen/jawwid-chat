@@ -56,6 +56,8 @@ export const ActionScope = {
   RECEIPT_CURSOR: 'receipt_cursor_actor',
   /** PD-37: GET /presence (up to 100 people a question). */
   PRESENCE_READ: 'presence_read_actor',
+  /** PD-37: POST /conversations/:id/typing (clients ping every 3 s while typing). */
+  TYPING: 'typing_actor',
 } as const;
 
 export type ActionScope = (typeof ActionScope)[keyof typeof ActionScope];

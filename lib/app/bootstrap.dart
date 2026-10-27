@@ -47,6 +47,7 @@ import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/messages/data/receipt_repository.dart';
+import '../features/messages/data/typing_repository.dart';
 import '../features/notifications/data/notifications_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
@@ -197,6 +198,7 @@ List<Override> _httpOverrides() {
     ),
     // PD-37: Message info, and "me" for realtime frames (another device of mine).
     receiptRepositoryProvider.overrideWithValue(HttpReceiptRepository(client: client)),
+    typingRepositoryProvider.overrideWithValue(HttpTypingRepository(client: client)),
     viewerActorIdProvider.overrideWithValue(session.actorId),
     profilePhotoRepositoryProvider.overrideWithValue(
       HttpProfilePhotoRepository(client: client),

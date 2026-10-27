@@ -22,6 +22,7 @@ import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/messages/data/receipt_repository.dart';
+import '../features/messages/data/typing_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../shared/models/user_role.dart';
 
@@ -99,6 +100,10 @@ final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
 final receiptRepositoryProvider = Provider<ReceiptRepository>((ref) {
   return const NoReceiptRepository();
 });
+
+/// PD-37: saying "typing" (over HTTP). A harmless default: a build without the
+/// route says nothing.
+final typingRepositoryProvider = Provider<TypingRepository>((ref) => const NoTypingRepository());
 
 /// PD-37: who is typing, decoded from the session's realtime transport. Null by
 /// default, so a screen built in isolation (a widget test, a fixture build)

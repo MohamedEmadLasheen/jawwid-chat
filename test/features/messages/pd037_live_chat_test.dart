@@ -18,6 +18,8 @@ import 'package:jawwid_chat/features/conversations/application/chat_realtime.dar
 import 'package:jawwid_chat/features/conversations/application/conversations_controller.dart';
 import 'package:jawwid_chat/features/messages/application/chat_typing_channel.dart';
 import 'package:jawwid_chat/features/messages/data/receipt_repository.dart';
+import 'package:jawwid_chat/features/messages/data/typing_repository.dart';
+import 'package:jawwid_chat/features/messages/domain/typing_sender.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_actions.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
@@ -72,6 +74,16 @@ class _Receipts implements ReceiptRepository {
   Future<MessageInfo> info(String conversationId, String messageId) async => const MessageInfo();
   @override
   Future<void> delivered(String conversationId, int upToSeq) async => cursors.add((conversationId, upToSeq));
+}
+
+/// Records what this person said about typing.
+class _TypingOut implements TypingRepository {
+  final said = <(String, bool)>[];
+
+  @override
+  bool get isAvailable => true;
+  @override
+  Future<void> typing(String conversationId, bool typing) async => said.add((conversationId, typing));
 }
 
 Message _message({ApprovalState approval = ApprovalState.notRequired, bool mine = true}) => Message(
@@ -166,6 +178,33 @@ void main() {
     });
   });
 
+  group('PD-37 TypingSender', () {
+    test('one start per ping interval while typing; a pause, an empty draft or dispose is a stop', () async {
+      final sent = <bool>[];
+      var clock = DateTime.utc(2026, 10, 27);
+      // The real intervals are 3 s and 5 s; the clock is injected and the pause shortened.
+      final sender = TypingSender(send: sent.add, now: () => clock, stopAfter: const Duration(milliseconds: 40));
+
+      sender.typed('h');
+      sender.typed('he');
+      expect(sent, [true]);
+
+      clock = clock.add(const Duration(seconds: 3));
+      sender.typed('hel');
+      expect(sent, [true, true]);
+
+      await Future<void>.delayed(const Duration(milliseconds: 80)); // a pause
+      expect(sent, [true, true, false]);
+
+      sender.typed('again');
+      sender.typed(''); // cleared, or sent
+      expect(sent, [true, true, false, true, false]);
+
+      sender.dispose(); // nothing active: no second stop
+      expect(sent, [true, true, false, true, false]);
+    });
+  });
+
   group('PD-37 Message info action', () {
     test("only on one's own published message, and only where the route exists", () {
       expect(actionsFor(_message(), withInfo: true), contains(MessageAction.info));
@@ -176,13 +215,14 @@ void main() {
   });
 
   group('PD-37 the chat screen', () {
-    testWidgets("shows someone else's typing above the composer; never this account's own other device, never another chat",
+    testWidgets("shows someone else's typing above the composer (never this account's own other device, never another chat), and says when this person types",
         (tester) async {
       final backend = FakeBackend(role: UserRole.parent);
       final socket = _Socket();
       final channel = ChatTypingChannel(socket);
       final recorder = FakeVoiceRecorder();
       final player = FakeVoicePlayer();
+      final typingOut = _TypingOut();
       final conversationId = backend.listConversations().first.id;
 
       await tester.pumpWidget(ProviderScope(
@@ -193,6 +233,7 @@ void main() {
           conversationRepositoryProvider.overrideWithValue(FakeConversationRepository(backend)),
           messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
           chatTypingChannelProvider.overrideWithValue(channel),
+          typingRepositoryProvider.overrideWithValue(typingOut),
           viewerActorIdProvider.overrideWithValue(() => 'me-id'),
         ],
         child: MaterialApp(
@@ -227,7 +268,14 @@ void main() {
       await deliver();
       expect(find.text('Omar is typing…'), findsNothing);
 
-      await tester.pumpWidget(const SizedBox());
+      // This person types: one "typing" for this chat over HTTP, throttled.
+      await tester.enterText(find.byType(TextField).last, 'hel');
+      await tester.enterText(find.byType(TextField).last, 'hello');
+      await tester.pump();
+      expect(typingOut.said, [(conversationId, true)]);
+
+      await tester.pumpWidget(const SizedBox()); // leaving the chat is a stop
+      expect(typingOut.said.last, (conversationId, false));
       // Torn down without waiting: inside a widget test's fake clock, awaiting
       // a broadcast subscription's cancel can wait for good.
       unawaited(recorder.dispose());

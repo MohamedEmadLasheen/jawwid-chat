@@ -36,7 +36,10 @@ import type { TypingService } from '@communication/realtime/typing.service';
 import type { PresenceService } from '@communication/realtime/presence.service';
 import { CommEvent } from '@communication/contracts/events';
 import { decodeEnvelope } from '../../src/infra/realtime/realtime-channel';
-import { PinnedCoverage, supervise, withAssignmentGate } from './harness';
+import { TypingController } from '@communication/api/typing.controller';
+import { ActionScope, RATE_LIMITED_ACTION } from '@platform/auth/action-throttle.guard';
+import { CommErrorCode } from '@platform/errors';
+import { legacyTeacherParentDirect, PinnedCoverage, supervise, withAssignmentGate } from './harness';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -358,3 +361,57 @@ describe('PD-37: the worker relay never widens an audience', () => {
     expect(decodeEnvelope(JSON.stringify({ ...base, audience: { countableOnly: true } }))).not.toBeNull();
   });
 });
+
+describe('PD-37: typing over HTTP follows exactly the socket rules', () => {
+  it("a seated parent's HTTP typing reaches seated members, never the manager reading with standing", async () => {
+    const [teacher, staff, manager] = await Promise.all([as('teacher'), as('staff'), as('manager')]);
+    expect(await gateway.typingFromHttp(ids.parent, groupId, true)).toEqual({ ok: true });
+    await teacher.waitFor(CommEvent.TYPING_STARTED, fromParent);
+    await staff.waitFor(CommEvent.TYPING_STARTED, fromParent);
+    await sleep(GRACE_MS);
+    expect(manager.got(CommEvent.TYPING_STARTED)).toBe(false);
+
+    expect(await gateway.typingFromHttp(ids.parent, groupId, false)).toEqual({ ok: true });
+    await teacher.waitFor(CommEvent.TYPING_STOPPED, fromParent);
+  });
+
+  it('a REMOVED member can neither start nor stop typing into the room', async () => {
+    const teacher = await as('teacher');
+    await conversations.setMembership(
+      groupId, ids.staff, { actorId: ids.parent, actorKind: 'contact', memberRole: 'parent' }, 'remove', 'pd037 test',
+    );
+    expect(await gateway.typingFromHttp(ids.parent, groupId, true)).toEqual({ ok: false });
+    expect(await gateway.typingFromHttp(ids.parent, groupId, false)).toEqual({ ok: false });
+    await sleep(GRACE_MS);
+    expect(teacher.got(CommEvent.TYPING_STARTED)).toBe(false);
+    expect(teacher.got(CommEvent.TYPING_STOPPED)).toBe(false);
+  });
+
+  it('a SILENCED member cannot start typing, but can still clear a stuck "typing…"', async () => {
+    const teacher = await as('teacher');
+    await prisma.$executeRawUnsafe(
+      `update chat.conversation_member set is_silent = true
+        where conversation_id = '${groupId}'::uuid and actor_id = '${ids.parent2}'::uuid and left_at is null`,
+    );
+    expect(await gateway.typingFromHttp(ids.parent2, groupId, true)).toEqual({ ok: false });
+    expect(await gateway.typingFromHttp(ids.parent2, groupId, false)).toEqual({ ok: true });
+    await teacher.waitFor(CommEvent.TYPING_STOPPED, (p) => p.actorId === ids.parent2);
+    expect(teacher.got(CommEvent.TYPING_STARTED, (p) => p.actorId === ids.parent2)).toBe(false);
+  });
+
+  it('PD-7: a direct teacher<->parent conversation carries no typing', async () => {
+    const directId = await legacyTeacherParentDirect(prisma, ids.teacher, ids.parent, ids.family);
+    expect(await gateway.typingFromHttp(ids.teacher, directId, true)).toEqual({ ok: false });
+    expect(await gateway.typingFromHttp(ids.parent, directId, true)).toEqual({ ok: false });
+  });
+
+  it('the route: a boolean only, and rate limited by typing_actor', async () => {
+    const controller = new TypingController(gateway);
+    await expect(controller.typing(ids.parent, groupId, { typing: 'yes' })).rejects.toMatchObject({
+      code: CommErrorCode.VALIDATION,
+    });
+    expect(Reflect.getMetadata(RATE_LIMITED_ACTION, TypingController.prototype.typing)).toBe(ActionScope.TYPING);
+    expect(await controller.typing(ids.parent, 'not-a-uuid', { typing: true })).toEqual({ ok: false });
+  });
+});
+

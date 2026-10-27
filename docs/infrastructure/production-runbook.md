@@ -50,7 +50,10 @@ only the live push waits.
 missing for a moment. They travel on a new node channel
 (`rt009:deliver-thread-audience`) and relay target (`room-audience`) that an
 older API node **drops** rather than broadcasts. They return once every node is
-updated. Presence (PD-37) needs Redis 6.2 or later (`ZADD … GT/XX`).
+updated. Presence (PD-37) needs Redis 6.2 or later (`ZADD … GT/XX`). The app sends typing over HTTP
+(`POST /conversations/:id/typing`, rate limited by `abuse.throttle.typing_actor`,
+40 per window); a spike of 429s there means a client pinging too often, not
+an outage — typing simply lapses on the other screens.
 
 ## 2. What exactly is running?
 

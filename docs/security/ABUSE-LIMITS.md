@@ -44,13 +44,14 @@ Every abuse case this product has is an *authorized* action:
 
 | Key | Default | Routes |
 |---|---|---|
-| `abuse.throttle.window_seconds` | 60 | the window for all six budgets |
+| `abuse.throttle.window_seconds` | 60 | the window for all seven budgets |
 | `abuse.throttle.message_send_actor` | 60 | `POST /conversations/:id/messages`, `POST …/messages/forward` |
 | `abuse.throttle.attachment_upload_actor` | 30 | `POST …/messages/attachments/authorize`, `POST /stories/media` |
 | `abuse.throttle.story_publish_actor` | 20 | `POST /stories/:id/publish` |
 | `abuse.throttle.call_start_actor` | 20 | `POST /calls`, `POST /scheduled-calls/:id/join` |
 | `abuse.throttle.receipt_cursor_actor` | 240 | `POST …/messages/read`, `POST …/messages/delivered`, WS `message.delivered { conversationId, upToSeq }` (PD-37) |
 | `abuse.throttle.presence_read_actor` | 60 | `GET /presence` (PD-37) |
+| `abuse.throttle.typing_actor` | 40 | `POST /conversations/:id/typing` (PD-37; no seeded row — the compiled default applies until one is added) |
 | `abuse.realtime.frames_per_socket_per_minute` | 600 | every inbound WebSocket frame |
 
 PD-32 adds three limits counted in the database rather than in the action store,
