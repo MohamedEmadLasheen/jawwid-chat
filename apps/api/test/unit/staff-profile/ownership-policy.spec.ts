@@ -12,24 +12,12 @@ const ORG = { organizationId: 'org-1' };
 const superAdmin = () => admin('super-1', StaffRole.SUPER_ADMIN);
 const coverage = () => admin('cov-1', StaffRole.COVERAGE);
 
-describe('families.assign', () => {
-  it('manager and super admin, same organization only', () => {
-    expect(authz.canAssignFamilies(manager(), ORG).allowed).toBe(true);
-    expect(authz.canAssignFamilies(superAdmin(), ORG).allowed).toBe(true);
-    expect(authz.canAssignFamilies(manager(), { organizationId: 'org-2' }).allowed).toBe(false);
-    for (const a of [admin(), coverage(), financeStaff(), academicStaff(), parent(), teacher(), { ...manager(), isActive: false }]) {
-      expect(authz.canAssignFamilies(a, ORG).allowed).toBe(false);
-    }
-  });
-});
-
-describe('moving a staff member\'s families (offboarding, part 1)', () => {
-  it('a manager moves an admin\'s families but not another manager\'s or the super admin\'s; the super admin moves anyone\'s', () => {
-    expect(authz.canTransferStaffFamilies(manager(), { ...ORG, role: 'admin' }).allowed).toBe(true);
-    expect(authz.canTransferStaffFamilies(manager(), { ...ORG, role: 'manager' }).allowed).toBe(false);
-    expect(authz.canTransferStaffFamilies(manager(), { ...ORG, role: 'super_admin' }).allowed).toBe(false);
-    expect(authz.canTransferStaffFamilies(superAdmin(), { ...ORG, role: 'manager' }).allowed).toBe(true);
-    expect(authz.canTransferStaffFamilies(admin(), { ...ORG, role: 'admin' }).allowed).toBe(false);
+describe('PD-40: no "any manager" family-assignment rule is left in the API', () => {
+  it('the uncalled canAssignFamilies / canTransferStaffFamilies are gone (canAssignSupervision decides)', () => {
+    const surface = authz as unknown as Record<string, unknown>;
+    expect(surface.canAssignFamilies).toBeUndefined();
+    expect(surface.canTransferStaffFamilies).toBeUndefined();
+    expect(typeof surface.canAssignSupervision).toBe('function');
   });
 });
 
