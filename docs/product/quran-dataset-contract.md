@@ -80,6 +80,12 @@ Agreed 2026-10-27 between the PD-29 materials-quality session and the PD-39 sess
   - Any failure, a crash included, is retried at most every 30 s.
 - Phase 2, PD-39 and PD-29 alike: `GET /quran/search?q=` over `text_search`.
 
+## For consumers: the four answers (asked by PD-39, 2026-10-27)
+1. **Field names.** `ayahs[i] = { ayah, basmala, text, sha256, audio }`. `basmala` is a string only for ayah 1 of the 112 surahs that carry it, otherwise null. `text` is the verse.
+2. **What the per-ayah `sha256` covers.** It is the SHA-256 of `text` (the verse) in UTF-8, **only**. It never covers the Basmala.
+3. **The Basmala's hash.** The API returns none. The Basmala isn't referenced, so it needs no hash in a response. The only Basmala hashes are the two accepted spellings, fixed in code (`BASMALA_SHA256`, the migration and the loader). A served `basmala` is always one of them, because the load refuses anything else.
+4. **`rangeSha256`.** The formula is unchanged: SHA-256 of the range's per-ayah `sha256` values (verse hashes) joined with "\n". The value differs from the pre-split draft only for ranges that include an ayah 1.
+
 ## How consumers reference text (never store it)
 - The whiteboard verse element is `{surah, fromAyah, toAyah, datasetId, rangeSha256}`.
   - `rangeSha256` = SHA-256 of the ayat's `sha256` values (the **verse** hashes) joined with "\n", in ayah order.
@@ -122,3 +128,8 @@ Agreed 2026-10-27 between the PD-29 materials-quality session and the PD-39 sess
 - Amiri Quran (OFL 1.1), the same file version in both consumers.
 - The Flutter app bundles it as an asset; `apps/lessons` self-hosts it.
 - Never Google Fonts.
+
+## Known limits
+- **TRUNCATE on the Tajweed tables** (`quran_tajweed_mark`, `quran_tajweed_review`, `quran_tajweed_withdrawal`) is not refused by a trigger. They reference `chat.staff`, and the integration harness runs `truncate chat.staff … cascade` before every suite, which reaches them. Row-level DELETE and UPDATE are refused. TRUNCATE needs the owner role, which the grants keep from every request role. (Accepted by the department head, 2026-10-27.) The text and the audio tables do refuse TRUNCATE.
+- **The routing settings** (`chat.loading_quran`, `chat.ingesting_quran_audio`) are not a security boundary; see "Loading".
+- **The Tajweed reviewer role** (`chat.can_review_tajweed`: an active manager or member of the Teachers department) is a proposal awaiting the owner's decision.
