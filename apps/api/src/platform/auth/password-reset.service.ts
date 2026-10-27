@@ -6,6 +6,7 @@ import type { AuditService } from '../audit.service';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { AuthService } from './auth.service';
 import { hashPassword, spendComparableTime } from './password';
+import { isPasswordLengthAcceptable } from './password-policy';
 import { RevocationUnconfirmedError } from '../realtime-revocation';
 
 /** How long a code lives: long enough to be passed on by hand. */
@@ -14,8 +15,6 @@ export const RESET_CODE_MINUTES = 10;
 export const RESET_CODE_TRIES = 5;
 /** Codes one account may be issued in an hour, whoever issues them. */
 export const RESET_CODES_PER_HOUR = 10;
-const MIN_PASSWORD = 8;
-const MAX_PASSWORD = 128;
 
 export const RESET_AUDIT = {
   ISSUED: 'account.password_reset_issued',
@@ -136,7 +135,7 @@ export class PasswordResetService {
     // person types here is the login they will sign in with.
     const subject = rawUsername.trim();
     const code = rawCode.trim();
-    if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
+    if (!isPasswordLengthAcceptable(password)) {
       throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
     }
     const account =

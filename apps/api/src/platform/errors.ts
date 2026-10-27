@@ -407,6 +407,10 @@ export enum CommErrorCode {
   MENTION_CLOSED = 'COMM.MENTION_CLOSED',
   /** A Materials feature that was retired (the memorization map, 2026-10-26). 410. */
   MATERIAL_RETIRED = 'COMM.MATERIAL_RETIRED',
+  /** The shared Quran text could not be verified against its pinned fingerprints: nothing is served. 503. */
+  QURAN_UNAVAILABLE = 'COMM.QURAN_UNAVAILABLE',
+  /** A Quran range that does not exist or is too long (at most 50 ayat). 422. */
+  QURAN_INVALID = 'COMM.QURAN_INVALID',
 
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */

@@ -107,11 +107,13 @@ const ENTRIES = {
   'certificates.design': { label: { en: 'Design and upload certificates', ar: 'تصميم الشهادات ورفعها' }, risk: 'pii', introducedBy: 'PD-12' },
   'certificates.deliver': { label: { en: 'Send certificates to the family', ar: 'إرسال الشهادات إلى الأسرة' }, risk: 'family_contact', introducedBy: 'PD-12' },
 
-  'leave.view': { label: { en: 'View teacher leave', ar: 'عرض إجازات المعلمين' }, risk: 'pii', introducedBy: 'PD-12' },
-  'leave.decide': { label: { en: 'Decide teacher leave', ar: 'البت في إجازات المعلمين' }, risk: 'pii', introducedBy: 'PD-12' },
   'leave.allowance': { label: { en: 'Set leave allowances', ar: 'تحديد رصيد الإجازات' }, risk: 'pii', introducedBy: 'PD-12' },
-  'discipline.view': { label: { en: 'View absences and lateness', ar: 'عرض الغياب والتأخر' }, risk: 'pii', introducedBy: 'PD-12' },
-  'discipline.manage': { label: { en: 'Record and decide absences and lateness', ar: 'تسجيل الغياب والتأخر والبت فيهما' }, risk: 'pii', introducedBy: 'PD-12' },
+  // PD-26 amendment (owner 2026-10-27): the Teacher Supervision page -- leave,
+  // absences and lateness, complaints, rewards, parent feedback -- for the
+  // Teachers department and, for the teachers of their families, Operations.
+  // Nothing of the Teacher File itself (teacher_files.*).
+  'teacher_supervision.view': { label: { en: 'View the Teacher Supervision page', ar: 'عرض صفحة الإشراف على المعلمين' }, risk: 'pii', introducedBy: 'PD-26' },
+  'teacher_supervision.record': { label: { en: 'Record on the Teacher Supervision page', ar: 'التسجيل في صفحة الإشراف على المعلمين' }, risk: 'pii', introducedBy: 'PD-26' },
   'supervision.chats': { label: { en: "Open teachers' supervision chats", ar: 'فتح محادثات الإشراف مع المعلمين' }, risk: 'pii', introducedBy: 'PD-12' },
 
   'teacher_profiles.review': { label: { en: 'Review teacher profiles', ar: 'مراجعة ملفات المعلمين التعريفية' }, risk: 'pii', introducedBy: 'Teacher Profile V2' },
@@ -122,7 +124,6 @@ const ENTRIES = {
   'teacher_files.finance': { label: { en: 'Teacher payroll', ar: 'رواتب المعلمين' }, risk: 'finance', introducedBy: 'PD-18' },
 
   'feedback.view': { label: { en: 'View parent feedback', ar: 'عرض ملاحظات أولياء الأمور' }, risk: 'family_contact', introducedBy: 'PD-32' },
-  'feedback.manage': { label: { en: 'Take and answer parent feedback', ar: 'استلام ملاحظات أولياء الأمور والرد عليها' }, risk: 'family_contact', introducedBy: 'PD-32' },
 } as const satisfies Record<string, Entry>;
 
 export type PermissionKey = keyof typeof ENTRIES;

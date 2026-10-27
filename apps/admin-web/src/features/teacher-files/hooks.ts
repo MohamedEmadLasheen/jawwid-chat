@@ -1,7 +1,11 @@
+import { useSession } from '@/core/auth/SessionProvider'
+import { useLessonAccess } from '@/features/teachers/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   payrollApi,
   payrollKeys,
+  supervisionDirectoryApi,
+  supervisionDirectoryKeys,
   supervisionTimelineApi,
   teacherFileApi,
   teacherFileKeys,
@@ -121,3 +125,30 @@ export function useAddAdjustment(teacherId: string) {
   const done = useFinanceRefresh(teacherId)
   return useMutation({ mutationFn: (body: NewAdjustment) => payrollApi.addAdjustment(teacherId, body), onSuccess: done })
 }
+
+/** PD-26 amendment: the page's teachers (the caller's) and complaint handlers. */
+export function useSupervisionDirectory(enabled = true) {
+  return useQuery({ queryKey: supervisionDirectoryKeys.directory, queryFn: supervisionDirectoryApi.directory, enabled, staleTime: 30_000 })
+}
+
+/** PD-26 amendment: one teacher's held lessons of the last two weeks, for recording lateness. */
+export function useHeldLessons(teacherId: string, kind: 'regular' | 'trial') {
+  return useQuery({
+    queryKey: supervisionDirectoryKeys.held(teacherId, kind),
+    queryFn: () => supervisionDirectoryApi.heldLessons(teacherId, kind),
+    enabled: teacherId !== '',
+  })
+}
+
+/**
+ * Whether to LINK a teacher's name to their Teacher File: the super admin and
+ * the Teachers department. An Operations supervisor on the Supervision page sees
+ * the name only (PD-26 amendment); the server refuses the file either way.
+ */
+export function useOpensTeacherFiles(): boolean {
+  const { staff } = useSession()
+  const access = useLessonAccess(Boolean(staff) && staff?.role !== 'super_admin')
+  // Until the server answers, no link: a name is never a link the viewer cannot follow.
+  return staff?.role === 'super_admin' || access.data?.lessonManager === true
+}
+

@@ -2204,6 +2204,18 @@ devices and sessions, the app lock and its deviation from the first design,
 domain) is `../security/pd023-convenient-sign-in.md`. The summary is the PD-23
 row in the table above.
 
+**Amendment 2026-10-27 -- minimum password length (owner decision, PD-23 / PD-25
+boundary).** The minimum password length is **4 characters for ALL accounts**
+(parents, teachers, staff and the super admin), replacing 8 (and 12 for the
+super-admin bootstrap). The owner was told staff-only 8+ was the recommendation
+and chose all accounts. Unchanged: the maximum (128; 256 for the bootstrap CLI),
+Argon2id hashing, the login rate limiter and lockout, and the reset / sign-up
+code limits. There is no common-password or breach list, so a 4-character PIN
+such as `1234` is a valid password. One rule per codebase:
+`PASSWORD_MIN_LENGTH` in `apps/api/src/platform/auth/password-policy.ts`,
+mirrored in `apps/admin-web/src/features/auth/passwordPolicy.ts` and
+`lib/features/auth/password_policy.dart`.
+
 ---
 
 ### PD-24 · Changing a family's supervisor without losing anything
@@ -2312,6 +2324,10 @@ Record: `../admin/pd025-parent-self-recovery.md`.
 
 **Closed.** 2026-10-22.
 
+**Amendment 2026-10-27.** The password a parent chooses at recovery (and at
+sign-up, and when finishing a PD-21 reset) may be as short as 4 characters. See
+the PD-23 amendment above: the owner decided the minimum is 4 for all accounts.
+
 ---
 
 ### PD-26 · The Teacher Supervision page
@@ -2408,6 +2424,61 @@ month has no pay terms. Every staff complaint names its source on every route
 "on leave" notice updates on the conversation's realtime signals, on reconnect,
 on app resume and when the shown leave ends, never by polling. Record:
 `docs/admin/pd026-teacher-supervision.md` §Known limits, closed.
+
+**Amendment, 2026-10-27: Operations access** (owner request, no new number;
+registry `pd-registry/PD-26-amendment-operations-access.md`). The owner: "We
+need these pages to be visible to the Operations Supervision team as well,
+since they will also use them to record teacher delays and excuses." Asked to
+scope it, the owner chose **the whole page** (leave, apologies and absences,
+lateness trial and regular, rewards, complaints, parent feedback) with **the
+Teachers department's rights on it**, for **the teachers of their families**.
+
+- **Which teachers.** The current teacher of each learner whose PD-8
+  supervisor is the Operations supervisor, a supervisor they cover as an
+  active backup (PD-33), or, for the Operations manager, any member of the
+  department; and the teacher of each of those learners' lessons from 30 days
+  ago on (`chat.operations_lesson_window()`; a lesson called off ties nobody).
+  Every other teacher answers as not found, as PD-35 does. One rule, in the
+  database (`chat.operations_teacher_ids`) and read by
+  `TeacherScopeService.operationsScopeOf`.
+- **Which children.** Of a teacher reached only through Operations, rows about
+  one child or family (lessons, lateness, a parent's complaint or feedback)
+  show only for the caller's own learners; writing on another family's answers
+  as not found. Teacher-level rows and decisions (leave, suspension) do not
+  narrow. The leave allowance, days used and balance stay the Teachers
+  department's and are left out by the server. A parent's complaint is about
+  its family (its PD-32 feedback's, or the conversation it was taken from); one
+  whose family is unknown is hidden from Operations, and Operations files one
+  only from a conversation with its own family. Management's complaints are the
+  teacher's.
+- **Rights are per teacher.** Someone who holds both bases has the Teachers
+  department's rights only for the teachers in its own (PD-35) scope; for the
+  rest, Operations' rights. The Teacher File never opens through Operations.
+- **Known limits (recorded, not fixed).** (1) The database confines Operations
+  to its families only for lateness and replies to a parent
+  (`chat.may_supervise_learner_row`); a complaint's follow-up, resolution,
+  upholding, take and handler are checked per teacher there, and per family by
+  the server only. (2) A leftover lesson -- say an open one the old teacher kept
+  after a transfer, dated after the transfer -- keeps that teacher in scope
+  until it falls 30 days into the past or is closed; it is a real lesson of the
+  family, so this is accepted.
+- **What they may do there.** What the Teachers department may do on the page:
+  decide leave; record lateness and absences; decide on the ladder (warnings,
+  deductions, suspensions); record complaints, follow-ups and resolutions, and
+  uphold them; handle a complaint; record a reward; read and answer parent
+  feedback. A complaint may also be handed to them.
+- **What does not change.** Money keeps PD-18's finance tier: reward amounts,
+  default deduction amounts, payroll and the payout account stay the super
+  admin's. Operations records a reward or decides a deduction case without a
+  price; a decided deduction is still priced from the super admin's default,
+  as for anyone. The Teacher File (personal record, monthly comments, days off,
+  the leave allowance) and the rest of the Teachers area (statistics, files,
+  certificates, materials) stay the Teachers department's. Admin Web shows
+  Operations the Teachers → Supervision page only, on the server's word.
+- **Backstop.** The PD-12/PD-26 database guards that said "the Teachers
+  department" now say "the Teachers department or the teacher's Operations
+  supervisor" (`chat.may_supervise_teacher`, migration
+  `20261027160000_chat_pd026_operations_access.sql`).
 
 **Closed.** 2026-10-22.
 
@@ -2765,6 +2836,44 @@ one order           everywhere a list of materials appears (the child's
 
 PD-35's planned "not progressing" flag, which was to read this map, is dropped
 with it (the department head tells PD-35).
+
+**Amendment 2026-10-27: materials quality, P0-2, the one shared Quran dataset.**
+The owner approved this on 2026-10-27 for both the lessons and the whiteboard.
+The plan is `docs/product/pd029-materials-quality-plan.md`; the contract, agreed
+with PD-39, is `docs/product/quran-dataset-contract.md`; migration `20261027170000`.
+
+```
+one source          the Quran text lives once, in chat.quran_ayah (Tanzil
+                    Uthmani, Hafs; CC BY 3.0, verbatim, credited), loaded from
+                    one vendored file (data/quran/). The lessons engine and the
+                    PD-39 whiteboard both read it; nothing else holds ayah text
+verified at every   the file's SHA-256 and the digest of its 6,236 ayah hashes
+load                are pinned in code (apps/api/src/quran/pinned.ts). The
+                    loader refuses a file that is not the pinned one, a count
+                    mismatch against chat.quran_surah, or a split, duplicate or
+                    empty ayah, before a row is written. The API re-verifies
+                    the whole dataset at start-up and every served ayah on
+                    every request, and refuses everything (503) on any
+                    mismatch: fail closed
+the Basmala         Tanzil prefixes it to ayah 1 of 112 surahs (not 1, where 1:1
+                    IS the Basmala, nor 9). Each ayah is served as { basmala,
+                    text }; the prefix is accepted only when its SHA-256 is one
+                    of the two known spellings, else the load is refused.
+                    Tajweed offsets, audio and the whiteboard's range hash are
+                    defined against the verse without it
+Tajweed             a mark is served only when a Tajweed reviewer (the Teachers
+                    department, the owner's decision 2026-10-27) approved it, it is not
+                    withdrawn, and the LATEST sign-off of its surah names it and
+                    still matches the digest of the marks it named; marks come
+                    from a published annotation, never hand or model
+                    classification; none are shipped yet
+audio               one file per ayah, its key generated from (reciter, surah,
+                    ayah), its hash computed by the server's ingest from the
+                    stored object, so a verse and its audio cannot mismatch and
+                    audio is never served unverified. No audio
+                    is shipped: chat.config quran.audio stays unset until the
+                    owner confirms the reciter and the right to self-host
+```
 
 ---
 

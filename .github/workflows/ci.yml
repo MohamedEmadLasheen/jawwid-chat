@@ -108,6 +108,12 @@ jobs:
         # migration since 20261022130000 with no slot claim.
         run: bash scripts/qa/guards.sh pd-registry
 
+      - name: The Quran text is pinned (pins, manifests and files agree; the loader refuses what it must)
+        # docs/product/quran-dataset-contract.md: a tampered file, a count
+        # mismatch, a split, duplicate or empty ayah are refused before a row
+        # is written, and pinned.ts, data/quran/<id>.json and the file agree.
+        run: bash scripts/qa/guards.sh quran-dataset
+
       - name: PD-40 · every API route declares the permission it asks of staff
         # A route with no @Requires / @SelfService / @NotForStaff / @Public is
         # refused to staff by PermissionGuard; this fails the build first.

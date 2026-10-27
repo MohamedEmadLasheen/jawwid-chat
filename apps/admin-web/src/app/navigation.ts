@@ -98,7 +98,6 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   parents: 'people',
   payments: 'people',
   trials: 'people',
-  coverage: 'people',
   'teacher-profiles': 'people',
   accounts: 'people',
   stories: 'stories',
@@ -123,7 +122,6 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   payments: '/payments',
   trials: '/trials',
   tasks: '/tasks',
-  coverage: '/coverage',
   dashboard: '/dashboard',
   stories: '/stories',
   'teacher-profiles': '/teacher-profiles',
@@ -145,7 +143,6 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   payments: 'tag',
   trials: 'calendar',
   tasks: 'tasks',
-  coverage: 'teams',
   dashboard: 'dashboard',
   stories: 'stories',
   'teacher-profiles': 'approvals',
@@ -254,7 +251,8 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
     groups[0]!.entries.push({
       key: area,
-      path: AREA_PATH[area],
+      // PD-26 amendment: without the Teachers department, the Teachers area is its Supervision page.
+      path: area === 'teachers' && access.lessonManager !== true ? `${AREA_PATH.teachers}/supervision` : AREA_PATH[area],
       icon: AREA_ICON[area],
       label: { message: `nav.${area}` },
       inDevelopment: false,

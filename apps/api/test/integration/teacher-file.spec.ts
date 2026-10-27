@@ -360,8 +360,8 @@ describe('5. the supervision timeline', () => {
     expect(r.json.error?.message).toMatch(new RegExp(`^${field}:`));
   });
 
-  it('an Operations supervisor may not write to the timeline', async () => {
-    const r = await add(m.supervisors[0].subject, { kind: 'complaint', body: 'probe' });
+  it('an Operations supervisor may not write the Teacher File\'s own entries (PD-26: the page\'s complaints only)', async () => {
+    const r = await add(m.supervisors[0].subject, { kind: 'monthly_comment', month: '2026-10', body: 'probe' });
     expect([r.status, r.code]).toEqual([403, 'COMM.TEACHER_FILE_DENIED']);
   });
 

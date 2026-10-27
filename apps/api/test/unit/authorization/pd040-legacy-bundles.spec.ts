@@ -15,8 +15,9 @@
  * Pure: no database.
  */
 import { StaffRole } from '@communication/contracts/vocab';
-import { decideBillingAccess, decidePd012StaffAccess, type OperationsDepartmentRole } from '@platform/pd012-policy';
-import { decideTeacherFileAccess } from '@platform/teacher-file-policy';
+import { decideBillingAccess, decidePd012PageAccess, decidePd012StaffAccess, type OperationsDepartmentRole } from '@platform/pd012-policy';
+import { decideTeacherFileAccess, teacherFilePageAccess } from '@platform/teacher-file-policy';
+import { decidePageBasis } from '@platform/teacher-scope';
 import { canGrantSubscriptionException } from '@platform/subscription-policy';
 import { accountAdminActs } from '@platform/account-admin-policy';
 import { StaffProfilePermission, profilePermissionsFor } from '@platform/staff-profile-policy';
@@ -77,6 +78,11 @@ function rules(): Record<string, Rule> {
   const supervises: Rule = (a) => pd012(a).canSupervise;
   const writesSupervision: Rule = (a) => file(a).canWriteSupervision;
   const readsMoney: Rule = (a) => billing(a).scope !== null;
+  // PD-26 amendment: the Teacher Supervision page, Teachers department or Operations.
+  const basis = (a: Account) => decidePageBasis(a.actor, role(a, 'teachers'), role(a, 'operations'));
+  const onPage: Rule = (a) => decidePd012PageAccess(pd012(a), basis(a)).canSupervise;
+  const recordsOnPage: Rule = (a) =>
+    decidePd012PageAccess(pd012(a), basis(a)).canSupervise && teacherFilePageAccess(file(a), basis(a)).canWriteSupervision;
   return {
     'billing.view': readsMoney,
     'parents.view': readsMoney,
@@ -89,11 +95,9 @@ function rules(): Record<string, Rule> {
     'certificates.view': supervises,
     'certificates.design': supervises,
     'certificates.deliver': supervises,
-    'leave.view': supervises,
-    'leave.decide': supervises,
+    'teacher_supervision.view': onPage,
+    'teacher_supervision.record': recordsOnPage,
     'supervision.chats': supervises,
-    'discipline.view': supervises,
-    'discipline.manage': supervises,
     'leave.allowance': (a) => pd012(a).canSetAllowance,
     'teacher_files.view': (a) => file(a).canView,
     'teacher_files.edit': (a) => file(a).canEditPersonal,

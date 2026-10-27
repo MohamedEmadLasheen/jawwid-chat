@@ -8,7 +8,6 @@ import { InboxPage } from '@/features/inbox/InboxPage'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { FamiliesPage } from '@/features/family/FamiliesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
-import { CoveragePage } from '@/features/coverage/CoveragePage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { StoriesStudio } from '@/features/stories/StoriesStudio'
 import { StoryComposer } from '@/features/stories/StoryComposer'
@@ -128,7 +127,6 @@ export function AppRoutes() {
         {/* PD-17: the Student Profile. Several departments open it, so the server alone decides. */}
         <Route path="/students/:learnerId" element={<StudentProfilePage />} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
-        <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
         {/*
           Stories: one studio, two homes. Operators (admin, coverage, manager)

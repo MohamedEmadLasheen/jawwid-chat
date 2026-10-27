@@ -12,10 +12,14 @@ export interface LeaveOverviewRow {
   id: string
   name: string
   isActive: boolean
-  /** Null while no allowance is set for the year: the leave is still recorded. */
-  allowance: number | null
-  used: number
-  balance: number | null
+  /**
+   * Null while no allowance is set for the year: the leave is still recorded.
+   * The three are absent for a teacher the viewer reaches only through
+   * Operations: the allowance is the Teachers department's (PD-26 amendment).
+   */
+  allowance?: number | null
+  used?: number
+  balance?: number | null
   pendingRequests: number
   away: { kind: 'leave' | 'suspended' | 'day_off'; until: string } | null
 }

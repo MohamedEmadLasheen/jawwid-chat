@@ -1,0 +1,13 @@
+{
+  "id": "tanzil-uthmani-1.1",
+  "fileSha256": "18c719bb3ba26d32ef457f40dad77cd28c4c5a34156833e26a8e5fcfdd246fb1",
+  "ayahsDigest": "849113038686701d40432aea92187101671f5a646f1a0774cfdc0b55394162a8",
+  "attribution": "Tanzil Project — tanzil.net",
+  "sourceUrl": "https://tanzil.net/",
+  "source": {
+    "text": "Tanzil Quran Text (Uthmani, Version 1.1), Hafs",
+    "licence": "CC BY 3.0 -- verbatim copies only; credit Tanzil Project and link to tanzil.net",
+    "downloaded": "2026-10-27",
+    "options": "quranType=uthmani, outType=txt-2 (with aya numbers), marks=true (pause marks), sajdah=true, alef=true (superscript alefs); rub-el-hizb, tatweel below superscript alefs, laa and sequential tanweens NOT included"
+  }
+}

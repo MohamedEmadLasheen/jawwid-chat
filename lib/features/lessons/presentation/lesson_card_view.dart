@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/app_clock.dart';
+import '../../../shared/utils/clock_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../materials/data/materials_repository.dart';
 import '../domain/report_vocab.dart';
@@ -221,7 +222,7 @@ class _LessonCard extends ConsumerWidget {
                   ?learner,
                   if (starts != null)
                     '${MaterialLocalizations.of(context).formatMediumDate(starts)} · '
-                        '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(starts))}',
+                        '${formatClockTime(context, TimeOfDay.fromDateTime(starts))}',
                 ].join(' — '),
                 style: theme.textTheme.labelMedium?.copyWith(color: muted),
               ),

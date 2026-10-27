@@ -15,7 +15,7 @@ export class DisciplineController {
   constructor(private readonly discipline: DisciplineService) {}
 
   /** The "needs decision" queue (state=open, the default), or decided / all; by month, teacher, kind. */
-  @Requires('discipline.view')
+  @Requires('teacher_supervision.view')
   @Get('discipline/violations')
   list(
     @ActorId() actorId: string,
@@ -27,35 +27,35 @@ export class DisciplineController {
     return this.discipline.list(actorId, { state, month, teacherId, kind });
   }
 
-  @Requires('discipline.manage')
+  @Requires('teacher_supervision.record')
   @Post('discipline/violations/:id/decide')
   decide(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.discipline.decide(actorId, id, body ?? {});
   }
 
   /** A held lesson the teacher started late (from teacher.late_threshold_minutes). */
-  @Requires('discipline.manage')
+  @Requires('teacher_supervision.record')
   @Post('lessons/:id/lateness')
   lateness(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.discipline.recordLateness(actorId, id, body ?? {});
   }
 
   /** PD-26: an absence with no lesson to close. With a lesson, close it as the teacher's absence instead. */
-  @Requires('discipline.manage')
+  @Requires('teacher_supervision.record')
   @Post('teachers/:id/absences')
   absence(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.discipline.recordAbsence(actorId, id, body ?? {});
   }
 
   /** PD-26: an upheld complaint joins the monthly ladder as a violation. */
-  @Requires('discipline.manage')
+  @Requires('teacher_supervision.record')
   @Post('discipline/complaints/:id/uphold')
   uphold(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.discipline.upholdComplaint(actorId, id, body ?? {});
   }
 
   /** One teacher's month: the count that sets the next step, the violations, the suspensions. */
-  @Requires('discipline.view')
+  @Requires('teacher_supervision.view')
   @Get('teachers/:id/discipline')
   teacherMonth(@ActorId() actorId: string, @Param('id') id: string, @Query('month') month?: string) {
     return this.discipline.teacherMonth(actorId, id, month);

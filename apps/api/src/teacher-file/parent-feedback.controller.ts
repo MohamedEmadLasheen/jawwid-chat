@@ -33,20 +33,20 @@ export class ParentFeedbackController {
 
   // --- the Teachers department and the super admin ---
 
-  @Requires('feedback.view')
+  @Requires('teacher_supervision.view')
   @Get('parent-feedback')
   list(@ActorId() actorId: string, @Query('status') status?: string, @Query('category') category?: string) {
     return this.feedback.list(actorId, { status, category });
   }
 
-  @Requires('feedback.manage')
+  @Requires('teacher_supervision.record')
   @Post('parent-feedback/:id/take')
   take(@ActorId() actorId: string, @Param('id') id: string) {
     return this.feedback.take(actorId, id);
   }
 
   /** { response, resolve? } */
-  @Requires('feedback.manage')
+  @Requires('teacher_supervision.record')
   @Post('parent-feedback/:id/reply')
   reply(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.feedback.reply(actorId, id, body ?? {});

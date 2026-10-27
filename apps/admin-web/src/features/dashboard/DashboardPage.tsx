@@ -5,7 +5,9 @@ import { qk } from '@/core/api/queryKeys'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { QueryBoundary } from '@/shared/components/States'
 import { Badge, WorkloadBadge } from '@/shared/components/Badge'
-import { useActivateBackup } from '@/features/coverage/hooks'
+import { useSession } from '@/core/auth/SessionProvider'
+import { isSuperAdmin } from '@/core/permissions/capabilities'
+import { adminSectionPath } from '@/features/admin/sections'
 
 /**
  * Every tile is a link into the list it summarises. A dashboard that only shows
@@ -44,7 +46,10 @@ export function DashboardPage() {
   const teamNow = useQuery({ queryKey: qk.teamNow, queryFn: () => dashboardApi.teamNow() })
   const needsAction = useQuery({ queryKey: qk.needsAction, queryFn: () => dashboardApi.needsAction() })
   const thisWeek = useQuery({ queryKey: qk.thisWeek, queryFn: () => dashboardApi.thisWeek() })
-  const activateBackup = useActivateBackup()
+  const { staff } = useSession()
+  // Backups are activated, and covers handed over, on the Organization page
+  // (PD-8, PD-33); the super admin reaches it as the Admin Portal's section.
+  const organizationPath = staff && isSuperAdmin(staff.role) ? adminSectionPath('teams') : '/organization'
 
   const unattended = header.data?.unattended_count ?? 0
 
@@ -148,8 +153,7 @@ export function DashboardPage() {
                   <button
                     type="button"
                     className="btn btn--sm btn--primary"
-                    disabled={activateBackup.isPending}
-                    onClick={() => activateBackup.mutate(item.absence_id!)}
+                    onClick={() => navigate(organizationPath)}
                   >
                     {t('coverage.activateBackup')}
                   </button>

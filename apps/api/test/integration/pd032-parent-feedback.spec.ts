@@ -218,7 +218,7 @@ describe('4. who reaches it', () => {
     expect(await code(files.complaints(s.teacherId, {}))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
   });
 
-  it('staff: the department and the super admin read all; the children\'s supervisor reads theirs; others nothing', async () => {
+  it('staff: the department and the super admin read all; the children\'s supervisor reads theirs (and, on the page, their teachers\'); others nothing', async () => {
     await file('praise');
     await file('suggestion', 'More homework please.', s.secondLearnerId);
     expect((await feedback.list(superId, {})).feedback).toHaveLength(2);
@@ -237,7 +237,9 @@ describe('4. who reaches it', () => {
     // Staff who supervise none of the family: the same 404 as no such family (no
     // existence oracle); the list route is the department's.
     expect(await code(feedback.forFamily(s.managerId, s.familyId))).toBe(CommErrorCode.FEEDBACK_NOT_FOUND);
-    expect(await code(feedback.list(s.ownerId, {}))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
+    // PD-26 amendment (Operations access): the page's list, for the teachers of her
+    // families -- after the move above she supervises only learner_l, so only teacher_c's.
+    expect((await feedback.list(s.ownerId, {})).feedback.map((f) => f.category)).toEqual(['praise']);
     expect(await code(feedback.forFamily(tsupId, randomUUID()))).toBe(CommErrorCode.FEEDBACK_NOT_FOUND);
   });
 });
