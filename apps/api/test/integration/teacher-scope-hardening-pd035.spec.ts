@@ -8,14 +8,19 @@
  *      concurrent removal), and the scope re-checks it
  *   2. a deactivated supervisor's teachers count as unassigned
  *   3. the move guard also covers a change of department_member.staff_id
- *   5. re-seating handles inactive teachers and follows the switch both ways
+ *   5. re-seating follows the switch both ways: on, it narrows inactive
+ *      teachers' conversations too; off, it restores exactly what main keeps
+ *      (an inactive teacher's conversation is left as it is, as main does)
  *   6. under strict scope a teacher supervisor moves a child only TO one of their
  *      own teachers, and lists only those
  *   7. a service constructed without the scope service is not department-wide by
  *      default: it reads the real switch
- *   9. the PD-38 calendar narrows a teacher supervisor under strict scope
+ *   R1 (review of #147) under strict scope, (re)assigning an INACTIVE teacher
+ *      who has a supervision conversation re-seats it instead of rolling back,
+ *      so their old supervisor can then leave the department
  *
- * (4, the switch's boot mirroring, is a unit spec; 8 is the runbook.)
+ * (4 and the re-seat retry are unit specs; 8 is the runbook; 9, the PD-38
+ * calendar, is PD-38's own -- #145.)
  * Synthetic fixtures only (G-16).
  */
 import { randomUUID } from 'node:crypto';
@@ -31,7 +36,6 @@ import { SupervisionConversationService } from '../../src/supervision/supervisio
 import { CardPoster } from '../../src/supervision/card-poster';
 import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
 import { TeacherSupervisorService } from '../../src/teacher-supervisors/teacher-supervisor.service';
-import { CalendarService } from '../../src/calendar/calendar.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -44,7 +48,6 @@ const trialGroups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
 const lifecycle = new LifecycleService(g.prisma, g.conversations, lessons, scheduling, g.outbox, g.config, audit, supervisionChats);
 const supervisors = new TeacherSupervisorService(g.prisma, g.conversations, new SeatPolicyRegistry(), scope, supervisionChats, trialGroups, audit);
-const calendar = new CalendarService(g.prisma, g.conversations, lessons, g.config);
 
 jest.setTimeout(120_000);
 
@@ -159,7 +162,7 @@ describe('3. the move guard', () => {
 });
 
 describe('5. re-seating', () => {
-  it('handles an inactive teacher and follows the switch both ways', async () => {
+  it('narrows an inactive teacher\'s conversation when on, and leaves it as main does when off', async () => {
     await assign(s.teacherId, tsupA);
     const chat = await supervisionChats.ensureForTeacher(tmgr, s.teacherId);
     await g.prisma.$executeRaw`UPDATE chat.teacher SET is_active = false WHERE id = ${s.teacherId}::uuid`;
@@ -169,9 +172,38 @@ describe('5. re-seating', () => {
     await supervisors.reseatAll();
     expect(await seatedStaff(chat.conversationId)).toEqual([tmgr, tsupA].sort());
 
+    // Off: main never syncs an inactive teacher's conversation, so neither does this.
+    await strict(false);
+    await supervisors.reseatAll();
+    expect(await seatedStaff(chat.conversationId)).toEqual([tmgr, tsupA].sort());
+  });
+
+  it('restores the whole department to an active teacher\'s conversation when turned off', async () => {
+    const chat = await supervisionChats.ensureForTeacher(tmgr, s.newTeacherId);
+    expect(await seatedStaff(chat.conversationId)).toEqual([tmgr, tsupA, tsupB].sort());
+    await strict(true);
+    await supervisors.reseatAll();
+    expect(await seatedStaff(chat.conversationId)).toEqual([tmgr]);
     await strict(false);
     await supervisors.reseatAll();
     expect(await seatedStaff(chat.conversationId)).toEqual([tmgr, tsupA, tsupB].sort());
+  });
+});
+
+describe('R1. assigning an inactive teacher under strict scope', () => {
+  it('re-seats their supervision conversation instead of rolling back, so the old supervisor can leave', async () => {
+    await assign(s.teacherId, tsupA);
+    const chat = await supervisionChats.ensureForTeacher(tmgr, s.teacherId);
+    await g.prisma.$executeRaw`UPDATE chat.teacher SET is_active = false WHERE id = ${s.teacherId}::uuid`;
+    await strict(true);
+    await supervisors.reseatAll();
+
+    await supervisors.assign(tmgr, s.teacherId, { supervisorId: tsupB });
+    expect(await seatedStaff(chat.conversationId)).toEqual([tmgr, tsupB].sort());
+    await supervisors.assign(tmgr, s.teacherId, { supervisorId: null });
+    expect(await seatedStaff(chat.conversationId)).toEqual([tmgr]);
+    // Nothing assigned to tsupA any more: the move guard lets them leave.
+    await g.prisma.$executeRaw`DELETE FROM chat.department_member WHERE staff_id = ${tsupA}::uuid`;
   });
 });
 
@@ -197,19 +229,5 @@ describe('7. no fail-open default', () => {
     const id = (await bare.schedule(tmgr, { learnerId: s.learnerId, startsAt: new Date(Date.now() + 3_600_000).toISOString(), endsAt: new Date(Date.now() + 5_400_000).toISOString() })).id;
     await strict(true);
     expect(await code(bare.get(tsupB, id))).toBe(CommErrorCode.LESSON_NOT_FOUND);
-  });
-});
-
-describe('9. the PD-38 calendar', () => {
-  it('narrows a teacher supervisor to their own teachers\' children under strict scope', async () => {
-    await assign(s.teacherId, tsupA);
-    expect((await calendar.scopeOf(await g.conversations.requireActor(tsupB)))?.kind).toBe('academy');
-    await strict(true);
-    const b = await calendar.scopeOf(await g.conversations.requireActor(tsupB));
-    expect(b).toMatchObject({ kind: 'supervisor' });
-    expect(b?.kind === 'supervisor' && b.ownLearners.has(s.learnerId)).toBe(false);
-    const a = await calendar.scopeOf(await g.conversations.requireActor(tsupA));
-    expect(a?.kind === 'supervisor' && a.ownLearners.has(s.learnerId)).toBe(true);
-    expect((await calendar.scopeOf(await g.conversations.requireActor(tmgr)))?.kind).toBe('academy');
   });
 });
