@@ -23,3 +23,10 @@ alter table chat.staff
 
 comment on column chat.staff.hide_last_seen is
   'PD-37: hide my last seen from other staff (and, reciprocally, do not see theirs). Online stays visible.';
+
+-- GET /presence answers for up to 100 people a question; bound how often one
+-- actor may ask (docs/security/ABUSE-LIMITS.md).
+insert into chat.config (key, value, scope, description) values
+('abuse.throttle.presence_read_actor', '60'::jsonb, 'abuse',
+ '[hypothesis] PD-37: presence questions (GET /presence) one actor may ask per window. A client asks on opening a chat or the team list; one a second sustained is far above that.')
+on conflict (key) do nothing;

@@ -5,6 +5,7 @@ import { ConversationService, isUuid } from '../conversations/conversation.servi
 import { ActorKind } from '../contracts/vocab';
 import { PresencePolicy } from '../realtime/presence-policy';
 import { PresenceService } from '../realtime/presence.service';
+import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
@@ -32,6 +33,7 @@ export class PresenceController {
   ) {}
 
   /** `GET /presence?staff=<id,…>&teachers=<id,…>` -- up to 100 people. */
+  @RateLimited(ActionScope.PRESENCE_READ)
   @Get('presence')
   async read(@ActorId() actorId: string, @Query('staff') staff?: string, @Query('teachers') teachers?: string) {
     const viewer = await this.conversations.requireActor(actorId);

@@ -5,6 +5,8 @@
 --
 --   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261026180001_pd037_presence.down.sql
 
+delete from chat.config where key = 'abuse.throttle.presence_read_actor';
+
 alter table chat.staff drop column if exists hide_last_seen;
 
 delete from chat.schema_migrations where version = '20261026180001_chat_pd037_presence';

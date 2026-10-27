@@ -20,9 +20,10 @@ import { CommErrorCode } from '@platform/errors';
 import { AppConfigService } from '@platform/app-config.service';
 import type { Actor } from '@platform/types';
 import { CommEvent } from '@communication/contracts/events';
-import { PresenceService } from '@communication/realtime/presence.service';
+import { PRESENCE_OFFLINE_GRACE_MS, PresenceService } from '@communication/realtime/presence.service';
 import { PresencePolicy } from '@communication/realtime/presence-policy';
 import { PresenceController } from '@communication/api/presence.controller';
+import { ActionScope, RATE_LIMITED_ACTION } from '@platform/auth/action-throttle.guard';
 import { RealtimeGateway } from '@communication/realtime/realtime.gateway';
 import { TeacherScopeService } from '@platform/teacher-scope';
 import { buildGraph, seed, truncate, Scenario } from './harness';
@@ -162,51 +163,68 @@ describe("PD-37 PresencePolicy: who may see a teacher, a parent", () => {
 });
 
 describe('PD-37 PresenceService: transitions, not heartbeats', () => {
-  it('online once for the first device, offline once for the last; last seen set', async () => {
-    const who = randomUUID();
-    expect(await presence.online(who, 'phone')).toBe(true);
-    expect(await presence.online(who, 'laptop')).toBe(false); // already online
-    expect(await presence.heartbeat(who, 'phone')).toBe(false);
-    expect(await presence.offline(who, 'phone')).toBe(false); // the laptop is still here
-    expect(await presence.isOnline(who)).toBe(true);
-    expect(await presence.offline(who, 'laptop')).toBe(true);
-    expect(await presence.isOnline(who)).toBe(false);
-    expect(await presence.lastSeen(who)).not.toBeNull();
-  });
-
-  it('a connection that stopped heart-beating lapses on its own (a crashed process)', async () => {
+  it('online once for the first device; the last disconnect starts the grace; last seen set', async () => {
     const who = randomUUID();
     const t0 = Date.now();
-    await presence.online(who, 'crashed', t0);
+    expect(await presence.online(who, 'phone', t0)).toBe(true);
+    expect(await presence.online(who, 'laptop', t0)).toBe(false); // already online
+    expect(await presence.heartbeat(who, 'phone', t0)).toBe(false);
+    expect(await presence.offline(who, 'phone', t0)).toBe(false); // the laptop is still here
+    expect(await presence.isOnline(who, t0)).toBe(true);
+    expect(await presence.offline(who, 'laptop', t0)).toBe(true);
+    expect(await presence.isOnline(who, t0)).toBe(false);
+    expect(await presence.lastSeen(who)).not.toBeNull();
+    // Not lapsed inside the grace...
+    expect(await presence.claimLapsed(t0 + PRESENCE_OFFLINE_GRACE_MS - 1)).not.toContain(who);
+    // ...lapsed after it, and claimed exactly once.
+    expect(await presence.claimLapsed(t0 + PRESENCE_OFFLINE_GRACE_MS + 1)).toContain(who);
+    expect(await presence.claimLapsed(t0 + PRESENCE_OFFLINE_GRACE_MS + 2)).not.toContain(who);
+    // And having been announced offline, coming back is a transition again.
+    expect(await presence.online(who, 'phone', t0 + PRESENCE_OFFLINE_GRACE_MS + 3)).toBe(true);
+  });
+
+  it('a reconnect inside the grace is no transition, and never lapses', async () => {
+    const who = randomUUID();
+    const t0 = Date.now();
+    await presence.online(who, 'phone', t0);
+    await presence.offline(who, 'phone', t0 + 1);
+    expect(await presence.online(who, 'phone', t0 + 1000)).toBe(false); // back in time: nothing to announce
+    expect(await presence.claimLapsed(t0 + PRESENCE_OFFLINE_GRACE_MS + 10)).not.toContain(who);
+  });
+
+  it('a crashed node: connections that stopped heart-beating lapse and are claimed', async () => {
+    const who = randomUUID();
+    const t0 = Date.now();
+    await presence.online(who, 'crashed', t0); // and never an offline()
     const ttlMs = 45_000;
     expect(await presence.isOnline(who, t0 + ttlMs + 1)).toBe(false);
-    // ...and coming back after the lapse is a transition again.
-    expect(await presence.online(who, 'fresh', t0 + ttlMs + 2)).toBe(true);
-    const snap = await presence.snapshot([who, randomUUID()], t0 + ttlMs + 3);
-    expect([...snap.values()].map((v) => v.online)).toEqual([true, false]);
+    expect(await presence.claimLapsed(t0 + ttlMs + 1)).toContain(who);
+    const snap = await presence.snapshot([who, randomUUID()], t0 + ttlMs + 2);
+    expect([...snap.values()].map((v) => v.online)).toEqual([false, false]);
   });
 });
 
-describe('PD-37 gateway: announced to the audience only, with an offline grace', () => {
+describe('PD-37 gateway: announced to the audience only; offline from the sweep', () => {
   function gatewayWith(fake: Partial<PresenceService>) {
     const gw = new RealtimeGateway(
       g.authz, g.conversations, {} as never, fake as PresenceService, {} as never, {} as never,
       undefined, undefined, undefined, policy,
     );
-    gw.presenceOfflineGraceMs = 20;
     const sent: Array<{ to: string[]; payload: { state: string; lastSeenAt: string | null } }> = [];
     jest.spyOn(gw, 'toUsers').mockImplementation(async (to, _e, payload) => {
       sent.push({ to: [...to], payload: payload as never });
     });
     return { gw, sent };
   }
-  const internals = (gw: RealtimeGateway) =>
-    gw as unknown as { wentOnline(a: Actor): void; wentOffline(a: Actor): void };
+  const internals = (gw: RealtimeGateway) => gw as unknown as { wentOnline(a: Actor): void };
   const settle = () => new Promise((r) => setTimeout(r, 120));
 
   it("a colleague's coming online and going offline reach the audience; last seen only where allowed", async () => {
     const seenAt = new Date('2026-10-26T09:00:00.000Z');
-    const { gw, sent } = gatewayWith({ isOnline: async () => false, lastSeen: async () => seenAt });
+    const { gw, sent } = gatewayWith({
+      lastSeen: async () => seenAt,
+      claimLapsed: async () => [s.ownerId],
+    });
     const me = await actor(s.ownerId);
 
     internals(gw).wentOnline(me);
@@ -217,8 +235,7 @@ describe('PD-37 gateway: announced to the audience only, with an offline grace',
     expect(sent.flatMap((d) => d.to)).not.toContain(s.teacherId);
 
     sent.length = 0;
-    internals(gw).wentOffline(me);
-    await settle();
+    await gw.sweepPresence();
     const full = sent.find((d) => d.to.includes(s.otherAdminId))!;
     expect(full.payload).toEqual({ actorId: s.ownerId, state: 'offline', lastSeenAt: seenAt.toISOString() });
     const hidden = sent.find((d) => d.to.includes(x.hider))!;
@@ -226,21 +243,17 @@ describe('PD-37 gateway: announced to the audience only, with an offline grace',
     await gw.onModuleDestroy().catch(() => undefined);
   });
 
-  it('a reconnect within the grace announces nothing at all', async () => {
-    const { gw, sent } = gatewayWith({ isOnline: async () => false, lastSeen: async () => new Date() });
-    const me = await actor(s.ownerId);
-    internals(gw).wentOffline(me);
-    internals(gw).wentOnline(me); // back before the grace ran out
-    await settle();
+  it('nothing lapsed, nothing announced', async () => {
+    const { gw, sent } = gatewayWith({ lastSeen: async () => new Date(), claimLapsed: async () => [] });
+    await gw.sweepPresence();
     expect(sent).toEqual([]);
     await gw.onModuleDestroy().catch(() => undefined);
   });
 
-  it('a parent going online or offline is announced to nobody', async () => {
-    const { gw, sent } = gatewayWith({ isOnline: async () => false, lastSeen: async () => new Date() });
-    const parent = await actor(s.parentId);
-    internals(gw).wentOnline(parent);
-    internals(gw).wentOffline(parent);
+  it('a parent coming online or lapsing is announced to nobody', async () => {
+    const { gw, sent } = gatewayWith({ lastSeen: async () => new Date(), claimLapsed: async () => [s.parentId] });
+    internals(gw).wentOnline(await actor(s.parentId));
+    await gw.sweepPresence();
     await settle();
     expect(sent).toEqual([]);
     await gw.onModuleDestroy().catch(() => undefined);
@@ -271,6 +284,11 @@ describe('PD-37 GET /presence and /me/presence', () => {
     await expect(controller().update(s.ownerId, { hideLastSeen: 'yes' })).rejects.toMatchObject({ code: CommErrorCode.VALIDATION });
     await expect(controller().update(s.parentId, { hideLastSeen: true })).rejects.toMatchObject({ code: CommErrorCode.PRESENCE_DENIED });
     await expect(controller().settings(s.teacherId)).rejects.toMatchObject({ code: CommErrorCode.PRESENCE_DENIED });
+  });
+
+  it('GET /presence is rate limited (presence_read_actor)', () => {
+    const scope = Reflect.getMetadata(RATE_LIMITED_ACTION, PresenceController.prototype.read);
+    expect(scope).toBe(ActionScope.PRESENCE_READ);
   });
 
   it('refuses more than 100 people in one question', async () => {

@@ -302,12 +302,13 @@ export class RealtimeGateway
   ) {}
 
   /**
-   * PD-37: how long a person who lost their last connection still counts as
-   * online before "offline" is announced. A phone that drops and reconnects
-   * within it -- the common case on mobile -- is never announced at all.
+   * PD-37: how often this node sweeps for people whose online state lapsed --
+   * after a clean disconnect's grace, a stalled connection, or a crashed node --
+   * and announces them offline. Every node sweeps; each lapse is claimed by one
+   * (PresenceService.claimLapsed), so nobody is announced twice.
    */
-  presenceOfflineGraceMs = 15_000;
-  private readonly offlineTimers = new Map<string, NodeJS.Timeout>();
+  presenceSweepMs = 5_000;
+  private presenceSweep?: NodeJS.Timeout;
 
   /**
    * PD-37: one cursor move against `abuse.throttle.receipt_cursor_actor`, the
@@ -341,6 +342,7 @@ export class RealtimeGateway
    */
   afterInit(): void {
     this.revocationHub?.attach(this);
+    this.startPresenceSweep();
     // Deliveries forwarded by another node are authorized HERE, against this
     // node's sockets -- never trusted because a peer already checked its own.
     const server = this.server as unknown as { on(event: string, fn: (...a: never[]) => void): void };
@@ -393,8 +395,7 @@ export class RealtimeGateway
 
   async onModuleDestroy(): Promise<void> {
     this.revocationConfirmer?.stop();
-    for (const t of this.offlineTimers.values()) clearTimeout(t);
-    this.offlineTimers.clear();
+    if (this.presenceSweep) clearInterval(this.presenceSweep);
     if (this.sweep) clearInterval(this.sweep);
     // Fence first, then leave the registry: nothing decided before this line
     // is emitted, so a revoker that no longer counts this node is right not to.
@@ -606,29 +607,30 @@ export class RealtimeGateway
   }
 
   private wentOnline(subject: Actor): void {
-    // Back within the grace: "offline" was never announced, so neither is this.
-    const pending = this.offlineTimers.get(subject.actorId);
-    if (pending) {
-      clearTimeout(pending);
-      this.offlineTimers.delete(subject.actorId);
-      return;
-    }
     void this.announcePresence(subject, 'online');
   }
 
-  private wentOffline(subject: Actor): void {
-    const previous = this.offlineTimers.get(subject.actorId);
-    if (previous) clearTimeout(previous);
-    const timer = setTimeout(() => {
-      this.offlineTimers.delete(subject.actorId);
-      // Still offline everywhere -- another device or node may have connected.
-      void this.presence
-        .isOnline(subject.actorId)
-        .then((online) => (online ? undefined : this.announcePresence(subject, 'offline')))
-        .catch((e: Error) => this.log.warn(`presence not checked: ${e.name}`));
-    }, this.presenceOfflineGraceMs);
-    timer.unref?.();
-    this.offlineTimers.set(subject.actorId, timer);
+  /**
+   * PD-37: announce offline everyone whose online state lapsed, whatever the
+   * cause. Exposed for tests; the interval below calls it.
+   */
+  async sweepPresence(now = Date.now()): Promise<void> {
+    if (!this.presencePolicy) return;
+    try {
+      for (const actorId of await this.presence.claimLapsed(now)) {
+        const subject = await this.conversations.requireActor(actorId).catch(() => null);
+        if (subject) await this.announcePresence(subject, 'offline');
+      }
+    } catch (e) {
+      this.log.warn(`presence sweep failed: ${(e as Error).name}`);
+    }
+  }
+
+  private startPresenceSweep(): void {
+    // Only with a policy to announce under, and a store that can be swept.
+    if (!this.presencePolicy || typeof this.presence.claimLapsed !== 'function' || this.presenceSweep) return;
+    this.presenceSweep = setInterval(() => void this.sweepPresence(), this.presenceSweepMs);
+    this.presenceSweep.unref?.();
   }
 
   /**
@@ -676,11 +678,11 @@ export class RealtimeGateway
   async handleDisconnect(client: AuthedSocket): Promise<void> {
     if (!client.actor) return;
     // Not awaited by Nest either: a rejection here would end the process.
-    const wentOffline = await this.presence.offline(client.actor.actorId, client.id).catch((e: Error) => {
-      this.log.warn(`presence not cleared: ${e.name}`);
-      return false;
-    });
-    if (wentOffline) this.wentOffline(client.actor);
+    // The last connection closing starts the grace; the sweep announces the
+    // offline once it lapses (on whichever node claims it).
+    await this.presence.offline(client.actor.actorId, client.id).catch((e: Error) =>
+      this.log.warn(`presence not cleared: ${e.name}`),
+    );
   }
 
   @SubscribeMessage('conversation.subscribe')

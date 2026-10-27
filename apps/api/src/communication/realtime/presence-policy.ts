@@ -67,8 +67,12 @@ export class PresencePolicy {
            AND (s.role = ${StaffRole.SUPER_ADMIN} OR ${teachersDepartmentSql('s.id', org)})`;
       // PD-35: off, the department works on every teacher; on, each viewer only
       // on their own -- asked of the one service every Teachers gate asks.
+      // The switch once, up front; then ONE scopeOf per candidate viewer (each
+      // is a different person, so that is the floor) -- not covers(), which
+      // would re-read the switch for each.
       const viewers = (await this.teacherScope.strict())
-        ? await asyncFilter(candidates, (v) => this.teacherScope.covers(staffActor(v.id, v.role, org), subject.actorId))
+        ? await asyncFilter(candidates, async (v) =>
+            scopeCovers(await this.teacherScope.scopeOf(staffActor(v.id, v.role, org)), subject.actorId))
         : candidates;
       return split(viewers, (v) => !v.hide);
     }
