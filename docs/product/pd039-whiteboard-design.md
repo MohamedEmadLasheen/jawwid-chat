@@ -159,8 +159,11 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
   - So there is **one** dataset and **one** module (`apps/api/src/quran/`). PD-29 P0-2
     builds it, on its own migration slot. PD-39 only reads it, and its own migration does
     not create Quran tables.
-  - The contract both PDs build to is summarised here. The full text is
-    `quran-dataset-contract.md` in the department head's notes.
+  - PD-29 and PD-39 agreed the contract on 2026-10-27. The full text is
+    [`quran-dataset-contract.md`](quran-dataset-contract.md), added by PD-29's #170; this
+    section only summarises it.
+  - The pinned source file lives at repo root, `data/quran/`. That way PD-29's lessons
+    engine bundles the same file, and CI checks its hash and counts.
 - **How it is stored (the shared contract).**
   - `chat.quran_dataset (id, sha256, attribution, source_url, loaded_at)`: one row per
     pinned source file, for example `tanzil-uthmani-1.1`. The config key `quran.dataset`
@@ -177,9 +180,13 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
     - all in one transaction.
   - No role can write to the tables (a trigger refuses UPDATE and DELETE), and request roles
     get no grants. It is organisation-independent reference data.
-  - Tajweed marks (`chat.quran_tajweed_mark`) use Unicode code-point offsets into
-    `text_uthmani`. Only marks a Quran teacher approved are served. They are PD-29's, and
-    PD-39 Phase 2 colours letters from them.
+  - Tajweed marks use Unicode code-point offsets into `text_uthmani`. A mark is served only
+    when two things hold:
+    - the mark itself is approved;
+    - an academy Quran teacher has signed off its surah for the same source version.
+  - The Tajweed marks belong to PD-29, and PD-39 Phase 2 colours letters from them.
+  - So does the per-ayah audio. The 30-ayah sheet below reviews the *text rendering* only;
+    Tajweed needs that full per-surah review.
 - **How it is inserted.**
   - The verse tool lets the teacher pick a surah (by Arabic or English name, or number),
     then an ayah range of up to 20 ayat.
