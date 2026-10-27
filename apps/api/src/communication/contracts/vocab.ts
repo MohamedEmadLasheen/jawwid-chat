@@ -75,6 +75,11 @@ export const ConversationType = {
    * (chat.conversation.trial_teacher_id). Never a contact or a prospect.
    */
   TRIAL_GROUP: 'trial_group',
+  /**
+   * PD-35 B6: one staff-only room per department (chat.conversation.department_id):
+   * the department's manager and its members. Never a contact or a teacher.
+   */
+  DEPARTMENT_ROOM: 'department_room',
 } as const;
 
 /** Group conversations: BR-1 admin presence (C-4) applies. */
@@ -95,6 +100,8 @@ export const GROUP_CALL_CONVERSATION_TYPES: ReadonlySet<string> = new Set([
   ...GROUP_CONVERSATION_TYPES,
   ConversationType.TRIAL_GROUP,
   ConversationType.TEACHER_SUPERVISION,
+  // PD-35 B6: a department room seats several staff.
+  ConversationType.DEPARTMENT_ROOM,
 ]);
 export type ConversationType = (typeof ConversationType)[keyof typeof ConversationType];
 
@@ -372,6 +379,8 @@ export const CardKind = {
   REPORT_CORRECTION_REQUESTED: 'report_correction_requested',
   EVALUATION_SHARED: 'evaluation_shared',
   IMPROVEMENT_PLAN_SHARED: 'improvement_plan_shared',
+  // PD-35 B6: an escalation case, announced in its target department's room (ids and names only).
+  CASE_ESCALATED: 'case_escalated',
 } as const;
 export type CardKind = (typeof CardKind)[keyof typeof CardKind];
 

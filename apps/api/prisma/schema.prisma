@@ -218,6 +218,8 @@ model Conversation {
 
   /// PD-11 T4: the teacher a trial_group conversation belongs to (that type only).
   trialTeacherId String? @map("trial_teacher_id") @db.Uuid
+  /// PD-35 B6: the department a department_room belongs to (20261027100000 owns the DDL).
+  departmentId String? @map("department_id") @db.Uuid
 
   state String @default("open")
 
