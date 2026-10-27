@@ -42,7 +42,9 @@ import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
 import '../features/materials/data/materials_repository.dart';
 import '../features/messages/application/chat_typing_channel.dart';
+import '../features/messages/application/drafts_controller.dart';
 import '../features/messages/data/chat_theme_repository.dart';
+import '../features/messages/data/draft_store.dart';
 import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
@@ -159,6 +161,7 @@ List<Override> _httpOverrides() {
   );
 
   client = buildApiClient(config: config, tokens: tokens);
+  const drafts = SharedPreferencesDraftStore();
 
   return [
     // The language choice survives a restart (see PersistedLocaleController).
@@ -200,6 +203,8 @@ List<Override> _httpOverrides() {
     receiptRepositoryProvider.overrideWithValue(HttpReceiptRepository(client: client)),
     typingRepositoryProvider.overrideWithValue(HttpTypingRepository(client: client)),
     viewerActorIdProvider.overrideWithValue(session.actorId),
+    // PD-37: unsent drafts stay on this device; sign-out deletes them.
+    draftStoreProvider.overrideWithValue(drafts),
     profilePhotoRepositoryProvider.overrideWithValue(
       HttpProfilePhotoRepository(client: client),
     ),
@@ -307,7 +312,7 @@ List<Override> _httpOverrides() {
       () => AuthController(
         repository: auth,
         tokens: tokenStore,
-        clearLocalData: () async {},
+        clearLocalData: drafts.clearAll,
         // The transport layer needs the principal too: ownership is decided by actor id and
         // approval policy by role. Before this existed, `actorId()` returned '' and `role()`
         // silently defaulted to parent, so a signed-in teacher saw their own messages as

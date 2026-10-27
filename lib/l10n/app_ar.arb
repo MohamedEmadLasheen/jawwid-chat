@@ -1649,5 +1649,6 @@
   "messageInfoDeliveredTo": "وصلت إلى",
   "messageInfoPending": "لم تصل بعد",
   "messageInfoNobody": "لا أحد",
-  "messageInfoFailed": "تعذّر تحميل معلومات الرسالة"
+  "messageInfoFailed": "تعذّر تحميل معلومات الرسالة",
+  "chatDraftLabel": "مسودة:"
 }

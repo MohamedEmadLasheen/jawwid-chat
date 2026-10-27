@@ -4157,4 +4157,7 @@ class L10nEn extends L10n {
 
   @override
   String get messageInfoFailed => 'Couldn\'t load message info';
+
+  @override
+  String get chatDraftLabel => 'Draft:';
 }

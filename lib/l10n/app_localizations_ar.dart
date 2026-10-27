@@ -4230,4 +4230,7 @@ class L10nAr extends L10n {
 
   @override
   String get messageInfoFailed => 'تعذّر تحميل معلومات الرسالة';
+
+  @override
+  String get chatDraftLabel => 'مسودة:';
 }

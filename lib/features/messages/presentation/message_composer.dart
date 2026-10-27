@@ -39,7 +39,13 @@ class MessageComposer extends StatefulWidget {
     this.mentionCandidates,
     this.onSendWithMentions,
     this.onDraftChanged,
+    this.initialText,
   });
+
+  /// PD-37: the conversation's saved draft, put back in the field. Adopted
+  /// while the field is still untouched -- drafts load a moment after the
+  /// screen opens -- and never over what the person has typed since.
+  final String? initialText;
 
   /// PD-37: every change of the draft (an empty one after sending), so the
   /// screen can say "typing…". Null says nothing.
@@ -91,10 +97,35 @@ class _MessageComposerState extends State<MessageComposer> {
 
   bool get _canSend => _controller.text.trim().isNotEmpty;
 
+  /// The person has typed here: a draft arriving later no longer applies.
+  bool _edited = false;
+  bool _restoring = false;
+
   @override
   void initState() {
     super.initState();
+    _restore(widget.initialText);
     _controller.addListener(_onChanged);
+  }
+
+  @override
+  void didUpdateWidget(MessageComposer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialText != oldWidget.initialText && !_edited && _controller.text.isEmpty) {
+      _restore(widget.initialText);
+    }
+  }
+
+  /// Puts a saved draft back, caret at the end. Restoring is not typing: it
+  /// says nothing to [MessageComposer.onDraftChanged].
+  void _restore(String? text) {
+    if (text == null || text.isEmpty) return;
+    _restoring = true;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _restoring = false;
   }
 
   @override
@@ -107,6 +138,8 @@ class _MessageComposerState extends State<MessageComposer> {
 
   void _onChanged() {
     setState(() {});
+    if (_restoring) return;
+    if (_controller.text.isNotEmpty) _edited = true;
     widget.onDraftChanged?.call(_controller.text);
     final source = widget.mentionCandidates;
     if (source == null) return;

@@ -38,6 +38,7 @@ import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../lessons/presentation/teacher_schedule_screen.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
+import '../application/drafts_controller.dart';
 import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
@@ -1064,6 +1065,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     );
   }
 
+  /// PD-37: this chat's saved draft, for the composer to put back. Watches
+  /// only whether the drafts have loaded, so the screen rebuilds once, not on
+  /// every keystroke.
+  String? _savedDraft() {
+    if (!ref.watch(draftsProvider.select((d) => d.hasValue))) return null;
+    return ref.read(draftsProvider).value?[widget.conversationId];
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -1255,8 +1264,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             },
             replyingTo: _replyingTo,
             onCancelReply: () => setState(() => _replyingTo = null),
-            // PD-37: "typing…" -- a read-only chat says nothing.
-            onDraftChanged: _typingSender?.typed,
+            // PD-37: "typing…" (a read-only chat says nothing), and the unsent
+            // text kept as this chat's draft.
+            initialText: _savedDraft(),
+            onDraftChanged: (text) {
+              _typingSender?.typed(text);
+              ref.read(draftsProvider.notifier).set(widget.conversationId, text);
+            },
             conversationId: widget.conversationId,
             voice: voice,
             onStartRecording: voiceController.start,

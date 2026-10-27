@@ -2870,5 +2870,7 @@
   "messageInfoNobody": "Nobody",
   "@messageInfoNobody": {"description": "PD-37: an empty Message info section."},
   "messageInfoFailed": "Couldn't load message info",
-  "@messageInfoFailed": {"description": "PD-37: Message info could not be read."}
+  "@messageInfoFailed": {"description": "PD-37: Message info could not be read."},
+  "chatDraftLabel": "Draft:",
+  "@chatDraftLabel": {"description": "PD-37: before the unsent text of a chat, in the Chats list (WhatsApp's \"Draft:\")."}
 }

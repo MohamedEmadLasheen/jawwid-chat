@@ -16,6 +16,7 @@ import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/search_fold.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../messages/application/drafts_controller.dart';
 import '../../messages/application/search_providers.dart';
 import '../../messages/presentation/starred_messages_screen.dart';
 import '../../notifications/presentation/notification_center_screen.dart';
@@ -214,6 +215,8 @@ class _Feed extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = AppClock.now();
+    // PD-37: an unsent draft shows as "Draft: ..." on its chat's row.
+    final drafts = ref.watch(draftsProvider).value ?? const <String, String>{};
     // The same box searches message text across every chat (owner decision
     // 2026-10-20) once there is a term worth sending.
     final term = query.trim();
@@ -283,6 +286,7 @@ class _Feed extends ConsumerWidget {
                 return ConversationTile(
                   conversation: conversation,
                   now: now,
+                  draft: drafts[conversation.id],
                   onTap: () => onOpen(conversation.id),
                   onLongPress: () =>
                       _showActions(context, ref, conversation),
