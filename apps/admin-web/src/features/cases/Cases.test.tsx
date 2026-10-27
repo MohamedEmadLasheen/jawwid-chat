@@ -5,6 +5,7 @@ import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { CasesPage } from './CasesPage'
 import { OpenCaseButton } from './OpenCaseDialog'
+import { CaseEscalatedCard } from './CaseEscalatedCard'
 import type { CaseDetail, CaseSummary } from './api'
 
 /**
@@ -130,3 +131,21 @@ describe('opening a case', () => {
     })
   })
 })
+
+describe('B6: a case in the department room', () => {
+  it('the case_escalated card names who opened it and who owns it, and links to the case', () => {
+    renderWithProviders(
+      <CaseEscalatedCard payload={{ caseId: 'c-1', ownerId: 'mgr-t', ownerName: 'Teachers Manager', openedBy: 'tsup-1', openedByName: 'Tsup One' }} />,
+      { staff: makeStaff({ role: 'admin' }) },
+    )
+    expect(screen.getByText(/Tsup One escalated a case/)).toBeInTheDocument()
+    expect(screen.getByText(/Teachers Manager/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open in Escalations' })).toHaveAttribute('href', '/cases?case=c-1')
+  })
+
+  it('Escalations opens the case named in the link', async () => {
+    renderWithProviders(<CasesPage />, { staff: makeStaff({ id: 'mgr-t', role: 'manager' }), route: '/cases?case=c-1' })
+    expect(await screen.findByRole('region', { name: 'Late reports again' })).toBeInTheDocument()
+  })
+})
+
