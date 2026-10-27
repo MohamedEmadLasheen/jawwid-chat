@@ -341,4 +341,72 @@ void main() {
       expect(world.store.stored['u_parent'], on);
     });
   });
+
+  // Redmi A5 QA, 2026-10-27: availability was read once per session, so it went stale
+  // the moment the person changed the phone's own lock.
+  group('the device lock changes while the app runs', () {
+    test('a screen lock added in Settings is seen on the way back, without a restart', () async {
+      start(available: false);
+      await signIn();
+      expect(lock().available, isFalse);
+
+      world.authenticator.available = true;
+      background(const Duration(seconds: 5));
+      await pumpEventQueue();
+
+      expect(lock().available, isTrue);
+    });
+
+    test('a screen lock removed while locked lifts the lock: nobody is locked out', () async {
+      start(storedSession: true, prefs: {'u_parent': on});
+      await coldStart();
+      expect(lock().phase, AppLockPhase.locked);
+
+      world.authenticator.available = false;
+      background(const Duration(seconds: 5));
+      await pumpEventQueue();
+
+      expect(lock().available, isFalse);
+      expect(lock().phase, AppLockPhase.unlocked);
+      expect(lock().active, isFalse);
+      // The choice is kept: adding a screen lock again brings back the lock they chose.
+      expect(lock().settings.enabled, isTrue);
+      expect(world.store.stored['u_parent'], on);
+
+      world.authenticator.available = true;
+      background(const Duration(seconds: 5));
+      await pumpEventQueue();
+      expect(lock().active, isTrue);
+    });
+
+    test('a prompt that fails because the lock is gone asks again, and lifts the lock', () async {
+      start(storedSession: true, prefs: {'u_parent': on});
+      await coldStart();
+      expect(lock().phase, AppLockPhase.locked);
+
+      // Removed while the app stayed in front: no resume to notice it. The prompt fails
+      // (Android's NO_CREDENTIALS).
+      world.authenticator.available = false;
+      world.authenticator.willAnswer(false);
+      await controller().unlock(reason: 'r');
+      await pumpEventQueue();
+
+      expect(lock().phase, AppLockPhase.unlocked);
+      expect(lock().available, isFalse);
+    });
+
+    test('an answer that lands after the account changed is dropped', () async {
+      start(available: false);
+      await signIn();
+
+      world.authenticator.available = true;
+      final stale = controller().refreshAvailability();
+      await container.read(authControllerProvider.notifier).signOut();
+      await stale;
+      await pumpEventQueue();
+
+      expect(lock().actorId, isNull);
+      expect(lock().available, isFalse);
+    });
+  });
 }

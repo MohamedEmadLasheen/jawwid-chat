@@ -5,6 +5,7 @@ import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../password_policy.dart';
 
 /// What a finished sign-up hands back to the sign-in screen, which then signs in normally.
 typedef ParentSignupResult = ({String email, String password});
@@ -90,7 +91,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
   Future<void> _finish() async {
     final l10n = L10n.of(context);
     setState(() => _tried = true);
-    if (!RegExp(r'^[0-9]{6}$').hasMatch(_code.text.trim()) || _password.text.length < 8 || _password.text != _confirm.text) {
+    if (!RegExp(r'^[0-9]{6}$').hasMatch(_code.text.trim()) || _password.text.length < kPasswordMinLength || _password.text != _confirm.text) {
       return;
     }
     setState(() {
@@ -120,7 +121,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
     final theme = Theme.of(context);
     final emailInvalid = _tried && !_codeAsked && !_emailRe.hasMatch(_email.text.trim());
     final codeInvalid = _tried && _codeAsked && !RegExp(r'^[0-9]{6}$').hasMatch(_code.text.trim());
-    final passwordShort = _tried && _codeAsked && _password.text.length < 8;
+    final passwordShort = _tried && _codeAsked && _password.text.length < kPasswordMinLength;
     final passwordsDiffer = _tried && _codeAsked && !passwordShort && _password.text != _confirm.text;
 
     return Scaffold(

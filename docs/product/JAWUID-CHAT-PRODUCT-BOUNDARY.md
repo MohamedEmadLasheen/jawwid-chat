@@ -2195,6 +2195,18 @@ devices and sessions, the app lock and its deviation from the first design,
 domain) is `../security/pd023-convenient-sign-in.md`. The summary is the PD-23
 row in the table above.
 
+**Amendment 2026-10-27 -- minimum password length (owner decision, PD-23 / PD-25
+boundary).** The minimum password length is **4 characters for ALL accounts**
+(parents, teachers, staff and the super admin), replacing 8 (and 12 for the
+super-admin bootstrap). The owner was told staff-only 8+ was the recommendation
+and chose all accounts. Unchanged: the maximum (128; 256 for the bootstrap CLI),
+Argon2id hashing, the login rate limiter and lockout, and the reset / sign-up
+code limits. There is no common-password or breach list, so a 4-character PIN
+such as `1234` is a valid password. One rule per codebase:
+`PASSWORD_MIN_LENGTH` in `apps/api/src/platform/auth/password-policy.ts`,
+mirrored in `apps/admin-web/src/features/auth/passwordPolicy.ts` and
+`lib/features/auth/password_policy.dart`.
+
 ---
 
 ### PD-24 · Changing a family's supervisor without losing anything
@@ -2302,6 +2314,10 @@ e-mail, SMS or WhatsApp sender.
 Record: `../admin/pd025-parent-self-recovery.md`.
 
 **Closed.** 2026-10-22.
+
+**Amendment 2026-10-27.** The password a parent chooses at recovery (and at
+sign-up, and when finishing a PD-21 reset) may be as short as 4 characters. See
+the PD-23 amendment above: the owner decided the minimum is 4 for all accounts.
 
 ---
 

@@ -301,56 +301,6 @@ export interface TeamNowRow {
   inactivity_warning: boolean
 }
 
-export interface Shift {
-  id: string
-  staff_id: string
-  staff_name?: string
-  days: number[]
-  starts: string
-  ends: string
-  valid_from: string | null
-  valid_to: string | null
-}
-
-export type CoverageWindow = 'outside_owner_shift' | 'all_day' | 'custom'
-
-export interface CoverageRule {
-  id: string
-  covering_id: string
-  covering_name?: string
-  /** null means ALL owners. */
-  covered_id: string | null
-  covered_name?: string | null
-  days: number[]
-  window: CoverageWindow
-  custom_from: string | null
-  custom_to: string | null
-  priority: number
-  valid_from: string | null
-  valid_to: string | null
-}
-
-export type AbsenceType = 'planned' | 'sick' | 'auto_detected'
-
-export interface Absence {
-  id: string
-  staff_id: string
-  staff_name?: string
-  from: string
-  to: string
-  backup_id: string | null
-  backup_name?: string | null
-  type: AbsenceType
-}
-
-export interface CoverageGap {
-  kind: 'absence_without_backup' | 'missing_rule' | 'uncovered_window'
-  starts_at: string
-  ends_at: string
-  description: string
-  staff_id: string | null
-}
-
 export interface Paginated<T> {
   items: T[]
   next_cursor: string | null

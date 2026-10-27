@@ -23,7 +23,6 @@ export type NavArea =
   | 'inbox'
   | 'families'
   | 'tasks'
-  | 'coverage'
   | 'dashboard'
   | 'stories'
   | 'organization'
@@ -87,7 +86,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `payments` (PD-27) likewise: offered as the Admin Portal's Payments section.
     // `materials` (PD-29) is offered under More beside the Admin Portal's sections.
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
-    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'settings']
+    return ['chat', 'inbox', 'families', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -99,7 +98,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-29: the Materials library -- offered only when the server confirms
     // the Teachers manager (see SERVER_CONFIRMED_AREAS).
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
-    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'settings']
+    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -188,7 +187,6 @@ export function navAreas(role: StaffRole, opts: DepartmentAccess = {}): NavArea[
 
 /** Manager-only, per the brief's invariants and AI #5's matrix. */
 export const managerOnly = {
-  editCoverageConfig: isManager,
   editConfigWeights: isManager,
   readAuditLog: isManager,
   activateBackup: isManager,

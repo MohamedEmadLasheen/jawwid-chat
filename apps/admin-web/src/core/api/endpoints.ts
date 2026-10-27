@@ -3,17 +3,13 @@ import { persistenceSupported, tokenStore } from '@/core/auth/tokens'
 import { deviceLabel } from '@/core/auth/device'
 import { ApiError } from './errors'
 import type {
-  Absence,
   AttentionBucket,
   Case,
-  CoverageGap,
-  CoverageRule,
   FamilyDetail,
   Handoff,
   InboxRow,
   Message,
   Paginated,
-  Shift,
   Staff,
   Task,
   TeamNowRow,
@@ -260,34 +256,6 @@ export const taskApi = {
     api.patch<Task>(`/tasks/${id}`, patch, newIdempotencyKey()),
 }
 
-/* --------------------------------------------------------------- coverage */
-
-export const coverageApi = {
-  shifts: () => api.get<Shift[]>('/coverage/shifts'),
-  createShift: (input: Omit<Shift, 'id' | 'staff_name'>) =>
-    api.post<Shift>('/coverage/shifts', input, newIdempotencyKey()),
-  updateShift: (id: string, patch: Partial<Shift>) =>
-    api.patch<Shift>(`/coverage/shifts/${id}`, patch, newIdempotencyKey()),
-  deleteShift: (id: string) => api.delete<void>(`/coverage/shifts/${id}`),
-
-  rules: () => api.get<CoverageRule[]>('/coverage/rules'),
-  createRule: (input: Omit<CoverageRule, 'id' | 'covering_name' | 'covered_name'>) =>
-    api.post<CoverageRule>('/coverage/rules', input, newIdempotencyKey()),
-  updateRule: (id: string, patch: Partial<CoverageRule>) =>
-    api.patch<CoverageRule>(`/coverage/rules/${id}`, patch, newIdempotencyKey()),
-  deleteRule: (id: string) => api.delete<void>(`/coverage/rules/${id}`),
-
-  absences: () => api.get<Absence[]>('/coverage/absences'),
-  createAbsence: (input: Omit<Absence, 'id' | 'staff_name' | 'backup_name'>) =>
-    api.post<Absence>('/coverage/absences', input, newIdempotencyKey()),
-  /** Manager one-click. Never automatic in MVP (brief §4). */
-  activateBackup: (absenceId: string) =>
-    api.post<void>(`/absences/${absenceId}/activate-backup`, {}, newIdempotencyKey()),
-
-  tonight: () => api.get<{ covering_id: string; covering_name: string; covered_id: string | null; covered_name: string | null }[]>('/coverage/tonight'),
-  gaps: (days: number) => api.get<CoverageGap[]>('/coverage/gaps', { days }),
-}
-
 /* -------------------------------------------------------------- dashboard */
 
 export interface DashboardHeader {
@@ -320,6 +288,9 @@ export const dashboardApi = {
     api.get<Paginated<InboxRow>>('/dashboard/unattended', { cursor }),
   needsAction: () => api.get<NeedsActionItem[]>('/dashboard/needs-action'),
   thisWeek: () => api.get<ThisWeek>('/dashboard/this-week'),
+  /** Manager one-click. Never automatic in MVP (brief §4). */
+  activateBackup: (absenceId: string) =>
+    api.post<void>(`/absences/${absenceId}/activate-backup`, {}, newIdempotencyKey()),
 }
 
 export const staffApi = {

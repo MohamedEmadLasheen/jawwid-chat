@@ -37,6 +37,11 @@
 .mt-override .select { flex: 1 1 14rem; min-inline-size: 0; inline-size: auto; }
 .mt-add-source { display: grid; gap: var(--space-2); max-inline-size: 40rem; }
 .dialog--sheet .mt-form { min-inline-size: 0; }
+/* A framed lesson in the full-window preview: the frame takes every pixel left. */
+.mt-stage { flex: 1; display: flex; min-block-size: 0; background: var(--surface); }
+.mt-stage .mt-frame { flex: 1; block-size: auto; min-block-size: 0; }
+.mt-stage:fullscreen .mt-frame { border: 0; border-radius: 0; }
+.dialog--full > .field__hint { margin-block: var(--space-2) 0; }
 @media (max-width: 560px) {
   .mt-item { grid-template-columns: 1fr; }
   .mt-item__actions { justify-content: flex-start; }

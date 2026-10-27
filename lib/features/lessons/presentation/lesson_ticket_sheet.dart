@@ -7,6 +7,7 @@ import '../../../core/errors/app_error.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import '../../../shared/utils/clock_time.dart';
 import 'change_lesson_time_sheet.dart';
 import 'lesson_report_sheet.dart';
 import 'makeup_sheet.dart';
@@ -42,15 +43,14 @@ IconData lessonTicketIcon(LessonTicketKind kind) => switch (kind) {
 /// Which lesson a ticket is about, in the reader's own calendar and clock.
 String lessonWhen(BuildContext context, DateTime startsAt) {
   final m = MaterialLocalizations.of(context);
-  return '${m.formatMediumDate(startsAt)} · ${m.formatTimeOfDay(TimeOfDay.fromDateTime(startsAt))}';
+  return '${m.formatMediumDate(startsAt)} · ${formatClockTime(context, TimeOfDay.fromDateTime(startsAt))}';
 }
 
 /// A regular weekly time, "Monday 17:00", in the reader's locale and clock -- from its
 /// next start, so a family abroad sees its own weekday and time, not the teacher's.
 String weeklyLabel(BuildContext context, DateTime nextStartsAt) {
   final locale = Localizations.localeOf(context).toLanguageTag();
-  final m = MaterialLocalizations.of(context);
-  return '${DateFormat.EEEE(locale).format(nextStartsAt)} ${m.formatTimeOfDay(TimeOfDay.fromDateTime(nextStartsAt))}';
+  return '${DateFormat.EEEE(locale).format(nextStartsAt)} ${formatClockTime(context, TimeOfDay.fromDateTime(nextStartsAt))}';
 }
 
 /// Open whichever sheet a ticket needs. Resolves true when something was sent.

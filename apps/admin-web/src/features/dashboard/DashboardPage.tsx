@@ -5,7 +5,7 @@ import { qk } from '@/core/api/queryKeys'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { QueryBoundary } from '@/shared/components/States'
 import { Badge, WorkloadBadge } from '@/shared/components/Badge'
-import { useActivateBackup } from '@/features/coverage/hooks'
+import { useActivateBackup } from './hooks'
 
 /**
  * Every tile is a link into the list it summarises. A dashboard that only shows
