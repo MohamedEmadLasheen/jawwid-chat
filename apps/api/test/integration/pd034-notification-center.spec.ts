@@ -337,12 +337,15 @@ describe('3. messages: one entry per chat, coalesced pushes, read withdraws', ()
 
   it('someone reading the chat right now is pushed late, so reading it cancels the push', async () => {
     const conv = await directWithParent();
-    const now = new Date();
     await g.prisma.conversationParticipantState.upsert({
       where: { conversationId_actorId: { conversationId: conv, actorId: s.parentId } },
       create: { conversationId: conv, actorId: s.parentId, lastReadSeq: BigInt(4) },
       update: { lastReadSeq: BigInt(4) },
     });
+    // "Reading right now" is measured against when the person last read, which
+    // the database stamps on its own clock: this case runs on that clock, so it
+    // holds whatever JavaScript's clock says (PD034_PIN_CLOCK included).
+    const [{ now }] = await g.prisma.$queryRawUnsafe<Array<{ now: Date }>>(`select now() as now`);
     await messageAt(conv, 5, now);
     const [push] = await deliveriesTo(s.parentId, conv);
     expect(push.scheduledAt.getTime()).toBe(now.getTime() + 20_000);
@@ -877,7 +880,8 @@ describe('5. scope', () => {
 
   it('an entry never crosses a tenant: a conversation of another organization writes nothing', async () => {
     const [{ id: org }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `insert into chat.organization (slug, display_name) values ('pd34-other', 'Other') returning id::text as id`,
+      // A slug of its own each run: truncate() leaves organizations, so a fixed one collides on a re-run.
+      `insert into chat.organization (slug, display_name) values ('pd34-other-${randomUUID().slice(0, 8)}', 'Other') returning id::text as id`,
     );
     const conv = await directWithParent();
     await g.prisma.$executeRawUnsafe(`alter table chat.conversation disable trigger user`);
