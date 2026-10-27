@@ -1,8 +1,22 @@
 # PD-29 amendment: materials quality and the child's experience: audit and plan
 
-Status: **PLAN, awaiting the owner's answers** (no lessons code changed). Claimed as
+Status: **DECIDED** (2026-10-27; the owner's answers are in "Owner decisions" below). Claimed as
 `docs/product/pd-registry/PD-29-amendment-materials-quality.md`. Item #1 ships on its own
 as #166. Written 2026-10-27 from the owner's 19-item request, relayed by the department head.
+
+## Owner decisions (2026-10-27)
+
+All six questions in §E are answered, and every answer took the recommendation. The owner's words are quoted.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Path for the lessons | "New clean engine in Chat (Recommended)": path (c), `apps/lessons`, content brought over as text only. |
+| P0-0 | Hide the wrong-audio lessons now | "Yes, hide them now (Recommended)": retire surahs 101, 113 and 89 in Admin Web → Materials until they are rebuilt. |
+| 2 | Quran text, Tajweed source, sign-off | The one shared, verified source: Tanzil Uthmani (Hafs), pinned and checked at every load. Tajweed is shown only once approved. The reviewers are the Teachers department: "Teachers department (Recommended)". Built in #176; the contract is `docs/product/quran-dataset-contract.md`. |
+| 3 | Reciter and hosting | "Mishary Alafasy (Recommended)": per-ayah files, self-hosted, with SHA-256. **Audio stays OFF** until the owner explicitly confirms the right to self-host them. The ingest path and the per-ayah table exist (#176). |
+| 4 | Memorization stars (#15) | "Recommended set": stars are earned in the engine and kept per child. No teacher map. |
+| 5 | Difficulty levels (#6) | "Recommended set": three levels, set by the child's teacher. |
+| 6 | Rewards and competitions (#8, #9) | "Recommended set": points and levels are visible only to the family and the teacher. Competition is opt-in, within one teacher's group, with no public leaderboard. |
 
 ## 0. How this was audited (safety)
 
@@ -335,7 +349,7 @@ asset work, not code.
 - **#19 more engaging games:** motion, sound, positive feedback and rewards in the engine's game
   kit. Design first, then one shared implementation.
 
-**Owner questions** (each with a recommendation)
+**Owner questions** (each with a recommendation). All six are **DECIDED** as recommended; see "Owner decisions" at the top.
 
 1. **Which path for the lessons?** *Recommend (c), the Chat-owned engine with content brought
    over as data.* Also: is there anything wrong in surah **order** that you saw outside the audio
