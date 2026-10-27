@@ -425,6 +425,10 @@ export enum CommErrorCode {
   CASE_STATE = 'COMM.CASE_STATE',
   /** A field failed validation. 400. */
   CASE_INVALID = 'COMM.CASE_INVALID',
+
+  // --- PD-35 B6: department rooms ---
+  /** Calls are not available in a department room (a later PD-19 decision). 403. */
+  CALL_NOT_IN_ROOM = 'COMM.CALL_NOT_IN_ROOM',
 }
 
 export class CommError extends Error {

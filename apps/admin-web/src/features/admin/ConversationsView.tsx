@@ -68,6 +68,7 @@ const TYPE_GLYPH: Record<string, IconName | undefined> = {
   official: 'notifications',
   teacher_supervision: 'teams',
   trial_group: 'calendar',
+  department_room: 'teams',
 }
 
 const GROUP_LABEL: Record<DayGroup, 'groupToday' | 'groupYesterday' | 'groupWeek' | 'groupOlder'> = {

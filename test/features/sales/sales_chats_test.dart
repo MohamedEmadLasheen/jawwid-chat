@@ -58,6 +58,15 @@ void main() {
       expect(forSales.displayTitle('Supervision', trialGroupLabel: 'Trial lessons'), 'teacher_c');
     });
 
+    // PD-35 B6: Sales' department room is a staff-only GROUP, named by the server.
+    test('a department room is a group, titled by the server', () {
+      final room = WireMappers.conversation(wire('department_room', title: 'Sales'), viewerRole: UserRole.sales, viewerActorId: 'me');
+      expect(room.kind, ConversationKind.studentGroup);
+      expect(room.kind.isDirect, isFalse);
+      expect(room.isTrialGroup, isFalse);
+      expect(room.displayTitle('Supervision', trialGroupLabel: 'Trial lessons'), 'Sales');
+    });
+
     test('a parent\'s student group is untouched', () {
       final group = WireMappers.conversation(wire('student_group', title: 'سارة · جَوِّد'), viewerRole: UserRole.parent);
       expect(group.kind, ConversationKind.studentGroup);

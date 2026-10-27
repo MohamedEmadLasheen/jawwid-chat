@@ -14,7 +14,10 @@ type Db = Pick<PrismaService, '$queryRaw'>;
  *     chat.staff_conversation_access still holds for them (PD-35 P2-3);
  *   - never the author;
  *   - an away supervisor is replaced by the backup covering for them, once
- *     per person (PD-33).
+ *     per person (PD-33);
+ *   - in a department room (PD-35 B6), only those still in its department --
+ *     chat.department_room_party, live: a member row the sweep has not yet
+ *     ended reaches no one.
  */
 export async function messageAudience(db: Db, conversationId: string, authorId: string | null): Promise<string[]> {
   const live = await db.$queryRaw<Array<{ actor_id: string; seat_row: boolean }>>`
@@ -37,5 +40,12 @@ export async function messageAudience(db: Db, conversationId: string, authorId: 
       FROM chat.live_covers(now())
      WHERE primary_id = ANY(${recipients}::uuid[])`;
   const cover = new Map(covers.map((r) => [r.primary_id, r.backup_id]));
-  return [...new Set(recipients.map((id) => cover.get(id) ?? id))];
+  const audience = [...new Set(recipients.map((id) => cover.get(id) ?? id))];
+  const parties = await db.$queryRaw<Array<{ id: string }>>`
+    SELECT r.id::text AS id
+      FROM unnest(${audience}::uuid[]) AS r(id)
+      JOIN chat.conversation c ON c.id = ${conversationId}::uuid
+     WHERE c.type <> 'department_room' OR chat.department_room_party(r.id, c.department_id)`;
+  const kept = new Set(parties.map((p) => p.id));
+  return audience.filter((id) => kept.has(id));
 }

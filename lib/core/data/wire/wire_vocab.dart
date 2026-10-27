@@ -15,6 +15,8 @@ abstract final class Wire {
   static const conversationTeacherSupervision = 'teacher_supervision';
   /// PD-11 T4: a teacher's staff-only group with Sales about their trial lessons.
   static const conversationTrialGroup = 'trial_group';
+  /// PD-35 B6: a department's staff-only room (Sales sees its own in the app).
+  static const conversationDepartmentRoom = 'department_room';
 
   // MemberRole
   static const memberParent = 'parent';

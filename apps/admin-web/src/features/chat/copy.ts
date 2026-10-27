@@ -279,6 +279,7 @@ export const chatCopy = {
       family_group: 'مجموعة العائلة',
       teacher_supervision: 'محادثة الإشراف',
       trial_group: 'مجموعة الحصص التجريبية',
+      department_room: 'غرفة القسم',
     } as Record<string, string>,
     role: { contact: 'ولي أمر', teacher: 'معلم', staff: 'جوّد', system: 'النظام' } as Record<string, string>,
     system: {
@@ -553,6 +554,7 @@ export const chatCopy = {
       family_group: 'Family group',
       teacher_supervision: 'Supervision chat',
       trial_group: 'Trial group',
+      department_room: 'Department room',
     } as Record<string, string>,
     role: { contact: 'Parent', teacher: 'Teacher', staff: 'Jawwid', system: 'System' } as Record<string, string>,
     system: {

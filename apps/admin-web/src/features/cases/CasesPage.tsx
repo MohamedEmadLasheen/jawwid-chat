@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
@@ -33,7 +34,9 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   const tx = useCopy()
   const [tab, setTab] = useState<CaseTab>('mine')
   const [closed, setClosed] = useState(false)
-  const [openId, setOpenId] = useState<string | null>(null)
+  // A case card in a department room links here as /cases?case=<id>.
+  const [params] = useSearchParams()
+  const [openId, setOpenId] = useState<string | null>(params.get('case'))
   const list = useQuery({
     queryKey: keys.list(tab, closed),
     queryFn: () => casesApi.list(tab, closed ? 'all' : 'open'),
