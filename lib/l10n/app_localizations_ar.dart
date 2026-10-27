@@ -2765,13 +2765,13 @@ class L10nAr extends L10n {
   String get signupCodeLabel => 'الرمز المكوّن من 6 أرقام';
 
   @override
-  String get signupPasswordLabel => 'كلمة مرور جديدة (8 أحرف على الأقل)';
+  String get signupPasswordLabel => 'كلمة مرور جديدة (4 أحرف على الأقل)';
 
   @override
   String get signupPasswordConfirmLabel => 'أعد كتابة كلمة المرور';
 
   @override
-  String get signupPasswordTooShort => 'استخدم 8 أحرف على الأقل.';
+  String get signupPasswordTooShort => 'استخدم 4 أحرف على الأقل.';
 
   @override
   String get signupPasswordsDiffer => 'كلمتا المرور غير متطابقتين.';

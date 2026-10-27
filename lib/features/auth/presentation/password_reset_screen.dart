@@ -5,6 +5,7 @@ import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../password_policy.dart';
 
 /// What a finished reset hands back to the sign-in screen, which then signs in normally.
 typedef PasswordResetResult = ({String username, String password});
@@ -66,7 +67,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
     setState(() => _tried = true);
     if (_username.text.trim().isEmpty ||
         !_codeRe.hasMatch(_code.text.trim()) ||
-        _password.text.length < 8 ||
+        _password.text.length < kPasswordMinLength ||
         _password.text != _confirm.text) {
       return;
     }
@@ -97,7 +98,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
     final theme = Theme.of(context);
     final usernameMissing = _tried && _username.text.trim().isEmpty;
     final codeInvalid = _tried && !_codeRe.hasMatch(_code.text.trim());
-    final passwordShort = _tried && _password.text.length < 8;
+    final passwordShort = _tried && _password.text.length < kPasswordMinLength;
     final passwordsDiffer = _tried && !passwordShort && _password.text != _confirm.text;
 
     return Scaffold(

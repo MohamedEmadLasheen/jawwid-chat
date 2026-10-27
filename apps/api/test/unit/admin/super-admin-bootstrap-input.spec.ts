@@ -37,8 +37,20 @@ describe('validateBootstrapInput', () => {
     );
   });
 
-  it(`refuses a password shorter than ${MIN_PASSWORD_LENGTH}, or equal to the address`, () => {
-    for (const password of ['short-1', ' '.repeat(20), 'OWNER@qa.jawwid.test']) {
+  // Owner decision 2026-10-27: 4 for ALL accounts, the super admin included (it was 12).
+  it('the minimum is 4, the same as every other account', () => {
+    expect(MIN_PASSWORD_LENGTH).toBe(4);
+  });
+
+  it('accepts a 4-character password and refuses a 3-character one', () => {
+    expect(() => validateBootstrapInput({ ...ok, password: '1234' })).not.toThrow();
+    expect(refusal(() => validateBootstrapInput({ ...ok, password: '123' })).code).toBe(
+      BootstrapRefusalCode.WEAK_PASSWORD,
+    );
+  });
+
+  it(`refuses a password shorter than ${MIN_PASSWORD_LENGTH}, blank, or equal to the address`, () => {
+    for (const password of ['ab1', ' '.repeat(20), 'OWNER@qa.jawwid.test']) {
       expect(refusal(() => validateBootstrapInput({ ...ok, password })).code).toBe(
         BootstrapRefusalCode.WEAK_PASSWORD,
       );
@@ -46,7 +58,7 @@ describe('validateBootstrapInput', () => {
   });
 
   it('never quotes the password in a refusal', () => {
-    const password = 'Sh0rt!x'; // 7 chars: a digit the rule text (12-256) does not contain
+    const password = 'x9!'; // 3 chars: a digit the rule text (4-256) does not contain
     const error = refusal(() => validateBootstrapInput({ ...ok, password }));
     expect(error.message).not.toContain(password);
     expect(error.message).not.toContain(String(password.length));

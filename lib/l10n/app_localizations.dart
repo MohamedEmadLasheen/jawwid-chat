@@ -4804,7 +4804,7 @@ abstract class L10n {
   /// No description provided for @signupPasswordLabel.
   ///
   /// In en, this message translates to:
-  /// **'New password (at least 8 characters)'**
+  /// **'New password (at least 4 characters)'**
   String get signupPasswordLabel;
 
   /// No description provided for @signupPasswordConfirmLabel.
@@ -4816,7 +4816,7 @@ abstract class L10n {
   /// No description provided for @signupPasswordTooShort.
   ///
   /// In en, this message translates to:
-  /// **'Use at least 8 characters.'**
+  /// **'Use at least 4 characters.'**
   String get signupPasswordTooShort;
 
   /// No description provided for @signupPasswordsDiffer.
