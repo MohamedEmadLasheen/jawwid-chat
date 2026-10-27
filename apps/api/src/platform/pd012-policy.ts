@@ -129,3 +129,15 @@ export function decideBillingAccess(
   if (salesRole !== null) return { scope: 'all', canAssign: false, canRecord: true, canEditParent: false, canVerify: false };
   return NO_BILLING_ACCESS;
 }
+
+/**
+ * PD-26 amendment (owner 2026-10-27): the Teacher Supervision page's PD-12 rights.
+ * The Teachers department and the super admin keep exactly what they have; an
+ * Operations supervisor supervises on the page (leave decisions, discipline) for
+ * the teachers of their families -- the callers narrow by the page scope -- and
+ * never sets a leave allowance (a Teacher File act).
+ */
+export function decidePd012PageAccess(staffAccess: Pd012Access, basis: 'super_admin' | 'teachers' | 'operations' | null): Pd012Access {
+  if (basis === 'operations') return { canSupervise: true, canSetAllowance: false };
+  return staffAccess;
+}

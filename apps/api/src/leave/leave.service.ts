@@ -171,7 +171,7 @@ export class LeaveService {
       throw invalid('state: requested | approved | declined | withdrawn | cancelled');
     }
     // PD-35: the requests of the teachers in the caller's scope.
-    const scope = await this.supervision.teacherScope.scopeOf(actor);
+    const scope = await this.supervision.teacherScope.pageScopeOf(actor);
     const rows = await this.prisma.teacherLeaveRequest.findMany({
       where: {
         organizationId: actor.organizationId,
@@ -209,7 +209,7 @@ export class LeaveService {
         LEFT JOIN LATERAL chat.teacher_away(t.id, chat.academy_today()) away ON true
        WHERE t.organization_id = ${actor.organizationId}::uuid
        ORDER BY (t.is_active AND t.left_at IS NULL) DESC, t.name`;
-    const scope = await this.supervision.teacherScope.scopeOf(actor);
+    const scope = await this.supervision.teacherScope.pageScopeOf(actor);
     return {
       year,
       // PD-35: the teachers in the caller's scope.
@@ -293,7 +293,7 @@ export class LeaveService {
   async approve(actorId: string, requestId: string, body: Record<string, unknown>) {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
-    await this.supervision.requireTeacherInScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
     if (row.state !== LeaveState.REQUESTED) throw state('this request has already been decided');
     const firstDay = isoDate(row.firstDay);
     const lastDay = isoDate(row.lastDay);
@@ -370,7 +370,7 @@ export class LeaveService {
   async decline(actorId: string, requestId: string, body: Record<string, unknown>) {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
-    await this.supervision.requireTeacherInScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
     if (row.state !== LeaveState.REQUESTED) throw state('this request has already been decided');
     const note = textField(body, 'note', MAX_TEXT, true) as string;
     const teacher = await this.conversations.requireActor(row.teacherId);
@@ -402,7 +402,7 @@ export class LeaveService {
   async cancel(actorId: string, requestId: string, body: Record<string, unknown>) {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
-    await this.supervision.requireTeacherInScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
     if (row.state !== LeaveState.APPROVED) throw state('only an approved leave can be cancelled');
     const note = textField(body, 'note', MAX_TEXT, true) as string;
     const teacher = await this.conversations.requireActor(row.teacherId);
@@ -568,8 +568,10 @@ export class LeaveService {
 
   private async requireSupervisor(actorId: string): Promise<Actor> {
     const actor = await this.conversations.requireActor(actorId);
-    if (!(await this.supervision.staffAccess(actor)).canSupervise) {
-      throw new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department decides leave');
+    // PD-26 amendment: the Teachers department, or an Operations supervisor for
+    // the teachers of their families (narrowed below by the page scope).
+    if (!(await this.supervision.pageAccess(actor)).canSupervise) {
+      throw new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department and, for the teachers of their families, Operations decide leave');
     }
     return actor;
   }
@@ -578,7 +580,7 @@ export class LeaveService {
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.LEAVE_NOT_FOUND, 'teacher not found');
     const t = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId ?? '' }, select: { id: true } });
     if (!t) throw new CommError(CommErrorCode.LEAVE_NOT_FOUND, 'teacher not found');
-    await this.supervision.requireTeacherInScope(actor, t.id, CommErrorCode.LEAVE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, t.id, CommErrorCode.LEAVE_NOT_FOUND);
   }
 
   private async timeZone(): Promise<string> {

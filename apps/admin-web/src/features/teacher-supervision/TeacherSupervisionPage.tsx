@@ -1,11 +1,12 @@
 import { useId, useState, type ReactNode } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import { TeachersTabs, teacherFilePath } from '@/features/supervision/TeachersTabs'
+import { TeachersTabs } from '@/features/supervision/TeachersTabs'
+import { TeacherName } from '@/features/teacher-files/TeacherName'
 import { LeaveRequestsList } from '@/features/supervision/LeaveRequestsPage'
 import type { Violation, ViolationQuery } from '@/features/discipline/api'
 import { describeError } from '@/features/discipline/copy'
@@ -110,7 +111,7 @@ function LeaveSection({ basePath }: { basePath: string }) {
                   {rows.map((t) => (
                     <tr key={t.id}>
                       <td dir="auto">
-                        <Link to={teacherFilePath(basePath, t.id)}>{t.name}</Link>
+                        <TeacherName basePath={basePath} teacher={t} />
                       </td>
                       <td>
                         {t.allowance === null ? (

@@ -170,7 +170,8 @@ export class ParentFeedbackService {
 
   /** ?status=received|in_review|resolved &category=praise|suggestion|complaint -- newest first. */
   async list(actorId: string, query: { status?: string; category?: string }) {
-    const { actor, access } = await this.files.gate(actorId, (a) => a.canView);
+    // PD-26 amendment: the page's feedback section, for Operations too.
+    const { actor, access } = await this.files.pageGate(actorId, (a) => a.onPage);
     if (query.status !== undefined && !['received', 'in_review', 'resolved'].includes(query.status)) {
       throw invalid('status: must be received, in_review or resolved');
     }
@@ -178,7 +179,7 @@ export class ParentFeedbackService {
       throw invalid('category: must be praise, suggestion or complaint');
     }
     // PD-35: the feedback about the teachers in the caller's scope.
-    const scope = await this.files.teacherScope.scopeOf(actor);
+    const scope = await this.files.teacherScope.pageScopeOf(actor);
     const rows = await this.prisma.parentFeedback.findMany({
       where: {
         organizationId: actor.organizationId as string,
@@ -197,7 +198,7 @@ export class ParentFeedbackService {
    * PD-26 handler (set once; a complaint already taken keeps its handler).
    */
   async take(actorId: string, id: string) {
-    const { actor } = await this.files.gate(actorId, (a) => a.canWriteSupervision);
+    const { actor } = await this.files.pageGate(actorId, (a) => a.canWriteSupervision);
     const row = await this.requireFeedback(actor, id);
     await this.write(async (tx) => {
       if (row.category === 'complaint') {
@@ -225,7 +226,7 @@ export class ParentFeedbackService {
    * only by its PD-26 resolution, so the record and the parent agree.
    */
   async reply(actorId: string, id: string, body: Record<string, unknown>) {
-    const { actor } = await this.files.gate(actorId, (a) => a.canWriteSupervision);
+    const { actor } = await this.files.pageGate(actorId, (a) => a.canWriteSupervision);
     const row = await this.requireFeedback(actor, id);
     if (typeof body.response !== 'string' || body.response.trim().length === 0) throw invalid('response: is required');
     const response = body.response.trim();
@@ -327,7 +328,7 @@ export class ParentFeedbackService {
     });
     if (!row) throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
     // PD-35: feedback about a teacher outside the caller's scope reads as unknown.
-    if (!(await this.files.teacherScope.covers(actor, row.teacherId))) {
+    if (!(await this.files.teacherScope.pageCovers(actor, row.teacherId))) {
       throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
     }
     return row;

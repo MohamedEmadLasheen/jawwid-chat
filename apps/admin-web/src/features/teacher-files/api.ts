@@ -306,3 +306,36 @@ export const payrollKeys = {
   all: (teacherId: string) => ['teacher-files', 'finance', teacherId] as const,
   finance: (teacherId: string, month: string) => ['teacher-files', 'finance', teacherId, month] as const,
 }
+
+/**
+ * PD-26 amendment (owner 2026-10-27): the Teacher Supervision page's own reads,
+ * the same for the Teachers department, the super admin and an Operations
+ * supervisor (the teachers of their families). Nothing of the Teacher File.
+ */
+export interface SupervisionDirectory {
+  basis: 'super_admin' | 'teachers' | 'operations'
+  access: { canWriteSupervision: boolean; canViewFinance: boolean }
+  teachers: Array<{ id: string; name: string; isActive: boolean; away: Away | null }>
+  /** Who may handle a complaint. */
+  supervisors: Person[]
+}
+
+export interface HeldLesson {
+  id: string
+  kind: 'regular' | 'trial'
+  startsAt: string
+  /** The learner's name, or the trial's booking label. */
+  label: string
+}
+
+export const supervisionDirectoryApi = {
+  directory: () => api.get<SupervisionDirectory>('/teacher-supervision/directory'),
+  heldLessons: (teacherId: string, kind: 'regular' | 'trial') =>
+    api.get<{ lessons: HeldLesson[] }>(`/teacher-supervision/teachers/${encodeURIComponent(teacherId)}/held-lessons`, { kind }),
+}
+
+export const supervisionDirectoryKeys = {
+  directory: ['teacher-supervision', 'directory'] as const,
+  held: (teacherId: string, kind: string) => ['teacher-supervision', 'held-lessons', teacherId, kind] as const,
+}
+

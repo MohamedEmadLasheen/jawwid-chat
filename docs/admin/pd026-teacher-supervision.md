@@ -110,3 +110,69 @@ without a new PD number.
   cancels lessons already posts cards into the family's chat, which emits
   `conversation.updated`. A leave that starts on a later day shows when the chat
   is next opened or the app next resumes. No new server event was added.
+
+## Operations access (amendment 2026-10-27)
+
+The owner opened the page to the Operations Supervision team: "they will also
+use them to record teacher delays and excuses". It covers the whole page, with
+the Teachers department's rights, for the teachers of their families.
+
+**Who, for which teachers.** `TeacherScopeService.pageBasis` gives each caller
+one basis:
+
+| Basis | Who | Which teachers |
+|---|---|---|
+| `super_admin` | the super admin | every teacher |
+| `teachers` | the Teachers department (role re-checked as PD-12) | PD-35's scope, as before |
+| `operations` | an Operations member (admin, coverage) or the Operations manager | `chat.operations_teacher_ids`: the current teacher of, and every teacher of a lesson of, each learner whose PD-8 supervisor is in `chat.staff_principals` (themself, an active backup cover, a managed department's members) |
+
+Someone in both departments keeps the Teachers basis. An out-of-scope teacher
+answers 404, like an unknown one.
+
+**Routes that admit Operations** (each narrowed by `pageScopeOf`):
+
+- Leave: `GET /teacher-leave-overview`, `GET /teacher-leave-requests`, approve /
+  decline / cancel a request.
+- Discipline: `GET /discipline/violations`, decide, `POST /lessons/:id/lateness`,
+  `POST /teachers/:id/absences`, `POST /discipline/complaints/:id/uphold`,
+  `GET /teachers/:id/discipline`.
+- Complaints and rewards: `GET /teacher-files/complaints`,
+  `POST /teacher-files/:id/entries` (only `complaint`, `complaint_followup`,
+  `complaint_resolution`), `GET /teacher-files/rewards` (no amounts),
+  `POST /teachers/:id/bonus` (without an amount).
+- Parent feedback: `GET /parent-feedback`, take, reply.
+- New, for every basis: `GET /teacher-supervision/directory` (the caller's
+  teachers, who is away, and who may handle a complaint) and
+  `GET /teacher-supervision/teachers/:id/held-lessons?kind=regular|trial` (the
+  lateness picker; Operations does not read Sales' trial lists).
+- `GET /lessons/access` adds `supervisionPage`.
+
+**Unchanged and refused to Operations.** `GET /teacher-files` (the Teacher Files
+list) and a file's detail; personal record; monthly comments and days off;
+the leave allowance; every `/teacher-files/:id/finance*` route; deduction
+defaults; `POST /teacher-files/:id/rewards` (a reward WITH an amount); PD-11's
+timeline and supervision chat.
+
+**Money.** Nothing about money changes. An Operations supervisor records a
+reward without an amount, and decides a deduction without naming one. A
+decided deduction is priced from the super admin's default (PD-26), exactly as
+when the Teachers department decides it. Amounts are shown to the super admin
+only.
+
+**Database.** `chat.may_supervise_teacher(staff, teacher, org)` is
+`chat.is_lesson_manager` OR the teacher is in `chat.operations_teacher_ids`. It
+replaces `is_lesson_manager` in five guards: a violation recorded or decided, a
+suspension, a supervision entry, PD-32's take of an app complaint, and a
+complaint's handler.
+
+**Admin Web.** The Teachers entry is offered when `GET /lessons/access` says
+`lessonManager` or `supervisionPage`. Without `lessonManager` it leads to
+`/teachers/supervision`, the tab strip shows Supervision only, and teacher names
+are not links to Teacher Files (`TeacherName`, `useOpensTeacherFiles`).
+
+**Known effects.** A suspension decided by an Operations supervisor cancels the
+lessons in its window through `LessonService.cancel` as that supervisor. A
+lesson of a family they do not supervise is not cancelled; it is reported back
+and stays on the Teachers department's needs-action list, as any lesson that
+cannot be cancelled.
+

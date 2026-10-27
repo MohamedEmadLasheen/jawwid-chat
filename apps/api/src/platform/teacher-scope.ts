@@ -110,4 +110,76 @@ export class TeacherScopeService implements OnModuleInit {
   async covers(actor: Actor, teacherId: string | null | undefined): Promise<boolean> {
     return scopeCovers(await this.scopeOf(actor), teacherId);
   }
+
+  // ------------------------------------------------------------------
+  // PD-26 amendment (owner 2026-10-27): the Teacher Supervision page's bases
+  // ------------------------------------------------------------------
+
+  /**
+   * Who works the Teacher Supervision page, and on what basis: the super admin;
+   * the Teachers department (as before, narrowed by the PD-35 switch); or an
+   * Operations supervisor, for the teachers of their own families. Anyone else:
+   * null. Teachers comes first: someone in both keeps the Teachers basis.
+   */
+  async pageBasis(actor: Actor): Promise<PageBasis | null> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
+    if (actor.staffRole === StaffRole.SUPER_ADMIN) return 'super_admin';
+    const [row] = await this.prisma.$queryRaw<Array<{ teachers: string | null; operations: string | null }>>`
+      SELECT chat.teachers_department_role(${actor.actorId}::uuid) AS teachers,
+             (SELECT CASE WHEN EXISTS (SELECT 1 FROM chat.department d
+                                        WHERE d.kind = 'operations' AND d.manager_id = ${actor.actorId}::uuid) THEN 'manager'
+                          WHEN EXISTS (SELECT 1 FROM chat.department_member m
+                                         JOIN chat.department d ON d.id = m.department_id
+                                        WHERE d.kind = 'operations' AND m.staff_id = ${actor.actorId}::uuid) THEN 'member'
+                     END) AS operations`;
+    return decidePageBasis(actor, asDepartmentRole(row?.teachers), asDepartmentRole(row?.operations));
+  }
+
+  /**
+   * The teachers an Operations supervisor works on: chat.operations_teacher_ids,
+   * the database's own rule (the PD-26 guards read the same function), so the
+   * page and the backstop cannot disagree. Never department-wide, whatever the
+   * PD-35 switch says.
+   */
+  async operationsScopeOf(actor: Actor, at: Date = new Date()): Promise<TeacherScope> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return { all: false, teacherIds: new Set() };
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.operations_teacher_ids(${actor.actorId}::uuid, ${at}::timestamptz) AS id`;
+    return { all: false, teacherIds: new Set(rows.map((r) => r.id)) };
+  }
+
+  /** The teachers this caller works on, on the Teacher Supervision page. None without a basis. */
+  async pageScopeOf(actor: Actor, at: Date = new Date()): Promise<TeacherScope> {
+    const basis = await this.pageBasis(actor);
+    if (basis === 'operations') return this.operationsScopeOf(actor, at);
+    if (basis === null) return { all: false, teacherIds: new Set() };
+    return this.scopeOf(actor, at);
+  }
+
+  async pageCovers(actor: Actor, teacherId: string | null | undefined): Promise<boolean> {
+    return scopeCovers(await this.pageScopeOf(actor), teacherId);
+  }
+}
+
+export type PageBasis = 'super_admin' | 'teachers' | 'operations';
+type DepartmentRole = 'manager' | 'member' | null;
+
+function asDepartmentRole(raw: string | null | undefined): DepartmentRole {
+  return raw === 'manager' || raw === 'member' ? raw : null;
+}
+
+/**
+ * PD-26 amendment, the pure part: the role is re-checked against the department
+ * relation, as PD-12 does (a manager row counts for role manager; a member row
+ * for admin or coverage), so a stale row grants nothing.
+ */
+export function decidePageBasis(actor: Actor, teachers: DepartmentRole, operations: DepartmentRole): PageBasis | null {
+  if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
+  if (actor.staffRole === StaffRole.SUPER_ADMIN) return 'super_admin';
+  const fits = (role: DepartmentRole) =>
+    (role === 'manager' && actor.staffRole === StaffRole.MANAGER) ||
+    (role === 'member' && (actor.staffRole === StaffRole.ADMIN || actor.staffRole === StaffRole.COVERAGE));
+  if (fits(teachers)) return 'teachers';
+  if (fits(operations)) return 'operations';
+  return null;
 }

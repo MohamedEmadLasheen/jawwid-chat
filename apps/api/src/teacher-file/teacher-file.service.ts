@@ -7,7 +7,8 @@ import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import { TeacherScopeService, scopeCovers } from '../platform/teacher-scope';
-import type { TeacherFileAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
+import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
+import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind } from '../communication/contracts/vocab';
 import { staffComplaintSource } from '../supervision/complaint-source';
@@ -215,12 +216,13 @@ export class TeacherFileService {
    * with the teacher's name -- the Supervision page's Complaints section.
    */
   async complaints(actorId: string, query: { from?: string; status?: string }) {
-    const { actor, access } = await this.gate(actorId, (a) => a.canView);
+    // PD-26 amendment: the page's list -- an Operations supervisor reads their families' teachers'.
+    const { actor, access } = await this.pageGate(actorId, (a) => a.onPage);
     if (query.from !== undefined && !COMPLAINT_FILTER_SOURCES.has(query.from)) {
       throw invalid('from', 'must be management, parent or parent_app');
     }
     const org = actor.organizationId as string;
-    const scope = await this.teacherScope.scopeOf(actor);
+    const scope = await this.teacherScope.pageScopeOf(actor);
     const roots = await this.prisma.teacherSupervisionEntry.findMany({
       where: {
         organizationId: org,
@@ -338,7 +340,13 @@ export class TeacherFileService {
       handledBy?: unknown;
     },
   ) {
-    const { actor } = await this.gate(actorId, (a) => a.canWriteSupervision);
+    // PD-26 amendment: on the page an Operations supervisor writes complaints,
+    // follow-ups and resolutions for the teachers of their families -- not the
+    // Teacher File's monthly comments or days off.
+    const { actor, basis } = await this.pageGate(actorId, (a) => a.canWriteSupervision);
+    if (basis === 'operations' && !(typeof body.kind === 'string' && OPERATIONS_ENTRY_KINDS.has(body.kind))) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this change to a Teacher File is not yours to make');
+    }
     const teacher = await this.requireTeacher(actor, teacherId);
 
     if (typeof body.kind !== 'string' || !KINDS.has(body.kind)) {
@@ -487,13 +495,97 @@ export class TeacherFileService {
     return dept.members.length > 0 ? 'member' : null;
   }
 
+  /**
+   * PD-26 amendment (owner 2026-10-27): the Teacher Supervision page's gate. The
+   * Teachers department and the super admin pass with their Teacher File access
+   * as it is; an Operations supervisor passes with the page's writes only
+   * (teacherFilePageAccess). Callers narrow by teacherScope.pageScopeOf.
+   */
+  async pageGate(actorId: string, needs: (a: TeacherFilePageAccess) => boolean) {
+    const actor = await this.conversations.requireActor(actorId);
+    const basis = await this.teacherScope.pageBasis(actor);
+    const access = teacherFilePageAccess(
+      this.authz.teacherFileAccess(actor, {
+        organizationId: actor.organizationId ?? '',
+        teachersDepartmentRole: await this.teachersDepartmentRole(actor),
+      }),
+      basis,
+    );
+    if (!access.onPage || !needs(access)) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, access.onPage ? 'this change to a Teacher File is not yours to make' : 'the Teacher Supervision page is for the Teachers department and Operations');
+    }
+    return { actor, access, basis };
+  }
+
+  /**
+   * PD-26 amendment: what the page's pickers need -- the teachers the caller
+   * works on (with whether they are away today) and who may handle a complaint
+   * (the Teachers department, and an Operations caller themself). Nothing of the
+   * Teacher File; the same for every basis, so the page asks one route.
+   */
+  async directory(actorId: string) {
+    const { actor, access, basis } = await this.pageGate(actorId, (a) => a.onPage);
+    const org = actor.organizationId as string;
+    const scope = await this.teacherScope.pageScopeOf(actor);
+    const teachers = await this.prisma.teacher.findMany({
+      where: { organizationId: org, ...(scope.all ? {} : { id: { in: [...scope.teacherIds] } }) },
+      select: { id: true, name: true, isActive: true, leftAt: true },
+      orderBy: { name: 'asc' },
+    });
+    const away = await this.awayToday(teachers.map((t) => t.id));
+    const handlers = await this.supervisors(org);
+    if (basis === 'operations' && !handlers.some((h) => h.id === actor.actorId)) {
+      handlers.push({ id: actor.actorId, name: actor.displayName });
+    }
+    return {
+      basis,
+      access: { canWriteSupervision: access.canWriteSupervision, canViewFinance: access.canViewFinance },
+      teachers: teachers.map((t) => ({ id: t.id, name: t.name, isActive: t.isActive && t.leftAt === null, away: away.get(t.id) ?? null })),
+      supervisors: handlers,
+    };
+  }
+
+  /**
+   * PD-26 amendment: the held lessons of one teacher in the last two weeks, for
+   * the page's "record lateness" -- regular (and make-ups) or trials. Only the
+   * fields a picker shows; the caller's page scope decides which teachers.
+   */
+  async heldLessons(actorId: string, teacherId: string, kind: unknown) {
+    const { actor } = await this.pageGate(actorId, (a) => a.onPage);
+    if (kind !== 'trial' && kind !== 'regular') throw invalid('kind', 'must be trial or regular');
+    const teacher = await this.requireTeacher(actor, teacherId);
+    const now = Date.now();
+    const rows = await this.prisma.lesson.findMany({
+      where: {
+        teacherId: teacher.id,
+        outcome: 'held',
+        startsAt: { gte: new Date(now - 14 * 86_400_000), lte: new Date(now) },
+        ...(kind === 'trial' ? { kind: 'trial' } : { kind: { not: 'trial' } }),
+      },
+      select: { id: true, startsAt: true, learner: { select: { name: true } }, prospect: { select: { displayName: true } } },
+      orderBy: { startsAt: 'desc' },
+      take: 200,
+    });
+    return {
+      lessons: rows.map((l) => ({
+        id: l.id,
+        kind,
+        startsAt: l.startsAt.toISOString(),
+        label: (kind === 'trial' ? l.prospect?.displayName : l.learner?.name) ?? '',
+      })),
+    };
+  }
+
   async requireTeacher(actor: Actor, teacherId: string) {
     const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
     if (!isUuid(teacherId)) throw notFound;
     const teacher = await this.prisma.teacher.findUnique({ where: { id: teacherId } });
     if (!teacher || teacher.organizationId !== actor.organizationId) throw notFound;
-    // PD-35: a teacher outside the caller's scope reads as unknown.
-    if (!scopeCovers(await this.teacherScope.scopeOf(actor), teacher.id)) throw notFound;
+    // PD-35: a teacher outside the caller's scope reads as unknown. The page
+    // scope is PD-35's for the Teachers department, and the teachers of their
+    // families for an Operations supervisor (PD-26 amendment); only the page's
+    // routes admit the latter.
+    if (!scopeCovers(await this.teacherScope.pageScopeOf(actor), teacher.id)) throw notFound;
     return teacher;
   }
 

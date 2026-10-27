@@ -4,7 +4,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { NewEntry, TeacherFile } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
-import { useAddEntryFor, useTeacherList, useUpdatePersonal } from './hooks'
+import { useAddEntryFor, useSupervisionDirectory, useUpdatePersonal } from './hooks'
 
 export function Footer({ onCancel, onSave, pending }: { onCancel: () => void; onSave: () => void; pending: boolean }) {
   const tx = useCopy()
@@ -165,7 +165,8 @@ export function AddEntryDialog({
   const sourceId = useId()
   const handlerId = useId()
   // The supervisors a complaint may be handed to, and the teachers to choose from.
-  const directory = useTeacherList(intent.kind === 'complaint' || teacherId === null)
+  // PD-26 amendment: the page's directory -- the caller's teachers and who may handle a complaint.
+  const directory = useSupervisionDirectory(intent.kind === 'complaint' || teacherId === null)
   const [chosen, setChosen] = useState(teacherId ?? '')
   const [source, setSource] = useState<'' | 'management' | 'parent'>(intent.kind === 'complaint' ? (intent.source ?? '') : '')
   const [handler, setHandler] = useState('')

@@ -2400,6 +2400,38 @@ month has no pay terms. Every staff complaint names its source on every route
 on app resume and when the shown leave ends, never by polling. Record:
 `docs/admin/pd026-teacher-supervision.md` §Known limits, closed.
 
+**Amendment, 2026-10-27: Operations access** (owner request, no new number;
+registry `pd-registry/PD-26-amendment-operations-access.md`). The owner: "We
+need these pages to be visible to the Operations Supervision team as well,
+since they will also use them to record teacher delays and excuses." Asked to
+scope it, the owner chose **the whole page** (leave, apologies and absences,
+lateness trial and regular, rewards, complaints, parent feedback) with **the
+Teachers department's rights on it**, for **the teachers of their families**.
+
+- **Which teachers.** The current teacher of, and every teacher of a lesson of,
+  each learner whose PD-8 supervisor is the Operations supervisor, a supervisor
+  they cover as an active backup (PD-33), or, for the Operations manager, any
+  member of the department. Every other teacher answers as not found, as PD-35
+  does. One rule, in the database (`chat.operations_teacher_ids`) and read by
+  `TeacherScopeService.operationsScopeOf`.
+- **What they may do there.** What the Teachers department may do on the page:
+  decide leave; record lateness and absences; decide on the ladder (warnings,
+  deductions, suspensions); record complaints, follow-ups and resolutions, and
+  uphold them; handle a complaint; record a reward; read and answer parent
+  feedback. A complaint may also be handed to them.
+- **What does not change.** Money keeps PD-18's finance tier: reward amounts,
+  default deduction amounts, payroll and the payout account stay the super
+  admin's. Operations records a reward or decides a deduction case without a
+  price; a decided deduction is still priced from the super admin's default,
+  as for anyone. The Teacher File (personal record, monthly comments, days off,
+  the leave allowance) and the rest of the Teachers area (statistics, files,
+  certificates, materials) stay the Teachers department's. Admin Web shows
+  Operations the Teachers → Supervision page only, on the server's word.
+- **Backstop.** The PD-12/PD-26 database guards that said "the Teachers
+  department" now say "the Teachers department or the teacher's Operations
+  supervisor" (`chat.may_supervise_teacher`, migration
+  `20261027140000_chat_pd026_operations_access.sql`).
+
 **Closed.** 2026-10-22.
 
 ---

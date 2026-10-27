@@ -404,8 +404,11 @@ describe('3. teacher leave', () => {
 
     expect(await code(leave.withdraw(s.newTeacherId, request.id))).toBe(CommErrorCode.LEAVE_NOT_FOUND);
     expect(await code(leave.approve(s.teacherId, request.id, {}))).toBe(CommErrorCode.LEAVE_DENIED);
-    expect(await code(leave.approve(s.ownerId, request.id, {}))).toBe(CommErrorCode.LEAVE_DENIED);
-    expect(await code(leave.list(s.ownerId, {}))).toBe(CommErrorCode.LEAVE_DENIED);
+    // PD-26 amendment: Operations decides the leave of their families' teachers only;
+    // admin_b has no charge over teacher_c.
+    expect(await code(leave.approve(s.otherAdminId, request.id, {}))).toBe(CommErrorCode.LEAVE_NOT_FOUND);
+    expect((await leave.list(s.otherAdminId, {})).requests).toEqual([]);
+    expect(await code(leave.list(s.parentId, {}))).toBe(CommErrorCode.LEAVE_DENIED);
     expect(await code(leave.ownLeave(tsupId))).toBe(CommErrorCode.LEAVE_DENIED);
 
     expect((await leave.withdraw(s.teacherId, request.id)).request.state).toBe('withdrawn');
