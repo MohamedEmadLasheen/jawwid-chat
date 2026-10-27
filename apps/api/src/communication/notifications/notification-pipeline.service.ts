@@ -303,11 +303,13 @@ export class NotificationPipeline {
         // Every chat push in the hour counts, a summary once it has gone included
         // (review P1-2: the owner's 6 is 6; a summary goes exactly when a slot
         // frees, so it fits). created_at bounds the scan: a held push is at most
-        // a night plus an hour old when it goes.
+        // a night plus an hour old when it goes. Measured from the EARLIER of
+        // `at` and the database clock, so a push decided for later (or a test
+        // on a fixed calendar) never excludes rows written now.
         const counted = await tx.$queryRaw<Array<{ t: Date }>>`
           SELECT coalesce(sent_at, scheduled_at) AS t FROM chat.notification
            WHERE recipient_id = ${r.actorId}::uuid AND event_type = 'message_published' AND status <> 'cancelled'
-             AND created_at > ${new Date(at.getTime() - 26 * 3_600_000)}
+             AND created_at > least(${at}::timestamptz, now()) - interval '26 hours'
              AND coalesce(sent_at, scheduled_at) > ${new Date(at.getTime() - 3_600_000)}
              AND coalesce(sent_at, scheduled_at) <= ${at}`;
         const frees = capFreesAt(at, counted.map((c) => c.t), capPerHour);

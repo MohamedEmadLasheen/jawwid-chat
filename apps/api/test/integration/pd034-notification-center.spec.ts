@@ -25,6 +25,23 @@ import { buildGraph, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
+/**
+ * Any wall-clock time: PD034_PIN_CLOCK=<ISO> runs the whole spec with JavaScript's
+ * clock pinned there (Date only; timers stay real, so Prisma and jest are
+ * untouched). G-19 runs it unpinned at whatever hour CI runs; locally it is run
+ * at 03:00 and 13:00 Cairo to prove no case depends on the time of day.
+ */
+const PINNED = process.env.PD034_PIN_CLOCK;
+if (PINNED) {
+  beforeAll(() => {
+    jest.useFakeTimers({
+      now: new Date(PINNED),
+      doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'],
+    });
+  });
+  afterAll(() => jest.useRealTimers());
+}
+
 const g = buildGraph();
 const audit = new PrismaAuditService();
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
@@ -494,11 +511,16 @@ describe('4. preferences, locked categories, rate limit, quiet hours, names', ()
     const [push] = await deliveriesTo(s.parentId, conv);
     expect(push.scheduledAt.toISOString()).toBe('2030-01-11T08:00:00.000Z');
 
+    // Their own setting wins: switched off, the push already held for 08:00
+    // goes at its earliest (the night itself), and a later message joins it.
     await g.inbox.setSettings(await actor(s.parentId), { quietHours: { enabled: false, startMinute: 1320, endMinute: 480 } });
+    expect((await deliveriesTo(s.parentId, conv))[0]!.scheduledAt.toISOString()).toBe(night.toISOString());
     const conv2 = (await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId)).id;
     await messageAt(conv2, 1, night);
-    const [push2] = await deliveriesTo(s.parentId, conv2);
-    expect(push2.scheduledAt.toISOString()).toBe(night.toISOString());
+    const pending = await g.prisma.notification.findMany({ where: { recipientId: s.parentId, status: 'scheduled' } });
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.scheduledAt.toISOString()).toBe(night.toISOString());
+    expect(pending[0]!.variables).toMatchObject({ count: 2 });
   });
 
   it('names on the lock screen only for someone who turned them on', async () => {
@@ -824,11 +846,12 @@ describe('5. scope', () => {
   it('P2-5: an entry about a conversation the reader can no longer read is withdrawn on read, from the list and the counts', async () => {
     const group = (await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId)).id;
     const direct = await directWithParent();
+    // Access is already gone when the entry exists: the leave trigger (which
+    // withdraws what is there when someone leaves) cannot have touched it, so
+    // only the read-time check stands between it and the reader.
+    await g.conversations.setMembership(group, s.ownerId, { actorId: s.parentId, actorKind: 'contact', memberRole: 'parent' }, 'remove', 'pd034');
     await messageAt(group, 1, new Date());
     await messageAt(direct, 1, new Date());
-    // The pushes went out, so nothing is waiting for the leave trigger to withdraw.
-    await g.prisma.notification.updateMany({ where: { recipientId: s.parentId }, data: { status: 'sent', sentAt: new Date() } });
-    await g.conversations.setMembership(group, s.ownerId, { actorId: s.parentId, actorKind: 'contact', memberRole: 'parent' }, 'remove', 'pd034');
     const parent = await actor(s.parentId);
 
     const counts = await g.inbox.counts(parent);
