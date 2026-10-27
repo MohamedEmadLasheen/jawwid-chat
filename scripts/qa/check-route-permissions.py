@@ -28,14 +28,14 @@ CATALOGUE = os.path.join(SRC, 'platform', 'permissions', 'catalogue.ts')
 HTTP = re.compile(r"^\s*@(Get|Post|Put|Patch|Delete)\(")
 DECL = re.compile(r"^\s*@(Requires|SelfService|NotForStaff|Public)\(")
 REQUIRES = re.compile(r"@Requires\(([^)]*)\)")
-KEY = re.compile(r"'([a-z_]+\.[a-z_]+)'")
+KEY = re.compile(r"'([a-z_]+(?:\.[a-z_]+)+)'")
 DECORATOR = re.compile(r"^\s*@\w")
 CLASS = re.compile(r"^\s*export class \w+")
 
 
 def catalogue_keys(text):
     body = text.split('const ENTRIES = {', 1)[1].split('} as const', 1)[0]
-    return set(re.findall(r"^\s*'([a-z_]+\.[a-z_]+)':", body, re.M))
+    return set(re.findall(r"^\s*'([a-z_]+(?:\.[a-z_]+)+)':", body, re.M))
 
 
 def check_source(name, text, keys):
@@ -106,7 +106,7 @@ def check():
 
 
 def selftest():
-    keys = {'certificates.view'}
+    keys = {'certificates.view', 'certificates.request.student'}
     ok = """
 @Controller('x')
 export class X {
@@ -139,6 +139,8 @@ export class M {
         ('an unknown key fails', ok.replace("'certificates.view'", "'certificates.vew'"), 1),
         ('two rules on one handler fail', ok.replace("  @SelfService()\n", "  @SelfService()\n  @NotForStaff()\n"), 1),
         ('an empty @Requires fails', ok.replace("@Requires('certificates.view')", '@Requires()'), 1),
+        ('a key with a multi-part action passes', ok.replace("'certificates.view'", "'certificates.request.student'"), 0),
+        ('a multi-part key not in the catalogue fails', ok.replace("'certificates.view'", "'certificates.request.parent'"), 1),
     ]
     failed = 0
     for label, text, want in cases:

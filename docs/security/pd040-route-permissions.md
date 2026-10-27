@@ -146,9 +146,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/invoices/:id/link` | billing.view | `billing/payments.controller.ts#PaymentsController.invoiceLink` |
 | GET | `/api/v1/learner-certificates` | certificates.view | `certificates/certificate.controller.ts#CertificateController.list` |
 | POST | `/api/v1/learner-certificates` | not for staff | `certificates/certificate.controller.ts#CertificateController.request` |
-| POST | `/api/v1/learner-certificates/:id/decline` | certificates.decline | `certificates/certificate.controller.ts#CertificateController.decline` |
+| POST | `/api/v1/learner-certificates/:id/decline` | certificates.deliver | `certificates/certificate.controller.ts#CertificateController.decline` |
 | POST | `/api/v1/learner-certificates/:id/issue` | certificates.deliver | `certificates/certificate.controller.ts#CertificateController.issue` |
-| POST | `/api/v1/learner-certificates/:id/upload` | certificates.deliver | `certificates/certificate.controller.ts#CertificateController.authorizeUpload` |
+| POST | `/api/v1/learner-certificates/:id/upload` | certificates.design | `certificates/certificate.controller.ts#CertificateController.authorizeUpload` |
 | POST | `/api/v1/learners/:id/enrollment` | students.manage | `lessons/journey.controller.ts#JourneyController.setEnrollment` |
 | GET | `/api/v1/learners/:id/free-slots` | schedule.view | `lessons/scheduling.controller.ts#SchedulingController.learnerFreeSlots` |
 | GET | `/api/v1/learners/:id/materials/library` | materials.view | `materials/materials.controller.ts#MaterialsController.library` |

@@ -193,7 +193,7 @@ Every permission records: `key`, `page`, `action`, bilingual label and descripti
 
 | Page | Permissions (examples) | Risk |
 |---|---|---|
-| `certificates` | `certificates.view`, `certificates.deliver` (upload + issue), `certificates.decline` | pii (the printed child name) |
+| `certificates` | `certificates.view`, `certificates.design` (upload), `certificates.deliver` (send to the family). The names are agreed with PD-41, which owns the certificates workflow and adds `request.student`, `request.teacher`, `story` and `oversee`. | pii (the printed child name) |
 | `chats` | `chat.use` (open the chat app / socket), `chat.internal_notes` | family_contact |
 | `families`, `parents` | `families.view`, `families.assign`, `parents.view`, `parents.edit_contact` | family_contact |
 | `instalments`, `payments` | `billing.view`, `billing.record`, `billing.verify` | finance |
@@ -334,16 +334,16 @@ The rules below form one DB-free decision, `decideStaffAccountAdmin(actor, targe
 
 ## 7. The Designer role
 
-A seeded **template** role, `designer`: org-wide, tier `specialist`, permissions `certificates.view` and `certificates.deliver`. The super admin may edit it as data.
+A seeded **template** role, `designer`: org-wide, tier `specialist`, permissions `certificates.view` and `certificates.design`. The super admin may edit it as data. **Aligned with PD-41 (2026-10-27):** the Designer designs and uploads, and never sends, cancels or declines. Sending is `certificates.deliver`, held by the requester. That settles §12 Q1 the PD-41 way, pending the owner.
 
 ### 7.1 Exactly what it reaches
 
 | Route | Permission | Note |
 |---|---|---|
 | `GET /learner-certificates?state=` | `certificates.view` | Every request in the organization, or by assignment (§12 Q2). PD-35 teacher scope does not apply, because the Designer is not a supervisor. |
-| `POST /learner-certificates/:id/upload` | `certificates.deliver` | A signed PUT URL, as today. |
-| `POST /learner-certificates/:id/issue` | `certificates.deliver` | Or a new "prepare" step instead (§12 Q1). |
-| `POST /learner-certificates/:id/decline` | `certificates.decline` | **Not** in the Designer bundle. Declining is an academic decision. |
+| `POST /learner-certificates/:id/upload` | `certificates.design` | A signed PUT URL, as today. PD-41 moves upload to its own design routes. |
+| `POST /learner-certificates/:id/issue` | `certificates.deliver` | **Not** in the Designer bundle: sending is the requester's act (PD-41). |
+| `POST /learner-certificates/:id/decline` | `certificates.deliver` | **Not** in the Designer bundle. Today the issuer declines; PD-41 replaces this with the requester cancelling and the Designer returning. |
 | `GET /me`, `/me/sessions`, own profile, `POST /auth/logout`, own notifications | `@SelfService()` | |
 
 **Nothing else.** No `/conversations`, `/families`, `/parent-profiles`, `/payments`, `/instalments`, `/teacher-files`, `/lessons`, `/org`, `/admin/*`, `/admin/accounts` or `/stories`. Also no socket rooms, because the Designer lacks `chat.use`. The route spec (§4.3 item 4) pins this list.

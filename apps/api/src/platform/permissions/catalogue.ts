@@ -5,7 +5,8 @@
  * (PR-2) seeds `chat.permission` from it and a protected spec asserts the two
  * are equal.
  *
- * A key names a page and an action, `<page>.<action>`. Every HTTP route
+ * A key names a page and an action, `<page>.<action>`; the action may have
+ * parts of its own (`certificates.request.student`). Every HTTP route
  * declares the keys it needs (route-access.ts), and PermissionGuard checks the
  * actor holds one of them. A key is NECESSARY, NEVER SUFFICIENT: the service
  * behind the route still decides department, scope and state exactly as
@@ -100,9 +101,11 @@ const ENTRIES = {
   'cases.view': { label: { en: 'View supervision cases', ar: 'عرض حالات الإشراف' }, risk: 'pii', introducedBy: 'PD-35' },
   'cases.manage': { label: { en: 'Open and work supervision cases', ar: 'فتح حالات الإشراف ومتابعتها' }, risk: 'pii', introducedBy: 'PD-35' },
 
+  // Names agreed with PD-41, which owns the certificates workflow and adds the
+  // rest of its keys (request.student, request.teacher, story, oversee).
   'certificates.view': { label: { en: 'View certificate requests', ar: 'عرض طلبات الشهادات' }, risk: 'pii', introducedBy: 'PD-12' },
-  'certificates.deliver': { label: { en: 'Upload and issue certificates', ar: 'رفع الشهادات وإصدارها' }, risk: 'pii', introducedBy: 'PD-12' },
-  'certificates.decline': { label: { en: 'Decline certificate requests', ar: 'رفض طلبات الشهادات' }, risk: 'pii', introducedBy: 'PD-12' },
+  'certificates.design': { label: { en: 'Design and upload certificates', ar: 'تصميم الشهادات ورفعها' }, risk: 'pii', introducedBy: 'PD-12' },
+  'certificates.deliver': { label: { en: 'Send certificates to the family', ar: 'إرسال الشهادات إلى الأسرة' }, risk: 'family_contact', introducedBy: 'PD-12' },
 
   'leave.view': { label: { en: 'View teacher leave', ar: 'عرض إجازات المعلمين' }, risk: 'pii', introducedBy: 'PD-12' },
   'leave.decide': { label: { en: 'Decide teacher leave', ar: 'البت في إجازات المعلمين' }, risk: 'pii', introducedBy: 'PD-12' },

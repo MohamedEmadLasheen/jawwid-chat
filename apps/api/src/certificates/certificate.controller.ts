@@ -27,7 +27,7 @@ export class CertificateController {
     return this.certificates.request(actorId, body ?? {});
   }
 
-  @Requires('certificates.deliver')
+  @Requires('certificates.design')
   @Post(':id/upload')
   authorizeUpload(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.certificates.authorizeUpload(actorId, id, body ?? {});
@@ -39,7 +39,8 @@ export class CertificateController {
     return this.certificates.issue(actorId, id, body ?? {});
   }
 
-  @Requires('certificates.decline')
+  // Today the issuer declines; PD-41 replaces this with cancel / return.
+  @Requires('certificates.deliver')
   @Post(':id/decline')
   decline(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.certificates.decline(actorId, id, body ?? {});

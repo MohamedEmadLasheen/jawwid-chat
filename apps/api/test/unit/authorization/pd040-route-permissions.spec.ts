@@ -131,8 +131,8 @@ describe('PD-40: every route declares what it asks of staff', () => {
     const opened = (key: string) =>
       routes.filter((r) => r.access?.kind === 'requires' && r.access.anyOf.includes(key as never)).map((r) => `${r.method} ${r.path}`);
     expect(opened('certificates.view')).toEqual(['GET /learner-certificates']);
-    expect(opened('certificates.deliver').sort()).toEqual(['POST /learner-certificates/:id/issue', 'POST /learner-certificates/:id/upload']);
-    expect(opened('certificates.decline')).toEqual(['POST /learner-certificates/:id/decline']);
+    expect(opened('certificates.design')).toEqual(['POST /learner-certificates/:id/upload']);
+    expect(opened('certificates.deliver').sort()).toEqual(['POST /learner-certificates/:id/decline', 'POST /learner-certificates/:id/issue']);
   });
 
   it('docs/security/pd040-route-permissions.md is up to date', () => {
