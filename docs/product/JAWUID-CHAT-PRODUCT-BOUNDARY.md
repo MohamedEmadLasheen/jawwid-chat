@@ -2036,7 +2036,7 @@ pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the
 
 ### PD-21 · Account administration: password reset, inactive accounts, impersonation
 
-> **Narrowed by PD-40 (2026-10-27).** Decision 1's "every staff role" is replaced by:
+> **Narrowed by PD-40 (2026-10-27); approved by the product owner on 2026-10-27 ("Approve as proposed").** Decision 1's "every staff role" is replaced by:
 > - parent accounts: the super admin and the Operations department; Sales may reset and
 >   sign out only;
 > - teacher accounts: the super admin and the Teachers department;
