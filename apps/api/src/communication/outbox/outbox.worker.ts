@@ -6,6 +6,7 @@ import { actorRefKey } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName, room } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
+import { statusUpdatesByAuthor } from '../messages/receipt-status';
 import { mentionRuleFor } from '../mentions/mention-policy';
 import { NotificationPipeline } from '../notifications/notification-pipeline.service';
 import { messageAudience } from './message-audience';
@@ -266,6 +267,37 @@ export class OutboxWorker {
         const storyId = payload.storyId as string | undefined;
         if (!storyId) return;
         await this.realtime.toUsers(await this.storyRecipientIds(storyId), type, payload as never);
+        return;
+      }
+
+      /**
+       * PD-37. A seated reader's cursor moved; tell each AUTHOR whose messages
+       * it covers what their ticks are now. Never the room: the payload this
+       * row carries names the reader, and the ticks are the author's alone.
+       * An explicit case so it can never reach the thread fan-out below.
+       */
+      case CommEvent.RECEIPTS_ADVANCED: {
+        if (!conversationId) return;
+        const send = this.realtime.toThreadAudience?.bind(this.realtime);
+        // Without an audience path the only fallback is the whole room, which
+        // is the leak itself: fail, and let the row retry.
+        if (!send) throw new Error('this realtime publisher cannot address part of a conversation');
+        const byAuthor = await statusUpdatesByAuthor(
+          this.prisma,
+          conversationId,
+          BigInt(payload.fromSeq as string),
+          BigInt(payload.toSeq as string),
+        );
+        // ONE delivery for every author it covers: one pass of the RT-009
+        // checks over the room, each author receiving only their own ticks
+        // (perActor). The reader's own messages are not changed by their read.
+        const perActor: Record<string, { conversationId: string; items: typeof byAuthor extends Map<string, infer I> ? I : never }> = {};
+        for (const [authorId, items] of byAuthor) {
+          if (authorId !== payload.actorId) perActor[authorId] = { conversationId, items };
+        }
+        const authors = Object.keys(perActor);
+        if (authors.length === 0) return;
+        await send(conversationId, CommEvent.MESSAGE_STATUS, { conversationId, items: [] }, { onlyActors: authors, perActor });
         return;
       }
 

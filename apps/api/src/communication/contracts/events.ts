@@ -17,7 +17,26 @@ export const CommEvent = {
    * through the authorized REST path. An internal note's edit reaches staff only.
    */
   MESSAGE_UPDATED: 'message.updated',
+  /**
+   * DEPRECATED, never emitted. It would have fanned one recipient's read of
+   * one message out to the whole room -- the roster RT-012 removed. PD-37
+   * replaced it with MESSAGE_STATUS, to the author only.
+   */
   MESSAGE_RECEIPT_UPDATED: 'message.receipt.updated',
+  /**
+   * PD-37: the ticks on the RECIPIENT'S OWN messages changed (sent ->
+   * delivered -> read, the WhatsApp group rule over countable readers). To the
+   * author's sockets only, through the conversation's delivery-time checks;
+   * never to the room. Carries no reader: who read it is Message info.
+   */
+  MESSAGE_STATUS: 'message.status',
+  /**
+   * PD-37, OUTBOX ONLY -- never emitted to a client. A countable reader's read
+   * or delivery cursor moved forward; the worker turns it into MESSAGE_STATUS
+   * for the authors whose messages it covers. It names the reader, so it must
+   * never reach the worker's default thread fan-out.
+   */
+  RECEIPTS_ADVANCED: 'receipts.advanced',
   REACTION_ADDED: 'reaction.added',
   REACTION_REMOVED: 'reaction.removed',
   TYPING_STARTED: 'typing.started',
@@ -178,6 +197,21 @@ export interface ReactionPayload {
   emoji: string;
 }
 
+/** PD-37: new ticks on the recipient's own messages. */
+export interface MessageStatusPayload {
+  conversationId: string;
+  items: Array<{ messageId: string; seq: string; status: 'sent' | 'delivered' | 'read' }>;
+}
+
+/** PD-37, outbox only: a reader's cursor moved from `fromSeq` (exclusive) to `toSeq`. */
+export interface ReceiptsAdvancedPayload {
+  conversationId: string;
+  actorId: string;
+  kind: 'delivered' | 'read';
+  fromSeq: string;
+  toSeq: string;
+}
+
 export interface TypingPayload {
   conversationId: string;
   actorId: string;
@@ -319,6 +353,8 @@ export interface CommEventPayloads {
   [CommEvent.MESSAGE_DELETED]: MessageDeletedPayload;
   [CommEvent.MESSAGE_UPDATED]: MessageUpdatedPayload;
   [CommEvent.MESSAGE_RECEIPT_UPDATED]: MessageReceiptUpdatedPayload;
+  [CommEvent.MESSAGE_STATUS]: MessageStatusPayload;
+  [CommEvent.RECEIPTS_ADVANCED]: ReceiptsAdvancedPayload;
   [CommEvent.REACTION_ADDED]: ReactionPayload;
   [CommEvent.REACTION_REMOVED]: ReactionPayload;
   [CommEvent.TYPING_STARTED]: TypingPayload;

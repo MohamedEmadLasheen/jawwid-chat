@@ -73,7 +73,14 @@ export function buildGraph(
   // A realtime publisher that is a no-op: these suites assert on what reaches
   // the DATABASE (notifications, outbox status), and a socket server in a jest
   // process would be a second thing to tear down.
-  const silentRealtime = { toThread: async () => undefined, toUsers: async () => undefined };
+  // PD-37: with toThreadAudience too -- without it the worker (rightly) fails a
+  // receipts.advanced row rather than widen it to the room, and every suite
+  // that reads a message and drains the outbox would see that row retried.
+  const silentRealtime = {
+    toThread: async () => undefined,
+    toUsers: async () => undefined,
+    toThreadAudience: async () => undefined,
+  };
   // PD-34: wired as production wires it (reminders, reads, message pushes).
   const pipeline = new NotificationPipeline(prisma, notifications, quietHours, config, identity, silentRealtime as never);
   const inbox = new NotificationInboxService(prisma, templates, config, pipeline, conversations);

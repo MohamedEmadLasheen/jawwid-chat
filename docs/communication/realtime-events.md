@@ -58,10 +58,10 @@ further, and is sent `conversation.access_revoked`.
 |---|---|---|
 | `conversation.subscribe` | `{ conversationId }` | Authorized; acknowledged. |
 | `conversation.unsubscribe` | `{ conversationId }` | |
-| `typing.start` | `{ conversationId }` | Debounced server-side; safe to call often. |
-| `typing.stop` | `{ conversationId }` | |
+| `typing.start` | `{ conversationId }` | Debounced server-side (Redis, before any database read; a "started" goes out at most once per 3 s); safe to call often. **PD-37: only a seated member** (live, not silent, not observer) may type; anyone else gets `{ ok: false }`. Never in a direct teacher↔parent conversation. |
+| `typing.stop` | `{ conversationId }` | Same seat rule. |
 | `presence.heartbeat` | — | Refreshes a TTL key. |
-| `message.delivered` | `{ messageIds: string[] }` | Only the caller's own receipts change. |
+| `message.delivered` | `{ conversationId, upToSeq }` (PD-37, preferred) or `{ messageIds: string[] }` | The cursor form moves the caller's delivery cursor forward (never back) and turns the authors' ticks grey ✓✓ via `message.status`. The id form only changes the caller's own receipts and announces nothing. |
 
 ## Server → client
 
@@ -70,10 +70,11 @@ further, and is sent `conversation.access_revoked`.
 | `message.created` | `{ conversationId, messageId, seq, authorKind, authorId, type, visibility, moderation, createdAt }` | Conversation room. **Internal notes go only to staff rooms.** |
 | `message.deleted` | `{ conversationId, messageId, deletedForAll }` | Conversation room |
 | `message.updated` | `{ conversationId, messageId, visibility, editedAt }` — no body; re-read the message | Conversation room. **An internal note's edit goes only to staff rooms.** |
-| `message.receipt.updated` | `{ conversationId, messageId, actorId, state, at }` | Conversation room |
+| `message.status` | `{ conversationId, items: [{ messageId, seq, status: 'sent'\|'delivered'\|'read' }] }` | **PD-37: the AUTHOR's sockets only**, through the conversation's delivery-time checks (RT-009). The new ticks on the recipient's own messages, under the WhatsApp group rule over seated readers. Names no reader: who read it is `GET …/messages/:id/info`. Up to 200 items per cursor move; one delivery per move, each author receiving only their own items. **Sent only while `realtime.receipts_announce` is on** — off by default, switched on after the PD-37 outbox worker is deployed everywhere (an older worker would fan the source event out to the whole room). |
+| ~~`message.receipt.updated`~~ | — | **Never emitted; deprecated by PD-37.** It would have sent one reader's read to the whole room (the RT-012 roster). Use `message.status`. |
 | `reaction.added` / `reaction.removed` | `{ conversationId, messageId, actorId, emoji }` | Conversation room |
-| `typing.started` / `typing.stopped` | `{ conversationId, actorId, displayName }` | Conversation room, excluding sender |
-| `presence.changed` | `{ actorId, state, lastSeenAt }` | Actor rooms |
+| `typing.started` / `typing.stopped` | `{ conversationId, actorId, displayName }` | **PD-37: seated members of the conversation only**, excluding the sender. Never a PD-8 reader without a seat, a silent member or an observer. Never stored. |
+| `presence.changed` | `{ actorId, state, lastSeenAt }` | **Not emitted yet** — PD-37 P1a-2 adds it with its visibility rule (staff↔staff only). |
 | `conversation.updated` | `{ conversationId, familyId, state, needsReply, lastActivityAt, handlerId }` | Conversation room |
 | `conversation.membership_changed` | `{ conversationId, added[], removed[] }` | Conversation room. Also emitted when a direct conversation or a Student Group is **created** (`added` = every member). |
 | `conversation.added` | `{ conversationId }` | **Each added member's own actor room** (2026-10-14). A conversation they belong to now exists and they are not subscribed to it yet: re-read the list and subscribe. Carries nothing else. |

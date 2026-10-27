@@ -52,6 +52,8 @@ export const ActionScope = {
   ATTACHMENT_UPLOAD: 'attachment_upload_actor',
   STORY_PUBLISH: 'story_publish_actor',
   CALL_START: 'call_start_actor',
+  /** PD-37: read and delivery cursor moves (POST …/messages/read, …/delivered). */
+  RECEIPT_CURSOR: 'receipt_cursor_actor',
 } as const;
 
 export type ActionScope = (typeof ActionScope)[keyof typeof ActionScope];

@@ -59,6 +59,11 @@ export class RealtimeRelay implements OnModuleDestroy {
         for (const id of envelope.ids) {
           void this.gateway.deliverToConversationLocally(id, envelope.event, envelope.payload);
         }
+      } else if (envelope.target === 'room-audience') {
+        // PD-37: part of the room, after the same checks.
+        for (const id of envelope.ids) {
+          void this.gateway.deliverToConversationLocally(id, envelope.event, envelope.payload, undefined, envelope.audience);
+        }
       } else {
         void this.gateway.deliverToActorsLocally(envelope.ids, envelope.event, envelope.payload);
       }
