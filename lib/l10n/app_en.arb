@@ -2857,8 +2857,6 @@
   "@typingOne": {"description": "PD-37: one person typing in the chat header.", "placeholders": {"name": {"type": "String"}}},
   "typingTwo": "{first} and {second} are typing…",
   "@typingTwo": {"description": "PD-37: two people typing.", "placeholders": {"first": {"type": "String"}, "second": {"type": "String"}}},
-  "typingMany": "{count} people are typing…",
-  "@typingMany": {"description": "PD-37: three or more people typing.", "placeholders": {"count": {"type": "int"}}},
   "messageInfoAction": "Message info",
   "@messageInfoAction": {"description": "PD-37: the long-press entry on one's own message."},
   "messageInfoReadBy": "Read by",

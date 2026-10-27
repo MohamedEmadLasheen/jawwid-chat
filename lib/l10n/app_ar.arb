@@ -1643,7 +1643,6 @@
   "mentionedMark": "تمت الإشارة إليك",
   "typingOne": "{name}: جارٍ الكتابة…",
   "typingTwo": "{first} و{second}: جارٍ الكتابة…",
-  "typingMany": "{count} أشخاص: جارٍ الكتابة…",
   "messageInfoAction": "معلومات الرسالة",
   "messageInfoReadBy": "قُرئت بواسطة",
   "messageInfoDeliveredTo": "وصلت إلى",
