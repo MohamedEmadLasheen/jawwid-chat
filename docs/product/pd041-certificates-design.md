@@ -267,6 +267,8 @@ PD-40's PR-1 ([#172](https://github.com/MohamedEmadLasheen/jawwid-chat/pull/172)
   - Regenerate `docs/security/pd040-route-permissions.md` with `PD040_WRITE_ROUTE_TABLE=1`.
 - Keys stay `delegable=false` until a policy verifies their bundle. `decideCertificateAccess` (§6.3) is that policy for the certificate keys.
 - PR-1 therefore lands **after #172**, and PR-3 shrinks to reading PD-40 PR-2's `Actor.permissions` and `chat.staff_has_permission`.
+- PD-40 PR-2 ([#174](https://github.com/MohamedEmadLasheen/jawwid-chat/pull/174), slot `20261027150000`) provides `chat.staff_has_permission(staff, key)` and `chat.staff_access_profile(staff)`. Its TypeScript side is `PermissionService.profileOf(actor)`, which `decideCertificateAccess` reads.
+- PD-40 PR-4 pins the Designer route list (§11 ✱). That list is sent to PD-40 once this design is approved.
 
 | Permission | Allows | Layer 2: which rows (PD-41's service decides) | Risk |
 |---|---|---|---|
