@@ -2828,6 +2828,44 @@ one order           everywhere a list of materials appears (the child's
 PD-35's planned "not progressing" flag, which was to read this map, is dropped
 with it (the department head tells PD-35).
 
+**Amendment 2026-10-27: materials quality, P0-2, the one shared Quran dataset.**
+The owner approved this on 2026-10-27 for both the lessons and the whiteboard.
+The plan is `docs/product/pd029-materials-quality-plan.md`; the contract, agreed
+with PD-39, is `docs/product/quran-dataset-contract.md`; migration `20261027170000`.
+
+```
+one source          the Quran text lives once, in chat.quran_ayah (Tanzil
+                    Uthmani, Hafs; CC BY 3.0, verbatim, credited), loaded from
+                    one vendored file (data/quran/). The lessons engine and the
+                    PD-39 whiteboard both read it; nothing else holds ayah text
+verified at every   the file's SHA-256 and the digest of its 6,236 ayah hashes
+load                are pinned in code (apps/api/src/quran/pinned.ts). The
+                    loader refuses a file that is not the pinned one, a count
+                    mismatch against chat.quran_surah, or a split, duplicate or
+                    empty ayah, before a row is written. The API re-verifies
+                    the whole dataset at start-up and every served ayah on
+                    every request, and refuses everything (503) on any
+                    mismatch: fail closed
+the Basmala         Tanzil prefixes it to ayah 1 of 112 surahs (not 1, where 1:1
+                    IS the Basmala, nor 9). Each ayah is served as { basmala,
+                    text }; the prefix is accepted only when its SHA-256 is one
+                    of the two known spellings, else the load is refused.
+                    Tajweed offsets, audio and the whiteboard's range hash are
+                    defined against the verse without it
+Tajweed             a mark is served only when a Tajweed reviewer (the Teachers
+                    department, the owner's decision 2026-10-27) approved it, it is not
+                    withdrawn, and the LATEST sign-off of its surah names it and
+                    still matches the digest of the marks it named; marks come
+                    from a published annotation, never hand or model
+                    classification; none are shipped yet
+audio               one file per ayah, its key generated from (reciter, surah,
+                    ayah), its hash computed by the server's ingest from the
+                    stored object, so a verse and its audio cannot mismatch and
+                    audio is never served unverified. No audio
+                    is shipped: chat.config quran.audio stays unset until the
+                    owner confirms the reciter and the right to self-host
+```
+
 ---
 
 ### PD-30 · Subscriptions, lesson balance, the payment lock and its exceptions
