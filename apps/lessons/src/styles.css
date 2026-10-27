@@ -1,0 +1,45 @@
+/* The lessons engine: RTL, logical properties, no external fonts (Amiri Quran is bundled later). */
+:root {
+  --ink: #1b2a2f;
+  --muted: #5b6b70;
+  --surface: #ffffff;
+  --page: #f6f3ec;
+  --accent: #0f6b62;
+  --gold: #8a6a1d;
+  --border: #e3ddd0;
+  --danger: #a12a2a;
+  font-family: system-ui, 'Segoe UI', Tahoma, sans-serif;
+  color: var(--ink);
+  background: var(--page);
+}
+body { margin: 0; }
+.lesson { max-inline-size: 52rem; margin-inline: auto; padding: 1rem; }
+.lesson__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.lesson__head h1 { margin: 0; font-size: 1.6rem; }
+.lesson__stars { margin: 0; color: var(--gold); font-size: 1.4rem; letter-spacing: 0.1em; }
+.sections { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-block: 1rem; position: sticky; inset-block-start: 0; background: var(--page); padding-block: 0.5rem; }
+.section { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 0.5rem 1rem; font: inherit; cursor: pointer; }
+.section--current { background: var(--accent); color: #fff; border-color: var(--accent); }
+.section__star { color: var(--gold); }
+.mushaf { background: var(--surface); border: 1px solid var(--border); border-radius: 1rem; padding: 1rem; }
+.basmala { text-align: center; font-family: 'Amiri Quran', 'Amiri', serif; font-size: 1.6rem; margin: 0 0 1rem; }
+.ayat { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.ayah__text { all: unset; display: block; inline-size: 100%; font-family: 'Amiri Quran', 'Amiri', serif; font-size: 1.6rem; line-height: 2.4; cursor: pointer; border-radius: 0.5rem; padding-inline: 0.5rem; }
+.ayah__text:disabled { cursor: default; }
+.ayah__text:focus-visible { outline: 2px solid var(--accent); }
+.ayah--selected .ayah__text { background: #e7f2ef; }
+.ayah--playing .ayah__text { background: #fff4d6; }
+.ayah__number { color: var(--gold); font-size: 1.1rem; }
+.note { color: var(--muted); }
+.refused { color: var(--danger); font-weight: 600; }
+button { font: inherit; }
+.primary { background: var(--accent); color: #fff; border: 0; border-radius: 0.75rem; padding: 0.6rem 1.2rem; margin-block-start: 1rem; cursor: pointer; }
+.verse-actions { display: flex; gap: 0.5rem; margin-block-start: 0.75rem; }
+.cards { list-style: none; padding: 0; display: grid; gap: 0.5rem; }
+.card { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.5rem 0.75rem; }
+.card__text { font-family: 'Amiri Quran', 'Amiri', serif; font-size: 1.3rem; line-height: 2; }
+.card__moves { display: flex; flex-direction: column; gap: 0.25rem; }
+.verdict--right { color: var(--accent); font-weight: 600; }
+.verdict--wrong { color: var(--danger); }
+.game__actions { display: flex; gap: 0.5rem; }
+.attribution { margin-block-start: 2rem; color: var(--muted); font-size: 0.85rem; }
