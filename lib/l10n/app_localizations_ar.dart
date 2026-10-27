@@ -261,17 +261,7 @@ class L10nAr extends L10n {
 
   @override
   String typingMany(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count شخص يكتبون الآن…',
-      many: '$count شخصًا يكتبون الآن…',
-      few: '$count أشخاص يكتبون الآن…',
-      two: 'شخصان يكتبان الآن…',
-      one: 'شخص واحد يكتب الآن…',
-      zero: 'لا أحد يكتب الآن…',
-    );
-    return '$_temp0';
+    return '$count أشخاص: جارٍ الكتابة…';
   }
 
   @override
@@ -4212,4 +4202,32 @@ class L10nAr extends L10n {
 
   @override
   String get mentionedMark => 'تمت الإشارة إليك';
+
+  @override
+  String typingOne(String name) {
+    return '$name: جارٍ الكتابة…';
+  }
+
+  @override
+  String typingTwo(String first, String second) {
+    return '$first و$second: جارٍ الكتابة…';
+  }
+
+  @override
+  String get messageInfoAction => 'معلومات الرسالة';
+
+  @override
+  String get messageInfoReadBy => 'قُرئت بواسطة';
+
+  @override
+  String get messageInfoDeliveredTo => 'وصلت إلى';
+
+  @override
+  String get messageInfoPending => 'لم تصل بعد';
+
+  @override
+  String get messageInfoNobody => 'لا أحد';
+
+  @override
+  String get messageInfoFailed => 'تعذّر تحميل معلومات الرسالة';
 }

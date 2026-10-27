@@ -41,10 +41,12 @@ import '../features/calls/data/http_account_call_history.dart';
 import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
 import '../features/materials/data/materials_repository.dart';
+import '../features/messages/application/chat_typing_channel.dart';
 import '../features/messages/data/chat_theme_repository.dart';
 import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
+import '../features/messages/data/receipt_repository.dart';
 import '../features/notifications/data/notifications_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
@@ -193,6 +195,9 @@ List<Override> _httpOverrides() {
     messageMarksRepositoryProvider.overrideWithValue(
       HttpMessageMarksRepository(client: client, viewerActorId: session.actorId),
     ),
+    // PD-37: Message info, and "me" for realtime frames (another device of mine).
+    receiptRepositoryProvider.overrideWithValue(HttpReceiptRepository(client: client)),
+    viewerActorIdProvider.overrideWithValue(session.actorId),
     profilePhotoRepositoryProvider.overrideWithValue(
       HttpProfilePhotoRepository(client: client),
     ),
@@ -277,6 +282,12 @@ List<Override> _httpOverrides() {
     // same verifier the HTTP guard uses, and the actor is derived from it. The
     // retired `x-actor-id` seam is not reintroduced here in any form.
     realtimeTokenProvider.overrideWithValue(tokens),
+    // PD-37: typing, decoded from the session's one socket (listen only).
+    chatTypingChannelProvider.overrideWith((ref) {
+      final channel = ChatTypingChannel(ref.watch(realtimeSocketProvider));
+      ref.onDispose(channel.dispose);
+      return channel;
+    }),
     // ONE SOCKET PER SESSION. The transport is keyed on the signed-in account
     // exactly as `callRealtimeClientProvider` is, so a session that ends tears
     // its socket down and the next session gets a fresh one. It used to be a

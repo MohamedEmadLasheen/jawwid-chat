@@ -1640,5 +1640,14 @@
   "mentionWaiting": "إشارة — بانتظار الانضمام",
   "mentionAskedBy": "بطلب من {name}، {date}",
   "mentionSomeoneHere": "أحد أعضاء المحادثة",
-  "mentionedMark": "تمت الإشارة إليك"
+  "mentionedMark": "تمت الإشارة إليك",
+  "typingOne": "{name}: جارٍ الكتابة…",
+  "typingTwo": "{first} و{second}: جارٍ الكتابة…",
+  "typingMany": "{count} أشخاص: جارٍ الكتابة…",
+  "messageInfoAction": "معلومات الرسالة",
+  "messageInfoReadBy": "قُرئت بواسطة",
+  "messageInfoDeliveredTo": "وصلت إلى",
+  "messageInfoPending": "لم تصل بعد",
+  "messageInfoNobody": "لا أحد",
+  "messageInfoFailed": "تعذّر تحميل معلومات الرسالة"
 }

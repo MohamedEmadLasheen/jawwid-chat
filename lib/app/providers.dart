@@ -16,10 +16,12 @@ import '../core/storage/secure_token_store.dart';
 import '../core/time/time_zone_controller.dart' show appZoneRevisionProvider;
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/messages/application/chat_typing_channel.dart';
 import '../features/messages/data/chat_theme_repository.dart';
 import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
+import '../features/messages/data/receipt_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../shared/models/user_role.dart';
 
@@ -91,6 +93,23 @@ final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
 final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
   return const NoSupervisionRepository();
 });
+
+/// PD-37: Message info and the delivery cursor. A harmless default: a build
+/// without the routes offers no Message info and reports no delivery.
+final receiptRepositoryProvider = Provider<ReceiptRepository>((ref) {
+  return const NoReceiptRepository();
+});
+
+/// PD-37: who is typing, decoded from the session's realtime transport. Null by
+/// default, so a screen built in isolation (a widget test, a fixture build)
+/// has no live typing and needs no session; the signed-in app builds it on the
+/// session's socket (bootstrap).
+final chatTypingChannelProvider = Provider<ChatTypingChannel?>((ref) => null);
+
+/// PD-37: the signed-in account's own actor id, where a screen must tell "me"
+/// from others in a realtime frame (another device of mine typing). Null in a
+/// build with no session -- then nobody is filtered out as "me".
+final viewerActorIdProvider = Provider<String Function()?>((ref) => null);
 
 /// Star and pin. A harmless default: a build without those routes offers neither.
 final messageMarksRepositoryProvider = Provider<MessageMarksRepository>((ref) {

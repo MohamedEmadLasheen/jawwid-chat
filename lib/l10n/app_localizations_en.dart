@@ -257,13 +257,7 @@ class L10nEn extends L10n {
 
   @override
   String typingMany(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count people are typing…',
-      one: '$count person is typing…',
-    );
-    return '$_temp0';
+    return '$count people are typing…';
   }
 
   @override
@@ -4135,4 +4129,32 @@ class L10nEn extends L10n {
 
   @override
   String get mentionedMark => 'You were mentioned';
+
+  @override
+  String typingOne(String name) {
+    return '$name is typing…';
+  }
+
+  @override
+  String typingTwo(String first, String second) {
+    return '$first and $second are typing…';
+  }
+
+  @override
+  String get messageInfoAction => 'Message info';
+
+  @override
+  String get messageInfoReadBy => 'Read by';
+
+  @override
+  String get messageInfoDeliveredTo => 'Delivered to';
+
+  @override
+  String get messageInfoPending => 'Not delivered yet';
+
+  @override
+  String get messageInfoNobody => 'Nobody';
+
+  @override
+  String get messageInfoFailed => 'Couldn\'t load message info';
 }
