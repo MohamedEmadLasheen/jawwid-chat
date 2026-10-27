@@ -197,6 +197,34 @@ describe('Landing and deep links', () => {
   })
 })
 
+describe('The retired Coverage page', () => {
+  // Shifts, coverage rules and absences were replaced by PD-8 backups and
+  // PD-33 covers on the Organization page; the API never had /coverage routes.
+  it('is listed for no role', () => {
+    for (const role of [...OPERATOR_ROLES, 'super_admin'] as StaffRole[]) {
+      const entries = destinationsFor(role, { lessonManager: true, billingReader: true }).flatMap(entriesOf)
+      expect(entries.map((e) => e.path)).not.toContain('/coverage')
+      expect(entries.map((e) => e.key)).not.toContain('coverage')
+    }
+  })
+
+  it('is not a route: /coverage falls to the unknown-path handling, like any other', async () => {
+    for (const [role, home] of [['manager', '/chat'], ['super_admin', '/admin/conversations']] as const) {
+      vi.stubGlobal('fetch', routeFetch({}))
+      const { unmount } = renderWithProviders(
+        <>
+          <AppRoutes />
+          <Where />
+        </>,
+        { staff: staff(role), route: '/coverage' },
+      )
+      await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(home))
+      expect(screen.queryByRole('heading', { name: 'Coverage' })).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+})
+
 describe('The desktop rail', () => {
   beforeEach(() => viewport(1440))
 
