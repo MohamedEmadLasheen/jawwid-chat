@@ -170,7 +170,7 @@ export class SupervisionService {
    */
   async bonus(actorId: string, teacherId: string, body: Record<string, unknown>) {
     const actor = await this.conversations.requireActor(actorId);
-    const teacher = await this.supervisedTeacher(actor, teacherId);
+    const teacher = await this.supervisedTeacher(actor, teacherId, true);
     const reason = textField(body, 'reason', 2000, true) as string;
     const { entry, conversationId } = await this.lessons.write(() =>
       this.prisma.$transaction((tx) => this.bonusInTx(tx, actor, teacher, reason)),
@@ -226,14 +226,18 @@ export class SupervisionService {
   }
 
   /** PD-10: the Teachers department and the super admin; anyone else -- the teacher included -- reads it as unknown. */
-  private async supervisedTeacher(actor: Actor, teacherId: string) {
+  private async supervisedTeacher(actor: Actor, teacherId: string, onPage = false) {
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    // PD-26 amendment: a bonus is also recorded from the Teacher Supervision page,
+    // where an Operations supervisor works on the teachers of their families.
+    const basis = onPage ? await this.lessons.teacherScope.pageBasis(actor) : null;
     const allowed = actor.kind === 'staff' && actor.isActive && !!actor.organizationId
-      && (actor.staffRole === 'super_admin' || (await this.lessons.isManager(actor)));
+      && (basis !== null || actor.staffRole === 'super_admin' || (await this.lessons.isManager(actor)));
     if (!allowed) throw new CommError(CommErrorCode.LESSON_DENIED, 'the supervision section belongs to the Teachers department');
     const teacher = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId } });
     // PD-35: a teacher outside the caller's scope reads as unknown.
-    if (!teacher || !(await this.lessons.teacherScope.covers(actor, teacher.id))) {
+    const covered = onPage ? this.lessons.teacherScope.pageCovers(actor, teacherId) : this.lessons.teacherScope.covers(actor, teacherId);
+    if (!teacher || !(await covered)) {
       throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     }
     return teacher;

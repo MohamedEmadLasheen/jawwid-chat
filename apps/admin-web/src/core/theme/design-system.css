@@ -480,6 +480,8 @@ html[lang='ar'] .rail__menu-heading { text-transform: none; letter-spacing: 0; f
 .dialog__actions { gap: var(--space-2); margin-block-start: var(--space-6); }
 .dialog--sheet { border-radius: 0; border-block: 0; border-inline-end: 0; padding: var(--space-5); }
 .dialog--sheet .dialog__header { padding-block-end: var(--space-4); margin-block-end: var(--space-5); border-block-end: 1px solid var(--border); }
+.dialog--full { border: 0; padding: var(--space-3) var(--space-4); }
+.dialog--full .dialog__header { padding-block-end: var(--space-3); margin-block-end: var(--space-3); border-block-end: 1px solid var(--border); }
 
 /* ================================================== operator workspaces */
 

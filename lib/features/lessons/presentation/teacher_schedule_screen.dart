@@ -9,6 +9,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/utils/app_clock.dart';
+import '../../../shared/utils/clock_time.dart';
 import 'lesson_ticket_sheet.dart';
 import 'teacher_calendar.dart';
 
@@ -319,7 +320,7 @@ class _LessonRow extends ConsumerWidget {
     final m = MaterialLocalizations.of(context);
     final theme = Theme.of(context);
     final status = scheduleStatus(l10n, lesson);
-    final time = '${m.formatTimeOfDay(TimeOfDay.fromDateTime(lesson.startsAt))} – ${m.formatTimeOfDay(TimeOfDay.fromDateTime(lesson.endsAt))}';
+    final time = '${formatClockTime(context, TimeOfDay.fromDateTime(lesson.startsAt))} – ${formatClockTime(context, TimeOfDay.fromDateTime(lesson.endsAt))}';
 
     return ListTile(
       key: ValueKey('schedule-${lesson.id}'),

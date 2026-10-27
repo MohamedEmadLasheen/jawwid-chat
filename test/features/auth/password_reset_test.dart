@@ -53,10 +53,10 @@ void main() {
     expect(find.text('teacher@example.test'), findsOneWidget);
 
     await tester.enterText(find.byKey(const ValueKey('reset-code')), '4829');
-    await tester.enterText(find.byKey(const ValueKey('reset-password')), 'short');
+    await tester.enterText(find.byKey(const ValueKey('reset-password')), 'abc');
     await tester.tap(find.byKey(const ValueKey('reset-submit')));
     await tester.pump();
-    expect(find.text('Use at least 8 characters.'), findsOneWidget);
+    expect(find.text('Use at least 4 characters.'), findsOneWidget);
     expect(repo.completed, isEmpty);
 
     await tester.enterText(find.byKey(const ValueKey('reset-code')), '482913');
@@ -72,6 +72,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.completed, ['teacher@example.test 482913 long-password-1']);
     expect(result, (username: 'teacher@example.test', password: 'long-password-1'));
+  });
+
+  // Owner decision 2026-10-27: a password may be as short as 4 characters, for every account.
+  testWidgets('3 characters are refused locally; 4 are sent', (tester) async {
+    final repo = _RecordingReset();
+    await tester.pumpWidget(app(const PasswordResetScreen(), repo));
+    await tester.enterText(find.byKey(const ValueKey('reset-username')), 'teacher@example.test');
+    await tester.enterText(find.byKey(const ValueKey('reset-code')), '482913');
+    await tester.enterText(find.byKey(const ValueKey('reset-password')), 'abc');
+    await tester.enterText(find.byKey(const ValueKey('reset-confirm')), 'abc');
+    await tester.tap(find.byKey(const ValueKey('reset-submit')));
+    await tester.pump();
+    expect(find.text('Use at least 4 characters.'), findsOneWidget);
+    expect(repo.completed, isEmpty);
+
+    await tester.enterText(find.byKey(const ValueKey('reset-password')), '1234');
+    await tester.enterText(find.byKey(const ValueKey('reset-confirm')), '1234');
+    await tester.tap(find.byKey(const ValueKey('reset-submit')));
+    await tester.pumpAndSettle();
+    expect(find.text('Use at least 4 characters.'), findsNothing);
+    expect(repo.completed, ['teacher@example.test 482913 1234']);
+  });
+
+  testWidgets('the Arabic text says 4 too', (tester) async {
+    await tester.pumpWidget(app(const PasswordResetScreen(), _RecordingReset(), locale: const Locale('ar')));
+    await tester.enterText(find.byKey(const ValueKey('reset-password')), 'abc');
+    await tester.tap(find.byKey(const ValueKey('reset-submit')));
+    await tester.pump();
+    expect(find.text('استخدم 4 أحرف على الأقل.'), findsOneWidget);
   });
 
   testWidgets('a code the server refuses says so plainly, in Arabic too', (tester) async {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../password_policy.dart';
 import 'recovery_widgets.dart';
 
 /// PD-25 forgot password: the parent's sign-in e-mail -> a 6-digit code e-mailed to it -> a
@@ -91,7 +92,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   Future<void> _finish() async {
     final l10n = L10n.of(context);
     setState(() => _tried = true);
-    if (!recoveryCodeRe.hasMatch(_code.text.trim()) || _password.text.length < 8 || _password.text != _confirm.text) {
+    if (!recoveryCodeRe.hasMatch(_code.text.trim()) || _password.text.length < kPasswordMinLength || _password.text != _confirm.text) {
       return;
     }
     setState(() {
@@ -123,7 +124,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     final theme = Theme.of(context);
     final emailInvalid = _tried && !_codeSent && !_emailRe.hasMatch(_email.text.trim());
     final codeInvalid = _tried && _codeSent && !recoveryCodeRe.hasMatch(_code.text.trim());
-    final passwordShort = _tried && _codeSent && _password.text.length < 8;
+    final passwordShort = _tried && _codeSent && _password.text.length < kPasswordMinLength;
     final passwordsDiffer = _tried && _codeSent && !passwordShort && _password.text != _confirm.text;
 
     return Scaffold(
