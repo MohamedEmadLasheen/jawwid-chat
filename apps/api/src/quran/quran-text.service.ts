@@ -10,6 +10,7 @@ import {
   verifyDataset,
   type AyahRow,
   type PinnedDataset,
+  type VerifiedAyah,
 } from './quran-integrity';
 import { servableMarks, type TajweedMark, type TajweedReview } from './tajweed';
 
@@ -35,7 +36,11 @@ export interface QuranStore {
   /** chat.config `quran.audio`: { reciter, baseUrl }, or null while no audio is approved. */
   audioSource(): Promise<{ reciter: string; baseUrl: string } | null>;
   audio(reciter: string, surah: number, from: number, to: number): Promise<Array<{ surah: number; ayah: number; objectKey: string; sha256: string }>>;
-  tajweed(id: string, surah: number, from: number, to: number): Promise<{ marks: TajweedMark[]; reviews: TajweedReview[] }>;
+  /**
+   * A surah's sign-offs, every mark they name or that is approved (whatever the
+   * range: a sign-off's digest covers its whole set), and the withdrawn mark ids.
+   */
+  tajweed(id: string, surah: number): Promise<{ marks: TajweedMark[]; reviews: TajweedReview[]; withdrawn: string[] }>;
 }
 
 export const MAX_AYAHS_PER_REQUEST = 50;
@@ -43,7 +48,7 @@ export const MAX_AYAHS_PER_REQUEST = 50;
 export const REVERIFY_COOLDOWN_MS = 30_000;
 
 type State =
-  | { ok: true; id: string; pinned: PinnedDataset; verified: Map<string, string> }
+  | { ok: true; id: string; pinned: PinnedDataset; verified: Map<string, VerifiedAyah> }
   | { ok: false; id: string | null; reason: string };
 
 /**
@@ -55,13 +60,20 @@ type State =
  * changes; every ayah is checked again when it is served -- its text's hash
  * must equal the hash verified at start-up. Anything that does not verify
  * makes the service refuse every request (503 COMM.QURAN_UNAVAILABLE) until a
- * fresh verification succeeds; a verse is never shown "as is".
+ * fresh verification succeeds; a verse is never shown "as is". Any failed or
+ * crashed verification is retried at most every REVERIFY_COOLDOWN_MS.
+ *
+ * Each ayah is served as { basmala, text }: `text` is the verse without the
+ * Basmala prefix, and its hash (`sha256`) is what Tajweed offsets, audio and the
+ * whiteboard's rangeSha256 refer to.
  */
 @Injectable()
 export class QuranTextService implements OnApplicationBootstrap {
   private readonly log = new Logger(QuranTextService.name);
   private state: State = { ok: false, id: null, reason: 'not verified yet' };
   private lastAttempt = 0;
+  /** The configured id the last attempt was for (whatever its outcome). */
+  private lastAttemptFor: string | null | undefined = undefined;
 
   constructor(
     @Inject(QURAN_STORE) private readonly store: QuranStore,
@@ -70,13 +82,14 @@ export class QuranTextService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap(): Promise<void> {
     // Never blocks start-up: a failure leaves the Quran routes refusing, nothing else.
-    await this.verify().catch((e) => this.fail(null, `verification crashed: ${String(e)}`));
+    await this.attempt();
   }
 
   /** Re-read and re-verify the configured dataset from scratch. */
   async verify(): Promise<boolean> {
     this.lastAttempt = Date.now();
     const id = await this.store.configuredDatasetId();
+    this.lastAttemptFor = id;
     if (!id) return this.fail(null, 'no dataset configured (chat.config quran.dataset)');
     const pinned = this.pins.get(id);
     if (!pinned) return this.fail(id, 'the configured dataset is not pinned in code');
@@ -100,7 +113,7 @@ export class QuranTextService implements OnApplicationBootstrap {
     const { surah, from, to } = range(query);
     const ok = await this.ready();
     const rows = await this.store.ayahs(ok.id, surah.number, from, to);
-    const texts = this.checkServed(ok, rows, surah.number, from, to);
+    this.checkServed(ok, rows, surah.number, from, to);
     const source = await this.store.audioSource();
     const audio = new Map<number, { reciter: string; key: string; url: string; sha256: string }>();
     if (source) {
@@ -114,8 +127,8 @@ export class QuranTextService implements OnApplicationBootstrap {
     }
     const ayahs = [];
     for (let n = from; n <= to; n++) {
-      const sha = ok.verified.get(ayahKey(surah.number, n))!;
-      ayahs.push({ ayah: n, text: texts.get(ayahKey(surah.number, n))!, sha256: sha, audio: audio.get(n) ?? null });
+      const v = ok.verified.get(ayahKey(surah.number, n))!;
+      ayahs.push({ ayah: n, basmala: v.basmala, text: v.verse, sha256: v.verseSha256, audio: audio.get(n) ?? null });
     }
     return {
       dataset: { id: ok.pinned.id, sha256: ok.pinned.fileSha256, attribution: ok.pinned.attribution, sourceUrl: ok.pinned.sourceUrl },
@@ -128,13 +141,15 @@ export class QuranTextService implements OnApplicationBootstrap {
   async tajweed(query: Record<string, unknown>) {
     const { surah, from, to } = range(query);
     const ok = await this.ready();
-    const texts = this.checkServed(ok, await this.store.ayahs(ok.id, surah.number, from, to), surah.number, from, to);
-    const { marks, reviews } = await this.store.tajweed(ok.id, surah.number, from, to);
-    const own = marks.filter((m) => m.datasetId === ok.id && m.surah === surah.number && m.ayah >= from && m.ayah <= to);
+    this.checkServed(ok, await this.store.ayahs(ok.id, surah.number, from, to), surah.number, from, to);
+    const verses = new Map<string, string>();
+    for (let n = from; n <= to; n++) verses.set(ayahKey(surah.number, n), ok.verified.get(ayahKey(surah.number, n))!.verse);
+    const { marks, reviews, withdrawn } = await this.store.tajweed(ok.id, surah.number);
+    const own = reviews.filter((r) => r.datasetId === ok.id && r.surah === surah.number);
     return {
       dataset: { id: ok.pinned.id, sha256: ok.pinned.fileSha256 },
       surah: surah.number,
-      marks: servableMarks(own, reviews, texts).map((m) => ({
+      marks: servableMarks(marks, own, new Set(withdrawn), verses).map((m) => ({
         ayah: m.ayah, start: m.start, end: m.end, rule: m.rule, source: m.source, sourceVersion: m.sourceVersion,
       })),
     };
@@ -143,24 +158,39 @@ export class QuranTextService implements OnApplicationBootstrap {
   /** The verified state, re-verifying when the configured dataset changed or a failure may have cleared. */
   private async ready(): Promise<Extract<State, { ok: true }>> {
     const configured = await this.store.configuredDatasetId();
-    // A changed configuration is verified at once; a failure is retried at most every
-    // REVERIFY_COOLDOWN_MS, so a refused dataset cannot be made to re-read 6,236 rows per request.
-    if (this.state.id !== configured || (!this.state.ok && Date.now() - this.lastAttempt >= REVERIFY_COOLDOWN_MS)) {
-      await this.verify();
-    }
+    // A changed configuration is verified at once; any failure (a refusal OR a crash) is
+    // retried at most every REVERIFY_COOLDOWN_MS, so a broken dataset or database cannot be
+    // made to re-read 6,236 rows per request.
+    const changed = configured !== this.lastAttemptFor;
+    const due = Date.now() - this.lastAttempt >= REVERIFY_COOLDOWN_MS;
+    if (changed || (!this.state.ok && due)) await this.attempt(configured);
     if (!this.state.ok) {
       throw new CommError(CommErrorCode.QURAN_UNAVAILABLE, 'the Quran text could not be verified', 503);
     }
     return this.state;
   }
 
-  /** Every served row must be present and hash to the value verified at start-up. */
+  /** One verification attempt that never throws: a crash counts as a failure, with the cooldown. */
+  private async attempt(configured?: string | null): Promise<void> {
+    try {
+      await this.verify();
+    } catch (e) {
+      this.lastAttempt = Date.now();
+      if (configured !== undefined) this.lastAttemptFor = configured;
+      this.fail(configured ?? null, `verification crashed: ${String(e)}`);
+    }
+  }
+
+  /** Every served row must be present, hash to the value verified at start-up, and carry the verified split. */
   private checkServed(ok: Extract<State, { ok: true }>, rows: AyahRow[], surah: number, from: number, to: number) {
     const texts = new Map<string, string>();
     for (const r of rows) {
       const key = ayahKey(r.surah, r.ayah);
       const expected = ok.verified.get(key);
-      if (!expected || r.surah !== surah || sha256Hex(r.text) !== expected || r.sha256 !== expected) {
+      if (
+        !expected || r.surah !== surah || sha256Hex(r.text) !== expected.verbatimSha256 || r.sha256 !== expected.verbatimSha256
+        || (r.basmala ?? null) !== expected.basmala || r.verse !== expected.verse
+      ) {
         this.fail(ok.id, `served ayah ${key} no longer matches the verified text`);
         throw new CommError(CommErrorCode.QURAN_UNAVAILABLE, 'the Quran text could not be verified', 503);
       }

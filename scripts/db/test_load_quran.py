@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for scripts/db/load-quran.py: a tampered file, a count mismatch, a
-split, duplicate or empty ayah are all refused before a row is written; the
-search folding matches data/quran/search-normalisation.vectors.json.
+split, duplicate or empty ayah, and a corrupted, missing or misplaced Basmala
+are all refused before a row is written.
 
     python3 -I scripts/db/test_load_quran.py
 """
@@ -30,8 +30,26 @@ def build(rows, comment=True):
     return ('\n'.join(lines) + '\n').encode('utf-8')
 
 
+def real_rows():
+    raw = open(os.path.join(ROOT, 'data', 'quran', 'tanzil-uthmani-1.1.txt'), 'rb').read()
+    return lq.parse(raw)
+
+
+_REAL = {(s, a): t for s, a, t in real_rows()}
+# Arabic comes from the pinned file, never typed: identical-looking text can differ in code points.
+BASMALA = _REAL[(1, 1)]
+BASMALA_SHADDA = ' '.join(_REAL[(95, 1)].split(' ')[:4])
+
+
 def synthetic():
-    return [(s, a, f'نص {s}:{a}') for s in sorted(COUNTS) for a in range(1, COUNTS[s] + 1)]
+    rows = []
+    for s in sorted(COUNTS):
+        for a in range(1, COUNTS[s] + 1):
+            t = f'نص {s}:{a}'
+            if a == 1 and s not in (1, 9):
+                t = f'{BASMALA_SHADDA if s in (95, 97) else BASMALA} {t}'
+            rows.append((s, a, t))
+    return rows
 
 
 def manifest_for(raw, rows):
@@ -60,13 +78,14 @@ class LoaderRefuses(unittest.TestCase):
         self.assertIn("select chat.load_quran_dataset('synthetic-1', ", out)
         self.assertTrue(out.endswith('commit;\n'))
         self.assertEqual(out.count('\n85\t'), 22)
+        self.assertIn('copy quran_load (surah, ayah, text_uthmani) from stdin;', out)
 
     def test_a_tampered_file_is_refused(self):
-        tampered = self.raw.replace('نص 101:4'.encode('utf-8'), 'نص 101:4ـ'.encode('utf-8'))
+        tampered = self.raw.replace('نص 101:4'.encode('utf-8'), 'نص 101:4x'.encode('utf-8'))
         self.assertIn("SHA-256", self.refused(tampered))
 
     def test_a_tampered_file_with_an_edited_file_pin_is_still_refused_by_the_digest(self):
-        tampered = self.raw.replace('نص 101:4'.encode('utf-8'), 'نص 101:4ـ'.encode('utf-8'))
+        tampered = self.raw.replace('نص 101:4'.encode('utf-8'), 'نص 101:4x'.encode('utf-8'))
         repinned = dict(self.manifest, fileSha256=hashlib.sha256(tampered).hexdigest())
         self.assertIn('digest', self.refused(tampered, repinned))
 
@@ -87,7 +106,7 @@ class LoaderRefuses(unittest.TestCase):
     def test_a_duplicate_or_empty_ayah_is_refused(self):
         dup = [(s, 3 if (s, a) == (112, 4) else a, t) for s, a, t in self.rows]
         self.assertIn('twice', self.refused(*self._repinned(dup)))
-        empty = [(s, a, '' if (s, a) == (108, 1) else t) for s, a, t in self.rows]
+        empty = [(s, a, '' if (s, a) == (108, 2) else t) for s, a, t in self.rows]
         self.assertIn('empty', self.refused(*self._repinned(empty)))
 
     def test_a_malformed_line_is_refused(self):
@@ -95,12 +114,12 @@ class LoaderRefuses(unittest.TestCase):
         self.assertIn('not "surah|ayah|text"', self.refused(raw, dict(self.manifest, fileSha256=hashlib.sha256(raw).hexdigest())))
 
     def test_the_text_is_kept_verbatim_and_copy_escaped(self):
-        rows = [(s, a, 'a\tb\\c ' if (s, a) == (1, 1) else t) for s, a, t in self.rows]
+        rows = [(s, a, 'a\tb\\c ' if (s, a) == (1, 2) else t) for s, a, t in self.rows]
         raw = build(rows).replace(b'\n', b'\r\n')
         manifest = manifest_for(raw, rows)
         ordered = lq.verify(raw, manifest, COUNTS)
-        self.assertEqual(ordered[0][2], 'a\tb\\c ')
-        self.assertIn('1\t1\ta\\tb\\\\c \t', lq.sql('synthetic-1', manifest, ordered))
+        self.assertEqual(ordered[1][2], 'a\tb\\c ')
+        self.assertIn('1\t2\ta\\tb\\\\c \n', lq.sql('synthetic-1', manifest, ordered))
 
     def test_main_refuses_without_writing_sql(self):
         with tempfile.TemporaryDirectory() as d:
@@ -111,11 +130,37 @@ class LoaderRefuses(unittest.TestCase):
             self.assertEqual(lq.main(['--check', '--data-dir', d, 'synthetic-1']), 0)
 
 
-class SearchFolding(unittest.TestCase):
-    def test_matches_the_shared_vectors(self):
-        path = os.path.join(ROOT, 'data', 'quran', 'search-normalisation.vectors.json')
-        for v in json.load(open(path, encoding='utf-8'))['vectors']:
-            self.assertEqual(lq.search_fold(v['input']), v['folded'], v['note'])
+class Basmala(unittest.TestCase):
+    """Tanzil prefixes the Basmala to ayah 1 of 112 surahs; it is split off, never counted as the verse."""
+
+    def test_the_real_file_splits_as_the_rule_requires(self):
+        splits = {(s, a): lq.split_basmala(s, a, t) for s, a, t in real_rows()}
+        self.assertEqual(sum(1 for b, _v in splits.values() if b is not None), 112)
+        self.assertEqual(splits[(1, 1)], (None, BASMALA))
+        self.assertIsNone(splits[(9, 1)][0])
+        self.assertEqual([ord(c) for c in splits[(2, 1)][1]], [0x627, 0x644, 0x653, 0x645, 0x653])  # "الٓمٓ"
+        for s in (95, 97):
+            self.assertEqual(splits[(s, 1)][0], BASMALA_SHADDA)
+
+    def _refused(self, rows):
+        raw = build(rows)
+        with self.assertRaises(lq.Refused) as ctx:
+            lq.verify(raw, manifest_for(raw, rows), COUNTS)
+        return str(ctx.exception)
+
+    def test_a_corrupted_or_missing_prefix_is_refused(self):
+        rows = synthetic()
+        two_one = next(t for s, a, t in rows if (s, a) == (2, 1))
+        corrupted = [(s, a, two_one[:2] + two_one[3:] if (s, a) == (2, 1) else t) for s, a, t in rows]
+        self.assertIn('accepted Basmala', self._refused(corrupted))
+        missing = [(s, a, 'نص 2:1' if (s, a) == (2, 1) else t) for s, a, t in rows]
+        self.assertIn('accepted Basmala', self._refused(missing))
+        double_space = [(s, a, f'{BASMALA}  نص 2:1' if (s, a) == (2, 1) else t) for s, a, t in rows]
+        self.assertIn('accepted Basmala', self._refused(double_space))
+
+    def test_a_basmala_on_9_1_is_refused(self):
+        rows = [(s, a, f'{BASMALA} {t}' if (s, a) == (9, 1) else t) for s, a, t in synthetic()]
+        self.assertIn('9:1', self._refused(rows))
 
 
 if __name__ == '__main__':

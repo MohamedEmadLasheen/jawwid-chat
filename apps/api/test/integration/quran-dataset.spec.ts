@@ -2,18 +2,25 @@
  * The shared Quran dataset against the real schema (migration 20261027170000;
  * docs/product/quran-dataset-contract.md). The owner's rules, end to end:
  *   1. the text is written only by chat.load_quran_dataset, which refuses a
- *      count mismatch, a split ayah or a wrong digest, and writes all or nothing;
+ *      count mismatch, a split ayah, a wrong digest or a Basmala that is not an
+ *      accepted one, derives the split and text_search itself, all or nothing;
  *   2. loaded text is never changed or removed;
- *   3. an ayah's audio key is generated from the ayah itself;
- *   4. a Tajweed mark starts pending, is reviewed once, and is served only when
- *      approved AND its surah is signed off for the same source version;
- *   5. the API serves only a dataset pinned in code, and refuses (503) one that
- *      is configured but not pinned.
- * A synthetic dataset with the real ayah counts stands in for the text (the
- * real file is vendored separately); each run uses a fresh dataset id because
- * loaded text cannot be deleted.
+ *   3. an ayah's audio is written only by the server's ingest, its key
+ *      generated from the ayah itself;
+ *   4. a Tajweed mark starts pending, is reviewed once by a Tajweed reviewer,
+ *      and is served only when named by the latest sign-off of its surah (which
+ *      records the marks' digest) and not withdrawn;
+ *   5. the API serves only a dataset pinned in code, as { basmala, text }, and
+ *      refuses (503) one that is configured but not pinned.
+ *
+ * Kind to a shared database: the synthetic datasets' ids are derived from their
+ * content, so a re-run reuses them ('already loaded') instead of adding 6,236
+ * rows; the reviewer fixtures (append-only Tajweed rows reference them) are
+ * created once and kept; chat.config quran.dataset is restored in a finally.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type Redis from 'ioredis';
@@ -24,12 +31,15 @@ import { hashPassword } from '@platform/auth/password';
 import { CommErrorCode } from '@platform/errors';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
+import type { ObjectStorage, StoredObject } from '@communication/attachments/object-storage';
 import { applyInfrastructure } from '../../src/infra/http/bootstrap';
-import { SURAHS } from '../../src/materials/quran-surahs';
 import { QuranModule } from '../../src/quran/quran.module';
 import { QURAN_PINNED } from '../../src/quran/quran-text.service';
 import { audioKey } from '../../src/quran/audio-key';
+import { ingestAyahAudio, prismaAudioRowWriter } from '../../src/quran/audio-ingest';
 import { digestOf, sha256Hex, type PinnedDataset } from '../../src/quran/quran-integrity';
+import { marksDigest } from '../../src/quran/tajweed';
+import { BASMALA, syntheticRows } from '../unit/quran/fixtures';
 import { buildGraph } from './harness';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
@@ -42,32 +52,32 @@ const inheritedRedisUrl = process.env.REDIS_URL;
 const PASSWORD = 'quran-dataset-spec-password-1';
 const DOMAIN = 'qurands.qa.jawwid.test';
 const RUN = Date.now().toString(36);
-const DATASET = `synthetic-${RUN}`;
-const UNPINNED = `unpinned-${RUN}`;
+
+type Row = { surah: number; ayah: number; text: string };
+const ROWS: Row[] = syntheticRows().map((r) => ({ surah: r.surah, ayah: r.ayah, text: r.text }));
+const digest = (rs: Row[]) => digestOf([...rs].sort((a, b) => a.surah - b.surah || a.ayah - b.ayah).map((r) => sha256Hex(r.text)));
+const DIGEST = digest(ROWS);
+// Content-derived ids: the same rows always load as the same dataset.
+const DATASET = `synthetic-${DIGEST.slice(0, 12)}`;
+const UNPINNED = `unpinned-${DIGEST.slice(0, 12)}`;
+const FILE_SHA = 'a'.repeat(64);
+const pinned: PinnedDataset = { id: DATASET, fileSha256: FILE_SHA, ayahsDigest: DIGEST, attribution: 'test', sourceUrl: 'https://example.test/quran' };
 
 const g = buildGraph();
 let app: INestApplication;
 let base: string;
 let token: string;
+let reviewer: string; // a Teachers department manager: a Tajweed reviewer
+let outsider: string; // a staff member outside the Teachers department
 let originalDataset: unknown = null;
 
-type Row = { surah: number; ayah: number; text: string };
-function rows(): Row[] {
-  const out: Row[] = [];
-  for (const s of SURAHS) for (let a = 1; a <= s.ayahCount; a++) out.push({ surah: s.number, ayah: a, text: `نص ${s.number}:${a}` });
-  return out;
-}
-const digest = (rs: Row[]) => digestOf(rs.map((r) => sha256Hex(r.text)));
-const FILE_SHA = 'a'.repeat(64);
-const pinned: PinnedDataset = { id: DATASET, fileSha256: FILE_SHA, ayahsDigest: digest(rows()), attribution: 'test', sourceUrl: 'https://example.test/quran' };
-
-/** What scripts/db/load-quran.py does in psql: stage the rows, call the load function, one transaction. */
+/** What scripts/db/load-quran.py does in psql: stage the VERBATIM rows, call the load function, one transaction. */
 async function load(id: string, rs: Row[], ayahsDigest = digest(rs), fileSha = FILE_SHA): Promise<string> {
   return g.prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`create temp table quran_load (surah smallint, ayah smallint, text_uthmani text, text_search text) on commit drop`);
+    await tx.$executeRawUnsafe(`create temp table quran_load (surah smallint, ayah smallint, text_uthmani text) on commit drop`);
     await tx.$executeRawUnsafe(
-      `insert into quran_load select * from unnest($1::smallint[], $2::smallint[], $3::text[], $4::text[])`,
-      rs.map((r) => r.surah), rs.map((r) => r.ayah), rs.map((r) => r.text), rs.map((r) => r.text),
+      `insert into quran_load select * from unnest($1::smallint[], $2::smallint[], $3::text[])`,
+      rs.map((r) => r.surah), rs.map((r) => r.ayah), rs.map((r) => r.text),
     );
     const out = await tx.$queryRawUnsafe<Array<{ r: string }>>(
       `select chat.load_quran_dataset($1, $2, $3, 'test', 'https://example.test/quran') as r`, id, fileSha, ayahsDigest,
@@ -91,25 +101,46 @@ async function http(path: string) {
   return { status: r.status, code: json.error?.code, json };
 }
 
-beforeAll(async () => {
-  await g.prisma.$connect();
-  await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
-  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'qurands-%'`);
-  const orgId = randomUUID();
-  await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ('${orgId}'::uuid, 'qurands-${RUN}', 'Quran dataset QA')`);
-  await g.prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
-    const account = await tx.account.create({ data: { organizationId: orgId, subject: `owner@${DOMAIN}`, kind: 'staff', status: 'active', isActive: true } });
-    await tx.accountCredential.create({ data: { accountId: account.id, passwordHash: await hashPassword(PASSWORD) } });
-    await tx.staff.create({ data: { organizationId: orgId, name: 'QA Owner', role: 'super_admin', isActive: true, accountId: account.id } });
-  });
-  expect(await load(DATASET, rows())).toBe('loaded');
-  const original = await g.prisma.config.findUnique({ where: { key: 'quran.dataset' } });
-  originalDataset = original?.value ?? null;
+async function setDataset(id: string) {
   await g.prisma.$executeRawUnsafe(
     `insert into chat.config (key, value, scope, description) values ('quran.dataset', to_jsonb($1::text), 'quran', 'quran-dataset.spec')
-     on conflict (key) do update set value = excluded.value`, DATASET,
+     on conflict (key) do update set value = excluded.value`, id,
   );
+}
+
+/** One organization with a Teachers department manager (the reviewer) and an outsider; created once, kept. */
+async function fixtures(): Promise<void> {
+  const slug = 'qurands-fixture';
+  let org = (await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(`select id::text from chat.organization where slug = $1`, slug))[0]?.id;
+  if (!org) {
+    org = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'Quran dataset QA')`, org, slug);
+  }
+  const staffFor = async (subject: string, role: string, name: string): Promise<string> => {
+    const existing = await g.prisma.staff.findFirst({ where: { organizationId: org, account: { subject } } });
+    if (existing) return existing.id;
+    return g.prisma.$transaction(async (tx) => {
+      if (role === 'super_admin') await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
+      const account = await tx.account.create({ data: { organizationId: org!, subject, kind: 'staff', status: 'active', isActive: true } });
+      await tx.accountCredential.create({ data: { accountId: account.id, passwordHash: await hashPassword(PASSWORD) } });
+      return (await tx.staff.create({ data: { organizationId: org!, name, role, isActive: true, accountId: account.id } })).id;
+    });
+  };
+  reviewer = await staffFor(`owner@${DOMAIN}`, 'super_admin', 'QA Tajweed reviewer');
+  outsider = await staffFor(`outsider@${DOMAIN}`, 'admin', 'QA outsider');
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.department (organization_id, kind, display_name, manager_id) values ($1::uuid, 'teachers', 'Teachers', $2::uuid)
+     on conflict (organization_id, kind) do update set manager_id = excluded.manager_id`, org, reviewer,
+  );
+}
+
+beforeAll(async () => {
+  await g.prisma.$connect();
+  await fixtures();
+  expect(['loaded', 'already loaded']).toContain(await load(DATASET, ROWS));
+  const original = await g.prisma.config.findUnique({ where: { key: 'quran.dataset' } });
+  originalDataset = original?.value ?? null;
+  await setDataset(DATASET);
 
   process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({ imports: [PlatformModule, AuthModule, QuranModule] })
@@ -133,112 +164,176 @@ afterAll(async () => {
   }
   await app?.close();
   for (let i = 0; i < 40 && redis && redis.status !== 'end'; i++) await new Promise((r) => setTimeout(r, 50));
-  if (originalDataset === null) await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'quran.dataset'`);
-  else await g.prisma.$executeRawUnsafe(`update chat.config set value = $1::jsonb where key = 'quran.dataset'`, JSON.stringify(originalDataset));
-  await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'quran.audio'`);
-  await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
-  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'qurands-%'`);
-  await g.prisma.$disconnect();
-  if (inheritedRedisUrl === undefined) delete process.env.REDIS_URL;
-  else process.env.REDIS_URL = inheritedRedisUrl;
+  try {
+    if (originalDataset === null) await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'quran.dataset'`);
+    else await g.prisma.$executeRawUnsafe(`update chat.config set value = $1::jsonb where key = 'quran.dataset'`, JSON.stringify(originalDataset));
+    await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'quran.audio'`);
+  } finally {
+    await g.prisma.$disconnect();
+    if (inheritedRedisUrl === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = inheritedRedisUrl;
+  }
 });
 
 describe('the load function', () => {
-  it('loaded every ayah with its hash, and skips a reload of the same fingerprints', async () => {
-    const n = await g.prisma.$queryRawUnsafe<Array<{ n: number; bad: number }>>(
+  it('loaded every ayah with its hash, split the Basmala and derived text_search, and skips a reload', async () => {
+    const n = await g.prisma.$queryRawUnsafe<Array<{ n: number; bad: number; basmalas: number }>>(
       `select count(*)::int as n,
-              count(*) filter (where sha256 <> encode(sha256(convert_to(text_uthmani, 'UTF8')), 'hex'))::int as bad
+              count(*) filter (where sha256 <> chat.sha256_hex(text_uthmani) or verse_sha256 <> chat.sha256_hex(verse)
+                                  or text_search <> chat.quran_fold(verse))::int as bad,
+              count(basmala)::int as basmalas
          from chat.quran_ayah where dataset_id = $1`, DATASET,
     );
-    expect(n[0]).toEqual({ n: 6236, bad: 0 });
-    expect(await load(DATASET, rows())).toBe('already loaded');
-    expect(await refused(load(DATASET, rows(), digest(rows()), 'b'.repeat(64)))).toMatch(/different fingerprint/);
+    expect(n[0]).toEqual({ n: 6236, bad: 0, basmalas: 112 });
+    const two = await g.prisma.$queryRawUnsafe<Array<{ basmala: string | null; verse: string }>>(
+      `select basmala, verse from chat.quran_ayah where dataset_id = $1 and surah = 2 and ayah = 1`, DATASET,
+    );
+    expect(two[0]).toEqual({ basmala: BASMALA, verse: 'نص 2:1' });
+    expect(await load(DATASET, ROWS)).toBe('already loaded');
+    expect(await refused(load(DATASET, ROWS, DIGEST, 'b'.repeat(64)))).toMatch(/different fingerprint/);
   });
 
-  it('refuses a count mismatch, a split ayah, an empty ayah and a wrong digest, writing nothing', async () => {
-    const id = `refused-${RUN}`;
-    const all = rows();
-    expect(await refused(load(id, all.filter((r) => !(r.surah === 89 && r.ayah === 23))))).toMatch(/6235 ayat, expected 6236/);
-    const split = all.map((r) => (r.surah === 89 && r.ayah === 30 ? { ...r, ayah: 31 } : r));
+  it('refuses a count mismatch, a split ayah, an empty ayah, a wrong digest and a bad Basmala, writing nothing', async () => {
+    const id = `refused-${DIGEST.slice(0, 12)}`;
+    expect(await refused(load(id, ROWS.filter((r) => !(r.surah === 89 && r.ayah === 23))))).toMatch(/6235 ayat, expected 6236/);
+    const split = ROWS.map((r) => (r.surah === 89 && r.ayah === 30 ? { ...r, ayah: 31 } : r));
     expect(await refused(load(id, split))).toMatch(/do not match chat\.quran_surah: 89/);
-    expect(await refused(load(id, all.map((r) => (r.surah === 108 && r.ayah === 1 ? { ...r, text: '' } : r))))).toMatch(/empty ayah/);
-    expect(await refused(load(id, all, 'c'.repeat(64)))).toMatch(/digest/);
+    expect(await refused(load(id, ROWS.map((r) => (r.surah === 108 && r.ayah === 2 ? { ...r, text: '' } : r))))).toMatch(/empty ayah/);
+    expect(await refused(load(id, ROWS, 'c'.repeat(64)))).toMatch(/digest/);
+    const corrupted = ROWS.map((r) => (r.surah === 2 && r.ayah === 1 ? { ...r, text: r.text.slice(0, 2) + r.text.slice(3) } : r));
+    expect(await refused(load(id, corrupted))).toMatch(/Basmala is not an accepted one.*2:1/);
+    const nine = ROWS.map((r) => (r.surah === 9 && r.ayah === 1 ? { ...r, text: `${BASMALA} ${r.text}` } : r));
+    expect(await refused(load(id, nine))).toMatch(/9:1/);
     const written = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(`select count(*)::int as n from chat.quran_dataset where id = $1`, id);
     expect(written[0]!.n).toBe(0);
   });
 
-  it('accepts no text written any other way, and never changes or removes loaded text', async () => {
+  it('accepts no text written any other way, and never changes, removes or truncates loaded text', async () => {
     expect(await refused(g.prisma.$executeRawUnsafe(
-      `insert into chat.quran_ayah (dataset_id, surah, ayah, text_uthmani, text_search, sha256) values ($1, 1, 1, 'x', 'x', $2)`, DATASET, sha256Hex('x'),
-    ))).toMatch(/only by chat\.load_quran_dataset|duplicate key/);
+      `insert into chat.quran_ayah (dataset_id, surah, ayah, text_uthmani, sha256, verse, verse_sha256, text_search) values ($1, 1, 1, 'x', $2, 'x', $2, 'x')`, DATASET, sha256Hex('x'),
+    ))).toMatch(/only by chat\.load_quran_dataset/);
     expect(await refused(g.prisma.$executeRawUnsafe(`update chat.quran_ayah set text_uthmani = 'x' where dataset_id = $1 and surah = 1 and ayah = 1`, DATASET)))
       .toMatch(/never changed or removed/);
     expect(await refused(g.prisma.$executeRawUnsafe(`delete from chat.quran_ayah where dataset_id = $1 and surah = 1`, DATASET)))
       .toMatch(/never changed or removed/);
     expect(await refused(g.prisma.$executeRawUnsafe(`update chat.quran_dataset set sha256 = $2 where id = $1`, DATASET, 'd'.repeat(64))))
       .toMatch(/never changed or removed/);
+    // The text and the audio cannot be truncated either. (The Tajweed tables reference
+    // chat.staff, which the harness truncates with CASCADE, so they carry no such guard.)
+    for (const t of ['quran_ayah', 'quran_dataset', 'quran_ayah_audio']) {
+      expect(await refused(g.prisma.$executeRawUnsafe(`truncate chat.${t} cascade`))).toMatch(/never changed or removed/);
+    }
+  });
+
+  it('folds text_search exactly as the app does (the shared vectors)', async () => {
+    const file = join(__dirname, '../../../../data/quran/search-normalisation.vectors.json');
+    const vectors = (JSON.parse(readFileSync(file, 'utf8')) as { vectors: Array<{ input: string; folded: string; note: string }> }).vectors;
+    for (const v of vectors) {
+      const r = await g.prisma.$queryRawUnsafe<Array<{ f: string }>>(`select chat.quran_fold($1) as f`, v.input);
+      expect({ note: v.note, folded: r[0]!.f }).toEqual({ note: v.note, folded: v.folded });
+    }
   });
 });
 
-describe('audio: one key per ayah, generated from the ayah', () => {
-  it('generates the same key as the API and refuses an ayah that does not exist', async () => {
-    const reciter = `t${RUN}`.slice(0, 20);
-    await g.prisma.$executeRawUnsafe(`insert into chat.quran_ayah_audio (reciter_code, surah, ayah, sha256) values ($1, 85, 3, $2)`, reciter, 'e'.repeat(64));
-    const row = await g.prisma.$queryRawUnsafe<Array<{ object_key: string }>>(
-      `select object_key from chat.quran_ayah_audio where reciter_code = $1 and surah = 85 and ayah = 3`, reciter,
+describe('audio: written only by the server\'s ingest, one key per ayah', () => {
+  const reciter = `t${RUN}`.slice(0, 20);
+  const MP3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(300, 9)]);
+  const storage = {
+    async read(key: string): Promise<StoredObject | null> {
+      return key === audioKey(reciter, 85, 3) ? { mimeType: 'audio/mpeg', size: MP3.length, range: null, body: MP3 } : null;
+    },
+  } as unknown as ObjectStorage;
+
+  it('refuses a row written any other way; the ingest hashes the object and the key is generated', async () => {
+    expect(await refused(g.prisma.$executeRawUnsafe(
+      `insert into chat.quran_ayah_audio (reciter_code, surah, ayah, sha256, byte_size) values ($1, 85, 3, $2, 10)`, reciter, 'e'.repeat(64),
+    ))).toMatch(/only by the server's ingest/);
+    await ingestAyahAudio(storage, prismaAudioRowWriter(g.prisma), reciter, 85, 3);
+    const stored = await g.prisma.$queryRawUnsafe<Array<{ object_key: string; sha256: string; byte_size: number }>>(
+      `select object_key, sha256, byte_size from chat.quran_ayah_audio where reciter_code = $1 and surah = 85 and ayah = 3`, reciter,
     );
-    expect(row[0]!.object_key).toBe(audioKey(reciter, 85, 3));
-    expect(await refused(g.prisma.$executeRawUnsafe(`insert into chat.quran_ayah_audio (reciter_code, surah, ayah, sha256) values ($1, 89, 31, $2)`, reciter, 'e'.repeat(64))))
-      .toMatch(/no ayah 31/);
-    expect(await refused(g.prisma.$executeRawUnsafe(`insert into chat.quran_ayah_audio (reciter_code, surah, ayah, object_key, sha256) values ($1, 85, 4, 'quran/audio/x/078005.mp3', $2)`, reciter, 'e'.repeat(64))))
-      .toMatch(/generated|object_key/i);
+    expect(stored[0]).toEqual({ object_key: audioKey(reciter, 85, 3), sha256: createHash('sha256').update(MP3).digest('hex'), byte_size: MP3.length });
     expect(await refused(g.prisma.$executeRawUnsafe(`update chat.quran_ayah_audio set surah = 78 where reciter_code = $1`, reciter)))
       .toMatch(/never changed or removed/);
   });
 });
 
-describe('Tajweed marks', () => {
-  const reviewer = randomUUID();
-
-  async function insertMark(ayah: number, start: number, end: number, extra = ''): Promise<string> {
+describe('Tajweed', () => {
+  async function insertMark(ayah: number, start: number, end: number, rule = 'ikhfa'): Promise<string> {
     const r = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `insert into chat.quran_tajweed_mark (dataset_id, surah, ayah, start_cp, end_cp, rule, source, source_version${extra ? ', state, reviewed_by, reviewed_at' : ''})
-       values ($1, 101, $2, $3, $4, 'ikhfa', 'qul', 'v1'${extra}) returning id::text`, DATASET, ayah, start, end,
+      `insert into chat.quran_tajweed_mark (dataset_id, surah, ayah, start_cp, end_cp, rule, source, source_version)
+       values ($1, 101, $2, $3, $4, $5, 'qul', $6) returning id::text`, DATASET, ayah, start, end, rule, `run-${RUN}`,
     );
     return r[0]!.id;
   }
+  const approve = (id: string, by: string) =>
+    g.prisma.$executeRawUnsafe(`update chat.quran_tajweed_mark set state = 'approved', reviewed_by = $2::uuid, reviewed_at = now() where id = $1::uuid`, id, by);
+  const signOff = (ids: string[], digestOverride?: string, by = reviewer) =>
+    g.prisma.$executeRawUnsafe(
+      `insert into chat.quran_tajweed_review (dataset_id, surah, source, source_version, mark_ids, marks_digest, reviewed_by)
+       values ($1, 101, 'qul', $2, $3::uuid[], coalesce($4, chat.quran_tajweed_marks_digest($3::uuid[])), $5::uuid)`,
+      DATASET, `run-${RUN}`, ids, digestOverride ?? null, by,
+    );
+  const mine = async () =>
+    ((await http('/quran/tajweed?surah=101&from=1&to=11')).json.marks as Array<{ ayah: number; sourceVersion: string }>)
+      .filter((m) => m.sourceVersion === `run-${RUN}`);
 
-  it('start pending, are reviewed once, and cannot be removed or reach past their ayah', async () => {
-    expect(await refused(insertMark(6, 0, 2, `, 'approved', '${reviewer}'::uuid, now()`))).toMatch(/starts pending/);
-    expect(await refused(insertMark(6, 0, 999))).toMatch(/past the end/);
-    const id = await insertMark(6, 0, 2);
-    await g.prisma.$executeRawUnsafe(`update chat.quran_tajweed_mark set state = 'approved', reviewed_by = $2::uuid, reviewed_at = now() where id = $1::uuid`, id, reviewer);
-    expect(await refused(g.prisma.$executeRawUnsafe(`update chat.quran_tajweed_mark set state = 'rejected' where id = $1::uuid`, id))).toMatch(/reviewed once/);
-    expect(await refused(g.prisma.$executeRawUnsafe(`update chat.quran_tajweed_mark set end_cp = 3 where id = $1::uuid`, id))).toMatch(/reviewed once/);
-    expect(await refused(g.prisma.$executeRawUnsafe(`delete from chat.quran_tajweed_mark where id = $1::uuid`, id))).toMatch(/reject it instead/);
+  let a: string;
+  let b: string;
+
+  it('a mark starts pending, is reviewed once by a Tajweed reviewer, and cannot be removed or reach past its verse', async () => {
+    expect(await refused(g.prisma.$executeRawUnsafe(
+      `insert into chat.quran_tajweed_mark (dataset_id, surah, ayah, start_cp, end_cp, rule, source, source_version, state, reviewed_by, reviewed_at)
+       values ($1, 101, 6, 0, 2, 'ikhfa', 'qul', 'v', 'approved', $2::uuid, now())`, DATASET, reviewer,
+    ))).toMatch(/starts pending/);
+    // Offsets are into the VERSE: 101:1's verse is 'نص 101:1' (8 code points), never the Basmala before it.
+    expect(await refused(insertMark(1, 0, 9))).toMatch(/past the end of verse/);
+    a = await insertMark(6, 0, 2);
+    expect(await refused(approve(a, outsider))).toMatch(/only a Tajweed reviewer/);
+    await approve(a, reviewer);
+    expect(await refused(g.prisma.$executeRawUnsafe(`update chat.quran_tajweed_mark set state = 'rejected' where id = $1::uuid`, a))).toMatch(/reviewed once/);
+    expect(await refused(g.prisma.$executeRawUnsafe(`update chat.quran_tajweed_mark set end_cp = 3 where id = $1::uuid`, a))).toMatch(/reviewed once/);
+    expect(await refused(g.prisma.$executeRawUnsafe(`delete from chat.quran_tajweed_mark where id = $1::uuid`, a))).toMatch(/reject or withdraw/);
   });
 
-  it('are served only when approved and their surah is signed off for the same source version', async () => {
-    const before = await http('/quran/tajweed?surah=101&from=1&to=11');
-    expect(before.status).toBe(200);
-    expect(before.json.marks).toEqual([]); // approved, but the surah is not signed off yet
-    await insertMark(7, 0, 2); // stays pending
-    await g.prisma.$executeRawUnsafe(
-      `insert into chat.quran_tajweed_review (dataset_id, surah, source, source_version, reviewed_by) values ($1, 101, 'qul', 'v1', $2::uuid)`, DATASET, reviewer,
+  it('is served only once a sign-off names it; a mark approved later waits for a new sign-off', async () => {
+    expect(await mine()).toEqual([]); // approved, but no sign-off yet
+    expect(await refused(signOff([a], 'f'.repeat(64)))).toMatch(/digest/);
+    expect(await refused(signOff([a], undefined, outsider))).toMatch(/only a Tajweed reviewer/);
+    await signOff([a]);
+    expect((await mine()).map((m) => m.ayah)).toEqual([6]);
+    b = await insertMark(7, 0, 2);
+    await approve(b, reviewer);
+    expect((await mine()).map((m) => m.ayah)).toEqual([6]); // b is approved but not signed
+    expect(await refused(signOff([a, b, b]))).toMatch(/each once/);
+    await signOff([a, b]);
+    expect((await mine()).map((m) => m.ayah)).toEqual([6, 7]);
+    const review = await g.prisma.$queryRawUnsafe<Array<{ d: string }>>(
+      `select marks_digest as d from chat.quran_tajweed_review where source_version = $1 order by reviewed_at desc limit 1`, `run-${RUN}`,
     );
-    const after = await http('/quran/tajweed?surah=101&from=1&to=11');
-    expect(after.json.marks).toEqual([{ ayah: 6, start: 0, end: 2, rule: 'ikhfa', source: 'qul', sourceVersion: 'v1' }]);
-    expect(await refused(g.prisma.$executeRawUnsafe(`delete from chat.quran_tajweed_review where dataset_id = $1`, DATASET))).toMatch(/never changed or removed/);
+    expect(review[0]!.d).toBe(marksDigest([{ ayah: 6, start: 0, end: 2, rule: 'ikhfa' }, { ayah: 7, start: 0, end: 2, rule: 'ikhfa' }]));
+  });
+
+  it('a withdrawn mark is no longer served; the withdrawal is a record, and a sign-off cannot name it', async () => {
+    expect(await refused(g.prisma.$executeRawUnsafe(
+      `insert into chat.quran_tajweed_withdrawal (mark_id, withdrawn_by, reason) values ($1::uuid, $2::uuid, 'x')`, a, outsider,
+    ))).toMatch(/only a Tajweed reviewer/);
+    await g.prisma.$executeRawUnsafe(`insert into chat.quran_tajweed_withdrawal (mark_id, withdrawn_by, reason) values ($1::uuid, $2::uuid, 'source corrected')`, a, reviewer);
+    expect((await mine()).map((m) => m.ayah)).toEqual([7]);
+    expect(await refused(signOff([a, b]))).toMatch(/unwithdrawn/);
+    expect(await refused(g.prisma.$executeRawUnsafe(`delete from chat.quran_tajweed_withdrawal where mark_id = $1::uuid`, a))).toMatch(/never changed or removed/);
+    expect(await refused(g.prisma.$executeRawUnsafe(`delete from chat.quran_tajweed_review where source_version = $1`, `run-${RUN}`))).toMatch(/never changed or removed/);
   });
 });
 
 describe('GET /quran/ayahs', () => {
-  it('serves the verified text of the pinned dataset, with the range fingerprint', async () => {
+  it('serves the verified text as { basmala, text }, the range fingerprint over the verses', async () => {
     const r = await http('/quran/ayahs?surah=85&from=1&to=22');
     expect(r.status).toBe(200);
     expect(r.json.dataset).toEqual({ id: DATASET, sha256: FILE_SHA, attribution: 'test', sourceUrl: 'https://example.test/quran' });
     expect(r.json.ayahs).toHaveLength(22);
-    expect(r.json.ayahs[21]).toMatchObject({ ayah: 22, text: 'نص 85:22', sha256: sha256Hex('نص 85:22'), audio: null });
+    expect(r.json.ayahs[0]).toMatchObject({ ayah: 1, basmala: BASMALA, text: 'نص 85:1', sha256: sha256Hex('نص 85:1') });
+    expect(r.json.ayahs[21]).toMatchObject({ ayah: 22, basmala: null, text: 'نص 85:22', sha256: sha256Hex('نص 85:22'), audio: null });
     expect(r.json.rangeSha256).toBe(digestOf(r.json.ayahs.map((a: { sha256: string }) => a.sha256)));
   });
 
@@ -247,28 +342,36 @@ describe('GET /quran/ayahs', () => {
     expect((await fetch(`${base}/quran/ayahs?surah=1`)).status).toBe(401);
   });
 
-  it('attaches audio only when a source is configured, through the ayah\'s own key', async () => {
+  it('attaches audio only when a source is configured, through the ayah\'s own key and its ingested hash', async () => {
+    const reciter = `t${RUN}`.slice(0, 20);
     await g.prisma.$executeRawUnsafe(
       `insert into chat.config (key, value, scope, description) values ('quran.audio', $1::jsonb, 'quran', 'quran-dataset.spec')
        on conflict (key) do update set value = excluded.value`,
-      JSON.stringify({ reciter: `t${RUN}`.slice(0, 20), baseUrl: 'https://media.example.test' }),
+      JSON.stringify({ reciter, baseUrl: 'https://media.example.test' }),
     );
-    const r = await http('/quran/ayahs?surah=85&from=2&to=4');
-    const reciter = `t${RUN}`.slice(0, 20);
-    expect(r.json.ayahs.map((a: { audio: unknown }) => a.audio)).toEqual([
-      null,
-      { reciter, key: audioKey(reciter, 85, 3), url: `https://media.example.test/${audioKey(reciter, 85, 3)}`, sha256: 'e'.repeat(64) },
-      null,
-    ]);
+    try {
+      const r = await http('/quran/ayahs?surah=85&from=2&to=4');
+      const stored = await g.prisma.$queryRawUnsafe<Array<{ sha256: string }>>(`select sha256 from chat.quran_ayah_audio where reciter_code = $1`, reciter);
+      expect(r.json.ayahs.map((a: { audio: unknown }) => a.audio)).toEqual([
+        null,
+        { reciter, key: audioKey(reciter, 85, 3), url: `https://media.example.test/${audioKey(reciter, 85, 3)}`, sha256: stored[0]!.sha256 },
+        null,
+      ]);
+    } finally {
+      await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'quran.audio'`);
+    }
   });
 
   it('refuses everything (503) once the configured dataset is not one pinned in code', async () => {
-    expect(await load(UNPINNED, rows())).toBe('loaded');
-    await g.prisma.$executeRawUnsafe(`update chat.config set value = to_jsonb($1::text) where key = 'quran.dataset'`, UNPINNED);
-    const r = await http('/quran/ayahs?surah=1&from=1&to=7');
-    expect(r.status).toBe(503);
-    expect(r.code).toBe(CommErrorCode.QURAN_UNAVAILABLE);
-    await g.prisma.$executeRawUnsafe(`update chat.config set value = to_jsonb($1::text) where key = 'quran.dataset'`, DATASET);
+    expect(['loaded', 'already loaded']).toContain(await load(UNPINNED, ROWS));
+    try {
+      await setDataset(UNPINNED);
+      const r = await http('/quran/ayahs?surah=1&from=1&to=7');
+      expect(r.status).toBe(503);
+      expect(r.code).toBe(CommErrorCode.QURAN_UNAVAILABLE);
+    } finally {
+      await setDataset(DATASET);
+    }
     expect((await http('/quran/ayahs?surah=1&from=1&to=7')).status).toBe(200);
   });
 });

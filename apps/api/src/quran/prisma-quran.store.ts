@@ -24,13 +24,13 @@ export class PrismaQuranStore implements QuranStore {
 
   allAyahs(id: string): Promise<AyahRow[]> {
     return this.prisma.$queryRaw<AyahRow[]>`
-      SELECT surah::int AS surah, ayah::int AS ayah, text_uthmani AS text, sha256
+      SELECT surah::int AS surah, ayah::int AS ayah, text_uthmani AS text, sha256, basmala, verse
         FROM chat.quran_ayah WHERE dataset_id = ${id}`;
   }
 
   ayahs(id: string, surah: number, from: number, to: number): Promise<AyahRow[]> {
     return this.prisma.$queryRaw<AyahRow[]>`
-      SELECT surah::int AS surah, ayah::int AS ayah, text_uthmani AS text, sha256
+      SELECT surah::int AS surah, ayah::int AS ayah, text_uthmani AS text, sha256, basmala, verse
         FROM chat.quran_ayah
        WHERE dataset_id = ${id} AND surah = ${surah} AND ayah BETWEEN ${from} AND ${to}
        ORDER BY ayah`;
@@ -51,15 +51,22 @@ export class PrismaQuranStore implements QuranStore {
        WHERE reciter_code = ${reciter} AND surah = ${surah} AND ayah BETWEEN ${from} AND ${to}`;
   }
 
-  async tajweed(id: string, surah: number, from: number, to: number): Promise<{ marks: TajweedMark[]; reviews: TajweedReview[] }> {
-    const marks = await this.prisma.$queryRaw<TajweedMark[]>`
-      SELECT dataset_id AS "datasetId", surah::int AS surah, ayah::int AS ayah, start_cp AS start, end_cp AS "end",
-             rule, source, source_version AS "sourceVersion", state
-        FROM chat.quran_tajweed_mark
-       WHERE dataset_id = ${id} AND surah = ${surah} AND ayah BETWEEN ${from} AND ${to} AND state = 'approved'`;
+  async tajweed(id: string, surah: number): Promise<{ marks: TajweedMark[]; reviews: TajweedReview[]; withdrawn: string[] }> {
     const reviews = await this.prisma.$queryRaw<TajweedReview[]>`
-      SELECT dataset_id AS "datasetId", surah::int AS surah, source, source_version AS "sourceVersion"
+      SELECT dataset_id AS "datasetId", surah::int AS surah, source, source_version AS "sourceVersion",
+             mark_ids::text[] AS "markIds", marks_digest AS "marksDigest", reviewed_at AS "reviewedAt"
         FROM chat.quran_tajweed_review WHERE dataset_id = ${id} AND surah = ${surah}`;
-    return { marks, reviews };
+    // Every mark a sign-off names, whatever its state, so the sign-off's digest can be checked.
+    const marks = await this.prisma.$queryRaw<TajweedMark[]>`
+      SELECT m.id::text AS id, m.dataset_id AS "datasetId", m.surah::int AS surah, m.ayah::int AS ayah,
+             m.start_cp AS start, m.end_cp AS "end", m.rule, m.source, m.source_version AS "sourceVersion", m.state
+        FROM chat.quran_tajweed_mark m
+       WHERE m.dataset_id = ${id} AND m.surah = ${surah}
+         AND m.id IN (SELECT unnest(r.mark_ids) FROM chat.quran_tajweed_review r WHERE r.dataset_id = ${id} AND r.surah = ${surah})`;
+    const withdrawn = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT w.mark_id::text AS id
+        FROM chat.quran_tajweed_withdrawal w JOIN chat.quran_tajweed_mark m ON m.id = w.mark_id
+       WHERE m.dataset_id = ${id} AND m.surah = ${surah}`;
+    return { marks, reviews, withdrawn: withdrawn.map((w) => w.id) };
   }
 }

@@ -30,8 +30,14 @@ ENTRY = re.compile(
 def pinned_ts():
     src = open(os.path.join(ROOT, 'apps', 'api', 'src', 'quran', 'pinned.ts'), encoding='utf-8').read()
     body = src[src.index('new Map<string, PinnedDataset>('):]
-    return {m.group(1): dict(id=m.group(1), fileSha256=m.group(2), ayahsDigest=m.group(3), attribution=m.group(4), sourceUrl=m.group(5))
+    pins = {m.group(1): dict(id=m.group(1), fileSha256=m.group(2), ayahsDigest=m.group(3), attribution=m.group(4), sourceUrl=m.group(5))
             for m in ENTRY.finditer(body)}
+    # Fail on an entry this cannot read rather than skip it: every `id:` must have parsed.
+    declared = len(re.findall(r"\bid:\s*'", body))
+    if declared != len(pins):
+        raise SystemExit(f'quran-dataset: pinned.ts declares {declared} dataset(s) but only {len(pins)} parse '
+                         f'as {{ id, fileSha256, ayahsDigest, attribution, sourceUrl }} in that order')
+    return pins
 
 
 def main():

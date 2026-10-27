@@ -7,13 +7,13 @@
  * These are the pure checks; the service and the loader both use them.
  */
 import { SURAHS } from '../../../src/materials/quran-surahs';
-import { QuranIntegrityError, sha256Hex, verifyDataset } from '../../../src/quran/quran-integrity';
+import { BASMALA_SHA256, QuranIntegrityError, sha256Hex, splitBasmala, verifyDataset } from '../../../src/quran/quran-integrity';
 import { audioKey, parseAudioKey } from '../../../src/quran/audio-key';
-import { servableMarks, type TajweedMark, type TajweedReview } from '../../../src/quran/tajweed';
+import { marksDigest, servableMarks, type TajweedMark, type TajweedReview } from '../../../src/quran/tajweed';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PINNED_QURAN_DATASETS } from '../../../src/quran/pinned';
-import { pinnedFor, syntheticRows } from './fixtures';
+import { BASMALA, BASMALA_SHADDA, pinnedFor, realRows, rowOf, syntheticRows } from './fixtures';
 
 function refusal(fn: () => unknown): string {
   try {
@@ -33,12 +33,12 @@ describe('the Quran text is verified against its pinned fingerprint', () => {
     expect(rows).toHaveLength(6236);
     const verified = verifyDataset(rows, pinned);
     expect(verified.size).toBe(6236);
-    expect(verified.get('85:22')).toBe(sha256Hex('نص 85:22'));
+    expect(verified.get('85:22')!.verseSha256).toBe(sha256Hex('نص 85:22'));
   });
 
   it('refuses a tampered text, even with its own hash recomputed to match', () => {
     // A changed letter whose row hash was updated with it: only the pinned digest catches it.
-    const tampered = rows.map((r) => (r.surah === 101 && r.ayah === 4 ? { ...r, text: r.text + 'ـ', sha256: sha256Hex(r.text + 'ـ') } : r));
+    const tampered = rows.map((r) => (r.surah === 101 && r.ayah === 4 ? rowOf(101, 4, r.text + 'ـ') : r));
     expect(refusal(() => verifyDataset(tampered, pinned))).toBe('digest');
   });
 
@@ -51,7 +51,7 @@ describe('the Quran text is verified against its pinned fingerprint', () => {
     const missing = rows.filter((r) => !(r.surah === 89 && r.ayah === 23));
     expect(refusal(() => verifyDataset(missing, pinned))).toBe('count');
 
-    const split = [...rows, { surah: 89, ayah: 31, text: 'extra', sha256: sha256Hex('extra') }];
+    const split = [...rows, rowOf(89, 31, 'extra')];
     expect(refusal(() => verifyDataset(split, pinned))).toBe('count');
 
     const shifted = rows.map((r) => (r.surah === 114 && r.ayah === 6 ? { ...r, ayah: 7 } : r));
@@ -62,7 +62,7 @@ describe('the Quran text is verified against its pinned fingerprint', () => {
   });
 
   it('refuses an empty ayah', () => {
-    const empty = rows.map((r) => (r.surah === 108 && r.ayah === 1 ? { ...r, text: '', sha256: sha256Hex('') } : r));
+    const empty = rows.map((r) => (r.surah === 108 && r.ayah === 2 ? { ...r, text: '', sha256: sha256Hex(''), verse: '' } : r));
     expect(refusal(() => verifyDataset(empty, pinned))).toBe('empty');
   });
 
@@ -95,35 +95,127 @@ describe('every ayah has exactly one audio key, and it names that ayah', () => {
   });
 });
 
-describe('Tajweed: only an approved mark of a signed-off surah is ever served', () => {
-  const mark = (over: Partial<TajweedMark> = {}): TajweedMark => ({
-    datasetId: 'synthetic-1', surah: 101, ayah: 6, start: 4, end: 7, rule: 'ikhfa',
+describe('the Basmala is split from ayah 1 and never counted as the verse', () => {
+  const real = realRows();
+  const verified = verifyDataset(real, pinnedFor(real, 'tanzil-uthmani-1.1'));
+  const cps = (t: string) => [...t].map((c) => c.codePointAt(0));
+
+  it('accepts exactly two Basmala spellings, by hash', () => {
+    expect(BASMALA_SHA256.has(sha256Hex(BASMALA))).toBe(true);
+    expect(BASMALA_SHA256.has(sha256Hex(BASMALA_SHADDA))).toBe(true);
+    expect(BASMALA_SHA256.size).toBe(2);
+  });
+
+  it('2:1 is served as the Basmala and the verse "الٓمٓ" (U+0627 U+0644 U+0653 U+0645 U+0653)', () => {
+    const v = verified.get('2:1')!;
+    expect(v.basmala).toBe(BASMALA);
+    expect(cps(v.verse)).toEqual([0x627, 0x644, 0x653, 0x645, 0x653]);
+    expect(v.verseSha256).toBe(sha256Hex(v.verse));
+  });
+
+  it('95:1 and 97:1 carry the bi-shadda spelling, split the same way', () => {
+    for (const s of [95, 97]) {
+      const v = verified.get(`${s}:1`)!;
+      expect(v.basmala).toBe(BASMALA_SHADDA);
+      expect(`${v.basmala} ${v.verse}`).toBe(real.find((r) => r.surah === s && r.ayah === 1)!.text);
+    }
+  });
+
+  it('every one of the 112 other surahs has a Basmala on ayah 1; 1:1 IS the verse; 9:1 has none', () => {
+    const withBasmala = [...verified.entries()].filter(([, v]) => v.basmala !== null).map(([k]) => k);
+    expect(withBasmala).toHaveLength(112);
+    expect(withBasmala.every((k) => k.endsWith(':1'))).toBe(true);
+    expect(verified.get('1:1')).toMatchObject({ basmala: null, verse: BASMALA });
+    expect(verified.get('9:1')!.basmala).toBeNull();
+    expect(verified.get('27:30')!.basmala).toBeNull(); // the Basmala inside an ayah is part of the verse
+  });
+
+  it('refuses a corrupted prefix, a missing one, and a Basmala on 9:1 -- even with re-hashed rows', () => {
+    const corrupt = (surah: number, text: string) => {
+      const rows = real.map((r) => (r.surah === surah && r.ayah === 1 ? { ...r, text, sha256: sha256Hex(text), basmala: undefined, verse: undefined } : r));
+      return () => verifyDataset(rows, pinnedFor(rows, 'x'));
+    };
+    const twoOne = real.find((r) => r.surah === 2 && r.ayah === 1)!.text;
+    expect(refusal(corrupt(2, twoOne.slice(0, 2) + twoOne.slice(3)))).toBe('basmala'); // one mark dropped from the Basmala
+    expect(refusal(corrupt(2, twoOne.split(' ').slice(4).join(' ')))).toBe('basmala'); // no Basmala at all
+    const nineOne = real.find((r) => r.surah === 9 && r.ayah === 1)!.text;
+    expect(refusal(corrupt(9, `${BASMALA} ${nineOne}`))).toBe('basmala');
+    expect(() => splitBasmala(2, 1, `${BASMALA}  x`)).toThrow(QuranIntegrityError); // two spaces: not the exact form
+  });
+
+  it('refuses a stored split that is not the text\'s', () => {
+    const rows = real.map((r) => (r.surah === 2 && r.ayah === 1 ? { ...r, basmala: null, verse: r.text } : r));
+    expect(refusal(() => verifyDataset(rows, pinnedFor(rows, 'x')))).toBe('basmala');
+  });
+});
+
+describe('Tajweed: only marks named by the latest sign-off, approved and not withdrawn, are served', () => {
+  const verse = 'فَأَمَّا مَن ثَقُلَتْ مَوَازِينُهُ';
+  const verses = new Map([['101:6', verse], ['101:7', 'فَهُوَ فِى عِيشَةٍ رَّاضِيَةٍ']]);
+  const mark = (id: string, over: Partial<TajweedMark> = {}): TajweedMark => ({
+    id, datasetId: 'synthetic-1', surah: 101, ayah: 6, start: 4, end: 7, rule: 'ikhfa',
     source: 'qul', sourceVersion: 'v1', state: 'approved', ...over,
   });
-  const review: TajweedReview = { datasetId: 'synthetic-1', surah: 101, source: 'qul', sourceVersion: 'v1' };
-  const texts = new Map([['101:6', 'فَأَمَّا مَن ثَقُلَتْ مَوَازِينُهُ']]);
+  const review = (marks: TajweedMark[], over: Partial<TajweedReview> = {}): TajweedReview => ({
+    datasetId: 'synthetic-1', surah: 101, source: 'qul', sourceVersion: 'v1',
+    markIds: marks.map((m) => m.id), marksDigest: marksDigest(marks), reviewedAt: '2026-10-27T10:00:00Z', ...over,
+  });
+  const none = new Set<string>();
 
-  it('serves an approved mark whose surah is signed off for the same source version', () => {
-    expect(servableMarks([mark()], [review], texts)).toHaveLength(1);
+  it('serves the marks a sign-off names', () => {
+    const a = mark('a');
+    expect(servableMarks([a], [review([a])], none, verses)).toEqual([a]);
   });
 
-  it('never serves a pending or rejected mark', () => {
-    expect(servableMarks([mark({ state: 'pending' }), mark({ state: 'rejected' })], [review], texts)).toEqual([]);
+  it('never serves a pending or rejected mark, even if a sign-off names it', () => {
+    const p = mark('p', { state: 'pending' });
+    const r = mark('r', { state: 'rejected' });
+    expect(servableMarks([p, r], [review([p, r])], none, verses)).toEqual([]);
   });
 
-  it('never serves an approved mark without the surah sign-off, or signed off for another version or source', () => {
-    expect(servableMarks([mark()], [], texts)).toEqual([]);
-    expect(servableMarks([mark()], [{ ...review, sourceVersion: 'v2' }], texts)).toEqual([]);
-    expect(servableMarks([mark()], [{ ...review, source: 'other' }], texts)).toEqual([]);
-    expect(servableMarks([mark({ datasetId: 'other' })], [review], texts)).toEqual([]);
+  it('does not serve a mark approved AFTER the sign-off until a new sign-off names it', () => {
+    const a = mark('a');
+    const late = mark('late', { ayah: 7, start: 0, end: 3 });
+    expect(servableMarks([a, late], [review([a])], none, verses)).toEqual([a]);
+    const resigned = review([a, late], { reviewedAt: '2026-10-28T10:00:00Z' });
+    expect(servableMarks([a, late], [review([a]), resigned], none, verses)).toEqual([a, late]);
   });
 
-  it('never serves a mark outside its ayah\'s text (code points, end exclusive)', () => {
-    const len = [...texts.get('101:6')!].length;
-    expect(servableMarks([mark({ start: 0, end: len })], [review], texts)).toHaveLength(1);
-    expect(servableMarks([mark({ start: 0, end: len + 1 })], [review], texts)).toEqual([]);
-    expect(servableMarks([mark({ start: 5, end: 5 })], [review], texts)).toEqual([]);
-    expect(servableMarks([mark({ ayah: 7 })], [review], texts)).toEqual([]);
+  it('only the LATEST sign-off of a surah and source version counts', () => {
+    const a = mark('a');
+    const b = mark('b', { ayah: 7, start: 0, end: 3 });
+    const older = review([a, b], { reviewedAt: '2026-10-27T10:00:00Z' });
+    const newer = review([b], { reviewedAt: '2026-10-29T10:00:00Z' });
+    expect(servableMarks([a, b], [older, newer], none, verses)).toEqual([b]);
+  });
+
+  it('serves nothing of a sign-off whose digest no longer matches the marks it names', () => {
+    const a = mark('a');
+    const signed = review([a]);
+    expect(servableMarks([{ ...a, end: 8 }], [signed], none, verses)).toEqual([]);
+    expect(servableMarks([], [signed], none, verses)).toEqual([]); // a named mark that cannot be read
+  });
+
+  it('never serves a withdrawn mark; the rest of the sign-off stays', () => {
+    const a = mark('a');
+    const b = mark('b', { ayah: 7, start: 0, end: 3 });
+    expect(servableMarks([a, b], [review([a, b])], new Set(['a']), verses)).toEqual([b]);
+  });
+
+  it('never serves a mark of another dataset, source or version under this sign-off', () => {
+    for (const over of [{ datasetId: 'other' }, { source: 'other' }, { sourceVersion: 'v2' }]) {
+      const m = mark('m', over);
+      expect(servableMarks([m], [review([mark('m')])], none, verses)).toEqual([]);
+    }
+  });
+
+  it('never serves a mark outside its verse (code points, end exclusive)', () => {
+    const len = [...verse].length;
+    const ok = mark('ok', { start: 0, end: len });
+    const past = mark('past', { start: 0, end: len + 1 });
+    const empty = mark('empty', { start: 5, end: 5 });
+    const absent = mark('absent', { ayah: 8 });
+    expect(servableMarks([ok, past, empty, absent], [review([ok, past, empty, absent])], none, verses)).toEqual([ok]);
   });
 });
 

@@ -5,11 +5,11 @@
  * the one ayah -> key mapping; Tajweed only when approved and signed off.
  */
 import { CommError, CommErrorCode } from '../../../src/platform/errors';
-import { QuranTextService, type QuranStore, type StoredDataset } from '../../../src/quran/quran-text.service';
+import { QuranTextService, REVERIFY_COOLDOWN_MS, type QuranStore, type StoredDataset } from '../../../src/quran/quran-text.service';
 import { sha256Hex, type AyahRow, type PinnedDataset } from '../../../src/quran/quran-integrity';
 import { audioKey } from '../../../src/quran/audio-key';
-import type { TajweedMark, TajweedReview } from '../../../src/quran/tajweed';
-import { pinnedFor, syntheticRows } from './fixtures';
+import { marksDigest, type TajweedMark, type TajweedReview } from '../../../src/quran/tajweed';
+import { BASMALA, pinnedFor, rowOf, syntheticRows } from './fixtures';
 
 class FakeStore implements QuranStore {
   configured: string | null = 'synthetic-1';
@@ -19,12 +19,19 @@ class FakeStore implements QuranStore {
   audioRows: Array<{ surah: number; ayah: number; objectKey: string; sha256: string }> = [];
   marks: TajweedMark[] = [];
   reviews: TajweedReview[] = [];
+  withdrawn: string[] = [];
+  datasetCalls = 0;
+  failDataset = false;
 
   constructor(readonly pinned: PinnedDataset) {
     this.stored = { id: pinned.id, sha256: pinned.fileSha256, ayahsDigest: pinned.ayahsDigest, attribution: pinned.attribution, sourceUrl: pinned.sourceUrl };
   }
   async configuredDatasetId() { return this.configured; }
-  async dataset(id: string) { return this.stored && this.stored.id === id ? this.stored : null; }
+  async dataset(id: string) {
+    this.datasetCalls++;
+    if (this.failDataset) throw new Error('connection refused');
+    return this.stored && this.stored.id === id ? this.stored : null;
+  }
   async allAyahs() { return this.rows; }
   async ayahs(_id: string, surah: number, from: number, to: number) {
     return this.rows.filter((r) => r.surah === surah && r.ayah >= from && r.ayah <= to);
@@ -33,7 +40,7 @@ class FakeStore implements QuranStore {
   async audio(_reciter: string, surah: number, from: number, to: number) {
     return this.audioRows.filter((r) => r.surah === surah && r.ayah >= from && r.ayah <= to);
   }
-  async tajweed() { return { marks: this.marks, reviews: this.reviews }; }
+  async tajweed() { return { marks: this.marks, reviews: this.reviews, withdrawn: this.withdrawn }; }
 }
 
 async function setup(adjust?: (store: FakeStore) => void) {
@@ -62,8 +69,11 @@ describe('QuranTextService', () => {
     expect(res.dataset).toEqual({ id: pinned.id, sha256: pinned.fileSha256, attribution: 'test', sourceUrl: pinned.sourceUrl });
     expect(res.surah).toMatchObject({ number: 85, ayahCount: 22 });
     expect(res.ayahs.map((a) => a.ayah)).toEqual([1, 2, 3]);
-    expect(res.ayahs[0]).toMatchObject({ text: 'نص 85:1', sha256: sha256Hex('نص 85:1'), audio: null });
-    expect(res.rangeSha256).toBe(sha256Hex(res.ayahs.map((a) => a.sha256).join('\n')));
+    // Ayah 1 is served as the Basmala and the verse; the hash is the verse's.
+    expect(res.ayahs[0]).toMatchObject({ basmala: BASMALA, text: 'نص 85:1', sha256: sha256Hex('نص 85:1'), audio: null });
+    expect(res.ayahs[1]).toMatchObject({ basmala: null, text: 'نص 85:2' });
+    // The range reference is over the verses, never the Basmala prefix.
+    expect(res.rangeSha256).toBe(sha256Hex(['نص 85:1', 'نص 85:2', 'نص 85:3'].map((t) => sha256Hex(t)).join('\n')));
   });
 
   it('refuses everything (503) when the stored dataset is not the pinned one', async () => {
@@ -75,7 +85,7 @@ describe('QuranTextService', () => {
 
   it('refuses everything when a row was tampered with before the API started', async () => {
     const { service } = await setup((s) => {
-      s.rows = s.rows.map((r) => (r.surah === 101 && r.ayah === 4 ? { ...r, text: 'x', sha256: sha256Hex('x') } : r));
+      s.rows = s.rows.map((r) => (r.surah === 101 && r.ayah === 4 ? rowOf(101, 4, 'x') : r));
     });
     expect((await refusedWith(service.ayahs({ surah: '114', from: '1', to: '6' }))).status).toBe(503);
   });
@@ -83,7 +93,7 @@ describe('QuranTextService', () => {
   it('refuses a row tampered with AFTER start-up, and stops serving until it verifies again', async () => {
     const { service, store } = await setup();
     await expect(service.ayahs({ surah: '101', from: '1', to: '5' })).resolves.toBeDefined();
-    store.rows = store.rows.map((r) => (r.surah === 101 && r.ayah === 4 ? { ...r, text: 'x', sha256: sha256Hex('x') } : r));
+    store.rows = store.rows.map((r) => (r.surah === 101 && r.ayah === 4 ? rowOf(101, 4, 'x') : r));
     expect((await refusedWith(service.ayahs({ surah: '101', from: '1', to: '5' }))).status).toBe(503);
     // Fail closed: even an untouched surah is refused now.
     expect((await refusedWith(service.ayahs({ surah: '1', from: '1', to: '7' }))).status).toBe(503);
@@ -133,14 +143,43 @@ describe('QuranTextService', () => {
     expect((await service.ayahs({ surah: '113', from: '1', to: '2' })).ayahs.every((a) => a.audio === null)).toBe(true);
   });
 
-  it('serves no Tajweed mark that is not approved and signed off', async () => {
-    const mark: TajweedMark = { datasetId: 'synthetic-1', surah: 101, ayah: 1, start: 0, end: 2, rule: 'madd_tabii', source: 'qul', sourceVersion: 'v1', state: 'pending' };
-    const { service, store } = await setup((s) => { s.marks = [mark]; s.reviews = [{ datasetId: 'synthetic-1', surah: 101, source: 'qul', sourceVersion: 'v1' }]; });
+  it('refuses a row whose stored Basmala split was changed after start-up', async () => {
+    const { service, store } = await setup();
+    store.rows = store.rows.map((r) => (r.surah === 2 && r.ayah === 1 ? { ...r, basmala: null, verse: r.text } : r));
+    expect((await refusedWith(service.ayahs({ surah: '2', from: '1', to: '2' }))).status).toBe(503);
+  });
+
+  it('applies the cooldown after a CRASHED verification too: no re-read on every request', async () => {
+    const { service, store } = await setup((s) => { s.failDataset = true; });
+    const after = store.datasetCalls;
+    expect((await refusedWith(service.ayahs({ surah: '1' }))).status).toBe(503);
+    expect((await refusedWith(service.ayahs({ surah: '1' }))).status).toBe(503);
+    expect(store.datasetCalls - after).toBeLessThanOrEqual(1);
+    // After the cooldown, a healthy store verifies again.
+    store.failDataset = false;
+    jest.useFakeTimers({ now: Date.now() + REVERIFY_COOLDOWN_MS + 1, doNotFake: ['nextTick', 'setImmediate'] });
+    try {
+      expect((await service.ayahs({ surah: '1' })).ayahs).toHaveLength(7);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('serves no Tajweed mark that is not approved, signed off and still in force', async () => {
+    const mark: TajweedMark = { id: 'm1', datasetId: 'synthetic-1', surah: 101, ayah: 2, start: 0, end: 2, rule: 'madd_tabii', source: 'qul', sourceVersion: 'v1', state: 'pending' };
+    const signOff = (marks: TajweedMark[]): TajweedReview => ({
+      datasetId: 'synthetic-1', surah: 101, source: 'qul', sourceVersion: 'v1', markIds: marks.map((m) => m.id), marksDigest: marksDigest(marks), reviewedAt: '2026-10-27T10:00:00Z',
+    });
+    const { service, store } = await setup((s) => { s.marks = [mark]; s.reviews = [signOff([mark])]; });
     expect((await service.tajweed({ surah: '101', from: '1', to: '11' })).marks).toEqual([]);
     store.marks = [{ ...mark, state: 'approved' }];
+    store.reviews = [signOff([{ ...mark, state: 'approved' }])];
     expect((await service.tajweed({ surah: '101', from: '1', to: '11' })).marks).toEqual([
-      { ayah: 1, start: 0, end: 2, rule: 'madd_tabii', source: 'qul', sourceVersion: 'v1' },
+      { ayah: 2, start: 0, end: 2, rule: 'madd_tabii', source: 'qul', sourceVersion: 'v1' },
     ]);
+    store.withdrawn = ['m1'];
+    expect((await service.tajweed({ surah: '101', from: '1', to: '11' })).marks).toEqual([]);
+    store.withdrawn = [];
     store.reviews = [];
     expect((await service.tajweed({ surah: '101', from: '1', to: '11' })).marks).toEqual([]);
   });

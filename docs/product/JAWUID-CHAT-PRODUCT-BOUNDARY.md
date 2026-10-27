@@ -2775,12 +2775,22 @@ load                are pinned in code (apps/api/src/quran/pinned.ts). The
                     the whole dataset at start-up and every served ayah on
                     every request, and refuses everything (503) on any
                     mismatch: fail closed
-Tajweed             a mark is served only when a teacher approved it AND its
-                    surah is signed off for the same source version; marks come
+the Basmala         Tanzil prefixes it to ayah 1 of 112 surahs (not 1, where 1:1
+                    IS the Basmala, nor 9). Each ayah is served as { basmala,
+                    text }; the prefix is accepted only when its SHA-256 is one
+                    of the two known spellings, else the load is refused.
+                    Tajweed offsets, audio and the whiteboard's range hash are
+                    defined against the verse without it
+Tajweed             a mark is served only when a Tajweed reviewer (the Teachers
+                    department: a proposal for the owner) approved it, it is not
+                    withdrawn, and the LATEST sign-off of its surah names it and
+                    still matches the digest of the marks it named; marks come
                     from a published annotation, never hand or model
                     classification; none are shipped yet
 audio               one file per ayah, its key generated from (reciter, surah,
-                    ayah), so a verse and its audio cannot mismatch. No audio
+                    ayah), its hash computed by the server's ingest from the
+                    stored object, so a verse and its audio cannot mismatch and
+                    audio is never served unverified. No audio
                     is shipped: chat.config quran.audio stays unset until the
                     owner confirms the reciter and the right to self-host
 ```

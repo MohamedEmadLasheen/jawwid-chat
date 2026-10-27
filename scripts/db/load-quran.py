@@ -12,10 +12,16 @@ deploy job), never inside the API image. Before a single row is emitted:
     the text is kept VERBATIM (only the line terminator is removed);
   * 6,236 ayat, every surah numbered 1..n with n = its ayah count
     (apps/api/src/materials/quran-surahs.ts), no empty ayah;
-  * the digest of the per-ayah SHA-256s equals the pinned digest.
-The SQL it prints stages the rows and calls chat.load_quran_dataset, which
-checks the counts and the digest again against the database, in one
-transaction. A dataset already loaded with the same fingerprints is skipped.
+  * the digest of the per-ayah SHA-256s equals the pinned digest;
+  * ayah 1 of every surah but 1 and 9 starts with an accepted Basmala (by its
+    SHA-256, BASMALA_SHA256) and one space, and 9:1 does not.
+The SQL it prints stages the VERBATIM rows and calls chat.load_quran_dataset,
+which checks all of it again against the database, derives the Basmala split
+and text_search itself, and writes all or nothing. A dataset already loaded
+with the same fingerprints is skipped.
+
+Anything outside the API that reads data/quran/ (the lessons build, a JSON
+snapshot) must run `--check` first and fail on a refusal (the contract).
 
 Standard library only: the deploy job has python3 and psql, nothing else.
 """
@@ -45,29 +51,28 @@ def sha256_hex(data):
     return hashlib.sha256(data).hexdigest()
 
 
-# The same folding as lib/shared/utils/search_text.dart (SearchText.fold); the
-# vectors in data/quran/search-normalisation.vectors.json hold both to it.
-_FOLD = {0x0622: 0x0627, 0x0623: 0x0627, 0x0625: 0x0627, 0x0671: 0x0627, 0x0672: 0x0627, 0x0673: 0x0627,
-         0x0649: 0x064A, 0x06CC: 0x064A, 0x06D2: 0x064A, 0x0629: 0x0647, 0x0624: 0x0621, 0x0626: 0x0621,
-         0x06A9: 0x0643, 0x06AA: 0x0643}
+# The accepted Basmala prefixes, by SHA-256 (the same list as the migration and
+# apps/api/src/quran/quran-integrity.ts): the plain spelling (1:1, prefixed to
+# 110 surahs) and the bi-shadda spelling prefixed to 95 and 97.
+BASMALA_SHA256 = frozenset({
+    'ac1e6f8f64c2e83d0b5087625a5e1eb0067b99d4a8962d3ad30528709dcf3dd6',
+    '5c88aa6a96b7e5db4565abcd6694de3a379dc4233bcd4abbe65952559c3d544a',
+})
 
 
-def search_fold(text):
-    out = []
-    for ch in text:
-        c = ord(ch)
-        if 0x064B <= c <= 0x065F or c == 0x0670 or 0x06D6 <= c <= 0x06ED or c == 0x0640:
-            continue
-        if 0x41 <= c <= 0x5A:
-            c += 0x20
-        elif 0x0660 <= c <= 0x0669:
-            c = c - 0x0660 + 0x30
-        elif 0x06F0 <= c <= 0x06F9:
-            c = c - 0x06F0 + 0x30
-        else:
-            c = _FOLD.get(c, c)
-        out.append(chr(c))
-    return re.sub(r'\s+', ' ', ''.join(out).strip())
+def split_basmala(surah, ayah, text):
+    """(basmala, verse); raises Refused when the rule is broken."""
+    words = text.split(' ', 4)
+    head = ' '.join(words[:4]) if len(words) == 5 else None
+    rest = words[4] if len(words) == 5 else ''
+    is_basmala = head is not None and sha256_hex(head.encode('utf-8')) in BASMALA_SHA256
+    if ayah == 1 and surah not in (1, 9):
+        if not is_basmala or not rest or rest.startswith(' '):
+            raise Refused(f'{surah}:1 does not start with an accepted Basmala')
+        return head, rest
+    if ayah == 1 and surah == 9 and is_basmala:
+        raise Refused('9:1 must not carry a Basmala')
+    return None, text
 
 
 def parse(raw):
@@ -109,6 +114,8 @@ def verify(raw, manifest, counts):
         if sum(1 for (ss, _a) in seen if ss == s) != n:
             raise Refused(f'surah {s} does not have {n} ayat')
     ordered = [(s, a, seen[(s, a)]) for s in sorted(counts) for a in range(1, counts[s] + 1)]
+    for s, a, t in ordered:
+        split_basmala(s, a, t)
     hashes = [sha256_hex(t.encode('utf-8')) for _s, _a, t in ordered]
     digest = sha256_hex('\n'.join(hashes).encode('utf-8'))
     if digest != manifest['ayahsDigest']:
@@ -126,9 +133,9 @@ def _lit(value):
 
 def sql(dataset_id, manifest, ordered):
     out = ['\\set ON_ERROR_STOP on', 'begin;',
-           'create temp table quran_load (surah smallint, ayah smallint, text_uthmani text, text_search text) on commit drop;',
-           'copy quran_load (surah, ayah, text_uthmani, text_search) from stdin;']
-    out += [f'{s}\t{a}\t{_copy(t)}\t{_copy(search_fold(t))}' for s, a, t in ordered]
+           'create temp table quran_load (surah smallint, ayah smallint, text_uthmani text) on commit drop;',
+           'copy quran_load (surah, ayah, text_uthmani) from stdin;']
+    out += [f'{s}\t{a}\t{_copy(t)}' for s, a, t in ordered]
     out += ['\\.',
             f'select chat.load_quran_dataset({_lit(dataset_id)}, {_lit(manifest["fileSha256"])}, '
             f'{_lit(manifest["ayahsDigest"])}, {_lit(manifest["attribution"])}, {_lit(manifest["sourceUrl"])});',
