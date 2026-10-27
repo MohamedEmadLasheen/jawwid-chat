@@ -184,6 +184,22 @@ class ConversationsController extends AsyncNotifier<List<ConversationSection>>
     }
   }
 
+  /// PD-36: the chat was opened, so its "@" marker goes -- here at once, and on the server.
+  /// Silent on failure: the next list load simply shows the marker again.
+  Future<void> markMentionsSeen(String conversationId) async {
+    final current = _conversations.where((c) => c.id == conversationId).firstOrNull;
+    if (current == null || !current.isMentioned) return;
+    _conversations = [
+      for (final c in _conversations) c.id == conversationId ? c.copyWith(isMentioned: false) : c,
+    ];
+    state = AsyncData(_sectioned());
+    try {
+      await ref.read(mentionRepositoryProvider).markSeen(conversationId);
+    } catch (_) {
+      // Deliberately silent, like markRead.
+    }
+  }
+
   Future<void> _optimistic(
     String conversationId,
     Conversation Function(Conversation) apply,

@@ -78,9 +78,16 @@ class ContentText extends StatelessWidget {
     this.overflow,
     this.textAlign,
     this.highlight,
+    this.chips = const [],
   });
 
   final String data;
+
+  /// PD-36: "@..." mentions to draw as chips, by UTF-16 offset into [data]. A chip is
+  /// wrapped in Unicode isolates, so an Arabic name inside English text (or the reverse)
+  /// keeps its own direction and never reorders the words around it. [mine] draws the
+  /// viewer's own mention stronger. Ignored while a search [highlight] is shown.
+  final List<({int start, int length, bool mine})> chips;
 
   /// While searching: the term to mark wherever it occurs (matched the way the
   /// server matches -- see `search_fold.dart`).
@@ -119,6 +126,39 @@ class ContentText extends StatelessWidget {
         if (start > last) spans.add(TextSpan(text: data.substring(last, start)));
         spans.add(TextSpan(text: data.substring(start, end), style: mark));
         last = end;
+      }
+      if (last < data.length) spans.add(TextSpan(text: data.substring(last)));
+      return Text.rich(
+        TextSpan(children: spans),
+        style: style,
+        maxLines: maxLines,
+        overflow: overflow,
+        textDirection: direction,
+        textAlign: align,
+      );
+    }
+
+    final fitting = [
+      for (final c in chips)
+        if (c.start >= 0 && c.length > 0 && c.start + c.length <= data.length) c,
+    ]..sort((a, b) => a.start.compareTo(b.start));
+    if (fitting.isNotEmpty) {
+      final tokens = JawwidTokens.of(context);
+      TextStyle chip(bool mine) => TextStyle(
+            fontWeight: FontWeight.w700,
+            color: tokens.colorAccentStrong,
+            backgroundColor: mine ? tokens.colorAccentSubtle : null,
+          );
+      final spans = <TextSpan>[];
+      var last = 0;
+      for (final c in fitting) {
+        if (c.start < last) continue; // overlapping: the first wins
+        if (c.start > last) spans.add(TextSpan(text: data.substring(last, c.start)));
+        spans.add(TextSpan(
+          text: '\u2068${data.substring(c.start, c.start + c.length)}\u2069',
+          style: chip(c.mine),
+        ));
+        last = c.start + c.length;
       }
       if (last < data.length) spans.add(TextSpan(text: data.substring(last)));
       return Text.rich(

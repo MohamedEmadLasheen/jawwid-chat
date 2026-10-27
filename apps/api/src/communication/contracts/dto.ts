@@ -5,12 +5,15 @@ import {
   MessageAttachment,
   MessageCard,
   MessageReaction,
+  MessageMention,
   MessageReceipt,
+  Prisma,
 } from '@prisma/client';
 import type { ActorRef, ResolvedActors } from '../../platform/identity.service';
 import type { Actor } from '../../platform/types';
 import { actorRefKey } from '../../platform/identity.service';
 import { ConversationState, Moderation, ReceiptState } from './vocab';
+import type { SummonedDto, ViewerMentionDto } from '../mentions/mention.service';
 
 /**
  * Safe DTOs. A Prisma entity is never returned from a controller or a gateway.
@@ -116,6 +119,27 @@ export interface MessageDto {
    * build that predates cards shows a readable message instead of nothing.
    */
   card: MessageCardDto | null;
+  /**
+   * PD-36: the "@..." chips in `body`, by UTF-16 offset (what JS and Dart
+   * strings index by). `actorId` for a person, `role` for a parent's
+   * @supervisor / @admin. Empty for a deleted message. The text of the chip is
+   * `body.slice(start, start + length)`; a client never re-derives who it is.
+   */
+  mentions: MessageMentionDto[];
+  /** PD-36: THIS viewer is one of the people mentioned (a role mention included). */
+  mentionsViewer: boolean;
+  /**
+   * PD-36: only on the send response -- some mentions went over a rate limit
+   * and stayed plain text. The message was sent; nobody was pinged for those.
+   */
+  mentionsLimited?: boolean;
+}
+
+export interface MessageMentionDto {
+  start: number;
+  length: number;
+  actorId: string | null;
+  role: 'supervisor' | 'admin' | null;
 }
 
 export interface MessageCardDto {
@@ -280,6 +304,11 @@ export interface ConversationDto {
    * see it: the parent is told who answers.
    */
   cover?: ConversationCoverDto | null;
+  /**
+   * PD-36: people asked to step in who are not members -- the top of Group
+   * Info, "Mentioned -- waiting". Computed by the detail route only.
+   */
+  summoned?: SummonedDto[];
 }
 
 export interface ConversationCoverDto {
@@ -301,6 +330,12 @@ export interface ConversationViewerStateDto {
   theme: string | null;
   /** The viewer's OWN wallpaper photo for this chat, as a link signed for them; null when none. */
   wallpaperUrl: string | null;
+  /**
+   * PD-36: the viewer's own open or unseen mention here; absent when none. A `summons`
+   * that is unseen puts the row at the very top of the list ("Mentioned"); a
+   * `member` mention is an "@" marker on the row until opened.
+   */
+  mention?: ViewerMentionDto;
   /**
    * PD-35: the viewer's open visible seat here (joined by choice). Present only
    * while they hold one -- only staff ever do; absent for everyone else.
@@ -424,6 +459,8 @@ export function toConversationDto(
     labels?: Array<{ id: string; name: string; color: string }>;
     /** PD-33: the live cover, or null; omitted when not computed. */
     cover?: ConversationCoverDto | null;
+    /** PD-36: non-members asked in (detail route). */
+    summoned?: SummonedDto[];
   },
 ): ConversationDto {
   return {
@@ -463,6 +500,7 @@ export function toConversationDto(
     avatarUrl: c.type === 'direct' ? undefined : (extra?.avatarUrl ?? null),
     ...(extra?.labels ? { labels: extra.labels } : {}),
     ...(extra?.cover !== undefined ? { cover: extra.cover } : {}),
+    ...(extra?.summoned ? { summoned: extra.summoned } : {}),
   };
 }
 
@@ -564,7 +602,42 @@ export type MessageWithRelations = Message & {
   reactions?: MessageReaction[];
   receipts?: MessageReceipt[];
   card?: MessageCard | null;
+  mentions?: Array<Pick<MessageMention, 'spanStart' | 'spanLength' | 'targetActorId' | 'viaRole' | 'state'>>;
 };
+
+/**
+ * Every relation a MessageDto is drawn from, in one place: a read path that
+ * forgot one would serve a message without it. PD-36 mentions taken back by an
+ * edit or a delete ('removed') are not chips any more.
+ */
+export const MESSAGE_INCLUDE = {
+  attachments: true,
+  reactions: true,
+  receipts: true,
+  card: true,
+  mentions: {
+    where: { state: { not: 'removed' } },
+    select: { spanStart: true, spanLength: true, targetActorId: true, viaRole: true, state: true },
+  },
+} satisfies Prisma.MessageInclude;
+
+/** PD-36: one chip per "@..." span; a role mention reaches several people under one chip. */
+function toMentionDtos(
+  rows: NonNullable<MessageWithRelations['mentions']>,
+  viewerId: string | undefined,
+): { mentions: MessageMentionDto[]; mentionsViewer: boolean } {
+  const live = rows.filter((r) => r.state !== 'removed');
+  const bySpan = new Map<number, typeof live>();
+  for (const r of live) bySpan.set(r.spanStart, [...(bySpan.get(r.spanStart) ?? []), r]);
+  const mentions = [...bySpan.values()]
+    .map((group) => {
+      const first = group[0]!;
+      const role = (first.viaRole as 'supervisor' | 'admin' | null) ?? null;
+      return { start: first.spanStart, length: first.spanLength, actorId: role ? null : first.targetActorId, role };
+    })
+    .sort((a, b) => a.start - b.start);
+  return { mentions, mentionsViewer: !!viewerId && live.some((r) => r.targetActorId === viewerId) };
+}
 
 /**
  * @param authors Resolved authors from `IdentityService.resolveActors`, keyed by
@@ -585,6 +658,7 @@ export function toMessageDto(
 ): MessageDto {
   const hidden = m.deletedForAll;
   const author = messageAuthorRef(m);
+  const mentioned = hidden ? { mentions: [], mentionsViewer: false } : toMentionDtos(m.mentions ?? [], receiptView?.viewerId);
   return {
     id: m.id,
     conversationId: m.conversationId,
@@ -627,6 +701,8 @@ export function toMessageDto(
       !hidden && m.card
         ? { kind: m.card.kind, lessonId: m.card.lessonId, payload: m.card.payload as Record<string, unknown> }
         : null,
+    mentions: mentioned.mentions,
+    mentionsViewer: mentioned.mentionsViewer,
   };
 }
 

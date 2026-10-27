@@ -17,6 +17,7 @@ import '../core/time/time_zone_controller.dart' show appZoneRevisionProvider;
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/messages/data/chat_theme_repository.dart';
+import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
@@ -106,6 +107,12 @@ final chatThemeRepositoryProvider = Provider<ChatThemeRepository>((ref) {
 /// without the routes offers no search.
 final messageSearchRepositoryProvider = Provider<MessageSearchRepository>((ref) {
   return const NoMessageSearchRepository();
+});
+
+/// PD-36 @mentions: the @ list and "seen". A harmless default: a build without the routes
+/// offers no @ list (a message still sends as plain text).
+final mentionRepositoryProvider = Provider<MentionRepository>((ref) {
+  return const NoMentionRepository();
 });
 
 /// Profile photos (own and, for a parent, the children's). A harmless default:

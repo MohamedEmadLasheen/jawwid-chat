@@ -3266,7 +3266,76 @@ Proven by `apps/api/test/integration/teacher-supervisor-pd035.spec.ts`.
 
 ---
 
-### Decisions still open after PD-1 to PD-35
+### PD-36 · @mentions that summon someone in charge to step in
+
+**Closed 2026-10-26** by the product owner (request) and the department head
+(decisions and the three owner questions, at the head's level; the owner may
+override). Builds on PD-8 (who is in charge), PD-19 (the super admin), PD-33
+(cover), BR-1/PD-7, and PD-35's visible-seat primitive (joining a group).
+
+**Final decision.**
+
+```
+who can be     a member, always; a NON-member only if they already have a PD-8
+mentioned      basis on the conversation (chat.mention_eligible_staff: the
+               supervisor, an active backup / PD-33 cover, the department
+               manager, the super admin) and only in a conversation that takes a
+               summons (student / family group, teacher_supervision, trial_group,
+               a FAMILY 1:1); never a teacher into a family 1:1 (BR-1/PD-7);
+               none in a Teacher <-> Admin 1:1 (membership is the authority
+               there, DEF-001) or a class / official group
+never widens   anything else refuses the WHOLE send (COMM.MENTION_NOT_ALLOWED);
+               the database refuses the row again (chat.guard_message_mention)
+parents        name members only, plus "@supervisor" (the children's supervisor,
+               or the live PD-33 cover) and "@admin" (that person AND the
+               department manager, at once); a role never reaches the super admin
+read           NO new read rule: whoever may be summoned already reads the whole
+               thread under PD-8. "Read-only until Join" is a client gate (Admin
+               Web hides the composer); the PD-8 send rule is unchanged
+join           PD-35's visible seat, reason 'mention', sourceId = the mention
+               (POST /conversations/:id/join): a member seat in a group ("Join"),
+               an EFFECTIVE seat in a family 1:1 ("Step in": no third member, the
+               pushes follow); eligible to join: an open summons + PD-8 standing
+               of one's own (chat.staff_conversation_standing); to stay: the
+               standing alone (chat.seat_reason 'mention'); leaving is PD-35's
+the summoned   the chat leads their list ABOVE pinned with "Mentioned" until
+person         opened; a push ("You were mentioned in a family group" / "... in a
+               conversation"; no name, no text) that breaks through mute, quiet
+               hours respected; Join / Step in / Not for me
+the group      "Mentioned -- waiting" rows at the top of Group Info with who asked
+               and when (parents see name and role); gone once seated, or after
+               mention.expiry_days (= 7)
+members        a chip in the message (isolated for RTL), a highlight, and a
+               mention push instead of the new-message push
+limits         mention.per_sender_hour = 5, mention.super_admin_day = 3 per
+               conversation, mention.parent_role_day = 3; counted under the
+               conversation lock; over a limit the message still sends and the
+               excess stays plain text (mentionsLimited)
+edits          an edit cannot add a mention; one whose "@..." it changed is taken
+               back; a delete-for-everyone closes its summonses
+events         MENTION_CREATED (one per person; PD-34 consumes it) and
+               MENTION_UPDATED
+```
+
+**Implementation phase.** Migration `20261026170000_chat_pd036_mentions`
+(chat.message_mention, chat.conversation_takes_summons,
+chat.mention_eligible_staff, chat.mention_role_targets, the guard trigger, five
+config keys, push rules and templates `mention` / `mention_group`);
+`MentionService` (+ send / edit / delete hooks, the 'mention' SeatPolicy, the
+worker sweep that closes answered summonses as joined); routes `GET
+/conversations/:id/mention-candidates`, `POST /conversations/:id/mentions/seen`,
+`GET /me/mentions`, `POST /mentions/:id/dismiss`; Admin Web @ picker, chips,
+Mentioned row, Join / Step in / Not for me banner, Group Info rows; app @ picker
+(with the two role mentions for parents), chips, "@" marker, Group Info rows.
+
+**Depends on.** PD-35's seat primitive (Join and Step in are its seats, reason
+'mention'); PD-33's `cover_of`.
+
+**Closed.** 2026-10-26.
+
+---
+
+### Decisions still open after PD-1 to PD-36
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

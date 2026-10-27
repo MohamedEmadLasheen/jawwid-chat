@@ -215,7 +215,7 @@ class MessagesController extends Notifier<MessagesState> {
   }
 
   /// Compose and enqueue. Returns the client id so a caller can track this message.
-  String send(String body, {ReplyPreview? replyTo}) {
+  String send(String body, {ReplyPreview? replyTo, List<MessageMention> mentions = const []}) {
     final clientMessageId = _uuid.v4();
     // PD-22: the echo's time reads in the account's zone, like the server copy that replaces it.
     final now = AppClock.now();
@@ -233,6 +233,7 @@ class MessagesController extends Notifier<MessagesState> {
       deliveryState: DeliveryState.queued,
       isMine: true,
       replyTo: replyTo,
+      mentions: mentions,
     );
 
     _enqueue(
@@ -243,6 +244,7 @@ class MessagesController extends Notifier<MessagesState> {
         kind: MessageKind.text,
         body: body,
         replyToMessageId: replyTo?.messageId,
+        mentions: mentions,
       ),
       now: now,
     );

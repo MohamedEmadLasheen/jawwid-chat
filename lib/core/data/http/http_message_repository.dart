@@ -105,6 +105,7 @@ class HttpMessageRepository implements MessageRepository {
         // the server returns the original message rather than creating a second one.
         'clientMessageId': message.clientMessageId,
         'replyToMessageId': ?message.replyToMessageId,
+        if (message.mentions.isNotEmpty) 'mentions': [for (final m in message.mentions) m.toWire()],
         if (message.attachments.isNotEmpty)
           'attachments': [
             for (final a in message.attachments)

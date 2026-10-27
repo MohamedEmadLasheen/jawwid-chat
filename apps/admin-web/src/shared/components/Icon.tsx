@@ -300,6 +300,13 @@ const PATHS = {
       <path d="M8 8h.01" />
     </>
   ),
+  /** PD-36: an @mention. */
+  at: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+    </>
+  ),
   bolt: <path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z" />,
   /** PD-29 Materials: an open book. */
   book: (
