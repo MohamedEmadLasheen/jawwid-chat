@@ -237,6 +237,31 @@ describe('leave requests', () => {
     expect(bodyOf(calls('POST', /\/approve$/)[0])).toEqual({ cancelCollidingLessons: true })
   })
 
+  it('as Operations sends it: no balance anywhere, and another family\'s lesson is not named', async () => {
+    on('GET', /\/teacher-leave-requests\?state=requested$/, () =>
+      json({
+        requests: [
+          leave({
+            balance: undefined,
+            collidingLessons: [
+              { id: 'les-1', startsAt: '2027-03-11T08:00:00Z', learnerName: 'Child Alpha' },
+              { id: 'les-2', startsAt: '2027-03-12T08:00:00Z', learnerName: null },
+            ],
+          }),
+        ],
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/leave' })
+    const row = (await screen.findByText('Family wedding')).closest('tr')!
+    expect(within(row).queryByText(/Balance now/)).not.toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/3 day\(s\) will be deducted from the teacher’s leave/)).toBeInTheDocument()
+    expect(within(dialog).queryByText(/balance after|No allowance set/)).not.toBeInTheDocument()
+    expect(within(dialog).getByText('Child Alpha')).toBeInTheDocument()
+    expect(within(dialog).getByText(/Another family’s lesson/)).toBeInTheDocument()
+  })
+
   it('an approved leave can be cancelled, with a reason', async () => {
     on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [] }))
     on('GET', /\/teacher-leave-requests\?state=approved$/, () => json({ requests: [leave({ state: 'approved', balance: undefined, collidingLessons: undefined })] }))

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launcher label: the product's name, as lib/l10n/app_en.arb's appName. The
+         Arabic one is in values-ar, and the phone's language picks between them.
+         test/l10n/android_launcher_label_test.dart keeps both equal to the ARBs. -->
+    <string name="app_name">Jawwid</string>
+</resources>

@@ -7,6 +7,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/lesson.dart';
+import '../../../shared/utils/clock_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../conversations/application/conversations_controller.dart';
 import '../domain/scheduled_call.dart';
@@ -266,6 +267,6 @@ class _ScheduledCallCardState extends ConsumerState<ScheduledCallCard> {
     if (start == null) return null;
     final material = MaterialLocalizations.of(context);
     return '${material.formatMediumDate(start)} · '
-        '${material.formatTimeOfDay(TimeOfDay.fromDateTime(start), alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context))}';
+        '${formatClockTime(context, TimeOfDay.fromDateTime(start), alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context))}';
   }
 }

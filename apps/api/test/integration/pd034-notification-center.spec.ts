@@ -825,6 +825,60 @@ describe('4b. the chat push policy (owner, 2026-10-27): quiet hours ON, 6 an hou
 });
 
 // ===========================================================================
+describe('QA 2026-10-27 (Android smoke test): no raw {child}; a mention is its own entry', () => {
+  it('an entry written before PD-34 (no child) never shows "{", and the backfill names the child, once', async () => {
+    const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: new Date(Date.now() + 3 * HOUR).toISOString(), endsAt: new Date(Date.now() + 3.5 * HOUR).toISOString() })).id;
+    // As the old producer wrote it: {startsAt} only, adopted under the in-app template.
+    await pipeline.emit({
+      dedupeKey: ReminderService.dedupeKey('lesson_parent_t30m', id, s.parentId),
+      ruleKey: 'lesson_parent_t30m', templateKey: 'lesson_reminder_soon', eventType: 'lesson_scheduled',
+      recipientId: s.parentId, priority: 'critical', respectQuietHours: false,
+      subject: { type: 'lesson', id }, refs: { lessonId: id, learnerId: s.learnerId },
+      variables: { startsAt: new Date(Date.now() + 30 * MIN).toISOString() },
+      scheduledAt: new Date(Date.now() - 1000),
+    });
+    const before = (await g.inbox.list(await actor(s.parentId), {})).entries;
+    expect(before).toHaveLength(1);
+    expect(`${before[0].title} ${before[0].body}`).not.toMatch(/\{/);
+
+    const [{ n }] = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(`select chat.pd034_backfill_child() as n`);
+    expect(Number(n)).toBe(1);
+    const learner = await g.prisma.learner.findUniqueOrThrow({ where: { id: s.learnerId } });
+    const after = (await g.inbox.list(await actor(s.parentId), {})).entries;
+    expect(after[0].body).toContain(learner.name);
+    // Idempotent: a second run touches nothing.
+    const [{ n: again }] = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(`select chat.pd034_backfill_child() as n`);
+    expect(Number(again)).toBe(0);
+  });
+
+  it('a mention writes a "mentioned you" entry under Conversations, named, opening the chat -- pushed or not', async () => {
+    const conv = await directWithParent();
+    const msg = await g.messages.send({ conversationId: conv, senderId: s.ownerId, body: 'hello', clientMessageId: randomUUID() });
+    const owner = await actor(s.ownerId);
+    const deliveryId = await pipeline.mentionPublished({
+      ruleKey: 'mention', recipientId: s.parentId, dedupeKey: `mention:${msg.id}:${s.parentId}`,
+      conversationId: conv, messageId: msg.id, mentionId: randomUUID(), by: owner.displayName,
+    });
+    const item = await g.prisma.notificationItem.findUniqueOrThrow({ where: { dedupeKey: `mention:${msg.id}:${s.parentId}` } });
+    expect(item).toMatchObject({ category: 'conversation', templateKey: 'inbox.mention', pushState: 'scheduled', eventType: 'mention_created' });
+    expect(item.action).toEqual({ kind: 'open_conversation', conversationId: conv });
+    expect((await g.prisma.notification.findUniqueOrThrow({ where: { id: deliveryId! } })).itemId).toBe(item.id);
+    const entry = (await g.inbox.list(await actor(s.parentId), { tab: 'conversations' })).entries.find((e) => e.id === item.id)!;
+    expect(entry.body).toContain(owner.displayName);
+    expect(entry.body).not.toMatch(/\{/);
+    // Reading the chat past the message reads the mention entry too.
+    await pipeline.conversationRead(conv, s.parentId, BigInt(String(msg.seq)));
+    expect((await g.prisma.notificationItem.findUniqueOrThrow({ where: { id: item.id } })).readAt).not.toBeNull();
+
+    // Chat pushes off: no push, the entry is still there.
+    await g.inbox.setSettings(await actor(s.parentId), { categories: [{ category: 'conversation', push: false }] });
+    const quiet = `mention:${randomUUID()}:${s.parentId}`;
+    expect(await pipeline.mentionPublished({ ruleKey: 'mention', recipientId: s.parentId, dedupeKey: quiet, conversationId: conv, messageId: msg.id })).toBeNull();
+    expect(await g.prisma.notificationItem.findUniqueOrThrow({ where: { dedupeKey: quiet } })).toMatchObject({ pushState: 'opted_out', category: 'conversation' });
+  });
+});
+
+// ===========================================================================
 describe('5. scope', () => {
   it('a person lists, counts, reads and acts on their own entries only', async () => {
     const mine = await lessonReminder(s.parentId);

@@ -309,7 +309,8 @@ describe('4. the parent signs up', () => {
     // Sales never sees the code (nor the entry, once assigned).
     expect((await enrolment.page(salesId)).students).toEqual([]);
 
-    expect(await code(signup.verify(EMAIL, relayed, 'short'))).toBe(AuthErrorCode.PASSWORD_TOO_WEAK);
+    // Owner decision 2026-10-27: 4 characters is the minimum for every account.
+    expect(await code(signup.verify(EMAIL, relayed, 'abc'))).toBe(AuthErrorCode.PASSWORD_TOO_WEAK);
     expect(await signup.verify(EMAIL, relayed, PASSWORD)).toEqual({ ok: true });
     // The app then signs in like anyone else.
     expect((await auth.login(LOWER, PASSWORD)).accessToken).toBeTruthy();

@@ -1,0 +1,28 @@
+import { Controller, Get, Query, UseFilters } from '@nestjs/common';
+import { CommErrorFilter } from '../communication/api/http-exception.filter';
+import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
+import { QuranTextService } from './quran-text.service';
+
+/**
+ * The shared, verified Quran text (docs/product/quran-dataset-contract.md).
+ * Behind the global bearer guard: any signed-in account may read it. Read-only.
+ */
+@Controller('quran')
+@UseFilters(CommErrorFilter)
+export class QuranController {
+  constructor(private readonly quran: QuranTextService) {}
+
+  /** ?surah=N&from=A&to=B, at most 50 ayat; each ayah with its hash and (when approved) its audio. */
+  @RateLimited(ActionScope.QURAN_READ)
+  @Get('ayahs')
+  ayahs(@Query() query: Record<string, unknown>) {
+    return this.quran.ayahs(query ?? {});
+  }
+
+  /** The approved, signed-off Tajweed marks of a range (none are shipped yet). */
+  @RateLimited(ActionScope.QURAN_READ)
+  @Get('tajweed')
+  tajweed(@Query() query: Record<string, unknown>) {
+    return this.quran.tajweed(query ?? {});
+  }
+}

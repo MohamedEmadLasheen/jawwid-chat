@@ -34,11 +34,6 @@ export const qk = {
   tasks: (filters: Record<string, unknown>) => ['tasks', filters] as const,
   tasksAll: ['tasks'] as const,
 
-  shifts: ['coverage', 'shifts'] as const,
-  coverageRules: ['coverage', 'rules'] as const,
-  absences: ['coverage', 'absences'] as const,
-  coverageTonight: ['coverage', 'tonight'] as const,
-  coverageGaps: (days: number) => ['coverage', 'gaps', days] as const,
   coverageAll: ['coverage'] as const,
 
   dashboardHeader: ['dashboard', 'header'] as const,

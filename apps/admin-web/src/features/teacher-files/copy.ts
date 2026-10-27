@@ -68,6 +68,9 @@ export const T = {
   source: { en: 'Source', ar: 'المصدر' },
   sourceParent: { en: 'A parent', ar: 'ولي أمر' },
   sourceManagement: { en: 'Management', ar: 'الإدارة' },
+  // PD-26 amendment: Operations names the family chat a parent's complaint came from.
+  familyChat: { en: 'Family chat it came from', ar: 'محادثة الأسرة التي وردت منها' },
+  chooseFamilyChat: { en: 'Choose the family', ar: 'اختر الأسرة' },
   handler: { en: 'Supervisor handling it', ar: 'المشرف المسؤول' },
   handlerMe: { en: 'Me', ar: 'أنا' },
   handledBy: { en: 'Handled by {name}', ar: 'يتابعها {name}' },

@@ -60,19 +60,23 @@ export interface LeaveRequest {
   decidedBy: Person | null
   decisionNote: string | null
   endedAt: string | null
-  /** Open requests only: the balance before approving, null while no allowance is set. */
+  /**
+   * Open requests only: the balance before approving, null while no allowance is
+   * set. Absent for an Operations supervisor: the allowance is the Teachers department's.
+   */
   balance?: number | null
-  /** Open requests only: lessons approving would cancel. */
-  collidingLessons?: Array<{ id: string; startsAt: string; learnerName: string }>
+  /** Open requests only: lessons approving would cancel. No name for a child of another family (Operations). */
+  collidingLessons?: Array<{ id: string; startsAt: string; learnerName: string | null }>
 }
 
+/** The allowance, the balance and the history are absent for an Operations supervisor (PD-26 amendment). */
 export interface TeacherLeave {
   year: number
-  allowance: number | null
-  used: number
-  balance: number | null
+  allowance?: number | null
+  used?: number
+  balance?: number | null
   requests: LeaveRequest[]
-  allowanceHistory: Array<{ days: number; note: string | null; setAt: string; setBy: Person }>
+  allowanceHistory?: Array<{ days: number; note: string | null; setAt: string; setBy: Person }>
 }
 
 export interface ApproveBody {

@@ -7,6 +7,7 @@ import '../../../app/providers.dart';
 import '../../../core/audio/voice_player.dart';
 import '../../../core/media/story_video_player.dart';
 import '../../../design/tokens.dart';
+import '../../../design/widgets/edge_swipe_back.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/materials.dart';
@@ -109,12 +110,17 @@ class _MaterialPlayerScreenState extends ConsumerState<MaterialPlayerScreen> {
         (_, final Object _, _) => JawwidErrorView(title: l10n.materialsUnavailable),
         (_, _, true) => JawwidErrorView(title: l10n.materialsCannotOpen),
         (null, _, _) => const JawwidLoadingView(),
-        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameIsolated => ref
-            .watch(activityViewFactoryProvider)
-            .build(context, url: o.url, sandbox: sandboxIsolated, allow: activityAllowance(o.url, isPackage: true)),
-        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameSite => ref
-            .watch(activityViewFactoryProvider)
-            .build(context, url: o.url, sandbox: sandboxSite, allow: activityAllowance(o.url, isPackage: false)),
+        // A WebView would take the edge swipe-back; the strip keeps the leading edge for it.
+        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameIsolated => EdgeSwipeBack(
+            child: ref
+                .watch(activityViewFactoryProvider)
+                .build(context, url: o.url, sandbox: sandboxIsolated, allow: activityAllowance(o.url, isPackage: true)),
+          ),
+        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameSite => EdgeSwipeBack(
+            child: ref
+                .watch(activityViewFactoryProvider)
+                .build(context, url: o.url, sandbox: sandboxSite, allow: activityAllowance(o.url, isPackage: false)),
+          ),
         (final OpenedMaterial o, _, _) when o.kind == 'audio' => _AudioBody(url: o.url),
         (final OpenedMaterial o, _, _) when o.kind == 'video' => _VideoBody(url: o.url),
         (final OpenedMaterial o, _, _) when o.kind == 'image' => InteractiveViewer(

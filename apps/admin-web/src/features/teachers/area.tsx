@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { useLessonAccess } from './hooks'
 import type { Pair } from './copy'
 
 /**
@@ -47,10 +48,15 @@ export function teachersTabPath(tab: TeachersTab, base: string = TEACHERS_AREA_B
 /** The area's tab strip. Links, not buttons: every tab is a real URL. */
 export function TeachersAreaTabs({ base = TEACHERS_AREA_BASE }: { base?: string }) {
   const { locale } = useI18n()
+  const access = useLessonAccess()
   if (TEACHERS_TABS.length < 2) return null // one page needs no tabs
+  // PD-26 amendment: Operations is offered the Supervision page and nothing else of the
+  // Teachers area. Until the server answers, the tabs stay as they were.
+  const pageOnly = access.data !== undefined && access.data.lessonManager !== true && access.data.supervisionPage === true
+  const tabs = pageOnly ? TEACHERS_TABS.filter((t) => t.key === 'supervision') : TEACHERS_TABS
   return (
     <nav className="ts-tabs" aria-label={locale === 'ar' ? 'المعلمون' : 'Teachers'}>
-      {TEACHERS_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <NavLink
           key={tab.key}
           to={teachersTabPath(tab, base)}

@@ -345,8 +345,11 @@ describe('PD-21: password reset', () => {
     const expired = await call(null, 'POST', '/auth/password-reset', { username: teacher.subject, code: fresh.json.code, password: NEW_PASSWORD });
     expect(expired.code).toBe(AuthErrorCode.RESET_CODE_INVALID);
 
-    const short = await call(null, 'POST', '/auth/password-reset', { username: teacher.subject, code: '123456', password: 'short' });
+    const short = await call(null, 'POST', '/auth/password-reset', { username: teacher.subject, code: '123456', password: 'abc' });
     expect(short.code).toBe(AuthErrorCode.PASSWORD_TOO_WEAK);
+    // Owner decision 2026-10-27: 4 characters is enough, for every account.
+    const four = await call(null, 'POST', '/auth/password-reset', { username: teacher.subject, code: '123456', password: '1234' });
+    expect(four.code).not.toBe(AuthErrorCode.PASSWORD_TOO_WEAK);
   });
 
   it('a new code supersedes the old one; "sign out everywhere" ends every session at once', async () => {

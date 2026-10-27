@@ -191,9 +191,37 @@ describe('Landing and deep links', () => {
 
   it('answers a page outside the role with Forbidden, and does not list it', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
-    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/coverage' })
+    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/dashboard' })
     expect(await screen.findByRole('alert')).toHaveTextContent("You don't have permission")
-    expect(within(screen.getByRole('navigation')).queryByRole('link', { name: 'Coverage' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation')).queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
+  })
+})
+
+describe('The retired Coverage page', () => {
+  // Shifts, coverage rules and absences were replaced by PD-8 backups and
+  // PD-33 covers on the Organization page; the API never had /coverage routes.
+  it('is listed for no role', () => {
+    for (const role of [...OPERATOR_ROLES, 'super_admin'] as StaffRole[]) {
+      const entries = destinationsFor(role, { lessonManager: true, billingReader: true }).flatMap(entriesOf)
+      expect(entries.map((e) => e.path)).not.toContain('/coverage')
+      expect(entries.map((e) => e.key)).not.toContain('coverage')
+    }
+  })
+
+  it('is not a route: /coverage falls to the unknown-path handling, like any other', async () => {
+    for (const [role, home] of [['manager', '/chat'], ['super_admin', '/admin/conversations']] as const) {
+      vi.stubGlobal('fetch', routeFetch({}))
+      const { unmount } = renderWithProviders(
+        <>
+          <AppRoutes />
+          <Where />
+        </>,
+        { staff: staff(role), route: '/coverage' },
+      )
+      await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(home))
+      expect(screen.queryByRole('heading', { name: 'Coverage' })).not.toBeInTheDocument()
+      unmount()
+    }
   })
 })
 

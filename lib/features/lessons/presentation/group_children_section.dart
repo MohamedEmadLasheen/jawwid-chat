@@ -9,6 +9,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/clock_time.dart';
 import '../../profile/presentation/profile_sections.dart';
 
 /// PD-15: each child of a group, from `GET /conversations/:id/learners`.
@@ -68,14 +69,13 @@ class _ChildCard extends StatelessWidget {
     // ISO weekday 1 = Monday; 2024-01-01 was a Monday.
     String weekday(int d) => DateFormat.EEEE(locale).format(DateTime(2024, 1, d));
     final notSet = l10n.groupChildNotSet;
-    final material = MaterialLocalizations.of(context);
     // PD-22: the next real start in the reader's own zone; the teacher's wall clock only
     // for a slot the server sent without one.
     String when(GroupChildSlot s) {
       final next = s.nextStartsAt;
       return next == null
           ? '${weekday(s.weekday)} · ${s.start}'
-          : '${weekday(next.weekday)} · ${material.formatTimeOfDay(TimeOfDay.fromDateTime(next))}';
+          : '${weekday(next.weekday)} · ${formatClockTime(context, TimeOfDay.fromDateTime(next))}';
     }
 
     Widget row(String label, Widget value) => Padding(

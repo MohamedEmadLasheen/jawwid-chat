@@ -371,12 +371,14 @@ export class TeacherPayrollService {
    * finance tier); for everyone else `amount` is absent, never null.
    */
   async rewards(actorId: string, month?: unknown) {
-    const { actor, access } = await this.files.gate(actorId, (a) => a.canView);
+    // PD-26 amendment: the page's rewards list; an Operations supervisor reads
+    // their families' teachers' rewards, never an amount (canViewFinance is false).
+    const { actor, access } = await this.files.pageGate(actorId, (a) => a.onPage);
     const org = actor.organizationId as string;
     const m = month === undefined || month === '' ? null : requireMonth('month', month);
     const [from, to] = m ? await this.monthBounds(m) : [null, null];
     // PD-35: the rewards of the teachers in the caller's scope.
-    const scope = await this.files.teacherScope.scopeOf(actor);
+    const scope = await this.files.teacherScope.pageScopeOf(actor);
     const entries = await this.prisma.teacherSupervisionEntry.findMany({
       where: {
         organizationId: org,

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Arabic launcher label, as lib/l10n/app_ar.arb's appName: جَوِّد, never جوّيد
+         (test/l10n/brand_name_test.dart). -->
+    <string name="app_name">جَوِّد</string>
+</resources>

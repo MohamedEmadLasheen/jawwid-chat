@@ -254,6 +254,10 @@ class AppLockController extends Notifier<AppLockState> {
           // A fresh lock starts without the previous attempt's failure line.
           lastAttemptFailed: phase != state.phase ? false : null,
         );
+        // Coming back is when the device's own lock may have changed: the hint under a
+        // disabled switch sends the user to the phone's Settings to add one, or they
+        // removed it there. Never back from our own prompt, which changed nothing.
+        if (!_prompting) unawaited(refreshAvailability());
       case AppLifecycleState.inactive:
         if (state.active && !state.obscured) state = state.copyWith(obscured: true);
       case AppLifecycleState.hidden:
@@ -263,6 +267,31 @@ class AppLockController extends Notifier<AppLockState> {
       case AppLifecycleState.detached:
         break;
     }
+  }
+
+  /// Asks the device again whether it can authenticate its owner, and adopts the answer.
+  ///
+  /// [_adopt] asks once per session, so availability went stale. Someone who followed
+  /// "set up a screen lock" and came back still saw the switch disabled until a restart.
+  /// Someone who removed the screen lock kept a lock no prompt could open (Android's
+  /// NO_CREDENTIALS). Called on every resume and whenever Settings shows App lock.
+  ///
+  /// Losing it never locks anybody out. The lock lifts, the offer goes, and the switch is
+  /// disabled with the hint (see `active`). The stored choice is kept, so adding a screen
+  /// lock again brings back the lock the person chose. Gated on [_generation] like
+  /// [_adopt]: an answer that lands after the account changed is dropped.
+  Future<void> refreshAvailability() async {
+    if (state.actorId == null) return;
+    final generation = _generation;
+    final available = await _authenticator.isAvailable();
+    if (!ref.mounted || generation != _generation || available == state.available) return;
+    state = state.copyWith(
+      available: available,
+      phase: !available && state.phase == AppLockPhase.locked ? AppLockPhase.unlocked : null,
+      offerVisible: available ? null : false,
+      obscured: available ? null : false,
+      lastAttemptFailed: available ? null : false,
+    );
   }
 
   /// The lock screen's Unlock (and its one automatic prompt). [reason] is the localized line
@@ -275,6 +304,10 @@ class AppLockController extends Notifier<AppLockState> {
     state = ok
         ? state.copyWith(phase: AppLockPhase.unlocked, lastAttemptFailed: false)
         : state.copyWith(lastAttemptFailed: true);
+    // A prompt can fail because the device no longer has any way to open it (the screen
+    // lock was removed while the app was running). Asking again lifts that lock rather
+    // than leaving the person in front of a prompt that can never succeed.
+    if (!ok) unawaited(refreshAvailability());
   }
 
   /// Settings' toggle. Turning the lock ON requires a successful prompt first -- it proves
@@ -287,6 +320,7 @@ class AppLockController extends Notifier<AppLockState> {
     if (enabled) {
       final generation = _generation;
       final ok = await _prompt(reason);
+      if (!ok && ref.mounted && generation == _generation) unawaited(refreshAvailability());
       if (!ok || !ref.mounted || generation != _generation) return false;
     }
     final settings = state.settings.copyWith(enabled: enabled, offerAnswered: true);

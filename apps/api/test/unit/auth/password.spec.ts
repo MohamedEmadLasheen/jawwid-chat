@@ -103,17 +103,22 @@ describe('account enumeration by timing', () => {
 
     // HOW LONG it took, RELATIVE to a failed parse through the same call path.
     // Not an absolute floor: a fast runner verified m=19456 in 4.99 ms and
-    // tripped a fixed 5 ms bound. A failed parse costs tens of microseconds
-    // on any machine, a real verification costs ~100-200x that, so a 20x
-    // ratio holds on fast hardware and still catches a no-op or a bad decoy.
-    // Median of seven, for the reason the next test gives.
+    // tripped a fixed 5 ms bound. And not a ratio of MEDIANS either: on a shared
+    // CI runner a neighbouring process inflates a failed parse (tens of
+    // microseconds when idle) by orders of magnitude, so median(real) was seen
+    // falling under 20 x median(failedParse) on unrelated PRs. Scheduling noise
+    // only ever ADDS time to a sample, so the minimum of many back-to-back pairs
+    // is the stable estimate of each path's true cost. Measured floors: a real
+    // verification ~8 ms, a failed parse ~0.03 ms (~280x). A no-op or a decoy that
+    // fails to parse sits at ~1x, so 10x keeps a wide margin on both sides. The
+    // structural checks above already prove WHAT ran; this only guards HOW LONG.
     const real: number[] = [];
     const failedParse: number[] = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 15; i++) {
       real.push(await time(() => spendComparableTime('whatever-was-submitted')));
       failedParse.push(await time(() => verifyPassword('whatever-was-submitted', '$argon2id$truncated')));
     }
-    expect(median(real)).toBeGreaterThan(median(failedParse) * 20);
+    expect(Math.min(...real)).toBeGreaterThan(Math.min(...failedParse) * 10);
   });
 
   it('is within the same order of magnitude as verifying a real hash', async () => {

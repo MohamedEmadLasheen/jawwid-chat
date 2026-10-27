@@ -29,19 +29,20 @@ describe('role → navigation', () => {
 
   it('gives the super admin every area, so no existing screen is hidden from it', () => {
     expect(visibleAreas('super_admin')).toEqual(
-      expect.arrayContaining(['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']),
+      expect.arrayContaining(['inbox', 'families', 'tasks', 'dashboard', 'stories', 'settings']),
     )
   })
 
-  it('gives only the manager and the super admin coverage, dashboard and settings', () => {
+  it('gives only the manager and the super admin dashboard and settings', () => {
     for (const role of ROLES) {
       const areas = visibleAreas(role)
+      // The Coverage page is retired (PD-8 backups and PD-33 covers replaced it).
+      expect(areas).not.toContain('coverage')
       if (role === 'manager' || role === 'super_admin') {
         expect(areas).toEqual(
-          expect.arrayContaining(['coverage', 'dashboard', 'settings']),
+          expect.arrayContaining(['dashboard', 'settings']),
         )
       } else {
-        expect(areas).not.toContain('coverage')
         expect(areas).not.toContain('dashboard')
         expect(areas).not.toContain('settings')
       }

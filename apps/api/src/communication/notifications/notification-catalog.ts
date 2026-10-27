@@ -62,6 +62,9 @@ const BY_RULE: Readonly<Record<string, CatalogEntry>> = {
   incoming_call: { version: 1, category: 'call', inbox: 'inbox.generic', listed: false },
   group_call_started: { version: 1, category: 'call', inbox: 'inbox.generic', listed: false },
   story_published: { version: 1, category: 'announcement', inbox: 'inbox.story_published', action: 'open_stories' },
+  // PD-36 mentions: their own Center entry, under Conversations (PD-34 QA 2026-10-27).
+  mention: { version: 1, category: 'conversation', inbox: 'inbox.mention', action: 'open_conversation' },
+  mention_group: { version: 1, category: 'conversation', inbox: 'inbox.mention_group', action: 'open_conversation' },
 };
 
 const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
