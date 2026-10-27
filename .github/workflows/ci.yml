@@ -101,6 +101,13 @@ jobs:
         # with the documented remedy already applied and silently ignored.
         run: bash scripts/qa/guards.sh backup-client
 
+      - name: PD numbers and migration slots — one claim each, every migration claimed
+        # The registry is one file per claim (docs/product/pd-registry/,
+        # docs/product/migration-slots/), so parallel PRs only add files. Fails
+        # on a PD number claimed twice, two migrations with one timestamp, or a
+        # migration since 20261022130000 with no slot claim.
+        run: bash scripts/qa/guards.sh pd-registry
+
       - name: Every gate in scripts/qa/guards.sh runs in CI
         # Anti-drift: fails if guards.sh defines a gate this job never calls.
         run: bash scripts/qa/guards.sh ci-wiring
