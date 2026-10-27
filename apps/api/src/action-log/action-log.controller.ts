@@ -9,15 +9,15 @@ import { ActionLogService } from './action-log.service';
 export class ActionLogController {
   constructor(private readonly log: ActionLogService) {}
 
-  /** ?from&to&before (ISO) */
+  /** ?from&to (ISO) &cursor (opaque, the page before's nextCursor) */
   @Get('staff/:id/action-log')
   list(
     @ActorId() actorId: string,
     @Param('id') staffId: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
-    @Query('before') before?: string,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.log.list(actorId, staffId, { from, to, before });
+    return this.log.list(actorId, staffId, { from, to, cursor });
   }
 }

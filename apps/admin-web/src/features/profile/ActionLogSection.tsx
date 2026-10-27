@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '@/core/api/client'
 import { ApiError } from '@/core/api/errors'
@@ -20,10 +21,15 @@ export interface ActionLogEntry {
 const L = {
   title: { en: 'Action log', ar: 'سجل الإجراءات' },
   hint: {
-    en: 'What they did in the last 30 days, from the records the system already keeps. A case shows only that it was acted on; open it to see more.',
-    ar: 'ما قاموا به خلال آخر 30 يومًا، من السجلات التي يحفظها النظام. الحالة تظهر فقط أنه جرى عليها إجراء؛ افتحها لترى المزيد.',
+    en: 'What they did, newest first, from the records the system already keeps. Choose a longer period to go further back. A case shows only that it was acted on; open it to see more.',
+    ar: 'ما قاموا به، الأحدث أولًا، من السجلات التي يحفظها النظام. اختر فترة أطول للرجوع أبعد. الحالة تظهر فقط أنه جرى عليها إجراء؛ افتحها لترى المزيد.',
   },
   empty: { en: 'Nothing recorded in this period.', ar: 'لا شيء مسجّل في هذه الفترة.' },
+  period: { en: 'Period', ar: 'الفترة' },
+  days30: { en: 'Last 30 days', ar: 'آخر 30 يومًا' },
+  days90: { en: 'Last 90 days', ar: 'آخر 90 يومًا' },
+  days365: { en: 'Last 12 months', ar: 'آخر 12 شهرًا' },
+  more: { en: 'Load more', ar: 'عرض المزيد' },
   support: { en: 'During a support session', ar: 'خلال جلسة دعم' },
 } satisfies Record<string, Pair>
 
@@ -73,22 +79,51 @@ function linkFor(e: ActionLogEntry): string | null {
  * the server lets read it (themselves, their department's manager, the super
  * admin); a "not found" shows nothing at all.
  */
+const PERIODS = [
+  { days: 30, label: L.days30 },
+  { days: 90, label: L.days90 },
+  { days: 365, label: L.days365 },
+] as const
+
+interface Page {
+  entries: ActionLogEntry[]
+  nextCursor: string | null
+}
+
 export function ActionLogSection({ staffId }: { staffId: string }) {
   const tx = useCopy()
   const { dateTime } = useI18n()
-  const query = useQuery({
-    queryKey: ['action-log', staffId],
-    queryFn: () => api.get<{ entries: ActionLogEntry[] }>(`/staff/${encodeURIComponent(staffId)}/action-log`),
+  const [days, setDays] = useState(30)
+  const query = useInfiniteQuery({
+    queryKey: ['action-log', staffId, days],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      api.get<Page>(`/staff/${encodeURIComponent(staffId)}/action-log`, {
+        // 30 days is the server's default window; a longer one is asked for.
+        ...(days !== 30 ? { from: new Date(Date.now() - days * 86_400_000).toISOString() } : {}),
+        ...(pageParam ? { cursor: pageParam } : {}),
+      }),
+    getNextPageParam: (last) => last.nextCursor,
+    // A new period keeps the lines on screen until it arrives.
+    placeholderData: (previous) => previous,
     retry: false,
     staleTime: 30_000,
   })
   if (query.error instanceof ApiError && query.error.isNotFound) return null
   if (!query.data && !query.error) return null
-  const entries = query.data?.entries ?? []
+  const entries = query.data?.pages.flatMap((p) => p.entries) ?? []
   return (
     <section className="card sp-card" aria-labelledby="sp-action-log">
       <h2 id="sp-action-log" className="sp-card__title">{tx(L.title)}</h2>
       <p className="sp-footnote">{tx(L.hint)}</p>
+      <label className="field">
+        <span className="field__label">{tx(L.period)}</span>
+        <select className="select" aria-label={tx(L.period)} value={days} onChange={(e) => setDays(Number(e.target.value))}>
+          {PERIODS.map((p) => (
+            <option key={p.days} value={p.days}>{tx(p.label)}</option>
+          ))}
+        </select>
+      </label>
       <QueryBoundary isLoading={false} error={query.error} onRetry={() => void query.refetch()}>
         {entries.length === 0 ? (
           <p className="sp-muted">{tx(L.empty)}</p>
@@ -113,6 +148,11 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
               )
             })}
           </ol>
+        )}
+        {query.hasNextPage && (
+          <button type="button" className="btn btn--sm" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+            {tx(L.more)}
+          </button>
         )}
       </QueryBoundary>
     </section>
