@@ -7,6 +7,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/app_lock/application/app_lock_controller.dart';
 import 'package:jawwid_chat/features/app_lock/data/app_lock_store.dart';
+import 'package:jawwid_chat/features/app_lock/data/device_security_settings.dart';
 import 'package:jawwid_chat/features/app_lock/domain/app_lock_settings.dart';
 import 'package:jawwid_chat/features/settings/application/theme_mode_controller.dart';
 import 'package:jawwid_chat/features/settings/presentation/settings_screen.dart';
@@ -19,32 +20,10 @@ import '../app_lock/app_lock_fakes.dart';
 void main() {
   late LockWorld world;
   late ProviderContainer container;
+  late _FakeSecuritySettings security;
 
-  Future<L10n> pumpSettings(
-    WidgetTester tester, {
-    bool available = true,
-    Map<String, AppLockSettings>? prefs,
-    UserRole role = UserRole.parent,
-  }) async {
-    world = LockWorld(
-      role: role,
-      storedSession: true,
-      authenticator: FakeAuthenticator(available: available),
-      store: InMemoryAppLockStore(prefs),
-    );
-    container = ProviderContainer(overrides: [
-      ...world.overrides(),
-      themeModeStoreProvider.overrideWithValue(FakeThemeModeStore()),
-    ]);
-    addTearDown(() {
-      container.dispose();
-      world.dispose();
-    });
-    container.listen(appLockControllerProvider, (_, _) {});
-    await container.read(authControllerProvider.notifier).restore();
-
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
+  /// The app around Settings, mounted again by [remount].
+  Widget settingsApp() => UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
           locale: const Locale('en'),
@@ -58,8 +37,34 @@ void main() {
           ],
           home: const SettingsScreen(),
         ),
-      ),
+      );
+
+  Future<L10n> pumpSettings(
+    WidgetTester tester, {
+    bool available = true,
+    Map<String, AppLockSettings>? prefs,
+    UserRole role = UserRole.parent,
+  }) async {
+    world = LockWorld(
+      role: role,
+      storedSession: true,
+      authenticator: FakeAuthenticator(available: available),
+      store: InMemoryAppLockStore(prefs),
     );
+    security = _FakeSecuritySettings();
+    container = ProviderContainer(overrides: [
+      ...world.overrides(),
+      themeModeStoreProvider.overrideWithValue(FakeThemeModeStore()),
+      deviceSecuritySettingsProvider.overrideWithValue(security),
+    ]);
+    addTearDown(() {
+      container.dispose();
+      world.dispose();
+    });
+    container.listen(appLockControllerProvider, (_, _) {});
+    await container.read(authControllerProvider.notifier).restore();
+
+    await tester.pumpWidget(settingsApp());
     await tester.pumpAndSettle();
     // The list is lazy: bring the section on screen.
     await tester.scrollUntilVisible(find.byKey(const ValueKey('settings-app-lock')), 200);
@@ -76,6 +81,100 @@ void main() {
     expect(toggle(tester).onChanged, isNull);
     // Flutter tests draw as Android unless told otherwise.
     expect(find.text(l10n.appLockUnavailable('android')), findsOneWidget);
+  });
+
+  // Redmi A5 QA, 2026-10-27: the person followed the hint, added a screen lock in the
+  // phone's Settings, came back, and the switch was still disabled until a restart.
+  group('the device lock is asked again', () {
+    Future<void> leaveAndComeBack(WidgetTester tester) async {
+      container.read(appLockControllerProvider.notifier)
+        ..onLifecycle(AppLifecycleState.inactive)
+        ..onLifecycle(AppLifecycleState.hidden)
+        ..onLifecycle(AppLifecycleState.paused)
+        ..onLifecycle(AppLifecycleState.hidden)
+        ..onLifecycle(AppLifecycleState.inactive)
+        ..onLifecycle(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a screen lock added in the phone\'s Settings enables the switch on the way back',
+        (tester) async {
+      final l10n = await pumpSettings(tester, available: false);
+      expect(toggle(tester).onChanged, isNull);
+      expect(find.text(l10n.appLockUnavailable('android')), findsOneWidget);
+
+      world.authenticator.available = true;
+      await leaveAndComeBack(tester);
+
+      expect(toggle(tester).onChanged, isNotNull);
+      expect(find.text(l10n.appLockUnavailable('android')), findsNothing);
+      expect(find.text(l10n.appLockToggleSubtitle), findsOneWidget);
+    });
+
+    testWidgets('a screen lock removed there disables it again, with the hint', (tester) async {
+      final l10n = await pumpSettings(tester);
+      expect(toggle(tester).onChanged, isNotNull);
+
+      world.authenticator.available = false;
+      await leaveAndComeBack(tester);
+
+      expect(toggle(tester).onChanged, isNull);
+      expect(toggle(tester).value, isFalse);
+      expect(find.text(l10n.appLockUnavailable('android')), findsOneWidget);
+    });
+
+    testWidgets('opening Settings asks too, with no resume in between', (tester) async {
+      await pumpSettings(tester, available: false);
+      expect(toggle(tester).onChanged, isNull);
+
+      world.authenticator.available = true;
+      // Away to another tab and back: Settings is built afresh.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(settingsApp());
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('settings-app-lock')), 200);
+      await tester.pumpAndSettle();
+
+      expect(toggle(tester).onChanged, isNotNull);
+    });
+  });
+
+  group('Open settings, beside the hint', () {
+    const openSettings = ValueKey('settings-app-lock-open-settings');
+
+    testWidgets('Android: offered when the device can authenticate nobody, and opens the phone\'s screen',
+        (tester) async {
+      await pumpSettings(tester, available: false);
+
+      await tester.ensureVisible(find.byKey(openSettings));
+      await tester.tap(find.byKey(openSettings));
+      await tester.pumpAndSettle();
+
+      expect(security.opened, 1);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+    testWidgets('Android: not offered once the device can', (tester) async {
+      await pumpSettings(tester);
+
+      expect(find.byKey(openSettings), findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+    testWidgets('iOS: the hint alone (no public way into Face ID & Passcode)', (tester) async {
+      final l10n = await pumpSettings(tester, available: false);
+
+      expect(find.text(l10n.appLockUnavailable('other')), findsOneWidget);
+      expect(find.byKey(openSettings), findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+  });
+
+  test('the Android hint asks only for what an app can use: no weak face unlock', () async {
+    for (final locale in const [Locale('en'), Locale('ar')]) {
+      final l10n = await L10n.delegate.load(locale);
+      final hint = l10n.appLockUnavailable('android');
+      expect(hint, isNot(contains(locale.languageCode == 'en' ? 'face' : 'الوجه')), reason: '$locale');
+      // Elsewhere face is offered only as "if supported".
+      expect(l10n.appLockToggle('android'), contains(locale.languageCode == 'en' ? 'face (if supported)' : 'الوجه (إن كان مدعومًا)'));
+    }
   });
 
   group('the unlock methods are named the way the platform names them', () {
@@ -190,4 +289,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(localeOverrideProvider), const Locale('ar'));
   });
+}
+
+class _FakeSecuritySettings implements DeviceSecuritySettings {
+  int opened = 0;
+
+  @override
+  Future<bool> open() async {
+    opened++;
+    return true;
+  }
 }
