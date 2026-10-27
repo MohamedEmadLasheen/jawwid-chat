@@ -10,6 +10,7 @@ import { isConversationStaff, type Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { StaffRole } from '../communication/contracts/vocab';
 import { SupervisorCoverService } from './supervisor-cover.service';
+import { DepartmentRoomService, type RoomChange } from './department-room.service';
 
 export const DepartmentKind = { OPERATIONS: 'operations', TEACHERS: 'teachers', SALES: 'sales' } as const;
 const DEPARTMENT_KINDS: ReadonlySet<string> = new Set(Object.values(DepartmentKind));
@@ -47,6 +48,10 @@ export class OrgStructureService {
     // PD-33: a link that is deactivated or ended takes its open cover with it.
     // Optional so the positional constructions the harnesses share do not shift.
     @Optional() private readonly covers?: SupervisorCoverService,
+    // PD-35 B6: each department's room follows its members. Optional for the
+    // same reason; without it the worker's sweep keeps the rooms (access is
+    // decided live by chat.department_room_party either way).
+    @Optional() private readonly rooms?: DepartmentRoomService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -294,7 +299,8 @@ export class OrgStructureService {
     const reason = requireText('reason', body.reason, 500);
     const kind = body.kind;
 
-    return this.write(async (tx) => {
+    const changes: Array<RoomChange | null | undefined> = [];
+    const result = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       const before = await tx.department.findUnique({ where: { organizationId_kind: { organizationId: org, kind } } });
       const dept = await tx.department.upsert({
@@ -311,8 +317,11 @@ export class OrgStructureService {
         after: { kind, displayName, managerId },
         reason,
       });
+      changes.push(await this.rooms?.syncInTx(tx, dept.id, actor.actorId));
       return dept;
-    }, true);
+    });
+    await this.leaveRooms(changes);
+    return result;
   }
 
   async setDepartmentMember(
@@ -335,7 +344,8 @@ export class OrgStructureService {
     const dept = await this.prisma.department.findUnique({ where: { id: departmentId } });
     if (!dept || dept.organizationId !== org) throw notFound('department');
 
-    return this.write(async (tx) => {
+    const changes: Array<RoomChange | null | undefined> = [];
+    const result = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       const before = await tx.departmentMember.findUnique({ where: { staffId } });
       if (before && (before.departmentId !== departmentId || before.position !== position)) {
@@ -357,8 +367,13 @@ export class OrgStructureService {
         after: { departmentId, position },
         reason,
       });
+      changes.push(await this.rooms?.syncInTx(tx, departmentId, actor.actorId));
+      // A move takes them out of the room they came from.
+      if (before && before.departmentId !== departmentId) changes.push(await this.rooms?.syncInTx(tx, before.departmentId, actor.actorId));
       return row;
-    }, true);
+    });
+    await this.leaveRooms(changes);
+    return result;
   }
 
   async removeDepartmentMember(actorId: string, staffId: string, body: { reason?: unknown }) {
@@ -371,6 +386,7 @@ export class OrgStructureService {
     const before = await this.prisma.departmentMember.findUnique({ where: { staffId } });
     if (!before || before.organizationId !== org) throw notFound('department member');
 
+    const changes: Array<RoomChange | null | undefined> = [];
     await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       await this.endLinksOf(tx, actor, staffId, 'removed from department');
@@ -383,7 +399,9 @@ export class OrgStructureService {
         before: { departmentId: before.departmentId, position: before.position },
         reason,
       });
-    }, true);
+      changes.push(await this.rooms?.syncInTx(tx, before.departmentId, actor.actorId));
+    });
+    await this.leaveRooms(changes);
     return { removed: true };
   }
 
@@ -861,6 +879,17 @@ export class OrgStructureService {
    * as an unlawful structure (409) instead of a 500. `confirmAfter` runs the
    * RT-009 barrier for changes that may reduce someone's access.
    */
+  /**
+   * RT-009 for the department rooms a structure change took people out of,
+   * once it has committed; then the confirmation the change always waited for.
+   */
+  private async leaveRooms(changes: ReadonlyArray<RoomChange | null | undefined>): Promise<void> {
+    for (const c of changes) {
+      if (c && c.removed.length > 0) this.revocation.leaveConversation(c.removed, c.conversationId);
+    }
+    await this.revocation.confirmRevoked();
+  }
+
   private async write<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>, confirmAfter = false): Promise<T> {
     let result: T;
     try {

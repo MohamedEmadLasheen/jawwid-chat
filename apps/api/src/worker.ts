@@ -19,6 +19,7 @@ import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { ConversationSeatService } from './communication/seats/conversation-seat.service';
 import { TeacherSupervisorService } from './teacher-supervisors/teacher-supervisor.service';
 import { SupervisionCaseService } from './cases/supervision-case.service';
+import { DepartmentRoomService } from './org/department-room.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -132,6 +133,13 @@ const SEAT_SWEEP_MS = 60_000;
 const CASE_DUE_SWEEP_MS = 10 * 60_000;
 
 /**
+ * PD-35 B6: how often the department rooms are healed against the structure
+ * (a member deactivated, anything changed outside OrgStructureService). Access
+ * never waits for it: chat.department_room_party is read live.
+ */
+const DEPARTMENT_ROOM_SWEEP_MS = 5 * 60_000;
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -185,6 +193,7 @@ async function bootstrap(): Promise<void> {
   const subscriptions = app.get(SubscriptionEffects);
   const seats = app.get(ConversationSeatService);
   const cases = app.get(SupervisionCaseService);
+  const departmentRooms = app.get(DepartmentRoomService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
   // and trial groups seat each teacher's own supervisor; off, the department.
   // Re-seated at boot when the boot turned the switch over (onApplicationBootstrap),
@@ -241,6 +250,7 @@ async function bootstrap(): Promise<void> {
   let nextHeldReevaluation = 0;
   let nextSeatSweep = 0;
   let nextCaseDueSweep = 0;
+  let nextRoomSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
   log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
@@ -412,6 +422,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextSeatSweep = Date.now() + SEAT_SWEEP_MS;
+      }
+    }
+
+    // PD-35 B6: every department's room follows its department (at start, then every few minutes).
+    if (Date.now() >= nextRoomSweep) {
+      draining = true;
+      try {
+        await departmentRooms.syncAll();
+      } catch (e) {
+        report(log, 'department room sweep', 'rooms.sync', e);
+      } finally {
+        draining = false;
+        nextRoomSweep = Date.now() + DEPARTMENT_ROOM_SWEEP_MS;
       }
     }
 

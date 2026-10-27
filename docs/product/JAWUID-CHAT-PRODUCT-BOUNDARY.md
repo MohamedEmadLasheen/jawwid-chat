@@ -3319,6 +3319,18 @@ Canonical: `supabase/migrations/20261026160006_chat_pd035_scope_hardening.sql`,
 
 Canonical: `supabase/migrations/20261026160007_chat_pd035_supervision_cases.sql`, `apps/api/src/cases/`, `apps/admin-web/src/features/cases/`. Proven by `apps/api/test/integration/supervision-cases-pd035.spec.ts` and `apps/admin-web/src/features/cases/Cases.test.tsx`.
 
+**Final decision (B6: department rooms).** Approved design `pd35-design.md` B6, with owner Q2 (rooms only; staff-to-staff 1:1s stay disabled). Built 2026-10-27.
+1. **One room per department.** The conversation type is `department_room` with `chat.conversation.department_id`, for Operations, Teachers and Sales alike. It is staff-only: the department's manager and its members, as admin. The database refuses a contact, a teacher, or staff of another department at the row.
+2. **Access is live.** The PD-8 decision has its own branch: `'member'` while `chat.department_room_party` holds (active staff, the department's manager or a member of it). Leaving the department ends access at once, whatever the member rows say. Below the super admin, nobody else stands to a room.
+3. **Kept in line.** `DepartmentRoomService` opens the room and syncs its members in the same transaction as every structure change: a department created or updated (its manager), a member set or moved, a member removed. People removed leave the live room after commit (RT-009). The worker heals the rooms every 5 minutes, for anything changed elsewhere, such as a staff member deactivated.
+4. **Messages and calls** are a group's. Moderation is PD-14 (published on send). Calls are group calls (`GROUP_CALL_CONVERSATION_TYPES`).
+5. **B5's card.** A case opened to a department posts `case_escalated` in that department's room, with who opened it, who owns it and the case id. It never carries the case's title, body or subject, because most of the room may not see the case: the card links to Escalations (`/cases?case=<id>`), which decides who sees it.
+6. **Clients:**
+   - **Admin Web:** the room in Chats ("Department room"), and the card with its link.
+   - **Flutter:** Sales sees its room as a group, titled by the server.
+
+Canonical: `supabase/migrations/20261027100000_chat_pd035_department_rooms.sql`, `apps/api/src/org/department-room.service.ts`. Proven by `apps/api/test/integration/department-rooms-pd035.spec.ts`, `apps/admin-web/src/features/cases/Cases.test.tsx` and `test/features/sales/sales_chats_test.dart`.
+
 ---
 
 ### PD-36 · @mentions that summon someone in charge to step in

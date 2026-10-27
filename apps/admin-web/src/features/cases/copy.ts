@@ -35,6 +35,10 @@ export const C = {
   details: { en: 'Details', ar: 'التفاصيل' },
   sendTo: { en: 'Send to', ar: 'إرسال إلى' },
   send: { en: 'Send', ar: 'إرسال' },
+  // B6: the case card in a department room
+  escalatedBy: { en: '{name} escalated a case to this department.', ar: 'صعّد {name} حالة إلى هذا القسم.' },
+  ownerIs: { en: 'Owner: {name}.', ar: 'المسؤول: {name}.' },
+  openInEscalations: { en: 'Open in Escalations', ar: 'فتح في التصعيدات' },
   sent: { en: 'Sent. It is in Escalations, under "Opened by me".', ar: 'أُرسلت. تجدها في التصعيدات، ضمن "فتحتها أنا".' },
 } satisfies Record<string, Pair>
 

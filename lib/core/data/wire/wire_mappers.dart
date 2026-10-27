@@ -72,6 +72,8 @@ abstract final class WireMappers {
         // PD-20: a teacher's trial group with Sales is a GROUP (several members, Sales
         // joins and leaves it) and lists under Groups -- for the teacher and for Sales.
         Wire.conversationTrialGroup => ConversationKind.studentGroup,
+        // PD-35 B6: a department room is a staff GROUP too, titled by the server.
+        Wire.conversationDepartmentRoom => ConversationKind.studentGroup,
         Wire.conversationDirect => _directKind(members),
         // An unknown type is not a direct conversation this client understands.
         // adminDirect remains the pre-PD-6 default for backward compatibility;
