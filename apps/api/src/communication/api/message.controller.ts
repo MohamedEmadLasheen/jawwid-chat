@@ -53,6 +53,8 @@ export class MessageController {
       clientMessageId?: string;
       replyToMessageId?: string;
       requestedMode?: string;
+      /** PD-36: `[{ start, length, actorId } | { start, length, role }]`, validated by MentionService. */
+      mentions?: unknown;
       attachments?: Array<{
         kind: string;
         objectKey: string;
@@ -80,6 +82,7 @@ export class MessageController {
       replyToMessageId: body.replyToMessageId,
       requestedMode: body.requestedMode,
       attachments: body.attachments,
+      mentions: body.mentions,
     });
   }
 

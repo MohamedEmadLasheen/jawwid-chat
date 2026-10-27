@@ -1595,5 +1595,19 @@
   "feedbackLimit": "أرسلت ملاحظات كثيرة اليوم. حاول مرة أخرى غدًا.",
   "feedbackNotFound": "لا يوجد الآن معلّم لهذا الطفل لتُرسل ملاحظة عنه.",
   "feedbackDenied": "إرسال الملاحظات عن المعلّمين متاح لأولياء الأمور فقط.",
-  "feedbackFailed": "تعذّر إرسال ملاحظتك. حاول مرة أخرى."
+  "feedbackFailed": "تعذّر إرسال ملاحظتك. حاول مرة أخرى.",
+  "mentionListLabel": "الإشارة إلى شخص",
+  "mentionNoMatch": "لا يوجد أحد بهذا الاسم هنا",
+  "mentionAskedToJoin": "دعوة للانضمام",
+  "mentionRoleSupervisor": "المشرف",
+  "mentionRoleAdmin": "الإدارة",
+  "mentionRoleSupervisorHint": "مشرف الطفل",
+  "mentionRoleAdminHint": "المشرف ومدير العمليات",
+  "mentionStaffManager": "مدير",
+  "mentionStaffSupervisor": "مشرف",
+  "mentionStaffCoverage": "مشرف تغطية",
+  "mentionWaiting": "إشارة — بانتظار الانضمام",
+  "mentionAskedBy": "بطلب من {name}، {date}",
+  "mentionSomeoneHere": "أحد أعضاء المحادثة",
+  "mentionedMark": "تمت الإشارة إليك"
 }

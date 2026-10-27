@@ -97,8 +97,10 @@ export function ConversationList({
     : v === 'favorites' ? active.filter((c) => c.viewerState?.favorite)
     : v === 'groups' ? active.filter(isGroup)
     : active
-  // Pinned first; otherwise the server's order (most recent activity first).
-  const rows = [...inView(view)].sort((a, b) => Number(!!b.viewerState?.pinned) - Number(!!a.viewerState?.pinned))
+  // PD-36: a chat that has asked the viewer in, not yet opened, leads -- above
+  // pinned. Then pinned; otherwise the server's order (most recent activity first).
+  const rank = (c: ChatConversation) => (isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
+  const rows = [...inView(view)].sort((a, b) => rank(b) - rank(a))
 
   const options = [
     { value: 'all' as const, label: copy.filterAll, count: inView('all').length },
@@ -217,6 +219,12 @@ export function ConversationList({
   )
 }
 
+/** PD-36: the viewer was asked into this chat and has not opened it since. */
+export function isUnseenSummons(c: ChatConversation): boolean {
+  const m = c.viewerState?.mention
+  return !!m && m.kind === 'summons' && m.state === 'pending' && !m.seen
+}
+
 function ConversationRow({
   c,
   selected,
@@ -243,9 +251,11 @@ function ConversationRow({
   const archived = !!c.viewerState?.archived
   const favorite = !!c.viewerState?.favorite
   const preview = previewText(c.lastMessage, selfId, copy) || (copy.kind[c.type] ?? c.type)
+  const mention = c.viewerState?.mention ?? null
+  const summoned = mention?.kind === 'summons' && mention.state === 'pending'
 
   return (
-    <li className="cw-row">
+    <li className={isUnseenSummons(c) ? 'cw-row cw-row--summoned' : 'cw-row'}>
       <button
         type="button"
         className={unread > 0 ? 'conv-row cw-row__main cw-row__main--unread' : 'conv-row cw-row__main'}
@@ -264,6 +274,17 @@ function ConversationRow({
           <span className="conv-row__bottom">
             <span className="conv-row__sub" dir="auto">{preview}</span>
             {c.needsReply && <Badge tone="now">{copy.needsReply}</Badge>}
+            {/* PD-36: asked in and not yet answered; the dot keeps it from being colour-only. */}
+            {summoned && (
+              <Badge tone="gold" dot>
+                {copy.mentionedBadge}
+              </Badge>
+            )}
+            {mention?.kind === 'member' && !mention.seen && (
+              <span className="cw-row__mark cw-row__mark--mention" title={copy.mentionedMark} aria-label={copy.mentionedMark}>
+                <Icon name="at" size={14} />
+              </span>
+            )}
             {c.cover && c.cover.coverId === selfId && (
               <span title={copy.coveringFor(c.cover.supervisorName)} aria-label={copy.coveringFor(c.cover.supervisorName)}>
                 <Badge tone="coverage">{copy.covering}</Badge>

@@ -59,6 +59,20 @@ class HttpGroupRepository implements GroupRepository {
       members: members,
       requiresApproval: data['teacherRequiresApproval'] == true ||
           data['parentRequiresApproval'] == true,
+      summoned: [
+        for (final row in (data['summoned'] as List?) ?? const [])
+          if (row is Map<String, Object?> &&
+              row['actorId'] is String &&
+              row['displayName'] is String &&
+              WireMappers.parseTime(row['at']) != null)
+            SummonedPerson(
+              id: row['actorId']! as String,
+              displayName: row['displayName']! as String,
+              staffRole: row['staffRole'] as String? ?? '',
+              at: WireMappers.parseTime(row['at'])!,
+              mentionedByName: row['mentionedByName'] as String?,
+            ),
+      ],
     );
   }
 }

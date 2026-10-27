@@ -6834,6 +6834,90 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Your feedback could not be sent. Please try again.'**
   String get feedbackFailed;
+
+  /// PD-36: the @ list above the message box.
+  ///
+  /// In en, this message translates to:
+  /// **'Mention someone'**
+  String get mentionListLabel;
+
+  /// No description provided for @mentionNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No one here by that name'**
+  String get mentionNoMatch;
+
+  /// PD-36: on an @ list row for someone not in the chat; picking them asks them in.
+  ///
+  /// In en, this message translates to:
+  /// **'Asked to join'**
+  String get mentionAskedToJoin;
+
+  /// PD-36: the label inserted after @ for a parent's role mention of the child's supervisor.
+  ///
+  /// In en, this message translates to:
+  /// **'supervisor'**
+  String get mentionRoleSupervisor;
+
+  /// PD-36: the label inserted after @ for a parent's role mention of the administration.
+  ///
+  /// In en, this message translates to:
+  /// **'admin'**
+  String get mentionRoleAdmin;
+
+  /// No description provided for @mentionRoleSupervisorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The child\'s supervisor'**
+  String get mentionRoleSupervisorHint;
+
+  /// No description provided for @mentionRoleAdminHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The supervisor and the operations manager'**
+  String get mentionRoleAdminHint;
+
+  /// No description provided for @mentionStaffManager.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager'**
+  String get mentionStaffManager;
+
+  /// No description provided for @mentionStaffSupervisor.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor'**
+  String get mentionStaffSupervisor;
+
+  /// No description provided for @mentionStaffCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage supervisor'**
+  String get mentionStaffCoverage;
+
+  /// PD-36: Group Info, someone asked in who has not joined yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Mentioned — waiting'**
+  String get mentionWaiting;
+
+  /// PD-36: who asked them in, and when.
+  ///
+  /// In en, this message translates to:
+  /// **'asked by {name}, {date}'**
+  String mentionAskedBy(String name, String date);
+
+  /// No description provided for @mentionSomeoneHere.
+  ///
+  /// In en, this message translates to:
+  /// **'someone in this chat'**
+  String get mentionSomeoneHere;
+
+  /// PD-36: the @ marker on a chat row.
+  ///
+  /// In en, this message translates to:
+  /// **'You were mentioned'**
+  String get mentionedMark;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
