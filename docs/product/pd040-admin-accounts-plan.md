@@ -457,7 +457,7 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 
 **PR-2 as built (2026-10-27)**
 - **Built:**
-  - Migration `20261027150000_chat_pd040_access_roles`: the `specialist` tier; `chat.permission` and `chat.legacy_permission_bundle`, seeded from the TypeScript sources and pinned by `pd040-catalogue-seed.spec.ts`; `chat.access_role`, `chat.access_role_permission` and `chat.staff_access_role`.
+  - Migration `20261027190000_chat_pd040_access_roles`: the `specialist` tier; `chat.permission` and `chat.legacy_permission_bundle`, seeded from the TypeScript sources and pinned by `pd040-catalogue-seed.spec.ts`; `chat.access_role`, `chat.access_role_permission` and `chat.staff_access_role`.
   - `chat.staff_access_profile` and `chat.staff_has_permission`.
   - The only writers: `define`, `update` and `archive_access_role`, and `grant` and `revoke_access_role`. A trigger refuses any other write. They enforce H1, H3, H5, H7 and H8, and audit H10 in the same transaction.
   - `PermissionGuard` and `GET /me` now read the SQL profile.

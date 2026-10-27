@@ -1,7 +1,7 @@
 /**
  * PD-40: the database's catalogue and legacy bundles are the TypeScript ones.
  *
- * The migration 20261027150000_chat_pd040_access_roles.sql seeds
+ * The migration 20261027190000_chat_pd040_access_roles.sql seeds
  * chat.permission and chat.legacy_permission_bundle inside a generated block.
  * This spec renders that block from catalogue.ts and legacy-bundles.ts and
  * fails when the migration's copy differs, so the SQL rules (H5's "grant only
@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { PERMISSIONS } from '@platform/permissions/catalogue';
 import { legacyBundle, legacyBundleNames, type LegacyTier, type StaffPlacement } from '@platform/permissions/legacy-bundles';
 
-const MIGRATION = join(__dirname, '..', '..', '..', '..', '..', 'supabase', 'migrations', '20261027150000_chat_pd040_access_roles.sql');
+const MIGRATION = join(__dirname, '..', '..', '..', '..', '..', 'supabase', 'migrations', '20261027190000_chat_pd040_access_roles.sql');
 const BEGIN = '-- BEGIN GENERATED pd040 seed -- by test/unit/authorization/pd040-catalogue-seed.spec.ts; do not edit';
 const END = '-- END GENERATED pd040 seed';
 
