@@ -1,5 +1,10 @@
 package com.jawwid.jawwid_chat
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.hardware.biometrics.BiometricManager
+import android.os.Build
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -61,6 +66,54 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SECURITY_SETTINGS_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openSecuritySettings" -> result.success(openSecuritySettings())
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    /**
+     * App lock's "Open settings": the screen where the owner adds what app lock needs.
+     *
+     * Android 11+ has a biometric enrolment screen that also offers a screen lock (PIN,
+     * pattern, password), asked here for exactly the strengths app lock accepts:
+     * BIOMETRIC_STRONG or DEVICE_CREDENTIAL. A weak ("convenience") face unlock is not
+     * one of them, and Android does not let an app use it. Not every phone ships that
+     * screen, so Security settings, then Settings, are the fallbacks.
+     *
+     * Returns whether anything opened. It never throws into Flutter.
+     */
+    private fun openSecuritySettings(): Boolean {
+        val candidates = mutableListOf<Intent>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            candidates.add(
+                Intent(Settings.ACTION_BIOMETRIC_ENROLL).putExtra(
+                    Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED,
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                        BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+                ),
+            )
+        }
+        candidates.add(Intent(Settings.ACTION_SECURITY_SETTINGS))
+        candidates.add(Intent(Settings.ACTION_SETTINGS))
+
+        for (intent in candidates) {
+            try {
+                startActivity(intent)
+                return true
+            } catch (e: ActivityNotFoundException) {
+                // This phone has no such screen; try the next one.
+            } catch (e: SecurityException) {
+                // Some vendors guard a screen; try the next one.
+            }
+        }
+        return false
     }
 
     /**
@@ -90,5 +143,8 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         /** Shared with `push_tokens.dart`. One string, three places. */
         private const val CHANNEL_NAME = "jawwid/push_tokens"
+
+        /** Shared with `device_security_settings.dart`. */
+        private const val SECURITY_SETTINGS_CHANNEL = "jawwid/device_security_settings"
     }
 }

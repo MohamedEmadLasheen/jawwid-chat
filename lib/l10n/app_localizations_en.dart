@@ -548,7 +548,7 @@ class L10nEn extends L10n {
   @override
   String appLockToggle(String platform) {
     String _temp0 = intl.Intl.selectLogic(platform, {
-      'android': 'Lock with fingerprint, face unlock or screen lock',
+      'android': 'Lock with fingerprint, face (if supported) or screen lock',
       'other': 'Lock with Face ID, fingerprint or passcode',
     });
     return '$_temp0';
@@ -561,11 +561,14 @@ class L10nEn extends L10n {
   @override
   String appLockUnavailable(String platform) {
     String _temp0 = intl.Intl.selectLogic(platform, {
-      'android': 'Set up a fingerprint, face unlock or a screen lock on this device to use app lock.',
+      'android': 'Set up a fingerprint or a screen lock on this device to use app lock.',
       'other': 'Set up Face ID, a fingerprint or a passcode on this device to use app lock.',
     });
     return '$_temp0';
   }
+
+  @override
+  String get appLockOpenSettings => 'Open settings';
 
   @override
   String get appLockTimeoutLabel => 'Lock automatically';
@@ -603,7 +606,7 @@ class L10nEn extends L10n {
   @override
   String appLockOfferBody(String platform) {
     String _temp0 = intl.Intl.selectLogic(platform, {
-      'android': 'Use your fingerprint, face unlock or screen lock to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.',
+      'android': 'Use your fingerprint, face (if supported) or screen lock to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.',
       'other': 'Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.',
     });
     return '$_temp0';

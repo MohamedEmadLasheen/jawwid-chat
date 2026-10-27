@@ -997,10 +997,10 @@ abstract class L10n {
   /// **'App lock'**
   String get appLockTitle;
 
-  /// Names the unlock methods the way the platform does: Android says fingerprint, face unlock and screen lock; iOS says Face ID and passcode. platform is android or other.
+  /// Names the unlock methods the way the platform does: Android says fingerprint and screen lock, and face only as 'if supported' (a weak face unlock is not available to apps); iOS says Face ID and passcode. platform is android or other.
   ///
   /// In en, this message translates to:
-  /// **'{platform, select, android{Lock with fingerprint, face unlock or screen lock} other{Lock with Face ID, fingerprint or passcode}}'**
+  /// **'{platform, select, android{Lock with fingerprint, face (if supported) or screen lock} other{Lock with Face ID, fingerprint or passcode}}'**
   String appLockToggle(String platform);
 
   /// No description provided for @appLockToggleSubtitle.
@@ -1009,11 +1009,17 @@ abstract class L10n {
   /// **'Ask to unlock when you return to the app'**
   String get appLockToggleSubtitle;
 
-  /// Names the unlock methods the way the platform does: Android says fingerprint, face unlock and screen lock; iOS says Face ID and passcode. platform is android or other.
+  /// Names the unlock methods the way the platform does: Android says fingerprint and screen lock, and face only as 'if supported' (a weak face unlock is not available to apps); iOS says Face ID and passcode. platform is android or other.
   ///
   /// In en, this message translates to:
-  /// **'{platform, select, android{Set up a fingerprint, face unlock or a screen lock on this device to use app lock.} other{Set up Face ID, a fingerprint or a passcode on this device to use app lock.}}'**
+  /// **'{platform, select, android{Set up a fingerprint or a screen lock on this device to use app lock.} other{Set up Face ID, a fingerprint or a passcode on this device to use app lock.}}'**
   String appLockUnavailable(String platform);
+
+  /// Beside the App lock hint on Android: opens the phone's own screen for adding a fingerprint or a screen lock.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get appLockOpenSettings;
 
   /// No description provided for @appLockTimeoutLabel.
   ///
@@ -1081,10 +1087,10 @@ abstract class L10n {
   /// **'Lock the app?'**
   String get appLockOfferTitle;
 
-  /// Names the unlock methods the way the platform does: Android says fingerprint, face unlock and screen lock; iOS says Face ID and passcode. platform is android or other.
+  /// Names the unlock methods the way the platform does: Android says fingerprint and screen lock, and face only as 'if supported' (a weak face unlock is not available to apps); iOS says Face ID and passcode. platform is android or other.
   ///
   /// In en, this message translates to:
-  /// **'{platform, select, android{Use your fingerprint, face unlock or screen lock to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.} other{Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.}}'**
+  /// **'{platform, select, android{Use your fingerprint, face (if supported) or screen lock to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.} other{Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.}}'**
   String appLockOfferBody(String platform);
 
   /// No description provided for @appLockOfferAccept.
