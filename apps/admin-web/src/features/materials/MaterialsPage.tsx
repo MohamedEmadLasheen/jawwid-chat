@@ -1,9 +1,10 @@
-import { useId, useMemo, useState, type ReactNode } from 'react'
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Icon } from '@/shared/components/Icon'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -465,20 +466,51 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
  *   browser         any other link: offered as a link to open, never framed
  *   file            the signed storage URL in <audio>, <video> or <img>; a PDF opens
  * Never allow-popups, allow-top-navigation or allow-modals; no referrer.
+ *
+ * A framed lesson or activity takes the whole window, above the navigation (PD-29
+ * amendment, materials quality #1), with a back button and, where the browser
+ * allows it, real full screen. Anything else stays in the side sheet.
  */
 function PreviewDialog({ item, onClose }: { item: MaterialItem; onClose: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
+  const stage = useRef<HTMLDivElement>(null)
   // A fresh signed link each time the preview opens; never cached.
   const open = useQuery({ queryKey: ['materials', 'open', item.id], queryFn: () => materialsApi.open(item.id), gcTime: 0, staleTime: 0, retry: false })
   const opened: OpenResult | undefined = open.data
+  // Until the server answers, an activity is expected to be framed.
+  const framed = opened
+    ? opened.presentation === 'frame-isolated' || opened.presentation === 'frame-site'
+    : item.kind === 'activity_package' || item.kind === 'activity_link'
+  const canFullScreen = framed && typeof document !== 'undefined' && document.fullscreenEnabled === true
+  const fullScreen = canFullScreen ? (
+    <button
+      type="button"
+      className="btn btn--sm"
+      disabled={!opened}
+      onClick={() => void stage.current?.requestFullscreen?.().catch(() => {})}
+    >
+      <Icon name="expand" />
+      {tx(M.fullScreen)}
+    </button>
+  ) : null
   return (
-    <Dialog title={itemTitle(item, locale)} onClose={onClose} variant="sheet">
+    <Dialog
+      title={itemTitle(item, locale)}
+      onClose={onClose}
+      variant={framed ? 'full' : 'sheet'}
+      backLabel={tx(M.backToLibrary)}
+      actions={fullScreen}
+    >
       <ServerError error={open.error} />
-      {opened && <Player opened={opened} />}
-      {opened && (opened.presentation === 'frame-isolated' || opened.presentation === 'frame-site') && (
-        <p className="field__hint">{tx(M.previewNote)}</p>
+      {framed ? (
+        <div className="mt-stage" ref={stage}>
+          {opened && <Player opened={opened} />}
+        </div>
+      ) : (
+        opened && <Player opened={opened} />
       )}
+      {opened && framed && <p className="field__hint">{tx(M.previewNote)}</p>}
     </Dialog>
   )
 }
