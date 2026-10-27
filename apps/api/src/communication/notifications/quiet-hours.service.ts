@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../platform/prisma.service';
+import { ACADEMY_ZONE } from '../../platform/time-zone';
 
 /**
  * Quiet hours, per recipient, in their own timezone.
@@ -32,6 +33,30 @@ export class QuietHoursService {
 
     // Defer to the end of the quiet window.
     let delta = settings.endMinute - localMinutes;
+    if (delta <= 0) delta += 24 * 60;
+    return new Date(scheduledAt.getTime() + delta * 60_000);
+  }
+
+  /**
+   * PD-34: as `adjust`, but someone with no row of their own gets the academy
+   * default (chat.config notification.quiet_hours.default_*) instead of none.
+   * Used by the notification pipeline only; `adjust` -- and so every caller of
+   * NotificationService.schedule -- is unchanged.
+   */
+  async adjustWithDefault(
+    recipientId: string,
+    scheduledAt: Date,
+    respect: boolean,
+    fallback: { enabled: boolean; startMinute: number; endMinute: number },
+  ): Promise<Date> {
+    if (!respect) return scheduledAt;
+    const own = await this.prisma.quietHours.findUnique({ where: { actorId: recipientId } });
+    const window = own ?? fallback;
+    if (!window.enabled) return scheduledAt;
+    const zone = await this.prisma.actorTimeZone.findUnique({ where: { actorId: recipientId }, select: { timeZone: true } });
+    const localMinutes = QuietHoursService.minutesInZone(scheduledAt, zone?.timeZone ?? own?.timezone ?? ACADEMY_ZONE);
+    if (!QuietHoursService.isQuiet(localMinutes, window.startMinute, window.endMinute)) return scheduledAt;
+    let delta = window.endMinute - localMinutes;
     if (delta <= 0) delta += 24 * 60;
     return new Date(scheduledAt.getTime() + delta * 60_000);
   }

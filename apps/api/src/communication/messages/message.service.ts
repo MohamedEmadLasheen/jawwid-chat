@@ -646,10 +646,22 @@ export class MessageService {
     });
     await this.markState(ids.map((m) => m.id), actor.actorId, ReceiptState.READ);
 
-    await this.prisma.conversationParticipantState.upsert({
-      where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
-      create: { conversationId, actorId: actor.actorId, lastReadSeq: target },
-      update: { lastReadSeq: target },
+    // PD-34: the read is an event too. The outbox worker withdraws the push still
+    // waiting for this chat, reads its Notification Center entry and tells the
+    // reader's other devices (conversation.read, their own room only). Through
+    // the outbox rather than a call from here: MessageService is a dependency of
+    // the realtime gateway, so it must not depend on the realtime publisher.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.conversationParticipantState.upsert({
+        where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
+        create: { conversationId, actorId: actor.actorId, lastReadSeq: target },
+        update: { lastReadSeq: target },
+      });
+      await this.outbox.enqueue(tx, CommEvent.CONVERSATION_READ, {
+        conversationId,
+        actorId: actor.actorId,
+        lastReadSeq: target.toString(),
+      });
     });
   }
 
