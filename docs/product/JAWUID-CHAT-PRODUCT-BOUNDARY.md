@@ -2430,7 +2430,7 @@ Teachers department's rights on it**, for **the teachers of their families**.
 - **Backstop.** The PD-12/PD-26 database guards that said "the Teachers
   department" now say "the Teachers department or the teacher's Operations
   supervisor" (`chat.may_supervise_teacher`, migration
-  `20261027140000_chat_pd026_operations_access.sql`).
+  `20261027160000_chat_pd026_operations_access.sql`).
 
 **Closed.** 2026-10-22.
 
