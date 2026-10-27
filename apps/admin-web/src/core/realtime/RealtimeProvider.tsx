@@ -102,6 +102,9 @@ function registerHandlers(socket: Socket, qc: QueryClient): void {
   })
 }
 
+/** PD-37: well inside the server's 45 s presence TTL. */
+const PRESENCE_HEARTBEAT_MS = 30_000
+
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useSession()
   const queryClient = useQueryClient()
@@ -156,7 +159,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
     registerHandlers(socket, queryClient)
 
+    // PD-37: keep this session counted as online (realtime.presence_ttl_seconds
+    // is 45); who may SEE it is the server's PresencePolicy, never this client.
+    const heartbeat = setInterval(() => {
+      if (socket.connected) socket.emit('presence.heartbeat')
+    }, PRESENCE_HEARTBEAT_MS)
+
     return () => {
+      clearInterval(heartbeat)
       setCurrent(null)
       socket.removeAllListeners()
       socket.disconnect()

@@ -29,6 +29,29 @@ staging.
 Any step failing stops the deployment. The configuration check runs **before**
 anything changes, so a missing secret costs a failed run rather than an outage.
 
+### 1a. Switches that wait for a deployed worker (PD-37)
+
+**`realtime.receipts_announce` stays OFF until the outbox WORKER runs PD-37.**
+It is a `chat.config` row, seeded `false` (the compiled default is `false`), and
+it gates the `receipts.advanced` outbox row from which the worker sends authors
+their live ticks (`message.status`). A worker from before PD-37 has no case for
+that event, and its default branch would broadcast the reader's cursor to the
+whole conversation room (the RT-012 roster leak). While it is off, read and
+delivery cursors and receipts still move, and the ticks are right on every fetch;
+only the live push waits.
+
+- Turn it on once the worker component runs a build with PD-37, in that
+  environment. It takes effect within the 30 s config cache:
+  `update chat.config set value = 'true'::jsonb where key = 'realtime.receipts_announce';`
+- **Before any worker rollback** to a build without PD-37, turn it off first:
+  `update chat.config set value = 'false'::jsonb where key = 'realtime.receipts_announce';`
+
+**During a rolling deploy** of PD-37, typing indicators and live ticks may be
+missing for a moment. They travel on a new node channel
+(`rt009:deliver-thread-audience`) and relay target (`room-audience`) that an
+older API node **drops** rather than broadcasts. They return once every node is
+updated. Presence (PD-37) needs Redis 6.2 or later (`ZADD … GT/XX`).
+
 ## 2. What exactly is running?
 
 ```bash
