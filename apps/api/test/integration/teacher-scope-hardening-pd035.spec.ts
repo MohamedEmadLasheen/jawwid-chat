@@ -144,7 +144,7 @@ describe('2. a deactivated supervisor', () => {
   it('leaves their teachers unassigned in the count the Teachers Manager sees', async () => {
     await assign(s.teacherId, tsupA);
     const before = (await supervisors.assignments(tmgr)).unassigned;
-    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${tsupA}::uuid`;
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${tsupA}::uuid`;
     const view = await supervisors.assignments(tmgr);
     expect(view.unassigned).toBe(before + 1);
     expect(view.teachers.find((t) => t.id === s.teacherId)?.supervisor).toMatchObject({ id: tsupA, isActive: false });
@@ -215,7 +215,7 @@ describe('6. change of teacher under strict scope', () => {
     expect(listed).toContain(s.teacherId);
     expect(listed).not.toContain(s.newTeacherId);
     expect(await code(lifecycle.transferPreview(tsupA, s.learnerId, s.newTeacherId))).toBe(CommErrorCode.LESSON_NOT_FOUND);
-    expect(await code(lifecycle.transfer(tsupA, s.learnerId, { toTeacherId: s.newTeacherId, reasonCode: 'other' })))
+    expect(await code(lifecycle.transfer(tsupA, s.learnerId, { toTeacherId: s.newTeacherId, reason: 'schedule_fit' })))
       .toBe(CommErrorCode.LESSON_NOT_FOUND);
     // The Teachers Manager still moves anyone anywhere.
     expect((await lifecycle.candidates(tmgr)).teachers.map((t) => t.id)).toContain(s.newTeacherId);
