@@ -14,6 +14,7 @@ import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../app_lock/application/app_lock_controller.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
+import '../../app_lock/presentation/unlock_platform.dart';
 import '../../profile/presentation/profile_photos_section.dart';
 import '../application/theme_mode_controller.dart';
 import 'date_time_screen.dart';
@@ -270,8 +271,8 @@ class _AppLockSection extends ConsumerWidget {
         SwitchListTile(
           key: const ValueKey('settings-app-lock'),
           secondary: const Icon(Icons.lock_outline),
-          title: Text(l10n.appLockToggle),
-          subtitle: Text(lock.available ? l10n.appLockToggleSubtitle : l10n.appLockUnavailable),
+          title: Text(l10n.appLockToggle(unlockPlatform(context))),
+          subtitle: Text(lock.available ? l10n.appLockToggleSubtitle : l10n.appLockUnavailable(unlockPlatform(context))),
           value: enabled,
           onChanged: !lock.available || lock.authenticating
               ? null

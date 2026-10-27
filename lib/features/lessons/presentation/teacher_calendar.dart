@@ -8,6 +8,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/my_calendar.dart';
 import '../../../shared/utils/app_clock.dart';
+import '../../../shared/utils/clock_time.dart';
 import 'teacher_schedule_screen.dart';
 
 /// PD-38 P2: the teacher's own calendar -- Day, Week and Month -- in the Schedule
@@ -319,7 +320,6 @@ Map<String, (int, int)> _lanes(List<MyCalendarLesson> lessons) {
 
 String _lessonLabel(BuildContext context, MyCalendarLesson l) {
   final l10n = L10n.of(context);
-  final m = MaterialLocalizations.of(context);
   final status = switch (l.status) {
     CalendarLessonStatus.trial => l10n.calendarStatusTrial,
     CalendarLessonStatus.paused => l10n.calendarStatusPaused,
@@ -327,7 +327,7 @@ String _lessonLabel(BuildContext context, MyCalendarLesson l) {
   };
   return [
     l.title,
-    '${m.formatTimeOfDay(TimeOfDay.fromDateTime(l.startsAt))} – ${m.formatTimeOfDay(TimeOfDay.fromDateTime(l.endsAt))}',
+    '${formatClockTime(context, TimeOfDay.fromDateTime(l.startsAt))} – ${formatClockTime(context, TimeOfDay.fromDateTime(l.endsAt))}',
     status,
     if (l.outsideShift) l10n.calendarOutsideShift,
   ].join(' · ');
@@ -340,7 +340,7 @@ void _openLesson(BuildContext context, WidgetRef ref, MyCalendarLesson l) {
     ref,
     lessonId: l.id,
     title: l.title,
-    subtitle: '${m.formatMediumDate(l.startsAt)} · ${m.formatTimeOfDay(TimeOfDay.fromDateTime(l.startsAt))}',
+    subtitle: '${m.formatMediumDate(l.startsAt)} · ${formatClockTime(context, TimeOfDay.fromDateTime(l.startsAt))}',
   );
 }
 
@@ -368,7 +368,6 @@ class _DayView extends ConsumerWidget {
         if (dayKey(l.startsAt) == day) l,
     ];
     final lanes = _lanes(lessons);
-    final m = MaterialLocalizations.of(context);
 
     Widget band(CalendarSpan s, Widget child, {double inset = 0}) {
       final top = y(minuteOfDay(s.from, day).clamp(lo, hi));
@@ -402,7 +401,7 @@ class _DayView extends ConsumerWidget {
                           top: y(minute) - 7,
                           start: 0,
                           child: Text(
-                            m.formatTimeOfDay(TimeOfDay(hour: minute ~/ 60, minute: 0), alwaysUse24HourFormat: true),
+                            formatClockTime(context, TimeOfDay(hour: minute ~/ 60, minute: 0), alwaysUse24HourFormat: true),
                             style: Theme.of(context).textTheme.labelSmall,
                           ),
                         ),

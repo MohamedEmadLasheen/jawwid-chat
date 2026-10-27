@@ -5,6 +5,7 @@ import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/app_lock_controller.dart';
+import 'unlock_platform.dart';
 
 /// The brand lockup, light or dark ink by theme (the same pair the sign-in screen uses: each
 /// ink only clears contrast on its own background).
@@ -193,7 +194,7 @@ class AppLockOffer extends ConsumerWidget {
           child: AlertDialog(
             icon: const Icon(Icons.lock_outline),
             title: Text(l10n.appLockOfferTitle),
-            content: Text(l10n.appLockOfferBody),
+            content: Text(l10n.appLockOfferBody(unlockPlatform(context))),
             actions: [
               TextButton(
                 key: const ValueKey('app-lock-offer-decline'),
