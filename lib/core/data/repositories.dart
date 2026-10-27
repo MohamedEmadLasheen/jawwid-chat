@@ -71,18 +71,43 @@ class GroupMember {
   final MemberAway? away;
 }
 
+/// PD-36: someone asked to step in who is not a member -- an admin, a manager. Shown at the
+/// top of Group Info, highlighted, until they join or the request lapses. Name and role are
+/// shown to everyone in the group (owner decision 2026-10-26).
+class SummonedPerson {
+  const SummonedPerson({
+    required this.id,
+    required this.displayName,
+    required this.staffRole,
+    required this.at,
+    this.mentionedByName,
+  });
+
+  final String id;
+  final String displayName;
+
+  /// 'super_admin' | 'manager' | 'admin' | 'coverage'.
+  final String staffRole;
+  final DateTime at;
+  final String? mentionedByName;
+}
+
 class StudentGroup {
   const StudentGroup({
     required this.conversationId,
     required this.learner,
     required this.members,
     this.requiresApproval = false,
+    this.summoned = const [],
   });
 
   final String conversationId;
   final LearnerRef learner;
   final List<GroupMember> members;
   final bool requiresApproval;
+
+  /// PD-36: asked in, not (yet) members.
+  final List<SummonedPerson> summoned;
 }
 
 /// Whether the server would let this actor START a call in a conversation.
@@ -249,6 +274,7 @@ class OutgoingMessage {
     this.attachments = const [],
     this.voiceNote,
     this.pendingAttachment,
+    this.mentions = const [],
   });
 
   /// Generated once at compose time and reused on every retry (§16, §17).
@@ -269,6 +295,10 @@ class OutgoingMessage {
   /// payload.
   final PendingAttachment? pendingAttachment;
 
+  /// PD-36: the "@..." spans in [body]. The server resolves and checks every one; a mention
+  /// of someone the sender may not reach refuses the send.
+  final List<MessageMention> mentions;
+
   bool get needsUpload => voiceNote != null || pendingAttachment != null;
 
   /// Promote a finished upload. The pending payload is dropped, so a later
@@ -280,6 +310,7 @@ class OutgoingMessage {
         body: body,
         replyToMessageId: replyToMessageId,
         attachments: [...attachments, attachment],
+        mentions: mentions,
       );
 }
 

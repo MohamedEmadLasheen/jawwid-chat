@@ -281,6 +281,16 @@ class MessageBubble extends StatelessWidget {
                         child: ContentText(
                           message.body,
                           highlight: highlight,
+                          // PD-36: "@..." as chips; the viewer's own is drawn stronger.
+                          chips: [
+                            for (final m in message.mentions)
+                              (
+                                start: m.start,
+                                length: m.length,
+                                // The bubble's gold rule says "you"; the chips stay alike.
+                                mine: false,
+                              ),
+                          ],
                           style:
                               theme.textTheme.bodyLarge?.copyWith(color: foreground),
                         ),
@@ -292,7 +302,7 @@ class MessageBubble extends StatelessWidget {
                     onRetry: onRetry,
                     onDiscard: onDiscard,
                   ),
-                ]),
+                ], mentionsMe: message.mentionsMe && !message.isDeleted),
               ),
               if (message.reactions.isNotEmpty && !message.isDeleted)
                 _ReactionChips(
@@ -369,8 +379,9 @@ class MessageBubble extends StatelessWidget {
     bool failed,
     bool withheld,
     bool mine,
-    List<Widget> children,
-  ) {
+    List<Widget> children, {
+    bool mentionsMe = false,
+  }) {
     final tokens = JawwidTokens.of(context);
 
     return AnimatedContainer(
@@ -408,7 +419,10 @@ class MessageBubble extends StatelessWidget {
                     ? tokens.colorBrandPrimary
                     : withheld
                         ? tokens.colorBorderStrong
-                        : tokens.colorBorderSubtle,
+                        // PD-36: a message that mentions the viewer carries a gold rule.
+                        : mentionsMe
+                            ? tokens.colorAccent
+                            : tokens.colorBorderSubtle,
               ),
       ),
       child: Column(

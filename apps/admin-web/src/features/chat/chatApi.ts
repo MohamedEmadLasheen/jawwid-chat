@@ -34,9 +34,57 @@ export interface ChatViewerState {
   theme?: ChatTheme | null
   /** The viewer's OWN wallpaper photo, signed for them; null/absent = none. */
   wallpaperUrl?: string | null
+  /**
+   * PD-36: the viewer's own open or unseen mention here. An unseen `summons`
+   * puts the row at the very top ("Mentioned"); a `member` mention is an "@"
+   * on the row until the chat is opened.
+   */
+  mention?: ChatViewerMention | null
   /** PD-35, staff: the viewer's open visible seat here (joined by choice); null/absent = none. */
   seat?: { reason: string; joinedAt: string; effective: boolean } | null
 }
+
+/** PD-36: the viewer was mentioned here. */
+export interface ChatViewerMention {
+  mentionId: string
+  /** 'summons': asked to step in while not a member. 'member': a highlight and a ping. */
+  kind: 'member' | 'summons'
+  /** 'pending' (a summons waiting for an answer) or 'notified' (a member's). */
+  state: string
+  mentionedById: string
+  at: string
+  seen: boolean
+  expiresAt: string | null
+}
+
+/** PD-36: someone asked in who is not a member -- the top of Group Info. */
+export interface ChatSummoned {
+  mentionId: string
+  actorId: string
+  displayName: string
+  staffRole: string
+  /** 'pending': asked in and waiting. */
+  state: string
+  mentionedById: string
+  mentionedByName: string | null
+  at: string
+  expiresAt: string | null
+}
+
+/** PD-36: an "@..." chip in a message, by UTF-16 offset into `body`. */
+export interface ChatMention {
+  start: number
+  length: number
+  actorId: string | null
+  role: 'supervisor' | 'admin' | null
+}
+
+/** PD-36: who the @ picker offers -- exactly who a send would accept. */
+export interface MentionCandidates {
+  people: Array<{ actorId: string; actorKind: string; displayName: string; staffRole: string | null; isMember: boolean }>
+  roles: Array<'supervisor' | 'admin'>
+}
+
 
 /** PD-35: a group of one of the viewer's teachers that they may join. Never its messages. */
 export interface SeatCandidate {
@@ -94,6 +142,8 @@ export interface ChatConversation {
   labels?: ChatLabel[]
   /** PD-33: the supervisor here is away and this backup covers until `until`; null when nobody covers. */
   cover?: ChatCover | null
+  /** PD-36: people asked to step in who are not members (detail route). */
+  summoned?: ChatSummoned[]
   /** PD-30: the group is locked for payment (detail route only); null otherwise. */
   paymentLock?: PaymentLock | null
 }
@@ -173,6 +223,12 @@ export interface ChatMessage {
    * author. Shown to everyone as "Sent by support".
    */
   sentBySupport?: boolean
+  /** PD-36: the "@..." chips in `body`. */
+  mentions?: ChatMention[]
+  /** PD-36: this viewer is one of the people mentioned. */
+  mentionsViewer?: boolean
+  /** PD-36, send response only: some mentions went over a limit and stayed plain text. */
+  mentionsLimited?: boolean
 }
 
 /** How long after sending the server lets an author edit (communication.edit_window_minutes). */
@@ -198,7 +254,14 @@ export interface SendInput {
   visibility: 'customer' | 'internal'
   replyToMessageId?: string
   attachments?: UploadedAttachment[]
+  /** PD-36: the "@..." spans in `body`. */
+  mentions?: SendMention[]
 }
+
+/** PD-36: one "@..." in the text being sent: a person, or (parents only) a role. */
+export type SendMention =
+  | { start: number; length: number; actorId: string }
+  | { start: number; length: number; role: 'supervisor' | 'admin' }
 
 /** POST /messages/attachments/authorize: a signed, single-use upload. */
 export interface UploadGrant {
@@ -289,9 +352,24 @@ export const chatApi = {
       clientMessageId: input.clientMessageId,
       ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
       ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+      ...(input.mentions?.length ? { mentions: input.mentions } : {}),
     })
   },
   upload,
+  /** PD-36: the @ picker -- members, plus the staff in charge who may be asked in. */
+  mentionCandidates: (id: string, q: string) =>
+    api.get<MentionCandidates>(`${conv(id)}/mention-candidates`, q ? { q } : undefined),
+  /** PD-36: the viewer opened the chat; their "Mentioned" badges here go. */
+  markMentionsSeen: (id: string) => api.post<void>(`${conv(id)}/mentions/seen`),
+  /** PD-36: "Not for me" -- or, after stepping into a 1:1, step back out. */
+  dismissMention: (mentionId: string) =>
+    api.post<{ state: string }>(`/mentions/${encodeURIComponent(mentionId)}/dismiss`),
+  /**
+   * PD-36 -> PD-35: answer a mention by taking a VISIBLE seat -- a member seat in
+   * a group ("Laila joined"), an effective seat in a family 1:1 (no third member).
+   */
+  joinOnMention: (id: string, mentionId: string) =>
+    api.post<{ id: string }>(`${conv(id)}/join`, { reason: 'mention', sourceId: mentionId }),
   /**
    * Forward messages of conversation `id` into up to ten others. The server
    * checks each source is readable here and each destination writable; media
@@ -411,6 +489,7 @@ export const chatKeys = {
   quickReplies: ['chat', 'quick-replies'] as const,
   search: (id: string, q: string) => ['chat', 'search', id, q] as const,
   searchAll: (q: string) => ['chat', 'search-all', q] as const,
+  mentionCandidates: (id: string, q: string) => ['chat', 'mention-candidates', id, q] as const,
   seatCandidates: (q: string) => ['chat', 'seat-candidates', q] as const,
 }
 

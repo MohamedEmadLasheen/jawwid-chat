@@ -1,5 +1,5 @@
 import { signActorAvatar } from '../profile/avatar-urls';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
@@ -20,6 +20,7 @@ import { objectKeyBelongsToConversation } from '../attachments/object-key';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import {
+  MESSAGE_INCLUDE,
   MessageDto,
   MessageInfoDto,
   MessageInfoEntryDto,
@@ -33,6 +34,7 @@ import {
 } from '../contracts/dto';
 import {
   ActorKind,
+  ConversationType,
   MessageType,
   Moderation,
   OnBehalfMode,
@@ -42,6 +44,7 @@ import {
   Visibility,
 } from '../contracts/vocab';
 import { currentImpersonationId } from '../../platform/request-context';
+import { MentionService } from '../mentions/mention.service';
 import { buildReceiptView, isCountableReader, isDirectTeacherParent } from './receipt-view';
 
 export interface AttachmentInput {
@@ -75,6 +78,12 @@ export interface SendMessageInput {
    * route never passes it, so a client cannot claim a message is a forward.
    */
   forwardedFromMessageId?: string;
+  /**
+   * PD-36: the "@..." spans in `body` -- `{ start, length, actorId }` for a
+   * person, `{ start, length, role }` for a parent's @supervisor / @admin.
+   * Validated and resolved by MentionService; an ineligible one refuses the send.
+   */
+  mentions?: unknown;
 }
 
 export interface ForwardInput {
@@ -106,6 +115,9 @@ export class MessageService {
     private readonly attachments: AttachmentService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    // PD-36. Optional so the positional constructions the harnesses share do
+    // not shift; without it a send carries no mentions (and grants nothing).
+    @Optional() private readonly mentions?: MentionService,
   ) {}
 
   /**
@@ -259,6 +271,22 @@ export class MessageService {
     this.validateContent(type, input);
     await this.validateReplyTarget(conv.id, input.replyToMessageId ?? null);
 
+    // PD-36: resolved before the transaction; a mention of anyone this sender
+    // may not reach here refuses the whole send. Never on a forward.
+    const plannedMentions =
+      this.mentions && !input.forwardedFromMessageId
+        ? await this.mentions.plan({
+            actor,
+            conversation: conv,
+            body: input.body,
+            visibility,
+            raw: input.mentions,
+            members,
+            now,
+          })
+        : [];
+    let mentionsLimited = false;
+
     // PD-14 (2026-10-20): every message is published when it is sent. Nothing
     // is held for approval; a group admin moderates afterwards (edit, delete).
     const moderation = Moderation.PUBLISHED;
@@ -330,7 +358,7 @@ export class MessageService {
                 }
               : undefined,
           },
-          include: { attachments: true, reactions: true, receipts: true, card: true },
+          include: MESSAGE_INCLUDE,
         });
 
         // Advance the conversation and the customer/staff clocks.
@@ -361,6 +389,13 @@ export class MessageService {
             })),
             skipDuplicates: true,
           });
+        }
+        // PD-36: counted and written under the conversation lock held above,
+        // so the rate limits are exact on every replica.
+        if (this.mentions) {
+          const recorded = await this.mentions.record(tx, plannedMentions, message, conv, actor, now);
+          mentionsLimited = recorded.limited;
+          (message as MessageWithRelations).mentions = recorded.rows;
         }
         await this.outbox.enqueue(tx, CommEvent.MESSAGE_CREATED, {
           conversationId: conv.id,
@@ -412,13 +447,14 @@ export class MessageService {
       // Sign this message's attachment URLs too. Without it a sender's own
       // voice note comes back with url: null and is unplayable until the thread
       // is re-fetched -- the message is there, but it cannot be heard.
-      return toMessageDto(
+      const dto = toMessageDto(
         created,
         await this.attachments.signUrlsForMessages([created.id], actor.actorId),
         await this.authorsFor([created]),
         (author) => signActorAvatar(author, conv.id, actor.actorId),
         await this.receiptViewFor(actor.actorId, [created]),
       );
+      return mentionsLimited ? { ...dto, mentionsLimited: true } : dto;
     } catch (e) {
       // Concurrent duplicate submission of the same client_message_id.
       if (
@@ -444,7 +480,7 @@ export class MessageService {
   ): Promise<MessageDto | null> {
     const found = await this.prisma.message.findFirst({
       where: { conversationId, authorId, clientMessageId },
-      include: { attachments: true, reactions: true, receipts: true, card: true },
+      include: MESSAGE_INCLUDE,
     });
     // The idempotent-replay path returns the original message, so it must carry
     // the same playable URLs a first send does.
@@ -512,7 +548,7 @@ export class MessageService {
     const ascending = input.after !== undefined;
     const rows = await this.prisma.message.findMany({
       where: this.visibilityFilter(actor, conv.id, input),
-      include: { attachments: true, reactions: true, receipts: true, card: true },
+      include: MESSAGE_INCLUDE,
       orderBy: { seq: ascending ? 'asc' : 'desc' },
       take: limit,
     });
@@ -1022,7 +1058,7 @@ export class MessageService {
     if (pins.length === 0) return { pins: [] };
     const rows = await this.prisma.message.findMany({
       where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
-      include: { attachments: true, reactions: true, receipts: true, card: true },
+      include: MESSAGE_INCLUDE,
     });
     const dtos = await this.dtosFor(rows, conv.id, actor);
     const byId = new Map(dtos.map((d) => [d.id, d]));
@@ -1066,7 +1102,7 @@ export class MessageService {
       if (!(await this.conversations.canReadResolved(actor, conv, membership)).allowed) continue;
       const rows = await this.prisma.message.findMany({
         where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: ids } }] },
-        include: { attachments: true, reactions: true, receipts: true, card: true },
+        include: MESSAGE_INCLUDE,
       });
       for (const d of await this.dtosFor(rows, conv.id, actor)) dtos.set(d.id, { ...d, starred: true });
     }
@@ -1146,7 +1182,7 @@ export class MessageService {
       if (candidates.length > 0) {
         const visible = await this.prisma.message.findMany({
           where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
-          include: { attachments: true, reactions: true, receipts: true, card: true },
+          include: MESSAGE_INCLUDE,
           orderBy: { seq: 'desc' },
           take: page - hits.length,
         });
@@ -1203,7 +1239,7 @@ export class MessageService {
         rows.push(
           ...(await this.prisma.message.findMany({
             where: { AND: [this.visibilityFilter(actor, { in: ids }, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
-            include: { attachments: true, reactions: true, receipts: true, card: true },
+            include: MESSAGE_INCLUDE,
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             take: limit - rows.length,
           })),
@@ -1254,7 +1290,7 @@ export class MessageService {
             upToSeq === null ? {} : { seq: { lte: upToSeq } },
           ],
         },
-        include: { attachments: true, reactions: true, receipts: true, card: true },
+        include: MESSAGE_INCLUDE,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: batch,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -1454,6 +1490,8 @@ export class MessageService {
           redactedReason: reason,
         },
       });
+      // PD-36: a deleted message mentions nobody; its open summonses close.
+      await this.mentions?.onDeletedForAll(tx, messageId, new Date());
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'message.delete_for_everyone',
@@ -1615,7 +1653,7 @@ export class MessageService {
       if (previous === body) {
         return tx.message.findUniqueOrThrow({
           where: { id: messageId },
-          include: { attachments: true, reactions: true, receipts: true, card: true },
+          include: MESSAGE_INCLUDE,
         });
       }
       await tx.messageRevision.create({
@@ -1627,10 +1665,13 @@ export class MessageService {
           editedAt: now,
         },
       });
+      // PD-36: an "@..." the edit changed no longer mentions anyone. Before the
+      // update, so the row read back below carries only the mentions that stand.
+      await this.mentions?.onEdited(tx, messageId, previous, body, now);
       const row = await tx.message.update({
         where: { id: messageId },
         data: { body, editedAt: now },
-        include: { attachments: true, reactions: true, receipts: true, card: true },
+        include: MESSAGE_INCLUDE,
       });
       await this.audit.audit(tx, {
         actorId: actor.actorId,
