@@ -243,6 +243,8 @@ Proposal: **one Chat-owned, versioned, pinned dataset** that both the lessons an
 | Tajweed | A **published, reviewed annotation**, never hand classification and never a model's judgement. Candidates to evaluate: QUL's Tajweed-annotated text (it has a review and correction tool; licence not yet confirmed), or the King Fahd Complex's colour-coded Tajweed Mushaf data where its terms allow. | Before anything is shown, a **qualified Quran teacher of the academy signs off** each surah's rule list on a review sheet, as PD-39 proposes for the text. The dataset records who signed and when. A rule the reviewer rejects is not shown. |
 | Fonts | Amiri Quran (OFL 1.1), as PD-39 proposes; KFGQPC Uthmanic Hafs if its terms allow embedding | bundled, never from Google Fonts |
 
+The schema, the API and who builds what are agreed with PD-39 in `docs/product/quran-dataset-contract.md`: PD-29 P0-2 builds it, and PD-39 consumes it.
+
 Corrections to Tajweed (#2, #13) come **only** from that reviewed dataset and the teacher's
 sign-off. This plan lists candidates for review (§B5); it does not rule on any of them.
 
