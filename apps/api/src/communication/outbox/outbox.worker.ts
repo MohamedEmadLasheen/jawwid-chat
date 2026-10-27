@@ -621,7 +621,10 @@ export class OutboxWorker {
     // PD-34 amendment (owner 2026-10-27): with the pipeline, a mention takes the
     // chat quiet hours (the person's own, else the chat default), never the cap.
     if (this.pipeline) {
-      await this.pipeline.mentionPublished({ ruleKey, recipientId: target, dedupeKey, locale: recipient.locale, conversationId });
+      await this.pipeline.mentionPublished({
+        ruleKey, recipientId: target, dedupeKey, locale: recipient.locale, conversationId,
+        messageId: payload.messageId as string, mentionId,
+      });
       return;
     }
     await this.notifications.scheduleByRule(ruleKey, {

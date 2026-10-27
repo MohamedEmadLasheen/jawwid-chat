@@ -59,9 +59,13 @@ export function capFreesAt(at: Date, pushTimes: readonly Date[], cap: number, wi
   return new Date(oldestThatMustAge.getTime() + windowMs);
 }
 
-/** A held (deferred) chat push: which chats it stands for, and how many messages from each. */
+/**
+ * A held (deferred) chat push: which chats it stands for and which of their
+ * messages -- `q` the seqs, `n` how many (a message without a seq counts but
+ * has none), `s` the newest seq -- so a read takes out exactly what it covers.
+ */
 export interface HeldChats {
-  [conversationId: string]: { s: string | null; n: number };
+  [conversationId: string]: { s: string | null; n: number; q?: string[] };
 }
 
 export function heldCount(chats: HeldChats): number {
@@ -73,16 +77,25 @@ export function heldAdd(chats: HeldChats, conversationId: string, seq: string | 
   const prev = chats[conversationId];
   const s = prev?.s ?? null;
   const next = seq === null ? s : s === null || BigInt(seq) > BigInt(s) ? seq : s;
-  return { ...chats, [conversationId]: { s: next, n: (prev?.n ?? 0) + 1 } };
+  const q = seq === null ? [...(prev?.q ?? [])] : [...(prev?.q ?? []), seq];
+  return { ...chats, [conversationId]: { s: next, n: (prev?.n ?? 0) + 1, q } };
 }
 
-/** What a read of `conversationId` up to `readSeq` covers is removed; a later message keeps its chat in. */
+/**
+ * A read of `conversationId` up to `readSeq` takes out the messages it covers:
+ * every seq at or below it, and every message without a seq. The chat stays
+ * in only while a later message is still unread.
+ */
 export function heldRead(chats: HeldChats, conversationId: string, readSeq: bigint): HeldChats {
   const c = chats[conversationId];
   if (!c) return chats;
-  if (c.s !== null && BigInt(c.s) > readSeq) return chats;
-  const { [conversationId]: _gone, ...rest } = chats;
-  return rest;
+  const q = (c.q ?? []).filter((x) => BigInt(x) > readSeq);
+  if (q.length === 0) {
+    const { [conversationId]: _gone, ...rest } = chats;
+    return rest;
+  }
+  const s = q.reduce((a, b) => (BigInt(b) > BigInt(a) ? b : a));
+  return { ...chats, [conversationId]: { s, n: q.length, q } };
 }
 
 /** The chats the recipient may no longer hear are removed (PD-34 review P1). */

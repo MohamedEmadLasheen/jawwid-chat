@@ -570,16 +570,17 @@ describe('4b. the chat push policy (owner, 2026-10-27): quiet hours ON, 6 an hou
     for (const c of chats) expect(await g.prisma.notificationItem.count({ where: { recipientId: s.parentId, groupKey: `conversation:${c}` } })).toBe(1);
   });
 
-  it('a summary the cap produced does not count toward the cap (no endless chain of summaries)', async () => {
-    // Four counted pushes in the hour, and a summary the cap sent 5 minutes ago.
+  it('review P1-2: a summary counts once it has gone -- 6 an hour is 6, summaries included', async () => {
+    // Four pushes and a cap summary already sent in the hour; with a cap of 5
+    // the next message is held, not pushed (the summary is the 5th).
     for (const ago of [40, 30, 20, 10]) await sentPush(chats[0]!, ago);
     await sentPush(chats[1]!, 5, { held: true, capSummary: true, chats: {}, count: 4 });
-    // With a cap of 5, counting the summary would make this the 6th and hold it.
     await setConfig('notification.chat.pushes_per_hour', 5);
     await messageAt(chats[2]!, 2, T);
     const [p] = await chatPushes();
-    expect(p!.scheduledAt.toISOString()).toBe(T.toISOString());
-    expect(p!.variables).not.toHaveProperty('held');
+    expect(p!.variables).toMatchObject({ held: true, capSummary: true });
+    // The oldest counted push (40 min before T) leaves the hour at T+20.
+    expect(p!.scheduledAt.toISOString()).toBe(min(20).toISOString());
   });
 
   it('quiet start and end: 21:59 goes, 22:00 and 07:59 wait for 08:00, 08:00 goes', async () => {
@@ -652,15 +653,101 @@ describe('4b. the chat push policy (owner, 2026-10-27): quiet hours ON, 6 an hou
     expect(held[0]!.variables).toMatchObject({ count: 2, capSummary: true });
   });
 
-  it('a held push stands for several chats: leaving one keeps the others; the send-time check trims it', async () => {
+  it('review P2-7: leaving one chat of a held push takes out only that chat, and only that chat\'s Center entry', async () => {
     await messageAt(chats[1]!, 1, new Date('2030-01-10T23:00:00Z'));
     await messageAt(chats[0]!, 1, new Date('2030-01-10T23:05:00Z'));
     await g.conversations.setMembership(chats[1]!, s.ownerId, { actorId: s.parentId, actorKind: 'contact', memberRole: 'parent' }, 'remove', 'pd034');
-    expect(await chatPushes()).toHaveLength(1);
-    await pipeline.guardDueMessages(new Date('2030-01-11T08:00:00Z'));
     const [trimmed] = await chatPushes();
     expect(trimmed!.variables).toMatchObject({ count: 1 });
     expect(Object.keys((trimmed!.variables as { chats: object }).chats)).toEqual([chats[0]]);
+    expect(trimmed!.conversationId).toBe(chats[0]);
+    expect(trimmed!.itemId).toBeNull();
+    const entry = (c: string) => g.prisma.notificationItem.findFirstOrThrow({ where: { recipientId: s.parentId, groupKey: `conversation:${c}` } });
+    expect((await entry(chats[1]!)).cancelReason).toBe('AUDIENCE');
+    expect((await entry(chats[0]!)).cancelledAt).toBeNull();
+  });
+
+  it('review P2-7: a held push withdrawn for its last chat leaves another chat\'s read entry alone', async () => {
+    await messageAt(chats[0]!, 1, new Date('2030-01-10T23:00:00Z'));
+    await pipeline.conversationRead(chats[0]!, s.parentId, BigInt(1));
+    await messageAt(chats[1]!, 1, new Date('2030-01-10T23:10:00Z'));
+    await g.conversations.setMembership(chats[1]!, s.ownerId, { actorId: s.parentId, actorKind: 'contact', memberRole: 'parent' }, 'remove', 'pd034');
+    expect(await chatPushes()).toHaveLength(0);
+    const first = await g.prisma.notificationItem.findFirstOrThrow({ where: { recipientId: s.parentId, groupKey: `conversation:${chats[0]}` } });
+    expect(first.cancelledAt).toBeNull();
+    expect(first.readAt).not.toBeNull();
+  });
+
+  it('review P1-1: muting one chat takes it out of a summary that stands for others too, whichever chat it is filed under', async () => {
+    await messageAt(chats[0]!, 1, new Date('2030-01-10T23:00:00Z')); // filed under chat 0
+    await messageAt(chats[1]!, 1, new Date('2030-01-10T23:10:00Z'));
+    await messageAt(chats[2]!, 1, new Date('2030-01-10T23:20:00Z'));
+    await g.conversations.setPreferences(chats[0]!, s.parentId, { mutedUntil: new Date(Date.now() + 3_600_000) });
+    let [held] = await chatPushes();
+    expect(Object.keys((held!.variables as { chats: object }).chats).sort()).toEqual([chats[1], chats[2]].sort());
+    expect(held!.conversationId).not.toBe(chats[0]);
+    await g.conversations.setPreferences(chats[2]!, s.parentId, { mutedUntil: new Date(Date.now() + 3_600_000) });
+    [held] = await chatPushes();
+    expect(Object.keys((held!.variables as { chats: object }).chats)).toEqual([chats[1]]);
+    expect(held!.templateKey).toBe('new_message');
+  });
+
+  it('review P2-4: a message arriving just after the summary was claimed for sending gets a push of its own', async () => {
+    await messageAt(chats[0]!, 1, new Date('2030-01-10T23:00:00Z'));
+    // The dispatcher claims it (status sent) before the next fold.
+    await g.prisma.notification.updateMany({ where: { recipientId: s.parentId, status: 'scheduled' }, data: { status: 'sent', sentAt: new Date('2030-01-11T08:00:00Z') } });
+    await messageAt(chats[1]!, 1, new Date('2030-01-10T23:30:00Z'));
+    const [mine] = await chatPushes();
+    expect(mine!.conversationId).toBe(chats[1]);
+    expect(mine!.variables).toMatchObject({ held: true, count: 1 });
+  });
+
+  it('review P2-5: a partial read takes out exactly the messages it covers', async () => {
+    for (const seq of [3, 4, 5]) await messageAt(chats[0]!, seq, new Date(`2030-01-10T23:0${seq}:00Z`));
+    await messageAt(chats[1]!, 1, new Date('2030-01-10T23:10:00Z'));
+    await pipeline.conversationRead(chats[0]!, s.parentId, BigInt(4));
+    const [held] = await chatPushes();
+    expect(held!.variables).toMatchObject({ count: 2 });
+  });
+
+  it('review P2-6: a held push follows later settings -- quiet hours off sends it at its earliest; chat pushes off withdraws it', async () => {
+    await messageAt(chats[0]!, 1, new Date('2030-01-10T23:00:00Z'));
+    const parent = await actor(s.parentId);
+    await g.inbox.setSettings(parent, { quietHours: { enabled: false, startMinute: 1320, endMinute: 480 } });
+    expect((await chatPushes())[0]!.scheduledAt.toISOString()).toBe('2030-01-10T23:00:00.000Z');
+    await g.inbox.setSettings(parent, { quietHours: null });
+    await messageAt(chats[1]!, 1, new Date('2030-01-10T23:30:00Z'));
+    await g.inbox.setSettings(parent, { categories: [{ category: 'conversation', push: false }] });
+    expect(await chatPushes()).toHaveLength(0);
+    expect(await g.prisma.notification.count({ where: { recipientId: s.parentId, failureCode: 'OPTED_OUT' } })).toBeGreaterThanOrEqual(1);
+  });
+
+  it('review P2-8 / P2-10: a mention respects chat pushes OFF; one waiting out the night is withdrawn by a read or when the mention closes', async () => {
+    const night = new Date('2030-01-10T23:00:00Z');
+    const msg = await g.messages.send({ conversationId: chats[0]!, senderId: s.ownerId, body: 'hello', clientMessageId: randomUUID() });
+    const mention = (mentionId: string) => pipeline.mentionPublished({
+      ruleKey: 'mention', recipientId: s.parentId, dedupeKey: `mention:${randomUUID()}:${s.parentId}`,
+      conversationId: chats[0]!, messageId: msg.id, mentionId, now: night,
+    });
+    const read = await g.prisma.notification.findUniqueOrThrow({ where: { id: (await mention(randomUUID()))! } });
+    expect(read.variables).toMatchObject({ lastSeq: String(msg.seq), quietDeferred: true });
+    await pipeline.conversationRead(chats[0]!, s.parentId, BigInt(String(msg.seq)));
+    expect((await g.prisma.notification.findUniqueOrThrow({ where: { id: read.id } })).failureCode).toBe('READ');
+    // A mention with no live mention row behind it (taken back) is not sent.
+    const gone = (await mention(randomUUID()))!;
+    await g.prisma.notification.update({ where: { id: gone }, data: { variables: { mentionId: randomUUID(), quietDeferred: true } } });
+    await pipeline.guardDueMessages(new Date('2030-01-11T08:00:00Z'));
+    expect((await g.prisma.notification.findUniqueOrThrow({ where: { id: gone } })).failureCode).toBe('MENTION_CLOSED');
+    await g.inbox.setSettings(await actor(s.parentId), { categories: [{ category: 'conversation', push: false }] });
+    expect(await mention(randomUUID())).toBeNull();
+  });
+
+  it('the chat window has its own keys; the generic ones (for lessons and payments) do not move it', async () => {
+    await setConfig('notification.quiet_hours.default_start_minute', 0);
+    await setConfig('notification.quiet_hours.default_end_minute', 1);
+    await setConfig('notification.chat.quiet_hours.default_start_minute', 21 * 60);
+    await messageAt(chats[0]!, 1, new Date('2030-01-10T21:30:00Z'));
+    expect((await chatPushes())[0]!.scheduledAt.toISOString()).toBe('2030-01-11T08:00:00.000Z');
   });
 
   it('a mention is never capped or summarised, but takes quiet hours; a person who turned them off is pushed', async () => {

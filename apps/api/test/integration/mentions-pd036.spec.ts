@@ -327,7 +327,9 @@ describe('5. the mention push', () => {
     const forTeacher = await g.prisma.notification.findMany({ where: { recipientId: s.teacherId } });
     expect(forTeacher.map((n) => n.ruleKey)).toEqual(['mention_group']);
     expect(forTeacher[0]!.dedupeKey).toBe(`mention:${sent.id}:${s.teacherId}`);
-    expect(forTeacher[0]!.variables).toEqual({});
+    // No content, only ids and timing (PD-34 amendment: which message and
+    // mention it stands for, so a read or the mention closing withdraws it).
+    expect(Object.keys(forTeacher[0]!.variables as object).every((k) => ['lastSeq', 'mentionId', 'quietDeferred', 'notBefore'].includes(k))).toBe(true);
     // The supervisor, not mentioned, gets the ordinary one.
     expect((await g.prisma.notification.findMany({ where: { recipientId: s.supervisorId } })).map((n) => n.ruleKey)).toEqual(['new_message']);
     await g.prisma.conversationParticipantState.update({

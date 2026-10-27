@@ -59,6 +59,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
    * administrative alerts keep their own rules and never read this.
    */
   'notification.chat.quiet_hours.default_enabled': true,
+  'notification.chat.quiet_hours.default_start_minute': 1320,
+  'notification.chat.quiet_hours.default_end_minute': 480,
   /**
    * PD-34 amendment, DECIDED (owner, 2026-10-27): at most this many chat-message
    * pushes per person per rolling hour. The excess is never dropped: it is held

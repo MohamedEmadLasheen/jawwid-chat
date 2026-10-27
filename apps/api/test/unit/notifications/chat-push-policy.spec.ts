@@ -80,21 +80,31 @@ describe('the held (summary) push', () => {
     let h = heldAdd({}, 'a', '5');
     h = heldAdd(h, 'a', '3');
     h = heldAdd(h, 'b', '1');
-    expect(h).toEqual({ a: { s: '5', n: 2 }, b: { s: '1', n: 1 } });
+    expect(h).toEqual({ a: { s: '5', n: 2, q: ['5', '3'] }, b: { s: '1', n: 1, q: ['1'] } });
     expect(heldCount(h)).toBe(3);
     expect(heldTemplate(h)).toBe('new_messages_summary');
     expect(heldTemplate(heldAdd({}, 'a', '1'))).toBe('new_message');
   });
 
-  it('a read takes out what it covers, and only that', () => {
-    const h = heldAdd(heldAdd({}, 'a', '5'), 'b', '2');
-    expect(heldRead(h, 'a', BigInt(4))).toEqual(h); // a message after the read keeps chat a in
-    expect(heldRead(h, 'a', BigInt(5))).toEqual({ b: { s: '2', n: 1 } });
+  it('a read takes out exactly the messages it covers (review P2-5: per seq, not per chat)', () => {
+    let h = heldAdd({}, 'a', '3');
+    h = heldAdd(h, 'a', '4');
+    h = heldAdd(h, 'a', '5');
+    h = heldAdd(h, 'b', '2');
+    const partial = heldRead(h, 'a', BigInt(4));
+    expect(partial.a).toEqual({ s: '5', n: 1, q: ['5'] });
+    expect(heldCount(partial)).toBe(2);
+    expect(heldRead(partial, 'a', BigInt(5))).toEqual({ b: { s: '2', n: 1, q: ['2'] } });
     expect(heldRead(h, 'c', BigInt(9))).toEqual(h);
+  });
+
+  it('a message with no seq is covered by any read of its chat', () => {
+    const h = heldAdd(heldAdd({}, 'a', null), 'a', '7');
+    expect(heldRead(h, 'a', BigInt(1))).toEqual({ a: { s: '7', n: 1, q: ['7'] } });
   });
 
   it('a chat the person may no longer hear is taken out', () => {
     const h = heldAdd(heldAdd({}, 'a', '1'), 'b', '1');
-    expect(heldKeep(h, (id) => id === 'b')).toEqual({ b: { s: '1', n: 1 } });
+    expect(heldKeep(h, (id) => id === 'b')).toEqual({ b: { s: '1', n: 1, q: ['1'] } });
   });
 });
