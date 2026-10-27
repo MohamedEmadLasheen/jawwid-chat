@@ -164,12 +164,14 @@ export function AddEntryDialog({
   const teacherFieldId = useId()
   const sourceId = useId()
   const handlerId = useId()
+  const chatId = useId()
   // The supervisors a complaint may be handed to, and the teachers to choose from.
   // PD-26 amendment: the page's directory -- the caller's teachers and who may handle a complaint.
   const directory = useSupervisionDirectory(intent.kind === 'complaint' || teacherId === null)
   const [chosen, setChosen] = useState(teacherId ?? '')
   const [source, setSource] = useState<'' | 'management' | 'parent'>(intent.kind === 'complaint' ? (intent.source ?? '') : '')
   const [handler, setHandler] = useState('')
+  const [chat, setChat] = useState('')
   const [body, setBody] = useState('')
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [day, setDay] = useState('')
@@ -188,9 +190,14 @@ export function AddEntryDialog({
             ? tx(T.addDayOff)
             : tx(T.cancelTitle, { date: cal.day(intent.date) })
 
+  // PD-26 amendment: about a teacher the caller reaches only through Operations, a
+  // parent's complaint names the family chat it came from (the server requires it).
+  const needsChat =
+    intent.kind === 'complaint' && source === 'parent' && directory.data?.teachers.find((t) => t.id === chosen)?.operationsOnly === true
   const missing = {
     teacher: !chosen,
     source: intent.kind === 'complaint' && !source,
+    chat: needsChat && !chat,
     body: !body.trim(),
     month: intent.kind === 'monthly_comment' && !/^\d{4}-\d{2}$/.test(month),
     day: intent.kind === 'day_off' && !/^\d{4}-\d{2}-\d{2}$/.test(day),
@@ -200,7 +207,13 @@ export function AddEntryDialog({
     const text = body.trim()
     switch (intent.kind) {
       case 'complaint':
-        return { kind: 'complaint', body: text, source: source || 'management', ...(handler ? { handledBy: handler } : {}) }
+        return {
+          kind: 'complaint',
+          body: text,
+          source: source || 'management',
+          ...(handler ? { handledBy: handler } : {}),
+          ...(needsChat && chat ? { sourceConversationId: chat } : {}),
+        }
       case 'complaint_followup':
         return { kind: 'complaint_followup', body: text, refersTo: intent.refersTo }
       case 'monthly_comment':
@@ -271,6 +284,22 @@ export function AddEntryDialog({
             </select>
             {touched && missing.source && <span className="field__error">{tx(T.required)}</span>}
           </div>
+          {needsChat && (
+            <div className="field">
+              <label className="field__label" htmlFor={chatId}>
+                {tx(T.familyChat)}
+              </label>
+              <select id={chatId} className="input" value={chat} onChange={(e) => setChat(e.target.value)}>
+                <option value="">{tx(T.chooseFamilyChat)}</option>
+                {(directory.data?.familyChats ?? []).map((c) => (
+                  <option key={c.conversationId} value={c.conversationId}>
+                    {c.learnerName}
+                  </option>
+                ))}
+              </select>
+              {touched && missing.chat && <span className="field__error">{tx(T.required)}</span>}
+            </div>
+          )}
           <div className="field">
             <label className="field__label" htmlFor={handlerId}>
               {tx(T.handler)}

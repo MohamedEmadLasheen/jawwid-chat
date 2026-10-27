@@ -21,6 +21,7 @@
  *   9. leave allowance is the Teachers department's: absent for Operations
  *  10. another family's child: hidden, and refused as not found
  *  11. Operations answers a parent's feedback, through the database guard too
+ *  12. a parent's complaint is about a family: unknown or another's is hidden
  *
  * Synthetic fixtures only (QA gate G-16).
  */
@@ -267,7 +268,7 @@ describe('6. leave and complaints, with the Teachers department\'s rights', () =
   });
 
   it('records a complaint (she handles it), a follow-up and the resolution; upholds it', async () => {
-    const c = await files.addEntry(ops(), s.teacherId, { kind: 'complaint', body: 'Late twice.', source: 'parent' });
+    const c = await files.addEntry(ops(), s.teacherId, { kind: 'complaint', body: 'Late twice.', source: 'parent', sourceConversationId: await groupOf(s.learnerId) });
     const row = await g.prisma.teacherSupervisionEntry.findUniqueOrThrow({ where: { id: c.id } });
     expect([row.complaintSource, row.handledBy, row.createdBy]).toEqual(['parent', ops(), ops()]);
     await files.addEntry(ops(), s.teacherId, { kind: 'complaint_followup', body: 'Called.', refersTo: c.id });
@@ -493,5 +494,83 @@ describe('11. Operations answers a parent\'s feedback (P1-2)', () => {
     await expect(
       g.prisma.parentFeedback.update({ where: { id: theirs.id }, data: { respondedBy: s.otherAdminId, parentResponse: 'x', respondedAt: new Date() } }),
     ).resolves.toBeDefined();
+  });
+});
+
+/** The learner's student group (family_x's is opened in beforeEach with admin_a; family_y's with admin_b). */
+async function groupOf(learnerId: string): Promise<string> {
+  return (await g.prisma.conversation.findFirstOrThrow({ where: { type: 'student_group', learnerId }, select: { id: true } })).id;
+}
+
+describe('12. a parent\'s complaint is about a family (re-review, P2-A)', () => {
+  it('one with no family (no source conversation) is hidden and not found to Operations; the Teachers department works it', async () => {
+    const c = await complaint('parent');
+    expect((await files.complaints(ops(), {})).complaints.map((x) => x.id)).toEqual([]);
+    expect(await code(files.addEntry(ops(), s.teacherId, { kind: 'complaint_followup', body: 'Called.', refersTo: c.id }))).toBe(CommErrorCode.TEACHER_FILE_NOT_FOUND);
+    expect(await code(files.addEntry(ops(), s.teacherId, { kind: 'complaint_resolution', body: 'Done.', refersTo: c.id }))).toBe(CommErrorCode.TEACHER_FILE_NOT_FOUND);
+    expect(await code(discipline.upholdComplaint(ops(), c.id, {}))).toBe(CommErrorCode.DISCIPLINE_NOT_FOUND);
+    expect((await files.complaints(tsupId, {})).complaints.map((x) => x.id)).toEqual([c.id]);
+    await expect(discipline.upholdComplaint(tsupId, c.id, {})).resolves.toBeDefined();
+    // The upheld violation carries the complaint's text: hidden from her as well.
+    expect((await discipline.list(ops(), { state: 'all' })).violations).toEqual([]);
+  });
+
+  it('the family comes from the source conversation: her family\'s shows, another family\'s does not', async () => {
+    const y = await otherFamily();
+    await g.conversations.ensureStudentGroup(y.learnerId, s.otherAdminId);
+    // Each filed by the family's own Operations supervisor, from that family's group.
+    const file = async (by: string, learnerId: string) =>
+      files.addEntry(by, s.teacherId, { kind: 'complaint', body: 'Started late.', source: 'parent', sourceConversationId: await groupOf(learnerId) });
+    const ours = await file(ops(), s.learnerId);
+    const theirs = await file(s.otherAdminId, y.learnerId);
+    expect((await files.complaints(s.otherAdminId, {})).complaints.map((x) => x.id)).toEqual([theirs.id]);
+    expect((await files.complaints(ops(), {})).complaints.map((x) => x.id)).toEqual([ours.id]);
+    await expect(files.addEntry(ops(), s.teacherId, { kind: 'complaint_followup', body: 'Called.', refersTo: ours.id })).resolves.toBeDefined();
+    expect(await code(files.addEntry(ops(), s.teacherId, { kind: 'complaint_followup', body: 'Called.', refersTo: theirs.id }))).toBe(CommErrorCode.TEACHER_FILE_NOT_FOUND);
+    expect(await code(discipline.upholdComplaint(ops(), theirs.id, {}))).toBe(CommErrorCode.DISCIPLINE_NOT_FOUND);
+  });
+
+  it('Operations files a parent\'s complaint only from a conversation with her family; management\'s needs none', async () => {
+    // The page's directory offers her own families' chats for it, and marks whose complaints need one.
+    const dir = await files.directory(ops());
+    expect(dir.familyChats).toEqual([{ conversationId: await groupOf(s.learnerId), learnerName: 'learner_l' }]);
+    expect(dir.teachers.every((t) => t.operationsOnly)).toBe(true);
+    const theirs = await files.directory(tsupId);
+    expect([theirs.familyChats, theirs.teachers.some((t) => t.operationsOnly)]).toEqual([[], false]);
+
+    expect(await code(files.addEntry(ops(), s.teacherId, { kind: 'complaint', body: 'x', source: 'parent' }))).toBe(CommErrorCode.VALIDATION);
+    await expect(files.addEntry(ops(), s.teacherId, { kind: 'complaint', body: 'x', source: 'management' })).resolves.toBeDefined();
+    const y = await otherFamily();
+    await g.conversations.ensureStudentGroup(y.learnerId, s.otherAdminId);
+    expect(await code(files.addEntry(ops(), s.teacherId, { kind: 'complaint', body: 'x', source: 'parent', sourceConversationId: await groupOf(y.learnerId) }))).toBe(CommErrorCode.VALIDATION);
+    await expect(
+      files.addEntry(ops(), s.teacherId, { kind: 'complaint', body: 'x', source: 'parent', sourceConversationId: await groupOf(s.learnerId) }),
+    ).resolves.toBeDefined();
+  });
+});
+
+describe('13. leave responses, as Operations reads them (re-review)', () => {
+  it('approve, decline and cancel answer without a balance', async () => {
+    const year = Number(today.slice(0, 4));
+    await leave.setAllowance(tmgrId, s.teacherId, { year, days: 21 });
+    const a = await leave.request(s.teacherId, { firstDay: plusDays(today, 40), lastDay: plusDays(today, 41), reason: 'family' });
+    const b = await leave.request(s.teacherId, { firstDay: plusDays(today, 50), lastDay: plusDays(today, 51), reason: 'family' });
+    const answers = [
+      (await leave.approve(ops(), a.request.id, {})).request,
+      (await leave.decline(ops(), b.request.id, { note: 'busy week' })).request,
+      (await leave.cancel(ops(), a.request.id, { note: 'plans changed' })).request,
+    ];
+    for (const r of answers) expect(JSON.parse(JSON.stringify(r))).not.toHaveProperty('balance');
+  });
+
+  it('a colliding lesson of another family comes without the child\'s name; hers is named', async () => {
+    const y = await otherFamily();
+    await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(30 * DAY), endsAt: at(30 * DAY + HOUR / 2) });
+    await lessons.schedule(tsupId, { learnerId: y.learnerId, startsAt: at(30 * DAY + 2 * HOUR), endsAt: at(30 * DAY + 2.5 * HOUR) });
+    await leave.request(s.teacherId, { firstDay: plusDays(today, 29), lastDay: plusDays(today, 32), reason: 'family' });
+    const [mine] = (await leave.list(ops(), { state: 'requested' })).requests;
+    expect(mine.collidingLessons?.map((l) => l.learnerName)).toEqual(['learner_l', null]);
+    const [theirs] = (await leave.list(tsupId, { state: 'requested' })).requests;
+    expect(theirs.collidingLessons?.map((l) => l.learnerName)).toEqual(['learner_l', 'learner_n']);
   });
 });

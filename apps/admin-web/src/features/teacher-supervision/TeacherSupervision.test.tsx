@@ -590,5 +590,55 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
     await waitFor(() => expect(calls('POST', /\/lateness$/)).toHaveLength(1))
     expect(calls('GET', /\/lessons\?/)).toHaveLength(0)
   })
-})
 
+  it('a parent\'s complaint about a teacher of her families names the family chat it came from', async () => {
+    asOperations()
+    on('GET', /\/teacher-supervision\/directory$/, () =>
+      json({
+        basis: 'operations',
+        access: { canWriteSupervision: true, canViewFinance: false },
+        teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, away: null, operationsOnly: true }],
+        supervisors: [{ id: 'o-1', name: 'Ops One' }],
+        familyChats: [{ conversationId: 'conv-x', learnerName: 'Child Alpha' }],
+      }),
+    )
+    on('GET', /\/teacher-files\/complaints/, () => json({ access, complaints: [] }))
+    on('GET', /\/discipline\/violations/, () => json({ violations: [] }))
+    on('POST', /\/teacher-files\/t-1\/entries$/, () => json({ id: 'c-9', kind: 'complaint', createdAt: '2026-10-27T09:00:00Z' }, 201))
+    renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision?section=complaints' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a complaint' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Source' }), 'parent')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Details' }), 'Started late.')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    // Required: nothing is sent without the family chat.
+    expect(within(dialog).getByText('Required.')).toBeInTheDocument()
+    expect(calls('POST', /\/entries$/)).toHaveLength(0)
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Family chat it came from' }), 'conv-x')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/entries$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/entries$/)[0])).toEqual({ kind: 'complaint', body: 'Started late.', source: 'parent', sourceConversationId: 'conv-x' })
+  })
+
+  it('management\'s complaint needs no family chat', async () => {
+    asOperations()
+    on('GET', /\/teacher-supervision\/directory$/, () =>
+      json({
+        basis: 'operations',
+        access: { canWriteSupervision: true, canViewFinance: false },
+        teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, away: null, operationsOnly: true }],
+        supervisors: [],
+        familyChats: [{ conversationId: 'conv-x', learnerName: 'Child Alpha' }],
+      }),
+    )
+    on('GET', /\/teacher-files\/complaints/, () => json({ access, complaints: [] }))
+    on('GET', /\/discipline\/violations/, () => json({ violations: [] }))
+    renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision?section=complaints' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a complaint' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Source' }), 'management')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')
+    expect(within(dialog).queryByRole('combobox', { name: 'Family chat it came from' })).not.toBeInTheDocument()
+  })
+})

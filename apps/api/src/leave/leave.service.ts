@@ -278,6 +278,11 @@ export class LeaveService {
       throw new CommError(CommErrorCode.LEAVE_DENIED, "only the Teachers department's manager sets a leave allowance");
     }
     await this.requireTeacherOf(actor, teacherId);
+    // The allowance is the Teachers department's, per teacher: never for one the
+    // caller reaches only through Operations (re-review of #175, NIT-B).
+    if (!(await this.supervision.teacherScope.covers(actor, teacherId))) {
+      throw new CommError(CommErrorCode.LEAVE_NOT_FOUND, 'teacher not found');
+    }
     const year = body.year;
     if (typeof year !== 'number' || !Number.isInteger(year) || year < 2000 || year > 2100) throw invalid('year: a calendar year');
     const days = body.days;

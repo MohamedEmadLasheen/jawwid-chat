@@ -2421,7 +2421,22 @@ Teachers department's rights on it**, for **the teachers of their families**.
   show only for the caller's own learners; writing on another family's answers
   as not found. Teacher-level rows and decisions (leave, suspension) do not
   narrow. The leave allowance, days used and balance stay the Teachers
-  department's and are left out by the server.
+  department's and are left out by the server. A parent's complaint is about
+  its family (its PD-32 feedback's, or the conversation it was taken from); one
+  whose family is unknown is hidden from Operations, and Operations files one
+  only from a conversation with its own family. Management's complaints are the
+  teacher's.
+- **Rights are per teacher.** Someone who holds both bases has the Teachers
+  department's rights only for the teachers in its own (PD-35) scope; for the
+  rest, Operations' rights. The Teacher File never opens through Operations.
+- **Known limits (recorded, not fixed).** (1) The database confines Operations
+  to its families only for lateness and replies to a parent
+  (`chat.may_supervise_learner_row`); a complaint's follow-up, resolution,
+  upholding, take and handler are checked per teacher there, and per family by
+  the server only. (2) A leftover lesson -- say an open one the old teacher kept
+  after a transfer, dated after the transfer -- keeps that teacher in scope
+  until it falls 30 days into the past or is closed; it is a real lesson of the
+  family, so this is accepted.
 - **What they may do there.** What the Teachers department may do on the page:
   decide leave; record lateness and absences; decide on the ladder (warnings,
   deductions, suspensions); record complaints, follow-ups and resolutions, and

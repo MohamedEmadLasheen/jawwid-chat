@@ -32,6 +32,21 @@ export async function familiesOfComplaints(
   );
 }
 
+/**
+ * What a complaint is about, for pageRowVisible (re-review of #175, P2-A).
+ * Management's is teacher-level (null). A parent's (`parent`, `parent_app`, or
+ * an older one with no source) is about its family; one whose family cannot
+ * be resolved is about an unknown family -- `{ familyId: null }`, which no
+ * Operations-only caller sees.
+ */
+export function complaintAbout(
+  entry: { id: string; complaintSource: string | null },
+  familyOf: ReadonlyMap<string, string | null>,
+): { familyId: string | null } | null {
+  if (entry.complaintSource === 'management') return null;
+  return { familyId: familyOf.get(entry.id) ?? null };
+}
+
 /** The family a conversation is with; null for any other conversation. */
 export async function familyOfConversation(prisma: PrismaService, conversationId: string): Promise<string | null> {
   const row = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { familyId: true } });

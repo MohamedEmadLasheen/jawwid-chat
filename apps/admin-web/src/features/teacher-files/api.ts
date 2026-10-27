@@ -139,7 +139,7 @@ export interface PersonalPatch {
 }
 
 export type NewEntry =
-  | { kind: 'complaint'; body: string; source: 'management' | 'parent'; handledBy?: string }
+  | { kind: 'complaint'; body: string; source: 'management' | 'parent'; handledBy?: string; sourceConversationId?: string }
   | { kind: 'complaint_resolution'; body: string; refersTo: string }
   | { kind: 'complaint_followup'; body: string; refersTo: string }
   | { kind: 'monthly_comment'; body: string; month: string }
@@ -315,9 +315,12 @@ export const payrollKeys = {
 export interface SupervisionDirectory {
   basis: 'super_admin' | 'teachers' | 'operations'
   access: { canWriteSupervision: boolean; canViewFinance: boolean }
-  teachers: Array<{ id: string; name: string; isActive: boolean; away: Away | null }>
+  /** `operationsOnly`: reached only through Operations -- a parent's complaint about them names its family chat. */
+  teachers: Array<{ id: string; name: string; isActive: boolean; away: Away | null; operationsOnly?: boolean }>
   /** Who may handle a complaint. */
   supervisors: Person[]
+  /** The caller's own families' student groups (Operations), to name where a parent's complaint came from. */
+  familyChats?: Array<{ conversationId: string; learnerName: string }>
 }
 
 export interface HeldLesson {

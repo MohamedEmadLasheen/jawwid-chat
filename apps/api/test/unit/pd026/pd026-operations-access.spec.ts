@@ -8,6 +8,7 @@ import type { Actor } from '@platform/types';
 import { ALL_TEACHERS, decidePageBases, decidePageBasis, pageRowVisible, type PageScope } from '@platform/teacher-scope';
 import { decidePd012PageAccess } from '@platform/pd012-policy';
 import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '@platform/teacher-file-policy';
+import { complaintAbout } from '../../../src/teacher-file/complaint-family';
 
 const ORG = '11111111-1111-1111-1111-111111111111';
 function staff(role: string, over: Partial<Actor> = {}): Actor {
@@ -84,6 +85,32 @@ describe('rows about one child (review of #175, P2-4)', () => {
   it('department-wide (strict scope off) shows every row of every teacher', () => {
     const wide: PageScope = { teachers: ALL_TEACHERS, whole: ALL_TEACHERS, learnerIds: new Set(), familyIds: new Set() };
     expect(pageRowVisible(wide, 'anyone', { learnerId: 'theirs' })).toBe(true);
+  });
+});
+
+describe('what a complaint is about (re-review of #175, P2-A)', () => {
+  const families = new Map<string, string | null>([['c-mine', 'fam-mine'], ['c-none', null]]);
+  const page: PageScope = {
+    teachers: { all: false, teacherIds: new Set(['t-ops']) },
+    whole: { all: false, teacherIds: new Set() },
+    learnerIds: new Set(),
+    familyIds: new Set(['fam-mine']),
+  };
+  const sees = (id: string, complaintSource: string | null) => pageRowVisible(page, 't-ops', complaintAbout({ id, complaintSource }, families));
+
+  it('management\'s is the teacher\'s: shown', () => {
+    expect(complaintAbout({ id: 'c-none', complaintSource: 'management' }, families)).toBeNull();
+    expect(sees('c-none', 'management')).toBe(true);
+  });
+
+  it('a parent\'s is its family\'s: shown for hers only', () => {
+    expect(sees('c-mine', 'parent')).toBe(true);
+    expect(sees('c-mine', 'parent_app')).toBe(true);
+  });
+
+  it('a parent\'s with no family resolved, or an older one with no source, is hidden', () => {
+    for (const source of ['parent', 'parent_app', null]) expect(sees('c-none', source)).toBe(false);
+    expect(sees('c-unknown', 'parent')).toBe(false);
   });
 });
 

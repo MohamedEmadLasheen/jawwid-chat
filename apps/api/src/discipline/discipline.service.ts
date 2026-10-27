@@ -7,7 +7,7 @@ import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import { pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
-import { familiesOfComplaints } from '../teacher-file/complaint-family';
+import { complaintAbout, familiesOfComplaints } from '../teacher-file/complaint-family';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
@@ -259,8 +259,8 @@ export class DisciplineService {
     });
     if (!complaint) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
     await this.supervision.requireTeacherInPageScope(actor, complaint.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
-    const family = (await familiesOfComplaints(this.prisma, [complaint])).get(complaint.id) ?? null;
-    if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), complaint.teacherId, family ? { familyId: family } : null)) {
+    const about = complaintAbout(complaint, await familiesOfComplaints(this.prisma, [complaint]));
+    if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), complaint.teacherId, about)) {
       throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
     }
     const note = textField(body, 'note', false);
@@ -597,14 +597,15 @@ export class DisciplineService {
     const complaints = complaintIds.length
       ? await this.prisma.teacherSupervisionEntry.findMany({
           where: { id: { in: complaintIds } },
-          select: { id: true, parentFeedbackId: true, conversationId: true },
+          select: { id: true, parentFeedbackId: true, conversationId: true, complaintSource: true },
         })
       : [];
     const familyOf = await familiesOfComplaints(this.prisma, complaints);
+    const complaintOf = new Map(complaints.map((c) => [c.id, c]));
     return rows.filter((r) => {
       if (r.lessonId) return pageRowVisible(page, r.teacherId, { learnerId: learnerOf.get(r.lessonId) ?? null });
-      const family = r.complaintEntryId ? familyOf.get(r.complaintEntryId) ?? null : null;
-      return pageRowVisible(page, r.teacherId, family ? { familyId: family } : null);
+      const c = r.complaintEntryId ? complaintOf.get(r.complaintEntryId) : undefined;
+      return pageRowVisible(page, r.teacherId, c ? complaintAbout(c, familyOf) : null);
     });
   }
 

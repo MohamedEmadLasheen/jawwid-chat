@@ -197,6 +197,29 @@ child to be the caller's (`chat.operations_learner_ids`): lateness on a lesson
 `/teachers/supervision`, the tab strip shows Supervision only, and teacher names
 are not links to Teacher Files (`TeacherName`, `useOpensTeacherFiles`).
 
+**Rights per teacher.** Someone holding both bases has the Teachers
+department's rights (monthly comments, days off, the allowance, the Teacher
+File) only for teachers in its PD-35 scope (`whole`); for teachers it reaches
+only through Operations, Operations' rights. `TeacherFileService.requireTeacher`
+resolves the Teachers scope for the Teacher File's routes and the page scope
+(`'page'`) for the page's.
+
+**A parent's complaint** (`complaintAbout`): management's is teacher-level; a
+parent's is about the family of its PD-32 feedback or of its source
+conversation. When that family is unknown, an Operations-only caller does not
+see it and cannot follow it up, resolve or uphold it (404). Operations files a
+parent's complaint only with `sourceConversationId`, a conversation with one of
+its own families. Admin Web's complaint dialog asks for it ("Family chat it came
+from") when the directory marks the teacher `operationsOnly`; the directory's
+`familyChats` lists the caller's own families' student groups.
+
+**Known limits (recorded).** The database confines Operations to its own
+families for lateness and replies to a parent only; a complaint's follow-up,
+resolution, upholding, take and handler are per teacher in the database and
+per family in the server. A leftover lesson of a family (an open lesson the
+previous teacher kept after a transfer) keeps that teacher in scope until it
+is 30 days past or closed.
+
 **Known effects.** A suspension decided by an Operations supervisor cancels the
 lessons in its window through `LessonService.cancel` as that supervisor. A
 lesson of a family they do not supervise is not cancelled; it is reported back
