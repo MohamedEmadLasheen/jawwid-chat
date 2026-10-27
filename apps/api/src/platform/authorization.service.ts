@@ -806,6 +806,14 @@ export class AuthorizationService {
         'a direct conversation is defined by its two members; its membership never changes',
       );
     }
+    // PD-35 B6: a department room's members are its department -- the room sync
+    // (DepartmentRoomService) is their only writer, so no one ejects a peer here.
+    if (conv.type === ConversationType.DEPARTMENT_ROOM) {
+      return deny(
+        CommErrorCode.CANNOT_MANAGE_MEMBERSHIP,
+        "a department room's members are its department; change the department instead",
+      );
+    }
     switch (conv.actorBasis) {
       case StaffAccessBasis.RESPONSIBLE:
       case StaffAccessBasis.BACKUP:

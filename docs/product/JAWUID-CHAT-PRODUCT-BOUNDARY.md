@@ -3323,11 +3323,18 @@ Canonical: `supabase/migrations/20261026160007_chat_pd035_supervision_cases.sql`
 1. **One room per department.** The conversation type is `department_room` with `chat.conversation.department_id`, for Operations, Teachers and Sales alike. It is staff-only: the department's manager and its members, as admin. The database refuses a contact, a teacher, or staff of another department at the row.
 2. **Access is live.** The PD-8 decision has its own branch: `'member'` while `chat.department_room_party` holds (active staff, the department's manager or a member of it). Leaving the department ends access at once, whatever the member rows say. Below the super admin, nobody else stands to a room.
 3. **Kept in line.** `DepartmentRoomService` opens the room and syncs its members in the same transaction as every structure change: a department created or updated (its manager), a member set or moved, a member removed. People removed leave the live room after commit (RT-009). The worker heals the rooms every 5 minutes, for anything changed elsewhere, such as a staff member deactivated.
-4. **Messages** are a group's, and moderation is PD-14 (published on send). **No calls in a room yet.** A room is not in `GROUP_CALL_CONVERSATION_TYPES`, which PD-19 fixes deliberately, so a call there would be a two-seat direct call and is refused. Calls in rooms are a later PD-19 decision.
+4. **Messages** are a group's, and moderation is PD-14 (published on send). **No calls in a room yet.** `CallService` refuses every call in a room with `CALL_NOT_IN_ROOM`, whatever the room's size, and `GROUP_CALL_CONVERSATION_TYPES` stays PD-19's fixed set. Calls in rooms are a later PD-19 decision.
 5. **B5's card.** A case opened to a department posts `case_escalated` in that department's room, with who opened it, who owns it and the case id. It never carries the case's title, body or subject, because most of the room may not see the case: the card links to Escalations (`/cases?case=<id>`), which decides who sees it.
 6. **Clients:**
    - **Admin Web:** the room in Chats ("Department room"), and the card with its link.
    - **Flutter:** Sales sees its room as a group, titled by the server.
+7. **Security review of #159** (department head, 2026-10-27):
+   - **The sync is the only writer.** The generic membership route refuses a room (`CANNOT_MANAGE_MEMBERSHIP`), so no member ejects a peer or the manager.
+   - **Pushes follow the department, live.** `messageAudience` keeps only `chat.department_room_party` in a room. A member row the sweep has not yet ended reaches no one.
+   - **Every sync evicts whom it removes** (RT-009), including the one done when a case is opened.
+   - **No deadlock.** Locks are taken in sorted order when a move syncs two rooms.
+   - A renamed room emits `conversation.updated`.
+   - **Accepted (department head's decision):** the case card shows the whole department that a case exists, with who opened it and who owns it. It shows no subject, and opening the case re-checks B5's rules.
 
 Canonical: `supabase/migrations/20261027100000_chat_pd035_department_rooms.sql`, `apps/api/src/org/department-room.service.ts`. Proven by `apps/api/test/integration/department-rooms-pd035.spec.ts`, `apps/admin-web/src/features/cases/Cases.test.tsx` and `test/features/sales/sales_chats_test.dart`.
 

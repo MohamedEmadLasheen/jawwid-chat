@@ -367,9 +367,11 @@ export class OrgStructureService {
         after: { departmentId, position },
         reason,
       });
-      changes.push(await this.rooms?.syncInTx(tx, departmentId, actor.actorId));
-      // A move takes them out of the room they came from.
-      if (before && before.departmentId !== departmentId) changes.push(await this.rooms?.syncInTx(tx, before.departmentId, actor.actorId));
+      // The new room and, on a move, the old one -- in sorted order, so two
+      // moves crossing between the same departments never deadlock on the
+      // rooms' locks.
+      const touched = [...new Set([departmentId, ...(before ? [before.departmentId] : [])])].sort();
+      for (const id of touched) changes.push(await this.rooms?.syncInTx(tx, id, actor.actorId));
       return row;
     });
     await this.leaveRooms(changes);

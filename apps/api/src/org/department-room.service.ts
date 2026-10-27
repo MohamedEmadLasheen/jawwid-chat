@@ -6,6 +6,7 @@ import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/rea
 import { ConversationService } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
+import { conversationState, needsReply } from '../communication/contracts/dto';
 import { ActorKind, ConversationType, MemberRole } from '../communication/contracts/vocab';
 
 type Tx = Prisma.TransactionClient;
@@ -52,9 +53,12 @@ export class DepartmentRoomService {
     return room?.change ?? null;
   }
 
-  /** The department's room, synced -- for a card (B5's case_escalated). */
-  async roomInTx(tx: Tx, departmentId: string, byStaffId: string | null): Promise<Conversation | null> {
-    return (await this.ensureInTx(tx, departmentId, byStaffId))?.conversation ?? null;
+  /**
+   * The department's room, synced -- for a card (B5's case_escalated). The
+   * caller evicts `change.removed` after commit (RT-009), as every sync's caller does.
+   */
+  async roomInTx(tx: Tx, departmentId: string, byStaffId: string | null): Promise<{ conversation: Conversation; change: RoomChange } | null> {
+    return this.ensureInTx(tx, departmentId, byStaffId);
   }
 
   /** Every department's room, one at a time; a failure is logged and the rest go on. */
@@ -116,8 +120,16 @@ export class DepartmentRoomService {
         },
       });
     } else if (conv.title !== dept.displayName) {
-      // The department's name is the room's name; follow a rename.
+      // The department's name is the room's name; follow a rename, and say so.
       conv = await tx.conversation.update({ where: { id: conv.id }, data: { title: dept.displayName } });
+      await this.outbox.enqueue(tx, CommEvent.CONVERSATION_UPDATED, {
+        conversationId: conv.id,
+        familyId: null,
+        state: conversationState(conv),
+        needsReply: needsReply(conv),
+        lastActivityAt: conv.lastActivityAt.toISOString(),
+        handlerId: null,
+      });
     }
 
     const live = await tx.conversationMember.findMany({ where: { conversationId: conv.id, leftAt: null } });

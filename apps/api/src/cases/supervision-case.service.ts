@@ -3,7 +3,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AuthorizationService } from '../platform/authorization.service';
 import { CommError, CommErrorCode } from '../platform/errors';
-import { AUDIT_SERVICE } from '../platform/tokens';
+import { AUDIT_SERVICE, REALTIME_REVOCATION } from '../platform/tokens';
+import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/realtime-revocation';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -12,7 +13,7 @@ import { CommEvent } from '../communication/contracts/events';
 import { ActorKind, CardKind, StaffRole } from '../communication/contracts/vocab';
 import { LessonService, type Tx } from '../lessons/lesson.service';
 import { ParentFeedbackService } from '../teacher-file/parent-feedback.service';
-import { DepartmentRoomService } from '../org/department-room.service';
+import { DepartmentRoomService, type RoomChange } from '../org/department-room.service';
 import { CardPoster } from '../supervision/card-poster';
 
 export const CASE_SUBJECTS = ['teacher', 'lesson', 'learner', 'complaint', 'feedback'] as const;
@@ -92,6 +93,9 @@ export class SupervisionCaseService {
     // for positional harness constructions: without them no card is posted.
     @Optional() private readonly rooms?: DepartmentRoomService,
     @Optional() private readonly cards?: CardPoster,
+    @Optional()
+    @Inject(REALTIME_REVOCATION)
+    private readonly revocation: RealtimeRevocation = NO_REALTIME_REVOCATION,
   ) {}
 
   /** { subject: { kind, id }, target: 'teachers' | 'operations', title, body?, dueOn?, ownerId? } */
@@ -123,6 +127,7 @@ export class SupervisionCaseService {
       ownerId = body.ownerId;
     }
 
+    let roomChange: RoomChange | null = null;
     const id = await this.asActor(actor.actorId, null, async (tx) => {
       const [row] = await tx.$queryRaw<Array<{ id: string; organization_id: string }>>`
         INSERT INTO chat.supervision_case (organization_id, subject_kind, subject_id, target_department_id, title, body, owner_id, due_on, opened_by)
@@ -136,7 +141,7 @@ export class SupervisionCaseService {
         ownerId,
         openedBy: actor.actorId,
       });
-      await this.announce(tx, actor, dept.id, row.id, ownerId);
+      roomChange = await this.announce(tx, actor, dept.id, row.id, ownerId);
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'supervision_case.opened',
@@ -147,6 +152,12 @@ export class SupervisionCaseService {
       });
       return row.id;
     });
+    // RT-009: whom the room's sync took out leave its live room, after commit.
+    const removed = (roomChange as RoomChange | null)?.removed ?? [];
+    if (roomChange && removed.length > 0) {
+      this.revocation.leaveConversation(removed, (roomChange as RoomChange).conversationId);
+      await this.revocation.confirmRevoked();
+    }
     return this.summary(await this.load(org, id));
   }
 
@@ -347,10 +358,11 @@ export class SupervisionCaseService {
    * and who owns it, and its id to open it in Escalations. Never its title,
    * body or subject: most of the room may not see the case itself.
    */
-  private async announce(tx: Tx, actor: Actor, departmentId: string, caseId: string, ownerId: string | null) {
-    if (!this.rooms || !this.cards) return;
-    const room = await this.rooms.roomInTx(tx, departmentId, actor.actorId);
-    if (!room) return;
+  private async announce(tx: Tx, actor: Actor, departmentId: string, caseId: string, ownerId: string | null): Promise<RoomChange | null> {
+    if (!this.rooms || !this.cards) return null;
+    const synced = await this.rooms.roomInTx(tx, departmentId, actor.actorId);
+    if (!synced) return null;
+    const room = synced.conversation;
     const names = new Map(
       (await tx.staff.findMany({ where: { id: { in: [actor.actorId, ...(ownerId ? [ownerId] : [])] } }, select: { id: true, name: true } }))
         .map((p) => [p.id, p.name]),
@@ -362,6 +374,7 @@ export class SupervisionCaseService {
       ? `تصعيد جديد من ${openedByName}، المسؤول: ${ownerName} · New escalation from ${openedByName}, owner: ${ownerName}`
       : `تصعيد جديد من ${openedByName} · New escalation from ${openedByName}`;
     await this.cards.post(tx, room, actor, { kind: CardKind.CASE_ESCALATED, payload, body });
+    return synced.change;
   }
 
   private async requireStaff(actorId: string): Promise<Actor> {
