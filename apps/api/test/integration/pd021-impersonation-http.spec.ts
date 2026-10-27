@@ -2,7 +2,8 @@
  * PD-21 impersonation ("support sessions") over real HTTP: real logins, the
  * global bearer guard, the real routes, the real database rules.
  *
- *   - any staff role opens a parent's or a teacher's account, never staff;
+ *   - the super admin and Operations open a parent's account, the super admin
+ *     and the Teachers department a teacher's (PD-40); never a staff account;
  *   - on the support token the administrator IS the person for reads, may
  *     send a message -- labelled "sent by support" to every reader -- and may
  *     change the person's own profile; everything else that would act in the
@@ -146,6 +147,27 @@ describe('PD-21: who may open a support session', () => {
       const r = await start(token, m.families[1]!.parent.subject);
       expect({ status: r.status, code: r.code }).toEqual({ status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
     }
+  });
+
+  it('PD-40: only the department that administers the account opens it', async () => {
+    const parent = m.families[1]!.parent.subject;
+    const teacherSubject = m.teachers[1]!.subject;
+    for (const [who, subject] of [
+      ['Sales manager on a parent', m.salesManager.subject],
+      ['Teachers manager on a parent', m.teachersManager.subject],
+      ['Teachers supervisor on a parent', m.teacherSupervisors[0]!.subject],
+    ] as const) {
+      const r = await start((await login(subject)).accessToken, parent);
+      expect({ who, status: r.status, code: r.code }).toEqual({ who, status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
+    }
+    for (const [who, subject] of [
+      ['Operations manager on a teacher', m.operationsManager.subject],
+      ['Operations supervisor on a teacher', m.supervisors[0]!.subject],
+    ] as const) {
+      const r = await start((await login(subject)).accessToken, teacherSubject);
+      expect({ who, status: r.status, code: r.code }).toEqual({ who, status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
+    }
+    expect(await g.prisma.impersonationSession.count({ where: { organizationId: orgId } })).toBe(0);
   });
 
   it('a staff account is never opened -- not even by the super admin; a suspended one cannot be', async () => {
@@ -332,7 +354,7 @@ describe('PD-21: a support session ends', () => {
   });
 
   it('when another one starts (one per administrator); only its administrator may re-token it; it has no refresh token', async () => {
-    const adminA = (await login(m.salesManager.subject)).accessToken;
+    const adminA = (await login(m.backups[0]!.subject)).accessToken;
     const first = await start(adminA, m.families[5]!.parent.subject);
     const second = await start(adminA, m.families[7]!.parent.subject);
     expect((await call(first.json.accessToken as string, 'GET', '/me')).status).toBe(401);

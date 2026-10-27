@@ -2036,6 +2036,15 @@ pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the
 
 ### PD-21 · Account administration: password reset, inactive accounts, impersonation
 
+> **Narrowed by PD-40 (2026-10-27).** Decision 1's "every staff role" is replaced by:
+> - parent accounts: the super admin and the Operations department; Sales may reset and
+>   sign out only;
+> - teacher accounts: the super admin and the Teachers department;
+> - staff accounts: the super admin, as before;
+> - nobody else.
+>
+> The record is `../admin/pd021-account-administration.md`. The rest of PD-21 is unchanged.
+
 **Closed by the product owner on 2026-10-22** (owner request: admins, the super
 admin included, may impersonate a student's account, reset another account's
 password, and set any account inactive; permissions enforced on the backend,

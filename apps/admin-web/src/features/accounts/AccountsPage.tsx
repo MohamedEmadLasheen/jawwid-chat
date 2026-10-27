@@ -42,11 +42,12 @@ const STATUS_TONE: Record<AccountStatus, Tone> = {
 }
 
 /**
- * PD-21: account administration. Every staff member finds a parent (by the
- * parent's, the family's or a child's name) or a teacher, and resets the
- * password or sets the account inactive; the super admin also other staff.
- * The server decides the list and every action; the buttons follow its
- * `allowed` answer, which is advisory.
+ * PD-21: account administration. Staff find a parent (by the parent's, the
+ * family's or a child's name) or a teacher, and reset the password or set the
+ * account inactive; the super admin also other staff. PD-40: which kinds is
+ * the server's answer (`administers`) -- parents for Operations and Sales,
+ * teachers for the Teachers department. The server decides the list and every
+ * action; the chips and buttons follow its answer, which is advisory.
  */
 export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
@@ -59,7 +60,10 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const list = useAccounts(deferred, kind)
   const accounts = list.data?.accounts ?? []
 
-  const kinds: Kind[] = staff && isSuperAdmin(staff.role) ? ['all', 'family', 'teacher', 'staff'] : ['all', 'family', 'teacher']
+  const administers = list.data?.administers
+  const fallback: Kind[] = staff && isSuperAdmin(staff.role) ? ['family', 'teacher', 'staff'] : ['family', 'teacher']
+  const kinds: Kind[] = ['all', ...(administers ?? fallback)]
+  const noneAdministered = administers !== undefined && administers.length === 0
 
   return (
     <div className="page">
@@ -78,7 +82,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
           isLoading={list.isLoading}
           error={list.error}
           isEmpty={accounts.length === 0}
-          emptyTitle={tx(A.empty)}
+          emptyTitle={tx(noneAdministered ? A.noneAdministered : A.empty)}
           onRetry={() => void list.refetch()}
         >
           <div className="table-wrap">
