@@ -36,6 +36,8 @@ export const TEACHERS_TABS: TeachersTab[] = [
   { key: 'certificates', segment: 'certificates', label: { en: 'Certificates', ar: 'الشهادات' } },
   // PD-26: leave, apologies and absences, lateness, rewards and complaints (was Leave requests + Discipline).
   { key: 'supervision', segment: 'supervision', label: { en: 'Supervision', ar: 'الإشراف' } },
+  // PD-35 B5: escalation cases (the same page as /cases).
+  { key: 'cases', segment: 'cases', label: { en: 'Escalations', ar: 'التصعيدات' } },
 ]
 
 export function teachersTabPath(tab: TeachersTab, base: string = TEACHERS_AREA_BASE): string {

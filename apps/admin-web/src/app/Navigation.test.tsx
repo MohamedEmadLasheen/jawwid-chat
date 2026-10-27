@@ -65,10 +65,10 @@ describe('The navigation registry', () => {
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
     // Accounts (PD-21: where every staff role administers accounts),
-    // Materials (PD-29: the library the super admin manages) and the Schedule
-    // (PD-38: the academy's calendar).
-    expect(keys).toHaveLength(25)
-    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule'].sort())
+    // Materials (PD-29: the library the super admin manages), the Schedule
+    // (PD-38: the academy's calendar) and Escalations (PD-35 B5).
+    expect(keys).toHaveLength(26)
+    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'cases'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
     const more = destinations.find((d) => d.key === 'more')!
@@ -114,7 +114,7 @@ describe('The navigation registry', () => {
     // the Teachers department and Operations (PD-38), and Materials, the
     // library it manages with the Teachers manager (PD-29).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/materials'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/cases', '/materials'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -262,8 +262,11 @@ describe('The desktop rail', () => {
     // PD-21: then Accounts,
     expect(document.activeElement).toHaveAccessibleName('Accounts')
     await userEvent.keyboard('{ArrowDown}')
-    // PD-38: then the Schedule, closing the first People group,
+    // PD-38: then the Schedule,
     expect(document.activeElement).toHaveAccessibleName('Schedule')
+    await userEvent.keyboard('{ArrowDown}')
+    // PD-35 B5: then Escalations, closing the first People group,
+    expect(document.activeElement).toHaveAccessibleName('Escalations')
     await userEvent.keyboard('{ArrowDown}')
     // PD-17: then Parents (an Operations section under People), then the menu wraps.
     expect(document.activeElement).toHaveAccessibleName('Parents')
@@ -344,7 +347,8 @@ describe('The drawer, below desktop width', () => {
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
     expect(within(more).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
-    expect(within(nav).getAllByRole('link')).toHaveLength(25)
+    expect(within(nav).getAllByRole('link', { name: 'التصعيدات' })[0]).toHaveAttribute('href', '/cases')
+    expect(within(nav).getAllByRole('link')).toHaveLength(26)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

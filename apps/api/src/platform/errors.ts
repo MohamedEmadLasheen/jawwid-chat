@@ -413,6 +413,16 @@ export enum CommErrorCode {
   SEAT_NOT_FOUND = 'COMM.SEAT_NOT_FOUND',
   /** A join's note or source failed validation. 400. */
   SEAT_INVALID = 'COMM.SEAT_INVALID',
+
+  // --- PD-35 B5: escalation cases ---
+  /** No such case, or not one the caller may see (an unscoped subject reads the same). 404. */
+  CASE_NOT_FOUND = 'COMM.CASE_NOT_FOUND',
+  /** The caller may see the case but not act on it (only its owner, the target manager, the super admin). 403. */
+  CASE_DENIED = 'COMM.CASE_DENIED',
+  /** The case is closed, or the change does not follow open -> in_progress -> resolved | cancelled. 409. */
+  CASE_STATE = 'COMM.CASE_STATE',
+  /** A field failed validation. 400. */
+  CASE_INVALID = 'COMM.CASE_INVALID',
 }
 
 export class CommError extends Error {

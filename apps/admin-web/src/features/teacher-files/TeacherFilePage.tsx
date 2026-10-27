@@ -19,6 +19,7 @@ import { ShiftSection } from '@/features/schedule/ShiftSection'
 import './teacher-files.css'
 import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
+import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
 
 /**
  * PD-10: one teacher's file. Sections in the order the owner listed them;
@@ -57,7 +58,15 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                       <AwayBadge away={data.teacher.away} />
                     </>
                   }
-                  actions={data.teacher.isActive && data.access.canWriteSupervision ? <OpenSupervisionButton teacherId={data.teacher.id} /> : undefined}
+                  actions={
+                    data.access.canWriteSupervision ? (
+                      <>
+                        {data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}
+                        {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
+                        <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />
+                      </>
+                    ) : undefined
+                  }
                 />
                 <FileSections file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
                 {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}

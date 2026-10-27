@@ -18,6 +18,7 @@ import { SubscriptionEffects } from './subscriptions/subscription-effects.servic
 import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { ConversationSeatService } from './communication/seats/conversation-seat.service';
 import { TeacherSupervisorService } from './teacher-supervisors/teacher-supervisor.service';
+import { SupervisionCaseService } from './cases/supervision-case.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -127,6 +128,9 @@ const SIGNUP_FAILURE_PURGE_MS = 6 * 60 * 60_000;
  */
 const SEAT_SWEEP_MS = 60_000;
 
+/** PD-35 B5: how often cases due tomorrow are announced (case.due_soon, once per due date). */
+const CASE_DUE_SWEEP_MS = 10 * 60_000;
+
 /**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
@@ -180,6 +184,7 @@ async function bootstrap(): Promise<void> {
   const mentions = app.get(MentionService);
   const subscriptions = app.get(SubscriptionEffects);
   const seats = app.get(ConversationSeatService);
+  const cases = app.get(SupervisionCaseService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
   // and trial groups seat each teacher's own supervisor; off, the department.
   // Re-seated at boot when the boot turned the switch over (onApplicationBootstrap),
@@ -234,6 +239,7 @@ async function bootstrap(): Promise<void> {
   let nextNotificationAdopt = 0;
   let nextNotificationPurge = 0;
   let nextSeatSweep = 0;
+  let nextCaseDueSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
   log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
@@ -405,6 +411,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextSeatSweep = Date.now() + SEAT_SWEEP_MS;
+      }
+    }
+
+    // PD-35 B5: cases due tomorrow go to the outbox for PD-34 to deliver.
+    if (Date.now() >= nextCaseDueSweep) {
+      draining = true;
+      try {
+        await cases.sweepDueSoon();
+      } catch (e) {
+        report(log, 'case due-soon sweep', 'cases.due_soon', e);
+      } finally {
+        draining = false;
+        nextCaseDueSweep = Date.now() + CASE_DUE_SWEEP_MS;
       }
     }
 

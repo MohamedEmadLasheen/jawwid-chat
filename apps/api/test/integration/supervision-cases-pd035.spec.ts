@@ -2,7 +2,8 @@
  * PD-35 B5 -- escalation cases (chat.supervision_case).
  *
  *   open      anyone with teacher or lesson scope on the subject (a teacher,
- *             a lesson, a learner, a complaint, a parent's feedback), to the
+ *             a lesson, a learner, a complaint, a parent's feedback --
+ *             'feedback': PD-32 keeps its table in src/teacher-file), to the
  *             Teachers or the Operations department; the owner defaults to
  *             that department's manager
  *   see       the opener, the owner, the target department's manager, the
@@ -22,13 +23,17 @@ import { CommError, CommErrorCode } from '@platform/errors';
 import { TeacherScopeService } from '@platform/teacher-scope';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { SupervisionCaseService } from '../../src/cases/supervision-case.service';
+import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
+import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
 const scope = new TeacherScopeService(g.prisma);
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit, undefined, undefined, scope);
-const cases = new SupervisionCaseService(g.prisma, g.conversations, lessons, g.authz, g.outbox, audit);
+const files = new TeacherFileService(g.prisma, g.authz, g.conversations, audit, scope);
+const feedback = new ParentFeedbackService(g.prisma, g.conversations, files, audit);
+const cases = new SupervisionCaseService(g.prisma, g.conversations, lessons, g.authz, g.outbox, audit, feedback);
 
 jest.setTimeout(120_000);
 
@@ -125,7 +130,7 @@ describe('opening a case', () => {
       .toBe(CommErrorCode.CASE_NOT_FOUND);
   });
 
-  it('a complaint or a parent\'s feedback is a subject too, and names its teacher', async () => {
+  it('a complaint is a subject too, and names its teacher', async () => {
     const [{ id: entry }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `insert into chat.teacher_supervision_entry (organization_id, teacher_id, kind, body, created_by, complaint_source)
        values (chat.default_organization_id(), $1::uuid, 'complaint', 'rude to the child', $2::uuid, 'management') returning id::text as id`,
@@ -136,6 +141,19 @@ describe('opening a case', () => {
     // An Operations supervisor has no standing to a teacher's complaint.
     expect(await code(cases.open(s.ownerId, { subject: { kind: 'complaint', id: entry }, target: 'operations', title: 'x' })))
       .toBe(CommErrorCode.CASE_NOT_FOUND);
+  });
+
+  it('a parent\'s feedback is a subject through the Teacher File, by its ids only', async () => {
+    const [{ id: fb }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.parent_feedback (organization_id, family_id, contact_id, learner_id, teacher_id, category, body)
+       values (chat.default_organization_id(), $1::uuid, $2::uuid, $3::uuid, $4::uuid, 'complaint', 'the lesson started late') returning id::text as id`,
+      s.familyId, s.parentId, s.learnerId, s.teacherId,
+    );
+    const c = await cases.open(tsupA, { subject: { kind: 'feedback', id: fb }, target: 'teachers', title: 'parent unhappy' });
+    expect(c).toMatchObject({ subject: { kind: 'feedback', id: fb }, teacher: { id: s.teacherId }, learner: { id: s.learnerId } });
+    expect(JSON.stringify(c)).not.toContain('started late');
+    await strict(true);
+    expect(await code(cases.open(tsupB, { subject: { kind: 'feedback', id: fb }, target: 'teachers', title: 'x' }))).toBe(CommErrorCode.CASE_NOT_FOUND);
   });
 
   it('refuses a bad request: no title, an unknown target, a past due date', async () => {
