@@ -45,6 +45,7 @@ import '../features/messages/data/chat_theme_repository.dart';
 import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
+import '../features/notifications/data/notifications_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
 import '../features/sessions/data/account_sessions_repository.dart';
@@ -229,6 +230,10 @@ List<Override> _httpOverrides() {
     accountSessionsRepositoryProvider.overrideWithValue(
       HttpAccountSessionsRepository(client: client),
     ),
+    // PD-34: the account's own Notification Center, over the same one client.
+    notificationsRepositoryProvider.overrideWithValue(
+      HttpNotificationsRepository(client: client),
+    ),
     // Stories are read-only here. The development composition root below registers no
     // implementation on purpose -- a fixture story is indistinguishable on screen from a real
     // publication, and this feature's contract is that what a reader sees was genuinely
@@ -341,6 +346,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
     // PD-23: an in-memory list of this account's devices, so the screen can be worked on.
     accountSessionsRepositoryProvider.overrideWithValue(FakeAccountSessionsRepository()),
+    // PD-34: in memory, the fixture account's OWN Notification Center.
+    notificationsRepositoryProvider.overrideWithValue(FakeNotificationsRepository()),
     // The fixture parent has billed nothing: an honest empty answer about their OWN account.
     billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
     // PD-32: in memory, the fixture parent's OWN feedback.

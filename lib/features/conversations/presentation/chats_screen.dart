@@ -18,6 +18,7 @@ import '../../../shared/utils/search_fold.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../messages/application/search_providers.dart';
 import '../../messages/presentation/starred_messages_screen.dart';
+import '../../notifications/presentation/notification_center_screen.dart';
 import '../../stories/application/stories_controller.dart';
 import '../../stories/presentation/stories_rail.dart';
 import '../application/conversations_controller.dart';
@@ -125,7 +126,8 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
         titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
             ),
-        actions: const [_OverflowMenu()],
+        // PD-34: the Notification Center, with the unread count.
+        actions: const [NotificationBell(), _OverflowMenu()],
       ),
       body: Column(
         children: [

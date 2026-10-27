@@ -3995,6 +3995,103 @@ class L10nEn extends L10n {
       'Your feedback could not be sent. Please try again.';
 
   @override
+  String get notificationsCenterTitle => 'Notifications';
+
+  @override
+  String get notificationsTabAll => 'All';
+
+  @override
+  String get notificationsTabUnread => 'Unread';
+
+  @override
+  String get notificationsTabAction => 'Requires action';
+
+  @override
+  String get notificationsTabLessons => 'Lessons';
+
+  @override
+  String get notificationsTabPayments => 'Payments';
+
+  @override
+  String get notificationsTabConversations => 'Conversations';
+
+  @override
+  String get notificationsTabAnnouncements => 'Announcements';
+
+  @override
+  String get notificationsMarkAllRead => 'Mark all as read';
+
+  @override
+  String get notificationsLoadOlder => 'Show older';
+
+  @override
+  String get notificationsActionOpenConversation => 'Open conversation';
+
+  @override
+  String get notificationsActionViewLesson => 'View lesson';
+
+  @override
+  String get notificationsActionViewPayments => 'View payments';
+
+  @override
+  String get notificationsActionOpenStories => 'View story';
+
+  @override
+  String get notificationsActionOpenCalls => 'View calls';
+
+  @override
+  String get notificationSettingsQuietHours => 'Quiet hours';
+
+  @override
+  String get notificationSettingsQuietHoursBody =>
+      'Notifications wait until quiet hours end, in your own time zone. Calls and lesson-start reminders always come through.';
+
+  @override
+  String get notificationSettingsFrom => 'From';
+
+  @override
+  String get notificationSettingsUntil => 'Until';
+
+  @override
+  String get notificationSettingsUseDefault => 'Use the academy\'s default';
+
+  @override
+  String get notificationSettingsShowNames => 'Show names on the lock screen';
+
+  @override
+  String get notificationSettingsShowNamesBody =>
+      'Show your child\'s name in lesson reminders and the amount in payment reminders while the phone is locked.';
+
+  @override
+  String get notificationSettingsShowNamesTeacherBody =>
+      'Show the student\'s name in lesson reminders while the phone is locked.';
+
+  @override
+  String get notificationSettingsCategories => 'Push notifications';
+
+  @override
+  String get notificationSettingsCategoriesBody =>
+      'Switched off, they still appear in Notifications, without an alert.';
+
+  @override
+  String get notificationSettingsLocked => 'Always on';
+
+  @override
+  String get notificationCategoryMessages => 'Messages';
+
+  @override
+  String get notificationCategoryCalls => 'Calls';
+
+  @override
+  String get notificationCategoryTasks => 'Tasks';
+
+  @override
+  String get notificationCategoryAnnouncements => 'Announcements and stories';
+
+  @override
+  String get notificationCategorySystem => 'System';
+
+  @override
   String get mentionListLabel => 'Mention someone';
 
   @override

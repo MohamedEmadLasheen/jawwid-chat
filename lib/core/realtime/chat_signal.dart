@@ -64,6 +64,10 @@ abstract final class ChatEventNames {
   static const membershipChanged = 'conversation.membership_changed';
   static const conversationAdded = 'conversation.added';
   static const accessRevoked = 'conversation.access_revoked';
+
+  /// PD-34: this account read the conversation on another device. Sent to the account's
+  /// own room only; refetching the conversation clears its unread badge here too.
+  static const conversationRead = 'conversation.read';
 }
 
 /// Decode a frame. Null when it is not a chat event, or when it names no
@@ -77,7 +81,9 @@ ChatSignal? decodeChatSignal(String event, Object? payload) {
     ChatEventNames.reactionRemoved ||
     ChatEventNames.approvalDecided =>
       ChatSignalKind.messageChanged,
-    ChatEventNames.conversationUpdated => ChatSignalKind.conversationUpdated,
+    ChatEventNames.conversationUpdated ||
+    ChatEventNames.conversationRead =>
+      ChatSignalKind.conversationUpdated,
     ChatEventNames.membershipChanged ||
     ChatEventNames.conversationAdded =>
       ChatSignalKind.membershipChanged,
