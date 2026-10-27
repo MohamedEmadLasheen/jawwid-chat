@@ -2782,7 +2782,7 @@ the Basmala         Tanzil prefixes it to ayah 1 of 112 surahs (not 1, where 1:1
                     Tajweed offsets, audio and the whiteboard's range hash are
                     defined against the verse without it
 Tajweed             a mark is served only when a Tajweed reviewer (the Teachers
-                    department: a proposal for the owner) approved it, it is not
+                    department, the owner's decision 2026-10-27) approved it, it is not
                     withdrawn, and the LATEST sign-off of its surah names it and
                     still matches the digest of the marks it named; marks come
                     from a published annotation, never hand or model

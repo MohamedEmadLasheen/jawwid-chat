@@ -97,7 +97,7 @@ Agreed 2026-10-27 between the PD-29 materials-quality session and the PD-39 sess
   - It starts `pending`.
   - It is reviewed **once** (`approved` | `rejected`), by a Tajweed reviewer, with `reviewed_by` (an FK to `chat.staff`) and `reviewed_at`.
   - It is never deleted, and its range can't reach past its verse.
-- **Who reviews** (`chat.can_review_tajweed`): an active manager or member of an organization's Teachers department. This is a proposal for the owner (PR #176).
+- **Who reviews** (`chat.can_review_tajweed`): an active manager or member of an organization's Teachers department. The super admin reviews only if they are in that department. **The owner's decision, 2026-10-27:** "Teachers department (Recommended)".
 - `chat.quran_tajweed_review` is a sign-off of one surah for one `(dataset, source, source_version)`:
   - it names the **exact** approved, unwithdrawn marks it covers (`mark_ids`);
   - it records their digest, `marks_digest`: lines `ayah|start|end|rule`, sorted (rule in C order), joined with "\n", SHA-256;
@@ -132,4 +132,3 @@ Agreed 2026-10-27 between the PD-29 materials-quality session and the PD-39 sess
 ## Known limits
 - **TRUNCATE on the Tajweed tables** (`quran_tajweed_mark`, `quran_tajweed_review`, `quran_tajweed_withdrawal`) is not refused by a trigger. They reference `chat.staff`, and the integration harness runs `truncate chat.staff … cascade` before every suite, which reaches them. Row-level DELETE and UPDATE are refused. TRUNCATE needs the owner role, which the grants keep from every request role. (Accepted by the department head, 2026-10-27.) The text and the audio tables do refuse TRUNCATE.
 - **The routing settings** (`chat.loading_quran`, `chat.ingesting_quran_audio`) are not a security boundary; see "Loading".
-- **The Tajweed reviewer role** (`chat.can_review_tajweed`: an active manager or member of the Teachers department) is a proposal awaiting the owner's decision.

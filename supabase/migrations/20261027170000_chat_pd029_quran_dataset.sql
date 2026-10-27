@@ -88,7 +88,8 @@ $$;
 
 -- Who may approve, sign off or withdraw Tajweed: an active member or the
 -- manager of an organization's Teachers department (PD-8/PD-12) -- the
--- academy's teaching staff. A proposal for the owner (PR #176).
+-- academy's teaching staff; the super admin only if in that department. The
+-- owner's decision, 2026-10-27: "Teachers department (Recommended)".
 create or replace function chat.can_review_tajweed(p_staff uuid)
 returns boolean
 language sql
