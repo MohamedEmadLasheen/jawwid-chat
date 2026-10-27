@@ -1,12 +1,10 @@
 import { CanActivate, ExecutionContext, Injectable, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PrismaService } from '../prisma.service';
 import { PUBLIC_ROUTE, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CommError, CommErrorCode } from '../errors';
 import { ActorKind } from '../../communication/contracts/vocab';
-import type { Actor } from '../types';
 import { ROUTE_ACCESS, describeRouteAccess, type RouteAccess } from './route-access';
-import { NO_PLACEMENT, legacyTierOf, permissionsOf, type DepartmentKind, type StaffPlacement } from './legacy-bundles';
+import { LEGACY_TIERS, PermissionService } from './permission.service';
 
 /**
  * PD-40 rollout switch. `shadow`: a legacy-tier staff member whose request the
@@ -15,8 +13,9 @@ import { NO_PLACEMENT, legacyTierOf, permissionsOf, type DepartmentKind, type St
  *
  * A constant, not an environment variable, on purpose: switching to
  * enforcement is one reviewed line (PD-40 PR-6), never a console edit. Two
- * refusals hold in either mode -- a route that declares nothing, and (from
- * PR-2) an account outside the legacy tiers, which has no bundle to shadow.
+ * refusals hold in either mode -- a route that declares nothing, and an
+ * account outside the legacy tiers (a `specialist`), which has no bundle to
+ * shadow: its permissions are exactly its granted roles.
  */
 export const PERMISSION_GUARD_MODE: 'shadow' | 'enforce' = 'shadow';
 
@@ -58,7 +57,7 @@ export class PermissionGuard implements CanActivate {
 
   constructor(
     private readonly reflector: Reflector,
-    private readonly prisma: PrismaService,
+    private readonly access: PermissionService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -79,18 +78,13 @@ export class PermissionGuard implements CanActivate {
     }
     if (access.kind === 'self') return true;
 
-    let allowed: boolean;
-    if (access.kind === 'not_for_staff') {
-      allowed = false;
-    } else {
-      const held = request.permissions ?? permissionsOf(actor, await this.placementOf(actor));
-      request.permissions = held;
-      allowed = access.anyOf.some((key) => held.has(key));
-    }
+    const profile = await this.access.profileOf(actor);
+    request.permissions = profile.permissions;
+    const allowed = access.kind === 'requires' && access.anyOf.some((key) => profile.permissions.has(key));
     if (allowed) return true;
 
-    const tier = legacyTierOf(actor.staffRole);
-    if (PERMISSION_GUARD_MODE === 'shadow' && tier !== null) {
+    const tier = profile.tier ?? 'none';
+    if (PERMISSION_GUARD_MODE === 'shadow' && LEGACY_TIERS.has(tier)) {
       const needs = describeRouteAccess(access);
       const key = `${route} ${tier}`;
       shadowDenials.set(key, (shadowDenials.get(key) ?? 0) + 1);
@@ -98,21 +92,5 @@ export class PermissionGuard implements CanActivate {
       return true;
     }
     throw new CommError(CommErrorCode.PERMISSION_DENIED, `this account may not use ${route}`);
-  }
-
-  /** The department the staff member runs or belongs to (PD-8). One per person, by the department tables' rules. */
-  private async placementOf(actor: Actor): Promise<StaffPlacement> {
-    const rows = await this.prisma.$queryRaw<Array<{ kind: DepartmentKind; position: 'manager' | 'member' }>>`
-      SELECT d.kind, 'manager' AS position
-        FROM chat.department d
-       WHERE d.manager_id = ${actor.actorId}::uuid AND d.organization_id = ${actor.organizationId}::uuid
-      UNION ALL
-      SELECT d.kind, 'member' AS position
-        FROM chat.department_member m
-        JOIN chat.department d ON d.id = m.department_id
-       WHERE m.staff_id = ${actor.actorId}::uuid AND d.organization_id = ${actor.organizationId}::uuid
-       LIMIT 1`;
-    const row = rows[0];
-    return row ? { kind: row.kind, position: row.position } : NO_PLACEMENT;
   }
 }

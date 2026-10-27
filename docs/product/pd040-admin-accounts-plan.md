@@ -455,6 +455,20 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 | **PR-5** Admin Web | Page registry, `visiblePages`, `<RequirePermission>`, the legacy-nav snapshot spec, `/certificates`, the Staff accounts and Roles UI, the setup-code sign-in, Flutter's "uses Admin Web" screen | legacy nav identical | — |
 | **PR-6** Enforce | System-test QA pass with zero shadow denials, then flip `PERMISSION_GUARD_MODE=enforce`, rewrite `AUTHORIZATION-MODEL.md` §3/§4, record PD-40 in boundary §4, update `docs/admin/pd021-account-administration.md` | enforcement on | — |
 
+**PR-2 as built (2026-10-27)**
+- **Built:**
+  - Migration `20261027140000_chat_pd040_access_roles`: the `specialist` tier; `chat.permission` and `chat.legacy_permission_bundle`, seeded from the TypeScript sources and pinned by `pd040-catalogue-seed.spec.ts`; `chat.access_role`, `chat.access_role_permission` and `chat.staff_access_role`.
+  - `chat.staff_access_profile` and `chat.staff_has_permission`.
+  - The only writers: `define`, `update` and `archive_access_role`, and `grant` and `revoke_access_role`. A trigger refuses any other write. They enforce H1, H3, H5, H7 and H8, and audit H10 in the same transaction.
+  - `PermissionGuard` and `GET /me` now read the SQL profile.
+- **Moved to PR-3:**
+  - The repeatable `general` department kind, `chat.department_account` for specialists, and the `access_changed` journal kind. Prisma upserts departments on the unique `(organization_id, kind)`, which a partial index would break, so these land with the department-creation code that needs them.
+  - Until PR-3 hands out `staff_accounts.manage`, only the super admin grants. The SQL already refuses everyone else.
+- **"Any manager" audit:**
+  - The PD-8 functions grant a manager a basis only over members of their own department. `chat.mention_eligible_staff` and the seat reasons require a PD-8 basis. So a manager with no supervisors reaches no family data through SQL.
+  - PR-3 must keep `general` departments free of `department_member` rows (a trigger), and must enforce, not shadow, any account placed in a `general` department.
+  - The TypeScript role-set checks (`FAMILY_FACING_STAFF_ROLES`, `canAssignFamilies`) are behind Layer 1 for such accounts. `canAssignFamilies` and `canTransferStaffFamilies` have no callers.
+
 **Order and parallel work**
 - PR-1 and PR-2 can be built side by side (different files), but PR-2 merges first, because PR-1's bundles move into SQL.
 - PR-5 can start once PR-3's contract is frozen in `docs/contracts/API-CONTRACT.md`.
