@@ -472,4 +472,44 @@ describe('10. security review', () => {
     await worker.drain(100);
     expect(await g.prisma.notification.count({ where: { recipientId: s.otherAdminId } })).toBe(0);
   });
+
+  it('P2-2 / P2-3 through the PD-34 notification pipeline: the same rules for Center entries and pushes', async () => {
+    // The harness worker carries the pipeline, as production wires it.
+    const worker = g.outboxWorker;
+    const holder = { recipientId: s.otherAdminId, groupKey: `conversation:${groupId}` };
+    const pushes = () => g.prisma.notification.count({ where: { recipientId: s.otherAdminId, conversationId: groupId } });
+    await allow(s.otherAdminId, groupId);
+    await seats.join(await actor(s.otherAdminId), groupId, { reason: SPEC_REASON });
+    await g.prisma.outboxEvent.deleteMany({});
+
+    // While the seat holds, the holder hears a message: one entry, one push.
+    await g.messages.send({ conversationId: groupId, senderId: s.parentId, body: 'hello' });
+    await worker.drain(100);
+    expect(await g.prisma.notificationItem.count({ where: holder })).toBe(1);
+    expect(await pushes()).toBe(1);
+
+    // P2-2: an internal note reaches no seat holder through the pipeline either.
+    await g.messages.send({ conversationId: groupId, senderId: s.ownerId, body: 'staff only', visibility: 'internal' });
+    await worker.drain(100);
+    expect((await g.prisma.notificationItem.findFirstOrThrow({ where: holder })).itemCount).toBe(1);
+    expect(await pushes()).toBe(1);
+
+    // A second message while the seat holds waits as one trailing push.
+    await g.prisma.notification.updateMany({ where: { recipientId: s.otherAdminId, conversationId: groupId }, data: { status: 'sent', sentAt: new Date() } });
+    await g.messages.send({ conversationId: groupId, senderId: s.parentId, body: 'second' });
+    await worker.drain(100);
+    expect((await g.prisma.notificationItem.findFirstOrThrow({ where: holder })).itemCount).toBe(2);
+    const waiting = await g.prisma.notification.findFirstOrThrow({ where: { recipientId: s.otherAdminId, conversationId: groupId, status: 'scheduled' } });
+
+    // P2-3: the seat stops holding; its member row is still live until the sweep.
+    await disallow(s.otherAdminId);
+    await g.messages.send({ conversationId: groupId, senderId: s.parentId, body: 'again' });
+    await worker.drain(100);
+    expect((await g.prisma.notificationItem.findFirstOrThrow({ where: holder })).itemCount).toBe(2);
+    expect(await pushes()).toBe(2);
+    // ...and the push that was already waiting is dropped before it can be sent
+    // (review P1: re-authorized at send, against the same audience rule).
+    await g.pipeline.guardDueMessages(new Date(), 120_000);
+    expect(await g.prisma.notification.findUniqueOrThrow({ where: { id: waiting.id } })).toMatchObject({ status: 'cancelled', failureCode: 'AUDIENCE' });
+  });
 });

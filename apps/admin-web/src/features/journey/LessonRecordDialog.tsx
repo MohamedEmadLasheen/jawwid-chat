@@ -28,7 +28,7 @@ import {
 import { ReportForm, reportBody } from './ReportForm'
 import './journey.css'
 
-type Mode = 'view' | 'correct' | 'edit' | 'delete' | 'history'
+type Mode = 'view' | 'correct' | 'edit' | 'delete' | 'history' | 'request'
 
 /**
  * PD-15: one lesson's record, from a lesson card in the chat. Staff with the
@@ -41,14 +41,17 @@ export function LessonRecordDialog({
   lessonId,
   conversationId,
   onClose,
+  initialMode = 'view',
 }: {
   lessonId: string
   conversationId: string
   onClose: () => void
+  /** PD-35: open straight on the history (a correction's before and after). */
+  initialMode?: Mode
 }) {
   const { tx } = useJourneyCopy()
   const qc = useQueryClient()
-  const [mode, setMode] = useState<Mode>('view')
+  const [mode, setMode] = useState<Mode>(initialMode)
   const q = useQuery({ queryKey: journeyKeys.lesson(lessonId), queryFn: () => journeyApi.lesson(lessonId), retry: false })
   const done = () => {
     void qc.invalidateQueries({ queryKey: journeyKeys.lesson(lessonId) })
@@ -79,6 +82,7 @@ export function LessonRecordDialog({
   if (mode === 'edit') return <EditForm l={l} onBack={() => setMode('view')} onDone={done} />
   if (mode === 'delete') return <DeleteForm l={l} onBack={() => setMode('view')} onDone={done} />
   if (mode === 'history') return <HistoryView l={l} onBack={() => setMode('view')} />
+  if (mode === 'request') return <RequestForm l={l} onBack={() => setMode('view')} onDone={done} />
   return <RecordView l={l} onClose={onClose} onMode={setMode} />
 }
 
@@ -93,6 +97,8 @@ function RecordView({ l, onClose, onMode }: { l: LessonRecord; onClose: () => vo
   const r = l.report
   const liveReport = l.outcome === 'held' && r && !r.deletedAt
   const correctable = l.outcome !== null && !['voided', 'rescheduled', 'suspended'].includes(l.outcome)
+  // PD-35: a report the teacher should file -- the lesson started and has none yet.
+  const reportOwed = (l.outcome === null || l.outcome === 'held') && !liveReport && Date.parse(l.startsAt) <= Date.now()
   return (
     <Dialog
       title={`${tx(J.recordTitle)} — ${l.learner.name}`}
@@ -101,6 +107,9 @@ function RecordView({ l, onClose, onMode }: { l: LessonRecord; onClose: () => vo
         <>
           <button type="button" className="btn" onClick={() => onMode('history')}>{tx(J.history)}</button>
           {correctable && <button type="button" className="btn" onClick={() => onMode('correct')}>{tx(J.correct)}</button>}
+          {(liveReport || reportOwed) && (
+            <button type="button" className="btn" onClick={() => onMode('request')}>{tx(liveReport ? J.requestCorrection : J.requestReport)}</button>
+          )}
           {liveReport && <button type="button" className="btn" onClick={() => onMode('edit')}>{tx(J.editReport)}</button>}
           {liveReport && <button type="button" className="btn btn--danger" onClick={() => onMode('delete')}>{tx(J.deleteReport)}</button>}
           <DialogCancelButton onClick={onClose} />
@@ -179,6 +188,41 @@ function ServerError({ error }: { error: unknown }) {
   const { locale } = useJourneyCopy()
   if (!error) return null
   return <div className="banner banner--danger" role="alert">{describeError(error, locale)}</div>
+}
+
+/** PD-35: ask the teacher to correct (or file) the report, with a reason. */
+function RequestForm({ l, onBack, onDone }: { l: LessonRecord; onBack: () => void; onDone: () => void }) {
+  const { tx } = useJourneyCopy()
+  const id = useId()
+  const s = useSubmit(onDone)
+  const [reason, setReason] = useState('')
+  const [touched, setTouched] = useState(false)
+  const live = !!(l.report && !l.report.deletedAt)
+  return (
+    <Dialog
+      title={`${tx(live ? J.requestCorrection : J.requestReport)} — ${l.learner.name}`}
+      onClose={onBack}
+      footer={
+        <Footer
+          onBack={onBack}
+          pending={s.pending}
+          onSave={() => {
+            setTouched(true)
+            if (!reason.trim()) return
+            void s.run(() => journeyApi.requestCorrection(l.id, { reason: reason.trim(), kind: live ? 'correction' : 'missing' }))
+          }}
+        />
+      }
+    >
+      <p className="ts-muted">{tx(J.requestHint)}</p>
+      <div className="field">
+        <label className="field__label" htmlFor={id}>{tx(J.requestReason)}</label>
+        <textarea id={id} className="input" dir="auto" rows={3} maxLength={500} value={reason} aria-invalid={touched && !reason.trim()} onChange={(e) => setReason(e.target.value)} />
+        {touched && !reason.trim() && <span className="field__error">{tx(J.required)}</span>}
+      </div>
+      <ServerError error={s.error} />
+    </Dialog>
+  )
 }
 
 function ReasonField({ value, onChange, touched }: { value: string; onChange: (v: string) => void; touched: boolean }) {

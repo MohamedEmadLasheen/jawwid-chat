@@ -42,6 +42,7 @@ claimed. The decision text itself still lives in
 | PD-31 | Scheduling: trial time slots, reschedule redesign, a parent's child schedule, change teacher | `claude/pd31-scheduling-*` | in progress |
 | PD-32 | Parent feedback about the teacher (amends PD-26), Starred in Chats, New Students redesign, sign-up code without time expiry (amends PD-16), Trial labels | `claude/pd32-feedback-ui-*` | in progress |
 | PD-33 | Hand over to backup: a temporary cover with automatic return (built on PD-8 backup links) | `claude/pd33-backup-handover-3bb0f2` | in progress |
+| PD-34 | Notifications: one pipeline, the per-account Notification Center, preferences and quiet hours (P1 of P1–P5) | `claude/pd34-notifications-c31e79` | P1 API in review |
 | PD-35 | Teacher supervisors: the visible seat (join/leave by choice), teacher assignment and scope, report corrections, evaluations, escalation | `claude/pd35-teacher-supervisors-8efcc6` | in progress |
 | PD-37 | Chat parity with WhatsApp/Messenger: read receipts (author-only ticks + Message info), typing, presence; first PR closes RT-012 (receipt roster leak) | `claude/pd37-chat-parity-*` | in progress |
 | PD-38 | Scheduling calendar: academy and teacher views, shifts by category, supervisor colors, filters, capacity statistics | `claude/pd38-schedule-calendar-b9fe8f`, `claude/pd38-admin-web` | P1: PR #139 (API) + #142 (Admin Web) |
@@ -69,7 +70,9 @@ claimed. The decision text itself still lives in
 | `20261026160000` | PD-35 — `chat_pd035_conversation_seat` (PR #131) |
 | `20261026160003` | PD-35 — `chat_pd035_seat_security_fixes` (security-review fixes for #131, fixed forward; PR #143) |
 | `20261026160004` | PD-35 — `chat_pd035_teacher_supervisor` (PR #136; renumbered from 160001 to sort after 160003) |
+| `20261026160005` | PD-35 — `chat_pd035_reports_evaluations` (PR #138; renumbered from 160002) |
 | `20261026180000` | PD-37 — chat read cursors / presence (P1a; sub-slots `180001…`). The RT-012 fix PR has no migration. |
+| `20261026190000` | PD-34 — `chat_pd034_notifications` (P1; later P1 PRs take `190001`, `190002`…) |
 | `20261026200000` | PD-29 amendment — `chat_pd029_material_opens` |
 | `20261026210000` | PD-38 — `chat_pd038_schedule_calendar` |
 

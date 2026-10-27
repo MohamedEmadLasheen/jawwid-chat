@@ -14,6 +14,8 @@ import { StatsController } from './stats.controller';
 import { StatsService } from './stats.service';
 import { TrialController, TrialTicketsController } from './trial.controller';
 import { TrialGroupService } from './trial-group.service';
+import { ReportCorrectionService } from './report-correction.service';
+import { ReportCorrectionController } from './report-correction.controller';
 import { TrialService } from './trial.service';
 import { SchedulingService } from './scheduling.service';
 import { EnrollmentService } from './enrollment.service';
@@ -37,7 +39,7 @@ import { ReportMaterials } from '../materials/report-materials';
   // OrgStructureModule: PD-24, a new student's supervisor changes through the one transfer.
   // BillingModule: PD-27, a trial's payment links before Assign, attached at Assign.
   imports: [CommunicationModule, SupervisionModule, NewStudentsModule, OrgStructureModule, BillingModule],
-  controllers: [StatsController, SchedulingController, LessonController, JourneyController, LifecycleController, TrialController, TrialTicketsController],
+  controllers: [StatsController, SchedulingController, LessonController, JourneyController, LifecycleController, TrialController, TrialTicketsController, ReportCorrectionController],
   providers: [
     LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService,
     // PD-15: corrections and report edits / deletes; enrolment details and courses.
@@ -48,6 +50,8 @@ import { ReportMaterials } from '../materials/report-materials';
     // PD-29: a report's practice and memorization marks, written in the
     // report's transaction. The file lives in src/materials.
     ReportMaterials,
+    // PD-35: report correction requests (resolved by the database when the report changes).
+    ReportCorrectionService,
   ],
   // PD-35: TrialGroupService re-seats a trial group when a teacher's supervisor changes.
   exports: [LessonService, SchedulingService, ReportMaterials, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService],

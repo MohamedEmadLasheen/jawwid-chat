@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/data/repositories.dart';
+import '../../../shared/utils/app_clock.dart';
 
 /// PD-26: the teacher members of this conversation who are away today, read from
 /// the conversation's own member list (`GET /conversations/:id`), where the server
@@ -18,3 +19,7 @@ final awayTeachersProvider = FutureProvider.autoDispose.family<List<GroupMember>
     return const [];
   }
 });
+
+/// "Now", for deciding when the notice may stop being true. [AppClock.now] in the app;
+/// a pinned instant in tests, so a test does not depend on the hour it runs at.
+final awayClockProvider = Provider<DateTime Function()>((ref) => AppClock.now);

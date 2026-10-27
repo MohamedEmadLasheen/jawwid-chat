@@ -368,6 +368,10 @@ export const CardKind = {
   SUBSCRIPTION_UNLOCKED: 'subscription_unlocked',
   /** PD-30, in the family's direct chat: a parent asked to renew. */
   RENEWAL_REQUESTED: 'subscription_renewal_requested',
+  // PD-35: report corrections and evaluations, in the teacher's supervision conversation.
+  REPORT_CORRECTION_REQUESTED: 'report_correction_requested',
+  EVALUATION_SHARED: 'evaluation_shared',
+  IMPROVEMENT_PLAN_SHARED: 'improvement_plan_shared',
 } as const;
 export type CardKind = (typeof CardKind)[keyof typeof CardKind];
 

@@ -1,4 +1,7 @@
 import { useState, type ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { journeyApi, journeyKeys, type CorrectionRequest } from '@/features/journey/api'
+import { LessonRecordDialog } from '@/features/journey/LessonRecordDialog'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -33,12 +36,18 @@ export function NeedsActionPage() {
     setDialog({ title, intro, fields, submit: (v) => op.mutateAsync(() => submit(v)) })
 
   const [scheduling, setScheduling] = useState<BlockedOccurrence | null>(null)
+  // PD-35: report corrections asked of the teachers, and how they were answered.
+  const qc = useQueryClient()
+  const corrections = useQuery({ queryKey: journeyKeys.corrections('all'), queryFn: () => journeyApi.corrections('all') })
+  const correctionRows = (corrections.data?.requests ?? []).slice(0, 50)
+  const openCorrections = correctionRows.filter((r) => r.status === 'open').length
+  const [historyOf, setHistoryOf] = useState<string | null>(null)
 
   const d = q.data
   const blocked = d?.blockedOccurrences ?? []
   const empty =
     d &&
-    d.overdue.length + d.awaitingClose.length + d.rulings.length + d.makeupsOverdue.length + d.scheduleRequests.length + d.returningSoon.length + blocked.length === 0
+    d.overdue.length + d.awaitingClose.length + d.rulings.length + d.makeupsOverdue.length + d.scheduleRequests.length + d.returningSoon.length + blocked.length + openCorrections === 0
 
   const noteField = (required: boolean, label: Pair = required ? O.note : O.noteOptional): FieldSpec => ({ key: 'note', label, type: 'textarea', required })
   const lessonActions = (l: LessonDto) => (
@@ -162,6 +171,20 @@ export function NeedsActionPage() {
                   </div>
                 ))}
               </Section>
+              <Section title={tx(CORRECTIONS)} hint={tx(CORRECTIONS_HINT)} count={correctionRows.length}>
+                {correctionRows.map((r) => (
+                  <CorrectionRow
+                    key={r.id}
+                    r={r}
+                    onHistory={() => setHistoryOf(r.lessonId)}
+                    onWithdraw={() =>
+                      run(tx(WITHDRAW), [], () =>
+                        journeyApi.withdrawCorrection(r.id).then(() => qc.invalidateQueries({ queryKey: ['journey', 'corrections'] })),
+                      )
+                    }
+                  />
+                ))}
+              </Section>
               <Section title={tx(O.returning)} count={d.returningSoon.length}>
                 {d.returningSoon.map((r) => (
                   <div className="ts-row" key={r.suspensionId}>
@@ -184,6 +207,7 @@ export function NeedsActionPage() {
           <ActionDialog title={dialog.title} intro={dialog.intro} fields={dialog.fields} onSubmit={dialog.submit} onClose={() => setDialog(null)} />
         )}
         {scheduling && <BlockedScheduleDialog item={scheduling} onClose={() => setScheduling(null)} />}
+        {historyOf && <LessonRecordDialog lessonId={historyOf} conversationId="" initialMode="history" onClose={() => setHistoryOf(null)} />}
       </div>
     </div>
   )
@@ -263,6 +287,48 @@ function ScheduleRequestRow({ r, onApprove, onReject }: { r: ScheduleRequestDto;
         <button type="button" className="btn btn--sm" onClick={onReject}>
           {tx(O.reject)}
         </button>
+      </div>
+    </div>
+  )
+}
+
+// PD-35: report corrections.
+const CORRECTIONS: Pair = { en: 'Report corrections', ar: 'تصحيح التقارير' }
+const CORRECTIONS_HINT: Pair = {
+  en: 'Asked of the teachers from a lesson record. The teacher edits the report; open the history to see what changed.',
+  ar: 'طُلبت من المعلمين من سجل الحصة. يعدّل المعلم التقرير؛ افتح السجل لترى ما تغيّر.',
+}
+const WITHDRAW: Pair = { en: 'Withdraw', ar: 'سحب الطلب' }
+const SEE_CHANGES: Pair = { en: 'See changes', ar: 'عرض التغييرات' }
+const CORRECTION_STATUS: Record<CorrectionRequest['status'], Pair> = {
+  open: { en: 'Waiting for the teacher', ar: 'بانتظار المعلم' },
+  corrected: { en: 'Corrected', ar: 'تم التصحيح' },
+  filed: { en: 'Report filed', ar: 'تم إرسال التقرير' },
+  withdrawn: { en: 'Withdrawn', ar: 'سُحب' },
+}
+const BY_STAFF: Pair = { en: 'by staff', ar: 'من الإدارة' }
+
+function CorrectionRow({ r, onHistory, onWithdraw }: { r: CorrectionRequest; onHistory: () => void; onWithdraw: () => void }) {
+  const tx = useTx()
+  const { dateTime } = useI18n()
+  return (
+    <div className="ts-row">
+      <div className="ts-row__main">
+        <strong>{r.learner.name}</strong>
+        <span className="ts-muted">{r.teacher.name} · {dateTime(r.lessonStartsAt)}</span>
+        <span dir="auto">{r.reason}</span>
+        <span className="ts-muted">
+          {tx(CORRECTION_STATUS[r.status])}
+          {r.resolvedByKind === 'staff' && r.status !== 'withdrawn' ? ` (${tx(BY_STAFF)})` : ''}
+          {r.askedVersion !== null && r.resolvedVersion !== null ? ` · v${r.askedVersion} → v${r.resolvedVersion}` : ''}
+        </span>
+      </div>
+      <div className="ts-row__actions">
+        {r.status === 'open' ? (
+          <button type="button" className="btn btn--sm" onClick={onWithdraw}>{tx(WITHDRAW)}</button>
+        ) : r.status !== 'withdrawn' ? (
+          <button type="button" className="btn btn--sm" onClick={onHistory}>{tx(SEE_CHANGES)}</button>
+        ) : null}
       </div>
     </div>
   )
