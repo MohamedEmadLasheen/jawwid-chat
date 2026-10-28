@@ -125,6 +125,40 @@ describe('PD-21: the Accounts page', () => {
     expect(screen.queryByText('482913')).not.toBeInTheDocument()
   })
 
+  it('PD-40: a reset answered with no code says it was e-mailed, and shows no code box', async () => {
+    const specialist = account({ accountId: 'a-7', kind: 'staff', name: 'Specialist One', staffRole: 'specialist', familyName: null, children: [] })
+    on('GET', /\/admin\/accounts(\?|$)/, () => json({ accounts: [specialist], truncated: false }))
+    on('POST', /\/admin\/accounts\/a-7\/password-reset$/, () =>
+      json({ emailed: true, expiresAt: '2026-10-22T10:10:00.000Z', expiresInMinutes: 10, signedOutSessions: 0 }, 201),
+    )
+    const { container } = renderWithProviders(<AppRoutes />, { staff: finance, route: '/accounts' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Reset password' }))
+    const dialog = screen.getByRole('dialog', { name: 'Reset the password of Specialist One' })
+    await userEvent.type(within(dialog).getByRole('textbox'), 'forgot it')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Get the code' }))
+
+    const sent = await screen.findByRole('dialog', { name: 'One-time code for Specialist One' })
+    expect(within(sent).getByText(/sent by e-mail to the account's sign-in address/)).toBeInTheDocument()
+    expect(within(sent).queryByRole('button', { name: 'Copy code' })).not.toBeInTheDocument()
+    expect(container.ownerDocument.querySelector('.acct-code')).toBeNull()
+  })
+
+  it('PD-40: a reset that could not be e-mailed says so', async () => {
+    const specialist = account({ accountId: 'a-7', kind: 'staff', name: 'Specialist One', staffRole: 'specialist', familyName: null, children: [] })
+    on('GET', /\/admin\/accounts(\?|$)/, () => json({ accounts: [specialist], truncated: false }))
+    on('POST', /\/admin\/accounts\/a-7\/password-reset$/, () =>
+      json({ emailed: false, expiresAt: '2026-10-22T10:10:00.000Z', expiresInMinutes: 10, signedOutSessions: 0 }, 201),
+    )
+    renderWithProviders(<AppRoutes />, { staff: finance, route: '/accounts', locale: 'ar' })
+    await userEvent.click(await screen.findByRole('button', { name: 'إعادة تعيين كلمة المرور' }))
+    const dialog = screen.getByRole('dialog', { name: 'إعادة تعيين كلمة مرور Specialist One' })
+    await userEvent.type(within(dialog).getByRole('textbox'), 'forgot it')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'احصل على الرمز' }))
+    const sent = await screen.findByRole('dialog', { name: 'رمز لمرة واحدة لـ Specialist One' })
+    expect(within(sent).getByText(/تعذّر إرسال الرمز بالبريد/)).toBeInTheDocument()
+    expect(within(sent).queryByRole('button', { name: 'نسخ الرمز' })).not.toBeInTheDocument()
+  })
+
   it('suspending needs a reason and says a refusal plainly', async () => {
     on('GET', /\/admin\/accounts(\?|$)/, () => json({ accounts: [account()], truncated: false }))
     on('POST', /\/admin\/accounts\/a-1\/suspend$/, () =>
