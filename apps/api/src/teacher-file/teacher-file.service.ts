@@ -90,7 +90,7 @@ export class TeacherFileService {
     const scope = await this.teacherScope.scopeOf(actor);
     const teachers = await this.prisma.teacher.findMany({
       where: { organizationId: org, ...(scope.all ? {} : { id: { in: [...scope.teacherIds] } }) },
-      select: { id: true, name: true, isActive: true, leftAt: true },
+      select: { id: true, name: true, isActive: true, leftAt: true, account: { select: { status: true } } },
       orderBy: { name: 'asc' },
     });
     const ids = teachers.map((t) => t.id);
@@ -112,6 +112,8 @@ export class TeacherFileService {
         studentCount: studentCount.get(t.id) ?? 0,
         openComplaints: open.get(t.id) ?? 0,
         away: away.get(t.id) ?? null,
+        // PD-43: `none` marks a teacher Give sign-in is for (the migration intake's work list).
+        signIn: t.account?.status ?? 'none',
       })),
       // PD-26: who may be named as a complaint's handler.
       supervisors: await this.supervisors(org),
@@ -530,14 +532,22 @@ export class TeacherFileService {
    * let issue it (chat.may_issue_teacher_first_login: the super admin, the
    * Teachers manager, the CURRENT supervisor).
    */
-  private async signInOf(actor: Actor, teacher: { id: string; accountId: string | null }) {
-    if (!teacher.accountId) return { status: 'none', canSendCode: false };
+  private async signInOf(actor: Actor, teacher: { id: string; accountId: string | null; isActive: boolean; leftAt: Date | null }) {
+    if (!teacher.accountId) {
+      // Give sign-in (chat.may_give_teacher_sign_in), for an active teacher only.
+      const live = teacher.isActive && teacher.leftAt === null;
+      const [row] = live
+        ? await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+            SELECT chat.may_give_teacher_sign_in(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok`
+        : [];
+      return { status: 'none', canSendCode: false, canGive: row?.ok === true };
+    }
     const account = await this.prisma.account.findUnique({ where: { id: teacher.accountId }, select: { status: true } });
     const status = account?.status ?? 'none';
-    if (status !== 'provisioned') return { status, canSendCode: false };
+    if (status !== 'provisioned') return { status, canSendCode: false, canGive: false };
     const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
       SELECT chat.may_issue_teacher_first_login(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok`;
-    return { status, canSendCode: row?.ok === true };
+    return { status, canSendCode: row?.ok === true, canGive: false };
   }
 
   /** What GET /teacher-files tells the page about adding a teacher. */

@@ -34,6 +34,19 @@ export function useAddTeacher() {
   })
 }
 
+/** PD-43: Give sign-in -- a login, and its first code shown once, for a teacher who has none. */
+export function useGiveSignIn(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (email: string) => teacherFileApi.giveSignIn(teacherId, email),
+    gcTime: 0,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.detail(teacherId) })
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.list })
+    },
+  })
+}
+
 /** PD-43: a new first sign-in code; the answer carries the code only for the Manager and the super admin. */
 export function useReissueFirstLogin(teacherId: string) {
   return useMutation({ mutationFn: () => teacherFileApi.reissueFirstLogin(teacherId), gcTime: 0 })

@@ -130,10 +130,14 @@ export class S3ObjectStorage implements ObjectStorage {
    * is unreachable without a signature this API issued after authorizing the
    * read.
    */
-  async signedReadUrl(objectKey: string, ttlSeconds = this.ttl): Promise<string> {
+  async signedReadUrl(objectKey: string, ttlSeconds = this.ttl, opts: { cacheControl?: string } = {}): Promise<string> {
     return getSignedUrl(
       this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: assertSafeObjectKey(objectKey) }),
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: assertSafeObjectKey(objectKey),
+        ...(opts.cacheControl ? { ResponseCacheControl: opts.cacheControl } : {}),
+      }),
       { expiresIn: ttlSeconds },
     );
   }

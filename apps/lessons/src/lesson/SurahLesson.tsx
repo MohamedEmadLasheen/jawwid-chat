@@ -104,7 +104,7 @@ export function SurahLesson({
   }
 
   const { info, ayahs } = state.surah;
-  const available = audio?.available ?? false;
+  const available = audio?.availableFor(info.number) ?? false;
   const select = (ayah: number) => {
     audio?.select();
     setSelected(ayah);

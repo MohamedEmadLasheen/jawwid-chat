@@ -22,6 +22,14 @@ export class TeacherOnboardingController {
     return this.onboarding.add(actorId, body ?? {});
   }
 
+  /** Give sign-in: a login, and its first code, for a teacher who exists but has none. { email, reason? } */
+  @Requires('teachers.create')
+  @Post(':teacherId/sign-in')
+  @Header('Cache-Control', 'no-store')
+  giveSignIn(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.onboarding.giveSignIn(actorId, teacherId, body ?? {});
+  }
+
   /** A new first sign-in code while the teacher has not signed in; the old one dies. { reason? } */
   @Requires('teachers.create')
   @Post(':teacherId/first-login-code')

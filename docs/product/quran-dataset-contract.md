@@ -117,12 +117,36 @@ Agreed 2026-10-27 between the PD-29 materials-quality session and the PD-39 sess
 ## Audio
 - PD-29 only; PD-39 doesn't use audio in the MVP.
 - One file per ayah (the verse, without the Basmala), self-hosted, so playback needs no timing tables.
+- **The recitations are pinned in code** (`apps/api/src/quran/audio-sources.ts`), each with:
+  - the official archives and their published SHA-256 (the ingest refuses any other archive);
+  - the owner's **licence confirmation**, `null` until recorded. Recording it is a reviewed change to that file, never a database write.
+- The owner directed engineering to start with **KFGQPC Al-Hudhaify (Hafs)**, reciter code `kfgqpc-huthify-hafs` (2026-10-28). Its one archive, `huthify-ayat.rar`, is pinned with its published URL, SHA-256 and size (`docs/legal/kfgqpc-hudhaify-licence.md` §5). Its licence is not recorded yet, and its attribution is a placeholder.
 - `chat.quran_ayah_audio`, PK `(reciter_code, surah, ayah)`:
   - `object_key` is **GENERATED** from (reciter, surah, ayah), with the same formula as `audioKey()`;
   - `sha256` and `byte_size` are **computed by the server's ingest** (`apps/api/src/quran/audio-ingest.ts`) from the object actually stored under that key, never supplied by a person. The database accepts a row only through the ingest path.
-- **Audio is never served unverified.**
-  - The API attaches audio only when `quran.audio` is configured and the stored key equals the computed key. The `sha256` it returns is the ingested one.
-  - `quran.audio` stays unset, and no route calls the ingest, until the owner confirms the reciter and the right to self-host.
+- **The ingest** (`node dist/cli/ingest-quran-audio.js --archive <rar> --extracted <dir>`) is a **dry run by default**.
+  1. It hashes the archive **as a stream** and accepts it only with exactly the published SHA-256 and size.
+  2. The operator extracts it with the system `bsdtar` into its own empty folder; nothing in it is ever run. The ingest refuses anything in that folder that is not a regular file, and checks the folder's manifest hash (every file's path, size and SHA-256) against `extractedManifestSha256`, pinned for the archive after the first verified extraction.
+  3. It maps each `SSSAAA.mp3` to one real ayah. `SSS000` is a Basmala file, reported as an extra.
+  4. It checks each file is MP3, and reports every reject and every one of the 6,236 ayat still missing.
+  `--write` needs a **complete** plan (archive verified, folder pinned and matching, no reject, all 6,236), a matching `--target`, and `APP_ENV` explicitly `local`, `test` or `ci` (or `--allow-non-local`). For each ayah it:
+  - refuses an ayah that already has a row (served audio is never replaced in place);
+  - uploads to a temporary key and hashes what storage holds there **before** moving it to the ayah's key;
+  - writes the row only through `ingestAyahAudio`, which hashes the live object and refuses anything but the expected SHA-256.
+- **THE RELEASE GATE** (`apps/api/src/quran/audio-gate.ts`). `chat.config quran.audio.enabled_for` takes `none` | `staff_test` | `all`; unset or anything else means **`none`**.
+  - `staff_test`: the **testers** only, meaning the super admin and the staff named in `chat.config quran.audio.test_staff_ids`. Not every staff role: a family-facing one could play it in a call with a student.
+  - `all`: everyone signed in **only once the recitation's licence is recorded in code**; until then it is still the testers only. Paying students and their families never get audio before that.
+  - The same gate covers **Materials recitations** (`POST /materials/recitations/:surah/open` and the child page's `hasRecitation`). An external recitation URL must be on a host allowed in code (`apps/api/src/materials/recitation-hosts.ts`, none by default), with that host's licence record. An uploaded recitation file has no licence record, so only the testers hear it.
+- **Audio is never served unverified.** `GET /quran/ayahs` attaches audio for the caller only when all of these hold:
+  - the gate allows them;
+  - `quran.audio` = `{ reciter }` names a reciter pinned in code;
+  - the stored key equals the computed key.
+  The `url` is a **short-lived signed read** (1 h, `Cache-Control: private, no-store`), never a permanent public address. The `sha256` is the ingested one. The response itself is sent `Cache-Control: private, no-store`.
+- **The lessons engine never calls the API.** The signed-in opener (a parent page, or the mobile app's WebView) reads `/quran/ayahs` and passes `{ ayah, audio }` of each entry to the lesson as `{ type: 'jawwid:quran-audio', surah, ayahs }`: data only, and any other field refuses the list. The engine (`apps/lessons/src/audio/audio-manifest.ts`):
+  - accepts it only from the origins fixed at build time (`LESSONS_PARENT_ORIGINS`, or the lesson's own origin for a WebView);
+  - refuses the whole list if any key is not exactly that ayah's or any URL is off `LESSONS_MEDIA_ORIGINS`;
+  - plays a file only after its bytes hash to the listed SHA-256, from memory.
+  The engine says `{ type: 'jawwid:lesson-ready', surah }` to its parent when it is ready.
 - Word or ayah timing segments, if ever needed, go in a separate table keyed to the audio file's `sha256`.
 
 ## Fonts
