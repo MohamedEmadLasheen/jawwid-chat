@@ -19,10 +19,12 @@ import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
 import { AccountAdminModule } from './account-admin/account-admin.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 import { MaterialsModule } from './materials/materials.module';
+import { QuranModule } from './quran/quran.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
 import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { SupervisionCaseModule } from './cases/supervision-case.module';
+import { ActionLogModule } from './action-log/action-log.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -67,6 +69,7 @@ import { SupervisionCaseModule } from './cases/supervision-case.module';
     AccountRecoveryModule,
     // PD-29: the Materials library, practice this week and the memorization map.
     MaterialsModule,
+    QuranModule,
     // PD-30: subscription locks -- cards, pushes, lesson holds, renewal requests.
     SubscriptionModule,
     // PD-35: teacher supervisors (assignment, the 'supervision' seat).
@@ -75,6 +78,8 @@ import { SupervisionCaseModule } from './cases/supervision-case.module';
     CalendarModule,
     // PD-35 B5: escalation cases to the Teachers or Operations department.
     SupervisionCaseModule,
+    // PD-35 B7: a staff member's action log.
+    ActionLogModule,
   ],
 })
 export class AppModule {}

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CommunicationModule } from '../communication/communication.module';
 import { LessonModule } from '../lessons/lesson.module';
 import { TeacherFileController } from './teacher-file.controller';
+import { TeacherSupervisionController } from './teacher-supervision.controller';
 import { TeacherFileService } from './teacher-file.service';
 import { TeacherPayrollService } from './teacher-payroll.service';
 import { ParentFeedbackController } from './parent-feedback.controller';
@@ -25,7 +26,7 @@ import { TeacherEvaluationService } from './teacher-evaluation.service';
   // (PD-26). Nothing under LessonModule or SupervisionModule imports this
   // module, so no cycle.
   imports: [CommunicationModule, SupervisionModule, LessonModule],
-  controllers: [TeacherFileController, ParentFeedbackController, TeacherEvaluationController],
+  controllers: [TeacherFileController, TeacherSupervisionController, ParentFeedbackController, TeacherEvaluationController],
   providers: [TeacherFileService, TeacherPayrollService, ParentFeedbackService, TeacherEvaluationService],
   // PD-35 B5: escalation cases ask who a piece of feedback is about (ids only).
   exports: [ParentFeedbackService],

@@ -10,6 +10,9 @@ import { Icon } from './Icon'
  * deliberately NOT a close: a stray click should not discard a typed reason.
  * `sheet` is a read-only details panel at the inline end; nothing can be lost,
  * so it closes from its backdrop and carries its own close button.
+ * `full` covers the whole window, navigation included, for content that needs
+ * the room (a lesson). It leads with a back button instead of a close button;
+ * `actions` sit at the header's end.
  */
 export function Dialog({
   title,
@@ -17,17 +20,24 @@ export function Dialog({
   children,
   footer,
   variant = 'center',
+  actions,
+  backLabel,
 }: {
   title: string
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
-  variant?: 'center' | 'sheet'
+  variant?: 'center' | 'sheet' | 'full'
+  /** Extra header controls (`sheet` and `full`). */
+  actions?: ReactNode
+  /** The back button's name (`full`); "Close" when left out. */
+  backLabel?: string
 }) {
   const { t } = useI18n()
   const ref = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<Element | null>(null)
   const sheet = variant === 'sheet'
+  const full = variant === 'full'
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement
@@ -50,20 +60,30 @@ export function Dialog({
 
   return (
     <div
-      className={sheet ? 'dialog-backdrop dialog-backdrop--sheet' : 'dialog-backdrop'}
+      className={sheet ? 'dialog-backdrop dialog-backdrop--sheet' : full ? 'dialog-backdrop dialog-backdrop--full' : 'dialog-backdrop'}
       onClick={sheet ? (e) => e.target === e.currentTarget && onClose() : undefined}
     >
       <div
-        className={sheet ? 'dialog dialog--sheet' : 'dialog'}
+        className={sheet ? 'dialog dialog--sheet' : full ? 'dialog dialog--full' : 'dialog'}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
         ref={ref}
       >
-        {sheet ? (
+        {full ? (
+          <div className="dialog__header">
+            <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>
+              <Icon name="arrowBack" />
+              {backLabel ?? t('common.close')}
+            </button>
+            <h2 className="dialog__title">{title}</h2>
+            {actions}
+          </div>
+        ) : sheet ? (
           <div className="dialog__header">
             <h2 className="dialog__title">{title}</h2>
+            {actions}
             <button
               type="button"
               className="btn btn--ghost btn--icon btn--sm"

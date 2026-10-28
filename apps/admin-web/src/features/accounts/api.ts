@@ -36,6 +36,12 @@ export interface AccountSummary {
 export interface AccountList {
   accounts: AccountSummary[]
   truncated: boolean
+  /**
+   * PD-40: the kinds this caller administers -- parents for Operations (and
+   * Sales), teachers for the Teachers department, all three for the super
+   * admin, none for anyone else. Absent from a server older than PD-40.
+   */
+  administers?: Array<'family' | 'teacher' | 'staff'>
 }
 
 /** The one-time code: shown to the administrator ONCE, never stored by the client. */

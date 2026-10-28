@@ -11,6 +11,7 @@ import {
 import { TeacherProfileService } from '../teacher-profile/teacher-profile.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
+import { NotForStaff, Requires } from '../../platform/permissions/route-access';
 
 /**
  * The teacher's professional profile, and certificate review.
@@ -55,12 +56,14 @@ export class TeacherProfileController {
   // --- the teacher's own profile ---------------------------------------------
 
   /** The signed-in teacher's current profile. Creates nothing. */
+  @NotForStaff()
   @Get('me/teacher-profile')
   async mine(@ActorId() actorId: string) {
     return this.profiles.myProfile(actorId);
   }
 
   /** Save the profile. Immediately current; nothing waits for a reviewer. */
+  @NotForStaff()
   @Post('me/teacher-profile')
   async save(
     @ActorId() actorId: string,
@@ -91,6 +94,7 @@ export class TeacherProfileController {
    * `chat.teacher`, and is read by surfaces that have nothing to do with this
    * feature. Folding it into the profile body would imply the profile owns it.
    */
+  @NotForStaff()
   @Patch('me/teacher-profile/name')
   async rename(@ActorId() actorId: string, @Body() body: { name?: string }) {
     return this.profiles.updateName(actorId, body?.name ?? '');
@@ -98,6 +102,7 @@ export class TeacherProfileController {
 
   // --- certificates ----------------------------------------------------------
 
+  @NotForStaff()
   @Post('me/teacher-profile/certificates/upload')
   async authorizeCertificate(
     @ActorId() actorId: string,
@@ -109,6 +114,7 @@ export class TeacherProfileController {
     });
   }
 
+  @NotForStaff()
   @Post('me/teacher-profile/certificates')
   async addCertificate(
     @ActorId() actorId: string,
@@ -133,6 +139,7 @@ export class TeacherProfileController {
   }
 
   /** Metadata only. There is no field here for the file. */
+  @NotForStaff()
   @Patch('me/teacher-profile/certificates/:id')
   async updateCertificate(
     @ActorId() actorId: string,
@@ -147,6 +154,7 @@ export class TeacherProfileController {
     });
   }
 
+  @NotForStaff()
   @Delete('me/teacher-profile/certificates/:id')
   async removeCertificate(@ActorId() actorId: string, @Param('id') id: string) {
     return this.profiles.removeCertificate(actorId, id);
@@ -155,11 +163,13 @@ export class TeacherProfileController {
   // --- certificate review (staff) -------------------------------------------
 
   /** Teachers with at least one credential awaiting a decision. */
+  @Requires('teacher_profiles.review')
   @Get('teacher-profiles/review')
   async reviewQueue(@ActorId() actorId: string) {
     return { profiles: await this.profiles.certificateReviewQueue(actorId) };
   }
 
+  @Requires('teacher_profiles.review')
   @Post('teacher-profiles/certificates/:id/decide')
   async decideCertificate(
     @ActorId() actorId: string,
@@ -173,6 +183,7 @@ export class TeacherProfileController {
   }
 
   /** A fresh RT-037 media link, bound to the caller. The owning teacher, or a reviewer. */
+  @Requires('teacher_profiles.review')
   @Get('teacher-profiles/certificates/:id/download')
   async certificateUrl(@ActorId() actorId: string, @Param('id') id: string) {
     return { url: await this.profiles.certificateDownloadUrl(actorId, id) };

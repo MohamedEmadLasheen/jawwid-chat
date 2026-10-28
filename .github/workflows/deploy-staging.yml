@@ -323,6 +323,17 @@ jobs:
           # AI #1's migration runner is the single migration authority.
           PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/apply.sh
 
+      - name: Load the pinned Quran text
+        # docs/product/quran-dataset-contract.md: after the migrations, from
+        # this checkout (never inside the API image). The loader refuses a file
+        # whose SHA-256 is not the pinned one, a count mismatch, a split or
+        # empty ayah, and writes all or nothing; a dataset already loaded with
+        # the same fingerprints is skipped. No dataset vendored: nothing to do.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/load-quran.sh
+
       - name: Release
         # Deploys the resolved .do/app.staging.yaml with doctl and fails unless
         # the ACTIVE deployment then runs exactly these image tags. Refuses,

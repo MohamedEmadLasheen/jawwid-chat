@@ -94,11 +94,15 @@ async function cards(conversationId = groupId) {
 beforeAll(async () => {
   await g.prisma.$connect();
 });
+// The hooks that truncate get their own time: under CI load a truncate alone
+// outran jest's 5 s hook default (G-19 run 40521900101).
+const TRUNCATING_HOOK_MS = 60_000;
+
 afterAll(async () => {
   await truncate(g.prisma);
   await g.prisma.$executeRawUnsafe(`delete from chat.config where key like 'lesson.%'`);
   await g.prisma.$disconnect();
-});
+}, TRUNCATING_HOOK_MS);
 beforeEach(async () => {
   jest.restoreAllMocks();
   await truncate(g.prisma);
@@ -118,7 +122,7 @@ beforeEach(async () => {
   );
   await openAllWeek(s.teacherId);
   await openAllWeek(s.newTeacherId);
-});
+}, TRUNCATING_HOOK_MS);
 
 describe('1. one lesson moves', () => {
   it('at once: the old row is rescheduled, the new one names it, the group reads a card -- no apology, no violation', async () => {

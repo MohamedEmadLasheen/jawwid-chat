@@ -7,6 +7,7 @@ import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/clock_time.dart';
 import '../application/notification_center_controller.dart';
 import '../domain/inbox.dart';
 
@@ -80,7 +81,7 @@ class _SettingsList extends ConsumerWidget {
     }
 
     String clock(int minute) =>
-        MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay(hour: minute ~/ 60, minute: minute % 60));
+        formatClockTime(context, TimeOfDay(hour: minute ~/ 60, minute: minute % 60));
 
     return ListView(
       padding: const EdgeInsetsDirectional.only(bottom: Spacing.spacing9),

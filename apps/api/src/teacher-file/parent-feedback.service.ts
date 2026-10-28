@@ -5,7 +5,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { scopeCovers } from '../platform/teacher-scope';
+import { pageRowVisible, scopeCovers } from '../platform/teacher-scope';
 import { currentImpersonationId } from '../platform/request-context';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -170,16 +170,19 @@ export class ParentFeedbackService {
 
   /** ?status=received|in_review|resolved &category=praise|suggestion|complaint -- newest first. */
   async list(actorId: string, query: { status?: string; category?: string }) {
-    const { actor, access } = await this.files.gate(actorId, (a) => a.canView);
+    // PD-26 amendment: the page's feedback section, for Operations too.
+    const { actor, access } = await this.files.pageGate(actorId, (a) => a.onPage);
     if (query.status !== undefined && !['received', 'in_review', 'resolved'].includes(query.status)) {
       throw invalid('status: must be received, in_review or resolved');
     }
     if (query.category !== undefined && !(FEEDBACK_CATEGORIES as readonly string[]).includes(query.category)) {
       throw invalid('category: must be praise, suggestion or complaint');
     }
-    // PD-35: the feedback about the teachers in the caller's scope.
-    const scope = await this.files.teacherScope.scopeOf(actor);
-    const rows = await this.prisma.parentFeedback.findMany({
+    // PD-35: the feedback about the teachers in the caller's scope; of an
+    // Operations-only teacher, about the caller's own learners (P2-4).
+    const page = await this.files.teacherScope.pageRowsOf(actor);
+    const scope = page.teachers;
+    const found = await this.prisma.parentFeedback.findMany({
       where: {
         organizationId: actor.organizationId as string,
         ...(query.status ? { status: query.status } : {}),
@@ -189,6 +192,7 @@ export class ParentFeedbackService {
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: 500,
     });
+    const rows = found.filter((f) => pageRowVisible(page, f.teacherId, { learnerId: f.learnerId }));
     return { canWrite: access.canWriteSupervision, feedback: await this.forStaff(rows) };
   }
 
@@ -197,7 +201,7 @@ export class ParentFeedbackService {
    * PD-26 handler (set once; a complaint already taken keeps its handler).
    */
   async take(actorId: string, id: string) {
-    const { actor } = await this.files.gate(actorId, (a) => a.canWriteSupervision);
+    const { actor } = await this.files.pageGate(actorId, (a) => a.canWriteSupervision);
     const row = await this.requireFeedback(actor, id);
     await this.write(async (tx) => {
       if (row.category === 'complaint') {
@@ -225,7 +229,7 @@ export class ParentFeedbackService {
    * only by its PD-26 resolution, so the record and the parent agree.
    */
   async reply(actorId: string, id: string, body: Record<string, unknown>) {
-    const { actor } = await this.files.gate(actorId, (a) => a.canWriteSupervision);
+    const { actor } = await this.files.pageGate(actorId, (a) => a.canWriteSupervision);
     const row = await this.requireFeedback(actor, id);
     if (typeof body.response !== 'string' || body.response.trim().length === 0) throw invalid('response: is required');
     const response = body.response.trim();
@@ -327,7 +331,7 @@ export class ParentFeedbackService {
     });
     if (!row) throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
     // PD-35: feedback about a teacher outside the caller's scope reads as unknown.
-    if (!(await this.files.teacherScope.covers(actor, row.teacherId))) {
+    if (!pageRowVisible(await this.files.teacherScope.pageRowsOf(actor), row.teacherId, { learnerId: row.learnerId })) {
       throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
     }
     return row;

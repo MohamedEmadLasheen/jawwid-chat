@@ -224,7 +224,9 @@ describe('PD-12 S1 over HTTP', () => {
     expect(requested.status).toBe(201);
     const requestId = (requested.json.request as { id: string }).id;
 
-    expect((await http(m.supervisors[0].subject, 'GET', '/teacher-leave-requests')).code).toBe(CommErrorCode.LEAVE_DENIED);
+    // PD-26 amendment: Operations decides the leave of their families' teachers;
+    // anyone outside both departments (here Sales) is still refused.
+    expect((await http(m.salesManager.subject, 'GET', '/teacher-leave-requests')).code).toBe(CommErrorCode.LEAVE_DENIED);
     expect((await http(fam.teacher, 'GET', '/teacher-leave-requests')).code).toBe(CommErrorCode.LEAVE_DENIED);
     const queue = await http(tsup, 'GET', '/teacher-leave-requests?state=requested');
     expect((queue.json.requests as Array<{ id: string }>).map((r) => r.id)).toContain(requestId);

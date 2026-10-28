@@ -5,6 +5,7 @@ import { AUDIT_SERVICE } from '../tokens';
 import type { AuditService } from '../audit.service';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { hashPassword } from './password';
+import { isPasswordLengthAcceptable } from './password-policy';
 import { subjectHash } from './subject-hash';
 
 /** Wrong tries before a code is spent and a new one must be asked for. */
@@ -18,8 +19,6 @@ const CODES_PER_HOUR = 5;
 export const SIGNUP_WRONG_CODES_PER_DAY = 10;
 const WRONG_CODES_KEY = 'signup.wrong_codes_per_day';
 const DAY_MS = 24 * 3_600_000;
-const MIN_PASSWORD = 8;
-const MAX_PASSWORD = 128;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /**
@@ -109,7 +108,7 @@ export class ParentSignupService {
   async verify(rawEmail: string, rawCode: string, password: string): Promise<{ ok: true }> {
     const email = normalizeEmail(rawEmail);
     const code = rawCode.trim();
-    if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
+    if (!isPasswordLengthAcceptable(password)) {
       throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
     }
     // Hashed for every attempt, before anything is looked up: as costly for an

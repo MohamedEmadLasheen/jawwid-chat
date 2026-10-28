@@ -7,6 +7,7 @@ import { ACADEMY_ZONE, canonicalZone, clockIn, dayIn } from '../../platform/time
 import { ActorKind } from '../contracts/vocab';
 import type { Actor } from '../../platform/types';
 import { TemplateService } from './template.service';
+import { inboxCandidates, renderFirstComplete } from './inbox-render';
 import { NotificationPipeline } from './notification-pipeline.service';
 import { ConversationService } from '../conversations/conversation.service';
 import {
@@ -338,9 +339,11 @@ export class NotificationInboxService {
       vars.time = clockIn(at, zone.zone, lang);
       vars.day = dayIn(at, zone.zone, lang);
     }
-    const text = (await this.render(r.templateKey, r.locale, vars, cache))
-      ?? (await this.render('inbox.generic', r.locale, vars, cache))
-      ?? { title: '', body: '' };
+    // Never an unfilled {placeholder}: the in-app text, else the lock-screen
+    // text of the same notification, else the generic line (inbox-render.ts).
+    const raws = [];
+    for (const key of inboxCandidates(r.templateKey)) raws.push(await this.raw(key, r.locale, cache));
+    const text = renderFirstComplete(raws, vars) ?? { title: '', body: '' };
     return {
       id: r.id,
       category: r.category,
@@ -359,19 +362,17 @@ export class NotificationInboxService {
     };
   }
 
-  private async render(
+  /** The template row itself, cached per request; interpolation happens per entry. */
+  private async raw(
     key: string,
     locale: string,
-    vars: Record<string, unknown>,
     cache: Map<string, { title: string; body: string } | null>,
   ): Promise<{ title: string; body: string } | null> {
-    // The template row is cached per request; interpolation is per entry.
     const ck = `${key}|${locale}`;
     if (!cache.has(ck)) cache.set(ck, await this.templates.render(key, locale, {}));
-    const raw = cache.get(ck);
-    if (!raw) return null;
-    return { title: TemplateService.interpolate(raw.title, vars), body: TemplateService.interpolate(raw.body, vars) };
+    return cache.get(ck) ?? null;
   }
+
 }
 
 function tabWhere(tab: InboxTab): Prisma.NotificationItemWhereInput {
