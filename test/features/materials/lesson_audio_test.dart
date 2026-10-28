@@ -35,4 +35,46 @@ void main() {
     expect(message.toString(), isNot(contains('stand-in verse')));
     expect(lessonAudioMessage(78, [{'ayah': 1, 'audio': null}]), isNull);
   });
+
+  test('pages /quran/ayahs 50 at a time, only forward, and never more than 6 requests', () async {
+    final asked = <(int, int?)>[];
+    Future<Map<String, Object?>> pages(int from, int? to) async {
+      asked.add((from, to));
+      final end = to ?? from + 49;
+      return {
+        'surah': {'ayahCount': 120},
+        'ayahs': [for (var a = from; a <= (end > 120 ? 120 : end); a++) {'ayah': a}],
+      };
+    }
+    final all = await collectAyahPages(pages);
+    expect(all.length, 120);
+    expect(asked, [(1, null), (51, 100), (101, 120)]);
+
+    // A server that does not move forward is not followed; one that never ends stops at 6.
+    var stuck = 0;
+    expect(await collectAyahPages((from, to) async {
+      stuck++;
+      return {'surah': {'ayahCount': 286}, 'ayahs': [{'ayah': 1}]};
+    }), hasLength(1));
+    expect(stuck, 2);
+    var endless = 0;
+    await collectAyahPages((from, to) async {
+      endless++;
+      return {'surah': {'ayahCount': 100000}, 'ayahs': [{'ayah': from + 49}]};
+    });
+    expect(endless, 6);
+  });
+
+  test('the WebView injection posts JSON to the EXPECTED lesson origin, both as literals', () {
+    final js = audioInjection({'type': 'jawwid:quran-audio', 'surah': 78, 'ayahs': <Object?>[]}, 'https://lessons.example.test');
+    expect(js, 'window.postMessage({"type":"jawwid:quran-audio","surah":78,"ayahs":[]}, "https://lessons.example.test");');
+    // A quote in the data stays data.
+    expect(audioInjection({'x': '"); alert(1); ("'}, 'https://l.test'), contains(r'"x":"\"); alert(1); (\""'));
+  });
+
+  test('a lesson origin is compared exactly: scheme, host and port', () {
+    expect(lessonOriginOf('https://lessons.example.test/lessons/quran/surah-78'), 'https://lessons.example.test');
+    expect(lessonOriginOf('https://lessons.example.test:8443/x'), 'https://lessons.example.test:8443');
+    expect(lessonOriginOf('not a url'), isNull);
+  });
 }

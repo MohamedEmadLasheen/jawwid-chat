@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -7,6 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 // A new window (target=_blank, window.open) is never opened: no onCreateWindow
 // handler is installed, so the WebView drops it.
 
+import '../data/lesson_audio.dart';
 import 'activity_view.dart';
 
 ActivityViewFactory createActivityViewFactory() => const _WebViewActivityFactory();
@@ -53,7 +53,12 @@ class _ActivityWebViewState extends State<_ActivityWebView> {
   Future<void> _handAudio() async {
     final message = await widget.audio?.catchError((Object _) => null);
     if (message == null || !mounted) return;
-    await _controller.runJavaScript('window.postMessage(${jsonEncode(message)}, window.location.origin);').catchError((Object _) {});
+    // To the lesson this view was opened on, and only while the page is still on it:
+    // the list was fetched meanwhile, and the page may have navigated.
+    final expected = lessonOriginOf(widget.url);
+    final current = await _controller.currentUrl();
+    if (expected == null || current == null || lessonOriginOf(current) != expected || !mounted) return;
+    await _controller.runJavaScript(audioInjection(message, expected)).catchError((Object _) {});
   }
 
   @override

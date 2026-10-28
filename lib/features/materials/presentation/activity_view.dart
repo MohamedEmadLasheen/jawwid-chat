@@ -36,5 +36,5 @@ bool Function(Uri) activityAllowance(String url, {required bool isPackage}) {
     final prefix = '/${prefixSegments.join('/')}/';
     return (uri) => uri.scheme == start.scheme && uri.host == start.host && uri.port == start.port && uri.path.startsWith(prefix);
   }
-  return (uri) => uri.scheme == 'https' && uri.host == start.host;
+  return (uri) => uri.scheme == 'https' && uri.host == start.host && uri.port == start.port;
 }

@@ -58,10 +58,24 @@ describe('accepting the audio list from the opener', () => {
     expect(acceptAudioMessage({ origin: ORIGINS.self, data: await message() }, 85, { ...ORIGINS, media: [] })).toBeNull();
   });
 
-  it('a list that arrived BEFORE the lesson mounted is not lost (a WebView injects it when the page loads)', async () => {
+  it('a list that arrived BEFORE the lesson mounted is not lost (a WebView injects it when the page loads), and is taken once', async () => {
     const data = await message();
-    window.dispatchEvent(new MessageEvent('message', { origin: ORIGINS.self, data }));
-    const { result } = renderHook(() => useAudioManifest(85, ORIGINS));
+    // A WebView injects it into the page itself: the page's own origin.
+    const self = { ...ORIGINS, self: window.location.origin };
+    window.dispatchEvent(new MessageEvent('message', { origin: window.location.origin, data }));
+    const first = renderHook(() => useAudioManifest(85, self));
+    expect(first.result.current?.surah).toBe(85);
+    // Drained: a later lesson does not re-accept a stale list from the buffer.
+    const second = renderHook(() => useAudioManifest(85, self));
+    expect(second.result.current).toBeNull();
+  });
+
+  it('the buffer keeps nothing from a disallowed origin, so junk cannot push the real list out', async () => {
+    const data = await message();
+    const self = { ...ORIGINS, self: window.location.origin };
+    window.dispatchEvent(new MessageEvent('message', { origin: window.location.origin, data }));
+    for (let i = 0; i < 10; i++) window.dispatchEvent(new MessageEvent('message', { origin: 'https://evil.example.test', data: { type: 'junk', i } }));
+    const { result } = renderHook(() => useAudioManifest(85, self));
     expect(result.current?.surah).toBe(85);
   });
 

@@ -9,10 +9,22 @@ import { api } from '@/core/api/client'
  * DATA: `{ type, surah, ayahs: [{ ayah, audio }] }`, only the ayat that have
  * audio, never their text, never a credential. When the gate gives no audio,
  * nothing is posted. The lesson checks every key and file hash itself.
+ *
+ * ONLY the academy's own lessons site is ever handed audio: the server marks
+ * the item `audioEligible` (a lessons-site item, never an allowlisted
+ * third-party frame), AND the frame's origin must be this build's
+ * VITE_LESSONS_ORIGIN. Unset, no lesson gets audio.
  */
 export const AUDIO_MESSAGE = 'jawwid:quran-audio'
 export const READY_MESSAGE = 'jawwid:lesson-ready'
 const PER_REQUEST = 50
+/** 286 ayat (the longest surah) is 6 requests: never more. */
+const MAX_REQUESTS = 6
+
+/** The lessons site's origin, fixed when Admin Web is built; '' means none. */
+export function lessonsOrigin(): string {
+  return ((import.meta.env?.VITE_LESSONS_ORIGIN as string | undefined) ?? '').trim()
+}
 
 interface AyahAudio {
   reciter: string
@@ -48,13 +60,18 @@ export async function lessonAudioMessage(surah: number): Promise<LessonAudioMess
   const ayahs: LessonAudioMessage['ayahs'] = []
   let from = 1
   let count = Infinity
-  while (from <= count) {
+  for (let request = 0; request < MAX_REQUESTS && from <= count; request++) {
     const to = Number.isFinite(count) ? Math.min(count, from + PER_REQUEST - 1) : undefined
     const answer = await api.get<AyahsAnswer>('/quran/ayahs', { surah, from, to })
     count = answer.surah.ayahCount
-    for (const a of answer.ayahs) if (a.audio) ayahs.push({ ayah: a.ayah, audio: { reciter: a.audio.reciter, key: a.audio.key, url: a.audio.url, sha256: a.audio.sha256 } })
+    // Only the ayat this request asked for, each once.
+    for (const a of answer.ayahs) {
+      if (!a.audio || a.ayah < from || (to !== undefined && a.ayah > to)) continue
+      ayahs.push({ ayah: a.ayah, audio: { reciter: a.audio.reciter, key: a.audio.key, url: a.audio.url, sha256: a.audio.sha256 } })
+    }
     const last = answer.ayahs[answer.ayahs.length - 1]?.ayah
-    if (!last) break
+    // Each page must move forward: a server that does not is not followed.
+    if (!last || last < from) break
     from = last + 1
   }
   return ayahs.length ? { type: AUDIO_MESSAGE, surah, ayahs } : null
@@ -65,9 +82,11 @@ export async function lessonAudioMessage(surah: number): Promise<LessonAudioMess
  * loads and whenever the lesson says it is ready -- only to the frame's own
  * window and the lesson's exact origin.
  */
-export function useLessonAudio(frame: RefObject<HTMLIFrameElement | null>, url: string, enabled: boolean): void {
+export function useLessonAudio(frame: RefObject<HTMLIFrameElement | null>, url: string, eligible: boolean): void {
   useEffect(() => {
-    const lesson = enabled ? lessonSurah(url) : null
+    const found = eligible ? lessonSurah(url) : null
+    const origin = lessonsOrigin()
+    const lesson = found && origin && found.origin === origin ? found : null
     const el = frame.current
     if (!lesson || !el) return
     let message: LessonAudioMessage | null = null
@@ -94,5 +113,5 @@ export function useLessonAudio(frame: RefObject<HTMLIFrameElement | null>, url: 
       el.removeEventListener('load', post)
       window.removeEventListener('message', onReady)
     }
-  }, [frame, url, enabled])
+  }, [frame, url, eligible])
 }

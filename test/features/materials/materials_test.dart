@@ -9,6 +9,7 @@ import 'package:jawwid_chat/core/media/attachment_opener.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/lessons/presentation/lesson_card_view.dart';
 import 'package:jawwid_chat/features/lessons/presentation/lesson_report_sheet.dart';
+import 'package:jawwid_chat/features/materials/data/lesson_audio.dart';
 import 'package:jawwid_chat/features/materials/data/materials_repository.dart';
 import 'package:jawwid_chat/features/materials/presentation/activity_view.dart';
 import 'package:jawwid_chat/features/materials/presentation/child_materials_screen.dart';
@@ -28,10 +29,12 @@ void main() {
   );
   const song = MaterialItem(id: 'm-2', titleAr: 'أنشودة الحروف', titleEn: 'Letters song', subject: 'arabic', kind: 'video', mode: 'link');
 
-  Widget app(Widget home, {required _Materials materials, _Lessons? lessons, _Activity? activity, _Opener? opener, Locale locale = const Locale('en')}) {
+  Widget app(Widget home,
+      {required _Materials materials, _Lessons? lessons, _Activity? activity, _Opener? opener, Locale locale = const Locale('en'), String lessonsOrigin = 'https://lessons.example.test'}) {
     return ProviderScope(
       overrides: [
         materialsRepositoryProvider.overrideWithValue(materials),
+        lessonsOriginProvider.overrideWithValue(lessonsOrigin),
         if (lessons != null) lessonRepositoryProvider.overrideWithValue(lessons),
         activityViewFactoryProvider.overrideWithValue(activity ?? _Activity()),
         attachmentOpenerProvider.overrideWithValue(opener ?? _Opener()),
@@ -96,7 +99,8 @@ void main() {
       final materials = _Materials()
         ..items = [game]
         ..lessonAudioAnswer = message
-        ..openAs = const OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/quran/surah-78');
+        ..openAs = const OpenedMaterial(
+            kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/quran/surah-78', audioEligible: true);
       final activity = _Activity();
       await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity));
       await tester.pumpAndSettle();
@@ -107,16 +111,24 @@ void main() {
       expect(await activity.audios.last, message);
     });
 
-    testWidgets('an uploaded package, or a lessons page that is not a surah, asks for no audio', (tester) async {
-      for (final opened in const [
-        OpenedMaterial(kind: 'activity_package', mode: 'package', presentation: MaterialPresentation.frameIsolated, url: _Materials.playUrl),
-        OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/arabic/lesson-1'),
+    testWidgets('no audio for: a package, a non-surah page, an allowlisted third-party frame, another origin, or a build without a lessons origin', (tester) async {
+      for (final (opened, origin) in const [
+        (OpenedMaterial(kind: 'activity_package', mode: 'package', presentation: MaterialPresentation.frameIsolated, url: _Materials.playUrl), 'https://lessons.example.test'),
+        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/arabic/lesson-1', audioEligible: true), 'https://lessons.example.test'),
+        // A lessons-site URL the server did not mark eligible.
+        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/quran/surah-78'), 'https://lessons.example.test'),
+        // An allowlisted third-party frame: the server does not mark it eligible.
+        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://activities.example.test/lessons/quran/surah-78'), 'https://lessons.example.test'),
+        // Marked eligible, but not on this build's lessons origin.
+        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://activities.example.test/lessons/quran/surah-78', audioEligible: true), 'https://lessons.example.test'),
+        // No lessons origin configured at all.
+        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/quran/surah-78', audioEligible: true), ''),
       ]) {
         final materials = _Materials()
           ..items = [game]
           ..openAs = opened;
         final activity = _Activity();
-        await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity));
+        await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity, lessonsOrigin: origin));
         await tester.pumpAndSettle();
         await tester.tap(find.text('An-Naba game'));
         await tester.pumpAndSettle();
@@ -320,6 +332,8 @@ void main() {
     expect(allow(Uri.parse('https://h5p.example.test/content/1')), isTrue);
     expect(allow(Uri.parse('http://h5p.example.test/content/1')), isFalse);
     expect(allow(Uri.parse('https://elsewhere.example.test/')), isFalse);
+    // Same host, another port: another origin, refused.
+    expect(allow(Uri.parse('https://h5p.example.test:8443/content/1')), isFalse);
   });
 }
 

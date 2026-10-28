@@ -4,6 +4,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as web;
 
+import '../data/lesson_audio.dart';
 import 'activity_view.dart';
 
 /// In a browser (PD-28's web build) an activity plays in an <iframe> with the
@@ -41,12 +42,13 @@ class _ActivityFrameState extends State<_ActivityFrame> {
   web.HTMLIFrameElement? _frame;
   Map<String, Object?>? _message;
   JSFunction? _onReady;
+  bool _disposed = false;
 
   /// The audio list, to the frame's window and the lesson's exact origin only.
   void _post() {
     final frame = _frame;
     final message = _message;
-    if (frame == null || message == null) return;
+    if (_disposed || frame == null || message == null) return;
     frame.contentWindow?.postMessage(message.jsify(), Uri.parse(widget.url).origin.toJS);
   }
 
@@ -63,7 +65,7 @@ class _ActivityFrameState extends State<_ActivityFrame> {
       _onReady = ((web.MessageEvent e) {
         final data = e.data.dartify();
         final fromFrame = e.source != null && e.source!.strictEquals(_frame?.contentWindow).toDart;
-        if (fromFrame && e.origin == Uri.parse(widget.url).origin && data is Map && data['type'] == 'jawwid:lesson-ready') _post();
+        if (fromFrame && e.origin == Uri.parse(widget.url).origin && data is Map && data['type'] == 'jawwid:lesson-ready' && data['surah'] == lessonSurahOf(widget.url)) _post();
       }).toJS;
       web.window.addEventListener('message', _onReady);
     }
@@ -84,6 +86,7 @@ class _ActivityFrameState extends State<_ActivityFrame> {
 
   @override
   void dispose() {
+    _disposed = true;
     if (_onReady != null) web.window.removeEventListener('message', _onReady);
     super.dispose();
   }

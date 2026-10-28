@@ -67,10 +67,12 @@ class _MaterialPlayerScreenState extends ConsumerState<MaterialPlayerScreen> {
     _open();
   }
 
-  /// What the release gate gives this account for the lesson's surah (null: no audio, or not a surah lesson).
+  /// What the release gate gives this account for the lesson's surah: only for a
+  /// lessons-site item (the server's `audioEligible`) on this build's lessons origin.
   Future<Map<String, Object?>?>? _audioFor(OpenedMaterial o) {
     final surah = lessonSurahOf(o.url);
-    if (surah == null) return null;
+    final origin = ref.read(lessonsOriginProvider);
+    if (surah == null || !o.audioEligible || origin.isEmpty || lessonOriginOf(o.url) != origin) return null;
     return _audio ??= ref.read(materialsRepositoryProvider).lessonAudio(surah).catchError((Object _) => null);
   }
 

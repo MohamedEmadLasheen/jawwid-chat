@@ -9,9 +9,60 @@
 /// only the ayat that have audio, never their text, never a credential. With no
 /// audio for this account there is no message at all. The lesson checks every
 /// key and every file's SHA-256 itself.
+///
+/// ONLY the academy's own lessons site is ever handed audio: the server marks the
+/// item `audioEligible` (a lessons-site item, never an allowlisted third-party
+/// frame), AND the frame's origin must be this build's JAWWID_LESSONS_ORIGIN.
+/// Unset, no lesson gets audio.
 library;
 
+import 'dart:convert';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 const lessonAudioType = 'jawwid:quran-audio';
+
+/// The lessons site's origin, fixed at build time (`--dart-define=JAWWID_LESSONS_ORIGIN=https://…`); '' means none.
+final lessonsOriginProvider = Provider<String>((ref) => const String.fromEnvironment('JAWWID_LESSONS_ORIGIN').trim());
+
+/// 286 ayat (the longest surah) is 6 requests of 50: never more.
+const _perRequest = 50;
+const _maxRequests = 6;
+
+/// `scheme://host[:port]` of [url], or null.
+String? lessonOriginOf(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) return null;
+  return uri.origin;
+}
+
+/// Every `/quran/ayahs` entry of a surah, a page at a time: each page must move
+/// forward, and there are never more than 6 requests.
+Future<List<Object?>> collectAyahPages(Future<Map<String, Object?>> Function(int from, int? to) page) async {
+  final ayahs = <Object?>[];
+  var from = 1;
+  int? count;
+  for (var request = 0; request < _maxRequests && (count == null || from <= count); request++) {
+    final to = count == null ? null : (from + _perRequest - 1 < count ? from + _perRequest - 1 : count);
+    final d = await page(from, to);
+    count = ((d['surah'] as Map?)?['ayahCount'] as num?)?.toInt() ?? 0;
+    final entries = (d['ayahs'] as List?) ?? const [];
+    int? last;
+    for (final e in entries) {
+      final n = e is Map ? (e['ayah'] as num?)?.toInt() : null;
+      if (n == null || n < from || (to != null && n > to)) continue; // only what this request asked for
+      ayahs.add(e);
+      last = n;
+    }
+    if (last == null || last < from) break;
+    from = last + 1;
+  }
+  return ayahs;
+}
+
+/// The script a WebView runs to hand the page its audio list: a `message` event
+/// to the EXPECTED lesson origin. Both are JSON literals, so data stays data.
+String audioInjection(Map<String, Object?> message, String origin) => 'window.postMessage(${jsonEncode(message)}, ${jsonEncode(origin)});';
 
 final _surahPage = RegExp(r'^/lessons/quran/surah-([1-9]\d{0,2})/?$');
 

@@ -520,7 +520,7 @@ export function Player({ opened }: { opened: OpenResult }) {
   const tx = useCopy()
   const frame = useRef<HTMLIFrameElement>(null)
   // A Quran lesson of the lessons site gets the recitation the release gate gives this account.
-  useLessonAudio(frame, opened.url, opened.presentation === 'frame-site')
+  useLessonAudio(frame, opened.url, opened.presentation === 'frame-site' && opened.audioEligible === true)
   switch (opened.presentation) {
     case 'frame-isolated':
     case 'frame-site':
