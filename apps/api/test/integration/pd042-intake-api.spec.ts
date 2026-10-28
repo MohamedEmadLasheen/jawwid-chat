@@ -71,6 +71,11 @@ let n = 0;
 
 const sql = (q: string, ...args: unknown[]) => g.prisma.$executeRawUnsafe(q, ...args);
 
+/** The JSON of `value` with every uuid taken out: digits inside an id never pass for a phone (G-07 checks). */
+function withoutIds(value: unknown): string {
+  return JSON.stringify(value).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>');
+}
+
 async function code(p: Promise<unknown>): Promise<string> {
   try {
     await p;
@@ -180,7 +185,8 @@ describe('1. entering a family', () => {
     expect(await g.prisma.familyContactKey.count({ where: { familyId: r.familyId, kind: 'phone' } })).toBe(1);
     // The number lives in the parent file only; the audit never carries it.
     const entered = await g.prisma.auditLog.findFirstOrThrow({ where: { action: 'family.entered', entityId: r.familyId } });
-    expect(JSON.stringify({ before: entered.before, after: entered.after, reason: entered.reason })).not.toContain(f.parent.phone);
+    // Ids taken out first: a typed number can also be a run of digits inside a uuid.
+    expect(withoutIds({ before: entered.before, after: entered.after, reason: entered.reason })).not.toContain(f.parent.phone);
   });
 
   it('a Sales member enters a family with an e-mail: the parent can sign up; they own it; it waits for an Operations supervisor', async () => {
@@ -428,7 +434,9 @@ describe('6. review of #202', () => {
     const applied = await backfillFamilyContactKeys(g.prisma, { apply: true, acceptGaps: false });
     expect(applied).toMatchObject({ apply: true, keys: 2, collisions: [], unreadable: [], ready: true });
     expect(await g.prisma.familyContactKey.count({ where: { familyId: s.familyId } })).toBe(2);
-    expect(JSON.stringify(applied)).not.toContain('0042');
+    for (const typed of ['010 0000 0042', '+201000000042', 'parent.seed@qa.jawwid.test', 'Parent.Seed@QA.jawwid.test']) {
+      expect(withoutIds(applied)).not.toContain(typed);
+    }
 
     const again = await backfillFamilyContactKeys(g.prisma, { apply: true, acceptGaps: false });
     expect(again).toMatchObject({ keys: 0, already: 2, ready: true });
