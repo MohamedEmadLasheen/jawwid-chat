@@ -9,13 +9,17 @@ import { QuranTextService, REVERIFY_COOLDOWN_MS, type QuranStore, type StoredDat
 import { sha256Hex, type AyahRow, type PinnedDataset } from '../../../src/quran/quran-integrity';
 import { audioKey } from '../../../src/quran/audio-key';
 import { marksDigest, type TajweedMark, type TajweedReview } from '../../../src/quran/tajweed';
+import type { AudioAudience } from '../../../src/quran/audio-gate';
+import type { AudioSourceSpec } from '../../../src/quran/audio-sources';
+import type { ObjectStorage } from '../../../src/communication/attachments/object-storage';
 import { BASMALA, pinnedFor, rowOf, syntheticRows } from './fixtures';
 
 class FakeStore implements QuranStore {
   configured: string | null = 'synthetic-1';
   rows: AyahRow[] = syntheticRows();
   stored: StoredDataset | null;
-  audioSourceValue: { reciter: string; baseUrl: string } | null = null;
+  audioSourceValue: { reciter: string } | null = null;
+  audience: AudioAudience = 'none';
   audioRows: Array<{ surah: number; ayah: number; objectKey: string; sha256: string }> = [];
   marks: TajweedMark[] = [];
   reviews: TajweedReview[] = [];
@@ -37,17 +41,26 @@ class FakeStore implements QuranStore {
     return this.rows.filter((r) => r.surah === surah && r.ayah >= from && r.ayah <= to);
   }
   async audioSource() { return this.audioSourceValue; }
+  async audioAudience() { return this.audience; }
   async audio(_reciter: string, surah: number, from: number, to: number) {
     return this.audioRows.filter((r) => r.surah === surah && r.ayah >= from && r.ayah <= to);
   }
   async tajweed() { return { marks: this.marks, reviews: this.reviews, withdrawn: this.withdrawn }; }
 }
 
-async function setup(adjust?: (store: FakeStore) => void) {
+const STAFF = { kind: 'staff' } as const;
+const PARENT = { kind: 'contact' } as const;
+const RECITER = 'test-reciter';
+const LICENCE = { confirmedBy: 'owner', confirmedAt: '2026-11-01', reference: 'test' };
+const source = (licence: AudioSourceSpec['licence']): AudioSourceSpec => ({ reciter: RECITER, name: 'Test', attribution: 'test', licence, archives: [] });
+/** Signed, short-lived read URLs: licensed audio is never at a permanent public address. */
+const signing = { signedReadUrl: async (key: string, ttl: number) => `https://media.example.test/${key}?ttl=${ttl}&sig=x` } as unknown as ObjectStorage;
+
+async function setup(adjust?: (store: FakeStore) => void, licence: AudioSourceSpec['licence'] = null) {
   const pinned = pinnedFor(syntheticRows());
   const store = new FakeStore(pinned);
   adjust?.(store);
-  const service = new QuranTextService(store, new Map([[pinned.id, pinned]]));
+  const service = new QuranTextService(store, new Map([[pinned.id, pinned]]), signing, new Map([[RECITER, source(licence)]]));
   await service.onApplicationBootstrap();
   return { service, store, pinned };
 }
@@ -124,23 +137,48 @@ describe('QuranTextService', () => {
     expect((await service.ayahs({ surah: '112' })).ayahs).toHaveLength(4);
   });
 
-  it('attaches audio only through the ayah -> key mapping, and only when a source is configured', async () => {
-    const key = audioKey('alafasy-128', 113, 2);
+  it('attaches audio only through the ayah -> key mapping, as a signed URL, when the gate lets this account have it', async () => {
+    const key = audioKey(RECITER, 113, 2);
     const { service, store } = await setup((s) => {
-      s.audioSourceValue = { reciter: 'alafasy-128', baseUrl: 'https://media.example.test' };
+      s.audience = 'staff_test';
+      s.audioSourceValue = { reciter: RECITER };
       s.audioRows = [
-        { surah: 113, ayah: 1, objectKey: audioKey('alafasy-128', 113, 1), sha256: 'a'.repeat(64) },
+        { surah: 113, ayah: 1, objectKey: audioKey(RECITER, 113, 1), sha256: 'a'.repeat(64) },
         { surah: 113, ayah: 2, objectKey: key, sha256: 'b'.repeat(64) },
         // A row whose key names another ayah is never served for this one.
-        { surah: 113, ayah: 3, objectKey: audioKey('alafasy-128', 78, 5), sha256: 'c'.repeat(64) },
+        { surah: 113, ayah: 3, objectKey: audioKey(RECITER, 78, 5), sha256: 'c'.repeat(64) },
       ];
     });
-    const res = await service.ayahs({ surah: '113', from: '1', to: '5' });
-    expect(res.ayahs[1]!.audio).toEqual({ reciter: 'alafasy-128', key, url: `https://media.example.test/${key}`, sha256: 'b'.repeat(64) });
+    const res = await service.ayahs({ surah: '113', from: '1', to: '5' }, STAFF);
+    expect(res.ayahs[1]!.audio).toEqual({ reciter: RECITER, key, url: `https://media.example.test/${key}?ttl=3600&sig=x`, sha256: 'b'.repeat(64) });
     expect(res.ayahs[2]!.audio).toBeNull();
     expect(res.ayahs[4]!.audio).toBeNull();
+    // A parent or a student: no audio under staff_test.
+    expect((await service.ayahs({ surah: '113', from: '1', to: '2' }, PARENT)).ayahs.every((a) => a.audio === null)).toBe(true);
     store.audioSourceValue = null;
-    expect((await service.ayahs({ surah: '113', from: '1', to: '2' })).ayahs.every((a) => a.audio === null)).toBe(true);
+    expect((await service.ayahs({ surah: '113', from: '1', to: '2' }, STAFF)).ayahs.every((a) => a.audio === null)).toBe(true);
+  });
+
+  it('the release gate: none (the default) gives nobody audio; all gives students audio ONLY with the licence recorded', async () => {
+    const rows = (s: FakeStore) => {
+      s.audioSourceValue = { reciter: RECITER };
+      s.audioRows = [{ surah: 113, ayah: 1, objectKey: audioKey(RECITER, 113, 1), sha256: 'a'.repeat(64) }];
+    };
+    const audioFor = async (service: QuranTextService, who: { kind: 'staff' | 'contact' }) =>
+      (await service.ayahs({ surah: '113', from: '1', to: '1' }, who)).ayahs[0]!.audio;
+    const none = await setup(rows);
+    expect(await audioFor(none.service, STAFF)).toBeNull();
+    expect(await audioFor(none.service, PARENT)).toBeNull();
+    const unlicensed = await setup((s) => { rows(s); s.audience = 'all'; });
+    expect(await audioFor(unlicensed.service, STAFF)).not.toBeNull();
+    expect(await audioFor(unlicensed.service, PARENT)).toBeNull();
+    const licensed = await setup((s) => { rows(s); s.audience = 'all'; }, LICENCE);
+    expect(await audioFor(licensed.service, PARENT)).not.toBeNull();
+    // A reciter with no source spec in code gets no audio at all, whatever the config says.
+    const unknown = await setup((s) => { rows(s); s.audience = 'all'; s.audioSourceValue = { reciter: 'someone-else' }; }, LICENCE);
+    expect(await audioFor(unknown.service, STAFF)).toBeNull();
+    // No account (an internal caller): no audio.
+    expect((await licensed.service.ayahs({ surah: '113', from: '1', to: '1' })).ayahs[0]!.audio).toBeNull();
   });
 
   it('refuses a row whose stored Basmala split was changed after start-up', async () => {

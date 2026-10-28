@@ -34,13 +34,16 @@ import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
 import type { ObjectStorage, StoredObject } from '@communication/attachments/object-storage';
 import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { QuranModule } from '../../src/quran/quran.module';
-import { QURAN_PINNED } from '../../src/quran/quran-text.service';
+import { QURAN_AUDIO_SOURCES, QURAN_PINNED } from '../../src/quran/quran-text.service';
 import { audioKey } from '../../src/quran/audio-key';
 import { ingestAyahAudio, prismaAudioRowWriter } from '../../src/quran/audio-ingest';
 import { digestOf, sha256Hex, type PinnedDataset } from '../../src/quran/quran-integrity';
 import { marksDigest } from '../../src/quran/tajweed';
 import { BASMALA, syntheticRows } from '../unit/quran/fixtures';
 import { buildGraph } from './harness';
+
+// QuranModule signs audio URLs, so it builds the object storage (local reference storage in tests).
+process.env.STORAGE_SIGNING_SECRET ??= 'integration-storage-secret-32-chars-ok!';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -52,6 +55,8 @@ const inheritedRedisUrl = process.env.REDIS_URL;
 const PASSWORD = 'quran-dataset-spec-password-1';
 const DOMAIN = 'qurands.qa.jawwid.test';
 const RUN = Date.now().toString(36);
+/** The test recitation: its audio row is written by the ingest test, then served through the gate. */
+const AUDIO_RECITER = `t${RUN}`.slice(0, 20);
 
 type Row = { surah: number; ayah: number; text: string };
 const ROWS: Row[] = syntheticRows().map((r) => ({ surah: r.surah, ayah: r.ayah, text: r.text }));
@@ -155,6 +160,8 @@ beforeAll(async () => {
   process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({ imports: [PlatformModule, AuthModule, QuranModule] })
     .overrideProvider(QURAN_PINNED).useValue(new Map([[DATASET, pinned]]))
+    // A test recitation pinned like a real one, with NO licence recorded (so staff only).
+    .overrideProvider(QURAN_AUDIO_SOURCES).useValue(new Map([[AUDIO_RECITER, { reciter: AUDIO_RECITER, name: 'test', attribution: 'test', licence: null, archives: [] }]]))
     .compile();
   app = moduleRef.createNestApplication({ logger: false });
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/live', 'health/ready'] });
@@ -177,7 +184,7 @@ afterAll(async () => {
   try {
     if (originalDataset === null) await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'quran.dataset'`);
     else await g.prisma.$executeRawUnsafe(`update chat.config set value = $1::jsonb where key = 'quran.dataset'`, JSON.stringify(originalDataset));
-    await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'quran.audio'`);
+    await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('quran.audio', 'quran.audio.enabled_for')`);
   } finally {
     await g.prisma.$disconnect();
     if (inheritedRedisUrl === undefined) delete process.env.REDIS_URL;
@@ -246,7 +253,7 @@ describe('the load function', () => {
 });
 
 describe('audio: written only by the server\'s ingest, one key per ayah', () => {
-  const reciter = `t${RUN}`.slice(0, 20);
+  const reciter = AUDIO_RECITER;
   const MP3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(300, 9)]);
   const storage = {
     async read(key: string): Promise<StoredObject | null> {
@@ -352,23 +359,28 @@ describe('GET /quran/ayahs', () => {
     expect((await fetch(`${base}/quran/ayahs?surah=1`)).status).toBe(401);
   });
 
-  it('attaches audio only when a source is configured, through the ayah\'s own key and its ingested hash', async () => {
-    const reciter = `t${RUN}`.slice(0, 20);
-    await g.prisma.$executeRawUnsafe(
-      `insert into chat.config (key, value, scope, description) values ('quran.audio', $1::jsonb, 'quran', 'quran-dataset.spec')
-       on conflict (key) do update set value = excluded.value`,
-      JSON.stringify({ reciter, baseUrl: 'https://media.example.test' }),
+  it('attaches audio only through the release gate, the ayah\'s own key and its ingested hash, as a signed URL', async () => {
+    const reciter = AUDIO_RECITER;
+    const setConfig = (key: string, value: unknown) => g.prisma.$executeRawUnsafe(
+      `insert into chat.config (key, value, scope, description) values ($1, $2::jsonb, 'quran', 'quran-dataset.spec')
+       on conflict (key) do update set value = excluded.value`, key, JSON.stringify(value),
     );
+    await setConfig('quran.audio', { reciter });
     try {
-      const r = await http('/quran/ayahs?surah=85&from=2&to=4');
+      // The gate is unset, so it is `none`: nobody gets audio, staff included.
+      expect((await http('/quran/ayahs?surah=85&from=2&to=4')).json.ayahs.map((a: { audio: unknown }) => a.audio)).toEqual([null, null, null]);
+      await setConfig('quran.audio.enabled_for', 'staff_test');
+      const r = await http('/quran/ayahs?surah=85&from=2&to=4'); // the owner: a staff account
       const stored = await g.prisma.$queryRawUnsafe<Array<{ sha256: string }>>(`select sha256 from chat.quran_ayah_audio where reciter_code = $1`, reciter);
+      const key = audioKey(reciter, 85, 3);
       expect(r.json.ayahs.map((a: { audio: unknown }) => a.audio)).toEqual([
         null,
-        { reciter, key: audioKey(reciter, 85, 3), url: `https://media.example.test/${audioKey(reciter, 85, 3)}`, sha256: stored[0]!.sha256 },
+        { reciter, key, url: expect.stringContaining(`${encodeURIComponent(key)}?expires=`), sha256: stored[0]!.sha256 },
         null,
       ]);
+      expect(r.json.ayahs[1].audio.url).toMatch(/&sig=/);
     } finally {
-      await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'quran.audio'`);
+      await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('quran.audio', 'quran.audio.enabled_for')`);
     }
   });
 

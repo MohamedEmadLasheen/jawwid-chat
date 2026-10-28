@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../platform/prisma.service';
 import { isReciterCode } from './audio-key';
+import { parseAudience, type AudioAudience } from './audio-gate';
 import type { AyahRow } from './quran-integrity';
 import type { QuranStore, StoredDataset } from './quran-text.service';
 import type { TajweedMark, TajweedReview } from './tajweed';
@@ -36,12 +37,16 @@ export class PrismaQuranStore implements QuranStore {
        ORDER BY ayah`;
   }
 
-  async audioSource(): Promise<{ reciter: string; baseUrl: string } | null> {
+  async audioSource(): Promise<{ reciter: string } | null> {
     const row = await this.prisma.config.findUnique({ where: { key: 'quran.audio' } });
-    const v = row?.value as { reciter?: unknown; baseUrl?: unknown } | null | undefined;
-    if (!v || typeof v !== 'object' || typeof v.reciter !== 'string' || typeof v.baseUrl !== 'string') return null;
-    if (!isReciterCode(v.reciter) || !/^https:\/\/[^\s/?#]+(\/[^\s?#]*)?$/.test(v.baseUrl)) return null;
-    return { reciter: v.reciter, baseUrl: v.baseUrl };
+    const v = row?.value as { reciter?: unknown } | null | undefined;
+    if (!v || typeof v !== 'object' || typeof v.reciter !== 'string' || !isReciterCode(v.reciter)) return null;
+    return { reciter: v.reciter };
+  }
+
+  async audioAudience(): Promise<AudioAudience> {
+    const row = await this.prisma.config.findUnique({ where: { key: 'quran.audio.enabled_for' } });
+    return parseAudience(row?.value);
   }
 
   audio(reciter: string, surah: number, from: number, to: number) {

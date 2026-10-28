@@ -1,4 +1,6 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
+import type { ObjectStorage } from '../communication/attachments/object-storage';
+import { OBJECT_STORAGE } from '../platform/tokens';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { surahOf } from '../materials/quran-surahs';
 import { audioKey } from './audio-key';
@@ -13,9 +15,14 @@ import {
   type VerifiedAyah,
 } from './quran-integrity';
 import { servableMarks, type TajweedMark, type TajweedReview } from './tajweed';
+import { audioAllowed, type AudioAudience } from './audio-gate';
+import { AUDIO_SOURCES, type AudioSourceSpec } from './audio-sources';
 
 export const QURAN_STORE = Symbol('QURAN_STORE');
 export const QURAN_PINNED = Symbol('QURAN_PINNED');
+export const QURAN_AUDIO_SOURCES = Symbol('QURAN_AUDIO_SOURCES');
+/** How long a signed audio URL stays valid: one lesson's sitting. */
+export const AUDIO_URL_TTL_SECONDS = 3600;
 
 /** The dataset's row as loaded (chat.quran_dataset). */
 export interface StoredDataset {
@@ -33,8 +40,10 @@ export interface QuranStore {
   dataset(id: string): Promise<StoredDataset | null>;
   allAyahs(id: string): Promise<AyahRow[]>;
   ayahs(id: string, surah: number, from: number, to: number): Promise<AyahRow[]>;
-  /** chat.config `quran.audio`: { reciter, baseUrl }, or null while no audio is approved. */
-  audioSource(): Promise<{ reciter: string; baseUrl: string } | null>;
+  /** chat.config `quran.audio`: { reciter }, or null while no audio is configured. */
+  audioSource(): Promise<{ reciter: string } | null>;
+  /** chat.config `quran.audio.enabled_for` -- the release gate's audience (audio-gate.ts); `none` unless set. */
+  audioAudience(): Promise<AudioAudience>;
   audio(reciter: string, surah: number, from: number, to: number): Promise<Array<{ surah: number; ayah: number; objectKey: string; sha256: string }>>;
   /**
    * A surah's sign-offs, every mark they name or that is approved (whatever the
@@ -78,6 +87,9 @@ export class QuranTextService implements OnApplicationBootstrap {
   constructor(
     @Inject(QURAN_STORE) private readonly store: QuranStore,
     @Inject(QURAN_PINNED) private readonly pins: ReadonlyMap<string, PinnedDataset>,
+    /** Signs each audio URL; without it no audio is attached. */
+    @Optional() @Inject(OBJECT_STORAGE) private readonly storage: Pick<ObjectStorage, 'signedReadUrl'> | null = null,
+    @Optional() @Inject(QURAN_AUDIO_SOURCES) private readonly sources: ReadonlyMap<string, AudioSourceSpec> = AUDIO_SOURCES,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -109,19 +121,25 @@ export class QuranTextService implements OnApplicationBootstrap {
     }
   }
 
-  async ayahs(query: Record<string, unknown>) {
+  /**
+   * A verified range. `actor` is the signed-in caller: audio is attached only
+   * when the release gate (audio-gate.ts) lets THIS account have it, only for a
+   * reciter pinned in audio-sources.ts, and only as a short-lived signed URL.
+   */
+  async ayahs(query: Record<string, unknown>, actor?: { kind: string }) {
     const { surah, from, to } = range(query);
     const ok = await this.ready();
     const rows = await this.store.ayahs(ok.id, surah.number, from, to);
     this.checkServed(ok, rows, surah.number, from, to);
-    const source = await this.store.audioSource();
     const audio = new Map<number, { reciter: string; key: string; url: string; sha256: string }>();
-    if (source) {
+    const source = actor && this.storage ? await this.store.audioSource() : null;
+    const spec = source ? this.sources.get(source.reciter) : undefined;
+    if (source && spec && audioAllowed(await this.store.audioAudience(), spec.licence, actor!)) {
       for (const a of await this.store.audio(source.reciter, surah.number, from, to)) {
         // The stored key must be the one key of THIS ayah; anything else is not served.
         const key = audioKey(source.reciter, a.surah, a.ayah);
         if (a.surah === surah.number && a.objectKey === key) {
-          audio.set(a.ayah, { reciter: source.reciter, key, url: `${source.baseUrl.replace(/\/+$/, '')}/${key}`, sha256: a.sha256 });
+          audio.set(a.ayah, { reciter: source.reciter, key, url: await this.storage!.signedReadUrl(key, AUDIO_URL_TTL_SECONDS), sha256: a.sha256 });
         }
       }
     }

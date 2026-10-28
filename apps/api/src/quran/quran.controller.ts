@@ -3,6 +3,8 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
 import { QuranTextService } from './quran-text.service';
 import { SelfService } from '../platform/permissions/route-access';
+import { CurrentActor } from '../communication/api/actor.decorator';
+import type { Actor } from '../platform/types';
 
 /**
  * The shared, verified Quran text (docs/product/quran-dataset-contract.md).
@@ -13,13 +15,14 @@ import { SelfService } from '../platform/permissions/route-access';
 export class QuranController {
   constructor(private readonly quran: QuranTextService) {}
 
-  /** ?surah=N&from=A&to=B, at most 50 ayat; each ayah with its hash and (when approved) its audio. */
+  /** ?surah=N&from=A&to=B, at most 50 ayat; each ayah with its hash and, when the release gate allows this account, its audio. */
   // PD-40: shared reference text any signed-in account may read -- self-service.
   @SelfService()
   @RateLimited(ActionScope.QURAN_READ)
   @Get('ayahs')
-  ayahs(@Query() query: Record<string, unknown>) {
-    return this.quran.ayahs(query ?? {});
+  ayahs(@Query() query: Record<string, unknown>, @CurrentActor() actor: Actor) {
+    // Audio rides only on what the release gate lets this account have (audio-gate.ts).
+    return this.quran.ayahs(query ?? {}, actor);
   }
 
   /** The approved, signed-off Tajweed marks of a range (none are shipped yet). */
