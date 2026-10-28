@@ -1474,6 +1474,7 @@
   "webPortalStaffBody": "برجاء استخدام لوحة التحكم (Admin Web)، أو تطبيق جَوِّد على هاتفك.",
   "voiceNoteWebUnavailable": "يمكن تسجيل الرسائل الصوتية من تطبيق الهاتف.",
   "materialsTitle": "المواد التعليمية",
+  "activityLoadFailed": "تعذّر تحميل هذا الدرس.",
   "materialsEntrySubtitle": "المكتبة وتدريب هذا الأسبوع وخريطة الحفظ",
   "materialsTabLibrary": "المكتبة",
   "materialsTabPractice": "تدريب هذا الأسبوع",

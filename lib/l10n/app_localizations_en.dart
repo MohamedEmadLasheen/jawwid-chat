@@ -3567,6 +3567,9 @@ class L10nEn extends L10n {
   String get materialsTitle => 'Materials';
 
   @override
+  String get activityLoadFailed => 'This lesson couldn\'t load.';
+
+  @override
   String get materialsEntrySubtitle =>
       'Library, practice this week and the memorization map';
 

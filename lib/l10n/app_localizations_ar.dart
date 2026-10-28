@@ -3640,6 +3640,9 @@ class L10nAr extends L10n {
   String get materialsTitle => 'المواد التعليمية';
 
   @override
+  String get activityLoadFailed => 'تعذّر تحميل هذا الدرس.';
+
+  @override
   String get materialsEntrySubtitle =>
       'المكتبة وتدريب هذا الأسبوع وخريطة الحفظ';
 

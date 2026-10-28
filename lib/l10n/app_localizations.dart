@@ -6103,6 +6103,12 @@ abstract class L10n {
   /// **'Materials'**
   String get materialsTitle;
 
+  /// PD-29: an activity (a lesson page in the app) failed to load -- TLS, the network or a 404 -- instead of a blank page; Try again reloads it.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson couldn\'t load.'**
+  String get activityLoadFailed;
+
   /// PD-29: the entry to a child's Materials page.
   ///
   /// In en, this message translates to:
