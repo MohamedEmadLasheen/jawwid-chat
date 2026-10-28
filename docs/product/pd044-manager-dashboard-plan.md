@@ -1,12 +1,23 @@
 # PD-44: a real manager Dashboard (review and plan)
 
-**State:** plan for approval, revision 1. No feature code is written.
+**State:** **APPROVED**, revision 2. On 2026-10-28 the owner answered Q1–Q9 "Approve all (Recommended)", relayed verbatim by the department head, with one correction to Q6 (§8). No feature code is written. PR-1 waits for the department head's GO (machine load cap).
 **Claim:** `docs/product/pd-registry/PD-44.md` (PR #189). **No migration slot is claimed.** The plan expects no DDL. §6.4 lists the two indexes a reviewer may ask for; if one is needed, the department head assigns the slot at that PR.
 **Base:** `main` @ `a547b0e2`, read after PR #187 (Remove the legacy Inbox; approved, merging on green). #187 removes `dashboardApi.unattended` and the Dashboard's link into `/inbox`. It keeps `DashboardPage` and its four other calls. Line numbers in `endpoints.ts`, `queryKeys.ts` and `RealtimeProvider.tsx` are `main`'s, and #187 moves some of them.
 
 The owner's decision, verbatim:
 
 > "Remove Inbox, rebuild Dashboard"
+
+---
+
+## What changed in revision 2
+
+| Owner answer (2026-10-28, relayed verbatim) | Change in this plan |
+|---|---|
+| Q1–Q9: "Approve all (Recommended)" | §8 records every question as DECIDED. |
+| Q6, corrected wording: "(6) The Operations manager sees Teacher Supervision figures (their access is now merged)" | Revision 1 waited for PD-26 #175, but #175 is merged (`a6ed9eb7`) and was QA'd on the system-test stack. It was already in this plan's base. The Operations Manager now gets the Teachers section, scoped by the page's own rules (§3.6, §3.8). |
+| `/tasks`: "Keep and rebuild later" | The Tasks page is **not** removed. It is a separate future feature (§1.3, §9). |
+| The calendar zone (department head) | Unchanged: "today" is `CalendarService.zone()` (§1.3). That method reads the `stats.zone` key. |
 
 ---
 
@@ -67,10 +78,10 @@ All paths are relative to the repository root. SQL lives in `supabase/migrations
 
 ### 1.3 What else the review found
 
-1. **"Today" has two configuration keys.** Stats, the calendar and scheduling read `stats.zone` (`apps/api/src/lessons/stats.service.ts:437`, `calendar.service.ts:136`; default in `apps/api/src/platform/app-config.service.ts:129`). `academyZone()` reads `schedule.timezone` (`apps/api/src/platform/time-zone.service.ts:93`). They agree only because both default to `Africa/Cairo`. The Dashboard uses **the calendar's zone** (`CalendarService.zone()`), so "today's lessons" always equals what `/schedule` shows for today. Unifying the two keys is a separate follow-up.
+1. **"Today" has two configuration keys.** Stats, the calendar and scheduling read `stats.zone` (`apps/api/src/lessons/stats.service.ts:437`, `calendar.service.ts:136`; default in `apps/api/src/platform/app-config.service.ts:129`). `academyZone()` reads `schedule.timezone` (`apps/api/src/platform/time-zone.service.ts:93`). They agree only because both default to `Africa/Cairo`. The Dashboard uses **the calendar's zone**: `CalendarService.zone()`, which reads `stats.zone` (`calendar.service.ts:136-137`). "Today's lessons" therefore always equals what `/schedule` shows for today. The Dashboard never reads `schedule.timezone` directly. Unifying the two keys is a separate follow-up.
 2. **The Admin Web does not read `/me`'s permission keys yet.** The API returns them (`apps/api/src/platform/auth/auth.controller.ts:147-154`; `auth.dto.ts:23`), but no Admin Web code reads them. PR-2 adds the field to the session type. The PD-40 page registry (`apps/admin-web/src/core/permissions/pages.ts`, PD-40 plan §4) is not on `main`. If it lands first, the Dashboard registers there instead.
-3. **The `/tasks` page is dead too.** `endpoints.ts:235,244` call `/tasks`, and no controller serves it. This is out of scope here, listed as a follow-up (§9).
-4. Already handled by others, not repeated here: `reports.view` for Teachers-department members (PD-40 #186); Operations access to the Teacher Supervision page (PD-26 #175).
+3. **The `/tasks` page has no API either.** `endpoints.ts:235,244` call `/tasks`, and no controller serves it. Owner, 2026-10-28: **"Keep and rebuild later"**. This plan does not touch it; it is a separate future feature (§9).
+4. Already handled by others, not repeated here: `reports.view` for Teachers-department members (PD-40 #186). Operations access to the Teacher Supervision page (PD-26 #175) is merged (`a6ed9eb7`) and is used in §3.6.
 
 ---
 
@@ -224,7 +235,13 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
 | `credentials.pending` | pending uploaded teacher credentials | `teacher_profiles.review` holders |
 
 - **Why `violations.open` reuses the list:** `standing()` decides from corrected lesson outcomes and `visible()` from the Operations child filter. Both run in JS (`discipline.service.ts:588,619`), so a separate SQL count would drift. The list is bounded at 500 and served by `teacher_violation_open_idx`. Moving `standing()` into SQL is a follow-up, not a Dashboard prerequisite.
-- **Operations manager:** for v1 this section is served on the **Teachers-department basis and to the super admin only**. The Operations basis (teachers of their own families) follows when PD-26 #175 has landed and been QA'd (Q6).
+- **Operations Manager (Q6, DECIDED): served on the Operations basis.** It uses the page's own rule, `TeacherScopeService.pageRowsOf` + `pageRowVisible` (`teacher-scope.ts:177-245`, merged with PD-26 #175).
+  - **Which teachers:** those reached through `chat.operations_teacher_ids`.
+  - **Teacher-level rows** (leave, a management complaint) count whole.
+  - **Rows about one child or family** (a lesson's lateness or absence, a parent's complaint or feedback) count only for `chat.operations_learner_ids` and those learners' families.
+  - **How the SQL counts express it:** as set predicates on those two functions, never as a JS filter over a fetched list. `violations.open` keeps reusing `DisciplineService.list`, which already applies `visible()`.
+  - **Not for the Operations Manager:** `certificates.requested` and `credentials.pending`. Operations holds neither `certificates.view` nor the Teachers-department basis.
+  - **Parity spec:** includes an Operations Manager whose families share a teacher with another department's families. The shared teacher's child-level rows for other families must not count.
 - **Lives in:** `LeaveService.counts`, `DisciplineService.openCount`, `ParentFeedbackService.counts`, `CertificateService.counts` and `TeacherProfileService.pendingCount`.
 - **Links:** `/teachers/supervision?section=leave|absences|feedback` (sections in `TeacherSupervisionPage.tsx:26,45`), `/teachers/certificates` and `/teacher-profiles`.
 
@@ -253,7 +270,7 @@ From the legacy bundles (`legacy-bundles.ts`) and the service bases above.
 | Lessons | today + outcome queue | today | today + outcome queue | — |
 | Enrolment | all tiles | trials, new students (unassigned + not set up) | trials | trials, prospects, new students (unassigned) |
 | Billing | all tiles | all tiles | — (no `billing.view`) | instalments, receipts, locked / grace |
-| Teachers | all tiles | — in v1 (Q6) | all tiles | — |
+| Teachers | all tiles | leave, violations, feedback for their families' teachers (Q6) | all tiles | — |
 | Structure | all tiles | unsupervised children / families, covers, backups | unsupervised teachers, covers, backups | covers, backups |
 
 **Supervisors (not in v1, Q1).** Each supervisor's working pages already are their queue:
@@ -366,7 +383,7 @@ Two new tests pin the result:
 | `/dashboard/lessons` | `lessons.view` \| `schedule.view` | calendar scope; `requireManager` + `scopeOf` for the outcome queue |
 | `/dashboard/enrolment` | `trials.view` \| `new_students.view` | trial scope; `EnrolmentService` visibility; per-tile key check |
 | `/dashboard/billing` | `billing.view` (+ `subscriptions.view` per tile) | `decideBillingAccess` |
-| `/dashboard/teachers` | `teacher_supervision.view` (+ `certificates.view`, `teacher_profiles.review` per tile) | `pageRowsOf` / `pageRowVisible`; Teachers basis only in v1 |
+| `/dashboard/teachers` | `teacher_supervision.view` (+ `certificates.view`, `teacher_profiles.review` per tile) | `pageRowsOf` / `pageRowVisible`: Teachers department, super admin and Operations bases |
 | `/dashboard/structure` | `org.manage` | `OrgStructureService`, `requireAssigner`, cover rules |
 
 - Every route is declared, so `pd040-route-permissions.spec.ts` passes. The generated table `docs/security/pd040-route-permissions.md` gains seven rows. No catalogue, bundle or migration change.
@@ -421,7 +438,7 @@ Each PR is small, carries its tests, and is merged by hand after green CI. At mo
 | **PR-3** | `/dashboard/lessons` and its section | PR-2 |
 | **PR-4** | `/dashboard/enrolment` and its section, plus the prospects "not booked" filter | PR-2 |
 | **PR-5** | `/dashboard/billing` and its section, plus `/instalments?status=` and the Parents "Locked / grace" filter | PR-2 |
-| **PR-6** | `/dashboard/teachers` and its section (Teachers basis) | PR-2 |
+| **PR-6** | `/dashboard/teachers` and its section (Teachers department, super admin and Operations bases, with the Operations parity case of §3.6) | PR-2 |
 | **PR-7** | `/dashboard/structure` and its section, plus `/organization?tab=&unassigned=` | PR-2 |
 | **PR-8** | The super admin: the sections in the Admin Portal Dashboard section; `/dashboard` redirects the super admin there | PR-3 … PR-7 |
 
@@ -429,18 +446,18 @@ PR-3 to PR-7 are independent of each other once PR-2 is in. The order above is a
 
 ---
 
-## 8. Owner questions
+## 8. Owner questions: DECIDED
 
-Each question has a recommendation. The plan is written as if the recommendation is accepted.
+**Owner, 2026-10-28, relayed verbatim by the department head:** "Approve all (Recommended)". The owner also approved one corrected wording for Q6: "(6) The Operations manager sees Teacher Supervision figures (their access is now merged)".
 
-| # | Question | Recommendation | Why |
+| # | Question | DECIDED | Why |
 |---|---|---|---|
 | Q1 | Who gets a Dashboard in v1? | **The super admin and the three managers.** Supervisors later. | A supervisor's working pages already are their queue (Chat unread, Cases → Mine, Needs action). The endpoints are scoped for supervisors, so adding them later is a nav change plus the billing reach query. |
 | Q2 | Should the Dashboard become the managers' landing page? | **No. Chat stays home; the Dashboard moves from More to the main navigation.** | Managers answer families and teams first. The Dashboard is a glance. Making it home would add a click before every conversation. |
 | Q3 | When does a chat count as "waiting"? From the parent's first unanswered message, or only after a delay (for example 30 minutes, or working hours)? | **From the first unanswered message, showing how long the oldest has waited.** No threshold in v1. | No response-time target is configured or measured anywhere on `main`. "Oldest since …" lets the manager judge urgency without a rule we would have to invent. |
 | Q4 | "Families without an Operations supervisor": a family where **any** child has no supervisor, or **every** child? | **Any child.** The tile shows families and children. | PD-8 assigns each child, not each family. A family with one unsupervised child already has a child nobody below the super admin can reach (`COMM.LEARNER_UNSUPERVISED`). |
 | Q5 | Where does a manager resolve a locked subscription? | **A "Locked / grace" filter on the Parents page,** each row opening the student profile. | No page lists locked children today, and the student profile is where payments and exceptions are recorded (PD-17, PD-30). |
-| Q6 | Should the Operations Manager see Teacher Supervision figures (feedback and violations about their families' teachers)? | **Not in v1. Add once PD-26 #175 (Operations access) has landed and been QA'd.** | Its scope rule is still awaiting review. A count must not go live before the page it mirrors does. |
+| Q6 | Should the Operations Manager see Teacher Supervision figures (feedback and violations about their families' teachers)? | **Yes. The Operations Manager sees Teacher Supervision figures, scoped by the page's rules** (corrected wording above). | Revision 1 wrongly treated PD-26 #175 as pending. It is merged (`a6ed9eb7`) and was QA'd, so the count mirrors a live page (§3.6). |
 | Q7 | The super admin: the same Dashboard, or a separate one? | **The same sections, inside the Admin Portal's Dashboard section, above the existing inventory.** `/dashboard` redirects there. | One Dashboard per person. The inventory counts stay where the super admin already reads them. |
 | Q8 | Should the Dashboard get its own PD-40 permission key (`dashboard.view`)? | **No. Each section requires its source page's key.** | A dashboard key would be a second gate to the same data and a delegation hazard. Not adding one also keeps this work free of any migration (§2.1). |
 | Q9 | Counts only, or also names (for example "the 5 longest-waiting families")? | **Counts only in v1, with "oldest since".** | Names would make the Dashboard a second list page with its own PII rules. The tile's link goes to the list that already has them. |
@@ -449,7 +466,7 @@ Each question has a recommendation. The plan is written as if the recommendation
 
 ## 9. Out of scope and follow-ups
 
-- **`/tasks` is dead too.** The Tasks page calls `/tasks`, and no API serves it (§1.3). It needs the same "remove or rebuild" decision as the Inbox.
+- **Tasks: "Keep and rebuild later"** (owner, 2026-10-28). The Tasks page stays. It calls `/tasks`, which no API serves yet (§1.3), and it is rebuilt as a **separate future feature** with its own PD number. PD-44 neither removes nor rebuilds it, and the Dashboard links no tile to it.
 - Unify `stats.zone` and `schedule.timezone` into one academy-zone key (§1.3).
 - Move `DisciplineService.standing()` into SQL, so `violations.open` becomes a true count with no cap.
 - Retire `chat.staff_workload` / `organization_workload_totals` (owner-based, pre-PD-8), or redefine them on PD-8 scope. The Staff Profiles directory still shows them.
