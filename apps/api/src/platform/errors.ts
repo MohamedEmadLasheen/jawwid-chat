@@ -345,6 +345,21 @@ export enum CommErrorCode {
    * Never retry: it changes only when the account's roles change.
    */
   PERMISSION_DENIED = 'COMM.PERMISSION_DENIED',
+  /**
+   * PD-40 PR-3: this caller may not create or manage this staff account, or
+   * grant this role (plan §13 S1/S2: only the super admin creates supervisors
+   * and managers; a department manager acts on the specialists of their own
+   * department, with roles whose every key they hold and may delegate). 403.
+   */
+  STAFF_ACCOUNT_DENIED = 'COMM.STAFF_ACCOUNT_DENIED',
+  /** PD-40 PR-3: no such staff account in the caller's reach. 404. */
+  STAFF_ACCOUNT_NOT_FOUND = 'COMM.STAFF_ACCOUNT_NOT_FOUND',
+  /** PD-40 PR-3: a malformed request -- name, e-mail, tier, department, role list or reason. 400. */
+  STAFF_ACCOUNT_INVALID = 'COMM.STAFF_ACCOUNT_INVALID',
+  /** PD-40 PR-3: the sign-in e-mail already signs in to Chat. 409. */
+  STAFF_ACCOUNT_CONFLICT = 'COMM.STAFF_ACCOUNT_CONFLICT',
+  /** PD-40 PR-3: an access role that cannot be defined -- an unknown or super-admin-only key, a bad tier, a taken key. 400. */
+  ACCESS_ROLE_INVALID = 'COMM.ACCESS_ROLE_INVALID',
   /** PD-21: no such account in the caller's organization. 404. */
   ACCOUNT_ADMIN_NOT_FOUND = 'COMM.ACCOUNT_ADMIN_NOT_FOUND',
   /** PD-21: not in a state for this (suspend an inactive account, reactivate one that is not suspended, impersonate an inactive one). 409. */
