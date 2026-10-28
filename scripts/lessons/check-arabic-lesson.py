@@ -53,6 +53,7 @@ FIXTURE = os.path.join(ARABIC, FIXTURE_NAME)
 LESSON_FILE = re.compile(r'lesson-\d{3}\.json')
 KEYS = {'lesson', 'review', 'provenance', 'finalMark', 'retiredIds', 'units', 'quiz'}
 UNIT_KEYS = {'id', 'letters', 'name', 'forms', 'note', 'words'}
+UNIT_OPTIONAL = {'mark', 'group'}  # lesson 3, the harakat: the letter carrying one mark; the picker's group
 WORD_KEYS = {'id', 'text', 'was', 'review'}
 POSITIONS = ['start', 'middle', 'end']
 UNIT_ID = re.compile(r'^[a-z][a-z0-9_]*$')
@@ -98,24 +99,29 @@ def letters_of(w):
     return [c for c in w if is_letter(c)]
 
 
-def occurrences(w, unit_letters):
+HARAKA = {'fatha': chr(0x64E), 'kasra': chr(0x650), 'damma': chr(0x64F)}
+
+
+def occurrences(w, unit_letters, mark=None):
+    """With a mark (one haraka's code point), a letter counts only where it CARRIES it (lesson 3)."""
     ls = letters_of(w)
+    marks = [mk for _, mk in letters_marks(w)] if mark else []
     out = []
     for entry in unit_letters:
         seq = list(entry)
         for i in range(len(ls) - len(seq) + 1):
-            if ls[i:i + len(seq)] == seq:
+            if ls[i:i + len(seq)] == seq and (not mark or mark in marks[i]):
                 out.append((i, len(seq)))
     return sorted(out)
 
 
-def has(w, unit_letters):
-    return bool(occurrences(w, unit_letters))
+def has(w, unit_letters, mark=None):
+    return bool(occurrences(w, unit_letters, mark))
 
 
-def positions(w, unit_letters):
+def positions(w, unit_letters, mark=None):
     n = len(letters_of(w))
-    found = {'start' if at == 0 else 'end' if at + length == n else 'middle' for at, length in occurrences(w, unit_letters)}
+    found = {'start' if at == 0 else 'end' if at + length == n else 'middle' for at, length in occurrences(w, unit_letters, mark)}
     return [p for p in POSITIONS if p in found]
 
 
@@ -209,8 +215,8 @@ def check(lesson, number):
     units, vocabulary, word_ids = {}, set(), set()
     for i, u in enumerate(lesson['units']):
         where = f'unit {u.get("id", i)!r}' if isinstance(u, dict) else f'unit {i}'
-        if not isinstance(u, dict) or set(u) != UNIT_KEYS:
-            err(f'{where}: keys must be {sorted(UNIT_KEYS)}')
+        if not isinstance(u, dict) or not UNIT_KEYS <= set(u) or set(u) - UNIT_KEYS - UNIT_OPTIONAL:
+            err(f'{where}: keys must be {sorted(UNIT_KEYS)} (and {sorted(UNIT_OPTIONAL)})')
             continue
         if not is_str(u['id']) or not UNIT_ID.match(u['id']):
             err(f'{where}: a unit id is a lowercase slug without hyphens (ba, lam_alif)')
@@ -220,8 +226,21 @@ def check(lesson, number):
         if not isinstance(u['letters'], list) or not u['letters'] or not all(is_str(l) and l and all(is_letter(c) for c in l) for l in u['letters']):
             err(f'{where}: letters must be a list of letters (one, or a pair such as لا)')
             continue
+        mark = None
+        if 'mark' in u:
+            if u['mark'] not in HARAKA or not all(len(l) == 1 for l in u['letters']):
+                err(f'{where}: mark must be fatha, kasra or damma, on single letters')
+                continue
+            mark = HARAKA[u['mark']]
+        if 'group' in u and (not is_str(u['group']) or not 0 < len(u['group']) <= 8):
+            err(f'{where}: group must be a short non-empty name (the letter)')
+        u = {**u, '_mark': mark}
         units[u['id']] = u
-        if not is_phrase(u['name']):
+        if mark:
+            # A marked unit's name is its syllable: one of its letters with that mark (بَ), not a word.
+            if u['name'] not in [l + mark for l in u['letters']]:
+                err(f'{where}: name {u["name"]!r} must be the syllable, one of its letters with its {u["mark"]}')
+        elif not is_phrase(u['name']):
             err(f'{where}: name {u["name"]!r} is not one written word or a phrase of them')
         else:
             # Every word fully vowelled; only the LAST takes the pausal sukun (the first of
@@ -232,7 +251,7 @@ def check(lesson, number):
                 if gaps:
                     err(f'{where} name: {w!r} is not fully vowelled ({", ".join(gaps)} unmarked)')
             tashkeel(f'{where} name', last, err)
-        if not isinstance(u['forms'], list) or not u['forms'] or not all(is_str(f) and f and all(c == chr(0x640) or any(c in l for l in u['letters']) for c in f) for f in u['forms']):
+        if not isinstance(u['forms'], list) or not u['forms'] or not all(is_str(f) and f and all(c == chr(0x640) or c == mark or any(c in l for l in u['letters']) for c in f) for f in u['forms']):
             err(f'{where}: each form is the unit\'s letter, with tatweel only')
         if u['note'] is not None:
             if not isinstance(u['note'], dict) or set(u['note']) != {'text', 'review'}:
@@ -271,8 +290,8 @@ def check(lesson, number):
                 err(f'{ww}: listed twice')
             seen.add(t)
             vocabulary.add(t)
-            if not has(t, u['letters']):
-                err(f'{ww}: does not contain the unit\'s letter {"/".join(u["letters"])} (by the one rule: only marks are removed)')
+            if not has(t, u['letters'], u['_mark']):
+                err(f'{ww}: does not contain the unit\'s letter {"/".join(u["letters"])}{" carrying its " + u["mark"] if u["_mark"] else ""} (by the one rule: only marks are removed)')
             exc = w.get('finalMarkException')
             if 'finalMarkException' in w:
                 if not is_str(exc) or not exc.strip():
@@ -311,7 +330,7 @@ def check(lesson, number):
             for o in opts:
                 if o not in vocabulary:
                     err(f'{where}: option {o!r} is not a word of this lesson')
-            right = [i for i, o in enumerate(opts) if has(o, unit['letters'])]
+            right = [i for i, o in enumerate(opts) if has(o, unit['letters'], unit['_mark'])]
             if not is_int(q.get('answer')) or right != [q['answer']]:
                 err(f'{where}: must have exactly one right answer, the answer (an index); by the one rule the right ones are {right}')
         elif q.get('kind') == 'position':
@@ -319,7 +338,7 @@ def check(lesson, number):
             if not is_str(word) or word not in vocabulary:
                 err(f'{where}: {word!r} is not a word of this lesson')
                 continue
-            at = positions(word, unit['letters'])
+            at = positions(word, unit['letters'], unit['_mark'])
             if not is_str(q.get('answer')) or at != [q['answer']]:
                 err(f'{where}: the letter must be in exactly one place, the answer; by the one rule it is {at}')
         else:
@@ -340,6 +359,10 @@ def fixture_failures():
         letters = fx['units'][c['unit']]
         if has(c['word'], letters) != c['has'] or positions(c['word'], letters) != c['positions']:
             out.append(f'fixture {c["word"]} / {c["unit"]}: got {has(c["word"], letters)}, {positions(c["word"], letters)}')
+    for c in fx['markedCases']:
+        mark = HARAKA[c['mark']]
+        if has(c['word'], c['letters'], mark) != c['has'] or positions(c['word'], c['letters'], mark) != c['positions']:
+            out.append(f'fixture {c["word"]} / {"".join(c["letters"])} with {c["mark"]}: got {has(c["word"], c["letters"], mark)}, {positions(c["word"], c["letters"], mark)}')
     for m in fx['marks']:
         if is_mark(chr(m['cp'])) != m['isMark']:
             out.append(f'fixture mark U+{m["cp"]:04X} ({m["note"]}): is_mark disagrees')
@@ -350,7 +373,7 @@ def fixture_failures():
         t = ''.join(map(chr, w['cps'])) if 'cps' in w else w['text']
         if is_word(t) != w['isWord']:
             out.append(f'fixture word {t!r} ({w.get("note", "")}): is_word disagrees')
-    return out, len(fx['cases']) + len(fx['marks']) + len(fx['letters']) + len(fx['words'])
+    return out, len(fx['cases']) + len(fx['markedCases']) + len(fx['marks']) + len(fx['letters']) + len(fx['words'])
 
 
 def selftest():
@@ -450,6 +473,38 @@ def selftest():
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
+    # Lesson 3 (the harakat): units are a letter CARRYING one mark.
+    def harakat():
+        return {
+            'lesson': 3, 'review': {'status': 'pending', 'by': None, 'note': ''}, 'provenance': {}, 'finalMark': 'sukun', 'retiredIds': [],
+            'units': [
+                {'id': 'ba_fatha', 'letters': ['ب'], 'mark': 'fatha', 'group': 'ب', 'name': 'بَ', 'forms': ['بَ'], 'note': None,
+                 'words': [{'id': 'ba_fatha-001', 'text': 'بَابْ', 'was': None, 'review': None},
+                           {'id': 'ba_fatha-002', 'text': 'كَتَبَ', 'was': None, 'review': 'FINAL MARK EXCEPTION',
+                            'finalMarkException': "the lesson's vowel on the last letter"}]},
+                {'id': 'ba_kasra', 'letters': ['ب'], 'mark': 'kasra', 'group': 'ب', 'name': 'بِ', 'forms': ['بِ'], 'note': None,
+                 'words': [{'id': 'ba_kasra-001', 'text': 'بِنْتْ', 'was': None, 'review': None}]},
+            ],
+            'quiz': [{'id': 'q1', 'kind': 'contains', 'unit': 'ba_fatha', 'options': ['بَابْ', 'بِنْتْ'], 'answer': 0, 'review': None},
+                     {'id': 'q2', 'kind': 'position', 'unit': 'ba_kasra', 'word': 'بِنْتْ', 'answer': 'start', 'review': None}],
+        }
+    hcases = {
+        'harakat-clean': (lambda c: None, None),
+        'harakat-word-without-the-mark': (lambda c: c['units'][0]['words'].append({'id': 'ba_fatha-003', 'text': 'بِنْتْ', 'was': None, 'review': None}), 'carrying its fatha'),
+        'harakat-name-not-the-syllable': (lambda c: c['units'][0].update(name='بِ'), 'must be the syllable'),
+        'harakat-bad-mark': (lambda c: c['units'][0].update(mark='sukun'), 'mark must be'),
+        'harakat-mark-on-a-pair': (lambda c: c['units'][0].update(letters=['لا']), 'mark must be'),
+        'harakat-two-right-answers': (lambda c: c['quiz'][0].update(options=['بَابْ', 'كَتَبَ']), 'exactly one right answer'),
+        'harakat-empty-group': (lambda c: c['units'][0].update(group=''), 'group must be'),
+        'harakat-unknown-key': (lambda c: c['units'][0].update(colour='red'), 'keys must be'),
+    }
+    for name, (mutate, expected) in hcases.items():
+        c = harakat()
+        mutate(c)
+        errors = check(c, 3)
+        ok = (not errors) if expected is None else any(expected in e for e in errors)
+        if not ok:
+            failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
     # A misnamed lesson file is refused, not skipped.
     if not stray_files(['lesson-001.json', FIXTURE_NAME, 'lesson-1.json', 'notes.json', 'index.ts']) == ['lesson-1.json', 'notes.json']:
         failed.append('stray-json: a misnamed .json is not refused')
@@ -458,7 +513,7 @@ def selftest():
     for f in failed:
         print(f'arabic-lesson selftest: FAIL {f}')
     if not failed:
-        print(f'arabic-lesson selftest: {len(cases) + 1} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
+        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + 1} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
     return 1 if failed else 0
 
 
