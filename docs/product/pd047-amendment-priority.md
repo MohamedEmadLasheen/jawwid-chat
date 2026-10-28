@@ -188,6 +188,7 @@ Today's alerts, from `communication/notifications/notification-catalog.ts:57-88`
   - Only `checkout.session.async_payment_failed` marks a checkout `failed`. A card declined at the checkout leaves the session to expire, and raises no task. Today the task covers delayed payment methods only.
 - **`notifySales` stays for now.** It pushes "renewal requested" to every Sales member until PR-4 delivers task notifications. PR-4 then replaces it with the task's notification to its one owner (Q-F6).
   - PR-4 keeps amounts out of notifications. Titles with amounts are for staff task lists only.
+- **An instalment task is Low of itself.** Its floor makes it Yellow from D-7 and Red from D0, so the task shows the due date as the reason, not a person's choice.
 - **Cut-offs (owner 2026-10-29: the last 14 days):**
   - instalments by due date, as the academy's day;
   - receipts by upload;

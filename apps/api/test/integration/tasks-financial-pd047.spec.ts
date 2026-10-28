@@ -67,11 +67,11 @@ async function instalment(days: number, amount = 50000): Promise<string> {
   return id;
 }
 
-/** A package of `lessons` for learner_l, entered by `by` (the Operations manager). */
+/** A package of `lessons` for learner_l, entered by `by` (the Operations manager; only a manager or the super admin may). */
 async function packageOf(lessons: number, by = s.managerId): Promise<string> {
   const [{ id }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    `insert into chat.learner_subscription (organization_id, learner_id, family_id, lessons_included, starts_on, source, created_by)
-     values (chat.default_organization_id(), $1::uuid, $2::uuid, $3::int, chat.academy_today(), 'staff', $4::uuid)
+    `insert into chat.learner_subscription (organization_id, learner_id, family_id, lessons_included, starts_on, source, created_by, note)
+     values (chat.default_organization_id(), $1::uuid, $2::uuid, $3::int, chat.academy_today(), 'staff', $4::uuid, 'PD-47 test package')
      returning id::text as id`,
     s.learnerId, s.familyId, lessons, by,
   );
@@ -343,8 +343,8 @@ describe('packages and renewals', () => {
       assignee: { kind: 'staff', id: smgr }, category: 'financial', effectivePriority: 'medium',
       titleParams: expect.objectContaining({ learnerName: 'learner_l', balance: 2 }),
     });
-    const next = await packageOf(10, s.otherAdminId);
-    expect(await tasks.get(smgr, id)).toMatchObject({ state: 'completed', closedBy: { id: s.otherAdminId } });
+    const next = await packageOf(10, smgr);
+    expect(await tasks.get(smgr, id)).toMatchObject({ state: 'completed', closedBy: { id: smgr } });
     expect((await completion(id))?.after).toEqual({ outcome: 'done', evidence: { subscriptionId: next } });
   });
 

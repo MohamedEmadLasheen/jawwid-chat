@@ -319,6 +319,8 @@ $$;
 -- ===========================================================================
 
 -- An instalment from D-7 (owner Q-F7): one task carries it to its payment.
+-- Low of itself: its floor makes it Yellow from D-7 and Red from D0, so the
+-- level reads as the due date's, not a person's.
 create or replace function chat.work_task_raise_instalment(p_instalment uuid)
 returns uuid
 language plpgsql
@@ -339,7 +341,7 @@ begin
     perform chat.work_task_note_issue(i.organization_id, 'instalment:' || i.id, 'no live billing supervisor or Operations manager');
     return null;
   end if;
-  return chat.work_task_raise(i.organization_id, 'instalment', i.id, v_owner, null, 'medium', 'financial', 'instalment',
+  return chat.work_task_raise(i.organization_id, 'instalment', i.id, v_owner, null, 'low', 'financial', 'instalment',
                               (i.due_date::timestamp) at time zone chat.work_task_academy_zone());
 end;
 $$;
