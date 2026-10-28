@@ -1,3 +1,4 @@
+import { ACCESS_ROLE_TEMPLATES } from '@platform/permissions/role-templates';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@platform/prisma.service';
 import { PrismaIdentityService } from '@platform/identity.service';
@@ -208,7 +209,8 @@ describe('super admin bootstrap against Postgres', () => {
       // Start from an organization without them, whatever earlier specs left.
       await prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe(`select set_config('chat.pd040_access_change', 'on', true)`);
-        const roles = `select id from chat.access_role where organization_id = '${org}'::uuid and key = 'designer'`;
+        // Every template (the Designer; PD-48's Pronunciation reviewer), whatever earlier specs left.
+        const roles = `select id from chat.access_role where organization_id = '${org}'::uuid and key in (${ACCESS_ROLE_TEMPLATES.map((t) => `'${t.key}'`).join(', ')})`;
         await tx.$executeRawUnsafe(`delete from chat.staff_access_role where role_id in (${roles})`);
         await tx.$executeRawUnsafe(`delete from chat.access_role_permission where role_id in (${roles})`);
         await tx.$executeRawUnsafe(`delete from chat.access_role where id in (${roles})`);
@@ -220,7 +222,7 @@ describe('super admin bootstrap against Postgres', () => {
       expect(await templates()).toEqual([]);
 
       const first = await bootstrapSuperAdmin(prisma, { email, password: PASSWORD, displayName: 'owner_o' });
-      expect(first.templatesSeeded).toBe(1);
+      expect(first.templatesSeeded).toBe(ACCESS_ROLE_TEMPLATES.length);
       expect(await templates()).toEqual([{ key: 'designer', is_template: true }]);
       const again = await bootstrapSuperAdmin(prisma, { email, password: PASSWORD, displayName: 'owner_o' });
       expect(again.templatesSeeded).toBe(0);

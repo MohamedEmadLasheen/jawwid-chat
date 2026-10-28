@@ -17,6 +17,7 @@ import { useLessonAccess } from '@/features/teachers/hooks'
 import { useInstalmentAccess } from '@/features/instalments/hooks'
 import { useMaterialsAccess } from '@/features/materials/hooks'
 import { useCertificateAccess } from '@/features/certificates/hooks'
+import { useLessonAudioAccess } from '@/features/lesson-audio/hooks'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { TEXT, useText } from '@/features/admin/copy'
@@ -60,9 +61,12 @@ function useDestinations(): Destination[] {
   // PD-41: the Certificates page, for whoever holds a certificates key (the Designer included).
   const certificateAccess = useCertificateAccess(operator)
   const certificates = certificateAccess.data?.canOpen === true
+  // PD-48: the Lesson audio page, for whoever may listen (the Pronunciation reviewer included).
+  const lessonAudioAccess = useLessonAudioAccess(operator)
+  const lessonAudio = lessonAudioAccess.data?.view === true
   return useMemo(
-    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates }) : []),
-    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates],
+    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio }) : []),
+    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio],
   )
 }
 

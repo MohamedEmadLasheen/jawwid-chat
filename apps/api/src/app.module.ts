@@ -21,6 +21,7 @@ import { StaffAccountsModule } from './staff-accounts/staff-accounts.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 import { MaterialsModule } from './materials/materials.module';
 import { QuranModule } from './quran/quran.module';
+import { LessonAudioModule } from './lesson-audio/lesson-audio.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
 import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
 import { CalendarModule } from './calendar/calendar.module';
@@ -74,6 +75,8 @@ import { TaskModule } from './tasks/task.module';
     // PD-29: the Materials library, practice this week and the memorization map.
     MaterialsModule,
     QuranModule,
+    // PD-48: lesson voice-over (computer voice, two teacher approvals per clip). Never Quran audio.
+    LessonAudioModule,
     // PD-30: subscription locks -- cards, pushes, lesson holds, renewal requests.
     SubscriptionModule,
     // PD-35: teacher supervisors (assignment, the 'supervision' seat).
