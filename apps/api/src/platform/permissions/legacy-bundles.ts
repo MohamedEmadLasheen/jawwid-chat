@@ -75,6 +75,10 @@ const DEPARTMENT_MANAGER = k(
   'staff_accounts.view',
   'staff_accounts.create',
   'staff_accounts.manage',
+  // PD-47: their team's tasks -- watch, give, decide (TaskService narrows to the team).
+  'tasks.team',
+  'tasks.create',
+  'tasks.manage',
 );
 
 /** Operations supervisors: their families' money, contact record, lessons and journey (PD-8, PD-15, PD-17). */
@@ -140,6 +144,10 @@ const TEACHERS_MEMBER = k(
   // PD-43 (owner Q1): teacher supervisors add teachers too, for themselves or
   // with no supervisor (decideTeacherOnboarding narrows them).
   'teachers.create',
+  // PD-47: a teacher supervisor sees their own teachers' tasks, read-only
+  // (owner Q3), and gives them tasks (Q5). TaskService narrows to their teachers.
+  'tasks.team',
+  'tasks.create',
 );
 
 /** Sales: enrolment, trials, payments (PD-16, PD-20). */
