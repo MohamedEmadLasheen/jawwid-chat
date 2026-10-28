@@ -34,11 +34,13 @@ import { TeacherFileService } from './teacher-file.service';
  *              may (chat.may_issue_teacher_first_login); the code is always
  *              e-mailed, and only the manager and the super admin see it.
  *   offboard() PR-1b: the Teachers manager or the super admin, never while a
- *              student remains. One transaction: chat.offboard_teacher (the
- *              teacher and the login closed, any waiting code dead, the
- *              supervisor link ended) and every session revoked. Then the
- *              realtime barrier, then the open lessons cancelled one by one as
- *              the discipline ladder does: a failure is reported, not fatal.
+ *              student remains. The lessons ahead are cancelled first, on the
+ *              actor's confirmation, while the teacher is still live; any
+ *              failure stops the offboarding. Then one transaction:
+ *              chat.offboard_teacher (the teacher and the login closed, any
+ *              waiting code dead, the supervisor link ended, the cancelled
+ *              lessons named on the audit row) and every session revoked; then
+ *              the realtime barrier.
  *   reactivate() the super admin only (owner Q6): the same teacher, the login
  *              waiting again, a new first sign-in code shown to them and e-mailed.
  *
@@ -231,17 +233,20 @@ export class TeacherOnboardingService {
     const teacher = await this.teacherOf(actor, teacherId);
     const [students, openLessons] = await Promise.all([
       this.prisma.learner.findMany({ where: { teacherId: teacher.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-      this.prisma.lesson.findMany({
-        where: { teacherId: teacher.id, outcome: null, startsAt: { gte: new Date() } },
-        select: { id: true, kind: true, startsAt: true, endsAt: true },
-        orderBy: { startsAt: 'asc' },
-      }),
+      this.openLessons(teacher.id),
     ]);
     const isActive = teacher.isActive && teacher.leftAt === null;
     return { teacherId: teacher.id, isActive, students, openLessons, canOffboard: isActive && students.length === 0 };
   }
 
-  /** { reason, cancelOpenLessons? } */
+  /**
+   * { reason, cancelOpenLessons? }. The lessons ahead are cancelled FIRST, on
+   * the actor's confirmation and while the teacher is still live (a trial's
+   * cancellation card goes to the teacher's trial group, which needs one).
+   * If any cannot be cancelled nothing is offboarded. Then one transaction:
+   * chat.offboard_teacher, which refuses over any lesson still open and names
+   * the cancelled ones on its audit row, and every session revoked.
+   */
   async offboard(actorId: string, teacherId: string, body: Record<string, unknown>) {
     const { actor } = await this.files.onboardingGate(actorId, (o) => o.canOffboard, OFFBOARD_REFUSAL);
     const reason = requireText('reason', body.reason, 500);
@@ -250,13 +255,48 @@ export class TeacherOnboardingService {
     }
     const cancelOpenLessons = body.cancelOpenLessons === true;
     const teacher = await this.teacherOf(actor, teacherId);
-    const issuer = await this.issuerAccount(actor);
 
+    // The database's refusals, checked first so no lesson is cancelled for an
+    // offboarding that cannot happen. chat.offboard_teacher checks them again.
+    if (!teacher.isActive || teacher.leftAt !== null) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'this teacher has already left', 409);
+    }
+    const students = await this.prisma.learner.findMany({ where: { teacherId: teacher.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
+    if (students.length > 0) {
+      throw new CommError(CommErrorCode.TEACHER_HAS_STUDENTS, 'move this teacher’s students to other teachers first', 409, { students });
+    }
+    const open = await this.openLessons(teacher.id);
+    if (open.length > 0 && !cancelOpenLessons) {
+      throw new CommError(CommErrorCode.TEACHER_HAS_OPEN_LESSONS, 'this teacher has lessons ahead; confirm their cancellation', 409, { openLessons: open });
+    }
+
+    const cancelledLessons: string[] = [];
+    const notCancelled: Array<{ lessonId: string; reason: string }> = [];
+    for (const lesson of open) {
+      try {
+        // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
+        if (lesson.kind === 'trial') await this.trials.cancel(actor.actorId, lesson.id, { reason: LESSON_CANCEL_REASON });
+        else await this.lessons.cancel(actor.actorId, lesson.id, { reason: LESSON_CANCEL_REASON });
+        cancelledLessons.push(lesson.id);
+      } catch (e) {
+        const why = errorText(e);
+        this.log.warn(`lesson ${lesson.id} of teacher ${teacher.id} was not cancelled for offboarding: ${why}`);
+        notCancelled.push({ lessonId: lesson.id, reason: why });
+      }
+    }
+    if (notCancelled.length > 0) {
+      throw new CommError(CommErrorCode.TEACHER_HAS_OPEN_LESSONS, 'some lessons could not be cancelled; the teacher is not offboarded', 409, {
+        cancelledLessons,
+        notCancelled,
+      });
+    }
+
+    const issuer = await this.issuerAccount(actor);
     let closed: { accountId: string | null; revoked: number };
     try {
       closed = await this.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`
-          SELECT chat.offboard_teacher(${teacher.id}::uuid, ${reason}::text, ${cancelOpenLessons}::boolean, ${actor.actorId}::uuid)::text`;
+          SELECT chat.offboard_teacher(${teacher.id}::uuid, ${reason}::text, ${cancelledLessons}::uuid[], ${actor.actorId}::uuid)::text`;
         if (!teacher.accountId) return { accountId: null, revoked: 0 };
         await tx.account.update({ where: { id: teacher.accountId }, data: { deactivatedBy: issuer } });
         const revoked = await this.auth.revokeAccountSessionsInTx(tx, teacher.accountId, 'teacher offboarded', {
@@ -269,28 +309,6 @@ export class TeacherOnboardingService {
       throw (await this.offboardRefusal(e, teacher.id)) ?? e;
     }
     if (closed.accountId) await this.auth.enforceAccountRevocation(closed.accountId, closed.revoked > 0);
-
-    // After the commit, each with its own card to the family; read again, so a
-    // lesson booked while this ran is not left behind.
-    const open = await this.prisma.lesson.findMany({
-      where: { teacherId: teacher.id, outcome: null, startsAt: { gte: new Date() } },
-      select: { id: true, kind: true },
-      orderBy: { startsAt: 'asc' },
-    });
-    const cancelledLessons: string[] = [];
-    const notCancelled: Array<{ lessonId: string; reason: string }> = [];
-    for (const lesson of open) {
-      try {
-        // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
-        if (lesson.kind === 'trial') await this.trials.cancel(actor.actorId, lesson.id, { reason: LESSON_CANCEL_REASON });
-        else await this.lessons.cancel(actor.actorId, lesson.id, { reason: LESSON_CANCEL_REASON });
-        cancelledLessons.push(lesson.id);
-      } catch (e) {
-        const why = errorText(e);
-        this.log.warn(`lesson ${lesson.id} of offboarded teacher ${teacher.id} was not cancelled: ${why}`);
-        notCancelled.push({ lessonId: lesson.id, reason: why });
-      }
-    }
     this.log.log(`teacher ${teacher.id} offboarded by staff ${actor.actorId}`);
     return { teacherId: teacher.id, cancelledLessons, notCancelled };
   }
@@ -360,6 +378,15 @@ export class TeacherOnboardingService {
     return teacher;
   }
 
+  /** The lessons ahead of a teacher, as chat.offboard_teacher counts them. */
+  private openLessons(teacherId: string) {
+    return this.prisma.lesson.findMany({
+      where: { teacherId, outcome: null, startsAt: { gte: new Date() } },
+      select: { id: true, kind: true, startsAt: true, endsAt: true },
+      orderBy: { startsAt: 'asc' },
+    });
+  }
+
   /** chat.offboard_teacher's refusals, as the API answers them; null for anything else. */
   private async offboardRefusal(e: unknown, teacherId: string): Promise<unknown> {
     if (e instanceof CommError || e instanceof AuthError) return e;
@@ -372,7 +399,7 @@ export class TeacherOnboardingService {
       return new CommError(CommErrorCode.TEACHER_HAS_STUDENTS, 'move this teacher’s students to other teachers first', 409, { students });
     }
     if (/this teacher has open lessons/.test(text)) {
-      return new CommError(CommErrorCode.TEACHER_HAS_OPEN_LESSONS, 'this teacher has lessons ahead; cancel them with the offboarding', 409);
+      return new CommError(CommErrorCode.TEACHER_HAS_OPEN_LESSONS, 'this teacher has lessons ahead; confirm their cancellation', 409);
     }
     if (/offboarding requires a reason/.test(text)) return invalid('reason', 'must be 1 to 500 characters');
     return busy(e);

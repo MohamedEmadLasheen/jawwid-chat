@@ -287,18 +287,20 @@ Migration `20261028200000_chat_pd043_offboarding_and_setup.sql`. Nothing is dele
 
 All three carry PD-40 key `teachers.offboard`; reactivation is narrowed to the super admin in the service and in `chat.reactivate_teacher`.
 
-Offboarding is one transaction: `chat.offboard_teacher` closes the teacher (`is_active = false`, `left_at`) and the login (`deactivated`, whether it had signed in or not), retires any waiting first sign-in code, ends the supervisor assignment and audits `teacher.offboarded`; every session is revoked in the same transaction and the realtime barrier runs after it. With no student left, a lesson ahead is a trial or the like: the preview lists each one, and they are cancelled only when the actor confirms it (`cancelOpenLessons: true`); `teacher.offboarded` records the confirmation and every lesson id it covered, and each cancellation is audited on its own (`trial.cancelled`, `lesson.admin_cancelled`). They are cancelled after the commit, one by one with the family's card, as the discipline ladder does; a lesson that could not be cancelled is listed in `notCancelled`, never fatal. The family's card never carries the offboarding reason.
+The lessons ahead come first. With no student left they are trials and the like: the preview lists each one, and they are cancelled only when the actor confirms it (`cancelOpenLessons: true`), while the teacher is still live, each with the family's card and its own audit row (`trial.cancelled`, `lesson.admin_cancelled`). The card never carries the offboarding reason. If any cannot be cancelled, nothing is offboarded (409 `TEACHER_HAS_OPEN_LESSONS`, `error.detail.notCancelled`).
+
+Then one transaction: `chat.offboard_teacher` refuses over any lesson still open, closes the teacher (`is_active = false`, `left_at`) and the login (`deactivated`, whether it had signed in or not), retires any waiting first sign-in code, ends the supervisor assignment and audits `teacher.offboarded` with the cancelled lesson ids; every session is revoked in the same transaction and the realtime barrier runs after it.
 
 Reactivation brings back the same teacher with no supervisor: the login waits again (`provisioned`) and a new first sign-in code is issued in the same transaction, shown to the super admin and e-mailed. The old password never comes back.
 
 | Error | When |
 |---|---|
 | `COMM.TEACHER_HAS_STUDENTS` | a student is still assigned; `error.detail.students` lists them. Refused in SQL too. |
-| `COMM.TEACHER_HAS_OPEN_LESSONS` | lessons ahead and `cancelOpenLessons` not set |
+| `COMM.TEACHER_HAS_OPEN_LESSONS` | lessons ahead and `cancelOpenLessons` not set (`error.detail.openLessons`), or one could not be cancelled (`error.detail.notCancelled`; nothing offboarded). Refused in SQL too. |
 | `COMM.TEACHER_FILE_CONFLICT` | offboarding a teacher who has left; reactivating one who is active |
 | `COMM.TEACHER_ONBOARDING_DENIED` | anyone else |
 
-`chat.teacher` now has `chat.staff`'s rule (`teacher_left_at_matches_is_active`): an inactive teacher has a leaving date. A writer that forgets it is given `now()`; bringing a teacher back clears it.
+There is no `is_active`/`left_at` check on `chat.teacher`: PD-38 reads an inactive teacher with no leaving date as never listed, so a date made up by a trigger or a backfill would rewrite the calendar's history. The writers here set both.
 
 ### The set-up checklist
 

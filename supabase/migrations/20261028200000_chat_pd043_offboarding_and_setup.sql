@@ -3,72 +3,34 @@
 --
 -- Plan: docs/product/pd043-teacher-onboarding-plan.md §3.5, §3.6.
 --
---   1. chat.teacher gets chat.staff's rule (staff_left_at_matches_is_active):
---      an inactive teacher has a leaving date. A writer that takes a teacher
---      out without one gets now(); a writer that brings one back has it
---      cleared. An active row with a date stays legal, as on staff: it is
---      already "not live" everywhere (identity.service, relationship.service).
---      NOT VALID first, validated once the rows that disagreed have a date.
---   2. chat.offboard_teacher: the Teachers manager or the super admin
+--   1. chat.offboard_teacher: the Teachers manager or the super admin
 --      (teachers.offboard), never while a student remains (the ladder's rule,
---      now in SQL), never over open lessons unless the caller confirms their
---      cancellation; the audit row names each one.
+--      now in SQL), never over an open lesson. The API cancels the lessons
+--      ahead BEFORE this, on the actor's confirmation, while the teacher is
+--      still live (a trial's card goes to the teacher's trial group); their
+--      ids are passed in, checked, and named on the audit row.
 --      Closes the teacher AND the login (the discipline ladder left the login
 --      active), retires any waiting code, ends the supervisor link, audits.
---      The API revokes the sessions in the same transaction and cancels the
---      lessons after it, as the ladder does.
---   3. chat.reactivate_teacher: the super admin only (owner Q6). The same
+--      The API revokes the sessions in the same transaction.
+--   2. chat.reactivate_teacher: the super admin only (owner Q6). The same
 --      teacher; a closed login waits again (provisioned) for a first sign-in
 --      code the API issues in the same transaction.
---   4. chat.teacher_setup_state: what the Teacher File's checklist shows,
+--   3. chat.teacher_setup_state: what the Teacher File's checklist shows,
 --      read from the real rows, never stored. Done / not done only: no amount.
+--
+-- No is_active/left_at check on chat.teacher (plan §3.5 proposed staff's): PD-38
+-- reads "inactive with no date" as never listed, so a date made up by a trigger
+-- or a backfill would rewrite the calendar's history. These writers set both.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
--- 1. is_active and left_at agree
--- ---------------------------------------------------------------------------
-create function chat.normalize_teacher_left_at()
-returns trigger
-language plpgsql
-set search_path = pg_catalog, pg_temp
-as $$
-begin
-  if not new.is_active and new.left_at is null then
-    new.left_at := now();
-  elsif new.is_active and new.left_at is not null and tg_op = 'UPDATE' and not old.is_active then
-    -- Brought back without clearing the date: they are not leaving.
-    new.left_at := null;
-  end if;
-  return new;
-end;
-$$;
-
-create trigger teacher_left_at_follows_is_active
-  before insert or update of is_active, left_at on chat.teacher
-  for each row execute function chat.normalize_teacher_left_at();
-
--- The rows that disagreed: an inactive teacher left when the row last changed.
-update chat.teacher set left_at = updated_at where not is_active and left_at is null;
-
-alter table chat.teacher add constraint teacher_left_at_matches_is_active
-  check (is_active or left_at is not null) not valid;
-
-do $$
-begin
-  if not exists (select 1 from chat.teacher where not is_active and left_at is null) then
-    alter table chat.teacher validate constraint teacher_left_at_matches_is_active;
-  end if;
-end;
-$$;
-
--- ---------------------------------------------------------------------------
--- 2. Offboarding
+-- 1. Offboarding
 -- ---------------------------------------------------------------------------
 create function chat.offboard_teacher(
-  p_teacher             uuid,
-  p_reason              text,
-  p_cancel_open_lessons boolean,
-  p_actor_id            uuid default null
+  p_teacher           uuid,
+  p_reason            text,
+  p_cancelled_lessons uuid[],
+  p_actor_id          uuid default null
 ) returns jsonb
 language plpgsql
 set search_path = pg_catalog, pg_temp
@@ -101,9 +63,14 @@ begin
   if exists (select 1 from chat.learner l where l.teacher_id = v_teacher.id) then
     raise exception 'move this teacher''s students to other teachers first' using errcode = 'check_violation';
   end if;
-  if not coalesce(p_cancel_open_lessons, false)
-     and exists (select 1 from chat.lesson l where l.teacher_id = v_teacher.id and l.outcome is null and l.starts_at >= now()) then
-    raise exception 'this teacher has open lessons; cancel them with the offboarding' using errcode = 'check_violation';
+  if exists (select 1 from chat.lesson l where l.teacher_id = v_teacher.id and l.outcome is null and l.starts_at >= now()) then
+    raise exception 'this teacher has open lessons; cancel them first' using errcode = 'check_violation';
+  end if;
+  -- What the API says it cancelled for this offboarding: this teacher's, and closed.
+  if exists (select 1 from unnest(coalesce(p_cancelled_lessons, '{}'::uuid[])) c(id)
+              where not exists (select 1 from chat.lesson l
+                                 where l.id = c.id and l.teacher_id = v_teacher.id and l.outcome is not null)) then
+    raise exception 'a cancelled lesson named for this offboarding is not this teacher''s, or is still open' using errcode = 'check_violation';
   end if;
 
   -- The login: closed, whatever state it was in; a waiting code dies with it.
@@ -125,18 +92,14 @@ begin
   insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
   values (v_actor.id, 'teacher.offboarded', 'teacher', v_teacher.id,
           jsonb_build_object('supervisorId', v_supervisor, 'accountStatus', v_account.status),
-          -- What the actor confirmed: the lessons ahead, each one, cancelled after the commit.
-          jsonb_build_object('cancelOpenLessons', coalesce(p_cancel_open_lessons, false),
-                             'openLessons', coalesce((select jsonb_agg(l.id order by l.starts_at) from chat.lesson l
-                                                       where l.teacher_id = v_teacher.id and l.outcome is null and l.starts_at >= now()),
-                                                     '[]'::jsonb)),
+          jsonb_build_object('cancelledLessons', to_jsonb(coalesce(p_cancelled_lessons, '{}'::uuid[]))),
           v_reason);
   return jsonb_build_object('accountId', v_teacher.account_id, 'supervisorId', v_supervisor);
 end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 3. Reactivation
+-- 2. Reactivation
 -- ---------------------------------------------------------------------------
 create function chat.reactivate_teacher(
   p_teacher  uuid,
@@ -182,7 +145,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 4. The set-up checklist
+-- 3. The set-up checklist
 -- ---------------------------------------------------------------------------
 create function chat.teacher_setup_state(p_teacher uuid)
 returns jsonb
@@ -230,7 +193,6 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Server-only
 -- ---------------------------------------------------------------------------
-revoke all on function chat.normalize_teacher_left_at() from public;
-revoke all on function chat.offboard_teacher(uuid, text, boolean, uuid) from public;
+revoke all on function chat.offboard_teacher(uuid, text, uuid[], uuid) from public;
 revoke all on function chat.reactivate_teacher(uuid, text, uuid) from public;
 revoke all on function chat.teacher_setup_state(uuid) from public;

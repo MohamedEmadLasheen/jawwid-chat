@@ -13,8 +13,7 @@
  *   3. POST /teachers/:id/reactivate: the super admin only (owner Q6); the
  *      same teacher, a waiting login and a new first sign-in code, e-mailed
  *      and shown to the super admin.
- *   4. chat.teacher: an inactive teacher has a leaving date, and the writers refuse a
- *      request role.
+ *   4. The writers refuse a request role.
  *   5. The set-up checklist on the Teacher File, and the count on the list.
  *
  * Synthetic people only (G-20).
@@ -201,7 +200,7 @@ describe('2. offboarding', () => {
   it('refused while any student remains -- by the API and by the database', async () => {
     const r = await offboard(m.teachersManager.subject, m.teachers[0]!.id);
     expect([r.status, r.code]).toEqual([409, 'COMM.TEACHER_HAS_STUDENTS']);
-    expect(await sqlError(g.prisma.$queryRaw`SELECT chat.offboard_teacher(${m.teachers[0]!.id}::uuid, 'r', true, ${m.teachersManager.id}::uuid)`)).toMatch(
+    expect(await sqlError(g.prisma.$queryRaw`SELECT chat.offboard_teacher(${m.teachers[0]!.id}::uuid, 'r', ARRAY[]::uuid[], ${m.teachersManager.id}::uuid)`)).toMatch(
       /move this teacher's students to other teachers first/,
     );
     expect((await g.prisma.teacher.findUniqueOrThrow({ where: { id: m.teachers[0]!.id } })).isActive).toBe(true);
@@ -224,13 +223,17 @@ describe('2. offboarding', () => {
     expect(preview.json.openLessons).toEqual([{ id: lesson, kind: 'trial', startsAt: expect.any(String), endsAt: expect.any(String) }]);
     const refused = await offboard(m.teachersManager.subject, id);
     expect([refused.status, refused.code]).toEqual([409, 'COMM.TEACHER_HAS_OPEN_LESSONS']);
+    // The database refuses too, whatever a caller claims to have cancelled.
+    expect(await sqlError(g.prisma.$queryRaw`SELECT chat.offboard_teacher(${id}::uuid, 'r', ARRAY[]::uuid[], ${m.teachersManager.id}::uuid)`)).toMatch(
+      /this teacher has open lessons/,
+    );
     const r = await offboard(m.teachersManager.subject, id, { cancelOpenLessons: true });
     expect(r.status).toBe(201);
     expect(r.json).toMatchObject({ teacherId: id, cancelledLessons: [lesson], notCancelled: [] });
     expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: lesson } })).outcome).not.toBeNull();
     // The confirmation and the lessons it covered are on the offboarding's own record.
     const [audit] = await g.prisma.auditLog.findMany({ where: { entityId: id, action: 'teacher.offboarded' } });
-    expect(audit?.after).toMatchObject({ cancelOpenLessons: true, openLessons: [lesson] });
+    expect(audit?.after).toMatchObject({ cancelledLessons: [lesson] });
     expect(await g.prisma.auditLog.count({ where: { entityId: lesson, action: 'trial.cancelled', actorId: m.teachersManager.id } })).toBe(1);
   });
 
@@ -285,21 +288,9 @@ describe('3. reactivation', () => {
 });
 
 describe('4. the database', () => {
-  it('an inactive teacher has a leaving date, as on chat.staff', async () => {
-    const id = (await add(m.teachersManager.subject, { email: email('f') })).json.teacher.id as string;
-    const [c] = await g.prisma.$queryRaw<{ validated: boolean }[]>`
-      SELECT convalidated AS validated FROM pg_constraint WHERE conname = 'teacher_left_at_matches_is_active'`;
-    expect(c).toEqual({ validated: true });
-    // A writer that forgets the date is given one; bringing the teacher back clears it.
-    await g.prisma.$executeRaw`UPDATE chat.teacher SET is_active = false WHERE id = ${id}::uuid`;
-    expect((await g.prisma.teacher.findUniqueOrThrow({ where: { id } })).leftAt).not.toBeNull();
-    await g.prisma.$executeRaw`UPDATE chat.teacher SET is_active = true WHERE id = ${id}::uuid`;
-    expect((await g.prisma.teacher.findUniqueOrThrow({ where: { id } })).leftAt).toBeNull();
-  });
-
   it('a request role calls neither writer', async () => {
     for (const sql of [
-      `select chat.offboard_teacher('${randomUUID()}'::uuid, 'r', false, '${m.teachersManager.id}'::uuid)`,
+      `select chat.offboard_teacher('${randomUUID()}'::uuid, 'r', ARRAY[]::uuid[], '${m.teachersManager.id}'::uuid)`,
       `select chat.reactivate_teacher('${randomUUID()}'::uuid, 'r', '${m.superAdmin.id}'::uuid)`,
     ]) {
       const out = await sqlError(
