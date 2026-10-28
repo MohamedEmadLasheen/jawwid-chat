@@ -11,7 +11,8 @@
 --      NOT VALID first, validated once the rows that disagreed have a date.
 --   2. chat.offboard_teacher: the Teachers manager or the super admin
 --      (teachers.offboard), never while a student remains (the ladder's rule,
---      now in SQL), never over open lessons unless the caller cancels them.
+--      now in SQL), never over open lessons unless the caller confirms their
+--      cancellation; the audit row names each one.
 --      Closes the teacher AND the login (the discipline ladder left the login
 --      active), retires any waiting code, ends the supervisor link, audits.
 --      The API revokes the sessions in the same transaction and cancels the
@@ -124,7 +125,11 @@ begin
   insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
   values (v_actor.id, 'teacher.offboarded', 'teacher', v_teacher.id,
           jsonb_build_object('supervisorId', v_supervisor, 'accountStatus', v_account.status),
-          jsonb_build_object('cancelOpenLessons', coalesce(p_cancel_open_lessons, false)),
+          -- What the actor confirmed: the lessons ahead, each one, cancelled after the commit.
+          jsonb_build_object('cancelOpenLessons', coalesce(p_cancel_open_lessons, false),
+                             'openLessons', coalesce((select jsonb_agg(l.id order by l.starts_at) from chat.lesson l
+                                                       where l.teacher_id = v_teacher.id and l.outcome is null and l.starts_at >= now()),
+                                                     '[]'::jsonb)),
           v_reason);
   return jsonb_build_object('accountId', v_teacher.account_id, 'supervisorId', v_supervisor);
 end;

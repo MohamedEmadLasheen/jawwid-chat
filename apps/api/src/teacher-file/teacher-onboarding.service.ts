@@ -171,13 +171,21 @@ export class TeacherOnboardingService {
     };
   }
 
-  /** What offboarding would meet: the students still assigned, the lessons ahead. */
+  /**
+   * What offboarding would meet: the students still assigned, and each lesson
+   * ahead. With no student left those are trials and the like; they are
+   * cancelled only when the actor confirms it (cancelOpenLessons), audited.
+   */
   async offboardPreview(actorId: string, teacherId: string) {
     const { actor } = await this.files.onboardingGate(actorId, (o) => o.canOffboard, OFFBOARD_REFUSAL);
     const teacher = await this.teacherOf(actor, teacherId);
     const [students, openLessons] = await Promise.all([
       this.prisma.learner.findMany({ where: { teacherId: teacher.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-      this.prisma.lesson.count({ where: { teacherId: teacher.id, outcome: null, startsAt: { gte: new Date() } } }),
+      this.prisma.lesson.findMany({
+        where: { teacherId: teacher.id, outcome: null, startsAt: { gte: new Date() } },
+        select: { id: true, kind: true, startsAt: true, endsAt: true },
+        orderBy: { startsAt: 'asc' },
+      }),
     ]);
     const isActive = teacher.isActive && teacher.leftAt === null;
     return { teacherId: teacher.id, isActive, students, openLessons, canOffboard: isActive && students.length === 0 };

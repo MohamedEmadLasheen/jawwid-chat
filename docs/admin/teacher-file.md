@@ -264,13 +264,13 @@ Migration `20261028200000_chat_pd043_offboarding_and_setup.sql`. Nothing is dele
 
 | Route | Who | What |
 |---|---|---|
-| `GET /teachers/:id/offboard-preview` | Teachers manager, super admin | `{ teacherId, isActive, students: [{id, name}], openLessons, canOffboard }` |
+| `GET /teachers/:id/offboard-preview` | Teachers manager, super admin | `{ teacherId, isActive, students: [{id, name}], openLessons: [{id, kind, startsAt, endsAt}], canOffboard }` |
 | `POST /teachers/:id/offboard` `{ reason, cancelOpenLessons? }` | Teachers manager, super admin | 201 `{ teacherId, cancelledLessons, notCancelled }` |
 | `POST /teachers/:id/reactivate` `{ reason }` | super admin only (owner Q6) | 201 `{ teacherId, signIn, firstLogin: { code, expiresAt, emailed } }`, `Cache-Control: no-store` |
 
 All three carry PD-40 key `teachers.offboard`; reactivation is narrowed to the super admin in the service and in `chat.reactivate_teacher`.
 
-Offboarding is one transaction: `chat.offboard_teacher` closes the teacher (`is_active = false`, `left_at`) and the login (`deactivated`, whether it had signed in or not), retires any waiting first sign-in code, ends the supervisor assignment and audits `teacher.offboarded`; every session is revoked in the same transaction and the realtime barrier runs after it. Lessons ahead are cancelled after the commit, one by one with the family's card, as the discipline ladder does; a lesson that could not be cancelled is listed in `notCancelled`, never fatal. The family's card never carries the offboarding reason.
+Offboarding is one transaction: `chat.offboard_teacher` closes the teacher (`is_active = false`, `left_at`) and the login (`deactivated`, whether it had signed in or not), retires any waiting first sign-in code, ends the supervisor assignment and audits `teacher.offboarded`; every session is revoked in the same transaction and the realtime barrier runs after it. With no student left, a lesson ahead is a trial or the like: the preview lists each one, and they are cancelled only when the actor confirms it (`cancelOpenLessons: true`); `teacher.offboarded` records the confirmation and every lesson id it covered, and each cancellation is audited on its own (`trial.cancelled`, `lesson.admin_cancelled`). They are cancelled after the commit, one by one with the family's card, as the discipline ladder does; a lesson that could not be cancelled is listed in `notCancelled`, never fatal. The family's card never carries the offboarding reason.
 
 Reactivation brings back the same teacher with no supervisor: the login waits again (`provisioned`) and a new first sign-in code is issued in the same transaction, shown to the super admin and e-mailed. The old password never comes back.
 
