@@ -435,6 +435,38 @@ export class TaskService {
     return total;
   }
 
+  /**
+   * PD-47 PR-4: tasks that passed their due date since the last pass, each
+   * announced once per due date (chat.work_task_overdue_notice, PD-35 B5's
+   * notice pattern): a `task.changed` signal with change 'overdue', which the
+   * outbox worker turns into the assignee's notice. A re-dated task that goes
+   * overdue again is announced again. Returns how many were announced.
+   */
+  async sweepOverdue(batch = 200): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const due = await tx.$queryRaw<Array<{ id: string; revision: number }>>`
+        WITH overdue AS (
+          SELECT t.id, t.revision, t.due_at
+            FROM chat.work_task t
+            CROSS JOIN LATERAL chat.work_task_effective(t.priority, t.floor_rule, t.due_at, t.source_floor, t.state,
+                                                         now(), chat.work_task_academy_zone()) e
+           WHERE t.state IN ('open', 'awaiting_decision') AND t.due_at IS NOT NULL AND e.overdue
+             AND NOT EXISTS (SELECT 1 FROM chat.work_task_overdue_notice n WHERE n.task_id = t.id AND n.due_at = t.due_at)
+           ORDER BY t.due_at, t.id
+           LIMIT ${batch}
+        ), fresh AS (
+          INSERT INTO chat.work_task_overdue_notice (task_id, due_at)
+          SELECT id, due_at FROM overdue
+          ON CONFLICT DO NOTHING
+          RETURNING task_id, due_at
+        )
+        SELECT o.id::text AS id, o.revision FROM overdue o JOIN fresh f ON f.task_id = o.id AND f.due_at = o.due_at
+         ORDER BY o.due_at, o.id`;
+      for (const t of due) await this.outbox.enqueue(tx, CommEvent.TASK_CHANGED, { taskId: t.id, revision: t.revision, change: 'overdue' });
+      return due.length;
+    });
+  }
+
   /** Exit 2: the assignee says it is outside their responsibility. { comment } */
   async outOfScope(actorId: string, taskId: string, body: Record<string, unknown>) {
     const { viewer, row } = await this.forAssignee(actorId, taskId, 'out_of_scope');

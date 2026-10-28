@@ -35,7 +35,9 @@ export type ActionKind =
   | 'open_stories'
   | 'open_calls'
   /** PD-35 B5: an escalation case, opened in Escalations (refs.caseId). */
-  | 'open_case';
+  | 'open_case'
+  /** PD-47 PR-4: a task, opened in Tasks (refs.taskId), which re-checks who may see it. */
+  | 'open_task';
 
 export interface CatalogEntry {
   version: number;
@@ -86,6 +88,13 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   case_opened: { version: 1, category: 'task', inbox: 'inbox.case_opened', action: 'open_case' },
   case_assigned: { version: 1, category: 'task', inbox: 'inbox.case_assigned', action: 'open_case' },
   case_due_soon: { version: 1, category: 'task', inbox: 'inbox.case_due_soon', action: 'open_case' },
+  // PD-47 PR-4: a task, to the person who must act on it. Generic texts: never
+  // the task's title, an amount, a card or a family (a lock screen is not
+  // behind sign-in); the task is read in Tasks, which re-checks who may see it.
+  task_assigned: { version: 1, category: 'task', inbox: 'inbox.task_assigned', action: 'open_task' },
+  task_returned: { version: 1, category: 'task', inbox: 'inbox.task_returned', action: 'open_task' },
+  task_out_of_scope: { version: 1, category: 'task', inbox: 'inbox.task_out_of_scope', action: 'open_task' },
+  task_overdue: { version: 1, category: 'task', inbox: 'inbox.task_overdue', action: 'open_task' },
   // PD-43 §3.4, §3.7: for the Teachers manager (the super admin when there is none).
   teacher_added_unsupervised: { version: 1, category: 'task', inbox: 'inbox.teacher_added_unsupervised' },
   teacher_duplicate_hidden: { version: 1, category: 'task', inbox: 'inbox.teacher_duplicate_hidden' },

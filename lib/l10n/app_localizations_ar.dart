@@ -4412,4 +4412,7 @@ class L10nAr extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get notificationsActionOpenTask => 'فتح قائمة الإنجاز';
 }

@@ -321,6 +321,24 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
   - for the super admin, `tasks.all_overdue`.
   - Coordinated with the PD-44 session (#211). The dead `/dashboard/needs-action` call is retired by PD-44.
 
+**As built in PR-4.**
+- **Delivery:** `OutboxWorker.deliverTask` reads the task live, beside PD-35's `deliverCase`.
+  - Signalled: the assignee, the person it left on a hand-on, the responsible managers, and the super admin while it waits on a decision or no manager stands to it. Ids only.
+  - Told, as a PD-34 `task` entry (Action tab: `requires_action`, `owner_id`, `due_at`, `task_status`; action `open_task`) with a generic push:
+    - `created` and `reassigned`: the assignee. A lesson report is not announced when raised.
+    - `returned`: the assignee.
+    - `out_of_scope`: the responsible managers, else the super admin (`task_status` `escalated`).
+    - `overdue`: the assignee.
+  - Never told: the person who did it.
+- **Settled:** a task that leaves a person (handed on, completed, removed) marks their entries acted, with `task_status` `cancelled` or `done`.
+- **Overdue:** `TaskService.sweepOverdue` (the worker, each minute) announces each task once per due date (`chat.work_task_overdue_notice`). A task re-dated and overdue again is announced again.
+- **No content in any text:** templates `task_*` and `inbox.task_*` are generic: no title, amount, card, family or child. Entries carry no variables.
+- **Q-F6:** the renewal push to every Sales member is gone. The renewal task's assignment notice reaches its one owner.
+- **Dashboard (PD-44):** a Tasks section, open to everyone. Each tile opens the Tasks view it counts.
+- **Clients:**
+  - Admin Web routes `open_task` to `/tasks?task=`.
+  - Flutter listens for `task.changed` on the session socket (`TaskSignalChannel`, listen only; the frozen call client is untouched) and refreshes the To do. A task entry opens the teacher's Schedule on its To do.
+
 ### 3.12 Clients
 
 **Admin Web: `features/tasks` rebuilt.**

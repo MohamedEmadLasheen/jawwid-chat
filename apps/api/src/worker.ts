@@ -475,6 +475,8 @@ async function bootstrap(): Promise<void> {
           );
         }
         if (!swept.skipped) lastTaskIssues = swept.issues;
+        // PR-4: what passed its due date, announced once per due date.
+        await tasks.sweepOverdue();
       } catch (e) {
         report(log, 'task source sweep', 'tasks.sweep', e);
       } finally {

@@ -21,6 +21,9 @@ export const SECTIONS: readonly SectionSpec[] = [
   { key: 'chats', title: { en: 'Chats', ar: 'المحادثات' }, requires: ['chat.use'] },
   { key: 'cases', title: { en: 'Escalation cases', ar: 'حالات التصعيد' }, requires: ['cases.view'] },
   { key: 'lessons', title: { en: 'Lessons', ar: 'الحصص' }, requires: ['lessons.view', 'schedule.view'] },
+  // PD-47 PR-4: everyone's own tasks are self-service, so no key is needed;
+  // the team, decision and super-admin tiles come only to whom they apply.
+  { key: 'tasks', title: { en: 'Tasks', ar: 'المهام' }, requires: [] },
 ]
 
 /** Today on the Schedule (its day view opens on today); the Teachers department's queue. */
@@ -36,7 +39,58 @@ export interface TileSpec {
   href: (present: ReadonlySet<string>) => string
 }
 
+/** PD-47: each task tile opens the Tasks view it counts (the same list, the same filter). */
+const tasksView = (tab: 'mine' | 'team' | 'all', filter = '') => () => `/tasks${tab === 'mine' ? (filter ? `?${filter}` : '') : `?tab=${tab}${filter ? `&${filter}` : ''}`}`
+const taskTiles = (tab: 'mine' | 'team' | 'all', whose: { en: string; ar: string }): Record<string, TileSpec> => ({
+  [`tasks.${tab}_open`]: {
+    label: { en: `Open tasks (${whose.en})`, ar: `مهام مفتوحة (${whose.ar})` },
+    icon: 'tasks',
+    backlog: false,
+    href: tasksView(tab),
+  },
+  [`tasks.${tab}_overdue`]: {
+    label: { en: `Overdue tasks (${whose.en})`, ar: `مهام متأخرة (${whose.ar})` },
+    icon: 'clock',
+    backlog: true,
+    href: tasksView(tab, 'overdue=true'),
+  },
+  [`tasks.${tab}_urgent`]: {
+    label: { en: `High-level tasks (${whose.en})`, ar: `مهام عالية المستوى (${whose.ar})` },
+    icon: 'alert',
+    backlog: true,
+    href: tasksView(tab, 'level=high'),
+  },
+  [`tasks.${tab}_financial`]: {
+    label: { en: `Financial tasks (${whose.en})`, ar: `مهام مالية (${whose.ar})` },
+    icon: 'banknote',
+    backlog: false,
+    href: tasksView(tab, 'category=financial'),
+  },
+})
+
 export const TILES: Readonly<Record<string, TileSpec>> = {
+  ...taskTiles('mine', { en: 'mine', ar: 'لي' }),
+  ...taskTiles('team', { en: 'my team', ar: 'فريقي' }),
+  ...taskTiles('all', { en: 'everyone', ar: 'الجميع' }),
+  'tasks.awaiting_decision': {
+    label: { en: 'Tasks waiting for my decision', ar: 'مهام تنتظر قراري' },
+    icon: 'approvals',
+    backlog: true,
+    href: () => '/tasks?tab=decisions',
+  },
+  'tasks.needs_reassignment': {
+    label: { en: 'Tasks whose assignee left', ar: 'مهام غادر المسند إليه' },
+    icon: 'users',
+    backlog: true,
+    href: (present) => (present.has('tasks.all_open') ? '/tasks?tab=all' : '/tasks?tab=team'),
+  },
+  'tasks.unmanaged': {
+    label: { en: 'Tasks no manager can move', ar: 'مهام لا يستطيع أي مدير نقلها' },
+    icon: 'alert',
+    backlog: true,
+    // The super admin's Decisions hold every task no manager stands to.
+    href: () => '/tasks?tab=decisions',
+  },
   'chats.waiting': {
     label: { en: 'Chats waiting for our reply', ar: 'محادثات تنتظر ردّنا' },
     icon: 'conversations',
@@ -115,5 +169,5 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
 
 /** Without /me's keys (an API before PD-40) every section is asked for, and the server decides. */
 export function sectionAllowed(spec: SectionSpec, permissions: readonly string[] | undefined): boolean {
-  return !permissions || spec.requires.some((key) => permissions.includes(key))
+  return !permissions || spec.requires.length === 0 || spec.requires.some((key) => permissions.includes(key))
 }
