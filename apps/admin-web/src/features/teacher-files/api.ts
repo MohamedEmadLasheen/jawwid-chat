@@ -247,6 +247,17 @@ export interface Reactivated {
   firstLogin: FirstLogin | null
 }
 
+/** PD-43: GET /teachers/:id/history -- the teacher's and their login's lifecycle, newest first. Names only. */
+export interface TeacherHistoryEvent {
+  at: string
+  action: string
+  /** Null when no staff member acted (the teacher signing in, the system). */
+  actor: Person | null
+  reason: string | null
+  /** A supervisor change: who held the teacher before and after. */
+  detail: { from?: Person | null; to?: Person | null }
+}
+
 export interface AddedTeacher {
   teacher: { id: string; name: string; supervisorId: string | null }
   signIn: string
@@ -270,6 +281,8 @@ export const teacherFileApi = {
     api.post<Offboarded>(`/teachers/${encodeURIComponent(teacherId)}/offboard`, body),
   reactivate: (teacherId: string, reason: string) =>
     api.post<Reactivated>(`/teachers/${encodeURIComponent(teacherId)}/reactivate`, { reason }),
+  history: (teacherId: string) =>
+    api.get<{ teacherId: string; events: TeacherHistoryEvent[] }>(`/teachers/${encodeURIComponent(teacherId)}/history`),
   detail: (teacherId: string) => api.get<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}`),
   updatePersonal: (teacherId: string, body: PersonalPatch) =>
     api.post<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}/personal`, body),

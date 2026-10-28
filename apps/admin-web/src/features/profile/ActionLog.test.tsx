@@ -53,6 +53,27 @@ describe('the action log on a profile', () => {
   })
 })
 
+describe('PD-42: entering families by hand, in words', () => {
+  it('each intake action is named, and a parent\'s line opens their profile', async () => {
+    const pd42 = [
+      { id: 'audit:11', action: 'family.entered', entity: 'family', entityId: 'f-1', reason: null, at: '2026-10-28T09:00:00Z', duringSupport: false },
+      { id: 'audit:12', action: 'family.children_added', entity: 'family', entityId: 'f-1', reason: null, at: '2026-10-28T08:00:00Z', duringSupport: false },
+      { id: 'audit:13', action: 'family.operations_supervisor_set', entity: 'family', entityId: 'f-1', reason: null, at: '2026-10-28T07:00:00Z', duringSupport: false },
+      { id: 'audit:14', action: 'family.sales_owner_changed', entity: 'family', entityId: 'f-1', reason: 'renewals', at: '2026-10-28T06:00:00Z', duringSupport: false },
+      { id: 'audit:15', action: 'subscription.carried_over', entity: 'learner', entityId: 'k-1', reason: null, at: '2026-10-28T05:00:00Z', duringSupport: false },
+      { id: 'audit:16', action: 'parent.sign_in_email_set', entity: 'contact', entityId: 'p-1', reason: null, at: '2026-10-28T04:00:00Z', duringSupport: false },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => json({ entries: pd42 })))
+    renderWithProviders(<ActionLogSection staffId="s-1" />, { staff: makeStaff({ role: 'manager' }) })
+    expect(await screen.findByText('Entered a family')).toBeInTheDocument()
+    expect(screen.getByText('Added children to a family')).toBeInTheDocument()
+    expect(screen.getByText('Chose a family\'s Operations supervisor')).toBeInTheDocument()
+    expect(screen.getByText('Changed a family\'s Sales owner')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Carried over a package from Jawwid Core' })).toHaveAttribute('href', '/students/k-1')
+    expect(screen.getByRole('link', { name: 'Set a parent\'s sign-in e-mail' })).toHaveAttribute('href', '/parents/p-1')
+  })
+})
+
 describe('going further back', () => {
   it('loads the next page with the server\'s cursor, and asks for a longer period when chosen', async () => {
     fetchMock = vi.fn(async (input: RequestInfo | URL) => {

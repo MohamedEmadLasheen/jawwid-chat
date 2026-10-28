@@ -138,11 +138,12 @@ beforeEach(async () => {
     await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
     await tx.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'super_s', 'super_admin', true)`, superId);
   });
-  // The Designer: a specialist with only view + design (PD-40).
+  // The Designer: a specialist with only view + design (PD-40). Its own key, so it
+  // never meets the `designer` template PD-40 seeds into existing organizations.
   designerId = randomUUID();
   await g.prisma.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'designer_d', 'specialist', true)`, designerId);
   const [{ id: roleId }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT chat.define_access_role('designer', 'Designer', 'المصمم', null, 'specialist', ${['certificates.view', 'certificates.design']}::text[], 'spec', ${superId}::uuid)::text AS id`;
+    SELECT chat.define_access_role('pd041_designer', 'Designer (spec)', 'المصمم', null, 'specialist', ${['certificates.view', 'certificates.design']}::text[], 'spec', ${superId}::uuid)::text AS id`;
   await g.prisma.$queryRaw`SELECT chat.grant_access_role(${designerId}::uuid, ${roleId}::uuid, 'spec', ${superId}::uuid)`;
 
   tsupId = randomUUID();

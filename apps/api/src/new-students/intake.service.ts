@@ -609,6 +609,80 @@ export class FamilyIntakeService {
     };
   }
 
+  /**
+   * S4 "Reading it": the family's history on the Parent Profile -- who entered
+   * the family and its children, who owns it (Sales), who placed it on its
+   * Operations supervisor, and the package carried over -- read from the audit
+   * rows those actions wrote, oldest first, with who did it and when. Only the
+   * facts each line needs, never the payloads whole: no phone or e-mail is in
+   * any of them (G-07). A reason is shown where a person typed it. Read by
+   * whoever owns the family now (chat.staff_owns_family).
+   */
+  async history(actorId: string, familyId: string) {
+    const s = await this.standing(actorId);
+    const family = await this.requireOwnFamily(s, familyId, 'optional');
+    const rows = await this.prisma.$queryRaw<Array<{
+      id: string; action: string; at: Date; actor_id: string | null; actor_name: string | null;
+      entity: string; entity_id: string; subject_name: string | null; before: unknown; after: unknown; reason: string;
+    }>>`
+      SELECT a.id::text AS id, a.action, a.at, a.actor_id::text AS actor_id, st.name AS actor_name,
+             a.entity, a.entity_id::text AS entity_id,
+             CASE a.entity WHEN 'family' THEN f.display_name WHEN 'learner' THEN l.name WHEN 'contact' THEN c.name END AS subject_name,
+             a.before, a.after, a.reason
+        FROM chat.audit_log a
+        LEFT JOIN chat.staff st ON st.id = a.actor_id
+        LEFT JOIN chat.family f ON a.entity = 'family' AND f.id = a.entity_id
+        LEFT JOIN chat.learner l ON a.entity = 'learner' AND l.id = a.entity_id
+        LEFT JOIN chat.contact c ON a.entity = 'contact' AND c.id = a.entity_id
+       WHERE a.action = ANY(${[...HISTORY_ACTIONS]}::text[])
+         AND ((a.entity = 'family' AND a.entity_id = ${family.id}::uuid)
+           OR (a.entity = 'learner' AND l.family_id = ${family.id}::uuid)
+           OR (a.entity = 'contact' AND c.family_id = ${family.id}::uuid))
+       ORDER BY a.at, a.id
+       LIMIT 500`;
+    const field = (v: unknown, k: string): unknown => (v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined);
+    const staffIds = new Set<string>();
+    for (const r of rows) {
+      for (const v of [field(r.after, 'supervisorId'), field(r.after, 'salesOwnerId'), field(r.before, 'salesOwnerId')]) {
+        if (typeof v === 'string' && isUuid(v)) staffIds.add(v);
+      }
+    }
+    const names = new Map(
+      (staffIds.size ? await this.prisma.staff.findMany({ where: { id: { in: [...staffIds] } }, select: { id: true, name: true } }) : [])
+        .map((x) => [x.id, x.name]),
+    );
+    const ref = (v: unknown) => (typeof v === 'string' && names.has(v) ? { id: v, name: names.get(v) ?? null } : null);
+    const num = (v: unknown) => (typeof v === 'number' ? v : null);
+    return {
+      familyId: family.id,
+      entries: rows.map((r) => {
+        const details: Record<string, unknown> = {};
+        if (field(r.after, 'supervisorId') !== undefined) details.supervisor = ref(field(r.after, 'supervisorId'));
+        if (r.action === 'family.sales_owner_set') details.to = ref(field(r.after, 'salesOwnerId'));
+        if (r.action === 'family.sales_owner_changed') {
+          details.from = ref(field(r.before, 'salesOwnerId'));
+          details.to = ref(field(r.after, 'salesOwnerId'));
+        }
+        if (r.action === 'subscription.carried_over') {
+          Object.assign(details, { total: num(field(r.after, 'total')), completed: num(field(r.after, 'completed')), planMonths: num(field(r.after, 'planMonths')) });
+        }
+        if (r.action === 'family.children_added' || r.action === 'family.entered') {
+          const ids = field(r.after, 'learnerIds');
+          details.children = Array.isArray(ids) ? ids.length : null;
+        }
+        return {
+          id: `audit:${r.id}`,
+          action: r.action,
+          at: r.at.toISOString(),
+          actor: r.actor_id ? { id: r.actor_id, name: r.actor_name } : null,
+          subject: { kind: r.entity as 'family' | 'learner' | 'contact', id: r.entity_id, name: r.subject_name },
+          details,
+          reason: TYPED_REASON.has(r.action) ? r.reason : null,
+        };
+      }),
+    };
+  }
+
   /** Each family's supervision, Sales owner, suggestion and live group, for the lists above. */
   private async ownersOf(familyIds: string[]) {
     const out = new Map<string, {
@@ -1018,6 +1092,25 @@ export function payloadHash(payload: unknown): string {
 function notFound() {
   return new CommError(CommErrorCode.INTAKE_NOT_FOUND, 'family not found', 404);
 }
+
+/** S4: the audit actions a family's history shows (who entered it, owns it, placed it; its packages). */
+const HISTORY_ACTIONS: ReadonlySet<string> = new Set([
+  'new_student.enrolled',
+  'family.entered',
+  'family.children_added',
+  'family.sales_owner_set',
+  'family.sales_owner_changed',
+  'family.supervisor_suggested',
+  'family.operations_supervisor_set',
+  'learner.supervisor_assigned',
+  'learner.supervision_imported',
+  'subscription.carried_over',
+  'subscription.voided',
+  'parent.sign_in_email_set',
+]);
+
+/** The actions whose reason a person typed (the rest carry the system's own). */
+const TYPED_REASON: ReadonlySet<string> = new Set(['family.sales_owner_set', 'family.sales_owner_changed', 'subscription.voided']);
 
 /** A manager enters a family for one of their supervisors (D5); they never own it themself. */
 function isManager(s: Standing): boolean {

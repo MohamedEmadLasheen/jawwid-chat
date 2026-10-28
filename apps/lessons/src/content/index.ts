@@ -1,3 +1,4 @@
+import fatihah from './surah-001.json';
 import naba from './surah-078.json';
 import naziat from './surah-079.json';
 import abasa from './surah-080.json';
@@ -42,10 +43,11 @@ import nas from './surah-114.json';
  * in the browser (lesson-content.ts). A surah without content still gets the
  * Quran sections of the lesson.
  */
-// Al-Buruj (the reference lesson, P0-4) and the rest of Juz' Amma, batches 1-4 (78-114). Every
+// Al-Buruj (the reference lesson, P0-4), the rest of Juz' Amma (batches 1-4, 78-114) and Al-Fatihah (batch 5). Every
 // file is "pending" until the Teachers department approves it, and shows
 // nothing beyond the verified Quran until then.
 const CONTENT: Record<number, unknown> = {
+  1: fatihah,
   78: naba,
   79: naziat,
   80: abasa,

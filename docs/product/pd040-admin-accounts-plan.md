@@ -638,8 +638,19 @@ Not covered: parameterised and write routes, and the Flutter staff app. Those co
 **Known limit (accepted by the department head, 2026-10-28):** the database does not check a staff account's suspension when the suspension names no actor. That is how the operator command-line tool suspends: `deactivate-principal --suspend` passes no requester. So a server-side writer that calls `chat.deactivate_principal` without a requester can still suspend any staff account. Suspension only takes access away, never grants it. A reactivation, a sign-out by another account, and any suspension that does name an actor are always checked.
 
 **Still to come:**
-- PR-4: the Designer template role, seeded with PD-41's keys.
 - PR-5: the Admin Web Staff accounts and Roles UI.
 - Repeatable `general` departments and moving a specialist between departments.
 - The `access_changed` journal: today, HTTP picks up a role change on the next request and sockets within 15 s.
 
+## 16. PR-4 as built (2026-10-28)
+
+- **Migration `20261029190000_chat_pd040_designer_template`.** `chat.seed_access_role_templates(org)` adds the template roles an organization lacks:
+  - It is idempotent and returns how many roles it added.
+  - It skips a key the organization already uses.
+  - It audits each role it adds as `access_role.created`, with no actor and `template: true`.
+  - The migration runs it for every organization that exists at that point. An organization created later gets the templates by running the same function.
+- **The template list.** It lives in `apps/api/src/platform/permissions/role-templates.ts`, and the migration seeds it from a generated block. `pd040-role-templates.spec.ts` keeps the two in step, as the catalogue seed spec does. The catalogue, the legacy bundles and the earlier seed blocks are unchanged.
+- **The Designer.** It is a specialist role holding `certificates.view` and `certificates.design`, never `certificates.deliver`. Both keys are delegable and held by the Teachers manager only. So the super admin and the Teachers manager can grant it, the latter to a specialist of the Teachers department.
+  - Its exact routes are pinned by PD-41 in `pd040-route-permissions.spec.ts`.
+  - This PR adds a check that everything its keys open is a `/certificates` or `/learner-certificates` route.
+- **Once seeded, a template is ordinary data.** The super admin edits or archives it like any other role. `GET /admin/access-roles` now marks it with `template: true`.

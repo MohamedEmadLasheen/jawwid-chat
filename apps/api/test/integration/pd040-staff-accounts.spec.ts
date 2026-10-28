@@ -121,6 +121,9 @@ beforeAll(async () => {
     await tx.staff.create({ data: { organizationId: orgId, name: 'QA Organization Owner', role: 'super_admin', isActive: true, accountId: account.id } });
   });
   m = await seedOrgChat(g.prisma, { organizationId: orgId, emailDomain: DOMAIN, password: PASSWORD, passwordHash: await hashPassword(PASSWORD), messages: false });
+  // PD-40 PR-4: the migration seeded the organizations that existed then; this one is new.
+  const seeded = await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.seed_access_role_templates(${orgId}::uuid) AS n`;
+  expect(seeded[0]!.n).toBe(1);
 
   process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({
@@ -174,8 +177,39 @@ describe('PD-40 S4: roles', () => {
 });
 
 describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
+  let designerTemplate: string;
+  beforeAll(async () => {
+    const rows = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.access_role WHERE organization_id = ${orgId}::uuid AND key = 'designer' AND is_template`;
+    designerTemplate = rows[0]!.id;
+  });
+
+  it('the template is seeded once, as a specialist role with exactly the two certificate keys (PR-4)', async () => {
+    const again = await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.seed_access_role_templates(${orgId}::uuid) AS n`;
+    expect(again[0]!.n).toBe(0);
+    const roles = await as(m.superAdmin.subject, 'GET', '/admin/access-roles');
+    expect((roles.json.roles as Array<{ key: string }>).filter((r) => r.key === 'designer')).toEqual([
+      expect.objectContaining({ maxTier: 'specialist', permissions: ['certificates.design', 'certificates.view'], template: true, archived: false, grantable: true }),
+    ]);
+    const created = await g.prisma.auditLog.findMany({ where: { action: 'access_role.created', entityId: designerTemplate } });
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ actorId: null, after: { key: 'designer', template: true } });
+  });
+
+  it('the Teachers manager may hand the Designer to a specialist of their department; the Operations manager may not (S1, H5)', async () => {
+    const r = await as(m.teachersManager.subject, 'POST', '/admin/staff-accounts', {
+      name: 'QA Teachers Designer', email: email('tch-designer'), tier: 'specialist', departmentId: m.departments.teachers, roleIds: [designerTemplate], reason: 'spec',
+    });
+    expect(r.status).toBe(201);
+    expect(r.json.account.roles).toEqual([expect.objectContaining({ key: 'designer' })]);
+    const ops = await as(m.operationsManager.subject, 'POST', '/admin/staff-accounts', {
+      name: 'QA Ops Designer', email: email('ops-designer'), tier: 'specialist', departmentId: m.departments.operations, roleIds: [designerTemplate], reason: 'spec',
+    });
+    expect({ status: ops.status, code: ops.code }).toEqual({ status: 403, code: CommErrorCode.STAFF_ACCOUNT_DENIED });
+  });
+
   it('the super admin creates it; the code is shown once, never audited; completing it activates; it opens Certificates only', async () => {
-    const designer = await defineRole('designer', ['certificates.view', 'certificates.design']);
+    const designer = designerTemplate;
     const address = email('designer');
     const created = await as(m.superAdmin.subject, 'POST', '/admin/staff-accounts', {
       name: 'QA Designer', email: address, tier: 'specialist', roleIds: [designer], reason: 'the certificates designer',
