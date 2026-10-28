@@ -146,7 +146,7 @@ describe('permission keys → pages', () => {
     expect(holdsAny(null, ['staff_accounts.view'])).toBe(false)
   })
 
-  it('gives a specialist no area of its own: it has only what its roles open', () => {
-    expect(visibleAreas('specialist')).toEqual([])
+  it("gives a specialist PD-41's Certificates area only -- never Accounts, so no staff-account tabs", () => {
+    expect(visibleAreas('specialist')).toEqual(['certificates'])
   })
 })
