@@ -1,7 +1,7 @@
 # PD-44: a real manager Dashboard (review and plan)
 
 **State:** plan for approval, revision 1. No feature code is written.
-**Claim:** `docs/product/pd-registry/PD-44.md`. **No migration slot is claimed.** The plan expects no DDL. §6.4 lists the two indexes a reviewer may ask for; if one is needed, the department head assigns the slot at that PR.
+**Claim:** `docs/product/pd-registry/PD-44.md` (PR #189). **No migration slot is claimed.** The plan expects no DDL. §6.4 lists the two indexes a reviewer may ask for; if one is needed, the department head assigns the slot at that PR.
 **Base:** `main` @ `a547b0e2`, read after PR #187 (Remove the legacy Inbox; approved, merging on green). #187 removes `dashboardApi.unattended` and the Dashboard's link into `/inbox`. It keeps `DashboardPage` and its four other calls. Line numbers in `endpoints.ts`, `queryKeys.ts` and `RealtimeProvider.tsx` are `main`'s, and #187 moves some of them.
 
 The owner's decision, verbatim:
