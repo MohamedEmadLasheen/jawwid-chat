@@ -168,7 +168,8 @@ describe('1. POST /teachers', () => {
     expect(new Date(r.json.firstLogin.expiresAt).getTime() - Date.now()).toBeGreaterThan(71 * 3_600_000);
 
     const done = await http(null, 'POST', '/auth/password-reset', { username: address, code: r.json.firstLogin.code, password: '1234' });
-    expect(done.status).toBe(201);
+    // POST /auth/password-reset answers 200 (@HttpCode), not 201.
+    expect(done.status).toBe(200);
     expect((await app.get(AuthService).login(address, '1234')).accessToken).toEqual(expect.any(String));
   });
 
@@ -298,7 +299,7 @@ describe('4. POST /teachers/:id/first-login-code (owner: "E-mail only; managers 
     if (again.json.firstLogin.code !== first.json.firstLogin.code) {
       expect((await http(null, 'POST', '/auth/password-reset', { username: address, code: first.json.firstLogin.code, password: '1234' })).status).toBe(401);
     }
-    expect((await http(null, 'POST', '/auth/password-reset', { username: address, code: again.json.firstLogin.code, password: '1234' })).status).toBe(201);
+    expect((await http(null, 'POST', '/auth/password-reset', { username: address, code: again.json.firstLogin.code, password: '1234' })).status).toBe(200);
     const after = await reissue(m.teachersManager.subject, id);
     expect([after.status, after.code]).toEqual([409, 'COMM.TEACHER_ALREADY_SIGNED_IN']);
   });

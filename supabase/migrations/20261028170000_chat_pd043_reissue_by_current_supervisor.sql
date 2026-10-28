@@ -9,10 +9,11 @@
 -- ADDED the teacher: a supervisor reassigned away could reissue, read the code
 -- and take the account.
 --
--- The person who adds a teacher (or gives an existing one a sign-in) still
--- issues its FIRST code, in that same transaction: the audit row
--- chat.create_teacher (or chat.give_teacher_sign_in) wrote moments before was
--- written by THIS transaction (xmin). Later, having added it grants nothing.
+-- The person who adds a NEW teacher still issues its FIRST code, in that same
+-- transaction: the teacher.created audit row chat.create_teacher wrote moments
+-- before was written by THIS transaction (xmin). Later, having added it grants
+-- nothing. Giving an EXISTING teacher a sign-in is not creation: it follows
+-- the reissue rule (department head, #198).
 --
 -- chat.guard_password_reset_code calls this for every first_login code, so the
 -- API cannot issue past it.
@@ -36,7 +37,7 @@ as $$
                 and (chat.staff_teacher_scope(s.id, t.id) in ('self', 'backup')
                      or exists (select 1 from chat.audit_log l
                                  where l.entity_id = t.id and l.actor_id = s.id
-                                   and l.action in ('teacher.created', 'teacher.sign_in_given')
+                                   and l.action = 'teacher.created'
                                    and l.xmin = (txid_current() % 4294967296)::text::xid))))
   );
 $$;
