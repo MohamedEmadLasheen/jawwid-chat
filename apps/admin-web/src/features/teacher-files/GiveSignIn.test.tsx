@@ -115,6 +115,23 @@ describe('Give sign-in', () => {
     await waitFor(() => expect(screen.queryByText('482913')).not.toBeInTheDocument())
   })
 
+  it('a supervisor gives a login but never sees the code: it is e-mailed, or ask the Manager', async () => {
+    on('GET', /\/teacher-files\/t-1$/, () => json(withSignIn('none')))
+    on('POST', /\/teachers\/t-1\/sign-in$/, () =>
+      json({ teacherId: 't-1', signIn: 'teacher.one@example.test', firstLogin: { expiresAt: '2026-10-31T09:00:00Z', emailed: true } }, 201),
+    )
+    const user = userEvent.setup()
+    const supervisor = makeStaff({ id: 's-1', name: 'Supervisor One', role: 'admin' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/files/t-1' })
+    await user.click(await screen.findByRole('button', { name: 'Give sign-in' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Give sign-in' })
+    await user.type(within(dialog).getByLabelText('Sign-in e-mail'), 'teacher.one@example.test')
+    await user.click(within(dialog).getByRole('button', { name: 'Give sign-in' }))
+    const shown = await screen.findByRole('dialog', { name: 'First sign-in code' })
+    expect(within(shown).getByText('A new code was e-mailed to the teacher.')).toBeInTheDocument()
+    expect(within(shown).queryByText(/^[0-9]{6}$/)).not.toBeInTheDocument()
+  })
+
   it('a teacher with a login, or no right to give one: no Give sign-in', async () => {
     on('GET', /\/teacher-files\/t-1$/, () => json(withSignIn('active', false)))
     const { unmount } = renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1' })

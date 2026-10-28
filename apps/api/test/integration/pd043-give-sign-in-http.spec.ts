@@ -3,7 +3,9 @@
  * login (inserted before PD-43; the Core-migration intake) gets one in place.
  *
  *   1. POST /teachers/:id/sign-in (teachers.create): a provisioned login
- *      linked to the SAME teacher, a first sign-in code returned once; the
+ *      linked to the SAME teacher, a first sign-in code always e-mailed and
+ *      returned only to the Teachers manager and the super admin (the reissue
+ *      rule, department head on #198: an existing teacher is a live identity); the
  *      teacher signs in; their students and history are untouched; the file's
  *      e-mail is filled only when empty; audited without the e-mail.
  *   2. Refusals: already has a login (409 TEACHER_HAS_SIGN_IN), inactive (409),
@@ -140,7 +142,7 @@ describe('1. POST /teachers/:id/sign-in', () => {
     expect(teacher.account).toMatchObject({ subject: address, kind: 'teacher', status: 'provisioned', isActive: false });
     expect((await g.prisma.teacherFile.findUnique({ where: { teacherId: id } }))?.email).toBe(address);
 
-    expect((await http(null, 'POST', '/auth/password-reset', { username: address, code: r.json.firstLogin.code, password: '1234' })).status).toBe(201);
+    expect((await http(null, 'POST', '/auth/password-reset', { username: address, code: r.json.firstLogin.code, password: '1234' })).status).toBe(200);
     expect((await app.get(AuthService).login(address, '1234')).actor.actorId).toBe(id);
 
     const audit = await g.prisma.auditLog.findMany({ where: { entityId: id, action: 'teacher.sign_in_given' } });
@@ -157,21 +159,27 @@ describe('1. POST /teachers/:id/sign-in', () => {
     expect((await g.prisma.teacherFile.findUniqueOrThrow({ where: { teacherId: id } })).email).toBe(before);
   });
 
-  it('a teacher supervisor gives a login only to a teacher they reach', async () => {
+  it('a teacher supervisor gives a login only to their CURRENT teacher, and never sees the code (department head, #198)', async () => {
     const mine = await legacyTeacher();
     await g.prisma.$executeRaw`INSERT INTO chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id, assigned_by, reason)
       VALUES (${mine}::uuid, ${orgId}::uuid, ${m.teacherSupervisors[0]!.id}::uuid, ${m.teachersManager.id}::uuid, 'spec')`;
     const theirs = await legacyTeacher();
-    await strict(true);
-    try {
-      const refused = await give(m.teacherSupervisors[0]!.subject, theirs, { email: email('c') });
-      expect([refused.status, refused.code]).toEqual([404, 'COMM.TEACHER_FILE_NOT_FOUND']);
-      expect((await give(m.teacherSupervisors[0]!.subject, mine, { email: email('d') })).status).toBe(201);
-    } finally {
-      await strict(false);
+    // Not their teacher: out of reach, strict scope on or off.
+    for (const on of [false, true]) {
+      await strict(on);
+      try {
+        const refused = await give(m.teacherSupervisors[0]!.subject, theirs, { email: email('c') });
+        expect([on, refused.status, refused.code]).toEqual([on, 404, 'COMM.TEACHER_FILE_NOT_FOUND']);
+      } finally {
+        await strict(false);
+      }
     }
-    // Strict scope off: the whole department reaches every teacher.
-    expect((await give(m.teacherSupervisors[0]!.subject, theirs, { email: email('e') })).status).toBe(201);
+    // Their teacher: the login is given, the code e-mailed, never shown to them.
+    const r = await give(m.teacherSupervisors[0]!.subject, mine, { email: email('d') });
+    expect(r.status).toBe(201);
+    expect(r.json.firstLogin).toEqual({ expiresAt: expect.any(String), emailed: false });
+    expect(r.text).not.toMatch(/"code"/);
+    expect((await g.prisma.teacher.findUniqueOrThrow({ where: { id: mine }, include: { account: true } })).account?.status).toBe('provisioned');
   });
 });
 
@@ -251,8 +259,8 @@ describe('4. the Teacher File tells the page', () => {
       canSendCode: false,
       canGive: false,
     });
-    // Strict scope off: the department reaches every teacher.
-    expect((await http(m.teacherSupervisors[0]!.subject, 'GET', `/teacher-files/${none}`)).json.signIn.canGive).toBe(true);
+    // A supervisor gives a login only to their CURRENT teacher, strict scope on or off.
+    expect((await http(m.teacherSupervisors[0]!.subject, 'GET', `/teacher-files/${none}`)).json.signIn.canGive).toBe(false);
     await strict(true);
     try {
       expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${none}`)).json.signIn.canGive).toBe(true);
