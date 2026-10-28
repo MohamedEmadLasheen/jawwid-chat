@@ -1,7 +1,7 @@
 # PD-47: one Tasks page for everyone (plan)
 
 **State:** **APPROVED.** On 2026-10-28 the owner answered Q1–Q13 "Approve all 13 (Recommended)", relayed verbatim by the department head (§8). No feature code is written. PR-1 waits for the department head's GO (machine load).
-**Claim:** `docs/product/pd-registry/PD-47.md`. **Migration slots, assigned by the department head:** PR-1 `20261029160000` (`chat_pd047_work_tasks`), PR-2 `20261029170000` (`chat_pd047_task_sources`), claimed in `docs/product/migration-slots/`. PR-4 asks for its own slot if it needs one.
+**Claim:** `docs/product/pd-registry/PD-47.md`. **Migration slots, assigned by the department head:** PR-1 `20261029160000` (`chat_pd047_work_tasks`), PR-2 `20261029210000` (`chat_pd047_task_sources`; moved from `20261029170000`, released, so it runs after the priority amendment's PR-1b `20261029200000`), claimed in `docs/product/migration-slots/`. PR-4 asks for its own slot if it needs one.
 **Base:** `main` @ `08bfd9dd`. Paths are relative to the repository root. `mig/` is `supabase/migrations/`.
 **Frozen, not touched:** the call workstreams W1–W8; legacy `chat.task` (§1.1); Jawwid Core.
 
@@ -377,7 +377,7 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
 | PR | Content | Slot |
 |---|---|---|
 | PR-1 | `chat.work_task` + `chat.work_task_event`, guard and history triggers, RLS; `TaskService` with manual tasks, the four exits, comments and the lists; the routes and the PD-40 keys (LATER block); integration spec | **`20261029160000`** (assigned) |
-| PR-2 | The source framework, the worker sweep, the Phase A adapters and their completion triggers; the `lesson.service`/`leave`/`discipline`/`cases` hooks; the guard spec | **`20261029170000`** (assigned) |
+| PR-2 | The source framework, the worker sweep, the Phase A adapters and their completion triggers; the `lesson.service`/`leave`/`discipline`/`cases` hooks; the guard spec | **`20261029210000`** (assigned; moved from 170000) |
 | PR-3 | Admin Web Tasks page, en/ar, RTL; legacy client code removed | none |
 | PR-4 | `task.changed` and the worker `case`; PD-34 emission and the overdue notice sweep; `/dashboard/tasks` (with PD-44) | 0–1 (the notice table) |
 | PR-5 | Flutter "To do" in the Schedule tab (app + teacher web), if Q2 | none |

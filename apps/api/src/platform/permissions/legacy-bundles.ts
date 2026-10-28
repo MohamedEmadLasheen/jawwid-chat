@@ -111,6 +111,12 @@ const OPERATIONS_MEMBER = k(
   // the Teacher File itself: no teacher_files.* key.
   'teacher_supervision.view',
   'teacher_supervision.record',
+  // PD-41: an Operations supervisor requests their students' certificates,
+  // approves the design, sends it and publishes its Story (owner 2026-10-28).
+  'certificates.view',
+  'certificates.request.student',
+  'certificates.deliver',
+  'certificates.story',
 );
 
 /** The Teachers department: certificates, leave, discipline, supervision, the Teacher File (PD-10, PD-12, PD-35). */
@@ -119,8 +125,12 @@ const TEACHERS_MEMBER = k(
   'accounts.administer',
   'accounts.support_session',
   'certificates.view',
+  // PD-12's issuers keep designing until a Designer exists (PD-41 design §6.2).
   'certificates.design',
   'certificates.deliver',
+  // PD-41: Teacher Supervision requests teachers' certificates.
+  'certificates.request.teacher',
+  'certificates.story',
   'teacher_supervision.view',
   'teacher_supervision.record',
   'supervision.chats',
@@ -184,6 +194,8 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     'subscriptions.manage',
     'materials.manage',
     'lessons.courses',
+    // PD-41: the department's certificate requests, whoever filed them.
+    'certificates.oversee',
   ],
   'manager:teachers': [
     ...CONVERSATION_STAFF,
@@ -196,6 +208,8 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     'teachers.offboard',
     'materials.manage',
     'lessons.courses',
+    // PD-41: the department's certificate requests, whoever filed them.
+    'certificates.oversee',
   ],
   'manager:sales': [...CONVERSATION_STAFF, ...DEPARTMENT_MANAGER, ...SALES_MEMBER, 'subscriptions.manage'],
   'manager:none': [...CONVERSATION_STAFF, 'org.view', 'staff_profiles.team', 'staff_profiles.manage'],

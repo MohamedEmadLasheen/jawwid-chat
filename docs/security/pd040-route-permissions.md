@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-480 routes.
+503 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -79,6 +79,32 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/cases/:id/notes` | cases.manage | `cases/supervision-case.controller.ts#SupervisionCaseController.note` |
 | GET | `/api/v1/cases/:id/owners` | cases.view | `cases/supervision-case.controller.ts#SupervisionCaseController.owners` |
 | POST | `/api/v1/cases/:id/status` | cases.manage | `cases/supervision-case.controller.ts#SupervisionCaseController.status` |
+| GET | `/api/v1/certificates` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.list` |
+| POST | `/api/v1/certificates` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.create` |
+| GET | `/api/v1/certificates/:id` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.get` |
+| POST | `/api/v1/certificates/:id/accept` | certificates.request.student | `certificates/certificates.controller.ts#CertificatesController.accept` |
+| POST | `/api/v1/certificates/:id/approve` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.approve` |
+| POST | `/api/v1/certificates/:id/cancel` | certificates.request.student | certificates.request.teacher | certificates.oversee | `certificates/certificates.controller.ts#CertificatesController.cancel` |
+| POST | `/api/v1/certificates/:id/consent` | certificates.story | `certificates/certificates.controller.ts#CertificatesController.consent` |
+| POST | `/api/v1/certificates/:id/decline` | certificates.request.student | `certificates/certificates.controller.ts#CertificatesController.decline` |
+| GET | `/api/v1/certificates/:id/delivery` | certificates.deliver | `certificates/certificates.controller.ts#CertificatesController.delivery` |
+| POST | `/api/v1/certificates/:id/edit` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.edit` |
+| POST | `/api/v1/certificates/:id/files` | certificates.design | `certificates/certificates.controller.ts#CertificatesController.confirmUpload` |
+| GET | `/api/v1/certificates/:id/files/:fileId` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.file` |
+| POST | `/api/v1/certificates/:id/files/upload` | certificates.design | `certificates/certificates.controller.ts#CertificatesController.authorizeUpload` |
+| POST | `/api/v1/certificates/:id/redesign` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.redesign` |
+| POST | `/api/v1/certificates/:id/release` | certificates.design | certificates.oversee | `certificates/certificates.controller.ts#CertificatesController.release` |
+| POST | `/api/v1/certificates/:id/resubmit` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.resubmit` |
+| POST | `/api/v1/certificates/:id/return` | certificates.design | `certificates/certificates.controller.ts#CertificatesController.returnForChanges` |
+| POST | `/api/v1/certificates/:id/send` | certificates.deliver | `certificates/certificates.controller.ts#CertificatesController.send` |
+| POST | `/api/v1/certificates/:id/start` | certificates.design | `certificates/certificates.controller.ts#CertificatesController.start` |
+| POST | `/api/v1/certificates/:id/story` | certificates.story | `certificates/certificates.controller.ts#CertificatesController.story` |
+| POST | `/api/v1/certificates/:id/withdraw-approval` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.withdrawApproval` |
+| GET | `/api/v1/certificates/access` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.access` |
+| GET | `/api/v1/certificates/recipients` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.recipients` |
+| GET | `/api/v1/certificates/types` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.listTypes` |
+| POST | `/api/v1/certificates/types` | certificates.types | `certificates/certificates.controller.ts#CertificatesController.createType` |
+| POST | `/api/v1/certificates/types/:id` | certificates.types | `certificates/certificates.controller.ts#CertificatesController.updateType` |
 | GET | `/api/v1/conversations` | chat.use | `communication/api/conversation.controller.ts#ConversationController.list` |
 | GET | `/api/v1/conversations/:conversationId/export` | chat.export | `communication/api/export.controller.ts#ExportController.export` |
 | GET | `/api/v1/conversations/:conversationId/messages` | chat.use | `communication/api/message.controller.ts#MessageController.list` |
@@ -171,11 +197,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/instalments/access` | self-service | `billing/billing.controller.ts#BillingController.access` |
 | POST | `/api/v1/integration/core/events` | public | `core-boundary/core-webhook.controller.ts#CoreWebhookController.receive` |
 | GET | `/api/v1/invoices/:id/link` | billing.view | `billing/payments.controller.ts#PaymentsController.invoiceLink` |
-| GET | `/api/v1/learner-certificates` | certificates.view | `certificates/certificate.controller.ts#CertificateController.list` |
+| GET | `/api/v1/learner-certificates` | not for staff | `certificates/certificate.controller.ts#CertificateController.list` |
 | POST | `/api/v1/learner-certificates` | not for staff | `certificates/certificate.controller.ts#CertificateController.request` |
-| POST | `/api/v1/learner-certificates/:id/decline` | certificates.deliver | `certificates/certificate.controller.ts#CertificateController.decline` |
-| POST | `/api/v1/learner-certificates/:id/issue` | certificates.deliver | `certificates/certificate.controller.ts#CertificateController.issue` |
-| POST | `/api/v1/learner-certificates/:id/upload` | certificates.design | `certificates/certificate.controller.ts#CertificateController.authorizeUpload` |
 | POST | `/api/v1/learners/:id/enrollment` | students.manage | `lessons/journey.controller.ts#JourneyController.setEnrollment` |
 | GET | `/api/v1/learners/:id/free-slots` | schedule.view | `lessons/scheduling.controller.ts#SchedulingController.learnerFreeSlots` |
 | GET | `/api/v1/learners/:id/materials/library` | materials.view | `materials/materials.controller.ts#MaterialsController.library` |

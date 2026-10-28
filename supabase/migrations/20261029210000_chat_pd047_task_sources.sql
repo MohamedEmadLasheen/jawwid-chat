@@ -1,4 +1,4 @@
--- PD-47 (2026-10-28), PR-2 -- system tasks from their sources (Phase A).
+-- PD-47 (2026-10-28), PR-2 -- system tasks from their sources (Phase A). Slot 20261029210000.
 --
 -- Plan: docs/product/pd047-tasks-plan.md §3.5-§3.6, and the priority
 -- amendment docs/product/pd047-amendment-priority.md §2 (owner-approved).
