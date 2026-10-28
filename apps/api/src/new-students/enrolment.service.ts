@@ -82,7 +82,8 @@ export class NewStudentEnrolmentService {
            WHERE ls.learner_id = ANY(${learnerIds}::uuid[])`
       : [];
     const supervisorOf = new Map(supervision.map((r) => [r.learner_id, { id: r.id, name: r.name }]));
-    const accounts = enrolments.map((e) => e.accountId);
+    // PD-42: an enrolment may not have its parent's account yet (no sign-in e-mail).
+    const accounts = enrolments.map((e) => e.accountId).filter((a): a is string => a !== null);
     const [credentials, codes] = await Promise.all([
       this.prisma.accountCredential.findMany({ where: { accountId: { in: accounts } }, select: { accountId: true } }),
       this.prisma.parentSignupCode.findMany({
@@ -111,9 +112,9 @@ export class NewStudentEnrolmentService {
         const e = byTrial.get(f.trialId);
         if (!e) return { ...f, enrolment: null };
         const supervisor = supervisorOf.get(e.learnerIds[0]) ?? null;
-        const code = codeOf.get(e.accountId);
+        const code = e.accountId ? codeOf.get(e.accountId) : undefined;
         const responsible = viewer.superAdmin || viewer.opsManager || e.learnerIds.some((l) => mine.has(l));
-        const wrong = wrongOf.get(e.accountId);
+        const wrong = e.accountId ? wrongOf.get(e.accountId) : undefined;
         // Only whoever is responsible sees the code, the wrong tries, and may act on them.
         const attempts = responsible && wrong ? { attempts: { wrong: wrong.wrong, cap: wrong.cap, locked: wrong.locked } } : {};
         return {
@@ -125,7 +126,7 @@ export class NewStudentEnrolmentService {
             assignedAt: e.assignedAt.toISOString(),
             groupConversationId: e.groupConversationId,
             canCreateGroup: responsible && e.groupConversationId === null,
-            parentSignup: signedUp.has(e.accountId)
+            parentSignup: e.accountId && signedUp.has(e.accountId)
               ? { state: 'signed_up' as const }
               : code
                 ? {
@@ -396,10 +397,13 @@ export class NewStudentEnrolmentService {
     if (!viewer.superAdmin && !viewer.opsManager && !enrolment.learnerIds.some((l) => mine.has(l))) {
       throw new CommError(CommErrorCode.LESSON_DENIED, 'the parent\'s sign-up is handled by the children\'s supervisor');
     }
-    if (await this.prisma.accountCredential.findUnique({ where: { accountId: enrolment.accountId }, select: { accountId: true } })) {
+    // PD-42: no account yet means nothing to sign up to (no sign-in e-mail entered).
+    const accountId = enrolment.accountId;
+    if (!accountId) throw new CommError(CommErrorCode.LESSON_STATE, 'the parent has no sign-in e-mail yet', 409);
+    if (await this.prisma.accountCredential.findUnique({ where: { accountId }, select: { accountId: true } })) {
       throw new CommError(CommErrorCode.LESSON_STATE, 'the parent has already signed up', 409);
     }
-    return { actor, enrolment };
+    return { actor, enrolment: { ...enrolment, accountId } };
   }
 
   // ------------------------------------------------------------------

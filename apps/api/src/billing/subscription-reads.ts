@@ -83,12 +83,21 @@ export function positionOf(standing: LearnerSubscription[], used: number): { n: 
   return { n: next - (before - last.lessonsIncluded), m: last.lessonsIncluded };
 }
 
+/**
+ * PD-42: the lessons a carried-over package had already used in Jawwid Core
+ * (entered as they stood). They count as used, exactly as
+ * chat.compute_learner_access counts them: 12 done of 20 -> "Lesson 13 of 20".
+ */
+export function lessonsUsedBefore(standing: LearnerSubscription[]): number {
+  return standing.reduce((n, r) => n + r.lessonsUsedBefore, 0);
+}
+
 export async function lessonPosition(prisma: PrismaService, learnerId: string): Promise<{ n: number; m: number } | null> {
   const standing = standingInOrder(await prisma.learnerSubscription.findMany({ where: { learnerId } }));
   if (standing.length === 0) return null;
   const rows = await prisma.$queryRaw<{ used: number }[]>`
     SELECT chat.learner_lessons_used(${learnerId}::uuid, ${day(standing[0]!.startsOn)}::date) AS used`;
-  return positionOf(standing, Number(rows[0]?.used ?? 0));
+  return positionOf(standing, Number(rows[0]?.used ?? 0) + lessonsUsedBefore(standing));
 }
 
 /** Each child's subscription standing, for a family (or the listed children of it). */
@@ -120,7 +129,7 @@ export async function childSubscriptions(
     const current = currentOf(standing, today);
     const a = accessOf.get(l.id);
     const included = standing.length > 0 ? standing.reduce((n, r) => n + r.lessonsIncluded, 0) : null;
-    const balance = included === null ? null : a?.balance ?? included;
+    const balance = included === null ? null : a?.balance ?? included - lessonsUsedBefore(standing);
     return {
       child: { id: l.id, name: l.name },
       current: current
