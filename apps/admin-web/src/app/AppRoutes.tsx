@@ -6,7 +6,6 @@ import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { InboxPage } from '@/features/inbox/InboxPage'
 import { ChatPage } from '@/features/chat/ChatPage'
-import { FamiliesPage } from '@/features/family/FamiliesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { StoriesStudio } from '@/features/stories/StoriesStudio'
@@ -91,7 +90,6 @@ export function AppRoutes() {
         <Route path="/calls/join/:scheduledCallId" element={<Area area="calls"><JoinLinkPage /></Area>} />
         <Route path="/inbox" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
-        <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
         <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
         {/* The Teachers area (features/teachers/area.tsx): Statistics is its base tab. */}
         <Route path="/teachers" element={<Area area="teachers"><TeacherStatsPage inTeachersArea /></Area>} />

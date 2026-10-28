@@ -29,6 +29,13 @@ export const StaffRole = {
    * through CONVERSATION_STAFF_ROLES below.
    */
   SUPER_ADMIN: 'super_admin',
+  /**
+   * PD-40: a department account -- the Designer, later the Accountant or
+   * Marketing. Holds NOTHING by its role: every page and action comes from the
+   * access roles it is granted (chat.staff_access_profile). Not family-facing,
+   * never a department supervisor or manager.
+   */
+  SPECIALIST: 'specialist',
 } as const;
 export type StaffRole = (typeof StaffRole)[keyof typeof StaffRole];
 

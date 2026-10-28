@@ -4,6 +4,8 @@ import { PrismaService } from '../platform/prisma.service';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { AuthorizationService, type AccountAdminAct, type AccountAdminTarget } from '../platform/authorization.service';
+import { accountKindsAdministered, type AccountAdminStanding } from '../platform/account-admin-policy';
+import { accountAdminStandingOf } from '../platform/account-admin-standing';
 import { AuthService } from '../platform/auth/auth.service';
 import { toSessionListDto, type SessionDto } from '../platform/auth/auth.dto';
 import { PasswordResetService, RESET_CODE_MINUTES } from '../platform/auth/password-reset.service';
@@ -95,14 +97,21 @@ export class AccountAdminService {
   ) {}
 
   /**
-   * The accounts this caller may administer: parents and teachers for every
-   * staff member, staff too for the super admin. Never the caller's own, never
-   * the super admin's. Searchable by the person's, the family's or a child's
-   * name.
+   * The accounts this caller may administer (PD-40): parents for the
+   * Operations and Sales departments, teachers for the Teachers department,
+   * all three kinds for the super admin, nothing for anyone else. Never the
+   * caller's own, never the super admin's. Searchable by the person's, the
+   * family's or a child's name. `administers` tells the page which kinds to
+   * offer; an empty list is an answer, not an error.
    */
-  async list(actor: Actor, query: { q?: string; kind?: string }): Promise<{ accounts: AccountSummaryDto[]; truncated: boolean }> {
+  async list(
+    actor: Actor,
+    query: { q?: string; kind?: string },
+  ): Promise<{ accounts: AccountSummaryDto[]; truncated: boolean; administers: string[] }> {
     const organizationId = this.requireStaff(actor);
-    const kinds = actor.staffRole === StaffRole.SUPER_ADMIN ? ['family', 'teacher', 'staff'] : ['family', 'teacher'];
+    const standing = await accountAdminStandingOf(this.prisma, actor);
+    const kinds: string[] = accountKindsAdministered(actor, standing);
+    if (kinds.length === 0) return { accounts: [], truncated: false, administers: [] };
     const kind = query.kind && kinds.includes(query.kind) ? [query.kind] : kinds;
     const q = query.q?.trim().slice(0, MAX_QUERY);
     const like = q ? { contains: q, mode: Prisma.QueryMode.insensitive } : undefined;
@@ -140,18 +149,21 @@ export class AccountAdminService {
 
     return {
       truncated: rows.length > LIST_LIMIT,
-      accounts: rows.slice(0, LIST_LIMIT).map((row) => this.summary(actor, row)),
+      accounts: rows.slice(0, LIST_LIMIT).map((row) => this.summary(actor, row, standing)),
+      administers: kinds,
     };
   }
 
   async get(actor: Actor, accountId: string): Promise<AccountSummaryDto> {
     this.requireStaff(actor);
     const row = await this.loadRow(accountId);
-    // Another tenant's account, the caller's own or the super admin's: not
-    // listed, so not found either (the decision says which, for the logs).
-    const decision = this.authz.canAdministerAccount(actor, toTarget(row), 'reset_password');
+    const standing = await accountAdminStandingOf(this.prisma, actor);
+    // Another tenant's account, the caller's own, the super admin's, or a kind
+    // the caller does not administer: not listed, so not found either (the
+    // decision says which, for the logs). Every kind's acts include a reset.
+    const decision = this.authz.canAdministerAccount(actor, toTarget(row), 'reset_password', standing);
     if (!decision.allowed) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, decision.reason);
-    return this.summary(actor, row);
+    return this.summary(actor, row, standing);
   }
 
   // -------------------------------------------------------------------------
@@ -241,7 +253,7 @@ export class AccountAdminService {
     });
     await this.auth.enforceAccountRevocation(accountId, outcome.revoked > 0);
     if (outcome.changed) this.log.log(`account ${accountId} suspended by staff ${actor.actorId}`);
-    return this.summary(actor, await this.loadRow(accountId));
+    return this.summary(actor, await this.loadRow(accountId), await accountAdminStandingOf(this.prisma, actor));
   }
 
   /**
@@ -278,7 +290,7 @@ export class AccountAdminService {
       return true;
     });
     if (changed) this.log.log(`account ${accountId} reactivated by staff ${actor.actorId}`);
-    return this.summary(actor, await this.loadRow(accountId));
+    return this.summary(actor, await this.loadRow(accountId), await accountAdminStandingOf(this.prisma, actor));
   }
 
   // -------------------------------------------------------------------------
@@ -341,7 +353,7 @@ export class AccountAdminService {
   private async authorize(actor: Actor, accountId: string, act: AccountAdminAct): Promise<{ row: AccountRow }> {
     this.requireStaff(actor);
     const row = await this.loadRow(accountId);
-    const decision = this.authz.canAdministerAccount(actor, toTarget(row), act);
+    const decision = this.authz.canAdministerAccount(actor, toTarget(row), act, await accountAdminStandingOf(this.prisma, actor));
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
     return { row };
   }
@@ -363,9 +375,9 @@ export class AccountAdminService {
     return row;
   }
 
-  private summary(actor: Actor, row: AccountRow): AccountSummaryDto {
+  private summary(actor: Actor, row: AccountRow, standing: AccountAdminStanding): AccountSummaryDto {
     const target = toTarget(row);
-    const may = (act: AccountAdminAct) => this.authz.canAdministerAccount(actor, target, act).allowed;
+    const may = (act: AccountAdminAct) => this.authz.canAdministerAccount(actor, target, act, standing).allowed;
     const contact = row.contacts[0];
     const lockedUntil = row.credential?.lockedUntil && row.credential.lockedUntil > new Date() ? row.credential.lockedUntil : null;
     return {

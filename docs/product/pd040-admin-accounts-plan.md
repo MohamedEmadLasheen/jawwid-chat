@@ -193,7 +193,7 @@ Every permission records: `key`, `page`, `action`, bilingual label and descripti
 
 | Page | Permissions (examples) | Risk |
 |---|---|---|
-| `certificates` | `certificates.view`, `certificates.deliver` (upload + issue), `certificates.decline` | pii (the printed child name) |
+| `certificates` | `certificates.view`, `certificates.design` (upload), `certificates.deliver` (send to the family). The names are agreed with PD-41, which owns the certificates workflow and adds `request.student`, `request.teacher`, `story` and `oversee`. | pii (the printed child name) |
 | `chats` | `chat.use` (open the chat app / socket), `chat.internal_notes` | family_contact |
 | `families`, `parents` | `families.view`, `families.assign`, `parents.view`, `parents.edit_contact` | family_contact |
 | `instalments`, `payments` | `billing.view`, `billing.record`, `billing.verify` | finance |
@@ -334,16 +334,16 @@ The rules below form one DB-free decision, `decideStaffAccountAdmin(actor, targe
 
 ## 7. The Designer role
 
-A seeded **template** role, `designer`: org-wide, tier `specialist`, permissions `certificates.view` and `certificates.deliver`. The super admin may edit it as data.
+A seeded **template** role, `designer`: org-wide, tier `specialist`, permissions `certificates.view` and `certificates.design`. The super admin may edit it as data. **Aligned with PD-41 (2026-10-27):** the Designer designs and uploads, and never sends, cancels or declines. Sending is `certificates.deliver`, held by the requester. That settles §12 Q1 the PD-41 way, pending the owner.
 
 ### 7.1 Exactly what it reaches
 
 | Route | Permission | Note |
 |---|---|---|
 | `GET /learner-certificates?state=` | `certificates.view` | Every request in the organization, or by assignment (§12 Q2). PD-35 teacher scope does not apply, because the Designer is not a supervisor. |
-| `POST /learner-certificates/:id/upload` | `certificates.deliver` | A signed PUT URL, as today. |
-| `POST /learner-certificates/:id/issue` | `certificates.deliver` | Or a new "prepare" step instead (§12 Q1). |
-| `POST /learner-certificates/:id/decline` | `certificates.decline` | **Not** in the Designer bundle. Declining is an academic decision. |
+| `POST /learner-certificates/:id/upload` | `certificates.design` | A signed PUT URL, as today. PD-41 moves upload to its own design routes. |
+| `POST /learner-certificates/:id/issue` | `certificates.deliver` | **Not** in the Designer bundle: sending is the requester's act (PD-41). |
+| `POST /learner-certificates/:id/decline` | `certificates.deliver` | **Not** in the Designer bundle. Today the issuer declines; PD-41 replaces this with the requester cancelling and the Designer returning. |
 | `GET /me`, `/me/sessions`, own profile, `POST /auth/logout`, own notifications | `@SelfService()` | |
 
 **Nothing else.** No `/conversations`, `/families`, `/parent-profiles`, `/payments`, `/instalments`, `/teacher-files`, `/lessons`, `/org`, `/admin/*`, `/admin/accounts` or `/stories`. Also no socket rooms, because the Designer lacks `chat.use`. The route spec (§4.3 item 4) pins this list.
@@ -451,9 +451,23 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 | **PR-1** API route layer | `catalogue.ts`, `@Requires`/`@SelfService`/`@NotForStaff` decorators, `PermissionGuard` in **shadow** mode, declarations on all 427 handlers, legacy bundles in TS, the route spec plus the generated route table, the bundle ⇔ policy consistency spec, the `pd040-routes` guard | none (shadow) | — |
 | **PR-2** Data model | The §9 migration: tables, `specialist`, `general` kind, effective-permission functions, `guard_staff_access_change`, `access_changed` journal, catalogue ⇔ table spec, the "any manager" SQL audit, `Actor.permissions` loaded per request, `/me` returns permissions | none for existing accounts | 1 slot |
 | **PR-3** Staff account lifecycle API | `decideStaffAccountAdmin` (H1–H10) plus its matrix spec, `/admin/staff-accounts` create/list/detail/patch/setup-code/history, `/admin/access-roles` CRUD, `/admin/permissions`, first-login activation, PD-25 mailer delivery, `accounts.family.manage` on PD-21 routes, realtime `chat.use` handshake | new endpoints only | maybe a sub-slot (code `purpose`) |
-| **PR-4** Certificates for the Designer | The permission basis, the design projection, the DB decider check, the seeded `designer` template, the exact-route spec | additive | sub-slot (trigger) |
-| **PR-5** Admin Web | Page registry, `visiblePages`, `<RequirePermission>`, the legacy-nav snapshot spec, `/certificates`, the Staff accounts and Roles UI, the setup-code sign-in, Flutter's "uses Admin Web" screen | legacy nav identical | — |
+| **PR-4** The Designer role | **Scope cut 2026-10-27:** PD-41 owns the certificates workflow, its pages, its `certificates.*` keys, the design projection and the certificate rules. PD-40 PR-4 only seeds the `designer` template role with PD-41's keys (`certificates.view`, `certificates.design`) and pins its exact routes. | additive | maybe a sub-slot |
+| **PR-5** Admin Web | Page registry, `visiblePages`, `<RequirePermission>`, the legacy-nav snapshot spec, the Staff accounts and Roles UI, the setup-code sign-in, Flutter's "uses Admin Web" screen. The `/certificates` page itself is PD-41's. | legacy nav identical | — |
 | **PR-6** Enforce | System-test QA pass with zero shadow denials, then flip `PERMISSION_GUARD_MODE=enforce`, rewrite `AUTHORIZATION-MODEL.md` §3/§4, record PD-40 in boundary §4, update `docs/admin/pd021-account-administration.md` | enforcement on | — |
+
+**PR-2 as built (2026-10-27)**
+- **Built:**
+  - Migration `20261027190000_chat_pd040_access_roles`: the `specialist` tier; `chat.permission` and `chat.legacy_permission_bundle`, seeded from the TypeScript sources and pinned by `pd040-catalogue-seed.spec.ts`; `chat.access_role`, `chat.access_role_permission` and `chat.staff_access_role`.
+  - `chat.staff_access_profile` and `chat.staff_has_permission`.
+  - The only writers: `define`, `update` and `archive_access_role`, and `grant` and `revoke_access_role`. A trigger refuses any other write. They enforce H1, H3, H5, H7 and H8, and audit H10 in the same transaction.
+  - `PermissionGuard` and `GET /me` now read the SQL profile.
+- **Moved to PR-3:**
+  - The repeatable `general` department kind, `chat.department_account` for specialists, and the `access_changed` journal kind. Prisma upserts departments on the unique `(organization_id, kind)`, which a partial index would break, so these land with the department-creation code that needs them.
+  - Until PR-3 hands out `staff_accounts.manage`, only the super admin grants. The SQL already refuses everyone else.
+- **"Any manager" audit:**
+  - The PD-8 functions grant a manager a basis only over members of their own department. `chat.mention_eligible_staff` and the seat reasons require a PD-8 basis. So a manager with no supervisors reaches no family data through SQL.
+  - PR-3 must keep `general` departments free of `department_member` rows (a trigger), and must enforce, not shadow, any account placed in a `general` department.
+  - The TypeScript role-set checks (`FAMILY_FACING_STAFF_ROLES`, `canAssignFamilies`) are behind Layer 1 for such accounts. `canAssignFamilies` and `canTransferStaffFamilies` have no callers.
 
 **Order and parallel work**
 - PR-1 and PR-2 can be built side by side (different files), but PR-2 merges first, because PR-1's bundles move into SQL.
@@ -495,6 +509,8 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 ---
 
 ## 12. Questions for the owner (each with a recommendation)
+
+> **2026-10-27:** Q1 and Q2 moved to PD-41, which owns the certificates workflow (`docs/product/pd041-certificates-design.md`). PD-41's design already has the Designer designing and uploading, never sending, and seeing a design projection only. PD-40 still needs Q3–Q6.
 
 1. **Does the Designer send the certificate to the family, or only prepare it?** Issuing posts the file into the family's group.
    - **Recommended: the Designer uploads and issues** (that is the page's job), but **cannot decline**.

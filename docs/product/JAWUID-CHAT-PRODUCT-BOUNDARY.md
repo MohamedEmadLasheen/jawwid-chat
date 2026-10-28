@@ -2036,6 +2036,15 @@ pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the
 
 ### PD-21 · Account administration: password reset, inactive accounts, impersonation
 
+> **Narrowed by PD-40 (2026-10-27); approved by the product owner on 2026-10-27 ("Approve as proposed").** Decision 1's "every staff role" is replaced by:
+> - parent accounts: the super admin and the Operations department; Sales may reset and
+>   sign out only;
+> - teacher accounts: the super admin and the Teachers department;
+> - staff accounts: the super admin, as before;
+> - nobody else.
+>
+> The record is `../admin/pd021-account-administration.md`. The rest of PD-21 is unchanged.
+
 **Closed by the product owner on 2026-10-22** (owner request: admins, the super
 admin included, may impersonate a student's account, reset another account's
 password, and set any account inactive; permissions enforced on the backend,
@@ -3446,6 +3455,25 @@ Canonical: `supabase/migrations/20261026160007_chat_pd035_supervision_cases.sql`
    - **Accepted (department head's decision):** the case card shows the whole department that a case exists, with who opened it and who owns it. It shows no subject, and opening the case re-checks B5's rules.
 
 Canonical: `supabase/migrations/20261027100000_chat_pd035_department_rooms.sql`, `apps/api/src/org/department-room.service.ts`. Proven by `apps/api/test/integration/department-rooms-pd035.spec.ts`, `apps/admin-web/src/features/cases/Cases.test.tsx` and `test/features/sales/sales_chats_test.dart`.
+
+**Final decision (B7: the action log).** Approved design `pd35-design.md` B7; built 2026-10-27. **No new logging.**
+1. **`GET staff/:id/action-log?from&to&cursor`** lists what one staff member did, newest first:
+   - every `chat.audit_log` row with them as the actor;
+   - plus the case history that is not audited: a due date set and a note added (`chat.supervision_case_event`).
+   - The default window is the last 30 days, and a request covers at most 366.
+   - A page is 200 lines. Its `nextCursor` is an opaque keyset (the time to the microsecond, the source, the row's key), so a run of lines written in one transaction is paged without losing or repeating a line.
+   - A time must carry its zone; a bare date is midnight UTC.
+2. **What a line shows:** the act, the entity it was about (linked in Admin Web), the audited reason and the time. It also says whether it was done during a PD-21 support session.
+   - It never shows the before/after payloads (pay terms, the Teacher File's personal facts).
+   - A case line shows the act and the case's id only. B5 shows a case's title and notes only to those who may see it, and opening the link re-checks that.
+3. **Who may read it:** the person themselves, the manager of the department they are in, and the super admin. Anyone else gets `ACTION_LOG_NOT_FOUND`: another organization's super admin, an inactive reader, an unknown id, or an id that is not a uuid.
+4. **A manager reads the reasons of their own era only.** A reason written before the member joined the manager's department is withheld from that manager (the act and its link stay). The person and the super admin read every reason.
+   - **Known limit:** `chat.department_member` keeps no history, so the line is `assigned_at`, which every move and position change resets. It is conservative: it may withhold a reason the manager could have read, never the reverse.
+5. **Deviation from the design.** The design listed a union over each record table: supervision entries, violation decisions, report revisions, evaluations and shares, plan updates, correction requests, seats and case events. Every one of these already writes `chat.audit_log`, so reading them again would show each act twice. Only the case history the audit misses (due date, note) is added.
+6. **Admin Web:** an "Action log" section on the Profile page, shown when the server answers. It offers a period (30 days, 90 days, 12 months) and "Load more". A manager reaches it from their team's profile links.
+7. **Known limit, not B7's:** the append-only triggers on `chat.audit_log` and `chat.supervision_case_event` refuse UPDATE and DELETE, but not TRUNCATE. Only the database owner can truncate; no API path does.
+
+Canonical: `apps/api/src/action-log/`. Proven by `apps/api/test/integration/action-log-pd035.spec.ts` and `apps/admin-web/src/features/profile/ActionLog.test.tsx`.
 
 ---
 

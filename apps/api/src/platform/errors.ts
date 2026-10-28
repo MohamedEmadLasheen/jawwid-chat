@@ -309,6 +309,12 @@ export enum CommErrorCode {
    * impersonation of a staff account. 403. Never retry.
    */
   ACCOUNT_ADMIN_DENIED = 'COMM.ACCOUNT_ADMIN_DENIED',
+  /**
+   * PD-40: this staff account does not hold the permission the route declares
+   * (or the route declares none, or is a parent's or a teacher's own). 403.
+   * Never retry: it changes only when the account's roles change.
+   */
+  PERMISSION_DENIED = 'COMM.PERMISSION_DENIED',
   /** PD-21: no such account in the caller's organization. 404. */
   ACCOUNT_ADMIN_NOT_FOUND = 'COMM.ACCOUNT_ADMIN_NOT_FOUND',
   /** PD-21: not in a state for this (suspend an inactive account, reactivate one that is not suspended, impersonate an inactive one). 409. */
@@ -433,6 +439,10 @@ export enum CommErrorCode {
   // --- PD-35 B6: department rooms ---
   /** Calls are not available in a department room (a later PD-19 decision). 403. */
   CALL_NOT_IN_ROOM = 'COMM.CALL_NOT_IN_ROOM',
+
+  // --- PD-35 B7: the action log ---
+  /** No such staff member, or not one whose log the caller may read (self, their department's manager, the super admin). 404. */
+  ACTION_LOG_NOT_FOUND = 'COMM.ACTION_LOG_NOT_FOUND',
 }
 
 export class CommError extends Error {

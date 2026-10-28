@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Param, Post, Put } from '@nestjs/common';
 import { ActorId } from './actor.decorator';
 import { ChatThemeService } from '../themes/chat-theme.service';
+import { Requires } from '../../platform/permissions/route-access';
 
 /**
  * The caller's OWN look for one chat (owner decisions 2026-10-20): a preset
@@ -14,12 +15,14 @@ import { ChatThemeService } from '../themes/chat-theme.service';
 export class ChatThemeController {
   constructor(private readonly themes: ChatThemeService) {}
 
+  @Requires('chat.use')
   @Put('theme')
   setTheme(@ActorId() actorId: string, @Param('conversationId') conversationId: string, @Body() body: { theme?: unknown }) {
     // An absent `theme` is refused (only an explicit null means the default look).
     return this.themes.setTheme(actorId, conversationId, body && 'theme' in body ? body.theme : undefined);
   }
 
+  @Requires('chat.use')
   @Post('wallpaper/upload')
   upload(
     @ActorId() actorId: string,
@@ -29,11 +32,13 @@ export class ChatThemeController {
     return this.themes.authorizeWallpaperUpload(actorId, conversationId, body ?? {});
   }
 
+  @Requires('chat.use')
   @Post('wallpaper')
   commit(@ActorId() actorId: string, @Param('conversationId') conversationId: string, @Body() body: { objectKey?: unknown }) {
     return this.themes.commitWallpaper(actorId, conversationId, body ?? {});
   }
 
+  @Requires('chat.use')
   @Delete('wallpaper')
   remove(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
     return this.themes.removeWallpaper(actorId, conversationId);

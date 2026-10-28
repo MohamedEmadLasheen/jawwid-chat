@@ -1311,7 +1311,7 @@ AccountSummaryDto { accountId, kind: 'family'|'teacher'|'staff', name, staffRole
                     allowed: { resetPassword, suspend, reactivate, impersonate, signOut } }   // advisory; decided again per action
 ```
 
-Permission (every route): `AuthorizationService.canAdministerAccount` — any active staff role, same organization, on a parent or teacher account; a staff account only by the super admin; never the super admin's account or the caller's own. A non-staff caller gets `COMM.ACCOUNT_ADMIN_DENIED` 403 before any lookup; another tenant's account is `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404. No route returns a password, a hash, a login identifier or a contact channel.
+Permission (every route): `AuthorizationService.canAdministerAccount`, same organization. PD-40 narrowed it (`apps/api/src/platform/account-admin-policy.ts`). A parent account is administered by the super admin and the Operations department; Sales may reset and sign out only. A teacher account is administered by the super admin and the Teachers department. A staff account is administered only by the super admin, and never the super admin's account or the caller's own. `GET /admin/accounts` lists only the kinds the caller administers and names them in `administers`. A non-staff caller gets `COMM.ACCOUNT_ADMIN_DENIED` 403 before any lookup; another tenant's account is `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404. No route returns a password, a hash, a login identifier or a contact channel.
 
 **GET /admin/accounts** — Query: `q?` (the person's, the family's or a child's name), `kind?` (`family`|`teacher`|`staff`; staff for the super admin only). Response: `{ accounts: AccountSummaryDto[], truncated }`, at most 100, never the caller's own nor the super admin's.
 
