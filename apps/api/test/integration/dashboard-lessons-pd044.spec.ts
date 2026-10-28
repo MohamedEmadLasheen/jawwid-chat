@@ -110,7 +110,9 @@ async function outcome(lessonId: string, value: string) {
   await g.prisma.$transaction([
     g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
     g.prisma.$executeRawUnsafe(
-      `update chat.lesson set outcome = $2, outcome_by_kind = 'staff', outcome_by = $3::uuid, outcome_at = now(), outcome_note = 'fixture'
+      // A student apology says when it came (lesson_apology_has_a_timing): this one, late.
+      `update chat.lesson set outcome = $2, outcome_by_kind = 'staff', outcome_by = $3::uuid, outcome_at = now(), outcome_note = 'fixture',
+              apology_timing = case when $2 = 'student_apology' then 'after_start' end
         where id = $1::uuid`,
       lessonId, value, tsup,
     ),
