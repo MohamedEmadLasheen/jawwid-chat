@@ -602,3 +602,33 @@ The bundle rows are in migration `20261028120000_chat_pd040_shadow_qa_bundles` (
 
 Not covered: parameterised and write routes, and the Flutter staff app. Those come with the PR-6 QA pass.
 
+---
+
+## 15. PR-3 as built (2026-10-28)
+
+**Migration `20261029100000_chat_pd040_staff_accounts`:**
+- `chat.permission.in_roles` (S4/C2).
+- The `staff_accounts.view` / `.create` / `.manage` and `access_roles.manage` keys, none of which goes in a role. The department managers' bundles hold the `staff_accounts.*` keys.
+- The minimal delegable set (C3): `certificates.view`, `certificates.design`, `billing.view` and `subscriptions.view`. Each is verified both ways in `pd040-legacy-bundles`.
+- `chat.department_account` (C5).
+- `chat.create_staff_account` and `chat.may_administer_staff_account`.
+- `chat.require_access_grantor` narrowed (C1). `chat.set_access_role_permissions` refuses barred keys. PD-43's `chat.guard_password_reset_code` is widened in its staff branch only (C4).
+
+**API:**
+
+| Route | Key | Rule |
+|---|---|---|
+| `GET /admin/staff-accounts`, `GET /:staffId` | `staff_accounts.view` | The super admin: every staff account but their own and the super admin's. A department manager: the specialists of their department. Anything else is not found. |
+| `POST /admin/staff-accounts` | `staff_accounts.create` | `decideStaffAccountCreate` and `chat.create_staff_account`. The roles are granted, and the first sign-in code (PD-43, HMAC-keyed, 72 h) is issued, in the same transaction. The code is e-mailed after the commit and shown once (`emailed`). |
+| `POST /:staffId/roles`, `/:staffId/roles/:roleId/revoke` | `staff_accounts.manage` | `chat.grant_access_role` / `revoke_access_role` (H1, H3, H5, H8, C1). |
+| `POST /:staffId/setup-code` | `staff_accounts.manage` | A reissue for a provisioned account. It supersedes every live code, and the audit names them. |
+| `GET /admin/access-roles`, `GET /admin/permissions` | `staff_accounts.view` or `access_roles.manage` | The roles, each with `grantable` for this caller, and the checklist they're made from. |
+| `POST /admin/access-roles`, `/:roleId`, `/:roleId/archive` | `access_roles.manage` | The super admin only (H7, S4). |
+| PD-21 `/admin/accounts/:id/{password-reset,suspend,reactivate,sessions/*}` | `accounts.administer` | Also open to a department manager for their own specialists (`managedByActor`, decided by `chat.may_administer_staff_account`). Never impersonation. |
+
+**Still to come:**
+- PR-4: the Designer template role, seeded with PD-41's keys.
+- PR-5: the Admin Web Staff accounts and Roles UI.
+- Repeatable `general` departments and moving a specialist between departments.
+- The `access_changed` journal: today, HTTP picks up a role change on the next request and sockets within 15 s.
+

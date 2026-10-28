@@ -161,9 +161,9 @@ export class AccountAdminService {
     // Another tenant's account, the caller's own, the super admin's, or a kind
     // the caller does not administer: not listed, so not found either (the
     // decision says which, for the logs). Every kind's acts include a reset.
-    const decision = this.authz.canAdministerAccount(actor, toTarget(row), 'reset_password', standing);
+    const decision = this.authz.canAdministerAccount(actor, toTarget(row, await this.managed(actor, row)), 'reset_password', standing);
     if (!decision.allowed) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, decision.reason);
-    return this.summary(actor, row, standing);
+    return this.summary(actor, row, standing, await this.managed(actor, row));
   }
 
   // -------------------------------------------------------------------------
@@ -253,7 +253,8 @@ export class AccountAdminService {
     });
     await this.auth.enforceAccountRevocation(accountId, outcome.revoked > 0);
     if (outcome.changed) this.log.log(`account ${accountId} suspended by staff ${actor.actorId}`);
-    return this.summary(actor, await this.loadRow(accountId), await accountAdminStandingOf(this.prisma, actor));
+    const after = await this.loadRow(accountId);
+    return this.summary(actor, after, await accountAdminStandingOf(this.prisma, actor), await this.managed(actor, after));
   }
 
   /**
@@ -290,7 +291,8 @@ export class AccountAdminService {
       return true;
     });
     if (changed) this.log.log(`account ${accountId} reactivated by staff ${actor.actorId}`);
-    return this.summary(actor, await this.loadRow(accountId), await accountAdminStandingOf(this.prisma, actor));
+    const after = await this.loadRow(accountId);
+    return this.summary(actor, after, await accountAdminStandingOf(this.prisma, actor), await this.managed(actor, after));
   }
 
   // -------------------------------------------------------------------------
@@ -353,7 +355,7 @@ export class AccountAdminService {
   private async authorize(actor: Actor, accountId: string, act: AccountAdminAct): Promise<{ row: AccountRow }> {
     this.requireStaff(actor);
     const row = await this.loadRow(accountId);
-    const decision = this.authz.canAdministerAccount(actor, toTarget(row), act, await accountAdminStandingOf(this.prisma, actor));
+    const decision = this.authz.canAdministerAccount(actor, toTarget(row, await this.managed(actor, row)), act, await accountAdminStandingOf(this.prisma, actor));
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
     return { row };
   }
@@ -375,8 +377,19 @@ export class AccountAdminService {
     return row;
   }
 
-  private summary(actor: Actor, row: AccountRow, standing: AccountAdminStanding): AccountSummaryDto {
-    const target = toTarget(row);
+  /**
+   * PD-40 PR-3: is the actor the manager of the department this staff account
+   * (a specialist) belongs to? The database's own rule, asked, never re-derived.
+   */
+  private async managed(actor: Actor, row: AccountRow): Promise<boolean> {
+    if (row.kind !== 'staff' || !row.staff || actor.staffRole !== StaffRole.MANAGER) return false;
+    const rows = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT chat.may_administer_staff_account(${actor.actorId}::uuid, ${row.staff.id}::uuid) AS ok`;
+    return rows[0]?.ok === true;
+  }
+
+  private summary(actor: Actor, row: AccountRow, standing: AccountAdminStanding, managedByActor = false): AccountSummaryDto {
+    const target = toTarget(row, managedByActor);
     const may = (act: AccountAdminAct) => this.authz.canAdministerAccount(actor, target, act, standing).allowed;
     const contact = row.contacts[0];
     const lockedUntil = row.credential?.lockedUntil && row.credential.lockedUntil > new Date() ? row.credential.lockedUntil : null;
@@ -404,13 +417,14 @@ export class AccountAdminService {
   }
 }
 
-function toTarget(row: AccountRow): AccountAdminTarget {
+function toTarget(row: AccountRow, managedByActor = false): AccountAdminTarget {
   return {
     accountId: row.id,
     organizationId: row.organizationId,
     kind: row.kind,
     staffId: row.staff?.id ?? null,
     staffRole: row.staff?.role ?? null,
+    managedByActor,
   };
 }
 
