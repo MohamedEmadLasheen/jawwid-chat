@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canOpenArea,
+  holdsAny,
   isDepartment,
   isManager,
   isSuperAdmin,
@@ -95,14 +96,17 @@ describe('navigation lists what a role may open', () => {
   it('nothing else is hidden: navigation is the openable areas minus Teacher statistics, Instalments, Parents, Payments, Materials and the Schedule until the server confirms the department', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
+      // PD-41: Certificates waits for GET /certificates/access.
+      const certs = (a: string) => a === 'certificates'
       expect(navAreas(role)).toEqual(
-        visibleAreas(role).filter((a) => a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a)),
+        visibleAreas(role).filter((a) => a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)),
       )
-      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !money(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'schedule'))
+      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'schedule' && !certs(a)))
       // PD-38: the Schedule on GET /lessons/access's `calendar`.
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role).filter((a) => !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true })).toEqual(visibleAreas(role))
     }
   })
 
@@ -123,5 +127,26 @@ describe('navigation lists what a role may open', () => {
       }
     }
     expect(navAreas('finance', { sales: true })).not.toContain('trials')
+  })
+})
+
+/** PD-40 PR-5: the smallest key gate -- the keys /me reports; UX only. */
+describe('permission keys → pages', () => {
+  const staff = (role: 'manager' | 'super_admin' | 'specialist', permissions?: string[]) => ({ role, ...(permissions ? { permissions } : {}) })
+
+  it('opens a page only for a held key', () => {
+    expect(holdsAny(staff('manager', ['staff_accounts.view']), ['staff_accounts.view'])).toBe(true)
+    expect(holdsAny(staff('manager', ['org.view']), ['staff_accounts.view', 'access_roles.manage'])).toBe(false)
+    expect(holdsAny(staff('manager', ['access_roles.manage']), ['staff_accounts.view', 'access_roles.manage'])).toBe(true)
+  })
+
+  it('fails closed when /me sent no keys, except for the super admin, who holds every key', () => {
+    expect(holdsAny(staff('manager'), ['staff_accounts.view'])).toBe(false)
+    expect(holdsAny(staff('super_admin'), ['access_roles.manage'])).toBe(true)
+    expect(holdsAny(null, ['staff_accounts.view'])).toBe(false)
+  })
+
+  it("gives a specialist PD-41's Certificates area only -- never Accounts, so no staff-account tabs", () => {
+    expect(visibleAreas('specialist')).toEqual(['certificates'])
   })
 })

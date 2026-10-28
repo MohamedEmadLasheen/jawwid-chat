@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
-import type { Certificate, LeaveRequest, TeacherLeave } from './api'
+import type { LeaveRequest, TeacherLeave } from './api'
 
 /**
  * PD-12 S1 pages, through the real routes and the real API client, with
@@ -30,28 +30,6 @@ const calls = (method: string, pattern: RegExp) =>
 const bodyOf = (call: unknown[] | undefined) => {
   if (!call) throw new Error('the request was not sent')
   return JSON.parse(String((call[1] as RequestInit).body))
-}
-
-function certificate(over: Partial<Certificate> = {}): Certificate {
-  return {
-    id: 'c-1',
-    state: 'requested',
-    learner: { id: 'l-1', name: 'Child Alpha' },
-    teacher: { id: 't-1', name: 'Teacher One' },
-    title: 'Juz Amma',
-    achievement: 'Memorized Juz Amma',
-    achievedOn: '2026-10-01',
-    grade: 'Excellent',
-    printedName: 'Child Alpha',
-    note: null,
-    requestedAt: '2026-10-18T09:00:00Z',
-    decidedAt: null,
-    declineReason: null,
-    fileName: null,
-    deliveredTo: null,
-    canDeliver: true,
-    ...over,
-  }
 }
 
 function leave(over: Partial<LeaveRequest> = {}): LeaveRequest {
@@ -96,107 +74,21 @@ afterEach(() => {
 })
 
 describe('the Teachers area has three pages', () => {
-  it('links Statistics, Teacher files, Certificates and Supervision (one registry, PD-11 T5; PD-26)', async () => {
-    on('GET', /\/learner-certificates\?state=requested$/, () => json({ certificates: [] }))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/certificates' })
+  it('links Statistics, Teacher files and Supervision (one registry, PD-11 T5; PD-26); certificates have their own page (PD-41)', async () => {
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
     expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('href', '/teachers')
-    expect(within(tabs).getByRole('link', { name: 'Teacher files' })).toHaveAttribute('href', '/teachers/files')
-    expect(within(tabs).getByRole('link', { name: 'Certificates' })).toHaveAttribute('aria-current', 'page')
+    expect(within(tabs).getByRole('link', { name: 'Teacher files' })).toHaveAttribute('aria-current', 'page')
     expect(within(tabs).getByRole('link', { name: 'Supervision' })).toHaveAttribute('href', '/teachers/supervision')
+    expect(within(tabs).queryByRole('link', { name: 'Certificates' })).not.toBeInTheDocument()
   })
 
   it('the super admin has the same pages under Admin > Teachers, without Statistics (that is Admin > Reports)', async () => {
-    on('GET', /\/learner-certificates\?state=requested$/, () => json({ certificates: [] }))
-    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/certificates' })
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/supervision' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers department' })
     expect(within(tabs).getByRole('link', { name: 'Teachers' })).toHaveAttribute('href', '/admin/teachers')
     expect(within(tabs).getByRole('link', { name: 'Supervision' })).toHaveAttribute('href', '/admin/teachers/supervision')
     expect(within(tabs).queryByRole('link', { name: 'Statistics' })).not.toBeInTheDocument()
-  })
-})
-
-describe('certificates', () => {
-  it('opens on what is waiting, and issues by uploading on the signed URL first', async () => {
-    on('GET', /\/learner-certificates\?state=requested$/, () => json({ certificates: [certificate()] }))
-    on('POST', /\/learner-certificates\/c-1\/upload$/, () =>
-      json({
-        upload: { objectKey: 'conversations/g-1/k-1', uploadUrl: 'https://storage.test/put/k-1', method: 'PUT', headers: { 'content-type': 'application/pdf' }, expiresAt: '2026-10-18T10:00:00Z' },
-        conversationId: 'g-1',
-      }),
-    )
-    on('PUT', /storage\.test\/put\/k-1$/, () => new Response(null, { status: 200 }))
-    on('POST', /\/learner-certificates\/c-1\/issue$/, () => json({ certificate: certificate({ state: 'issued' }) }))
-
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/certificates' })
-    const row = (await screen.findByText('Juz Amma')).closest('tr')!
-    expect(within(row).getByText('Child Alpha')).toBeInTheDocument()
-    await userEvent.click(within(row).getByRole('button', { name: 'Issue' }))
-
-    const dialog = await screen.findByRole('dialog')
-    // Nothing is sent without a file.
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Issue' }))
-    expect(within(dialog).getByText('Required.')).toBeInTheDocument()
-    expect(calls('POST', /\/upload$/)).toHaveLength(0)
-
-    const pdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], 'certificate.pdf', { type: 'application/pdf' })
-    await userEvent.upload(within(dialog).getByLabelText('Certificate file'), pdf)
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Issue' }))
-
-    await waitFor(() => expect(calls('POST', /\/issue$/)).toHaveLength(1))
-    expect(bodyOf(calls('POST', /\/upload$/)[0])).toEqual({ mimeType: 'application/pdf', byteSize: 5 })
-    expect(calls('PUT', /storage\.test/)).toHaveLength(1)
-    expect(bodyOf(calls('POST', /\/issue$/)[0])).toEqual({
-      objectKey: 'conversations/g-1/k-1',
-      mimeType: 'application/pdf',
-      byteSize: 5,
-      fileName: 'certificate.pdf',
-    })
-    // The PUT went before the issue.
-    const order = fetchMock.mock.calls.map(([u]) => String(u))
-    expect(order.findIndex((u) => u.includes('storage.test'))).toBeLessThan(order.findIndex((u) => u.endsWith('/issue')))
-  })
-
-  it('refuses a file type the server would refuse, before uploading anything', async () => {
-    on('GET', /\/learner-certificates\?state=requested$/, () => json({ certificates: [certificate()] }))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/certificates' })
-    const row = (await screen.findByText('Juz Amma')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Issue' }))
-    const dialog = await screen.findByRole('dialog')
-    const doc = new File(['x'], 'certificate.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
-    await userEvent.upload(within(dialog).getByLabelText('Certificate file'), doc, { applyAccept: false })
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Issue' }))
-    expect(within(dialog).getByText('Choose a PDF, JPEG, PNG or WebP file.')).toBeInTheDocument()
-    expect(calls('POST', /\/upload$/)).toHaveLength(0)
-  })
-
-  it('cannot issue while the student has no group, and says why', async () => {
-    on('GET', /\/learner-certificates\?state=requested$/, () => json({ certificates: [certificate({ canDeliver: false })] }))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/certificates' })
-    const row = (await screen.findByText('Juz Amma')).closest('tr')!
-    expect(within(row).getByRole('button', { name: 'Issue' })).toBeDisabled()
-    expect(within(row).getByText(/open the student’s group first/)).toBeInTheDocument()
-  })
-
-  it('declining requires a reason, and sends it', async () => {
-    on('GET', /\/learner-certificates\?state=requested$/, () => json({ certificates: [certificate()] }))
-    on('POST', /\/learner-certificates\/c-1\/decline$/, () => json({ certificate: certificate({ state: 'declined' }) }))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/certificates' })
-    const row = (await screen.findByText('Juz Amma')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Decline' }))
-    const dialog = await screen.findByRole('dialog')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Decline' }))
-    expect(calls('POST', /\/decline$/)).toHaveLength(0)
-    await userEvent.type(within(dialog).getByLabelText('Reason (the teacher sees it)'), 'The level is not finished')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Decline' }))
-    await waitFor(() => expect(calls('POST', /\/decline$/)).toHaveLength(1))
-    expect(bodyOf(calls('POST', /\/decline$/)[0])).toEqual({ reason: 'The level is not finished' })
-  })
-
-  it("shows the server's refusal as it is", async () => {
-    on('GET', /\/learner-certificates/, () => json({ error: { code: 'COMM.CERTIFICATE_DENIED', message: 'no' } }, 403))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/certificates' })
-    expect(await screen.findByText('Certificates are for the Teachers department and the super admin.')).toBeInTheDocument()
   })
 })
 

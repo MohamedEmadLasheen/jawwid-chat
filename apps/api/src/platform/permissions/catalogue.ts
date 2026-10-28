@@ -122,6 +122,13 @@ const ENTRIES = {
   'certificates.view': { label: { en: 'View certificate requests', ar: 'عرض طلبات الشهادات' }, risk: 'pii', introducedBy: 'PD-12', delegable: true },
   'certificates.design': { label: { en: 'Design and upload certificates', ar: 'تصميم الشهادات ورفعها' }, risk: 'pii', introducedBy: 'PD-12', delegable: true },
   'certificates.deliver': { label: { en: 'Send certificates to the family', ar: 'إرسال الشهادات إلى الأسرة' }, risk: 'family_contact', introducedBy: 'PD-12' },
+  // PD-41 (owner 2026-10-28): the rest of the Certificates page's keys.
+  'certificates.request.student': { label: { en: 'Request student certificates', ar: 'طلب شهادات الطلاب' }, risk: 'pii', introducedBy: 'PD-41' },
+  'certificates.request.teacher': { label: { en: 'Request teacher certificates', ar: 'طلب شهادات المعلمين' }, risk: 'pii', introducedBy: 'PD-41' },
+  'certificates.story': { label: { en: 'Record consent and publish certificate Stories', ar: 'تسجيل الموافقة ونشر الشهادات في القصص' }, risk: 'family_contact', introducedBy: 'PD-41' },
+  'certificates.oversee': { label: { en: 'Oversee every certificate request of the department', ar: 'الإشراف على جميع طلبات شهادات القسم' }, risk: 'pii', introducedBy: 'PD-41' },
+  // PD-41 safeguard 6: the super admin's alone -- never in a role.
+  'certificates.types': { label: { en: 'Manage certificate types', ar: 'إدارة أنواع الشهادات' }, risk: 'admin', introducedBy: 'PD-41', inRoles: false },
 
   'leave.allowance': { label: { en: 'Set leave allowances', ar: 'تحديد رصيد الإجازات' }, risk: 'pii', introducedBy: 'PD-12' },
   // PD-26 amendment (owner 2026-10-27): the Teacher Supervision page -- leave,
@@ -145,6 +152,12 @@ const ENTRIES = {
   'teachers.offboard': { label: { en: 'Offboard teachers', ar: 'إنهاء عمل المعلمين' }, risk: 'admin', introducedBy: 'PD-43' },
 
   'feedback.view': { label: { en: 'View parent feedback', ar: 'عرض ملاحظات أولياء الأمور' }, risk: 'family_contact', introducedBy: 'PD-32' },
+
+  // PD-47: tasks. A person's own tasks need no key (self-service); these watch,
+  // give and decide others' (TaskService decides whose, live).
+  'tasks.team': { label: { en: 'See the team\'s tasks', ar: 'عرض مهام الفريق' }, risk: 'pii', introducedBy: 'PD-47' },
+  'tasks.create': { label: { en: 'Give tasks', ar: 'إسناد المهام' }, risk: 'pii', introducedBy: 'PD-47' },
+  'tasks.manage': { label: { en: 'Remove, return and reassign tasks', ar: 'حذف المهام وإعادتها وإعادة إسنادها' }, risk: 'pii', introducedBy: 'PD-47' },
 } as const satisfies Record<string, Entry>;
 
 export type PermissionKey = keyof typeof ENTRIES;

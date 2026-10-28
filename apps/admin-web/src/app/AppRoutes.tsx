@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from '@/core/auth/SessionProvider'
-import { canOpenArea, isDepartment, isSuperAdmin, type NavArea } from '@/core/permissions/capabilities'
+import { canOpenArea, holdsAny, isDepartment, isSuperAdmin, type NavArea } from '@/core/permissions/capabilities'
 import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
@@ -24,7 +24,7 @@ import { TrialsPage } from '@/features/trials/TrialsPage'
 import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
-import { CertificatesPage } from '@/features/supervision/CertificatesPage'
+import { CertificatesPage } from '@/features/certificates/CertificatesPage'
 import { TeacherSupervisionPage } from '@/features/teacher-supervision/TeacherSupervisionPage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
@@ -36,6 +36,9 @@ import { CallsPage } from '@/features/calls-page/CallsPage'
 import { JoinLinkPage } from '@/features/calls-page/JoinLinkPage'
 import { TeacherProfilesPage } from '@/features/teacher-profiles/TeacherProfilesPage'
 import { AccountsPage } from '@/features/accounts/AccountsPage'
+import { StaffAccountsPage } from '@/features/staff-accounts/StaffAccountsPage'
+import { RolesPage } from '@/features/staff-accounts/RolesPage'
+import { ROLE_PAGE_KEYS, STAFF_ACCOUNT_KEYS } from '@/features/staff-accounts/AccountsTabs'
 import { SupportSessionPage } from '@/features/support/SupportSessionPage'
 import { DevicesPage } from '@/features/devices/DevicesPage'
 import { NotificationsPage } from '@/features/notification-center/NotificationsPage'
@@ -54,6 +57,16 @@ function Area({ area, children }: { area: NavArea; children: ReactElement }) {
   return canOpenArea(staff.role, area) ? children : <ForbiddenPage />
 }
 
+/**
+ * PD-40: a page that belongs to a permission, not a role -- open when GET /me
+ * reports one of `any`. Same rule as Area: UX, not security.
+ */
+function RequirePermission({ any, children }: { any: readonly string[]; children: ReactElement }) {
+  const { staff } = useSession()
+  if (!staff) return null
+  return holdsAny(staff, any) ? children : <ForbiddenPage />
+}
+
 /** The Admin Portal sections. Same rule as Area: UX, not security -- every
  *  `/admin/*` request is refused server-side for anyone but super_admin. */
 function SuperAdminOnly({ children }: { children: ReactElement }) {
@@ -66,6 +79,8 @@ function SuperAdminOnly({ children }: { children: ReactElement }) {
  *  conversations. The Dashboard stays at its own URL, under More. */
 function homeFor(role: Parameters<typeof isDepartment>[0]): string {
   if (isSuperAdmin(role)) return adminSectionPath('conversations')
+  // PD-40/PD-41: the Designer's whole Admin Web is the Certificates page.
+  if (role === 'specialist') return '/certificates'
   // Departments have no conversations — they only ever see their own tasks. Operators
   // land in their conversations: the chat workspace on the real API.
   return isDepartment(role) ? '/tasks' : '/chat'
@@ -99,7 +114,9 @@ export function AppRoutes() {
         <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />
         {/* PD-12: the department's queues, tabs of the same area. */}
-        <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
+        {/* PD-41: certificates have their own page; the PD-12 tab lands there. */}
+        <Route path="/certificates" element={<Area area="certificates"><CertificatesPage /></Area>} />
+        <Route path="/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         {/* PD-26: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
         {/* PD-35 B5: escalation cases -- a Teachers tab, and /cases for everyone else who opens or owns one. */}
@@ -142,6 +159,15 @@ export function AppRoutes() {
         />
         {/* PD-21: account administration -- every staff role; the server decides each account and action. */}
         <Route path="/accounts" element={<Area area="accounts"><AccountsPage /></Area>} />
+        {/* PD-40: tabs of the Accounts page, each for the permission keys /me reports; the server decides every request. */}
+        <Route
+          path="/accounts/staff"
+          element={<Area area="accounts"><RequirePermission any={STAFF_ACCOUNT_KEYS}><StaffAccountsPage /></RequirePermission></Area>}
+        />
+        <Route
+          path="/accounts/roles"
+          element={<Area area="accounts"><RequirePermission any={ROLE_PAGE_KEYS}><RolesPage /></RequirePermission></Area>}
+        />
         {/* PD-21: a support session (acting as a parent or teacher); the token lives in memory only. */}
         <Route path="/support/:impersonationId" element={<Area area="accounts"><SupportSessionPage /></Area>} />
         {/*
@@ -162,10 +188,7 @@ export function AppRoutes() {
           path="/admin/:section"
           element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
         />
-        <Route
-          path="/admin/teachers/certificates"
-          element={<SuperAdminOnly><CertificatesPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
-        />
+        <Route path="/admin/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         <Route
           path="/admin/teachers/discipline"
           element={<Navigate to={`${adminSectionPath('teachers')}/supervision?section=absences`} replace />}

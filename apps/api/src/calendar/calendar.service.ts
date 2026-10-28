@@ -3,7 +3,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
 import { CommError, CommErrorCode } from '../platform/errors';
-import { ACADEMY_ZONE, canonicalZone } from '../platform/time-zone';
+import { ACADEMY_ZONE, canonicalZone, localDate } from '../platform/time-zone';
+import { ALL_TEACHERS, type TeacherScope } from '../platform/teacher-scope';
 import { TimeZoneService } from '../platform/time-zone.service';
 import type { Actor } from '../platform/types';
 import { ConversationService } from '../communication/conversations/conversation.service';
@@ -17,6 +18,7 @@ import {
   type CalendarFilters,
 } from './calendar-filters';
 import { PALETTE_KEYS } from './palette';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -121,6 +123,98 @@ export class CalendarService {
     const scope = await this.scopeOf(actor);
     if (!scope) throw new CommError(CommErrorCode.LESSON_DENIED, 'the schedule belongs to the administration');
     return { actor, scope };
+  }
+
+  /**
+   * PD-44: the Dashboard's Lessons section (plan §3.3).
+   *
+   *   lessons.today_*        today's lessons as GET /calendar shows them to this
+   *                          person (same scope, same window, same `m` and
+   *                          `shown`), by outcome: upcoming / unreported (no
+   *                          outcome, before / after their start), held, student
+   *                          or teacher absent, cancelled (an apology or the
+   *                          administration). Moved and paused lessons are in no
+   *                          tile; an Operations supervisor counts only the
+   *                          lessons the calendar names to them (an anonymous
+   *                          lesson's outcome is not theirs to see).
+   *   lessons.needs_outcome  GET /lessons/needs-action's overdue + awaiting close:
+   *   lessons.rulings_open   and its open rulings -- the Teachers department (in
+   *                          its PD-35 scope) and the super admin only
+   *
+   * Absent, never 0, outside a basis; another person (a parent, a teacher) is
+   * refused as the calendar refuses them. A fixed number of statements.
+   */
+  async dashboardCounts(actorId: string, now: Date = new Date()): Promise<DashboardTile[]> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) throw new CommError(CommErrorCode.LESSON_DENIED, 'the schedule belongs to the administration');
+    if (!actor.isActive || !actor.organizationId) return [];
+    const org = actor.organizationId;
+    const [scope, facts] = await Promise.all([this.scopeOf(actor), this.lessons.teachersFacts(actor)]);
+    const queue: TeacherScope | null = actor.staffRole === StaffRole.SUPER_ADMIN ? ALL_TEACHERS : facts.department ? facts.scope : null;
+    const tiles: DashboardTile[] = [];
+
+    if (scope) {
+      const zone = await this.zone();
+      const today = localDate(now, zone);
+      const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+      const f = this.filtersFor(scope, { from: today, to: tomorrow });
+      const supervisor = scope.kind === 'supervisor';
+      const named = scope.kind === 'supervisor' ? [...scope.namedTeachers] : [];
+      const own = scope.kind === 'supervisor' ? [...scope.ownLearners] : [];
+      const [r] = await this.prisma.$queryRaw<Array<{
+        upcoming: number; unreported: number; unreported_oldest: Date | null; held: number;
+        student_absent: number; teacher_absent: number; cancelled: number;
+      }>>`
+        ${this.ctes(org, f, zone)}
+        SELECT count(*) FILTER (WHERE m.outcome IS NULL AND m.starts_at > ${now}::timestamptz)::int AS upcoming,
+               count(*) FILTER (WHERE m.outcome IS NULL AND m.starts_at <= ${now}::timestamptz)::int AS unreported,
+               min(m.starts_at) FILTER (WHERE m.outcome IS NULL AND m.starts_at <= ${now}::timestamptz) AS unreported_oldest,
+               count(*) FILTER (WHERE m.outcome = 'held')::int AS held,
+               count(*) FILTER (WHERE m.outcome = 'student_no_show')::int AS student_absent,
+               count(*) FILTER (WHERE m.outcome = 'teacher_no_show')::int AS teacher_absent,
+               count(*) FILTER (WHERE m.outcome IN ('student_apology', 'teacher_apology', 'admin_cancelled'))::int AS cancelled
+          FROM m
+          JOIN shown t ON t.teacher_id = m.teacher_id
+         WHERE m.st NOT IN ('moved', 'paused')
+           AND (NOT ${supervisor}::boolean
+                OR m.teacher_id = ANY (${named}::uuid[])
+                OR m.learner_id = ANY (${own}::uuid[]))`;
+      tiles.push(
+        dashboardTile('lessons.today_upcoming', r?.upcoming ?? 0),
+        dashboardTile('lessons.today_unreported', r?.unreported ?? 0, r?.unreported_oldest ?? null),
+        dashboardTile('lessons.today_held', r?.held ?? 0),
+        dashboardTile('lessons.today_student_absent', r?.student_absent ?? 0),
+        dashboardTile('lessons.today_teacher_absent', r?.teacher_absent ?? 0),
+        dashboardTile('lessons.today_cancelled', r?.cancelled ?? 0),
+      );
+    }
+
+    if (queue) {
+      const all = queue.all;
+      const ids = queue.all ? [] : [...queue.teacherIds];
+      // needsAction's own predicates: learner lessons (not trials) still open
+      // after their end, and rulings nobody has decided -- in the PD-35 scope.
+      const [q] = await this.prisma.$queryRaw<Array<{ open: number; open_oldest: Date | null; rulings: number; rulings_oldest: Date | null }>>`
+        SELECT (SELECT count(*)::int FROM chat.lesson l
+                 WHERE l.organization_id = ${org}::uuid AND l.kind <> 'trial' AND l.outcome IS NULL
+                   AND l.ends_at <= ${now}::timestamptz
+                   AND (${all}::boolean OR l.teacher_id = ANY (${ids}::uuid[]))) AS open,
+               (SELECT min(l.ends_at) FROM chat.lesson l
+                 WHERE l.organization_id = ${org}::uuid AND l.kind <> 'trial' AND l.outcome IS NULL
+                   AND l.ends_at <= ${now}::timestamptz
+                   AND (${all}::boolean OR l.teacher_id = ANY (${ids}::uuid[]))) AS open_oldest,
+               (SELECT count(*)::int FROM chat.lesson_ruling r JOIN chat.lesson l ON l.id = r.lesson_id
+                 WHERE r.organization_id = ${org}::uuid AND r.decision IS NULL
+                   AND (${all}::boolean OR l.teacher_id = ANY (${ids}::uuid[]))) AS rulings,
+               (SELECT min(r.opened_at) FROM chat.lesson_ruling r JOIN chat.lesson l ON l.id = r.lesson_id
+                 WHERE r.organization_id = ${org}::uuid AND r.decision IS NULL
+                   AND (${all}::boolean OR l.teacher_id = ANY (${ids}::uuid[]))) AS rulings_oldest`;
+      tiles.push(
+        dashboardTile('lessons.needs_outcome', q?.open ?? 0, q?.open_oldest ?? null),
+        dashboardTile('lessons.rulings_open', q?.rulings ?? 0, q?.rulings_oldest ?? null),
+      );
+    }
+    return tiles;
   }
 
   /** The department's manager (chat.department.manager_id), not a member. */

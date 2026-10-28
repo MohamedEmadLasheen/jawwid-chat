@@ -25,6 +25,10 @@ enum SignedOutReason {
   /// (staff, system, or a kind this build does not recognise). Telling the user to check
   /// their password would send them round a loop they cannot exit.
   roleNotSupported,
+
+  /// PD-40 (plan §8): a department specialist with no chat access. Its account works in Admin
+  /// Web, and the sign-in screen says that, instead of "this account cannot sign in".
+  usesAdminWeb,
 }
 
 /// The authentication state machine.
@@ -65,6 +69,9 @@ class AuthSignedOut extends AuthState {
     // `forbidden`, and only the code says which forbidden thing happened.
     if (error.code == AuthFailures.roleNotSupported) {
       return SignedOutReason.roleNotSupported;
+    }
+    if (error.code == AuthFailures.usesAdminWeb) {
+      return SignedOutReason.usesAdminWeb;
     }
     return switch (error.kind) {
       AppErrorKind.accountDisabled => SignedOutReason.accountDisabled,

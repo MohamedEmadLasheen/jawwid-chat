@@ -90,6 +90,11 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   teacher_added_unsupervised: { version: 1, category: 'task', inbox: 'inbox.teacher_added_unsupervised' },
   teacher_duplicate_hidden: { version: 1, category: 'task', inbox: 'inbox.teacher_duplicate_hidden' },
   teacher_supervisor_left: { version: 1, category: 'task', inbox: 'inbox.teacher_supervisor_left' },
+  // PD-41: the Certificates page's work items.
+  certificate_requested: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_returned: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_uploaded: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_suggestion_decided: { version: 1, category: 'task', inbox: 'inbox.generic' },
 };
 
 const FALLBACK: CatalogEntry = { version: 1, category: 'system', inbox: 'inbox.generic' };

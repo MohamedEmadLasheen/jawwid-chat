@@ -14,6 +14,7 @@ import {
   type StaffAccountStanding,
   type StaffAccountTarget,
 } from '../platform/staff-account-policy';
+import { accessRoleConflict } from './access-role-conflict';
 
 export interface StaffAccountRoleDto {
   id: string;
@@ -523,9 +524,8 @@ function roleRefusal(e: unknown): unknown {
   if (e instanceof CommError) return e;
   const t = errorText(e);
   if (/only the super admin defines/.test(t)) return new CommError(CommErrorCode.STAFF_ACCOUNT_DENIED, 'only the super admin defines and changes access roles');
-  if (/their granting manager may not grant/.test(t)) {
-    return new CommError(CommErrorCode.ACCESS_ROLE_CONFLICT, t.replace(/^[\s\S]*?(?:ERROR|Message):\s*/i, '').split('\n')[0]!.slice(0, 600), 409);
-  }
+  // Parsed from the full text before the message is cut: detail.grants names every blocking grant (review of #239).
+  if (/their granting manager may not grant/.test(t)) return accessRoleConflict(t);
   if (/no such role/.test(t)) return notFound();
   if (/unknown permission|super admin's own powers|super admin''s own powers|at least one permission|access_role_key|violates check constraint|a reason is required|duplicate key|access_role_key_per_organization/.test(t)) {
     return roleInvalid(t.replace(/^[\s\S]*?(?:ERROR|Message):\s*/i, '').split('\n')[0]!.slice(0, 300));

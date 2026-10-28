@@ -19,7 +19,7 @@ export interface DashboardSection {
   tiles: DashboardTile[]
 }
 
-export type DashboardSectionKey = 'chats' | 'cases'
+export type DashboardSectionKey = 'chats' | 'cases' | 'lessons'
 
 export const dashboardApi = {
   section: (key: DashboardSectionKey) => api.get<DashboardSection>(`/dashboard/${key}`),

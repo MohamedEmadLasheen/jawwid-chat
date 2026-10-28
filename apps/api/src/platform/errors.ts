@@ -121,6 +121,8 @@ export enum CommErrorCode {
    * story route into an existence oracle.
    */
   STORY_NOT_FOUND = 'COMM.STORY_NOT_FOUND',
+  /** PD-41: story media is a stories/ key Stories issued to this publisher (POST /stories/media), used once. 403. */
+  STORY_MEDIA_NOT_GRANTED = 'COMM.STORY_MEDIA_NOT_GRANTED',
   STORY_EMPTY = 'COMM.STORY_EMPTY',
   STORY_TOO_LONG = 'COMM.STORY_TOO_LONG',
   STORY_ALREADY_PUBLISHED = 'COMM.STORY_ALREADY_PUBLISHED',
@@ -279,6 +281,26 @@ export enum CommErrorCode {
   CERTIFICATE_DENIED = 'COMM.CERTIFICATE_DENIED',
   /** PD-12: the certificate is not in a state that allows this (already decided, no group to deliver into). 409. */
   CERTIFICATE_STATE = 'COMM.CERTIFICATE_STATE',
+  /** PD-41: the same certificate (recipient, type, Juz' or period) is already open or sent; detail names it. 409. */
+  CERTIFICATE_DUPLICATE = 'COMM.CERTIFICATE_DUPLICATE',
+  /** PD-41: a similar certificate exists for this recipient in the last 30 days; resend with confirmDuplicate. 409. */
+  CERTIFICATE_DUPLICATE_SUSPECTED = 'COMM.CERTIFICATE_DUPLICATE_SUSPECTED',
+  /** PD-41: send and Story need the requester's approval of the current design first. 409. */
+  CERTIFICATE_NOT_APPROVED = 'COMM.CERTIFICATE_NOT_APPROVED',
+  /** PD-41: the design changed since the reviewer looked at it; review the current revision. 409. */
+  CERTIFICATE_REVISION_CHANGED = 'COMM.CERTIFICATE_REVISION_CHANGED',
+  /** PD-41: the person who uploaded a design does not approve it. 403. */
+  CERTIFICATE_SELF_APPROVAL = 'COMM.CERTIFICATE_SELF_APPROVAL',
+  /** PD-41: the group the server would send into changed since it was shown; check it and send again. 409. */
+  CERTIFICATE_TARGET_CHANGED = 'COMM.CERTIFICATE_TARGET_CHANGED',
+  /** PD-41: the request did not opt in to a Story. 409. */
+  CERTIFICATE_STORY_NOT_OPTED_IN = 'COMM.CERTIFICATE_STORY_NOT_OPTED_IN',
+  /** PD-41: a student certificate's Story needs the family's recorded consent; none, or it was withdrawn. 409. */
+  CERTIFICATE_STORY_CONSENT_MISSING = 'COMM.CERTIFICATE_STORY_CONSENT_MISSING',
+  /** PD-41: a Story shows an image; this certificate's file is a PDF. 409. */
+  CERTIFICATE_STORY_NEEDS_IMAGE = 'COMM.CERTIFICATE_STORY_NEEDS_IMAGE',
+  /** PD-41: this certificate type is disabled; pick an active one. 409. */
+  CERTIFICATE_TYPE_DISABLED = 'COMM.CERTIFICATE_TYPE_DISABLED',
   /** PD-12: no such leave request or teacher, or none this caller may see. 404. */
   LEAVE_NOT_FOUND = 'COMM.LEAVE_NOT_FOUND',
   /** PD-12: this caller may not request, decide or cancel this leave, or set this allowance. 403. */
@@ -490,6 +512,16 @@ export enum CommErrorCode {
   CASE_STATE = 'COMM.CASE_STATE',
   /** A field failed validation. 400. */
   CASE_INVALID = 'COMM.CASE_INVALID',
+
+  // --- PD-47: tasks ---
+  /** No such task, or not one the caller may see (assignee, responsible manager, teacher supervisor, super admin). 404. */
+  TASK_NOT_FOUND = 'COMM.TASK_NOT_FOUND',
+  /** The caller may see the task but not do this (only the assignee completes or disputes; only the responsible manager or the super admin decides). 403. */
+  TASK_DENIED = 'COMM.TASK_DENIED',
+  /** The task is closed, or the action is not one of its exits from where it stands. 409. */
+  TASK_STATE = 'COMM.TASK_STATE',
+  /** A field failed validation, or the new assignee is not a live person of the organization. 400. */
+  TASK_INVALID = 'COMM.TASK_INVALID',
 
   // --- PD-35 B6: department rooms ---
   /** Calls are not available in a department room (a later PD-19 decision). 403. */
