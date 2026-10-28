@@ -130,7 +130,7 @@ export class PasswordResetService {
           organizationId: input.organizationId,
           accountId: input.accountId,
           issuedBy: input.issuedByStaffId,
-          codeHash: resetCodeHash(input.accountId, code, purpose),
+          codeHash: resetCodeHash(input.accountId, code),
           reason: input.reason,
           expiresAt,
           purpose,
@@ -173,10 +173,7 @@ export class PasswordResetService {
     if (!isPasswordLengthAcceptable(password)) {
       throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
     }
-    const account =
-      subject && /^[0-9]{6}$/.test(code)
-        ? await this.prisma.account.findUnique({ where: { subject }, select: { id: true } })
-        : null;
+    const account = subject && /^[0-9]{6}$/.test(code) ? await this.accountBySubject(subject) : null;
     const live = account
       ? await this.prisma.passwordResetCode.findFirst({
           where: { accountId: account.id, usedAt: null, supersededAt: null, expiresAt: { gt: new Date() } },
@@ -187,7 +184,7 @@ export class PasswordResetService {
       throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
     }
 
-    if (!sameHash(live.codeHash, resetCodeHash(account.id, code, live.purpose === 'first_login' ? 'first_login' : 'reset'))) {
+    if (!sameHash(live.codeHash, resetCodeHash(account.id, code))) {
       const attempts = live.attempts + 1;
       await this.prisma.passwordResetCode.update({
         where: { id: live.id },
@@ -199,40 +196,67 @@ export class PasswordResetService {
 
     // OUTSIDE the transaction: Argon2id must not hold a pooled connection.
     const passwordHash = await hashPassword(password);
-    const revoked = await this.prisma.$transaction(async (tx) => {
-      // Re-read under the transaction: two submissions of one code finish once.
-      const spent = await tx.passwordResetCode.updateMany({
+    let revoked: number;
+    try {
+      revoked = await this.prisma.$transaction(async (tx) => {
+        // Re-read under the transaction: two submissions of one code finish once.
+        const spent = await tx.passwordResetCode.updateMany({
+          where: { id: live.id, usedAt: null, supersededAt: null },
+          data: { usedAt: new Date() },
+        });
+        if (spent.count !== 1) throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
+        await tx.accountCredential.upsert({
+          where: { accountId: account.id },
+          create: { accountId: account.id, passwordHash },
+          update: { passwordHash, passwordChangedAt: new Date(), failedAttempts: 0, lockedUntil: null },
+        });
+        const count = await this.auth.revokeAccountSessionsInTx(tx, account.id, RESET_REVOCATION_REASON);
+        // The person is the actor, and has no staff id (audit_log.actor_id names
+        // staff): no actor, the account as entity, the issuer in `after`.
+        await this.audit.audit(tx, {
+          actorId: null,
+          action: RESET_AUDIT.COMPLETED,
+          entity: 'account',
+          entityId: account.id,
+          after: { resetCodeId: live.id, channel: live.channel, purpose: live.purpose, issuedBy: live.issuedBy, revokedSessions: count },
+          reason: 'the account holder set a new password with a one-time reset code',
+        });
+        // PD-43: a first sign-in code also activates the account (provisioned ->
+        // active), here, so the code is never spent without it. The SQL writer
+        // refuses anything but a spent first_login code of a provisioned account.
+        if (live.purpose === 'first_login') {
+          await tx.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text AS activated`;
+        }
+        return count;
+      });
+    } catch (e) {
+      if (e instanceof AuthError || live.purpose !== 'first_login') throw e;
+      // The activation refused -- the login no longer waits for its first
+      // password (suspended meanwhile, say). The transaction rolled back, so no
+      // password was set. Spend the code so it is not tried again, and answer
+      // exactly as for a wrong code: no oracle, no 500.
+      await this.prisma.passwordResetCode.updateMany({
         where: { id: live.id, usedAt: null, supersededAt: null },
-        data: { usedAt: new Date() },
+        data: { supersededAt: new Date() },
       });
-      if (spent.count !== 1) throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
-      await tx.accountCredential.upsert({
-        where: { accountId: account.id },
-        create: { accountId: account.id, passwordHash },
-        update: { passwordHash, passwordChangedAt: new Date(), failedAttempts: 0, lockedUntil: null },
-      });
-      const count = await this.auth.revokeAccountSessionsInTx(tx, account.id, RESET_REVOCATION_REASON);
-      // The person is the actor, and has no staff id (audit_log.actor_id names
-      // staff): no actor, the account as entity, the issuer in `after`.
-      await this.audit.audit(tx, {
-        actorId: null,
-        action: RESET_AUDIT.COMPLETED,
-        entity: 'account',
-        entityId: account.id,
-        after: { resetCodeId: live.id, channel: live.channel, purpose: live.purpose, issuedBy: live.issuedBy, revokedSessions: count },
-        reason: 'the account holder set a new password with a one-time reset code',
-      });
-      // PD-43: a first sign-in code also activates the account (provisioned ->
-      // active), here, so the code is never spent without it. The SQL writer
-      // refuses anything but a spent first_login code of a provisioned account.
-      if (live.purpose === 'first_login') {
-        await tx.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text AS activated`;
-      }
-      return count;
-    });
+      this.log.warn(`account ${account.id}: first sign-in code ${live.id} did not activate the account`);
+      throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
+    }
     await this.enforce(account.id, revoked > 0);
     this.log.log(`account ${account.id} completed a password reset`);
     return { ok: true };
+  }
+
+  /**
+   * The account a sign-in name names: exactly as typed, else lower-cased (a
+   * teacher's sign-in is stored lower-cased, PD-43). AuthService.login applies
+   * the same rule, so the name that completes a code is the name that signs in.
+   */
+  private async accountBySubject(subject: string): Promise<{ id: string } | null> {
+    const exact = await this.prisma.account.findUnique({ where: { subject }, select: { id: true } });
+    const lower = subject.toLowerCase();
+    if (exact || lower === subject) return exact;
+    return this.prisma.account.findUnique({ where: { subject: lower }, select: { id: true } });
   }
 
   /**
@@ -278,7 +302,7 @@ export class PasswordResetService {
           accountId: input.accountId,
           issuedBy: null,
           channel: input.channel,
-          codeHash: resetCodeHash(input.accountId, code, 'reset'),
+          codeHash: resetCodeHash(input.accountId, code),
           reason: `the parent asked for a recovery code by ${input.channel}`,
           expiresAt,
         },
@@ -310,7 +334,7 @@ export class PasswordResetService {
       where: { accountId, channel: 'whatsapp', usedAt: null, supersededAt: null, expiresAt: { gt: new Date() } },
     });
     if (!live || live.attempts >= RESET_CODE_TRIES) return false;
-    if (!sameHash(live.codeHash, resetCodeHash(accountId, code, 'reset'))) {
+    if (!sameHash(live.codeHash, resetCodeHash(accountId, code))) {
       const attempts = live.attempts + 1;
       await this.prisma.passwordResetCode.update({
         where: { id: live.id },
@@ -346,24 +370,42 @@ export function newCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, '0');
 }
 
-/** Labels the key derived for first sign-in codes, so it is never the refresh-token key itself. */
-const FIRST_LOGIN_KEY_LABEL = 'jawwid:first-login-code:v1';
+/** Labels the key derived locally from JWT_REFRESH_SECRET, so it is never the refresh-token key itself. */
+const LOCAL_KEY_LABEL = 'jawwid:reset-code-hash:v1';
+
+/** Environments that must hold RESET_CODE_HASH_SECRET (infra/env/manifest.tsv: req). */
+const DEPLOYED_ENVIRONMENTS: ReadonlySet<string> = new Set(['staging', 'production']);
 
 /**
- * What is stored for a code. A reset code lives 10 minutes and keeps PD-21's
- * sha256. A first sign-in code lives 72 hours, so it is a KEYED hash
- * (owner rule: never recoverable from storage; PD-40 review G1): HMAC-SHA256
- * under a key derived from JWT_REFRESH_SECRET for this purpose alone, as the
- * refresh-token hash is keyed. Someone who reads chat.password_reset_code
- * cannot try the 10^6 codes offline without the server's secret. Rotating that
- * secret voids live first sign-in codes; the administrator issues new ones.
+ * What is stored for a one-time code: a KEYED hash, never one anybody can
+ * reverse from the table (owner rule: "never store or log the code in
+ * plaintext"; PD-43 review P2-3). A code is 6 digits, so an unkeyed sha256 is
+ * recovered from a database read or a backup by trying all 10^6 in
+ * milliseconds; under HMAC-SHA256 that needs the server's secret too.
+ *
+ *   RESET_CODE_HASH_SECRET   the key, at least 32 characters. Required in
+ *                            staging and production: there, without it, no
+ *                            code is issued or accepted (fails closed).
+ *   otherwise (local, test)  a key derived from JWT_REFRESH_SECRET, so a
+ *                            developer needs nothing new -- still never
+ *                            unkeyed.
+ *
+ * Rotating the key voids every live code; the person asks for a new one. The
+ * migration that introduced it retired every code stored the old way.
  */
-export function resetCodeHash(accountId: string, code: string, purpose: ResetCodePurpose): string {
-  if (purpose !== 'first_login') return createHash('sha256').update(`${accountId}:${code}`).digest('hex');
-  const secret = (process.env.JWT_REFRESH_SECRET ?? '').trim();
-  if (secret.length < MIN_SECRET_LENGTH) throw new Error('JWT_REFRESH_SECRET is required to hash a first sign-in code');
-  const key = createHmac('sha256', secret).update(FIRST_LOGIN_KEY_LABEL).digest();
-  return createHmac('sha256', key).update(`${accountId}:${code}`).digest('hex');
+export function resetCodeHash(accountId: string, code: string): string {
+  return createHmac('sha256', resetCodeKey()).update(`${accountId}:${code}`).digest('hex');
+}
+
+function resetCodeKey(): Buffer {
+  const dedicated = (process.env.RESET_CODE_HASH_SECRET ?? '').trim();
+  if (dedicated.length >= MIN_SECRET_LENGTH) return Buffer.from(dedicated, 'utf8');
+  if (DEPLOYED_ENVIRONMENTS.has((process.env.APP_ENV ?? '').trim())) {
+    throw new Error(`RESET_CODE_HASH_SECRET must be set to at least ${MIN_SECRET_LENGTH} characters in ${process.env.APP_ENV}`);
+  }
+  const refresh = (process.env.JWT_REFRESH_SECRET ?? '').trim();
+  if (refresh.length < MIN_SECRET_LENGTH) throw new Error('RESET_CODE_HASH_SECRET (or, locally, JWT_REFRESH_SECRET) is required to hash a code');
+  return createHmac('sha256', refresh).update(LOCAL_KEY_LABEL).digest();
 }
 
 function sameHash(a: string, b: string): boolean {

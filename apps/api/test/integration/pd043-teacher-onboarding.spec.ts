@@ -446,16 +446,19 @@ describe('5. the department head\'s review of #184', () => {
 
   it('P2-1: setting the transaction flag by hand activates nothing; only a code spent in this transaction does', async () => {
     const { account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: email('t') }));
-    const forged = await sqlError(
-      g.prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(`select set_config('chat.activating_account', '${account.id}', true)`);
-        await tx.$executeRawUnsafe(`update chat.account set status = 'active', is_active = true where id = '${account.id}'::uuid`);
-      }),
-    );
-    expect(forged).toMatch(/an account becomes active from provisioned only with a first sign-in code/);
-    // A code spent in an EARLIER transaction is not enough either.
     const { code } = await issueFirstLogin(account.id);
     const live = await g.prisma.passwordResetCode.findFirstOrThrow({ where: { accountId: account.id, usedAt: null, supersededAt: null } });
+    // The setting names a real first sign-in code of this account, but nobody spent it here.
+    for (const setting of ['chat.activating_code', 'chat.activating_account']) {
+      const forged = await sqlError(
+        g.prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`select set_config('${setting}', '${setting === 'chat.activating_code' ? live.id : account.id}', true)`);
+          await tx.$executeRawUnsafe(`update chat.account set status = 'active', is_active = true where id = '${account.id}'::uuid`);
+        }),
+      );
+      expect(forged).toMatch(/an account becomes active from provisioned only with a first sign-in code/);
+    }
+    // A code spent in an EARLIER transaction is not enough either.
     await g.prisma.passwordResetCode.update({ where: { id: live.id }, data: { usedAt: new Date() } });
     expect(await sqlError(g.prisma.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text`)).toMatch(
       /spent in this transaction/,

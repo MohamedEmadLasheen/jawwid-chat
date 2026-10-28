@@ -25,6 +25,11 @@
 --      account, in any case, or a contact already on a teacher's file, is
 --      refused WITHOUT naming anyone: what the caller may be told is decided
 --      by the API, which knows their scope (plan §3.4).
+--      Department head's review (#184): a code is a KEYED hash (the API's
+--      RESET_CODE_HASH_SECRET), so every outstanding code, stored under the
+--      old unkeyed hash, is retired here; a first sign-in code is issued only
+--      by someone who may add that teacher; activation checks a code spent in
+--      THIS transaction, never a setting alone.
 --   4. Pay (owner N2). The Teachers manager may write pay terms, the payout
 --      account and the default deduction amounts, as the super admin does;
 --      nobody else may write pay terms or a payout account any more (before,
@@ -44,7 +49,7 @@ select set_config('chat.pd040_catalogue_change', 'on', true);
 -- BEGIN GENERATED pd043 catalogue rows -- by test/unit/authorization/pd040-catalogue-seed.spec.ts; do not edit
 insert into chat.permission (key, page, action, label_en, label_ar, risk, delegable, introduced_by) values
   ('teachers.create', 'teachers', 'create', 'Add teachers and give them a sign-in', 'إضافة المعلمين ومنحهم حساب الدخول', 'admin', false, 'PD-43'),
-  ('teachers.offboard', 'teachers', 'offboard', 'Offboard and reactivate teachers', 'إنهاء عمل المعلمين وإعادة تفعيلهم', 'admin', false, 'PD-43');
+  ('teachers.offboard', 'teachers', 'offboard', 'Offboard teachers', 'إنهاء عمل المعلمين', 'admin', false, 'PD-43');
 
 insert into chat.legacy_permission_bundle (tier, department_kind, permission_key) values
   ('manager', 'teachers', 'teacher_files.finance'),
@@ -66,6 +71,50 @@ comment on column chat.password_reset_code.purpose is
   'PD-43: reset = PD-21/PD-25, a new password for an account in use; first_login = the first password of an account '
   'that has never signed in (provisioned). Completing a first_login code activates the account '
   '(chat.activate_account_with_code).';
+
+-- A first sign-in code spent in THIS transaction: its row version was written
+-- by the current transaction (xmin), it is a first_login code, used, and not
+-- superseded. A code spent earlier, or a setting written by hand, is not one.
+create function chat.is_first_login_code_spent_now(p_code uuid)
+returns boolean
+language sql
+stable
+set search_path = pg_catalog, pg_temp
+as $$
+  select exists (
+    select 1 from chat.password_reset_code c
+     where c.id = p_code and c.purpose = 'first_login' and c.used_at is not null and c.superseded_at is null
+       and c.xmin = (txid_current() % 4294967296)::text::xid
+  );
+$$;
+
+-- Who may issue a teacher's first sign-in code: someone who may add teachers
+-- (PD-40 teachers.create) and reaches this teacher -- the super admin, the
+-- Teachers manager, or a teacher supervisor within their scope (every teacher
+-- with PD-35's strict scope off; with it on, their own teachers). The
+-- supervisor who added the teacher keeps it while the login waits, even when
+-- they added it with no supervisor (owner N1).
+create function chat.may_issue_teacher_first_login(p_staff uuid, p_teacher uuid)
+returns boolean
+language sql
+stable
+set search_path = pg_catalog, pg_temp
+as $$
+  select exists (
+    select 1
+      from chat.staff s
+      join chat.teacher t on t.id = p_teacher and t.organization_id = s.organization_id
+     where s.id = p_staff and s.is_active and s.left_at is null
+       and chat.staff_has_permission(s.id, 'teachers.create')
+       and (s.role = 'super_admin'
+            or (s.role = 'manager' and chat.teachers_department_role(s.id) = 'manager')
+            or (s.role in ('admin', 'coverage') and chat.teachers_department_role(s.id) = 'member'
+                and (not chat.teacher_scope_strict()
+                     or chat.staff_teacher_scope(s.id, t.id) in ('self', 'backup')
+                     or exists (select 1 from chat.audit_log l
+                                 where l.entity_id = t.id and l.action = 'teacher.created' and l.actor_id = s.id))))
+  );
+$$;
 
 -- PD-25's guard, plus the purpose: a first sign-in code is issued by an
 -- administrator, only to a provisioned account, and lives at most 72 hours
@@ -122,8 +171,19 @@ begin
       raise exception 'only a parent account recovers itself' using errcode = 'check_violation';
     end if;
 
-    if new.purpose = 'first_login' and v_target_status is distinct from 'provisioned' then
-      raise exception 'a first sign-in code is for an account that has not signed in yet' using errcode = 'check_violation';
+    if new.purpose = 'first_login' then
+      if v_target_status is distinct from 'provisioned' then
+        raise exception 'a first sign-in code is for an account that has not signed in yet' using errcode = 'check_violation';
+      end if;
+      if v_target_kind = 'teacher' then
+        if not chat.may_issue_teacher_first_login(new.issued_by,
+                 (select t.id from chat.teacher t where t.account_id = new.account_id)) then
+          raise exception 'a first sign-in code is issued by someone who may add this teacher' using errcode = 'check_violation';
+        end if;
+      elsif v_target_kind is distinct from 'staff' then
+        -- A parent's first password is PD-16's sign-up code.
+        raise exception 'a first sign-in code is for a teacher or a staff account' using errcode = 'check_violation';
+      end if;
     end if;
 
     new.created_at := now();
@@ -156,6 +216,12 @@ begin
 end;
 $$;
 
+-- Every outstanding code was stored under the old, unkeyed hash, which the API
+-- no longer computes. Retire them; the person asks again (a reset lives ten
+-- minutes; no first sign-in code exists before this migration).
+update chat.password_reset_code set superseded_at = now()
+ where used_at is null and superseded_at is null;
+
 -- The ONE way an account moves from provisioned to active: the person
 -- completed a first sign-in code. PasswordResetService.complete() calls this
 -- in the transaction that spends the code and sets the password.
@@ -173,8 +239,8 @@ begin
       using errcode = 'insufficient_privilege';
   end if;
   select * into v_code from chat.password_reset_code where id = p_code for update;
-  if v_code.id is null or v_code.purpose <> 'first_login' or v_code.used_at is null or v_code.superseded_at is not null then
-    raise exception 'an account is activated only by a spent first sign-in code' using errcode = 'check_violation';
+  if not chat.is_first_login_code_spent_now(p_code) then
+    raise exception 'an account is activated only by a first sign-in code spent in this transaction' using errcode = 'check_violation';
   end if;
   select * into v_account from chat.account where id = v_code.account_id for update;
   if v_account.status is distinct from 'provisioned' then
@@ -185,9 +251,10 @@ begin
     raise exception 'the super admin''s account is never activated by a code' using errcode = 'insufficient_privilege';
   end if;
 
-  perform set_config('chat.activating_account', v_account.id::text, true);
+  -- The guard re-checks the code itself: the setting only names it.
+  perform set_config('chat.activating_code', v_code.id::text, true);
   update chat.account set status = 'active', is_active = true where id = v_account.id;
-  perform set_config('chat.activating_account', '', true);
+  perform set_config('chat.activating_code', '', true);
 
   -- The person is the actor, and has no staff id: no actor, the issuer in `after`.
   insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
@@ -203,8 +270,20 @@ returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
 as $$
+declare
+  v_code uuid;
 begin
-  if coalesce(current_setting('chat.activating_account', true), '') <> old.id::text then
+  -- A setting anyone in the transaction could write only NAMES the code; the
+  -- code itself must be this account's first sign-in code, spent in this very
+  -- transaction and not superseded.
+  begin
+    v_code := nullif(current_setting('chat.activating_code', true), '')::uuid;
+  exception when invalid_text_representation then
+    v_code := null;
+  end;
+  if v_code is null
+     or not exists (select 1 from chat.password_reset_code c where c.id = v_code and c.account_id = old.id)
+     or not chat.is_first_login_code_spent_now(v_code) then
     raise exception 'an account becomes active from provisioned only with a first sign-in code (PD-43)'
       using errcode = 'insufficient_privilege';
   end if;
@@ -290,10 +369,33 @@ begin
     perform pg_advisory_xact_lock(hashtext('pd043:phone:' || v_digits));
   end if;
 
-  -- The same request again (a double submit) is the teacher it already made.
+  -- The same request again (a double submit) is the teacher it already made --
+  -- but only for the SAME adder, with the SAME arguments, while the login still
+  -- waits for its first sign-in. Anything else is refused, so nobody can claim
+  -- someone else's new teacher (and, in PR-2, its first sign-in code) by id.
   if exists (select 1 from chat.teacher t where t.id = p_id) then
-    if exists (select 1 from chat.teacher t join chat.account a on a.id = t.account_id
-                where t.id = p_id and t.organization_id = v_actor.organization_id and a.subject = v_email) then
+    if exists (
+      select 1
+        from chat.teacher t
+        join chat.account a on a.id = t.account_id
+        join chat.teacher_file f on f.teacher_id = t.id
+        join chat.audit_log l on l.entity_id = t.id and l.action = 'teacher.created'
+       where t.id = p_id
+         and t.organization_id = v_actor.organization_id
+         and l.actor_id = v_actor.id
+         and a.status = 'provisioned'
+         and a.subject = v_email
+         and t.name = v_name
+         and f.phone is not distinct from v_phone
+         and f.teaching_market is not distinct from v_market
+         and (l.after ->> 'supervisorId') is not distinct from p_supervisor_id::text
+         and (p_joined_on is null or f.joined_on = p_joined_on)
+         and not exists (select 1 from chat.teacher_supervisor_assignment s
+                          where s.teacher_id = t.id and s.supervisor_id is distinct from p_supervisor_id)
+         and (p_supervisor_id is null
+              or exists (select 1 from chat.teacher_supervisor_assignment s
+                          where s.teacher_id = t.id and s.supervisor_id = p_supervisor_id))
+    ) then
       return p_id;
     end if;
     raise exception 'this teacher id is already used' using errcode = 'unique_violation';
@@ -383,6 +485,7 @@ create trigger teacher_payout_account_author_is_payroll before insert or update 
 create or replace function chat.guard_teacher_pay_default()
 returns trigger
 language plpgsql
+set search_path = pg_catalog, pg_temp
 as $$
 begin
   if not chat.is_teacher_payroll_author(new.created_by, new.organization_id) then
@@ -402,6 +505,8 @@ comment on table chat.teacher_pay_default is
 -- 5. Server-only
 -- ---------------------------------------------------------------------------
 revoke all on function chat.activate_account_with_code(uuid) from public;
+revoke all on function chat.is_first_login_code_spent_now(uuid) from public;
+revoke all on function chat.may_issue_teacher_first_login(uuid, uuid) from public;
 revoke all on function chat.guard_account_first_activation() from public;
 revoke all on function chat.create_teacher(uuid, text, text, text, date, text, uuid, text, uuid) from public;
 revoke all on function chat.is_teacher_payroll_author(uuid, uuid) from public;

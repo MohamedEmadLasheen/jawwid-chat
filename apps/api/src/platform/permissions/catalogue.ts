@@ -125,7 +125,8 @@ const ENTRIES = {
 
   // PD-43: adding a teacher (their login, Teacher File and supervisor) and offboarding one.
   'teachers.create': { label: { en: 'Add teachers and give them a sign-in', ar: 'إضافة المعلمين ومنحهم حساب الدخول' }, risk: 'admin', introducedBy: 'PD-43' },
-  'teachers.offboard': { label: { en: 'Offboard and reactivate teachers', ar: 'إنهاء عمل المعلمين وإعادة تفعيلهم' }, risk: 'admin', introducedBy: 'PD-43' },
+  // Reactivating a former teacher is the super admin's alone (decideTeacherOnboarding), so the label says offboard only.
+  'teachers.offboard': { label: { en: 'Offboard teachers', ar: 'إنهاء عمل المعلمين' }, risk: 'admin', introducedBy: 'PD-43' },
 
   'feedback.view': { label: { en: 'View parent feedback', ar: 'عرض ملاحظات أولياء الأمور' }, risk: 'family_contact', introducedBy: 'PD-32' },
 } as const satisfies Record<string, Entry>;

@@ -473,6 +473,14 @@ The `pd040-legacy-bundles` spec gains the matching Layer-2 rows:
 | **PR-5, client copy** | The Flutter code screen reads "I have a set-up or reset code" (ar and en) | Flutter widget test, run locally (CI runs no Flutter) | — |
 | **PR-6, docs** | PD-43 in boundary doc §4; `docs/admin/pd043-adding-a-teacher.md` (the checklist runbook for the Teachers Manager); `AUTHORIZATION-MODEL.md` footnote 5 updated; `core-integration-contract.md` gap 5 closed | `guards.sh` | PR-2 |
 
+**PR-2 gates** (from the department head's review of #184, and PD-40's review against the owner's rules for the initial code; each needs a test in PR-2):
+- **P2-5.** The duplicate-e-mail answer never reveals that an account exists in **another organization**, and there is no e-mail-check endpoint.
+- **P2-7.** The supervision chat is created with `ensureInTx` in the **same transaction** as `chat.create_teacher`.
+- **Payout reveal.** A test that the Teachers Manager's reveal of payout details writes its audit row (owner N2).
+- **G2, delivery.** The first sign-in code is **e-mailed** to the sign-in address (PD-25's `selectRecoveryMailer`, an Arabic and English first-login template, sent after commit) **and** shown once to the person who added the teacher. On failure only the code id is logged, and the response says `emailed: false`.
+
+PR-1 as merged also keys **every** one-time code (reset and first sign-in) under the new secret `RESET_CODE_HASH_SECRET` (required in staging and production; locally derived from `JWT_REFRESH_SECRET`), and retires codes stored the old way.
+
 PR-3 and PR-4 can be built side by side once PR-2's contract is frozen. Within the machine-load rules, at most two builder sessions run at once.
 
 ---
