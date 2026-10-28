@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-489 routes.
+501 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -157,6 +157,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/courses/:id` | lessons.courses | `lessons/journey.controller.ts#JourneyController.updateCourse` |
 | GET | `/api/v1/dashboard/cases` | cases.view | `dashboard/dashboard.controller.ts#DashboardController.casesSection` |
 | GET | `/api/v1/dashboard/chats` | chat.use | `dashboard/dashboard.controller.ts#DashboardController.chats` |
+| GET | `/api/v1/dashboard/tasks` | self-service | `dashboard/dashboard.controller.ts#DashboardController.tasksSection` |
 | POST | `/api/v1/discipline/complaints/:id/uphold` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.uphold` |
 | GET | `/api/v1/discipline/violations` | teacher_supervision.view | `discipline/discipline.controller.ts#DisciplineController.list` |
 | POST | `/api/v1/discipline/violations/:id/decide` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.decide` |
@@ -312,6 +313,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/me/starred` | chat.use | `communication/api/starred.controller.ts#StarredController.starred` |
 | POST | `/api/v1/me/subscriptions/:learnerId/renewal-request` | not for staff | `subscriptions/subscription-effects.controller.ts#SubscriptionRenewalController.request` |
 | POST | `/api/v1/me/supervision-conversation` | not for staff | `supervision/supervision.controller.ts#SupervisionController.ensureOwn` |
+| GET | `/api/v1/me/tasks` | self-service | `tasks/task.controller.ts#TaskController.mine` |
 | GET | `/api/v1/me/teacher-profile` | not for staff | `communication/api/teacher-profile.controller.ts#TeacherProfileController.mine` |
 | POST | `/api/v1/me/teacher-profile` | not for staff | `communication/api/teacher-profile.controller.ts#TeacherProfileController.save` |
 | POST | `/api/v1/me/teacher-profile/certificates` | not for staff | `communication/api/teacher-profile.controller.ts#TeacherProfileController.addCertificate` |
@@ -426,6 +428,16 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/suspensions` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.suspensions` |
 | POST | `/api/v1/suspensions/:id/end` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.end` |
 | POST | `/api/v1/suspensions/:id/extend` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.extend` |
+| GET | `/api/v1/tasks` | tasks.team | tasks.manage | `tasks/task.controller.ts#TaskController.list` |
+| POST | `/api/v1/tasks` | tasks.create | `tasks/task.controller.ts#TaskController.create` |
+| GET | `/api/v1/tasks/:id` | self-service | `tasks/task.controller.ts#TaskController.get` |
+| POST | `/api/v1/tasks/:id/comments` | self-service | `tasks/task.controller.ts#TaskController.comment` |
+| POST | `/api/v1/tasks/:id/complete` | self-service | `tasks/task.controller.ts#TaskController.complete` |
+| POST | `/api/v1/tasks/:id/due` | tasks.manage | `tasks/task.controller.ts#TaskController.due` |
+| POST | `/api/v1/tasks/:id/out-of-scope` | self-service | `tasks/task.controller.ts#TaskController.outOfScope` |
+| POST | `/api/v1/tasks/:id/reassign` | tasks.manage | `tasks/task.controller.ts#TaskController.reassign` |
+| POST | `/api/v1/tasks/:id/remove` | tasks.manage | `tasks/task.controller.ts#TaskController.remove` |
+| POST | `/api/v1/tasks/:id/return` | tasks.manage | `tasks/task.controller.ts#TaskController.returnTask` |
 | GET | `/api/v1/teacher-files` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.list` |
 | GET | `/api/v1/teacher-files/:teacherId` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.detail` |
 | POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_supervision.record | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |
