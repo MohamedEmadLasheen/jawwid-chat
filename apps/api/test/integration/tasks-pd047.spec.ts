@@ -37,7 +37,10 @@ let tmgr: string; // Teachers manager
 let tsupA: string; // supervises s.teacherId
 let tsupB: string; // Teachers member, not s.teacherId's supervisor
 let smgr: string; // Sales manager
+let srep: string; // a Sales member
 let sa: string;
+let farOrg: string; // another organization
+let farStaff: string; // live staff of farOrg
 
 async function code(p: Promise<unknown>): Promise<string> {
   try {
@@ -88,8 +91,21 @@ beforeEach(async () => {
   const [{ id: tdept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `insert into chat.department (kind, display_name, manager_id) values ('teachers', 'teachers', $1::uuid) returning id::text as id`, tmgr,
   );
+  const [{ id: sdept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `insert into chat.department (kind, display_name, manager_id) values ('sales', 'sales', $1::uuid) returning id::text as id`, smgr,
+  );
+  srep = randomUUID();
+  await g.prisma.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'srep_t', 'admin', true)`, srep);
   await g.prisma.$executeRawUnsafe(
-    `insert into chat.department (kind, display_name, manager_id) values ('sales', 'sales', $1::uuid)`, smgr,
+    `insert into chat.department_member (staff_id, organization_id, department_id, position) values ($1::uuid, chat.default_organization_id(), $2::uuid, 'supervisor')`,
+    srep, sdept,
+  );
+  [farOrg, farStaff] = [randomUUID(), randomUUID()];
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.organization (id, slug, display_name) values ($1::uuid, 'pd047-' || left($1::text, 8), 'pd047 far')`, farOrg,
+  );
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.staff (id, organization_id, name, role, is_active) values ($1::uuid, $2::uuid, 'far_t', 'admin', true)`, farStaff, farOrg,
   );
   await g.prisma.$executeRawUnsafe(
     `insert into chat.department_member (staff_id, organization_id, department_id, position) values
@@ -158,6 +174,17 @@ describe('who sees a task', () => {
     expect(await ids(tsupA, 'team')).toEqual([t.id]);
     expect(await ids(tsupB, 'team')).toEqual([]);
     expect(await code(tasks.remove(tsupA, t.id, { reason: 'not needed' }))).toBe(CommErrorCode.TASK_DENIED);
+  });
+
+  it('a teacher supervisor reads, and does nothing else: no comment, return, reassign or due date (Q3)', async () => {
+    const t = await manual(tmgr, teacher(s.teacherId));
+    expect((await tasks.get(tsupA, t.id)).id).toBe(t.id);
+    expect(await code(tasks.comment(tsupA, t.id, { body: 'any news?' }))).toBe(CommErrorCode.TASK_DENIED);
+    expect(await code(tasks.reassign(tsupA, t.id, { to: teacher(s.newTeacherId) }))).toBe(CommErrorCode.TASK_DENIED);
+    expect(await code(tasks.setDue(tsupA, t.id, { dueAt: '2026-11-02T09:00:00Z' }))).toBe(CommErrorCode.TASK_DENIED);
+    await tasks.outOfScope(s.teacherId, t.id, { comment: 'not my student' });
+    expect(await code(tasks.returnTask(tsupA, t.id, { instructions: 'it is' }))).toBe(CommErrorCode.TASK_DENIED);
+    expect((await tasks.returnTask(tmgr, t.id, { instructions: 'it is' })).state).toBe('open');
   });
 
   it('only the super admin has All', async () => {
@@ -270,6 +297,28 @@ describe('exit 4: reassign', () => {
     const sent = await tasks.reassign(s.managerId, t.id, { to: { department: 'sales' } });
     expect(sent.assignee).toEqual(staff(smgr));
     expect(await ids(smgr, 'mine')).toEqual([t.id]);
+    // The manager who created it still watches it (plan §3.7).
+    expect(await ids(s.managerId, 'team')).toEqual([t.id]);
+  });
+
+  it('the department manager it was sent to hands it on: within their team, or onward -- never removes or returns it', async () => {
+    const t = await manual(s.managerId, staff(s.ownerId));
+    await tasks.reassign(s.managerId, t.id, { to: { department: 'sales' } });
+    expect(await code(tasks.remove(smgr, t.id, { reason: 'not ours' }))).toBe(CommErrorCode.TASK_DENIED);
+    expect(await code(tasks.reassign(smgr, t.id, { to: staff(tsupA) }))).toBe(CommErrorCode.TASK_DENIED);
+    const handed = await tasks.reassign(smgr, t.id, { to: staff(srep), instructions: 'the family is ours now' });
+    expect(handed).toMatchObject({ assignee: staff(srep), instructions: 'the family is ours now' });
+    expect(await ids(srep, 'mine')).toEqual([t.id]);
+    expect(await ids(smgr, 'mine')).toEqual([]);
+    // Now a member of Sales: the Sales manager is responsible, and decides.
+    expect(await ids(smgr, 'team')).toEqual([t.id]);
+    expect((await tasks.remove(smgr, t.id, { reason: 'done by phone' })).state).toBe('removed');
+  });
+
+  it('a department manager sends their own task onward to another department', async () => {
+    const t = await manual(sa, staff(smgr));
+    const sent = await tasks.reassign(smgr, t.id, { to: { department: 'teachers' } });
+    expect(sent.assignee).toEqual(staff(tmgr));
   });
 
   it('the super admin reassigns anywhere; the assignee cannot reassign their own task', async () => {
@@ -292,13 +341,26 @@ describe('exit 4: reassign', () => {
 });
 
 describe('nothing disappears on its own', () => {
-  it('an assignee who leaves the team keeps the task; the manager no longer watches it, the super admin still does', async () => {
+  it('an assignee who leaves the team keeps the task; the manager no longer watches it; the super admin sees it as unmanaged', async () => {
     // admin_b: admin_a supervises the family's children, so they cannot leave the department.
-    const t = await manual(s.managerId, staff(s.otherAdminId));
+    // Created by the super admin, so no manager stands to it as its creator.
+    const t = await manual(sa, staff(s.otherAdminId));
+    expect(t.unmanaged).toBe(false);
     await g.prisma.$executeRaw`DELETE FROM chat.department_member WHERE staff_id = ${s.otherAdminId}::uuid`;
     expect(await ids(s.otherAdminId, 'mine')).toEqual([t.id]);
     expect(await ids(s.managerId, 'team')).toEqual([]);
     expect(await ids(sa, 'all')).toContain(t.id);
+    expect((await tasks.get(sa, t.id)).unmanaged).toBe(true);
+    expect(await ids(sa, 'decisions')).toEqual([t.id]);
+  });
+
+  it('a task assigned to a manager is unmanaged unless a manager created it: only the super admin stands over them', async () => {
+    const byAdmin = await manual(sa, staff(tmgr));
+    expect(byAdmin.unmanaged).toBe(true);
+    expect(await ids(sa, 'decisions')).toEqual([byAdmin.id]);
+    const sent = await manual(s.managerId, staff(s.ownerId));
+    await tasks.reassign(s.managerId, sent.id, { to: { department: 'sales' } });
+    expect((await tasks.get(sa, sent.id)).unmanaged).toBe(false);
   });
 
   it('an inactive assignee keeps the task, flagged for reassignment (Q11)', async () => {
@@ -347,16 +409,57 @@ describe('the database', () => {
     ).rejects.toThrow();
   });
 
-  it('refuses an actor who is inactive or of another organization', async () => {
+  it('refuses an actor who is inactive, or live staff of another organization', async () => {
     const t = await manual(s.managerId, staff(s.ownerId));
-    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.otherAdminId}::uuid`;
-    await expect(
+    const removeAs = (actor: string) =>
       g.prisma.$transaction([
-        g.prisma.$executeRawUnsafe(`select set_config('chat.task_actor', $1, true)`, s.otherAdminId),
+        g.prisma.$executeRawUnsafe(`select set_config('chat.task_actor', $1, true)`, actor),
         g.prisma.$executeRawUnsafe(`select set_config('chat.task_note', 'x', true)`),
         g.prisma.$executeRawUnsafe(`update chat.work_task set state = 'removed' where id = $1::uuid`, t.id),
-      ]),
-    ).rejects.toThrow();
+      ]);
+    await expect(removeAs(farStaff)).rejects.toThrow(/live person of its organization/);
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.otherAdminId}::uuid`;
+    await expect(removeAs(s.otherAdminId)).rejects.toThrow(/live person of its organization/);
+    expect(await code(tasks.get(farStaff, t.id))).toBe(CommErrorCode.TASK_NOT_FOUND);
+  });
+
+  it('refuses a change that writes no history: instructions or activity on their own', async () => {
+    const t = await manual(s.managerId, staff(s.ownerId));
+    const asManager = (sql: string) =>
+      g.prisma.$transaction([
+        g.prisma.$executeRawUnsafe(`select set_config('chat.task_actor', $1, true)`, s.managerId),
+        g.prisma.$executeRawUnsafe(`select set_config('chat.task_note', 'x', true)`),
+        g.prisma.$executeRawUnsafe(sql, t.id),
+      ]);
+    await expect(asManager(`update chat.work_task set instructions = 'do it' where id = $1::uuid`)).rejects.toThrow(/instructions come with/);
+    await expect(asManager(`update chat.work_task set activity_at = now() + interval '1 hour' where id = $1::uuid`)).rejects.toThrow(/recorded event/);
+    expect((await tasks.get(s.ownerId, t.id)).revision).toBe(1);
+  });
+
+  it('refuses a forged event: only a comment is written directly, and only by the named actor', async () => {
+    const t = await manual(s.managerId, staff(s.ownerId));
+    const insertAs = (actor: string, kind: string, by: string) =>
+      g.prisma.$transaction([
+        g.prisma.$executeRawUnsafe(`select set_config('chat.task_actor', $1, true)`, actor),
+        g.prisma.$executeRawUnsafe(
+          `insert into chat.work_task_event (task_id, organization_id, kind, actor_kind, actor_id, body)
+           values ($1::uuid, chat.default_organization_id(), $2, 'staff', $3::uuid, 'forged')`,
+          t.id, kind, by,
+        ),
+      ]);
+    await expect(insertAs(s.managerId, 'completed', s.managerId)).rejects.toThrow(/only a comment is written directly/);
+    await expect(insertAs(s.managerId, 'commented', s.ownerId)).rejects.toThrow(/written by its actor/);
+    await insertAs(s.ownerId, 'commented', s.ownerId);
+    expect((await history(t.id)).map((e) => e.kind)).toEqual(['created', 'commented']);
+    expect((await tasks.get(s.ownerId, t.id)).state).toBe('open');
+  });
+
+  it('refuses TRUNCATE of either table, outside the harness', async () => {
+    await manual(s.managerId, staff(s.ownerId));
+    await expect(g.prisma.$executeRawUnsafe(`truncate chat.work_task_event`)).rejects.toThrow(/never truncated/);
+    await expect(g.prisma.$executeRawUnsafe(`truncate chat.work_task cascade`)).rejects.toThrow(/never truncated/);
+    const [{ n }] = await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM chat.work_task_event`;
+    expect(Number(n)).toBe(1);
   });
 
   it('an assignee is exactly one of a staff member or a teacher', async () => {
@@ -378,6 +481,32 @@ describe('the database', () => {
     await tasks.complete(s.otherAdminId, t.id, {});
     const [{ n }] = await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM chat.task`;
     expect(Number(n)).toBe(0);
+  });
+});
+
+describe('the Dashboard (PD-44)', () => {
+  it('counts what the lists show: Mine for everyone; the team, the decisions and the gone for a manager; unmanaged for the super admin', async () => {
+    await manual(s.managerId, staff(s.ownerId), { dueAt: '2020-01-01T00:00:00Z' });
+    const disputed = await manual(s.managerId, staff(s.otherAdminId));
+    await tasks.outOfScope(s.otherAdminId, disputed.id, { comment: 'not mine' });
+    await manual(sa, staff(tmgr));
+    const tile = (tiles: Array<{ key: string; count: number }>, key: string) => tiles.find((t) => t.key === key)?.count;
+
+    const mine = await tasks.dashboardCounts(s.ownerId);
+    expect(mine.map((t) => t.key)).toEqual(['tasks.mine_open', 'tasks.mine_overdue']);
+    expect([tile(mine, 'tasks.mine_open'), tile(mine, 'tasks.mine_overdue')]).toEqual([1, 1]);
+
+    const mgr = await tasks.dashboardCounts(s.managerId);
+    expect(tile(mgr, 'tasks.team_open')).toBe((await tasks.list(s.managerId, { view: 'team' })).items.length);
+    expect(tile(mgr, 'tasks.team_open')).toBe(2);
+    expect(tile(mgr, 'tasks.team_overdue')).toBe(1);
+    expect(tile(mgr, 'tasks.awaiting_decision')).toBe((await tasks.list(s.managerId, { view: 'decisions' })).items.length);
+    expect(tile(mgr, 'tasks.awaiting_decision')).toBe(1);
+    expect(tile(mgr, 'tasks.unmanaged')).toBeUndefined();
+
+    const top = await tasks.dashboardCounts(sa);
+    expect(tile(top, 'tasks.unmanaged')).toBe(1);
+    expect(tile(top, 'tasks.awaiting_decision')).toBe((await tasks.list(sa, { view: 'decisions' })).items.length);
   });
 });
 

@@ -29,7 +29,14 @@
 -- PR-1 creates manual tasks only. System tasks (kind 'system', keyed by their
 -- source) arrive with PR-2, which redefines the guard's insert branch.
 --
--- FAIL CLOSED. RLS on, no grant to any request role.
+-- EVERY CHANGE IS AN EVENT. The guard refuses an update that would write no
+-- history (an instructions, source or activity change on its own); a comment
+-- is the one event written directly, and it touches the task through a
+-- trigger. Neither table may be truncated, except by the integration harness,
+-- which says so (chat.test_truncate).
+--
+-- FAIL CLOSED. RLS on, no grant to any request role. Every function pins its
+-- search_path.
 
 -- ===========================================================================
 -- 1. The catalogue (PD-40)
@@ -67,6 +74,7 @@ create or replace function chat.task_principal_kind(p_id uuid, p_org uuid)
 returns text
 language sql
 stable
+set search_path = chat, pg_temp
 as $$
   select case
     when exists (select 1 from chat.staff s
@@ -76,19 +84,21 @@ as $$
   end;
 $$;
 
--- Where live staff p_viewer stands to a task assigned to p_staff or p_teacher,
--- decided live, every time:
+-- Where live staff p_viewer stands to a task assigned to p_staff or p_teacher
+-- and created by p_creator, decided live, every time:
 --   super_admin  the super admin of the organization: everything
---   manager      the responsible manager: the manager of the department the
---                assigned staff member belongs to, or, for a teacher, the
---                Teachers manager (PD-35's teacher scope)
+--   manager      a responsible manager: the manager of the department the
+--                assigned staff member belongs to; for a teacher, the
+--                Teachers manager (PD-35's teacher scope); and the manager who
+--                created the task (plan §3.7), wherever it went since
 --   supervisor   the teacher's PD-35 supervisor (or their active backup):
 --                sees the teacher's tasks, decides nothing (owner Q3)
 --   null         nothing (the assignee's own standing is the API's)
-create or replace function chat.work_task_standing(p_viewer uuid, p_org uuid, p_staff uuid, p_teacher uuid)
+create or replace function chat.work_task_standing(p_viewer uuid, p_org uuid, p_staff uuid, p_teacher uuid, p_creator uuid)
 returns text
 language sql
 stable
+set search_path = chat, pg_temp
 as $$
   select case
     when v.role = 'super_admin' then 'super_admin'
@@ -96,6 +106,7 @@ as $$
       select 1 from chat.department_member m
         join chat.department d on d.id = m.department_id
        where m.staff_id = p_staff and d.manager_id = p_viewer and d.organization_id = p_org) then 'manager'
+    when p_creator = p_viewer and v.role = 'manager' then 'manager'
     when p_teacher is not null then
       case chat.staff_teacher_scope(p_viewer, p_teacher)
         when 'manager' then 'manager'
@@ -105,6 +116,32 @@ as $$
   end
   from chat.staff v
   where v.id = p_viewer and v.organization_id = p_org and v.is_active and v.left_at is null;
+$$;
+
+-- No live manager stands to the task: nobody but the super admin may remove,
+-- return or reassign it. The assignee left their department, its manager is
+-- not live, the assignee is a manager, or (for a teacher) the Teachers
+-- department has no live manager -- and no live manager created it.
+create or replace function chat.work_task_unmanaged(p_org uuid, p_staff uuid, p_teacher uuid, p_creator uuid)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select not (
+    (p_staff is not null and exists (
+      select 1 from chat.department_member m
+        join chat.department d on d.id = m.department_id and d.organization_id = p_org
+        join chat.staff mg on mg.id = d.manager_id and mg.is_active and mg.left_at is null
+       where m.staff_id = p_staff))
+    or (p_teacher is not null and exists (
+      select 1 from chat.department d
+        join chat.staff mg on mg.id = d.manager_id and mg.is_active and mg.left_at is null
+       where d.organization_id = p_org and d.kind = 'teachers'))
+    or (p_creator is not null and exists (
+      select 1 from chat.staff c
+       where c.id = p_creator and c.organization_id = p_org and c.role = 'manager' and c.is_active and c.left_at is null))
+  );
 $$;
 
 -- ===========================================================================
@@ -167,12 +204,14 @@ create index work_task_closed_idx on chat.work_task (organization_id, closed_at 
 create or replace function chat.guard_work_task()
 returns trigger
 language plpgsql
+set search_path = chat, pg_temp
 as $$
 declare
-  v_actor  text := nullif(current_setting('chat.task_actor', true), '');
-  v_note   text := nullif(btrim(coalesce(current_setting('chat.task_note', true), '')), '');
-  v_org    uuid;
-  v_moved  boolean;
+  v_actor    text := nullif(current_setting('chat.task_actor', true), '');
+  v_note     text := nullif(btrim(coalesce(current_setting('chat.task_note', true), '')), '');
+  v_org      uuid;
+  v_moved    boolean;
+  v_returned boolean;
 begin
   if tg_op = 'DELETE' then
     raise exception 'a task is never deleted; it is completed, removed or reassigned' using errcode = 'check_violation';
@@ -213,10 +252,11 @@ begin
   end if;
 
   -- UPDATE
-  if (new.id, new.organization_id, new.kind, new.source_type, new.source_id, new.source_key,
+  -- source_state changes with PR-2's sources, which record source_withdrawn.
+  if (new.id, new.organization_id, new.kind, new.source_type, new.source_id, new.source_key, new.source_state,
       new.title, new.body, new.created_by, new.created_at)
      is distinct from
-     (old.id, old.organization_id, old.kind, old.source_type, old.source_id, old.source_key,
+     (old.id, old.organization_id, old.kind, old.source_type, old.source_id, old.source_key, old.source_state,
       old.title, old.body, old.created_by, old.created_at) then
     raise exception 'a task''s what, source and creator never change' using errcode = 'check_violation';
   end if;
@@ -225,6 +265,7 @@ begin
   end if;
 
   v_moved := (new.assignee_staff_id, new.assignee_teacher_id) is distinct from (old.assignee_staff_id, old.assignee_teacher_id);
+  v_returned := old.state = 'awaiting_decision' and new.state = 'open' and not v_moved;
   if v_moved and chat.task_principal_kind(coalesce(new.assignee_staff_id, new.assignee_teacher_id), old.organization_id) is null then
     raise exception 'a task is reassigned to a live person of its organization' using errcode = 'check_violation';
   end if;
@@ -241,7 +282,7 @@ begin
     if new.state = 'removed' and v_note is null then
       raise exception 'a removal needs a reason (chat.task_note)' using errcode = 'check_violation';
     end if;
-    if old.state = 'awaiting_decision' and new.state = 'open' and not v_moved and v_note is null then
+    if v_returned and v_note is null then
       raise exception 'a return needs instructions (chat.task_note)' using errcode = 'check_violation';
     end if;
     if new.state in ('completed', 'removed') then
@@ -254,6 +295,19 @@ begin
     raise exception 'a task is closed only by moving to completed or removed' using errcode = 'check_violation';
   end if;
 
+  -- Instructions come with a return or a reassignment, which record them.
+  if new.instructions is distinct from old.instructions and not (v_returned or v_moved) then
+    raise exception 'instructions come with a return or a reassignment' using errcode = 'check_violation';
+  end if;
+  -- Every change is recorded: a move, a state, a due date -- or a comment,
+  -- whose event touches the task from its own trigger (activity_at only).
+  if not (v_moved or new.state is distinct from old.state or new.due_at is distinct from old.due_at) then
+    if not (pg_trigger_depth() > 1 and new.activity_at is distinct from old.activity_at
+            and new.instructions is not distinct from old.instructions) then
+      raise exception 'a task changes only with a recorded event' using errcode = 'check_violation';
+    end if;
+  end if;
+
   new.revision := old.revision + 1;
   new.updated_at := now();
   return new;
@@ -263,6 +317,25 @@ $$;
 create trigger work_task_is_coherent
   before insert or update or delete on chat.work_task
   for each row execute function chat.guard_work_task();
+
+-- Neither table is ever truncated. The integration harness truncates chat.staff
+-- ... CASCADE before every suite, which reaches both; it says so, in its own
+-- transaction (chat.test_truncate = 'on').
+create or replace function chat.guard_work_task_truncate()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if coalesce(current_setting('chat.test_truncate', true), '') = 'on' then
+    return null;
+  end if;
+  raise exception 'tasks and their history are never truncated' using errcode = 'check_violation';
+end;
+$$;
+
+create trigger work_task_no_truncate before truncate on chat.work_task
+  for each statement execute function chat.guard_work_task_truncate();
 
 -- ===========================================================================
 -- 4. The history
@@ -295,16 +368,27 @@ create index work_task_event_actor_idx on chat.work_task_event (actor_id, at des
 create trigger work_task_event_is_append_only before update or delete on chat.work_task_event
   for each row execute function chat.forbid_change();
 
--- An event is written by a live person of the task's organization, named as such.
+-- An event is written by a live person of the task's organization, named as
+-- such. Only a comment is written directly, by the actor the API names; every
+-- other kind comes from chat.record_work_task_event (a nested trigger).
 create or replace function chat.guard_work_task_event()
 returns trigger
 language plpgsql
+set search_path = chat, pg_temp
 as $$
 declare
   v_org uuid := (select organization_id from chat.work_task where id = new.task_id);
 begin
   if v_org is null or new.organization_id is distinct from v_org then
     raise exception 'a task event belongs to its task''s organization' using errcode = 'check_violation';
+  end if;
+  if pg_trigger_depth() <= 1 then
+    if new.kind <> 'commented' then
+      raise exception 'only a comment is written directly; every other event is the task''s own' using errcode = 'insufficient_privilege';
+    end if;
+    if new.actor_id is null or new.actor_id::text is distinct from nullif(current_setting('chat.task_actor', true), '') then
+      raise exception 'a comment is written by its actor (chat.task_actor)' using errcode = 'insufficient_privilege';
+    end if;
   end if;
   if new.actor_kind <> 'system' and chat.task_principal_kind(new.actor_id, v_org) is distinct from new.actor_kind then
     raise exception 'a task event is written by a live person of its organization (actor)' using errcode = 'insufficient_privilege';
@@ -316,11 +400,33 @@ $$;
 create trigger work_task_event_has_a_live_actor before insert on chat.work_task_event
   for each row execute function chat.guard_work_task_event();
 
+create trigger work_task_event_no_truncate before truncate on chat.work_task_event
+  for each statement execute function chat.guard_work_task_truncate();
+
+-- A comment is the task's latest activity: it touches the task (activity_at,
+-- and so its revision), which the guard allows only from here.
+create or replace function chat.touch_work_task_on_comment()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if new.kind = 'commented' then
+    update chat.work_task set activity_at = new.at where id = new.task_id;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger work_task_event_touches_its_task after insert on chat.work_task_event
+  for each row execute function chat.touch_work_task_on_comment();
+
 -- One event per change, in the transaction that made it, with the note
 -- (comment, reason or instructions) the API set in chat.task_note.
 create or replace function chat.record_work_task_event()
 returns trigger
 language plpgsql
+set search_path = chat, pg_temp
 as $$
 declare
   v_actor  uuid := current_setting('chat.task_actor', true)::uuid;
@@ -379,7 +485,10 @@ alter table chat.work_task_event enable row level security;
 revoke all on chat.work_task, chat.work_task_event from public, anon, authenticated, chat_app;
 
 revoke all on function chat.task_principal_kind(uuid, uuid) from public;
-revoke all on function chat.work_task_standing(uuid, uuid, uuid, uuid) from public;
+revoke all on function chat.work_task_standing(uuid, uuid, uuid, uuid, uuid) from public;
+revoke all on function chat.work_task_unmanaged(uuid, uuid, uuid, uuid) from public;
 revoke all on function chat.guard_work_task() from public;
+revoke all on function chat.guard_work_task_truncate() from public;
 revoke all on function chat.guard_work_task_event() from public;
+revoke all on function chat.touch_work_task_on_comment() from public;
 revoke all on function chat.record_work_task_event() from public;

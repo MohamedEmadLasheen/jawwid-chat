@@ -5,6 +5,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent, type TaskChangedPayload } from '../communication/contracts/events';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { nextState, type TaskAction, type TaskState } from './task-transitions';
 
 export type PrincipalKind = 'staff' | 'teacher';
@@ -63,6 +64,7 @@ interface Row {
   close_reason: string | null;
   revision: number;
   disputed: number;
+  unmanaged: boolean;
   standing: Standing | null;
 }
 
@@ -153,9 +155,13 @@ export class TaskService {
           : view === 'decisions'
             ? Prisma.sql`${standing} IN ('manager', 'super_admin')`
             : Prisma.sql`true`;
+    // The super admin's Decisions also hold every pending task no live manager
+    // stands to: only they can move it (chat.work_task_unmanaged).
     const states =
       view === 'decisions'
-        ? Prisma.sql`t.state = 'awaiting_decision'`
+        ? viewer.superAdmin
+          ? Prisma.sql`(t.state = 'awaiting_decision' OR (t.state = 'open' AND ${UNMANAGED}))`
+          : Prisma.sql`t.state = 'awaiting_decision'`
         : state === 'open'
           ? Prisma.sql`t.state IN ('open', 'awaiting_decision')`
           : Prisma.sql`t.state IN ('completed', 'removed') AND t.closed_at > now() - make_interval(days => ${CLOSED_DAYS}::int)`;
@@ -200,37 +206,49 @@ export class TaskService {
     const { viewer, row } = await this.forAssignee(actorId, taskId, 'complete');
     if (row.kind !== 'manual') throw denied('a system task is completed by doing its work');
     const note = text(body.note, 'note', NOTE_MAX, false);
-    return this.move(viewer, row, 'complete', note, Prisma.sql`state = 'completed', outcome = 'done'`, 'completed');
+    return this.move(viewer, row, 'complete', note, Prisma.sql`state = 'completed', outcome = 'done'`, 'completed', mineSql(viewer));
   }
 
   /** Exit 2: the assignee says it is outside their responsibility. { comment } */
   async outOfScope(actorId: string, taskId: string, body: Record<string, unknown>) {
     const { viewer, row } = await this.forAssignee(actorId, taskId, 'out_of_scope');
     const comment = text(body.comment, 'comment', NOTE_MAX, true) as string;
-    return this.move(viewer, row, 'out_of_scope', comment, Prisma.sql`state = 'awaiting_decision'`, 'out_of_scope');
+    return this.move(viewer, row, 'out_of_scope', comment, Prisma.sql`state = 'awaiting_decision'`, 'out_of_scope', mineSql(viewer));
   }
 
   /** Exit 2's decision: back to the assignee, with instructions. { instructions } */
   async returnTask(actorId: string, taskId: string, body: Record<string, unknown>) {
     const { viewer, row } = await this.forDecider(actorId, taskId);
     const instructions = text(body.instructions, 'instructions', NOTE_MAX, true) as string;
-    return this.move(viewer, row, 'return', instructions, Prisma.sql`state = 'open', instructions = ${instructions}`, 'returned');
+    return this.move(viewer, row, 'return', instructions, Prisma.sql`state = 'open', instructions = ${instructions}`, 'returned', this.deciderSql(viewer));
   }
 
   /** Exit 3 (or exit 2's decision): removed, with a reason. { reason } */
   async remove(actorId: string, taskId: string, body: Record<string, unknown>) {
     const { viewer, row } = await this.forDecider(actorId, taskId);
     const reason = text(body.reason, 'reason', NOTE_MAX, true) as string;
-    return this.move(viewer, row, 'remove', reason, Prisma.sql`state = 'removed'`, 'removed');
+    return this.move(viewer, row, 'remove', reason, Prisma.sql`state = 'removed'`, 'removed', this.deciderSql(viewer));
   }
 
   /**
    * Exit 4 (or exit 2's decision). { to: { kind, id } | { department: kind }, instructions? }
    * A manager hands it within their team, or sends it to another department,
    * whose manager distributes it (Q6). The super admin hands it to anyone.
+   *
+   * A task sent to a department lands with its manager, who belongs to no
+   * department (PD-8) and so has no responsible manager of their own: as the
+   * assignee, a department's manager hands their own task on -- within their
+   * team, or to another department. Only reassigning: removing and returning
+   * stay with a responsible manager or the super admin.
    */
   async reassign(actorId: string, taskId: string, body: Record<string, unknown>) {
-    const { viewer, row } = await this.forDecider(actorId, taskId);
+    const viewer = await this.requireViewer(actorId);
+    const row = await this.visible(viewer, taskId);
+    const decider = row.standing === 'manager' || row.standing === 'super_admin';
+    const handsOwn = !decider && isAssignee(viewer, row) && (await this.managesDepartment(viewer));
+    if (!decider && !handsOwn) {
+      throw denied('a task is reassigned by the responsible manager, the super admin, or a department manager it was sent to');
+    }
     const instructions = text(body.instructions, 'instructions', NOTE_MAX, false);
     const to = await this.targetOf(viewer, body.to);
     await this.requireLive(viewer.organizationId, to.principal);
@@ -245,35 +263,108 @@ export class TaskService {
                            assignee_teacher_id = ${to.principal.kind === 'teacher' ? to.principal.id : null}::uuid,
                            instructions = ${instructions},
                            state = 'open'`;
-    return this.move(viewer, row, 'reassign', instructions, set, 'reassigned');
+    return this.move(viewer, row, 'reassign', instructions, set, 'reassigned', decider ? this.deciderSql(viewer) : this.handsOwnSql(viewer));
   }
 
   /** { dueAt: ISO timestamp | null }: the responsible manager or the super admin. */
   async setDue(actorId: string, taskId: string, body: Record<string, unknown>) {
     const { viewer, row } = await this.forDecider(actorId, taskId);
     const dueAt = dueField(body.dueAt);
-    return this.move(viewer, row, 'due', null, Prisma.sql`due_at = ${dueAt}::timestamptz`, 'due_changed');
+    if ((row.due_at?.toISOString() ?? null) === dueAt) throw invalid('dueAt: unchanged');
+    return this.move(viewer, row, 'due', null, Prisma.sql`due_at = ${dueAt}::timestamptz`, 'due_changed', this.deciderSql(viewer));
   }
 
-  /** Anyone who sees the task. It changes nothing but the history. { body } */
+  /**
+   * The assignee, a responsible manager or the super admin. It changes nothing
+   * but the history. A teacher's supervisor reads the task and stays silent
+   * (owner Q3: read-only). { body }
+   */
   async comment(actorId: string, taskId: string, body: Record<string, unknown>) {
     const viewer = await this.requireViewer(actorId);
     const row = await this.visible(viewer, taskId);
+    if (!isAssignee(viewer, row) && row.standing !== 'manager' && row.standing !== 'super_admin') {
+      throw denied('a teacher\'s supervisor reads their teachers\' tasks; comments are the assignee\'s and their manager\'s');
+    }
     if (nextState(row.state, 'comment') === null) throw wrongState('this task is closed');
     const note = text(body.body, 'body', NOTE_MAX, true) as string;
     await this.asActor(viewer.id, null, async (tx) => {
-      const [moved] = await tx.$queryRaw<Array<{ revision: number }>>`
-        UPDATE chat.work_task SET activity_at = now()
-         WHERE id = ${row.id}::uuid AND state IN ('open', 'awaiting_decision')
-         RETURNING revision`;
-      if (!moved) throw wrongState('this task is closed');
+      // Standing re-checked under the row's lock, in the writing transaction.
+      const [held] = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT t.id::text AS id FROM chat.work_task t
+         WHERE t.id = ${row.id}::uuid AND t.state IN ('open', 'awaiting_decision')
+           AND (${mineSql(viewer)} OR ${this.deciderSql(viewer)})
+         FOR UPDATE`;
+      if (!held) throw wrongState('the task changed meanwhile; reload it');
+      // The event touches the task itself (chat.touch_work_task_on_comment).
       await tx.$executeRaw`
         INSERT INTO chat.work_task_event (task_id, organization_id, kind, actor_kind, actor_id, to_assignee, body)
         VALUES (${row.id}::uuid, ${viewer.organizationId}::uuid, 'commented', ${viewer.kind}, ${viewer.id}::uuid,
                 ${assigneeOf(row).id}::uuid, ${note})`;
-      await this.signal(tx, row.id, moved.revision, 'commented');
+      const [after] = await tx.$queryRaw<Array<{ revision: number }>>`
+        SELECT revision FROM chat.work_task WHERE id = ${row.id}::uuid`;
+      await this.signal(tx, row.id, after.revision, 'commented');
     });
     return this.summary(await this.load(viewer, row.id));
+  }
+
+  /**
+   * PD-44: the Dashboard's task tiles -- `list`'s own predicates, counted,
+   * pending tasks only. Everyone: their own, open and overdue. Whoever manages
+   * a department (and the super admin, over everything): the team's, the
+   * decisions waiting, the tasks whose assignee is gone. The super admin: the
+   * unmanaged ones (Decisions shows them).
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const viewer = await this.requireViewer(actorId);
+    const standing = this.standingSql(viewer);
+    const [r] = await this.prisma.$queryRaw<
+      Array<{
+        manages: boolean;
+        mine: number; mine_oldest: Date | null; mine_overdue: number;
+        team: number; team_oldest: Date | null; team_overdue: number;
+        decisions: number; decisions_oldest: Date | null;
+        gone: number; unmanaged: number;
+      }>
+    >`
+      SELECT (${viewer.superAdmin}::boolean OR EXISTS (
+                SELECT 1 FROM chat.department d WHERE d.manager_id = ${viewer.id}::uuid AND d.organization_id = ${viewer.organizationId}::uuid)) AS manages,
+             count(*) FILTER (WHERE x.mine)::int AS mine,
+             min(x.created_at) FILTER (WHERE x.mine) AS mine_oldest,
+             count(*) FILTER (WHERE x.mine AND x.due_at < now())::int AS mine_overdue,
+             count(*) FILTER (WHERE x.team)::int AS team,
+             min(x.created_at) FILTER (WHERE x.team) AS team_oldest,
+             count(*) FILTER (WHERE x.team AND x.due_at < now())::int AS team_overdue,
+             count(*) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR (${viewer.superAdmin}::boolean AND x.unmanaged)))::int AS decisions,
+             min(x.created_at) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR (${viewer.superAdmin}::boolean AND x.unmanaged))) AS decisions_oldest,
+             count(*) FILTER (WHERE x.team AND NOT x.live)::int AS gone,
+             count(*) FILTER (WHERE x.unmanaged)::int AS unmanaged
+        FROM (
+          SELECT t.created_at, t.due_at, t.state,
+                 ${mineSql(viewer)} AS mine,
+                 coalesce(${standing} IN ('manager', 'super_admin'), false) AS team,
+                 coalesce(${standing} IN ('manager', 'super_admin'), false) AS decides,
+                 ${UNMANAGED} AS unmanaged,
+                 coalesce(a.is_active AND a.left_at IS NULL, ta.is_active AND ta.left_at IS NULL, false) AS live
+            FROM chat.work_task t
+            LEFT JOIN chat.staff a ON a.id = t.assignee_staff_id
+            LEFT JOIN chat.teacher ta ON ta.id = t.assignee_teacher_id
+           WHERE t.organization_id = ${viewer.organizationId}::uuid
+             AND t.state IN ('open', 'awaiting_decision')
+        ) x`;
+    const tiles = [
+      dashboardTile('tasks.mine_open', r?.mine ?? 0, r?.mine_oldest ?? null),
+      dashboardTile('tasks.mine_overdue', r?.mine_overdue ?? 0),
+    ];
+    if (r?.manages) {
+      tiles.push(
+        dashboardTile('tasks.team_open', r.team, r.team_oldest),
+        dashboardTile('tasks.team_overdue', r.team_overdue),
+        dashboardTile('tasks.awaiting_decision', r.decisions, r.decisions_oldest),
+        dashboardTile('tasks.needs_reassignment', r.gone),
+      );
+    }
+    if (viewer.superAdmin) tiles.push(dashboardTile('tasks.unmanaged', r?.unmanaged ?? 0));
+    return tiles;
   }
 
   // ------------------------------------------------------------------
@@ -286,16 +377,19 @@ export class TaskService {
     note: string | null,
     set: Prisma.Sql,
     change: TaskChangedPayload['change'],
+    /** Who may do this, re-checked in the writing transaction (the row is locked by the UPDATE). */
+    auth: Prisma.Sql,
   ) {
     if (nextState(row.state, action) === null) {
       throw wrongState(row.state === 'completed' || row.state === 'removed' ? 'this task is closed' : `a task ${row.state.replace('_', ' ')} cannot do that`);
     }
     await this.asActor(viewer.id, note, async (tx) => {
-      // Guarded by the state it was read in: a concurrent exit wins, this one is refused.
+      // Guarded by the state it was read in -- a concurrent exit wins, this one
+      // is refused -- and by the caller's standing, decided again now.
       const [moved] = await tx.$queryRaw<Array<{ revision: number }>>`
-        UPDATE chat.work_task SET ${set}
-         WHERE id = ${row.id}::uuid AND state = ${row.state} AND revision = ${row.revision}
-         RETURNING revision`;
+        UPDATE chat.work_task t SET ${set}
+         WHERE t.id = ${row.id}::uuid AND t.state = ${row.state} AND t.revision = ${row.revision} AND ${auth}
+         RETURNING t.revision`;
       if (!moved) throw wrongState('the task changed meanwhile; reload it');
       await this.signal(tx, row.id, moved.revision, change);
     });
@@ -330,14 +424,33 @@ export class TaskService {
     if (viewer.kind !== 'staff') return null;
     const [r] = await this.prisma.$queryRaw<Array<{ standing: Standing | null }>>`
       SELECT chat.work_task_standing(${viewer.id}::uuid, ${viewer.organizationId}::uuid,
-                                     ${p.kind === 'staff' ? p.id : null}::uuid, ${p.kind === 'teacher' ? p.id : null}::uuid) AS standing`;
+                                     ${p.kind === 'staff' ? p.id : null}::uuid, ${p.kind === 'teacher' ? p.id : null}::uuid, NULL) AS standing`;
     return r?.standing ?? null;
   }
 
   private standingSql(viewer: Viewer): Prisma.Sql {
     return viewer.kind === 'staff'
-      ? Prisma.sql`chat.work_task_standing(${viewer.id}::uuid, t.organization_id, t.assignee_staff_id, t.assignee_teacher_id)`
+      ? Prisma.sql`chat.work_task_standing(${viewer.id}::uuid, t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by)`
       : Prisma.sql`NULL::text`;
+  }
+
+  /** A responsible manager or the super admin, for the task row `t`. */
+  private deciderSql(viewer: Viewer): Prisma.Sql {
+    return Prisma.sql`coalesce(${this.standingSql(viewer)} IN ('manager', 'super_admin'), false)`;
+  }
+
+  /** The assignee, while they manage a department (see reassign). */
+  private handsOwnSql(viewer: Viewer): Prisma.Sql {
+    return Prisma.sql`(${mineSql(viewer)} AND EXISTS (
+      SELECT 1 FROM chat.department d WHERE d.manager_id = ${viewer.id}::uuid AND d.organization_id = t.organization_id))`;
+  }
+
+  private async managesDepartment(viewer: Viewer): Promise<boolean> {
+    if (viewer.kind !== 'staff') return false;
+    const [r] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT EXISTS (SELECT 1 FROM chat.department d
+                      WHERE d.manager_id = ${viewer.id}::uuid AND d.organization_id = ${viewer.organizationId}::uuid) AS ok`;
+    return r?.ok === true;
   }
 
   /** `{ kind, id }` or `{ department }` (that department's manager). */
@@ -421,6 +534,7 @@ export class TaskService {
              t.closed_by::text AS closed_by, coalesce(xs.name, xt.name) AS closer_name, t.closed_at, t.close_reason,
              t.revision,
              (SELECT count(*)::int FROM chat.work_task_event e WHERE e.task_id = t.id AND e.kind = 'out_of_scope') AS disputed,
+             ${UNMANAGED} AS unmanaged,
              ${this.standingSql(viewer)} AS standing
         FROM chat.work_task t
         LEFT JOIN chat.staff a ON a.id = t.assignee_staff_id
@@ -443,6 +557,8 @@ export class TaskService {
       assigneeName: r.assignee_name ?? '',
       /** The assignee is no longer active (owner Q11): the task stays theirs until a manager reassigns it. */
       needsReassignment: !r.assignee_live,
+      /** No live manager stands to it (the assignee left their department, their manager is gone, or they are a manager): only the super admin can move it. */
+      unmanaged: r.unmanaged,
       title: r.title ?? '',
       body: r.body,
       dueAt: r.due_at?.toISOString() ?? null,
@@ -459,6 +575,8 @@ export class TaskService {
     };
   }
 }
+
+const UNMANAGED = Prisma.sql`chat.work_task_unmanaged(t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by)`;
 
 function assigneeOf(r: Pick<Row, 'assignee_staff_id' | 'assignee_teacher_id'>): Principal {
   return r.assignee_staff_id ? { kind: 'staff', id: r.assignee_staff_id } : { kind: 'teacher', id: r.assignee_teacher_id as string };

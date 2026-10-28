@@ -115,6 +115,10 @@ export const CommEvent = {
    * PD-47: a task changed (created, commented, disputed, returned, reassigned,
    * completed, removed, its due date). A refetch signal, not content: ids and
    * the revision only. No conversationId.
+   * TODO(PD-47 PR-4): delivered by OutboxWorker to the assignee, the previous
+   * assignee and the responsible managers' actor rooms, beside #223's
+   * deliverCase; until then it falls to the worker's default branch and reaches
+   * no one.
    */
   TASK_CHANGED: 'task.changed',
   /** PD-11 T3, for Core: a learner changed teacher in Chat. */
