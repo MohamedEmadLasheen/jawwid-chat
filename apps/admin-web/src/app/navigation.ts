@@ -17,7 +17,7 @@ import type { IconName } from '@/shared/components/Icon'
  * answer "forbidden". (Listing is UX, not security: the server decides.)
  */
 
-export type DestinationKey = 'conversations' | 'calls' | 'people' | 'stories' | 'more'
+export type DestinationKey = 'conversations' | 'dashboard' | 'calls' | 'people' | 'stories' | 'more'
 
 type OperatorArea = Exclude<NavArea, 'settings'>
 
@@ -49,6 +49,8 @@ export interface Destination {
 
 export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label: Bilingual }[] = [
   { key: 'conversations', icon: 'conversations', label: { en: 'Conversations', ar: 'المحادثات' } },
+  // PD-44: a manager's Dashboard is one click from anywhere, beside the chats it counts.
+  { key: 'dashboard', icon: 'dashboard', label: { en: 'Dashboard', ar: 'لوحة المتابعة' } },
   { key: 'calls', icon: 'calls', label: { en: 'Calls', ar: 'المكالمات' } },
   { key: 'people', icon: 'users', label: { en: 'People & teams', ar: 'الأشخاص والفرق' } },
   { key: 'stories', icon: 'stories', label: { en: 'Stories', ar: 'الحالات' } },
@@ -104,7 +106,9 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   tasks: 'more',
   // PD-35 B5: escalation cases, for every operator who may open or own one.
   cases: 'people',
-  dashboard: 'more',
+  // PD-44: out of More, its own destination (the super admin's stays in the
+  // Admin Portal's More until PD-44 PR-8).
+  dashboard: 'dashboard',
   settings: null,
 }
 

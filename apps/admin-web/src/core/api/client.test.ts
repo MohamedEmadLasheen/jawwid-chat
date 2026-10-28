@@ -81,7 +81,7 @@ describe('api client', () => {
 
   it('falls back to a readable message when the server sends none', async () => {
     fetchMock.mockResolvedValue(jsonResponse({}, 500))
-    await expect(api.get('/dashboard/header')).rejects.toMatchObject({
+    await expect(api.get('/dashboard/chats')).rejects.toMatchObject({
       status: 500,
       messageEn: 'Something went wrong on our side.',
     })
