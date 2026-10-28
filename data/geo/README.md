@@ -31,3 +31,4 @@ python3 -I scripts/geo/build-dataset.py --cldr <that-dir> --check   # or without
 - **Some names fall back.** Outside the eight core markets, a subdivision with no Arabic name in CLDR shows its English name. The dataset's `fallbacks` lists every one.
 - **A CLDR upgrade** is a new pin, a rebuild, and a new migration. A code CLDR retires is never deleted: it gets `retired_at`, so a stored value never dangles.
 - **Changing `overlay.json`** changes its SHA-256. The R-45a sign-off then no longer covers it, and the reviewer must sign it off again.
+- **Three CLDR Arabic names are withheld** (`overlay.json` → `arabicWithheld`): Cundinamarca (CO-CUN), Vojvodina (RS-VO) and one Slovenian municipality (SI-159). Each contains one of the protected staff names of G-20 as a substring, so the guard would rightly stop the file. They are shown in English, and `fallbacks` lists them. A future CLDR name that trips G-20 is handled the same way, never by weakening the guard.

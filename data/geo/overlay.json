@@ -14,6 +14,10 @@
     "US": { "en": "State", "ar": "الولاية" },
     "CA": { "en": "Province / territory", "ar": "المقاطعة / الإقليم" }
   },
+  "arabicWithheld": {
+    "about": "CLDR Arabic names that contain a protected staff name as a substring (release gate G-20). They are shown in English, and dataset.json's fallbacks lists each one.",
+    "codes": ["CO-CUN", "RS-VO", "SI-159"]
+  },
   "countries": {
     "SA": { "ar": "السعودية" },
     "PS": { "en": "Palestine", "ar": "فلسطين" }

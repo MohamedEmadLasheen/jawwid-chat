@@ -113,6 +113,7 @@ def build(cldr):
         if code not in regions:
             raise SystemExit(f'geo: the overlay names {code}, which is not a country in CLDR {manifest["version"]}')
 
+    withheld = set(overlay['arabicWithheld']['codes'])
     fallbacks = []
 
     def pick(code, found, override):
@@ -144,12 +145,18 @@ def build(cldr):
             override = overlay['subdivisions'].get(code, {})
             if override:
                 used_overrides.add(code)
-            n = pick(code, {'en': sub_names['en'].get(sid), 'ar': sub_names['ar'].get(sid)}, override)
+            if code in withheld:
+                withheld.discard(code)
+                n = pick(code, {'en': sub_names['en'].get(sid), 'ar': None}, override)
+            else:
+                n = pick(code, {'en': sub_names['en'].get(sid), 'ar': sub_names['ar'].get(sid)}, override)
             subs.append({'code': code, 'en': n['en'], 'ar': n['ar']})
         subs.sort(key=lambda s: s['code'])
         n = pick(cc, {'en': country_names['en'].get(cc), 'ar': country_names['ar'].get(cc)}, overlay['countries'].get(cc, {}))
         countries.append({'code': cc, 'en': n['en'], 'ar': n['ar'], 'label': overlay['labels'].get(cc), 'subdivisions': subs})
 
+    if withheld:
+        raise SystemExit(f'geo: the overlay withholds subdivisions CLDR does not list at first level: {", ".join(sorted(withheld))}')
     unused = sorted(set(overlay['subdivisions']) - used_overrides)
     if unused:
         raise SystemExit(f'geo: the overlay names subdivisions CLDR does not list at first level: {", ".join(unused)}')

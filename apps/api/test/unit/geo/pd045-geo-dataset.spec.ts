@@ -33,6 +33,7 @@ interface Overlay {
   labels: Record<string, Names>;
   defaultLabel: Names;
   pinned: string[];
+  arabicWithheld: { codes: string[] };
   countries: Record<string, Partial<Names>>;
   subdivisions: Record<string, Partial<Names>>;
 }
@@ -172,6 +173,14 @@ describe('PD-45 geo dataset: the names', () => {
     for (const [code, names] of Object.entries(overlay.countries)) {
       if (names.ar) expect(byCode.get(code)!.ar).toBe(names.ar);
       if (names.en) expect(byCode.get(code)!.en).toBe(names.en);
+    }
+  });
+
+  it('shows in English a CLDR Arabic name the overlay withholds (G-20), and says so in the fallbacks', () => {
+    for (const code of overlay.arabicWithheld.codes) {
+      const s = byCode.get(code.slice(0, 2))!.subdivisions.find((x) => x.code === code)!;
+      expect(s.ar).toBe(s.en);
+      expect(dataset.fallbacks).toContain(`${code}:ar<-en`);
     }
   });
 
