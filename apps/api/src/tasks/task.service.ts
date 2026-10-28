@@ -222,7 +222,7 @@ export class TaskService {
                 ${assignee.kind === 'staff' ? assignee.id : null}::uuid, ${assignee.kind === 'teacher' ? assignee.id : null}::uuid,
                 ${title}, ${detail}, ${dueAt}::timestamptz, ${viewer.id}::uuid, ${priority}, ${category})
         RETURNING id::text AS id, revision`;
-      await this.signal(tx, row.id, row.revision, 'created');
+      await this.signal(tx, row.id, row.revision, 'created', { actorId: viewer.id, toAssignee: assignee.id });
       return row.id;
     });
     return this.summary(await this.load(viewer, id));
@@ -239,7 +239,13 @@ export class TaskService {
    * crossing a boundary while someone pages never moves between pages. Closed
    * tasks come newest first.
    */
-  async list(actorId: string, query: { view: string; state?: string; cursor?: string; level?: string; category?: string; overdue?: string; limit?: string }) {
+  async list(actorId: string, query: {
+    view: string; state?: string; cursor?: string; level?: string; category?: string; overdue?: string; limit?: string;
+    /** PR-4: only tasks whose assignee left (the Dashboard's needs_reassignment). */
+    gone?: string;
+    /** PR-4: only tasks no live manager stands to (the super admin's unmanaged). */
+    unmanaged?: string;
+  }) {
     const viewer = await this.requireViewer(actorId);
     const view = query.view as TaskView;
     if (!(TASK_VIEWS as readonly string[]).includes(view)) throw invalid('view: mine, team, decisions or all');
@@ -279,7 +285,13 @@ export class TaskService {
     const filters = category ? Prisma.sql`t.category = ${category}` : Prisma.sql`true`;
     const overdue =
       query.overdue === 'true' ? Prisma.sql`r.eff_overdue` : query.overdue === 'false' ? Prisma.sql`NOT r.eff_overdue` : Prisma.sql`true`;
-    const outer = Prisma.sql`${level ? Prisma.sql`r.eff_level = ${level}` : Prisma.sql`true`} AND ${overdue} AND ${afterSql(cursor)}`;
+    for (const [name, v] of [['gone', query.gone], ['unmanaged', query.unmanaged]] as const) {
+      if (v !== undefined && v !== '' && v !== 'true') throw invalid(`${name}: true`);
+    }
+    // Each Dashboard tile is one of these lists, counted (tile == list).
+    const gone = query.gone === 'true' ? Prisma.sql`NOT r.assignee_live` : Prisma.sql`true`;
+    const unmanagedOnly = query.unmanaged === 'true' ? Prisma.sql`r.unmanaged` : Prisma.sql`true`;
+    const outer = Prisma.sql`${level ? Prisma.sql`r.eff_level = ${level}` : Prisma.sql`true`} AND ${overdue} AND ${gone} AND ${unmanagedOnly} AND ${afterSql(cursor)}`;
     const limit = query.limit === undefined || query.limit === '' ? PAGE : Number(query.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > PAGE) throw invalid(`limit: 1 to ${PAGE}`);
     const rows = await this.rows(
@@ -439,10 +451,23 @@ export class TaskService {
    * PD-47 PR-4: tasks that passed their due date since the last pass, each
    * announced once per due date (chat.work_task_overdue_notice, PD-35 B5's
    * notice pattern): a `task.changed` signal with change 'overdue', which the
-   * outbox worker turns into the assignee's notice. A re-dated task that goes
-   * overdue again is announced again. Returns how many were announced.
+   * outbox worker turns into a notice (the assignee's; the decider's while it
+   * waits on a decision). A re-dated task that goes overdue again is announced
+   * again. A task whose work went away (withdrawn) is not announced: nobody
+   * must do it any more. Batch after batch until none is left (at most
+   * `rounds`). Returns how many were announced.
    */
-  async sweepOverdue(batch = 200): Promise<number> {
+  async sweepOverdue(batch = 200, rounds = 25): Promise<number> {
+    let total = 0;
+    for (let i = 0; i < rounds; i++) {
+      const n = await this.sweepOverdueOnce(batch);
+      total += n;
+      if (n < batch) break;
+    }
+    return total;
+  }
+
+  private async sweepOverdueOnce(batch: number): Promise<number> {
     return this.prisma.$transaction(async (tx) => {
       const due = await tx.$queryRaw<Array<{ id: string; revision: number }>>`
         WITH overdue AS (
@@ -451,6 +476,7 @@ export class TaskService {
             CROSS JOIN LATERAL chat.work_task_effective(t.priority, t.floor_rule, t.due_at, t.source_floor, t.state,
                                                          now(), chat.work_task_academy_zone()) e
            WHERE t.state IN ('open', 'awaiting_decision') AND t.due_at IS NOT NULL AND e.overdue
+             AND t.source_state IS DISTINCT FROM 'withdrawn'
              AND NOT EXISTS (SELECT 1 FROM chat.work_task_overdue_notice n WHERE n.task_id = t.id AND n.due_at = t.due_at)
            ORDER BY t.due_at, t.id
            LIMIT ${batch}
@@ -604,7 +630,7 @@ export class TaskService {
                 ${assigneeOf(row).id}::uuid, ${note})`;
       const [after] = await tx.$queryRaw<Array<{ revision: number }>>`
         SELECT revision FROM chat.work_task WHERE id = ${row.id}::uuid`;
-      await this.signal(tx, row.id, after.revision, 'commented');
+      await this.signal(tx, row.id, after.revision, 'commented', { actorId: viewer.id });
     });
     return this.summary(await this.load(viewer, row.id));
   }
@@ -717,18 +743,28 @@ export class TaskService {
     await this.asActor(viewer.id, note, async (tx) => {
       // Guarded by the state it was read in -- a concurrent exit wins, this one
       // is refused -- and by the caller's standing, decided again now.
-      const [moved] = await tx.$queryRaw<Array<{ revision: number }>>`
+      const [moved] = await tx.$queryRaw<Array<{ revision: number; assignee: string }>>`
         UPDATE chat.work_task t SET ${set}
          WHERE t.id = ${row.id}::uuid AND t.state = ${row.state} AND t.revision = ${row.revision} AND ${auth}
-         RETURNING t.revision`;
+         RETURNING t.revision, coalesce(t.assignee_staff_id, t.assignee_teacher_id)::text AS assignee`;
       if (!moved) throw wrongState('the task changed meanwhile; reload it');
-      await this.signal(tx, row.id, moved.revision, change);
+      // Who did it and, for a hand-on, whom it left and reached -- as of THIS change.
+      await this.signal(tx, row.id, moved.revision, change, {
+        actorId: viewer.id,
+        ...(change === 'reassigned' ? { fromAssignee: assigneeOf(row).id, toAssignee: moved.assignee } : {}),
+      });
     });
     return this.summary(await this.load(viewer, row.id));
   }
 
-  private signal(tx: Prisma.TransactionClient, taskId: string, revision: number, change: TaskChangedPayload['change']) {
-    return this.outbox.enqueue(tx, CommEvent.TASK_CHANGED, { taskId, revision, change });
+  private signal(
+    tx: Prisma.TransactionClient,
+    taskId: string,
+    revision: number,
+    change: TaskChangedPayload['change'],
+    at: Pick<TaskChangedPayload, 'actorId' | 'fromAssignee' | 'toAssignee'> = {},
+  ) {
+    return this.outbox.enqueue(tx, CommEvent.TASK_CHANGED, { taskId, revision, change, ...at });
   }
 
   /** The live person behind `actorId`: staff or a teacher, of an organization. */

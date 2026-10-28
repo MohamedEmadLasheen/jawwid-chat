@@ -735,23 +735,29 @@ export class OutboxWorker {
   }
 
   /**
-   * PD-47 PR-4 (plan §3.10-§3.11). The task is read NOW; the payload only says
-   * which task, at which revision, and what kind of change.
+   * PD-47 PR-4 (plan §3.10-§3.11). The task's STATE is read now; WHO did the
+   * change, and for a hand-on whom it left and reached, come from the payload,
+   * written with the change -- the task may have moved on since, and its
+   * newest event is not this one.
    *
-   *   signalled  every list that changed: the assignee, the person it left
-   *              (a hand-on), the responsible managers, and the super admin
-   *              while it waits on a decision -- `task.changed`, ids only
+   *   signalled  every list that changed: the assignee, the person it left (a
+   *              hand-on), the responsible managers, a teacher's supervisors
+   *              (who read their tasks), and the super admin while it waits on
+   *              a decision -- `task.changed`, ids only
    *   told       the one who must act now, a PD-34 'task' entry (action
    *              open_task) with a generic push:
-   *                created, reassigned  the assignee (a lesson report is not
-   *                                     announced when created: the teacher
+   *                created, reassigned  the person it reached, if it is still
+   *                                     theirs (a lesson report is not
+   *                                     announced when raised: the teacher
    *                                     just taught it; it is when overdue)
    *                returned             the assignee
-   *                out_of_scope         the responsible managers (else the
-   *                                     super admin)
-   *                overdue              the assignee, once per due date
-   *   settled    when it leaves a person (handed on, completed, removed) their
-   *              entries stop asking anything of them
+   *                out_of_scope         the responsible managers, else the
+   *                                     super admin
+   *                overdue              the assignee, once per due date; the
+   *                                     decider while it waits on a decision
+   *   settled    entries stop asking anything of whoever no longer must act:
+   *              the person it left, the deciders once decided, everyone once
+   *              closed, the old "overdue" once re-dated
    *
    * Never told: the person who did it. Never in any text: the task's title, an
    * amount, a card, a family or a child (a lock screen is not behind sign-in).
@@ -761,21 +767,25 @@ export class OutboxWorker {
     const change = payload.change as string | undefined;
     const revision = Number(payload.revision ?? 0);
     if (!taskId || !change) return;
+    const actor = typeof payload.actorId === 'string' ? payload.actorId : null;
+    const left = typeof payload.fromAssignee === 'string' ? payload.fromAssignee : null;
+    const reached = typeof payload.toAssignee === 'string' ? payload.toAssignee : null;
     const [t] = await this.prisma.$queryRaw<Array<{
-      organization_id: string; state: string; source_type: string | null; assignee: string; due_at: Date | null;
-      unmanaged: boolean; actor: string | null; left: string | null; managers: string[]; admins: string[];
+      state: string; source_type: string | null; assignee: string; due_at: Date | null;
+      unmanaged: boolean; managers: string[]; readers: string[]; admins: string[];
     }>>`
-      SELECT t.organization_id::text AS organization_id, t.state, t.source_type, t.due_at,
+      SELECT t.state, t.source_type, t.due_at,
              coalesce(t.assignee_staff_id, t.assignee_teacher_id)::text AS assignee,
              chat.work_task_unmanaged(t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by) AS unmanaged,
-             -- Who did it, and whom it left: the latest event of its kind.
-             (SELECT e.actor_id::text FROM chat.work_task_event e WHERE e.task_id = t.id ORDER BY e.at DESC, e.id DESC LIMIT 1) AS actor,
-             (SELECT e.from_assignee::text FROM chat.work_task_event e WHERE e.task_id = t.id AND e.kind = 'reassigned'
-               ORDER BY e.at DESC, e.id DESC LIMIT 1) AS left,
              ARRAY(SELECT s.id::text FROM chat.staff s
                     WHERE s.organization_id = t.organization_id AND s.is_active AND s.left_at IS NULL
                       AND chat.work_task_standing(s.id, t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by) = 'manager'
                     ORDER BY s.id) AS managers,
+             -- A teacher's supervisors read their tasks (owner Q3): their lists change too.
+             ARRAY(SELECT s.id::text FROM chat.staff s
+                    WHERE s.organization_id = t.organization_id AND s.is_active AND s.left_at IS NULL
+                      AND chat.work_task_standing(s.id, t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by) = 'supervisor'
+                    ORDER BY s.id) AS readers,
              ARRAY(SELECT s.id::text FROM chat.staff s
                     WHERE s.organization_id = t.organization_id AND s.role = 'super_admin' AND s.is_active AND s.left_at IS NULL
                     ORDER BY s.id) AS admins
@@ -784,42 +794,66 @@ export class OutboxWorker {
     if (!t) return;
     const pending = t.state === 'open' || t.state === 'awaiting_decision';
     const deciding = t.state === 'awaiting_decision' || t.unmanaged;
-    const signalled = [...new Set([t.assignee, change === 'reassigned' ? t.left : null, ...t.managers, ...(deciding ? t.admins : [])]
+    const signalled = [...new Set([t.assignee, left, ...t.managers, ...t.readers, ...(deciding ? t.admins : [])]
       .filter((x): x is string => !!x))];
     if (signalled.length > 0) {
       await this.realtime.toUsers(signalled, CommEvent.TASK_CHANGED, { taskId, revision, change } as never);
     }
     if (!this.pipeline) return;
 
-    // Settled first: a person it left, or everyone once it is closed.
-    if (change === 'completed' || t.state === 'completed') await this.pipeline.taskLeft(taskId, 'done');
-    else if (change === 'removed' || t.state === 'removed') await this.pipeline.taskLeft(taskId, 'cancelled');
+    // Settled first.
+    if (t.state === 'completed') await this.pipeline.taskLeft(taskId, 'done');
+    else if (t.state === 'removed') await this.pipeline.taskLeft(taskId, 'cancelled');
     else if (change === 'reassigned') await this.pipeline.taskLeft(taskId, 'cancelled', t.assignee);
+    else if (change === 'returned') await this.pipeline.taskLeft(taskId, 'done', t.assignee, ['task_out_of_scope']);
+    else if (change === 'due_changed') await this.pipeline.taskLeft(taskId, 'done', null, ['task_overdue']);
     if (!pending) return;
 
-    const notFor = (ids: Array<string | null>) => [...new Set(ids.filter((x): x is string => !!x && x !== t.actor))];
+    const notFor = (ids: Array<string | null>) => [...new Set(ids.filter((x): x is string => !!x && x !== actor))];
+    // The deciders: the responsible managers, else the super admin.
+    const deciders = (() => {
+      const pool = notFor(t.managers);
+      return pool.length > 0 ? pool : notFor(t.admins);
+    })();
     let told: string[] = [];
     let ruleKey: 'task_assigned' | 'task_returned' | 'task_out_of_scope' | 'task_overdue' | null = null;
     let key = String(revision);
+    let status: 'open' | 'escalated' = 'open';
     if ((change === 'created' && t.source_type !== 'lesson_report') || change === 'reassigned') {
+      // Only if it is still theirs: a later hand-on tells whoever it reached then.
+      const to = reached ?? t.assignee;
       ruleKey = 'task_assigned';
-      told = notFor([t.assignee]);
+      told = to === t.assignee ? notFor([to]) : [];
     } else if (change === 'returned') {
       ruleKey = 'task_returned';
       told = notFor([t.assignee]);
     } else if (change === 'out_of_scope' && t.state === 'awaiting_decision') {
       ruleKey = 'task_out_of_scope';
-      told = notFor(t.managers.length > 0 ? t.managers : t.admins);
+      status = 'escalated';
+      told = deciders;
     } else if (change === 'overdue' && t.due_at) {
       // Once per due date: re-dated and overdue again is a new notice.
       ruleKey = 'task_overdue';
       key = String(t.due_at.getTime());
-      told = [t.assignee];
+      if (t.state === 'awaiting_decision') {
+        status = 'escalated';
+        told = deciders;
+      } else {
+        told = [t.assignee];
+      }
     }
     if (!ruleKey) return;
     for (const recipientId of told) {
       const recipient = await this.identity.resolveActor(recipientId);
       if (!recipient || !recipient.isActive) continue;
+      // Handed away and back before reading it: one "given" that still asks is enough.
+      if (ruleKey === 'task_assigned') {
+        const asking = await this.prisma.notificationItem.findFirst({
+          where: { subjectType: 'task', subjectId: taskId, recipientId, eventType: 'task_assigned', actedAt: null },
+          select: { id: true },
+        });
+        if (asking) continue;
+      }
       await this.pipeline.emit({
         dedupeKey: `${ruleKey}:${taskId}:${key}:${recipientId}`,
         ruleKey,
@@ -831,7 +865,7 @@ export class OutboxWorker {
         subject: { type: 'task', id: taskId },
         refs: { taskId },
         scheduledAt: new Date(),
-        task: { ownerId: recipientId, dueAt: t.due_at, status: ruleKey === 'task_out_of_scope' ? 'escalated' : 'open' },
+        task: { ownerId: recipientId, dueAt: t.due_at, status },
       });
     }
   }

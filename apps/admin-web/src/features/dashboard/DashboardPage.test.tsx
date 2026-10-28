@@ -176,7 +176,7 @@ describe('the manager Dashboard', () => {
     expect(screen.getByRole('link', { name: /Financial tasks \(mine\)/ })).toHaveAttribute('href', '/tasks?category=financial')
     expect(screen.getByRole('link', { name: /Overdue tasks \(my team\)/ })).toHaveAttribute('href', '/tasks?tab=team&overdue=true')
     expect(screen.getByRole('link', { name: /waiting for my decision/ })).toHaveAttribute('href', '/tasks?tab=decisions')
-    expect(screen.getByRole('link', { name: /assignee left/ })).toHaveAttribute('href', '/tasks?tab=team')
+    expect(screen.getByRole('link', { name: /assignee left/ })).toHaveAttribute('href', '/tasks?tab=team&gone=true')
   })
 
   it('shows the Lessons section: today by outcome, and the outcome queue where the server sends it (PR-3)', async () => {

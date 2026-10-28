@@ -451,11 +451,17 @@ export class NotificationPipeline {
    * PD-47 PR-4: a task left these people (done, removed, or handed to someone
    * else): their entries about it no longer ask anything of them. Marked acted,
    * with where the task went; the entries stay as history. `keep` is the person
-   * it is still with, whose entry stands.
+   * it is still with, whose entries stand; `only` narrows it to some kinds of
+   * entry (a decision taken settles the deciders' "decision waiting"; a new due
+   * date settles the old "overdue").
    */
-  async taskLeft(taskId: string, status: 'done' | 'cancelled', keep: string | null = null): Promise<number> {
+  async taskLeft(taskId: string, status: 'done' | 'cancelled', keep: string | null = null, only?: readonly string[]): Promise<number> {
     const result = await this.prisma.notificationItem.updateMany({
-      where: { subjectType: 'task', subjectId: taskId, actedAt: null, ...(keep ? { recipientId: { not: keep } } : {}) },
+      where: {
+        subjectType: 'task', subjectId: taskId, actedAt: null,
+        ...(keep ? { recipientId: { not: keep } } : {}),
+        ...(only ? { eventType: { in: [...only] } } : {}),
+      },
       data: { actedAt: new Date(), taskStatus: status },
     });
     return result.count;

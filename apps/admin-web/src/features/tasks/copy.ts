@@ -20,6 +20,9 @@ export const C = {
   anyKind: { en: 'Any kind', ar: 'كل الأنواع' },
   operational: { en: 'Operational', ar: 'تشغيلية' },
   overdueOnly: { en: 'Overdue only', ar: 'المتأخرة فقط' },
+  goneOnly: { en: 'Assignee left', ar: 'غادر المسند إليه' },
+  unmanagedOnly: { en: 'No manager can move it', ar: 'لا يستطيع أي مدير نقلها' },
+  clearFilter: { en: 'Clear "{filter}"', ar: 'إلغاء «{filter}»' },
   whose: { en: 'Whose', ar: 'لمن' },
   // A row
   assignedTo: { en: 'Assigned to {name}', ar: 'مسندة إلى {name}' },

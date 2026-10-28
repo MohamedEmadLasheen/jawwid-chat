@@ -82,14 +82,15 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     label: { en: 'Tasks whose assignee left', ar: 'مهام غادر المسند إليه' },
     icon: 'users',
     backlog: true,
-    href: (present) => (present.has('tasks.all_open') ? '/tasks?tab=all' : '/tasks?tab=team'),
+    // The same list, filtered to an assignee who left (tile == list).
+    href: (present) => (present.has('tasks.all_open') ? '/tasks?tab=all&gone=true' : '/tasks?tab=team&gone=true'),
   },
   'tasks.unmanaged': {
     label: { en: 'Tasks no manager can move', ar: 'مهام لا يستطيع أي مدير نقلها' },
     icon: 'alert',
     backlog: true,
-    // The super admin's Decisions hold every task no manager stands to.
-    href: () => '/tasks?tab=decisions',
+    // Every task no live manager stands to (tile == list).
+    href: () => '/tasks?tab=all&unmanaged=true',
   },
   'chats.waiting': {
     label: { en: 'Chats waiting for our reply', ar: 'محادثات تنتظر ردّنا' },

@@ -19,7 +19,7 @@ export class TaskController {
   @SelfService()
   @Get('me/tasks')
   mine(@ActorId() actorId: string, @Query() q: Record<string, string | undefined>) {
-    return this.tasks.list(actorId, { view: 'mine', state: q.state, cursor: q.cursor, level: q.level, category: q.category, overdue: q.overdue, limit: q.limit });
+    return this.tasks.list(actorId, { view: 'mine', state: q.state, cursor: q.cursor, level: q.level, category: q.category, overdue: q.overdue, limit: q.limit, gone: q.gone });
   }
 
   /**
@@ -33,6 +33,7 @@ export class TaskController {
   list(@ActorId() actorId: string, @Query() q: Record<string, string | undefined>) {
     return this.tasks.list(actorId, {
       view: q.view ?? '', state: q.state, cursor: q.cursor, level: q.level, category: q.category, overdue: q.overdue, limit: q.limit,
+      gone: q.gone, unmanaged: q.unmanaged,
     });
   }
 
