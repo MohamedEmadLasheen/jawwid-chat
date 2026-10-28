@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry quran-dataset pd040-routes ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry quran-dataset pd040-routes lessons-supply-chain ci-wiring"
 
 title() {
   case "$1" in
@@ -202,6 +202,7 @@ title() {
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
     quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
     pd040-routes)  echo "PD-40 · every API route declares the permission it asks of staff" ;;
+    lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -359,6 +360,24 @@ gate_pd040_routes() {
   fi
   "$PYTHON" -I scripts/qa/check-route-permissions.py selftest || return 1
   "$PYTHON" -I scripts/qa/check-route-permissions.py check
+}
+
+gate_lessons_supply_chain() {
+  # apps/lessons (PD-29 materials quality P0-3) is written from scratch; the old
+  # lessons repo was infected through its build config. Exact pins, every locked
+  # package from registry.npmjs.org with integrity, no unlisted install scripts,
+  # none of the infected family's markers in any git-listed file, no postcss/tailwind
+  # config, .vscode or nested node_modules/dist, no unlisted binary, nothing
+  # imported or aliased from outside apps/lessons; and the
+  # Quran snapshot builds only from the verified dataset. The selftest proves
+  # each check can fail.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the lessons-supply-chain gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/qa/check-lessons-supply-chain.py selftest || return 1
+  "$PYTHON" -I scripts/qa/check-lessons-supply-chain.py || return 1
+  "$PYTHON" -I scripts/lessons/test_build_quran_snapshot.py
 }
 
 gate_ci_wiring() {
