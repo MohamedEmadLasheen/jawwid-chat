@@ -210,8 +210,12 @@ BUILD_TIME	release	no	opt	req	req
 # SMTP_URL + RECOVERY_MAIL_FROM; WhatsApp needs WHATSAPP_PHONE_NUMBER_ID +
 # WHATSAPP_ACCESS_TOKEN + WHATSAPP_RECOVERY_TEMPLATE (an APPROVED Meta
 # authentication template). SMTP_URL embeds the SMTP password, so it is secret.
-SMTP_URL	recovery	yes	opt	opt	opt
-RECOVERY_MAIL_FROM	recovery	no	opt	opt	opt
+# REQUIRED in production (department head, 2026-10-28): e-mail also carries the
+# first-login and reset codes staff and teachers depend on (PD-40, PD-43), so a
+# production without it strands people at sign-in. Both halves are required:
+# SMTP_URL alone still leaves the e-mail channel off.
+SMTP_URL	recovery	yes	opt	opt	req
+RECOVERY_MAIL_FROM	recovery	no	opt	opt	req
 WHATSAPP_PHONE_NUMBER_ID	recovery	no	opt	opt	opt
 WHATSAPP_ACCESS_TOKEN	recovery	yes	opt	opt	opt
 WHATSAPP_RECOVERY_TEMPLATE	recovery	no	opt	opt	opt

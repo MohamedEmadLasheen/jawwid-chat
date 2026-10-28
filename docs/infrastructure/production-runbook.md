@@ -18,7 +18,8 @@ staging.
 3. Approve the `production` environment when prompted.
 4. The workflow then, in order: rebuilds the production Admin Web image
    (ADR-006) → checks the deploy credentials → validates configuration and
-   resolves `.do/app.production.yaml` → backs up the database
+   resolves `.do/app.production.yaml` → checks the bucket still keeps deleted
+   objects for 30 days (versioning + lifecycle) → backs up the database
    (encrypted; refused without the `BACKUP_ENCRYPTION_PASSPHRASE` secret)
    → uploads the backup as a 30-day artifact → applies migrations → releases
    with `doctl apps update` and confirms the ACTIVE deployment runs the new
@@ -94,6 +95,44 @@ drop the old — in a later release. Each step is independently reversible.
 
 **Configuration rollback:** revert the variable in the environment and redeploy.
 Configuration is not versioned with the code; a change to it is a deployment.
+
+## 3a. Restore a deleted or overwritten file (object storage)
+
+The bucket keeps every deleted or overwritten object for **30 days**
+(`backup-recovery.md` §1a). Restoring copies an old version back on top. It
+needs a storage key with read and write on the bucket, held by an authorised
+operator. Never paste the key into a ticket or a chat.
+
+```bash
+export AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=…   # in your shell only
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+E=https://fra1.digitaloceanspaces.com B=<bucket>
+
+# 1. Find the object's key. It is in Postgres (e.g. chat.message_attachment.object_key),
+#    never guessed. Then list its versions:
+aws --endpoint-url $E s3api list-object-versions --bucket $B --prefix '<object-key>' \
+  --query '{versions: Versions[].[VersionId,LastModified,Size,IsLatest], deleted: DeleteMarkers[].[VersionId,LastModified,IsLatest]}'
+
+# 2. Copy the version you want back. It becomes the current object again:
+aws --endpoint-url $E s3api copy-object --bucket $B --key '<object-key>' \
+  --copy-source "$B/<object-key>?versionId=<VersionId>"
+
+# 3. Confirm:
+aws --endpoint-url $E s3api head-object --bucket $B --key '<object-key>'
+```
+
+* **Restore only to the same key.** The API authorises by key and namespace.
+  A file copied to a new key is unreferenced, and is never served.
+* **Undoing a deletion of the database row** (a message deleted in the app) is
+  a database restore, not this. Restoring the bytes alone brings back nothing
+  the app can show.
+* **A file an admin deliberately deleted** (moderation, a privacy request) must
+  not be restored without the same authority that ordered the deletion. To
+  make such a deletion permanent before 30 days, delete each version by
+  `--version-id`. Record why.
+* This exact procedure (delete, find the version, copy back, compare bytes) is
+  what `scripts/infra/storage-versioning.sh --verify-expiry start` drills on
+  the `_lifecycle-probe/` prefix.
 
 ## 4. Restart a service
 
