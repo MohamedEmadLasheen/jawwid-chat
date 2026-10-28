@@ -37,12 +37,24 @@ export interface AudioArchive {
   extractedManifestSha256: string | null;
 }
 
+/**
+ * How the publisher names its files, derived from the archive's own listing and
+ * reviewed: `ayah` is anchored and captures (surah, ayah); each extra is a file
+ * the reviewer has named in advance, reported and never ingested. Any other
+ * file is a reject.
+ */
+export interface AudioNaming {
+  ayah: RegExp;
+  extras: Array<{ pattern: RegExp; reason: string }>;
+}
+
 export interface AudioSourceSpec {
   reciter: string;
   name: string;
   attribution: string;
   licence: AudioLicence | null;
   archives: AudioArchive[];
+  naming: AudioNaming;
 }
 
 /**
@@ -64,9 +76,24 @@ export const KFGQPC_HUDHAIFY: AudioSourceSpec = {
       url: 'https://download.qurancomplex.gov.sa/new-sounds/huthify-01/hafs/huthify-ayat.rar',
       sha256: 'ad50fd0d8c362f6967141b5240cdbac4089efaf6d3a46ef159c3c8aaa05371f5',
       bytes: 842634506,
-      extractedManifestSha256: null,
+      // The first verified extraction (2026-10-28, macOS bsdtar 3.7.4): 6,350 files,
+      // 6,236 ayat mapped, 114 known extras, 0 rejects, all decoded.
+      extractedManifestSha256: '7daf7f2ac325e08d2c78f52215ff3ebded8e0b29cb968baadec847cc80fe1a69',
     },
   ],
+  // From the listing of the verified archive (2026-10-28): 6,350 files under
+  // `الحذيفي-ايات/<SSS> <name>/`. 5,950 ayat as 10-SSSAAA-A01.mp3 and Al-Baqarah's
+  // 286 as 10-002AAA-001.mp3 (6,236 in all); one Basmala per surah as
+  // 10-SSSC00-*.mp3 (112); the Isti'adha as 10-000B00-A01.mp3; and one Sound
+  // Forge peak file (.sfk), editor data. MP3, 22,050 Hz stereo, 64 kbps.
+  naming: {
+    ayah: /^10-(\d{3})(\d{3})-(?:A01|001)\.mp3$/,
+    extras: [
+      { pattern: /^10-(?!000)\d{3}C00-(?:A01|001)\.mp3$/, reason: 'the surah\'s Basmala as its own file (the audio of an ayah is the verse alone)' },
+      { pattern: /^10-000B00-A01\.mp3$/, reason: 'the Isti\'adha, not an ayah' },
+      { pattern: /^10-000B00-A01\.mp3\.sfk$/, reason: 'a Sound Forge peak file: editor data, not audio' },
+    ],
+  },
 };
 
 export const AUDIO_SOURCES: ReadonlyMap<string, AudioSourceSpec> = new Map([[KFGQPC_HUDHAIFY.reciter, KFGQPC_HUDHAIFY]]);

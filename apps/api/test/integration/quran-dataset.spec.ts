@@ -162,7 +162,7 @@ beforeAll(async () => {
   const moduleRef = await Test.createTestingModule({ imports: [PlatformModule, AuthModule, QuranModule] })
     .overrideProvider(QURAN_PINNED).useValue(new Map([[DATASET, pinned]]))
     // A test recitation pinned like a real one, with NO licence recorded (so staff only).
-    .overrideProvider(QURAN_AUDIO_SOURCES).useValue(new Map([[AUDIO_RECITER, { reciter: AUDIO_RECITER, name: 'test', attribution: 'test', licence: null, archives: [] }]]))
+    .overrideProvider(QURAN_AUDIO_SOURCES).useValue(new Map([[AUDIO_RECITER, { reciter: AUDIO_RECITER, name: 'test', attribution: 'test', licence: null, archives: [], naming: { ayah: /^$/, extras: [] } }]]))
     .compile();
   app = moduleRef.createNestApplication({ logger: false });
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/live', 'health/ready'] });

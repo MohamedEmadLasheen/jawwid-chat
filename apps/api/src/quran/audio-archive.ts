@@ -20,10 +20,12 @@ import type { AudioArchive, AudioSourceSpec } from './audio-sources';
  *     under the size cap, and its manifest (each file's path, size and
  *     SHA-256) must hash to the value pinned for the archive. Until that value
  *     is pinned, the plan is never complete, so nothing can be written.
- *  3. Each file is mapped by its name, `SSSAAA.mp3`, to one real ayah (the surah
- *     counts of materials/quran-surahs.ts, which the verified dataset is checked
- *     against). `SSS000` is a Basmala file, a known extra: reported, not
- *     ingested. Anything else is a reject, with its reason.
+ *  3. Each file is mapped by its name, with the source's reviewed naming rule
+ *     (audio-sources.ts), to one real ayah (the surah counts of
+ *     materials/quran-surahs.ts, which the verified dataset is checked against);
+ *     a folder named for a surah (`085 Al-Buruj`) must hold only that surah's
+ *     files. A file the reviewer named in advance as an extra (a Basmala file,
+ *     the Isti'adha) is reported, not ingested. Anything else is a reject.
  *  4. Each mapped file must be MP3 by its bytes (an ID3 tag or an MPEG frame
  *     sync), not empty, and the only one for its ayah.
  *  5. The plan lists every reject, every extra and every ayah of the 6,236
@@ -79,7 +81,7 @@ export async function listExtracted(dir: string): Promise<ExtractedFile[]> {
     for (const entry of (await readdir(d)).sort()) {
       const path = join(d, entry);
       const st = await lstat(path);
-      const name = relative(dir, path).split(sep).join('/');
+      const name = relative(dir, path).split(sep).join('/').normalize('NFC');
       if (st.isDirectory()) {
         await walk(path);
         continue;
@@ -95,9 +97,12 @@ export async function listExtracted(dir: string): Promise<ExtractedFile[]> {
   return out;
 }
 
-/** The extracted folder's fingerprint: SHA-256 of `path<TAB>size<TAB>sha256` lines, sorted by path. */
+/** The extracted folder's fingerprint: SHA-256 of `path<TAB>size<TAB>sha256` lines (paths in NFC), sorted by path. */
 export function manifestOf(files: readonly ExtractedFile[]): string {
-  const lines = [...files].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).map((f) => `${f.name}\t${f.bytes}\t${f.sha256}\n`);
+  const lines = files
+    .map((f) => ({ ...f, name: f.name.normalize('NFC') }))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map((f) => `${f.name}\t${f.bytes}\t${f.sha256}\n`);
   return createHash('sha256').update(lines.join('')).digest('hex');
 }
 
@@ -120,8 +125,6 @@ export interface IngestPlan {
   expected: number;
   complete: boolean;
 }
-
-const FILE = /^(\d{3})(\d{3})\.mp3$/i;
 
 function isMp3(head: Buffer): boolean {
   if (head.length >= 3 && head.toString('latin1', 0, 3) === 'ID3') return true;
@@ -157,9 +160,16 @@ export async function planIngest(archive: ArchiveCheck, files: readonly Extracte
   const covered = new Set<string>();
   for (const f of files) {
     const reject = (reason: string) => plan.rejected.push({ name: f.name, reason });
-    const m = FILE.exec(f.name.split('/').pop()!);
+    const parts = f.name.split('/');
+    const base = parts.pop()!;
+    const extra = spec.naming.extras.find((x) => x.pattern.test(base));
+    if (extra) {
+      plan.extras.push({ name: f.name, reason: extra.reason });
+      continue;
+    }
+    const m = spec.naming.ayah.exec(base);
     if (!m) {
-      reject('not an ayah file (expected SSSAAA.mp3)');
+      reject(`not an ayah file (unparsed-name: not ${spec.naming.ayah.source})`);
       continue;
     }
     const surah = Number(m[1]);
@@ -169,8 +179,13 @@ export async function planIngest(archive: ArchiveCheck, files: readonly Extracte
       reject(`surah-out-of-range: no surah ${surah}`);
       continue;
     }
+    const folder = /^(\d{3}) /.exec(parts[parts.length - 1] ?? '');
+    if (folder && Number(folder[1]) !== surah) {
+      reject(`folder-mismatch: a surah ${surah} file in the folder of surah ${Number(folder[1])}`);
+      continue;
+    }
     if (ayah === 0) {
-      plan.extras.push({ name: f.name, reason: `a Basmala file for surah ${surah}, not an ayah (audio is the verse alone)` });
+      reject(`ayah-out-of-range: no ayah ${surah}:0`);
       continue;
     }
     if (ayah > s.ayahCount) {
