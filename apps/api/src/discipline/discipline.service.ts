@@ -51,10 +51,14 @@ const KIND_FILTERS = {
  *                          card, `teacher.suspended` to Core/HR; open lessons in
  *                          the window are cancelled for the families
  *   permanent suspension   refused while the teacher still has students (move
- *                          them first, PD-11 transfer); then the card,
- *                          `teacher.suspended`, the teacher deactivated through
- *                          chat.deactivate_principal (RT-032: signed out
- *                          everywhere), and their open lessons cancelled
+ *                          them first, PD-11 transfer); their open lessons are
+ *                          cancelled FIRST, while the teacher is still live (a
+ *                          trial's card goes to the teacher's trial group, which
+ *                          needs one) -- if any cannot be, nothing is decided;
+ *                          then, in one transaction that refuses over any lesson
+ *                          still open, the card, `teacher.suspended`, and the
+ *                          teacher deactivated through chat.deactivate_principal
+ *                          (RT-032: signed out everywhere)
  *   excused                kept on record, no longer counted
  *
  * The suggested step is computed on every read (ladder.ts); choosing anything
@@ -342,6 +346,25 @@ export class DisciplineService {
 
     const teacher = await this.conversations.requireActor(violation.teacherId);
     const context = await this.cardContext(violation);
+    const cancelReason = teacher.locale === 'en' ? 'The teacher is suspended' : 'المعلم موقوف';
+    const permanent = decision === Decision.PERMANENT_SUSPENSION;
+
+    // A permanent suspension deactivates the teacher, so their lessons are
+    // cancelled before it, while they are still live (as PD-43's offboarding).
+    // One that cannot be cancelled stops the decision: nothing is deactivated.
+    const cancelled: string[] = [];
+    if (permanent) {
+      const notCancelled = await this.cancelLessons(actorId, violation.teacherId, colliding, cancelReason, cancelled);
+      if (notCancelled.length > 0) {
+        throw new CommError(
+          CommErrorCode.DISCIPLINE_LESSONS_COLLIDE,
+          `${notCancelled.length} lesson(s) could not be cancelled; the teacher is not suspended`,
+          409,
+          { cancelledLessons: cancelled, notCancelled },
+        );
+      }
+    }
+
     await this.write(() =>
       this.prisma.$transaction(async (tx) => {
         let suspensionId: string | null = null;
@@ -432,7 +455,20 @@ export class DisciplineService {
           after: { violationId: violation.id, suggestedStep: step, suspensionId, collidingLessons: colliding.map((l) => l.id) },
           reason: note ?? `ladder step ${step}`,
         });
-        if (decision === Decision.PERMANENT_SUSPENSION) {
+        if (permanent) {
+          // Nothing open may outlive the teacher: a lesson booked since the
+          // cancellations above refuses the whole decision.
+          const [{ open }] = await tx.$queryRaw<Array<{ open: number }>>`
+            SELECT count(*)::int AS open FROM chat.lesson l
+             WHERE l.teacher_id = ${violation.teacherId}::uuid AND l.outcome IS NULL
+               AND (l.starts_at AT TIME ZONE ${tz})::date >= ${today}::date`;
+          if (open > 0) {
+            throw new CommError(
+              CommErrorCode.DISCIPLINE_LESSONS_COLLIDE,
+              `${open} open lesson(s) remain; the teacher is not suspended -- decide again to cancel them`,
+              409,
+            );
+          }
           // RT-032: the teacher's sessions are revoked through the journal, and a
           // node's completion barrier confirms it after this commit.
           await tx.$queryRaw`
@@ -443,22 +479,36 @@ export class DisciplineService {
       }),
     );
 
-    // The families are told through each lesson's own cancellation card.
+    // A temporary suspension: the teacher stays live, so the lessons are
+    // cancelled after it is recorded. The families are told through each
+    // lesson's own cancellation card.
+    const notCancelled = permanent ? [] : await this.cancelLessons(actorId, violation.teacherId, colliding, cancelReason, cancelled);
+    const fresh = await this.prisma.teacherViolation.findUniqueOrThrow({ where: { id: violation.id } });
+    return { violation: (await this.dtos([fresh]))[0], cancelledLessons: cancelled.length, notCancelled };
+  }
+
+  /** Cancels each lesson (a trial as a trial); `cancelled` collects the ids that were. Returns those that were not. */
+  private async cancelLessons(
+    actorId: string,
+    teacherId: string,
+    lessons: ReadonlyArray<{ id: string; kind: string }>,
+    reason: string,
+    cancelled: string[],
+  ): Promise<Array<{ lessonId: string; reason: string }>> {
     const notCancelled: Array<{ lessonId: string; reason: string }> = [];
-    for (const lesson of colliding) {
+    for (const lesson of lessons) {
       try {
-        const reason = teacher.locale === 'en' ? 'The teacher is suspended' : 'المعلم موقوف';
         // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
         if (lesson.kind === 'trial') await this.trials.cancel(actorId, lesson.id, { reason });
         else await this.lessons.cancel(actorId, lesson.id, { reason });
+        cancelled.push(lesson.id);
       } catch (e) {
-        const reason = e instanceof Error ? e.message : String(e);
-        this.logger.warn(`lesson ${lesson.id} inside suspension of ${violation.teacherId} was not cancelled: ${reason}`);
-        notCancelled.push({ lessonId: lesson.id, reason });
+        const why = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`lesson ${lesson.id} inside suspension of ${teacherId} was not cancelled: ${why}`);
+        notCancelled.push({ lessonId: lesson.id, reason: why });
       }
     }
-    const fresh = await this.prisma.teacherViolation.findUniqueOrThrow({ where: { id: violation.id } });
-    return { violation: (await this.dtos([fresh]))[0], cancelledLessons: colliding.length - notCancelled.length, notCancelled };
+    return notCancelled;
   }
 
   // ------------------------------------------------------------------
