@@ -1,12 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 // A new window (target=_blank, window.open) is never opened: no onCreateWindow
 // handler is installed, so the WebView drops it.
 
+import '../../../app/providers.dart';
 import '../data/lesson_audio.dart';
+import 'activity_load_error.dart';
+import 'activity_load_failure.dart';
 import 'activity_view.dart';
 
 ActivityViewFactory createActivityViewFactory() => const _WebViewActivityFactory();
@@ -20,7 +24,7 @@ class _WebViewActivityFactory implements ActivityViewFactory {
       _ActivityWebView(url: url, allow: allow, audio: audio);
 }
 
-class _ActivityWebView extends StatefulWidget {
+class _ActivityWebView extends ConsumerStatefulWidget {
   const _ActivityWebView({required this.url, required this.allow, this.audio});
 
   final String url;
@@ -28,10 +32,30 @@ class _ActivityWebView extends StatefulWidget {
   final Future<Map<String, Object?>?>? audio;
 
   @override
-  State<_ActivityWebView> createState() => _ActivityWebViewState();
+  ConsumerState<_ActivityWebView> createState() => _ActivityWebViewState();
 }
 
-class _ActivityWebViewState extends State<_ActivityWebView> {
+class _ActivityWebViewState extends ConsumerState<_ActivityWebView> {
+  /// Set when the page itself failed (TLS, the network, a 404): the view then says
+  /// so and offers Try again, instead of the WebView's blank white page.
+  ActivityLoadFailure? _failure;
+
+  /// The page the main frame is on, for matching an HTTP error to it.
+  late String _pageUrl = widget.url;
+
+  void _failed(ActivityLoadFailure? failure) {
+    if (failure == null || !mounted) return;
+    // The kind, code and host only: never the path, its query or a token.
+    ref.read(loggerProvider).warn('activity page did not load', data: failure.logData);
+    setState(() => _failure = failure);
+  }
+
+  void _retry() {
+    setState(() => _failure = null);
+    _pageUrl = widget.url;
+    unawaited(_controller.loadRequest(Uri.parse(widget.url)));
+  }
+
   late final WebViewController _controller = WebViewController()
     ..setJavaScriptMode(JavaScriptMode.unrestricted)
     ..setNavigationDelegate(NavigationDelegate(
@@ -42,7 +66,10 @@ class _ActivityWebViewState extends State<_ActivityWebView> {
         if (!request.isMainFrame) return NavigationDecision.navigate;
         return uri != null && widget.allow(uri) ? NavigationDecision.navigate : NavigationDecision.prevent;
       },
+      onPageStarted: (url) => _pageUrl = url,
       onPageFinished: (_) => unawaited(_handAudio()),
+      onWebResourceError: (error) => _failed(pageLoadFailure(error, pageUrl: _pageUrl)),
+      onHttpError: (error) => _failed(pageHttpFailure(error, pageUrl: _pageUrl)),
     ))
     ..loadRequest(Uri.parse(widget.url));
 
@@ -62,5 +89,6 @@ class _ActivityWebViewState extends State<_ActivityWebView> {
   }
 
   @override
-  Widget build(BuildContext context) => WebViewWidget(controller: _controller);
+  Widget build(BuildContext context) =>
+      _failure == null ? WebViewWidget(controller: _controller) : ActivityLoadError(onRetry: _retry);
 }

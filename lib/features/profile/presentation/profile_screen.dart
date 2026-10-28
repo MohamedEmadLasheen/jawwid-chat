@@ -83,8 +83,14 @@ class ConversationProfileScreen extends ConsumerWidget {
             // a person: muting yourself is not a thing.
             actions: [
               ConversationActions(conversationId: conversationId),
-              // PD-15: each child of the group -- age, course, times, package.
-              if (value.isGroup) GroupChildrenSection(conversationId: conversationId),
+              // PD-15: each child of the group -- age, course, times, package. A family
+              // group names no single learner, so each child's progress and Materials
+              // come with that child's card here (a learner group shows them below).
+              if (value.isGroup)
+                GroupChildrenSection(
+                  conversationId: conversationId,
+                  withChildEntries: value.learner == null || value.learner!.id.isEmpty,
+                ),
             ],
           ),
       },

@@ -3567,6 +3567,9 @@ class L10nEn extends L10n {
   String get materialsTitle => 'Materials';
 
   @override
+  String get activityLoadFailed => 'This lesson couldn\'t load.';
+
+  @override
   String get materialsEntrySubtitle =>
       'Library, practice this week and the memorization map';
 
@@ -4190,6 +4193,16 @@ class L10nEn extends L10n {
 
   @override
   String get messageInfoFailed => 'Couldn\'t load message info';
+
+  @override
+  String get adminWebOnlyTitle => 'This account uses Admin Web';
+
+  @override
+  String get adminWebOnlyBody =>
+      'Department staff accounts work in Admin Web, in a browser. Sign in there with the same e-mail and password.';
+
+  @override
+  String get adminWebOnlyAnotherAccount => 'Use another account';
 
   @override
   String scheduleFilterTodo(int count) {

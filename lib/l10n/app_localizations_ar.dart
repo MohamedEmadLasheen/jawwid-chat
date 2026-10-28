@@ -3640,6 +3640,9 @@ class L10nAr extends L10n {
   String get materialsTitle => 'المواد التعليمية';
 
   @override
+  String get activityLoadFailed => 'تعذّر تحميل هذا الدرس.';
+
+  @override
   String get materialsEntrySubtitle =>
       'المكتبة وتدريب هذا الأسبوع وخريطة الحفظ';
 
@@ -4267,6 +4270,16 @@ class L10nAr extends L10n {
 
   @override
   String get messageInfoFailed => 'تعذّر تحميل معلومات الرسالة';
+
+  @override
+  String get adminWebOnlyTitle => 'هذا الحساب يستخدم لوحة التحكم (Admin Web)';
+
+  @override
+  String get adminWebOnlyBody =>
+      'حسابات موظفي الأقسام تعمل في لوحة التحكم (Admin Web) عبر المتصفح. سجّل الدخول هناك بالبريد الإلكتروني وكلمة المرور نفسيهما.';
+
+  @override
+  String get adminWebOnlyAnotherAccount => 'استخدام حساب آخر';
 
   @override
   String scheduleFilterTodo(int count) {
