@@ -305,13 +305,19 @@ The rules below form one DB-free decision, `decideStaffAccountAdmin(actor, targe
 2. `POST /api/v1/admin/staff-accounts` creates the account in one transaction:
    - `chat.account` (kind `staff`, status **`provisioned`**), `chat.staff` (tier) and the affiliation (§9).
    - The grants, and the audit rows.
-   - A **setup code**: PD-21's `chat.password_reset_code` with a new `purpose = 'first_login'` and a longer TTL (proposal: 72 h, 5 tries).
+   - A **setup code**, through the first-login primitive PD-43 built (PR #184, migration `20261028100000_chat_pd043_teacher_onboarding`). It works for any account kind, so PD-40 reuses it:
+     - Issue the code with `PasswordResetService.issue({ ..., purpose: 'first_login' })` on the provisioned staff account. That gives 72 h (`FIRST_LOGIN_CODE_HOURS`) and 5 tries, and audits `account.first_login_code_issued`.
+     - `chat.guard_password_reset_code` allows `purpose = 'first_login'` only on the admin channel, for a `provisioned` account, expiring within 72 h.
+     - **PR-3 must widen that guard's staff-target rule**: today a staff account's code may be issued only by the super admin. It must also allow a manager acting within H3–H6.
 3. **Delivery** (§12 Q5): the setup code is e-mailed to the sign-in address through the PD-25 mailer, and also shown once to the creator, for hand delivery as a fallback.
 
 ### 6.2 First login
 
 1. The Admin Web sign-in page offers **"I have a setup code"**. That is the existing reset-code screen with new copy, completing through `POST /auth/password-reset` (`password-reset.controller.ts:27-36`).
-2. Completing the code sets the password (minimum 12 characters for staff, the bootstrap's floor), moves the account from `provisioned` to **`active`** (a new branch in `password-reset.service.ts`, guarded in SQL), and writes the `staff.activated` audit row.
+2. Completing the code sets the password, and in the same transaction calls `chat.activate_account_with_code(code)` (PD-43).
+   - The minimum password length is 4 for every account (#171), which supersedes this plan's earlier "12 for staff".
+   - That function moves the account from `provisioned` to **`active`** (never the super admin) and writes `account.activated` `{kind, codeId, issuer}`.
+   - Trigger `account_activation_is_by_first_login` refuses any other provisioned→active change.
 3. The person signs in. `GET /me` returns their permissions and `homePath`. A Designer lands on **`/certificates`** and sees only that item in the nav.
 4. **2FA:** not in PD-40, because none exists today. Recommended follow-up: TOTP, mandatory for any account holding a `finance`, `family_contact` or `admin` permission. Passkeys are already tracked under PD-23 phase B.
 
