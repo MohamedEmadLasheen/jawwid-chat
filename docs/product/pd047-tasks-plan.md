@@ -1,7 +1,7 @@
 # PD-47: one Tasks page for everyone (plan)
 
-**State:** **DRAFT for approval.** No feature code has been written. The code waits for the owner's answers (§8) and the department head's GO (machine load).
-**Claim:** `docs/product/pd-registry/PD-47.md`. **No migration slot is claimed.** The department head assigns them (format `20261029HHMMSS`). PR-1 and PR-2 each need one slot (§7).
+**State:** **APPROVED.** On 2026-10-28 the owner answered Q1–Q13 "Approve all 13 (Recommended)", relayed verbatim by the department head (§8). No feature code is written. PR-1 waits for the department head's GO (machine load).
+**Claim:** `docs/product/pd-registry/PD-47.md`. **Migration slots, assigned by the department head:** PR-1 `20261029160000` (`chat_pd047_work_tasks`), PR-2 `20261029170000` (`chat_pd047_task_sources`), claimed in `docs/product/migration-slots/`. PR-4 asks for its own slot if it needs one.
 **Base:** `main` @ `08bfd9dd`. Paths are relative to the repository root. `mig/` is `supabase/migrations/`.
 **Frozen, not touched:** the call workstreams W1–W8; legacy `chat.task` (§1.1); Jawwid Core.
 
@@ -41,9 +41,9 @@ The owner's request, verbatim (2026-10-28):
   - **Visibility:** Mine for everyone; Team for managers (PD-8 department plus the Teachers manager's teachers); All for the super admin. Who may remove, reassign or decide is checked live.
   - **The work stays on its own page.** A task links to the leave request, the lesson report or the case; it does not copy their forms. The Tasks page is the index of responsibilities and the place of accountability.
 - **Interplay:** a `task.changed` refetch signal through the outbox (the PD-46 pattern); PD-34 notifications in the existing `task` category, which finally fills the Notification Center's empty "Action" tab; and a Tasks tile on the PD-44 Dashboard.
-- **Two boundary decisions are reopened** and need the owner: PD-4 (no task entity, Q1) and the frozen Teacher Account (a teacher "To do" list, Q2).
-- **Seven small PRs** (§7). The first two need a migration slot each.
-- **Thirteen owner questions** (§8), each with a recommendation.
+- **Two boundary decisions are reopened, narrowly, by the owner's answers:** PD-4 (a task entity for staff and teacher accountability, Q1) and the frozen Teacher Account (a teacher "To do" list inside the Schedule tab, Q2).
+- **Seven small PRs** (§7). PR-1 and PR-2 have their slots.
+- **All thirteen owner questions are DECIDED** as recommended (§8).
 
 ---
 
@@ -59,6 +59,8 @@ The owner's request, verbatim (2026-10-28):
 | Dashboard "Needs action" | `apps/admin-web/src/features/dashboard/DashboardPage.tsx:47` calls `/dashboard/needs-action` (`endpoints.ts:157`) | **Dead.** No route. PD-44 (#211) is replacing the Dashboard with per-section counts and has no tasks tile (`docs/product/pd044-manager-dashboard-plan.md:83,469`). |
 
 Also relevant: **PD-35's case events are enqueued and delivered to no one.** `case.opened`, `case.assigned` and `case.due_soon` carry no `conversationId`, so the outbox worker's `default:` branch only logs them (`apps/api/src/communication/outbox/outbox.worker.ts:304-312`). The same happens to every actor-addressed event, so a task event needs its own `case` in the worker (§3.10).
+
+The `case.*` gap itself is **not fixed by PD-47**. The department head routed it separately to PD-35's owner (2026-10-28). PD-47's `case:<caseId>` source (§3.6) does not depend on that fix, because its completion trigger reads `chat.supervision_case` directly.
 
 ### 1.2 Every signal that could become a task
 
@@ -373,8 +375,8 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
 
 | PR | Content | Slot |
 |---|---|---|
-| PR-1 | `chat.work_task` + `chat.work_task_event`, guard and history triggers, RLS; `TaskService` with manual tasks, the four exits, comments and the lists; the routes and the PD-40 keys (LATER block); integration spec | **one** (head assigns) |
-| PR-2 | The source framework, the worker sweep, the Phase A adapters and their completion triggers; the `lesson.service`/`leave`/`discipline`/`cases` hooks; the guard spec | **one** |
+| PR-1 | `chat.work_task` + `chat.work_task_event`, guard and history triggers, RLS; `TaskService` with manual tasks, the four exits, comments and the lists; the routes and the PD-40 keys (LATER block); integration spec | **`20261029160000`** (assigned) |
+| PR-2 | The source framework, the worker sweep, the Phase A adapters and their completion triggers; the `lesson.service`/`leave`/`discipline`/`cases` hooks; the guard spec | **`20261029170000`** (assigned) |
 | PR-3 | Admin Web Tasks page, en/ar, RTL; legacy client code removed | none |
 | PR-4 | `task.changed` and the worker `case`; PD-34 emission and the overdue notice sweep; `/dashboard/tasks` (with PD-44) | 0–1 (the notice table) |
 | PR-5 | Flutter "To do" in the Schedule tab (app + teacher web), if Q2 | none |
@@ -389,9 +391,15 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
 
 ---
 
-## 8. Owner questions
+## 8. Owner decisions
 
-| # | Question | Recommendation |
+**DECIDED 2026-10-28.** The owner's answer, relayed verbatim by the department head:
+
+> "Approve all 13 (Recommended)"
+
+Every recommendation below is therefore the decision. The table keeps each question for the record.
+
+| # | Question | Decision |
 |---|---|---|
 | **Q1** | PD-4 and boundary §1.2 forbid a task entity. May PD-47 reopen that, narrowly? | **Yes, narrowly.** Tasks are accountability items for staff and teachers about Chat's own records. There is no CRM routing, workload scoring or SLA engine. Family-facing events stay system messages. Legacy `chat.task` stays frozen, and a new table is used. |
 | **Q2** | The Teacher Account is frozen. Where do a teacher's tasks appear in the app and on teacher web? | **A "To do (N)" segment inside the existing Schedule tab**, with no new tab. It lists lesson reports, correction requests and manual tasks. A teacher may comment, say "Not mine", and acknowledge. |
