@@ -1,0 +1,398 @@
+{
+  "surah": 94,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs, the reciter line and the typed basmala, and every hand-typed Quran string (replaced by positions). Also dropped, because each quotes \"ma'a al-'usri yusran\" (5:2-4) as typed Quran mid-sentence and cutting before the quote leaves no sentence: the first did-you-know line (that Allah promised it, twice in the surah), the first reflection idea (\"we remember that ...\"), and the reflection's feedback line. Ayat 5 and 6 are the same words but for the fa-; the word cards for al-'usr and yusra point at ayah 5, and the complete-the-ayah word al-'usr is the one at 5:3. The complete-the-ayah words are the answers of the old completion and missing-word games; their hand-typed distractors that are not words of this surah ('usran, sabran, shukran, naftah, narfa', minka, al-sabr, al-shukr, fa-sbir) are gone, as the game draws its options from these words. The quiz question \"which ayah comes after ...\" typed ayah 4 into its text; it now shows ayah 4's last word. The old quiz categories were mapped (hifz, ma'ani); its question on the lesson of the surah was filed under ma'ani and is categorised \"lessons\" here. Emoji were stripped from the ends of lines. Not carried (no field or no such game in the engine): the \"Makki\" surah type, the ayah-ordering and build-the-ayah games, the three word-meaning games (same words and meanings as the list), the intro quiz (surah name, ayah count) and the motivational messages."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-94 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "9c631716d16e9f1218acef54e2305a7b0bfc864715fc9389624aa7657ea61256",
+      "components/WelcomeSection.tsx": "e5beb7ec82d75e25dd88fba5082eda8cf3d94bf4fef0229dde54479481d3eaf9",
+      "components/ListenSection.tsx": "8bc73c1ffba800ac1b644a06fca4919e0e5d007868e5f0fc9c1bc5acf049e412",
+      "components/MeaningsSection.tsx": "d5fbb8507f36f4a0c7de98106e3c2fba043756b5e1dc848614b916435fd93f5f",
+      "components/MemorizationGames.tsx": "1c98501934c62b68a1bf7616bf80a5a184d37acb8c94937ffc26e4fd024d206d",
+      "components/TajweedSection.tsx": "47dae62cba7bb8f50c3e7ab141f7cee955117db83f03a38acaf51da5068df30e",
+      "components/FinalExam.tsx": "c38b41711fa0723447c8e191b5f65fe0ee40620fc0c47606239838ac0a9783aa"
+    }
+  },
+  "intro": {
+    "text": "سورة الشرح تذكر نعم الله على النبي محمد ﷺ وتعلمنا أن بعد الصعوبة يأتي الفرج واليسر.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "الله يسأل النبي ﷺ: ألم نوسع قلبك ونملأه بالنور والإيمان؟",
+      "review": "Presents the ayah as Allah asking the Prophet a question. Common tafsir: the question is one of affirmation (istifham taqriri), \"We have indeed expanded your chest\" (with guidance, faith and wisdom); a child may read it as a real question. It also gives sadr (\"chest\") as \"heart\". Teacher to choose the wording."
+    },
+    {
+      "ayah": 2,
+      "text": "وأزلنا عنك الحمل الثقيل الذي كان يتعبك.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "هذا الحمل كان ثقيلاً جداً كأنه يؤلم الظهر.",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "وجعلنا اسمك عالياً يذكره الناس في كل مكان.",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "إن مع الصعوبة يأتي الفرج والسهولة بإذن الله.",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "الله يؤكد مرة أخرى أن بعد كل صعوبة يأتي فرج ويسر.",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "إذا انتهيت من عملك فاجتهد في العبادة والدعاء.",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "وتوجه إلى الله وحده بالدعاء والرجاء.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "نوسّع ونفتح",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "قلبك",
+      "review": "Gives sadr as \"heart\"; the word means chest (common tafsir: the breast, expanded with guidance and faith, where the heart is). Teacher to confirm the wording."
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "الحمل الثقيل",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 2,
+      "meaning": "أثقل وأتعب",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "اسمك ومكانتك",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 3,
+      "meaning": "الصعوبة والشدة",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 4,
+      "meaning": "سهولة وفرج",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 2,
+      "meaning": "انتهيت من عملك",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 3,
+      "meaning": "اجتهد في العبادة",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 3,
+      "meaning": "توجه إلى الله بالدعاء",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 1,
+      "word": 4
+    },
+    {
+      "ayah": 2,
+      "word": 2
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 3,
+      "word": 3
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 5,
+      "word": 3
+    },
+    {
+      "ayah": 5,
+      "word": 4
+    },
+    {
+      "ayah": 8,
+      "word": 3
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول آية في سورة الشرح؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 5
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "قلبك"
+        },
+        {
+          "text": "الحمل الثقيل"
+        },
+        {
+          "text": "اسمك"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 2,
+        "word": 3
+      },
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 5,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 2,
+          "word": 3
+        },
+        {
+          "ayah": 5,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors \"sabran\" and \"shukran\" were hand-typed, not words of this surah; they are replaced by wizraka (2:3) and dhikraka (4:3), words of this surah. The answer yusra (5:4) is unchanged.",
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "انصب في العمل"
+        },
+        {
+          "text": "توجه إلى الله بالدعاء"
+        },
+        {
+          "text": "ارجع إلى بيتك"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 8,
+        "word": 3
+      },
+      "id": "q4"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الشرح؟",
+      "options": [
+        {
+          "text": "6 آيات"
+        },
+        {
+          "text": "7 آيات"
+        },
+        {
+          "text": "8 آيات"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q5"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية التي تأتي بعد",
+      "options": [
+        {
+          "ayah": 5
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 7
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old question typed the whole of ayah 4 (\"wa-rafa'na laka dhikrak\") into its text; it now shows ayah 4's last word (dhikraka) after \"ma al-ayah allati ta'ti ba'd\". Teacher to confirm it reads well.",
+      "word": {
+        "ayah": 4,
+        "word": 3
+      },
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "نوسّع ونفتح"
+        },
+        {
+          "text": "نغلق"
+        },
+        {
+          "text": "نرفع"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 2
+      },
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "ما الدرس الأهم من سورة الشرح؟",
+      "options": [
+        {
+          "text": "أن بعد الصعوبة يأتي اليسر"
+        },
+        {
+          "text": "أن الحياة صعبة دائمًا"
+        },
+        {
+          "text": "أن نلعب كثيرًا"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q8"
+    },
+    {
+      "category": "hifz",
+      "question": "آخر آية في سورة الشرح هي:",
+      "options": [
+        {
+          "ayah": 7
+        },
+        {
+          "ayah": 8
+        },
+        {
+          "ayah": 6
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "أن الله يساعد عباده ويوسع صدورهم",
+      "review": null
+    },
+    {
+      "text": "أن بعد كل صعوبة يأتي اليسر والفرج",
+      "review": null
+    },
+    {
+      "text": "أن المسلم يجب أن يدعو الله ويعتمد عليه",
+      "review": null
+    },
+    {
+      "text": "أن الله رفع ذكر النبي محمد ﷺ",
+      "review": null
+    },
+    {
+      "text": "أن العمل والعبادة مهمان في حياة المسلم",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "ماذا نتذكر عندما نمر بصعوبة أو مشكلة؟",
+    "ideas": [
+      "ندعو الله ونتوكل عليه",
+      "نصبر ونعلم أن الله سيساعدنا"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الدعاء يجعل القلب مطمئنًا؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الشرح نزلت في مكة المكرمة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن اسم النبي محمد ﷺ يُذكر في الأذان كل يوم؟ هذا من رفع ذكره!",
+      "review": null
+    }
+  ]
+}

@@ -22,6 +22,16 @@ import real103 from '../../public/data/quran/surah-103.json';
 import real104 from '../../public/data/quran/surah-104.json';
 import real105 from '../../public/data/quran/surah-105.json';
 import real106 from '../../public/data/quran/surah-106.json';
+import real89 from '../../public/data/quran/surah-089.json';
+import real90 from '../../public/data/quran/surah-090.json';
+import real91 from '../../public/data/quran/surah-091.json';
+import real92 from '../../public/data/quran/surah-092.json';
+import real93 from '../../public/data/quran/surah-093.json';
+import real94 from '../../public/data/quran/surah-094.json';
+import real95 from '../../public/data/quran/surah-095.json';
+import real96 from '../../public/data/quran/surah-096.json';
+import real97 from '../../public/data/quran/surah-097.json';
+import real98 from '../../public/data/quran/surah-098.json';
 
 // Stand-in verses (not Quran text), 3, 2 and 4 words.
 const TEXTS = ['أحد اثنان ثلاثة', 'أربعة خمسة', 'ستة سبعة ثمانية تسعة'];
@@ -133,6 +143,20 @@ describe('Al-Buruj, on the real verified text', () => {
 });
 
 // Every lesson rebuilt on the engine (Juz' Amma, batch 1), each on its real verified surah.
+// Juz' Amma batch 3 (89-98). Al-Fajr's old lesson split ayah 23: its tafsir is merged and renumbered.
+const BATCH3: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
+  89: { file: real89, ayat: 30, held: 24, complete: 8 },
+  90: { file: real90, ayat: 20, held: 8, complete: 8 },
+  91: { file: real91, ayat: 15, held: 6, complete: 10 },
+  92: { file: real92, ayat: 21, held: 2, complete: 7 },
+  93: { file: real93, ayat: 11, held: 5, complete: 5 },
+  94: { file: real94, ayat: 8, held: 4, complete: 9 },
+  95: { file: real95, ayat: 8, held: 11, complete: 7 },
+  96: { file: real96, ayat: 19, held: 6, complete: 7 },
+  97: { file: real97, ayat: 5, held: 9, complete: 3 },
+  98: { file: real98, ayat: 8, held: 22, complete: 4 },
+};
+
 // Juz' Amma batch 2 (99-106).
 const BATCH2: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
   99: { file: real99, ayat: 8, held: 7, complete: 8 },
@@ -156,13 +180,13 @@ const BATCH1: Record<number, { file: unknown; ayat: number; held: number; comple
   114: { file: real114, ayat: 6, held: 4, complete: 8 },
 };
 
-describe("Juz' Amma batches 1 and 2, each on its real verified text", () => {
+describe("Juz' Amma batches 1 to 3, each on its real verified text", () => {
   const anchor: QuranAnchor = {
     datasetId: realManifest.datasetId,
     fileSha256: realManifest.fileSha256,
     rangeSha256: realManifest.surahs.map((s) => s.rangeSha256),
   };
-  for (const [n, expected] of Object.entries({ ...BATCH1, ...BATCH2 })) {
+  for (const [n, expected] of Object.entries({ ...BATCH1, ...BATCH2, ...BATCH3 })) {
     it(`surah ${n}: every position resolves, flagged lines are held, and it waits for approval`, async () => {
       const surah = Number(n);
       const fetcher: Fetcher = async (path) =>

@@ -20,6 +20,7 @@ import { FamilyFeedbackSection } from './FamilyFeedbackSection'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
 import { I } from '@/features/intake/copy'
 import { useIntakeOptions } from '@/features/intake/hooks'
+import { OwnershipSection } from '@/features/intake/OwnershipSection'
 import {
   CancelRequestDialog,
   EditBillingDialog,
@@ -96,6 +97,8 @@ export function ParentProfilePage({ eyebrow }: { eyebrow?: string }) {
                   }
                 />
                 <ContactSection profile={data} onEdit={() => setDialog({ kind: 'contact' })} />
+                {/* PD-42 PR-3: sign-in e-mail, Operations supervisor, Sales owner -- when the server answers for this viewer. */}
+                <OwnershipSection familyId={data.family.id} parentName={data.name} />
                 <NoteSection profile={data} onEdit={() => setDialog({ kind: 'note' })} />
                 <ChildrenSection profile={data} />
                 <FamilyFeedbackSection familyId={data.family.id} />

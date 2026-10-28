@@ -124,6 +124,9 @@ export interface AssignResult {
   familyId: string
   learnerIds: string[]
   schedules: Array<{ learnerId: string; set: boolean; reason: string | null }>
+  /** PD-42 PR-3: added to the family the parent is already in (a trial sibling). */
+  attached?: boolean
+  group?: 'joined' | 'none' | 'not_joined'
 }
 
 /** What the "+ -> Trial" card needs in one trial group. */
@@ -172,7 +175,7 @@ export const trialsApi = {
   leaveGroup: (conversationId: string) => api.post<TrialGroupContextDto>(`/trials/groups/${id(conversationId)}/leave`),
   newStudents: () => api.get<{ students: NewStudentDto[]; canAssign?: boolean }>('/trials/new-students'),
   /** PD-16: the Operations manager assigns the supervisor; Chat creates the family. */
-  assignNewStudent: (trialId: string, body: { supervisorId: string; email?: string }) =>
+  assignNewStudent: (trialId: string, body: { supervisorId?: string; email?: string; familyId?: string }) =>
     api.post<AssignResult>(`/trials/new-students/${id(trialId)}/assign`, body),
   /** PD-24: the Operations manager changes the supervisor; the children, their group and records move. */
   changeNewStudentSupervisor: (trialId: string, body: { supervisorId: string; reason: string }) =>

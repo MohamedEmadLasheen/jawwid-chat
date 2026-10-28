@@ -139,6 +139,8 @@ export function ChatPage() {
             selectedId={conversationId ?? null}
             onSelect={(id) => navigate(`/chat/${encodeURIComponent(id)}`)}
             onOpenMessage={openAt}
+            // PD-44: the Dashboard's waiting tile lands here as /chat?view=waiting.
+            initialView={params.get('view') === 'waiting' ? 'waiting' : undefined}
             actions={
               <>
                 <button

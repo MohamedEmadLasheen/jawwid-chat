@@ -48,6 +48,12 @@ String systemMessageText(String body, L10n l10n) {
           : l10n.systemDirectSupervisorChangedNoName;
     case 'group.learner_detached':
       return l10n.systemGroupLearnerDetached;
+    // PD-42: a child added to the family joined its group.
+    case 'group.learner_added':
+      final learner = facts['learner'];
+      return learner is String && learner.isNotEmpty
+          ? l10n.systemGroupLearnerAdded(learner)
+          : l10n.systemGroupLearnerAddedNoName;
     case 'cover.started':
     case 'cover.extended':
       final cover = facts['cover'];

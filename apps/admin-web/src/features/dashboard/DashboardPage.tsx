@@ -1,204 +1,168 @@
-import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { dashboardApi } from '@/core/api/endpoints'
-import { qk } from '@/core/api/queryKeys'
-import { useI18n } from '@/core/i18n/I18nProvider'
-import { QueryBoundary } from '@/shared/components/States'
-import { Badge, WorkloadBadge } from '@/shared/components/Badge'
+import { Link } from 'react-router-dom'
+import { useQueries, type UseQueryResult } from '@tanstack/react-query'
+import { ApiError } from '@/core/api/errors'
 import { useSession } from '@/core/auth/SessionProvider'
-import { isSuperAdmin } from '@/core/permissions/capabilities'
-import { adminSectionPath } from '@/features/admin/sections'
+import { useI18n } from '@/core/i18n/I18nProvider'
+import { RefreshAction } from '@/features/admin/common'
+import { TEXT, fill, relativeTime, useText } from '@/features/admin/copy'
+import { Icon } from '@/shared/components/Icon'
+import { PageHeader } from '@/shared/components/PageHeader'
+import { Skeleton } from '@/shared/components/Skeleton'
+import { EmptyState } from '@/shared/components/States'
+import { dashboardApi, dashboardKeys, type DashboardSection, type DashboardTile } from './api'
+import { D } from './copy'
+import { SECTIONS, TILES, sectionAllowed, type SectionSpec } from './registry'
+import './dashboard.css'
 
 /**
- * Every tile is a link into the list it summarises. A dashboard that only shows
- * numbers is explicitly rejected (role brief §78) — the manager's job is to act
- * on what she sees, not to read it and then go hunting.
+ * PD-44: polled, not pushed (plan §2.3) -- these counts change through many
+ * write paths with no one event, and a minute late is fine. A hidden tab does
+ * not poll; focusing the window refetches.
  */
-function Metric({
-  value,
-  label,
-  alert,
-  onClick,
-}: {
-  value: string
-  label: string
-  alert?: boolean
-  onClick?: () => void
-}) {
+export const DASHBOARD_REFRESH_MS = 60_000
+
+type SectionQuery = UseQueryResult<DashboardSection>
+
+const refused = (error: unknown) => error instanceof ApiError && error.status === 403
+
+/** What a section has to show: the tiles the server sent that this page knows how to name. */
+const tilesOf = (data: DashboardSection | undefined): DashboardTile[] => (data?.tiles ?? []).filter((t) => t.key in TILES)
+
+/**
+ * The manager Dashboard (PD-44): what is waiting, as counts, each a link to
+ * the page where it is resolved. One section per page it summarises, asked
+ * for only with that page's PD-40 key; the server leaves out a tile the
+ * person is not covered for, and absent is never drawn as zero.
+ */
+export function DashboardPage() {
+  const tx = useText()
+  const { t } = useI18n()
+  const { staff } = useSession()
+  const sections = SECTIONS.filter((s) => sectionAllowed(s, staff?.permissions))
+  const queries = useQueries({
+    queries: sections.map((s) => ({
+      queryKey: dashboardKeys.section(s.key),
+      queryFn: () => dashboardApi.section(s.key),
+      refetchInterval: DASHBOARD_REFRESH_MS,
+    })),
+  })
+
+  // A section is hidden when the server refused it, or covered the person for
+  // none of its tiles; it stays (with its error) when it simply failed.
+  const shown = sections
+    .map((spec, i) => ({ spec, query: queries[i]! }))
+    .filter(({ query }) => !refused(query.error) && !(query.data && tilesOf(query.data).length === 0))
+  const settled = queries.every((q) => !q.isLoading)
+  const updatedAt = Math.max(0, ...queries.map((q) => q.dataUpdatedAt))
+
   return (
-    <button
-      type="button"
-      className={alert ? 'metric metric--alert' : 'metric'}
-      onClick={onClick}
-      disabled={!onClick}
-    >
-      <div className="metric__value">{value}</div>
-      <div className="metric__label">{label}</div>
-    </button>
+    <div className="page dash">
+      <div className="page__inner">
+        <PageHeader
+          title={t('nav.dashboard')}
+          subtitle={tx(D.subtitle)}
+          actions={
+            sections.length > 0 && (
+              <RefreshAction
+                updatedAt={updatedAt}
+                fetching={queries.some((q) => q.isFetching)}
+                onRefresh={() => queries.forEach((q) => void q.refetch())}
+              />
+            )
+          }
+        />
+        {sections.length === 0 || (settled && shown.length === 0) ? (
+          <EmptyState title={tx(D.noSections)} />
+        ) : (
+          shown.map(({ spec, query }) => <Section key={spec.key} spec={spec} query={query} />)
+        )}
+      </div>
+    </div>
   )
 }
 
-export function DashboardPage() {
-  const { t, number } = useI18n()
-  const navigate = useNavigate()
-
-  const header = useQuery({ queryKey: qk.dashboardHeader, queryFn: () => dashboardApi.header() })
-  const teamNow = useQuery({ queryKey: qk.teamNow, queryFn: () => dashboardApi.teamNow() })
-  const needsAction = useQuery({ queryKey: qk.needsAction, queryFn: () => dashboardApi.needsAction() })
-  const thisWeek = useQuery({ queryKey: qk.thisWeek, queryFn: () => dashboardApi.thisWeek() })
-  const { staff } = useSession()
-  // Backups are activated, and covers handed over, on the Organization page
-  // (PD-8, PD-33); the super admin reaches it as the Admin Portal's section.
-  const organizationPath = staff && isSuperAdmin(staff.role) ? adminSectionPath('teams') : '/organization'
-
-  const unattended = header.data?.unattended_count ?? 0
+function Section({ spec, query }: { spec: SectionSpec; query: SectionQuery }) {
+  const tx = useText()
+  const { t, time } = useI18n()
+  const titleId = `dash-section-${spec.key}`
+  const tiles = tilesOf(query.data)
 
   return (
-    <div className="page">
-      <h1 className="page__title">{t('nav.dashboard')}</h1>
-
-      <div className="grid grid--metrics" style={{ marginBlockEnd: 'var(--space-4)' }}>
-        <Metric
-          value={number(unattended)}
-          label={t('dashboard.unattended')}
-          alert={unattended > 0}
-        />
-        <Metric
-          value={number(header.data?.open_escalations ?? 0)}
-          label={t('dashboard.escalations')}
-        />
-      </div>
-
-      {/* The target is zero, so zero deserves to be said out loud. */}
-      {header.data && unattended === 0 && (
-        <div className="banner banner--info">{t('dashboard.unattendedZero')}</div>
-      )}
-
-      <section className="card">
-        <h2 className="panel__title">{t('dashboard.teamNow')}</h2>
-        <QueryBoundary
-          isLoading={teamNow.isLoading}
-          error={teamNow.error}
-          isEmpty={(teamNow.data ?? []).length === 0}
-          emptyTitle={t('common.none')}
-          onRetry={() => void teamNow.refetch()}
-        >
-          <table className="table">
-            <thead>
-              <tr>
-                <th>{t('family.owner')}</th>
-                <th>presence</th>
-                <th className="num">{t('bucket.now')}</th>
-                <th className="num">{t('bucket.today')}</th>
-                <th className="num">late</th>
-                <th>{t('dashboard.workload')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(teamNow.data ?? []).map((row) => (
-                <tr key={row.staff_id}>
-                  <td>
-                    {row.name}{' '}
-                    {row.inactivity_warning && <Badge tone="danger">inactive</Badge>}
-                  </td>
-                  <td><Badge tone={row.presence === 'online' ? 'ok' : 'neutral'}>{row.presence}</Badge></td>
-                  <td className="num">{number(row.now_count)}</td>
-                  <td className="num">{number(row.today_count)}</td>
-                  <td className="num">{number(row.late_replies)}</td>
-                  <td>
-                    {/* Score and level are both server-computed (brief §7). */}
-                    <WorkloadBadge level={row.workload_level} score={row.workload_score} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </QueryBoundary>
-      </section>
-
-      <section className="card">
-        <h2 className="panel__title">{t('dashboard.needsAction')}</h2>
-        <QueryBoundary
-          isLoading={needsAction.isLoading}
-          error={needsAction.error}
-          isEmpty={(needsAction.data ?? []).length === 0}
-          emptyTitle={t('dashboard.unattendedZero')}
-          onRetry={() => void needsAction.refetch()}
-        >
-          {(needsAction.data ?? []).map((item, index) => (
-            <div className="kv" key={index}>
-              <span className="kv__k">
-                <Badge tone="danger">{item.kind}</Badge> {item.description}
-              </span>
-              <span className="kv__v">
-                {item.kind === 'auto_detected_absence' && item.absence_id && (
-                  <button
-                    type="button"
-                    className="btn btn--sm btn--primary"
-                    onClick={() => navigate(organizationPath)}
-                  >
-                    {t('coverage.activateBackup')}
-                  </button>
-                )}
-              </span>
+    <section className="dash-section" aria-labelledby={titleId}>
+      <h2 id={titleId} className="dash-section__title">
+        {tx(spec.title)}
+      </h2>
+      {query.isLoading ? (
+        <div role="status" aria-live="polite">
+          <span className="sr-only">{t('common.loading')}</span>
+          <div className="kpi-grid">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} height={118} radius={12} />
+            ))}
+          </div>
+        </div>
+      ) : !query.data ? (
+        // A figure that failed is never shown as zero.
+        <div className="state state--compact" role="alert">
+          <span className="state__icon" aria-hidden="true">
+            <Icon name="alert" size={22} />
+          </span>
+          <div className="state__title">{tx(D.failed)}</div>
+          <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+            <Icon name="refresh" size={16} />
+            {t('common.retry')}
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Figures kept from an earlier read are shown only with this warning. */}
+          {query.error && (
+            <div className="stale-banner" role="status">
+              <Icon name="alert" size={16} />
+              <span>{fill(tx(TEXT.staleData), { time: time(new Date(query.dataUpdatedAt).toISOString()) })}</span>
+              <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+                {t('common.retry')}
+              </button>
             </div>
-          ))}
-        </QueryBoundary>
-      </section>
-
-      <section className="card">
-        <h2 className="panel__title">{t('dashboard.thisWeek')}</h2>
-        <QueryBoundary
-          isLoading={thisWeek.isLoading}
-          error={thisWeek.error}
-          onRetry={() => void thisWeek.refetch()}
-        >
-          {thisWeek.data && (
-            <>
-              <div className="grid grid--metrics">
-                <Metric value={number(thisWeek.data.renewals.due)} label="renewals due" />
-                <Metric value={number(thisWeek.data.renewals.renewed)} label="renewed" />
-                <Metric value={number(thisWeek.data.renewals.no_reply)} label="no reply" />
-                <Metric value={number(thisWeek.data.renewals.refused)} label="refused" />
-                <Metric
-                  value={`${number(thisWeek.data.target_compliance_pct)}%`}
-                  label="response target compliance"
-                />
-              </div>
-
-              {thisWeek.data.at_risk.length > 0 && (
-                <div style={{ marginBlockStart: 'var(--space-4)' }}>
-                  {thisWeek.data.at_risk.map((entry) => (
-                    <div className="kv" key={entry.reason}>
-                      <span className="kv__k">{entry.reason}</span>
-                      <span className="kv__v">{number(entry.count)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {thisWeek.data.median_first_reply_by_shift.length > 0 && (
-                <table className="table" style={{ marginBlockStart: 'var(--space-4)' }}>
-                  <thead>
-                    <tr>
-                      <th>shift</th>
-                      <th className="num">median first reply (min)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {thisWeek.data.median_first_reply_by_shift.map((entry) => (
-                      <tr key={entry.shift}>
-                        <td>{entry.shift}</td>
-                        <td className="num">{number(entry.median_minutes)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </>
           )}
-        </QueryBoundary>
-      </section>
-    </div>
+          {tiles.every((tile) => tile.count === 0) ? (
+            <p className="dash-section__clear">
+              <Icon name="check" size={16} />
+              {tx(D.allClear)}
+            </p>
+          ) : (
+            <ul className="kpi-grid">
+              {tiles.map((tile) => (
+                <Tile key={tile.key} tile={tile} present={new Set(tiles.map((x) => x.key))} />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+function Tile({ tile, present }: { tile: DashboardTile; present: ReadonlySet<string> }) {
+  const tx = useText()
+  const { number, locale } = useI18n()
+  const spec = TILES[tile.key]!
+  const alert = spec.backlog && tile.count > 0
+  return (
+    <li>
+      <Link to={spec.href(present)} className={alert ? 'kpi-card dash-tile dash-tile--alert' : 'kpi-card dash-tile'}>
+        <span className="kpi-card__top">
+          <span className="kpi-card__icon" aria-hidden="true">
+            <Icon name={spec.icon} size={18} />
+          </span>
+          <span className="kpi-card__label">{tx(spec.label)}</span>
+          <Icon name="chevronForward" size={16} />
+        </span>
+        <span className="kpi-card__value">{tile.capped ? `${number(tile.count)}+` : number(tile.count)}</span>
+        {tile.oldestAt && tile.count > 0 && (
+          <span className="kpi-card__sub">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span>
+        )}
+      </Link>
+    </li>
   )
 }
