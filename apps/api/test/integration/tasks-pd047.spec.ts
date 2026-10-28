@@ -569,3 +569,41 @@ describe('the realtime signal', () => {
     for (const p of sig) expect(Object.keys(p).sort()).toEqual(['change', 'revision', 'taskId']);
   });
 });
+
+describe('what the Tasks page is offered (PR-3)', () => {
+  it('a task says what this viewer may do with it, by the routes\' rules', async () => {
+    const t = await manual(s.managerId, staff(s.ownerId));
+    expect((await tasks.get(s.ownerId, t.id)).actions.sort()).toEqual(['comment', 'complete', 'out_of_scope']);
+    expect((await tasks.get(s.managerId, t.id)).actions.sort()).toEqual(['comment', 'due', 'priority', 'reassign', 'remove']);
+    await tasks.outOfScope(s.ownerId, t.id, { comment: 'not mine' });
+    expect((await tasks.get(s.ownerId, t.id)).actions.sort()).toEqual(['comment', 'complete']);
+    expect((await tasks.get(s.managerId, t.id)).actions).toContain('return');
+    await tasks.complete(s.ownerId, t.id, {});
+    expect((await tasks.get(s.managerId, t.id)).actions).toEqual([]);
+  });
+
+  it('a teacher\'s supervisor reads their teacher\'s task and is offered nothing', async () => {
+    const t = await manual(tmgr, teacher(s.teacherId));
+    expect((await tasks.get(tsupA, t.id)).actions).toEqual([]);
+  });
+
+  it('offers as assignees exactly the people the routes would accept', async () => {
+    // Creating: a manager's team; a teacher supervisor's own teacher.
+    const forMgr = (await tasks.assignees(s.managerId, {})).people.map((p) => p.id);
+    expect(forMgr).toEqual(expect.arrayContaining([s.ownerId, s.otherAdminId]));
+    expect(forMgr).not.toContain(srep);
+    expect(forMgr).not.toContain(farStaff);
+    expect((await tasks.assignees(tsupA, {})).people.map((p) => p.id)).toEqual([s.teacherId]);
+    for (const p of (await tasks.assignees(s.managerId, {})).people) {
+      await manual(s.managerId, { kind: p.kind, id: p.id });
+    }
+    // Handing on: the team (not the current assignee), oneself, and the departments.
+    const t = await manual(s.managerId, staff(s.ownerId));
+    const on = await tasks.assignees(s.managerId, { task: t.id });
+    expect(on.people.map((p) => p.id)).toEqual(expect.arrayContaining([s.otherAdminId, s.managerId]));
+    expect(on.people.map((p) => p.id)).not.toContain(s.ownerId);
+    expect(on.departments.map((d) => d.kind).sort()).toEqual(['operations', 'sales', 'teachers']);
+    expect(await code(tasks.assignees(s.teacherId, {}))).toBe(CommErrorCode.TASK_DENIED);
+    expect(await code(tasks.assignees(farStaff, { task: t.id }))).toBe(CommErrorCode.TASK_NOT_FOUND);
+  });
+});

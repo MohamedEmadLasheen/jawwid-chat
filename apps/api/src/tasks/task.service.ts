@@ -25,6 +25,8 @@ export type Level = (typeof LEVELS)[number];
 export const CATEGORIES = ['financial', 'operational'] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type PriorityReason = 'manual' | 'due_soon' | 'overdue' | 'source';
+/** What a viewer may do with a task now (TaskService.get `actions`). */
+export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority';
 /** What one worker sweep did (chat.work_task_sweep, summed over its batches). */
 export interface SweepResult {
   skipped: boolean;
@@ -298,6 +300,12 @@ export class TaskService {
        ORDER BY e.at, e.id`;
     return {
       ...this.summary(row),
+      /**
+       * PD-47 PR-3: what this viewer may do with the task now, by the same
+       * rules as the routes (which decide again on every write). A client
+       * offers these and nothing else.
+       */
+      actions: await this.actionsFor(viewer, row),
       history: events.map((e) => ({
         id: e.id,
         kind: e.kind,
@@ -311,6 +319,52 @@ export class TaskService {
         at: e.at.toISOString(),
       })),
     };
+  }
+
+  /**
+   * PD-47 PR-3: who the caller may give a task to (no `task`: creating) or
+   * hand this task on to (`task`): live people, by the rules of create and
+   * reassign, and the departments with a live manager. The routes decide again.
+   */
+  async assignees(actorId: string, query: { task?: string }) {
+    const viewer = await this.requireViewer(actorId);
+    if (viewer.kind !== 'staff') throw denied('teachers neither give nor hand on tasks');
+    const row = query.task ? await this.visible(viewer, query.task) : null;
+    const standing = Prisma.sql`chat.work_task_standing(${viewer.id}::uuid, ${viewer.organizationId}::uuid, p.sid, p.tid, NULL)`;
+    // Creating: the assignee's manager, or a teacher's supervisor. Handing on:
+    // a manager within their team, or to themselves.
+    const may = viewer.superAdmin
+      ? Prisma.sql`true`
+      : row
+        ? Prisma.sql`(p.sid = ${viewer.id}::uuid OR ${standing} = 'manager')`
+        : Prisma.sql`(${standing} = 'manager' OR (${standing} = 'supervisor' AND p.tid IS NOT NULL))`;
+    // A teacher's decision goes to someone who supervises that teacher.
+    const stands = row?.source_teacher_id
+      ? Prisma.sql`p.sid IS NOT NULL AND chat.staff_teacher_scope(p.sid, ${row.source_teacher_id}::uuid) IS NOT NULL`
+      : Prisma.sql`true`;
+    const current = row ? assigneeOf(row).id : null;
+    const people = await this.prisma.$queryRaw<Array<{ kind: PrincipalKind; id: string; name: string }>>`
+      SELECT p.kind, p.id::text AS id, p.name FROM (
+        SELECT 'staff' AS kind, s.id, s.name, s.id AS sid, NULL::uuid AS tid FROM chat.staff s
+         WHERE s.organization_id = ${viewer.organizationId}::uuid AND s.is_active AND s.left_at IS NULL AND s.role <> 'system'
+        UNION ALL
+        SELECT 'teacher', t.id, t.name, NULL::uuid, t.id FROM chat.teacher t
+         WHERE t.organization_id = ${viewer.organizationId}::uuid AND t.is_active AND t.left_at IS NULL
+      ) p
+      WHERE ${may} AND ${stands} AND p.id IS DISTINCT FROM ${current}::uuid
+      ORDER BY p.name, p.id
+      LIMIT 500`;
+    // A department is a handing-on target (it lands with its manager), not a
+    // creating one; a teacher's decision stays with its supervisors.
+    const departments = row && !row.source_teacher_id
+      ? await this.prisma.$queryRaw<Array<{ kind: string; managerName: string }>>`
+          SELECT DISTINCT ON (d.kind) d.kind, m.name AS "managerName" FROM chat.department d
+            JOIN chat.staff m ON m.id = d.manager_id AND m.is_active AND m.left_at IS NULL
+           WHERE d.organization_id = ${viewer.organizationId}::uuid AND d.kind IN ('operations', 'teachers', 'sales')
+             AND m.id IS DISTINCT FROM ${current}::uuid
+           ORDER BY d.kind, d.id`
+      : [];
+    return { people, departments };
   }
 
   /** Exit 1, a manual task: the assignee says it is done. { note? } */
@@ -682,6 +736,25 @@ export class TaskService {
       SELECT 1 FROM chat.department d WHERE d.manager_id = ${viewer.id}::uuid AND d.organization_id = t.organization_id))`;
   }
 
+  /** The routes' rules, read once for the viewer (TaskService.get). */
+  private async actionsFor(viewer: Viewer, row: Row): Promise<TaskActionName[]> {
+    if (row.state !== 'open' && row.state !== 'awaiting_decision') return [];
+    const mine = isAssignee(viewer, row);
+    const decider = row.standing === 'manager' || row.standing === 'super_admin';
+    const out: TaskActionName[] = [];
+    if (mine && row.kind === 'manual') out.push('complete');
+    if (mine && row.kind === 'system' && row.source_state === 'withdrawn') out.push('acknowledge');
+    if (mine && nextState(row.state, 'out_of_scope') !== null) out.push('out_of_scope');
+    if (mine || decider) out.push('comment');
+    if (decider && nextState(row.state, 'return') !== null) out.push('return');
+    if (decider) out.push('remove', 'due', 'priority');
+    const followsSource = !!row.source_type && NOT_REASSIGNABLE.has(row.source_type);
+    const orphaned = viewer.superAdmin && !!row.source_type && FINANCIAL.has(row.source_type)
+      && !(await this.isLive(viewer.organizationId, assigneeOf(row)));
+    if ((decider || (mine && (await this.managesDepartment(viewer)))) && (!followsSource || orphaned)) out.push('reassign');
+    return out;
+  }
+
   private async managesDepartment(viewer: Viewer): Promise<boolean> {
     if (viewer.kind !== 'staff') return false;
     const [r] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
@@ -807,13 +880,14 @@ export class TaskService {
                                                  FROM chat.teacher_violation q JOIN chat.teacher te ON te.id = q.teacher_id WHERE q.id = t.source_id)
                WHEN 'case' THEN (SELECT jsonb_build_object('caseTitle', c.title) FROM chat.supervision_case c WHERE c.id = t.source_id)
                WHEN 'instalment' THEN (SELECT jsonb_build_object('label', i.label, 'amountMinor', i.amount_minor, 'currency', i.currency,
-                                                                 'dueDate', i.due_date, 'learnerName', ln.name, 'familyName', f.display_name)
+                                                                 'dueDate', i.due_date, 'learnerName', ln.name, 'familyName', f.display_name,
+                                                                 'learnerId', i.learner_id)
                                          FROM chat.family_instalment i JOIN chat.family f ON f.id = i.family_id
                                          LEFT JOIN chat.learner ln ON ln.id = i.learner_id WHERE i.id = t.source_id)
-               WHEN 'package_low' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'balance', a.balance)
+               WHEN 'package_low' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'balance', a.balance, 'learnerId', e.learner_id)
                                           FROM chat.work_task_package_episode e JOIN chat.learner ln ON ln.id = e.learner_id
                                           LEFT JOIN chat.learner_access a ON a.learner_id = e.learner_id WHERE e.id = t.source_id)
-               WHEN 'renewal_request' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'balance', a.balance)
+               WHEN 'renewal_request' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'balance', a.balance, 'learnerId', e.learner_id)
                                               FROM chat.work_task_package_episode e JOIN chat.learner ln ON ln.id = e.learner_id
                                               LEFT JOIN chat.learner_access a ON a.learner_id = e.learner_id WHERE e.id = t.source_id)
                WHEN 'receipt_review' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'amountMinor', r.amount_minor, 'currency', r.currency)
