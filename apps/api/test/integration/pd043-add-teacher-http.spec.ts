@@ -413,10 +413,10 @@ describe('5. GET /teacher-files offers the form', () => {
     const r = await add(m.teachersManager.subject, { email: email('x'), supervisorId: m.teacherSupervisors[0]!.id });
     const id = r.json.teacher.id as string;
     const as = async (subject: string) => (await http(subject, 'GET', `/teacher-files/${id}`)).json.signIn;
-    expect(await as(m.teachersManager.subject)).toEqual({ status: 'provisioned', canSendCode: true });
-    expect(await as(m.teacherSupervisors[0]!.subject)).toEqual({ status: 'provisioned', canSendCode: true });
+    expect(await as(m.teachersManager.subject)).toEqual({ status: 'provisioned', canSendCode: true, canGive: false });
+    expect(await as(m.teacherSupervisors[0]!.subject)).toEqual({ status: 'provisioned', canSendCode: true, canGive: false });
     // Strict scope off, the other supervisor reads the file but is not the current supervisor.
-    expect(await as(m.teacherSupervisors[1]!.subject)).toEqual({ status: 'provisioned', canSendCode: false });
-    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${m.teachers[0]!.id}`)).json.signIn).toEqual({ status: 'active', canSendCode: false });
+    expect(await as(m.teacherSupervisors[1]!.subject)).toEqual({ status: 'provisioned', canSendCode: false, canGive: false });
+    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${m.teachers[0]!.id}`)).json.signIn).toEqual({ status: 'active', canSendCode: false, canGive: false });
   });
 });

@@ -8,9 +8,9 @@ import type { TeacherFile, TeacherSummary } from './api'
 
 /**
  * PD-43 "Give sign-in" on the Teacher File: a teacher with no login gets one
- * (POST /teachers/:id/sign-in); a login never used gets a new first sign-in
- * code (POST /teachers/:id/first-login-code). The page follows the file's
- * `signIn.status` and `access.canManageSignIn`; the code is shown once. Who may
+ * (POST /teachers/:id/sign-in), and the first code is shown once to whoever
+ * gives it. The page follows the file's `signIn.canGive`; the list marks
+ * teachers with no sign-in (the migration intake's work list). Who may
  * is proven server-side (apps/api test/integration/pd043-give-sign-in-http.spec.ts).
  * Synthetic people only.
  */
@@ -71,9 +71,9 @@ function file(access: TeacherFile["access"] = { canEditPersonal: false, canWrite
 
 const manager = makeStaff({ id: 'm-1', name: 'Teachers Manager', role: 'manager' })
 
-const withSignIn = (status: string, canManageSignIn = true) => ({
-  ...file({ canEditPersonal: true, canWriteSupervision: true, canManageSignIn } as TeacherFile['access']),
-  signIn: { status },
+const withSignIn = (status: string, canGive = true) => ({
+  ...file({ canEditPersonal: true, canWriteSupervision: true } as TeacherFile['access']),
+  signIn: { status, canSendCode: false, canGive },
 })
 
 const CODE = { code: '482913', expiresAt: '2026-10-31T09:00:00Z', emailed: false }
@@ -115,24 +115,11 @@ describe('Give sign-in', () => {
     await waitFor(() => expect(screen.queryByText('482913')).not.toBeInTheDocument())
   })
 
-  it('a login never used: Send a new first sign-in code', async () => {
-    on('GET', /\/teacher-files\/t-1$/, () => json(withSignIn('provisioned')))
-    on('POST', /\/teachers\/t-1\/first-login-code$/, () => json({ teacherId: 't-1', signIn: 'teacher.one@example.test', firstLogin: CODE }, 201))
-    const user = userEvent.setup()
-    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1' })
-    expect(await screen.findByText('Not signed in yet')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Give sign-in' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Send a new first sign-in code' }))
-    const shown = await screen.findByRole('dialog', { name: 'First sign-in code' })
-    expect(within(shown).getByText('482913')).toBeInTheDocument()
-    expect(calls('POST', /\/teachers\/t-1\/first-login-code$/)).toHaveLength(1)
-  })
-
-  it('an active login, or no right to manage it: neither button', async () => {
+  it('a teacher with a login, or no right to give one: no Give sign-in', async () => {
     on('GET', /\/teacher-files\/t-1$/, () => json(withSignIn('active')))
     const { unmount } = renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1' })
     await screen.findByRole('heading', { level: 1, name: /^Teacher One/ })
-    expect(screen.queryByRole('button', { name: /Give sign-in|Send a new first sign-in code/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Give sign-in' })).not.toBeInTheDocument()
     unmount()
 
     on('GET', /\/teacher-files\/t-1$/, () => json(withSignIn('none', false)))

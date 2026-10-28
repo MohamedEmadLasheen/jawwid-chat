@@ -11,7 +11,8 @@
  *      in use (gate P2-5: one identical answer).
  *   3. One transaction for the login, the link and the code; two calls at
  *      once make one login.
- *   4. The Teacher File tells the page: signIn.status and canManageSignIn.
+ *   4. The Teacher File tells the page: signIn { status, canSendCode, canGive };
+ *      the list marks each teacher's sign-in.
  *
  * Synthetic people only (G-20).
  */
@@ -241,12 +242,23 @@ describe('3. one transaction, one login', () => {
 });
 
 describe('4. the Teacher File tells the page', () => {
-  it('signIn.status and canManageSignIn', async () => {
+  it('signIn { status, canSendCode, canGive }', async () => {
     const none = await legacyTeacher();
     const file = await http(m.teachersManager.subject, 'GET', `/teacher-files/${none}`);
-    expect(file.json).toMatchObject({ signIn: { status: 'none' }, access: { canManageSignIn: true } });
-    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${m.teachers[0]!.id}`)).json.signIn).toEqual({ status: 'active' });
-    expect((await http(m.teacherSupervisors[0]!.subject, 'GET', `/teacher-files/${none}`)).json.access.canManageSignIn).toBe(true);
+    expect(file.json.signIn).toEqual({ status: 'none', canSendCode: false, canGive: true });
+    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${m.teachers[0]!.id}`)).json.signIn).toEqual({
+      status: 'active',
+      canSendCode: false,
+      canGive: false,
+    });
+    // Strict scope off: the department reaches every teacher.
+    expect((await http(m.teacherSupervisors[0]!.subject, 'GET', `/teacher-files/${none}`)).json.signIn.canGive).toBe(true);
+    await strict(true);
+    try {
+      expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${none}`)).json.signIn.canGive).toBe(true);
+    } finally {
+      await strict(false);
+    }
     const list = await http(m.teachersManager.subject, 'GET', '/teacher-files');
     expect(list.json.teachers.find((t: { id: string }) => t.id === none)).toMatchObject({ signIn: 'none' });
   });
