@@ -1,6 +1,6 @@
 # PD-42: entering families by hand, without a trial (review and plan, v3)
 
-**State:** revision 3. The owner has decided Q1–Q5 and added five safeguards (§13, §15). The safeguard-5 check of PD-30 on `main` flags points that need a decision before any code (§16). No feature code has been written.
+**State:** revision 3.1. The owner has decided Q1–Q5 and added five safeguards (§13, §15). Of the points the safeguard-5 check of PD-30 raised (§16), the department head decided F1, F2, F3 and F5 on 2026-10-28. **F4 is with the owner.** No feature code has been written; code waits for the F4 answer and the head's GO.
 **Claim:** `docs/product/pd-registry/PD-42.md`. Migration slot `20261028110000` (`chat_pd042_direct_enrolment`), renumbered from `20261027140000`, which now sorts before `main`'s `20261027190000`.
 **Base:** `main` @ `a547b0e2` (merged in). PD-40 is on `main`: its catalogue is `catalogue.ts` plus the tables `chat.permission` and `chat.legacy_permission_bundle` (`20261027190000_chat_pd040_access_roles.sql`).
 
@@ -458,7 +458,7 @@ The form saves with this minimum. The rest is completed later, on the screens th
 
 | PR | Contents | Depends on |
 |---|---|---|
-| **PR-1, data** | Migration `20261028110000`, plus the Prisma model. No behaviour change. It contains: `student_enrolment` with `id` as primary key, `origin`, `kind`, a nullable `lesson_id` and `account_id`, `entered_*`, and the new guards; `enrol_learner` widened (intake authority, optional teacher); `chat.family_sales_owner` and its backfill; `chat.family_contact_key` (S1); `chat.staff_may_handle_family` and `chat.sales_family_scope()` (S3; the setting stays `all`); `learner_subscription` with `carried_over`, `lessons_used_before`, the 1–24 plan length and the new compute (F1–F5); the `subscriptions.carry_over` key and bundle rows (§8); the PD-30 amendment record; the PD-30 equivalence spec. | — |
+| **PR-1, data** (waits for F4 and the GO) | Migration `20261028110000`, plus the Prisma model. No behaviour change. It contains: `student_enrolment` with `id` as primary key, `origin`, `kind`, a nullable `lesson_id` and `account_id`, `entered_*`, and the new guards; `enrol_learner` widened (intake authority, optional teacher); `chat.family_sales_owner` and its backfill; `chat.family_contact_key` (S1); `chat.staff_may_handle_family` and `chat.sales_family_scope()` (S3; the setting stays `all`); `learner_subscription` with `carried_over`, `lessons_used_before`, the 1–24 plan length and the new compute (F1–F5); the `subscriptions.carry_over` key and bundle rows (§8); the PD-30 amendment record; the PD-30 equivalence spec. | — |
 | **PR-2, intake** | `FamilyIntakeService` (shared PD-16 body); enter family; add child; set sign-in e-mail; carried-over package; duplicates and locks; "Needs an Operations supervisor"; the Admin Web form, New Students filters and profile actions. **This answers the owner.** | PR-1 |
 | **PR-3, family group and trial sibling** | `addLearnersToFamilyGroup`; Assign's `PARENT_EXISTS` → added children | PR-2 |
 | **PR-4, Sales scope enforcement** | `SALES_FAMILY_SCOPE` in the API (PD-17, PD-27, PD-30, New Students) and in the DB write guards (S3); the verification CLI; the Sales owner change by the Sales manager; the `family-contact-keys:backfill` CLI (S1) | PR-1. The CLIs run before intake opens; the switch goes on only after verification and a GO (D2) |
@@ -597,9 +597,19 @@ Done; see §16. The conflicts it found are **flagged** there, each with a recomm
 | PD-30's go-live **backfill** created a ledger row from PD-15's `package_lessons` for every child that had one | `:877-890` | **conflict, F2** |
 | Once a ledger row exists, the ledger is the package. `package_lessons` is no longer edited | `lessons/enrollment.service.ts:206-208` | agrees: intake writes no `package_lessons` |
 
-### 16.2 Flagged before code
+### 16.2 Flagged before code, and the decisions
 
-**F1. A Core student already past their total (already into grace, or over it).**
+| Flag | Status (2026-10-28) |
+|---|---|
+| F1 | **DECIDED** by the department head, under the owner's safeguard 2: completed is stored exactly as entered, the form shows "Over by N", a manager confirms, and PD-30 counts the grace once. |
+| F2 | **DECIDED**: carry-over only for a child with **no** standing ledger row, enforced in the DB. QA sizes it on systest with the read-only count below. A production count, if needed, is an owner-run query relayed by the head. |
+| F3 | **DECIDED**: `plan_months` 1–24 for `source = 'carried_over'` only. |
+| F4 | **OPEN, with the owner.** It overrides PD-30's owner decision of 2026-10-26. The head has put the bounded wording below to the owner. Nothing that depends on it is built until the answer is relayed. |
+| F5 | **DECIDED** (agreed): `starts_on` is the child's intake day. |
+
+The original analysis of each flag follows, unchanged.
+
+**F1. A Core student already past their total (already into grace, or over it).** *(DECIDED: the recommendation.)*
 - **The issue.** v2 capped completed at the total. That cannot represent a student who has used 21 of 20, and capping would silently alter their entitlement (S2).
 - **Recommendation:** accept any completed ≥ 0, exactly as entered.
   - When completed > total, the form shows "Over by N". It needs a confirmation from the Operations manager or the Sales manager (the PD-30 three roles), recorded in the audit row.
@@ -607,19 +617,19 @@ Done; see §16. The conflicts it found are **flagged** there, each with a recomm
   - Over the grace, the child is `locked` when enforcement is on, which is the truth.
 - **Alternative:** refuse above the total and require an exception. That loses the real count.
 
-**F2. Children who already have a ledger row in Chat.**
+**F2. Children who already have a ledger row in Chat.** *(DECIDED: the recommendation.)*
 - **The issue.** PD-30's go-live backfill (`:877-890`), and any paid request or instalment plan since, gave some existing children a standing row. A carried-over row on top would **double their package**.
 - **Recommendation:** a carried-over row is allowed **only for a child with no standing ledger row** (DB-enforced). A child with one shows their ledger and offers no carry-over. If the backfilled row is wrong, a PD-30 role voids it first, with a reason.
 - **To check before PR-2.** I cannot read production. The head or the operator should run this read-only query on production and on systest:
   `select source, count(*) from chat.learner_subscription where voided_at is null group by source;`
   It shows how many children this affects. If production has none (likely, before go-live), F2 is only a guard.
 
-**F3. Plan length.**
+**F3. Plan length.** *(DECIDED: the recommendation.)*
 - **The issue.** PD-30 allows only 1, 3, 6 or 12 months (`:132`). A Core plan of another length (2 months, 4 months) **cannot be preserved** as S2 requires.
 - **Recommendation:** for `source = 'carried_over'` only, allow 1–24 months. That is a single CHECK change (`plan_months in (1,3,6,12) or (source = 'carried_over' and plan_months between 1 and 24)`). **Readers checked:** Admin Web's `planLabel` (`features/profiles/copy.ts:185-191`) and Flutter's `billingPlanMonths` and `subscriptionMonthCount` (ICU plurals, `app_ar.arb:1168`, used by `payment_sections.dart:17-33`) already render any number of months. The CHECK is the only change.
 - **Alternative:** keep the set, and store a length outside it in the note with `plan_months` null. This loses the structured value.
 
-**F4. Supervisors recording lessons with no payment conflicts with PD-30's owner decision of 2026-10-26.**
+**F4. Supervisors recording lessons with no payment conflicts with PD-30's owner decision of 2026-10-26.** *(OPEN: with the owner.)*
 - **The issue.** PD-30 says only the super admin, the Operations manager and the Sales manager may add lessons with no payment behind them. The DB enforces this (`can_grant_subscription_exception`). The approved PD-42 design lets **every Sales and Operations supervisor** record a carried-over package, which is also lessons with no Chat payment. The owner approved it on 2026-10-28, but it is an exception to a standing decision.
 - **Recommendation:** record it as a **PD-30 amendment** (`PD-30-amendment-carried-over`) and bound it narrowly, all DB-enforced:
   - source `carried_over` only;
@@ -630,7 +640,7 @@ Done; see §16. The conflicts it found are **flagged** there, each with a recomm
   - Anything else stays with the three roles.
 - **Confirm:** the head confirms the amendment wording, or asks the owner.
 
-**F5. Lessons held in Chat before the package is entered.**
+**F5. Lessons held in Chat before the package is entered.** *(DECIDED: agreed.)*
 - **The issue.** If a child is entered without a package and the package is added days later, the lessons held in between would not count, because the counting starts at the row's `starts_on`. That would be free lessons.
 - **Recommendation:** `starts_on` = **the child's intake day**, always, even when the package is entered later (within the 14 days). The form asks for "completed lessons **before «intake date»**". Lessons held in Chat since then count automatically.
 - PD-30's guard allows a backdated `starts_on` only for `staff` rows (−7 days). The `carried_over` rule above takes the intake day instead.
