@@ -822,6 +822,9 @@ export class OutboxWorker {
     else if (change === 'returned') await this.pipeline.taskLeft(taskId, 'done', t.assignee, ['task_out_of_scope', 'task_overdue_decision']);
     else if (change === 'due_changed') await this.pipeline.taskLeft(taskId, 'done', null, ['task_overdue', 'task_overdue_decision']);
     if (!pending) return;
+    // A case's task is the owner's pointer; the case announces itself
+    // (PD-35 case_opened / case_assigned / case_due_soon) -- never twice.
+    if (t.source_type === 'case') return;
 
     const notFor = (ids: Array<string | null>) => [...new Set(ids.filter((x): x is string => !!x && x !== actor))];
     // The deciders: the responsible managers, else the super admin.

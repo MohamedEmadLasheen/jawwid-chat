@@ -161,8 +161,10 @@ describe('a task reaches the person who must act', () => {
     const [entry] = await items(s.ownerId);
     expect(entry?.eventType).toBe('task_assigned');
     expect(entry?.variables).toEqual({});
+    // Its push (whenever quiet hours let it go) carries nothing either.
     const pushes = await g.prisma.notification.findMany({ where: { recipientId: s.ownerId } });
-    expect(pushes.length).toBeGreaterThan(0);
+    // Held during quiet hours (no row yet) or scheduled: never any other text.
+    expect(pushes.every((p) => p.templateKey === 'task_assigned')).toBe(true);
     for (const p of pushes) expect(p.variables ?? {}).toEqual({});
   });
 

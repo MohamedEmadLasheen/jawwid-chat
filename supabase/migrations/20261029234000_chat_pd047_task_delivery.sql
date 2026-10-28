@@ -198,8 +198,17 @@ revoke all on function chat.work_task_raise_renewal(uuid) from public;
 revoke all on function chat.work_task_financial_owner(text, uuid) from public;
 
 -- ===========================================================================
--- The texts
+-- The rules (chat.notification.rule_key references them) and the texts
 -- ===========================================================================
+
+insert into chat.notification_rule (key, event_type, offset_seconds, template_key, recipient_role, channel, priority, respect_quiet_hours)
+values
+  ('task_assigned',         'task_assigned',         0, 'task_assigned',         'assignee', 'push', 'normal', true),
+  ('task_returned',         'task_returned',         0, 'task_returned',         'assignee', 'push', 'normal', true),
+  ('task_out_of_scope',     'task_out_of_scope',     0, 'task_out_of_scope',     'manager',  'push', 'normal', true),
+  ('task_overdue',          'task_overdue',          0, 'task_overdue',          'assignee', 'push', 'normal', true),
+  ('task_overdue_decision', 'task_overdue_decision', 0, 'task_overdue_decision', 'manager',  'push', 'normal', true)
+on conflict (key) do nothing;
 
 insert into chat.notification_template (key, locale, title, body)
 select v.key, v.locale, v.title, v.body

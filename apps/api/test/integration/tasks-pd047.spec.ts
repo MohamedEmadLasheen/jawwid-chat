@@ -566,7 +566,14 @@ describe('the realtime signal', () => {
     const revs = sig.map((p) => p.revision);
     expect([...revs].sort((a, b) => a - b)).toEqual(revs);
     expect(new Set(revs).size).toBe(revs.length);
-    for (const p of sig) expect(Object.keys(p).sort()).toEqual(['change', 'revision', 'taskId']);
+    // Ids only: who did it and, for a hand-on, whom it left and reached -- never a name or any text.
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    for (const p of sig as Array<Record<string, unknown>>) {
+      expect(Object.keys(p).every((k) => ['taskId', 'revision', 'change', 'actorId', 'fromAssignee', 'toAssignee'].includes(k))).toBe(true);
+      for (const k of ['taskId', 'actorId', 'fromAssignee', 'toAssignee']) if (p[k] !== undefined) expect(p[k]).toMatch(UUID);
+      expect(typeof p.revision).toBe('number');
+    }
+    expect(sig.find((p) => p.change === 'reassigned')).toEqual(expect.objectContaining({ fromAssignee: expect.any(String), toAssignee: expect.any(String) }));
   });
 });
 
