@@ -32,6 +32,7 @@ import real95 from '../../public/data/quran/surah-095.json';
 import real96 from '../../public/data/quran/surah-096.json';
 import real97 from '../../public/data/quran/surah-097.json';
 import real98 from '../../public/data/quran/surah-098.json';
+import real1 from '../../public/data/quran/surah-001.json';
 import real78 from '../../public/data/quran/surah-078.json';
 import real79 from '../../public/data/quran/surah-079.json';
 import real80 from '../../public/data/quran/surah-080.json';
@@ -153,6 +154,11 @@ describe('Al-Buruj, on the real verified text', () => {
 });
 
 // Every lesson rebuilt on the engine (Juz' Amma, batch 1), each on its real verified surah.
+// Batch 5: Al-Fatihah. The Basmala is ayah 1 of 7, in the old lesson and in the verified text alike.
+const BATCH5: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
+  1: { file: real1, ayat: 7, held: 3, complete: 6 },
+};
+
 // Juz' Amma batch 4 (78-84, 86-88), the last of it. An-Nazi'at's old lesson split ayah 40 and stopped at 45:
 // its tafsir is merged, renumbered, and ayah 46 is missing.
 const BATCH4: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
@@ -205,13 +211,13 @@ const BATCH1: Record<number, { file: unknown; ayat: number; held: number; comple
   114: { file: real114, ayat: 6, held: 4, complete: 8 },
 };
 
-describe("Juz' Amma batches 1 to 4, each on its real verified text", () => {
+describe("Juz' Amma batches 1 to 4 and Al-Fatihah, each on its real verified text", () => {
   const anchor: QuranAnchor = {
     datasetId: realManifest.datasetId,
     fileSha256: realManifest.fileSha256,
     rangeSha256: realManifest.surahs.map((s) => s.rangeSha256),
   };
-  for (const [n, expected] of Object.entries({ ...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4 })) {
+  for (const [n, expected] of Object.entries({ ...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4, ...BATCH5 })) {
     it(`surah ${n}: every position resolves, flagged lines are held, and it waits for approval`, async () => {
       const surah = Number(n);
       const fetcher: Fetcher = async (path) =>

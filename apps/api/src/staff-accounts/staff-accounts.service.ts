@@ -59,6 +59,8 @@ export interface AccessRoleDto {
   maxTier: string;
   permissions: string[];
   archived: boolean;
+  /** Seeded for every organization (role-templates.ts, PD-40 PR-4); otherwise ordinary data. */
+  template: boolean;
   /** May THIS caller grant it now (S1, H5)? Advisory: the database decides again. */
   grantable: boolean;
 }
@@ -282,9 +284,9 @@ export class StaffAccountsService {
     const org = requireStaff(actor);
     const standing = await this.standing(actor);
     const rows = await this.prisma.$queryRaw<
-      Array<{ id: string; key: string; name_en: string; name_ar: string; description: string | null; max_tier: string; archived: boolean; permissions: string[] | null }>
+      Array<{ id: string; key: string; name_en: string; name_ar: string; description: string | null; max_tier: string; archived: boolean; template: boolean; permissions: string[] | null }>
     >`
-      SELECT r.id::text AS id, r.key, r.name_en, r.name_ar, r.description, r.max_tier, r.archived_at IS NOT NULL AS archived,
+      SELECT r.id::text AS id, r.key, r.name_en, r.name_ar, r.description, r.max_tier, r.archived_at IS NOT NULL AS archived, r.is_template AS template,
              array_agg(arp.permission_key ORDER BY arp.permission_key) FILTER (WHERE arp.permission_key IS NOT NULL) AS permissions
         FROM chat.access_role r
         LEFT JOIN chat.access_role_permission arp ON arp.role_id = r.id
@@ -312,6 +314,7 @@ export class StaffAccountsService {
           maxTier: r.max_tier,
           permissions: keys,
           archived: r.archived,
+          template: r.template,
           grantable,
         };
       }),

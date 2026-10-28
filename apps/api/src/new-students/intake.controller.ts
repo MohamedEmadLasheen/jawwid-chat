@@ -35,6 +35,13 @@ export class FamilyIntakeController {
     return this.intake.family(actorId, familyId);
   }
 
+  /** S4: the family's history -- who entered it, owns it, placed it; its packages. */
+  @Requires('new_students.view')
+  @Get('families/:familyId/history')
+  history(@ActorId() actorId: string, @Param('familyId') familyId: string) {
+    return this.intake.history(actorId, familyId);
+  }
+
   /** { supervisorId } -- the Operations manager places a family waiting for its Operations supervisor. */
   @Requires('org.manage')
   @Post('families/:familyId/operations-supervisor')

@@ -21,6 +21,7 @@ import { IntakeDialog } from '@/features/intake/IntakeDialog'
 import { I } from '@/features/intake/copy'
 import { useIntakeOptions } from '@/features/intake/hooks'
 import { OwnershipSection } from '@/features/intake/OwnershipSection'
+import { FamilyHistorySection } from '@/features/intake/FamilyHistorySection'
 import {
   CancelRequestDialog,
   EditBillingDialog,
@@ -102,6 +103,8 @@ export function ParentProfilePage({ eyebrow }: { eyebrow?: string }) {
                 <NoteSection profile={data} onEdit={() => setDialog({ kind: 'note' })} />
                 <ChildrenSection profile={data} />
                 <FamilyFeedbackSection familyId={data.family.id} />
+                {/* PD-42 S4: who entered the family, owns it, placed it; its packages. */}
+                <FamilyHistorySection familyId={data.family.id} />
                 {isProfileRefusal(billing.error) ? (
                   <Section id="pf-payments" title={tx(P.payments)}>
                     <p className="tf-muted">{describeError(billing.error, locale)}</p>
