@@ -1,8 +1,8 @@
-# PD-42: entering families by hand, without a trial (review and plan, v2)
+# PD-42: entering families by hand, without a trial (review and plan, v3)
 
-**State:** plan for approval, revision 2. No feature code has been written.
-**Claim:** `docs/product/pd-registry/PD-42.md`. Migration slot `20261027140000` (`chat_pd042_direct_enrolment`).
-**Base:** `main` @ `6e809f12`. PD-40's catalogue is read from `claude/pd40-access-model` (#174).
+**State:** revision 3. The owner has decided Q1–Q5 and added five safeguards (§13, §15). The safeguard-5 check of PD-30 on `main` flags points that need a decision before any code (§16). No feature code has been written.
+**Claim:** `docs/product/pd-registry/PD-42.md`. Migration slot `20261028110000` (`chat_pd042_direct_enrolment`), renumbered from `20261027140000`, which now sorts before `main`'s `20261027190000`.
+**Base:** `main` @ `a547b0e2` (merged in). PD-40 is on `main`: its catalogue is `catalogue.ts` plus the tables `chat.permission` and `chat.legacy_permission_bundle` (`20261027190000_chat_pd040_access_roles.sql`).
 
 ## What changed since v1
 
@@ -283,11 +283,11 @@ The e-mail is optional at intake, because Core is incomplete.
 | Change | Detail |
 |---|---|
 | `source` gains `'carried_over'` | It has no `request_id` and no `plan_ref`. `created_by` is required. |
-| new column `lessons_used_before integer not null default 0` | `check (lessons_used_before between 0 and lessons_included)`, and `check (source = 'carried_over' or lessons_used_before = 0)`. |
-| at most one standing per child | partial unique index `(learner_id) where source = 'carried_over' and voided_at is null` |
-| `starts_on` = the intake day (academy date) | Nothing before it exists in Chat, so nothing is counted twice. |
-| `plan_months` optional | as PD-30 |
-| guard | `created_by` must hold intake rights over the child's family (`chat.may_enter_family(staff, family)`, the §4.3 rules), or be one of PD-30's three roles (`can_grant_subscription_exception`). |
+| new column `lessons_used_before integer not null default 0` | `check (lessons_used_before between 0 and 1000)`, and `check (source = 'carried_over' or lessons_used_before = 0)`. **Completed may exceed the total** (§16 F1), with a manager's confirmation. |
+| at most one standing per child | partial unique index `(learner_id) where source = 'carried_over' and voided_at is null`. **Refused if the child has any other standing row** (§16 F2). |
+| `starts_on` = **the child's intake day** (academy date), even when the package is entered later | Lessons held in Chat since intake count against it; nothing is counted twice or given free (§16 F5) |
+| `plan_months` optional; 1–24 for this source | as entered, never rounded to PD-30's set (§16 F3) |
+| guard | `created_by` holds `subscriptions.carry_over` (`chat.staff_has_permission`), may handle the family (`chat.staff_may_handle_family`), the child's enrolment has origin `intake`, and today is within 14 days of it. Otherwise, one of PD-30's three roles (`can_grant_subscription_exception`). This is the PD-30 amendment in §16 F4. |
 
 ### 5.2 Counting
 
@@ -326,7 +326,7 @@ These are server-computed and never entered:
 ### 5.5 Who enters it, correction, and audit
 
 - **Entering:** at intake, or afterwards from the Student Profile, by the §4.3 editors of the family. This uses a new key, **`subscriptions.carry_over`** (§8).
-- **Correcting:** void and re-add, with a reason.
+- **Correcting:** void and re-add, with a reason. **Raising the entitlement** (a larger total or a smaller completed) after the child has held any lesson in Chat needs PD-30's three roles, whatever the window (§15 S1).
   - **Within 14 days of the child's intake:** the same editors.
   - **After 14 days:** only PD-30's three roles (`subscriptions.manage`). Changing an opening balance late is then the same as granting free lessons.
 - **Audit:**
@@ -381,9 +381,12 @@ The form saves with this minimum. The rest is completed later, on the screens th
 - `CHILD_EXISTS` and `PARENT_EXISTS` answers never disclose a family the actor cannot reach;
 - an actor with no scope gets 403 **before** any lookup, as PD-17 does.
 
-**Two changes to hand to the PD-40 session:**
-- add `subscriptions.carry_over` to the catalogue;
-- add `parents.edit` to `supervisor:sales`.
+**How the two changes land, now that PD-40 is merged.** PD-40's consistency rule is one catalogue row plus one migration row. PD-42 makes both changes itself:
+- PR-1's migration inserts `subscriptions.carry_over` into `chat.permission` (risk `finance`, delegable, `introduced_by` PD-42). It inserts `(supervisor|manager, operations|sales, subscriptions.carry_over)` and `(supervisor, sales, parents.edit)` into `chat.legacy_permission_bundle`.
+- `catalogue.ts` and `legacy-bundles.ts` get the same rows. PD-40's seed spec (`pd040-catalogue-seed.spec.ts`) and `pd040-access-roles.spec.ts` prove the code and the tables are equal.
+- New routes declare `@Requires(...)`, so the `pd040-routes` guard and the route table pass. The route table is regenerated with `PD040_WRITE_ROUTE_TABLE=1`.
+- The **DB layer** asks the same question through `chat.staff_has_permission(staff, key)` (`20261027190000…:541-549`). The intake and carried-over guards call it, so a key that is missing refuses at the database as well (§15, S3).
+- The PD-40 guard is in SHADOW mode for legacy tiers. The Layer-2 row scope is what enforces today, and it is never shadowed.
 
 ## 9. How it meets the other decisions
 
@@ -433,7 +436,9 @@ The form saves with this minimum. The rest is completed later, on the screens th
   - no `payment_request`, `invoice` or `family_instalment` is created;
   - the void-and-re-add correction respects the 14-day window, then needs the three roles;
   - the audit rows are present;
-  - the DB refuses `lessons_used_before > lessons_included`, a second standing carried-over row, and an unentitled `created_by`.
+  - completed > total needs a manager's confirmation and leaves the right grace (21 of 20 → one grace lesson);
+  - the DB refuses a second standing carried-over row, a carried-over row for a child with another standing row, one outside the 14-day intake window, and an unentitled `created_by`;
+  - the safeguard tests in §15 (S1–S4).
 - **PD-30 equivalence:** the full PD-30 suite still passes with the new compute, because every row has `lessons_used_before = 0`.
 - **Duplicates:**
   - `PARENT_EXISTS` by e-mail and by phone, with each answer limited by scope;
@@ -453,34 +458,42 @@ The form saves with this minimum. The rest is completed later, on the screens th
 
 | PR | Contents | Depends on |
 |---|---|---|
-| **PR-1, data** | Migration `20261027140000`, plus the Prisma model. No behaviour change. It contains: `student_enrolment` with `id` as primary key, `origin`, `kind`, a nullable `lesson_id` and `account_id`, `entered_*`, and the new guards; `enrol_learner` widened (intake authority, optional teacher); `chat.family_sales_owner` and its backfill; `chat.may_enter_family`; `learner_subscription` with `carried_over`, `lessons_used_before` and the new compute; the PD-30 equivalence spec. | — |
+| **PR-1, data** | Migration `20261028110000`, plus the Prisma model. No behaviour change. It contains: `student_enrolment` with `id` as primary key, `origin`, `kind`, a nullable `lesson_id` and `account_id`, `entered_*`, and the new guards; `enrol_learner` widened (intake authority, optional teacher); `chat.family_sales_owner` and its backfill; `chat.family_contact_key` (S1); `chat.staff_may_handle_family` and `chat.sales_family_scope()` (S3; the setting stays `all`); `learner_subscription` with `carried_over`, `lessons_used_before`, the 1–24 plan length and the new compute (F1–F5); the `subscriptions.carry_over` key and bundle rows (§8); the PD-30 amendment record; the PD-30 equivalence spec. | — |
 | **PR-2, intake** | `FamilyIntakeService` (shared PD-16 body); enter family; add child; set sign-in e-mail; carried-over package; duplicates and locks; "Needs an Operations supervisor"; the Admin Web form, New Students filters and profile actions. **This answers the owner.** | PR-1 |
 | **PR-3, family group and trial sibling** | `addLearnersToFamilyGroup`; Assign's `PARENT_EXISTS` → added children | PR-2 |
-| **PR-4, Sales scope switch** | `SALES_FAMILY_SCOPE` across PD-17, PD-27 and New Students reads; the Sales owner change by the Sales manager | PR-1; switched on after the intake |
+| **PR-4, Sales scope enforcement** | `SALES_FAMILY_SCOPE` in the API (PD-17, PD-27, PD-30, New Students) and in the DB write guards (S3); the verification CLI; the Sales owner change by the Sales manager; the `family-contact-keys:backfill` CLI (S1) | PR-1. The CLIs run before intake opens; the switch goes on only after verification and a GO (D2) |
 | **PR-5, docs** | PD-42 in the boundary doc §4; `docs/admin/` intake guide for supervisors; catalogue rows handed to PD-40 | PR-2 |
 
 The second guardian is deferred (owner Q4) and is not in these PRs.
 
-## 13. Owner answers so far, and remaining questions
+## 13. Owner decisions
 
-**Answered on 2026-10-27:**
-- Q2: same form, one click.
-- Q4: second guardian later.
-- Q1 and Q3: Sales and Operations supervisors both enter their own families.
-- Q5: carry over running packages.
+**2026-10-27:**
+- Q2 (adding a child): "Same form + one-click".
+- Q4 (second guardian): "Later".
+- Q1 and Q3: Sales supervisors and Operations supervisors both enter the families assigned to them, scoped to those families. The full text is in the department head's relay, summarised in "What changed since v1".
+- Q5: running packages carry over, with total, completed and remaining lessons, no reset and no new payment.
 
-**Remaining questions, each with a recommendation:**
+**2026-10-28: v2's Q1–Q5 DECIDED.** The owner's answer, verbatim:
 
-1. **A family entered by a Sales supervisor: who chooses its Operations supervisor?**
-   *Recommendation:* the Operations manager, from a "Needs an Operations supervisor" list. The Sales supervisor may suggest a name. This keeps today's rule that only the Operations manager places children on an Operations supervisor.
-2. **Should Sales' current access to every family (parent profiles, payments) narrow to "own families"?**
-   *Recommendation:* yes, behind a switch, turned on once the migration intake is complete. The Sales manager keeps every family. Unassigned trial forms stay visible to all of Sales.
-3. **A student whose package is already fully used when entered: the normal two grace lessons, or a longer grace period during the migration?**
-   *Recommendation:* the normal rule, so renewal starts at once. The lock is off in production anyway, and a manager can grant an exception.
-4. **Do Core packages have an expiry date that must carry over?**
-   *Recommendation:* no. Record total, completed and plan months only, because PD-30 has no date expiry. Add one later if the academy enforces it.
-5. **May the Operations manager or the Sales manager enter a family on behalf of a supervisor?**
-   *Recommendation:* yes. The supervisor is named as owner, and the manager is recorded as the one who entered it.
+> "Approve all 5 recommendations, with the following safeguards:
+> 1. Make the migration idempotent. Re-running it must not create duplicate families, duplicate assignments, or grant the 2 grace lessons more than once.
+> 2. Validate package balances carefully. Preserve the original total lessons, completed lessons, remaining balance, and plan length. Do not invent or silently alter package entitlements.
+> 3. Enforce Sales supervisor access restrictions at the API and database authorization layers, not only in the UI. Enable the restriction only after migration is complete and verified. The Sales manager must retain access to all families.
+> 4. Preserve a clear audit trail recording who created each family, who owns it, who assigned the Operations supervisor, and when these actions occurred.
+> 5. Before implementation, verify the existing package rules and grace-lesson behavior. If any recommendation conflicts with existing production behavior or data, flag it before making changes.
+> Important: Do not modify any Jawwid Core production code or database. Implement changes only in the intended system and follow the existing project safeguards."
+
+**What is now decided:**
+
+| # | Decision |
+|---|---|
+| D1 | A Sales-entered family gets its Operations supervisor from the Operations manager, through the "Needs an Operations supervisor" list. The Sales supervisor may suggest a name. |
+| D2 | Sales' access narrows to their own families, behind `SALES_FAMILY_SCOPE`. The switch is turned on only after the intake is complete and verified. The Sales manager keeps every family. |
+| D3 | A package entered as used up follows PD-30's normal rule: two grace lessons, then renewal. |
+| D4 | Core expiry dates are not carried over. Total, completed and plan length are. |
+| D5 | The Operations manager and the Sales manager may enter a family on behalf of a supervisor. The supervisor is the owner, and the manager is recorded as the one who entered it. |
+| D6 | **Nothing in Jawwid Core is read or changed.** Intake is manual entry in Chat only. No Core code, database, API or export is touched, and no Core id is required. |
 
 ## 14. Out of scope
 
@@ -489,3 +502,142 @@ The second guardian is deferred (owner Q4) and is not in these PRs.
 - Merging duplicate families that already exist.
 - An adult learner who is their own parent.
 - Flutter changes. The parent's Payments screen already shows included, used and left. `lessonsUsed` is computed from the balance, so it already includes the completed-before lessons with no client change.
+
+## 15. The owner's safeguards: mechanism and test for each
+
+### S1. Idempotent; no duplicate families or assignments; grace never granted twice
+
+| Risk | Mechanism | Test |
+|---|---|---|
+| A retried or double-submitted intake | The client generates `intake_id` (uuid), which **is** `student_enrolment.id`. The intake runs `insert … on conflict (id) do nothing`. A replay by the same actor returns the stored result and creates nothing. A replay by anyone else gets 409. | The same request sent twice, and sent concurrently, yields one family, one contact, one account, N children, one carried-over row per child, and **one** set of audit rows. |
+| The same parent entered twice, by one or two supervisors | (a) An advisory lock on the normalized e-mail and on the E.164 phone, held inside the transaction. (b) **New `chat.family_contact_key (key_hash text primary key, family_id, kind ∈ {email, phone}, created_at)`**, where `key_hash` = sha-256 of the normalized e-mail or the E.164 phone. It holds no plain PII, which is G-07-safe. Intake and "Set sign-in e-mail" insert into it. The primary key makes a second family with the same phone or e-mail **impossible at the DB**. (c) `account.subject` is already unique. (d) A partial unique index on `student_enrolment (family_id) where kind = 'new_family'`. | Two concurrent intakes with the same phone: one family, and the other gets `PARENT_EXISTS`. Raw SQL inserting a second key fails. |
+| Families that existed before PD-42 | Before intake opens, a one-off CLI `family-contact-keys:backfill` fills `family_contact_key` from every parent file (E.164 parse, as `ParentPhoneDirectory` does). It is run on staging and then production by the operator. It is **read-only towards everything else**, and it reports the collisions it finds without merging them. | A backfill spec over seeded parent files; a collision report for two families that share a phone. |
+| A duplicate Operations-supervisor assignment | `learner_supervision` is keyed by `learner_id` (one supervisor per child, PD-8). Assigning the supervisor a child already has is a **no-op**: no write, no audit row. | Assign twice: one row, one audit row. |
+| A duplicate Sales owner | `family_sales_owner` is keyed by `family_id`. Setting the same owner again is a no-op. | The same. |
+| A duplicate carried-over package | A partial unique index: one **standing** `carried_over` row per child. It is allowed only when the child has **no other standing ledger row** (§16 F2). | A second insert fails at the DB; so does an insert for a child with a backfill row. |
+| **Grace granted twice** | **PD-30 never stores grace. It derives it** from the cumulative balance: `grace_left = grace + balance` once the balance is ≤ 0, and grace lessons used are taken from the next package (`20261026140000…:25-29`, `:459-466`). Grace could only be given again by inflating the balance. That needs either a duplicate carried-over row (blocked above) or a void-and-re-add with a larger total or smaller completed. **Such a re-add, once the child has held any lesson in Chat or 14 days have passed, needs PD-30's three roles** (`subscriptions.manage`) and a reason. | Enter 20/20, hold 2 lessons (grace used up, state `locked`); a supervisor's void-and-re-add of 20/18 is refused and a manager's is allowed and audited. A void-and-re-add with identical numbers leaves `balance` and `grace_left` unchanged. |
+
+### S2. Package balances preserved exactly; nothing invented or silently altered
+
+- **Stored exactly as entered:** `lessons_included` (total), `lessons_used_before` (completed) and the plan length (§16 F3). Remaining is **never stored or typed**. It is derived by PD-30's compute (§5.2).
+- **No clamping, ever.** An out-of-range value is **refused** with a message; it is never adjusted. Integers only. Total 1–1000. Completed ≥ 0. Above the total is §16 F1.
+- **Confirmation step.** Before saving, the form shows "Total 20 · Completed 12 · Remaining 8 · 3 months" and must be confirmed.
+- **No edits.** The row is immutable (`guard_learner_subscription`). A correction is void-and-new, with a reason, both audited (§5.5, S1).
+- **No new entitlement appears silently.** Intake writes no `payment_request`, invoice, instalment, exception or `staff` row.
+- **Tests:**
+  - round-trip of the entered numbers;
+  - every out-of-range value refused (none clamped);
+  - remaining = total − completed − held-in-Chat, across holds and no-shows;
+  - "Lesson 13 of 20";
+  - no other ledger or money rows written;
+  - the before-and-after equality spec over PD-30's suite for rows with `lessons_used_before = 0`.
+
+### S3. The Sales restriction at the API and DB layers, switched on only after verification; the Sales manager keeps everything
+
+- **One setting, written in one place.** `SALES_FAMILY_SCOPE=all|own` is read at boot and written to `chat.config ('sales.family_scope')`. It follows PD-35's strict-scope pattern (`platform/teacher-scope.ts:9-16`): only an explicit value is written, and a change is logged loudly. The API and the DB read that one row through `chat.sales_family_scope()`, so they cannot disagree.
+- **API layer:**
+  - `decideBillingAccess` (`pd012-policy.ts:113-131`) gains a scope `'owned'` for Sales members when the setting is `own`.
+  - Every PD-17, PD-27, PD-30 and New Students read, and every PD-42 action, uses it.
+  - The Sales manager stays `'all'`.
+  - The PD-40 Layer-1 keys come first; then the Layer-2 scope, which is never shadowed.
+- **DB layer:**
+  - New `chat.staff_may_handle_family(staff, family)` = super admin, **or** PD-8 reach (`staff_reaches_family`), **or** the Operations manager, **or** the Sales manager, **or** (Sales member **and** (`sales.family_scope = 'all'` **or** `family_sales_owner.staff_id = staff`)).
+  - It is called by the **write guards** of every family-scoped table a Sales member can write: `parent_file`, `family_billing`, `family_instalment`, `payment_request`, `payment`, `learner_subscription` (the `carried_over` and `staff` sources), `student_enrolment` (intake), `family_sales_owner`, `contact` (name and photo edits).
+  - Reads are already server-side only (no request-role grants), so a read can only come through the API gate.
+  - A raw write as a Sales member against a family they do not own is refused **whatever the API does**.
+- **Switching on (D2).** The switch stays `all` until:
+  1. a verification report (a CLI, read-only) shows every family has an Operations supervisor or a Sales owner, with counts per supervisor;
+  2. the Operations manager and the Sales manager sign the counts off;
+  3. the head and owner give a GO.
+  Switching back to `all` is a restart.
+- **Tests:**
+  - the full matrix under `all` and under `own`;
+  - the Sales manager reaches every family in both modes;
+  - raw-SQL writes refused under `own`;
+  - API and DB agree on every row of a seeded matrix;
+  - the verification CLI reports unowned families.
+
+### S4. Audit trail: who created, who owns, who assigned the Operations supervisor, and when
+
+| Fact | Durable columns (current state) | Audit action (history; in the same transaction; no phone or e-mail) |
+|---|---|---|
+| Who created the family or children, and when | `student_enrolment.entered_by`, `entered_at` (immutable), `origin`, `kind` | `family.entered` / `family.children_added` (`{ origin, kind, learnerIds, onBehalfOf? }`) |
+| Who owns it (Sales) | `family_sales_owner.staff_id`, `assigned_by`, `assigned_at` | `family.sales_owner_set` and `family.sales_owner_changed` (`{ from, to, reason }`) |
+| Who assigned the Operations supervisor, and when | `learner_supervision.supervisor_id`, `assigned_by`, `assigned_at` (they exist) | `learner.supervisor_assigned` per child (exists), plus `family.operations_supervisor_set` (`{ supervisorId, learnerIds }`) for the family |
+| The carried-over package | `learner_subscription.created_by`, `created_at`, `voided_by`, `voided_at`, `void_reason` | `subscription.carried_over` (`{ total, completed, planMonths }`), `subscription.voided` |
+| Entered on behalf of someone (D5) | `entered_by` = the manager | `onBehalfOf` = the owner, on `family.entered` |
+
+- **Reading it.** A **"Family history"** panel on the Parent Profile reads these audit rows for the family and its children. It is in scope (§4.3) and shows actor name, action and time.
+- **Tests:**
+  - each action writes exactly one audit row with actor and time;
+  - the panel lists them in order;
+  - a replay (S1) adds none;
+  - no audit row contains a phone or an e-mail (the existing privacy spec, extended).
+
+### S5. Verify the existing package and grace rules first
+
+Done; see §16. The conflicts it found are **flagged** there, each with a recommendation. They are to be decided before any code.
+
+## 16. Safeguard 5: PD-30 on `main` checked against this plan
+
+**Checked:** `main` @ `a547b0e2`. `20261026140000_chat_pd030_subscription_lock.sql` is the only migration defining the ledger, the counting, the state and the grace rule. Nothing after it redefines them. Also checked: `subscription-effects.service.ts` and `subscription-reads.ts`.
+
+### 16.1 What the existing rules are, and where the plan agrees
+
+| Rule on `main` | Evidence | Plan |
+|---|---|---|
+| A child with **no** standing ledger row has `balance` NULL, is `open`, and is never balance-locked | `:361`, `:454-458` | agrees: a child entered without a package is never locked |
+| Used = `regular` + `makeup` lessons with outcome `held` **or `student_no_show`**, from the earliest standing row's `starts_on` | `:408-419` | agrees. A Chat no-show uses a lesson, as for every child. **The form tells staff to enter Core's *used* count, no-shows included if Core counted them.** |
+| Balance = Σ included − used | `:454-459` | extended by − Σ `lessons_used_before`. It is identical when that is 0 (S2 equivalence spec). |
+| Grace = `subscription.grace_lessons` (default **2**). It is derived, not stored: `grace_left = greatest(grace + balance, 0)` once balance ≤ 0, and **grace lessons used are taken from the next package** | `:94-101`, `:459-466`, header `:25-29` | agrees. This is why grace cannot be granted twice except by inflating the balance (S1). |
+| `locked` when balance has passed the grace, or an instalment due on or after go-live is overdue, unless an exception covers it | `:466-492`, `:85-92` | agrees |
+| **Enforcement off (production):** state is computed, every event is marked applied **with no card and no push**. On the first enforced pass, every child already in grace or locked is **announced** | `subscription-effects.service.ts:88-126`, `:158` | agrees. **Note:** packages entered as used up during the migration will be announced to their families when enforcement is first turned on. |
+| A subscription with **no payment** (`source = 'staff'`) is allowed only to the super admin, the Operations manager or the Sales manager, with a reason, starting between −7 and +30 days | `:103-122`, `:191-199` (owner decision 2026-10-26) | **conflict, F4** |
+| `plan_months ∈ {1, 3, 6, 12}` | `:132` | **conflict, F3** |
+| PD-30's go-live **backfill** created a ledger row from PD-15's `package_lessons` for every child that had one | `:877-890` | **conflict, F2** |
+| Once a ledger row exists, the ledger is the package. `package_lessons` is no longer edited | `lessons/enrollment.service.ts:206-208` | agrees: intake writes no `package_lessons` |
+
+### 16.2 Flagged before code
+
+**F1. A Core student already past their total (already into grace, or over it).**
+- **The issue.** v2 capped completed at the total. That cannot represent a student who has used 21 of 20, and capping would silently alter their entitlement (S2).
+- **Recommendation:** accept any completed ≥ 0, exactly as entered.
+  - When completed > total, the form shows "Over by N". It needs a confirmation from the Operations manager or the Sales manager (the PD-30 three roles), recorded in the audit row.
+  - PD-30's derived grace then counts the over-use: 21 of 20 leaves one grace lesson, so the grace is still given once in total.
+  - Over the grace, the child is `locked` when enforcement is on, which is the truth.
+- **Alternative:** refuse above the total and require an exception. That loses the real count.
+
+**F2. Children who already have a ledger row in Chat.**
+- **The issue.** PD-30's go-live backfill (`:877-890`), and any paid request or instalment plan since, gave some existing children a standing row. A carried-over row on top would **double their package**.
+- **Recommendation:** a carried-over row is allowed **only for a child with no standing ledger row** (DB-enforced). A child with one shows their ledger and offers no carry-over. If the backfilled row is wrong, a PD-30 role voids it first, with a reason.
+- **To check before PR-2.** I cannot read production. The head or the operator should run this read-only query on production and on systest:
+  `select source, count(*) from chat.learner_subscription where voided_at is null group by source;`
+  It shows how many children this affects. If production has none (likely, before go-live), F2 is only a guard.
+
+**F3. Plan length.**
+- **The issue.** PD-30 allows only 1, 3, 6 or 12 months (`:132`). A Core plan of another length (2 months, 4 months) **cannot be preserved** as S2 requires.
+- **Recommendation:** for `source = 'carried_over'` only, allow 1–24 months. That is a single CHECK change (`plan_months in (1,3,6,12) or (source = 'carried_over' and plan_months between 1 and 24)`). **Readers checked:** Admin Web's `planLabel` (`features/profiles/copy.ts:185-191`) and Flutter's `billingPlanMonths` and `subscriptionMonthCount` (ICU plurals, `app_ar.arb:1168`, used by `payment_sections.dart:17-33`) already render any number of months. The CHECK is the only change.
+- **Alternative:** keep the set, and store a length outside it in the note with `plan_months` null. This loses the structured value.
+
+**F4. Supervisors recording lessons with no payment conflicts with PD-30's owner decision of 2026-10-26.**
+- **The issue.** PD-30 says only the super admin, the Operations manager and the Sales manager may add lessons with no payment behind them. The DB enforces this (`can_grant_subscription_exception`). The approved PD-42 design lets **every Sales and Operations supervisor** record a carried-over package, which is also lessons with no Chat payment. The owner approved it on 2026-10-28, but it is an exception to a standing decision.
+- **Recommendation:** record it as a **PD-30 amendment** (`PD-30-amendment-carried-over`) and bound it narrowly, all DB-enforced:
+  - source `carried_over` only;
+  - only for a child whose `student_enrolment` has origin `intake`;
+  - only within 14 days of that intake;
+  - only when the child has no other standing row (F2);
+  - only by someone who may handle the family (`staff_may_handle_family`) and holds `subscriptions.carry_over`.
+  - Anything else stays with the three roles.
+- **Confirm:** the head confirms the amendment wording, or asks the owner.
+
+**F5. Lessons held in Chat before the package is entered.**
+- **The issue.** If a child is entered without a package and the package is added days later, the lessons held in between would not count, because the counting starts at the row's `starts_on`. That would be free lessons.
+- **Recommendation:** `starts_on` = **the child's intake day**, always, even when the package is entered later (within the 14 days). The form asks for "completed lessons **before «intake date»**". Lessons held in Chat since then count automatically.
+- PD-30's guard allows a backdated `starts_on` only for `staff` rows (−7 days). The `carried_over` rule above takes the intake day instead.
+- **No decision needed** unless the head disagrees.
+
+**No conflict found with:**
+- the lock, overdue instalments, exceptions or renewal requests;
+- "Lesson N of M" (the report keeps its M, `:259-262`);
+- the materializer hold (only when enforced);
+- go-live (`subscription.overdue_from`): migrated instalment plans created in Chat with due dates before go-live never lock, which is the existing rule.
