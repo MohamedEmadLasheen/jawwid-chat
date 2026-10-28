@@ -2,14 +2,17 @@
  * PD-42 PR-1 -- the database half of entering families by hand (the migration
  * from Jawwid Core), and PD-30-amendment-carried-over.
  *
- *   1. an intake enrolment: written by the family's own supervisor, one
- *      new_family row per family, idempotent by its id, the parent account set once
- *   2. a supervisor places children only on themself
- *   3. the Sales owner: a Sales member, changed by the Sales manager, never removed
+ *   1. an intake enrolment: written by the family's own supervisor, listing
+ *      only the children it creates (never an existing one), one new_family
+ *      row per family, with a contact key, idempotent by its id, the parent
+ *      account set once
+ *   2. who places a child on a supervisor
+ *   3. the Sales owner: set by the Sales manager; a Sales member owns only the
+ *      family they are entering; never removed
  *   4. one family per parent: the contact keys
- *   5. "their own family" and the Sales switch
+ *   5. "their own family" (not a covering backup) and the Sales switch
  *   6. the carried-over package: the five conditions, the managers, completed
- *      above the total (F1), grace given once, the plan length (F3)
+ *      above the total (F1), grace given once, voids, the plan length (F3)
  *   7. the permission key
  *
  * Every refusal is the database's own: these statements are what a legacy
@@ -19,7 +22,10 @@ import { randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { lessonPosition } from '../../src/billing/subscription-reads';
-import { buildGraph, seed, truncate, type Scenario } from './harness';
+import { contactKeyHash } from '../../src/new-students/contact-key';
+import { activateBackup, buildGraph, seed, truncate, type Scenario } from './harness';
+
+process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
 
 jest.setTimeout(60_000);
 
@@ -60,18 +66,21 @@ async function department(kind: string, managerId: string | null, members: strin
 interface Intake { familyId: string; contactId: string; learnerId: string; enrolmentId: string }
 
 /**
- * A family entered by `by`, the way PR-2's intake will write it: the family
- * (owned by its entrant), the parent, the child, then -- for an Operations
- * supervisor -- their own supervision, or -- for a Sales member -- their
- * ownership, and the intake enrolment.
+ * A family entered by `by`, the way PR-2's intake will write it, in one
+ * transaction: the family (chat.create_intake_family), the parent, -- for a
+ * Sales member -- their ownership, the parent's contact key, the child, --
+ * for an Operations supervisor -- their own supervision, and the intake
+ * enrolment (which records who entered the child).
  */
-async function intake(by: string, as: 'operations' | 'sales', opts: { teacherId?: string | null; enrolmentId?: string } = {}): Promise<Intake> {
+async function intake(
+  by: string,
+  as: 'operations' | 'sales',
+  opts: { teacherId?: string | null; enrolmentId?: string; key?: boolean } = {},
+): Promise<Intake> {
   const enrolmentId = opts.enrolmentId ?? randomUUID();
   return g.prisma.$transaction(async (tx) => {
     const q = <T>(text: string, ...args: unknown[]) => tx.$queryRawUnsafe<T[]>(text, ...args).then((r) => r[0]!);
-    const { id: familyId } = await q<{ id: string }>(
-      `insert into chat.family (display_name, owner_id, language) values ('family_i', $1::uuid, 'ar') returning id::text as id`, by,
-    );
+    const { id: familyId } = await q<{ id: string }>(`select chat.create_intake_family('family_i', $1::uuid)::text as id`, by);
     const { id: contactId } = await q<{ id: string }>(
       `insert into chat.contact (family_id, name, role_preset, can_message, is_active)
        values ($1::uuid, 'parent_i', 'primary_guardian', true, true) returning id::text as id`, familyId,
@@ -80,6 +89,13 @@ async function intake(by: string, as: 'operations' | 'sales', opts: { teacherId?
       await tx.$executeRawUnsafe(
         `insert into chat.family_sales_owner (family_id, organization_id, staff_id, assigned_by)
          values ($1::uuid, chat.default_organization_id(), $2::uuid, $2::uuid)`, familyId, by,
+      );
+    }
+    if (opts.key !== false) {
+      await tx.$executeRawUnsafe(
+        `insert into chat.family_contact_key (organization_id, key_hash, family_id, kind, created_by)
+         values (chat.default_organization_id(), $1, $2::uuid, 'phone', $3::uuid)`,
+        contactKeyHash('phone', `+2010${Math.floor(Math.random() * 1e8).toString().padStart(8, '0')}`), familyId, by,
       );
     }
     const teacher = opts.teacherId === undefined ? s.teacherId : opts.teacherId;
@@ -98,6 +114,25 @@ async function intake(by: string, as: 'operations' | 'sales', opts: { teacherId?
       enrolmentId, familyId, contactId, learnerId, by,
     );
     return { familyId, contactId, learnerId, enrolmentId };
+  });
+}
+
+/** A further child entered into a family that is `by`'s own: Add child (kind added_children). */
+async function addChild(by: string, familyId: string, contactId: string): Promise<string> {
+  return g.prisma.$transaction(async (tx) => {
+    const [{ id }] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+      `select chat.enrol_learner($1::uuid, 'child_more', $2::uuid, $3::uuid)::text as id`, familyId, s.teacherId, by,
+    );
+    await tx.$executeRawUnsafe(
+      `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, $2::uuid)`, id, by,
+    );
+    await tx.$executeRawUnsafe(
+      `insert into chat.student_enrolment (organization_id, family_id, contact_id, learner_ids, origin, kind, assigned_by)
+       values (chat.default_organization_id(), $1::uuid, $2::uuid, array[$3::uuid], 'intake', 'added_children', $4::uuid)`,
+      familyId, contactId, id, by,
+    );
+    return id;
   });
 }
 
@@ -133,6 +168,9 @@ async function enteredDaysAgo(enrolmentId: string, days: number) {
     g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
     g.prisma.$executeRawUnsafe(
       `update chat.student_enrolment set assigned_at = now() - make_interval(days => $2) where id = $1::uuid`, enrolmentId, days,
+    ),
+    g.prisma.$executeRawUnsafe(
+      `update chat.learner_intake set entered_at = now() - make_interval(days => $2) where enrolment_id = $1::uuid`, enrolmentId, days,
     ),
   ]);
 }
@@ -188,6 +226,31 @@ describe('1. an intake enrolment', () => {
     const e = await g.prisma.studentEnrolment.findUniqueOrThrow({ where: { id: f.enrolmentId } });
     expect(e).toMatchObject({ origin: 'intake', kind: 'new_family', lessonId: null, accountId: null, assignedBy: s.ownerId });
     expect(await g.prisma.learnerSupervision.findUnique({ where: { learnerId: f.learnerId } })).toMatchObject({ supervisorId: s.ownerId });
+    // Who entered the child, recorded by the intake that created it (review P1-A).
+    expect(await g.prisma.learnerIntake.findUnique({ where: { learnerId: f.learnerId } }))
+      .toMatchObject({ enrolmentId: f.enrolmentId, enteredBy: s.ownerId, familyId: f.familyId });
+  });
+
+  it('a new family is entered with its parent\'s contact key', async () => {
+    await expect(intake(s.ownerId, 'operations', { key: false })).rejects.toThrow(/entered with its parent's e-mail or number/);
+  });
+
+  it('who entered a child is written by its intake only, and never changes', async () => {
+    const f = await intake(s.ownerId, 'operations');
+    await expect(sql(
+      `insert into chat.learner_intake (learner_id, organization_id, family_id, enrolment_id, entered_by, entered_at)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid, $4::uuid, now())`,
+      s.learnerId, s.familyId, f.enrolmentId, s.ownerId,
+    )).rejects.toThrow(/recorded by their intake enrolment only/);
+    await expect(sql(`update chat.learner_intake set entered_at = now() where learner_id = $1::uuid`, f.learnerId)).rejects.toThrow(/never changes/);
+    await expect(sql(`delete from chat.learner_intake where learner_id = $1::uuid`, f.learnerId)).rejects.toThrow(/never removed/);
+  });
+
+  it('Add child: the family\'s own supervisor enters a further child into it', async () => {
+    const f = await intake(s.ownerId, 'operations');
+    const more = await addChild(s.ownerId, f.familyId, f.contactId);
+    expect(await g.prisma.studentEnrolment.count({ where: { familyId: f.familyId } })).toBe(2);
+    expect(await g.prisma.learnerIntake.findUnique({ where: { learnerId: more } })).toMatchObject({ enteredBy: s.ownerId });
   });
 
   it('a Sales member enters a family: they own it, and nobody supervises it yet', async () => {
@@ -221,22 +284,26 @@ describe('1. an intake enrolment', () => {
     // family_x is admin_a's (seed); admin_b is an Operations supervisor without it.
     await expect(sql(`select chat.enrol_learner($1::uuid, 'child_x', $2::uuid, $3::uuid)`, s.familyId, s.teacherId, s.otherAdminId))
       .rejects.toThrow(/family's own supervisor/);
+    await expect(sql(`select chat.create_intake_family('family_t', $1::uuid)`, tsupId)).rejects.toThrow(/entered by a Sales or Operations supervisor/);
+  });
+
+  it('an existing child is never listed by an intake -- not even by the family\'s own supervisor (review P1-A)', async () => {
+    // learner_l exists (seed: a family from Core / PD-16); admin_a supervises it.
     await expect(sql(
-      `insert into chat.student_enrolment (organization_id, family_id, contact_id, learner_ids, origin, kind, assigned_by)
-       values (chat.default_organization_id(), $1::uuid, $2::uuid, array[$3::uuid], 'intake', 'added_children', $4::uuid)`,
-      s.familyId, s.parentId, s.learnerId, s.otherAdminId,
-    )).rejects.toThrow(/entered by its own Sales or Operations supervisor/);
-    await expect(sql(
-      `insert into chat.student_enrolment (organization_id, family_id, contact_id, learner_ids, origin, kind, assigned_by)
-       values (chat.default_organization_id(), $1::uuid, $2::uuid, array[$3::uuid], 'intake', 'added_children', $4::uuid)`,
-      s.familyId, s.parentId, s.learnerId, tsupId,
-    )).rejects.toThrow(/entered by its own Sales or Operations supervisor/);
-    // ...while the family's own supervisor adds children to it.
-    await sql(
       `insert into chat.student_enrolment (organization_id, family_id, contact_id, learner_ids, origin, kind, assigned_by)
        values (chat.default_organization_id(), $1::uuid, $2::uuid, array[$3::uuid], 'intake', 'added_children', $4::uuid)`,
       s.familyId, s.parentId, s.learnerId, s.ownerId,
-    );
+    )).rejects.toThrow(/existing child is never entered again/);
+    // ...so no intake record exists for it, and a supervisor's carry-over is refused.
+    expect(await g.prisma.learnerIntake.findUnique({ where: { learnerId: s.learnerId } })).toBeNull();
+    await expect(carryOver(s.learnerId, s.ownerId, 20, 12, { startsOn: await today() })).rejects.toThrow(/supervisor who entered the child/);
+    // A child entered by an earlier intake is not listed again either.
+    const f = await intake(s.ownerId, 'operations');
+    await expect(sql(
+      `insert into chat.student_enrolment (organization_id, family_id, contact_id, learner_ids, origin, kind, assigned_by)
+       values (chat.default_organization_id(), $1::uuid, $2::uuid, array[$3::uuid], 'intake', 'added_children', $4::uuid)`,
+      f.familyId, f.contactId, f.learnerId, s.ownerId,
+    )).rejects.toThrow(/existing child is never entered again/);
   });
 
   it('a child may be entered without a teacher yet', async () => {
@@ -272,21 +339,48 @@ describe('1. an intake enrolment', () => {
   });
 });
 
-describe('2. a supervisor places children only on themself', () => {
-  it('admin_a cannot place family_x\'s child on admin_b; the Operations manager can; on themself is fine', async () => {
+describe('2. who places a child on a supervisor', () => {
+  it('only the Operations manager moves a child; a supervisor never takes an existing child, not even onto themself', async () => {
     await expect(sql(
       `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = $3::uuid where learner_id = $1::uuid`,
       s.learnerId, s.otherAdminId, s.ownerId,
-    )).rejects.toThrow(/places children only on themself/);
-    await sql(
-      `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = $3::uuid where learner_id = $1::uuid`,
-      s.secondLearnerId, s.ownerId, s.ownerId,
-    );
+    )).rejects.toThrow(/anyone else is placed by the Operations manager/);
+    await expect(sql(
+      `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = $2::uuid where learner_id = $1::uuid`,
+      s.learnerId, s.otherAdminId,
+    )).rejects.toThrow(/anyone else is placed by the Operations manager/);
     await sql(`delete from chat.conversation_learner where learner_id = $1::uuid`, s.learnerId);
     await sql(
       `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = $3::uuid where learner_id = $1::uuid`,
       s.learnerId, s.otherAdminId, s.managerId,
     );
+  });
+
+  it('a supervision always names its assigner; a manager of another department is not the Operations manager', async () => {
+    const teachersManager = randomUUID();
+    await staff(teachersManager, 'tmgr_t', 'manager');
+    await sql(`update chat.department set manager_id = $1::uuid where kind = 'teachers'`, teachersManager);
+    await expect(sql(
+      `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = null where learner_id = $1::uuid`,
+      s.learnerId, s.otherAdminId,
+    )).rejects.toThrow(/names who assigned it/);
+    await expect(sql(
+      `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = $3::uuid where learner_id = $1::uuid`,
+      s.learnerId, s.otherAdminId, teachersManager,
+    )).rejects.toThrow(/anyone else is placed by the Operations manager/);
+  });
+
+  it('the academy\'s own import opens chat.syncing_supervision for its statement only', async () => {
+    await sql(`delete from chat.conversation_learner where learner_id = $1::uuid`, s.learnerId);
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision', 'on', true)`),
+      g.prisma.$executeRawUnsafe(
+        `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = null where learner_id = $1::uuid`, s.learnerId, s.otherAdminId,
+      ),
+    ]);
+    await expect(sql(
+      `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = null where learner_id = $1::uuid`, s.learnerId, s.ownerId,
+    )).rejects.toThrow(/names who assigned it/);
   });
 });
 
@@ -296,33 +390,41 @@ describe('3. the Sales owner', () => {
     await expect(sql(`update chat.family_sales_owner set staff_id = $2::uuid, assigned_by = $2::uuid where family_id = $1::uuid`, f.familyId, s.ownerId))
       .rejects.toThrow(/live member of the Sales department/);
     await expect(sql(`update chat.family_sales_owner set staff_id = $2::uuid, assigned_by = $3::uuid where family_id = $1::uuid`, f.familyId, otherSalesId, salesId))
-      .rejects.toThrow(/changed by the Sales manager or the super admin/);
+      .rejects.toThrow(/set by the Sales manager or the super admin/);
     await sql(`update chat.family_sales_owner set staff_id = $2::uuid, assigned_by = $3::uuid where family_id = $1::uuid`, f.familyId, otherSalesId, salesManagerId);
     await sql(`update chat.family_sales_owner set staff_id = $2::uuid, assigned_by = $3::uuid where family_id = $1::uuid`, f.familyId, salesId, superId);
     await expect(sql(`delete from chat.family_sales_owner where family_id = $1::uuid`, f.familyId)).rejects.toThrow(/never removed/);
   });
 
-  it('a Sales member cannot make someone else the owner of a family on entering it', async () => {
+  it('a Sales member never claims a family that already exists (a Core family), nor names someone else (review P1-B)', async () => {
+    await expect(sql(
+      `insert into chat.family_sales_owner (family_id, organization_id, staff_id, assigned_by)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, $2::uuid)`, s.familyId, salesId,
+    )).rejects.toThrow(/a Sales member owns only a family they are entering/);
     await expect(sql(
       `insert into chat.family_sales_owner (family_id, organization_id, staff_id, assigned_by)
        values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`, s.familyId, otherSalesId, salesId,
-    )).rejects.toThrow(/changed by the Sales manager or the super admin/);
+    )).rejects.toThrow(/set by the Sales manager or the super admin/);
+    // The Sales manager may give the Core family its owner.
+    await sql(
+      `insert into chat.family_sales_owner (family_id, organization_id, staff_id, assigned_by)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`, s.familyId, salesId, salesManagerId,
+    );
   });
 });
 
 describe('4. one family per parent', () => {
-  const key = (n: number) => n.toString(16).padStart(64, '0');
-
-  it('a second family with the same key is refused in words; a malformed key never lands', async () => {
+  it('a second family with the same key is refused in words; a malformed key never lands; a key is never edited or removed', async () => {
     const a = await intake(s.ownerId, 'operations');
     const b = await intake(salesId, 'sales');
-    await sql(`insert into chat.family_contact_key (key_hash, organization_id, family_id, kind) values ($1, chat.default_organization_id(), $2::uuid, 'phone')`, key(1), a.familyId);
-    await expect(sql(`insert into chat.family_contact_key (key_hash, organization_id, family_id, kind) values ($1, chat.default_organization_id(), $2::uuid, 'phone')`, key(1), b.familyId))
+    const key = contactKeyHash('email', 'parent.same@example.test');
+    await sql(`insert into chat.family_contact_key (organization_id, key_hash, family_id, kind) values (chat.default_organization_id(), $1, $2::uuid, 'email')`, key, a.familyId);
+    await expect(sql(`insert into chat.family_contact_key (organization_id, key_hash, family_id, kind) values (chat.default_organization_id(), $1, $2::uuid, 'email')`, key, b.familyId))
       .rejects.toThrow(/already in Chat/);
-    await expect(sql(`insert into chat.family_contact_key (key_hash, organization_id, family_id, kind) values ('+20 100 000 0000', chat.default_organization_id(), $1::uuid, 'phone')`, b.familyId))
+    await expect(sql(`insert into chat.family_contact_key (organization_id, key_hash, family_id, kind) values (chat.default_organization_id(), 'parent.same@example.test', $1::uuid, 'email')`, b.familyId))
       .rejects.toThrow();
-    await expect(sql(`update chat.family_contact_key set family_id = $2::uuid where key_hash = $1`, key(1), b.familyId))
-      .rejects.toThrow(/never changes/);
+    await expect(sql(`update chat.family_contact_key set family_id = $2::uuid where key_hash = $1`, key, b.familyId)).rejects.toThrow(/never changes/);
+    await expect(sql(`delete from chat.family_contact_key where key_hash = $1`, key)).rejects.toThrow(/never removed while its family exists/);
   });
 });
 
@@ -345,6 +447,13 @@ describe('5. their own family, and the Sales switch', () => {
     expect(await handles(salesId)).toBe(true);
     expect(await handles(salesManagerId)).toBe(true);
     expect(await handles(tsupId)).toBe(false);
+  });
+
+  it('a covering backup reaches the family but does not own it (review P2)', async () => {
+    await activateBackup(g.prisma, s.ownerId, s.otherAdminId);
+    expect((await one<{ basis: string | null }>(`select chat.staff_reaches_family($1::uuid, $2::uuid) as basis`, s.otherAdminId, s.familyId)).basis).toBe('backup');
+    expect((await one<{ ok: boolean }>(`select chat.staff_owns_family($1::uuid, $2::uuid) as ok`, s.otherAdminId, s.familyId)).ok).toBe(false);
+    expect((await one<{ ok: boolean }>(`select chat.staff_owns_family($1::uuid, $2::uuid) as ok`, s.ownerId, s.familyId)).ok).toBe(true);
   });
 });
 
@@ -435,16 +544,30 @@ describe('6. the carried-over package (PD-30-amendment-carried-over)', () => {
     await expect(carryOver(f.learnerId, s.ownerId, 20, 12, { startsOn: d })).rejects.toThrow(/starts on the day the child was entered/);
   });
 
-  it('F1: completed above the total needs a manager\'s confirmation; then the grace is counted once (21 of 20 -> one left)', async () => {
+  it('F1: completed above the total is a manager\'s own entry; then the grace is counted once (21 of 20 -> one left)', async () => {
     const f = await intake(s.ownerId, 'operations');
     await expect(carryOver(f.learnerId, s.ownerId, 20, 21)).rejects.toThrow(/learner_subscription_over_is_confirmed/);
-    await expect(carryOver(f.learnerId, s.ownerId, 20, 21, { over: salesId })).rejects.toThrow(/confirmed by the super admin, the Operations Manager or the Sales Manager/);
-    await expect(carryOver(f.learnerId, s.ownerId, 20, 12, { over: s.managerId })).rejects.toThrow(/learner_subscription_over_is_confirmed/);
-    await carryOver(f.learnerId, s.ownerId, 20, 21, { over: s.managerId });
+    // A supervisor cannot, even naming a manager as the confirmer.
+    await expect(carryOver(f.learnerId, s.ownerId, 20, 21, { over: s.managerId })).rejects.toThrow(/entered and confirmed by the super admin/);
+    // A manager confirms only their own entry.
+    await expect(carryOver(f.learnerId, s.managerId, 20, 21, { over: salesManagerId })).rejects.toThrow(/entered and confirmed by the super admin/);
+    await expect(carryOver(f.learnerId, s.managerId, 20, 12, { over: s.managerId })).rejects.toThrow(/learner_subscription_over_is_confirmed/);
+    await carryOver(f.learnerId, s.managerId, 20, 21, { over: s.managerId });
     expect(await access(f.learnerId)).toMatchObject({ state: 'grace', balance: -1, graceLeft: 1 });
     // Exactly as entered: nothing was clamped.
     expect(await g.prisma.learnerSubscription.findFirstOrThrow({ where: { learnerId: f.learnerId } }))
       .toMatchObject({ lessonsIncluded: 20, lessonsUsedBefore: 21, overConfirmedBy: s.managerId, planMonths: 3 });
+  });
+
+  it('voids: the entrant within the 14 days, or a manager; nobody else, and not the entrant after day 14 (review P2)', async () => {
+    const f = await intake(s.ownerId, 'operations');
+    await carryOver(f.learnerId, s.ownerId, 20, 20);
+    await expect(voidCarriedOver(f.learnerId, s.otherAdminId)).rejects.toThrow(/corrected by the supervisor who entered it within 14 days/);
+    await enteredDaysAgo(f.enrolmentId, 15);
+    await expect(voidCarriedOver(f.learnerId, s.ownerId)).rejects.toThrow(/corrected by the supervisor who entered it within 14 days/);
+    await voidCarriedOver(f.learnerId, s.managerId);
+    expect(await g.prisma.learnerSubscription.findFirstOrThrow({ where: { learnerId: f.learnerId } }))
+      .toMatchObject({ voidedBy: s.managerId, voidReason: 'entered by mistake' });
   });
 
   it('grace is given once: a used-up package used its grace; a supervisor cannot re-add more lessons, a manager can', async () => {

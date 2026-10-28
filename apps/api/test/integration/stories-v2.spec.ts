@@ -88,11 +88,15 @@ async function addFamily(opts: {
   }
   if (opts.supervisor) {
     for (const id of learners) {
-      await prisma.$executeRawUnsafe(
-        `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
-         values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
-        id, opts.supervisor,
-      );
+      // The academy's own import gate: no Operations manager in this fixture (PD-42).
+      await prisma.$transaction([
+        prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision', 'on', true)`),
+        prisma.$executeRawUnsafe(
+          `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
+           values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
+          id, opts.supervisor,
+        ),
+      ]);
     }
   }
   return { familyId, contactId };

@@ -232,9 +232,9 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
        ('${ids.otherAdminId}'::uuid, chat.default_organization_id(), '${ids.departmentId}'::uuid, 'supervisor')`,
   );
   await prisma.$executeRawUnsafe(
-    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id) values
-       ('${ids.learnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid),
-       ('${ids.secondLearnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid)`,
+    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by) values
+       ('${ids.learnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid, '${ids.managerId}'::uuid),
+       ('${ids.secondLearnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid, '${ids.managerId}'::uuid)`,
   );
   return ids;
 }
@@ -282,15 +282,20 @@ export async function supervise(
     org,
     departmentId,
   );
+  // Stands in for the Operations Manager's assignment, which these suites
+  // never name: the academy's own import gate (PD-42's assigner backstop).
   for (const learnerId of learnerIds) {
-    await prisma.$executeRawUnsafe(
-      `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
-       values ($1::uuid, $2::uuid, $3::uuid)
-       on conflict (learner_id) do update set supervisor_id = excluded.supervisor_id`,
-      learnerId,
-      org,
-      supervisorId,
-    );
+    await prisma.$transaction([
+      prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision', 'on', true)`),
+      prisma.$executeRawUnsafe(
+        `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
+         values ($1::uuid, $2::uuid, $3::uuid)
+         on conflict (learner_id) do update set supervisor_id = excluded.supervisor_id`,
+        learnerId,
+        org,
+        supervisorId,
+      ),
+    ]);
   }
   return departmentId;
 }
