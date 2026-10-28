@@ -7393,6 +7393,12 @@ abstract class L10n {
   /// **'To do ({count}+)'**
   String scheduleFilterTodoMore(int count);
 
+  /// PD-47 PR-4: a task entry's button in the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Open my To do'**
+  String get notificationsActionOpenTask;
+
   /// PD-48: owner-approved 2026-10-29, word for word (design §17 Q7). Parent Settings row and page title.
   ///
   /// In en, this message translates to:

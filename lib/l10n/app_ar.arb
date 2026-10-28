@@ -1689,6 +1689,7 @@
   "taskNotMineSent": "أُرسلت إلى مديرك.",
   "taskCommentSent": "أُضيف التعليق.",
   "scheduleFilterTodoMore": "{count, plural, zero{للإنجاز (+)} one{للإنجاز (1+)} two{للإنجاز (2+)} few{للإنجاز ({count}+)} many{للإنجاز ({count}+)} other{للإنجاز ({count}+)}}",
+  "notificationsActionOpenTask": "فتح قائمة الإنجاز",
   "lessonAudioAboutTitle": "عن صوت الدروس",
   "lessonAudioAboutBody": "النطق في الدروس بصوت حاسوبي، وكلُّ تسجيل يراجعه ويعتمده اثنان من معلمينا قبل أن يسمعه طفلك. وإذا لم يُحسن الصوت الحاسوبي نطق كلمة، فلا يكون لها صوت. ولا تُتلى آيات القرآن الكريم بصوت حاسوبي أبدًا.",
   "lessonAudioTermsHeading": "صوت النطق في الدروس.",

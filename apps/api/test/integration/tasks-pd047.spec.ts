@@ -566,7 +566,14 @@ describe('the realtime signal', () => {
     const revs = sig.map((p) => p.revision);
     expect([...revs].sort((a, b) => a - b)).toEqual(revs);
     expect(new Set(revs).size).toBe(revs.length);
-    for (const p of sig) expect(Object.keys(p).sort()).toEqual(['change', 'revision', 'taskId']);
+    // Ids only: who did it and, for a hand-on, whom it left and reached -- never a name or any text.
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    for (const p of sig as Array<Record<string, unknown>>) {
+      expect(Object.keys(p).every((k) => ['taskId', 'revision', 'change', 'actorId', 'fromAssignee', 'toAssignee'].includes(k))).toBe(true);
+      for (const k of ['taskId', 'actorId', 'fromAssignee', 'toAssignee']) if (p[k] !== undefined) expect(p[k]).toMatch(UUID);
+      expect(typeof p.revision).toBe('number');
+    }
+    expect(sig.find((p) => p.change === 'reassigned')).toEqual(expect.objectContaining({ fromAssignee: expect.any(String), toAssignee: expect.any(String) }));
   });
 });
 
@@ -688,3 +695,63 @@ describe('what the Tasks page is offered (PR-3)', () => {
     expect((await tasks.assignees(farStaff, {})).people.map((p) => p.id)).not.toContain(s.ownerId);
   });
 });
+
+describe('every Dashboard tile is its list, counted (PR-4)', () => {
+  /** Every item of a list, page after page. */
+  const count = async (by: string, q: Record<string, string>) => {
+    let n = 0;
+    let cursor: string | undefined;
+    for (;;) {
+      const page = await tasks.list(by, { view: 'mine', ...q, cursor });
+      n += page.items.length;
+      if (!page.nextCursor) return n;
+      cursor = page.nextCursor;
+    }
+  };
+  const LIST: Record<string, (scope: 'team' | 'all') => Record<string, string>> = {
+    mine_open: () => ({ view: 'mine' }),
+    mine_overdue: () => ({ view: 'mine', overdue: 'true' }),
+    mine_urgent: () => ({ view: 'mine', level: 'high' }),
+    mine_financial: () => ({ view: 'mine', category: 'financial' }),
+    wide_open: (v) => ({ view: v }),
+    wide_overdue: (v) => ({ view: v, overdue: 'true' }),
+    wide_urgent: (v) => ({ view: v, level: 'high' }),
+    wide_financial: (v) => ({ view: v, category: 'financial' }),
+    awaiting_decision: () => ({ view: 'decisions' }),
+    needs_reassignment: (v) => ({ view: v, gone: 'true' }),
+    unmanaged: () => ({ view: 'all', unmanaged: 'true' }),
+  };
+  const parity = async (by: string, scope: 'team' | 'all') => {
+    const tiles = await tasks.dashboardCounts(by);
+    expect(tiles.length).toBeGreaterThan(0);
+    for (const tile of tiles) {
+      const name = tile.key.replace(/^tasks\./, '').replace(/^(team|all)_/, 'wide_');
+      const q = LIST[name];
+      expect(q).toBeDefined();
+      expect([tile.key, tile.count]).toEqual([tile.key, await count(by, q!(scope))]);
+    }
+    return tiles;
+  };
+
+  it('for a manager and for the super admin, each count is the length of the list its tile opens', async () => {
+    const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+    await manual(s.managerId, staff(s.ownerId));
+    await manual(s.managerId, staff(s.ownerId), { dueAt: hourAgo });
+    await manual(s.managerId, staff(s.ownerId), { priority: 'high' });
+    await manual(s.managerId, staff(s.ownerId), { category: 'financial' });
+    const waiting = await manual(s.managerId, staff(s.ownerId));
+    await tasks.outOfScope(s.ownerId, waiting.id, { comment: 'not mine' });
+    await manual(s.managerId, staff(s.otherAdminId), { dueAt: hourAgo });
+    await g.prisma.$executeRawUnsafe(`update chat.staff set is_active = false, left_at = now() where id = $1::uuid`, s.otherAdminId);
+    // No manager stands to a manager the super admin gave a task to.
+    await manual(sa, staff(tmgr));
+    const tiles = await parity(s.managerId, 'team');
+    expect(tiles.find((t) => t.key === 'tasks.needs_reassignment')?.count).toBe(1);
+    expect(tiles.find((t) => t.key === 'tasks.awaiting_decision')?.count).toBe(1);
+    const saTiles = await parity(sa, 'all');
+    expect(saTiles.find((t) => t.key === 'tasks.unmanaged')?.count).toBeGreaterThanOrEqual(1);
+    // The filters themselves are strict.
+    expect(await code(tasks.list(sa, { view: 'all', gone: 'yes' }))).toBe(CommErrorCode.TASK_INVALID);
+  });
+});
+

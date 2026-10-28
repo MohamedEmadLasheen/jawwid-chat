@@ -4414,6 +4414,9 @@ class L10nAr extends L10n {
   }
 
   @override
+  String get notificationsActionOpenTask => 'فتح قائمة الإنجاز';
+
+  @override
   String get lessonAudioAboutTitle => 'عن صوت الدروس';
 
   @override

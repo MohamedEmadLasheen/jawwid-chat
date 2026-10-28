@@ -4318,6 +4318,9 @@ class L10nEn extends L10n {
   }
 
   @override
+  String get notificationsActionOpenTask => 'Open my To do';
+
+  @override
   String get lessonAudioAboutTitle => 'About lesson audio';
 
   @override

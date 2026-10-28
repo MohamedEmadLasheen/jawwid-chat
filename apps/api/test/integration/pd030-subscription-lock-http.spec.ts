@@ -404,7 +404,15 @@ describe('PD-30 over HTTP', () => {
     expect(await cards(directId, 'subscription_renewal_requested')).toHaveLength(1);
     const queue = await http(m.salesManager.subject, 'GET', '/subscriptions/renewal-requests');
     expect(queue.json.requests.find((r: any) => r.child.id === child.id)).toMatchObject({ renewed: false });
-    expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_renewal_requested', recipientId: m.salesManager.id } })).toBe(1);
+    // PD-47 PR-4 (owner Q-F6): no push to every Sales member; the request raises its
+    // renewal task for the family's one Sales owner (else the Sales manager), whose
+    // assignment is the notice (task-delivery-pd047.spec.ts).
+    expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_renewal_requested' } })).toBe(0);
+    const [renewalTask] = await g.prisma.$queryRaw<Array<{ sales: string | null }>>`
+      SELECT chat.sales_department_role(t.assignee_staff_id) AS sales FROM chat.work_task t
+        JOIN chat.work_task_package_episode e ON e.id = t.source_id
+       WHERE t.source_type = 'renewal_request' AND e.learner_id = ${child.id}::uuid AND t.state = 'open'`;
+    expect(renewalTask?.sales).not.toBeNull();
     expect((await http(teacher.subject, 'POST', `/me/subscriptions/${child.id}/renewal-request`)).code).toBe(CommErrorCode.BILLING_DENIED);
 
     // Sales sends a renewal for 8 lessons; the parent pays it (recorded in cash): unlocked at once.
