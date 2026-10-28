@@ -23,7 +23,12 @@
  *   delegable  false = only the super admin grants it (PD-40 H5/H8). Every key
  *              starts non-delegable; a key becomes delegable only once its
  *              legacy bundles are verified against the service rules
- *              (legacy-bundles.ts, pd040-legacy-bundles.spec.ts).
+ *              (legacy-bundles.ts, pd040-legacy-bundles.spec.ts) -- the spec
+ *              fails on a delegable key with no verified rule. PR-3 opens a
+ *              minimal, read-only set (plan §13 C3).
+ *   inRoles    false = the key is never part of an access role, so no role can
+ *              rebuild the super admin (plan §13 S4/C2): the super admin's own
+ *              powers and the account-administration keys. Defaults to true.
  *
  * Adding a page later is one entry here, `@Requires` on its routes (the route
  * spec fails until they have it) and one Admin Web page-registry entry.
@@ -37,47 +42,55 @@ export interface PermissionDefinition {
   label: { en: string; ar: string };
   risk: PermissionRisk;
   delegable: boolean;
+  /** May the key be put in an access role (chat.permission.in_roles)? */
+  inRoles: boolean;
   /** The decision that introduced the surface. */
   introducedBy: string;
 }
 
-type Entry = Omit<PermissionDefinition, 'key' | 'page' | 'action' | 'delegable'> & { delegable?: boolean };
+type Entry = Omit<PermissionDefinition, 'key' | 'page' | 'action' | 'delegable' | 'inRoles'> & { delegable?: boolean; inRoles?: boolean };
 
 const ENTRIES = {
   // Chats and calls (PD-8 scope decides WHICH conversations).
   'chat.use': { label: { en: 'Use chats', ar: 'استخدام المحادثات' }, risk: 'family_contact', introducedBy: 'PD-8' },
   'chat.manage': { label: { en: 'Create groups and manage members', ar: 'إنشاء المجموعات وإدارة الأعضاء' }, risk: 'family_contact', introducedBy: 'PD-8' },
   'chat.moderate': { label: { en: 'Moderate held messages', ar: 'مراجعة الرسائل المعلّقة' }, risk: 'family_contact', introducedBy: 'PD-14' },
-  'chat.export': { label: { en: 'Export a conversation', ar: 'تصدير محادثة' }, risk: 'family_contact', introducedBy: 'PD-37' },
+  'chat.export': { label: { en: 'Export a conversation', ar: 'تصدير محادثة' }, risk: 'family_contact', introducedBy: 'PD-37', inRoles: false },
   'calls.use': { label: { en: 'Make and join calls', ar: 'إجراء المكالمات والانضمام إليها' }, risk: 'family_contact', introducedBy: 'PD-19' },
 
   'stories.view': { label: { en: 'View stories', ar: 'عرض القصص' }, risk: 'none', introducedBy: 'Stories v2' },
   'stories.publish': { label: { en: 'Publish stories', ar: 'نشر القصص' }, risk: 'family_contact', introducedBy: 'Stories v2' },
 
-  'admin.inspect': { label: { en: 'Inspect the whole organization', ar: 'الاطلاع على المؤسسة كاملة' }, risk: 'admin', introducedBy: 'PD-5' },
+  'admin.inspect': { label: { en: 'Inspect the whole organization', ar: 'الاطلاع على المؤسسة كاملة' }, risk: 'admin', introducedBy: 'PD-5', inRoles: false },
 
-  'accounts.administer': { label: { en: 'Reset, suspend and reactivate accounts', ar: 'إعادة تعيين الحسابات وإيقافها وتفعيلها' }, risk: 'admin', introducedBy: 'PD-21' },
-  'accounts.support_session': { label: { en: 'Open an account as its owner (support)', ar: 'فتح حساب نيابةً عن صاحبه (الدعم)' }, risk: 'admin', introducedBy: 'PD-21' },
+  'accounts.administer': { label: { en: 'Reset, suspend and reactivate accounts', ar: 'إعادة تعيين الحسابات وإيقافها وتفعيلها' }, risk: 'admin', introducedBy: 'PD-21', inRoles: false },
+  'accounts.support_session': { label: { en: 'Open an account as its owner (support)', ar: 'فتح حساب نيابةً عن صاحبه (الدعم)' }, risk: 'admin', introducedBy: 'PD-21', inRoles: false },
 
   'org.view': { label: { en: 'View the organization structure', ar: 'عرض الهيكل التنظيمي' }, risk: 'pii', introducedBy: 'PD-8' },
   'org.manage': { label: { en: 'Assign supervisors, backups and covers', ar: 'تعيين المشرفين والبدلاء والتغطية' }, risk: 'family_contact', introducedBy: 'PD-8' },
   'org.covers': { label: { en: 'Hand a supervisor over to a backup', ar: 'تسليم المشرف إلى البديل' }, risk: 'family_contact', introducedBy: 'PD-33' },
-  'org.departments': { label: { en: 'Create departments and place staff', ar: 'إنشاء الأقسام وتوزيع الموظفين' }, risk: 'admin', introducedBy: 'PD-8' },
+  // PD-40 PR-3: staff accounts and access roles. Never in a role: a role must
+  // not hand out account administration (plan §13 S4).
+  'staff_accounts.view': { label: { en: 'View staff accounts', ar: 'عرض حسابات الموظفين' }, risk: 'admin', introducedBy: 'PD-40', inRoles: false },
+  'staff_accounts.create': { label: { en: 'Create staff accounts', ar: 'إنشاء حسابات الموظفين' }, risk: 'admin', introducedBy: 'PD-40', inRoles: false },
+  'staff_accounts.manage': { label: { en: 'Manage staff accounts and their roles', ar: 'إدارة حسابات الموظفين وأدوارهم' }, risk: 'admin', introducedBy: 'PD-40', inRoles: false },
+  'access_roles.manage': { label: { en: 'Define access roles', ar: 'تعريف أدوار الصلاحيات' }, risk: 'admin', introducedBy: 'PD-40', inRoles: false },
+  'org.departments': { label: { en: 'Create departments and place staff', ar: 'إنشاء الأقسام وتوزيع الموظفين' }, risk: 'admin', introducedBy: 'PD-8', inRoles: false },
 
   'staff_profiles.team': { label: { en: "View the team's profiles", ar: 'عرض ملفات الفريق' }, risk: 'pii', introducedBy: 'Staff Profiles' },
-  'staff_profiles.organization': { label: { en: 'View every staff profile', ar: 'عرض ملفات جميع الموظفين' }, risk: 'pii', introducedBy: 'Staff Profiles' },
+  'staff_profiles.organization': { label: { en: 'View every staff profile', ar: 'عرض ملفات جميع الموظفين' }, risk: 'pii', introducedBy: 'Staff Profiles', inRoles: false },
   'staff_profiles.manage': { label: { en: 'Assign responsibilities', ar: 'إسناد المسؤوليات' }, risk: 'pii', introducedBy: 'Staff Profiles' },
-  'staff_profiles.reporting_lines': { label: { en: 'Change reporting lines', ar: 'تغيير خطوط التبعية' }, risk: 'admin', introducedBy: 'Staff Profiles' },
+  'staff_profiles.reporting_lines': { label: { en: 'Change reporting lines', ar: 'تغيير خطوط التبعية' }, risk: 'admin', introducedBy: 'Staff Profiles', inRoles: false },
 
   'parents.view': { label: { en: 'View parent profiles', ar: 'عرض ملفات أولياء الأمور' }, risk: 'family_contact', introducedBy: 'PD-17' },
   'parents.edit': { label: { en: "Edit a parent's contact record", ar: 'تعديل بيانات تواصل ولي الأمر' }, risk: 'family_contact', introducedBy: 'PD-17' },
 
-  'billing.view': { label: { en: 'View payments and instalments', ar: 'عرض المدفوعات والأقساط' }, risk: 'finance', introducedBy: 'PD-12' },
+  'billing.view': { label: { en: 'View payments and instalments', ar: 'عرض المدفوعات والأقساط' }, risk: 'finance', introducedBy: 'PD-12', delegable: true },
   'billing.record': { label: { en: 'Record payments and instalments', ar: 'تسجيل المدفوعات والأقساط' }, risk: 'finance', introducedBy: 'PD-17' },
   'billing.assign': { label: { en: "Set a family's billing supervisor", ar: 'تعيين مشرف الفوترة للأسرة' }, risk: 'finance', introducedBy: 'PD-17' },
   'billing.verify': { label: { en: 'Refunds and payment settings', ar: 'الاستردادات وإعدادات الدفع' }, risk: 'finance', introducedBy: 'PD-27' },
 
-  'subscriptions.view': { label: { en: 'View subscriptions', ar: 'عرض الاشتراكات' }, risk: 'finance', introducedBy: 'PD-30' },
+  'subscriptions.view': { label: { en: 'View subscriptions', ar: 'عرض الاشتراكات' }, risk: 'finance', introducedBy: 'PD-30', delegable: true },
   'subscriptions.manage': { label: { en: 'Add free lessons and grant exceptions', ar: 'إضافة حصص مجانية ومنح الاستثناءات' }, risk: 'finance', introducedBy: 'PD-30' },
   // PD-30-amendment-carried-over: only for a child the holder entered, within
   // 14 days, for their own family, with no other package (the database decides).
@@ -106,8 +119,8 @@ const ENTRIES = {
 
   // Names agreed with PD-41, which owns the certificates workflow and adds the
   // rest of its keys (request.student, request.teacher, story, oversee).
-  'certificates.view': { label: { en: 'View certificate requests', ar: 'عرض طلبات الشهادات' }, risk: 'pii', introducedBy: 'PD-12' },
-  'certificates.design': { label: { en: 'Design and upload certificates', ar: 'تصميم الشهادات ورفعها' }, risk: 'pii', introducedBy: 'PD-12' },
+  'certificates.view': { label: { en: 'View certificate requests', ar: 'عرض طلبات الشهادات' }, risk: 'pii', introducedBy: 'PD-12', delegable: true },
+  'certificates.design': { label: { en: 'Design and upload certificates', ar: 'تصميم الشهادات ورفعها' }, risk: 'pii', introducedBy: 'PD-12', delegable: true },
   'certificates.deliver': { label: { en: 'Send certificates to the family', ar: 'إرسال الشهادات إلى الأسرة' }, risk: 'family_contact', introducedBy: 'PD-12' },
 
   'leave.allowance': { label: { en: 'Set leave allowances', ar: 'تحديد رصيد الإجازات' }, risk: 'pii', introducedBy: 'PD-12' },
@@ -152,6 +165,7 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze(
       label: entry.label,
       risk: entry.risk,
       delegable: entry.delegable ?? false,
+      inRoles: entry.inRoles ?? true,
       introducedBy: entry.introducedBy,
     });
   }),

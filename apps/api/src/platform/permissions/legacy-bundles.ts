@@ -70,6 +70,11 @@ const DEPARTMENT_MANAGER = k(
   'staff_profiles.team',
   'staff_profiles.manage',
   'reports.view',
+  // PD-40 PR-3 (owner 2026-10-28, S1): a department manager creates and manages
+  // the specialists of their department (decideStaffAccountCreate / Manage).
+  'staff_accounts.view',
+  'staff_accounts.create',
+  'staff_accounts.manage',
   // PD-47: their team's tasks -- watch, give, decide (TaskService narrows to the team).
   'tasks.team',
   'tasks.create',

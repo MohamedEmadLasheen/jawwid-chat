@@ -10,10 +10,14 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-465 routes.
+476 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
+| GET | `/api/v1/admin/access-roles` | staff_accounts.view | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.roles` |
+| POST | `/api/v1/admin/access-roles` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.define` |
+| POST | `/api/v1/admin/access-roles/:roleId` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.update` |
+| POST | `/api/v1/admin/access-roles/:roleId/archive` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.archive` |
 | GET | `/api/v1/admin/accounts` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.list` |
 | GET | `/api/v1/admin/accounts/:accountId` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.get` |
 | POST | `/api/v1/admin/accounts/:accountId/password-reset` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.passwordReset` |
@@ -30,6 +34,13 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/admin/impersonations/:id/end` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.end` |
 | POST | `/api/v1/admin/impersonations/:id/token` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.token` |
 | GET | `/api/v1/admin/overview` | admin.inspect | `admin/admin.controller.ts#AdminController.overview` |
+| GET | `/api/v1/admin/permissions` | staff_accounts.view | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.permissions` |
+| GET | `/api/v1/admin/staff-accounts` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.list` |
+| POST | `/api/v1/admin/staff-accounts` | staff_accounts.create | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.create` |
+| GET | `/api/v1/admin/staff-accounts/:staffId` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.get` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/roles` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.grant` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/roles/:roleId/revoke` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.revoke` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/setup-code` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.setupCode` |
 | GET | `/api/v1/admin/stories` | admin.inspect | `admin/admin.controller.ts#AdminController.stories` |
 | GET | `/api/v1/admin/users` | admin.inspect | `admin/admin.controller.ts#AdminController.users` |
 | POST | `/api/v1/approvals/:id/approve` | chat.moderate | `communication/api/approval.controller.ts#ApprovalController.approve` |
