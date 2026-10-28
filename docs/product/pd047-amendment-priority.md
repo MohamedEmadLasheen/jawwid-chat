@@ -169,6 +169,24 @@ Today's alerts, from `communication/notifications/notification-catalog.ts:57-88`
 
 ---
 
+### 5.1 As built in PR-2b (slot `20261029233000`)
+
+- **Financial tasks follow their owner.** That owner is the family's billing supervisor, or the family's Sales owner, else the Sales manager.
+  - The sweep moves a task when its owner changes. Nobody reassigns it by hand: the API refuses, and so does the database guard.
+  - The Tasks page says where to change the owner.
+- **The system may complete a financial task.** Card payments by the family through Stripe record no staff actor, and neither does a package without a creator, so the history names the system there.
+  - `completed` joins the event kinds the system may write, and only the source helpers write it.
+  - Everywhere else, the person who did the work is named.
+- **`notifySales` stays for now.** It pushes "renewal requested" to every Sales member until PR-4 delivers task notifications. PR-4 then replaces it with the task's notification to its one owner (Q-F6).
+- **Cut-offs (owner 2026-10-29: the last 14 days):**
+  - instalments by due date;
+  - receipts by upload;
+  - failed checkouts and renewals by their time.
+  - A low balance is a present state and has no cut-off.
+- **Keys:**
+  - `package_low` and `renewal_request` are keyed by the child's newest package, so one package raises one task of each.
+  - `checkout_failed` is keyed by its payment request, because a Stripe session has no uuid.
+
 ## 6. THRESHOLDS: CONFIRMED by the owner 2026-10-28 ("Approve as proposed")
 
 | Task | 🟡 Yellow | 🔴 Red | Completed when | Why these numbers |
