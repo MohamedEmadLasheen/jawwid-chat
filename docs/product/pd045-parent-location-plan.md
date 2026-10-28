@@ -1,7 +1,11 @@
 # PD-45: a parent's country and state / province / emirate / governorate (review and plan)
 
-**State:** plan for approval, **revision 1**. No feature code has been written. Code waits for the department head's GO (machine-load cap: two coding sessions).
-**Claim:** `docs/product/pd-registry/PD-45.md`. **No migration slot is claimed.** PR-1 needs one, and the department head assigns it. It must sort after the highest slot claimed today, `20261028150000`.
+**State:** **APPROVED**, revision 2. The owner approved Q1–Q7 as recommended on 2026-10-28, relayed verbatim by the department head, who also decided the two coordination points (§12). No feature code has been written. Code waits for the department head's GO (builder slots are full).
+**Claim:** `docs/product/pd-registry/PD-45.md`. Migration slots, assigned by the department head on 2026-10-28:
+- `20261028180000` (`chat_pd045_parent_location`) for PR-1;
+- `20261028190000` (`chat_pd045_validate_country_fk`) for PR-5.
+
+The claims are in `docs/product/migration-slots/`.
 **Base:** `main` @ `bba7770c9e935b6361f70443deed16e11c3a8483`. PD-42 is read from its merged plan (`docs/product/pd042-direct-enrolment-plan.md`, v3.2) and its open data PR #194 (`claude/pd42-pr1-data`). PD-40's catalogue is on `main`.
 
 The owner's request, verbatim:
@@ -31,7 +35,7 @@ The owner's request, verbatim:
   - a one-time prompt in the app asks parents.
   - Any country suggested from the phone's country code is shown as a suggestion and **never saved silently**.
 - **Visibility does not change:** exactly the PD-17 matrix. Teachers, the Teachers department and other parents never see it. A parent sees only their own (§4).
-- **Six small PRs**, each with tests (§11). Seven owner questions (§12).
+- **Six small PRs**, each with tests (§11). The owner approved all seven questions as recommended (§12).
 
 ---
 
@@ -193,7 +197,7 @@ CLDR has no type names, so the label is a short hand-written table in the overla
 
 #### 3.1.2 Order and search
 
-- **Default order:** Egypt, then Saudi Arabia, UAE, Kuwait, Qatar, Bahrain, Oman, Jordan. Then a divider and every other country A–Z in the interface language. Owner question Q3.
+- **Default order:** Egypt, then Saudi Arabia, UAE, Kuwait, Qatar, Bahrain, Oman, Jordan. Then a divider and every other country A–Z in the interface language. DECIDED (Q3).
 - **Search:**
   - matches the Arabic name, the English name and the ISO code, whatever the interface language;
   - normalises Arabic the way PD-42 §7 does: tatweel removed; أ/إ/آ→ا; ى→ي; ة→ه;
@@ -480,20 +484,24 @@ The guard lists any other file that reads the column, so a teacher-facing servic
 
 | PR | Contents | Depends on |
 |---|---|---|
-| **PR-1, data** (waits for the GO and a slot) | <ul><li>`scripts/geo/build-dataset.py` + `data/geo/overlay.json` (reviewed Arabic names, labels, pinned order, aliases)</li><li>the generated `apps/api/src/geo/dataset.json` + `LICENSE-CLDR.txt`</li><li>the migration: `chat.geo_country`, `chat.geo_subdivision` (seeded); `family.subdivision_code` and `location_*`; the composite FK and CHECK; the country FK `NOT VALID`; `trial_subscription.country_code/subdivision_code` with the same FKs; no grants to request roles (as `country_code`)</li><li>Prisma fields</li><li>the parity spec</li></ul>No behaviour change. | the head's slot |
+| **PR-1, data** (waits for the GO; slot `20261028180000`) | <ul><li>`scripts/geo/build-dataset.py` + `data/geo/overlay.json` (reviewed Arabic names, labels, pinned order, aliases)</li><li>the generated `apps/api/src/geo/dataset.json` + `LICENSE-CLDR.txt`</li><li>the migration: `chat.geo_country`, `chat.geo_subdivision` (seeded); `family.subdivision_code` and `location_*`; the composite FK and CHECK; the country FK `NOT VALID`; `trial_subscription.country_code/subdivision_code` with the same FKs; no grants to request roles (as `country_code`)</li><li>Prisma fields</li><li>the parity spec</li></ul>No behaviour change.<br>**Release gate R-45a (head, 2026-10-28):** before PR-1 merges, a human reviewer, recorded by role and never by name (G-20), signs off the 88 Arabic names in `data/geo/overlay.json` (Egypt, the six Gulf states, Jordan). The PR records the sign-off as the reviewer's role, the date and the overlay's SHA-256. The PR stays draft until then. | the GO |
 | **PR-2, staff edit: option (a)** | <ul><li>`src/geo` (dataset service, `parseLocation`, `GET /geo/...`)</li><li>Parent Profile: `subdivisionCode`, stop writing `region`, the "Old note" display, `suggestedCountryCode`, the re-key on country change (§9)</li><li>Parents list: column and `?location=missing`</li><li>Stories validation</li><li>Admin Web `LocationPicker`, `EditContactDialog`, Parents filter, Stories panel</li><li>the confinement guard</li><li>the route table</li><li>the time-zone estimate and the hint (§7)</li></ul> | PR-1, #194 |
 | **PR-3, new parents** | <ul><li>Sales' subscription form and its API (`new-students`)</li><li>Assign copies the codes</li><li>the suggestion chip</li><li>Q1's required rule</li><li>the intake pass-through if PD-42 PR-2 is merged (§9)</li></ul> | PR-2 |
-| **PR-4, the app: option (b)** | <ul><li>`GET/PUT /me/location` and the server-side "answered" stamp (a small table, `chat.contact_location_prompt(contact_id, answered_at, outcome)`, in PR-1's migration so only one slot is needed)</li><li>the Flutter picker, profile row and one-time prompt</li><li>the arb strings</li></ul> | PR-2 |
-| **PR-5, backfill** | <ul><li>`geo:backfill` CLI (§6.3)</li><li>the report</li><li>after a clean report, the `VALIDATE CONSTRAINT` migration (a second slot from the head)</li></ul> | PR-2 |
+| **PR-4, the app: option (b)** | <ul><li>`GET/PUT /me/location` and the server-side "answered" stamp (a small table, `chat.contact_location_prompt(contact_id, answered_at, outcome)`, in PR-1's migration)</li><li>the Flutter picker, profile row and one-time prompt</li><li>the arb strings</li></ul> | PR-2 |
+| **PR-5, backfill** | <ul><li>`geo:backfill` CLI (§6.3)</li><li>the report</li><li>after a clean report, the `VALIDATE CONSTRAINT` migration (slot `20261028190000`)</li></ul> | PR-2 |
 | **PR-6, docs** | <ul><li>PD-45 in the boundary doc §4</li><li>the PD-17 doc (region → subdivision)</li><li>the STORIES.md ownership note</li><li>a `docs/admin/` page for supervisors on completing locations</li><li>the PD-44 hand-off for the aggregate counts</li></ul> | PR-3, PR-4 |
 
 PR-3 and PR-4 are independent of each other once PR-2 is merged. Under the two-session cap they run one after the other.
 
 ---
 
-## 12. Owner questions
+## 12. Owner decisions
 
-| # | Question | Recommendation | Why |
+### 12.1 DECIDED (owner, 2026-10-28, relayed verbatim by the department head)
+
+> "Approve all 7 (Recommended)"
+
+| # | Question | DECIDED | Why |
 |---|---|---|---|
 | **Q1** | For **new** parents on Sales' subscription form: is the location **required** or optional? | **Country required; governorate, emirate or state required when the country has them in the list.** | Sales are talking to the parent at that moment, so it costs one question. It stops the "missing" list from growing again. |
 | **Q2** | For families entered by hand under **PD-42** (moving families from the old system): required or optional? | **Optional, but shown on the form**, and every family without it lands in "Missing location". | PD-42's minimum fields were decided to keep the migration fast (PD-42 §6). Making this required would slow every entry, and option (a) or (b) completes it afterwards. |
@@ -502,6 +510,15 @@ PR-3 and PR-4 are independent of each other once PR-2 is merged. Under the two-s
 | **Q5** | May a child's **teacher** see the family's country (not the governorate)? | **No**, as PD-17 decided for all parent details. | The teacher already sees the family's local time, which is what lessons need. Adding the country would be a new reader of personal data with no task that needs it. |
 | **Q6** | When a parent has set their own location, may staff change it? | **Yes**, and staff see "Set by the parent on «date»" before saving. The change is audited. | Staff must be able to fix a mistake. The note stops them from overwriting a correct answer without knowing. |
 | **Q7** | After the backfill, may the old free-text "region" be **deleted**? | **Yes, once the report shows nothing left to match**, in a separate small migration. Until then it stays visible as "Old note". | Keeping two region fields invites drift. Deleting it early would lose the only hint for the unmatched families. |
+
+### 12.2 DECIDED (department head, 2026-10-28)
+
+| # | Point | DECIDED |
+|---|---|---|
+| H1 | PR-2 and PD-42 #194 (§9) | **Agreed.** PR-2 depends on #194, and re-keys the contact in the same transaction as a country change. A collision refuses with `PARENT_EXISTS`. |
+| H2 | Order with PD-42 PR-2 (§9) | **Agreed.** PD-45 does not block PD-42. Whichever lands second adds the location block to the shared `SubscriptionForm`. |
+| H3 | Migration slots | PR-1 `20261028180000`; PR-5 (`VALIDATE`) `20261028190000` |
+| H4 | The Arabic overlay | The 88 names need a human reviewer (by role) before PR-1 merges. This is release gate **R-45a** (§11). |
 
 ---
 
