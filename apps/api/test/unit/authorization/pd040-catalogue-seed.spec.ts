@@ -74,6 +74,16 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
       ['supervisor', 'teachers', 'reports.view'],
     ],
   },
+  {
+    // PD-42 PR-2: a Sales account edits the contact record of the families it owns.
+    migration: '20261028200000_chat_pd042_intake_scope.sql',
+    tag: 'pd042b',
+    permissions: [],
+    bundles: [
+      ['manager', 'sales', 'parents.edit'],
+      ['supervisor', 'sales', 'parents.edit'],
+    ],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));
