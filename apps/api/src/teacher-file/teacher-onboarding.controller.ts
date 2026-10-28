@@ -3,6 +3,7 @@ import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { Requires } from '../platform/permissions/route-access';
 import { TeacherOnboardingService } from './teacher-onboarding.service';
+import { TeacherFileService } from './teacher-file.service';
 
 /**
  * PD-43: adding a teacher, and (PR-1b) offboarding and reactivating one. Who
@@ -13,7 +14,10 @@ import { TeacherOnboardingService } from './teacher-onboarding.service';
 @Controller('teachers')
 @UseFilters(CommErrorFilter)
 export class TeacherOnboardingController {
-  constructor(private readonly onboarding: TeacherOnboardingService) {}
+  constructor(
+    private readonly onboarding: TeacherOnboardingService,
+    private readonly files: TeacherFileService,
+  ) {}
 
   /** { id, name, email, phone?, joinedOn?, teachingMarket?, supervisorId?: uuid | 'self' | null, note? } */
   @Requires('teachers.create')
@@ -59,5 +63,12 @@ export class TeacherOnboardingController {
   @Header('Cache-Control', 'no-store')
   reactivate(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
     return this.onboarding.reactivate(actorId, teacherId, body ?? {});
+  }
+
+  /** PD-43: the teacher's and their login's lifecycle, newest first. Read as the Teacher File is. */
+  @Requires('teacher_files.view')
+  @Get(':teacherId/history')
+  history(@ActorId() actorId: string, @Param('teacherId') teacherId: string) {
+    return this.files.history(actorId, teacherId);
   }
 }

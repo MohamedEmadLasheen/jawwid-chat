@@ -80,6 +80,15 @@ export function useReactivate(teacherId: string) {
   })
 }
 
+/** PD-43: the history card. Under the file's key, so a change that refreshes the file refreshes it too. */
+export function useTeacherHistory(teacherId: string) {
+  return useQuery({
+    queryKey: [...teacherFileKeys.detail(teacherId), 'history'],
+    queryFn: () => teacherFileApi.history(teacherId),
+    staleTime: 15_000,
+  })
+}
+
 export function useTeacherFile(teacherId: string) {
   return useQuery({
     queryKey: teacherFileKeys.detail(teacherId),

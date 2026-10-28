@@ -325,3 +325,12 @@ Warnings only: every teacher stays pickable (owner Q5, "students allowed").
 - Change teacher shows the notes beside the name ("Setup incomplete · Not signed in yet · No supervisor", or "Login suspended"); the radio stays enabled. The subscription form puts them in the option's label, and once such a teacher is chosen says "This teacher's set-up is not finished. Students are allowed; this is a warning."
 - `GET /teacher-files` rows carry `unsupervised` (active, no live primary supervisor). Every reader sees a **No supervisor** badge; the Teachers Manager and the super admin also get an "{n} unsupervised" count, an **Unsupervised only** filter and an **Assign supervisor** link to Organization's Teachers & supervisors tab (`/organization?tab=teachers`, or `/admin/teams?tab=teachers` in the Admin Portal).
 - The offboard preview's students link to their page, where Change teacher is.
+
+### Teacher history (PD-43 §4)
+
+**`GET /teachers/:id/history`** (`teacher_files.view`) returns `{ teacherId, events: [{ at, action, actor: {id, name} | null, reason, detail }] }`, newest first (at most 200). It is read exactly as the Teacher File is: the department gate, then the PD-35 scope (404 out of a strict supervisor's scope).
+
+- **The teacher** (`entity 'teacher'`): `teacher.created`, `teacher.sign_in_given`, `teacher.sign_in_changed`, `teacher_supervisor.assigned` / `.unassigned` (`detail.from` / `detail.to` name the supervisors), `teacher.offboarded`, `teacher.reactivated`.
+- **Their login** (`entity 'account'`): `account.first_login_code_issued`, `account.activated`, `account.password_reset_issued`, `account.password_reset_completed`, `account.suspended`, `account.reactivated`. Session bookkeeping is left out.
+- Never a raw before/after: an audit row may hold an e-mail, a phone flag or a code id; the answer holds names only. `actor` is null when no staff member acted (the teacher's own first sign-in reads "By the teacher").
+- The Teacher File shows it as **Sign-in and status history**.

@@ -738,6 +738,55 @@ export class TeacherFileService {
    * page's routes -- that scope and, for Operations, the teachers of their
    * families (PD-26 amendment).
    */
+  /**
+   * PD-43 (plan §4): the teacher's lifecycle and their login's, newest first --
+   * who did what and why. Read as the Teacher File is (gate + scope). Only the
+   * actions below, and never a raw before/after: an audit row may hold an
+   * e-mail, a phone flag or a code id; this answer holds names only.
+   */
+  async history(actorId: string, teacherId: string) {
+    const { actor } = await this.gate(actorId, (a) => a.canView);
+    const teacher = await this.requireTeacher(actor, teacherId);
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { entity: 'teacher', entityId: teacher.id, action: { in: [...HISTORY_TEACHER_ACTIONS] } },
+          ...(teacher.accountId ? [{ entity: 'account', entityId: teacher.accountId, action: { in: [...HISTORY_ACCOUNT_ACTIONS] } }] : []),
+        ],
+      },
+      orderBy: [{ at: 'desc' }, { id: 'desc' }],
+      take: HISTORY_LIMIT,
+    });
+    const supervisorOf = (json: unknown) => {
+      const v = (json as { supervisorId?: unknown } | null)?.supervisorId;
+      return typeof v === 'string' ? v : null;
+    };
+    const staffIds = new Set<string>();
+    for (const r of rows) {
+      if (r.actorId) staffIds.add(r.actorId);
+      if (r.action.startsWith('teacher_supervisor.')) {
+        for (const id of [supervisorOf(r.before), supervisorOf(r.after)]) if (id) staffIds.add(id);
+      }
+    }
+    const staff = staffIds.size
+      ? await this.prisma.staff.findMany({ where: { id: { in: [...staffIds] } }, select: { id: true, name: true } })
+      : [];
+    const nameOf = new Map(staff.map((x) => [x.id, x.name]));
+    const person = (id: string | null) => (id ? { id, name: nameOf.get(id) ?? '' } : null);
+    return {
+      teacherId: teacher.id,
+      events: rows.map((r) => ({
+        at: r.at.toISOString(),
+        action: r.action,
+        actor: person(r.actorId),
+        reason: r.reason || null,
+        detail: r.action.startsWith('teacher_supervisor.')
+          ? { from: person(supervisorOf(r.before)), to: person(supervisorOf(r.after)) }
+          : {},
+      })),
+    };
+  }
+
   async requireTeacher(actor: Actor, teacherId: string, scope: 'file' | 'page' = 'file') {
     const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
     if (!isUuid(teacherId)) throw notFound;
@@ -1040,3 +1089,26 @@ interface TeacherSetup {
   payMatchesShift: boolean;
   missing: number;
 }
+
+/** PD-43 teacher history: the teacher's lifecycle (entity 'teacher')... */
+const HISTORY_TEACHER_ACTIONS = [
+  'teacher.created',
+  'teacher.sign_in_given',
+  'teacher.sign_in_changed',
+  'teacher_supervisor.assigned',
+  'teacher_supervisor.unassigned',
+  'teacher.offboarded',
+  'teacher.reactivated',
+] as const;
+
+/** ...and their login's (entity 'account'). Session bookkeeping is not history. */
+const HISTORY_ACCOUNT_ACTIONS = [
+  'account.first_login_code_issued',
+  'account.activated',
+  'account.password_reset_issued',
+  'account.password_reset_completed',
+  'account.suspended',
+  'account.reactivated',
+] as const;
+
+const HISTORY_LIMIT = 200;

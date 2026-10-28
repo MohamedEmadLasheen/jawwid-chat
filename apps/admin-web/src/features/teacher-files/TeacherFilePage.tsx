@@ -4,11 +4,11 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
-import type { Complaint, EntryBrief, TeacherFile } from './api'
-import { T, useCopy } from './copy'
+import type { Complaint, EntryBrief, TeacherFile, TeacherHistoryEvent } from './api'
+import { HISTORY_ACTION, T, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
-import { useReissueFirstLogin, useTeacherFile } from './hooks'
+import { useReissueFirstLogin, useTeacherFile, useTeacherHistory } from './hooks'
 import { FirstLoginCodeDialog, GiveSignInDialog } from './AddTeacherDialog'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
 import { AwayBadge, ComplaintItem, UpholdDialog } from './Complaint'
@@ -130,6 +130,8 @@ function FileSections({
       <DaysOff file={file} onAdd={onAdd} />
       {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
       <TeacherLeaveSection teacherId={file.teacher.id} canSetAllowance={file.access.canEditPersonal} />
+      {/* PD-43: the teacher's and their login's lifecycle. */}
+      <LifecycleHistory teacherId={file.teacher.id} />
       {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
       <SupervisionTimeline teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} />
       {payroll.dialogs}
@@ -205,6 +207,50 @@ function SetupChecklist({ file }: { file: TeacherFile }) {
           {tx(T.payMismatch)}
         </p>
       )}
+    </Section>
+  )
+}
+
+/** PD-43: added, sign-in, supervisor, offboarded, reactivated -- newest first, with who and why. */
+function LifecycleHistory({ teacherId }: { teacherId: string }) {
+  const tx = useCopy()
+  const { dateTime } = useI18n()
+  const history = useTeacherHistory(teacherId)
+  const events = history.data?.events
+  const what = (e: TeacherHistoryEvent) => {
+    if (e.action === 'teacher_supervisor.assigned') {
+      return tx(T.historySupervisorChanged, { from: e.detail.from?.name ?? tx(T.historyNone), to: e.detail.to?.name ?? tx(T.historyNone) })
+    }
+    const label = HISTORY_ACTION[e.action]
+    return label ? tx(label) : e.action
+  }
+  // No staff member: the teacher themselves for their own sign-in, the system otherwise.
+  const who = (e: TeacherHistoryEvent) =>
+    e.actor?.name ?? tx(e.action === 'account.activated' || e.action === 'account.password_reset_completed' ? T.historyByTeacher : T.historyAutomatic)
+  return (
+    <Section id="tf-history" title={tx(T.historyTitle)}>
+      <QueryBoundary isLoading={history.isLoading} error={history.error} onRetry={() => void history.refetch()}>
+        {events && events.length === 0 && <p className="tf-muted">{tx(T.historyEmpty)}</p>}
+        {events && events.length > 0 && (
+          <ul className="tf-history">
+            {events.map((e, i) => (
+              <li key={`${e.at}-${i}`}>
+                <strong dir="auto">{what(e)}</strong>
+                <span className="tf-byline">
+                  {' '}
+                  · <bdi>{who(e)}</bdi> · {dateTime(e.at)}
+                </span>
+                {e.reason && (
+                  <span className="tf-muted" dir="auto">
+                    {' '}
+                    · {e.reason}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </QueryBoundary>
     </Section>
   )
 }
