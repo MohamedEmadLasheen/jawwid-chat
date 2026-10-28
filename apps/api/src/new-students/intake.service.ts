@@ -90,23 +90,29 @@ export class FamilyIntakeService {
   /** What the form needs: who the caller enters as, who they may enter for, the teachers. */
   async options(actorId: string) {
     const s = await this.standing(actorId);
-    const onBehalfOf = s.standing === 'operations_manager' || s.standing === 'sales_manager' || s.standing === 'super_admin'
-      ? await this.prisma.$queryRaw<Array<{ id: string; name: string; kind: 'operations' | 'sales' }>>`
-          SELECT st.id::text AS id, st.name, d.kind
-            FROM chat.department_member m
-            JOIN chat.department d ON d.id = m.department_id
-            JOIN chat.staff st ON st.id = m.staff_id AND st.is_active AND st.left_at IS NULL
-           WHERE st.organization_id = ${s.org}::uuid
-             AND ((d.kind = 'operations' AND m.position = 'supervisor' AND ${s.standing !== 'sales_manager'})
-               OR (d.kind = 'sales' AND ${s.standing !== 'operations_manager'}))
-           ORDER BY st.name, st.id`
-      : [];
+    const onBehalfOf = isManager(s) ? await this.enterableFor(s) : [];
     const teachers = await this.prisma.teacher.findMany({
       where: { organizationId: s.org, isActive: true, leftAt: null },
       select: { id: true, name: true },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
-    return { standing: s.standing, manager: s.manager, ready: await this.ready(), onBehalfOf, teachers };
+    // QA on #202: a manager with nobody to enter a family for is told so,
+    // instead of a form that cannot be saved. They never own it themself.
+    const noTeam = isManager(s) && onBehalfOf.length === 0;
+    return { standing: s.standing, manager: s.manager, ready: await this.ready(), onBehalfOf, noTeam, teachers };
+  }
+
+  /** The supervisors a manager may enter a family for (D5): their department's. */
+  private async enterableFor(s: Standing) {
+    return this.prisma.$queryRaw<Array<{ id: string; name: string; kind: 'operations' | 'sales' }>>`
+      SELECT st.id::text AS id, st.name, d.kind
+        FROM chat.department_member m
+        JOIN chat.department d ON d.id = m.department_id
+        JOIN chat.staff st ON st.id = m.staff_id AND st.is_active AND st.left_at IS NULL
+       WHERE st.organization_id = ${s.org}::uuid
+         AND ((d.kind = 'operations' AND m.position = 'supervisor' AND ${s.standing !== 'sales_manager'})
+           OR (d.kind = 'sales' AND ${s.standing !== 'operations_manager'}))
+       ORDER BY st.name, st.id`;
   }
 
   async enter(actorId: string, body: unknown) {
@@ -728,7 +734,12 @@ export class FamilyIntakeService {
         ? { supervisorId: self, salesOwnerId: null, onBehalfOf: null }
         : { supervisorId: null, salesOwnerId: self, onBehalfOf: null };
     }
-    if (!onBehalfOf) throw new CommError(CommErrorCode.INTAKE_INVALID, 'onBehalfOf: a manager names the supervisor the family belongs to', 400);
+    if (!onBehalfOf) {
+      if ((await this.enterableFor(s)).length === 0) {
+        throw new CommError(CommErrorCode.INTAKE_INVALID, 'a family belongs to a supervisor of your department, and it has none yet: add one first', 400);
+      }
+      throw new CommError(CommErrorCode.INTAKE_INVALID, 'onBehalfOf: a manager names the supervisor the family belongs to', 400);
+    }
     const [t] = await this.prisma.$queryRaw<Array<{ ops: boolean; sales: string | null }>>`
       SELECT EXISTS (SELECT 1 FROM chat.department_member m JOIN chat.department d ON d.id = m.department_id
                       WHERE m.staff_id = st.id AND d.kind = 'operations' AND m.position = 'supervisor') AS ops,
@@ -980,6 +991,11 @@ export function payloadHash(payload: unknown): string {
 
 function notFound() {
   return new CommError(CommErrorCode.INTAKE_NOT_FOUND, 'family not found', 404);
+}
+
+/** A manager enters a family for one of their supervisors (D5); they never own it themself. */
+function isManager(s: Standing): boolean {
+  return s.standing === 'operations_manager' || s.standing === 'sales_manager' || s.standing === 'super_admin';
 }
 
 /** A required id in the body, as a lower-case uuid. */

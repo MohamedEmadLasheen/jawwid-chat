@@ -15,6 +15,8 @@ export interface IntakeOptions {
   ready: boolean
   /** For a manager: the supervisors they may enter a family for. */
   onBehalfOf: Array<{ id: string; name: string; kind: 'operations' | 'sales' }>
+  /** A manager whose department has nobody to enter a family for: Add family waits (they never own it themself). */
+  noTeam?: boolean
   teachers: Array<{ id: string; name: string }>
 }
 
