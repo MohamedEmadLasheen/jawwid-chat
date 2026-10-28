@@ -8,10 +8,10 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
     expect(r.approved).toBe(true);
     const alif = r.units[0]!;
     expect(alif.words).toEqual([
-      { text: 'كِتَابْ', positions: ['middle'] },
-      { text: 'عَصَا', positions: ['end'] },
+      { id: 'alif-w1', text: 'كِتَابْ', positions: ['middle'] },
+      { id: 'alif-w2', text: 'عَصَا', positions: ['end'] },
     ]);
-    expect(alif.note).toBe('مُلَاحَظَةْ');
+    expect(alif.note).toEqual({ id: 'alif-note', text: 'مُلَاحَظَةْ' });
     // أَسَدْ is a hamza word: it starts with أ, which is not alif.
     expect(r.units[1]!.words.map((w) => w.positions)).toEqual([['start'], ['middle'], ['end']]);
     // q3 shows the flagged بَابْ, q4 is flagged itself: both held; the flagged word is held too.
@@ -28,7 +28,11 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
 
   it('refuses the whole file when any proof fails', () => {
     const bad: ((c: ArabicLesson) => void)[] = [
-      (c) => { c.units[0]!.words.push({ text: 'أَسَدْ', was: null, review: null }); }, // an أ word filed as alif
+      (c) => { c.units[0]!.words.push({ id: 'alif-w9', text: 'أَسَدْ', was: null, review: null }); }, // an أ word filed as alif
+      (c) => { c.units[0]!.words[1]!.id = 'alif-w1'; }, // a reused id
+      (c) => { c.units[0]!.note!.id = 'hamza-w1'; }, // one namespace: a note may not take a word's id
+      (c) => { c.units[1]!.words[0]!.id = 'Hamza 1'; }, // not a lowercase slug
+      (c) => { delete (c.units[1]!.words[0] as { id?: string }).id; }, // every reading string has one
       (c) => { c.units[0]!.words[0]!.text = 'كِتَاب ب'; }, // not one word
       (c) => { c.quiz[0] = { ...c.quiz[0]!, kind: 'contains', options: ['كِتَابْ', 'عَصَا'], answer: 0 } as never; }, // two right answers
       (c) => { c.quiz[0] = { ...c.quiz[0]!, answer: 0 } as never; }, // the answer is not the right one

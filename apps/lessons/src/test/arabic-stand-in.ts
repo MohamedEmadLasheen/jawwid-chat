@@ -13,11 +13,11 @@ export function standIn(): ArabicLesson {
         letters: ['ا'],
         name: 'أَلِفْ',
         forms: ['ا', 'ـا'],
-        note: { text: 'مُلَاحَظَةْ', review: null },
+        note: { id: 'alif-note', text: 'مُلَاحَظَةْ', review: null },
         words: [
-          { text: 'كِتَابْ', was: null, review: null },
-          { text: 'عَصَا', was: null, review: null },
-          { text: 'بَابْ', was: 'بَاب', review: 'ADDED TASHKEEL: final sukun' },
+          { id: 'alif-w1', text: 'كِتَابْ', was: null, review: null },
+          { id: 'alif-w2', text: 'عَصَا', was: null, review: null },
+          { id: 'alif-w3', text: 'بَابْ', was: 'بَاب', review: 'ADDED TASHKEEL: final sukun' },
         ],
       },
       {
@@ -27,9 +27,9 @@ export function standIn(): ArabicLesson {
         forms: ['ء', 'أ', 'إ', 'ؤ', 'ئ'],
         note: null,
         words: [
-          { text: 'أَسَدْ', was: null, review: null },
-          { text: 'رَأْسْ', was: null, review: null },
-          { text: 'جُزْءْ', was: null, review: null },
+          { id: 'hamza-w1', text: 'أَسَدْ', was: null, review: null },
+          { id: 'hamza-w2', text: 'رَأْسْ', was: null, review: null },
+          { id: 'hamza-w3', text: 'جُزْءْ', was: null, review: null },
         ],
       },
     ],

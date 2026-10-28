@@ -24,6 +24,9 @@ cannot disagree. This FAILS when:
     clearing sets `review` and `was` to null;
   * a quiz question does not have exactly one right answer by the rule, or
     shows a word that is not in the lesson;
+  * a reading string (a unit's name, a note, a word) has no stable id, or one
+    that is not a lowercase slug or is used twice in the lesson. A voice-over
+    clip binds to (id, SHA-256 of the text), so an id must never be reused;
   * the file says "approved" while anything is flagged or uncleared.
 Standard library only; reads files.
 """
@@ -40,6 +43,7 @@ FIXTURE = os.path.join(ARABIC, 'letters.fixture.json')
 KEYS = {'lesson', 'review', 'provenance', 'finalMark', 'units', 'quiz'}
 UNIT_KEYS = {'id', 'letters', 'name', 'forms', 'note', 'words'}
 POSITIONS = ['start', 'middle', 'end']
+ID = re.compile(r'^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$')
 
 MARKS = {chr(c) for c in range(0x64B, 0x653)} | {chr(0x670)}
 SUKUN, SHADDA, DAMMA, KASRA = chr(0x652), chr(0x651), chr(0x64F), chr(0x650)
@@ -163,14 +167,21 @@ def check(lesson, number):
         if r:
             flagged.append(where)
 
-    units, vocabulary = {}, set()
+    units, vocabulary, string_ids = {}, set(), set()
+
+    def fresh(where, sid):
+        if not isinstance(sid, str) or not ID.match(sid):
+            err(f'{where}: id {sid!r} must be a lowercase slug (ba-w1, alif-note): voice-over binds to it')
+        elif sid in string_ids:
+            err(f'{where}: id {sid!r} is used twice in the lesson (ids are never reused)')
+        string_ids.add(sid)
+
     for i, u in enumerate(lesson['units']):
         where = f'unit {u.get("id", i)!r}'
         if set(u) != UNIT_KEYS:
             err(f'{where}: keys must be {sorted(UNIT_KEYS)}')
             continue
-        if not isinstance(u['id'], str) or not u['id'] or u['id'] in units:
-            err(f'{where}: unit ids must be unique and non-empty')
+        fresh(where, u['id'])
         if not u['letters'] or not all(isinstance(l, str) and l and all(is_letter(c) for c in l) for l in u['letters']):
             err(f'{where}: letters must be letters (one, or a pair such as لا)')
             continue
@@ -182,6 +193,7 @@ def check(lesson, number):
         if not u['forms'] or not all(isinstance(f, str) and f and all(c == chr(0x640) or any(c in l for l in u['letters']) for c in f) for f in u['forms']):
             err(f'{where}: each form is the unit\'s letter, with tatweel only')
         if u['note'] is not None:
+            fresh(f'{where} note', u['note'].get('id'))
             if not isinstance(u['note'].get('text'), str) or not u['note']['text'].strip():
                 err(f'{where}: a note has text')
             else:
@@ -193,9 +205,10 @@ def check(lesson, number):
         for w in u['words']:
             t = w.get('text')
             ww = f'{where} word {t!r}'
-            if set(w) - {'text', 'was', 'review', 'finalMarkException'} or not {'text', 'was', 'review'} <= set(w):
-                err(f'{ww}: keys are text, was, review (and finalMarkException)')
+            if set(w) - {'id', 'text', 'was', 'review', 'finalMarkException'} or not {'id', 'text', 'was', 'review'} <= set(w):
+                err(f'{ww}: keys are id, text, was, review (and finalMarkException)')
                 continue
+            fresh(ww, w['id'])
             if not is_word(t):
                 err(f'{ww}: not one written word')
                 continue
@@ -271,17 +284,17 @@ def selftest():
             'lesson': 1, 'review': {'status': 'pending', 'by': None, 'note': ''}, 'provenance': {}, 'finalMark': 'sukun',
             'units': [
                 {'id': 'alif', 'letters': [chr(0x627)], 'name': 'أَلِفْ', 'forms': ['ا', 'ـا'],
-                 'note': {'text': 'لَا تَبْدَأُ كَلِمَةٌ بِأَلِفٍ.', 'review': 'AUTHORED'},
-                 'words': [{'text': 'كِتَابْ', 'was': None, 'review': None},
-                           {'text': 'عَصَا', 'was': None, 'review': None},
-                           {'text': 'بَابْ', 'was': 'بَاب', 'review': 'ADDED TASHKEEL: final sukun'}]},
+                 'note': {'id': 'alif-note', 'text': 'لَا تَبْدَأُ كَلِمَةٌ بِأَلِفٍ.', 'review': 'AUTHORED'},
+                 'words': [{'id': 'alif-w1', 'text': 'كِتَابْ', 'was': None, 'review': None},
+                           {'id': 'alif-w2', 'text': 'عَصَا', 'was': None, 'review': None},
+                           {'id': 'alif-w3', 'text': 'بَابْ', 'was': 'بَاب', 'review': 'ADDED TASHKEEL: final sukun'}]},
                 {'id': 'hamza', 'letters': ['ء', 'أ', 'إ', 'ؤ', 'ئ'], 'name': 'هَمْزَةْ', 'forms': ['ء', 'أ', 'إ', 'ؤ', 'ئ'],
                  'note': None,
-                 'words': [{'text': 'أَسَدْ', 'was': None, 'review': None},
-                           {'text': 'جُزْءْ', 'was': None, 'review': None}]},
+                 'words': [{'id': 'hamza-w1', 'text': 'أَسَدْ', 'was': None, 'review': None},
+                           {'id': 'hamza-w2', 'text': 'جُزْءْ', 'was': None, 'review': None}]},
                 {'id': 'ba', 'letters': ['ب'], 'name': 'بَاءْ', 'forms': ['ب', 'بـ', 'ـبـ', 'ـب'], 'note': None,
-                 'words': [{'text': 'الْبَحْرْ', 'was': None, 'review': None},
-                           {'text': 'الشَّبَابْ', 'was': None, 'review': None}]},
+                 'words': [{'id': 'ba-w1', 'text': 'الْبَحْرْ', 'was': None, 'review': None},
+                           {'id': 'ba-w2', 'text': 'الشَّبَابْ', 'was': None, 'review': None}]},
             ],
             'quiz': [
                 {'id': 'q1', 'kind': 'contains', 'unit': 'alif', 'options': ['أَسَدْ', 'كِتَابْ', 'جُزْءْ'], 'answer': 1, 'review': None},
@@ -299,10 +312,15 @@ def selftest():
 
     cases = {
         'clean': (lambda c: None, None),
-        'alif-start-is-hamza': (lambda c: c['units'][0]['words'].append({'text': 'أَسَدْ', 'was': None, 'review': None}), 'does not contain'),
-        'madda-is-not-alif': (lambda c: c['units'][0]['words'].append({'text': 'آدَمْ', 'was': None, 'review': None}), 'does not contain'),
+        'alif-start-is-hamza': (lambda c: c['units'][0]['words'].append({'id': 'alif-w8', 'text': 'أَسَدْ', 'was': None, 'review': None}), 'does not contain'),
+        'madda-is-not-alif': (lambda c: c['units'][0]['words'].append({'id': 'alif-w9', 'text': 'آدَمْ', 'was': None, 'review': None}), 'does not contain'),
         'not-a-word': (word(0, 0, text='كِتَابْ بَابْ'), 'not one written word'),
-        'listed-twice': (lambda c: c['units'][1]['words'].append({'text': 'جُزْءْ', 'was': None, 'review': None}), 'listed twice'),
+        'listed-twice': (lambda c: c['units'][1]['words'].append({'id': 'hamza-w9', 'text': 'جُزْءْ', 'was': None, 'review': None}), 'listed twice'),
+        'word-id-reused': (word(0, 1, id='alif-w1'), 'used twice'),
+        'note-takes-a-word-id': (lambda c: c['units'][0]['note'].update(id='hamza-w1'), 'used twice'),
+        'unit-id-is-a-word-id': (lambda c: c['units'][2].update(id='alif-w1'), 'used twice'),
+        'id-not-a-slug': (word(1, 0, id='Hamza 1'), 'lowercase slug'),
+        'word-without-id': (lambda c: c['units'][1]['words'][0].pop('id'), 'keys are id'),
         'no-final-mark': (word(0, 0, text='كِتَاب'), 'no sukun'),
         'tanween-final': (word(0, 0, text='كِتَابٌ'), 'tanween'),
         'vowel-final': (word(0, 0, text='كِتَابُ'), 'a short vowel'),
@@ -323,7 +341,7 @@ def selftest():
         'quiz-unknown-unit': (lambda c: c['quiz'][1].update(unit='nope'), 'no unit'),
         'quiz-duplicate-id': (lambda c: c['quiz'][1].update(id='q1'), 'unique'),
         'quiz-bad-kind': (lambda c: c['quiz'][1].update(kind='order'), 'kind must be'),
-        'unit-duplicate-id': (lambda c: c['units'][1].update(id='alif'), 'unique'),
+        'unit-duplicate-id': (lambda c: c['units'][1].update(id='alif'), 'used twice'),
         'form-not-the-letter': (lambda c: c['units'][2].update(forms=['ت']), 'each form'),
         'final-mark-tanween': (lambda c: c.update(finalMark='tanween'), 'finalMark must be'),
         'approved-with-flags': (lambda c: c['review'].update(status='approved', by='Teachers department'), 'still flagged'),

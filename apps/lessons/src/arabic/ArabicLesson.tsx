@@ -79,7 +79,7 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
           <h2>{unit.name}</h2>
           <p className="note">{TEXT.forms}</p>
           <p className="letters-forms">{unit.forms.join('  ')}</p>
-          {unit.note ? <p className="intro">{unit.note}</p> : null}
+          {unit.note ? <p className="intro">{unit.note.text}</p> : null}
           {POSITIONS.map((p) => {
             const at = unit.words.filter((w) => w.positions.includes(p));
             return at.length ? (
@@ -87,7 +87,7 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
                 <h3>{POSITION_LABEL[p]}</h3>
                 <ul className="letters-examples">
                   {at.map((w) => (
-                    <li key={w.text}>
+                    <li key={w.id}>
                       <Word text={w.text} unit={unit} />
                     </li>
                   ))}
