@@ -83,6 +83,9 @@ export class TeacherOnboardingService {
     const joinedOn = optionalDate('joinedOn', body.joinedOn);
     const teachingMarket = optionalText('teachingMarket', body.teachingMarket, 80);
     const note = optionalText('note', body.note, 500);
+    if (body.confirmSimilarName !== undefined && typeof body.confirmSimilarName !== 'boolean') {
+      throw invalid('confirmSimilarName', 'must be true or false');
+    }
 
     let supervisorId: string | null;
     if (body.supervisorId === undefined || body.supervisorId === null) supervisorId = null;
@@ -91,6 +94,8 @@ export class TeacherOnboardingService {
     if (onboarding.supervisorChoice === 'self_or_none' && supervisorId !== null && supervisorId !== actor.actorId) {
       throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'a teacher supervisor adds a teacher for themselves or with no supervisor');
     }
+
+    if (body.confirmSimilarName !== true) await this.warnOnSimilarName(actor, id, name);
 
     const issuer = await this.issuerAccount(actor);
     let created: { name: string; issued: { id: string; code: string; expiresAt: Date } };
@@ -365,6 +370,33 @@ export class TeacherOnboardingService {
   }
 
   // ------------------------------------------------------------------
+
+  /**
+   * Plan §3.4: the same name as an ACTIVE teacher the caller reaches is a
+   * warning, never a refusal -- a name alone is too weak, and naming one out of
+   * reach would disclose it, so such a match says nothing at all. Names compare
+   * folded the PD-42 way (chat.search_fold: case, diacritics, tatweel,
+   * alef/yeh/heh variants) with runs of spaces collapsed. The id being added is
+   * left out, so a replayed request is not its own match.
+   */
+  private async warnOnSimilarName(actor: Actor, id: string, name: string): Promise<void> {
+    const scope = await this.teacherScope.scopeOf(actor);
+    const matches = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
+      SELECT t.id::text AS id, t.name
+        FROM chat.teacher t
+       WHERE t.organization_id = ${actor.organizationId}::uuid
+         AND t.is_active AND t.left_at IS NULL
+         AND t.id <> ${id}::uuid
+         AND chat.search_fold(regexp_replace(btrim(t.name), '[[:space:]]+', ' ', 'g'))
+             = chat.search_fold(regexp_replace(btrim(${name}::text), '[[:space:]]+', ' ', 'g'))
+       ORDER BY t.name, t.id`;
+    const seen = matches.filter((t) => scopeCovers(scope, t.id));
+    if (seen.length > 0) {
+      throw new CommError(CommErrorCode.TEACHER_SIMILAR_NAME, 'a teacher with this name is already here; confirm to add another', 409, {
+        teachers: seen,
+      });
+    }
+  }
 
   /** A teacher of the caller's organization; anything else is the same 404. */
   private async teacherOf(actor: Actor, teacherId: string) {
