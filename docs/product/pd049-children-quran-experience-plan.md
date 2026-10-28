@@ -1,6 +1,6 @@
 # PD-49: an age-adaptive children's Quran experience for all 114 surahs (plan)
 
-**State:** **Plan, docs only.** No product code is written; code waits for the department head's approval and the owner's answers (§H).
+**State:** **Plan, docs only. DECIDED 2026-10-29.** The owner approved all 14 recommendations in §H, chose **public-domain sources only** (§A), confirmed a scholar reviewer, and fixed the pilot as 1, 112, 105 and 111. The decisions were relayed by the department head. No product code is written yet; the pilot build follows the department head's GO.
 **Claim:** `docs/product/pd-registry/PD-49.md`. **Migration slot:** none for this plan. PR-2 and PR-3 (§G) will each ask the department head for one.
 **Base:** `main` @ `02812e33`. Paths are relative to the repository root.
 **Builds on:**
@@ -24,7 +24,7 @@ Two follow-ups from the owner during planning:
 
 1. **Two kinds of content, two speeds.**
    - **Verified-text activities** are generated only from positions in the pinned Tanzil text: which ayah, which word, what order. Nothing in them is authored, so they need no per-surah review. They reach **all 114 surahs at once**, adapted to age and length, in the first engine PR. A scholar approves each **game mechanic** once (§C.4), not each surah.
-   - **Knowledge content** is word meanings, tafsir, lessons, asbab, stories and quiz questions. It is written **for children, derived from a named source, with a citation on every item**. A child sees it only after review: Teachers department for all of it, plus a qualified scholar for tafsir, asbab, lessons and stories. Content games unlock **surah by surah** as review finishes.
+   - **Knowledge content** is word meanings, tafsir, lessons, asbab, stories and quiz questions. It is written **for children, in our own words, derived from a named public-domain source** (al-Sa'di for tafsir, Ibn al-Ha'im for word meanings, the hadith collections and al-Wahidi for asbab reports; §A), **with a citation on every item**. A child sees it only after review: Teachers department for all of it, plus a qualified scholar for tafsir, asbab, lessons and stories. Content games unlock **surah by surah** as review finishes.
 2. **Three axes of adaptation** (§B), so a 4-year-old on Al-Kawthar and a 10-year-old on Al-Mulk never get the same session:
    - **age band** (3–5, 6–8, 9–12) decides which mechanics are allowed and how they look (pre-reader or reader);
    - **surah length tier** (L1–L5) decides chunking, the number of rounds, and the order/recall game shapes;
@@ -34,14 +34,19 @@ Two follow-ups from the owner during planning:
    - per-item review states in the database, bound to the SHA-256 of the exact text, as PD-48 does for clips;
    - an export of approvals into the repo, checked by CI;
    - **held text is never shipped in the bundle**;
-   - no asbab without an authenticated report: where there is none, the section does not exist;
+   - no asbab without an authenticated report: where there is none, or the references disagree, the section does not exist;
    - Quran never typed (the existing checker).
-5. **It works with audio off.** Every audio activity drops out of the playlist when the gate gives no recitation. There is no placeholder button (PD-48's rule). The 3–5 band is honestly weaker without audio. §D says what it gets meanwhile, and §H Q5 asks the owner.
-6. **Review is the bottleneck, not code** (§G.4). About 2,000 items for Juz' Amma plus Al-Fatihah: ~38 teacher hours and ~25 scholar hours. About 21,000 items for the whole Quran: ~600 reviewer hours. The phasing follows that.
+5. **It works with audio off.** Every audio activity drops out of the playlist when the gate gives no recitation. There is no placeholder button (PD-48's rule). The 3–5 band is honestly weaker without audio. §D says what it gets meanwhile; the owner adopted §H Q5.
+6. **Review and authoring are the bottleneck, not code** (§G.4). About 2,000 items for Juz' Amma plus Al-Fatihah: ~38 teacher hours and ~25 scholar hours. About 21,000 items for the whole Quran: ~600 reviewer hours. The phasing follows that.
 
 ---
 
 ## A. Sources (accuracy before features)
+
+**Owner decision, 2026-10-29: "Only public-domain sources."** No permission letters are sent.
+- Every source PD-49 derives from, and every source an item cites as its basis, is a work whose author's text is in the public domain.
+- A **modern work may appear only as a reference** for an authenticity judgement: its title, volume/page and verdict, which are facts and citations. Its text is never used.
+- Every child-facing line is **our own wording**, with a citation per item.
 
 **How this was researched.**
 - Web reading only, 2026-10-28. Nothing was downloaded, signed up for or run.
@@ -49,120 +54,129 @@ Two follow-ups from the owner during planning:
   - `pd49-tafsir-sources-research.md`
   - `pd49-word-meanings-sources-research.md`
   - `pd49-asbab-sources-research.md`
-- Some official pages (KFGQPC, Dorar) answered 404 or 403. Those points rest on search snippets and are marked "unconfirmed".
-- **Every licence conclusion here is an engineer's reading, not legal advice. Counsel confirms before anything is recorded as licensed** (§A.8).
+- Copyright conclusions are an engineer's reading, not legal advice. **Optional:** counsel may confirm the public-domain status per market (§A.7). This is a note, not a blocker.
 
-### A.0 The finding that shapes everything
+### A.0 What "public domain" means here
 
-**No reliable source for tafsir, word meanings or asbab has a published licence that covers all three uses a paid children's app needs:**
-- (a) showing its text verbatim;
-- (b) storing it offline;
-- (c) deriving simplified children's text from it.
-The modern works (al-Mukhtasar, al-Muyassar, al-Siraj, al-Muharrar, al-Sahih al-Musnad, Makhluf) are in copyright and need **written permission**. The classical works are out of copyright, but they are not written for children, and some contain weak reports.
+**Public-domain status depends on the jurisdiction.**
+- Saudi Arabia, Egypt and Qatar protect a work for the author's life + 50 years.
+- The EU protects it for life + 70, to the end of the calendar year.
+- So a work can be free in one market and protected in another for a few more years.
 
-So PD-49 works this way:
-1. **Children's text is our own original writing.** It conveys the meaning the cited source gives, in new words for the band. It never reproduces the source's sentences.
-   - Each item records the source and the exact place (work, edition, surah:ayah, volume/page).
-   - Whether this needs the publisher's permission for a commercial product is §H Q1b, for counsel. **We ask the publishers anyway** (§A.8), because permission also lets reviewers see the source inside the review tool.
-2. **No source text is shipped or stored in the product** until its licence is recorded in code (`content/sources.json`, the `audio-sources.ts` pattern).
-   - Until then, reviewers open the source by link or in their own copy. The review tool shows the exact reference, not the text.
-3. **Accuracy is a review fact, not a licence fact.** Even with every licence, nothing shows until the review steps of §F.2 are complete.
+**The author's text is not the same as the edition.** A modern critical edition (tahqiq) can carry the editor's own rights in its apparatus: footnotes, takhrij and gradings, introductions, added headings, indexes. Whether the editor's choice of readings in the main text is protected is unsettled.
+
+**So every source is pinned to an edition that is itself free of modern apparatus**, recorded in `apps/lessons/src/content/sources.json`:
+- the author and their death date;
+- the edition: printer, place, year, and the volume/page scheme;
+- why that edition is free: e.g. an early print with no modern editor, or a print whose editor died long enough ago;
+- the markets where the work is still protected, if any.
+
+If no such print can be identified for a work, the work is **not** a primary source. It may still be a cross-check, read by the reviewer from any copy, because the item cites the author's own words and position, never an editor's.
+
+**Nothing from a source is shipped to children verbatim**, so the bundle carries our text only. The source is what the reviewer checks against.
 
 ### A.1 Simplified tafsir
 
-| Source | Publisher, method | Licence for a paid app | Format | Role |
-|---|---|---|---|---|
-| **al-Mukhtasar fi Tafsir al-Quran al-Karim** | Markaz Tafsir lil-Dirasat al-Quraniyyah. Named authors, ten reviewers and a supervisory committee, with a later revision. It states a Salaf / Ahl al-Sunnah method. Written to be short and clear. | In copyright. The Arabic text is on **QuranEnc** (API, versioned), whose terms allow republishing only **unmodified, credited and versioned**, and are silent on commercial use. IslamHouse's content policy allows commercial use and offline storage, and treats a summary as "your own independent work", but it is written for their own translations, not for third-party tafsir rights. **Written permission is needed from Markaz Tafsir.** | QuranEnc API / JSON (`arabic_mokhtasar`), PDF | **Primary.** Children's tafsir is derived from it, cited by QuranEnc version + surah:ayah |
-| **al-Tafsir al-Muyassar** | KFGQPC (King Fahd Glorious Quran Printing Complex). A committee under a named supervisor; the contributors are not listed. | A corporate work, protected (to about 2048 by the agent's reading). The Complex's developer site offers data "for app content", but **no licence for the tafsir** was found, and the footer reserves all rights (unconfirmed: page 404). The Complex's published free-use grant covers the **Mushaf only**. **Written permission is needed from KFGQPC.** | KFGQPC data; QuranEnc (`arabic_moyassar`); quran.com resource 16 | **Cross-check** for every tafsir item |
-| **Taysir al-Karim al-Rahman (al-Sa'di)** | The author died 1957 (often misdated 1956). Widely taught; Ahl al-Sunnah. | The **base text** is public domain in Saudi Arabia and Egypt (life + 50). In the EU it is protected until the end of 2027. Modern critical editions' apparatus is protected. No data source says which edition it copied. | Many; QuranEnc (`arabic_saadi`), quran.com 91 | **Fallback** if permissions stall; a reviewer's reference for lessons learned (al-Sa'di draws out lessons) |
-| **Ibn Kathir** | The original (d. 774 AH) is public domain, long, and includes weak reports. Its abridgements (al-Misbah al-Munir; al-'Adawi's Sahih; others) are in copyright. | Original: free. Abridgements: permission from each publisher. | Many | **A reviewer's reference only**, for narrations. Never derived from directly. |
-| **Quran Foundation API** (quran.com) | Serves al-Muyassar, al-Sa'di and Ibn Kathir; **not** the Arabic Mukhtasar | Its developer terms (dated 2026-10-11) allow paid apps, but limit caching to **one week** unless their Content Sync is used. Summaries count as "Derived Materials" that stay under its terms, and everything must be deleted if access ends. | REST API | **Not a base** for authored, permanent children's text |
-| **QUL (Tarteel)** | Hosts Muyassar, Sa'di and Mukhtasar | Each licence page says "no copyright information" for the resource. **QUL grants nothing.** | Downloads | Not used |
-| Children's tafsir books | Retail Juz' 'Amma books and an article series | All in copyright. No committee-reviewed, openly licensed whole-Quran children's tafsir was found. | Print | Style reference only |
+| Role | Work | Status | Notes |
+|---|---|---|---|
+| **Primary** | **Taysir al-Karim al-Rahman fi Tafsir Kalam al-Mannan**, 'Abd al-Rahman al-Sa'di | The author died 22 Jumada al-Akhira 1376 AH = **24 January 1957** (often misdated 1956). **Public domain under life + 50 (Saudi Arabia, Egypt, Qatar) since about 2007.** **EU (life + 70): protected until 31 December 2027**, free from 1 January 2028. | Clear, concise, lesson-oriented, and it largely avoids isra'iliyyat, which makes it the closest classical fit for children. **Edition:** NOT the al-Luwayhiq critical edition (Ula al-Nuha 2000 / al-Rushd 2008), whose apparatus is the editor's. Pin an early print with no modern editor's apparatus (§A.6, step 1). |
+| **Cross-check 1** | **Ma'alim al-Tanzil**, al-Baghawi (d. 516 AH) | Public domain everywhere (author's text) | A concise, Sunni, narration-based tafsir widely regarded as sound in method (the scholar confirms). It is used to confirm the meaning of each ayah. |
+| **Cross-check 2** | **Tafsir al-Quran al-'Azim**, Ibn Kathir (d. 774 AH), the full original | Public domain everywhere (author's text). Its modern abridgements (al-Misbah al-Munir, al-'Adawi's Sahih, etc.) are in copyright and **not used**. | Used for narrations and for checking that a meaning is the established one. It includes weak reports, so **nothing is taken from a narration in it without the asbab/hadith rule** (§A.3). |
+| Reference only | Tafsir al-Jalalayn (al-Mahalli d. 864, al-Suyuti d. 911) | Public domain | Very short glosses, useful for word sense. **Caution:** it reinterprets some divine attributes (ta'wil). The scholar never accepts a line about Allah's attributes from it. |
 
-**Recommendation:**
-- **Primary: al-Mukhtasar** (Markaz Tafsir), cited by its QuranEnc version.
-- **Cross-check: al-Muyassar** (KFGQPC).
-- **Fallback: al-Sa'di's base text.**
-- The scholar reviewer may consult Ibn Kathir and others, but the item cites the source it was written from.
-- If the Mukhtasar and the Muyassar disagree on an ayah's meaning, the item is held for the scholar and the disagreement is written in the item's record.
+**The EU caveat, applied.**
+- Children see only our own wording, so no al-Sa'di text reaches any market.
+- Until 1 January 2028, **no verbatim quotation of al-Sa'di appears anywhere in the product**, not even for reviewers inside the app. Reviewers read their own copy.
+- The citation (work, volume/page) is a fact and is shown everywhere.
+- If counsel advises (§A.7), EU-market accounts can be checked again in 2028. Nothing in the design depends on it.
 
 ### A.2 Word meanings (gharib)
 
-| Source | Notes | Licence | Role |
+| Role | Work | Status | Notes |
 |---|---|---|---|
-| **al-Muyassar fi Gharib al-Quran al-Karim** (KFGQPC, 2nd ed. 2021) | Written for memorisation students; Hafs; printed in the Mushaf margin; phrases quoted in Uthmani script | All rights reserved; no licence published (QUL's copy, resource 519: "no copyright information"). The Complex grants free use of its Mushaf, so it has a permissions process. **Written permission needed.** | **Primary**, under licence |
-| **al-Siraj fi Bayan Gharib al-Quran** (al-Khudayri; published by Majallat al-Bayan) | Clear, short glosses; widely used | The author is living, so it is in copyright. On QuranEnc (`arabic_seraj`): republishing allowed only unmodified, credited and versioned; silent on commercial use. QUL 250: "no copyright information". | **Cross-check** (reviewers read it). Not shipped unless licensed. |
-| **Kalimat al-Quran** (Makhluf) | Classic glossary | The author died 1990; Egyptian life + 50 runs to about 2040. Rights holder not found. | Not used |
-| **Classical gharib**: Ibn Qutaybah, al-Raghib, al-Sijistani, Ibn al-Ha'im (*al-Tibyan*) | Authoritative, not written for children | The authors' text is public domain. A modern edition's notes and choices of reading may be protected; use out-of-copyright prints. | **Fallback cross-check** needing no permission |
-| Quranic Arabic Corpus (Leeds) | Morphology and grammar only; **no Arabic meanings** | GPL v3; its FAQ says non-commercial; its download terms forbid changes | Not used in the product |
-| Quran Foundation / QUL word-by-word | Translations, **no Arabic word meanings** | See A.1 | Not used |
+| **Primary** | **al-Tibyan fi Tafsir Gharib al-Quran**, Ibn al-Ha'im (d. 815 AH) | Public domain (author's text) | Ordered by surah and ayah, so it maps to our positions. Glosses are short and accurate, but terse and in adult register (§A.5). **Edition:** to be pinned (§A.6, step 1); a modern edition may be read only for the author's words, never its notes. |
+| Cross-check | **Tafsir Gharib al-Quran**, Ibn Qutaybah (d. 276 AH) | Public domain (author's text). The al-Sayyid Ahmad Saqr edition (1978) and others carry editors' apparatus. | The earliest standard gharib work. Ordered by surah. |
+| Cross-check | **Nuzhat al-Qulub (Gharib al-Quran)**, al-Sijistani (d. 330 AH) | Public domain; **a Bulaq print of 1295 AH (in a margin)** is reported, which itself has no modern apparatus | Alphabetical, so a reviewer's look-up, not a map |
+| Reference | **al-Mufradat fi Gharib al-Quran**, al-Raghib al-Isfahani (d. 502 AH) | Public domain | Ordered by root, deep. For the scholar's look-up on hard words. |
+| Reference | al-Sa'di and al-Baghawi (§A.1) | Public domain (§A.1) | They often explain the key word within the ayah's tafsir |
+
+**Not used** (in copyright, so excluded by the owner's decision):
+- KFGQPC's al-Muyassar fi Gharib al-Quran;
+- al-Khudayri's al-Siraj;
+- Makhluf's Kalimat al-Quran (protected to about 2040).
+The Quranic Arabic Corpus is GPL and non-commercial, with no meanings. Quran Foundation and QUL have no Arabic meanings and grant nothing.
 
 **Word positions.**
-- Tanzil writes waqf marks (and ۞, ۩) as separate space-separated tokens.
-- quran.com and QUL attach them to the previous word and add an "end" token. For 2:2, Tanzil splits into 9 tokens; quran.com shows 7 words plus the end token.
-- The engine already numbers only tokens that contain a letter (`wordsOf` in `content/lesson-content.ts`), so a mark is never a word.
-- Glossaries often explain **phrases**. So a meaning item is a **span**, `{ayah, word, to?}` (§F.1). The checker verifies the span.
-- Any cross-reference to QUL word ids is checked by a test, never assumed.
-
-**Recommendation:**
-- **Primary: KFGQPC's al-Muyassar fi Gharib al-Quran**, under a written licence.
-- **Cross-check: al-Siraj.** Fallback cross-check: Ibn al-Ha'im's *al-Tibyan*.
-- **Until a licence is recorded,** no source text is shipped. Authors write their own child glosses from these sources, with the citation, and counsel confirms that approach (§H Q1b).
+- Tanzil writes waqf marks (and ۞, ۩) as separate tokens.
+- The engine numbers only tokens that contain a letter (`wordsOf`, `content/lesson-content.ts`), so a mark is never a word.
+- The classical glossaries often explain **phrases**, so a meaning item is a **span**, `{ayah, word, to?}` (§F.1), and the checker verifies it.
 
 ### A.3 Asbab al-nuzul (reasons for revelation)
 
-| Work | Author, publisher | Method | Licence | Role |
-|---|---|---|---|---|
-| **al-Muharrar fi Asbab Nuzul al-Quran min khilal al-Kutub al-Tis'ah** | Khalid al-Muzaini; Dar Ibn al-Jawzi, 1427 AH, 2 vols (a PhD thesis) | For each report it rules **twice**: is the chain sound, and is it really the reason for the verse? It covers the nine hadith books only. | In copyright; no licence stated. Quranpedia has it per ayah, but its licence covers classical texts only, not contemporary works. | **Primary** |
-| **al-Sahih al-Musnad min Asbab al-Nuzul** | Muqbil al-Wadi'i (d. 1422 AH); Maktabat Ibn Taymiyya (4th ed., 1408 AH), later Dar al-Athar | Collects reports he judges authentic. **Inclusion is not always a "sahih" verdict**: e.g. for al-Kawthar he concludes the report is mursal. | Treat as in copyright: the book names one licensed printer. A "free for every Muslim to print" claim was seen only on a 2006 forum post, **not confirmed**. | **Secondary** |
-| **al-Isti'ab fi Bayan al-Asbab** | Salim al-Hilali and Muhammad Al Nasr; Dar Ibn al-Jawzi, 3 vols | Grades sound and weak reports alike | In copyright | The scholar's reference for **disputed** reports |
-| al-Wahidi, *Asbab al-Nuzul*; al-Suyuti, *Lubab al-Nuqul* | Classical | Mix sound and weak reports. Modern editions add copyrighted gradings. | The classical text is free | **Never the authenticating source** |
+Three different things are needed for one asbab item, and each comes from a different place:
 
-**The display rule.** An asbab item is shown only when **all** of these hold:
-1. al-Muharrar concludes the report **is** the reason for the verse;
-2. the chain is graded **sahih or hasan**, by al-Muzaini or, where he is silent, by al-Wadi'i;
-3. **neither** work grades it weak or rejects it as the reason. A conflict means it is not shown;
-4. the scholar reviewer signs it, with the grade and the reference recorded on the item (§F.2).
+| What | Where it comes from | Status | How it is used |
+|---|---|---|---|
+| **The report** (what happened) | **The hadith collection itself**, e.g. Sahih al-Bukhari, Sahih Muslim or the Sunan; and the classical asbab works that collect them: **al-Wahidi, *Asbab Nuzul al-Quran*** (d. 468 AH) and **al-Suyuti, *Lubab al-Nuqul*** (d. 911 AH) | Public domain (authors' text). Modern editions' takhrij and gradings are the editors' and are not used. | Our child retelling is written from the report in the collection, cited by collection and number or volume/page. al-Wahidi and al-Suyuti point to the reports. **They never authenticate**: they include weak and unsourced reports. |
+| **The authenticity judgement** (is the chain sound?) | Classical judgements where they exist (e.g. a report in al-Bukhari or Muslim; Ibn Hajar, *Fath al-Bari*, public domain). Modern judgements **by reference only**: al-Muzaini, *al-Muharrar fi Asbab Nuzul al-Quran*; al-Wadi'i, *al-Sahih al-Musnad min Asbab al-Nuzul*. | Classical: public domain. Modern: in copyright, so cited as a fact (title, volume/page, verdict) and **never quoted** | The item records each verdict and its reference |
+| **Whether it is really the reason** (not just a related story) | The same two modern works, by reference. al-Muharrar rules on this explicitly for each report. | As above | Recorded as a fact on the item |
 
-Otherwise **there is no asbab section for that ayah: no placeholder, no "unknown", no weaker report.** The item stores a citation (surah:ayah, collection, volume/page, the verdict, the reviewer and the date) and our child retelling. It **never stores third-party book text**.
+**The display rule (unchanged in strictness).** An asbab item is shown only when **all** of these hold:
+1. al-Muharrar's verdict, cited by reference, is that the report **is** the reason for the verse;
+2. the chain is graded **sahih or hasan**: by being in al-Bukhari or Muslim, by al-Muzaini, or, where he is silent, by al-Wadi'i;
+3. **neither** reference grades it weak or rejects it as the reason. A conflict means it is not shown (§H Q14: the owner adopted "show nothing");
+4. the scholar reviewer signs it, after checking the report in the collection and the verdicts against the printed books (§F.2).
+
+Otherwise **there is no asbab section for that ayah: no placeholder, no "unknown", no weaker report.** The item stores:
+- our retelling;
+- the report's citation (collection + number, or volume/page in the pinned print);
+- the verdicts' references (work, volume/page, verdict);
+- the reviewer and the date.
+**No text from a modern book is ever stored.**
 
 **Juz' Amma and Al-Fatihah, as research leads only.** The scholar confirms every row against the printed books; this table is not a ruling.
 
 | Lead | Surahs |
 |---|---|
-| Strong candidates: both works agree; the hadith is in al-Bukhari or Muslim | Al-Duha 1–3 (93); Al-'Alaq 6–19 (96); Al-Masad (111) |
+| Strong candidates: both references agree; the hadith is in al-Bukhari or Muslim | Al-Duha 1–3 (93); Al-'Alaq 6–19 (96); **Al-Masad (111, in the pilot)** |
 | Likely | Al-Mutaffifin 1 (83) |
-| **Disputed: show nothing** (rule 3). An exception would be an owner decision on the scholar's written opinion (§H Q14). | An-Nazi'at (79): al-Wadi'i includes it, al-Muzaini rejects it · 'Abasa (80): the chain's grade is contested · Al-Kawthar (108): mursal per al-Wadi'i · Al-Ikhlas (112): weak per al-Muzaini, though others grade it hasan · Al-Kafirun (109): weak routes |
-| Show nothing | Al-Fatihah; Al-Qadr (97); Al-Falaq and An-Nas (113–114: the sihr hadith is sahih, but the claim that it caused the revelation rests on weak reports); every other surah of the juz' |
-
-**For the pilot (§G.2), this means:**
-- Al-Masad tests the "show" path.
-- Al-Ikhlas tests the "disputed, show nothing" path.
-- Al-Fatihah and Al-Fil test "none".
+| **Disputed: show nothing** (rule 3) | An-Nazi'at (79): al-Wadi'i includes it, al-Muzaini rejects it · 'Abasa (80): the chain's grade is contested · Al-Kawthar (108): mursal per al-Wadi'i · **Al-Ikhlas (112, in the pilot)**: very weak per al-Muzaini, though others grade it hasan · Al-Kafirun (109): weak routes |
+| Show nothing | **Al-Fatihah and Al-Fil (in the pilot)**; Al-Qadr (97); Al-Falaq and An-Nas (113–114: the sihr hadith is sahih, but the claim that it caused the revelation rests on weak reports); every other surah of the juz' |
 
 ### A.4 Hadith look-ups for reviewers
 
-- **Dorar.net:** a **live look-up only**. Its API terms forbid bulk storage and limit caching to 24–48 hours. Nothing from it is stored.
-- **HadeethEnc:** its published policy allows commercial use and offline storage, unmodified and credited. It is suitable if a lesson ever quotes a hadith verbatim. See the earlier `hadith-dataset-research.md` in the same notes folder.
+- **Dorar.net:** a live look-up by the reviewer only. Its terms forbid storage; nothing from it is stored.
+- **HadeethEnc:** its published policy allows commercial use, unmodified and credited. It is not needed while every child-facing line is our own wording.
+- The hadith texts themselves (al-Bukhari, Muslim, the Sunan) are classical and public domain. Only modern editions' numbering schemes and notes are editorial, so a citation names the numbering it uses (e.g. "al-Bukhari, Fu'ad 'Abd al-Baqi numbering").
 
-### A.5 Verification workflow (every item)
+### A.5 Where public-domain sources are weaker for children, and how the plan handles it
 
-1. **Write.** The author writes the child text for its band from the **primary** source and records the citation. The author never writes from memory. Asbab are taken only from al-Muharrar / al-Sahih al-Musnad, with the grade as printed.
-2. **Source check.** A second person opens the cited place and confirms the item says what the source says, then opens the **cross-check** source. A disagreement is noted on the item, which goes to the scholar.
-3. **Teachers department.** Checks Arabic, full tashkeel where shown to readers, age fit for the band, and consistency with the verified text (positions resolve; no typed Quran, enforced by the checker).
-4. **Scholar** (tafsir, lessons, stories, asbab, pictures, mechanics): checks aqeedah and accuracy against the sources. For asbab, also the chain and grade.
-5. **Approval export → CI → build** (§F.3). Only approved, hash-matching text reaches a child.
-6. **Corrections.** Anyone can flag a shown item. A reviewer **withdraws** it at once, so it stops showing after the next approvals-export build. A fix is a new text: new hash, new review.
+| Weakness | Effect | How authoring and review handle it |
+|---|---|---|
+| **Adult, classical register.** Terse glosses, rare vocabulary, long sentences (Ibn al-Ha'im, Ibn Qutaybah, al-Baghawi). Al-Sa'di is clearer, but written for adults. | The author has to do much more than shorten | **An authoring guide per band** (PR-5): vocabulary limits, at most one idea per sentence, sentence-length limits, concrete examples from a child's day, full tashkeel for readers. **A "meaning ladder" per item, recorded in its file:** the source's words → plain modern Arabic → the band's wording. The reviewer checks each step against the step before, so simplification never drifts from the source. |
+| **Several opinions without a stated preference** (common in Ibn Kathir and al-Baghawi) | A child should get one clear meaning | The item follows **al-Sa'di's** stated meaning (the primary). If al-Sa'di gives several, the scholar chooses, and the choice and reason are recorded on the item. A child never sees "some scholars said…" below 9–12. |
+| **Weak narrations and isra'iliyyat** (Ibn Kathir, al-Baghawi, al-Wahidi, al-Suyuti) | Risk of teaching an unauthenticated story | No narration enters a tafsir, story or lesson item unless it passes the asbab/hadith rule (§A.3, rules 2–4). Stories (activity 17) retell **only** the Quranic text's own account plus authenticated reports. |
+| **Aqeedah differences in some classical works** (e.g. al-Jalalayn's ta'wil of attributes) | A wrong statement about Allah | Al-Jalalayn is reference only. Every tafsir item touching Allah's names and attributes is flagged `aqeedah` and needs the scholar, **even when a sampling rule would apply** (word items). |
+| **Root-ordered or alphabetical glossaries** (al-Raghib, al-Sijistani) | Not keyed to an ayah; the sense must be chosen | Used only as cross-checks. The primary (Ibn al-Ha'im) is ordered by ayah, and the reviewer confirms the sense fits **this** ayah. |
+| **No lessons or values written for children** | "Lessons learned" (feature 3) must be derived | Lessons are derived from al-Sa'di, who regularly draws out benefits (fawa'id), plus the ayah's plain meaning. Each lesson cites the ayah and al-Sa'di's place. The scholar reviews every one. |
+| **Editions with modern apparatus** | The pinned print may be hard to find | §A.0's pin rule. The citation is to the author's words (surah:ayah, and volume/page in the pinned print). The reviewer may use any copy to read it. |
+| **Coverage gaps** (al-Wahidi covers 81 surahs; gharib works skip "obvious" words) | Some ayat have no gloss or report | A missing gloss is written from al-Sa'di's tafsir of the ayah and cited to it. A missing report means no asbab section, by rule. |
 
-### A.6 Licence actions (owner or counsel; this session contacts no one)
+**The cost:** authoring takes longer than it would from a modern children's-level source. The estimate in §G.4 rises from 3–5 to **about 5–8 minutes per tafsir item**. The pilot measures it.
 
-1. **Markaz Tafsir** (`info@tafsir.net`): permission for al-Mukhtasar to (a) show to reviewers and in-app where useful, (b) store offline, and (c) derive children's text, plus the exact credit wording.
-2. **KFGQPC** (`info@qurancomplex.gov.sa`): the same, for al-Tafsir al-Muyassar and al-Muyassar fi Gharib al-Quran.
-3. **IslamHouse / QuranEnc** (`admin@islamhouse.com`): written confirmation of whether their policy covers these Arabic tafsirs in a paid app, and how their "no excessive pricing" condition applies.
-4. **Dar Ibn al-Jawzi** (al-Muharrar, al-Isti'ab), and the holder of al-Sahih al-Musnad's rights: permission to cite and retell, with references. No contact address was found; the owner's network may have one.
-5. **Counsel:** whether original children's text that conveys a cited source's meaning, with a citation and no reproduced sentences, needs the publisher's permission in Jawwid's markets (§H Q1b).
-6. Each answer is recorded in `content/sources.json` with who confirmed, when and the document, in a reviewed commit. A source with no record is never shipped as text.
+### A.6 Steps before the pilot is written
+
+1. **Pin the editions** (an engineer plus the scholar), for al-Sa'di, Ibn al-Ha'im, al-Baghawi, Ibn Kathir and al-Wahidi. Record each in `sources.json` (§A.0) in a reviewed commit. A work with no pinned edition can be a cross-check but not the primary.
+2. **Write the authoring guide** for the three bands, with three worked examples per kind, approved by the Teachers department and the scholar.
+3. **Approve the respect rules and the mechanics** (§C.4) with the scholar.
+4. Then write the pilot (§G.2).
+
+### A.7 Optional: counsel
+
+Not a blocker (owner, 2026-10-29). If counsel is consulted, the useful questions are:
+- (a) the public-domain status of al-Sa'di in each market Jawwid sells to, given the EU end-2027 term;
+- (b) whether citing a modern work's verdict by reference (title, page, verdict) needs anything.
+The design already assumes the conservative answers: no verbatim al-Sa'di before 2028, and no modern text, only facts.
 
 ---
 
@@ -460,15 +474,17 @@ The assessment comes at the end of the surah, or of each segment for L3–L5. It
   "items": [
     { "id": "intro-001",    "kind": "intro",   "bands": ["3-5"], "text": "…", "source": null },
     { "id": "tafsir-001",   "kind": "tafsir",  "ayah": 1, "bands": ["6-8","9-12"], "text": "… {{w:1:4}} …",
-      "source": { "work": "mukhtasar", "version": "<QuranEnc version>", "ref": "112:1" }, "crossCheck": { "work": "muyassar", "ref": "112:1" } },
+      "source": { "work": "saadi", "ref": "112:1", "page": "vol./p. in the pinned print" }, "crossCheck": { "work": "baghawi", "ref": "112:1" },
+      "ladder": ["<the source's sense, our words>", "<plain modern Arabic>"] },          // §A.5: each step checked against the one before
       // {{w:a:n}} is a POSITION: the engine draws the word from the verified text
     { "id": "tafsir_x-001", "kind": "tafsir_extra", "ayah": 1, "bands": ["9-12"], "text": "…", "source": { "work": "saadi", "ref": "112:1" } },
-    { "id": "word-001",     "kind": "word",    "ayah": 1, "word": 4, "to": 4, "text": "…", "source": { "work": "muyassar-gharib", "ref": "112:1" }, "picture": null },
+    { "id": "word-001",     "kind": "word",    "ayah": 1, "word": 4, "to": 4, "text": "…", "source": { "work": "ibn-haim-tibyan", "ref": "112:1" }, "picture": null },
       // a span: words 4..to of the ayah, counted as wordsOf() counts them (mark-only tokens are not words)
-    { "id": "lesson-001",   "kind": "lesson",  "bands": ["3-5","6-8","9-12"], "text": "…", "behaviour": "good", "source": { "work": "muyassar", "ref": "112" } },
+    { "id": "lesson-001",   "kind": "lesson",  "bands": ["3-5","6-8","9-12"], "text": "…", "behaviour": "good", "source": { "work": "saadi", "ref": "112" } },
     { "id": "asbab-001",    "kind": "asbab",   "ayah": [1,4], "bands": ["9-12"], "text": "…",
-      "source": { "work": "muzaini-muharrar", "ref": "vol./p.", "verdict": "is the reason; chain sahih", "hadith": "collection + number" },
-      "crossCheck": { "work": "wadii-sahih-musnad", "ref": "p.", "verdict": "…" } },
+      "source": { "work": "bukhari", "ref": "<numbering scheme + number>" }, "pointer": { "work": "wahidi", "ref": "vol./p." },
+      "verdicts": [ { "work": "muzaini-muharrar", "ref": "vol./p.", "verdict": "is the reason; chain sahih" },     // facts by reference, never text
+                    { "work": "wadii-sahih-musnad", "ref": "p.", "verdict": "…" } ] },
     { "id": "story-001",    "kind": "story",   "order": 1, "text": "…", "picture": "pic-005", "source": { … } },
     { "id": "theme-001",    "kind": "theme",   "text": "…", "source": { … } },
     { "id": "quiz-001",     "kind": "quiz",    "category": "tafsir", "bands": ["6-8","9-12"], "question": "…",
@@ -484,7 +500,12 @@ The assessment comes at the end of the surah, or of each segment for L3–L5. It
   - so `(lessonKey, id, sha256(text))` is exactly PD-48's clip binding, and voice-over can bind later with no change.
   - Three digits allow 999 per kind per surah. Al-Baqarah has 286 ayat and should gloss well under 999 words. If a kind ever needs more, that is a PD-48 regex change, made deliberately.
 - **Ayah numbers are fields, never part of an id**, so moving an item never breaks a binding.
-- **Sources** live in one registry, `apps/lessons/src/content/sources.json`: work id, full title, author, publisher, edition, and a **licence record** (who confirmed, when, which terms document). It works like `audio-sources.ts`. A work with no licence record can be cited for derived wording only if §H Q1 allows that, and can never be quoted verbatim.
+- **Sources** live in one registry, `apps/lessons/src/content/sources.json`. It records:
+  - the work id, full title, author and death date;
+  - the **pinned public-domain edition** (printer, place, year, page scheme) and why it is free;
+  - the markets where the work is still protected (al-Sa'di: EU until the end of 2027);
+  - its role: `primary`, `cross-check`, `pointer` (al-Wahidi, al-Suyuti) or `verdict-reference` (al-Muharrar, al-Sahih al-Musnad: facts only).
+  - The checker refuses an item whose `source` is not a public-domain work with a pinned edition. It also refuses a `verdict-reference` work in `source`, and any text field in a `verdicts` entry beyond the work, the reference and a short verdict from a fixed vocabulary.
 - **Pictures** live in `apps/lessons/public/pictures/`, each with its SHA-256 in a manifest. They are reviewed as items (`kind: picture`, the same states), because an image can be wrong too.
 
 ### F.2 Review states, recorded in the database, bound to the text
@@ -503,7 +524,7 @@ draft ─(source check)─▶ checked ─(teacher)─▶ teacher_ok ─(scholar,
 | tafsir, tafsir_extra, theme | yes | yes | **every item** |
 | lesson, reflection | yes | yes | **every item** (they state values and rulings) |
 | story | yes | yes | **every item** |
-| asbab | yes, including the grade as printed in the authenticated source | yes | **every item, with the chain and grade checked** |
+| asbab | yes: the report in the collection, and each verdict as printed in the referenced books (§A.3) | yes | **every item, with the chain and grade checked** |
 | quiz | its answer must cite an approved item | yes | when its category is tafsir or asbab |
 | picture | n/a | yes | **every picture** (image policy, §H Q6) |
 | game mechanic | n/a | yes | **once per mechanic** (§C.4) |
@@ -519,6 +540,19 @@ draft ─(source check)─▶ checked ─(teacher)─▶ teacher_ok ─(scholar,
 - `lesson_content.review_scholar`.
 The scholar key is a deliberate grant to named people, never a bundle default.
 
+**The Scholar reviewer role and its account** (owner, 2026-10-29: "We have someone").
+- **Template role** (PD-40 `role-templates.ts`, in the LATER block): `scholar_reviewer`, "المراجع الشرعي", tier `specialist`.
+  - Keys: `lesson_content.view` and `lesson_content.review_scholar` only.
+  - **No family, child, chat or finance keys.** Under strict scope the account sees no family data at all; it reviews content, not children.
+- **Who grants it:** only the super admin. `lesson_content.review_scholar` is **not delegable** and is in **no legacy bundle**: not `manager:teachers`, not any supervisor. The Teachers manager cannot create a scholar.
+- **Teacher vs scholar are separate steps.** The teacher step needs `lesson_content.review_teacher` (in `manager:teachers`, delegable to qualified teachers). The scholar step needs `lesson_content.review_scholar`. The review trigger refuses the same person signing two steps of one item, even if someone held both keys.
+- **Account setup** (the super admin, in Admin Web, using the existing flow; nothing in the repo):
+  1. Staff accounts → create: name, e-mail, tier `specialist`, department (recommended: the Teachers department, so content reports reach its manager), template role `scholar_reviewer`, and a reason. The existing `POST /staff-accounts` shows a one-time sign-in code. The super admin passes it to the scholar privately, never through a repo, a ticket or this chat.
+  2. The scholar signs in and opens `/lesson-content`. The queue defaults to "needs my step: scholar".
+  3. The PD-29 Tajweed reviewer function (`chat.can_review_tajweed`) is **not** extended to the scholar. Tajweed stays with the Teachers department.
+- **The scholar's name is never in the repository**, a fixture or a doc. The audit trail holds only the staff id, and the review screens resolve names at runtime from `chat.staff`. (G-20 already blocks real staff names outside `docs/`. PD-49 adds nothing that would need one.)
+- **Absence:** if the scholar's account is suspended or they leave, `review_scholar` stops with it (`is_active`, `left_at`). Their past approvals stand, because each is an approval of exact text. Items waiting for the scholar step simply wait.
+
 ### F.3 From the database to the child
 
 - **Approvals export.** `scripts/lessons/export-approvals.py` writes `apps/lessons/src/content/approvals/surah-NNN.json` from an export the API prints: `[{ id, textSha256, steps: [...], approvedAt }]`. It goes in by an ordinary reviewed PR.
@@ -533,7 +567,7 @@ One page, `/lesson-content`, under `lesson_content.view`:
 - **Queue:** "needs my step" by default; filters by surah, kind, band and state; progress bars per surah ("Al-Ikhlas: 22/26 approved").
 - **Review panel, side by side:**
   - the verified ayah, from the API's `/quran/ayahs`;
-  - the cited source place: the source text, if its licence allows storing it, otherwise the exact reference to open;
+  - the cited source place: the reference (work, surah:ayah, volume/page in the pinned print). Where the team has transcribed the passage from the **pinned public-domain print**, the passage itself is shown too, stored in the review system, never in the child's bundle. Al-Sa'di's passage is shown only from 2028 for EU-market reasons (§A.1). Modern verdict references show the reference and verdict only;
   - the child text, with `{{w:a:n}}` rendered as the real word;
   - the band;
   - the item's history.
@@ -559,22 +593,20 @@ One page, `/lesson-content`, under `lesson_content.view`:
 | **PR-2** progress (API + migration) | `jawwid:lesson-progress` via the openers; `POST /materials/progress`; events, projection and band override tables; profile endpoint for the openers; the parent and teacher views read the projection (P1-3/P1-4 minimal) | Migration slot from the head |
 | **PR-3** review system (API + migration + Admin Web) | Review tables, PD-40 keys (LATER block), `/lesson-content` queue, approvals export, `lesson-content-approvals` guard, approved-only bundling | Slot; PD-40 seed block |
 | **PR-4** content activities and assessments | Activities 5, 6, 16–22, 24; the assessment (§E); quiz generation from approved meanings | PR-1, PR-3 |
-| **PR-5** pilot content | 4 surahs end to end (§G.2) | Sources decided (§H Q1), reviewers named (§H Q2) |
+| **PR-5** pilot content | 4 surahs end to end (§G.2) | Editions pinned and the authoring guide approved (§A.6); the scholar's account set up (§F.2) |
 | later | Activity 23 (similar ayat), after a reviewed list of pairs; word-level timing, if a source is found; voice-over binding via PD-48 | — |
 
 ### G.2 Phase 1: the pilot (4 surahs, end to end)
 
-**Recommended pilot: Al-Fatihah (1), Al-Ikhlas (112), Al-Fil (105), Al-Masad (111).** Together they exercise every path:
+**The pilot (owner, 2026-10-29): Al-Fatihah (1), Al-Ikhlas (112), Al-Fil (105), Al-Masad (111).** Together they exercise every path:
 - **Al-Fatihah:** recited in every prayer, and the Basmala-as-ayah-1 case.
 - **Al-Ikhlas:** short, about aqeedah. It tests the scholar's tafsir review on the most sensitive topic.
 - **Al-Fil:** a narrative. It tests stories, illustrations and the image policy.
 - **Al-Masad:** the strongest asbab candidate in Juz' Amma (§A.3). It tests the "show" path of asbab end to end. The grade comes from the books and the scholar, not from this plan.
 - With Al-Ikhlas (disputed asbab, so none shown) and Al-Fatihah and Al-Fil (none), the pilot also tests the "show nothing" paths.
 
-The alternative, if the owner prefers to avoid a surah about punishment for the youngest, is Al-Duha (93). Its asbab is also a strong candidate (§A.3), it has 11 ayat, and it brings an L2 surah into the pilot. (Al-Kawthar would not test the asbab path: its report is mursal per al-Wadi'i.)
-
 **Steps:**
-1. Write the items from the chosen sources.
+1. Pin the editions and write the authoring guide (§A.6). Then write the items from the public-domain sources (§A).
 2. Source check.
 3. Teacher review.
 4. Scholar review.
@@ -627,35 +659,42 @@ Estimates are per surah with `n` ayat and `w` words (Tanzil tokens). The extract
 | Juz' Amma + Al-Fatihah | ≈ 38 h | ≈ 25 h | about 6 weeks at 10 h a week for the scholar |
 | The other 76 surahs | ≈ 330 h | ≈ 245 h | about 6 months at 10 h a week for the scholar, so it is planned surah by surah, by demand |
 
-**The authors' time is larger than the reviewers'.** Writing a child-level tafsir item from the source, with its citation, takes about 3–5 minutes. Juz' Amma alone is about 100–150 author hours. Who writes is §H Q9.
+**The authors' time is larger than the reviewers'.** Writing a child-level tafsir item from a classical source, with its meaning ladder and citation, takes about 5–8 minutes (§A.5). Juz' Amma alone is about 150–250 author hours. Who writes is §H Q9.
 
 ---
 
-## H. Owner questions (each with a recommendation)
+## H. Owner decisions (2026-10-29)
 
-1. **Sources and licences (§A).**
-   - **a. Which sources?** *Recommend:*
-     - tafsir from **al-Mukhtasar** (Markaz Tafsir), cross-checked with **al-Muyassar** (KFGQPC), with al-Sa'di as the fallback;
-     - word meanings from **KFGQPC's al-Muyassar fi Gharib al-Quran**, cross-checked with **al-Siraj**;
-     - asbab from **al-Muzaini's al-Muharrar**, cross-checked with **al-Wadi'i's al-Sahih al-Musnad**, under the display rule of §A.3.
-   - **b. While permissions are pending, may authors write original children's text from these sources, with citations, without the publishers' permission?** *Recommend: ask counsel first. Meanwhile write the pilot's items, but publish none until counsel answers. No source text is shipped until its licence is recorded.*
-   - **c. Licence costs.** None of these publishers lists a price; all need a written request (§A.6). *Recommend the owner sends the four requests now. Approval may take weeks, and the pilot's publication waits on (b).*
+The owner answered on 2026-10-29, relayed by the department head:
+1. **"Approve all":** every recommendation below is adopted as written, except where the next three answers replace it.
+2. **Sources: "Only public-domain sources."** This replaces Q1. No permission letters are sent, and counsel is optional (§A.7).
+3. **Scholar: "We have someone."** This replaces Q2's open part. The role and the account setup are in §F.2. No name goes in the repository.
+4. **Pilot: 1, 112, 105, 111.** This settles Q12.
 
-2. **Who is the scholar reviewer?** *Recommend a named, qualified scholar (a sharia degree with a specialism in tafsir or hadith, or an ijazah in tafsir), under a written contract. They sign tafsir, asbab, lessons, stories, pictures and game mechanics, and are granted `lesson_content.review_scholar` personally. The Teachers department does the teacher step. The two steps must be **different people**. If no external scholar is available yet, the pilot waits: a teacher does not stand in for the scholar on tafsir or asbab.*
-3. **Age bands.** PD-49 uses 3–5, 6–8 and 9–12, as the brief asks. Materials uses 4–6 / 7–9 / 10–12 / 13–17. *Recommend keeping PD-49's bands inside the lessons engine only, so the library filter is unchanged, and listing an alignment of the Materials bands as a separate small item if you want one scale everywhere.*
-4. **Who picks the band?** *Recommend: automatic from the age Sales recorded; the parent or the teacher may move it one band up or down (a record of who and why is kept); the teacher sets the level within the band (your earlier decision, PD-29 Q5).*
-5. **The 3–5 band while recitation is off.** Pre-readers learn mostly by listening, and recitation stays staff_test until the KFGQPC licence and lawyer sign-off. *Recommend: build 3–5 now, run it with staff on staff_test audio, and offer families the "with a grown-up" mode (a parent reads, the child taps) until recitation reaches families. Explanations can be voiced earlier through PD-48's approved TTS, because they are not Quran.*
-6. **Illustration policy.** *Recommend (the scholar to confirm):*
+The original questions follow, each marked with its decision.
+
+1. **Sources and licences.** **DECIDED 2026-10-29: public-domain sources only** (§A):
+   - tafsir from al-Sa'di's base text, in a pinned print with no modern apparatus, cross-checked with al-Baghawi and Ibn Kathir;
+   - word meanings from Ibn al-Ha'im's al-Tibyan, cross-checked with Ibn Qutaybah and al-Sijistani;
+   - asbab reports from the hadith collections, with al-Wahidi and al-Suyuti as pointers; modern authenticity verdicts by reference only;
+   - every child-facing line is our own wording, cited per item.
+   The earlier recommendation (modern sources with permission letters) is withdrawn.
+
+2. **Who is the scholar reviewer?** **DECIDED 2026-10-29:** the owner has a qualified scholar. They get the Scholar reviewer role (§F.2), and their name is never in the repo. *Adopted as written: a named, qualified scholar (a sharia degree with a specialism in tafsir or hadith, or an ijazah in tafsir), under a written contract. They sign tafsir, asbab, lessons, stories, pictures and game mechanics, and are granted `lesson_content.review_scholar` personally. The Teachers department does the teacher step. The two steps must be **different people**. A teacher never stands in for the scholar on tafsir or asbab.*
+3. **Age bands.** **ADOPTED 2026-10-29.** PD-49 uses 3–5, 6–8 and 9–12, as the brief asks. Materials uses 4–6 / 7–9 / 10–12 / 13–17. *Recommend keeping PD-49's bands inside the lessons engine only, so the library filter is unchanged, and listing an alignment of the Materials bands as a separate small item if you want one scale everywhere.*
+4. **Who picks the band?** **ADOPTED 2026-10-29.** *Recommend: automatic from the age Sales recorded; the parent or the teacher may move it one band up or down (a record of who and why is kept); the teacher sets the level within the band (your earlier decision, PD-29 Q5).*
+5. **The 3–5 band while recitation is off.** **ADOPTED 2026-10-29.** Pre-readers learn mostly by listening, and recitation stays staff_test until the KFGQPC licence and lawyer sign-off. *Recommend: build 3–5 now, run it with staff on staff_test audio, and offer families the "with a grown-up" mode (a parent reads, the child taps) until recitation reaches families. Explanations can be voiced earlier through PD-48's approved TTS, because they are not Quran.*
+6. **Illustration policy.** **ADOPTED 2026-10-29.** *Recommend (the scholar to confirm):*
    - *never depict Allah, prophets, companions, angels or the unseen (Paradise, Hell);*
    - *no human faces;*
    - *animals, nature and objects named in the surah are allowed;*
    - *every picture is reviewed like text.*
    *This needs an illustrator: budget about 5 pictures per short surah, about 120 for Juz' Amma.*
-7. **Sound.** *Recommend: no musical instruments; voice and short non-musical effects; a mute control; nothing playing over a recitation.*
-8. **Respect rules for game mechanics** (§C.4). *Recommend approving these rules now. The scholar signs each mechanic once before it ships. Mechanics that treat verse words as objects (catching, popping, stacking, assembling into food) are not used.*
-9. **Who writes the children's text, and may software help?** *Recommend: a small authoring team (Teachers department or a contracted Arabic children's writer) writes from the licensed source. Software may only help simplify the wording of a cited source excerpt; it is never a source of facts, asbab, gradings or rulings. Every such item says so in its record, and gets the full human review.*
-10. **The 38 extracted files.** *Recommend treating them as drafts: every line is checked against the primary source, cited if it matches, rewritten from the source if not. None is approved as it stands.*
-11. **Recitation speed control.** *Recommend none in v1. Revisit when the KFGQPC licence is recorded and the scholar has given an opinion on slowed playback.*
-12. **The pilot surahs.** *Recommend 1, 112, 105 and 111 (§G.2), or 93 instead of 111 if you prefer to avoid that surah for the youngest.*
-13. **Languages.** *Recommend Arabic only for v1 (Jawwid is Arabic-first). Translations of the children's text are a later item, each translation reviewed as its own text.*
-14. **Disputed asbab.** For example, Al-Ikhlas: weak per al-Muzaini, while others grade it hasan. *Recommend showing nothing when the two primary works conflict, even if a scholar leans one way. The owner asked for no unverified reports, and silence is never wrong. Any exception is the owner's decision on the scholar's written opinion, recorded on the item.*
+7. **Sound.** **ADOPTED 2026-10-29.** *Recommend: no musical instruments; voice and short non-musical effects; a mute control; nothing playing over a recitation.*
+8. **Respect rules for game mechanics** (§C.4). **ADOPTED 2026-10-29.** *Recommend approving these rules now. The scholar signs each mechanic once before it ships. Mechanics that treat verse words as objects (catching, popping, stacking, assembling into food) are not used.*
+9. **Who writes the children's text, and may software help?** **ADOPTED 2026-10-29.** *Recommend: a small authoring team (Teachers department or a contracted Arabic children's writer) writes from the pinned public-domain source (§A). Software may only help simplify the wording of a cited source excerpt; it is never a source of facts, asbab, gradings or rulings. Every such item says so in its record, and gets the full human review.*
+10. **The 38 extracted files.** **ADOPTED 2026-10-29.** *Recommend treating them as drafts: every line is checked against al-Sa'di (or, for word meanings, Ibn al-Ha'im), cited if it matches, rewritten from the source if not. None is approved as it stands.*
+11. **Recitation speed control.** **ADOPTED 2026-10-29.** *Recommend none in v1. Revisit when the KFGQPC licence is recorded and the scholar has given an opinion on slowed playback.*
+12. **The pilot surahs.** **DECIDED 2026-10-29: 1, 112, 105 and 111** (§G.2).
+13. **Languages.** **ADOPTED 2026-10-29.** *Recommend Arabic only for v1 (Jawwid is Arabic-first). Translations of the children's text are a later item, each translation reviewed as its own text.*
+14. **Disputed asbab.** **ADOPTED 2026-10-29.** For example, Al-Ikhlas: weak per al-Muzaini, while others grade it hasan. *Recommend showing nothing when the two primary works conflict, even if a scholar leans one way. The owner asked for no unverified reports, and silence is never wrong. Any exception is the owner's decision on the scholar's written opinion, recorded on the item.*
