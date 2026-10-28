@@ -206,7 +206,11 @@ describe('1. only the requester sends, after approving this revision', () => {
     await svc.approve(s.ownerId, c.id, { fileId: up.currentFile!.id });
     expect(await code(svc.send(designerId, c.id, { conversationId: groupId }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
     expect(await code(svc.publishStory(designerId, c.id))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    // Refused before the body is read: a malformed body tells a Designer nothing either.
     expect(await code(svc.recordConsent(designerId, c.id, { kind: 'granted', contactId: s.parentId, method: 'written' }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect(await code(svc.recordConsent(designerId, c.id, { kind: 'nonsense' }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect(await code(svc.cancel(designerId, c.id, {}))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect(await code(svc.send(designerId, c.id, { conversationId: 'not-a-uuid' }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
     // ...and an overseer oversees: the Operations manager cancels, never approves or sends someone else's.
     expect(await code(svc.send(s.managerId, c.id, { conversationId: groupId }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
   });
@@ -551,7 +555,8 @@ describe('Stories accepts only its own media (review of #216)', () => {
     // A legacy row naming a non-stories key: the sweep unlinks it and leaves the bytes.
     const legacy = await g.stories.create(s.ownerId, { body: 'legacy', audiences: [{ kind: 'all_families' }] });
     await g.prisma.$executeRawUnsafe(
-      `update chat.story set body = null, media_object_key = $2, media_kind = 'image', media_mime = 'image/png', deleted_at = now() - interval '400 days', state = 'deleted' where id = $1::uuid`,
+      `update chat.story set body = null, media_object_key = $2, media_kind = 'image', media_mime = 'image/png',
+              deleted_at = now() - interval '400 days', deleted_reason = 'legacy row (spec)', state = 'deleted' where id = $1::uuid`,
       legacy.id,
       pinned,
     );
