@@ -149,6 +149,24 @@ describe('a task reaches the person who must act', () => {
     for (const p of pushes) expect(p.variables ?? {}).toEqual({});
   });
 
+  it('every task text is generic: no placeholder, no amount, no currency, no card, no name', async () => {
+    const rows = await g.prisma.$queryRaw<Array<{ key: string; locale: string; title: string; body: string }>>`
+      SELECT key, locale, title, body FROM chat.notification_template WHERE key LIKE 'task\\_%' OR key LIKE 'inbox.task\\_%'`;
+    expect(rows.map((r) => `${r.key}:${r.locale}`).sort()).toEqual(
+      ['task_assigned', 'task_returned', 'task_out_of_scope', 'task_overdue']
+        .flatMap((k) => [k, `inbox.${k}`])
+        .flatMap((k) => [`${k}:ar`, `${k}:en`])
+        .sort(),
+    );
+    for (const r of rows) {
+      const text = `${r.title} ${r.body}`;
+      // Nothing is filled in, so nothing from the task, the family or the money can reach a lock screen.
+      expect(text, r.key).not.toMatch(/\{|\}/);
+      expect(text, r.key).not.toMatch(/[0-9\u0660-\u0669]/);
+      expect(text, r.key).not.toMatch(/EGP|USD|SAR|\$|£|€|ج\.م|card|بطاقة|instalment|قسط|family|أسرة|عائلة|child|طفل/i);
+    }
+  });
+
   it('a task closed before its signal is delivered tells no one, and signals still go', async () => {
     const t = await tasks.create(s.managerId, { assignee: staff(s.otherAdminId), title: 'x' });
     await tasks.remove(s.managerId, t.id, { reason: 'duplicate' });
