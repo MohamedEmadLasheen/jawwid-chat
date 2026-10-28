@@ -7,6 +7,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/utils/app_clock.dart';
+import '../../../shared/utils/clock_time.dart';
 import 'lesson_ticket_sheet.dart';
 import 'slot_chip_picker.dart';
 
@@ -550,7 +551,7 @@ class _ChangeLessonTimeSheetState extends ConsumerState<ChangeLessonTimeSheet> {
   }
 
   String _currentLabel(BuildContext context, GroupChildSlot c) =>
-      c.nextStartsAt != null ? weeklyLabel(context, c.nextStartsAt!) : '${c.weekday} ${c.start}';
+      c.nextStartsAt != null ? weeklyLabel(context, c.nextStartsAt!) : '${c.weekday} ${formatWallClock(context, c.start)}';
 
   /// What the request changes, as the family reads it: "Mon 17:00 → Tue 18:00",
   /// "From 3 Nov", "Thu 17:00 unchanged", and each week a new time is skipped because

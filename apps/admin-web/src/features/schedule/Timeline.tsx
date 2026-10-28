@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { ACADEMY_ZONE, clockIn, isoToAcademyWallClock } from '@/core/time/academyTime'
+import { ACADEMY_ZONE, clock12In, hour12Label, isoToAcademyWallClock } from '@/core/time/academyTime'
 import type { CalendarDay, CalendarLesson, CalendarSummary, CalendarTeacher, CalendarWindow, Interval } from './api'
 import { CATEGORY_LABEL, S, STATUS_LABEL, WEEKDAYS, dayLabel, hoursOf, percentOf, useScheduleText } from './copy'
 import { swatchClass } from './palette'
@@ -15,7 +15,15 @@ import { daysOf, isoWeekday, minuteOfDay } from './viewState'
  *
  * Rows use `content-visibility: auto` (schedule.css): a hundred teachers cost
  * only the rows on screen.
+ *
+ * Every time is on the 12-hour clock (clock12In / hour12Label: the one shared
+ * formatter). The day view gives each hour a fixed width (DAY_HOUR_PX) and
+ * scrolls sideways when the day is long, so axis labels never collide and a
+ * lesson has room for its name and time.
  */
+
+/** Width of one hour in the day view: a one-hour lesson shows its name and its time. */
+export const DAY_HOUR_PX = 120
 
 /** The hours shown: everything the data holds, at least 10:00-22:00. */
 export function hourRange(days: CalendarDay[], lessons: CalendarLesson[]): { lo: number; hi: number } {
@@ -70,8 +78,12 @@ function lessonName(l: CalendarLesson, tx: ReturnType<typeof useScheduleText>): 
 }
 
 /** What a lesson block says to a screen reader and in its tooltip: who, when, status. */
+export function lessonTime(l: { startsAt: string; endsAt: string }, locale: 'ar' | 'en'): string {
+  return `${clock12In(l.startsAt, ACADEMY_ZONE, locale)} – ${clock12In(l.endsAt, ACADEMY_ZONE, locale)}`
+}
+
 export function lessonLabel(l: CalendarLesson, tx: ReturnType<typeof useScheduleText>, locale: 'ar' | 'en', miss = false): string {
-  const parts = [lessonName(l, tx), `${clockIn(l.startsAt, ACADEMY_ZONE, locale)}–${clockIn(l.endsAt, ACADEMY_ZONE, locale)}`, tx(STATUS_LABEL[l.status])]
+  const parts = [lessonName(l, tx), lessonTime(l, locale), tx(STATUS_LABEL[l.status])]
   if (l.outsideShift) parts.push(tx(S.outsideMark))
   if (miss) parts.push(tx(S.otherBooking))
   return parts.join(' · ')
@@ -86,6 +98,7 @@ export function Track({
   hi,
   lessonFilter,
   compact = false,
+  hourPx,
   onLesson,
 }: {
   day: string
@@ -95,6 +108,8 @@ export function Track({
   hi: number
   lessonFilter: boolean
   compact?: boolean
+  /** The width of an hour, when fixed (the day view): blocks wide enough also show their time. */
+  hourPx?: number
   onLesson?: (l: CalendarLesson) => void
 }) {
   const tx = useScheduleText()
@@ -125,9 +140,13 @@ export function Track({
           l.outsideShift ? 'sc-lesson--outside' : '',
         ].join(' ')
         const box: CSSProperties = { ...style, insetBlockStart: `${(lane.lane / lane.of) * 100}%`, blockSize: `${100 / lane.of}%` }
+        // How much fits: name and time, the name, or nothing (the tooltip and the details still say it all).
+        const width = hourPx ? ((Date.parse(l.endsAt) - Date.parse(l.startsAt)) / 3_600_000) * hourPx : null
+        const room = compact ? 'none' : width === null ? 'name' : width >= 110 ? 'full' : width >= 36 ? 'name' : 'none'
         return (
           <button key={l.id} type="button" className={cls} style={box} title={label} aria-label={label} onClick={() => onLesson?.(l)}>
-            {!compact && <span className="sc-lesson__name" dir="auto">{lessonName(l, tx)}</span>}
+            {room !== 'none' && <span className="sc-lesson__name" dir="auto">{lessonName(l, tx)}</span>}
+            {room === 'full' && <span className="sc-lesson__time">{lessonTime(l, locale)}</span>}
           </button>
         )
       })}
@@ -151,13 +170,14 @@ function TeacherHead({ t }: { t: CalendarTeacher }) {
 }
 
 function HourAxis({ lo, hi }: { lo: number; hi: number }) {
+  const { locale } = useI18n()
   const hours: number[] = []
   for (let m = lo; m < hi; m += 60) hours.push(m)
   return (
     <div className="sc-axis" aria-hidden="true">
       {hours.map((m) => (
         <span key={m} className="sc-axis__tick" style={{ insetInlineStart: `${((m - lo) / (hi - lo)) * 100}%` }}>
-          <bdi dir="ltr">{String(m / 60).padStart(2, '0')}:00</bdi>
+          <bdi>{hour12Label(m / 60, locale)}</bdi>
         </span>
       ))}
     </div>
@@ -182,8 +202,10 @@ export function DayView({ data, day, onLesson }: { data: CalendarWindow; day: st
   const { lo, hi } = useMemo(() => hourRange(data.days, data.lessons), [data])
   const days = useMemo(() => byTeacherDay(data.days), [data.days])
   const lessons = useMemo(() => lessonsByTeacherDay(data.lessons), [data.lessons])
+  // A fixed width per hour: a long day scrolls instead of squeezing its labels together.
+  const width = { '--sc-day-w': `${((hi - lo) / 60) * DAY_HOUR_PX}px` } as CSSProperties
   return (
-    <div className="sc-grid sc-grid--day" role="table" aria-label={tx(S.title)}>
+    <div className="sc-grid sc-grid--day" role="table" aria-label={tx(S.title)} style={width} data-hours={(hi - lo) / 60}>
       <div className="sc-row sc-row--axis" role="row">
         <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
         <div role="columnheader"><HourAxis lo={lo} hi={hi} /></div>
@@ -199,6 +221,7 @@ export function DayView({ data, day, onLesson }: { data: CalendarWindow; day: st
               lo={lo}
               hi={hi}
               lessonFilter={data.lessonFilter}
+              hourPx={DAY_HOUR_PX}
               onLesson={onLesson}
             />
           </div>

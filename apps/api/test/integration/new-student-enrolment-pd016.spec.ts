@@ -29,6 +29,7 @@ import { TrialService } from '../../src/lessons/trial.service';
 import { EnrollmentService } from '../../src/lessons/enrollment.service';
 import { NewStudentsService } from '../../src/new-students/new-students.service';
 import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.service';
+import { contactKeyHash } from '../../src/new-students/contact-key';
 import { OrgStructureService } from '../../src/org/org-structure.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { buildGraph, seed, truncate, Scenario } from './harness';
@@ -223,6 +224,14 @@ describe('1. Assign', () => {
       await tx.$executeRawUnsafe('set local role chat_app');
       await tx.$queryRawUnsafe(`select chat.enrol_learner($1::uuid, 'sneaky', $2::uuid, $3::uuid)`, done.familyId, s.teacherId, s.managerId);
     })).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe('1b. PD-42: Assign keys the parent', () => {
+  it('the parent\'s sign-in e-mail becomes a contact key of the new family, so the same parent is never entered as a second family', async () => {
+    const done = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    expect(await g.prisma.familyContactKey.findFirst({ where: { familyId: done.familyId, kind: 'email' } }))
+      .toMatchObject({ keyHash: contactKeyHash('email', LOWER) });
   });
 });
 

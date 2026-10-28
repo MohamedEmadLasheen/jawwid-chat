@@ -8,6 +8,9 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { parentPath } from './api'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useParents } from './hooks'
+import { IntakeDialog } from '@/features/intake/IntakeDialog'
+import { I } from '@/features/intake/copy'
+import { useIntakeOptions } from '@/features/intake/hooks'
 import './profiles.css'
 
 /**
@@ -24,6 +27,9 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
   const deferred = useDeferredValue(q.trim())
   const list = useParents(deferred)
   const items = list.data?.items ?? []
+  // PD-42: offered when the server says this viewer enters families.
+  const intake = useIntakeOptions()
+  const [adding, setAdding] = useState(false)
 
   return (
     <div className="page">
@@ -31,7 +37,13 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
         <PageHeader eyebrow={eyebrow} title={tx(P.parentsTitle)} subtitle={tx(P.parentsSubtitle)} />
         <div className="toolbar">
           <SearchField value={q} onChange={setQ} label={tx(P.search)} clearLabel={t('common.cancel')} />
+          {intake.data?.ready && (
+            <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
+              {tx(I.addFamily)}
+            </button>
+          )}
         </div>
+        {adding && intake.data && <IntakeDialog options={intake.data} initial={{ kind: 'new' }} onClose={() => setAdding(false)} />}
         {isProfileRefusal(list.error) ? (
           <EmptyState icon="lock" title={describeError(list.error, locale)} />
         ) : (

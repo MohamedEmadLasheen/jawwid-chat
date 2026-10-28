@@ -306,3 +306,13 @@ There is no `is_active`/`left_at` check on `chat.teacher`: PD-38 reads an inacti
 ### The set-up checklist
 
 `GET /teacher-files/:id` carries `setup`: `signedIn`, `supervisor`, `contact`, `payTerms`, `payoutAccount`, `leaveAllowance` (this academy year), `shift` (a current PD-38 pattern), `availability` (hourly teachers count as having it), `profile`, `payMatchesShift` (an hourly pattern with hourly pay, and the reverse), and `missing` (how many are not done). `GET /teacher-files` carries `setupMissing` per teacher. Read live from `chat.teacher_setup_state`, never stored, and never an amount.
+
+### On the Admin Web
+
+`GET /teacher-files/:id` carries `onboarding: { canOffboard, canReactivate }` (from `decideTeacherOnboarding`; the routes re-check), and the Teacher File offers:
+
+- **Offboard** (Teachers manager, super admin; active teachers). The dialog loads the preview: the students still assigned are listed and block it; otherwise each lesson ahead is listed and the teacher is offboarded only once the actor ticks "Cancel this lesson / these lessons" and gives a reason.
+- **Reactivate** (super admin; teachers who left). A reason, then the new first sign-in code is shown once, in the same dialog as when adding a teacher.
+- **Set-up checklist**, a card at the top of an active teacher's file while any step is open (or the pay type and the shift category disagree). The list shows a **Setup incomplete** badge and a **Setup incomplete only** filter.
+
+A dialog that shows a first sign-in code (Give sign-in, Reactivate) stays mounted when the reloaded file no longer offers its button, so the code survives the reload.

@@ -5,6 +5,9 @@ import { ACADEMY_ZONE, zoneLabel } from '@/core/time/academyTime'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { FilterChips } from '@/shared/components/FilterChips'
+import { Dialog } from '@/shared/components/Dialog'
+import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
+import { AgendaView, MonthAgenda } from './Agenda'
 import type { CalendarLesson } from './api'
 import { S, VIEW_LABEL, dayLabel, useScheduleText } from './copy'
 import { FilterBar } from './FilterBar'
@@ -12,7 +15,7 @@ import { useCalendarOptions, useCalendarStats, useCalendarSummary, useCalendarWi
 import { PaletteStyle } from './palette'
 import { Legend, LessonDetails, StatsBar } from './Panels'
 import { DayView, MonthView, WeekView } from './Timeline'
-import { VIEWS, academyToday, addDays, apiQuery, parseViewState, rangeFor, step, toParams, type View, type ViewState } from './viewState'
+import { VIEWS, academyToday, activeFilterCount, addDays, apiQuery, parseViewState, rangeFor, step, toParams, type View, type ViewState } from './viewState'
 import './schedule.css'
 
 /**
@@ -33,6 +36,9 @@ export function SchedulePage() {
   const state = useMemo(() => parseViewState(params, today), [params, today])
   const update = useCallback((next: ViewState) => setParams(toParams(next), { replace: false }), [setParams])
   const [lesson, setLesson] = useState<CalendarLesson | null>(null)
+  // A phone: the agenda, and the filters in a bottom sheet (owner, 2026-10-28).
+  const narrow = useMediaQuery('(max-width: 720px)')
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const options = useCalendarOptions()
   const q = useMemo(() => apiQuery(state), [state])
@@ -71,7 +77,7 @@ export function SchedulePage() {
   const teachers = month ? summary.data?.teachers : win.data?.teachers
 
   return (
-    <div className="page sc-page">
+    <div className={`page sc-page${narrow ? ' sc-page--narrow' : ''}`}>
       <PaletteStyle />
       <div className="page__inner page__inner--wide">
         <PageHeader
@@ -104,7 +110,14 @@ export function SchedulePage() {
             </div>
           </div>
 
-          <FilterBar state={state} options={options.data} onChange={update} />
+          {narrow ? (
+            <button type="button" className="btn sc-filters-button" aria-haspopup="dialog" onClick={() => setFiltersOpen(true)}>
+              {tx(S.filtersButton)}
+              {activeFilterCount(state) > 0 && <span className="sc-filter__count">{activeFilterCount(state)}</span>}
+            </button>
+          ) : (
+            <FilterBar state={state} options={options.data} onChange={update} />
+          )}
           {options.data?.viewer.scope === 'supervisor' && state.lists.supervisorIds.includes(options.data.viewer.staffId) && (
             <p className="sc-hint">{tx(S.mineDefault)}</p>
           )}
@@ -113,9 +126,15 @@ export function SchedulePage() {
           <Legend supervisors={supervisors} selected={state.lists.supervisorIds} onToggle={toggleSupervisor} />
 
           <QueryBoundary isLoading={active.isLoading} error={active.error} onRetry={() => void active.refetch()}>
-            <div className="sc-scroll" aria-busy={active.isFetching}>
+            <div className={narrow ? 'sc-agenda-wrap' : 'sc-scroll'} aria-busy={active.isFetching}>
               {teachers && teachers.length === 0 && <EmptyState title={tx(S.noTeachers)} />}
-              {teachers && teachers.length > 0 && (
+              {teachers && teachers.length > 0 && narrow && (
+                <>
+                  {!month && win.data && <AgendaView data={win.data} onLesson={setLesson} />}
+                  {month && summary.data && <MonthAgenda data={summary.data} onOpenDay={openDay} />}
+                </>
+              )}
+              {teachers && teachers.length > 0 && !narrow && (
                 <>
                   {state.view === 'day' && win.data && <DayView data={win.data} day={range.from} onLesson={setLesson} />}
                   {state.view === 'week' && win.data && <WeekView data={win.data} onLesson={setLesson} onOpenDay={openDay} />}
@@ -127,6 +146,16 @@ export function SchedulePage() {
         </QueryBoundary>
       </div>
       {lesson && <LessonDetails lesson={lesson} supervisors={supervisors} onClose={() => setLesson(null)} />}
+      {narrow && filtersOpen && (
+        <Dialog
+          title={tx(S.filters)}
+          variant="sheet"
+          onClose={() => setFiltersOpen(false)}
+          footer={<button type="button" className="btn btn--primary" onClick={() => setFiltersOpen(false)}>{tx(S.done)}</button>}
+        >
+          <FilterBar state={state} options={options.data} onChange={update} layout="sheet" />
+        </Dialog>
+      )}
     </div>
   )
 }

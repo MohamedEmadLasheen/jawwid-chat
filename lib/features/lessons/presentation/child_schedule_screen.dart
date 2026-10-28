@@ -9,6 +9,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/utils/app_clock.dart';
+import '../../../shared/utils/clock_time.dart';
 import 'change_lesson_time_sheet.dart';
 import 'lesson_ticket_sheet.dart';
 
@@ -114,7 +115,7 @@ class ChildScheduleScreen extends ConsumerWidget {
                     ListTile(
                       key: ValueKey('child-weekly-${s.weekday}-${s.start}'),
                       leading: const Icon(Icons.event_repeat_outlined),
-                      title: Text(s.nextStartsAt != null ? l10n.cardEveryWeek(weeklyLabel(context, s.nextStartsAt!)) : s.start),
+                      title: Text(s.nextStartsAt != null ? l10n.cardEveryWeek(weeklyLabel(context, s.nextStartsAt!)) : formatWallClock(context, s.start)),
                       subtitle: s.durationMinutes > 0 ? Text(l10n.makeupLength(s.durationMinutes)) : null,
                     ),
                 if (schedule.hasPendingRequest)
