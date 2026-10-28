@@ -3,8 +3,8 @@
 Status: **DECIDED** (owner, 2026-10-28). All six recommendations in §13 are approved, with seven
 safeguards (§0). §14 maps each safeguard to its state, mechanism and test. Code starts only on
 the department head's GO, because of the machine-load cap.
-Claim: `docs/product/pd-registry/PD-41.md`. Migration slot: `20261028110000` (`chat_pd041_certificates`),
-renumbered from `20261027130000`.
+Claim: `docs/product/pd-registry/PD-41.md`. Migration slot: `20261028130000` (`chat_pd041_certificates`),
+assigned by the department head (earlier claims: `20261027130000`, `20261028110000`).
 Base: `main` @ `a547b0e2`, with PD-40 merged (#164, #167, #172, #174).
 
 ## 0. The owner's decision (2026-10-28, verbatim, relayed by the department head)
@@ -200,7 +200,7 @@ check: kind in (returned, redesign_requested, approval_withdrawn, declined, canc
 
 ## 4. Data model
 
-### 4.1 Extend in place: one migration at slot `20261028110000`
+### 4.1 Extend in place: one migration at slot `20261028130000`
 
 `alter table chat.learner_certificate rename to appreciation_certificate`. In Prisma, the model
 becomes `AppreciationCertificate` with `@@map("appreciation_certificate")`. The readers to update
@@ -671,7 +671,7 @@ and `CERTIFICATE_TYPE_DISABLED`. The existing
 | PR | Scope | Behaviour change | Depends on |
 |---|---|---|---|
 | **PR-0** (this) | the claim, the slot and this design | none | — |
-| **PR-1** API + migration | migration `20261028110000`: rename, columns, the category, type, file, upload, event and **consent** tables, triggers (approval, four eyes, consent, suggestion decider, type never deleted), legacy mapping, the `certificate_awarded` and `certificate_accepted` kinds, templates, and the five new catalogue keys plus their bundle rows. `pd041-policy.ts` plus its matrix spec. `CertificateService` rewritten around the state machine. The new controller. The `/learner-certificates` teacher routes kept. The projection spec. Integration specs (rewritten `pd012-*`, new `pd041-*`: duplicates, races, send-once, Story-once, target-changed, redaction, trigger refusals attempted directly). `docs/contracts/API-CONTRACT.md`. | additive; legacy issue/decline still work until PR-2 | — |
+| **PR-1** API + migration | migration `20261028130000`: rename, columns, the category, type, file, upload, event and **consent** tables, triggers (approval, four eyes, consent, suggestion decider, type never deleted), legacy mapping, the `certificate_awarded` and `certificate_accepted` kinds, templates, and the five new catalogue keys plus their bundle rows. `pd041-policy.ts` plus its matrix spec. `CertificateService` rewritten around the state machine. The new controller. The `/learner-certificates` teacher routes kept. The projection spec. Integration specs (rewritten `pd012-*`, new `pd041-*`: duplicates, races, send-once, Story-once, target-changed, redaction, trigger refusals attempted directly). `docs/contracts/API-CONTRACT.md`. | additive; legacy issue/decline still work until PR-2 | — |
 | **PR-2** Admin Web | the `/certificates` page, form, drawer and history, the redirects, tests. Removes the three legacy staff routes. | the Teachers-tab page moves to `/certificates` | PR-1 |
 | **PR-3** Designer cut-over | the ✱ list into PD-40's exact Designer route spec; `design` removed from the Teachers bundle (the transition rule ends) once a Designer account exists | only the Designer designs | PR-1, plus a Designer created on the stack. PD-40 is **merged**, so PR-1 already reads `PermissionService.profileOf` and `chat.staff_has_permission` |
 | **PR-4** Flutter (small) | renders `certificate_awarded` in the supervision conversation (the file plus the type and period); the teacher's suggestion sheet copy says "suggest". | copy only | PR-1 |
