@@ -14,6 +14,14 @@ import real111 from '../../public/data/quran/surah-111.json';
 import real112 from '../../public/data/quran/surah-112.json';
 import real113 from '../../public/data/quran/surah-113.json';
 import real114 from '../../public/data/quran/surah-114.json';
+import real99 from '../../public/data/quran/surah-099.json';
+import real100 from '../../public/data/quran/surah-100.json';
+import real101 from '../../public/data/quran/surah-101.json';
+import real102 from '../../public/data/quran/surah-102.json';
+import real103 from '../../public/data/quran/surah-103.json';
+import real104 from '../../public/data/quran/surah-104.json';
+import real105 from '../../public/data/quran/surah-105.json';
+import real106 from '../../public/data/quran/surah-106.json';
 
 // Stand-in verses (not Quran text), 3, 2 and 4 words.
 const TEXTS = ['أحد اثنان ثلاثة', 'أربعة خمسة', 'ستة سبعة ثمانية تسعة'];
@@ -125,6 +133,18 @@ describe('Al-Buruj, on the real verified text', () => {
 });
 
 // Every lesson rebuilt on the engine (Juz' Amma, batch 1), each on its real verified surah.
+// Juz' Amma batch 2 (99-106).
+const BATCH2: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
+  99: { file: real99, ayat: 8, held: 7, complete: 8 },
+  100: { file: real100, ayat: 11, held: 4, complete: 5 },
+  101: { file: real101, ayat: 11, held: 7, complete: 3 },
+  102: { file: real102, ayat: 8, held: 4, complete: 4 },
+  103: { file: real103, ayat: 3, held: 7, complete: 4 },
+  104: { file: real104, ayat: 9, held: 10, complete: 9 },
+  105: { file: real105, ayat: 5, held: 4, complete: 5 },
+  106: { file: real106, ayat: 4, held: 10, complete: 4 },
+};
+
 const BATCH1: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
   107: { file: real107, ayat: 7, held: 4, complete: 9 },
   108: { file: real108, ayat: 3, held: 5, complete: 6 },
@@ -136,13 +156,13 @@ const BATCH1: Record<number, { file: unknown; ayat: number; held: number; comple
   114: { file: real114, ayat: 6, held: 4, complete: 8 },
 };
 
-describe("Juz' Amma batch 1, each on its real verified text", () => {
+describe("Juz' Amma batches 1 and 2, each on its real verified text", () => {
   const anchor: QuranAnchor = {
     datasetId: realManifest.datasetId,
     fileSha256: realManifest.fileSha256,
     rangeSha256: realManifest.surahs.map((s) => s.rangeSha256),
   };
-  for (const [n, expected] of Object.entries(BATCH1)) {
+  for (const [n, expected] of Object.entries({ ...BATCH1, ...BATCH2 })) {
     it(`surah ${n}: every position resolves, flagged lines are held, and it waits for approval`, async () => {
       const surah = Number(n);
       const fetcher: Fetcher = async (path) =>

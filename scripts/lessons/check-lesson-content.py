@@ -175,10 +175,14 @@ def check(content, verses, dataset_id):
         text(f'reflection.ideas[{i}]', idea)
     note('reflection', refl)
 
-    # Runs of RUN words, or a whole ayah when it is shorter than that.
+    # Runs of RUN words, or a whole ayah when it is shorter than that -- but never a
+    # ONE-word ayah: a single word in prose cannot be told from the surah's name
+    # (al-Qari'ah, al-Haqqah and al-'Asr are each their surah's whole first ayah).
     grams = set()
     for v in verses:
         ws = fold(v).split()
+        if len(ws) < 2:
+            continue
         k = min(RUN, len(ws))
         grams.update(tuple(ws[i:i + k]) for i in range(len(ws) - k + 1))
     sizes = {len(g) for g in grams}
@@ -198,13 +202,13 @@ def check(content, verses, dataset_id):
 
 
 def selftest():
-    verses = ['ألف باء تاء ثاء', 'جيم حاء خاء', 'دال ذال راء زاي سين', 'شين صاد']
+    verses = ['ألف باء تاء ثاء', 'جيم حاء خاء', 'دال ذال راء زاي سين', 'شين صاد', 'قاف']
 
     def base():
         return {
             'surah': 999, 'datasetId': 'test-1', 'review': {'status': 'pending', 'by': None, 'note': 'x'},
             'provenance': {}, 'intro': {'text': 'مقدمة', 'review': None},
-            'tafsir': [{'ayah': i, 'text': f'شرح {i}', 'review': None} for i in range(1, 5)],
+            'tafsir': [{'ayah': i, 'text': f'شرح {i}', 'review': None} for i in range(1, 6)],
             'words': [{'ayah': 1, 'word': 2, 'meaning': 'معنى', 'review': None}],
             'complete': [{'ayah': 1, 'word': 4}, {'ayah': 2, 'word': 3}, {'ayah': 3, 'word': 5}],
             'quiz': [{'id': 'q1', 'category': 'hifz', 'question': 'أكمل', 'prompt': {'ayah': 2, 'words': 2},
@@ -238,6 +242,7 @@ def selftest():
         'typed-quran': (set_(['tafsir', 0, 'text'], 'كما قال دال ذال راء زاي'), 'consecutive words'),
         'typed-quran-diacritics': (set_(['lessons', 0, 'text'], 'دَالٌ ذَالٍ رَاءٌ زَايٌ'), 'consecutive words'),
         'whole-short-ayah': (set_(['didYouKnow', 0, 'text'], 'شين صاد'), 'whole ayah'),
+        'one-word-ayah-is-a-name': (set_(['intro', 'text'], 'سورة قاف تعلمنا'), None),
         'three-words-is-paraphrase': (set_(['tafsir', 0, 'text'], 'كما قال دال ذال راء'), None),
         'uthmani-marks': (set_(['intro', 'text'], 'نص ' + chr(0x671) + 'لله'), 'Uthmani-only'),
         'too-few-game-words': (set_(['complete'], [{'ayah': 1, 'word': 4}, {'ayah': 1, 'word': 4}, {'ayah': 2, 'word': 3}]), 'three distinct'),
