@@ -22,6 +22,7 @@ import { decidePageBasis } from '@platform/teacher-scope';
 import { canCarryOverPackage, canGrantSubscriptionException } from '@platform/subscription-policy';
 import { accountAdminActs } from '@platform/account-admin-policy';
 import { decideTeacherOnboarding } from '@platform/teacher-onboarding-policy';
+import { CERTIFICATE_KEYS, legacyCertificateKeys } from '@platform/pd041-policy';
 import { StaffProfilePermission, profilePermissionsFor } from '@platform/staff-profile-policy';
 import { PERMISSIONS, PERMISSION_KEYS } from '@platform/permissions/catalogue';
 import {
@@ -102,9 +103,10 @@ function rules(): Record<string, Rule> {
     'parents.edit': (a) => billing(a).canEditParent,
     'subscriptions.manage': (a) => canGrantSubscriptionException(a.actor, role(a, 'operations'), role(a, 'sales')),
     'subscriptions.carry_over': (a) => canCarryOverPackage(a.actor, role(a, 'operations'), role(a, 'sales')),
-    'certificates.view': supervises,
-    'certificates.design': supervises,
-    'certificates.deliver': supervises,
+    // PD-41: the certificate keys, from Operations' placement and PD-12's canSupervise.
+    ...Object.fromEntries(
+      CERTIFICATE_KEYS.map((key) => [key, (a: Account) => legacyCertificateKeys(a.actor, role(a, 'operations'), role(a, 'teachers')).has(key)]),
+    ),
     'teacher_supervision.view': onPage,
     'teacher_supervision.record': recordsOnPage,
     'supervision.chats': supervises,
