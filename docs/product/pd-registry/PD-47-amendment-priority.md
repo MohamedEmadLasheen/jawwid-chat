@@ -6,4 +6,4 @@ branch: claude/pd47-priority-plan
 pr: #233
 state: IN PROGRESS
 ---
-Plan: `docs/product/pd047-amendment-priority.md` (revision 2: the owner's financial rules). PR-1b slot 20261029200000; PR-2b (financial sources) asks for a second slot. Thresholds (§6) await the owner.
+Plan: `docs/product/pd047-amendment-priority.md` (revision 2, APPROVED by the owner 2026-10-28). Slots: PR-1b 20261029200000, PR-2b 20261029210000.

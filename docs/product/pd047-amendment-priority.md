@@ -1,10 +1,10 @@
 # PD-47 amendment: task priority, colour and the financial tier (plan)
 
-**State:** **revision 2, DRAFT for the owner's approval of the thresholds (§6).** No code is written. Nothing in §5–§6 is built until the owner approves the numbers.
+**State:** **revision 2, APPROVED.** On 2026-10-28 the owner confirmed the thresholds and every question in §10, relayed by the department head. No code is written yet. Build order: PR-1b, then PR-2 and PR-2b (§8).
 **Claim:** `docs/product/pd-registry/PD-47-amendment-priority.md`. It amends `docs/product/pd047-tasks-plan.md`.
 **Slots:**
 - PR-1b is `20261029200000`, assigned by the department head and claimed in `docs/product/migration-slots/20261029200000.md`.
-- The financial sources (PR-2b, §8) need **a second slot, requested**.
+- PR-2b (the financial sources) is `20261029210000`, assigned by the department head and claimed in `docs/product/migration-slots/20261029210000.md`.
 
 **Base:** `main` @ `90b9d2d7`. `mig/` is `supabase/migrations/`.
 
@@ -167,7 +167,7 @@ Today's alerts, from `communication/notifications/notification-catalog.ts:57-88`
 
 ---
 
-## 6. PROPOSED THRESHOLDS (owner approval required before any rule is built)
+## 6. THRESHOLDS: CONFIRMED by the owner 2026-10-28 ("Approve as proposed")
 
 | Task | 🟡 Yellow | 🔴 Red | Completed when | Why these numbers |
 |---|---|---|---|---|
@@ -200,7 +200,7 @@ One table rule: **the instalment and package floors replace the generic 24 h / 3
 |---|---|---|
 | **PR-1b** | `priority`, `category`, `source_floor`; `chat.work_task_effective` with the four floor rules; `priority_changed` and `source_raised` in the guard and the history trigger; indexes; the sort plus the `as_of` keyset; filters; `POST tasks/:id/priority`; create takes `priority` and `category`; DTO fields; the urgent and financial Dashboard tiles; specs | **`20261029200000`** (assigned) |
 | PR-2 | the Phase A sources, with their floor rule (`lesson_report` and `report_correction` are `overdue_only`) | `20261029170000` |
-| **PR-2b** | **the financial sources** (`instalment`, `package_low`, `renewal_request`, `receipt_review`, and `checkout_failed` if Q-F5 says yes). Their completion triggers on `chat.family_instalment`, the payment ledger, `chat.learner_subscription`, `chat.renewal_request` and `chat.payment_receipt`, and `notifySales` replaced (Q-F6). Moved **ahead** of the other Phase B sources, because the owner named finance first. | **a second slot, requested** |
+| **PR-2b** | **the financial sources** (owner Q-F5: `checkout_failed` included) (`instalment`, `package_low`, `renewal_request`, `receipt_review`, and `checkout_failed` if Q-F5 says yes). Their completion triggers on `chat.family_instalment`, the payment ledger, `chat.learner_subscription`, `chat.renewal_request` and `chat.payment_receipt`, and `notifySales` replaced (Q-F6). Moved **ahead** of the other Phase B sources, because the owner named finance first. | **`20261029210000`** (assigned) |
 | PR-3 / PR-5 | the chip, the Finance tag, the tokens | none |
 
 **Order:** #228 → PR-1b → PR-2 → PR-2b → the rest of Phase B.
@@ -215,16 +215,18 @@ One table rule: **the instalment and package floors replace the generic 24 h / 3
 
 ---
 
-## 10. Owner questions
+## 10. Owner decisions
 
-| # | Question | Recommendation |
+**DECIDED 2026-10-28.** The owner answered every question below, relayed by the department head. Q-F7: "Approve as proposed". Q-F2: "Colour first, finance first within". Q-F1: all three confirmed. Q-F3 to Q-F6: "Family's Sales owner", which also covers replacing the push to every Sales member, Finance on manual tasks, and a task for a failed card payment. Each recommendation is therefore the decision.
+
+| # | Question | Decision |
 |---|---|---|
 | Q-P1 | Lesson reports Red from creation? | **CLOSED** by the owner: Yellow until overdue (`overdue_only`). |
 | Q-P2 | Minutes or calendar days? | **CLOSED** by the owner: to the minute. |
-| **Q-F1** | Which other routine sources get `overdue_only`? | **`report_correction`, `trial_outcome` attendance and `makeup_owed`** (§2.2). All are routine and high-volume, and none should drown out finance. |
-| **Q-F2** | Colour first with finance second inside each colour, or finance strictly first? | **Colour first, finance second inside each colour.** An overdue operational task is still more urgent than an instalment due next week. |
-| **Q-F3** | May a manager tick "financial" on a manual task? | **Yes.** It is a sort tier and a tag only, so it adds no permission and no risk. |
-| **Q-F4** | Who owns a package that is running out: Sales (sells the renewal) or the child's supervisor (already gets the PD-30 grace push)? | **The family's Sales owner, else the Sales manager.** Renewing is a sale, and the supervisor keeps today's pushes. |
-| **Q-F5** | Add a task when a card payment fails? | **Yes, Red.** Today nobody is told (`checkout.service.ts:159-174`). |
-| **Q-F6** | Replace the "renewal requested" push to every Sales member with the task's notification to the family's Sales owner? | **Yes.** One accountable person, and no double push. |
-| **Q-F7** | Approve the thresholds in §6 (2 lessons / 0 lessons; D−7 / D0 / D+1; 48 h for receipts)? | **Approve as proposed.** Each one sits on a timing PD-27 or PD-30 already uses. |
+| **Q-F1** (CONFIRMED 2026-10-28) | Which other routine sources get `overdue_only`? | **`report_correction`, `trial_outcome` attendance and `makeup_owed`** (§2.2). All are routine and high-volume, and none should drown out finance. |
+| **Q-F2** (CONFIRMED 2026-10-28) | Colour first with finance second inside each colour, or finance strictly first? | **Colour first, finance second inside each colour.** An overdue operational task is still more urgent than an instalment due next week. |
+| **Q-F3** (CONFIRMED 2026-10-28) | May a manager tick "financial" on a manual task? | **Yes.** It is a sort tier and a tag only, so it adds no permission and no risk. |
+| **Q-F4** (CONFIRMED 2026-10-28) | Who owns a package that is running out: Sales (sells the renewal) or the child's supervisor (already gets the PD-30 grace push)? | **The family's Sales owner, else the Sales manager.** Renewing is a sale, and the supervisor keeps today's pushes. |
+| **Q-F5** (CONFIRMED 2026-10-28) | Add a task when a card payment fails? | **Yes, Red.** Today nobody is told (`checkout.service.ts:159-174`). |
+| **Q-F6** (CONFIRMED 2026-10-28) | Replace the "renewal requested" push to every Sales member with the task's notification to the family's Sales owner? | **Yes.** One accountable person, and no double push. |
+| **Q-F7** (CONFIRMED 2026-10-28) | Approve the thresholds in §6 (2 lessons / 0 lessons; D−7 / D0 / D+1; 48 h for receipts)? | **Approve as proposed.** Each one sits on a timing PD-27 or PD-30 already uses. |
