@@ -1,7 +1,7 @@
 # PD-48: voice-over for the Arabic lessons (design)
 
-**State:** **DRAFT, docs only.** No product code is written. Code waits for the department head's approval of this design and for the owner's answers in §17.
-**Claim:** `docs/product/pd-registry/PD-48.md`. **Migration slot:** requested from the department head (§11). None is claimed.
+**State:** **DRAFT, docs only.** No product code is written. On 2026-10-28 the owner answered Q1–Q6 (§17), relayed by the department head. **Q7 (disclosure) is OPEN**: it waits for the owner's choice among the compliant alternatives in §2.8. Code waits for the department head's approval.
+**Claim:** `docs/product/pd-registry/PD-48.md`. **Migration slot:** `20261029230000`, assigned by the department head for PR-2 (§11). It is claimed in `docs/product/migration-slots/20261029230000.md`.
 **Base:** `main` @ `90b9d2d7`. Paths are relative to the repository root. `mig/` is `supabase/migrations/`.
 **Depends on:** PD-29 P0-5 (Arabic lesson 1). The design is `docs/product/pd029-p05-arabic-letters-design.md` (PR #232); the engine and checker are PR-1 (#234, in progress). §4 is the one change PD-48 asks of that data shape.
 **Not touched, by rule:** Quran recitation in every form: `chat.quran_ayah_audio`, `quran.audio.*` in `chat.config`, `apps/api/src/quran/audio-*.ts` and the engine's `jawwid:quran-audio` message. Quran audio is never TTS (§13). The `islamic/` lessons are out of scope.
@@ -24,7 +24,7 @@ What that means in practice:
 
 1. **Generated offline, once.** An operator runs a script on their own machine (§6). It sends each reading string to the vendor and saves the audio. Nothing is synthesized when a child opens a lesson. No browser voice (`speechSynthesis`) is ever used.
 2. **Bound to its text.** Each clip is bound to the lesson, the string's stable id, the SHA-256 of the exact text and the SHA-256 of the voice settings (§5). If the text changes by one mark, the hash no longer matches and the clip stops playing everywhere at once. Nobody has to remember to switch it off.
-3. **Approved per clip, by two reviewers.** Teachers department reviewers listen to each clip next to its vowelled text, then approve or reject it (§7, §9). The recommendation is **two different reviewers per clip** (Q1). One rejection is final for that clip.
+3. **Approved per clip, by two reviewers.** Teachers department reviewers listen to each clip next to its vowelled text, then approve or reject it (§7, §9). The owner decided on **two different reviewers per clip** (Q1). One rejection is final for that clip.
 4. **Fixed or left silent.** A rejected clip is regenerated with a pronunciation fix (lexicon entry, phoneme or a respelled input). If three tries fail, a reviewer marks the string "no audio". From then on it has no play button. It never falls back to another voice, an unapproved clip or the browser's voice.
 5. **Fail-closed release, like Quran audio.** `lesson_audio.enabled_for` = `none | staff_test | all`. Unset means nobody hears anything. `all` also needs the vendor's licence confirmation **recorded in code** (§7.6).
 6. **Checked twice before playback.** The server serves only approved clips whose text hash equals the text the API was built with. The lesson engine checks the text hash again against its own text, then plays a file only after its bytes hash to the approved SHA-256. That second check reuses the Quran audio pattern.
@@ -79,7 +79,7 @@ No vendor documents it, and no evaluation was found. It stays the weakest point.
 - **Azure: probably fine, but the primary document was not read.**
   - The Microsoft Product Terms page could not be retrieved.
   - A 2023 answer from a Microsoft employee on Microsoft Q&A says commercial use of the output is fine on a **paid** resource (not free tier or free credits).
-  - The Microsoft AI Code of Conduct (v4.0) **requires telling users the voice is synthetic** (Q7). It does not ban children's or education apps.
+  - The Microsoft AI Code of Conduct (v4.0) **requires disclosing that the voice is synthetic**, prebuilt voices included (verified in §2.8, Q7). It does not ban children's or education apps.
   - Real-time synthesis stores neither the text nor the audio.
   - **The owner (or counsel) must read the Product Terms clause before the licence is recorded in `voice-sources.ts`** (§7.6).
 - **Google: blocked pending legal review.**
@@ -104,7 +104,7 @@ Azure and Google bill SSML markup as characters. The worst case (every clip wrap
 - **Primary: Azure AI Speech, an `ar-SA` voice (Hamed or Zariyah), on a paid S0 resource.**
   - It is the only vendor with Arabic `<phoneme>`, a custom lexicon, `<sub>`, `<break>` and rate control all documented together. So every rejection can become a permanent fix in `lexicon/azure.json`, instead of a gamble on the auto-diacritizer.
   - It retains nothing on real-time calls.
-  - Conditions: the owner reads the Product Terms clause, and the app discloses that the voice is synthetic (Q7).
+  - Conditions: the owner reads the Product Terms clause, and the synthetic voice is disclosed in a form the terms accept (§2.8, Q7).
 - **Fallback: Amazon Polly.**
   - The clearest licence for stored, replayed audio.
   - The only vendor that documents honouring vowelled input (Zeina), with an Arabic phone table and lexicons.
@@ -159,6 +159,53 @@ Azure and Google bill SSML markup as characters. The worst case (every clip wrap
   - [NatiQ (arXiv 2206.07373)](https://arxiv.org/abs/2206.07373)
   - [diacritics in Arabic TTS (arXiv 2603.01622)](https://arxiv.org/html/2603.01622v1)
   - [ArVoice (arXiv 2505.20506)](https://arxiv.org/abs/2505.20506)
+
+### 2.8 Disclosing that the voice is synthetic: what Azure and Polly require
+
+Verified at the source on **2026-10-28**, for Q7. The owner's instruction was: don't show a disclosure unless it is mandatory, never bypass the provider's terms, and present compliant alternatives if it is mandatory. Every quote below was read on that date.
+
+**Azure AI Speech: disclosure is a MUST, prebuilt voices included. How and where to disclose is a SHOULD.**
+
+| Source | Exact words | MUST or SHOULD |
+|---|---|---|
+| [Code of Conduct for Microsoft AI Services](https://learn.microsoft.com/en-us/legal/ai-code-of-conduct), v4.0 (2026-05-01), opening | "defines the requirements that all customers of Microsoft AI Services (as defined in the Product Terms) must adhere to in good faith". It "unifies and replaces the previous codes for … Azure Speech in Foundry Tools text to speech" and "applies in addition to the Microsoft Product Terms". | Binding on every Azure AI customer |
+| Same, Responsible AI requirement 3 | Customers "must ensure that all of their applications built with Microsoft AI Services … Disclose when the output … [is] generated by AI, including the synthetic nature of generated voices … such that users are not likely to be deceived or duped … into believing they are interacting with a real person, that any generated content is authentic …" | **MUST.** It covers all Microsoft AI Services, not just custom voice. The aim is stated: users must not be deceived. |
+| Same, "Azure Speech and voice services" section | Its extra duties (opt-out, recording scripts, consent terms) apply to "personalized or AI-generated voice features" built from **External Users' own voices** (voice model training data). | Custom/personal voice only. **Not our case.** It neither adds to nor removes requirement 3. |
+| [Text to speech Transparency Note](https://learn.microsoft.com/en-us/azure/ai-foundry/responsible-ai/speech-service/text-to-speech/transparency-note) (2026-03-31), "Disclose when the voice is synthetic" | "Microsoft requires its customers to disclose the synthetic nature of text to speech voices to its users." | **MUST**, restated for TTS. Not limited to custom voice. |
+| Same, next bullet | "If your use case is intended for minors or children, you'll need to ensure that your disclosure is clear and transparent so that parents or legal guardians can understand the role of synthetic media and make an informed decision on behalf of minors or children about whether to use the experience." | For a children's app, the disclosure must reach **parents or guardians** clearly. |
+| [Disclosure design guidelines](https://learn.microsoft.com/en-us/azure/ai-foundry/responsible-ai/speech-service/text-to-speech/concepts-disclosure-guidelines) (2025-11-21) | "This guide helps you determine which disclosure patterns are best fit". "If the context makes it clear that a synthetic voice is 'speaking,' disclosure may be minimal, momentary, or even unnecessary." | **SHOULD**, design guidance. It shapes the *form* of the disclosure. It cannot waive requirement 3. |
+| Microsoft Product Terms (Azure, AI Services section) | **Not read.** The page answers 403 to automated readers (2026-10-28). The Code itself says it applies "in addition to" the Product Terms. | Must be read by a person (the owner or counsel) before the licence is recorded (§7.6) |
+
+**So with Azure, "no disclosure anywhere" is not compliant.** The terms do not prescribe the form. Microsoft's own guidance for children's use cases points the disclosure at **parents and guardians**.
+
+**Amazon Polly: no disclosure requirement found.**
+
+| Source | Exact words | MUST or SHOULD |
+|---|---|---|
+| [AWS Service Terms](https://aws.amazon.com/service-terms/) (last updated 2026-10-22), §50.1 / §50.2 | Polly is named among the "AI Services". "The output that you generate using AI Services is Your Content." | Ownership: ours |
+| Same, §50.4 | "You are responsible for providing legally adequate privacy notices to End Users" (and obtaining necessary consents). Its under-13 COPPA mechanics name **Amazon Lex**, not Polly. | **MUST**, but about *privacy notices for data*, not about labelling synthetic speech. Our Polly input is lesson text with no personal data. |
+| Same, §1.23 | Use of AI/ML services is subject to the AWS Responsible AI Policy. | Binding |
+| [AWS Responsible AI Policy](https://aws.amazon.com/ai/responsible-ai/policy/) (last updated 2025-01-13) | It prohibits use "for intentional disinformation or deception" and "to depict a person's voice or likeness without their consent or other appropriate rights". **It has no requirement to disclose or label AI-generated content.** | MUST NOT deceive. **No disclosure duty.** |
+| [Polly pricing](https://aws.amazon.com/polly/pricing/) / FAQ | "you can cache and replay Amazon Polly's generated speech at no additional cost". Nothing on disclosure. | none |
+
+**So with Polly, no vendor rule requires a disclosure**, as of these dates. A future terms change would be caught when the licence record in `voice-sources.ts` is reviewed.
+
+**Not covered here:** the law where Jawwid's families live. For example, if EU users are served, the EU AI Act's transparency rules for synthetic audio. That is counsel's question, not the vendor's, and it applies to whichever vendor is chosen.
+
+**Compliant alternatives** (Q7; never skirting a MUST), ranked:
+
+1. **Azure, with the disclosure aimed at parents only, and nothing in the child's lesson screen.**
+   - Where: one clear sentence in the parent-facing terms and privacy notice, at enrolment (the parent accepts it), and under "About lesson audio" in the parent's settings.
+   - Example: "Lesson pronunciation audio is computer-generated and checked by our teachers before use".
+   - Why it is compliant: it matches the Transparency Note's own pattern for minors, which is a disclosure parents or guardians can understand. It also serves requirement 3's stated aim. No child is led to think a real person is speaking, because there is no persona or named speaker, and every clip is teacher-approved.
+   - Remaining risk: requirement 3 says "users", and children are users. **Recommended safeguard: ask Microsoft in writing (an Azure support or licensing question) to confirm a parent-facing disclosure satisfies requirement 3 for this use, before step 7 of the rollout.** No account is needed to ask a licensing question by e-mail; opening one is the owner's call.
+2. **Amazon Polly instead of Azure: no disclosure required by AWS.**
+   - Trade-offs: Zeina is an older non-neural MSA voice, and Hala and Zayd sound Gulf. The pilot's probe (§15 step 3) decides whether the quality is good enough.
+   - Lexicons and `<phoneme>` exist for Arabic, so the fix loop still works.
+3. **Azure, with a minimal in-app mention instead of a per-clip label.** For example, a small "ⓘ" in the lesson's audio settings, or one line on the lesson's start screen. This is compliant beyond doubt, and the least intrusive form inside the app.
+4. **Teacher-recorded audio for every clip, so no synthetic voice is used.** The owner declined this for now, so it is listed last.
+
+**What is never an option:** Azure with no disclosure anywhere.
 
 ## 3. What gets a voice in lesson 1
 
@@ -259,7 +306,7 @@ lesson-001.json ──(1) plan──▶ worklist ──(2) generate──▶ cli
 - allows one more round (written reason), or
 - marks the string **no audio** (`chat.lesson_audio_string_decision`, written reason).
 
-A "no audio" string has no play button in the lesson. Nothing replaces it: no other voice, no older clip, no browser speech. The decision is bound to the text hash. If a teacher later changes the word, the decision no longer applies and the new text can be tried. The no-audio list is a report in the queue (Q3: whether a teacher may later record those few strings by hand).
+A "no audio" string has no play button in the lesson. Nothing replaces it: no other voice, no older clip, no browser speech. The decision is bound to the text hash. If a teacher later changes the word, the decision no longer applies and the new text can be tried. The no-audio list is a report in the queue (Q3, owner 2026-10-28: such words stay silent for lesson 1; no teacher recordings).
 
 ## 7. The approval gate (fail-closed)
 
@@ -279,7 +326,7 @@ pending ──approve (1 of 2)──▶ pending (1/2) ──approve by a DIFFERE
 ```
 
 - **Approve** names the clip id **and echoes the hashes the reviewer's browser checked**: the text hash and the hash of the audio bytes it actually played (WebCrypto in Admin Web). The database function refuses an approval whose hashes differ from the clip's. So an approval is a record of these exact bytes for this exact text, not of "the clip for ba-001".
-- **Two different reviewers** (recommended, Q1). `APPROVALS_REQUIRED = 2` is a constant **in code**, not a config row, so a database write cannot lower it. The same reviewer cannot approve twice (a unique index).
+- **Two different reviewers** (the owner's decision, Q1). `APPROVALS_REQUIRED = 2` is a constant **in code**, not a config row, so a database write cannot lower it. The same reviewer cannot approve twice (a unique index).
 - **One rejection is final** for that clip, even after an approval. The fix is a new clip.
 - **Withdraw**: any reviewer can pull an approved clip, with a reason. It stops playing on the next request. A withdrawal is final; the fix is a new clip.
 - **Stale** is never stored. A clip whose `text_sha256` differs from the current text map simply does not match the serving query. Change the word, and its audio is off everywhere, with no job to run.
@@ -469,7 +516,7 @@ create table chat.lesson_audio_string_decision (  -- append-only; bound to the t
 - Syllable drills (بَ بِ بُ بْ): not in lesson 1 (§3).
 - Voicing UI text and quiz questions.
 - Runtime or on-device TTS, in any form.
-- Teacher-recorded clips for "no audio" strings (Q3).
+- Teacher-recorded clips for "no audio" strings (Q3: declined for lesson 1).
 
 ## 13. Risks
 
@@ -484,7 +531,7 @@ create table chat.lesson_audio_string_decision (  -- append-only; bound to the t
 | A vendor's auto-diacritizer "corrects" a mark we supplied | a wrong vowel that sounds natural | undocumented for Azure (§2.2), so reviewers listen against the displayed text, never the input; the fix is a `<phoneme>` |
 | A client-supplied key reads another object | data leak | no route takes a key; the derived formula; signing after the server's own query |
 | Quran audio confused with lesson audio | TTS Quran | separate prefix, tables, gate and message; the typed-Quran refusal (§12) |
-| "No audio" strings feel broken to a child | UX gap | no button at all (not a disabled one); the report lets teachers decide on Q3 |
+| "No audio" strings feel broken to a child | UX gap | no button at all (not a disabled one); the report lists them (Q3: they stay silent) |
 | A big lesson change invalidates many clips | review backlog | ids are stable; only changed strings go stale |
 
 ## 14. Cost
@@ -511,7 +558,7 @@ create table chat.lesson_audio_string_decision (  -- append-only; bound to the t
    - Then the operator generates the 34 unit names and one unit's words. Reviewers approve or reject them. Set `staff_test` and listen in the real lesson.
 4. Measure the rejection rate by category. Tune the lexicon and voice.
 5. Generate the rest of lesson 1. Two reviewers finish it.
-6. The owner records the licence confirmation in `voice-sources.ts` (a reviewed commit).
+6. The owner records the licence confirmation in `voice-sources.ts` (a reviewed commit). The record names the disclosure form chosen under Q7 (§2.8), and whatever that form needs is live: the terms text, the enrolment line, or the in-app mention.
 7. Set `all` on production. Families hear only approved clips.
 
 ## 16. Tests
@@ -560,12 +607,28 @@ create table chat.lesson_audio_string_decision (  -- append-only; bound to the t
   - there is no bulk-approve control;
   - bulk-play goes in order.
 
-## 17. Questions for the owner (each with a recommendation)
+## 17. The owner's answers (2026-10-28) and the one open question
 
-1. **Two reviewers per clip, or one?** *Recommended: two different reviewers.* One tired reviewer over 2,000 clips is the likeliest way an error reaches a child. Two costs ~3 more hours per lesson.
-2. **The vendor** (§2.6). *Recommended:* Azure AI Speech (`ar-SA`, paid S0 resource) as primary, Amazon Polly as fallback, with the pilot's ~60-item probe deciding between them. Before the licence is recorded in code, you (or counsel) read the Azure Product Terms clause on generated output, because it could not be retrieved. Google waits for a legal reading of its under-18 clause §20(d). ElevenLabs is excluded unless it approves a children's app in writing. Opening any account is yours.
-3. **Strings the computer voice cannot get right:** leave them silent forever, or let a teacher record those few by hand through the same approval gate? *Recommended: silent for lesson 1.* Revisit after the pilot shows how many there are.
-4. **Who may approve:** only teachers granted "Pronunciation reviewer", plus the Teachers manager? *Recommended: yes.* Supervisors can listen but not approve without the grant.
-5. **The voice:** one adult MSA voice for the whole lesson, or a child-like voice where one exists? *Recommended: one clear adult MSA voice* (§2.1). No vendor offers an Arabic child voice. The one research voice for children's stories (NatiQ "Amina") has no public API or licence.
-6. **Speed:** slightly slower than normal (about −10%) for children? *Recommended: yes,* one rate for the whole lesson, recorded in the recipe.
-7. **Telling families the voice is computer-generated.** Azure's Code of Conduct requires disclosing synthetic voices. *Recommended:* one line in the lesson ("الصوت مُوَلَّد حاسوبيًا وراجعه معلمونا" / "computer voice, checked by our teachers") and in the app's terms. Your wording.
+The department head relayed the answers, from the owner's replies to these questions on 2026-10-28.
+
+1. **Reviewers per clip: TWO different teachers.** The owner's first click said "One teacher". Their written answer then said "Keep the other defaults: two teacher approvals for every audio clip". The head applied the explicit, stricter answer and told the owner they can correct it. `APPROVALS_REQUIRED = 2` (§7.1).
+2. **Vendor: Microsoft Azure, with Amazon Polly as the fallback.** No account is created yet. Before the licence is recorded in `voice-sources.ts`, the owner or counsel reads the Azure Product Terms clause on generated output (§2.5, §2.8).
+3. **Words the computer voice cannot get right: "No audio for that word".** Silent, with no play button and no teacher recordings, for lesson 1 (§6).
+4. **Approvers:** teachers granted "Pronunciation reviewer", plus the Teachers Manager (§8).
+5. **Voice:** one adult MSA voice for the whole lesson (§2.1).
+6. **Speed:** about 10% slower than normal, one rate for the lesson, recorded in the recipe (§5).
+7. **Disclosure that the voice is computer-generated: OPEN.** The owner's words, verbatim:
+
+   > We do not want to display a disclosure to users stating that the voice is computer-generated. Please verify Microsoft Azure's exact requirements and whether this disclosure is mandatory for our intended use in Jawwid Academy. Do not bypass or violate the provider's terms. If disclosure is mandatory, present compliant alternatives before proceeding.
+
+   **Finding (§2.8):**
+   - For Azure, disclosure is **mandatory**, prebuilt voices included. The Code of Conduct, Responsible AI requirement 3, says so, and the Transparency Note says "Microsoft requires its customers to disclose the synthetic nature of text to speech voices to its users". The form is not prescribed. For children's use cases, Microsoft's guidance aims the disclosure at parents and guardians.
+   - For Amazon Polly, **no disclosure requirement** was found in the AWS Service Terms §50 or the AWS Responsible AI Policy.
+
+   **Compliant alternatives, ranked** (details in §2.8):
+   1. Azure, with a parent-facing disclosure only: terms, privacy notice, enrolment and parent settings, with nothing in the child's lesson. Microsoft is asked in writing to confirm this is enough.
+   2. Amazon Polly as the primary vendor, with no disclosure required. The cost is voice quality, which the pilot probe measures.
+   3. Azure, with one minimal in-app mention (an info icon or the lesson's start screen).
+   4. Teacher-recorded audio (declined for now).
+
+   *Recommended: option 1, with option 2 as the fallback if Microsoft does not confirm.* Either way, nothing reaches families before the owner's choice is recorded here.
