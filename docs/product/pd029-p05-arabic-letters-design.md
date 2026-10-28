@@ -47,12 +47,13 @@ So P0-5 is a **rewrite as data**. The old words are the starting list. A checker
   "review": { "status": "pending", "by": null, "note": "" },
   "provenance": { "source": "jawwid-lessons @ c231532 arabic/lesson-1 (read as text)", "sha256": { "lib/lessonData.ts": "…" } },
   "finalMark": "sukun",
+  "retiredIds": [],
   "units": [
     { "id": "ba", "letters": ["ب"], "name": "بَاءْ",
       "note": null,
-      "words": [ { "id": "ba-w1", "text": "بَابْ", "was": "بَاب", "review": "ADDED TASHKEEL: final sukun" } ] },
+      "words": [ { "id": "ba-001", "text": "بَابْ", "was": "بَاب", "review": "ADDED TASHKEEL: final sukun" } ] },
     { "id": "alif", "letters": ["ا"], "name": "أَلِفْ",
-      "note": { "id": "alif-note", "text": "…", "review": "AUTHORED: teacher to write or approve" },
+      "note": { "text": "…", "review": "AUTHORED: teacher to write or approve" },
       "words": [ … ] },
     { "id": "hamza", "letters": ["ء", "أ", "إ", "ؤ", "ئ"], "name": "هَمْزَةْ", "note": { … }, "words": [ … ] }
   ]
@@ -60,11 +61,13 @@ So P0-5 is a **rewrite as data**. The old words are the starting list. A checker
 ```
 
 **Every reading string has a stable id, for voice-over.** The owner has asked for voice-over of letters, words and sentences; a separate session designs it.
-- Each unit (its id stands for its name), each note and each word carries an `id`: a lowercase slug such as `ba-w1`, unique across the lesson.
-- An id is never reused or renumbered. A deleted word leaves a gap.
+- The scheme is PD-48's (the voice-over design).
+- A word's `id` is `<unit id>-NNN`, such as `ba-001`. Its prefix is its own unit's id, and it is unique in the lesson. The extractor assigns it once, and it is never renumbered when words are reordered or removed.
+- A removed word's id goes into the lesson's `retiredIds` and is never used again.
+- Unit ids are lowercase slugs without hyphens (`ba`, `lam_alif`). A unit's name and note need no field: their ids are derived, `<unit id>.name` and `<unit id>.note`.
 - A clip binds to (id, SHA-256 of the text). Editing a text, for example adding a mark, changes the hash and invalidates the clip, so a stale recording can never play for changed text.
 - Every reading string is stored in **NFC**, so marks are in canonical order and the same word always hashes the same.
-- The checker enforces that ids are unique and well-formed, and that text is NFC. The voice-over design decides the rest.
+- The checker enforces the id format, uniqueness, `retiredIds` and NFC text. The voice-over design decides the rest.
 
 **Nothing derivable is stored.** A word carries no "start / middle / end" label and no letter tag. The engine and the checker compute both from the word's own letters, using the rule in §4. A word filed under the wrong position cannot exist; a word filed under a unit whose letter it doesn't contain is refused.
 
@@ -102,7 +105,8 @@ One module, `apps/lessons/src/arabic/letters.ts`, used by every game, the quiz a
 - **The final mark is one convention for the whole lesson: pausal sukun** (`"finalMark": "sukun"`, the owner's decision of 2026-10-28, §8). A word ends the way a child reads it aloud on its own: أَسَدْ, كِتَابْ, هَمْزَةْ. Every added mark is still held for the Teachers department (§6).
 - **The checker enforces that one convention.** A word's last letter must carry a sukun (with a shadda where the letter is doubled, e.g. أُمّْ), unless it is a letter that takes no mark (a bare ا, ى, a madd و or ي).
   - Any other final mark is refused: tanween (ـٌ ـٍ ـً) or a short vowel (ـَ ـُ ـِ).
-  - The one way past it is an explicit exception on the word itself: `"finalMarkException": "<reason>"`, for example a fixed expression a teacher wants kept as it is said. An exception is always also a held line. The generated review doc lists every exception in its own table, so none is silent.
+  - The one way past it is an explicit exception on the word itself: `"finalMarkException": "<reason>"`, for example a fixed expression a teacher wants kept as it is said. An exception stays held until the file is approved; the approval is the teachers' sign-off of it. The generated review doc lists every exception in its own table, so none is silent.
+  - Tanween on the letter before a final bare ا or ى (كِتَابًا, هُدًى) counts as a tanween ending. A final letter carrying only a dagger alif (عَلَىٰ) fails closed and needs an exception.
 - **Every mark the rebuild adds is visible.** For each word the extractor keeps the old spelling in `was` and the new one in `text`. A word whose marks changed carries `review: "ADDED TASHKEEL: …"`, which says exactly what was added (final mark, qamari-lam sukun, an internal mark).
   - Like a held Quran line, it is **not shown** until a teacher clears it.
   - The review doc lists every such word, old → new, per unit, generated from the file.
