@@ -7,16 +7,16 @@
 -- Plan: docs/product/pd043-teacher-onboarding-plan.md §3.9.
 --
 --   chat.may_give_teacher_sign_in(staff, teacher)
---       who may: PD-40's teachers.create, and the same rule as adding a
---       teacher -- the super admin, the Teachers manager, or a teacher
---       supervisor who reaches the teacher (every teacher with PD-35's strict
---       scope off; their own -- self or active backup -- with it on).
+--       who may: PD-40's teachers.create, and the REISSUE rule (department
+--       head on #198: an existing teacher is a live identity) -- the super
+--       admin, the Teachers manager, or the teacher's CURRENT supervisor
+--       (self or active backup), whatever the strict switch says.
 --   chat.give_teacher_sign_in(teacher, email, reason, actor)
 --       one login, under an advisory lock on the teacher (two calls at once
 --       make one); the Teacher File's e-mail only when it has none; audited as
 --       teacher.sign_in_given without the e-mail. The first sign-in code is
---       issued by the API in the same transaction, which
---       chat.may_issue_teacher_first_login admits through that audit row.
+--       issued by the API in the same transaction; it is always e-mailed and
+--       only the manager and the super admin see it, as for a reissue.
 --
 -- Every refusal is check_violation (Prisma drops a unique_violation's text).
 -- =============================================================================
@@ -36,7 +36,7 @@ as $$
        and (s.role = 'super_admin'
             or (s.role = 'manager' and chat.teachers_department_role(s.id) = 'manager')
             or (s.role in ('admin', 'coverage') and chat.teachers_department_role(s.id) = 'member'
-                and (not chat.teacher_scope_strict() or chat.staff_teacher_scope(s.id, t.id) in ('self', 'backup'))))
+                and chat.staff_teacher_scope(s.id, t.id) in ('self', 'backup')))
   );
 $$;
 

@@ -263,8 +263,9 @@ After the commit, the code is e-mailed to the sign-in address when the e-mail ch
 Teachers inserted before PD-43, and the Core-migration intake, have a teacher row and no login. On their Teacher File, **Give sign-in** gives them one in place: the same teacher, students and history. The Teacher Files list marks them "No sign-in"; that list is the intake's work list.
 
 **`POST /teachers/:id/sign-in`** (`teachers.create`) takes `{ email, reason? }`.
-- **Who:** the super admin, the Teachers Manager, or a teacher supervisor who reaches the teacher. That means every teacher while strict scope is off, and their own teachers while it is on. The rule is `chat.may_give_teacher_sign_in`.
-- **In one transaction:** `chat.give_teacher_sign_in` (migration `20261028160000`) and the first sign-in code. The code is shown once to whoever gives the login, as when a teacher is added, and is e-mailed after the commit.
+- **Who:** the super admin, the Teachers Manager, or the teacher's **current** supervisor, whatever the strict switch says. The rule is `chat.may_give_teacher_sign_in`.
+- **In one transaction:** `chat.give_teacher_sign_in` (migration `20261028160000`) and the first sign-in code.
+- **The code** follows the reissue rule, because an existing teacher is a live identity: it is always e-mailed, and only the Manager and the super admin see it. A supervisor gets `{ expiresAt, emailed }`.
 - **The Teacher File's e-mail** is filled only when it has none.
 
 | Refusal | Answer |

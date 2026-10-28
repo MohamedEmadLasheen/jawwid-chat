@@ -376,9 +376,11 @@ Where it shows:
 
 Teachers inserted before PD-43 have a `chat.teacher` row and no `account_id`, so they can never sign in (§1.1). PD-43 gives them a login **in place**: same teacher, same students, same history.
 
-**Who.** It is the same decision as adding a teacher (`teachers.create`; `decideTeacherOnboarding`):
+**Who** (department head, #198): the **reissue** rule, because an existing teacher is a live identity:
 - the super admin and the Teachers Manager, for any teacher of the organization;
-- a primary teacher supervisor, only for a teacher they reach: every teacher with PD-35 strict scope off, their own with it on. This is `chat.may_issue_teacher_first_login`, the same rule that decides who issues the code.
+- the teacher's **current** supervisor, whatever the strict switch says (`chat.may_give_teacher_sign_in`).
+
+The code is always e-mailed, and only the Manager and the super admin see it.
 
 **`chat.give_teacher_sign_in(p_teacher, p_email, p_reason, p_actor_id)`**, in slot `20261028160000`:
 - **Refused when:**

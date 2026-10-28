@@ -21,8 +21,10 @@ import { TeacherFileService } from './teacher-file.service';
  *              returned ONCE to the person who added the teacher either way.
  *   giveSignIn()  a teacher who exists but has no login (inserted before PD-43;
  *              the Core-migration intake) gets one in place, and its FIRST code
- *              in the same transaction, shown once to the giver as at creation
- *              (chat.give_teacher_sign_in).
+ *              in the same transaction (chat.give_teacher_sign_in). The reissue
+ *              rule, not creation's (department head on #198): an existing
+ *              teacher is a live identity, so the code is always e-mailed and
+ *              only the manager and the super admin see it.
  *   reissue()  a new code while the teacher has not signed in; the old one dies.
  *              Owner, 2026-10-28, "E-mail only; managers can see": only the super
  *              admin, the Teachers manager and the teacher's CURRENT supervisor
@@ -107,7 +109,7 @@ export class TeacherOnboardingService {
   }
 
   async giveSignIn(actorId: string, teacherId: string, body: Record<string, unknown>) {
-    const { actor } = await this.files.onboardingGate(actorId);
+    const { actor, onboarding } = await this.files.onboardingGate(actorId);
     const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
     if (!isUuid(teacherId)) throw notFound;
     const email = requireEmail(body.email);
@@ -140,7 +142,14 @@ export class TeacherOnboardingService {
       throw await this.refusal(e, actor, email, null);
     }
     const emailed = await this.deliver(email, issued);
-    return { teacherId, signIn: email, firstLogin: { code: issued.code, expiresAt: issued.expiresAt.toISOString(), emailed } };
+    const seesCode = onboarding.supervisorChoice === 'any';
+    return {
+      teacherId,
+      signIn: email,
+      firstLogin: seesCode
+        ? { code: issued.code, expiresAt: issued.expiresAt.toISOString(), emailed }
+        : { expiresAt: issued.expiresAt.toISOString(), emailed },
+    };
   }
 
   async reissue(actorId: string, teacherId: string, body: Record<string, unknown>) {
