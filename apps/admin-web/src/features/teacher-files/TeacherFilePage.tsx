@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
@@ -21,6 +21,7 @@ import './teacher-files.css'
 import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
+import { OffboardButton, ReactivateButton } from './Offboarding'
 
 /**
  * PD-10: one teacher's file. Sections in the order the owner listed them;
@@ -63,11 +64,23 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                   actions={
                     data.access.canWriteSupervision ? (
                       <>
-                        {data.signIn?.canGive && <GiveSignInButton teacherId={data.teacher.id} basePath={basePath} />}
+                        {/* Mounted whatever the file says: a code shown once must outlive the reload. */}
+                        <GiveSignInButton show={!!data.signIn?.canGive} teacherId={data.teacher.id} basePath={basePath} />
                         {data.signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}
                         {data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}
                         {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
                         <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />
+                        {/* PD-43 PR-1b: the server says who may (the routes re-check). */}
+                        <ReactivateButton
+                          show={!!data.onboarding?.canReactivate && !data.teacher.isActive}
+                          teacherId={data.teacher.id}
+                          name={data.teacher.name}
+                        />
+                        <OffboardButton
+                          show={!!data.onboarding?.canOffboard && data.teacher.isActive}
+                          teacherId={data.teacher.id}
+                          name={data.teacher.name}
+                        />
                       </>
                     ) : undefined
                   }
@@ -99,6 +112,7 @@ function FileSections({
   const payroll = usePayroll(file)
   return (
     <>
+      <SetupChecklist file={file} />
       <Personal file={file} onEdit={onEdit} />
       <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
       <Students file={file} />
@@ -147,6 +161,51 @@ function Section({
       {hint && <p className="field__hint">{hint}</p>}
       {children}
     </section>
+  )
+}
+
+const SETUP_STEPS = [
+  ['signedIn', T.stepSignedIn],
+  ['supervisor', T.stepSupervisor],
+  ['contact', T.stepContact],
+  ['payTerms', T.stepPayTerms],
+  ['payoutAccount', T.stepPayoutAccount],
+  ['leaveAllowance', T.stepLeaveAllowance],
+  ['shift', T.stepShift],
+  ['availability', T.stepAvailability],
+  ['profile', T.stepProfile],
+] as const
+
+/** PD-43: what is still to set up for an active teacher, read live; gone once everything is done. */
+function SetupChecklist({ file }: { file: TeacherFile }) {
+  const tx = useCopy()
+  const { number } = useI18n()
+  const setup = file.setup
+  if (!setup || !file.teacher.isActive || (setup.missing === 0 && setup.payMatchesShift)) return null
+  return (
+    <Section
+      id="tf-setup"
+      title={tx(T.setupTitle)}
+      action={
+        <Badge tone="warn">{setup.missing === 1 ? tx(T.oneStepLeft) : tx(T.stepsLeft, { n: number(setup.missing) })}</Badge>
+      }
+    >
+      <ul className="tf-setup">
+        {SETUP_STEPS.map(([key, label]) => (
+          <li key={key}>
+            <span>{tx(label)}</span>
+            <Badge tone={setup[key] ? 'ok' : 'outline'} dot>
+              {tx(setup[key] ? T.done : T.stepNotDone)}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+      {!setup.payMatchesShift && (
+        <p className="banner banner--warn" role="note">
+          {tx(T.payMismatch)}
+        </p>
+      )}
+    </Section>
   )
 }
 
@@ -420,15 +479,19 @@ function SendCodeButton({ teacherId }: { teacherId: string }) {
 }
 
 /** PD-43 Give sign-in, for a teacher who has no login. */
-function GiveSignInButton({ teacherId, basePath }: { teacherId: string; basePath: string }) {
+function GiveSignInButton({ show, teacherId, basePath }: { show: boolean; teacherId: string; basePath: string }) {
   const tx = useCopy()
   const [open, setOpen] = useState(false)
+  // Stable: the Dialog re-focuses whenever onClose changes.
+  const close = useCallback(() => setOpen(false), [])
   return (
     <>
-      <button type="button" className="btn" onClick={() => setOpen(true)}>
-        {tx(T.giveSignIn)}
-      </button>
-      {open && <GiveSignInDialog teacherId={teacherId} basePath={basePath} onClose={() => setOpen(false)} />}
+      {show && (
+        <button type="button" className="btn" onClick={() => setOpen(true)}>
+          {tx(T.giveSignIn)}
+        </button>
+      )}
+      {open && <GiveSignInDialog teacherId={teacherId} basePath={basePath} onClose={close} />}
     </>
   )
 }
