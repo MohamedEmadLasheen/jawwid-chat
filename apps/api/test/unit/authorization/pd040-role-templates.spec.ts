@@ -15,7 +15,7 @@
  *
  * Regenerate the block with: PD040_WRITE_SEED=1 npx jest pd040-role-templates
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PERMISSIONS } from '@platform/permissions/catalogue';
 import { legacyBundle } from '@platform/permissions/legacy-bundles';
@@ -25,6 +25,8 @@ import { collectRoutes } from '../../support/route-inventory';
 const MIGRATIONS = join(__dirname, '..', '..', '..', '..', '..', 'supabase', 'migrations');
 const BEGIN = '-- BEGIN GENERATED pd040 role templates -- by test/unit/authorization/pd040-role-templates.spec.ts; do not edit';
 const END = '-- END GENERATED pd040 role templates';
+/** What the generated rows sit in: the VALUES list's close and its column names. */
+const CLOSE = '      ) as v (key, name_en, name_ar, description, max_tier, permissions)';
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
 
 function render(templates: readonly AccessRoleTemplate[]): string {
@@ -42,7 +44,18 @@ const byKey = new Map(PERMISSIONS.map((p) => [p.key, p]));
 const designer = ACCESS_ROLE_TEMPLATES.find((t) => t.key === 'designer')!;
 
 describe('PD-40 PR-4: the template roles the migration seeds', () => {
-  it.each([...new Set(ACCESS_ROLE_TEMPLATES.map((t) => t.migration))])('the generated block of %s is up to date', (migration) => {
+  // Every migration that (re)defines chat.seed_access_role_templates carries the
+  // block: the templates seeded by then. A redefinition (PR-4b) repeats it.
+  const carriers = readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith('.sql') && readFileSync(join(MIGRATIONS, f), 'utf8').includes(BEGIN))
+    .sort();
+
+  it('every template is first seeded by a migration that carries the block', () => {
+    expect(carriers.length).toBeGreaterThan(0);
+    for (const t of ACCESS_ROLE_TEMPLATES) expect({ key: t.key, carried: carriers.includes(t.migration) }).toEqual({ key: t.key, carried: true });
+  });
+
+  it.each(carriers)('the generated block of %s is up to date, inside its VALUES list', (migration) => {
     const file = join(MIGRATIONS, migration);
     const sql = readFileSync(file, 'utf8');
     const start = sql.indexOf(BEGIN);
@@ -50,9 +63,12 @@ describe('PD-40 PR-4: the template roles the migration seeds', () => {
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const current = sql.slice(start, end + END.length);
-    const want = render(ACCESS_ROLE_TEMPLATES.filter((t) => t.migration === migration));
+    const want = render(ACCESS_ROLE_TEMPLATES.filter((t) => t.migration <= migration));
     if (process.env.PD040_WRITE_SEED === '1' && current !== want) writeFileSync(file, sql.replace(current, want));
-    expect(readFileSync(file, 'utf8').slice(start, start + want.length)).toBe(want);
+    const now = readFileSync(file, 'utf8');
+    expect(now.slice(start, start + want.length)).toBe(want);
+    // The line after the block closes the VALUES list it lives in.
+    expect(now.slice(start + want.length).split('\n')[1]).toBe(CLOSE);
   });
 
   it.each(ACCESS_ROLE_TEMPLATES.map((t) => [t.key, t] as const))('%s: a valid role key whose every key is in the catalogue and may go in a role', (_key, t) => {
@@ -87,6 +103,12 @@ describe('PD-40 PR-4: the Designer (plan §7, PD-41)', () => {
       designer.permissions.every((k) => legacyBundle('manager', { kind, position: 'manager' }).has(k)),
     );
     expect(grants).toEqual(['teachers']);
+  });
+
+  it('no route that sends a certificate (certificates.deliver) accepts either of its keys', () => {
+    const keys = new Set<string>(designer.permissions);
+    const sends = collectRoutes().filter((r) => r.access?.kind === 'requires' && r.access.anyOf.includes('certificates.deliver'));
+    expect(sends.filter((r) => r.access?.kind === 'requires' && r.access.anyOf.some((k) => keys.has(k))).map((r) => `${r.method} ${r.path}`)).toEqual([]);
   });
 
   it('everything its keys open is a certificates route, and something is', () => {
