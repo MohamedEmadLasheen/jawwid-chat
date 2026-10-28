@@ -25,6 +25,16 @@ export type Level = (typeof LEVELS)[number];
 export const CATEGORIES = ['financial', 'operational'] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type PriorityReason = 'manual' | 'due_soon' | 'overdue' | 'source';
+/** PD-47 PR-2: the sources of system tasks (chat.work_task_sweep). */
+export const SOURCE_TYPES = ['lesson_report', 'report_correction', 'lesson_ruling', 'leave_decision', 'violation_decision', 'case'] as const;
+export type SourceType = (typeof SOURCE_TYPES)[number];
+/**
+ * Sources whose work only one person can do, or whose owner is decided on the
+ * source's own page: their task is not reassigned here. A lesson report and a
+ * correction are the lesson's teacher's (change the lesson's teacher on the
+ * Schedule); a case follows its owner (assign it on the Cases page).
+ */
+const NOT_REASSIGNABLE: ReadonlySet<SourceType> = new Set(['lesson_report', 'report_correction', 'case']);
 /** The reference time and zone every effective level of one response is computed at. */
 interface Clock {
   asOf: string;
@@ -81,6 +91,13 @@ interface Row {
   standing: Standing | null;
   priority: Level;
   category: Category;
+  source_type: SourceType | null;
+  source_id: string | null;
+  source_state: 'pending' | 'withdrawn' | null;
+  /** The teacher a system task's decision is about (leave, violation, ruling): who a reassignment must stand to. */
+  source_teacher_id: string | null;
+  /** What the client words a system task's title with, read from the source now (never frozen). */
+  title_params: Record<string, unknown> | null;
   eff_level: Level;
   eff_reason: PriorityReason;
   /** Sort keys, as text to the microsecond, for the cursor. */
@@ -267,6 +284,25 @@ export class TaskService {
     return this.move(viewer, row, 'complete', note, Prisma.sql`state = 'completed', outcome = 'done'`, 'completed', mineSql(viewer));
   }
 
+  /**
+   * Exit 1 for a system task whose source went away without its work (a lesson
+   * cancelled, a request withdrawn): the assignee acknowledges it (plan Q4).
+   * Nothing closes it by itself.
+   */
+  async acknowledge(actorId: string, taskId: string) {
+    const { viewer, row } = await this.forAssignee(actorId, taskId, 'complete');
+    if (row.kind !== 'system' || row.source_state !== 'withdrawn') {
+      throw wrongState('only a task whose work no longer exists is acknowledged');
+    }
+    return this.move(viewer, row, 'complete', null, Prisma.sql`state = 'completed', outcome = 'acknowledged'`, 'completed', mineSql(viewer));
+  }
+
+  /** PD-47 PR-2: the worker's sweep of the task sources (chat.work_task_sweep). */
+  async sweep(): Promise<number> {
+    const [r] = await this.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.work_task_sweep() AS n`;
+    return r?.n ?? 0;
+  }
+
   /** Exit 2: the assignee says it is outside their responsibility. { comment } */
   async outOfScope(actorId: string, taskId: string, body: Record<string, unknown>) {
     const { viewer, row } = await this.forAssignee(actorId, taskId, 'out_of_scope');
@@ -307,9 +343,21 @@ export class TaskService {
     if (!decider && !handsOwn) {
       throw denied('a task is reassigned by the responsible manager, the super admin, or a department manager it was sent to');
     }
+    if (row.source_type && NOT_REASSIGNABLE.has(row.source_type)) {
+      throw denied(row.source_type === 'case'
+        ? 'a case\'s task follows its owner: assign the case on its page'
+        : 'only the lesson\'s teacher writes its report: change the lesson\'s teacher on the Schedule');
+    }
     const instructions = text(body.instructions, 'instructions', NOTE_MAX, false);
     const to = await this.targetOf(viewer, body.to);
     await this.requireLive(viewer.organizationId, to.principal);
+    // A teacher's decision (leave, violation, ruling) goes to someone who stands to that teacher.
+    if (row.source_teacher_id) {
+      const [ok] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+        SELECT ${to.principal.kind === 'staff'}::boolean
+               AND chat.staff_teacher_scope(${to.principal.id}::uuid, ${row.source_teacher_id}::uuid) IS NOT NULL AS ok`;
+      if (!ok?.ok) throw invalid('to: someone who supervises this teacher');
+    }
     const current = assigneeOf(row);
     if (current.kind === to.principal.kind && current.id === to.principal.id) throw invalid('to: the task is already theirs');
     if (!to.department && !viewer.superAdmin && to.principal.id !== viewer.id) {
@@ -659,6 +707,27 @@ export class TaskService {
              ${UNMANAGED} AS unmanaged,
              ${this.standingSql(viewer)} AS standing,
              t.priority, t.category, e.level AS eff_level, e.reason AS eff_reason,
+             t.source_type, t.source_id::text AS source_id, t.source_state,
+             CASE t.source_type
+               WHEN 'leave_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_leave_request q WHERE q.id = t.source_id)
+               WHEN 'violation_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_violation q WHERE q.id = t.source_id)
+               WHEN 'lesson_ruling' THEN (SELECT l.teacher_id::text FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id WHERE q.id = t.source_id)
+             END AS source_teacher_id,
+             CASE t.source_type
+               WHEN 'lesson_report' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at)
+                                            FROM chat.lesson l JOIN chat.learner ln ON ln.id = l.learner_id WHERE l.id = t.source_id)
+               WHEN 'report_correction' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at)
+                                                FROM chat.report_correction_request q JOIN chat.lesson l ON l.id = q.lesson_id
+                                                JOIN chat.learner ln ON ln.id = l.learner_id WHERE q.id = t.source_id)
+               WHEN 'lesson_ruling' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at)
+                                            FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id
+                                            JOIN chat.learner ln ON ln.id = l.learner_id WHERE q.id = t.source_id)
+               WHEN 'leave_decision' THEN (SELECT jsonb_build_object('teacherName', te.name, 'firstDay', q.first_day, 'lastDay', q.last_day)
+                                             FROM chat.teacher_leave_request q JOIN chat.teacher te ON te.id = q.teacher_id WHERE q.id = t.source_id)
+               WHEN 'violation_decision' THEN (SELECT jsonb_build_object('teacherName', te.name, 'kind', q.kind)
+                                                 FROM chat.teacher_violation q JOIN chat.teacher te ON te.id = q.teacher_id WHERE q.id = t.source_id)
+               WHEN 'case' THEN (SELECT jsonb_build_object('caseTitle', c.title) FROM chat.supervision_case c WHERE c.id = t.source_id)
+             END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,
              CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END AS k3,
@@ -710,6 +779,16 @@ export class TaskService {
       effectivePriority: r.eff_level,
       priorityReason: r.eff_reason,
       category: r.category,
+      /**
+       * PD-47 PR-2: a system task names its source; its title is the client's
+       * words for `titleKey` with `titleParams`, read from the source now.
+       * `sourceState: withdrawn` means the work no longer exists: the assignee
+       * acknowledges it, or a manager removes it.
+       */
+      source: r.source_type ? { type: r.source_type, id: r.source_id as string } : null,
+      sourceState: r.source_state,
+      titleKey: r.source_type ? `task.${r.source_type}` : null,
+      titleParams: r.title_params,
     };
   }
 }

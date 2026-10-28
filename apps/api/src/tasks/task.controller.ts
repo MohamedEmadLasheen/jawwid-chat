@@ -56,6 +56,13 @@ export class TaskController {
     return this.tasks.complete(actorId, id, body ?? {});
   }
 
+  /** The assignee, for a system task whose work no longer exists (PD-47 PR-2). */
+  @SelfService()
+  @Post('tasks/:id/acknowledge')
+  acknowledge(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.tasks.acknowledge(actorId, id);
+  }
+
   /** { comment }: the assignee. */
   @SelfService()
   @Post('tasks/:id/out-of-scope')
