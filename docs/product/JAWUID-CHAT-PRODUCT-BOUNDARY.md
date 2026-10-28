@@ -3546,6 +3546,63 @@ Mentioned row, Join / Step in / Not for me banner, Group Info rows; app @ picker
 
 ---
 
+### PD-44 · A real manager Dashboard on data the API already computes
+
+**Closed 2026-10-28** by the product owner: "Remove Inbox, rebuild Dashboard",
+then on the plan's nine questions "Approve all (Recommended)", with Q6
+corrected to "(6) The Operations manager sees Teacher Supervision figures
+(their access is now merged)". Plan: `pd044-manager-dashboard-plan.md`.
+
+**Decision.** The dead Dashboard, which called four `/dashboard/*` routes that
+never existed and measured the retired on-duty model, is rebuilt as counts of
+what is waiting. There are seven sections: chats, cases, lessons, enrolment,
+billing, teachers and structure.
+
+- **Who:** the super admin, inside the Admin Portal's Dashboard section, and
+  the three managers. Supervisors come later.
+- **Navigation:** Chat stays the landing page. The Dashboard moves from More to
+  the main navigation.
+- **What a tile shows:** a count, plus "oldest since" where it helps. Never a
+  name. Every tile links to the page that resolves it.
+
+**Canonical rule.** One read-only `GET /dashboard/<section>` per section.
+
+- **Permission:** each section `@Requires` the PD-40 key of the page its tiles
+  link to. There is no dashboard key of its own.
+- **Counting:** the count is a method of the service that owns that page, with
+  the page's own scope helper (PD-8, PD-26, PD-35), so the tile equals the list
+  it opens.
+- **Absent is not zero:** a tile outside the caller's basis is left out, never
+  sent as 0.
+- **Cost:** each request runs a fixed number of statements whatever the number
+  of rows.
+- **Freshness:** polling every 60 s; no realtime.
+- **Specific rules:** "today" is the calendar's zone; a chat waits from the
+  parent's first unanswered message; a family "without a supervisor" has any
+  child without one.
+
+**Implementation phase.** Eight PRs (plan §7). PR-1 serves `/dashboard/chats`
+and `/dashboard/cases`.
+
+**Consequences.**
+- The Admin Web's `/dashboard/header`, `/team-now`, `/needs-action` and
+  `/this-week` calls are removed (PR-2).
+- A "Locked / grace" filter is added to the Parents page (PR-5).
+- No migration and no new permission key.
+
+**Deprecated behaviour.**
+- The on-duty / unattended counts, "team now", workload scores and response
+  targets.
+- `chat.staff_workload.awaiting_reply` as a scope: it groups by
+  `family.owner_id`, not PD-8.
+
+**Not changed.** `/tasks` is kept, to be rebuilt later as its own feature
+(owner, 2026-10-28: "Keep and rebuild later").
+
+**Closed.** 2026-10-28.
+
+---
+
 ### Decisions still open after PD-1 to PD-36
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
