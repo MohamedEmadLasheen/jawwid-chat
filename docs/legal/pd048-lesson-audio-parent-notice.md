@@ -16,3 +16,19 @@ Rules:
 ## Arabic
 
 > **صوت النطق في الدروس.** تُشغِّل بعض الدروس نطق الحروف والكلمات والجمل، وهذا الصوت مولَّد بصوت حاسوبي. وقبل أن يسمع أيُّ طفل تسجيلًا، يستمع إليه اثنان من معلمينا ويعتمدانه. والكلمة التي لا يُحسن الصوت الحاسوبي نطقها لا يكون لها صوت. ولا يُقرأ القرآن الكريم بصوت حاسوبي أبدًا. ويُرسَل نصُّ دروسنا إلى مزوّد خدمة النطق لإنتاج الصوت، ولا تُرسَل أيُّ معلومات عنك أو عن طفلك.
+
+## The other two approved texts, as the app shows them
+
+Approved with the paragraph, on the same day and under the same rules. The app's strings (`lib/l10n/app_en.arb`, `lib/l10n/app_ar.arb`, keys `lessonAudio*`) are held to every text in this file, word for word, by `test/features/settings/lesson_audio_wording_test.dart`.
+
+**The line a parent ticks** (at sign-up; or once, at the next sign-in, for a family already enrolled):
+
+> I understand that lesson pronunciation audio is computer-generated and checked by the academy's teachers before use.
+
+> أُدرك أن صوت النطق في الدروس مولَّد حاسوبيًا، وأن معلمي الأكاديمية يراجعونه قبل استخدامه.
+
+**Parent Settings → About lesson audio:**
+
+> Pronunciation in the lessons is spoken by a computer voice. Every recording is checked and approved by two of our teachers before your child hears it. If the computer voice cannot say a word correctly, that word has no audio. Quran recitation is never computer-generated.
+
+> النطق في الدروس بصوت حاسوبي، وكلُّ تسجيل يراجعه ويعتمده اثنان من معلمينا قبل أن يسمعه طفلك. وإذا لم يُحسن الصوت الحاسوبي نطق كلمة، فلا يكون لها صوت. ولا تُتلى آيات القرآن الكريم بصوت حاسوبي أبدًا.

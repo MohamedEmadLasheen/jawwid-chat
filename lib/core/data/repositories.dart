@@ -358,7 +358,9 @@ abstract interface class ParentSignupRepository {
   Future<void> requestCode(String email);
 
   /// `POST /auth/signup/verify` -- sets the password. The caller then signs in normally.
-  Future<void> verify({required String email, required String code, required String password});
+  /// [lessonAudioNotice]: the version of the PD-48 lesson-audio notice the parent ticked,
+  /// recorded as their acknowledgement so the next sign-in does not ask again.
+  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice});
 }
 
 /// The build with no sign-up server (fixtures, tests that do not override it).
@@ -369,7 +371,7 @@ class NoParentSignupRepository implements ParentSignupRepository {
   Future<void> requestCode(String email) => throw UnsupportedError('no sign-up server in this build');
 
   @override
-  Future<void> verify({required String email, required String code, required String password}) =>
+  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice}) =>
       throw UnsupportedError('no sign-up server in this build');
 }
 
