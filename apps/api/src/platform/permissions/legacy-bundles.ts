@@ -121,6 +121,9 @@ const TEACHERS_MEMBER = k(
   'cases.view',
   'cases.manage',
   'feedback.view',
+  // PD-40 shadow QA (2026-10-28): the stats reader is the Teachers department
+  // (StatsService.isStatsReader), members included.
+  'reports.view',
   // PD-43 (owner Q1): teacher supervisors add teachers too, for themselves or
   // with no supervisor (decideTeacherOnboarding narrows them).
   'teachers.create',
@@ -140,6 +143,11 @@ const SALES_MEMBER = k(
   'new_students.view',
   'new_students.manage',
   'students.view',
+  // PD-40 shadow QA (2026-10-28): what Sales reaches today -- the course list
+  // and lessons (the enrolment form, PD-16), and the cases list (empty for
+  // Sales: a case is opened and owned only by Teachers or Operations).
+  'lessons.view',
+  'cases.view',
 );
 
 const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {

@@ -2,7 +2,7 @@ import { Controller, Get, Query, UseFilters } from '@nestjs/common';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
 import { QuranTextService } from './quran-text.service';
-import { Requires } from '../platform/permissions/route-access';
+import { SelfService } from '../platform/permissions/route-access';
 
 /**
  * The shared, verified Quran text (docs/product/quran-dataset-contract.md).
@@ -14,9 +14,8 @@ export class QuranController {
   constructor(private readonly quran: QuranTextService) {}
 
   /** ?surah=N&from=A&to=B, at most 50 ayat; each ayah with its hash and (when approved) its audio. */
-  // PD-40: the Quran text is the materials surface's; parents and teachers
-  // pass this layer, and staff who work with materials hold materials.view.
-  @Requires('materials.view')
+  // PD-40: shared reference text any signed-in account may read -- self-service.
+  @SelfService()
   @RateLimited(ActionScope.QURAN_READ)
   @Get('ayahs')
   ayahs(@Query() query: Record<string, unknown>) {
@@ -24,7 +23,7 @@ export class QuranController {
   }
 
   /** The approved, signed-off Tajweed marks of a range (none are shipped yet). */
-  @Requires('materials.view')
+  @SelfService()
   @RateLimited(ActionScope.QURAN_READ)
   @Get('tajweed')
   tajweed(@Query() query: Record<string, unknown>) {

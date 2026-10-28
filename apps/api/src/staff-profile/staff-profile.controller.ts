@@ -26,7 +26,9 @@ export class StaffProfileController {
   constructor(private readonly profiles: StaffProfileService) {}
 
   /** The caller's direct reports (managers; the super admin's reports). */
-  @Requires('staff_profiles.team')
+  // PD-40: the caller's own direct reports, filtered by the profile policy,
+  // so self-service like /staff-profiles/:staffId.
+  @SelfService()
   @Get('team')
   team(@CurrentActor() actor: Actor) {
     return this.profiles.team(actor);

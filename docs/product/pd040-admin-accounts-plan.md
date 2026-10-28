@@ -531,3 +531,31 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 - No staff impersonation.
 - 2FA as a follow-up PD, mandatory for accounts holding finance or family-contact permissions.
 - "Deactivate" in the UI means reversible suspension; permanent offboarding stays with the super admin.
+
+---
+
+## 14. Shadow QA (2026-10-28): what answers 200 today stays allowed
+
+On the systest stack at main `a547b0e2`, QA ran every parameter-free Admin Web GET for each seeded persona, with the guard in shadow mode. The results:
+- **No undeclared routes, and the super admin was denied nothing.**
+- The Operations and Teachers managers: no route that answers 200 would be refused.
+- **Eleven routes that answer 200 today would be refused once the guard enforces.**
+
+`test/unit/authorization/pd040-shadow-qa.spec.ts` now pins every persona's 200 routes. Fixture: `fixtures/pd040-systest-200-a547b0e2.json`. Each pair was decided from the current Layer-2 rule:
+
+| Persona | Route | Layer 2 today | Decision |
+|---|---|---|---|
+| Sales manager | `GET /admin/impersonations`, `/:id/actions` | `ImpersonationService.list` returns the caller's own support sessions (the super admin's: all) | **Declaration corrected** to `@SelfService()`. It's the caller's own record. Starting, re-tokening and ending a session stay `accounts.support_session`, and Sales still cannot start one (the #167 rule). |
+| Sales manager | `GET /cases` | any staff member, filtered to cases they own, opened or manage. Sales can open none (subject scope) and own none (targets are Teachers or Operations), so it's an empty list | **Intended, kept as is:** `cases.view` goes into the Sales bundles. Not delegable. |
+| Sales manager | `GET /courses`, `/lessons`, `/correction-requests` | courses: any staff. Lessons and correction requests: any staff, filtered by standing and visibility | **Intended:** Sales picks the course on the enrolment form (PD-16). `lessons.view` goes into the Sales bundles. |
+| Sales manager | `GET /materials/quran/surahs` (and `/quran/ayahs`, `/quran/tajweed`) | any signed-in account ("the shared, verified Quran text") | **Declaration corrected** to `@SelfService()`. It's reference text that holds nothing about anyone. |
+| Operations supervisor, Teachers supervisor | `GET /org/group-candidates` | any conversation staff member, scoped to the families they supervise; it feeds "open a family group" | **Declaration corrected** to `chat.manage`, the key of `POST /conversations/family-group`. |
+| Operations supervisor, Teachers supervisor | `GET /staff-profiles/team` | any staff member, filtered to the direct reports the profile policy lets them view | **Declaration corrected** to `@SelfService()`, like `/staff-profiles/:staffId`. |
+| Teachers supervisor | `GET /stats/teachers` | `StatsService.isStatsReader`: the Teachers department (members too) and the super admin | **Intended:** `reports.view` goes into Teachers members' bundle. |
+
+None of these needed a tighter Layer 2: every 200 matched the service rule as written.
+
+The bundle rows are in migration `20261028120000_chat_pd040_shadow_qa_bundles` (a generated `LATER` block; the `20261027190000` seed is frozen). The integration check is `pd040-access-roles` (table equals TypeScript).
+
+Not covered: parameterised and write routes, and the Flutter staff app. Those come with the PR-6 QA pass.
+

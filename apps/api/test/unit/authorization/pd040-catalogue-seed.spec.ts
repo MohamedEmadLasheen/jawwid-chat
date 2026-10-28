@@ -47,6 +47,20 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
       ['supervisor', 'teachers', 'teachers.create'],
     ],
   },
+  {
+    // PD-40 shadow QA (2026-10-28): what Sales and Teachers-department members
+    // reach today, so that enforcing refuses none of it (plan §14).
+    migration: '20261028120000_chat_pd040_shadow_qa_bundles.sql',
+    tag: 'pd040qa',
+    permissions: [],
+    bundles: [
+      ['manager', 'sales', 'cases.view'],
+      ['manager', 'sales', 'lessons.view'],
+      ['supervisor', 'sales', 'cases.view'],
+      ['supervisor', 'sales', 'lessons.view'],
+      ['supervisor', 'teachers', 'reports.view'],
+    ],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));
