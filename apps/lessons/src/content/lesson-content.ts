@@ -66,6 +66,12 @@ export interface ResolvedContent {
   didYouKnow: string[];
   /** Lines held back for teacher review. */
   held: number;
+  /**
+   * The Teachers department signed the file off. Until then the lesson shows
+   * NOTHING of it -- only the verified Quran (department head, 2026-10-28: content
+   * reaches children only after verified and approved review, as for Tajweed).
+   * A flagged line is held back even then; CI refuses an approved file with one.
+   */
   approved: boolean;
 }
 
@@ -134,7 +140,7 @@ export function resolveContent(content: unknown, surah: Surah): ResolvedContent 
       reflection: shown(content.reflection) ? { question: content.reflection.question, ideas: content.reflection.ideas } : null,
       didYouKnow: content.didYouKnow.filter(shown).map((d) => d.text),
       held,
-      approved: content.review.status === 'approved' && held === 0,
+      approved: content.review.status === 'approved',
     };
   } catch {
     // A bad position (Unresolved) or a malformed file (a TypeError on a missing

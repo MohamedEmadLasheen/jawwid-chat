@@ -14,9 +14,10 @@ import { Verses } from './Verses';
 /**
  * One surah lesson, the same for all 114 (PD-29 materials quality P0-3): the
  * verified text, one audio controller, one section header, one star model.
- * A surah with reviewed content (src/content/, P0-4) adds its tafsir, word
- * meanings, games, quiz and lessons learned; content that does not resolve
- * against the verified text is refused whole, and the Quran sections remain.
+ * A surah with APPROVED content (src/content/, P0-4) adds its tafsir, word
+ * meanings, games, quiz and lessons learned. Content still pending review, or
+ * that does not resolve against the verified text, shows nothing: the Quran
+ * sections remain, with a note.
  * The Quran text itself only ever comes from the dataset.
  * The listening star needs an ayah actually played, so while recitation is
  * off (until the owner confirms the rights) it cannot be earned.
@@ -53,7 +54,9 @@ export function SurahLesson({
     () => (raw === null ? undefined : loaded ? resolveContent(raw, loaded) : undefined),
     [raw, loaded],
   );
-  const sections = resolved ? CONTENT_SECTIONS : QURAN_SECTIONS;
+  // Content reaches the child only once the Teachers department approved it.
+  const approved = resolved?.approved ? resolved : null;
+  const sections = approved ? CONTENT_SECTIONS : QURAN_SECTIONS;
   const stars = useMemo(() => new StarLedger(sections), [surah, sections]);
 
   useEffect(() => {
@@ -120,8 +123,8 @@ export function SurahLesson({
           {'☆'.repeat(stars.max - stars.total)}
         </p>
       </header>
-      {resolved?.intro ? <p className="intro">{resolved.intro}</p> : null}
-      {resolved === null ? (
+      {approved?.intro ? <p className="intro">{approved.intro}</p> : null}
+      {resolved !== undefined && !approved ? (
         <p className="note">محتوى الدرس قيد المراجعة، فعُرض نص السورة وحده.</p>
       ) : null}
       <SectionHeader sections={sections} current={section} done={(s) => stars.has(s)} onSelect={go} />
@@ -153,9 +156,9 @@ export function SurahLesson({
               </button>
             </div>
           ) : null}
-          {selected !== null && resolved ? (
+          {selected !== null && approved ? (
             <p className="tafsir" data-testid="tafsir">
-              {resolved.tafsir.get(selected) ?? 'شرح هذه الآية قيد المراجعة.'}
+              {approved.tafsir.get(selected) ?? 'شرح هذه الآية قيد المراجعة.'}
             </p>
           ) : null}
           <button type="button" className="primary" onClick={() => earn('verses')}>
@@ -164,10 +167,10 @@ export function SurahLesson({
         </section>
       ) : null}
 
-      {section === 'meanings' && resolved ? (
+      {section === 'meanings' && approved ? (
         <section aria-label="المعاني">
           <ul className="meanings">
-            {resolved.words.map((w) => (
+            {approved.words.map((w) => (
               <li key={`${w.ayah}:${w.text}`}>
                 <span className="meanings__word">{w.text}</span>
                 <span className="meanings__meaning">{w.meaning}</span>
@@ -180,15 +183,15 @@ export function SurahLesson({
         </section>
       ) : null}
 
-      {section === 'complete' && resolved ? (
-        <CompleteAyah ayahs={ayahs} items={resolved.complete} seed={shuffleSeed} onComplete={() => earn('complete')} />
+      {section === 'complete' && approved ? (
+        <CompleteAyah ayahs={ayahs} items={approved.complete} seed={shuffleSeed} onComplete={() => earn('complete')} />
       ) : null}
 
       {section === 'order' ? <OrderAyat ayahs={ayahs} seed={shuffleSeed} onComplete={() => earn('order')} /> : null}
 
-      {section === 'quiz' && resolved ? <Quiz quiz={resolved.quiz} seed={shuffleSeed} onComplete={() => earn('quiz')} /> : null}
+      {section === 'quiz' && approved ? <Quiz quiz={approved.quiz} seed={shuffleSeed} onComplete={() => earn('quiz')} /> : null}
 
-      {section === 'benefits' && resolved ? <Benefits content={resolved} onDone={() => earn('benefits')} /> : null}
+      {section === 'benefits' && approved ? <Benefits content={approved} onDone={() => earn('benefits')} /> : null}
 
       <footer className="attribution">
         نص القرآن الكريم: <a href={state.surah.sourceUrl} rel="noreferrer">{state.surah.attribution}</a>

@@ -2,7 +2,7 @@
 
 The reference lesson for the engine. Content file: `apps/lessons/src/content/surah-085.json`. It was extracted as text from the old lesson (jawwid-lessons @ c231532, read only, never built or run) and reviewed against the verified Tanzil text.
 
-**How review works.** A line whose `review` is set is **held back**: the engine does not show it. A teacher from the Teachers department resolves each line by correcting it, or writing it where it is missing, and clears its `review`. Then they set `review.status` to `approved` with their name in `review.by`. The CI check (`scripts/lessons/check-lesson-content.py`) refuses an approved file that still has a flagged line.
+**How review works.** Until a Teachers department reviewer approves the file (`review.status` = `approved`), the lesson shows **nothing** from it, only the verified Quran (department head, 2026-10-28). Even then, a line whose `review` is set is **held back**: the engine does not show it. A teacher from the Teachers department resolves each line by correcting it, or writing it where it is missing, and clears its `review`. Then they set `review.status` to `approved` with their name in `review.by`. The CI check (`scripts/lessons/check-lesson-content.py`) refuses an approved file that still has a flagged line.
 
 ## What the review found in the old lesson
 
@@ -34,4 +34,4 @@ The reference lesson for the engine. Content file: `apps/lessons/src/content/sur
 | Quiz q5 | ما معنى كلمة | Says al-buruj are "the big stars". Common tafsir gives the great stars, or the mansions of the sun and moon. Teacher to choose the wording. |
 | Did you know | هل تعلم أن البروج هي النجوم الكبيرة في السماء؟ | Says al-buruj are "the big stars". Common tafsir gives the great stars, or the mansions of the sun and moon. Teacher to choose the wording. |
 
-18 lines held in all. Everything else in the file is shown as extracted; it still needs the Teachers department sign-off (`review.status`) like the rest.
+18 lines held in all. Nothing in the file is shown until the Teachers department signs it off; the unflagged lines need that review too.
