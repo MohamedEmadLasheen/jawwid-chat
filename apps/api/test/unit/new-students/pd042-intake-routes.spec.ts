@@ -35,6 +35,7 @@ describe('/family-intake: who passes each route\'s key', () => {
     ['options', ENTRANTS],
     ['entered', ENTRANTS],
     ['family', ENTRANTS],
+    ['history', ENTRANTS],
     ['enter', ENTRANTS],
     ['addChildren', ENTRANTS],
     ['setSignInEmail', ENTRANTS],
@@ -58,7 +59,7 @@ describe('/family-intake: who passes each route\'s key', () => {
     const handlers = Object.getOwnPropertyNames(FamilyIntakeController.prototype).filter((n) => n !== 'constructor').sort();
     expect(handlers).toEqual([
       'addChildren', 'assignOperationsSupervisor', 'carriedOverOf', 'carryOver', 'changeSalesOwner', 'enter', 'entered',
-      'family', 'options', 'setSignInEmail', 'suggestSupervisor', 'voidCarryOver',
+      'family', 'history', 'options', 'setSignInEmail', 'suggestSupervisor', 'voidCarryOver',
     ]);
   });
 });
