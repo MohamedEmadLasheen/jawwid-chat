@@ -471,8 +471,14 @@ export enum CommErrorCode {
   INTAKE_NOT_FOUND = 'COMM.INTAKE_NOT_FOUND',
   /** A field failed validation (the message names it). 400. */
   INTAKE_INVALID = 'COMM.INTAKE_INVALID',
-  /** The intake id was used by someone else, or the change does not apply any more. 409. */
+  /** The intake id was used by someone else or for another body, or the change does not apply any more. 409. */
   INTAKE_STATE = 'COMM.INTAKE_STATE',
+  /**
+   * Entering families waits for the contact-key backfill (every existing
+   * family's parents keyed), so that no parent is entered twice. 409; the
+   * operator runs family-contact-keys-backfill --apply.
+   */
+  INTAKE_NOT_READY = 'COMM.INTAKE_NOT_READY',
   /**
    * This parent is already in Chat (the e-mail or the number). `detail` names
    * the family only when the caller may handle it; otherwise it says nothing

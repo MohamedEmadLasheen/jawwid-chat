@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
@@ -105,12 +106,14 @@ export class FamilyIntakeService {
       select: { id: true, name: true },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
-    return { standing: s.standing, manager: s.manager, onBehalfOf, teachers };
+    return { standing: s.standing, manager: s.manager, ready: await this.ready(), onBehalfOf, teachers };
   }
 
   async enter(actorId: string, body: unknown) {
     const s = await this.standing(actorId);
+    await this.requireReady();
     const input = parseIntake(body);
+    const hash = payloadHash({ route: 'enter', parent: input.parent, children: input.children, payment: input.payment, onBehalfOf: input.onBehalfOf, confirmOver: input.confirmOver });
     const owner = await this.ownership(s, input.onBehalfOf);
     this.requireOverConfirmed(s, input.children, input.confirmOver);
     for (const c of input.children) if (c.teacherId) await this.requireTeacher(s.org, c.teacherId);
@@ -121,7 +124,7 @@ export class FamilyIntakeService {
 
     const created = await this.write(s, async (tx) => {
       await this.lock(tx, [input.intakeId, ...keys.map((k) => k.hash)]);
-      const replay = await this.replay(tx, s, input.intakeId);
+      const replay = await this.replay(tx, s, input.intakeId, hash, null);
       if (replay) return replay;
       await this.refuseExistingParent(tx, s, input.parent.email, keys.map((k) => k.hash));
 
@@ -154,6 +157,7 @@ export class FamilyIntakeService {
         data: {
           id: input.intakeId, organizationId: s.org, familyId, contactId: contact.id, accountId: account?.id ?? null,
           learnerIds: learners.map((l) => l.id), origin: 'intake', kind: 'new_family', assignedBy: s.actor.actorId,
+          intakePayloadHash: hash,
         },
       });
       await this.carryOverAll(tx, s, learners);
@@ -197,24 +201,26 @@ export class FamilyIntakeService {
 
   async addChildren(actorId: string, familyId: string, body: unknown) {
     const s = await this.standing(actorId);
+    await this.requireReady();
     const input = parseAddChildren(body);
     const family = await this.requireOwnFamily(s, familyId);
     this.requireOverConfirmed(s, input.children, input.confirmOver);
     for (const c of input.children) if (c.teacherId) await this.requireTeacher(s.org, c.teacherId);
-
-    // The family's Operations supervisor: placed by them, or by the Operations
-    // manager / super admin. A Sales owner adds the child; the manager places it.
-    const supervisors = await this.prisma.$queryRaw<Array<{ supervisor_id: string }>>`
-      SELECT DISTINCT ls.supervisor_id::text AS supervisor_id
-        FROM chat.learner_supervision ls JOIN chat.learner l ON l.id = ls.learner_id
-       WHERE l.family_id = ${family.id}::uuid`;
-    const only = supervisors.length === 1 ? supervisors[0]!.supervisor_id : null;
-    const supervisorId = only && (only === s.actor.actorId || s.standing === 'operations_manager' || s.standing === 'super_admin') ? only : null;
+    const hash = payloadHash({ route: 'add_children', familyId: family.id, children: input.children, confirmDuplicate: input.confirmDuplicate, confirmOver: input.confirmOver });
 
     const created = await this.write(s, async (tx) => {
       await this.lock(tx, [input.intakeId, family.id]);
-      const replay = await this.replay(tx, s, input.intakeId);
+      const replay = await this.replay(tx, s, input.intakeId, hash, family.id);
       if (replay) return replay;
+      // The family's Operations supervisor, read under the family's lock: placed
+      // by them, or by the Operations manager / super admin. A Sales owner adds
+      // the child; the manager places it.
+      const supervisors = await tx.$queryRaw<Array<{ supervisor_id: string }>>`
+        SELECT DISTINCT ls.supervisor_id::text AS supervisor_id
+          FROM chat.learner_supervision ls JOIN chat.learner l ON l.id = ls.learner_id
+         WHERE l.family_id = ${family.id}::uuid`;
+      const only = supervisors.length === 1 ? supervisors[0]!.supervisor_id : null;
+      const supervisorId = only && (only === s.actor.actorId || s.standing === 'operations_manager' || s.standing === 'super_admin') ? only : null;
       if (!input.confirmDuplicate) {
         // The same child: the same name (folded), and the same date of birth when both are known.
         const existing = await tx.$queryRaw<Array<{ name: string; birth: string | null }>>`
@@ -233,6 +239,7 @@ export class FamilyIntakeService {
         data: {
           id: input.intakeId, organizationId: s.org, familyId: family.id, contactId: family.contactId, accountId: family.accountId,
           learnerIds: learners.map((l) => l.id), origin: 'intake', kind: 'added_children', assignedBy: s.actor.actorId,
+          intakePayloadHash: hash,
         },
       });
       await this.carryOverAll(tx, s, learners);
@@ -241,7 +248,7 @@ export class FamilyIntakeService {
         after: { origin: 'intake', kind: 'added_children', learnerIds: learners.map((l) => l.id), supervisorId },
         reason: 'child added by hand (PD-42)',
       });
-      return { replay: false as const, enrolmentId: input.intakeId, familyId: family.id, contactId: family.contactId, learners };
+      return { replay: false as const, enrolmentId: input.intakeId, familyId: family.id, contactId: family.contactId, learners, supervisorId };
     });
 
     if (created.replay) return created.result;
@@ -250,7 +257,7 @@ export class FamilyIntakeService {
       enrolmentId: created.enrolmentId,
       familyId: created.familyId,
       learnerIds: created.learners.map((l) => l.id),
-      supervision: supervisorId ? 'placed' : 'needs_operations_supervisor',
+      supervision: created.supervisorId ? 'placed' : 'needs_operations_supervisor',
       schedules,
       replay: false,
     };
@@ -300,6 +307,7 @@ export class FamilyIntakeService {
   /** { email } -- the sign-in e-mail of a parent entered without one; their account is made now. */
   async setSignInEmail(actorId: string, familyId: string, body: unknown) {
     const s = await this.standing(actorId);
+    await this.requireReady();
     const email = parseSignInEmail(body);
     const family = await this.requireOwnFamily(s, familyId);
     if (family.accountId) throw new CommError(CommErrorCode.INTAKE_STATE, 'this parent already has a sign-in e-mail', 409);
@@ -481,11 +489,18 @@ export class FamilyIntakeService {
     }
   }
 
-  /** S1: the same intake id again. The same caller gets what the first wrote; anyone else a refusal. */
-  private async replay(tx: Tx, s: Standing, intakeId: string) {
+  /**
+   * S1: the same intake id again. The same caller sending the same thing (the
+   * same payload hash, for the same family) gets what the first wrote; any other
+   * use of the id is refused.
+   */
+  private async replay(tx: Tx, s: Standing, intakeId: string, hash: string, familyId: string | null) {
     const done = await tx.studentEnrolment.findUnique({ where: { id: intakeId } });
     if (!done) return null;
-    if (done.assignedBy !== s.actor.actorId || done.organizationId !== s.org || done.origin !== 'intake') {
+    if (
+      done.assignedBy !== s.actor.actorId || done.organizationId !== s.org || done.origin !== 'intake'
+      || done.intakePayloadHash !== hash || (familyId !== null && done.familyId !== familyId)
+    ) {
       throw new CommError(CommErrorCode.INTAKE_STATE, 'this intake id was already used', 409);
     }
     return {
@@ -499,18 +514,20 @@ export class FamilyIntakeService {
 
   /**
    * S1: the parent is already in Chat -- their e-mail is an account, or their
-   * e-mail or number is a contact key of the academy. The family is named only
-   * to a caller who may handle it.
+   * e-mail or number is a contact key of the academy. One answer for every case
+   * the caller may not act on (another supervisor's family, a staff or teacher
+   * login): it says nothing more. The family is named only to a caller who OWNS
+   * it, so "add the children here" is offered only where they may add them.
    */
   private async refuseExistingParent(tx: Tx, s: Standing, email: string | null, hashes: string[]) {
     let familyId: string | null = null;
     if (email) {
       const account = await tx.account.findUnique({ where: { subject: email }, select: { id: true, kind: true } });
-      if (account && account.kind !== 'family') throw new CommError(CommErrorCode.INTAKE_STATE, 'this e-mail belongs to a staff or teacher account', 409);
+      if (account && account.kind !== 'family') throw unavailable();
       if (account) {
         const contact = await tx.contact.findFirst({ where: { accountId: account.id, organizationId: s.org }, select: { familyId: true } });
         familyId = contact?.familyId ?? null;
-        if (!familyId) throw new CommError(CommErrorCode.PARENT_EXISTS, 'this parent is already in Chat; ask your manager', 409);
+        if (!familyId) throw unavailable();
       }
     }
     if (!familyId && hashes.length > 0) {
@@ -518,13 +535,26 @@ export class FamilyIntakeService {
       familyId = key?.familyId ?? null;
     }
     if (!familyId) return;
-    const [{ may }] = await tx.$queryRaw<Array<{ may: boolean }>>`
-      SELECT chat.staff_may_handle_family(${s.actor.actorId}::uuid, ${familyId}::uuid) AS may`;
-    if (!may) throw new CommError(CommErrorCode.PARENT_EXISTS, 'this parent is already in Chat; ask your manager', 409);
+    const [{ owns }] = await tx.$queryRaw<Array<{ owns: boolean }>>`
+      SELECT chat.staff_owns_family(${s.actor.actorId}::uuid, ${familyId}::uuid) AS owns`;
+    if (!owns) throw unavailable();
     const family = await tx.family.findUnique({ where: { id: familyId }, select: { id: true, primaryContactId: true, displayName: true } });
     throw new CommError(CommErrorCode.PARENT_EXISTS, 'this parent is already in Chat; add the children to their family', 409, {
       familyId, contactId: family?.primaryContactId ?? null, parentName: family?.displayName ?? null,
     });
+  }
+
+  /** The intake waits for every existing family's parents to be keyed (review of #202, P1-2). */
+  private async ready(): Promise<boolean> {
+    const [row] = await this.prisma.$queryRaw<Array<{ ready: boolean }>>`
+      SELECT coalesce((SELECT value = 'true'::jsonb FROM chat.config WHERE key = 'intake.contact_keys_ready'), false) AS ready`;
+    return row?.ready === true;
+  }
+
+  private async requireReady() {
+    if (!(await this.ready())) {
+      throw new CommError(CommErrorCode.INTAKE_NOT_READY, 'entering families opens once every existing family\'s parents are keyed (family-contact-keys-backfill)', 409);
+    }
   }
 
   private async requireOwnFamily(s: Standing, familyId: string) {
@@ -572,11 +602,21 @@ export function dbRefusal(e: unknown): unknown {
   const raw = String(meta?.message ?? e.message);
   const sqlstate = meta?.code ?? (/\b(42501|23514|23505)\b/.exec(raw)?.[1] ?? '');
   const words = (/ERROR:\s*([^\n`]+)/.exec(raw)?.[1] ?? raw).trim();
-  if (/already in Chat/.test(raw)) return new CommError(CommErrorCode.PARENT_EXISTS, 'this parent is already in Chat; ask your manager', 409);
+  if (/already in Chat/.test(raw)) return unavailable();
   if (sqlstate === '42501' || /insufficient_privilege/.test(raw)) return new CommError(CommErrorCode.INTAKE_DENIED, words);
   if (sqlstate === '23514' || /check_violation|violates check constraint/.test(raw)) return new CommError(CommErrorCode.INTAKE_INVALID, words, 400);
   if (sqlstate === '23505') return new CommError(CommErrorCode.INTAKE_STATE, 'this was entered at the same moment by someone else; reload', 409);
   return e;
+}
+
+/** The one answer for a parent the caller may not act on (S1): nothing more is said. */
+function unavailable() {
+  return new CommError(CommErrorCode.PARENT_EXISTS, 'this e-mail or number cannot be used here; ask your manager', 409);
+}
+
+/** What an intake asked for, as a hash: a replay must ask for the same thing. */
+export function payloadHash(payload: unknown): string {
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
 function notFound() {

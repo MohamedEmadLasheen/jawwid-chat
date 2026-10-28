@@ -272,8 +272,8 @@ jobs:
           # PD-35: strict teacher-supervisor scope is off everywhere until the owner sets
           # the variable to 'true' (department head, 2026-10-26).
           TEACHER_SUPERVISOR_STRICT_SCOPE: ${{ vars.TEACHER_SUPERVISOR_STRICT_SCOPE || 'false' }}
-          # PD-42: the Sales family scope stays 'all' until the owner sets 'own'.
-          SALES_FAMILY_SCOPE: ${{ vars.SALES_FAMILY_SCOPE || 'all' }}
+          # PD-42: NOT defaulted -- unset keeps the value stored in chat.config.
+          SALES_FAMILY_SCOPE: ${{ vars.SALES_FAMILY_SCOPE }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           OTEL_SERVICE_NAME: jawwid-chat-api
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}

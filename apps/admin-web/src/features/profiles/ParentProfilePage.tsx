@@ -326,7 +326,7 @@ function ChildrenSection({ profile }: { profile: ParentProfile }) {
   // PD-42: "Add child", when the server says this viewer enters families (it decides the family).
   const intake = useIntakeOptions()
   const [adding, setAdding] = useState(false)
-  const action = intake.data ? (
+  const action = intake.data?.ready ? (
     <button type="button" className="btn btn--sm" onClick={() => setAdding(true)}>
       {tx(I.addChild)}
     </button>

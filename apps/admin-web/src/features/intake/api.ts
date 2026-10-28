@@ -11,6 +11,8 @@ export interface IntakeOptions {
   standing: IntakeStanding
   /** May enter completed lessons above a package (the super admin, the Operations Manager, the Sales Manager). */
   manager: boolean
+  /** Entering opens once every existing family's parents are keyed (the contact-key backfill). */
+  ready: boolean
   /** For a manager: the supervisors they may enter a family for. */
   onBehalfOf: Array<{ id: string; name: string; kind: 'operations' | 'sales' }>
   teachers: Array<{ id: string; name: string }>

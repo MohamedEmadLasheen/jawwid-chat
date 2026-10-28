@@ -20,6 +20,10 @@
 --       names when sales_scope_refuses says so. One function per table (a
 --       shared trigger cannot read a column only one table has). Reads are
 --       server-side only (no request-role grants): the API's scope is their gate.
+--   a guard on a parent's name and photo (chat.contact) and a family's
+--       country (chat.family), which carry no actor column: checked when the
+--       API names the acting staff member (chat.acting_staff_id).
+--   student_enrolment.intake_payload_hash: a replayed intake is the same intake.
 --   parents.edit for the Sales bundles (manager:sales, supervisor:sales): the
 --       service limits a Sales member to the families they own
 --       (BillingAccess.editOwnedOnly), whatever the switch says.
@@ -188,6 +192,87 @@ create trigger zz_pd042_sales_scope
   for each row execute function chat.pd042_sales_scope_learner_subscription();
 
 -- ---------------------------------------------------------------------------
+-- Writes with no actor column: a parent's name and photo, a family's country
+-- ---------------------------------------------------------------------------
+-- chat.contact and chat.family carry no column naming who changed them. The
+-- API's writers a Sales member reaches (the Parent Profile's contact edit and
+-- photo) name the acting staff member for their own transaction in
+-- chat.acting_staff_id, and these guards refuse the write when the switch says
+-- so. A writer that names nobody (the parent editing their own profile, the
+-- seed) is not a Sales member's and passes, as before.
+
+create or replace function chat.pd042_acting_staff()
+returns uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select nullif(current_setting('chat.acting_staff_id', true), '')::uuid;
+$$;
+
+create or replace function chat.pd042_sales_scope_contact()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if (new.name is distinct from old.name or new.avatar_object_key is distinct from old.avatar_object_key)
+     and chat.sales_scope_refuses(chat.pd042_acting_staff(), new.family_id) then
+    raise exception 'a Sales supervisor handles only their own families' using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger zz_pd042_sales_scope
+  before update on chat.contact
+  for each row execute function chat.pd042_sales_scope_contact();
+
+create or replace function chat.pd042_sales_scope_family()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if new.country_code is distinct from old.country_code
+     and chat.sales_scope_refuses(chat.pd042_acting_staff(), new.id) then
+    raise exception 'a Sales supervisor handles only their own families' using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger zz_pd042_sales_scope
+  before update on chat.family
+  for each row execute function chat.pd042_sales_scope_family();
+
+-- ---------------------------------------------------------------------------
+-- A replayed intake must be the same intake (review of #202, P2)
+-- ---------------------------------------------------------------------------
+-- The API stores a hash of what the intake asked for; a replay of the same id
+-- with another body is refused. Written with the enrolment, never changed.
+
+alter table chat.student_enrolment add column intake_payload_hash text
+  check (intake_payload_hash is null or intake_payload_hash ~ '^[0-9a-f]{64}$');
+
+create or replace function chat.pd042_intake_payload_hash_fixed()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if new.intake_payload_hash is distinct from old.intake_payload_hash then
+    raise exception 'what an intake asked for never changes' using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger student_enrolment_payload_hash_fixed
+  before update on chat.student_enrolment
+  for each row execute function chat.pd042_intake_payload_hash_fixed();
+
+-- ---------------------------------------------------------------------------
 -- The permission rows (PD-40's catalogue changes only by migration)
 -- ---------------------------------------------------------------------------
 
@@ -212,3 +297,7 @@ revoke all on function chat.pd042_sales_scope_family_instalment() from public;
 revoke all on function chat.pd042_sales_scope_payment_request() from public;
 revoke all on function chat.pd042_sales_scope_payment() from public;
 revoke all on function chat.pd042_sales_scope_learner_subscription() from public;
+revoke all on function chat.pd042_acting_staff() from public;
+revoke all on function chat.pd042_sales_scope_contact() from public;
+revoke all on function chat.pd042_sales_scope_family() from public;
+revoke all on function chat.pd042_intake_payload_hash_fixed() from public;

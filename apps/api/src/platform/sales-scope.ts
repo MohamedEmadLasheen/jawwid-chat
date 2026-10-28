@@ -13,11 +13,14 @@ import type { SalesFamilyScope } from './pd012-policy';
  * the variable leaves the row as it is (no last-boot-wins), and a boot that
  * turns the stored value over says so loudly.
  *
- *   all (default)  every Sales member reads every family, as before PD-42.
+ *   unset          writes nothing: the stored value stands ('all' until written).
+ *   all            every Sales member reads every family, as before PD-42.
  *   own            a Sales member reads and writes only the families they own
  *                  (chat.family_sales_owner); the Sales manager keeps every
  *                  family. The owner turns it on only after the intake from
  *                  Jawwid Core is complete and verified (D2).
+ *
+ * Any other value refuses to boot (fail closed).
  *
  * Whatever the switch says, PD-42's own actions (enter, add a child, carry a
  * package over, edit the contact record) are a Sales member's for the families
@@ -26,7 +29,9 @@ import type { SalesFamilyScope } from './pd012-policy';
 export function salesFamilyScopeFromEnv(): SalesFamilyScope | null {
   const raw = (process.env.SALES_FAMILY_SCOPE ?? '').trim().toLowerCase();
   if (raw === '') return null;
-  return raw === 'own' ? 'own' : 'all';
+  if (raw === 'own' || raw === 'all') return raw;
+  // Fail closed: a typo must never silently widen (or narrow) who reads families.
+  throw new Error(`SALES_FAMILY_SCOPE must be 'all' or 'own' (or unset to keep the stored value); got '${process.env.SALES_FAMILY_SCOPE}'`);
 }
 
 @Injectable()

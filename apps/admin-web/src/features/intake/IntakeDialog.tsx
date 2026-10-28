@@ -256,10 +256,10 @@ export function IntakeDialog({ options, initial, onClose }: { options: IntakeOpt
                 ), { required: true, hint: tx(I.phoneHint) })}
                 {field('country', tx(I.country), (id) => (
                   <select id={id} className="input" value={country} onChange={(e) => setCountry(e.target.value)}>
-                    <option value="">EG</option>
-                    {['AE', 'SA', 'KW', 'QA', 'BH', 'OM', 'JO', 'GB', 'US', 'CA', 'AU', 'DE', 'FR'].map((c) => <option key={c} value={c}>{c}</option>)}
+                    <option value="">{tx(I.choose)}</option>
+                    {['EG', 'AE', 'SA', 'KW', 'QA', 'BH', 'OM', 'JO', 'GB', 'US', 'CA', 'AU', 'DE', 'FR'].map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
-                ))}
+                ), { hint: tx(I.countryHint) })}
               </div>
               {field('email', tx(I.email), (id) => (
                 <input id={id} className="input" type="email" inputMode="email" dir="ltr" value={email} aria-invalid={bad('channel')} onChange={(e) => setEmail(e.target.value)} />

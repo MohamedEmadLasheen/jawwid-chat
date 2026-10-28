@@ -14,6 +14,8 @@ import { normaliseEmailForKey } from './contact-key';
 const MAX_CHILDREN = 10;
 const MAX_SLOTS = 14;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** An Egyptian mobile as typed at home: 010 / 011 / 012 / 015 and eight digits. */
+const EGYPT_MOBILE = /^01[0125]\d{8}$/;
 
 export interface CarriedOverInput {
   /** Lessons in the package Core shows. */
@@ -73,11 +75,13 @@ export function parseIntake(raw: unknown): IntakeInput {
   const phone = text(parentRaw.phone, 'parent.phone', 32, false);
   let phoneE164: string | null = null;
   if (phone !== null) {
-    const region = typeof parentRaw.country === 'string' && /^[A-Za-z]{2}$/.test(parentRaw.country.trim())
+    const country = typeof parentRaw.country === 'string' && /^[A-Za-z]{2}$/.test(parentRaw.country.trim())
       ? (parentRaw.country.trim().toUpperCase() as Parameters<typeof toE164>[1])
-      : DEFAULT_PHONE_REGION;
-    phoneE164 = toE164(phone, region);
-    if (!phoneE164) throw invalid('parent.phone: a phone number with its country code (or the country chosen)');
+      : null;
+    const keyed = e164ForKey(phone, country);
+    if (keyed === 'ambiguous') throw invalid('parent.phone: add the country code (+...) or choose the number\'s country');
+    if (!keyed) throw invalid('parent.phone: a phone number with its country code (or the country chosen)');
+    phoneE164 = keyed;
   }
   if (!email && !phone) throw invalid('parent: a phone number or an e-mail address -- one of them is required');
   const paymentRaw = body.payment === undefined || body.payment === null ? {} : object(body.payment, 'payment');
@@ -119,6 +123,20 @@ export function parseSignInEmail(raw: unknown): string {
   const email = optionalEmail(body.email);
   if (!email) throw invalid('email: required');
   return email;
+}
+
+/**
+ * The number a parent's phone is keyed by (E.164), or 'ambiguous' when a local
+ * number comes with no country -- unless it is unmistakably an Egyptian mobile
+ * (010 / 011 / 012 / 015 + eight digits). A Gulf "050 123 4567" read as
+ * Egyptian would key a different person. null when it is not a number at all.
+ */
+export function e164ForKey(phone: string, country: string | null): string | 'ambiguous' | null {
+  const digits = phone.replace(/[\s().-]/g, '');
+  const international = digits.startsWith('+') || digits.startsWith('00');
+  if (!international && !country && !EGYPT_MOBILE.test(digits)) return 'ambiguous';
+  const region = (country ?? DEFAULT_PHONE_REGION) as Parameters<typeof toE164>[1];
+  return toE164(digits.startsWith('00') ? `+${digits.slice(2)}` : phone, region);
 }
 
 /**

@@ -16,6 +16,8 @@ import { subjectHash } from '../platform/auth/subject-hash';
 import { PaymentLedger } from '../billing/payment-ledger.service';
 import { NewStudentsService } from './new-students.service';
 import { seedFromEnrolment } from '../parent-profile/parent-record.service';
+import { contactKeyHash } from './contact-key';
+import { e164ForKey } from './intake-input';
 
 type PresentedForm = NonNullable<Awaited<ReturnType<NewStudentsService['get']>>>;
 
@@ -214,6 +216,16 @@ export class NewStudentEnrolmentService {
           paymentMethod: form.payment.method,
           currency: form.payment.currency,
         });
+        // PD-42 S1: the parent's contact keys, so the same parent is never a
+        // second family -- entered by hand later, or already entered by hand.
+        for (const k of parentContactKeys(email, form.parent.phone)) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pd042:${k.hash}`}, 0))`;
+          const other = await tx.familyContactKey.findFirst({ where: { organizationId: org, keyHash: k.hash }, select: { familyId: true } });
+          if (other) {
+            throw new CommError(CommErrorCode.PARENT_EXISTS, 'this parent is already in Chat; add the children to their family', 409, { familyId: other.familyId });
+          }
+          await tx.familyContactKey.create({ data: { organizationId: org, keyHash: k.hash, familyId: family.id, kind: k.kind, createdBy: actor.actorId } });
+        }
 
         const learners: Array<{ id: string; child: PresentedForm['children'][number] }> = [];
         for (const child of form.children) {
@@ -435,6 +447,19 @@ export class NewStudentEnrolmentService {
     const minutes = trial ? Math.round((trial.endsAt.getTime() - trial.startsAt.getTime()) / 60_000) : 30;
     return minutes >= 15 && minutes <= 240 ? minutes : 30;
   }
+}
+
+/**
+ * PD-42 S1: the keys a parent is known by -- the sign-in e-mail, and the phone
+ * Sales typed when it reads as one number (E.164; a local number with no
+ * country is not keyed rather than keyed wrong).
+ */
+export function parentContactKeys(email: string | null, phone: string | null): Array<{ kind: 'email' | 'phone'; hash: string }> {
+  const keys: Array<{ kind: 'email' | 'phone'; hash: string }> = [];
+  if (email) keys.push({ kind: 'email', hash: contactKeyHash('email', email.trim().toLowerCase()) });
+  const e164 = phone ? e164ForKey(phone, null) : null;
+  if (e164 && e164 !== 'ambiguous') keys.push({ kind: 'phone', hash: contactKeyHash('phone', e164) });
+  return keys;
 }
 
 /**

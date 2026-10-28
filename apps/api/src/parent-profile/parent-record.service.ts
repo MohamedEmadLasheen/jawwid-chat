@@ -137,6 +137,9 @@ export class ParentRecordService implements OnModuleInit {
 
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      // PD-42 S3: the edit names its staff member, for the Sales-scope guards on
+      // chat.contact and chat.family (which carry no actor column).
+      await tx.$executeRaw`SELECT set_config('chat.acting_staff_id', ${actor.actorId}, true)`;
       if (name !== undefined && name !== contact.name) {
         await tx.contact.update({ where: { id: contact.id }, data: { name } });
       }

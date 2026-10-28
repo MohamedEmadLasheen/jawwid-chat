@@ -192,12 +192,12 @@ TEACHER_SUPERVISOR_STRICT_SCOPE	application	no	opt	opt	opt
 # SALES_FAMILY_SCOPE is CONSUMED by apps/api/src/platform/sales-scope.ts (PD-42)
 # in the API, which writes it into chat.config at boot so the database's write
 # guards read the same value: 'own' = a Sales member reads and writes only the
-# families they own (the Sales manager keeps every family). Any other value =
-# 'all': every Sales member reads every family, as before PD-42. UNSET writes
-# nothing: the stored value stands ('all' until written); a boot that changes
-# it logs a warning. Owner decision 2026-10-28: 'all' everywhere until the
-# intake from Jawwid Core is complete and verified (the deploy workflow
-# defaults it so).
+# families they own (the Sales manager keeps every family); 'all' = every
+# Sales member reads every family, as before PD-42. Any other value REFUSES TO
+# BOOT (fail closed). UNSET writes nothing: the stored value stands ('all'
+# until written); a boot that changes it logs a warning. The deploy workflows
+# do NOT default it. Owner decision 2026-10-28: 'own' only after the intake
+# from Jawwid Core is complete and verified.
 SALES_FAMILY_SCOPE	application	no	opt	opt	opt
 # SENTRY_DSN is CONSUMED: when set, the API and the worker report 5xx responses,
 # swallowed worker-subsystem failures and process-level faults to Sentry

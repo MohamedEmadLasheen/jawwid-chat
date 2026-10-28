@@ -37,7 +37,7 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
         <PageHeader eyebrow={eyebrow} title={tx(P.parentsTitle)} subtitle={tx(P.parentsSubtitle)} />
         <div className="toolbar">
           <SearchField value={q} onChange={setQ} label={tx(P.search)} clearLabel={t('common.cancel')} />
-          {intake.data && (
+          {intake.data?.ready && (
             <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
               {tx(I.addFamily)}
             </button>
