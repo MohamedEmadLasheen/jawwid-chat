@@ -247,7 +247,7 @@ The **Needs action** page and the other source pages stay as they are. A task is
   - for a teacher: the Teachers manager;
   - for a manager assignee: the super admin only.
   - The super admin is always responsible.
-  - A manual task's creator, if a manager, also stays responsible.
+  - **Built in PR-1 without a creator rule:** responsibility follows the assignee's live reporting line only. A manager who sends a task to another department, or whose member leaves the team, stops watching it, and the super admin still sees it. A creator kept as responsible would have watched a task outside their team for ever. The SQL is `chat.work_task_standing`.
 - **Across departments** (Q6): a manager reassigns within their team. "Send to another department" assigns the task to that department's manager, who distributes it. The super admin may assign anywhere.
 
 ### 3.8 Visibility
