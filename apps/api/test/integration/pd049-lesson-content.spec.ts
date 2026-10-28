@@ -121,8 +121,9 @@ describe('PD-49: who signs which step', () => {
   });
 
   it('a department manager cannot grant the scholar role: the super admin alone does (H5)', async () => {
-    const account = await g.prisma.account.create({ data: { organizationId: orgId, subject: `would-be@${DOMAIN}`, kind: 'staff', status: 'active', isActive: true } });
-    const other = (await g.prisma.staff.create({ data: { organizationId: orgId, name: 'QA Specialist', role: 'specialist', isActive: true, accountId: account.id } })).id;
+    // A specialist of the manager's own department, so S1 passes and the refusal is H5's.
+    const [{ id: other }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT chat.create_staff_account('QA Specialist', ${`would-be@${DOMAIN}`}::text, 'specialist', ${m.departments.teachers}::uuid, 'spec', ${m.superAdmin.id}::uuid) AS id`;
     const e = await sqlError(g.prisma.$queryRaw`SELECT chat.grant_access_role(${other}::uuid, ${scholarRole}::uuid, 'spec', ${m.teachersManager.id}::uuid)`);
     // The H5 refusal itself: the role holds a key the manager may not grant.
     expect(e).toMatch(/permissions you may not grant: lesson_content\.review_scholar \(PD-40 H5\)/);
@@ -153,7 +154,8 @@ describe('PD-49: who may sign at all (review of #258)', () => {
     const t = 'suspended text';
     await sign('lesson-052', t, 'check', m.superAdmin.id);
     await sign('lesson-052', t, 'teacher', m.teachersManager.id);
-    await g.prisma.staff.update({ where: { id: second }, data: { isActive: false } });
+    // staff_left_at_matches_is_active: an inactive staff row carries left_at.
+    await g.prisma.staff.update({ where: { id: second }, data: { isActive: false, leftAt: new Date() } });
     expect(await sqlError(sign('lesson-052', t, 'scholar', second))).toMatch(/active staff of the content organization/);
   });
 
