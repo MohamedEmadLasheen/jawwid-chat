@@ -199,6 +199,8 @@ create index work_task_teacher_pending_idx on chat.work_task (assignee_teacher_i
   where state in ('open', 'awaiting_decision');
 create index work_task_decision_idx on chat.work_task (organization_id, created_at desc) where state = 'awaiting_decision';
 create index work_task_org_idx on chat.work_task (organization_id, created_at desc, id desc);
+create index work_task_org_pending_idx on chat.work_task (organization_id, created_at desc)
+  where state in ('open', 'awaiting_decision');
 create index work_task_closed_idx on chat.work_task (organization_id, closed_at desc) where closed_at is not null;
 
 create or replace function chat.guard_work_task()
@@ -308,6 +310,11 @@ begin
     end if;
   end if;
 
+  -- activity_at is the task's last event: a comment sets it (from its own
+  -- trigger), every other recorded change here.
+  if v_moved or new.state is distinct from old.state or new.due_at is distinct from old.due_at then
+    new.activity_at := now();
+  end if;
   new.revision := old.revision + 1;
   new.updated_at := now();
   return new;
@@ -389,6 +396,13 @@ begin
     if new.actor_id is null or new.actor_id::text is distinct from nullif(current_setting('chat.task_actor', true), '') then
       raise exception 'a comment is written by its actor (chat.task_actor)' using errcode = 'insufficient_privilege';
     end if;
+    -- A comment says only who, what and its text: written now, about the
+    -- task's current assignee. It cannot be back-dated or carry a move.
+    new.at := clock_timestamp();
+    new.from_assignee := null;
+    new.to_assignee := (select coalesce(t.assignee_staff_id, t.assignee_teacher_id) from chat.work_task t where t.id = new.task_id);
+    new.before := null;
+    new.after := null;
   end if;
   if new.actor_kind <> 'system' and chat.task_principal_kind(new.actor_id, v_org) is distinct from new.actor_kind then
     raise exception 'a task event is written by a live person of its organization (actor)' using errcode = 'insufficient_privilege';

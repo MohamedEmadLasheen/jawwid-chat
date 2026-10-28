@@ -26,6 +26,8 @@ const NOTE_MAX = 2000;
 const PAGE = 200;
 /** The Closed tab's default window (owner Q13: nothing is deleted; older closed tasks stay searchable). */
 const CLOSED_DAYS = 90;
+/** The Dashboard reads at most this many pending tasks of the organization (newest first); past it, tiles are `capped`. */
+const TILE_SCAN = 5000;
 
 const invalid = (why: string) => new CommError(CommErrorCode.TASK_INVALID, why, 400);
 const notFound = () => new CommError(CommErrorCode.TASK_NOT_FOUND, 'task not found');
@@ -254,7 +256,7 @@ export class TaskService {
     await this.requireLive(viewer.organizationId, to.principal);
     const current = assigneeOf(row);
     if (current.kind === to.principal.kind && current.id === to.principal.id) throw invalid('to: the task is already theirs');
-    if (!to.viaDepartment && !viewer.superAdmin && to.principal.id !== viewer.id) {
+    if (!to.department && !viewer.superAdmin && to.principal.id !== viewer.id) {
       if ((await this.standingTo(viewer, to.principal)) !== 'manager') {
         throw denied('a manager hands a task within their team, or sends it to another department');
       }
@@ -263,7 +265,18 @@ export class TaskService {
                            assignee_teacher_id = ${to.principal.kind === 'teacher' ? to.principal.id : null}::uuid,
                            instructions = ${instructions},
                            state = 'open'`;
-    return this.move(viewer, row, 'reassign', instructions, set, 'reassigned', decider ? this.deciderSql(viewer) : this.handsOwnSql(viewer));
+    // The target is decided again in the writing transaction too: still in the
+    // caller's team, or still that department's manager.
+    const target = to.department
+      ? Prisma.sql`EXISTS (SELECT 1 FROM chat.department d WHERE d.organization_id = t.organization_id
+                             AND d.kind = ${to.department} AND d.manager_id = ${to.principal.id}::uuid)`
+      : viewer.superAdmin || to.principal.id === viewer.id
+        ? Prisma.sql`true`
+        : Prisma.sql`chat.work_task_standing(${viewer.id}::uuid, t.organization_id,
+                       ${to.principal.kind === 'staff' ? to.principal.id : null}::uuid,
+                       ${to.principal.kind === 'teacher' ? to.principal.id : null}::uuid, NULL) = 'manager'`;
+    const who = decider ? this.deciderSql(viewer) : this.handsOwnSql(viewer);
+    return this.move(viewer, row, 'reassign', instructions, set, 'reassigned', Prisma.sql`${who} AND ${target}`);
   }
 
   /** { dueAt: ISO timestamp | null }: the responsible manager or the super admin. */
@@ -309,61 +322,74 @@ export class TaskService {
 
   /**
    * PD-44: the Dashboard's task tiles -- `list`'s own predicates, counted,
-   * pending tasks only. Everyone: their own, open and overdue. Whoever manages
-   * a department (and the super admin, over everything): the team's, the
-   * decisions waiting, the tasks whose assignee is gone. The super admin: the
-   * unmanaged ones (Decisions shows them).
+   * pending tasks only, so each tile equals the list it links to:
+   *   everyone            tasks.mine_open, tasks.mine_overdue           (view=mine)
+   *   a department's      tasks.team_open, tasks.team_overdue           (view=team)
+   *   manager             tasks.awaiting_decision                       (view=decisions)
+   *                       tasks.needs_reassignment (team, assignee gone)
+   *   the super admin     tasks.all_open, tasks.all_overdue             (view=all), the
+   *                       decisions, needs_reassignment over all, and tasks.unmanaged
+   * At most TILE_SCAN pending rows are read; a tile past that is `capped`.
    */
   async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
     const viewer = await this.requireViewer(actorId);
+    const sa = viewer.superAdmin;
     const standing = this.standingSql(viewer);
+    // The super admin's wide tiles are view=all; anyone else's are view=team.
+    const wide = sa ? Prisma.sql`true` : Prisma.sql`coalesce(${standing} IN ('manager', 'supervisor'), false)`;
+    const unmanaged = sa ? UNMANAGED : Prisma.sql`false`;
     const [r] = await this.prisma.$queryRaw<
       Array<{
-        manages: boolean;
+        manages: boolean; scanned: number;
         mine: number; mine_oldest: Date | null; mine_overdue: number;
-        team: number; team_oldest: Date | null; team_overdue: number;
+        wide: number; wide_oldest: Date | null; wide_overdue: number;
         decisions: number; decisions_oldest: Date | null;
         gone: number; unmanaged: number;
       }>
     >`
-      SELECT (${viewer.superAdmin}::boolean OR EXISTS (
+      SELECT (${sa}::boolean OR EXISTS (
                 SELECT 1 FROM chat.department d WHERE d.manager_id = ${viewer.id}::uuid AND d.organization_id = ${viewer.organizationId}::uuid)) AS manages,
+             count(*)::int AS scanned,
              count(*) FILTER (WHERE x.mine)::int AS mine,
              min(x.created_at) FILTER (WHERE x.mine) AS mine_oldest,
              count(*) FILTER (WHERE x.mine AND x.due_at < now())::int AS mine_overdue,
-             count(*) FILTER (WHERE x.team)::int AS team,
-             min(x.created_at) FILTER (WHERE x.team) AS team_oldest,
-             count(*) FILTER (WHERE x.team AND x.due_at < now())::int AS team_overdue,
-             count(*) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR (${viewer.superAdmin}::boolean AND x.unmanaged)))::int AS decisions,
-             min(x.created_at) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR (${viewer.superAdmin}::boolean AND x.unmanaged))) AS decisions_oldest,
-             count(*) FILTER (WHERE x.team AND NOT x.live)::int AS gone,
+             count(*) FILTER (WHERE x.wide)::int AS wide,
+             min(x.created_at) FILTER (WHERE x.wide) AS wide_oldest,
+             count(*) FILTER (WHERE x.wide AND x.due_at < now())::int AS wide_overdue,
+             count(*) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR x.unmanaged))::int AS decisions,
+             min(x.created_at) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR x.unmanaged)) AS decisions_oldest,
+             count(*) FILTER (WHERE x.wide AND NOT x.live)::int AS gone,
              count(*) FILTER (WHERE x.unmanaged)::int AS unmanaged
         FROM (
           SELECT t.created_at, t.due_at, t.state,
                  ${mineSql(viewer)} AS mine,
-                 coalesce(${standing} IN ('manager', 'super_admin'), false) AS team,
-                 coalesce(${standing} IN ('manager', 'super_admin'), false) AS decides,
-                 ${UNMANAGED} AS unmanaged,
+                 ${wide} AS wide,
+                 ${this.deciderSql(viewer)} AS decides,
+                 ${unmanaged} AS unmanaged,
                  coalesce(a.is_active AND a.left_at IS NULL, ta.is_active AND ta.left_at IS NULL, false) AS live
             FROM chat.work_task t
             LEFT JOIN chat.staff a ON a.id = t.assignee_staff_id
             LEFT JOIN chat.teacher ta ON ta.id = t.assignee_teacher_id
            WHERE t.organization_id = ${viewer.organizationId}::uuid
              AND t.state IN ('open', 'awaiting_decision')
+           ORDER BY t.created_at DESC
+           LIMIT ${TILE_SCAN}
         ) x`;
+    const capped = (r?.scanned ?? 0) >= TILE_SCAN;
     const tiles = [
-      dashboardTile('tasks.mine_open', r?.mine ?? 0, r?.mine_oldest ?? null),
-      dashboardTile('tasks.mine_overdue', r?.mine_overdue ?? 0),
+      dashboardTile('tasks.mine_open', r?.mine ?? 0, r?.mine_oldest ?? null, capped),
+      dashboardTile('tasks.mine_overdue', r?.mine_overdue ?? 0, null, capped),
     ];
     if (r?.manages) {
+      const scope = sa ? 'all' : 'team';
       tiles.push(
-        dashboardTile('tasks.team_open', r.team, r.team_oldest),
-        dashboardTile('tasks.team_overdue', r.team_overdue),
-        dashboardTile('tasks.awaiting_decision', r.decisions, r.decisions_oldest),
-        dashboardTile('tasks.needs_reassignment', r.gone),
+        dashboardTile(`tasks.${scope}_open`, r.wide, r.wide_oldest, capped),
+        dashboardTile(`tasks.${scope}_overdue`, r.wide_overdue, null, capped),
+        dashboardTile('tasks.awaiting_decision', r.decisions, r.decisions_oldest, capped),
+        dashboardTile('tasks.needs_reassignment', r.gone, null, capped),
       );
     }
-    if (viewer.superAdmin) tiles.push(dashboardTile('tasks.unmanaged', r?.unmanaged ?? 0));
+    if (sa) tiles.push(dashboardTile('tasks.unmanaged', r?.unmanaged ?? 0, null, capped));
     return tiles;
   }
 
@@ -454,7 +480,7 @@ export class TaskService {
   }
 
   /** `{ kind, id }` or `{ department }` (that department's manager). */
-  private async targetOf(viewer: Viewer, v: unknown): Promise<{ principal: Principal; viaDepartment: boolean }> {
+  private async targetOf(viewer: Viewer, v: unknown): Promise<{ principal: Principal; department: string | null }> {
     if (v && typeof v === 'object' && 'department' in v) {
       const kind = (v as Record<string, unknown>).department;
       if (typeof kind !== 'string' || !(DEPARTMENT_KINDS as readonly string[]).includes(kind)) {
@@ -465,9 +491,9 @@ export class TaskService {
          WHERE organization_id = ${viewer.organizationId}::uuid AND kind = ${kind}
          ORDER BY id LIMIT 1`;
       if (!d?.manager_id) throw invalid(`to.department: the ${kind} department has no manager`);
-      return { principal: { kind: 'staff', id: d.manager_id }, viaDepartment: true };
+      return { principal: { kind: 'staff', id: d.manager_id }, department: kind };
     }
-    return { principal: principalOf(v, 'to'), viaDepartment: false };
+    return { principal: principalOf(v, 'to'), department: null };
   }
 
   private async visible(viewer: Viewer, taskId: string): Promise<Row> {

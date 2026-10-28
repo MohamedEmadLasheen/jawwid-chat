@@ -371,6 +371,21 @@ describe('nothing disappears on its own', () => {
     expect(row).toMatchObject({ id: t.id, state: 'open', needsReassignment: true });
   });
 
+  it('every recorded change is the task\'s latest activity, a reassignment and a closing included', async () => {
+    // Compared in the database, to the microsecond: the API's ISO times stop at the millisecond.
+    const activity = async (id: string) =>
+      (await g.prisma.$queryRaw<Array<{ at: string }>>`SELECT activity_at::text AS at FROM chat.work_task WHERE id = ${id}::uuid`)[0].at;
+    const later = async (a: string, b: string) =>
+      (await g.prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT ${b}::timestamptz > ${a}::timestamptz AS ok`)[0].ok;
+    const t = await manual(s.managerId, staff(s.ownerId));
+    const created = await activity(t.id);
+    await tasks.reassign(s.managerId, t.id, { to: staff(s.otherAdminId) });
+    const moved = await activity(t.id);
+    expect(await later(created, moved)).toBe(true);
+    await tasks.complete(s.otherAdminId, t.id, {});
+    expect(await later(moved, await activity(t.id))).toBe(true);
+  });
+
   it('a comment changes nothing but the history', async () => {
     const t = await manual(s.managerId, staff(s.ownerId));
     await tasks.comment(s.managerId, t.id, { body: 'any news?' });
@@ -454,6 +469,25 @@ describe('the database', () => {
     expect((await tasks.get(s.ownerId, t.id)).state).toBe('open');
   });
 
+  it('a direct comment cannot be back-dated or carry a move: written now, about the current assignee', async () => {
+    const t = await manual(s.managerId, staff(s.ownerId));
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`select set_config('chat.task_actor', $1, true)`, s.ownerId),
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.work_task_event (task_id, organization_id, kind, actor_kind, actor_id, from_assignee, to_assignee, body, before, after, at)
+         values ($1::uuid, chat.default_organization_id(), 'commented', 'staff', $2::uuid, $3::uuid, $3::uuid, 'old news',
+                 '{"x":1}'::jsonb, '{"y":2}'::jsonb, '2020-01-01T00:00:00Z')`,
+        t.id, s.ownerId, s.otherAdminId,
+      ),
+    ]);
+    const [e] = await g.prisma.$queryRaw<Array<{ at: Date; from_assignee: string | null; to_assignee: string | null; before: unknown; after: unknown }>>`
+      SELECT at, from_assignee::text AS from_assignee, to_assignee::text AS to_assignee, before, after
+        FROM chat.work_task_event WHERE task_id = ${t.id}::uuid AND kind = 'commented'`;
+    expect(e.at.getTime()).toBeGreaterThan(Date.parse('2026-01-01T00:00:00Z'));
+    expect(e).toMatchObject({ from_assignee: null, to_assignee: s.ownerId, before: null, after: null });
+    expect(Date.parse((await tasks.get(s.ownerId, t.id)).activityAt)).toBeGreaterThan(Date.parse('2026-01-01T00:00:00Z'));
+  });
+
   it('refuses TRUNCATE of either table, outside the harness', async () => {
     await manual(s.managerId, staff(s.ownerId));
     await expect(g.prisma.$executeRawUnsafe(`truncate chat.work_task_event`)).rejects.toThrow(/never truncated/);
@@ -504,9 +538,19 @@ describe('the Dashboard (PD-44)', () => {
     expect(tile(mgr, 'tasks.awaiting_decision')).toBe(1);
     expect(tile(mgr, 'tasks.unmanaged')).toBeUndefined();
 
+    // The super admin's wide tiles are view=all, and each equals its list.
     const top = await tasks.dashboardCounts(sa);
-    expect(tile(top, 'tasks.unmanaged')).toBe(1);
+    expect(top.map((t) => t.key)).toEqual([
+      'tasks.mine_open', 'tasks.mine_overdue', 'tasks.all_open', 'tasks.all_overdue',
+      'tasks.awaiting_decision', 'tasks.needs_reassignment', 'tasks.unmanaged',
+    ]);
+    expect(tile(top, 'tasks.all_open')).toBe((await tasks.list(sa, { view: 'all' })).items.length);
+    expect(tile(top, 'tasks.all_open')).toBe(3);
+    expect(tile(top, 'tasks.all_overdue')).toBe(1);
     expect(tile(top, 'tasks.awaiting_decision')).toBe((await tasks.list(sa, { view: 'decisions' })).items.length);
+    expect(tile(top, 'tasks.awaiting_decision')).toBe(2);
+    expect(tile(top, 'tasks.unmanaged')).toBe(1);
+    expect(top.every((t) => t.capped === false)).toBe(true);
   });
 });
 
