@@ -174,7 +174,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.STAFF_ACCOUNT_INVALID` | 400 | PD-40 PR-3: a malformed request (name, e-mail, tier, department, role list or reason), or a tier that is never created here (the super admin). |
 | `COMM.STAFF_ACCOUNT_CONFLICT` | 409 | PD-40 PR-3: the sign-in e-mail already signs in to Chat. |
 | `COMM.ACCESS_ROLE_INVALID` | 400 | PD-40 PR-3: an access role that cannot be defined. Causes: an unknown key; a super-admin-only key, which never goes in a role (S4); no key at all; a bad tier; or a key already taken. |
-| `COMM.ACCESS_ROLE_CONFLICT` | 409 | PD-40 PR-3: the edit adds a key that a department manager who granted this role may not grant (H5). The message names those grants (staff id and grantor). The super admin revokes them first, then edits again. |
+| `COMM.ACCESS_ROLE_CONFLICT` | 409 | PD-40 PR-3: the edit adds a key that a department manager who granted this role may not grant (H5). The message names those grants (staff id and grantor) but may be cut short; `detail.grants` lists every one, as `[{ staffId, grantedBy }]`, parsed from the full database text. The super admin revokes them first, then edits again. |
 | `COMM.ACCOUNT_ADMIN_NOT_FOUND` | 404 | PD-21: no such account in the caller's organization. Indistinguishable from another tenant's account on purpose. |
 | `COMM.ACCOUNT_ADMIN_STATE` | 409 | PD-21: the account is not in a state for this — suspending one that is not active, reactivating one that is not suspended, impersonating one that cannot sign in. Reload the account; never retry blindly. |
 | `COMM.SESSION_NOT_FOUND` | 404 | PD-23: the account has no live session with this id — ended already, or another account's (one answer for both). Refetch the list. |

@@ -22,6 +22,8 @@ export type StaffRole =
   /** PD-40: a department account (the Designer) with no implicit powers; it opens only what it was granted. */
   | 'specialist'
   | 'system'
+  /** PD-40: a department account with no implicit powers -- only what its access roles open. */
+  | 'specialist'
 
 export type Presence = 'online' | 'away' | 'offline'
 

@@ -3,7 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { ChangedSignIn } from './api'
 import { T, describeError, useCopy } from './copy'
-import { Field } from './TeacherFileDialogs'
+import { Field } from '@/shared/components/Field'
 import { FirstLoginCodeDialog } from './AddTeacherDialog'
 import { useChangeSignIn } from './hooks'
 

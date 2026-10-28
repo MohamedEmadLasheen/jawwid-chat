@@ -5,7 +5,7 @@ import { ApiError } from '@/core/api/errors'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { AddedTeacher, FirstLogin, TeacherOnboardingOffer } from './api'
 import { T, describeError, useCopy } from './copy'
-import { Field } from './TeacherFileDialogs'
+import { Field } from '@/shared/components/Field'
 import { useAddTeacher, useGiveSignIn } from './hooks'
 
 /**

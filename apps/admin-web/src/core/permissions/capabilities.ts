@@ -16,7 +16,7 @@
  * This file therefore only answers coarse, role-level questions used for
  * navigation and page-level routing.
  */
-import type { StaffRole } from '@/shared/types/domain'
+import type { Staff, StaffRole } from '@/shared/types/domain'
 
 export type NavArea =
   | 'chat'
@@ -130,6 +130,18 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     return ['tasks', 'accounts']
   }
   return []
+}
+
+/**
+ * PD-40: does GET /me report one of these permission keys? The page-level gate
+ * for pages that are a permission's, not a role's (Staff accounts, Roles). It
+ * fails closed: no keys reported (an API older than PD-40) is no page. The
+ * super admin holds every key (chat.staff_access_profile). UX only.
+ */
+export function holdsAny(staff: Pick<Staff, 'role' | 'permissions'> | null | undefined, keys: readonly string[]): boolean {
+  if (!staff) return false
+  if (isSuperAdmin(staff.role)) return true
+  return keys.some((key) => staff.permissions?.includes(key) === true)
 }
 
 export function canOpenArea(role: StaffRole, area: NavArea): boolean {
