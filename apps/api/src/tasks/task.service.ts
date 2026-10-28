@@ -469,7 +469,7 @@ export class TaskService {
 
   private async sweepOverdueOnce(batch: number): Promise<number> {
     return this.prisma.$transaction(async (tx) => {
-      const due = await tx.$queryRaw<Array<{ id: string; revision: number }>>`
+      const due = await tx.$queryRaw<Array<{ id: string; revision: number; due_at: Date }>>`
         WITH overdue AS (
           SELECT t.id, t.revision, t.due_at
             FROM chat.work_task t
@@ -486,9 +486,11 @@ export class TaskService {
           ON CONFLICT DO NOTHING
           RETURNING task_id, due_at
         )
-        SELECT o.id::text AS id, o.revision FROM overdue o JOIN fresh f ON f.task_id = o.id AND f.due_at = o.due_at
+        SELECT o.id::text AS id, o.revision, o.due_at FROM overdue o JOIN fresh f ON f.task_id = o.id AND f.due_at = o.due_at
          ORDER BY o.due_at, o.id`;
-      for (const t of due) await this.outbox.enqueue(tx, CommEvent.TASK_CHANGED, { taskId: t.id, revision: t.revision, change: 'overdue' });
+      for (const t of due) {
+        await this.outbox.enqueue(tx, CommEvent.TASK_CHANGED, { taskId: t.id, revision: t.revision, change: 'overdue', dueAt: t.due_at.toISOString() });
+      }
       return due.length;
     });
   }

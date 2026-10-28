@@ -770,11 +770,15 @@ export class OutboxWorker {
     const actor = typeof payload.actorId === 'string' ? payload.actorId : null;
     const left = typeof payload.fromAssignee === 'string' ? payload.fromAssignee : null;
     const reached = typeof payload.toAssignee === 'string' ? payload.toAssignee : null;
+    // An overdue signal names the due date it was for; a task re-dated since is not overdue for it.
+    const dueFor = typeof payload.dueAt === 'string' ? new Date(payload.dueAt).getTime() : null;
     const [t] = await this.prisma.$queryRaw<Array<{
-      state: string; source_type: string | null; assignee: string; due_at: Date | null;
-      unmanaged: boolean; managers: string[]; readers: string[]; admins: string[];
+      state: string; source_type: string | null; assignee: string; due_at: Date | null; overdue: boolean;
+      unmanaged: boolean; managers: string[]; readers: string[]; admins: string[]; left_watchers: string[];
     }>>`
       SELECT t.state, t.source_type, t.due_at,
+             (SELECT e.overdue FROM chat.work_task_effective(t.priority, t.floor_rule, t.due_at, t.source_floor, t.state,
+                                                             now(), chat.work_task_academy_zone()) e) AS overdue,
              coalesce(t.assignee_staff_id, t.assignee_teacher_id)::text AS assignee,
              chat.work_task_unmanaged(t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by) AS unmanaged,
              ARRAY(SELECT s.id::text FROM chat.staff s
@@ -788,13 +792,22 @@ export class OutboxWorker {
                     ORDER BY s.id) AS readers,
              ARRAY(SELECT s.id::text FROM chat.staff s
                     WHERE s.organization_id = t.organization_id AND s.role = 'super_admin' AND s.is_active AND s.left_at IS NULL
-                    ORDER BY s.id) AS admins
+                    ORDER BY s.id) AS admins,
+             -- A hand-on changes the lists of whoever watched the person it LEFT too
+             -- (their managers, a teacher's supervisors): ids only.
+             ARRAY(SELECT s.id::text FROM chat.staff s
+                    WHERE ${left}::uuid IS NOT NULL
+                      AND s.organization_id = t.organization_id AND s.is_active AND s.left_at IS NULL
+                      AND chat.work_task_standing(s.id, t.organization_id,
+                            (SELECT x.id FROM chat.staff x WHERE x.id = ${left}::uuid),
+                            (SELECT x.id FROM chat.teacher x WHERE x.id = ${left}::uuid), t.created_by) IN ('manager', 'supervisor')
+                    ORDER BY s.id) AS left_watchers
         FROM chat.work_task t
        WHERE t.id = ${taskId}::uuid`;
     if (!t) return;
     const pending = t.state === 'open' || t.state === 'awaiting_decision';
     const deciding = t.state === 'awaiting_decision' || t.unmanaged;
-    const signalled = [...new Set([t.assignee, left, ...t.managers, ...t.readers, ...(deciding ? t.admins : [])]
+    const signalled = [...new Set([t.assignee, left, ...t.managers, ...t.readers, ...t.left_watchers, ...(deciding ? t.admins : [])]
       .filter((x): x is string => !!x))];
     if (signalled.length > 0) {
       await this.realtime.toUsers(signalled, CommEvent.TASK_CHANGED, { taskId, revision, change } as never);
@@ -805,8 +818,9 @@ export class OutboxWorker {
     if (t.state === 'completed') await this.pipeline.taskLeft(taskId, 'done');
     else if (t.state === 'removed') await this.pipeline.taskLeft(taskId, 'cancelled');
     else if (change === 'reassigned') await this.pipeline.taskLeft(taskId, 'cancelled', t.assignee);
-    else if (change === 'returned') await this.pipeline.taskLeft(taskId, 'done', t.assignee, ['task_out_of_scope']);
-    else if (change === 'due_changed') await this.pipeline.taskLeft(taskId, 'done', null, ['task_overdue']);
+    // Decided: the deciders' "decision waiting" and "decision overdue" stop asking.
+    else if (change === 'returned') await this.pipeline.taskLeft(taskId, 'done', t.assignee, ['task_out_of_scope', 'task_overdue_decision']);
+    else if (change === 'due_changed') await this.pipeline.taskLeft(taskId, 'done', null, ['task_overdue', 'task_overdue_decision']);
     if (!pending) return;
 
     const notFor = (ids: Array<string | null>) => [...new Set(ids.filter((x): x is string => !!x && x !== actor))];
@@ -816,9 +830,10 @@ export class OutboxWorker {
       return pool.length > 0 ? pool : notFor(t.admins);
     })();
     let told: string[] = [];
-    let ruleKey: 'task_assigned' | 'task_returned' | 'task_out_of_scope' | 'task_overdue' | null = null;
+    let ruleKey: 'task_assigned' | 'task_returned' | 'task_out_of_scope' | 'task_overdue' | 'task_overdue_decision' | null = null;
     let key = String(revision);
     let status: 'open' | 'escalated' = 'open';
+    let alsoOverdue = false;
     if ((change === 'created' && t.source_type !== 'lesson_report') || change === 'reassigned') {
       // Only if it is still theirs: a later hand-on tells whoever it reached then.
       const to = reached ?? t.assignee;
@@ -827,22 +842,42 @@ export class OutboxWorker {
     } else if (change === 'returned') {
       ruleKey = 'task_returned';
       told = notFor([t.assignee]);
+      // Returned past its due date: the assignee also hears it is overdue, once
+      // per due date (the deciders heard it while it waited on them) -- after
+      // "returned", below.
+      alsoOverdue = t.overdue && !!t.due_at;
     } else if (change === 'out_of_scope' && t.state === 'awaiting_decision') {
       ruleKey = 'task_out_of_scope';
       status = 'escalated';
       told = deciders;
-    } else if (change === 'overdue' && t.due_at) {
-      // Once per due date: re-dated and overdue again is a new notice.
-      ruleKey = 'task_overdue';
+    } else if (change === 'overdue' && t.due_at && (dueFor === null || dueFor === t.due_at.getTime())) {
+      // Once per due date: re-dated and overdue again is a new notice. While it
+      // waits on a decision, it is the decision that is overdue.
       key = String(t.due_at.getTime());
       if (t.state === 'awaiting_decision') {
+        ruleKey = 'task_overdue_decision';
         status = 'escalated';
         told = deciders;
       } else {
+        ruleKey = 'task_overdue';
         told = [t.assignee];
       }
     }
     if (!ruleKey) return;
+    await this.tellTask(taskId, ruleKey, key, told, t.due_at, status);
+    if (alsoOverdue && t.due_at) await this.tellTask(taskId, 'task_overdue', String(t.due_at.getTime()), [t.assignee], t.due_at, 'open');
+  }
+
+  /** One PD-47 task entry and its push per person; a "given" that still asks is not repeated. */
+  private async tellTask(
+    taskId: string,
+    ruleKey: 'task_assigned' | 'task_returned' | 'task_out_of_scope' | 'task_overdue' | 'task_overdue_decision',
+    key: string,
+    told: readonly string[],
+    dueAt: Date | null,
+    status: 'open' | 'escalated',
+  ): Promise<void> {
+    if (!this.pipeline) return;
     for (const recipientId of told) {
       const recipient = await this.identity.resolveActor(recipientId);
       if (!recipient || !recipient.isActive) continue;
@@ -865,7 +900,7 @@ export class OutboxWorker {
         subject: { type: 'task', id: taskId },
         refs: { taskId },
         scheduledAt: new Date(),
-        task: { ownerId: recipientId, dueAt: t.due_at, status },
+        task: { ownerId: recipientId, dueAt, status },
       });
     }
   }

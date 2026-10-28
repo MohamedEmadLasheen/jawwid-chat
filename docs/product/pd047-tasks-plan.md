@@ -337,8 +337,9 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
 - **Settled** also covers decisions: a return settles the deciders' "decision waiting", and a new due date settles the old "overdue".
 - **Overdue:** `TaskService.sweepOverdue` (the worker, each minute, batch after batch, with its own error label) announces each task once per due date (`chat.work_task_overdue_notice`). Two sweeps at once announce it once. A task re-dated and overdue again is announced again.
   - **Decided:** a task whose work went away (withdrawn) is not announced overdue, because nobody must do it.
-  - **Decided:** a task overdue while it waits on a decision is announced to the decider (the responsible managers, else the super admin), not the assignee.
-- **Signalled** also includes a teacher's supervisors, who read their tasks (owner Q3); they are never told.
+  - **Decided:** a task overdue while it waits on a decision is announced to the decider (the responsible managers, else the super admin) as "a task waiting for your decision is overdue" (`task_overdue_decision`), not to the assignee. A return settles that notice, and tells the assignee once if the task is still overdue.
+  - The overdue signal carries the due date it is for. A task re-dated before delivery gets nothing for the old date.
+- **Signalled** also includes a teacher's supervisors, who read their tasks (owner Q3); they are never told. After a hand-on, the managers and supervisors of the person it left are signalled too, because their lists changed.
 - **A renewal always reaches someone:** the family's Sales owner, else the Sales manager, else the super admin. When a Sales owner or manager appears, the task moves to them.
 - **Tile == list:** the list takes `gone=true` (the assignee left) and `unmanaged=true` (no live manager stands to it), so "Tasks whose assignee left" and "Tasks no manager can move" open exactly the list they count. A spec compares every tile with its list.
 - **No content in any text:** templates `task_*` and `inbox.task_*` are generic: no title, amount, card, family or child. Entries carry no variables.

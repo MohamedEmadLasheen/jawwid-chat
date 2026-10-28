@@ -212,6 +212,8 @@ select v.key, v.locale, v.title, v.body
     ('task_out_of_scope', 'ar', 'جَوِّد', 'مهمة تنتظر قرارك.'),
     ('task_overdue', 'en', 'Jawwid', 'One of your tasks is overdue.'),
     ('task_overdue', 'ar', 'جَوِّد', 'إحدى مهامك متأخرة.'),
+    ('task_overdue_decision', 'en', 'Jawwid', 'A task waiting for your decision is overdue.'),
+    ('task_overdue_decision', 'ar', 'جَوِّد', 'مهمة تنتظر قرارك متأخرة.'),
     ('inbox.task_assigned', 'en', 'New task', 'A task was given to you. Open it in Tasks.'),
     ('inbox.task_assigned', 'ar', 'مهمة جديدة', 'أُسندت إليك مهمة. افتحها في المهام.'),
     ('inbox.task_returned', 'en', 'Task returned to you', 'A task came back to you with instructions. Open it in Tasks.'),
@@ -219,6 +221,8 @@ select v.key, v.locale, v.title, v.body
     ('inbox.task_out_of_scope', 'en', 'A decision is waiting', 'Someone said a task is not theirs. Decide in Tasks.'),
     ('inbox.task_out_of_scope', 'ar', 'قرار بانتظارك', 'قيل إن مهمة ليست من مسؤولية صاحبها. قرّر في المهام.'),
     ('inbox.task_overdue', 'en', 'Task overdue', 'One of your tasks is overdue. Open it in Tasks.'),
-    ('inbox.task_overdue', 'ar', 'مهمة متأخرة', 'إحدى مهامك متأخرة. افتحها في المهام.')
+    ('inbox.task_overdue', 'ar', 'مهمة متأخرة', 'إحدى مهامك متأخرة. افتحها في المهام.'),
+    ('inbox.task_overdue_decision', 'en', 'Decision overdue', 'A task waiting for your decision is overdue. Decide in Tasks.'),
+    ('inbox.task_overdue_decision', 'ar', 'قرار متأخر', 'مهمة تنتظر قرارك متأخرة. قرّر في المهام.')
   ) as v(key, locale, title, body)
  where not exists (select 1 from chat.notification_template t where t.key = v.key and t.locale = v.locale);

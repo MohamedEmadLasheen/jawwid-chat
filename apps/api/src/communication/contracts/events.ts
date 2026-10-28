@@ -424,6 +424,8 @@ export interface TaskChangedPayload {
   actorId?: string | null;
   fromAssignee?: string | null;
   toAssignee?: string | null;
+  /** 'overdue': the due date it is overdue for (a task re-dated since is not). */
+  dueAt?: string | null;
 }
 
 /** PD-35 B5. Ids only: PD-34 reads the case through its own authorized path. */

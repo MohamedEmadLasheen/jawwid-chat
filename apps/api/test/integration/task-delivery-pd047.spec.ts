@@ -170,7 +170,7 @@ describe('a task reaches the person who must act', () => {
     const rows = await g.prisma.$queryRaw<Array<{ key: string; locale: string; title: string; body: string }>>`
       SELECT key, locale, title, body FROM chat.notification_template WHERE key LIKE 'task\\_%' OR key LIKE 'inbox.task\\_%'`;
     expect(rows.map((r) => `${r.key}:${r.locale}`).sort()).toEqual(
-      ['task_assigned', 'task_returned', 'task_out_of_scope', 'task_overdue']
+      ['task_assigned', 'task_returned', 'task_out_of_scope', 'task_overdue', 'task_overdue_decision']
         .flatMap((k) => [k, `inbox.${k}`])
         .flatMap((k) => [`${k}:ar`, `${k}:en`])
         .sort(),
@@ -257,6 +257,16 @@ describe('who else hears of it', () => {
     expect((await items(smgr)).map((i) => i.eventType)).toEqual(['task_assigned']);
   });
 
+  it('handed from one teacher to another: the first teacher\'s supervisor is signalled too (their list lost it)', async () => {
+    const t = await tasks.create(tmgr, { assignee: { kind: 'teacher', id: s.teacherId }, title: 'x' });
+    await worker.drain(100);
+    signals.length = 0;
+    await tasks.reassign(tmgr, t.id, { to: { kind: 'teacher', id: s.newTeacherId } });
+    await worker.drain(100);
+    expect(taskSignals()[0]?.to).toEqual(expect.arrayContaining([s.teacherId, s.newTeacherId, tsup, tmgr]));
+    expect(await items(tsup)).toEqual([]);
+  });
+
   it('a teacher\'s supervisor is signalled (their list changes) and never told; an unrelated manager hears nothing', async () => {
     const t = await tasks.create(tmgr, { assignee: { kind: 'teacher', id: s.teacherId }, title: 'x' });
     await worker.drain(100);
@@ -282,13 +292,29 @@ describe('overdue, precisely', () => {
     expect(await tasks.sweepOverdue()).toBe(0);
   });
 
-  it('overdue while it waits on a decision: the decider is told, not the assignee', async () => {
+  it('overdue while it waits on a decision: the decider is told the decision is overdue, not the assignee; returned, the decider stops being asked and the assignee hears it once', async () => {
     const t = await tasks.create(s.managerId, { assignee: staff(s.otherAdminId), title: 'x', dueAt: hourAgo() });
     await tasks.outOfScope(s.otherAdminId, t.id, { comment: 'not mine' });
     await worker.drain(100);
     await tasks.sweepOverdue();
     await worker.drain(100);
-    expect((await items(s.managerId)).map((i) => i.eventType)).toEqual(['task_out_of_scope', 'task_overdue']);
+    expect((await items(s.managerId)).map((i) => i.eventType)).toEqual(['task_out_of_scope', 'task_overdue_decision']);
+    expect((await items(s.otherAdminId)).map((i) => i.eventType)).toEqual(['task_assigned']);
+    await tasks.returnTask(s.managerId, t.id, { instructions: 'it is yours' });
+    await worker.drain(100);
+    for (const i of await items(s.managerId)) expect([i.eventType, i.actedAt === null]).toEqual([i.eventType, false]);
+    expect((await items(s.otherAdminId)).map((i) => i.eventType).sort()).toEqual(['task_assigned', 'task_overdue', 'task_returned']);
+    // Swept again: the notice for this due date was given; nothing more.
+    expect(await tasks.sweepOverdue()).toBe(0);
+  });
+
+  it('an overdue signal for a due date the task no longer has sends nothing', async () => {
+    const t = await tasks.create(s.managerId, { assignee: staff(s.otherAdminId), title: 'x', dueAt: hourAgo() });
+    await worker.drain(100);
+    await tasks.sweepOverdue();
+    // Re-dated before the worker delivered it.
+    await tasks.setDue(s.managerId, t.id, { dueAt: new Date(Date.now() + 86_400_000).toISOString() });
+    await worker.drain(100);
     expect((await items(s.otherAdminId)).map((i) => i.eventType)).toEqual(['task_assigned']);
   });
 
