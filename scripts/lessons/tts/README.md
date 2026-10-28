@@ -17,7 +17,7 @@ texts/arabic-001.json --(1) export--> states.json --(2) plan--> worklist.json --
 1. **Export** the lesson's clip states. This step is read-only; it prints hashes and states, with no text and no URLs:
 
    ```bash
-   node apps/api/dist/cli/ingest-lesson-audio.js --export arabic-001 --target <host:port/db> > states.json
+   node apps/api/dist/cli/ingest-lesson-audio.js --export arabic-001 --organization <org uuid> --target <host:port/db> > states.json
    ```
 
 2. **Plan**. No network, no key, no database:
@@ -28,6 +28,7 @@ texts/arabic-001.json --(1) export--> states.json --(2) plan--> worklist.json --
 
    - Profiles: `azure-hamed`, `azure-zariyah`; fallback `polly-zeina`, `polly-hala`.
    - The plan lists only approved strings that have no pending or approved clip of their current text.
+   - It refuses a lesson that is not `arabic-NNN`, any string that carries Quran text (the whole-Quran 4-word index), a profile whose rate is outside 0.85 to 1.0 of normal, and once `apps/api/src/lesson-audio/lesson-voices.json` pins the lesson's ONE voice, any other profile.
    - It skips strings with no audio, and strings that wait for a reviewer's decision (after 3 failed clips).
    - `--only ba-001,ba.name` limits the plan, e.g. for the pilot.
 
@@ -50,7 +51,7 @@ texts/arabic-001.json --(1) export--> states.json --(2) plan--> worklist.json --
    ```
 
    ```bash
-   node apps/api/dist/cli/ingest-lesson-audio.js --manifest out/manifest.json --write --target <host:port/db>
+   node apps/api/dist/cli/ingest-lesson-audio.js --manifest out/manifest.json --write --organization <org uuid> --target <host:port/db>
    ```
 
    The ingest refuses a clip in any of these cases:

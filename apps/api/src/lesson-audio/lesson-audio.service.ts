@@ -10,13 +10,15 @@ import { lessonAudioAllowed, type LessonAudioViewer } from './lesson-audio-gate'
 import { APPROVALS_REQUIRED, SHA256, STRING_ID, TRIES_PER_ROUND, lessonAudioKey } from './lesson-audio-key';
 import type { ClipRow, LessonAudioStore, ReviewRow } from './lesson-audio.store';
 import { lessonText, type LessonText } from './lesson-texts';
-import { VOICE_SOURCES, familyLicence, type VoiceSource } from './voice-sources';
+import { VOICE_SOURCES, familyLicence, lessonVoice, type VoiceSource } from './voice-sources';
 
 export const LESSON_AUDIO_STORE = Symbol('LESSON_AUDIO_STORE');
 /** The voices that may be served (voice-sources.ts); a token so a spec can record a licence. */
 export const LESSON_VOICE_SOURCES = Symbol('LESSON_VOICE_SOURCES');
 /** The lessons' approved text (lesson-texts.ts); a token so a spec can use an approved lesson. */
 export const LESSON_TEXTS = Symbol('LESSON_TEXTS');
+/** The ONE voice a lesson is served in (lesson-voices.json); a token so a spec can pin one. */
+export const LESSON_VOICE_PINS = Symbol('LESSON_VOICE_PINS');
 /** How long a signed clip URL stays valid: one sitting. */
 export const LESSON_AUDIO_URL_TTL_SECONDS = 3600;
 /** One unit is the review page's page; the biggest lesson-1 unit is well under this. */
@@ -30,9 +32,14 @@ export interface LearnerClip {
   audio: { key: string; url: string; sha256: string; textSha256: string };
 }
 
-/** The newest clip with its approvals complete, per string, among the clips of its CURRENT text. */
-function servedClip(clips: ClipRow[], textSha256: string): ClipRow | null {
-  const ok = clips.filter((c) => c.textSha256 === textSha256 && c.state === 'approved');
+/**
+ * The newest clip with its approvals complete, per string, among the clips of
+ * its CURRENT text in the lesson's ONE voice -- unless a reviewer decided "no
+ * audio" for that text, which wins over any clip (review of #254, P1).
+ */
+export function servedClip(clips: ReadonlyArray<ClipRow>, textSha256: string, voice: string | null, noAudio: boolean): ClipRow | null {
+  if (noAudio || voice === null) return null;
+  const ok = clips.filter((c) => c.textSha256 === textSha256 && c.state === 'approved' && `${c.vendor}:${c.voice}` === voice);
   return ok.length ? ok.reduce((a, b) => (b.createdAt > a.createdAt ? b : a)) : null;
 }
 
@@ -42,7 +49,9 @@ function servedClip(clips: ClipRow[], textSha256: string): ClipRow | null {
  * learnerAudio -- what a signed-in account hears in a lesson. FAIL CLOSED: a
  *   string gets a clip only if (1) it is in the lesson's approved text as the
  *   API was built with it, (2) a clip of exactly that text has two approvals
- *   from two people and no rejection or withdrawal, (3) its voice is listed in
+ *   from two people and no rejection or withdrawal, in THIS account's
+ *   organization, and no reviewer decided "no audio" for that text, (3) its
+ *   voice is the lesson's one pinned voice (lesson-voices.json) and listed in
  *   voice-sources.ts, and (4) the release gate lets THIS account hear that
  *   voice. Every URL is signed here, after those checks, for a key derived from
  *   the row: no request field names a key or a clip.
@@ -60,6 +69,7 @@ export class LessonAudioService {
     @Optional() @Inject(OBJECT_STORAGE) private readonly storage: Pick<ObjectStorage, 'signedReadUrl'> | null = null,
     @Optional() @Inject(LESSON_VOICE_SOURCES) private readonly voices: ReadonlyMap<string, VoiceSource> = VOICE_SOURCES,
     @Optional() @Inject(LESSON_TEXTS) private readonly texts: (lesson: string) => LessonText | null = lessonText,
+    @Optional() @Inject(LESSON_VOICE_PINS) private readonly pin: (lesson: string) => string | null = lessonVoice,
   ) {}
 
   // --- the learner ---------------------------------------------------------------
@@ -74,12 +84,17 @@ export class LessonAudioService {
     // Testers hear an unapproved lesson file's clips (to check them in place); nobody else does.
     const tester = lessonAudioAllowed({ ...gate, audience: 'staff_test' }, false, viewer);
     if (!text.lessonApproved && !tester) return { lesson, clips: [] };
-    const all = await this.store.clips(lesson);
+    // Organization-scoped: an account hears only its own organization's approved clips.
+    const org = actor.organizationId;
+    const voice = this.pin(lesson);
+    if (!org || voice === null) return { lesson, clips: [] };
+    const [all, decisions] = await Promise.all([this.store.clips(org, lesson), this.store.decisions(org, lesson)]);
+    const silent = new Set(decisions.filter((d) => d.decision === 'no_audio').map((d) => `${d.stringId}:${d.textSha256}`));
     const byString = new Map<string, ClipRow[]>();
     for (const c of all) byString.set(c.stringId, [...(byString.get(c.stringId) ?? []), c]);
     const clips: LearnerClip[] = [];
     for (const s of text.strings.values()) {
-      const c = servedClip(byString.get(s.id) ?? [], s.sha256);
+      const c = servedClip(byString.get(s.id) ?? [], s.sha256, voice, silent.has(`${s.id}:${s.sha256}`));
       if (!c) continue;
       const source = this.voices.get(`${c.vendor}:${c.voice}`);
       if (!source) continue; // a voice taken out of voice-sources.ts is off for everyone
@@ -102,7 +117,8 @@ export class LessonAudioService {
   async summary(lesson: string, actor: Actor) {
     await this.require(actor, 'view');
     const text = this.textOf(lesson);
-    const [clips, decisions] = await Promise.all([this.store.clips(lesson), this.store.decisions(lesson)]);
+    const org = this.orgOf(actor);
+    const [clips, decisions] = await Promise.all([this.store.clips(org, lesson), this.store.decisions(org, lesson)]);
     const units = new Map<string, { unit: string; strings: number; approved: number; pending: number; needsDecision: number; noAudio: number; none: number }>();
     for (const s of text.strings.values()) {
       const unit = unitOf(s.id);
@@ -122,7 +138,8 @@ export class LessonAudioService {
     const strings = [...text.strings.values()].filter((s) => unitOf(s.id) === unit);
     if (strings.length === 0) throw new CommError(CommErrorCode.LESSON_AUDIO_NOT_FOUND, `no unit ${unit} with approved text in ${lesson}`);
     if (strings.length > MAX_STRINGS_SIGNED) throw new CommError(CommErrorCode.LESSON_AUDIO_INVALID, 'this unit is too large for one page', 422);
-    const [clips, decisions] = await Promise.all([this.store.clips(lesson, strings.map((s) => s.id)), this.store.decisions(lesson)]);
+    const org = this.orgOf(actor);
+    const [clips, decisions] = await Promise.all([this.store.clips(org, lesson, strings.map((s) => s.id)), this.store.decisions(org, lesson)]);
     const current = clips.filter((c) => strings.some((s) => s.id === c.stringId && s.sha256 === c.textSha256));
     const reviews = await this.store.reviews(current.map((c) => c.id));
     const out = [];
@@ -210,6 +227,11 @@ export class LessonAudioService {
     }
   }
 
+  private orgOf(actor: Actor): string {
+    if (!actor.organizationId) throw new CommError(CommErrorCode.LESSON_AUDIO_DENIED, 'lesson audio belongs to an organization');
+    return actor.organizationId;
+  }
+
   private textOf(lesson: string): LessonText {
     const text = this.texts(lesson);
     if (!text) throw new CommError(CommErrorCode.LESSON_AUDIO_NOT_FOUND, `no lesson ${lesson} with voice-over`);
@@ -238,8 +260,9 @@ export function stringStatus(
 ): StringStatus {
   const own = clips.filter((c) => c.textSha256 === textSha256);
   const ds = decisions.filter((d) => d.textSha256 === textSha256);
-  if (own.some((c) => c.state === 'approved')) return 'approved';
+  // "No audio" first: it is final, whatever clip exists (review of #254, P1).
   if (ds.some((d) => d.decision === 'no_audio')) return 'noAudio';
+  if (own.some((c) => c.state === 'approved')) return 'approved';
   if (own.some((c) => c.state === 'pending')) return 'pending';
   const failed = own.filter((c) => c.state === 'rejected' || c.state === 'withdrawn').length;
   const rounds = ds.filter((d) => d.decision === 'one_more_round').length;

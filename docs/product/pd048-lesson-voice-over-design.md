@@ -706,3 +706,23 @@ The department head said go on 2026-10-29. One draft PR carries what §15 split 
 - The Flutter openers (`activity_view_{web,mobile}`) posting `jawwid:lesson-audio`.
 - The parent notice surfaces of Q7: the parent terms and privacy notice, the enrolment line, and Settings → About lesson audio. Its wording waits for the owner.
 - Generating any clip. That needs an account the owner opens, the pilot probe (§15 step 3), and R-48a before `all`.
+
+### 18.1 The department head's review of #254 (2026-10-29), fixed
+
+- **P1, "no audio" is final.** The approve guard refuses a clip whose text has "no audio". `decide no_audio` is refused while a clip of that text is pending or approved (withdraw it first). The learner list skips a "no audio" string whatever clip exists, and the review page ranks "no audio" first. An integration test plays the reviewer's exact scenario.
+- **P2, the round of three tries.** `guard_lesson_audio_clip` refuses a clip of a text whose failures reached the round, until a reviewer decides "one more round". Ingest, review and decision all take one lock per (organization, lesson, string), `chat.lock_lesson_audio_string`.
+- **P2, never Quran.** The lesson key is `^arabic-[0-9]{3}$` in SQL (`chat.is_lesson_audio_key`), in the API and in `tts.py`. `lesson-audio-texts.py` and `tts.py plan` refuse any string carrying Quran text. They use a whole-Quran index of every 4-word run, and every whole shorter ayah, folded by PD-29's typed-Quran rule over the pinned dataset. The ingest accepts only strings from the checked map.
+- **P2, one voice.** `apps/api/src/lesson-audio/lesson-voices.json` pins the ONE voice per lesson. While it is null (before the pilot picks), no learner hears the lesson. Once it is set, other voices are neither served nor ingested nor planned. The recipe's rate must be 0.85 to 1.0 of normal.
+- **P2, the organization.**
+  - Clips and decisions carry `organization_id`.
+  - A reviewer reviews only clips of their own organization, and decides only for it.
+  - A learner is served only their organization's clips.
+  - The ingest CLI takes `--organization`.
+- **Nits:**
+  - no preselected reject category;
+  - the review page hashes the text it shows and refuses to approve when that hash is not the clip's;
+  - the "listen to the end first" hint is visible text the buttons point to with `aria-describedby`;
+  - vendor regions must match `^[a-z0-9-]{1,32}$`;
+  - an empty voice list clears a stale one, and the opener posts it;
+  - the browser-speech ban covers every file of `apps/lessons` and any spelling of "synthesis";
+  - re-seeding templates audits a skipped role once only.

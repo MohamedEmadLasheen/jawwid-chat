@@ -107,7 +107,8 @@ export async function voiceMessage(lesson: string): Promise<VoiceMessage | null>
   const answer = await api.get<{ lesson: string; clips: VoiceMessage['clips'] }>(`/lesson-audio/${encodeURIComponent(lesson)}`)
   if (answer.lesson !== lesson) return null
   const clips = answer.clips.map((c) => ({ id: c.id, audio: { key: c.audio.key, url: c.audio.url, sha256: c.audio.sha256, textSha256: c.audio.textSha256 } }))
-  return clips.length ? { type: VOICE_MESSAGE, lesson, clips } : null
+  // Posted even when empty: an empty list clears what the lesson held before.
+  return { type: VOICE_MESSAGE, lesson, clips }
 }
 
 /**

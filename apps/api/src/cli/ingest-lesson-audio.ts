@@ -17,6 +17,8 @@ import { describeTarget } from './bootstrap-super-admin';
  *                           would not; nothing is stored or written
  *   --write                 store the clips and write the rows
  *   --target <host:port/db> REQUIRED with --write or --export; must name DATABASE_URL's target
+ *   --organization <uuid>   REQUIRED with --write or --export: the organization whose
+ *                           reviewers approve these clips and whose accounts hear them
  *   --allow-non-local       with --write: required unless APP_ENV is EXPLICITLY local, test or ci
  *   --export <lesson>       print the lesson's clips and decisions (states, hashes; no
  *                           text, no URLs) for scripts/lessons/tts/plan.py. Read-only.
@@ -38,8 +40,11 @@ export interface LessonIngestArgs {
   write: boolean;
   exportLesson?: string;
   target?: string;
+  organization?: string;
   allowNonLocal: boolean;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function parseLessonIngestArgs(argv: string[]): LessonIngestArgs {
   const args: LessonIngestArgs = { manifest: '', write: false, allowNonLocal: false };
@@ -56,6 +61,7 @@ export function parseLessonIngestArgs(argv: string[]): LessonIngestArgs {
       case '--write': args.write = true; break;
       case '--export': args.exportLesson = value(); break;
       case '--target': args.target = value(); break;
+      case '--organization': args.organization = value(); break;
       case '--allow-non-local': args.allowNonLocal = true; break;
       default: throw new UsageError(`unknown option ${flag}`);
     }
@@ -63,9 +69,11 @@ export function parseLessonIngestArgs(argv: string[]): LessonIngestArgs {
   if (args.exportLesson !== undefined) {
     if (!LESSON_KEY.test(args.exportLesson)) throw new UsageError('--export needs a lesson key such as arabic-001');
     if (args.manifest || args.write) throw new UsageError('--export reads only: give no --manifest or --write');
+    if (!args.organization || !UUID.test(args.organization)) throw new UsageError('--export needs the --organization id');
     return args;
   }
   if (!args.manifest) throw new UsageError('give the --manifest');
+  if (args.write && (!args.organization || !UUID.test(args.organization))) throw new UsageError('--write needs the --organization id');
   return args;
 }
 
@@ -77,17 +85,18 @@ function checkedTarget(target: string | undefined): string {
   return actual;
 }
 
-async function exportLesson(lesson: string, target: string): Promise<void> {
+async function exportLesson(lesson: string, organization: string, target: string): Promise<void> {
   const prisma = new PrismaClient();
   try {
     const clips = await prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT c.string_id AS "stringId", c.text_sha256 AS "textSha256", c.render_sha256 AS "renderSha256",
              c.attempt::int AS attempt, chat.lesson_audio_clip_state(c.id) AS state
-        FROM chat.lesson_audio_clip c WHERE c.lesson_key = ${lesson} ORDER BY c.string_id, c.created_at`;
+        FROM chat.lesson_audio_clip c WHERE c.organization_id = ${organization}::uuid AND c.lesson_key = ${lesson}
+       ORDER BY c.string_id, c.created_at`;
     const decisions = await prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT string_id AS "stringId", text_sha256 AS "textSha256", decision
-        FROM chat.lesson_audio_string_decision WHERE lesson_key = ${lesson} ORDER BY at`;
-    process.stdout.write(`${JSON.stringify({ target, lesson, clips, decisions }, null, 1)}\n`);
+        FROM chat.lesson_audio_string_decision WHERE organization_id = ${organization}::uuid AND lesson_key = ${lesson} ORDER BY at`;
+    process.stdout.write(`${JSON.stringify({ target, organization, lesson, clips, decisions }, null, 1)}\n`);
   } finally {
     await prisma.$disconnect();
   }
@@ -96,7 +105,7 @@ async function exportLesson(lesson: string, target: string): Promise<void> {
 async function main(): Promise<void> {
   const args = parseLessonIngestArgs(process.argv.slice(2));
   if (args.exportLesson) {
-    await exportLesson(args.exportLesson, checkedTarget(args.target));
+    await exportLesson(args.exportLesson, args.organization!, checkedTarget(args.target));
     return;
   }
   const manifest = parseManifest(JSON.parse(await readFile(args.manifest, 'utf8')));
@@ -124,7 +133,7 @@ async function main(): Promise<void> {
         writer: prismaClipRowWriter(prisma as unknown as PrismaService),
         readFile: (p) => readFile(p),
       },
-      { dryRun: false },
+      { dryRun: false, organizationId: args.organization! },
     );
     process.stdout.write(`${JSON.stringify({ target, ...report }, null, 2)}\n`);
     process.exitCode = report.refused.length ? 1 : 0;

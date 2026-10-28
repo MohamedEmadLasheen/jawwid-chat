@@ -15,13 +15,14 @@ import type { UploadAuthorization } from '../../../src/communication/attachments
 import { NO_LESSON_AUDIO, lessonAudioAllowed, parseLessonAudience, parseLessonAudioTesters, type LessonAudioGate } from '../../../src/lesson-audio/lesson-audio-gate';
 import { APPROVALS_REQUIRED, TRIES_PER_ROUND, lessonAudioKey, parseLessonAudioKey } from '../../../src/lesson-audio/lesson-audio-key';
 import { parseManifest, planLessonIngest, runLessonIngest, type ClipRowWriter, type GenerationManifest } from '../../../src/lesson-audio/lesson-audio-ingest';
-import { LessonAudioService, refusal, stringStatus, unitOf } from '../../../src/lesson-audio/lesson-audio.service';
-import type { ClipRow, LessonAudioStore, ReviewRow } from '../../../src/lesson-audio/lesson-audio.store';
+import { LessonAudioService, refusal, servedClip, stringStatus, unitOf } from '../../../src/lesson-audio/lesson-audio.service';
+import type { ClipRow, DecisionRow, LessonAudioStore, ReviewRow } from '../../../src/lesson-audio/lesson-audio.store';
 import { lessonText, parseLessonText, type LessonText } from '../../../src/lesson-audio/lesson-texts';
-import { canonicalJson, parseRecipe, renderSha256, type RenderRecipe } from '../../../src/lesson-audio/recipe';
-import { VOICE_SOURCES, familyLicence, type VoiceSource } from '../../../src/lesson-audio/voice-sources';
+import { canonicalJson, parseRecipe, rateFactor, renderSha256, type RenderRecipe } from '../../../src/lesson-audio/recipe';
+import { VOICE_SOURCES, familyLicence, lessonVoice, type VoiceSource } from '../../../src/lesson-audio/voice-sources';
 import { admin, manager, parent, teacher } from '../../support/fixtures';
 
+const ORG_ID = '00000000-0000-4000-8000-0000000000aa';
 const sha = (s: string | Buffer) => createHash('sha256').update(s).digest('hex');
 const MIGRATION = join(__dirname, '../../../../../supabase/migrations/20261029230000_chat_pd048_lesson_audio.sql');
 
@@ -65,21 +66,24 @@ function clip(over: Partial<ClipRow> = {}): ClipRow {
 class FakeStore implements LessonAudioStore {
   clipRows: ClipRow[] = [];
   reviewRows: ReviewRow[] = [];
+  decisionRows: DecisionRow[] = [];
+  orgsAsked: string[] = [];
   gateValue: LessonAudioGate = NO_LESSON_AUDIO;
   clipsAsked = 0;
   reviewed: unknown[] = [];
   async gate() {
     return this.gateValue;
   }
-  async clips() {
+  async clips(org: string) {
     this.clipsAsked++;
+    this.orgsAsked.push(org);
     return this.clipRows;
   }
   async reviews() {
     return this.reviewRows;
   }
   async decisions() {
-    return [];
+    return this.decisionRows;
   }
   async review(...args: unknown[]) {
     this.reviewed.push(args);
@@ -97,14 +101,17 @@ const storage = {
 };
 const permissions = (keys: string[]) => ({ profileOf: async () => ({ tier: 'x', departmentKind: null, placement: null, permissions: new Set(keys) }) });
 
-function service(store: FakeStore, opts: { approved?: boolean; voices?: ReadonlyMap<string, VoiceSource>; keys?: string[] } = {}) {
+const HAMED = 'azure:ar-SA-HamedNeural';
+function service(store: FakeStore, opts: { approved?: boolean; voices?: ReadonlyMap<string, VoiceSource>; keys?: string[]; pin?: string | null } = {}) {
   const text = textOf(opts.approved ?? true);
+  const pin = opts.pin === undefined ? HAMED : opts.pin;
   return new LessonAudioService(
     store,
     permissions(opts.keys ?? []) as never,
     storage,
     opts.voices ?? VOICE_SOURCES,
     (l) => (l === 'arabic-001' ? text : null),
+    () => pin,
   );
 }
 
@@ -418,7 +425,7 @@ describe('the ingest: what storage holds is what is recorded', () => {
 
   it('writes the row with the hash of what the clip key holds, and the attempt after the earlier ones', async () => {
     const f = fakeDeps();
-    const report = await runLessonIngest(manifest([entry()]), '/clips', f.deps, { dryRun: false });
+    const report = await runLessonIngest(manifest([entry()]), '/clips', f.deps, { dryRun: false, organizationId: ORG_ID });
     expect(report).toMatchObject({ written: 1, refused: [] });
     expect(f.rows).toEqual([expect.objectContaining({ stringId: real.id, audioSha256: sha(bytes), byteSize: bytes.length, attempt: 2 })]);
     expect([...f.objects.keys()]).toEqual([lessonAudioKey('arabic-001', real.id, sha(bytes))]); // the temporary upload is gone
@@ -426,12 +433,69 @@ describe('the ingest: what storage holds is what is recorded', () => {
 
   it('a dry run writes nothing; a clip already ingested is never replaced; corrupted storage is refused', async () => {
     const dry = fakeDeps();
-    expect(await runLessonIngest(manifest([entry()]), '/clips', dry.deps, { dryRun: true })).toMatchObject({ dryRun: true, accepted: 1, written: 0 });
+    expect(await runLessonIngest(manifest([entry()]), '/clips', dry.deps, { dryRun: true, organizationId: ORG_ID })).toMatchObject({ dryRun: true, accepted: 1, written: 0 });
     expect(dry.rows).toEqual([]);
     const again = fakeDeps({ exists: true });
-    expect((await runLessonIngest(manifest([entry()]), '/clips', again.deps, { dryRun: false })).refused[0]?.reason).toMatch(/never replaced/);
+    expect((await runLessonIngest(manifest([entry()]), '/clips', again.deps, { dryRun: false, organizationId: ORG_ID })).refused[0]?.reason).toMatch(/never replaced/);
     const bad = fakeDeps({ corrupt: true });
-    expect((await runLessonIngest(manifest([entry()]), '/clips', bad.deps, { dryRun: false })).refused[0]?.reason).toMatch(/storage holds differs/);
+    expect((await runLessonIngest(manifest([entry()]), '/clips', bad.deps, { dryRun: false, organizationId: ORG_ID })).refused[0]?.reason).toMatch(/storage holds differs/);
     expect(bad.rows).toEqual([]);
+  });
+});
+
+describe('review of #254: "no audio" is final, one voice per lesson, the rate, the lesson key, the organization', () => {
+  const t = sha(BAB);
+  it('"no audio" wins over an approved clip: it is not served, and the string stands as no audio', async () => {
+    expect(servedClip([clip()], t, HAMED, true)).toBeNull();
+    expect(servedClip([clip()], t, HAMED, false)?.id).toBe(clip().id);
+    expect(stringStatus(t, [{ textSha256: t, state: 'approved' }], [{ textSha256: t, decision: 'no_audio' }])).toBe('noAudio');
+    const store = new FakeStore();
+    store.gateValue = { audience: 'staff_test', testStaffIds: [] };
+    store.clipRows = [clip()];
+    store.decisionRows = [{ stringId: 'ba-001', textSha256: t, decision: 'no_audio', staffName: 'R', reason: 'x', at: new Date() }];
+    expect((await service(store).learnerAudio('arabic-001', admin('sa', 'super_admin'))).clips).toEqual([]);
+  });
+
+  it("only the lesson's one pinned voice is served; while nothing is pinned, nothing is", async () => {
+    const store = new FakeStore();
+    store.gateValue = { audience: 'staff_test', testStaffIds: [] };
+    store.clipRows = [clip({ voice: 'ar-SA-ZariyahNeural' })];
+    expect((await service(store).learnerAudio('arabic-001', admin('sa', 'super_admin'))).clips).toEqual([]);
+    store.clipRows = [clip()];
+    expect((await service(store, { pin: null }).learnerAudio('arabic-001', admin('sa', 'super_admin'))).clips).toEqual([]);
+    expect(lessonVoice('arabic-001')).toBeNull(); // the pilot has not picked yet
+    expect(lessonVoice('arabic-001', { 'arabic-001': HAMED })).toBe(HAMED);
+    expect(lessonVoice('arabic-001', { 'arabic-001': 'azure:not-listed' })).toBeNull();
+  });
+
+  it('a learner is served from their own organization only, and a staff member with none gets nothing', async () => {
+    const store = new FakeStore();
+    store.gateValue = { audience: 'staff_test', testStaffIds: [] };
+    store.clipRows = [clip()];
+    await service(store).learnerAudio('arabic-001', admin('sa', 'super_admin'));
+    expect(store.orgsAsked).toEqual([admin('sa', 'super_admin').organizationId]);
+    expect((await service(store).learnerAudio('arabic-001', { ...admin('sa', 'super_admin'), organizationId: undefined })).clips).toEqual([]);
+  });
+
+  it('the rate is 0.85 to 1.0 of normal (owner Q6), in either vendor\'s notation', () => {
+    expect(rateFactor('-10%')).toBeCloseTo(0.9);
+    expect(rateFactor('90%')).toBeCloseTo(0.9);
+    const base: RenderRecipe = { v: 1, norm: 'exact-v1', vendor: 'azure', voice: 'ar-SA-HamedNeural', locale: 'ar-SA', format: 'mp3', rate: '-10%', input: '<speak/>', lexicon: '', take: 1 };
+    expect(parseRecipe(base)).toEqual(base);
+    for (const rate of ['+10%', '110%', '-20%', '80%', 'fast', '0.9']) expect(typeof parseRecipe({ ...base, rate })).toBe('string');
+  });
+
+  it('only arabic-NNN lessons: a quran- or surah- manifest is refused before anything is read', () => {
+    for (const lesson of ['quran-001', 'surah-085', 'islamic-001']) expect(parseManifest({ lesson, clips: [] })).toMatch(/not a generation manifest/);
+    expect(() => lessonAudioKey('quran-001', 'ba-001', AUDIO)).toThrow();
+  });
+
+  it('once a lesson is pinned, the ingest refuses any other voice', () => {
+    const real = [...lessonText('arabic-001')!.strings.values()][0]!;
+    const recipe: RenderRecipe = { v: 1, norm: 'exact-v1', vendor: 'azure', voice: 'ar-SA-ZariyahNeural', locale: 'ar-SA', format: 'mp3', rate: '-10%', input: '<speak/>', lexicon: '', take: 1 };
+    const m = parseManifest({ lesson: 'arabic-001', clips: [{ stringId: real.id, text: real.text, recipe, renderSha256: renderSha256(recipe), file: 'x.mp3', sha256: AUDIO }] });
+    if (typeof m === 'string') throw new Error(m);
+    expect(planLessonIngest(m, () => HAMED).refused[0]?.reason).toMatch(/voiced by azure:ar-SA-HamedNeural only/);
+    expect(planLessonIngest(m, () => null).accepted).toHaveLength(1);
   });
 });

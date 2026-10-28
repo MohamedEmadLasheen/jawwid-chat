@@ -25,6 +25,7 @@ ensure_ascii), so the file never trips G-20.
   python3 -I scripts/lessons/lesson-audio-texts.py selftest  each refusal can fail
 """
 import hashlib
+import importlib.util
 import json
 import pathlib
 import re
@@ -38,8 +39,37 @@ LESSONS = [
     ("arabic-001", "apps/lessons/src/arabic/lesson-001.json", "apps/api/src/lesson-audio/texts/arabic-001.json"),
 ]
 STRING_ID = re.compile(r"^[a-z][a-z0-9_]*(-[0-9]{3}|\.(name|note))$")
-# The browser's own voice must never become a silent fallback (design §7.5).
-BROWSER_SPEECH = re.compile(r"speechSynthesis|SpeechSynthesisUtterance")
+# The browser's own voice must never become a silent fallback (design section 7.5). Any spelling
+# of it, anywhere in apps/lessons (review of #254): speechSynthesis, SpeechSynthesisUtterance,
+# window['speech' + 'Synthesis'] all carry "synthesis"; webkitSpeech* is the prefixed family.
+BROWSER_SPEECH = re.compile(r"synthesi[sz]|webkitspeech", re.I)
+SKIP_DIRS = {"node_modules", "dist", "public", ".vite"}
+
+sys.dont_write_bytecode = True  # loading a sibling script must leave no __pycache__ in the tree
+
+
+def quran_index():
+    """Every 4-word run of the verified Quran, and every whole shorter ayah of 2+ words, folded
+    exactly as PD-29's typed-Quran rule folds them (check-lesson-content.py), over all 114 surahs."""
+    spec = importlib.util.spec_from_file_location("lesson_content", str(ROOT / "scripts/lessons/check-lesson-content.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    grams = set()
+    for verses in mod.verified_surahs().values():
+        for v in verses:
+            ws = mod.fold(v).split()
+            if len(ws) < 2:
+                continue
+            k = min(mod.RUN, len(ws))
+            grams.update(tuple(ws[i:i + k]) for i in range(len(ws) - k + 1))
+    return grams, mod.fold
+
+
+def typed_quran(text, index):
+    """Whether a string carries Quran: Quran recitation is never TTS, so such a string is never voiced."""
+    grams, fold = index
+    ws = fold(text).split()
+    return any(tuple(ws[i:i + k]) in grams for k in {len(g) for g in grams} for i in range(len(ws) - k + 1))
 
 
 def sha(text):
@@ -83,17 +113,23 @@ def render(key, source_rel, source_bytes):
 
 def browser_speech(root):
     hits = []
-    for p in sorted((root / "apps/lessons/src").rglob("*")):
-        if p.suffix in (".ts", ".tsx", ".js", ".jsx", ".html") and p.is_file():
-            if BROWSER_SPEECH.search(p.read_text(encoding="utf-8", errors="replace")):
-                hits.append(str(p.relative_to(root)))
+    for p in sorted((root / "apps/lessons").rglob("*")):
+        if not p.is_file() or SKIP_DIRS & set(p.relative_to(root / "apps/lessons").parts) or p.stat().st_size > 2_000_000:
+            continue
+        if BROWSER_SPEECH.search(p.read_text(encoding="utf-8", errors="replace")):
+            hits.append(str(p.relative_to(root)))
     return hits
 
 
-def check(root=ROOT, write=False):
+def check(root=ROOT, write=False, index=None):
     failures = []
+    index = index if index is not None else quran_index()
     for key, src, dst in LESSONS:
         want = render(key, src, (root / src).read_bytes())
+        quran = [s["id"] for s in json.loads(want)["strings"] if typed_quran(s["text"], index)]
+        if quran:
+            failures.append("%s: %s carry Quran text; Quran is never voiced (PD-48)" % (dst, ", ".join(quran[:5])))
+            continue
         target = root / dst
         if write:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -134,18 +170,31 @@ def selftest():
         raise AssertionError("a duplicate id was accepted")
     except ValueError:
         pass
+    # A synthetic Quran index: the run "a b c d" is "Quran" here.
+    IDX = ({("a", "b", "c", "d"), ("e", "f")}, lambda t: t)
+    assert typed_quran("x a b c d y", IDX) and typed_quran("e f", IDX) and not typed_quran("a b c", IDX) and not typed_quran("e", IDX)
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
         (root / "apps/lessons/src/arabic").mkdir(parents=True)
         (root / "apps/lessons/src/arabic/lesson-001.json").write_text(json.dumps(lesson), encoding="utf-8")
-        assert check(root), "a missing map passed"
-        assert check(root, write=True) == []
-        assert check(root) == [], "a fresh map failed"
+        assert check(root, index=IDX), "a missing map passed"
+        assert check(root, write=True, index=IDX) == []
+        assert check(root, index=IDX) == [], "a fresh map failed"
         (root / "apps/lessons/src/arabic/lesson-001.json").write_text(json.dumps(lesson).replace('"z"', '"zz"'), encoding="utf-8")
-        assert any("stale" in f for f in check(root)), "a changed text did not make the map stale"
-        check(root, write=True)
-        (root / "apps/lessons/src/x.ts").write_text("window.speechSynthesis.speak(u)", encoding="utf-8")
-        assert any("speech synthesis" in f for f in check(root)), "browser speech was not refused"
+        assert any("stale" in f for f in check(root, index=IDX)), "a changed text did not make the map stale"
+        check(root, write=True, index=IDX)
+        for sneaky in ("window.speechSynthesis.speak(u)", "window['speech' + 'Synthesis']", "new webkitSpeechRecognition()"):
+            (root / "apps/lessons/src/x.ts").write_text(sneaky, encoding="utf-8")
+            assert any("speech synthesis" in f for f in check(root, index=IDX)), "browser speech was not refused: %s" % sneaky
+        (root / "apps/lessons/README.md").write_text("speechSynthesis", encoding="utf-8")
+        (root / "apps/lessons/src/x.ts").write_text("ok", encoding="utf-8")
+        assert any("README.md" in f for f in check(root, index=IDX)), "only src was scanned"
+        (root / "apps/lessons/README.md").write_text("ok", encoding="utf-8")
+        assert check(root, index=IDX) == []
+        quranic = json.loads(json.dumps(lesson))
+        quranic["units"][1]["note"]["text"] = "x a b c d"
+        (root / "apps/lessons/src/arabic/lesson-001.json").write_text(json.dumps(quranic), encoding="utf-8")
+        assert any("carry Quran text" in f for f in check(root, index=IDX)), "typed Quran was not refused"
     print("lesson-audio-texts selftest: ok")
 
 

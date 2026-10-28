@@ -40,7 +40,9 @@ describe('accepting the voice-over list', () => {
   it('drops a clip for other text (an API and a lesson out of step) or for a string this build does not show', async () => {
     const m = await acceptVoiceMessage(from(await message([await entry('alif-001', 'كِتَابٌ'), await entry('alif.name', 'أَلِفْ'), await entry('ba-001', 'بَابْ')])), 'arabic-001', TEXTS, ORIGINS);
     expect([...m!.keys()]).toEqual(['alif.name']);
-    expect(await acceptVoiceMessage(from(await message([await entry('alif-001', 'other')])), 'arabic-001', TEXTS, ORIGINS)).toBeNull();
+    // A valid list with nothing left is EMPTY, not refused: it clears what an earlier list gave.
+    expect((await acceptVoiceMessage(from(await message([await entry('alif-001', 'other')])), 'arabic-001', TEXTS, ORIGINS))?.size).toBe(0);
+    expect((await acceptVoiceMessage(from(await message([])), 'arabic-001', TEXTS, ORIGINS))?.size).toBe(0);
   });
 
   it('refuses the WHOLE list for a bad origin, another lesson, an extra field, a foreign key or a media host not allowed', async () => {
@@ -129,5 +131,12 @@ describe('the voice hook: one clip at a time, only verified bytes', () => {
     });
     await waitFor(() => expect(swapped.result.current.has('alif-001')).toBe(false));
     expect(swapped.result.current.has('alif.name')).toBe(true);
+
+    // An empty list from the opener (the gate closed, the clip was withdrawn) clears the buttons.
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { origin: 'https://admin.example.test', data: { type: VOICE_MESSAGE, lesson: 'arabic-001', clips: [] } }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await waitFor(() => expect(swapped.result.current.has('alif.name')).toBe(false));
   });
 });

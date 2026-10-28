@@ -46,6 +46,8 @@ export async function acceptVoiceMessage(
   texts: ReadonlyMap<string, string>,
   origins: AudioOrigins,
 ): Promise<Map<string, VoiceClip> | null> {
+  // null: refused (nothing changes). An EMPTY map: a valid list with nothing this
+  // account may hear -- it clears what an earlier list gave (review of #254).
   if (event.origin !== origins.self && !origins.parents.includes(event.origin)) return null;
   const data = event.data as { type?: unknown; lesson?: unknown; clips?: unknown };
   if (!data || typeof data !== 'object' || !only(data, ['type', 'lesson', 'clips'])) return null;
@@ -79,7 +81,7 @@ export async function acceptVoiceMessage(
     if (text === undefined || (await sha256Hex(text)) !== c.textSha256) continue;
     clips.set(c.id, c.clip);
   }
-  return clips.size ? clips : null;
+  return clips;
 }
 
 export interface Voice {
@@ -102,7 +104,7 @@ export function useVoice(lesson: number, texts: ReadonlyMap<string, string>, ori
     let live = true;
     const consider = (e: { origin: string; data: unknown }) => {
       void acceptVoiceMessage(e, lessonKey, texts, origins).then((m) => {
-        if (live && m) setClips(m);
+        if (live && m) setClips(m.size ? m : null);
       });
     };
     const onMessage = (e: MessageEvent) => consider({ origin: e.origin, data: e.data });

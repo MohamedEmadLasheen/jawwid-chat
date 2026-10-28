@@ -17,11 +17,12 @@ export const APPROVALS_REQUIRED = 2;
 /** After this many failed clips of one text, a reviewer decides (chat.lesson_audio_tries_per_round). */
 export const TRIES_PER_ROUND = 3;
 
-export const LESSON_KEY = /^[a-z]+-[0-9]{3}$/;
+/** The Arabic letters lessons only: Quran recitation is never TTS (`quran-001`, `surah-085` are refused). */
+export const LESSON_KEY = /^arabic-[0-9]{3}$/;
 /** PD-29's string ids (#234): <unit>-NNN, <unit>.name, <unit>.note. */
 export const STRING_ID = /^[a-z][a-z0-9_]*(-[0-9]{3}|\.(name|note))$/;
 export const SHA256 = /^[0-9a-f]{64}$/;
-const KEY = /^lesson-audio\/([a-z]+-[0-9]{3})\/([a-z][a-z0-9_]*(?:-[0-9]{3}|\.(?:name|note)))\/([0-9a-f]{64})\.mp3$/;
+const KEY = /^lesson-audio\/(arabic-[0-9]{3})\/([a-z][a-z0-9_]*(?:-[0-9]{3}|\.(?:name|note)))\/([0-9a-f]{64})\.mp3$/;
 
 export function lessonAudioKey(lesson: string, stringId: string, audioSha256: string): string {
   if (!LESSON_KEY.test(lesson)) throw new Error(`not a lesson key: ${JSON.stringify(lesson)}`);

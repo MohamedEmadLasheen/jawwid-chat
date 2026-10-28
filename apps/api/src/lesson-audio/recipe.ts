@@ -29,6 +29,18 @@ export interface RenderRecipe {
 }
 
 const VENDOR = /^[a-z][a-z0-9-]{1,31}$/;
+
+/** Owner Q6: about 10% slower for children -- never faster than normal, never slower than 0.85. */
+export const RATE_RANGE = { min: 0.85, max: 1 } as const;
+
+/** A recipe's speaking rate as a factor of normal: Azure writes `-10%`, Polly `90%`. Anything else is null. */
+export function rateFactor(rate: string): number | null {
+  const relative = /^-(\d{1,2})%$/.exec(rate);
+  if (relative) return 1 - Number(relative[1]) / 100;
+  if (rate === '0%') return 1;
+  const absolute = /^(\d{2,3})%$/.exec(rate);
+  return absolute ? Number(absolute[1]) / 100 : null;
+}
 const VOICE = /^[A-Za-z0-9-]{1,80}$/;
 
 export function canonicalJson(value: unknown): string {
@@ -54,6 +66,8 @@ export function parseRecipe(raw: unknown): RenderRecipe | string {
   if (typeof r.vendor !== 'string' || !VENDOR.test(r.vendor)) return 'vendor';
   if (typeof r.voice !== 'string' || !VOICE.test(r.voice)) return 'voice';
   for (const k of ['locale', 'format', 'rate'] as const) if (typeof r[k] !== 'string' || !(r[k] as string).length || (r[k] as string).length > 80) return k;
+  const factor = rateFactor(r.rate as string);
+  if (factor === null || factor < RATE_RANGE.min || factor > RATE_RANGE.max) return `rate: between ${RATE_RANGE.min} and ${RATE_RANGE.max} of normal`;
   if (typeof r.input !== 'string' || !r.input.length || r.input.length > 4000) return 'input';
   if (typeof r.lexicon !== 'string' || !(r.lexicon === '' || /^[0-9a-f]{64}$/.test(r.lexicon))) return 'lexicon';
   if (typeof r.take !== 'number' || !Number.isInteger(r.take) || r.take < 1 || r.take > 100) return 'take';

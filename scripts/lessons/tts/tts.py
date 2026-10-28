@@ -21,9 +21,11 @@ Never Quran: a lesson with typed Quran is not voiced (Quran recitation is never 
 import datetime
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 import pathlib
+import re
 import sys
 import tempfile
 import unicodedata
@@ -31,9 +33,16 @@ import urllib.error
 import urllib.request
 from xml.sax.saxutils import escape
 
+sys.dont_write_bytecode = True  # loading a sibling script must leave no __pycache__ in the tree
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 HERE = pathlib.Path(__file__).resolve().parent
 TEXTS = ROOT / "apps/api/src/lesson-audio/texts"
+VOICES = ROOT / "apps/api/src/lesson-audio/lesson-voices.json"
+LESSON = re.compile(r"^arabic-[0-9]{3}$")  # = LESSON_KEY in lesson-audio-key.ts: the letters lessons, never Quran
+REGION = re.compile(r"^[a-z0-9-]{1,32}$")  # a vendor region goes into a host name: nothing else
+RATE_RANGE = (0.85, 1.0)  # = RATE_RANGE in recipe.ts (owner Q6: about 10% slower, never faster)
+_UNSET = object()
 TRIES_PER_ROUND = 3  # = TRIES_PER_ROUND in apps/api/src/lesson-audio/lesson-audio-key.ts
 
 # The voices the owner chose (Q2, Q5, Q6: Azure, one adult MSA voice, about 10% slower; Polly as
@@ -114,18 +123,54 @@ def load_text(lesson):
     return doc
 
 
-def plan(lesson, profile_name, export, only=None, texts=None, lexicon=None):
+def rate_factor(rate):
+    """The API's rateFactor (recipe.ts): Azure writes -10%, Polly 90%."""
+    m = re.match(r"^-(\d{1,2})%$", rate)
+    if m:
+        return 1 - int(m.group(1)) / 100
+    if rate == "0%":
+        return 1.0
+    m = re.match(r"^(\d{2,3})%$", rate)
+    return int(m.group(1)) / 100 if m else None
+
+
+def lesson_voice(lesson):
+    """The ONE voice a lesson is voiced in once the pilot picked it (lesson-voices.json), else None."""
+    v = json.loads(VOICES.read_text(encoding="utf-8")).get(lesson)
+    return v if isinstance(v, str) else None
+
+
+def quran_index():
+    """The whole-Quran 4-word index of scripts/lessons/lesson-audio-texts.py (one rule, one place)."""
+    spec = importlib.util.spec_from_file_location("lesson_audio_texts", str(ROOT / "scripts/lessons/lesson-audio-texts.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.quran_index(), mod.typed_quran
+
+
+def plan(lesson, profile_name, export, only=None, texts=None, lexicon=None, pin=_UNSET, quran=None):
     """The worklist: every approved string with no pending or approved clip of its current text."""
-    if not lesson.startswith("arabic-"):
+    if not LESSON.match(lesson or ""):
         # Only the Arabic letters lessons are voiced. A Quran lesson is never TTS: it has no text map.
         raise Refused("%s is not an Arabic letters lesson: only arabic-NNN is voiced, and Quran never" % lesson)
     if profile_name not in PROFILES:
         raise Refused("unknown profile %s (one of %s)" % (profile_name, ", ".join(sorted(PROFILES))))
     profile = PROFILES[profile_name]
+    factor = rate_factor(profile["rate"])
+    if factor is None or not RATE_RANGE[0] <= factor <= RATE_RANGE[1]:
+        raise Refused("profile %s: the rate is %s of normal; it must be %s to %s" % (profile_name, factor, *RATE_RANGE))
+    voice = lesson_voice(lesson) if pin is _UNSET else pin
+    if voice is not None and voice != "%s:%s" % (profile["vendor"], profile["voice"]):
+        # One adult MSA voice per lesson (owner Q5): once pinned, no other.
+        raise Refused("%s is voiced by %s only (lesson-voices.json); profile %s is another voice" % (lesson, voice, profile_name))
     doc = texts if texts is not None else load_text(lesson)
     entries = lexicon if lexicon is not None else lexicon_of(profile["vendor"])
     if export.get("lesson") != lesson:
         raise Refused("the export is of %r, not %s" % (export.get("lesson"), lesson))
+    index, typed = quran if quran is not None else quran_index()
+    carried = [s["id"] for s in doc["strings"] if typed(s["text"], index)]
+    if carried:
+        raise Refused("%s carry Quran text: Quran recitation is never TTS (PD-48)" % ", ".join(carried[:5]))
     work, skipped = [], []
     for s in doc["strings"]:
         if only and s["id"] not in only:
@@ -245,11 +290,15 @@ def vendor_from_shell(profile_name):
         key, region = os.environ.get("JAWWID_TTS_KEY", ""), os.environ.get("JAWWID_TTS_REGION", "")
         if not key or not region:
             raise Refused("set JAWWID_TTS_KEY and JAWWID_TTS_REGION in your shell (never in a file)")
+        if not REGION.match(region):
+            raise Refused("JAWWID_TTS_REGION is not a region name (lowercase letters, digits, dashes)")
         return lambda recipe: azure_synthesize(recipe, key, region)
     access, secret = os.environ.get("AWS_ACCESS_KEY_ID", ""), os.environ.get("AWS_SECRET_ACCESS_KEY", "")
     region = os.environ.get("AWS_REGION", "")
     if not access or not secret or not region:
         raise Refused("set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_REGION in your shell (never in a file)")
+    if not REGION.match(region):
+        raise Refused("AWS_REGION is not a region name (lowercase letters, digits, dashes)")
     token = os.environ.get("AWS_SESSION_TOKEN", "")
     return lambda recipe: polly_synthesize(recipe, profile, access, secret, token, region)
 
@@ -274,7 +323,9 @@ def selftest():
         {"id": "tha-001", "kind": "word", "text": "z", "sha256": sha("z")},
     ]}
     export = {"lesson": "arabic-001", "clips": [], "decisions": []}
-    p = plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={})
+    # A synthetic Quran index (the run "q u r a" is "Quran" here), so the selftest reads no dataset.
+    NOQ = ({("q", "u", "r", "a")}, lambda t, idx: any(tuple(t.split()[i:i + 4]) in idx for i in range(len(t.split()))))
+    p = plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={}, pin=None, quran=NOQ)
     assert [w["stringId"] for w in p["work"]] == ["ba-001", "ba-002", "ta-001", "tha-001"]
     first = p["work"][0]
     assert first["recipe"]["input"].endswith('<prosody rate="-10%">' + bab + "</prosody></voice></speak>")
@@ -284,35 +335,73 @@ def selftest():
         {"stringId": "ba-001", "textSha256": sha(bab), "renderSha256": first["renderSha256"], "state": "rejected"},
     ] + [{"stringId": "tha-001", "textSha256": sha("z"), "renderSha256": str(i) * 64, "state": "rejected"} for i in range(3)],
         "decisions": [{"stringId": "ta-001", "textSha256": sha("y"), "decision": "no_audio"}]}
-    p = plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={})
+    p = plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={}, pin=None, quran=NOQ)
     assert [(w["stringId"], w["recipe"]["take"]) for w in p["work"]] == [("ba-001", 2)], p["work"]
     assert {s["stringId"] for s in p["skipped"]} == {"ba-002", "ta-001", "tha-001"}
     # A lexicon fix changes the input and the recipe: take 1 again, a new clip.
     fix = {"arabic-001/ba-001": {"ssml": '<phoneme alphabet="ipa" ph="ba:b">' + bab + "</phoneme>", "why": "final sukun dropped"}}
-    p = plan("arabic-001", "azure-hamed", export, texts=texts, lexicon=fix)
+    p = plan("arabic-001", "azure-hamed", export, texts=texts, lexicon=fix, pin=None, quran=NOQ)
     w = p["work"][0]
     assert w["recipe"]["take"] == 1 and "<phoneme" in w["recipe"]["input"] and w["recipe"]["lexicon"] == sha(canonical(fix["arabic-001/ba-001"]))
     for bad in ({"ssml": "<speak>x</speak>", "why": "w"}, {"ssml": "x", "why": ""}, {"ssml": '<audio src="u"/>', "why": "w"}):
         try:
-            plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={"arabic-001/ba-001": bad})
+            plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={"arabic-001/ba-001": bad}, pin=None, quran=NOQ)
             raise AssertionError("a bad lexicon entry was accepted")
         except Refused:
             pass
     try:
-        plan("surah-085", "azure-hamed", {"lesson": "surah-085"}, texts=texts, lexicon={})
+        plan("surah-085", "azure-hamed", {"lesson": "surah-085"}, texts=texts, lexicon={}, pin=None, quran=NOQ)
         raise AssertionError("a Quran lesson was planned")
     except Refused:
         pass
     try:
-        plan("arabic-002", "azure-hamed", export, texts=texts, lexicon={})
+        plan("arabic-002", "azure-hamed", export, texts=texts, lexicon={}, pin=None, quran=NOQ)
         raise AssertionError("an export of another lesson was accepted")
     except Refused:
         pass
+    # Review of #254: one pinned voice, the rate range, no Quran text, a region that is only a region.
+    try:
+        plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={}, pin="azure:ar-SA-ZariyahNeural", quran=NOQ)
+        raise AssertionError("another voice than the pinned one was planned")
+    except Refused:
+        pass
+    assert plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={}, pin="azure:ar-SA-HamedNeural", quran=NOQ)["work"]
+    quranic = {"lesson": "arabic-001", "strings": texts["strings"] + [{"id": "ba.note", "kind": "note", "text": "x q u r a", "sha256": sha("x q u r a")}]}
+    try:
+        plan("arabic-001", "azure-hamed", export, texts=quranic, lexicon={}, pin=None, quran=NOQ)
+        raise AssertionError("Quran text was planned")
+    except Refused:
+        pass
+    assert [rate_factor(r) for r in ("-10%", "90%", "0%", "+10%", "fast")] == [0.9, 0.9, 1.0, None, None]
+    PROFILES["_fast"] = dict(PROFILES["azure-hamed"], rate="110%")
+    try:
+        plan("arabic-001", "_fast", export, texts=texts, lexicon={}, pin=None, quran=NOQ)
+        raise AssertionError("a faster than normal rate was planned")
+    except Refused:
+        pass
+    finally:
+        del PROFILES["_fast"]
+    saved = {k: os.environ.get(k) for k in ("JAWWID_TTS_KEY", "JAWWID_TTS_REGION")}
+    try:
+        os.environ["JAWWID_TTS_KEY"], os.environ["JAWWID_TTS_REGION"] = "test-only", "evil.example/x?"
+        try:
+            vendor_from_shell("azure-hamed")
+            raise AssertionError("a region that is not a region was accepted")
+        except Refused:
+            pass
+        os.environ["JAWWID_TTS_REGION"] = "westeurope"
+        assert callable(vendor_from_shell("azure-hamed"))  # built, never called
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
     # generate writes only what the vendor returned as MP3, and never the key.
     mp3 = b"ID3" + b"\x00" * 100
     with tempfile.TemporaryDirectory() as d:
         out = pathlib.Path(d)
-        work = plan("arabic-001", "azure-hamed", {"lesson": "arabic-001", "clips": [], "decisions": []}, texts=texts, lexicon={})
+        work = plan("arabic-001", "azure-hamed", {"lesson": "arabic-001", "clips": [], "decisions": []}, texts=texts, lexicon={}, pin=None, quran=NOQ)
         calls = iter([mp3, b"<html>no</html>", mp3, mp3])
         m = generate(work, out, lambda r: next(calls))
         assert [c["stringId"] for c in m["clips"]] == ["ba-001", "ta-001", "tha-001"] and m["failed"][0]["stringId"] == "ba-002"

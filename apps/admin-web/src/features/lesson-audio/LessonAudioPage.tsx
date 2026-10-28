@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ApiError } from '@/core/api/errors'
@@ -35,6 +35,8 @@ const C = {
   stop: { en: 'Stop', ar: 'إيقاف' },
   approve: { en: 'Approve', ar: 'اعتماد' },
   approveHint: { en: 'Listen to the end first.', ar: 'استمع حتى النهاية أولًا.' },
+  textMismatch: { en: 'The text shown is not the text this clip was made for: do not approve it. Report it.', ar: 'النص المعروض ليس النص الذي صُنع له هذا التسجيل: لا تعتمده. أبلغ عن ذلك.' },
+  chooseCategory: { en: 'Choose…', ar: 'اختر…' },
   reject: { en: 'Reject', ar: 'رفض' },
   withdraw: { en: 'Withdraw', ar: 'سحب' },
   category: { en: 'What is wrong', ar: 'ما الخطأ' },
@@ -216,6 +218,21 @@ function Unit({ lesson, strings, required, canReview, player }: { lesson: string
   )
 }
 
+/** SHA-256 of the text as shown, by WebCrypto; null until computed. */
+function useShownTextSha(text: string): string | null {
+  const [sha, setSha] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    void crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then((d) => {
+      if (live) setSha([...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join(''))
+    })
+    return () => {
+      live = false
+    }
+  }, [text])
+  return sha
+}
+
 function Clip(props: {
   s: StringView
   c: ClipView
@@ -231,13 +248,20 @@ function Clip(props: {
   const { dateTime } = useI18n()
   const qc = useQueryClient()
   const [form, setForm] = useState<'reject' | 'withdraw' | null>(null)
-  const [category, setCategory] = useState<RejectCategory>('vowel')
+  // Nothing preselected: the reviewer names what is wrong (review of #254).
+  const [category, setCategory] = useState<RejectCategory | ''>('')
   const [reason, setReason] = useState('')
+  const hintId = useId()
+  // The text's hash is taken HERE, from the text on screen, and must be the clip's:
+  // an approval says "this text", not just "this clip" (review of #254).
+  const shownSha = useShownTextSha(s.text)
+  const textMatches = shownSha !== null && shownSha === s.textSha256
+  const ready = !!heard && textMatches
   const refresh = () => qc.invalidateQueries({ queryKey: lessonAudioKeys.all })
-  const hashes = { textSha256: s.textSha256, audioSha256: heard ?? '' }
+  const hashes = { textSha256: shownSha ?? '', audioSha256: heard ?? '' }
   const approve = useMutation({ mutationFn: () => lessonAudioApi.approve(c.clipId, hashes), onSuccess: refresh })
   const refuse = useMutation({
-    mutationFn: () => (form === 'withdraw' ? lessonAudioApi.withdraw : lessonAudioApi.reject)(c.clipId, { ...hashes, category, reason: reason.trim() }),
+    mutationFn: () => (form === 'withdraw' ? lessonAudioApi.withdraw : lessonAudioApi.reject)(c.clipId, { ...hashes, category: category as RejectCategory, reason: reason.trim() }),
     onSuccess: () => {
       setForm(null)
       return refresh()
@@ -260,26 +284,35 @@ function Clip(props: {
         </span>
         {canReview && c.canReview ? (
           <>
-            <button type="button" className="primary" disabled={!heard || approve.isPending} title={heard ? undefined : tx(C.approveHint)} onClick={() => approve.mutate()}>
+            <button type="button" className="primary" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
               {tx(C.approve)}
             </button>
-            <button type="button" disabled={!heard} title={heard ? undefined : tx(C.approveHint)} onClick={() => setForm('reject')}>
+            <button type="button" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('reject')}>
               {tx(C.reject)}
             </button>
           </>
         ) : null}
         {canReview && c.state === 'approved' ? (
-          <button type="button" disabled={!heard} title={heard ? undefined : tx(C.approveHint)} onClick={() => setForm('withdraw')}>
+          <button type="button" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('withdraw')}>
             {tx(C.withdraw)}
           </button>
         ) : null}
       </div>
+      {canReview && !heard && (c.canReview || c.state === 'approved') ? (
+        <p id={hintId} className="lesson-audio__hint">
+          {tx(C.approveHint)}
+        </p>
+      ) : null}
       {mismatch ? <p role="alert">{tx(C.mismatch)}</p> : null}
+      {shownSha !== null && !textMatches ? <p role="alert">{tx(C.textMismatch)}</p> : null}
       {form ? (
         <div className="lesson-audio__form">
           <label>
             {tx(C.category)}
-            <select value={category} onChange={(e) => setCategory(e.target.value as RejectCategory)}>
+            <select value={category} onChange={(e) => setCategory(e.target.value as RejectCategory | '')}>
+              <option value="" disabled>
+                {tx(C.chooseCategory)}
+              </option>
               {REJECT_CATEGORIES.map((k) => (
                 <option key={k} value={k}>
                   {tx(CATEGORY[k])}
@@ -291,7 +324,7 @@ function Clip(props: {
             {tx(C.reason)}
             <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
           </label>
-          <button type="button" disabled={!reason.trim() || refuse.isPending} onClick={() => refuse.mutate()}>
+          <button type="button" disabled={!category || !reason.trim() || refuse.isPending} onClick={() => refuse.mutate()}>
             {tx(C.confirm)}
           </button>
           <button type="button" onClick={() => setForm(null)}>

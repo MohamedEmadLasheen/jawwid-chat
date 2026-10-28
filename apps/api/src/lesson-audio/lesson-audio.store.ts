@@ -39,10 +39,10 @@ export interface DecisionRow {
 
 export interface LessonAudioStore {
   gate(): Promise<LessonAudioGate>;
-  /** Every clip of a lesson (optionally of some strings), with its derived state. */
-  clips(lesson: string, stringIds?: readonly string[]): Promise<ClipRow[]>;
+  /** Every clip of a lesson in ONE organization (optionally of some strings), with its derived state. */
+  clips(organizationId: string, lesson: string, stringIds?: readonly string[]): Promise<ClipRow[]>;
   reviews(clipIds: readonly string[]): Promise<ReviewRow[]>;
-  decisions(lesson: string): Promise<DecisionRow[]>;
+  decisions(organizationId: string, lesson: string): Promise<DecisionRow[]>;
   /** chat.review_lesson_audio_clip: returns the clip's state afterwards. */
   review(clipId: string, action: string, textSha256: string, audioSha256: string, category: string | null, reason: string | null, actorId: string): Promise<string>;
   /** chat.decide_lesson_audio_string. */
@@ -58,14 +58,15 @@ export class PrismaLessonAudioStore implements LessonAudioStore {
     return readLessonAudioGate(this.prisma);
   }
 
-  clips(lesson: string, stringIds?: readonly string[]): Promise<ClipRow[]> {
+  clips(organizationId: string, lesson: string, stringIds?: readonly string[]): Promise<ClipRow[]> {
     const ids = stringIds ? [...stringIds] : null;
     return this.prisma.$queryRaw<ClipRow[]>`
       SELECT c.id::text AS id, c.string_id AS "stringId", c.text_sha256 AS "textSha256", c.render_sha256 AS "renderSha256",
              c.audio_sha256 AS "audioSha256", c.object_key AS "objectKey", c.vendor, c.voice, c.attempt::int AS attempt,
              c.created_at AS "createdAt", chat.lesson_audio_clip_state(c.id) AS state
         FROM chat.lesson_audio_clip c
-       WHERE c.lesson_key = ${lesson} AND (${ids}::text[] IS NULL OR c.string_id = ANY (${ids}::text[]))
+       WHERE c.organization_id = ${organizationId}::uuid AND c.lesson_key = ${lesson}
+         AND (${ids}::text[] IS NULL OR c.string_id = ANY (${ids}::text[]))
        ORDER BY c.string_id, c.created_at`;
   }
 
@@ -78,11 +79,11 @@ export class PrismaLessonAudioStore implements LessonAudioStore {
        ORDER BY r.at`;
   }
 
-  decisions(lesson: string): Promise<DecisionRow[]> {
+  decisions(organizationId: string, lesson: string): Promise<DecisionRow[]> {
     return this.prisma.$queryRaw<DecisionRow[]>`
       SELECT d.string_id AS "stringId", d.text_sha256 AS "textSha256", d.decision, s.name AS "staffName", d.reason, d.at
         FROM chat.lesson_audio_string_decision d JOIN chat.staff s ON s.id = d.staff_id
-       WHERE d.lesson_key = ${lesson}
+       WHERE d.organization_id = ${organizationId}::uuid AND d.lesson_key = ${lesson}
        ORDER BY d.at`;
   }
 

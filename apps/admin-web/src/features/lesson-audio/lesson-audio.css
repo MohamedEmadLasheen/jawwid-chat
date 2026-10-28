@@ -14,3 +14,4 @@
 .lesson-audio__row { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); align-items: center; }
 .lesson-audio__voice { color: var(--text-muted, inherit); font-size: 0.875em; }
 .lesson-audio__form { display: grid; gap: var(--space-2, 8px); max-width: 32rem; }
+.lesson-audio__hint { color: var(--text-muted, inherit); font-size: 0.875em; margin: 0; }

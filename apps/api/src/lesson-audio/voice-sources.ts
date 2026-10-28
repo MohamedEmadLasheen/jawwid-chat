@@ -1,3 +1,5 @@
+import lessonVoices from './lesson-voices.json';
+
 /**
  * PD-48: the computer voices whose clips may be served, each with its licence
  * record (design §7.6, §2.8; owner 2026-10-28/29). Recorded ONLY in code, in a
@@ -32,6 +34,19 @@ export interface VoiceSource {
   voice: string;
   licence: VoiceLicence | null;
 }
+
+/**
+ * The ONE voice each lesson is served in (owner Q5: one adult MSA voice), from
+ * lesson-voices.json (tts.py reads the same file). Clips of any other voice are
+ * never served and never ingested once a lesson is pinned; while a lesson's pin
+ * is null (before the pilot picks), no learner hears it at all.
+ */
+export function lessonVoice(lesson: string, pins: Readonly<Record<string, unknown>> = LESSON_VOICES): string | null {
+  const v = pins[lesson];
+  return typeof v === 'string' && VOICE_SOURCES.has(v) ? v : null;
+}
+
+const LESSON_VOICES: Readonly<Record<string, unknown>> = lessonVoices;
 
 export const VOICE_SOURCES: ReadonlyMap<string, VoiceSource> = new Map(
   (

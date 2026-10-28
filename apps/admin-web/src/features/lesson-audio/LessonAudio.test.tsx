@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -28,7 +29,8 @@ const calls = (method: string, pattern: RegExp) => fetchMock.mock.calls.filter((
 
 const AUDIO = 'a'.repeat(64)
 const TEXT = 'بَابْ'
-const TEXT_SHA = 'b'.repeat(64)
+// The page hashes the text it shows and must get the clip's own text hash.
+const TEXT_SHA = createHash('sha256').update(TEXT, 'utf8').digest('hex')
 function unitView(over: Partial<UnitView['strings'][number]['clips'][number]> = {}): UnitView {
   return {
     lesson: 'arabic-001',
@@ -124,6 +126,27 @@ describe('the Lesson audio page', () => {
     expect((within(clip).getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('a text whose hash is not the clip\'s is flagged, and the clip cannot be approved even after listening', async () => {
+    on('GET', /\/lesson-audio\/review\/arabic-001\/units\/ba$/, () => {
+      const v = unitView()
+      v.strings[0]!.textSha256 = 'b'.repeat(64)
+      return json(v)
+    })
+    renderWithProviders(<LessonAudioPage player={player({ audioSha256: AUDIO, matched: true })} />, { staff: reviewer })
+    const clip = await screen.findByTestId('clip-clip-1')
+    await userEvent.click(within(clip).getByRole('button', { name: 'Listen' }))
+    expect(await within(clip).findByText(/not the text this clip was made for/)).toBeTruthy()
+    expect((within(clip).getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('the hint to listen first is visible text the buttons point to, not a tooltip', async () => {
+    renderWithProviders(<LessonAudioPage player={player({ audioSha256: AUDIO, matched: true })} />, { staff: reviewer })
+    const clip = await screen.findByTestId('clip-clip-1')
+    const hint = within(clip).getByText('Listen to the end first.')
+    expect(within(clip).getByRole('button', { name: 'Approve' }).getAttribute('aria-describedby')).toBe(hint.id)
+    expect(within(clip).getByRole('button', { name: 'Approve' }).getAttribute('title')).toBeNull()
+  })
+
   it('a reject names what is wrong and why', async () => {
     on('POST', /\/lesson-audio\/clips\/clip-1\/reject$/, () => json({ clipId: 'clip-1', state: 'rejected' }))
     renderWithProviders(<LessonAudioPage player={player({ audioSha256: AUDIO, matched: true })} />, { staff: reviewer })
@@ -133,8 +156,11 @@ describe('the Lesson audio page', () => {
     await userEvent.click(within(clip).getByRole('button', { name: 'Reject' }))
     const confirm = within(clip).getByRole('button', { name: 'Confirm' }) as HTMLButtonElement
     expect(confirm.disabled).toBe(true)
-    await userEvent.selectOptions(within(clip).getByRole('combobox'), 'final_sukun')
+    // Nothing is preselected: a reason alone does not confirm.
+    expect((within(clip).getByRole('combobox') as HTMLSelectElement).value).toBe('')
     await userEvent.type(within(clip).getByRole('textbox'), 'the last letter has a vowel')
+    expect(confirm.disabled).toBe(true)
+    await userEvent.selectOptions(within(clip).getByRole('combobox'), 'final_sukun')
     await userEvent.click(confirm)
     await waitFor(() => expect(calls('POST', /\/reject$/)).toHaveLength(1))
     expect(JSON.parse(String((calls('POST', /\/reject$/)[0]![1] as RequestInit).body))).toEqual({
