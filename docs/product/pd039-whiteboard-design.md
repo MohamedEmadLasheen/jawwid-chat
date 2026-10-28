@@ -520,7 +520,7 @@ never enough to read an object.**
 | Image / PDF page asset | 10 MB, 8,000 px long edge |
 | Assets per board | 60 |
 | Assets per teacher (object storage) | 300 MB. Boards in trash count until they are purged. |
-| Organisation budgets (alert at 80%) | documents 1 GiB, assets 50 GiB (§11) |
+| Organisation budgets (alert at 80%), sized for 200 teachers | documents 2.5 GiB (alert at 2 GiB), assets 60 GiB (alert at 48 GiB) (§11.2) |
 | Exports | 24 h, then purged; at most 5 in flight per teacher |
 | Writes | page save ≤ 2/s per board; grants ≤ 20/min per teacher |
 
@@ -575,6 +575,10 @@ visibility.
      teachers.
 4. **Export**: PNG on the device; PDF through `pdfkit`; export purge in the worker.
 5. **MVP-b, PDF page import**: only if `pdfrx` passes the dependency review (§4.4).
+
+**Release gate.** The Boards tab is shown to teachers in an environment only once object
+storage versioning is enabled there (§11.3, hard precondition) and the Quran review sheet is
+signed (step 3).
 
 Phase 2 (live view and tools) gets its own design note and slot once the MVP is in
 teachers' hands.
@@ -715,23 +719,31 @@ their claims against the real database (in CI, G-19).
 
 ### 11.2 Storage capacity
 
+**DECIDED 2026-10-28 (owner):** "50–200" active teachers will use boards in the next year.
+Everything below is sized for **200**. The per-teacher caps are kept.
+
 - **Postgres.** The DigitalOcean cluster already in the project is 1 GB RAM / 10 GiB disk,
   and every feature shares it.
   - The first draft's limits did not fit. 1 MB pages × 50 pages × 200 boards is up to
     10 GB **for one teacher**.
-  - The new limits (§6.4) are 512 KB per page and 25 MB per teacher, with an organisation
-    alert at 1 GiB of board documents.
+  - The new limits (§6.4) are 512 KB per page and 25 MB per teacher.
   - Estimate: an active teacher with 40 boards × 6 pages × ~40 KB (delta-encoded strokes,
-    before Postgres compression) holds about 10 MB. 50 teachers hold about 500 MB, about 5%
-    of the disk.
-  - The 25 MB cap keeps the worst case at 1.25 GB for 50 teachers. The organisation's real
-    teacher count and the production cluster's size should be confirmed when it is
+    before Postgres compression) holds about 10 MB. **200 teachers hold about 2 GB**, about
+    20% of the 10 GiB disk.
+  - The 25 MB cap bounds the worst case at 5 GB for 200 teachers.
+  - **Organisation alert:** a documents budget of 2.5 GiB, alerting at 80% (2 GiB, the
+    expected size at 200 teachers). When it fires, it is time to grow the disk, not an
+    emergency.
+  - If teachers fill their caps rather than the estimate, the 10 GiB cluster becomes the
+    limit. The production cluster's disk should be sized with that in mind when it is
     provisioned.
 - **Object storage.** One S3-compatible bucket (`STORAGE_BUCKET`) is shared with chat
   attachments, Materials and certificates. The code has no bucket-wide quota.
-  - Board images are capped at 300 MB per teacher. 50 teachers × 300 MB = 15 GB worst case.
+  - Board images are capped at 300 MB per teacher. 200 teachers × 300 MB = 60 GB worst case.
+    A more typical ~50 MB per teacher is about 10 GB.
   - Exports expire after 24 h, and trash and retention purges free space.
-  - An organisation budget (50 GiB, alert at 80%) is computed from `bytes_total`.
+  - **Organisation alert:** an assets budget of 60 GiB, computed from `bytes_total`, alerting
+    at 80% (48 GiB).
 - **Monitoring.** The API exposes the organisation's board document and asset totals
   beside its existing health metrics. The 80% alerts go to the same place as the other
   operational alerts.
@@ -746,16 +758,26 @@ their claims against the real database (in CI, G-19).
 - **What this means.** Today, a lost bucket would lose a board's *images* but not its
   drawing, text or verses. Those are in Postgres, and verses are only references to the
   shared Quran dataset. The board would show "Image unavailable" placeholders.
-  - **This is an infrastructure item, not a PD-39 code item.** The head should raise it with
-    the owner: provisioning bucket versioning (30 days, as the backup doc plans) closes it
-    for boards and attachments together.
-  - I recommend doing that before teachers rely on boards for lesson preparation.
+- **DECIDED 2026-10-28 (owner): "Yes, enable it first."** Object storage versioning is
+  enabled first. The infrastructure change is the DigitalOcean session's, not PD-39 code;
+  it covers boards and chat attachments together.
+- **HARD PRECONDITION:** boards do **not** go live for teachers until object storage
+  versioning, with 30-day retention as the backup doc plans, is enabled in that
+  environment and recorded in `docs/infrastructure/backup-recovery.md` §1 as provisioned.
+  - The Boards tab stays hidden for teachers until then. Its visibility switch (§8) is
+    turned on only after the head confirms the precondition for that environment.
+  - Code can be built and merged before then; only showing it to teachers waits.
 - **Trash and backups.** Trash is the per-board recovery: a backup restores the whole
   database, never one board. That is why the 30-day trash exists.
-- **Permanent deletion and backups.** A purged board leaves the live system on day 30. It
-  can survive in `pg_dump` archives for up to 30 more days, until they age out (about day
-  60). The same applies to a leaver's boards after their 12 months. The privacy text
-  shown to teachers should say "deleted within 60 days".
+- **Permanent deletion and backups.** A purged board leaves the live system on day 30.
+  - Its drawing can survive in `pg_dump` archives for up to 30 more days, until they age
+    out. With versioning on, its images survive as non-current object versions for the same
+    30 days. So everything is gone by about day 60.
+  - The same applies to a leaver's boards after their 12 months.
+  - **DECIDED wording:** text shown to teachers about permanent deletion says **"deleted
+    within 60 days"**, for example in the trash list's footer: "Boards in Deleted boards are
+    restorable for 30 days, then deleted for good within 60 days." The delete dialog (§10,
+    5a) keeps the exact restore-until date.
 - **Restore drill.** Add a board count, and one board's page SHA-256, to the restore
   checklist (backup doc §5). This proves a restore brings boards back intact.
 
@@ -769,4 +791,8 @@ their claims against the real database (in CI, G-19).
    teacher (11.2).
 3. Two new PD-40 keys, `whiteboards.view` and `whiteboards.retention` (11.1).
 
-One item stays **open outside PD-39**: provisioning object storage versioning (11.3).
+And two owner answers, recorded as DECIDED:
+
+4. Sized for 200 teachers, with the organisation alerts set to match (11.2).
+5. Object storage versioning is enabled first. It is a **hard precondition** for showing
+   boards to teachers (11.3).
