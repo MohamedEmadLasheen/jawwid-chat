@@ -20,6 +20,8 @@ export type StaffRole =
   | 'academic'
   | 'super_admin'
   | 'system'
+  /** PD-40: a department account with no implicit powers -- only what its access roles open. */
+  | 'specialist'
 
 export type Presence = 'online' | 'away' | 'offline'
 

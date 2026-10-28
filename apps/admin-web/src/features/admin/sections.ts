@@ -201,8 +201,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'الموظفون والمعلمون وجهات اتصال العائلات.',
     },
     note: {
-      en: 'Creating, suspending and resetting accounts is not built yet.',
-      ar: 'إنشاء الحسابات وإيقافها وإعادة تعيينها لم يُبنَ بعد.',
+      en: 'Read-only here. Resetting and suspending accounts, staff accounts and their roles are on the Accounts page.',
+      ar: 'للعرض فقط هنا. إعادة تعيين الحسابات وإيقافها، وحسابات الموظفين وأدوارها في صفحة الحسابات.',
     },
   },
   {

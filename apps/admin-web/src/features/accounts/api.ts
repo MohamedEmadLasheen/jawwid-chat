@@ -44,9 +44,15 @@ export interface AccountList {
   administers?: Array<'family' | 'teacher' | 'staff'>
 }
 
-/** The one-time code: shown to the administrator ONCE, never stored by the client. */
+/**
+ * The one-time code: shown to the administrator ONCE, never stored by the client.
+ * PD-40 PR-3: a code a department manager issues for a staff account is
+ * e-mailed to its sign-in address only -- then `code` is absent and `emailed`
+ * says whether it went.
+ */
 export interface IssuedReset {
-  code: string
+  code?: string
+  emailed?: boolean
   expiresAt: string
   expiresInMinutes: number
   signedOutSessions: number
@@ -55,6 +61,7 @@ export interface IssuedReset {
 export const accountKeys = {
   all: ['accounts'] as const,
   list: (q: string, kind: string) => ['accounts', 'list', q, kind] as const,
+  one: (id: string) => ['accounts', 'one', id] as const,
 }
 
 const path = (id: string) => `/admin/accounts/${encodeURIComponent(id)}`
@@ -62,6 +69,8 @@ const path = (id: string) => `/admin/accounts/${encodeURIComponent(id)}`
 export const accountsApi = {
   list: (q: string, kind: string) =>
     api.get<AccountList>('/admin/accounts', { ...(q ? { q } : {}), ...(kind !== 'all' ? { kind } : {}) }),
+  /** PD-40: one account and what this caller may do to it (a staff account's status actions). */
+  get: (id: string) => api.get<AccountSummary>(path(id)),
   issueReset: (id: string, reason: string, signOutEverywhere: boolean) =>
     api.post<IssuedReset>(`${path(id)}/password-reset`, { reason, signOutEverywhere }),
   suspend: (id: string, reason: string) => api.post<AccountSummary>(`${path(id)}/suspend`, { reason }),
