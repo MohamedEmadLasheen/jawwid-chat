@@ -26,7 +26,7 @@ import { CardPoster } from '../../src/supervision/card-poster';
 import { CertificateService } from '../../src/certificates/certificate.service';
 import { CertificateTypeService } from '../../src/certificates/certificate-type.service';
 import { LocalFsBlobStore } from '../../src/communication/attachments/blob-store';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { activateBackup, buildGraph, moveFamily, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -37,8 +37,9 @@ const svc = new CertificateService(g.prisma, g.conversations, supervision, cards
 const types = new CertificateTypeService(g.prisma, g.conversations, permissions, audit);
 const blobs = new LocalFsBlobStore();
 
-const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200, 0x20)]);
-const PDF = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(200, 0x20)]);
+const IEND = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200, 0x20), IEND]);
+const PDF = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(200, 0x20), Buffer.from('\n%%EOF\n')]);
 
 interface Dto {
   id: string;
@@ -249,6 +250,42 @@ describe('1. only the requester sends, after approving this revision', () => {
     expect(await code(svc.send(s.ownerId, c.id, { conversationId: groupId }))).toBe(CommErrorCode.CERTIFICATE_STATE);
   });
 
+  it('the database refuses a Designer as the sender of an approved certificate', async () => {
+    const c = await approved();
+    const row = await g.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id: c.id } });
+    expect(
+      await sqlError(
+        g.prisma.appreciationCertificate.update({
+          where: { id: c.id },
+          data: { state: 'sent', sentAt: new Date(), sentBy: designerId, conversationId: groupId, sentMessageId: randomUUID(), actionSeq: row.actionSeq + 1, lastAction: 'sent', lastNote: null, lastActorStaff: designerId, lastActorTeacher: null },
+        }),
+      ),
+    ).toMatch(/only the requester of record sends/);
+  });
+
+  it('responsibility follows the child: after a PD-24 transfer the new supervisor approves and sends, the old one cannot', async () => {
+    const c = await studentRequest();
+    const up = await design(c.id);
+    await moveFamily(g.prisma, s, s.otherAdminId);
+    expect(await code(svc.approve(s.ownerId, c.id, { fileId: up.currentFile!.id }))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
+    await svc.approve(s.otherAdminId, c.id, { fileId: up.currentFile!.id });
+    expect(dto(await svc.send(s.otherAdminId, c.id, { conversationId: groupId })).state).toBe('sent');
+  });
+
+  it('a file that is not whole, or a PDF that runs something, is refused', async () => {
+    const c = await studentRequest();
+    await svc.start(designerId, c.id);
+    const truncated = PNG.subarray(0, PNG.length - 12);
+    const one = await svc.authorizeUpload(designerId, c.id, { mimeType: 'image/png', byteSize: truncated.length });
+    await blobs.put(one.upload.objectKey, 'image/png', truncated);
+    expect(await code(svc.confirmUpload(designerId, c.id, { objectKey: one.upload.objectKey, fileName: 'c.png' }))).toBe(CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED);
+    const active = Buffer.concat([Buffer.from('%PDF-1.7\n1 0 obj << /OpenAction << /S /JavaScript /JS (app.alert(1)) >> >>\n'), Buffer.from('%%EOF\n')]);
+    const two = await svc.authorizeUpload(designerId, c.id, { mimeType: 'application/pdf', byteSize: active.length });
+    await blobs.put(two.upload.objectKey, 'application/pdf', active);
+    expect(await code(svc.confirmUpload(designerId, c.id, { objectKey: two.upload.objectKey, fileName: 'c.pdf' }))).toBe(CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED);
+    expect((await g.prisma.appreciationCertificateFile.count({ where: { certificateId: c.id } }))).toBe(0);
+  });
+
   it('the group changed since it was shown: nothing is sent', async () => {
     const c = await approved();
     const elsewhere = randomUUID();
@@ -258,7 +295,7 @@ describe('1. only the requester sends, after approving this revision', () => {
     expect(await cardsIn(groupId)).toEqual([]);
   });
 
-  it('the database refuses a send that skipped the approval, and a Designer as the sender', async () => {
+  it('the database refuses a send that skipped the approval, and a Designer as the approver', async () => {
     const c = await studentRequest();
     await design(c.id);
     const row = await g.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id: c.id } });
@@ -338,11 +375,18 @@ describe('3. a teacher Story is optional and never automatic', () => {
 
   it('sent into the teacher\'s supervision conversation with its file, and no Story until one is asked for', async () => {
     const c = await teacherCert(true);
+    // Reading the target creates nothing: the teacher has no supervision conversation yet.
+    const conversations = await g.prisma.conversation.count();
     const target = await svc.deliveryTarget(tsupId, c.id);
-    const sent = dto(await svc.send(tsupId, c.id, { conversationId: target.target!.conversationId }));
+    expect(target.target).toMatchObject({ conversationId: null, type: 'teacher_supervision' });
+    expect(await g.prisma.conversation.count()).toBe(conversations);
+    const sent = dto(await svc.send(tsupId, c.id, { conversationId: null }));
     expect(sent).toMatchObject({ state: 'sent', story: null });
     expect(await g.prisma.story.count()).toBe(0);
-    const awarded = await cardsIn(target.target!.conversationId);
+    const row = await g.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id: c.id } });
+    // The type as it read when sent.
+    expect(row).toMatchObject({ typeLabelEn: 'Teacher of the Month', typeLabelAr: 'المعلم المثالي' });
+    const awarded = await cardsIn(row.conversationId!);
     expect(awarded.map((m) => m.card?.kind)).toEqual(['certificate_awarded']);
     expect(awarded[0]!.attachments).toHaveLength(1);
 
@@ -388,11 +432,33 @@ describe('4. a student Story needs the family\'s recorded consent', () => {
     expect(kinds.slice(-3)).toEqual(['story_published', 'consent_withdrawn', 'story_withdrawn']);
   });
 
+  it('a PD-33 backup withdraws consent: the withdrawal and the Story\'s removal commit together', async () => {
+    const c = await approved();
+    await svc.recordConsent(s.ownerId, c.id, { kind: 'granted', contactId: s.parentId, method: 'phone', note: 'mother agreed by phone on 29 Oct' });
+    const published = dto(await svc.publishStory(s.ownerId, c.id));
+    await activateBackup(g.prisma, s.ownerId, s.otherAdminId);
+    const after = dto(await svc.recordConsent(s.otherAdminId, c.id, { kind: 'withdrawn', note: 'the father asked us to remove it' }));
+    expect(after.story!.withdrawnAt).not.toBeNull();
+    const story = await g.prisma.story.findUniqueOrThrow({ where: { id: published.story!.id } });
+    expect(story).toMatchObject({ state: 'deleted', deletedBy: s.otherAdminId });
+    const consent = await g.prisma.certificateStoryConsent.findMany({ where: { certificateId: c.id }, orderBy: { actionSeq: 'asc' } });
+    expect(consent.map((x) => [x.kind, x.recordedBy])).toEqual([
+      ['granted', s.ownerId],
+      ['withdrawn', s.otherAdminId],
+    ]);
+  });
+
+  it('written consent says where the document is', async () => {
+    const c = await approved();
+    expect(await code(svc.recordConsent(s.ownerId, c.id, { kind: 'granted', contactId: s.parentId, method: 'written' }))).toBe(CommErrorCode.VALIDATION);
+    await svc.recordConsent(s.ownerId, c.id, { kind: 'granted', contactId: s.parentId, method: 'written', note: 'signed form in the family file, 29 Oct' });
+  });
+
   it('a PDF certificate is sent, but a Story needs an image', async () => {
     const c = await studentRequest();
     const up = await design(c.id, designerId, { mime: 'application/pdf', bytes: PDF });
     await svc.approve(s.ownerId, c.id, { fileId: up.currentFile!.id });
-    await svc.recordConsent(s.ownerId, c.id, { kind: 'granted', contactId: s.parentId, method: 'written' });
+    await svc.recordConsent(s.ownerId, c.id, { kind: 'granted', contactId: s.parentId, method: 'written', note: 'signed form in the family file, 29 Oct' });
     expect(await code(svc.publishStory(s.ownerId, c.id))).toBe(CommErrorCode.CERTIFICATE_STORY_NEEDS_IMAGE);
   });
 
@@ -443,6 +509,17 @@ describe('5. the learner\'s assigned Operations supervisor decides a teacher\'s 
     expect(told).toHaveLength(1);
   });
 
+  it('an undecided suggestion can be cancelled by an overseer; a learner with no supervisor is decided by the Operations manager', async () => {
+    const one = await suggestion();
+    expect(await code(svc.cancel(s.ownerId, one.certificate.id, { reason: 'nobody should cancel this' }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect(dto(await svc.cancel(tmgrId, one.certificate.id, { reason: 'the teacher left; no longer needed' })).state).toBe('cancelled');
+
+    await g.prisma.$executeRawUnsafe(`delete from chat.learner_supervision where learner_id = $1::uuid`, s.learnerId);
+    const two = await suggestion();
+    expect(await code(svc.accept(s.ownerId, two.certificate.id, { typeId: juzTypeId, juz: 30 }))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
+    expect(dto(await svc.accept(s.managerId, two.certificate.id, { typeId: juzTypeId, juz: 30 })).state).toBe('requested');
+  });
+
   it('a decline needs its reason, answers the teacher, and reaches no family', async () => {
     const { certificate, conversationId } = await suggestion();
     expect(await code(svc.decline(s.ownerId, certificate.id, { reason: 'no' }))).toBe(CommErrorCode.VALIDATION);
@@ -454,6 +531,31 @@ describe('5. the learner\'s assigned Operations supervisor decides a teacher\'s 
 });
 
 // ---------------------------------------------------------------------------
+
+describe('Stories accepts only its own media (review of #216)', () => {
+  it('a certificate\'s pinned file and another publisher\'s grant are refused; the sweeper never deletes outside stories/', async () => {
+    const c = await studentRequest();
+    const up = await design(c.id);
+    const pinned = (await g.prisma.appreciationCertificateFile.findUniqueOrThrow({ where: { id: up.currentFile!.id } })).objectKey;
+    expect(await code(g.stories.create(s.ownerId, { mediaObjectKey: pinned, mediaKind: 'image', mediaMime: 'image/png', audiences: [{ kind: 'all_families' }] }))).toBe(
+      CommErrorCode.STORY_MEDIA_NOT_GRANTED,
+    );
+    const theirs = await g.stories.authorizeMediaUpload(s.managerId, { mimeType: 'image/png', byteSize: PNG.length });
+    expect(await code(g.stories.create(s.ownerId, { mediaObjectKey: theirs.objectKey, mediaKind: 'image', mediaMime: 'image/png', audiences: [{ kind: 'all_families' }] }))).toBe(
+      CommErrorCode.STORY_MEDIA_NOT_GRANTED,
+    );
+    // A legacy row naming a non-stories key: the sweep unlinks it and leaves the bytes.
+    const legacy = await g.stories.create(s.ownerId, { body: 'legacy', audiences: [{ kind: 'all_families' }] });
+    await g.prisma.$executeRawUnsafe(
+      `update chat.story set body = null, media_object_key = $2, media_kind = 'image', media_mime = 'image/png', deleted_at = now() - interval '400 days', state = 'deleted' where id = $1::uuid`,
+      legacy.id,
+      pinned,
+    );
+    await g.storySweeper.purgeDueMedia(new Date());
+    expect((await g.prisma.story.findUniqueOrThrow({ where: { id: legacy.id } })).mediaObjectKey).toBeNull();
+    expect(await g.storage.readHead(pinned, 8)).not.toBeNull();
+  });
+});
 
 describe('6. the super admin keeps the types; disabling deletes nothing', () => {
   it('only the super admin adds or disables a type; a disabled type takes no new request but keeps its certificates', async () => {

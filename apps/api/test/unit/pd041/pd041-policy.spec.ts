@@ -177,6 +177,11 @@ describe('PD-41: the acts on one certificate', () => {
     expect(allowedActs(ops, { ...live, storyWithdrawn: true })).toContain(CertificateAct.CANCEL);
   });
 
+  it('an undecided suggestion is cancelled only by an overseer; its supervisor decides it', () => {
+    expect(allowedActs(ops, rel({ state: CertificateState.PROPOSED, decidesSuggestion: true }))).not.toContain(CertificateAct.CANCEL);
+    expect(allowedActs(certificateAccessFrom(TEACHERS_MEMBER), rel({ state: CertificateState.PROPOSED, anyOversee: true }))).toEqual([CertificateAct.CANCEL]);
+  });
+
   it('nothing moves a closed certificate', () => {
     for (const state of [CertificateState.CANCELLED, CertificateState.DECLINED]) {
       expect(allowedActs(manager, rel({ state, actsAsRequester: true, publishStory: true }))).toEqual([]);

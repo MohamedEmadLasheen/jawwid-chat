@@ -27,7 +27,7 @@ import { ActorKind, CardKind, CertificateCategory, CertificateState, Conversatio
 import { CardPoster } from '../supervision/card-poster';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { renderPd012CardBody, type CardLanguage } from '../supervision/pd012-cards';
-import { sniffCertificateFile, CERTIFICATE_MIME_TYPES, MAX_CERTIFICATE_BYTES, type CertificateMime } from './certificate-file';
+import { inspectCertificateFile, sniffCertificateFile, CERTIFICATE_MIME_TYPES, MAX_CERTIFICATE_BYTES, type CertificateMime } from './certificate-file';
 import { STATES_OF_GROUP, toDesignDto, toFullDto, type CertificateView } from './certificate-dto';
 
 type Tx = Prisma.TransactionClient;
@@ -47,7 +47,7 @@ const SUSPECTED_DUPLICATE_DAYS = 30;
 const ACT_STATES: Readonly<Record<CertificateAct, readonly string[]>> = {
   edit: [CertificateState.REQUESTED, CertificateState.CHANGES_REQUESTED],
   resubmit: [CertificateState.CHANGES_REQUESTED],
-  cancel: [CertificateState.REQUESTED, CertificateState.IN_DESIGN, CertificateState.CHANGES_REQUESTED, CertificateState.UPLOADED, CertificateState.APPROVED],
+  cancel: [CertificateState.PROPOSED, CertificateState.REQUESTED, CertificateState.IN_DESIGN, CertificateState.CHANGES_REQUESTED, CertificateState.UPLOADED, CertificateState.APPROVED],
   accept: [CertificateState.PROPOSED],
   decline: [CertificateState.PROPOSED],
   start: [CertificateState.REQUESTED],
@@ -199,37 +199,69 @@ export class CertificateService {
     return { ...access, canOpen: access.view };
   }
 
-  async list(actorId: string, query: { category?: string; status?: string; q?: string; before?: string }) {
+  /**
+   * The page's lists. Scoped IN THE QUERY (review of #216): the categories one
+   * oversees, the learners one reaches (PD-8) or the teachers in one's PD-35
+   * scope, suggestions for an overseer, and -- for a designer -- every request
+   * past suggestion. Keyset-paged on (requestedAt, id).
+   */
+  async list(actorId: string, query: { category?: string; status?: string; q?: string; cursor?: string }) {
     const ctx = await this.ctx(actorId);
     if (!ctx.access.view) throw denied();
-    const where: Prisma.AppreciationCertificateWhereInput = { organizationId: ctx.actor.organizationId ?? '' };
+    const and: Prisma.AppreciationCertificateWhereInput[] = [{ organizationId: ctx.actor.organizationId ?? '' }];
     if (query.category !== undefined) {
       if (!isCertificateCategory(query.category)) throw invalid('category: student | teacher');
-      where.category = query.category;
+      and.push({ category: query.category });
     }
     if (query.status !== undefined) {
       const states = STATES_OF_GROUP[query.status] ?? (Object.values(CertificateState).includes(query.status as never) ? [query.status] : null);
       if (!states) throw invalid('status: suggested | pending | in_progress | completed | sent | closed, or a state');
-      where.state = { in: [...states] };
+      and.push({ state: { in: [...states] } });
     }
-    if (query.q) {
-      const q = String(query.q).trim().slice(0, 80);
-      if (q) where.OR = [{ printedName: { contains: q, mode: 'insensitive' } }, { title: { contains: q, mode: 'insensitive' } }];
-    }
-    if (query.before) {
-      const d = new Date(String(query.before));
-      if (Number.isNaN(d.getTime())) throw invalid('before: an ISO timestamp');
-      where.requestedAt = { lt: d };
-    }
+    const q = typeof query.q === 'string' ? query.q.trim().slice(0, 80) : '';
+    if (q) and.push({ OR: [{ printedName: { contains: q, mode: 'insensitive' } }, { title: { contains: q, mode: 'insensitive' } }] });
+    and.push({ OR: await this.scopePredicate(ctx) });
+
     // Oldest first while waiting (a queue), newest first once done.
     const queue = query.status === 'pending' || query.status === 'suggested' || query.status === 'in_progress';
-    const rows = await this.prisma.appreciationCertificate.findMany({ where, orderBy: { requestedAt: queue ? 'asc' : 'desc' }, take: PAGE * 3 });
-    const views = await this.views(this.prisma, ctx, rows, false);
-    const visible = views.slice(0, PAGE);
+    const dir = queue ? 'asc' : 'desc';
+    if (query.cursor) {
+      const [at, id] = String(query.cursor).split('|');
+      const d = new Date(at ?? '');
+      if (Number.isNaN(d.getTime()) || !id || !isUuid(id)) throw invalid('cursor: the nextCursor of the previous page');
+      const after = queue ? 'gt' : 'lt';
+      and.push({ OR: [{ requestedAt: { [after]: d } }, { requestedAt: d, id: { [after]: id } }] });
+    }
+    const rows = await this.prisma.appreciationCertificate.findMany({
+      where: { AND: and },
+      orderBy: [{ requestedAt: dir }, { id: dir }],
+      take: PAGE + 1,
+    });
+    const page = rows.slice(0, PAGE);
+    const views = await this.views(this.prisma, ctx, page, false);
+    const last = page[page.length - 1];
     return {
-      certificates: visible.map((v) => (v.full ? toFullDto(v.view) : toDesignDto(v.view))),
-      nextBefore: !queue && visible.length === PAGE ? visible[visible.length - 1]!.view.row.requestedAt.toISOString() : null,
+      certificates: views.map((v) => (v.full ? toFullDto(v.view) : toDesignDto(v.view))),
+      nextCursor: rows.length > PAGE && last ? `${last.requestedAt.toISOString()}|${last.id}` : null,
     };
+  }
+
+  /** The rows this caller may see at all, as a query (views() then decides full or design). */
+  private async scopePredicate(ctx: Ctx): Promise<Prisma.AppreciationCertificateWhereInput[]> {
+    const { student, teacher } = ctx.access.categories;
+    const or: Prisma.AppreciationCertificateWhereInput[] = [];
+    if (student.oversee) or.push({ category: CertificateCategory.STUDENT });
+    else if (student.request) or.push({ category: CertificateCategory.STUDENT, learnerId: { in: [...(await this.reachedLearners(ctx.actor))] } });
+    if (teacher.oversee) {
+      or.push({ category: CertificateCategory.TEACHER });
+      // An undecided suggestion an overseer may cancel (review of #216: no orphans).
+      or.push({ state: CertificateState.PROPOSED });
+    } else if (teacher.request) {
+      const scope = await this.supervision.teacherScope.scopeOf(ctx.actor);
+      or.push(scope.all ? { category: CertificateCategory.TEACHER } : { category: CertificateCategory.TEACHER, recipientTeacherId: { in: [...scope.teacherIds] } });
+    }
+    if (ctx.access.design) or.push({ state: { notIn: [CertificateState.PROPOSED, CertificateState.DECLINED] } });
+    return or.length ? or : [{ id: { in: [] } }];
   }
 
   async get(actorId: string, id: string) {
@@ -552,6 +584,10 @@ export class CertificateService {
     if (!(await this.storage.copy(objectKey, pinned))) throw new CommError(CommErrorCode.CERTIFICATE_STATE, 'the file has not been uploaded', 409);
 
     try {
+      // The WHOLE pinned copy -- the bytes that will be sent -- not just its head.
+      const bytes = await this.readAll(pinned);
+      const refused = bytes ? (bytes.length === upload.byteSize ? inspectCertificateFile(bytes, upload.mimeType as CertificateMime) : 'the file changed size') : 'the file has not been uploaded';
+      if (refused) throw new CommError(CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED, refused, 400);
       const out = await this.act(actorId, id, CertificateAct.UPLOAD, async (tx, l) => {
         if (upload.issuedTo !== l.actor.actorId) throw new CommError(CommErrorCode.CERTIFICATE_DENIED, 'this upload was issued to another designer');
         const last = await tx.appreciationCertificateFile.findFirst({ where: { certificateId: l.row.id }, orderBy: { revision: 'desc' }, select: { revision: true } });
@@ -578,21 +614,29 @@ export class CertificateService {
   // Delivery: send, consent, Story
   // ==================================================================
 
-  /** Where the certificate would go now; send must echo it (design §5). */
+  /**
+   * Where the certificate would go now; send must echo it (design §5). A read:
+   * it creates nothing -- a teacher with no supervision conversation yet gets
+   * `conversationId: null`, and the send opens it.
+   */
   async deliveryTarget(actorId: string, id: string) {
     const ctx = await this.ctx(actorId);
     const row = await this.findRow(this.prisma, ctx.actor, id);
     const [v] = await this.views(this.prisma, ctx, [row], false);
     if (!v || !v.full || !ctx.access.categories[row.category as CertificateCategory].deliver) throw notFound();
-    const target = await this.prisma.$transaction((tx) => this.targetOf(tx, row));
-    if (!target) return { target: null };
+    const target = await this.targetOf(this.prisma, row, false);
+    if (!target) {
+      if (row.category !== CertificateCategory.TEACHER) return { target: null };
+      const teacher = await this.prisma.teacher.findUnique({ where: { id: row.recipientTeacherId! }, select: { name: true } });
+      return { target: { conversationId: null, type: ConversationType.TEACHER_SUPERVISION, title: teacher?.name ?? null, members: null } };
+    }
     const members = await this.prisma.conversationMember.count({ where: { conversationId: target.id, leftAt: null } });
     return { target: { conversationId: target.id, type: target.type, title: target.title, members } };
   }
 
   async send(actorId: string, id: string, body: Record<string, unknown>) {
-    const conversationId = body.conversationId;
-    if (typeof conversationId !== 'string' || !isUuid(conversationId)) throw invalid('conversationId: the group you were shown');
+    const conversationId = body.conversationId ?? null;
+    if (conversationId !== null && (typeof conversationId !== 'string' || !isUuid(conversationId))) throw invalid('conversationId: the group you were shown');
     const ctx = await this.ctx(actorId);
     const before = await this.requireRequesterSide(ctx, id, 'deliver');
     if (before.state === CertificateState.SENT) {
@@ -602,29 +646,40 @@ export class CertificateService {
     const file = before.approvedFileId ? await this.prisma.appreciationCertificateFile.findUnique({ where: { id: before.approvedFileId } }) : null;
     if (!file) throw notApproved();
     if (!this.storage.copy) throw new CommError(CommErrorCode.CERTIFICATE_STATE, 'this storage cannot deliver a pinned file', 409);
-    const delivered = buildObjectKey(conversationPrefix(conversationId));
-    let copied = false;
+    let delivered: string | null = null;
     try {
-      const out = await this.act(actorId, id, CertificateAct.SEND, async (tx, l) => {
-        const target = await this.targetOf(tx, l.row);
+      return await this.act(actorId, id, CertificateAct.SEND, async (tx, l) => {
+        const existing = await this.targetOf(tx, l.row, false);
+        // A teacher's supervision conversation that did not exist when it was shown is opened now.
+        const target = existing ?? (conversationId === null ? await this.targetOf(tx, l.row, true) : null);
         if (!target) throw noGroup(l.row.category);
-        if (target.id !== conversationId) {
-          throw new CommError(CommErrorCode.CERTIFICATE_TARGET_CHANGED, 'the group changed since it was shown; check it and send again', 409, { conversationId: target.id });
+        if ((existing?.id ?? null) !== conversationId) {
+          throw new CommError(CommErrorCode.CERTIFICATE_TARGET_CHANGED, 'the group changed since it was shown; check it and send again', 409, { conversationId: existing?.id ?? null });
         }
         if (l.row.approvedFileId !== file.id) throw notApproved();
+        delivered = buildObjectKey(conversationPrefix(target.id));
         if (!(await this.storage.copy!(file.objectKey, delivered))) throw new CommError(CommErrorCode.CERTIFICATE_STATE, 'the approved file is missing', 409);
-        copied = true;
+        const type = l.row.typeId ? await tx.certificateType.findUnique({ where: { id: l.row.typeId } }) : null;
         const messageId = await this.postDelivery(tx, l, target, file, delivered);
         await tx.appreciationCertificateFile.update({ where: { id: file.id }, data: { deliveredObjectKey: delivered } });
         await tx.appreciationCertificate.update({
           where: { id: l.row.id },
-          data: { state: CertificateState.SENT, sentAt: new Date(), sentBy: l.actor.actorId, conversationId: target.id, sentMessageId: messageId, ...stamp(l, 'sent', null) },
+          data: {
+            state: CertificateState.SENT,
+            sentAt: new Date(),
+            sentBy: l.actor.actorId,
+            conversationId: target.id,
+            sentMessageId: messageId,
+            // The type as it read when sent: a later relabel never rewrites a delivered certificate.
+            typeLabelEn: type?.labelEn ?? null,
+            typeLabelAr: type?.labelAr ?? null,
+            ...stamp(l, 'sent', null),
+          },
         });
         await this.auditAct(tx, l, 'sent', { conversationId: target.id, messageId, fileId: file.id });
       });
-      return out;
     } catch (e) {
-      if (copied) await this.storage.delete(delivered).catch(() => undefined);
+      if (delivered) await this.storage.delete(delivered).catch(() => undefined);
       throw e;
     }
   }
@@ -632,7 +687,9 @@ export class CertificateService {
   /**
    * Owner safeguard 4: a student Story needs the family's explicit, documented
    * consent -- WHICH parent, HOW, and the evidence. Recording it is its own act,
-   * never part of publishing. A withdrawal takes a published Story down.
+   * never part of publishing. A withdrawal takes a published Story down IN THE
+   * SAME TRANSACTION, by whoever answers for the certificate now (a PD-33
+   * backup included): both commit, or neither does.
    */
   async recordConsent(actorId: string, id: string, body: Record<string, unknown>) {
     const kind = body.kind;
@@ -650,19 +707,12 @@ export class CertificateService {
         if (typeof body.evidenceMessageId !== 'string' || !isUuid(body.evidenceMessageId)) throw invalid('evidenceMessageId: must be a uuid');
         evidence = body.evidenceMessageId;
       }
-      if ((method === 'phone' || method === 'in_person') && (note?.length ?? 0) < MIN_REASON) throw invalid('note: say when and how the parent agreed (at least 10 characters)');
+      if (method !== 'in_chat' && (note?.length ?? 0) < MIN_REASON) {
+        throw invalid(method === 'written' ? 'note: where the signed document is kept (at least 10 characters)' : 'note: say when and how the parent agreed (at least 10 characters)');
+      }
       if (method === 'in_chat' && !evidence && (note?.length ?? 0) < MIN_REASON) throw invalid('evidenceMessageId: link the parent\'s message, or describe it in the note');
     } else if ((note?.length ?? 0) < MIN_REASON) {
       throw invalid('note: why consent is withdrawn (at least 10 characters)');
-    }
-
-    // Decided first; then a withdrawal takes the Story down before the record
-    // changes: a live Story must not outlast its consent.
-    await this.act(actorId, id, CertificateAct.CONSENT, async () => undefined, undefined, false);
-    const ctx = await this.ctx(actorId);
-    const current = await this.findRow(this.prisma, ctx.actor, id);
-    if (kind === 'withdrawn' && current.storyId && !current.storyWithdrawnAt) {
-      await this.stories.remove(current.storyId, actorId, 'family consent withdrawn');
     }
 
     return this.act(actorId, id, CertificateAct.CONSENT, async (tx, l) => {
@@ -673,6 +723,7 @@ export class CertificateService {
       await tx.appreciationCertificate.update({ where: { id: l.row.id }, data: stamp(l, kind === 'granted' ? 'consent_granted' : 'consent_withdrawn', kind === 'withdrawn' ? note : null) });
       await this.auditAct(tx, l, kind === 'granted' ? 'consent_granted' : 'consent_withdrawn', { contactId, method, evidenceMessageId: evidence }, note ?? undefined);
       if (kind === 'withdrawn' && l.row.storyId && !l.row.storyWithdrawnAt) {
+        await this.stories.retireForCertificate(tx, l.row.storyId, l.actor.actorId, 'family consent withdrawn');
         await tx.appreciationCertificate.update({
           where: { id: l.row.id },
           data: { storyWithdrawnAt: new Date(), actionSeq: seq + 1, lastAction: 'story_withdrawn', lastNote: 'family consent withdrawn', lastActorStaff: l.actor.actorId, lastActorTeacher: null },
@@ -682,29 +733,35 @@ export class CertificateService {
     });
   }
 
-  /** Owner safeguards 3 and 4: explicit, once, after approval, opted in, consented. */
+  /**
+   * Owner safeguards 3 and 4: explicit, once, after approval, opted in,
+   * consented. In two phases, so no crash leaves a live Story the certificate
+   * does not know: the Story is created HIDDEN (a draft reaches nobody), linked
+   * under the certificate's lock -- where consent is decided again -- and only
+   * then published. A retry finishes a linked draft.
+   */
   async publishStory(actorId: string, id: string) {
     const ctx = await this.ctx(actorId);
     const row = await this.requireRequesterSide(ctx, id, 'story');
-    if (row.storyId) return { certificate: await this.dtoOf(ctx, id), replayed: true };
+    if (row.storyId) {
+      const story = await this.prisma.story.findUnique({ where: { id: row.storyId }, select: { state: true } });
+      if (story?.state === 'draft' && !row.storyWithdrawnAt) await this.stories.publish(row.storyId, actorId);
+      return { certificate: await this.dtoOf(ctx, id), replayed: true };
+    }
     if (!row.publishStory) throw new CommError(CommErrorCode.CERTIFICATE_STORY_NOT_OPTED_IN, 'this request did not opt in to a Story', 409);
     if (row.state !== CertificateState.APPROVED && row.state !== CertificateState.SENT) throw notApproved();
     const category = await this.prisma.certificateCategory.findUniqueOrThrow({ where: { key: row.category } });
-    if (category.storyNeedsConsent && !(await this.consentGranted(this.prisma, row.id))) {
-      throw new CommError(CommErrorCode.CERTIFICATE_STORY_CONSENT_MISSING, 'record the family\'s consent before publishing this Story', 409);
-    }
+    if (category.storyNeedsConsent && !(await this.consentGranted(this.prisma, row.id))) throw consentMissing();
     const file = row.approvedFileId ? await this.prisma.appreciationCertificateFile.findUnique({ where: { id: row.approvedFileId } }) : null;
     if (!file) throw notApproved();
     if (!file.mimeType.startsWith('image/')) throw new CommError(CommErrorCode.CERTIFICATE_STORY_NEEDS_IMAGE, 'a Story shows an image; this certificate is a PDF', 409);
     if (!this.storage.copy) throw new CommError(CommErrorCode.CERTIFICATE_STATE, 'this storage cannot copy the certificate into Stories', 409);
-    // A server-minted key, never a client's (design R7).
+    // A server-minted key, recorded as Stories' own grant to this publisher (design R7).
     const mediaKey = buildObjectKey('stories');
     if (!(await this.storage.copy(file.objectKey, mediaKey))) throw new CommError(CommErrorCode.CERTIFICATE_STATE, 'the approved file is missing', 409);
-
-    // Re-checked under the lock before the Story exists, then once more as the act.
-    await this.act(actorId, id, CertificateAct.STORY, async () => undefined, undefined, false);
-    let storyId: string | null = null;
+    let draftId: string | null = null;
     try {
+      await this.stories.grantCertificateMedia(actorId, mediaKey, file.mimeType, file.byteSize);
       const draft = await this.stories.create(actorId, {
         internalName: `Certificate · ${row.printedName}`.slice(0, 120),
         mediaObjectKey: mediaKey,
@@ -712,20 +769,23 @@ export class CertificateService {
         mediaMime: file.mimeType,
         audiences: [{ kind: category.storyAudience }],
       });
-      storyId = draft.id;
-      await this.stories.publish(draft.id, actorId);
-      return await this.act(actorId, id, CertificateAct.STORY, async (tx, l) => {
+      draftId = draft.id;
+      await this.act(actorId, id, CertificateAct.STORY, async (tx, l) => {
+        if (category.storyNeedsConsent && !(await this.consentGranted(tx, l.row.id))) throw consentMissing();
         await tx.appreciationCertificate.update({
           where: { id: l.row.id },
-          data: { storyId, storyPublishedAt: new Date(), storyPublishedBy: l.actor.actorId, ...stamp(l, 'story_published', null) },
+          data: { storyId: draft.id, storyPublishedAt: new Date(), storyPublishedBy: l.actor.actorId, ...stamp(l, 'story_published', null) },
         });
-        await this.auditAct(tx, l, 'story_published', { storyId, audience: category.storyAudience });
-      });
+        await this.auditAct(tx, l, 'story_published', { storyId: draft.id, audience: category.storyAudience });
+      }, undefined, false);
     } catch (e) {
-      if (storyId) await this.stories.remove(storyId, actorId, 'the certificate refused its Story').catch(() => undefined);
+      if (draftId) await this.stories.remove(draftId, actorId, 'the certificate refused its Story').catch(() => undefined);
       else await this.storage.delete(mediaKey).catch(() => undefined);
       throw e;
     }
+    // Linked: now it may go live. A failure here leaves a linked draft, which a retry publishes.
+    await this.stories.publish(draftId, actorId);
+    return { certificate: await this.dtoOf(ctx, id), replayed: false };
   }
 
   // ==================================================================
@@ -813,8 +873,12 @@ export class CertificateService {
     const teacher = ctx.access.categories.teacher;
     const reached = student.request && !student.oversee && rows.some((r) => r.category === 'student') ? await this.reachedLearners(ctx.actor, db) : new Set<string>();
     const scope = teacher.request && !teacher.oversee && rows.some((r) => r.category === 'teacher') ? await this.supervision.teacherScope.scopeOf(ctx.actor) : null;
-    const supervisors = await this.supervisorsOf(db, rows.filter((r) => r.state === CertificateState.PROPOSED && r.learnerId).map((r) => r.learnerId!));
-    const actsAs = await this.actsAs(db, staffId, [...rows.map((r) => r.requestedByStaff), ...supervisors.values()]);
+    const proposed = rows.filter((r) => r.state === CertificateState.PROPOSED && r.learnerId);
+    const supervisors = await this.supervisorsOf(db, proposed.map((r) => r.learnerId!));
+    const actsAs = await this.actsAs(db, staffId, [...supervisors.values()]);
+    // Who answers for each certificate NOW -- the database's own rule (chat.certificate_responsible).
+    const responsible = await this.responsibleFor(db, staffId, rows.filter((r) => r.requestedByStaff).map((r) => r.id));
+    const anyOversee = student.oversee || teacher.oversee;
     const fileIds = rows.map((r) => r.currentFileId).filter((x): x is string => !!x);
     const currentFiles = new Map((await db.appreciationCertificateFile.findMany({ where: { id: { in: fileIds } } })).map((f) => [f.id, f]));
 
@@ -822,14 +886,19 @@ export class CertificateService {
     for (const row of rows) {
       const category = row.category as CertificateCategory;
       const c = ctx.access.categories[category];
-      const asRequester = !!row.requestedByStaff && actsAs.get(row.requestedByStaff) === true;
+      const asRequester = responsible.get(row.id) === true;
       const supervisor = row.learnerId ? supervisors.get(row.learnerId) : undefined;
-      const decides = row.state === CertificateState.PROPOSED && !!supervisor && actsAs.get(supervisor) === true;
+      // A learner nobody supervises: the Operations manager decides (review of #216).
+      const decides =
+        row.state === CertificateState.PROPOSED && (supervisor ? actsAs.get(supervisor) === true : student.oversee);
       const reaches =
         category === CertificateCategory.STUDENT
           ? !!row.learnerId && reached.has(row.learnerId)
           : !!scope && !!row.recipientTeacherId && (scope.all || scope.teacherIds.has(row.recipientTeacherId));
-      const full = fullViewOf(ctx.access, category) && (c.oversee || asRequester || decides || reaches);
+      const full =
+        (fullViewOf(ctx.access, category) && (c.oversee || asRequester || decides || reaches)) ||
+        // An undecided suggestion is in reach of every overseer, who may cancel it.
+        (row.state === CertificateState.PROPOSED && anyOversee);
       const design = ctx.access.design && row.state !== CertificateState.PROPOSED && row.state !== CertificateState.DECLINED;
       if (!full && !design) continue;
       const current = row.currentFileId ? (currentFiles.get(row.currentFileId) ?? null) : null;
@@ -846,6 +915,7 @@ export class CertificateService {
       };
       // Without the requester side, only the design acts are offered.
       const scoped: CertificateAccess = full ? ctx.access : { ...ctx.access, categories: NO_CERTIFICATE_ACCESS.categories };
+      relation.anyOversee = full && anyOversee;
       out.push({ view: await this.viewOf(db, row, current, allowedActs(scoped, relation), withHistory, full), full, relation });
     }
     return out;
@@ -915,6 +985,13 @@ export class CertificateService {
     return new Map(rows.map((r) => [r.learnerId, r.supervisorId]));
   }
 
+  private async responsibleFor(db: Db, staffId: string, ids: string[]): Promise<Map<string, boolean>> {
+    if (ids.length === 0) return new Map();
+    const rows = await db.$queryRaw<Array<{ id: string; ok: boolean }>>`
+      SELECT c::text AS id, chat.certificate_responsible(${staffId}::uuid, c) AS ok FROM unnest(${ids}::uuid[]) AS c`;
+    return new Map(rows.map((r) => [r.id, r.ok]));
+  }
+
   /** chat.certificate_acts_as for each principal: themself or their active cover. */
   private async actsAs(db: Db, staffId: string, principals: Array<string | null>): Promise<Map<string, boolean>> {
     const ids = [...new Set(principals.filter((x): x is string => !!x))];
@@ -924,9 +1001,10 @@ export class CertificateService {
     return new Map(rows.map((r) => [r.id, r.ok]));
   }
 
+  /** The database's own answer: the latest consent recorded BY ITS ACT is a grant. */
   private async consentGranted(db: Db, id: string): Promise<boolean> {
-    const latest = await db.certificateStoryConsent.findFirst({ where: { certificateId: id }, orderBy: { actionSeq: 'desc' }, select: { kind: true } });
-    return latest?.kind === 'granted';
+    const rows = await db.$queryRaw<Array<{ ok: boolean }>>`SELECT chat.certificate_consent_granted(${id}::uuid) AS ok`;
+    return rows[0]?.ok === true;
   }
 
   private async namesOf(ids: string[], db: Db = this.prisma): Promise<Map<string, string>> {
@@ -937,6 +1015,20 @@ export class CertificateService {
       db.teacher.findMany({ where: { id: { in: unique } }, select: { id: true, name: true } }),
     ]);
     return new Map([...staff, ...teachers].map((p) => [p.id, p.name]));
+  }
+
+  private async readAll(objectKey: string): Promise<Buffer | null> {
+    const got = await this.storage.read(objectKey);
+    if (!got || got === 'unsatisfiable') return null;
+    if (Buffer.isBuffer(got.body)) return got.body;
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for await (const chunk of got.body) {
+      total += chunk.length;
+      if (total > MAX_CERTIFICATE_BYTES) return null;
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 
   private async orgOf(id: string): Promise<string> {
@@ -1035,9 +1127,13 @@ export class CertificateService {
    * Teacher: their own supervision conversation -- no teachers' group exists
    * (design §5, owner Q3).
    */
-  private async targetOf(tx: Tx, row: AppreciationCertificate): Promise<Conversation | null> {
+  private async targetOf(tx: Db, row: AppreciationCertificate, open: boolean): Promise<Conversation | null> {
     if (row.category === CertificateCategory.TEACHER) {
-      return this.supervision.ensureInTx(tx, row.recipientTeacherId!, row.organizationId, null).catch(() => null);
+      const existing = await tx.conversation.findFirst({
+        where: { type: ConversationType.TEACHER_SUPERVISION, supervisedTeacherId: row.recipientTeacherId, archivedAt: null, organizationId: row.organizationId },
+      });
+      if (existing || !open) return existing;
+      return this.supervision.ensureInTx(tx as Tx, row.recipientTeacherId!, row.organizationId, null).catch(() => null);
     }
     const own = await tx.conversation.findFirst({
       where: { type: ConversationType.STUDENT_GROUP, learnerId: row.learnerId, archivedAt: null, organizationId: row.organizationId },
@@ -1244,6 +1340,10 @@ function denied() {
 
 function notFound() {
   return new CommError(CommErrorCode.CERTIFICATE_NOT_FOUND, 'certificate not found');
+}
+
+function consentMissing() {
+  return new CommError(CommErrorCode.CERTIFICATE_STORY_CONSENT_MISSING, "record the family's consent before publishing this Story", 409);
 }
 
 function notApproved() {

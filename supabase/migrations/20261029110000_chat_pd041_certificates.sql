@@ -162,6 +162,9 @@ alter table chat.appreciation_certificate
   add column return_message        text check (return_message is null or length(btrim(return_message)) between 10 and 1000),
   add column sent_at               timestamptz,
   add column sent_by               uuid references chat.staff (id),
+  -- The type's labels as they read when it was sent: a later relabel never rewrites a delivered certificate.
+  add column type_label_en         text,
+  add column type_label_ar         text,
   add column story_id              uuid unique references chat.story (id),
   add column story_published_at    timestamptz,
   add column story_published_by    uuid references chat.staff (id),
@@ -248,9 +251,11 @@ alter table chat.appreciation_certificate
     (category = 'student' and learner_id is not null and recipient_teacher_id is null)
     or (category = 'teacher' and recipient_teacher_id is not null and learner_id is null and suggested_by_teacher is null)),
   -- A suggestion has a teacher and no staff requester; anything a staff member owns has one.
+  -- (A suggestion an overseer cancels before anyone decided it keeps no staff requester.)
   add constraint appreciation_certificate_requester_shape check (
-    (state in ('proposed', 'declined')) = (requested_by_staff is null)
-    and (state not in ('proposed', 'declined') or suggested_by_teacher is not null)),
+    (state not in ('proposed', 'declined') or (requested_by_staff is null and suggested_by_teacher is not null))
+    and (state in ('proposed', 'declined', 'cancelled') or requested_by_staff is not null)
+    and (requested_by_staff is not null or suggested_by_teacher is not null)),
   add constraint appreciation_certificate_has_its_file check (state not in ('uploaded', 'approved', 'sent') or current_file_id is not null),
   -- Approved means THIS revision, by someone.
   add constraint appreciation_certificate_approval_is_whole check (
@@ -260,7 +265,8 @@ alter table chat.appreciation_certificate
     and (approved_file_id is null or state in ('approved', 'sent', 'cancelled'))
     and (approved_file_id is null or approved_file_id = current_file_id)),
   add constraint appreciation_certificate_send_is_whole check (
-    (state = 'sent') = (sent_at is not null and sent_by is not null and conversation_id is not null and sent_message_id is not null)),
+    (state = 'sent') = (sent_at is not null and sent_by is not null and conversation_id is not null and sent_message_id is not null)
+    and (state <> 'sent' or type_id is null or (type_label_en is not null and type_label_ar is not null))),
   add constraint appreciation_certificate_story_is_whole check (
     (story_id is null) = (story_published_at is null) and (story_id is null) = (story_published_by is null)
     -- A live Story belongs to an approved or sent certificate; take it down before anything else.
@@ -326,9 +332,11 @@ create table chat.certificate_story_consent (
   -- The certificate act that records it (section 4): written first, then the act.
   action_seq           integer not null,
   unique (certificate_id, action_seq),
+  -- Documented means: who, how, and the evidence -- the parent's message for in_chat, otherwise
+  -- a note saying when and how (for written: where the signed document is kept).
   constraint certificate_consent_grant_is_documented check (
     kind <> 'granted' or (given_by_contact_id is not null and method is not null
-      and (method in ('in_chat', 'written') or length(btrim(coalesce(note, ''))) >= 10)
+      and (method = 'in_chat' or length(btrim(coalesce(note, ''))) >= 10)
       and (method <> 'in_chat' or evidence_message_id is not null or length(btrim(coalesce(note, ''))) >= 10))),
   constraint certificate_consent_withdrawal_has_a_reason check (
     kind <> 'withdrawn' or length(btrim(coalesce(note, ''))) >= 10)
@@ -449,6 +457,7 @@ create or replace function chat.certificate_request_key(p_category text)
 returns text
 language sql
 immutable
+set search_path = chat, pg_temp
 as $$
   select 'certificates.request.' || p_category;
 $$;
@@ -458,6 +467,7 @@ create or replace function chat.certificate_transition_ok(p_action text, p_from 
 returns boolean
 language sql
 immutable
+set search_path = chat, pg_temp
 as $$
   select case p_action
     when 'edited'             then p_from in ('requested', 'changes_requested') and p_to = p_from
@@ -476,7 +486,7 @@ as $$
     when 'consent_withdrawn'  then p_from in ('requested', 'in_design', 'changes_requested', 'uploaded', 'approved', 'sent') and p_to = p_from
     when 'story_published'    then p_from in ('approved', 'sent') and p_to = p_from
     when 'story_withdrawn'    then p_from in ('approved', 'sent') and p_to = p_from
-    when 'cancelled'          then p_from in ('requested', 'in_design', 'changes_requested', 'uploaded', 'approved') and p_to = 'cancelled'
+    when 'cancelled'          then p_from in ('proposed', 'requested', 'in_design', 'changes_requested', 'uploaded', 'approved') and p_to = 'cancelled'
     else false
   end;
 $$;
@@ -489,8 +499,36 @@ stable
 security definer
 set search_path = chat, pg_temp
 as $$
-  select coalesce((select kind = 'granted' from chat.certificate_story_consent
-                    where certificate_id = p_certificate order by action_seq desc limit 1), false);
+  -- Only a consent row recorded BY ITS ACT counts: the history event of the same seq and kind.
+  select coalesce((select sc.kind = 'granted'
+                     from chat.certificate_story_consent sc
+                     join chat.appreciation_certificate_event e
+                       on e.certificate_id = sc.certificate_id and e.seq = sc.action_seq and e.kind = 'consent_' || sc.kind
+                    where sc.certificate_id = p_certificate
+                    order by sc.action_seq desc limit 1), false);
+$$;
+
+-- Who answers for a certificate NOW (the reviewer's guard): for a student, whoever acts for the
+-- learner's CURRENT Operations supervisor (a PD-24 transfer moves it with the child) -- or, for a
+-- learner nobody supervises, the requester of record; for a teacher, the requester of record while
+-- they still request teacher certificates.
+create or replace function chat.certificate_responsible(p_staff uuid, p_certificate uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = chat, pg_temp
+as $$
+  select coalesce((
+    select case
+             when c.category = 'student' and ls.supervisor_id is not null then chat.certificate_acts_as(p_staff, ls.supervisor_id)
+             when c.category = 'student' then chat.certificate_acts_as(p_staff, c.requested_by_staff)
+             else chat.certificate_acts_as(p_staff, c.requested_by_staff)
+                  and chat.staff_has_permission(c.requested_by_staff, 'certificates.request.teacher')
+           end
+      from chat.appreciation_certificate c
+      left join chat.learner_supervision ls on ls.learner_id = c.learner_id
+     where c.id = p_certificate), false);
 $$;
 
 create or replace function chat.guard_appreciation_certificate()
@@ -580,6 +618,13 @@ begin
          or not chat.staff_has_permission(actor, chat.certificate_request_key(new.category)) then
         raise exception 'a certificate is requested by staff holding its category''s request permission' using errcode = 'insufficient_privilege';
       end if;
+      -- PD-8 reach: a student certificate is requested by staff who act for the child's supervisor
+      -- (or an overseer). PD-35's teacher scope is a runtime switch, so the API applies it.
+      if new.category = 'student'
+         and chat.staff_acts_for(actor, (select ls.supervisor_id from chat.learner_supervision ls where ls.learner_id = new.learner_id), now()) is null
+         and not chat.staff_has_permission(actor, 'certificates.oversee') then
+        raise exception 'a student certificate is requested by staff who reach the learner' using errcode = 'insufficient_privilege';
+      end if;
     end if;
     new.requested_at := now();
     new.updated_at := now();
@@ -642,8 +687,8 @@ begin
      and a not in ('approved', 'approval_withdrawn') then
     raise exception 'an approval is given or withdrawn, never edited' using errcode = 'check_violation';
   end if;
-  if (new.sent_at, new.sent_by, new.conversation_id, new.sent_message_id) is distinct from
-     (old.sent_at, old.sent_by, old.conversation_id, old.sent_message_id) and a <> 'sent' then
+  if (new.sent_at, new.sent_by, new.conversation_id, new.sent_message_id, new.type_label_en, new.type_label_ar) is distinct from
+     (old.sent_at, old.sent_by, old.conversation_id, old.sent_message_id, old.type_label_en, old.type_label_ar) and a <> 'sent' then
     raise exception 'a certificate is sent once' using errcode = 'check_violation';
   end if;
   if (new.story_id, new.story_published_at, new.story_published_by) is distinct from
@@ -668,8 +713,11 @@ begin
   case a
     when 'accepted', 'declined' then
       -- Owner safeguard 5: the learner's assigned Operations supervisor, or their active cover.
+      -- A learner nobody supervises: the Operations manager (an overseer) decides.
       select ls.supervisor_id into v_super from chat.learner_supervision ls where ls.learner_id = new.learner_id;
-      if not chat.certificate_acts_as(actor, v_super) or not chat.staff_has_permission(actor, 'certificates.request.student') then
+      if not chat.staff_has_permission(actor, 'certificates.request.student')
+         or not (case when v_super is null then chat.staff_has_permission(actor, 'certificates.oversee')
+                      else chat.certificate_acts_as(actor, v_super) end) then
         raise exception 'a teacher''s suggestion is decided by the learner''s Operations supervisor' using errcode = 'insufficient_privilege';
       end if;
       if new.decided_by is distinct from actor or new.decided_at is null then
@@ -715,7 +763,7 @@ begin
         raise exception 'a released design has no designer' using errcode = 'check_violation';
       end if;
     when 'edited', 'resubmitted', 'approved', 'redesign_requested', 'approval_withdrawn' then
-      if not chat.certificate_acts_as(actor, new.requested_by_staff)
+      if not chat.certificate_responsible(actor, new.id)
          or not chat.staff_has_permission(actor, chat.certificate_request_key(new.category)) then
         raise exception 'only the requester of record does this' using errcode = 'insufficient_privilege';
       end if;
@@ -736,7 +784,7 @@ begin
         raise exception 'a redesign keeps its message' using errcode = 'check_violation';
       end if;
     when 'sent' then
-      if not chat.certificate_acts_as(actor, new.requested_by_staff) or not chat.staff_has_permission(actor, 'certificates.deliver') then
+      if not chat.certificate_responsible(actor, new.id) or not chat.staff_has_permission(actor, 'certificates.deliver') then
         raise exception 'only the requester of record sends a certificate' using errcode = 'insufficient_privilege';
       end if;
       if new.sent_by is distinct from actor or new.approved_file_id is distinct from new.current_file_id then
@@ -755,8 +803,12 @@ begin
       if not exists (select 1 from chat.message msg where msg.id = new.sent_message_id and msg.conversation_id = new.conversation_id) then
         raise exception 'a sent certificate points at its card in that group' using errcode = 'check_violation';
       end if;
+      if new.type_id is not null and not exists (select 1 from chat.certificate_type t where t.id = new.type_id
+                                                    and t.label_en = new.type_label_en and t.label_ar = new.type_label_ar) then
+        raise exception 'a sent certificate keeps its type''s labels as they read when it was sent' using errcode = 'check_violation';
+      end if;
     when 'consent_granted', 'consent_withdrawn' then
-      if not chat.certificate_acts_as(actor, new.requested_by_staff) or not chat.staff_has_permission(actor, 'certificates.story') then
+      if not chat.certificate_responsible(actor, new.id) or not chat.staff_has_permission(actor, 'certificates.story') then
         raise exception 'only the requester of record records consent' using errcode = 'insufficient_privilege';
       end if;
       if not exists (select 1 from chat.certificate_story_consent sc where sc.certificate_id = new.id and sc.recorded_by = actor
@@ -764,7 +816,7 @@ begin
         raise exception 'a consent act records its consent row, written first under the same act' using errcode = 'check_violation';
       end if;
     when 'story_published', 'story_withdrawn' then
-      if not chat.certificate_acts_as(actor, new.requested_by_staff) or not chat.staff_has_permission(actor, 'certificates.story') then
+      if not chat.certificate_responsible(actor, new.id) or not chat.staff_has_permission(actor, 'certificates.story') then
         raise exception 'only the requester of record publishes a Story' using errcode = 'insufficient_privilege';
       end if;
       if a = 'story_published' then
@@ -778,7 +830,8 @@ begin
         end if;
       end if;
     when 'cancelled' then
-      if not ((chat.certificate_acts_as(actor, new.requested_by_staff)
+      -- An undecided suggestion is cancelled only by an overseer (it has no requester yet).
+      if not ((old.state <> 'proposed' and chat.certificate_responsible(actor, new.id)
                and chat.staff_has_permission(actor, chat.certificate_request_key(new.category)))
               or chat.staff_has_permission(actor, 'certificates.oversee')) then
         raise exception 'a certificate is cancelled by its requester or an overseer' using errcode = 'insufficient_privilege';
@@ -839,6 +892,7 @@ create trigger appreciation_certificate_has_history after insert or update on ch
 create or replace function chat.forbid_appreciation_certificate_delete()
 returns trigger
 language plpgsql
+set search_path = chat, pg_temp
 as $$
 begin
   raise exception 'a certificate is never deleted; cancel it' using errcode = 'check_violation';
@@ -903,6 +957,34 @@ insert into chat.notification_template (key, locale, title, body) values
 on conflict (key, locale, version) do nothing;
 
 -- ===========================================================================
+-- 5b. Stories media: only what Stories itself granted (design R7, review of #216)
+-- ===========================================================================
+-- Before this, StoryService stored any client-supplied media key and signed it
+-- for every recipient, so a publisher could broadcast any object they could
+-- name -- another conversation's file, or a certificate's pinned design -- and
+-- the retention sweep would then DELETE it. A story's media is now only a
+-- `stories/` key that Stories' own upload grant issued to the same staff member
+-- (or that the certificate workflow copied there for them), used once.
+
+create table chat.story_media_grant (
+  object_key      text primary key check (object_key ~ '^stories/[^/]+$'),
+  organization_id uuid not null references chat.organization (id),
+  issued_to       uuid not null references chat.staff (id),
+  mime_type       text not null,
+  byte_size       integer not null check (byte_size > 0),
+  source          text not null default 'upload' check (source in ('upload', 'certificate')),
+  created_at      timestamptz not null default now(),
+  -- The story that used it; a grant is used once.
+  story_id        uuid unique references chat.story (id)
+);
+
+comment on table chat.story_media_grant is
+  'PD-41: a story media key Stories issued (an upload grant, or a certificate copy) to one staff member. StoryService accepts no other media key.';
+
+alter table chat.story_media_grant enable row level security;
+revoke all on chat.story_media_grant from public, anon, authenticated, chat_app;
+
+-- ===========================================================================
 -- 6. Permissions (PD-40 catalogue): the certificate keys PD-41 adds
 -- ===========================================================================
 -- The rows are generated from catalogue.ts and legacy-bundles.ts by
@@ -956,6 +1038,7 @@ revoke all on function chat.guard_certificate_type() from public;
 revoke all on function chat.guard_certificate_story_consent() from public;
 revoke all on function chat.certificate_live_staff(uuid, uuid) from public;
 revoke all on function chat.certificate_acts_as(uuid, uuid) from public;
+revoke all on function chat.certificate_responsible(uuid, uuid) from public;
 revoke all on function chat.certificate_consent_granted(uuid) from public;
 revoke all on function chat.guard_appreciation_certificate() from public;
 revoke all on function chat.record_appreciation_certificate_event() from public;

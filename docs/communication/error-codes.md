@@ -141,6 +141,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CERTIFICATE_STORY_CONSENT_MISSING` | 409 | PD-41: a student certificate's Story needs the family's recorded consent; none, or it was withdrawn. |
 | `COMM.CERTIFICATE_STORY_NEEDS_IMAGE` | 409 | PD-41: a Story shows an image; this certificate's file is a PDF. |
 | `COMM.CERTIFICATE_TYPE_DISABLED` | 409 | PD-41: the certificate type is disabled; pick an active one. |
+| `COMM.STORY_MEDIA_NOT_GRANTED` | 403 | PD-41: a story's media is a `stories/` key that `POST /stories/media` issued to this publisher, used once. Any other key is refused. Upload again. |
 | `COMM.LEAVE_NOT_FOUND` | 404 | No such leave request or teacher, or one the caller may not see. |
 | `COMM.LEAVE_DENIED` | 403 | Leave is requested by a teacher for themselves, decided by the Teachers department, and the allowance is set by its manager or the super admin. Never retry. |
 | `COMM.LEAVE_STATE` | 409 | The leave does not allow it: already decided or withdrawn, overlapping another open or approved request, in the past, or crossing a calendar year. |

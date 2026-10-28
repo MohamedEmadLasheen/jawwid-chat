@@ -821,3 +821,51 @@ The code differs from the sections above in seven places:
 **Merge order:** PR-1 removes the PD-12 staff routes (`/learner-certificates/:id/upload|issue|decline`).
 The current Admin Web Certificates tab calls them, so that tab stops working until PR-2 (the
 `/certificates` page) lands. Merge PR-1 and PR-2 together, or one right after the other.
+
+### 15.1 The department head's review of #216 (2026-10-29)
+
+**P1s, fixed:**
+- **A PD-33 backup can withdraw consent.** The withdrawal and the Story's removal now commit in
+  one transaction, through `StoryService.retireForCertificate` (audited `story.deleted`, without
+  the author rule). They commit together or not at all.
+- **Stories accepts only its own media.** `chat.story_media_grant` records every key
+  `POST /stories/media` issues, and the certificate copies. `StoryService.create` accepts only a
+  `stories/` key granted to the same publisher, and claims it once inside the transaction
+  (`COMM.STORY_MEDIA_NOT_GRANTED`). The retention sweep deletes bytes only under `stories/`. A
+  legacy row naming another key is unlinked and its bytes are left alone. This closes design R7.
+
+**P2s, changed:**
+- **Listing is scoped in the query:** the categories overseen, the learners reached, the
+  teachers in PD-35 scope, suggestions for overseers, and designers past suggestion. It is
+  keyset-paged on `(requestedAt, id)`.
+- **Who answers for a certificate is decided now, not by the record.** That is
+  `chat.certificate_responsible`:
+  - for a student, whoever acts for the learner's CURRENT supervisor, so a PD-24 transfer moves
+    approve, send, consent and Story with the child; the requester of record only when nobody
+    supervises the learner;
+  - for a teacher, the requester of record while they still hold `certificates.request.teacher`.
+- **The insert guard checks reach:** a student request must come from staff who act for the
+  learner's supervisor, or an overseer. PD-35's teacher scope is a runtime switch, so the API
+  applies it.
+- **Consent is tied to its act.** `certificate_consent_granted` counts only a consent row whose
+  history event of the same seq and kind exists.
+- **Written consent needs a note** saying where the signed document is kept.
+- **A Story is published in two phases.** It is created hidden (a draft), linked under the
+  certificate's lock where consent is decided again, then published. A crash leaves at worst a
+  linked draft, which a retry publishes.
+- **Every file is checked whole.** Images must end where their format ends. A PDF must end with
+  `%%EOF` and carry no `/JavaScript`, `/JS`, `/Launch`, `/EmbeddedFile`, `/RichMedia`, `/XFA`,
+  `/SubmitForm`, `/ImportData` or `/GoToR`. **Launch requirement:** names inside compressed
+  object streams are not seen, so a malware scan of every upload is required before production.
+- **Orphaned suggestions are handled.**
+  - An overseer (the Operations or Teachers manager, or the super admin) may cancel an undecided
+    suggestion.
+  - When nobody supervises the learner, the Operations manager decides.
+
+**Nits, done:**
+- `search_path` is pinned on the three helpers.
+- The type's labels are copied onto the certificate when it is sent.
+- `GET :id/delivery` writes nothing; the send opens a missing teacher supervision conversation.
+- The slot note is corrected.
+- The spec title is fixed, and a test now shows the DB refusing a Designer as sender.
+

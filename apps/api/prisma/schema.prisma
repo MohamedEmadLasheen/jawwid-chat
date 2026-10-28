@@ -1806,6 +1806,8 @@ model AppreciationCertificate {
   sentMessageId      String?   @unique @map("sent_message_id") @db.Uuid
   sentAt             DateTime? @map("sent_at") @db.Timestamptz
   sentBy             String?   @map("sent_by") @db.Uuid
+  typeLabelEn        String?   @map("type_label_en")
+  typeLabelAr        String?   @map("type_label_ar")
   storyId            String?   @unique @map("story_id") @db.Uuid
   storyPublishedAt   DateTime? @map("story_published_at") @db.Timestamptz
   storyPublishedBy   String?   @map("story_published_by") @db.Uuid
@@ -1822,6 +1824,21 @@ model AppreciationCertificate {
 
   @@unique([organizationId, requestKey])
   @@map("appreciation_certificate")
+  @@schema("chat")
+}
+
+/// PD-41: a story media key Stories itself issued to one staff member; used once.
+model StoryMediaGrant {
+  objectKey      String   @id @map("object_key")
+  organizationId String   @map("organization_id") @db.Uuid
+  issuedTo       String   @map("issued_to") @db.Uuid
+  mimeType       String   @map("mime_type")
+  byteSize       Int      @map("byte_size")
+  source         String   @default("upload")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  storyId        String?  @unique @map("story_id") @db.Uuid
+
+  @@map("story_media_grant")
   @@schema("chat")
 }
 

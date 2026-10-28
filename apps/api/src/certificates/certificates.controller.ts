@@ -61,9 +61,9 @@ export class CertificatesController {
     @Query('category') category?: string,
     @Query('status') status?: string,
     @Query('q') q?: string,
-    @Query('before') before?: string,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.certificates.list(actorId, { category, status, q, before });
+    return this.certificates.list(actorId, { category, status, q, cursor });
   }
 
   @Requires('certificates.request.student', 'certificates.request.teacher')

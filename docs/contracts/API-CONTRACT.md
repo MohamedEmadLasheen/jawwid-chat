@@ -1383,23 +1383,23 @@ Act        edit | resubmit | cancel | accept | decline | start | return | releas
 | `GET /certificates/access` | view | the caller's per-category capabilities (nav, form, tabs) |
 | `GET /certificates/types?category&includeDisabled` | view | active types; `includeDisabled=true` for the super admin |
 | `POST /certificates/types` · `POST /certificates/types/:id` | types | add / relabel / enable / disable. Never delete (owner safeguard 6) |
-| `GET /certificates?category&status&q&before` | view | 100 a page; `status` is a stateGroup or a state; `nextBefore` pages |
+| `GET /certificates?category&status&q&cursor` | view | Scoped in the query; keyset pages of 100. `status` is a stateGroup or a state; pass `nextCursor` back as `cursor` |
 | `GET /certificates/recipients?category&q` | request.student \| request.teacher | the caller's learners (with their teacher), or teachers in scope |
 | `POST /certificates` | request.* | `{ category, typeId, learnerId|teacherId, printedName, title?, achievement?, achievedOn?, grade?, juz?, periodStart?, periodEnd?, designerNote?, internalNote?, publishStory?, requestKey, confirmDuplicate? }` → `201 { certificate, replayed }`. Same `requestKey` → the first request. `COMM.CERTIFICATE_DUPLICATE` 409 (same recipient, type, Juz' or period) · `COMM.CERTIFICATE_DUPLICATE_SUSPECTED` 409 (similar in 30 days; resend with `confirmDuplicate`) · `COMM.CERTIFICATE_TYPE_DISABLED` 409 |
 | `GET /certificates/:id` | view | the DTO with `history` |
 | `POST /certificates/:id/edit` · `/resubmit` | request.* | the requester of record, in `requested` / `changes_requested` |
-| `POST /certificates/:id/accept` · `/decline` | request.student | a teacher's suggestion: the learner's assigned supervisor or their active cover only. `accept {typeId, juz?, …}`, `decline {reason ≥10}` |
+| `POST /certificates/:id/accept` · `/decline` | request.student | A teacher's suggestion: the learner's assigned supervisor or their active cover only; the Operations manager when nobody supervises the learner. `accept {typeId, juz?, …}`, `decline {reason ≥10}` |
 | `POST /certificates/:id/start` · `/return {message ≥10}` · `/release` | design (release: design \| oversee) | the Designer takes, returns, or lets go |
 | `POST /certificates/:id/files/upload {mimeType, byteSize}` | design | a signed PUT into `certificate-uploads/<org>/<id>/` (never served) |
 | `POST /certificates/:id/files {objectKey, fileName}` | design | sniffs the bytes, pins a copy, → `uploaded`. Idempotent per upload |
 | `GET /certificates/:id/files/:fileId` | view | `{ url, expiresInSeconds }`, a 5-minute signed read |
 | `POST /certificates/:id/approve {fileId}` | request.* | the requester approves THIS revision. `COMM.CERTIFICATE_REVISION_CHANGED` 409 · `COMM.CERTIFICATE_SELF_APPROVAL` 403 |
 | `POST /certificates/:id/redesign {message}` · `/withdraw-approval {message}` | request.* | back to `in_design`, with the message |
-| `GET /certificates/:id/delivery` | deliver | `{ target: { conversationId, type, title, members } \| null }`, the group the server would choose |
-| `POST /certificates/:id/send {conversationId}` | deliver | `approved` only (`COMM.CERTIFICATE_NOT_APPROVED` 409). Must echo the target (`COMM.CERTIFICATE_TARGET_CHANGED` 409 with `detail.conversationId`). Repeat → `replayed: true` |
-| `POST /certificates/:id/consent` | story | student only. `{ kind:'granted', contactId, method:'in_chat'|'phone'|'in_person'|'written', evidenceMessageId?, note? }` or `{ kind:'withdrawn', note }`. A withdrawal takes a published Story down |
+| `GET /certificates/:id/delivery` | deliver | `{ target: { conversationId, type, title, members } \| null }`: the group the server would choose. A read that creates nothing: a teacher with no supervision conversation yet gets `conversationId: null` |
+| `POST /certificates/:id/send {conversationId}` | deliver | `approved` only (`COMM.CERTIFICATE_NOT_APPROVED` 409), by whoever answers for it now (the learner's CURRENT supervisor, or their cover). Must echo the target, `null` included (`COMM.CERTIFICATE_TARGET_CHANGED` 409 with `detail.conversationId`). Keeps the type's labels as they read when sent. Repeat → `replayed: true` |
+| `POST /certificates/:id/consent` | story | Student only. `{ kind:'granted', contactId, method:'in_chat'|'phone'|'in_person'|'written', evidenceMessageId?, note? }`: in_chat needs the parent's message or a note; the others need a note ≥10 (for `written`, where the signed document is kept). Or `{ kind:'withdrawn', note }`, which takes a published Story down in the same transaction |
 | `POST /certificates/:id/story` | story | `approved`/`sent`, opted in, image file (`COMM.CERTIFICATE_STORY_NEEDS_IMAGE`), student: latest consent granted (`COMM.CERTIFICATE_STORY_CONSENT_MISSING`). Once; repeat → `replayed: true` |
-| `POST /certificates/:id/cancel {reason ≥10}` | request.* \| oversee | |
+| `POST /certificates/:id/cancel {reason ≥10}` | request.* \| oversee | An undecided suggestion is cancelled by an overseer only |
 | `GET /learner-certificates?state` · `POST /learner-certificates` | not for staff | the teacher app: own suggestions, and suggesting one (unchanged body). Staff routes `/:id/upload|issue|decline` are **removed**: the Certificates page replaces them |
 
 ### 3.11 Health (`infra/health/health.controller.ts`) — EXISTS, unauthenticated, no prefix

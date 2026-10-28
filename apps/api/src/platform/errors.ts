@@ -121,6 +121,8 @@ export enum CommErrorCode {
    * story route into an existence oracle.
    */
   STORY_NOT_FOUND = 'COMM.STORY_NOT_FOUND',
+  /** PD-41: story media is a stories/ key Stories issued to this publisher (POST /stories/media), used once. 403. */
+  STORY_MEDIA_NOT_GRANTED = 'COMM.STORY_MEDIA_NOT_GRANTED',
   STORY_EMPTY = 'COMM.STORY_EMPTY',
   STORY_TOO_LONG = 'COMM.STORY_TOO_LONG',
   STORY_ALREADY_PUBLISHED = 'COMM.STORY_ALREADY_PUBLISHED',

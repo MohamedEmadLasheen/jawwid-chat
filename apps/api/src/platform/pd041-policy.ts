@@ -168,10 +168,18 @@ export type CertificateAct = (typeof CertificateAct)[keyof typeof CertificateAct
 export interface CertificateRelation {
   category: CertificateCategory;
   state: CertificateState;
-  /** The requester of record, or their active PD-33 cover. */
+  /**
+   * Answers for it NOW (chat.certificate_responsible): for a student, whoever
+   * acts for the learner's current supervisor -- a PD-24 transfer moves it --
+   * or the requester of record when nobody supervises the learner; for a
+   * teacher, the requester of record while they still request teacher
+   * certificates. Their active PD-33 cover counts as them.
+   */
   actsAsRequester: boolean;
-  /** For a suggestion: the learner's assigned Operations supervisor, or their active cover. */
+  /** For a suggestion: the learner's assigned Operations supervisor or their cover; the Operations manager when nobody supervises the learner. */
   decidesSuggestion: boolean;
+  /** Holds certificates.oversee in some category: may cancel an undecided suggestion. */
+  anyOversee?: boolean;
   isAssignedDesigner: boolean;
   /** Uploaded the current revision (and so may not approve it). */
   uploadedCurrent: boolean;
@@ -205,6 +213,8 @@ export function allowedActs(access: CertificateAccess, r: CertificateRelation): 
   if (s === CertificateState.PROPOSED && r.category === CertificateCategory.STUDENT && c.request && r.decidesSuggestion) {
     acts.push(CertificateAct.ACCEPT, CertificateAct.DECLINE);
   }
+  // An orphaned suggestion is cancelled by an overseer (the Teachers or Operations manager, the super admin).
+  if (s === CertificateState.PROPOSED && r.anyOversee) acts.push(CertificateAct.CANCEL);
   if (requester) {
     if (s === CertificateState.REQUESTED || s === CertificateState.CHANGES_REQUESTED) acts.push(CertificateAct.EDIT);
     if (s === CertificateState.CHANGES_REQUESTED) acts.push(CertificateAct.RESUBMIT);

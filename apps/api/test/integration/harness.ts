@@ -98,6 +98,21 @@ export function buildGraph(
   const stories = new StoryService(
     prisma, authz, storyAudience, outbox, config, identity, storage, audit, undefined, conversations,
   );
+  // PD-41: a story's media must be a stories/ key Stories granted to its author.
+  // Specs that make media stories from a synthetic key get the grant POST
+  // /stories/media would have recorded; a key Stories never issued (any other
+  // prefix, or already granted to someone) is left to be refused.
+  const createStory = stories.create.bind(stories);
+  stories.create = async (actorId, input) => {
+    const key = input.mediaObjectKey;
+    if (key && /^stories\/[^/]+$/.test(key)) {
+      await prisma.$executeRaw`
+        INSERT INTO chat.story_media_grant (object_key, organization_id, issued_to, mime_type, byte_size)
+        SELECT ${key}, s.organization_id, s.id, ${input.mediaMime ?? 'image/png'}, 1 FROM chat.staff s WHERE s.id = ${actorId}::uuid
+        ON CONFLICT (object_key) DO NOTHING`.catch(() => undefined);
+    }
+    return createStory(actorId, input);
+  };
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
   const teacherProfiles = new TeacherProfileService(prisma, authz, identity, storage, audit);
 

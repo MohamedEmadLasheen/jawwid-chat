@@ -191,7 +191,7 @@ describe('PD-12 S1 over HTTP', () => {
 
     // The Teachers department designs it (PD-12's issuers, until a Designer exists).
     expect((await http(tsup, 'POST', `/certificates/${certId}/start`)).status).toBe(201);
-    const bytes = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(100, 0x20)]);
+    const bytes = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(100, 0x20), Buffer.from('\n%%EOF\n')]);
     const grant = await http(tsup, 'POST', `/certificates/${certId}/files/upload`, { mimeType: 'application/pdf', byteSize: bytes.length });
     expect(grant.status).toBe(201);
     const upload = grant.json.upload as { uploadUrl: string; objectKey: string; headers: Record<string, string> };
