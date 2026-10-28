@@ -68,3 +68,6 @@ button { font: inherit; }
 .piece:disabled { cursor: default; }
 .piece--right { border-color: var(--accent); background: #e7f2ef; }
 .choice--picked { border-color: var(--accent); background: #e7f2ef; }
+/* Long surahs, a page at a time (lesson/pages.ts). */
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-block: 0.75rem; }
+.pager__range { color: var(--muted); }
