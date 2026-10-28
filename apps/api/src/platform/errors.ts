@@ -244,6 +244,24 @@ export enum CommErrorCode {
   TEACHER_FILE_CONFLICT = 'COMM.TEACHER_FILE_CONFLICT',
   /** PD-18: payout accounts cannot be sealed or opened (no payout key configured, or a retired key). 503. */
   TEACHER_PAYROLL_UNAVAILABLE = 'COMM.TEACHER_PAYROLL_UNAVAILABLE',
+  /** PD-43: this actor may not add a teacher, or may not name that supervisor. 403. */
+  TEACHER_ONBOARDING_DENIED = 'COMM.TEACHER_ONBOARDING_DENIED',
+  /**
+   * PD-43: the sign-in e-mail, or the phone, cannot be used. One answer,
+   * whatever holds it -- another organization's account, a parent, a teacher
+   * out of the caller's reach -- so it tells nobody what exists (gate P2-5). 409.
+   */
+  TEACHER_EMAIL_UNAVAILABLE = 'COMM.TEACHER_EMAIL_UNAVAILABLE',
+  /** PD-43: that sign-in is a teacher the caller reaches; `detail.teacher` names them. 409. */
+  TEACHER_ALREADY_ADDED = 'COMM.TEACHER_ALREADY_ADDED',
+  /** PD-43: that phone or e-mail is on another teacher's file; named in `detail.teacher` only when the caller reaches them. 409. */
+  TEACHER_CONTACT_TAKEN = 'COMM.TEACHER_CONTACT_TAKEN',
+  /** PD-43: the teacher has signed in; a password reset, not a first sign-in code. 409. */
+  TEACHER_ALREADY_SIGNED_IN = 'COMM.TEACHER_ALREADY_SIGNED_IN',
+  /** PD-43: the teacher's sign-in is suspended; reactivate it before anything else. 409. */
+  TEACHER_SIGN_IN_SUSPENDED = 'COMM.TEACHER_SIGN_IN_SUSPENDED',
+  /** PD-43: the database was too busy to finish adding the teacher; nothing was written. 503. */
+  TEACHER_ONBOARDING_BUSY = 'COMM.TEACHER_ONBOARDING_BUSY',
   /** PD-12: no such certificate, or none this caller may see. 404. */
   CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
   /** PD-12: this caller may not request, issue or decline this certificate. 403. */
@@ -456,6 +474,8 @@ export class CommError extends Error {
     // tenant (found by org-scope-pd8.spec, 2026-10-15). Deciding it here means
     // no call site can forget it again.
     readonly status: number = code.endsWith('_NOT_FOUND') ? 404 : 403,
+    /** Sent as `error.detail` (what the Admin Web client reads), beside the code and message. */
+    readonly detail?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'CommError';

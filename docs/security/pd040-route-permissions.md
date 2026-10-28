@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-432 routes.
+434 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -403,6 +403,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/teacher-profiles/review` | teacher_profiles.review | `communication/api/teacher-profile.controller.ts#TeacherProfileController.reviewQueue` |
 | GET | `/api/v1/teacher-supervision/directory` | teacher_supervision.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.directory` |
 | GET | `/api/v1/teacher-supervision/teachers/:teacherId/held-lessons` | teacher_supervision.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.heldLessons` |
+| POST | `/api/v1/teachers` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.add` |
 | POST | `/api/v1/teachers/:id/absences` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.absence` |
 | GET | `/api/v1/teachers/:id/availability` | schedule.view | `lessons/scheduling.controller.ts#SchedulingController.availability` |
 | POST | `/api/v1/teachers/:id/availability` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.setAvailability` |
@@ -417,6 +418,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/teachers/:id/work-pattern` | schedule.manage | `calendar/calendar.controller.ts#CalendarController.setPattern` |
 | GET | `/api/v1/teachers/:teacherId/evaluations` | teacher_files.view | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.forTeacher` |
 | POST | `/api/v1/teachers/:teacherId/evaluations` | teacher_files.evaluate | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.evaluate` |
+| POST | `/api/v1/teachers/:teacherId/first-login-code` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.reissue` |
 | POST | `/api/v1/teachers/:teacherId/improvement-plans` | teacher_files.evaluate | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.plan` |
 | POST | `/api/v1/teachers/:teacherId/supervision-conversation` | supervision.chats | `supervision/supervision.controller.ts#SupervisionController.ensureForTeacher` |
 | GET | `/api/v1/teachers/candidates` | lessons.view | `lessons/lifecycle.controller.ts#LifecycleController.candidates` |

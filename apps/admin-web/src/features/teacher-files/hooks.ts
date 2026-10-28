@@ -12,6 +12,7 @@ import {
   timelineKeys,
   type NewAdjustment,
   type NewEntry,
+  type NewTeacher,
   type PayoutDetails,
   type PayoutMethod,
   type PersonalPatch,
@@ -20,6 +21,22 @@ import {
 
 export function useTeacherList(enabled = true) {
   return useQuery({ queryKey: teacherFileKeys.list, queryFn: teacherFileApi.list, enabled, staleTime: 30_000 })
+}
+
+/** PD-43: add a teacher; the list refreshes so the new teacher appears. */
+export function useAddTeacher() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: NewTeacher) => teacherFileApi.addTeacher(body),
+    // The answer holds a sign-in code: never kept once the dialog lets go of it.
+    gcTime: 0,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.list }),
+  })
+}
+
+/** PD-43: a new first sign-in code; the answer carries the code only for the Manager and the super admin. */
+export function useReissueFirstLogin(teacherId: string) {
+  return useMutation({ mutationFn: () => teacherFileApi.reissueFirstLogin(teacherId), gcTime: 0 })
 }
 
 export function useTeacherFile(teacherId: string) {

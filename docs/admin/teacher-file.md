@@ -223,3 +223,37 @@ Teacher File that means:
 - `teacher-file-confinement.spec` guards only `chat.teacher_file`, its model and
   the phone field. The timeline is shared with `src/lessons` and carries no
   contact channel.
+
+## Adding a teacher (PD-43)
+
+**Teacher Files → Add teacher.** The button appears only when `GET /teacher-files` returns `onboarding.canAdd`.
+
+| Who | May add | Supervisor they may name |
+|---|---|---|
+| Super admin, Teachers Manager | yes | any primary teacher supervisor, or none |
+| A primary teacher supervisor | yes (owner Q1) | themselves (`"self"`) or none (owner N1) |
+| Anyone else | no (`COMM.TEACHER_ONBOARDING_DENIED`, 403) | — |
+
+**`POST /teachers`** (`teachers.create`) takes `{ id, name, email, phone?, joinedOn?, teachingMarket?, supervisorId?: uuid | "self" | null, note? }`. In ONE transaction it runs:
+- `chat.create_teacher`: the provisioned login, the teacher, the Teacher File and the assignment;
+- the teacher's supervision chat;
+- a first sign-in code (72 h, five tries).
+
+It answers `{ teacher, signIn, firstLogin: { code, expiresAt, emailed } }` with `Cache-Control: no-store`. The code appears in this response once, and never again.
+
+After the commit, the code is e-mailed to the sign-in address when the e-mail channel (`SMTP_URL` + `RECOVERY_MAIL_FROM`) is configured. Otherwise `emailed` is false, and the person who added the teacher hands the code over. The same `id` sent twice is the same teacher, with a fresh code that kills the first.
+
+**`POST /teachers/:id/first-login-code`** (`teachers.create`) issues a new code while the teacher has not signed in. The owner set the rule on 2026-10-28: "E-mail only; managers can see".
+- **Who:** only the super admin, the Teachers Manager and the teacher's **current** supervisor, as decided by `chat.may_issue_teacher_first_login` (migration `20261028170000`). A former supervisor, or the supervisor who merely added the teacher, gets 404, before any other answer.
+- **The code:** it is always e-mailed to the teacher. Only the Manager and the super admin see it in the response; a supervisor gets `{ expiresAt, emailed }`, and is told to ask the Manager when it could not be e-mailed.
+- **After sign-in:** `COMM.TEACHER_ALREADY_SIGNED_IN` (409); use a password reset. A suspended login answers `COMM.TEACHER_SIGN_IN_SUSPENDED` (409).
+- **Limit:** ten codes an hour per login, counting the first.
+- **Delivery:** the e-mail is sent after the commit and waits at most 10 seconds; the subject never carries the code.
+
+**A sign-in or contact already in use** (409):
+
+| Error | When |
+|---|---|
+| `COMM.TEACHER_ALREADY_ADDED` | the e-mail signs in a teacher the caller reaches; `error.detail.teacher` names them |
+| `COMM.TEACHER_EMAIL_UNAVAILABLE` | the e-mail, or the phone, belongs to anyone else: another organization's account, a parent, staff, or a teacher out of the caller's reach. It is one identical answer, so it tells nobody what exists. There is no e-mail-check endpoint. |
+| `COMM.TEACHER_CONTACT_TAKEN` | the phone or e-mail is on the file of a teacher the caller reaches, named in `error.detail.teacher` |

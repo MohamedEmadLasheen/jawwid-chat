@@ -190,6 +190,50 @@ export const T = {
   tDayOff: { en: 'Day off', ar: 'يوم إجازة' },
   tOther: { en: 'Record', ar: 'سجل' },
   lessonOf: { en: '{name}, {date}', ar: '{name}، {date}' },
+
+  // PD-43: adding a teacher
+  addTeacher: { en: 'Add teacher', ar: 'إضافة معلم' },
+  signInEmail: { en: 'Sign-in e-mail', ar: 'بريد الدخول' },
+  signInHint: {
+    en: 'The teacher signs in with this address, and the first sign-in code is e-mailed to it.',
+    ar: 'يدخل المعلم بهذا العنوان، ويُرسل إليه رمز الدخول الأول.',
+  },
+  phoneOptional: { en: 'Phone (optional)', ar: 'الهاتف (اختياري)' },
+  joinedOnOptional: { en: 'Joining date (optional)', ar: 'تاريخ الانضمام (اختياري)' },
+  me: { en: 'Me', ar: 'أنا' },
+  noSupervisorYet: { en: 'No supervisor yet', ar: 'بدون مشرف حاليًا' },
+  unsupervisedNote: {
+    en: 'Until a supervisor is set, the Teachers Manager is responsible for this teacher.',
+    ar: 'إلى أن يُعيَّن مشرف، يتولى مدير قسم المعلمين مسؤولية هذا المعلم.',
+  },
+  selfNoneNote: {
+    en: 'The Teachers Manager will cover this teacher until a supervisor is set. With strict scope on, you will no longer see this teacher once added.',
+    ar: 'سيتولى مدير قسم المعلمين هذا المعلم إلى أن يُعيَّن مشرف. وعند تفعيل النطاق الصارم لن ترى هذا المعلم بعد إضافته.',
+  },
+  add: { en: 'Add', ar: 'إضافة' },
+  adding: { en: 'Adding…', ar: 'جارٍ الإضافة…' },
+  firstLoginTitle: { en: 'First sign-in code', ar: 'رمز الدخول الأول' },
+  firstLoginHint: {
+    en: 'Give this code to the teacher. It works once, for 72 hours, and is not shown again.',
+    ar: 'سلّم هذا الرمز للمعلم. يعمل مرة واحدة لمدة 72 ساعة، ولن يُعرض مرة أخرى.',
+  },
+  signInLabel: { en: 'Sign-in', ar: 'اسم الدخول' },
+  codeLabel: { en: 'Code', ar: 'الرمز' },
+  validUntil: { en: 'Valid until {when}', ar: 'صالح حتى {when}' },
+  emailedTo: { en: 'It was also e-mailed to the sign-in address.', ar: 'وأُرسل أيضًا إلى بريد الدخول.' },
+  notEmailed: { en: 'It was not e-mailed: hand it to the teacher yourself.', ar: 'لم يُرسل بالبريد: سلّمه للمعلم بنفسك.' },
+  done: { en: 'Done', ar: 'تم' },
+  alreadyTeacher: { en: 'This person is already a teacher here.', ar: 'هذا الشخص معلم هنا بالفعل.' },
+  notSignedInYet: { en: 'Not signed in yet', ar: 'لم يسجّل الدخول بعد' },
+  signInSuspended: { en: 'Sign-in suspended', ar: 'الدخول موقوف' },
+  noSignIn: { en: 'No sign-in', ar: 'بلا حساب دخول' },
+  sendNewCode: { en: 'Send a new first sign-in code', ar: 'إرسال رمز دخول أول جديد' },
+  sending: { en: 'Sending…', ar: 'جارٍ الإرسال…' },
+  codeEmailed: { en: 'A new code was e-mailed to the teacher.', ar: 'أُرسل رمز جديد إلى بريد المعلم.' },
+  codeNotEmailedAskManager: {
+    en: 'The code could not be e-mailed. Ask the Teachers Manager to send it.',
+    ar: 'تعذّر إرسال الرمز بالبريد. اطلب من مدير قسم المعلمين إرساله.',
+  },
 } satisfies Record<string, Pair>
 
 const BY_CODE: Record<string, Pair> = {
@@ -206,6 +250,28 @@ const BY_CODE: Record<string, Pair> = {
     ar: 'ملفات المعلمين لقسم المعلمين والمدير العام فقط.',
   },
   'COMM.TEACHER_FILE_NOT_FOUND': { en: 'This teacher was not found.', ar: 'لم يُعثر على هذا المعلم.' },
+  'COMM.TEACHER_ONBOARDING_DENIED': {
+    en: 'Teachers are added by the Teachers department and the super admin; a supervisor names only themselves.',
+    ar: 'يضيف المعلمين قسمُ المعلمين والمدير العام، ولا يسمّي المشرف إلا نفسه.',
+  },
+  'COMM.TEACHER_EMAIL_UNAVAILABLE': {
+    en: 'These details can’t be used for a new teacher. Use another e-mail or phone, or ask the Teachers Manager.',
+    ar: 'لا يمكن استخدام هذه البيانات لمعلم جديد. استخدم بريدًا أو هاتفًا آخر، أو اسأل مدير قسم المعلمين.',
+  },
+  'COMM.TEACHER_ALREADY_SIGNED_IN': {
+    en: 'This teacher has already signed in. Reset their password instead.',
+    ar: 'سجّل هذا المعلم الدخول من قبل. أعد تعيين كلمة مروره بدلًا من ذلك.',
+  },
+  'COMM.TEACHER_SIGN_IN_SUSPENDED': {
+    en: 'This teacher’s sign-in is suspended. Reactivate it first.',
+    ar: 'دخول هذا المعلم موقوف. أعد تفعيله أولًا.',
+  },
+  'COMM.TEACHER_ONBOARDING_BUSY': { en: 'The system was busy and nothing was saved. Try again.', ar: 'كان النظام مشغولًا ولم يُحفظ شيء. حاول مرة أخرى.' },
+  'COMM.TEACHER_ALREADY_ADDED': { en: 'This person is already a teacher here.', ar: 'هذا الشخص معلم هنا بالفعل.' },
+  'COMM.TEACHER_CONTACT_TAKEN': {
+    en: 'This phone or e-mail is already on a teacher’s file.',
+    ar: 'هذا الهاتف أو البريد مسجّل في ملف معلم آخر.',
+  },
   'COMM.TEACHER_FILE_CONFLICT': {
     en: 'Already recorded: this entry has a resolution or cancellation, or that day off exists.',
     ar: 'مسجّل مسبقًا: لهذا البند معالجة أو إلغاء، أو يوم الإجازة موجود.',

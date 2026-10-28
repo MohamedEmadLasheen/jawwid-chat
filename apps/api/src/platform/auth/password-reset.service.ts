@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { AUDIT_SERVICE } from '../tokens';
 import type { AuditService } from '../audit.service';
@@ -105,7 +106,24 @@ export class PasswordResetService {
 
   /** Returns the plain code: the ONLY time it exists outside the person's hands. */
   async issue(input: IssueResetInput): Promise<{ code: string; expiresAt: Date; revokedSessions: number }> {
-    const recent = await this.prisma.passwordResetCode.count({
+    const { id, code, expiresAt, revokedSessions } = await this.prisma.$transaction((tx) => this.issueInTx(tx, input));
+    if (input.signOutEverywhere) await this.enforce(input.accountId, revokedSessions > 0);
+    this.log.log(`reset code ${id} issued for account ${input.accountId}`);
+    return { code, expiresAt, revokedSessions };
+  }
+
+  /**
+   * issue(), inside the CALLER's transaction: PD-43 adds a teacher, opens their
+   * supervision chat and writes their first sign-in code in one commit. The
+   * caller enforces a sign-out-everywhere after its commit (issue() does).
+   */
+  async issueInTx(
+    tx: Prisma.TransactionClient,
+    input: IssueResetInput,
+  ): Promise<{ id: string; code: string; expiresAt: Date; revokedSessions: number }> {
+    // One account's codes are issued one at a time, so two at once cannot both pass the hourly count.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'password_reset_code:' + input.accountId}))`;
+    const recent = await tx.passwordResetCode.count({
       where: { accountId: input.accountId, createdAt: { gte: new Date(Date.now() - 3_600_000) } },
     });
     if (recent >= RESET_CODES_PER_HOUR) throw new AuthError(AuthErrorCode.RATE_LIMITED, 3600);
@@ -115,54 +133,49 @@ export class PasswordResetService {
     const expiresAt = new Date(
       Date.now() + (purpose === 'first_login' ? FIRST_LOGIN_CODE_HOURS * 3_600_000 : RESET_CODE_MINUTES * 60_000),
     );
-    const { id, revoked } = await this.prisma.$transaction(async (tx) => {
-      // A reissue kills every live code, and the audit names them.
-      const superseded = await tx.passwordResetCode.findMany({
-        where: { accountId: input.accountId, usedAt: null, supersededAt: null },
-        select: { id: true },
-      });
-      await tx.passwordResetCode.updateMany({
-        where: { accountId: input.accountId, usedAt: null, supersededAt: null },
-        data: { supersededAt: new Date() },
-      });
-      const row = await tx.passwordResetCode.create({
-        data: {
-          organizationId: input.organizationId,
-          accountId: input.accountId,
-          issuedBy: input.issuedByStaffId,
-          codeHash: resetCodeHash(input.accountId, code),
-          reason: input.reason,
-          expiresAt,
-          purpose,
-        },
-        select: { id: true },
-      });
-      const revokedSessions = input.signOutEverywhere
-        ? await this.auth.revokeAccountSessionsInTx(tx, input.accountId, 'password reset issued', {
-            revokedBy: input.issuedByAccountId,
-            actorId: input.issuedByStaffId,
-          })
-        : 0;
-      // Never the code, nor its hash: only what an incident review needs.
-      await this.audit.audit(tx, {
-        actorId: input.issuedByStaffId,
-        action: purpose === 'first_login' ? RESET_AUDIT.FIRST_LOGIN_ISSUED : RESET_AUDIT.ISSUED,
-        entity: 'account',
-        entityId: input.accountId,
-        after: {
-          resetCodeId: row.id,
-          purpose,
-          supersedes: superseded.map((s) => s.id),
-          expiresAt: expiresAt.toISOString(),
-          signOutEverywhere: input.signOutEverywhere,
-        },
-        reason: input.reason,
-      });
-      return { id: row.id, revoked: revokedSessions };
+    // A reissue kills every live code, and the audit names them.
+    const superseded = await tx.passwordResetCode.findMany({
+      where: { accountId: input.accountId, usedAt: null, supersededAt: null },
+      select: { id: true },
     });
-    if (input.signOutEverywhere) await this.enforce(input.accountId, revoked > 0);
-    this.log.log(`reset code ${id} issued for account ${input.accountId}`);
-    return { code, expiresAt, revokedSessions: revoked };
+    await tx.passwordResetCode.updateMany({
+      where: { accountId: input.accountId, usedAt: null, supersededAt: null },
+      data: { supersededAt: new Date() },
+    });
+    const row = await tx.passwordResetCode.create({
+      data: {
+        organizationId: input.organizationId,
+        accountId: input.accountId,
+        issuedBy: input.issuedByStaffId,
+        codeHash: resetCodeHash(input.accountId, code),
+        reason: input.reason,
+        expiresAt,
+        purpose,
+      },
+      select: { id: true },
+    });
+    const revokedSessions = input.signOutEverywhere
+      ? await this.auth.revokeAccountSessionsInTx(tx, input.accountId, 'password reset issued', {
+          revokedBy: input.issuedByAccountId,
+          actorId: input.issuedByStaffId,
+        })
+      : 0;
+    // Never the code, nor its hash: only what an incident review needs.
+    await this.audit.audit(tx, {
+      actorId: input.issuedByStaffId,
+      action: purpose === 'first_login' ? RESET_AUDIT.FIRST_LOGIN_ISSUED : RESET_AUDIT.ISSUED,
+      entity: 'account',
+      entityId: input.accountId,
+      after: {
+        resetCodeId: row.id,
+        purpose,
+        supersedes: superseded.map((x) => x.id),
+        expiresAt: expiresAt.toISOString(),
+        signOutEverywhere: input.signOutEverywhere,
+      },
+      reason: input.reason,
+    });
+    return { id: row.id, code, expiresAt, revokedSessions };
   }
 
   async complete(rawUsername: string, rawCode: string, password: string): Promise<{ ok: true }> {

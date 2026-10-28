@@ -11,6 +11,7 @@ import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherList } from './hooks'
 import './teacher-files.css'
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
+import { AddTeacherDialog } from './AddTeacherDialog'
 
 /**
  * PD-10: every teacher of the organization, for the Teachers department and
@@ -21,6 +22,9 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
   const { t, number } = useI18n()
   const list = useTeacherList()
   const [query, setQuery] = useState('')
+  const [adding, setAdding] = useState(false)
+  // PD-43: offered only when the server says so.
+  const offer = list.data?.onboarding
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -40,6 +44,11 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
             <div className="toolbar">
               <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
               <span className="toolbar__count">{tx(T.count, { n: number(rows.length) })}</span>
+              {offer?.canAdd && (
+                <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
+                  {tx(T.addTeacher)}
+                </button>
+              )}
             </div>
             {rows.length === 0 ? (
               <EmptyState title={tx(T.noTeachers)} />
@@ -86,6 +95,7 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
             )}
           </QueryBoundary>
         )}
+        {adding && offer && <AddTeacherDialog offer={offer} basePath={basePath} onClose={() => setAdding(false)} />}
       </div>
     </div>
   )
