@@ -326,6 +326,23 @@ Warnings only: every teacher stays pickable (owner Q5, "students allowed").
 - `GET /teacher-files` rows carry `unsupervised` (active, no live primary supervisor). Every reader sees a **No supervisor** badge; the Teachers Manager and the super admin also get an "{n} unsupervised" count, an **Unsupervised only** filter and an **Assign supervisor** link to Organization's Teachers & supervisors tab (`/organization?tab=teachers`, or `/admin/teams?tab=teachers` in the Admin Portal).
 - The offboard preview's students link to their page, where Change teacher is.
 
+### Change sign-in e-mail (PD-43 §3.3)
+
+**`PATCH /teachers/:id/sign-in`** (`teachers.create`) takes `{ email, reason? }`; `Cache-Control: no-store`. The SQL writer is `chat.change_teacher_sign_in`.
+
+- **While the login waits** (`provisioned`): the reissue rule (`chat.may_give_teacher_sign_in`: the super admin, the Teachers Manager, the teacher's **current** supervisor, strict scope on or off). Every live code of the login is retired, and a new first sign-in code is issued in the same transaction and e-mailed to the **new** address after the commit. Only the Manager and the super admin see it in the answer.
+- **Once signed in** (`active`): the super admin only. Every session ends; the teacher signs in again with the new address and the same password. The answer's `firstLogin` is `null`.
+- The Teacher File's e-mail follows only when it was the sign-in. Audited as `teacher.sign_in_changed`, with no address in it.
+- The Teacher File's `signIn.canChange` says whether to offer **Change sign-in e-mail**; the code, when shown, stays on screen through the file's reload.
+
+| Refusal | Answer |
+|---|---|
+| Out of the caller's reach, or unknown | 404 |
+| A used login, by anyone but the super admin | 403 `COMM.TEACHER_ONBOARDING_DENIED` |
+| No login (Give sign-in is for that), a closed login, an inactive teacher, the same address | 409 `COMM.TEACHER_FILE_CONFLICT` |
+| A suspended login | 409 `COMM.TEACHER_SIGN_IN_SUSPENDED` |
+| An address in use | the same scoped answers as when adding a teacher (gate P2-5) |
+
 ### Teacher history (PD-43 §4)
 
 **`GET /teachers/:id/history`** (`teacher_files.view`) returns `{ teacherId, events: [{ at, action, actor: {id, name} | null, reason, detail }] }`, newest first (at most 200). It is read exactly as the Teacher File is: the department gate, then the PD-35 scope (404 out of a strict supervisor's scope).

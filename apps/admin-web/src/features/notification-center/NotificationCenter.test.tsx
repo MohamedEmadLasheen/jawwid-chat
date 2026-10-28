@@ -123,5 +123,7 @@ describe('PD-34: the Notification Center', () => {
     expect(routeFor({ kind: 'open_conversation', conversationId: 'c 1' })).toBe('/chat/c%201')
     expect(routeFor({ kind: 'view_lesson', lessonId: 'l' })).toBeNull()
     expect(routeFor(null)).toBeNull()
+    // PD-35 B5: a case notification opens the case in Escalations.
+    expect(routeFor({ kind: 'open_case', caseId: 'k 1' })).toBe('/cases?case=k%201')
   })
 })
