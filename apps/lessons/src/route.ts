@@ -1,5 +1,5 @@
-/** The paths the lessons site has always used (Chat's items store them): /lessons/quran/surah-N. */
-export type Route = { kind: 'surah'; surah: number } | { kind: 'index' } | { kind: 'not-found' };
+/** The paths the lessons site has always used (Chat's items store them): /lessons/quran/surah-N, /lessons/arabic/lesson-N. */
+export type Route = { kind: 'surah'; surah: number } | { kind: 'arabic'; lesson: number } | { kind: 'index' } | { kind: 'not-found' };
 
 export function route(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '') || '/';
@@ -8,6 +8,11 @@ export function route(pathname: string): Route {
   if (m) {
     const n = Number(m[1]);
     if (n >= 1 && n <= 114 && String(n) === m[1]) return { kind: 'surah', surah: n };
+  }
+  const a = /^\/lessons\/arabic\/lesson-(\d{1,2})$/.exec(path);
+  if (a) {
+    const n = Number(a[1]);
+    if (n >= 1 && n <= 10 && String(n) === a[1]) return { kind: 'arabic', lesson: n };
   }
   return { kind: 'not-found' };
 }

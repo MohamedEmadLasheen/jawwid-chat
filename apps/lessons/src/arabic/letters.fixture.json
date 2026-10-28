@@ -1,0 +1,33 @@
+{
+  "comment": "The one letter rule, as cases. Run by letters.test.ts AND scripts/lessons/check-arabic-lesson.py selftest, so the browser and CI agree. Only marks are removed; no letter is folded into another.",
+  "units": {
+    "alif": ["ا"],
+    "hamza": ["ء", "أ", "إ", "ؤ", "ئ"],
+    "lam-alif": ["لا"],
+    "ba": ["ب"],
+    "ya": ["ي"],
+    "alif-maqsura": ["ى"]
+  },
+  "cases": [
+    { "word": "أَسَدْ", "unit": "alif", "has": false, "positions": [] },
+    { "word": "أَسَدْ", "unit": "hamza", "has": true, "positions": ["start"] },
+    { "word": "إِبْرَةْ", "unit": "alif", "has": false, "positions": [] },
+    { "word": "آدَمْ", "unit": "alif", "has": false, "positions": [] },
+    { "word": "آدَمْ", "unit": "hamza", "has": false, "positions": [] },
+    { "word": "كِتَابْ", "unit": "alif", "has": true, "positions": ["middle"] },
+    { "word": "عَصَا", "unit": "alif", "has": true, "positions": ["end"] },
+    { "word": "هٰذَا", "unit": "alif", "has": true, "positions": ["end"] },
+    { "word": "رَأْسْ", "unit": "hamza", "has": true, "positions": ["middle"] },
+    { "word": "رَأْسْ", "unit": "alif", "has": false, "positions": [] },
+    { "word": "سُؤَالْ", "unit": "hamza", "has": true, "positions": ["middle"] },
+    { "word": "بِئْرْ", "unit": "hamza", "has": true, "positions": ["middle"] },
+    { "word": "جُزْءْ", "unit": "hamza", "has": true, "positions": ["end"] },
+    { "word": "سَمَاءْ", "unit": "hamza", "has": true, "positions": ["end"] },
+    { "word": "سَمَاءْ", "unit": "alif", "has": true, "positions": ["middle"] },
+    { "word": "لَاعِبْ", "unit": "lam-alif", "has": true, "positions": ["start"] },
+    { "word": "لَاعِبْ", "unit": "alif", "has": true, "positions": ["middle"] },
+    { "word": "بَابْ", "unit": "ba", "has": true, "positions": ["start", "end"] },
+    { "word": "مُوسَى", "unit": "ya", "has": false, "positions": [] },
+    { "word": "مُوسَى", "unit": "alif-maqsura", "has": true, "positions": ["end"] }
+  ]
+}
