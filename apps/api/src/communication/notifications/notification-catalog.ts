@@ -80,6 +80,10 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   subscription_locked: { version: 1, category: 'payment', inbox: 'inbox.generic', action: 'view_payments' },
   subscription_unlocked: { version: 1, category: 'payment', inbox: 'inbox.generic', action: 'view_payments' },
   subscription_renewal_requested: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  // PD-43 §3.4, §3.7: for the Teachers manager (the super admin when there is none).
+  teacher_added_unsupervised: { version: 1, category: 'task', inbox: 'inbox.teacher_added_unsupervised' },
+  teacher_duplicate_hidden: { version: 1, category: 'task', inbox: 'inbox.teacher_duplicate_hidden' },
+  teacher_supervisor_left: { version: 1, category: 'task', inbox: 'inbox.teacher_supervisor_left' },
 };
 
 const FALLBACK: CatalogEntry = { version: 1, category: 'system', inbox: 'inbox.generic' };

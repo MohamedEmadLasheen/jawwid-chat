@@ -148,6 +148,16 @@ afterAll(async () => {
 const told = (recipientId: string, templateKey: string) =>
   g.prisma.notification.findMany({ where: { recipientId, templateKey }, orderBy: { createdAt: 'asc' } });
 
+/** The hidden-duplicate notification is written after the answer (its timing must not leak): wait for it. */
+async function toldEventually(recipientId: string, templateKey: string, count: number) {
+  for (let i = 0; i < 50; i++) {
+    const rows = await told(recipientId, templateKey);
+    if (rows.length >= count) return rows;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return told(recipientId, templateKey);
+}
+
 describe('1. a teacher added with no supervisor', () => {
   it('tells the Teachers manager when anyone else adds one; never the manager about their own', async () => {
     const before = (await told(m.teachersManager.id, 'teacher_added_unsupervised')).length;
@@ -178,7 +188,7 @@ describe('2. a sign-in or contact on a teacher out of the adder\'s reach', () =>
 
       const hidden = await add(m.teacherSupervisors[1]!.subject, { name: 'QA Second Try', email: taken, supervisorId: 'self' });
       expect([hidden.status, hidden.code]).toEqual([409, 'COMM.TEACHER_EMAIL_UNAVAILABLE']);
-      const rows = (await told(m.teachersManager.id, 'teacher_duplicate_hidden')).slice(before);
+      const rows = (await toldEventually(m.teachersManager.id, 'teacher_duplicate_hidden', before + 1)).slice(before);
       expect(rows).toHaveLength(1);
       expect(rows[0]!.variables).toMatchObject({ holder: 'QA Holder Teacher', addedBy: expect.any(String), name: 'QA Second Try' });
       expect(JSON.stringify(rows[0]!.variables)).not.toContain('@');
@@ -186,6 +196,7 @@ describe('2. a sign-in or contact on a teacher out of the adder\'s reach', () =>
       // Within reach the adder is told directly: no notification.
       const named = await add(m.teachersManager.subject, { name: 'QA Third Try', email: taken });
       expect(named.code).toBe('COMM.TEACHER_ALREADY_ADDED');
+      await new Promise((r) => setTimeout(r, 500));
       expect((await told(m.teachersManager.id, 'teacher_duplicate_hidden')).length).toBe(before + 1);
     } finally {
       await strict(false);
@@ -196,6 +207,7 @@ describe('2. a sign-in or contact on a teacher out of the adder\'s reach', () =>
     const before = (await told(m.teachersManager.id, 'teacher_duplicate_hidden')).length;
     const r = await add(m.teacherSupervisors[1]!.subject, { email: m.families[0]!.parent.subject, supervisorId: 'self' });
     expect(r.code).toBe('COMM.TEACHER_EMAIL_UNAVAILABLE');
+    await new Promise((r) => setTimeout(r, 500));
     expect((await told(m.teachersManager.id, 'teacher_duplicate_hidden')).length).toBe(before);
   });
 });
