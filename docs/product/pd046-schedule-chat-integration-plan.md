@@ -1,7 +1,7 @@
 # PD-46: Schedule ↔ Chat in real time, and the supervisor's Upcoming lessons (plan)
 
 **State:** **APPROVED.** On 2026-10-28 the owner answered Q1–Q8 "Approve all 8 (Recommended)", relayed verbatim by the department head (§7). No feature code is written. PR-1 waits for the department head's GO (machine load).
-**Claim:** `docs/product/pd-registry/PD-46.md`. **PR-1's migration slot is `20261028240000`**, assigned by the department head and claimed in `docs/product/migration-slots/20261028240000.md`. Later PRs that need DDL (PR-2's card key if it does not land with PR-1, and PR-4) ask for their own slots.
+**Claim:** `docs/product/pd-registry/PD-46.md`. **PR-1's migration slot is `20261028235900`**, assigned by the department head and claimed in `docs/product/migration-slots/20261028235900.md`. Later PRs that need DDL (PR-2's card key if it does not land with PR-1, and PR-4) ask for their own slots.
 **Base:** `main` @ `03fd9175`. All paths are relative to the repository root. SQL migrations live in `supabase/migrations/`, abbreviated `mig/`.
 **Frozen:** the call workstreams W1–W8, `lib/core/realtime/realtime_socket.dart` and `lib/core/realtime/call_realtime_client.dart`. Nothing here edits them (§3.6).
 
@@ -244,7 +244,7 @@ lesson.changed {
 
 | PR | Content | Slot |
 |---|---|---|
-| PR-1 | `lesson.revision` + bump trigger + unannounced table; `outbox_event.idempotency_key`; `LessonEvents.record`; `lesson.changed` + `schedule.refreshed` in `events.ts` and the worker's fan-out; integration spec | **`20261028240000`** (assigned) |
+| PR-1 | `lesson.revision` + bump trigger + unannounced table; `outbox_event.idempotency_key`; `LessonEvents.record`; `lesson.changed` + `schedule.refreshed` in `events.ts` and the worker's fan-out; integration spec | **`20261028235900`** (assigned) |
 | PR-2 | `LessonWriter` and the move of every §1.1 writer; the `lesson-writer` guard; `message_card.idempotency_key` + keyed `postCard` (same slot if landed together, else a second) | 0–1 |
 | PR-3 | Clients: Admin Web `/schedule` + Chat ticket refresh; Flutter `chat_signal.dart` kind + calendar/ticket invalidation; live card footer | none |
 | PR-4 | Item 5 API: `chat.lesson_watch_mark`, `GET /lessons/upcoming`, mark/unmark, `lessons.watch` key, audit | one slot |
