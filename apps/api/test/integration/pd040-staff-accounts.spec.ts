@@ -362,7 +362,7 @@ describe('PD-40 S1/S2: a department manager', () => {
     // The same through SQL directly: the database refuses it too.
     await expect(
       g.prisma.$queryRaw`SELECT chat.grant_access_role(${ownSpecialist.staffId}::uuid, ${notHeld}::uuid, 'direct', ${m.operationsManager.id}::uuid)`,
-    ).rejects.toThrow(/this role holds permissions you may not grant: certificates\.view/);
+    ).rejects.toThrow(/this role holds permissions you may not grant: certificates\.design/);
     await expect(
       g.prisma.$queryRaw`SELECT chat.grant_access_role(${ownSpecialist.staffId}::uuid, ${supervisory}::uuid, 'direct', ${m.operationsManager.id}::uuid)`,
     ).rejects.toThrow(/only the super admin grants a role above a specialist/);
