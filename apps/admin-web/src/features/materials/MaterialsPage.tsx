@@ -42,6 +42,7 @@ import {
   useCopy,
 } from './copy'
 import { useItems, useRecitationMutations, useRecitations, useSaveItem, useSurahs } from './hooks'
+import { useLessonAudio } from './lessonAudio'
 import './materials.css'
 
 type Tab = 'library' | 'import' | 'recitations'
@@ -517,11 +518,15 @@ function PreviewDialog({ item, onClose }: { item: MaterialItem; onClose: () => v
 
 export function Player({ opened }: { opened: OpenResult }) {
   const tx = useCopy()
+  const frame = useRef<HTMLIFrameElement>(null)
+  // A Quran lesson of the lessons site gets the recitation the release gate gives this account.
+  useLessonAudio(frame, opened.url, opened.presentation === 'frame-site' && opened.audioEligible === true)
   switch (opened.presentation) {
     case 'frame-isolated':
     case 'frame-site':
       return (
         <iframe
+          ref={frame}
           className="mt-frame"
           title={opened.itemId}
           src={opened.url}

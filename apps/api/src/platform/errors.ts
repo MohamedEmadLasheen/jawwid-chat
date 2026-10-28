@@ -264,6 +264,10 @@ export enum CommErrorCode {
   TEACHER_HAS_SIGN_IN = 'COMM.TEACHER_HAS_SIGN_IN',
   /** PD-43: the database was too busy to finish adding the teacher; nothing was written. 503. */
   TEACHER_ONBOARDING_BUSY = 'COMM.TEACHER_ONBOARDING_BUSY',
+  /** PD-43: a teacher still has students; move them to other teachers before offboarding. 409. */
+  TEACHER_HAS_STUDENTS = 'COMM.TEACHER_HAS_STUDENTS',
+  /** PD-43: a teacher has lessons ahead; offboard with cancelOpenLessons to cancel them. 409. */
+  TEACHER_HAS_OPEN_LESSONS = 'COMM.TEACHER_HAS_OPEN_LESSONS',
   /** PD-12: no such certificate, or none this caller may see. 404. */
   CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
   /** PD-12: this caller may not request, issue or decline this certificate. 403. */
@@ -298,6 +302,12 @@ export enum CommErrorCode {
   DISCIPLINE_STATE = 'COMM.DISCIPLINE_STATE',
   /** PD-12 S2: open lessons fall inside the suspension; decide again with cancelCollidingLessons. 409. */
   DISCIPLINE_LESSONS_COLLIDE = 'COMM.DISCIPLINE_LESSONS_COLLIDE',
+  /**
+   * PD-12 S2: a permanent suspension's lessons are cancelled first; some could not
+   * be, so nothing was decided and the teacher is still active. `detail` names
+   * the cancelled and the not-cancelled lessons. 409.
+   */
+  DISCIPLINE_NOT_CANCELLED = 'COMM.DISCIPLINE_NOT_CANCELLED',
   /** PD-12 S3: only Operations (in scope), the Operations Manager and the super admin read instalments. 403. */
   BILLING_DENIED = 'COMM.BILLING_DENIED',
   /** PD-12 S3: no such family in the caller's organization, or none this caller may see. 404. */

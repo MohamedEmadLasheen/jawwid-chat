@@ -115,6 +115,10 @@ const BY_CODE: Record<string, Pair> = {
     ar: 'الانضباط لقسم المعلمين والمدير العام فقط.',
   },
   'COMM.DISCIPLINE_NOT_FOUND': { en: 'Not found.', ar: 'غير موجود.' },
+  'COMM.DISCIPLINE_NOT_CANCELLED': {
+    en: 'Some of the teacher’s lessons could not be cancelled, so nothing was decided and the teacher is still active. They are on the needs-action list; deal with them, then decide again.',
+    ar: 'تعذّر إلغاء بعض حصص المعلم، فلم يُتخذ أي قرار وما زال المعلم نشطًا. الحصص في قائمة ما يحتاج إجراءً؛ عالجها ثم أعد القرار.',
+  },
 }
 
 export function describeError(error: unknown, locale: 'ar' | 'en'): string {

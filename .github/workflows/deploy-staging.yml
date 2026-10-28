@@ -109,6 +109,9 @@ jobs:
         env:
           API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
           REALTIME_URL: ${{ vars.STAGING_REALTIME_URL }}
+          # PD-29 audio: the lessons site's origin, compiled into Admin Web and the
+          # teacher web portal. Unset = no lesson is handed Quran audio.
+          LESSONS_ORIGIN: ${{ vars.STAGING_LESSONS_ORIGIN }}
         run: |
           test -n "$API_BASE_URL" || { echo "::error::vars.STAGING_API_BASE_URL is not set"; exit 1; }
           # The variable is the API ORIGIN: the smoke test probes
@@ -137,6 +140,7 @@ jobs:
             --build-arg VITE_REALTIME_URL="$REALTIME_URL" \
             --build-arg VITE_APP_ENV=staging \
             --build-arg VITE_GIT_COMMIT="${GITHUB_SHA}" \
+            --build-arg VITE_LESSONS_ORIGIN="$LESSONS_ORIGIN" \
             -t "$IMAGE:staging-${GITHUB_SHA}" -t "$IMAGE:staging" \
             apps/admin-web
           docker push "$IMAGE:staging-${GITHUB_SHA}"

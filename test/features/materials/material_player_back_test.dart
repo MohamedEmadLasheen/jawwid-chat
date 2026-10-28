@@ -144,7 +144,8 @@ class _ScrollingLesson implements ActivityViewFactory {
   int drags = 0;
 
   @override
-  Widget build(BuildContext context, {required String url, required String sandbox, required bool Function(Uri uri) allow}) =>
+  Widget build(BuildContext context,
+          {required String url, required String sandbox, required bool Function(Uri uri) allow, Future<Map<String, Object?>?>? audio}) =>
       GestureDetector(
         key: key,
         behavior: HitTestBehavior.opaque,

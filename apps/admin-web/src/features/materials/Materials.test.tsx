@@ -5,6 +5,7 @@ import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { ImportReport, MaterialItem } from './api'
+import { lessonAudioMessage } from './lessonAudio'
 
 /**
  * PD-29: the Materials page (Library, Import, Recitations), through the real
@@ -189,8 +190,8 @@ describe('Materials > Library', () => {
     }
   })
 
-  async function preview(presentation: string, url: string) {
-    on('POST', /\/materials\/items\/m-2\/open$/, () => json({ itemId: 'm-2', kind: 'activity_link', mode: 'link', presentation, url }, 201))
+  async function preview(presentation: string, url: string, extra: Record<string, unknown> = {}) {
+    on('POST', /\/materials\/items\/m-2\/open$/, () => json({ itemId: 'm-2', kind: 'activity_link', mode: 'link', presentation, url, ...extra }, 201))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/materials' })
     await showArabic()
     const list = await screen.findByRole('list', { name: 'Library' })
@@ -209,6 +210,128 @@ describe('Materials > Library', () => {
     expect(frame.getAttribute('sandbox')).not.toMatch(/allow-popups|allow-top-navigation|allow-modals/)
     expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer')
     expect(frame.getAttribute('allow') ?? '').not.toMatch(/camera|microphone|geolocation/)
+  })
+
+  describe('a framed Quran lesson gets its audio list from the release gate', () => {
+    const RECITER = 'kfgqpc-huthify-hafs'
+    const audioOf = (a: number) => ({
+      reciter: RECITER,
+      key: `quran/audio/${RECITER}/078${String(a).padStart(3, '0')}.mp3`,
+      url: `https://media.example.test/078${a}?sig=x`,
+      sha256: 'a'.repeat(64),
+    })
+    function ayahsRoute(withAudio: (a: number) => boolean) {
+      on('GET', /\/quran\/ayahs\?/, (url) => {
+        const q = new URL(url, 'https://api.example.test').searchParams
+        const from = Number(q.get('from') ?? 1)
+        const to = Math.min(Number(q.get('to') ?? from + 49), 40)
+        const ayahs = []
+        for (let a = from; a <= to; a++) ayahs.push({ ayah: a, basmala: null, text: 'stand-in verse', sha256: 'b'.repeat(64), audio: withAudio(a) ? audioOf(a) : null })
+        return json({ surah: { number: 78, nameAr: 'النبأ', nameEn: 'An-Naba', ayahCount: 40 }, ayahs })
+      })
+    }
+    beforeEach(() => vi.stubEnv('VITE_LESSONS_ORIGIN', 'https://lessons.example.test'))
+    afterEach(() => vi.unstubAllEnvs())
+
+    async function framedLesson(url = 'https://lessons.example.test/lessons/quran/surah-78', extra: Record<string, unknown> = { audioEligible: true }) {
+      const dialog = await preview('frame-site', url, extra)
+      const frame = await waitFor(() => {
+        const f = dialog.querySelector('iframe')
+        if (!f) throw new Error('no frame yet')
+        return f as HTMLIFrameElement
+      })
+      const post = vi.fn()
+      ;(frame.contentWindow as unknown as { postMessage: unknown }).postMessage = post
+      frame.dispatchEvent(new Event('load'))
+      return { frame, post }
+    }
+
+    it('posts {ayah, audio} of the ayat the server gave audio for -- data only -- to the lesson\'s own origin', async () => {
+      ayahsRoute((a) => a <= 2)
+      const { post } = await framedLesson()
+      await waitFor(() => expect(post).toHaveBeenCalled())
+      const [message, origin] = post.mock.calls.at(-1)!
+      expect(origin).toBe('https://lessons.example.test')
+      expect(message).toEqual({ type: 'jawwid:quran-audio', surah: 78, ayahs: [{ ayah: 1, audio: audioOf(1) }, { ayah: 2, audio: audioOf(2) }] })
+      // No Quran text, no hash of it, no credential crosses into the lesson.
+      expect(JSON.stringify(message)).not.toMatch(/stand-in verse|basmala|bbbb|Bearer|access-1/)
+    })
+
+    it('posts nothing when the gate gave this account no audio', async () => {
+      ayahsRoute(() => false)
+      const { post } = await framedLesson()
+      await waitFor(() => expect(calls('GET', /\/quran\/ayahs\?/).length).toBeGreaterThan(0))
+      await new Promise((r) => setTimeout(r, 50))
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('a lesson that is not a Quran surah page asks for nothing', async () => {
+      ayahsRoute(() => true)
+      await preview('frame-site', 'https://lessons.example.test/lessons/arabic/letters-1', { audioEligible: true })
+      await new Promise((r) => setTimeout(r, 50))
+      expect(calls('GET', /\/quran\/ayahs/)).toEqual([])
+    })
+
+    it('an allowlisted THIRD-PARTY frame is never handed audio, whatever its path: nothing fetched, nothing posted', async () => {
+      ayahsRoute(() => true)
+      // The server does not mark it eligible: only the lessons site is.
+      const { post } = await framedLesson('https://activities.example.test/lessons/quran/surah-78', {})
+      await new Promise((r) => setTimeout(r, 50))
+      expect(calls('GET', /\/quran\/ayahs/)).toEqual([])
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('a lessons-site URL the server did NOT mark eligible is handed nothing', async () => {
+      ayahsRoute(() => true)
+      const { post } = await framedLesson('https://lessons.example.test/lessons/quran/surah-78', {})
+      await new Promise((r) => setTimeout(r, 50))
+      expect(calls('GET', /\/quran\/ayahs/)).toEqual([])
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('even an item marked eligible is refused on an origin that is not the lessons site', async () => {
+      ayahsRoute(() => true)
+      const { post } = await framedLesson('https://activities.example.test/lessons/quran/surah-78', { audioEligible: true })
+      await new Promise((r) => setTimeout(r, 50))
+      expect(calls('GET', /\/quran\/ayahs/)).toEqual([])
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('without a configured lessons origin, no lesson is handed audio', async () => {
+      vi.stubEnv('VITE_LESSONS_ORIGIN', '')
+      ayahsRoute(() => true)
+      const { post } = await framedLesson()
+      await new Promise((r) => setTimeout(r, 50))
+      expect(calls('GET', /\/quran\/ayahs/)).toEqual([])
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('posts again only for a READY from that frame, that origin and that surah', async () => {
+      ayahsRoute((a) => a === 1)
+      const { frame, post } = await framedLesson()
+      await waitFor(() => expect(post).toHaveBeenCalled())
+      const before = post.mock.calls.length
+      const ready = (init: MessageEventInit) => window.dispatchEvent(new MessageEvent('message', init))
+      ready({ origin: 'https://lessons.example.test', source: window, data: { type: 'jawwid:lesson-ready', surah: 78 } })
+      ready({ origin: 'https://evil.example.test', source: frame.contentWindow, data: { type: 'jawwid:lesson-ready', surah: 78 } })
+      ready({ origin: 'https://lessons.example.test', source: frame.contentWindow, data: { type: 'jawwid:lesson-ready', surah: 79 } })
+      expect(post.mock.calls.length).toBe(before)
+      ready({ origin: 'https://lessons.example.test', source: frame.contentWindow, data: { type: 'jawwid:lesson-ready', surah: 78 } })
+      expect(post.mock.calls.length).toBe(before + 1)
+    })
+
+    it('stops paging when the server does not move forward, and never asks more than 6 times', async () => {
+      on('GET', /\/quran\/ayahs\?/, () => json({ surah: { number: 2, ayahCount: 286 }, ayahs: [{ ayah: 1, audio: audioOf(1) }] }))
+      expect(await lessonAudioMessage(2)).toMatchObject({ surah: 2, ayahs: [{ ayah: 1 }] })
+      expect(calls('GET', /\/quran\/ayahs\?/).length).toBeLessThanOrEqual(2)
+      let page = 0
+      on('GET', /\/quran\/ayahs\?/, () => {
+        page++
+        return json({ surah: { number: 2, ayahCount: 100_000 }, ayahs: [{ ayah: page * 50, audio: null }] })
+      })
+      expect(await lessonAudioMessage(2)).toBeNull()
+      expect(page).toBeLessThanOrEqual(6)
+    })
   })
 
   it('any other link is never framed: it is offered to open in the browser', async () => {

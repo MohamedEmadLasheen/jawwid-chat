@@ -139,6 +139,30 @@ describe('discipline on the Supervision page', () => {
     expect(sent.startsOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
+  it('a permanent suspension whose lessons could not be cancelled says so, and asks for nothing more', async () => {
+    on('GET', /\/discipline\/violations\?state=open&kind=absences$/, () =>
+      json({ violations: [violation({ step: 5, suggestedDecision: 'permanent_suspension' })] }),
+    )
+    on('POST', /\/discipline\/violations\/v-1\/decide$/, () =>
+      json(
+        {
+          error: {
+            code: 'COMM.DISCIPLINE_NOT_CANCELLED',
+            message: '1 lesson(s) could not be cancelled; the teacher is not suspended',
+            detail: { cancelledLessons: [], notCancelled: [{ lessonId: 'les-1', reason: 'x' }] },
+          },
+        },
+        409,
+      ),
+    )
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/discipline' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Decide' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/could not be cancelled, so nothing was decided and the teacher is still active/)
+    expect(within(dialog).queryByRole('checkbox', { name: 'Cancel those lessons' })).not.toBeInTheDocument()
+  })
+
   it('records lateness on a held lesson of the chosen teacher', async () => {
     on('GET', /\/discipline\/violations\?state=open&kind=late$/, () => json({ violations: [] }))
     // PD-26 amendment: the page's own reads -- its teachers, and one teacher's held
