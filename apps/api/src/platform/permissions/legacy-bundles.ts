@@ -63,7 +63,18 @@ const k = (...keys: PermissionKey[]): readonly PermissionKey[] => keys;
 const CONVERSATION_STAFF = k('chat.use', 'chat.manage', 'chat.moderate', 'calls.use', 'stories.view', 'stories.publish', 'teacher_profiles.review');
 
 /** Running a department: the structure view, backups and covers, the team's profiles. */
-const DEPARTMENT_MANAGER = k('org.view', 'org.manage', 'org.covers', 'staff_profiles.team', 'staff_profiles.manage', 'reports.view');
+const DEPARTMENT_MANAGER = k(
+  'org.view',
+  'org.manage',
+  'org.covers',
+  'staff_profiles.team',
+  'staff_profiles.manage',
+  'reports.view',
+  // PD-47: their team's tasks -- watch, give, decide (TaskService narrows to the team).
+  'tasks.team',
+  'tasks.create',
+  'tasks.manage',
+);
 
 /** Operations supervisors: their families' money, contact record, lessons and journey (PD-8, PD-15, PD-17). */
 const OPERATIONS_MEMBER = k(
@@ -128,6 +139,10 @@ const TEACHERS_MEMBER = k(
   // PD-43 (owner Q1): teacher supervisors add teachers too, for themselves or
   // with no supervisor (decideTeacherOnboarding narrows them).
   'teachers.create',
+  // PD-47: a teacher supervisor sees their own teachers' tasks, read-only
+  // (owner Q3), and gives them tasks (Q5). TaskService narrows to their teachers.
+  'tasks.team',
+  'tasks.create',
 );
 
 /** Sales: enrolment, trials, payments (PD-16, PD-20). */

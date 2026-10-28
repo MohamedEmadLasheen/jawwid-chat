@@ -23,16 +23,12 @@
  * Synthetic fixtures only (G-16).
  */
 import { randomUUID } from 'node:crypto';
-import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { TeacherScopeService } from '@platform/teacher-scope';
 import { TaskService } from '../../src/tasks/task.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
-const audit = new PrismaAuditService();
-const scope = new TeacherScopeService(g.prisma);
-const tasks = new TaskService(g.prisma, g.outbox, audit, scope);
+const tasks = new TaskService(g.prisma, g.outbox);
 
 jest.setTimeout(120_000);
 
@@ -57,7 +53,7 @@ const staff = (id: string) => ({ kind: 'staff' as const, id });
 const teacher = (id: string) => ({ kind: 'teacher' as const, id });
 const manual = (by: string, to: { kind: 'staff' | 'teacher'; id: string }, extra: Record<string, unknown> = {}) =>
   tasks.create(by, { assignee: to, title: 'call the family back', body: 'about Thursday', ...extra });
-const ids = async (by: string, view: string) => (await tasks.list(by, { view })).items.map((t: { id: string }) => t.id);
+const ids = async (by: string, view: string, state?: string) => (await tasks.list(by, { view, state })).items.map((t) => t.id);
 const history = async (taskId: string) =>
   g.prisma.$queryRaw<Array<{ kind: string; actor_id: string | null; to_assignee: string | null; body: string | null }>>`
     SELECT kind, actor_id::text AS actor_id, to_assignee::text AS to_assignee, body
@@ -175,7 +171,7 @@ describe('exit 1: complete', () => {
     const done = await tasks.complete(s.ownerId, t.id, { note: 'called, rescheduled' });
     expect(done).toMatchObject({ state: 'completed', outcome: 'done', closedBy: { id: s.ownerId } });
     expect(await ids(s.ownerId, 'mine')).toEqual([]);
-    expect(await ids(s.ownerId, 'closed')).toEqual([t.id]);
+    expect(await ids(s.ownerId, 'mine', 'closed')).toEqual([t.id]);
     expect(await code(tasks.complete(s.ownerId, t.id, {}))).toBe(CommErrorCode.TASK_STATE);
     expect(await code(tasks.remove(s.managerId, t.id, { reason: 'x' }))).toBe(CommErrorCode.TASK_STATE);
     expect((await history(t.id)).map((e) => [e.kind, e.actor_id, e.body])).toEqual([
@@ -238,7 +234,7 @@ describe('exit 3: remove', () => {
     const r = await tasks.remove(s.managerId, t.id, { reason: 'the family cancelled' });
     expect(r).toMatchObject({ state: 'removed', closedBy: { id: s.managerId }, closeReason: 'the family cancelled' });
     expect(await ids(s.ownerId, 'mine')).toEqual([]);
-    expect(await ids(s.ownerId, 'closed')).toEqual([t.id]);
+    expect(await ids(s.ownerId, 'mine', 'closed')).toEqual([t.id]);
     expect(await code(tasks.returnTask(s.managerId, t.id, { instructions: 'x' }))).toBe(CommErrorCode.TASK_STATE);
   });
 
@@ -297,16 +293,18 @@ describe('exit 4: reassign', () => {
 
 describe('nothing disappears on its own', () => {
   it('an assignee who leaves the team keeps the task; the manager no longer watches it, the super admin still does', async () => {
-    const t = await manual(s.managerId, staff(s.ownerId));
-    await g.prisma.$executeRaw`DELETE FROM chat.department_member WHERE staff_id = ${s.ownerId}::uuid`;
-    expect(await ids(s.ownerId, 'mine')).toEqual([t.id]);
+    // admin_b: admin_a supervises the family's children, so they cannot leave the department.
+    const t = await manual(s.managerId, staff(s.otherAdminId));
+    await g.prisma.$executeRaw`DELETE FROM chat.department_member WHERE staff_id = ${s.otherAdminId}::uuid`;
+    expect(await ids(s.otherAdminId, 'mine')).toEqual([t.id]);
     expect(await ids(s.managerId, 'team')).toEqual([]);
     expect(await ids(sa, 'all')).toContain(t.id);
   });
 
   it('an inactive assignee keeps the task, flagged for reassignment (Q11)', async () => {
-    const t = await manual(s.managerId, staff(s.ownerId));
-    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.ownerId}::uuid`;
+    // admin_b: admin_a owns the family and cannot be deactivated.
+    const t = await manual(s.managerId, staff(s.otherAdminId));
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.otherAdminId}::uuid`;
     const [row] = (await tasks.list(s.managerId, { view: 'team' })).items;
     expect(row).toMatchObject({ id: t.id, state: 'open', needsReassignment: true });
   });
