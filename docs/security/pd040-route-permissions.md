@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-452 routes.
+453 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -139,6 +139,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/family-intake/entered` | new_students.view | `new-students/intake.controller.ts#FamilyIntakeController.entered` |
 | GET | `/api/v1/family-intake/families/:familyId` | new_students.view | `new-students/intake.controller.ts#FamilyIntakeController.family` |
 | POST | `/api/v1/family-intake/families/:familyId/children` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.addChildren` |
+| GET | `/api/v1/family-intake/families/:familyId/history` | new_students.view | `new-students/intake.controller.ts#FamilyIntakeController.history` |
 | POST | `/api/v1/family-intake/families/:familyId/operations-supervisor` | org.manage | `new-students/intake.controller.ts#FamilyIntakeController.assignOperationsSupervisor` |
 | POST | `/api/v1/family-intake/families/:familyId/sales-owner` | org.manage | `new-students/intake.controller.ts#FamilyIntakeController.changeSalesOwner` |
 | POST | `/api/v1/family-intake/families/:familyId/sign-in-email` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.setSignInEmail` |

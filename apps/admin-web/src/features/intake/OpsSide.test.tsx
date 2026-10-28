@@ -343,7 +343,7 @@ describe('The Parent Profile: the family history (S4)', () => {
     expect(items[3]).toHaveTextContent('Changed the Sales owner')
     expect(items[3]).toHaveTextContent('Sales One → Sales Two')
     expect(items[3]).toHaveTextContent('takes the renewals')
-    expect(within(items[3]).getByText(/^\d/, { selector: 'time' })).toHaveAttribute('dateTime', '2026-10-22T09:00:00Z')
+    expect(items[3]!.querySelector('time')).toHaveAttribute('dateTime', '2026-10-22T09:00:00Z')
   })
 
   it('a family the viewer does not own: no history, nothing said', async () => {

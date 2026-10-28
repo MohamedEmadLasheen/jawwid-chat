@@ -6,6 +6,8 @@ import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { QueryBoundary } from '@/shared/components/States'
 import { useCopy, type Pair } from '@/features/organization/copy'
+import { ACTION_LOG } from '@/features/intake/historyCopy'
+import { parentPath } from '@/features/profiles/api'
 
 /** One line of GET /staff/:id/action-log (apps/api ActionLogService). */
 export interface ActionLogEntry {
@@ -53,6 +55,8 @@ const ACTION: Record<string, Pair> = {
   'learner.supervisor_assigned': { en: 'Assigned a child to a supervisor', ar: 'أسند طفلًا إلى مشرف' },
   'seat.joined': { en: 'Joined a group', ar: 'انضم إلى مجموعة' },
   'seat.left': { en: 'Left a group', ar: 'غادر مجموعة' },
+  // PD-42: entering families by hand.
+  ...ACTION_LOG,
 }
 
 /** Where a line's subject is opened -- each page decides for itself whether the viewer may see it. */
@@ -69,6 +73,8 @@ function linkFor(e: ActionLogEntry): string | null {
       return `/chat/${id}`
     case 'staff':
       return `/profile/${id}`
+    case 'contact':
+      return parentPath(e.entityId)
     default:
       return null
   }
