@@ -3,6 +3,7 @@ import { CurrentActor } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import type { Actor } from '../platform/types';
 import { AdminInspectionService } from './admin-inspection.service';
+import { Requires } from '../platform/permissions/route-access';
 
 /**
  * `/admin` -- the Admin Portal's read-only inspection surface.
@@ -22,26 +23,31 @@ import { AdminInspectionService } from './admin-inspection.service';
 export class AdminController {
   constructor(private readonly inspection: AdminInspectionService) {}
 
+  @Requires('admin.inspect')
   @Get('overview')
   overview(@CurrentActor() actor: Actor) {
     return this.inspection.overview(actor);
   }
 
+  @Requires('admin.inspect')
   @Get('users')
   users(@CurrentActor() actor: Actor) {
     return this.inspection.users(actor);
   }
 
+  @Requires('admin.inspect')
   @Get('conversations')
   conversations(@CurrentActor() actor: Actor) {
     return this.inspection.conversations(actor);
   }
 
+  @Requires('admin.inspect')
   @Get('conversations/:id/messages')
   messages(@CurrentActor() actor: Actor, @Param('id') id: string) {
     return this.inspection.messages(actor, id);
   }
 
+  @Requires('admin.inspect')
   @Get('stories')
   stories(@CurrentActor() actor: Actor) {
     return this.inspection.stories(actor);

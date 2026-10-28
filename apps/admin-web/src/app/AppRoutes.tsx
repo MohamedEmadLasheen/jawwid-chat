@@ -6,9 +6,7 @@ import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { InboxPage } from '@/features/inbox/InboxPage'
 import { ChatPage } from '@/features/chat/ChatPage'
-import { FamiliesPage } from '@/features/family/FamiliesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
-import { CoveragePage } from '@/features/coverage/CoveragePage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { StoriesStudio } from '@/features/stories/StoriesStudio'
 import { StoryComposer } from '@/features/stories/StoryComposer'
@@ -92,7 +90,6 @@ export function AppRoutes() {
         <Route path="/calls/join/:scheduledCallId" element={<Area area="calls"><JoinLinkPage /></Area>} />
         <Route path="/inbox" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
-        <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
         <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
         {/* The Teachers area (features/teachers/area.tsx): Statistics is its base tab. */}
         <Route path="/teachers" element={<Area area="teachers"><TeacherStatsPage inTeachersArea /></Area>} />
@@ -128,7 +125,6 @@ export function AppRoutes() {
         {/* PD-17: the Student Profile. Several departments open it, so the server alone decides. */}
         <Route path="/students/:learnerId" element={<StudentProfilePage />} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
-        <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
         {/*
           Stories: one studio, two homes. Operators (admin, coverage, manager)

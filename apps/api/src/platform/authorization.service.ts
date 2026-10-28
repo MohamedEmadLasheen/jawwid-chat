@@ -15,6 +15,7 @@ import {
   type StaffProfileTarget,
 } from './staff-profile-policy';
 import { decideTeacherFileAccess, type TeacherFileAccess, type TeachersDepartmentRole } from './teacher-file-policy';
+import { accountAdminActs, type AccountAdminAct, type AccountAdminStanding } from './account-admin-policy';
 import {
   ActorKind,
   CONVERSATION_STAFF_ROLES,
@@ -31,8 +32,9 @@ import {
 /**
  * PD-21: what an administrator may do to another account. PD-23 adds
  * 'sign_out' (end one or all of its sessions), under the same rule as suspend.
+ * PD-40 moved the department matrix into account-admin-policy.ts.
  */
-export type AccountAdminAct = 'reset_password' | 'suspend' | 'reactivate' | 'impersonate' | 'sign_out';
+export type { AccountAdminAct, AccountAdminStanding } from './account-admin-policy';
 
 /** PD-21: the account an administrator acts on, resolved by the caller. */
 export interface AccountAdminTarget {
@@ -1329,28 +1331,16 @@ export class AuthorizationService {
   // Ownership and offboarding (approved policy, 20261014110000)
   // ------------------------------------------------------------------
   //
-  // The SQL functions are the enforcement (chat.require_family_assigner /
-  // chat.require_super_admin, server-side only); these are the same rules for
-  // any API route that offers the action, so the API never offers what the
-  // database will refuse. Separate actions, separate rules:
-  //   families.assign            manager or super_admin, same organization
-  //   move a staff member's families (offboarding, part 1)
-  //                              manager (not another manager's or the super
-  //                              admin's) or super_admin
+  // The SQL functions are the enforcement (chat.require_super_admin,
+  // server-side only); this is the same rule for any API route that offers
+  // the action, so the API never offers what the database will refuse:
   //   deactivate a staff account super_admin only; never the super admin, never self
-
-  canAssignFamilies(actor: Actor, target: { organizationId: string }): Decision {
-    return this.ownershipAuthority(actor, target.organizationId, ['manager', 'super_admin'], 'assign families');
-  }
-
-  canTransferStaffFamilies(actor: Actor, target: { organizationId: string; role: string }): Decision {
-    const base = this.ownershipAuthority(actor, target.organizationId, ['manager', 'super_admin'], 'move families');
-    if (!base.allowed) return base;
-    if (actor.staffRole === StaffRole.MANAGER && NEVER_A_TEAM_MEMBER.has(target.role)) {
-      return deny(CommErrorCode.STAFF_ASSIGNMENT_DENIED, "a manager cannot move another manager's or the super admin's families");
-    }
-    return base;
-  }
+  //
+  // PD-40 removed canAssignFamilies and canTransferStaffFamilies. Nothing
+  // called them, and their "any manager" rule was wider than the one that
+  // decides: a family's supervisor is changed through canAssignSupervision
+  // (the manager of the department both supervisors belong to, PD-8/PD-24),
+  // and PermissionGuard's org.manage gates the route.
 
   canDeactivateStaff(actor: Actor, target: { staffId: string; organizationId: string; role: string }): Decision {
     const base = this.ownershipAuthority(actor, target.organizationId, ['super_admin'], 'deactivate staff');
@@ -1367,11 +1357,12 @@ export class AuthorizationService {
 
   /**
    * May `actor` reset the password of, suspend, reactivate or impersonate the
-   * account `target`? Owner decision 2026-10-22 (PD-21), which widens
-   * AUTHORIZATION-MODEL §3 `users.manage` from the super admin to every staff
-   * role -- for PARENT and TEACHER accounts:
+   * account `target`? Owner decision 2026-10-22 (PD-21), narrowed by PD-40:
    *
-   *   - any active staff member, any role, of the same organization;
+   *   - a PARENT account by the super admin and the Operations department
+   *     (Sales: reset and sign out only); a TEACHER account by the super admin
+   *     and the Teachers department -- account-admin-policy.ts, decided on
+   *     `standing`, the actor's department roles, resolved by the caller;
    *   - a STAFF account only by the super admin, and never the super admin's
    *     own (its only credential writer is the bootstrap CLI);
    *   - never one's own account;
@@ -1385,7 +1376,7 @@ export class AuthorizationService {
    * An impersonation session cannot reach this at all: its actor is the
    * parent or teacher, never staff.
    */
-  canAdministerAccount(actor: Actor, target: AccountAdminTarget, act: AccountAdminAct): Decision {
+  canAdministerAccount(actor: Actor, target: AccountAdminTarget, act: AccountAdminAct, standing: AccountAdminStanding): Decision {
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not administer accounts');
     if (actor.kind !== ActorKind.STAFF || !actor.organizationId) {
       return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, 'only staff administer accounts');
@@ -1410,6 +1401,14 @@ export class AuthorizationService {
     }
     if (target.kind !== 'family' && target.kind !== 'teacher') {
       return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, 'unknown account kind');
+    }
+    if (!accountAdminActs(actor, standing, target.kind).has(act)) {
+      return deny(
+        CommErrorCode.ACCOUNT_ADMIN_DENIED,
+        target.kind === 'family'
+          ? 'only the super admin and the Operations department administer parent accounts'
+          : 'only the super admin and the Teachers department administer teacher accounts',
+      );
     }
     return allow();
   }

@@ -55,8 +55,9 @@ super_admin on purpose. The portal links that screen with the label
 
 ## Running the bootstrap
 
-The password is never accepted on the command line. Put it in a file only you
-can read:
+The password is never accepted on the command line. It must be 4 to 256
+characters -- the same minimum as every other account (owner decision
+2026-10-27; it was 12). Put it in a file only you can read:
 
 ```bash
 mkdir -p -m 700 ~/.jawwid && read -rs "pw?Initial super admin password: " && (umask 077; printf '%s' "$pw" > ~/.jawwid/super-admin.pw) && unset pw && echo saved

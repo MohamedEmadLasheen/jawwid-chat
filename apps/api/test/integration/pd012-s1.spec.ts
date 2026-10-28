@@ -315,7 +315,7 @@ describe('3. teacher leave', () => {
     await allowance(20);
     const view = await leave.teacherLeave(tsupId, s.teacherId, String(NEXT_YEAR));
     expect(view.allowance).toBe(20);
-    expect(view.allowanceHistory.map((h) => h.days)).toEqual([20, 21]);
+    expect(view.allowanceHistory?.map((h) => h.days)).toEqual([20, 21]);
   });
 
   it('request -> approve writes day_off entries, and the balance is computed from them', async () => {
@@ -404,8 +404,11 @@ describe('3. teacher leave', () => {
 
     expect(await code(leave.withdraw(s.newTeacherId, request.id))).toBe(CommErrorCode.LEAVE_NOT_FOUND);
     expect(await code(leave.approve(s.teacherId, request.id, {}))).toBe(CommErrorCode.LEAVE_DENIED);
-    expect(await code(leave.approve(s.ownerId, request.id, {}))).toBe(CommErrorCode.LEAVE_DENIED);
-    expect(await code(leave.list(s.ownerId, {}))).toBe(CommErrorCode.LEAVE_DENIED);
+    // PD-26 amendment: Operations decides the leave of their families' teachers only;
+    // admin_b has no charge over teacher_c.
+    expect(await code(leave.approve(s.otherAdminId, request.id, {}))).toBe(CommErrorCode.LEAVE_NOT_FOUND);
+    expect((await leave.list(s.otherAdminId, {})).requests).toEqual([]);
+    expect(await code(leave.list(s.parentId, {}))).toBe(CommErrorCode.LEAVE_DENIED);
     expect(await code(leave.ownLeave(tsupId))).toBe(CommErrorCode.LEAVE_DENIED);
 
     expect((await leave.withdraw(s.teacherId, request.id)).request.state).toBe('withdrawn');

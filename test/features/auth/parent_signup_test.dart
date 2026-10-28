@@ -72,6 +72,29 @@ void main() {
     expect(result, (email: 'parent@example.test', password: 'long-password-1'));
   });
 
+  // Owner decision 2026-10-27: a password may be as short as 4 characters, for every account.
+  testWidgets('a 3-character password is refused locally; a 4-character one is sent', (tester) async {
+    final repo = _RecordingSignup();
+    await tester.pumpWidget(app(const ParentSignupScreen(), repo));
+    await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
+    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('signup-code')), '482913');
+    await tester.enterText(find.byKey(const ValueKey('signup-password')), 'abc');
+    await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'abc');
+    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await tester.pump();
+    expect(find.text('Use at least 4 characters.'), findsOneWidget);
+    expect(repo.verified, isEmpty);
+
+    await tester.enterText(find.byKey(const ValueKey('signup-password')), '1234');
+    await tester.enterText(find.byKey(const ValueKey('signup-confirm')), '1234');
+    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await tester.pumpAndSettle();
+    expect(repo.verified, ['parent@example.test 482913 1234']);
+  });
+
   testWidgets('a code the server refuses says so plainly, in Arabic too, and a new code can be asked for', (tester) async {
     final repo = _RecordingSignup(refuseVerifyWith: 'AUTH.SIGNUP_CODE_INVALID');
     await tester.pumpWidget(app(const ParentSignupScreen(), repo, locale: const Locale('ar')));

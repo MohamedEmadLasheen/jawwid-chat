@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Put } from '@nestjs/common';
 import { ActorId, CurrentActor } from './actor.decorator';
 import { TimeZoneService } from '../../platform/time-zone.service';
 import type { Actor } from '../../platform/types';
+import { SelfService } from '../../platform/permissions/route-access';
 
 /**
  * PD-22: the caller's own time zone, like a phone's Date & time settings.
@@ -18,16 +19,19 @@ import type { Actor } from '../../platform/types';
 export class TimeZoneController {
   constructor(private readonly zones: TimeZoneService) {}
 
+  @SelfService()
   @Get()
   mine(@ActorId() actorId: string) {
     return this.zones.get(actorId);
   }
 
+  @SelfService()
   @Post('device')
   report(@CurrentActor() actor: Actor, @Body() body: { timeZone?: unknown }) {
     return this.zones.reportDevice(actor, body?.timeZone);
   }
 
+  @SelfService()
   @Put()
   set(@CurrentActor() actor: Actor, @Body() body: { automatic?: unknown; timeZone?: unknown }) {
     return this.zones.set(actor, body ?? {});

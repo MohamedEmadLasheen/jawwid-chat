@@ -360,7 +360,8 @@ describe('a manager and their team', () => {
     // The report sees active labels only; history stays with those who manage it.
     const own = await profiles.profile(await actor(w.ownerId), 'me');
     expect(own.responsibilities).toEqual([]);
-    expect((await g.prisma.auditLog.findMany({ where: { entityId: w.ownerId } })).map((a) => a.action)).toEqual([
+    // In insert order (id is a sequence): without orderBy Postgres may return the two rows either way (CI, 2026-10-27).
+    expect((await g.prisma.auditLog.findMany({ where: { entityId: w.ownerId }, orderBy: { id: 'asc' } })).map((a) => a.action)).toEqual([
       'staff_responsibility.assigned',
       'staff_responsibility.ended',
     ]);

@@ -6,12 +6,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import {
-  decidePd012StaffAccess,
-  isLiveTeacher,
-  type Pd012Access,
-  type TeachersDepartmentRole,
-} from '../platform/pd012-policy';
+import { decidePd012StaffAccess, isLiveTeacher, type Pd012Access, type TeachersDepartmentRole, decidePd012PageAccess } from '../platform/pd012-policy';
 import { TeacherScopeService } from '../platform/teacher-scope';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
@@ -77,6 +72,20 @@ export class SupervisionConversationService {
    */
   async requireTeacherInScope(actor: Actor, teacherId: string | null | undefined, notFound: CommErrorCode): Promise<void> {
     if (!(await this.teacherScope.covers(actor, teacherId))) throw new CommError(notFound, 'not found');
+  }
+
+  /**
+   * PD-26 amendment (owner 2026-10-27): the Teacher Supervision page's PD-12
+   * rights -- the Teachers department's, plus an Operations supervisor's for the
+   * teachers of their families (decidePd012PageAccess).
+   */
+  async pageAccess(actor: Actor): Promise<Pd012Access> {
+    return decidePd012PageAccess(await this.staffAccess(actor), await this.teacherScope.pageBasis(actor));
+  }
+
+  /** As requireTeacherInScope, for the page: an Operations supervisor's teachers are their families'. */
+  async requireTeacherInPageScope(actor: Actor, teacherId: string | null | undefined, notFound: CommErrorCode): Promise<void> {
+    if (!(await this.teacherScope.pageCovers(actor, teacherId))) throw new CommError(notFound, 'not found');
   }
 
   // ------------------------------------------------------------------

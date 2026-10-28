@@ -1,0 +1,60 @@
+{
+  "about": "Test vectors for the Quran dataset's text_search folding. scripts/db/load-quran.py (search_fold) and lib/shared/utils/search_text.dart (SearchText.fold) must both produce `folded` from `input`. docs/product/quran-dataset-contract.md.",
+  "vectors": [
+    {
+      "note": "Al-Fatihah 1:1 in Uthmani script: wasla alef, superscript alef and tashkeel fold away",
+      "input": "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+      "folded": "بسم الله الرحمن الرحيم"
+    },
+    {
+      "note": "Uthmani small marks (U+06E1) are Quranic annotation marks",
+      "input": "ٱلۡحَمۡدُ لِلَّهِ",
+      "folded": "الحمد لله"
+    },
+    {
+      "note": "superscript alef inside a word",
+      "input": "مَٰلِكِ يَوۡمِ ٱلدِّينِ",
+      "folded": "ملك يوم الدين"
+    },
+    {
+      "note": "hamza-bearing alefs fold to bare alef",
+      "input": "أحمد إيمان آمن",
+      "folded": "احمد ايمان امن"
+    },
+    {
+      "note": "alef maqsura and farsi yeh fold to yaa",
+      "input": "عَلَىٰ هدى",
+      "folded": "علي هدي"
+    },
+    {
+      "note": "taa marbuta folds to haa",
+      "input": "مدرسة",
+      "folded": "مدرسه"
+    },
+    {
+      "note": "seated hamzas fold to a plain hamza",
+      "input": "مسؤول مسئول",
+      "folded": "مسءول مسءول"
+    },
+    {
+      "note": "tatweel is dropped",
+      "input": "كـتـاب",
+      "folded": "كتاب"
+    },
+    {
+      "note": "Arabic-Indic and extended digits fold to ASCII",
+      "input": "٢٠٢٦ ۱۲",
+      "folded": "2026 12"
+    },
+    {
+      "note": "Latin case folds; whitespace runs collapse and trim",
+      "input": "  Al  FATIHAH\t1 ",
+      "folded": "al fatihah 1"
+    },
+    {
+      "note": "shadda and sukun are tashkeel",
+      "input": "جَوِّد",
+      "folded": "جود"
+    }
+  ]
+}

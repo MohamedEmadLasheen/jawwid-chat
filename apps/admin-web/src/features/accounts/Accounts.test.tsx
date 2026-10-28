@@ -140,6 +140,28 @@ describe('PD-21: the Accounts page', () => {
   })
 })
 
+describe('PD-40: the kinds each department administers', () => {
+  const teachersSupervisor = makeStaff({ id: 's-3', name: 'Teachers Supervisor', role: 'admin' })
+
+  it('offers only the kinds the server says this caller administers', async () => {
+    on('GET', /\/admin\/accounts(\?|$)/, () =>
+      json({ accounts: [account({ accountId: 'a-2', kind: 'teacher', name: 'Teacher Omega', familyName: null, children: [] })], truncated: false, administers: ['teacher'] }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/accounts' })
+    expect(await screen.findByText('Teacher Omega')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Teacher' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Parent' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Staff' })).not.toBeInTheDocument()
+  })
+
+  it('says plainly when the caller\'s department administers no accounts', async () => {
+    on('GET', /\/admin\/accounts(\?|$)/, () => json({ accounts: [], truncated: false, administers: [] }))
+    renderWithProviders(<AppRoutes />, { staff: finance, route: '/accounts' })
+    expect(await screen.findByText(/Your department does not administer accounts/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Teacher' })).not.toBeInTheDocument()
+  })
+})
+
 describe('PD-21: finishing a reset on the sign-in page', () => {
   it('sends the login, the code and the new password -- and opens no session', async () => {
     tokenStore.clear()

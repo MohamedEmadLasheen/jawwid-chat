@@ -10,6 +10,7 @@ import type { IdentityService } from '../identity.service';
 import type { AuditService, Tx } from '../audit.service';
 import type { Actor } from '../types';
 import { AuthorizationService } from '../authorization.service';
+import { accountAdminStandingOf } from '../account-admin-standing';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { AuthConfig, loadAuthConfig } from './auth.config';
 import {
@@ -583,6 +584,7 @@ export class AuthService {
       staff,
       { accountId: target.id, organizationId: target.organizationId, kind: target.kind },
       'impersonate',
+      await accountAdminStandingOf(this.prisma, staff),
     );
     if (!decision.allowed) return refuse('the administrator may no longer open this account');
     return { id: row.id, staffId: row.staffId, staffAccountId: row.staffAccountId };

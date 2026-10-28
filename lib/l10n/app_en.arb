@@ -265,9 +265,27 @@
   "devicesSignOutFailed": "Could not sign that device out. Try again.",
   "devicesEmpty": "No active sessions",
   "appLockTitle": "App lock",
-  "appLockToggle": "Lock with Face ID, fingerprint or passcode",
+  "appLockToggle": "{platform, select, android{Lock with fingerprint, face (if supported) or screen lock} other{Lock with Face ID, fingerprint or passcode}}",
+  "@appLockToggle": {
+    "description": "Names the unlock methods the way the platform does: Android says fingerprint and screen lock, and face only as 'if supported' (a weak face unlock is not available to apps); iOS says Face ID and passcode. platform is android or other.",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
   "appLockToggleSubtitle": "Ask to unlock when you return to the app",
-  "appLockUnavailable": "Set up Face ID, a fingerprint or a passcode on this device to use app lock.",
+  "appLockUnavailable": "{platform, select, android{Set up a fingerprint or a screen lock on this device to use app lock.} other{Set up Face ID, a fingerprint or a passcode on this device to use app lock.}}",
+  "@appLockUnavailable": {
+    "description": "Names the unlock methods the way the platform does: Android says fingerprint and screen lock, and face only as 'if supported' (a weak face unlock is not available to apps); iOS says Face ID and passcode. platform is android or other.",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "appLockOpenSettings": "Open settings",
+  "@appLockOpenSettings": {"description": "Beside the App lock hint on Android: opens the phone's own screen for adding a fingerprint or a screen lock."},
   "appLockTimeoutLabel": "Lock automatically",
   "appLockTimeoutImmediately": "Immediately",
   "appLockTimeoutOneMinute": "After 1 minute",
@@ -279,7 +297,15 @@
   "appLockUnlockAction": "Unlock",
   "appLockFailed": "Could not unlock. Try again.",
   "appLockOfferTitle": "Lock the app?",
-  "appLockOfferBody": "Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.",
+  "appLockOfferBody": "{platform, select, android{Use your fingerprint, face (if supported) or screen lock to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.} other{Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.}}",
+  "@appLockOfferBody": {
+    "description": "Names the unlock methods the way the platform does: Android says fingerprint and screen lock, and face only as 'if supported' (a weak face unlock is not available to apps); iOS says Face ID and passcode. platform is android or other.",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
   "appLockOfferAccept": "Turn on",
   "appLockOfferDecline": "Not now",
   "searchHint": "Search your chats",
@@ -1490,9 +1516,9 @@
   "signupSendCode": "Get my code",
   "signupCodeSent": "Your supervisor will send you a 6-digit code on WhatsApp. Enter it below with the password you want.",
   "signupCodeLabel": "6-digit code",
-  "signupPasswordLabel": "New password (at least 8 characters)",
+  "signupPasswordLabel": "New password (at least 4 characters)",
   "signupPasswordConfirmLabel": "Repeat the password",
-  "signupPasswordTooShort": "Use at least 8 characters.",
+  "signupPasswordTooShort": "Use at least 4 characters.",
   "signupPasswordsDiffer": "The passwords do not match.",
   "signupFinish": "Create account",
   "signupCodeInvalid": "That code is not valid or has expired. Ask for a new one.",
@@ -2857,8 +2883,6 @@
   "@typingOne": {"description": "PD-37: one person typing in the chat header.", "placeholders": {"name": {"type": "String"}}},
   "typingTwo": "{first} and {second} are typing…",
   "@typingTwo": {"description": "PD-37: two people typing.", "placeholders": {"first": {"type": "String"}, "second": {"type": "String"}}},
-  "typingMany": "{count} people are typing…",
-  "@typingMany": {"description": "PD-37: three or more people typing.", "placeholders": {"count": {"type": "int"}}},
   "messageInfoAction": "Message info",
   "@messageInfoAction": {"description": "PD-37: the long-press entry on one's own message."},
   "messageInfoReadBy": "Read by",

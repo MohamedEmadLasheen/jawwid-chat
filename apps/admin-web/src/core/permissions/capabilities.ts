@@ -21,9 +21,7 @@ import type { StaffRole } from '@/shared/types/domain'
 export type NavArea =
   | 'chat'
   | 'inbox'
-  | 'families'
   | 'tasks'
-  | 'coverage'
   | 'dashboard'
   | 'stories'
   | 'organization'
@@ -87,7 +85,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `payments` (PD-27) likewise: offered as the Admin Portal's Payments section.
     // `materials` (PD-29) is offered under More beside the Admin Portal's sections.
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
-    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'settings']
+    return ['chat', 'inbox', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -99,7 +97,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-29: the Materials library -- offered only when the server confirms
     // the Teachers manager (see SERVER_CONFIRMED_AREAS).
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
-    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'settings']
+    return ['chat', 'calls', 'inbox', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -116,7 +114,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // teacher-profiles is here for the same reason stories is: admin and
     // coverage hold the reviewer role server-side
     // (AuthorizationService.canReviewTeacherProfile).
-    return ['chat', 'calls', 'inbox', 'families', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases']
+    return ['chat', 'calls', 'inbox', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases']
   }
   if (isDepartment(role)) {
     // Departments get tasks — they may not open family records — and, PD-21
@@ -160,6 +158,12 @@ export interface DepartmentAccess {
   materialsManager?: boolean
   /** PD-38: GET /lessons/access -- the Teachers department, Operations and the super admin open the schedule. */
   calendar?: boolean
+  /**
+   * PD-26 amendment (owner 2026-10-27): GET /lessons/access -- the Teacher
+   * Supervision page, for the Teachers department, the super admin and an
+   * Operations supervisor (the teachers of their families).
+   */
+  supervisionPage?: boolean
 }
 
 /**
@@ -168,7 +172,8 @@ export interface DepartmentAccess {
  * department (the teachers' trials) and Operations (new students).
  */
 const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => boolean>> = {
-  teachers: (a) => a.lessonManager === true,
+  // The Teachers department's area; Operations is offered its Supervision page only (PD-26 amendment).
+  teachers: (a) => a.lessonManager === true || a.supervisionPage === true,
   trials: (a) => a.lessonManager === true || a.sales === true || a.operations === true,
   instalments: (a) => a.billingReader === true,
   // PD-17: the Parent Profile follows the same rule as the money on it.
@@ -188,7 +193,6 @@ export function navAreas(role: StaffRole, opts: DepartmentAccess = {}): NavArea[
 
 /** Manager-only, per the brief's invariants and AI #5's matrix. */
 export const managerOnly = {
-  editCoverageConfig: isManager,
   editConfigWeights: isManager,
   readAuditLog: isManager,
   activateBackup: isManager,

@@ -142,12 +142,17 @@ describe('1. an absence with no lesson', () => {
     expect((await discipline.list(tsupId, { kind: 'late', state: 'all' })).violations).toEqual([]);
   });
 
-  it('needs a note, a past or present day, and the Teachers department', async () => {
+  it('needs a note, a past or present day, and someone who works on that teacher', async () => {
     expect(await code(discipline.recordAbsence(tsupId, s.teacherId, { occurredOn: today }))).toBe(CommErrorCode.VALIDATION);
     expect(await code(discipline.recordAbsence(tsupId, s.teacherId, { occurredOn: plusDays(today, 2), note: 'x' }))).toBe(
       CommErrorCode.DISCIPLINE_STATE,
     );
-    expect(await code(discipline.recordAbsence(s.ownerId, s.teacherId, { occurredOn: today, note: 'x' }))).toBe(
+    // PD-26 amendment: an Operations supervisor works on the teachers of her own
+    // families only; admin_b has no charge over teacher_c (pd026-operations-access.spec).
+    expect(await code(discipline.recordAbsence(s.otherAdminId, s.teacherId, { occurredOn: today, note: 'x' }))).toBe(
+      CommErrorCode.DISCIPLINE_NOT_FOUND,
+    );
+    expect(await code(discipline.recordAbsence(s.parentId, s.teacherId, { occurredOn: today, note: 'x' }))).toBe(
       CommErrorCode.DISCIPLINE_DENIED,
     );
   });
@@ -158,7 +163,7 @@ describe('1. an absence with no lesson', () => {
     await expect(g.prisma.teacherViolation.create({ data: { ...base, kind: 'absence', note: 'x' } })).rejects.toThrow(/lesson_shape/);
     await expect(g.prisma.teacherViolation.create({ data: { ...base, kind: 'teacher_no_show', recordedBy: tsupId } })).rejects.toThrow(/lesson_shape/);
     await expect(
-      g.prisma.teacherViolation.create({ data: { ...base, kind: 'absence', note: 'x', recordedBy: s.ownerId } }),
+      g.prisma.teacherViolation.create({ data: { ...base, kind: 'absence', note: 'x', recordedBy: s.otherAdminId } }),
     ).rejects.toThrow(/Teachers department/);
   });
 });
@@ -194,7 +199,7 @@ describe('2. an upheld complaint joins the ladder', () => {
     expect(fromParents.complaints.map((x) => [x.id, x.teacher.name, x.status, x.followUps.length])).toEqual([[c.id, 'teacher_c', 'resolved', 2]]);
     expect((await files.complaints(tsupId, { from: 'management' })).complaints).toEqual([]);
     expect((await files.complaints(tsupId, { status: 'open' })).complaints).toEqual([]);
-    expect(await code(files.complaints(s.ownerId, {}))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
+    expect(await code(files.complaints(s.parentId, {}))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
   });
 
   it('a follow-up does not resolve a complaint; a second resolution is still refused', async () => {
@@ -207,9 +212,10 @@ describe('2. an upheld complaint joins the ladder', () => {
     );
   });
 
-  it('a complaint is handled by the Teachers department only', async () => {
+  it('a complaint is handled by someone who works on that teacher', async () => {
+    // admin_b is an Operations supervisor with no charge over teacher_c.
     expect(
-      await code(files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'x', source: 'management', handledBy: s.ownerId })),
+      await code(files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'x', source: 'management', handledBy: s.otherAdminId })),
     ).toBe(CommErrorCode.TEACHER_FILE_CONFLICT);
     const ok = await files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'x', source: 'management', handledBy: tmgrId });
     expect((await files.detail(tsupId, s.teacherId)).supervision.complaints.find((c) => c.id === ok.id)?.handledBy?.id).toBe(tmgrId);

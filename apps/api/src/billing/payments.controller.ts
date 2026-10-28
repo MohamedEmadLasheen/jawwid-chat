@@ -4,6 +4,7 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
 import { ParentPaymentsService } from './parent-payments.service';
 import { PaymentsService } from './payments.service';
+import { NotForStaff, Requires } from '../platform/permissions/route-access';
 
 /**
  * PD-27 routes (docs/admin/pd027-payments.md). Behind the global bearer guard.
@@ -21,57 +22,68 @@ export class PaymentsController {
 
   // ---- staff -------------------------------------------------------
 
+  @Requires('billing.record')
   @Post('families/:id/payment-requests')
   createRequest(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.payments.createRequest(actorId, id, body ?? {});
   }
 
+  @Requires('billing.record')
   @Post('payment-requests/:id/cancel')
   cancelRequest(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.payments.cancelRequest(actorId, id, body ?? {});
   }
 
   /** { method: cash | bank_transfer, amountMinor, paidOn, requestId? | instalmentId?, learnerId?, reference? } */
+  @Requires('billing.record')
   @Post('families/:id/payments')
   recordManual(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.payments.recordManual(actorId, id, body ?? {});
   }
 
+  @Requires('billing.record')
   @Post('payments/:id/void')
   voidPayment(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.payments.voidPayment(actorId, id, body ?? {});
   }
 
+  @Requires('billing.verify')
   @Post('payments/:id/refunds')
   refund(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.payments.refund(actorId, id, body ?? {});
   }
 
+  @Requires('billing.view')
   @Get('payment-receipts')
   receipts(@ActorId() actorId: string, @Query('status') status?: string) {
     return this.payments.receipts(actorId, status);
   }
 
+  @Requires('billing.record')
   @Post('payment-receipts/:id/approve')
   approveReceipt(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.payments.approveReceipt(actorId, id, body ?? {});
   }
 
+  @Requires('billing.record')
   @Post('payment-receipts/:id/reject')
   rejectReceipt(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.payments.rejectReceipt(actorId, id, body ?? {});
   }
 
+  @Requires('billing.view')
   @Get('invoices/:id/link')
   invoiceLink(@ActorId() actorId: string, @Param('id') id: string) {
     return this.payments.invoiceLink(actorId, id);
   }
 
+  @Requires('billing.view')
   @Get('billing/settings')
   settings(@ActorId() actorId: string) {
     return this.payments.settings(actorId);
   }
 
+  @Requires('billing.verify')
   @Post('billing/settings')
   setSettings(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.payments.setSettings(actorId, body ?? {});
@@ -80,22 +92,26 @@ export class PaymentsController {
   // ---- the parent ----------------------------------------------------
 
   /** { requestId } | { instalmentId } -> { url } */
+  @NotForStaff()
   @Post('me/billing/checkout')
   checkout(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.parents.startCheckout(actorId, body ?? {});
   }
 
   @RateLimited(ActionScope.ATTACHMENT_UPLOAD)
+  @NotForStaff()
   @Post('me/billing/receipts/upload')
   authorizeReceiptUpload(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.parents.authorizeReceiptUpload(actorId, body ?? {});
   }
 
+  @NotForStaff()
   @Post('me/billing/receipts')
   submitReceipt(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.parents.submitReceipt(actorId, body ?? {});
   }
 
+  @NotForStaff()
   @Get('me/billing/invoices/:id/link')
   myInvoiceLink(@ActorId() actorId: string, @Param('id') id: string) {
     return this.parents.invoiceLink(actorId, id);

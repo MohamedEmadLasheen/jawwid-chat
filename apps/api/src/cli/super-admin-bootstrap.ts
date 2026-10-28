@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { hashPassword } from '../platform/auth/password';
+import { PASSWORD_MIN_LENGTH } from '../platform/auth/password-policy';
 import { StaffRole } from '../communication/contracts/vocab';
 
 /**
@@ -48,7 +49,11 @@ import { StaffRole } from '../communication/contracts/vocab';
 
 export const BOOTSTRAP_AUDIT_ACTION = 'staff.super_admin_bootstrapped';
 export const BOOTSTRAP_REVOKE_REASON = 'super admin bootstrap: password reset';
-export const MIN_PASSWORD_LENGTH = 12;
+/**
+ * Owner decision 2026-10-27: the minimum is 4 for ALL accounts, the super admin
+ * included (it was 12 here). The shared rule lives in platform/auth/password-policy.
+ */
+export const MIN_PASSWORD_LENGTH = PASSWORD_MIN_LENGTH;
 export const MAX_PASSWORD_LENGTH = 256;
 
 export type BootstrapOutcome = 'created' | 'promoted' | 'already_super_admin';

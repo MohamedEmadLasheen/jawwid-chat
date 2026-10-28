@@ -28,17 +28,11 @@ export const qk = {
   family: (id: string) => ['family', id] as const,
   familyMessages: (id: string) => ['family', id, 'messages'] as const,
   familyCases: (id: string) => ['family', id, 'cases'] as const,
-  families: (filters: Record<string, unknown>) => ['families', filters] as const,
   transferImpact: (id: string, to: string) => ['family', id, 'transfer-impact', to] as const,
 
   tasks: (filters: Record<string, unknown>) => ['tasks', filters] as const,
   tasksAll: ['tasks'] as const,
 
-  shifts: ['coverage', 'shifts'] as const,
-  coverageRules: ['coverage', 'rules'] as const,
-  absences: ['coverage', 'absences'] as const,
-  coverageTonight: ['coverage', 'tonight'] as const,
-  coverageGaps: (days: number) => ['coverage', 'gaps', days] as const,
   coverageAll: ['coverage'] as const,
 
   dashboardHeader: ['dashboard', 'header'] as const,

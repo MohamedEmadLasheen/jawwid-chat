@@ -672,6 +672,19 @@
 }
 [dir='rtl'] .dialog--sheet { animation-name: sheet-in-rtl; }
 .dialog--sheet .dialog__title { font-size: var(--fs-lg); }
+
+/* Full window: above the navigation, for a lesson that needs the whole screen. */
+.dialog-backdrop--full { place-items: stretch; padding: 0; }
+.dialog--full {
+  inline-size: 100%;
+  block-size: 100dvh;
+  max-block-size: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dialog--full .dialog__title { font-size: var(--fs-lg); }
 /* Movement only: the content is never transparent, even mid-animation. */
 @keyframes sheet-in { from { transform: translateX(24px); } }
 @keyframes sheet-in-rtl { from { transform: translateX(-24px); } }
