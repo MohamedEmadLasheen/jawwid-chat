@@ -1,0 +1,63 @@
+{
+  "about": "PD-49 game mechanics (plan section C). Each is signed once by a teacher and the scholar (scope 'play' in the review system) before any child plays it; until then it never appears. A mechanic's record is what is signed: change it and it waits for review again. The respect rules are the plan's section C.4, stated for this mechanic.",
+  "mechanics": [
+    {
+      "id": "listen_glow",
+      "version": 1,
+      "nameAr": "اسمع والمس",
+      "skill": "listening",
+      "bands": ["3-5"],
+      "tiers": ["L1", "L2"],
+      "needsAudio": true,
+      "respect": [
+        "Each ayah is shown whole, still and unaltered, as the verified text gives it.",
+        "Only the card's frame glows while that ayah is recited; the text never moves, shrinks, bounces or changes.",
+        "The child taps the card to hear the ayah again; nothing is popped, thrown, caught or hidden.",
+        "No music and no instruments: the recitation itself is the only sound."
+      ]
+    },
+    {
+      "id": "echo",
+      "version": 1,
+      "nameAr": "ردّد معي",
+      "skill": "recitation",
+      "bands": ["3-5"],
+      "tiers": ["L1", "L2", "L3", "L4", "L5"],
+      "needsAudio": true,
+      "respect": [
+        "One ayah at a time, shown whole and unaltered while it is recited.",
+        "After the recitation the child repeats aloud; nothing is recorded or stored, and a grown-up taps to say it was repeated.",
+        "No music and no instruments; no score for the child's voice."
+      ]
+    },
+    {
+      "id": "which_heard",
+      "version": 1,
+      "nameAr": "أيّ آية سمعت؟",
+      "skill": "recognition",
+      "bands": ["3-5"],
+      "tiers": ["L1", "L2", "L3"],
+      "needsAudio": true,
+      "respect": [
+        "Every card is a whole, real ayah of the verified text; no card is ever an altered or made-up ayah.",
+        "A wrong tap is refused where it is: the card stays as it is, and after two tries the right ayah is shown and praised.",
+        "Each card has a shape and a number as well as a colour, so it is never told apart by colour alone.",
+        "No timer, no lost points, no music."
+      ]
+    },
+    {
+      "id": "count_ayat",
+      "version": 1,
+      "nameAr": "عُدّ الآيات",
+      "skill": "structure",
+      "bands": ["3-5"],
+      "tiers": ["L1"],
+      "needsAudio": false,
+      "respect": [
+        "The surah's ayat are shown whole and in order; the next one to count is lit by its frame only.",
+        "A grown-up reads each ayah to the child (or the recitation plays, where it is allowed), then the child touches it to count.",
+        "Nothing is moved, hidden or scored; no music."
+      ]
+    }
+  ]
+}

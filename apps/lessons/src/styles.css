@@ -71,3 +71,22 @@ button { font: inherit; }
 /* Long surahs, a page at a time (lesson/pages.ts). */
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-block: 0.75rem; }
 .pager__range { color: var(--muted); }
+
+/* PD-49 games (src/play): big targets for small hands, the verse never animated, only its frame. */
+.play__title { font-size: 1.5rem; margin-block: 0.5rem; }
+.play { display: grid; gap: 0.75rem; justify-items: stretch; }
+.play__ask { font-size: 1.3rem; margin: 0; }
+.play__again { font-size: 1.2rem; margin: 0; color: var(--muted); }
+.play__big { min-block-size: 64px; min-inline-size: 64px; font-size: 1.3rem; }
+.play-cards { display: grid; gap: 0.75rem; }
+.play-card { display: grid; gap: 0.25rem; min-block-size: 64px; inline-size: 100%; text-align: start; background: var(--surface); border: 3px solid var(--border); border-radius: 1rem; padding: 0.75rem 1rem; cursor: pointer; font: inherit; color: inherit; }
+.play-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.play-card__shape { font-size: 1.2rem; color: var(--muted); }
+.play-card__verse { font-family: 'Amiri Quran', 'Amiri', serif; font-size: 1.7rem; line-height: 2.4; }
+.play-card__mark { font-weight: 600; color: var(--accent); }
+.play-card--glow { border-color: var(--gold); box-shadow: 0 0 0 4px #f3e2b0; animation: play-glow 1.6s ease-in-out infinite; }
+.play-card--right, .play-card--shown { border-color: var(--accent); border-style: double; }
+@keyframes play-glow { 50% { box-shadow: 0 0 0 8px #f3e2b0; } }
+@media (prefers-reduced-motion: reduce) { .play-card--glow { animation: none; } }
+.beads { font-size: 1.4rem; letter-spacing: 0.2em; color: var(--gold); margin: 0; }
+.praise { font-size: 1.5rem; font-weight: 600; color: var(--accent); margin: 0; }

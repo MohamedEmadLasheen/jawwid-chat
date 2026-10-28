@@ -58,6 +58,8 @@ APPROVALS = os.path.join(CONTENT, 'approvals')
 SOURCES = os.path.join(CONTENT, 'sources.json')
 VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
+MECHANICS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'play', 'mechanics.json')
+PLAY_APPROVALS = os.path.join(APPROVALS, 'play.json')
 RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
 PIN = os.path.join(ROOT, 'apps', 'lessons', 'quran-pin.json')
 
@@ -563,6 +565,60 @@ def check_approvals(appr, content, works):
     return errors
 
 
+MECHANIC_KEYS = {'id', 'version', 'nameAr', 'skill', 'bands', 'tiers', 'needsAudio', 'respect'}
+SKILLS = ('listening', 'recitation', 'recognition', 'structure')
+TIERS = ('L1', 'L2', 'L3', 'L4', 'L5')
+
+
+def check_mechanics(reg):
+    """The game mechanics registry (apps/lessons/src/play/mechanics.json; mechanics.ts applies the same)."""
+    errors = []
+    items = reg.get('mechanics') if isinstance(reg, dict) else None
+    if not isinstance(items, list):
+        return ['mechanics: must be a list'], {}
+    out = {}
+    for m in items:
+        mid = m.get('id') if isinstance(m, dict) else None
+        if not isinstance(m, dict) or set(m) != MECHANIC_KEYS or not isinstance(mid, str) or not re.fullmatch(r'[a-z][a-z0-9_]{1,62}', mid) or mid in out:
+            errors.append(f'mechanics: {mid!r}: exactly {sorted(MECHANIC_KEYS)}, a unique snake_case id')
+            continue
+        if not is_int(m['version']) or m['version'] < 1 or not isinstance(m['nameAr'], str) or not m['nameAr'].strip():
+            errors.append(f'mechanics: {mid}: version and nameAr')
+        if m['skill'] not in SKILLS or not isinstance(m['needsAudio'], bool):
+            errors.append(f'mechanics: {mid}: skill one of {SKILLS}, needsAudio true or false')
+        if not isinstance(m['bands'], list) or not m['bands'] or not all(b in BANDS for b in m['bands']):
+            errors.append(f'mechanics: {mid}: bands')
+        if not isinstance(m['tiers'], list) or not m['tiers'] or not all(t in TIERS for t in m['tiers']):
+            errors.append(f'mechanics: {mid}: tiers')
+        if not isinstance(m['respect'], list) or not m['respect'] or not all(isinstance(r, str) and r.strip() for r in m['respect']):
+            errors.append(f'mechanics: {mid}: the respect rules (plan C.4) the scholar signs')
+        out[mid] = m
+    return errors, out
+
+
+def check_play_approvals(appr, mechanics, dataset_id):
+    """A mechanic is signed by a teacher and the scholar, for its record as it is now."""
+    errors = []
+    if not isinstance(appr, dict) or set(appr) != {'scope', 'approvals'} or appr['scope'] != 'play' or not isinstance(appr['approvals'], list):
+        return ['play approvals: exactly {"scope": "play", "approvals": [...]}']
+    seen = set()
+    for a in appr['approvals']:
+        aid = a.get('id') if isinstance(a, dict) else None
+        if not isinstance(a, dict) or set(a) != {'id', 'approvalSha256', 'steps'} or not isinstance(aid, str) or aid in seen:
+            errors.append(f'play approvals: {aid!r}: exactly id, approvalSha256, steps, once per mechanic')
+            continue
+        seen.add(aid)
+        m = mechanics.get(aid)
+        if m is None:
+            errors.append(f'play approvals: {aid}: no such mechanic')
+            continue
+        if a['approvalSha256'] != approval_sha256(dataset_id, 'play', m):
+            errors.append(f'play approvals: {aid}: stale -- the mechanic changed after it was signed')
+        if not isinstance(a['steps'], list) or 'teacher' not in a['steps'] or 'scholar' not in a['steps']:
+            errors.append(f'play approvals: {aid}: a mechanic needs the teacher and the scholar')
+    return errors
+
+
 def check_vectors(vectors):
     errors = []
     for i, v in enumerate(vectors):
@@ -661,6 +717,24 @@ def selftest():
         if not any(expected in e for e in check_sources(bad)[0]):
             failed.append(f'sources: {name} was accepted')
 
+    # The game mechanics and their signatures.
+    mech_errors, mechanics = check_mechanics(json.load(open(MECHANICS, encoding='utf-8')))
+    failed += mech_errors
+    m0 = next(iter(mechanics.values()))
+    play_cases = {
+        'signed': ({'scope': 'play', 'approvals': [{'id': m0['id'], 'approvalSha256': approval_sha256('test-1', 'play', m0), 'steps': ['teacher', 'scholar']}]}, None),
+        'teacher-only': ({'scope': 'play', 'approvals': [{'id': m0['id'], 'approvalSha256': approval_sha256('test-1', 'play', m0), 'steps': ['teacher']}]}, 'the scholar'),
+        'stale': ({'scope': 'play', 'approvals': [{'id': m0['id'], 'approvalSha256': approval_sha256('test-1', 'play', dict(m0, version=9)), 'steps': ['teacher', 'scholar']}]}, 'stale'),
+        'unknown': ({'scope': 'play', 'approvals': [{'id': 'nope_game', 'approvalSha256': '0' * 64, 'steps': ['teacher', 'scholar']}]}, 'no such mechanic'),
+    }
+    for name, (ap, expected) in play_cases.items():
+        errors = check_play_approvals(ap, mechanics, 'test-1')
+        ok = (not errors) if expected is None else any(expected in e for e in errors)
+        if not ok:
+            failed.append(f'play approvals {name}: expected {expected or "no errors"}, got {errors}')
+    if check_mechanics({'mechanics': [dict(m0, extra=1)]})[0] == []:
+        failed.append('mechanics: an extra field was accepted')
+
     # The shared hash vectors (quran-content.test.ts checks the same file).
     failed += check_vectors(json.load(open(VECTORS, encoding='utf-8')))
 
@@ -692,6 +766,16 @@ def main(argv):
     failed = 1 if reg_errors else 0
     files = sorted(f for f in os.listdir(QURAN) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(QURAN) else []
     approvals = sorted(f for f in os.listdir(APPROVALS) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(APPROVALS) else []
+    mech_errors, mechanics = check_mechanics(json.load(open(MECHANICS, encoding='utf-8'))) if os.path.exists(MECHANICS) else ([], {})
+    play_errors = mech_errors + (check_play_approvals(json.load(open(PLAY_APPROVALS, encoding='utf-8')), mechanics, dataset_id)
+                                 if os.path.exists(PLAY_APPROVALS) else [])
+    for e in play_errors:
+        print(f'quran-content: {e}')
+    if play_errors:
+        failed += 1
+    elif mechanics:
+        print(f'quran-content: {len(mechanics)} game mechanic(s) well formed; '
+              f'{len(json.load(open(PLAY_APPROVALS, encoding="utf-8"))["approvals"]) if os.path.exists(PLAY_APPROVALS) else 0} signed')
     for f in approvals:
         if f not in files:
             print(f'quran-content: approvals/{f}: no content file for it')
