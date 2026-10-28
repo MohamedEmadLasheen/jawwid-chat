@@ -178,10 +178,42 @@ describe('PD-40 S4: roles', () => {
 
 describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
   let designerTemplate: string;
+  /** Two more organizations: one seeded with the template, one whose super admin keyed a role "designer" first. */
+  const otherOrg = { id: '', designer: '', superAdmin: '', ownDesignerOrg: '', ownDesigner: '' };
   beforeAll(async () => {
     const rows = await g.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id::text AS id FROM chat.access_role WHERE organization_id = ${orgId}::uuid AND key = 'designer' AND is_template`;
     designerTemplate = rows[0]!.id;
+
+    otherOrg.id = randomUUID();
+    otherOrg.ownDesignerOrg = randomUUID();
+    for (const id of [otherOrg.id, otherOrg.ownDesignerOrg]) {
+      await g.prisma.$executeRawUnsafe(
+        `insert into chat.organization (id, slug, display_name) values ('${id}'::uuid, 'pd40s-t-${id.slice(0, 8)}', 'Another academy')`,
+      );
+    }
+    await g.prisma.$queryRaw`SELECT chat.seed_access_role_templates(${otherOrg.id}::uuid)`;
+    otherOrg.designer = (
+      await g.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT id::text AS id FROM chat.access_role WHERE organization_id = ${otherOrg.id}::uuid AND key = 'designer'`
+    )[0]!.id;
+    // That organization's super admin, to edit its roles.
+    otherOrg.superAdmin = await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
+      const account = await tx.account.create({
+        data: { organizationId: otherOrg.id, subject: `owner-t-${otherOrg.id.slice(0, 8)}@${DOMAIN}`, kind: 'staff', status: 'active', isActive: true },
+      });
+      return (await tx.staff.create({ data: { organizationId: otherOrg.id, name: 'QA Other Owner', role: 'super_admin', isActive: true, accountId: account.id } })).id;
+    });
+    // In the third, a role keyed "designer" exists before any seed (as a super admin would have made it).
+    otherOrg.ownDesigner = await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`select set_config('chat.pd040_access_change', 'on', true)`);
+      const [role] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+        `insert into chat.access_role (organization_id, key, name_en, name_ar, max_tier) values ('${otherOrg.ownDesignerOrg}'::uuid, 'designer', 'Our designer', 'Our designer', 'specialist') returning id::text`,
+      );
+      await tx.$executeRawUnsafe(`insert into chat.access_role_permission (role_id, permission_key) values ('${role!.id}'::uuid, 'certificates.view')`);
+      return role!.id;
+    });
   });
 
   it('the template is seeded once, as a specialist role with exactly the two certificate keys (PR-4)', async () => {
@@ -206,6 +238,72 @@ describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
       name: 'QA Ops Designer', email: email('ops-designer'), tier: 'specialist', departmentId: m.departments.operations, roleIds: [designerTemplate], reason: 'spec',
     });
     expect({ status: ops.status, code: ops.code }).toEqual({ status: 403, code: CommErrorCode.STAFF_ACCOUNT_DENIED });
+    // The reason is H5: the Operations manager holds neither key.
+    expect(ops.json.error.message).toMatch(/may not grant: certificates\.design, certificates\.view/);
+  });
+
+  it('the Teachers manager never grants it across their department or from another organization (S1, S2)', async () => {
+    // A specialist of the Operations department: out of the Teachers manager's reach, so not found.
+    const opsSpecialist = await as(m.superAdmin.subject, 'POST', '/admin/staff-accounts', {
+      name: 'QA Ops Helper', email: email('ops-helper'), tier: 'specialist', departmentId: m.departments.operations, reason: 'spec',
+    });
+    const across = await as(m.teachersManager.subject, 'POST', `/admin/staff-accounts/${opsSpecialist.json.account.staffId}/roles`, {
+      roleId: designerTemplate, reason: 'spec',
+    });
+    expect({ status: across.status, code: across.code }).toEqual({ status: 404, code: CommErrorCode.STAFF_ACCOUNT_NOT_FOUND });
+    await expect(
+      g.prisma.$queryRaw`SELECT chat.grant_access_role(${opsSpecialist.json.account.staffId}::uuid, ${designerTemplate}::uuid, 'direct', ${m.teachersManager.id}::uuid)`,
+    ).rejects.toThrow(/a manager changes the access of the specialists of their own department only/);
+
+    // Another organization's Designer, to the Teachers manager's own specialist: no such role here.
+    const own = await as(m.teachersManager.subject, 'POST', '/admin/staff-accounts', {
+      name: 'QA Teachers Helper 2', email: email('tch-helper2'), tier: 'specialist', departmentId: m.departments.teachers, reason: 'spec',
+    });
+    const foreign = await as(m.teachersManager.subject, 'POST', `/admin/staff-accounts/${own.json.account.staffId}/roles`, {
+      roleId: otherOrg.designer, reason: 'spec',
+    });
+    expect({ status: foreign.status, code: foreign.code }).toEqual({ status: 400, code: CommErrorCode.STAFF_ACCOUNT_INVALID });
+    expect(foreign.json.error.message).toMatch(/no such staff member or role in this organization/);
+    expect(await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM chat.staff_access_role WHERE staff_id = ${own.json.account.staffId}::uuid`).toEqual([
+      { n: 0n },
+    ]);
+  });
+
+  it('seeding over a role the super admin already keyed "designer" adds nothing, keeps it theirs, and leaves a trail (review of #231)', async () => {
+    const seeded = await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.seed_access_role_templates(${otherOrg.id}::uuid) AS n`;
+    expect(seeded[0]!.n).toBe(0);
+    const rows = await g.prisma.$queryRaw<Array<{ id: string; is_template: boolean }>>`
+      SELECT id::text AS id, is_template FROM chat.access_role WHERE organization_id = ${otherOrg.ownDesignerOrg}::uuid AND key = 'designer'`;
+    expect(rows).toEqual([{ id: otherOrg.ownDesigner, is_template: false }]);
+    const again = await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.seed_access_role_templates(${otherOrg.ownDesignerOrg}::uuid) AS n`;
+    expect(again[0]!.n).toBe(0);
+    const trail = await g.prisma.auditLog.findMany({ where: { action: 'access_role.template_skipped', entityId: otherOrg.ownDesigner } });
+    expect(trail.length).toBeGreaterThanOrEqual(1);
+    expect(trail[0]).toMatchObject({ actorId: null, after: { key: 'designer', existingRoleId: otherOrg.ownDesigner } });
+    // A template already seeded is skipped quietly: no trail for it.
+    expect(await g.prisma.auditLog.count({ where: { action: 'access_role.template_skipped', entityId: otherOrg.designer } })).toBe(0);
+  });
+
+  it('only the server runs the seed: no request role may EXECUTE it', async () => {
+    const rows = await g.prisma.$queryRaw<Array<{ role: string; may: boolean }>>`
+      SELECT r AS role, has_function_privilege(r, 'chat.seed_access_role_templates(uuid)', 'EXECUTE') AS may
+        FROM unnest(array['chat_app', 'authenticated', 'anon']) r ORDER BY r`;
+    expect(rows).toEqual([
+      { role: 'anon', may: false },
+      { role: 'authenticated', may: false },
+      { role: 'chat_app', may: false },
+    ]);
+  });
+
+  it("an edited template is the organization's own role: is_template clears once its keys change", async () => {
+    const id = otherOrg.designer;
+    const actor = otherOrg.superAdmin;
+    await g.prisma.$executeRaw`SELECT chat.update_access_role(${id}::uuid, 'Designer (renamed)', null, null, null, 'rename only', ${actor}::uuid)`;
+    expect(await g.prisma.$queryRaw`SELECT is_template FROM chat.access_role WHERE id = ${id}::uuid`).toEqual([{ is_template: true }]);
+    await g.prisma.$executeRaw`SELECT chat.update_access_role(${id}::uuid, null, null, null, array['certificates.view']::text[], 'view only', ${actor}::uuid)`;
+    expect(await g.prisma.$queryRaw`SELECT is_template FROM chat.access_role WHERE id = ${id}::uuid`).toEqual([{ is_template: false }]);
+    const audit = await g.prisma.auditLog.findMany({ where: { action: 'access_role.updated', entityId: id }, orderBy: { id: 'asc' } });
+    expect(audit.map((a) => (a.after as { template: boolean }).template)).toEqual([true, false]);
   });
 
   it('the super admin creates it; the code is shown once, never audited; completing it activates; it opens Certificates only', async () => {
