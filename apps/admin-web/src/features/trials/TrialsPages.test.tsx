@@ -190,6 +190,7 @@ describe('Trial lessons, as Sales', () => {
         teachers: [
           { id: 't-1', name: 'Teacher One', readiness: { setupIncomplete: false, notSignedIn: false, noSupervisor: false, loginSuspended: false } },
           { id: 't-2', name: 'Teacher Two', readiness: { setupIncomplete: true, notSignedIn: false, noSupervisor: true, loginSuspended: false } },
+          { id: 't-3', name: 'Teacher Three', readiness: { setupIncomplete: true, notSignedIn: false, noSupervisor: false, loginSuspended: false } },
         ],
       }),
     )
@@ -200,12 +201,17 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'The student subscribed' }))
     const child = within(dialog).getByRole('group', { name: 'Child 1' })
     const select = within(child).getByLabelText('Assigned teacher')
-    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3))
+    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(4))
     expect(within(select).getByRole('option', { name: 'Teacher One' })).toBeInTheDocument()
     expect(within(select).getByRole('option', { name: 'Teacher Two — Setup incomplete · No supervisor' })).toBeInTheDocument()
     await userEvent.selectOptions(select, 't-2')
     expect(select).toHaveValue('t-2')
     expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; this is a warning.')).toBeInTheDocument()
+    // No supervisor: who covers them (plan §3.7).
+    expect(within(child).getByText('The Teachers Manager covers this teacher until a supervisor is set.')).toBeInTheDocument()
+    await userEvent.selectOptions(select, 't-3')
+    expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; this is a warning.')).toBeInTheDocument()
+    expect(within(child).queryByText('The Teachers Manager covers this teacher until a supervisor is set.')).not.toBeInTheDocument()
   })
 
   it('corrects an outcome, saying why', async () => {
