@@ -1,6 +1,6 @@
 # PD-48: voice-over for the Arabic lessons (design)
 
-**State:** **DRAFT, docs only.** No product code is written. On 2026-10-28 the owner answered Q1–Q6 (§17), relayed by the department head. **Q7 (disclosure) is OPEN**: it waits for the owner's choice among the compliant alternatives in §2.8. Code waits for the department head's approval.
+**State:** **Design, docs only.** No product code is written. The owner answered Q1–Q6 on 2026-10-28 and Q7 on 2026-10-29 (§17), relayed by the department head. Every question is decided. Code follows the department head's approval.
 **Claim:** `docs/product/pd-registry/PD-48.md`. **Migration slot:** `20261029230000`, assigned by the department head for PR-2 (§11). It is claimed in `docs/product/migration-slots/20261029230000.md`.
 **Base:** `main` @ `90b9d2d7`. Paths are relative to the repository root. `mig/` is `supabase/migrations/`.
 **Depends on:** PD-29 P0-5 (Arabic lesson 1). The design is `docs/product/pd029-p05-arabic-letters-design.md` (PR #232); the engine and checker are PR-1 (#234, in progress). §4 is the one change PD-48 asks of that data shape.
@@ -558,7 +558,7 @@ create table chat.lesson_audio_string_decision (  -- append-only; bound to the t
    - Then the operator generates the 34 unit names and one unit's words. Reviewers approve or reject them. Set `staff_test` and listen in the real lesson.
 4. Measure the rejection rate by category. Tune the lexicon and voice.
 5. Generate the rest of lesson 1. Two reviewers finish it.
-6. The owner records the licence confirmation in `voice-sources.ts` (a reviewed commit). The record names the disclosure form chosen under Q7 (§2.8), and whatever that form needs is live: the terms text, the enrolment line, or the in-app mention.
+6. The owner records the licence confirmation in `voice-sources.ts` (a reviewed commit). It records Microsoft's written confirmation for R-48a (§17 Q7). The parent notice must also be live, in the owner-approved wording: in the parent terms and privacy notice, at enrolment, and under Settings → About lesson audio.
 7. Set `all` on production. Families hear only approved clips.
 
 ## 16. Tests
@@ -611,13 +611,13 @@ create table chat.lesson_audio_string_decision (  -- append-only; bound to the t
 
 The department head relayed the answers, from the owner's replies to these questions on 2026-10-28.
 
-1. **Reviewers per clip: TWO different teachers.** The owner's first click said "One teacher". Their written answer then said "Keep the other defaults: two teacher approvals for every audio clip". The head applied the explicit, stricter answer and told the owner they can correct it. `APPROVALS_REQUIRED = 2` (§7.1).
+1. **Reviewers per clip: TWO different teachers** (re-confirmed by the owner on 2026-10-29). The owner's first click said "One teacher". Their written answer then said "Keep the other defaults: two teacher approvals for every audio clip". The head applied the explicit, stricter answer and told the owner they can correct it. `APPROVALS_REQUIRED = 2` (§7.1).
 2. **Vendor: Microsoft Azure, with Amazon Polly as the fallback.** No account is created yet. Before the licence is recorded in `voice-sources.ts`, the owner or counsel reads the Azure Product Terms clause on generated output (§2.5, §2.8).
 3. **Words the computer voice cannot get right: "No audio for that word".** Silent, with no play button and no teacher recordings, for lesson 1 (§6).
 4. **Approvers:** teachers granted "Pronunciation reviewer", plus the Teachers Manager (§8).
 5. **Voice:** one adult MSA voice for the whole lesson (§2.1).
 6. **Speed:** about 10% slower than normal, one rate for the lesson, recorded in the recipe (§5).
-7. **Disclosure that the voice is computer-generated: OPEN.** The owner's words, verbatim:
+7. **Disclosure that the voice is computer-generated: DECIDED 2026-10-29, "Azure, parent-only notice".** The owner's words, verbatim:
 
    > We do not want to display a disclosure to users stating that the voice is computer-generated. Please verify Microsoft Azure's exact requirements and whether this disclosure is mandatory for our intended use in Jawwid Academy. Do not bypass or violate the provider's terms. If disclosure is mandatory, present compliant alternatives before proceeding.
 
@@ -631,4 +631,9 @@ The department head relayed the answers, from the owner's replies to these quest
    3. Azure, with one minimal in-app mention (an info icon or the lesson's start screen).
    4. Teacher-recorded audio (declined for now).
 
-   *Recommended: option 1, with option 2 as the fallback if Microsoft does not confirm.* Either way, nothing reaches families before the owner's choice is recorded here.
+   **The owner's decision (2026-10-29): option 1, "Azure, parent-only notice".**
+   - **Nothing on the child's lesson screen.**
+   - One sentence for parents, in three places: the parent terms and privacy notice, at enrolment (the parent accepts it), and under parent **Settings → About lesson audio**.
+   - **Release gate R-48a (written confirmation).** Before `lesson_audio.enabled_for` is set to `all` on production, Microsoft must confirm **in writing** that a parent-facing notice satisfies Code of Conduct Responsible AI requirement 3 for this use. The confirmation is recorded with the licence in `voice-sources.ts` (§7.6). **If Microsoft will not confirm, the vendor switches to Amazon Polly** (§2.8 option 2). The Azure clips are then switched off by removing the voice from `voice-sources.ts`, then regenerated with Polly and reviewed again.
+   - **Owner to approve: the notice wording** (Arabic and English) before it is published. The proposed English is: "Lesson pronunciation audio is computer-generated and checked by our teachers before use." Its Arabic, wording for the owner to approve: «صوت نطق الدروس مولَّد حاسوبيًا، ويراجعه معلمونا قبل استخدامه.» Both are drafts until the owner approves them.
+   - The parent-notice surfaces are a separate small item (parent terms, enrolment, settings), tracked in the rollout (§15 step 6). Without them, R-48a is not met.
