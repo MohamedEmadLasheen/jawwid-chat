@@ -419,8 +419,11 @@ describe('PD-40 S1/S2: a department manager', () => {
     // Creation keeps the owner's rule: the creator sees the code once (the subset holds by construction).
     expect(r.json.firstLogin.code).toMatch(/^[0-9]{6}$/);
     ownSpecialist = { staffId: r.json.account.staffId, accountId: r.json.account.accountId };
+    // The specialists of their department only (the super admin placed another there earlier in this file).
     const list = await as(m.operationsManager.subject, 'GET', '/admin/staff-accounts');
-    expect((list.json.accounts as Array<{ staffId: string }>).map((a) => a.staffId)).toEqual([ownSpecialist.staffId]);
+    const listed = list.json.accounts as Array<{ staffId: string; tier: string; departmentId: string | null }>;
+    expect(listed.map((a) => a.staffId)).toContain(ownSpecialist.staffId);
+    expect(listed.filter((a) => a.tier !== 'specialist' || a.departmentId !== opsDept)).toEqual([]);
   });
 
   it('never creates a supervisor, a manager, or anyone outside their department -- and a refused create leaves nothing behind', async () => {
