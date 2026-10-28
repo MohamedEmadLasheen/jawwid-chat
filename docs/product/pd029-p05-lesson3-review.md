@@ -35,7 +35,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 **One bulk decision first: the lesson's vowel on the last letter (39 words, e.g. كَتَبَ, قَرَأَ).** Everywhere else a word ends in the pausal sukun. These words would lose the very haraka the unit teaches if they did, so they keep their final vowel (`finalMarkException`). Confirm that this is how you want them shown; this one answer clears or changes them all at once. They are listed below.
 
 1. **The words below.** Every word must be a real word, suitable for a child, spelled correctly and fully vowelled.
-2. **The units left out**: no word from the old lesson passed, so the unit is not in the file until a teacher supplies words.
+2. **Unit with no words: يِ (`ya_kasra`).** Please supply 5–10 words in which ي carries kasra, fully vowelled. No word from the old lesson passed (all were a nisba ـِي, whose ي does not carry the kasra), so the unit is not in the file until teachers supply its words. The rebuild invents none.
 3. **The unit names** are the letter with its haraka, e.g. بَ. The hamza units use the seat: أَ, إِ, أُ, and count a word with any hamza (ء أ إ ؤ ئ) carrying the haraka.
 4. **The quiz**: up to two questions per unit, built from the unit's own words.
 
