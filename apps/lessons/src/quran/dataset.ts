@@ -1,4 +1,5 @@
 import pin from '../../quran-pin.json';
+import { BASMALA_SHA256 } from './basmala';
 import { digestOf, sha256Hex } from './sha256';
 
 /**
@@ -7,7 +8,11 @@ import { digestOf, sha256Hex } from './sha256';
  * loader's verification first). The engine checks it again before showing a
  * letter -- and FAILS CLOSED: a snapshot that is not the pinned dataset, a
  * surah with a missing or extra ayah, or an ayah whose text does not hash to
- * its recorded value is refused, and nothing of it is rendered.
+ * its recorded value is refused, and nothing of it is rendered. The
+ * fingerprints it checks against come from the bundle, not the server: the CI
+ * build writes the snapshot's fileSha256 and every rangeSha256 into it
+ * (vite.config.ts, "THE TRUST ANCHOR"), so a snapshot changed on the host after
+ * the build is refused too.
  * Contract: docs/product/quran-dataset-contract.md.
  */
 export interface SurahInfo {
@@ -45,6 +50,15 @@ export interface Surah {
 
 export class QuranRefused extends Error {}
 
+/** What the CI build saw: the dataset, its file hash, and each surah's rangeSha256 (index = surah - 1). */
+export interface QuranAnchor {
+  datasetId: string;
+  fileSha256: string;
+  rangeSha256: string[];
+}
+
+export const BUILD_ANCHOR: QuranAnchor | null = __QURAN_ANCHOR__;
+
 export type Fetcher = (path: string) => Promise<unknown>;
 
 export const SNAPSHOT_BASE = '/data/quran';
@@ -60,19 +74,28 @@ function isManifest(x: unknown): x is Manifest {
   return !!m && typeof m.datasetId === 'string' && typeof m.fileSha256 === 'string' && Array.isArray(m.surahs);
 }
 
-export async function loadManifest(fetcher: Fetcher = fetchJson): Promise<Manifest> {
+export async function loadManifest(fetcher: Fetcher = fetchJson, anchor: QuranAnchor | null = BUILD_ANCHOR): Promise<Manifest> {
+  if (!anchor || anchor.datasetId !== pin.datasetId || anchor.fileSha256 !== pin.fileSha256 || anchor.rangeSha256.length !== 114) {
+    throw new QuranRefused('this build carries no trust anchor for the pinned dataset');
+  }
   const m = await fetcher(`${SNAPSHOT_BASE}/manifest.json`);
   if (!isManifest(m)) throw new QuranRefused('the snapshot manifest is malformed');
-  if (m.datasetId !== pin.datasetId || m.fileSha256 !== pin.fileSha256) {
+  if (m.datasetId !== anchor.datasetId || m.fileSha256 !== anchor.fileSha256) {
     throw new QuranRefused(`the snapshot is ${m.datasetId} (${m.fileSha256}), not the pinned ${pin.datasetId}`);
   }
-  if (m.surahs.length !== 114 || m.surahs.some((s, i) => s.number !== i + 1)) throw new QuranRefused('the manifest does not list surahs 1..114');
+  if (m.surahs.length !== 114 || m.surahs.some((s, i) => s.number !== i + 1 || s.rangeSha256 !== anchor.rangeSha256[i])) {
+    throw new QuranRefused('the manifest is not the one this build was made from');
+  }
   return m;
 }
 
-/** One surah, verified: numbered 1..n, every text hashing to its sha256, the range digest the manifest's. */
-export async function loadSurah(number: number, fetcher: Fetcher = fetchJson): Promise<Surah> {
-  const manifest = await loadManifest(fetcher);
+/**
+ * One surah, verified: numbered 1..n, every text hashing to its sha256, the
+ * Basmala present exactly where it belongs and one of the two accepted
+ * spellings, and the range digest the one this build was made from.
+ */
+export async function loadSurah(number: number, fetcher: Fetcher = fetchJson, anchor: QuranAnchor | null = BUILD_ANCHOR): Promise<Surah> {
+  const manifest = await loadManifest(fetcher, anchor);
   const info = manifest.surahs[number - 1];
   if (!info) throw new QuranRefused(`no surah ${number}`);
   const body = (await fetcher(`${SNAPSHOT_BASE}/surah-${String(number).padStart(3, '0')}.json`)) as {
@@ -88,7 +111,11 @@ export async function loadSurah(number: number, fetcher: Fetcher = fetchJson): P
   for (let i = 0; i < ayahs.length; i++) {
     const a = ayahs[i]!;
     if (a.ayah !== i + 1 || typeof a.text !== 'string' || !a.text) throw new QuranRefused(`surah ${number}: ayah ${i + 1} is missing`);
-    if (a.basmala !== null && !(a.ayah === 1 && number !== 1 && number !== 9)) throw new QuranRefused(`${number}:${a.ayah} carries a Basmala`);
+    const carries = a.ayah === 1 && number !== 1 && number !== 9;
+    if (!carries && a.basmala !== null) throw new QuranRefused(`${number}:${a.ayah} carries a Basmala`);
+    if (carries && (typeof a.basmala !== 'string' || !BASMALA_SHA256.has(await sha256Hex(a.basmala)))) {
+      throw new QuranRefused(`${number}:1: the Basmala is missing or not an accepted spelling`);
+    }
     if ((await sha256Hex(a.text)) !== a.sha256) throw new QuranRefused(`${number}:${a.ayah} does not match its hash`);
   }
   if ((await digestOf(ayahs.map((a) => a.sha256))) !== info.rangeSha256) throw new QuranRefused(`surah ${number}: the range digest differs`);

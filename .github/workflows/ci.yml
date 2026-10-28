@@ -199,11 +199,20 @@ jobs:
         working-directory: apps/lessons
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing in this job pushes; no token is left on disk for the
+          # dependencies' code to find.
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: apps/lessons/package-lock.json
+      - name: Release-age cooldown (warns on a locked version under 7 days old; never fails)
+        working-directory: .
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python3 -I scripts/qa/check-lessons-supply-chain.py --release-age
       - run: npm ci --ignore-scripts
       - name: The Quran snapshot, built only from the verified dataset
         working-directory: .
@@ -214,10 +223,26 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: The build serves no inline script (the CSP allows script-src 'self' only)
+        # Case-insensitive and across lines: every <script> must have a src and
+        # no body, and no element may carry an inline on*= handler or style.
         run: |
-          if grep -Eq '<script>|<script [^>]*>[^<]' dist/index.html; then
-            echo "dist/index.html has an inline script"; exit 1
-          fi
+          python3 -I - dist/index.html <<'PY'
+          import re, sys
+          html = open(sys.argv[1], encoding='utf-8').read()
+          bad = []
+          for attrs, body in re.findall(r'<script\b([^>]*)>(.*?)</script\s*>', html, re.I | re.S):
+              if body.strip() or not re.search(r'\bsrc\s*=', attrs, re.I):
+                  bad.append('an inline <script>')
+          if len(re.findall(r'<script\b', html, re.I)) != len(re.findall(r'</script\s*>', html, re.I)):
+              bad.append('an unclosed <script>')
+          if re.search(r'<[^>]+\son[a-z]+\s*=', html, re.I):
+              bad.append('an inline event handler')
+          if re.search(r'<style\b|<[^>]+\sstyle\s*=', html, re.I):
+              bad.append('an inline style')
+          for b in bad:
+              print(f'dist/index.html has {b}')
+          sys.exit(1 if bad else 0)
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: lessons-dist-${{ github.sha }}

@@ -2,21 +2,28 @@ import { useMemo, useState } from 'react';
 import type { Ayah } from '../quran/dataset';
 import { rounds, shuffled } from './shuffle';
 
+/** A fresh seed for each visit, so a child does not learn one fixed order. */
+function visitSeed(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0]!;
+}
+
 /**
- * Put the ayat in order (#16). Each round's order is shuffled ONCE, from a seed,
- * into state: tapping never reorders the cards. The answer is checked by ayah
+ * Put the ayat in order (#16). Each round's order is shuffled ONCE, from the
+ * visit's seed (random per visit; tests pass one), into state: tapping never
+ * reorders the cards. The answer is checked by ayah
  * number, so two ayat with the same words cannot fail a correct order. Rounds
  * walk the whole surah, so every ayah is asked.
  */
-export function OrderAyat({ surah, ayahs, onComplete }: { surah: number; ayahs: Ayah[]; onComplete: () => void }) {
+export function OrderAyat({ ayahs, seed, onComplete }: { ayahs: Ayah[]; seed?: number; onComplete: () => void }) {
   const plan = useMemo(() => rounds(ayahs.length), [ayahs.length]);
+  const [visit] = useState(() => seed ?? visitSeed());
   const [round, setRound] = useState(0);
-  const [order, setOrder] = useState<number[]>(() => shuffled(plan[0] ?? [], surah * 1000));
+  const [order, setOrder] = useState<number[]>(() => shuffled(plan[0] ?? [], visit));
   const [verdict, setVerdict] = useState<'right' | 'wrong' | null>(null);
-  const window = plan[round] ?? [];
+  const asked = plan[round] ?? [];
   const byNumber = useMemo(() => new Map(ayahs.map((a) => [a.ayah, a])), [ayahs]);
 
-  if (window.length < 2) return <p className="note">هذه السورة قصيرة جدًّا للعبة الترتيب.</p>;
+  if (asked.length < 2) return <p className="note">هذه السورة قصيرة جدًّا للعبة الترتيب.</p>;
 
   const move = (index: number, by: -1 | 1) => {
     const to = index + by;
@@ -28,7 +35,7 @@ export function OrderAyat({ surah, ayahs, onComplete }: { surah: number; ayahs: 
   };
 
   const check = () => {
-    const right = order.every((a, i) => a === window[i]);
+    const right = order.every((a, i) => a === asked[i]);
     setVerdict(right ? 'right' : 'wrong');
     if (right && round === plan.length - 1) onComplete();
   };
@@ -36,7 +43,7 @@ export function OrderAyat({ surah, ayahs, onComplete }: { surah: number; ayahs: 
   const nextRound = () => {
     const r = round + 1;
     setRound(r);
-    setOrder(shuffled(plan[r] ?? [], surah * 1000 + r));
+    setOrder(shuffled(plan[r] ?? [], visit + r));
     setVerdict(null);
   };
 
