@@ -15,7 +15,7 @@ learned) is prose plus POSITIONS into the verified dataset: {ayah} or
     of the surah, or a whole (shorter) ayah -- i.e. Quran typed or pasted into prose. (Three is too
     tight: tafsir paraphrase legitimately repeats short runs such as
     "السماوات والأرض والله".) Typed Quran is matched on the rasm skeleton, so
-    standard spelling (الرحمن) is caught as well as the Uthmani (ٱلرَّحْمَـٰنِ); the
+    standard spelling (الرحمن, الصلاة) is caught as well as the Uthmani; the
     Basmala counts in every surah's lesson, since the verses carry it apart.
   * a quiz's answer or options are malformed, or a game has too few distinct words;
   * the file says "approved" while any line is still flagged, or names no reviewer.
@@ -52,13 +52,17 @@ def fold(t):
     return re.sub('[^' + chr(0x621) + '-' + chr(0x64A) + ' ]', ' ', t)
 
 
-def skeleton(t):
-    """The rasm skeleton, for the typed-Quran refusal ONLY (positions keep fold()):
-    fold(), then every alef form dropped (the dagger alef, maddah, wasla and hamza
-    seats are already alef or gone in fold), so Uthmani and standard spelling meet:
-    ٱلرَّحْمَـٰنِ and الرحمن are both رحمن-shaped. ى/ي and ة/ه are unified and tatweel
-    dropped by fold()."""
-    return ' '.join(w for w in fold(t).replace(chr(0x627), '').split() if w)
+def _load(name):
+    spec = importlib.util.spec_from_file_location(name[:-3], os.path.join(HERE, name))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# The ONE typed-Quran fold, shared with PD-48 (scripts/lessons/rasm.py): no alef or hamza of any
+# form, no marks, the Uthmani waw-for-alef dropped. Positions keep fold() above.
+RASM = _load('rasm.py')
+rasm = RASM.rasm
 
 
 def verified_surahs():
@@ -192,7 +196,7 @@ def check(content, verses, dataset_id, also=()):
     # (al-Qari'ah, al-Haqqah and al-'Asr are each their surah's whole first ayah).
     grams = set()
     for v in [*verses, *also]:
-        ws = skeleton(v).split()
+        ws = rasm(v).split()
         if len(ws) < 2:
             continue
         k = min(RUN, len(ws))
@@ -201,7 +205,7 @@ def check(content, verses, dataset_id, also=()):
     for where, t in prose:
         if UTHMANI_ONLY.search(t):
             err(f'{where}: carries Uthmani-only marks (Quran text belongs in positions, never in prose)')
-        ws = skeleton(t).split()
+        ws = rasm(t).split()
         if any(tuple(ws[i:i + k]) in grams for k in sizes for i in range(len(ws) - k + 1)):
             err(f'{where}: contains {RUN} consecutive words of the surah, or a whole ayah (use a position, not typed Quran)')
 
@@ -293,7 +297,7 @@ def main(argv):
     dataset_id = json.load(open(PIN, encoding='utf-8'))['datasetId']
     files = sorted(f for f in os.listdir(CONTENT) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(CONTENT) else []
     surahs = verified_surahs() if files else {}
-    failed = 0
+    failed = RASM.selftest(surahs) if files else 0  # the shared fixtures, on the real verified text
     for f in files:
         content = json.load(open(os.path.join(CONTENT, f), encoding='utf-8'))
         number = int(f[6:9])
