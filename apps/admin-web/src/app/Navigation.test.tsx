@@ -79,9 +79,7 @@ describe('The navigation registry', () => {
     for (const role of OPERATOR_ROLES) {
       for (const [lessonManager, billingReader] of [[false, false], [true, false], [false, true], [true, true]] as const) {
         const listed = destinationsFor(role, { lessonManager, billingReader }).flatMap((d) => entriesOf(d).map((e) => e.path))
-        // Exactly the openable areas, with TWO deliberate exceptions: the legacy
-        // Inbox stays routable (old links) but is never offered -- its API
-        // routes (/inbox, /families/*) exist on no branch; and Teacher
+        // Exactly the openable areas, with one deliberate exception: Teacher
         // statistics is offered only when the server confirms the Teachers
         // department (GET /lessons/access), which the role alone cannot tell --
         // and Instalments likewise waits for Operations (GET /instalments/access).
@@ -91,7 +89,6 @@ describe('The navigation registry', () => {
         expect([...listed].sort(), role).toEqual([...allowed].sort())
         expect(listed, role).not.toContain('/inbox')
         const withheld = [
-          ...(visibleAreas(role).includes('inbox') ? ['inbox'] : []),
           ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
           // PD-38: the Schedule waits for GET /lessons/access to say `calendar`.
           ...(visibleAreas(role).includes('schedule') ? ['schedule'] : []),
@@ -366,7 +363,7 @@ describe('The desktop rail', () => {
   it('gives each operator role only its own destinations, and links a one-page destination directly', async () => {
     const cases: [StaffRole, string[], string[], string[]][] = [
       // role, destinations, direct links, menus
-      // Conversations is a direct link to /chat: the legacy Inbox is not offered.
+      // Conversations is a direct link to /chat (the legacy Inbox is retired).
       // PD-13: Calls is its own destination for every operating role.
       // Teacher Profile V2: the certificate review queue sits under People beside
       // the other people pages, so for admin and coverage People is a menu.

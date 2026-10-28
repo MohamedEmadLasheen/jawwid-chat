@@ -41,51 +41,20 @@ function registerHandlers(socket: Socket, qc: QueryClient): void {
     handler: (payload: ServerEvents[K]) => void,
   ) => socket.on(event as string, handler as (p: unknown) => void)
 
-  on('family.updated', ({ family_id }) => {
-    // The family may have moved between sections, so every section is stale.
-    void qc.invalidateQueries({ queryKey: qk.inboxAll })
-    void qc.invalidateQueries({ queryKey: qk.family(family_id) })
-  })
-
-  on('message.created', ({ family_id }) => {
-    void qc.invalidateQueries({ queryKey: qk.familyMessages(family_id) })
-    void qc.invalidateQueries({ queryKey: qk.inboxAll })
-  })
-
-  on('case.updated', ({ family_id }) => {
-    void qc.invalidateQueries({ queryKey: qk.familyCases(family_id) })
-    void qc.invalidateQueries({ queryKey: qk.family(family_id) })
-    void qc.invalidateQueries({ queryKey: qk.inboxAll })
-  })
-
-  on('task.updated', ({ task }) => {
+  on('task.updated', () => {
     void qc.invalidateQueries({ queryKey: qk.tasksAll })
-    void qc.invalidateQueries({ queryKey: qk.family(task.family_id) })
-    // Completing the last open task on a case reopens it server-side and moves
-    // the family to TODAY, so the inbox is stale too (brief §8).
-    void qc.invalidateQueries({ queryKey: qk.inboxAll })
-  })
-
-  on('handoff.created', () => {
-    void qc.invalidateQueries({ queryKey: qk.awaySummary })
-    void qc.invalidateQueries({ queryKey: qk.inboxAll })
   })
 
   on('coverage.changed', () => {
     void qc.invalidateQueries({ queryKey: qk.coverageAll })
-    void qc.invalidateQueries({ queryKey: qk.duty })
-    void qc.invalidateQueries({ queryKey: qk.inboxAll })
   })
 
-  on('ownership.changed', ({ family_id }) => {
-    void qc.invalidateQueries({ queryKey: qk.family(family_id) })
-    void qc.invalidateQueries({ queryKey: qk.inboxAll })
+  on('ownership.changed', () => {
     void qc.invalidateQueries({ queryKey: qk.dashboardAll })
   })
 
   on('unattended.changed', () => {
     void qc.invalidateQueries({ queryKey: qk.dashboardHeader })
-    void qc.invalidateQueries({ queryKey: qk.unattended })
   })
 
   on('escalation.created', () => {
@@ -95,10 +64,6 @@ function registerHandlers(socket: Socket, qc: QueryClient): void {
 
   on('presence.changed', () => {
     void qc.invalidateQueries({ queryKey: qk.teamNow })
-  })
-
-  on('shift.ending', () => {
-    void qc.invalidateQueries({ queryKey: qk.shiftBanner })
   })
 }
 

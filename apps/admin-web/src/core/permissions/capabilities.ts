@@ -9,9 +9,9 @@
  * Two consequences we hold ourselves to:
  *   1. Nothing here ever *grants* access. If the server says no, the answer is
  *      no, and the UI shows the server's message and refreshes.
- *   2. Per-family decisions are NOT made here. They come from the server in
- *      `FamilyDetail.capabilities`, because only the server can evaluate
- *      on_duty(family, now), stickiness, assist eligibility and owner_locked.
+ *   2. Per-family decisions are NOT made here. Only the server can evaluate
+ *      on_duty(family, now), stickiness, assist eligibility and owner_locked,
+ *      so each page takes them from the server's answer.
  *
  * This file therefore only answers coarse, role-level questions used for
  * navigation and page-level routing.
@@ -20,7 +20,6 @@ import type { StaffRole } from '@/shared/types/domain'
 
 export type NavArea =
   | 'chat'
-  | 'inbox'
   | 'tasks'
   | 'dashboard'
   | 'stories'
@@ -85,7 +84,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `payments` (PD-27) likewise: offered as the Admin Portal's Payments section.
     // `materials` (PD-29) is offered under More beside the Admin Portal's sections.
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
-    return ['chat', 'inbox', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'settings']
+    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -97,7 +96,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-29: the Materials library -- offered only when the server confirms
     // the Teachers manager (see SERVER_CONFIRMED_AREAS).
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
-    return ['chat', 'calls', 'inbox', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'settings']
+    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -114,7 +113,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // teacher-profiles is here for the same reason stories is: admin and
     // coverage hold the reviewer role server-side
     // (AuthorizationService.canReviewTeacherProfile).
-    return ['chat', 'calls', 'inbox', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases']
+    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases']
   }
   if (isDepartment(role)) {
     // Departments get tasks — they may not open family records — and, PD-21
@@ -127,14 +126,6 @@ export function visibleAreas(role: StaffRole): NavArea[] {
 export function canOpenArea(role: StaffRole, area: NavArea): boolean {
   return visibleAreas(role).includes(area)
 }
-
-/**
- * Areas that stay ROUTABLE (old links, bookmarks) but are not OFFERED in any
- * navigation. The legacy Inbox calls `/inbox` and `/families/*`, which no API
- * on any current branch serves, so presenting it as a destination would offer
- * a page that cannot load. The working conversation interface is `/chat`.
- */
-export const UNLISTED_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['inbox'])
 
 /**
  * Areas offered only when the server confirms a fact the role alone does not
@@ -186,9 +177,9 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   schedule: (a) => a.calendar === true,
 }
 
-/** What navigation shows: the areas this role may open, minus the unlisted ones and those the server has not confirmed. */
+/** What navigation shows: the areas this role may open, minus those the server has not confirmed. */
 export function navAreas(role: StaffRole, opts: DepartmentAccess = {}): NavArea[] {
-  return visibleAreas(role).filter((area) => !UNLISTED_AREAS.has(area) && (SERVER_CONFIRMED_AREAS[area]?.(opts) ?? true))
+  return visibleAreas(role).filter((area) => SERVER_CONFIRMED_AREAS[area]?.(opts) ?? true)
 }
 
 /** Manager-only, per the brief's invariants and AI #5's matrix. */
@@ -198,23 +189,6 @@ export const managerOnly = {
   activateBackup: isManager,
   viewTeamWorkload: isManager,
   viewUnattended: isManager,
-} as const
-
-/**
- * Ownership and offboarding -- the approved policy (DB: 20261014110000, API:
- * AuthorizationService.canAssignFamilies / canTransferStaffFamilies /
- * canDeactivateStaff). Separate actions, separate rules; the database refuses
- * anything else whatever this says.
- */
-export const ownershipActions = {
-  /** families.assign: transfer or assign a family's owner. */
-  transferOwnership: (role: StaffRole) => isManager(role) || isSuperAdmin(role),
-  /** Offboarding, part 1: move a staff member's families. */
-  moveStaffFamilies: (role: StaffRole) => isManager(role) || isSuperAdmin(role),
-  /** Offboarding, part 2: deactivate the account (users.manage). */
-  deactivateStaff: isSuperAdmin,
-  /** Both parts in one transaction, so it needs both authorities. */
-  offboardStaff: isSuperAdmin,
 } as const
 
 /** The task scope a role should request from the API. */

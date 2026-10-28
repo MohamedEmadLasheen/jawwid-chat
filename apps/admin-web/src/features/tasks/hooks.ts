@@ -26,20 +26,6 @@ export function useUpdateTask() {
       taskApi.update(id, patch),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: qk.tasksAll })
-      // Completing the last open task on a case reopens it and moves the family
-      // to TODAY (brief §8) — that happens server-side, so the inbox is stale.
-      void queryClient.invalidateQueries({ queryKey: qk.inboxAll })
-    },
-  })
-}
-
-export function useCreateTask() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: Parameters<typeof taskApi.create>[0]) => taskApi.create(input),
-    onSuccess: (task) => {
-      void queryClient.invalidateQueries({ queryKey: qk.tasksAll })
-      void queryClient.invalidateQueries({ queryKey: qk.family(task.family_id) })
     },
   })
 }
