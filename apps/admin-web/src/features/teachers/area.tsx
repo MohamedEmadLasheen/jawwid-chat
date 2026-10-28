@@ -20,7 +20,7 @@ import type { Pair } from './copy'
  */
 export interface TeachersTab {
   key: string
-  /** Relative to the area base: '' (the base), 'files', 'certificates', ... */
+  /** Relative to the area base: '' (the base), 'files', 'supervision', ... */
   segment: string
   label: Pair
 }
@@ -34,7 +34,6 @@ export const TEACHERS_TABS: TeachersTab[] = [
   { key: 'students', segment: 'students', label: { en: 'Students', ar: 'الطلاب' } },
   // PD-10 Teacher File and PD-12 S1's queues.
   { key: 'files', segment: 'files', label: { en: 'Teacher files', ar: 'ملفات المعلمين' } },
-  { key: 'certificates', segment: 'certificates', label: { en: 'Certificates', ar: 'الشهادات' } },
   // PD-26: leave, apologies and absences, lateness, rewards and complaints (was Leave requests + Discipline).
   { key: 'supervision', segment: 'supervision', label: { en: 'Supervision', ar: 'الإشراف' } },
   // PD-35 B5: escalation cases (the same page as /cases).

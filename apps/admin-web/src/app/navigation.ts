@@ -104,6 +104,8 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   tasks: 'more',
   // PD-35 B5: escalation cases, for every operator who may open or own one.
   cases: 'people',
+  // PD-41: the Certificates page.
+  certificates: 'people',
   dashboard: 'more',
   settings: null,
 }
@@ -125,6 +127,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   materials: '/materials',
   schedule: '/schedule',
   cases: '/cases',
+  certificates: '/certificates',
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
@@ -144,6 +147,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   materials: 'book',
   schedule: 'calendar',
   cases: 'tasks',
+  certificates: 'star',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
@@ -253,6 +257,14 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     path: AREA_PATH.cases,
     icon: AREA_ICON.cases,
     label: { text: ADMIN_CASES_LABEL },
+    inDevelopment: false,
+  })
+  // PD-41: the Certificates page, with its types, at /certificates.
+  out.get('people')?.[0]?.entries.push({
+    key: 'certificates',
+    path: AREA_PATH.certificates,
+    icon: AREA_ICON.certificates,
+    label: { message: 'nav.certificates' },
     inDevelopment: false,
   })
   // One registry group inside a destination needs no heading.
