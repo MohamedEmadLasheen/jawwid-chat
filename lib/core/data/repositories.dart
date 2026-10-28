@@ -12,6 +12,7 @@ import '../../shared/models/teacher_feedback.dart';
 import '../../shared/models/teacher_profile.dart';
 import '../../shared/models/trial.dart';
 import '../../shared/models/user_role.dart';
+import '../../shared/models/work_task.dart';
 
 /// One page of a cursor-paginated list (§19).
 class Page<T> {
@@ -1112,4 +1113,51 @@ class NoFeedbackRepository implements FeedbackRepository {
     required String body,
   }) =>
       throw UnsupportedError('no feedback server in this build');
+}
+
+/// PD-47: the person's own tasks (the teacher's "To do"). Every method is one endpoint;
+/// NO AUTHORIZATION LIVES HERE -- the server decides who sees a task and what they may
+/// do with it, and its `COMM.*` code reaches the caller intact.
+abstract interface class TaskRepository {
+  /// `GET /me/tasks?state=open`, most urgent first, every page.
+  Future<List<WorkTask>> myTasks();
+
+  /// `GET /tasks/:id` -- with what the viewer may do now (`actions`).
+  Future<WorkTask> task(String id);
+
+  /// `POST /tasks/:id/complete` -- a task a person gave.
+  Future<void> complete(String id);
+
+  /// `POST /tasks/:id/acknowledge` -- a task whose work no longer exists.
+  Future<void> acknowledge(String id);
+
+  /// `POST /tasks/:id/out-of-scope` -- "Not mine": the manager decides.
+  Future<void> outOfScope(String id, String comment);
+
+  /// `POST /tasks/:id/comments`
+  Future<void> comment(String id, String body);
+}
+
+/// The build with no task server (fixtures, tests that do not override it): nothing
+/// to do, and every action refused, so a fixture task is never mistaken for a real one.
+class NoTaskRepository implements TaskRepository {
+  const NoTaskRepository();
+
+  @override
+  Future<List<WorkTask>> myTasks() async => const [];
+
+  @override
+  Future<WorkTask> task(String id) => throw UnsupportedError('no task server in this build');
+
+  @override
+  Future<void> complete(String id) => throw UnsupportedError('no task server in this build');
+
+  @override
+  Future<void> acknowledge(String id) => throw UnsupportedError('no task server in this build');
+
+  @override
+  Future<void> outOfScope(String id, String comment) => throw UnsupportedError('no task server in this build');
+
+  @override
+  Future<void> comment(String id, String body) => throw UnsupportedError('no task server in this build');
 }

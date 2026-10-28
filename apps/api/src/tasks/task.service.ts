@@ -866,12 +866,12 @@ export class TaskService {
                WHEN 'lesson_ruling' THEN (SELECT l.teacher_id::text FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id WHERE q.id = t.source_id)
              END AS source_teacher_id,
              CASE t.source_type
-               WHEN 'lesson_report' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at)
+               WHEN 'lesson_report' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
                                             FROM chat.lesson l JOIN chat.learner ln ON ln.id = l.learner_id WHERE l.id = t.source_id)
-               WHEN 'report_correction' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at)
+               WHEN 'report_correction' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
                                                 FROM chat.report_correction_request q JOIN chat.lesson l ON l.id = q.lesson_id
                                                 JOIN chat.learner ln ON ln.id = l.learner_id WHERE q.id = t.source_id)
-               WHEN 'lesson_ruling' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at)
+               WHEN 'lesson_ruling' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
                                             FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id
                                             JOIN chat.learner ln ON ln.id = l.learner_id WHERE q.id = t.source_id)
                WHEN 'leave_decision' THEN (SELECT jsonb_build_object('teacherName', te.name, 'firstDay', q.first_day, 'lastDay', q.last_day)

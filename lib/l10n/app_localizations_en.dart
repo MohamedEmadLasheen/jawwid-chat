@@ -4190,4 +4190,112 @@ class L10nEn extends L10n {
 
   @override
   String get messageInfoFailed => 'Couldn\'t load message info';
+
+  @override
+  String scheduleFilterTodo(int count) {
+    return 'To do ($count)';
+  }
+
+  @override
+  String get todoEmpty => 'Nothing to do.';
+
+  @override
+  String get todoLoadFailed => 'Couldn\'t load your tasks. Try again.';
+
+  @override
+  String get taskLevelHigh => 'High';
+
+  @override
+  String get taskLevelMedium => 'Medium';
+
+  @override
+  String get taskLevelLow => 'Low';
+
+  @override
+  String get taskReasonOverdue => 'Overdue';
+
+  @override
+  String get taskReasonDueSoon => 'Due soon';
+
+  @override
+  String get taskReasonSource => 'Raised by its source';
+
+  @override
+  String get taskFinance => 'Finance';
+
+  @override
+  String taskTitleLessonReport(String learner, String when) {
+    return 'Write the lesson report: $learner, $when';
+  }
+
+  @override
+  String taskTitleReportCorrection(String learner, String when) {
+    return 'Correct the lesson report: $learner, $when';
+  }
+
+  @override
+  String get taskTitleFromAcademy => 'A task from the academy';
+
+  @override
+  String taskDue(String when) {
+    return 'Due $when';
+  }
+
+  @override
+  String get taskNoDue => 'No due date';
+
+  @override
+  String get taskStateReturned => 'Returned with instructions';
+
+  @override
+  String get taskStateAwaiting => 'Waiting for your manager';
+
+  @override
+  String get taskStateWithdrawn => 'No longer needed';
+
+  @override
+  String taskGivenBy(String name) {
+    return 'Given by $name';
+  }
+
+  @override
+  String get taskInstructions => 'Instructions';
+
+  @override
+  String get taskWithdrawnNotice =>
+      'The work behind this task no longer exists. Acknowledge it to clear it.';
+
+  @override
+  String get taskOpenLesson => 'Open the lesson';
+
+  @override
+  String get taskMarkDone => 'Mark done';
+
+  @override
+  String get taskAcknowledge => 'Acknowledge';
+
+  @override
+  String get taskNotMine => 'Not mine';
+
+  @override
+  String get taskNotMineHint =>
+      'Say why. Your manager decides what happens next.';
+
+  @override
+  String get taskComment => 'Add a comment';
+
+  @override
+  String get taskSend => 'Send';
+
+  @override
+  String get taskActionFailed => 'Couldn\'t do that. Try again.';
+
+  @override
+  String get taskDoneSnack => 'Done.';
+
+  @override
+  String get taskNotMineSent => 'Sent to your manager.';
+
+  @override
+  String get taskCommentSent => 'Comment added.';
 }

@@ -7170,6 +7170,198 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Couldn\'t load message info'**
   String get messageInfoFailed;
+
+  /// PD-47: the Schedule's To do segment, with how many tasks are open.
+  ///
+  /// In en, this message translates to:
+  /// **'To do ({count})'**
+  String scheduleFilterTodo(int count);
+
+  /// PD-47: the To do list is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to do.'**
+  String get todoEmpty;
+
+  /// No description provided for @todoLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your tasks. Try again.'**
+  String get todoLoadFailed;
+
+  /// PD-47: a task's level (red).
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get taskLevelHigh;
+
+  /// No description provided for @taskLevelMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get taskLevelMedium;
+
+  /// No description provided for @taskLevelLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get taskLevelLow;
+
+  /// PD-47: why a task's level was raised.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get taskReasonOverdue;
+
+  /// No description provided for @taskReasonDueSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Due soon'**
+  String get taskReasonDueSoon;
+
+  /// No description provided for @taskReasonSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised by its source'**
+  String get taskReasonSource;
+
+  /// PD-47: the tag on a financial task.
+  ///
+  /// In en, this message translates to:
+  /// **'Finance'**
+  String get taskFinance;
+
+  /// No description provided for @taskTitleLessonReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Write the lesson report: {learner}, {when}'**
+  String taskTitleLessonReport(String learner, String when);
+
+  /// No description provided for @taskTitleReportCorrection.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct the lesson report: {learner}, {when}'**
+  String taskTitleReportCorrection(String learner, String when);
+
+  /// PD-47: a system task this build has no words for.
+  ///
+  /// In en, this message translates to:
+  /// **'A task from the academy'**
+  String get taskTitleFromAcademy;
+
+  /// No description provided for @taskDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {when}'**
+  String taskDue(String when);
+
+  /// No description provided for @taskNoDue.
+  ///
+  /// In en, this message translates to:
+  /// **'No due date'**
+  String get taskNoDue;
+
+  /// No description provided for @taskStateReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'Returned with instructions'**
+  String get taskStateReturned;
+
+  /// No description provided for @taskStateAwaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your manager'**
+  String get taskStateAwaiting;
+
+  /// No description provided for @taskStateWithdrawn.
+  ///
+  /// In en, this message translates to:
+  /// **'No longer needed'**
+  String get taskStateWithdrawn;
+
+  /// No description provided for @taskGivenBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Given by {name}'**
+  String taskGivenBy(String name);
+
+  /// No description provided for @taskInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Instructions'**
+  String get taskInstructions;
+
+  /// No description provided for @taskWithdrawnNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'The work behind this task no longer exists. Acknowledge it to clear it.'**
+  String get taskWithdrawnNotice;
+
+  /// No description provided for @taskOpenLesson.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the lesson'**
+  String get taskOpenLesson;
+
+  /// No description provided for @taskMarkDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark done'**
+  String get taskMarkDone;
+
+  /// No description provided for @taskAcknowledge.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get taskAcknowledge;
+
+  /// PD-47: the assignee says a task is outside their responsibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Not mine'**
+  String get taskNotMine;
+
+  /// No description provided for @taskNotMineHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Say why. Your manager decides what happens next.'**
+  String get taskNotMineHint;
+
+  /// No description provided for @taskComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a comment'**
+  String get taskComment;
+
+  /// No description provided for @taskSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get taskSend;
+
+  /// No description provided for @taskActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t do that. Try again.'**
+  String get taskActionFailed;
+
+  /// No description provided for @taskDoneSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Done.'**
+  String get taskDoneSnack;
+
+  /// No description provided for @taskNotMineSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to your manager.'**
+  String get taskNotMineSent;
+
+  /// No description provided for @taskCommentSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment added.'**
+  String get taskCommentSent;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
