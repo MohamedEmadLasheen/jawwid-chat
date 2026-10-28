@@ -1,7 +1,7 @@
 # PD-47: one Tasks page for everyone (plan)
 
 **State:** **APPROVED.** On 2026-10-28 the owner answered Q1–Q13 "Approve all 13 (Recommended)", relayed verbatim by the department head (§8). No feature code is written. PR-1 waits for the department head's GO (machine load).
-**Claim:** `docs/product/pd-registry/PD-47.md`. **Migration slots, assigned by the department head:** PR-1 `20261029160000` (`chat_pd047_work_tasks`), PR-2 `20261029170000` (`chat_pd047_task_sources`), claimed in `docs/product/migration-slots/`. PR-4 asks for its own slot if it needs one.
+**Claim:** `docs/product/pd-registry/PD-47.md`. **Migration slots, assigned by the department head:** PR-1 `20261029160000` (`chat_pd047_work_tasks`), PR-2 `20261029210000` (`chat_pd047_task_sources`; moved from `20261029170000`, released, so it runs after the priority amendment's PR-1b `20261029200000`), claimed in `docs/product/migration-slots/`. PR-4 asks for its own slot if it needs one.
 **Base:** `main` @ `08bfd9dd`. Paths are relative to the repository root. `mig/` is `supabase/migrations/`.
 **Frozen, not touched:** the call workstreams W1–W8; legacy `chat.task` (§1.1); Jawwid Core.
 
@@ -239,6 +239,32 @@ A guard spec asserts that every adapter has a completion trigger and a test wher
 
 The **Needs action** page and the other source pages stay as they are. A task is the "you, by name" layer over them.
 
+#### 3.6.1 As built in PR-2 (#241)
+
+- **Day-one backfill.** Owner, 2026-10-29: "Yes, but only recent ones". At switch-on, only source items from the **last 14 days** become tasks, and older open items are left as they are.
+  - Each source has its own cut-off, `tasks.since.<source>` in `chat.config`.
+  - It is set on first use to that moment minus 14 days.
+  - It replaces the never-applied `tasks.lesson_report_since` of an earlier PR-2 draft.
+- **Violations corrected away** (PD-15): a violation whose lesson's outcome was corrected away can no longer be decided (`DisciplineService.standing`).
+  - Its task is withdrawn, by the lesson trigger and by the sweep.
+  - A violation already corrected away is never raised.
+  - A lesson corrected **back** to the violation's outcome makes the same violation stand again, because it is unique per lesson and kind. Its withdrawn task is then **pending again**, recorded as `source_restored`, rather than raised a second time.
+- **Other sources:**
+  - A **trial lesson** (no learner) raises no report task; trials are Phase B's `trial_outcome`.
+  - A **"missing" correction** whose lesson already has a report task raises none of its own.
+- **Owners that change:**
+  - A lesson given to another teacher moves its report task, and its open correction tasks, as a reassignment by the system.
+  - A case whose owner left moves to its department's manager.
+  - Lesson-report, correction and case tasks are moved only by their source. The database guard enforces this.
+- **Nothing is silent:**
+  - A source occurrence that has no assignee, or whose trigger or sweep step failed, is recorded in `chat.work_task_source_issue`.
+  - It is warned once, then retried with a back-off: one hour, doubling, at most a day.
+    - A raise that declines is recorded the same way, so the batch is never starved.
+    - So an occurrence that waited for a manager is raised **at most 24 h after** one becomes live again.
+  - The record is deleted when the occurrence resolves in any way: its task raised, completed, withdrawn or moved, or its source decided or gone.
+  - The sweep returns its counts, and the worker logs any failures.
+- **The sweep** runs in batches of at most 60 rows under an advisory lock, and the source triggers wait at most 2 s for a lock.
+
 ### 3.7 Manual tasks, and who is responsible
 
 - **Create** (`tasks.create`): a manager for anyone in their team; the super admin for anyone; a teacher supervisor for their teachers (Q5). There is no peer-to-peer creation.
@@ -377,7 +403,7 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
 | PR | Content | Slot |
 |---|---|---|
 | PR-1 | `chat.work_task` + `chat.work_task_event`, guard and history triggers, RLS; `TaskService` with manual tasks, the four exits, comments and the lists; the routes and the PD-40 keys (LATER block); integration spec | **`20261029160000`** (assigned) |
-| PR-2 | The source framework, the worker sweep, the Phase A adapters and their completion triggers; the `lesson.service`/`leave`/`discipline`/`cases` hooks; the guard spec | **`20261029170000`** (assigned) |
+| PR-2 | The source framework, the worker sweep, the Phase A adapters and their completion triggers; the `lesson.service`/`leave`/`discipline`/`cases` hooks; the guard spec | **`20261029210000`** (assigned; moved from 170000) |
 | PR-3 | Admin Web Tasks page, en/ar, RTL; legacy client code removed | none |
 | PR-4 | `task.changed` and the worker `case`; PD-34 emission and the overdue notice sweep; `/dashboard/tasks` (with PD-44) | 0–1 (the notice table) |
 | PR-5 | Flutter "To do" in the Schedule tab (app + teacher web), if Q2 | none |

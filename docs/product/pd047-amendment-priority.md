@@ -4,7 +4,7 @@
 **Claim:** `docs/product/pd-registry/PD-47-amendment-priority.md`. It amends `docs/product/pd047-tasks-plan.md`.
 **Slots:**
 - PR-1b is `20261029200000`, assigned by the department head and claimed in `docs/product/migration-slots/20261029200000.md`.
-- PR-2b (the financial sources) is `20261029210000`, assigned by the department head and claimed in `docs/product/migration-slots/20261029210000.md`.
+- PR-2 (the Phase A sources) is `20261029210000` and PR-2b (the financial sources) is `20261029233000`, both assigned by the department head on 2026-10-28 so that 200000 < 210000 < 233000, each claimed in `docs/product/migration-slots/`. `20261029170000` is released.
 
 **Base:** `main` @ `90b9d2d7`. `mig/` is `supabase/migrations/`.
 
@@ -201,8 +201,8 @@ One table rule: **the instalment and package floors replace the generic 24 h / 3
 | PR | Content | Slot |
 |---|---|---|
 | **PR-1b** | `priority`, `category`, `source_floor`; `chat.work_task_effective` with the four floor rules; `priority_changed` and `source_raised` in the guard and the history trigger; indexes; the sort plus the `as_of` keyset; filters; `POST tasks/:id/priority`; create takes `priority` and `category`; DTO fields; the urgent and financial Dashboard tiles; specs | **`20261029200000`** (assigned) |
-| PR-2 | the Phase A sources, with their floor rule (`lesson_report` and `report_correction` are `overdue_only`) | `20261029170000` |
-| **PR-2b** | **the financial sources** (owner Q-F5: `checkout_failed` included) (`instalment`, `package_low`, `renewal_request`, `receipt_review`, and `checkout_failed` if Q-F5 says yes). Their completion triggers on `chat.family_instalment`, the payment ledger, `chat.learner_subscription`, `chat.renewal_request` and `chat.payment_receipt`, and `notifySales` replaced (Q-F6). Moved **ahead** of the other Phase B sources, because the owner named finance first. | **`20261029210000`** (assigned) |
+| PR-2 | the Phase A sources, with their floor rule (`lesson_report` and `report_correction` are `overdue_only`) | `20261029210000` |
+| **PR-2b** | **the financial sources** (owner Q-F5: `checkout_failed` included) (`instalment`, `package_low`, `renewal_request`, `receipt_review`, and `checkout_failed` if Q-F5 says yes). Their completion triggers on `chat.family_instalment`, the payment ledger, `chat.learner_subscription`, `chat.renewal_request` and `chat.payment_receipt`, and `notifySales` replaced (Q-F6). Moved **ahead** of the other Phase B sources, because the owner named finance first. | **`20261029233000`** (assigned) |
 | PR-3 / PR-5 | the chip, the Finance tag, the tokens | none |
 
 **Order:** #228 → PR-1b → PR-2 → PR-2b → the rest of Phase B.

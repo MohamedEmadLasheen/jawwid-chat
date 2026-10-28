@@ -341,7 +341,8 @@ describe('the database', () => {
       ]);
     await expect(asSa(`update chat.work_task set category = 'financial' where id = $1::uuid`)).rejects.toThrow(/never change/);
     await expect(asSa(`update chat.work_task set floor_rule = 'none' where id = $1::uuid`)).rejects.toThrow(/never change/);
-    await expect(asSa(`update chat.work_task set source_floor = 'high' where id = $1::uuid`)).rejects.toThrow(/never change/);
+    // PR-2's guard: a source floor is its source's alone (chat.task_system).
+    await expect(asSa(`update chat.work_task set source_floor = 'high' where id = $1::uuid`)).rejects.toThrow(/only with its source/);
   });
 
   it('a manual task has the generic floor and no source floor', async () => {
