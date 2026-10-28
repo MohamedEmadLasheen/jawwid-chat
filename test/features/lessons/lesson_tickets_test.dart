@@ -14,6 +14,7 @@ import 'package:jawwid_chat/features/lessons/presentation/lesson_report_sheet.da
 import 'package:jawwid_chat/features/lessons/presentation/lesson_ticket_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/makeup_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/teacher_schedule_screen.dart';
+import 'package:jawwid_chat/features/materials/data/materials_repository.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_composer.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
@@ -26,10 +27,11 @@ import 'package:jawwid_chat/shared/models/user_role.dart';
 /// and the form that sends one. Nothing here decides who may do what -- the server's
 /// answers are stubbed, and the client is held to drawing exactly what it is given.
 void main() {
-  Widget app(Widget home, {LessonRepository? lessons, Locale locale = const Locale('en'), UserRole? role}) {
+  Widget app(Widget home, {LessonRepository? lessons, MaterialsRepository? materials, Locale locale = const Locale('en'), UserRole? role}) {
     return ProviderScope(
       overrides: [
         if (lessons != null) lessonRepositoryProvider.overrideWithValue(lessons),
+        if (materials != null) materialsRepositoryProvider.overrideWithValue(materials),
         // The signed-in role (no session in these tests): a parent unless a test says otherwise.
         currentRoleProvider.overrideWithValue(role ?? UserRole.parent),
       ],
@@ -565,6 +567,59 @@ void main() {
       expect(find.descendant(of: second, matching: find.text('No regular times yet')), findsOneWidget);
     });
 
+    // A family group (PD-15) names NO single learner: its children come from
+    // /conversations/:id/learners. Each child's progress and Materials must come with
+    // that child's card, or nobody ever sees them from a family group.
+    group('a family group\'s children each get their progress and Materials', () {
+      const one = GroupChild(id: 'k1', name: 'learner_l');
+      const two = GroupChild(id: 'k2', name: 'learner_m');
+      final month = ChildProgress(attended: 3, apologised: 0, absent: 0, attendedAllTime: 3, streak: 3, makeupsOwed: 0);
+      Widget section({required bool entries}) =>
+          SingleChildScrollView(child: GroupChildrenSection(conversationId: 'c1', withChildEntries: entries));
+
+      testWidgets('one child: one Materials entry, under that child', (tester) async {
+        final repo = _RecordingLessons()
+          ..children = const [one]
+          ..childProgress = month;
+        await tester.pumpWidget(app(section(entries: true), lessons: repo, materials: _SomeMaterials()));
+        await tester.pumpAndSettle();
+        final block = find.byKey(const ValueKey('group-child-block-k1'));
+        expect(find.descendant(of: block, matching: find.byKey(const ValueKey('materials-entry-k1'))), findsOneWidget);
+        expect(find.descendant(of: block, matching: find.text('This month')), findsOneWidget);
+      });
+
+      testWidgets('two children: two entries, each under its own child', (tester) async {
+        final repo = _RecordingLessons()
+          ..children = const [one, two]
+          ..childProgress = month;
+        await tester.pumpWidget(app(section(entries: true), lessons: repo, materials: _SomeMaterials()));
+        await tester.pumpAndSettle();
+        for (final id in ['k1', 'k2']) {
+          final block = find.byKey(ValueKey('group-child-block-$id'));
+          expect(find.descendant(of: block, matching: find.byKey(ValueKey('materials-entry-$id'))), findsOneWidget);
+          expect(find.descendant(of: block, matching: find.text('This month')), findsOneWidget);
+        }
+        expect(find.text('Materials'), findsNWidgets(2));
+      });
+
+      testWidgets('a group about ONE learner shows them from its learner instead: none here, nothing twice', (tester) async {
+        final repo = _RecordingLessons()..children = const [one];
+        await tester.pumpWidget(app(section(entries: false), lessons: repo, materials: _SomeMaterials()));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('group-child-k1')), findsOneWidget);
+        expect(find.byKey(const ValueKey('materials-entry-k1')), findsNothing);
+        expect(find.text('This month'), findsNothing);
+      });
+
+      testWidgets('a build with no materials server offers no Materials entry', (tester) async {
+        final repo = _RecordingLessons()..children = const [one, two];
+        await tester.pumpWidget(app(section(entries: true), lessons: repo));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('materials-entry-k1')), findsNothing);
+        expect(find.byKey(const ValueKey('materials-entry-k2')), findsNothing);
+      });
+    });
+
     testWidgets('a build with no lesson server shows no progress at all', (tester) async {
       await tester.pumpWidget(app(const ChildProgressCard(learnerId: 'k1')));
       await tester.pumpAndSettle();
@@ -592,6 +647,12 @@ void main() {
       expect(find.text('90% reports on time'), findsOneWidget);
     });
   });
+}
+
+/// A materials server is there; the entry asks nothing of it until it is opened.
+class _SomeMaterials implements MaterialsRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _RecordingLessons implements LessonRepository {

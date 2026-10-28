@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
@@ -15,7 +16,10 @@ import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/conversations/presentation/chats_screen.dart';
 import 'package:jawwid_chat/features/conversations/presentation/conversation_tile.dart';
+import 'package:jawwid_chat/features/materials/data/materials_repository.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
+import 'package:jawwid_chat/features/profile/application/profile_controller.dart';
+import 'package:jawwid_chat/features/profile/domain/profile_view.dart';
 import 'package:jawwid_chat/features/profile/data/profile_photo_repository.dart';
 import 'package:jawwid_chat/features/profile/presentation/my_profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_screen.dart';
@@ -23,6 +27,7 @@ import 'package:jawwid_chat/features/profile/presentation/profile_sections.dart'
 import 'package:jawwid_chat/features/settings/presentation/settings_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/auth.dart';
+import 'package:jawwid_chat/shared/models/lesson.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
 /// Profiles are contextual: reached by tapping an avatar or a name, never from a tab.
@@ -33,6 +38,7 @@ void main() {
     Locale locale = const Locale('en'),
     bool superAdmin = false,
     String? photoUrl,
+    List<Override> extra = const [],
   }) {
     final backend = FakeBackend(role: role);
     addTearDown(backend.dispose);
@@ -48,6 +54,7 @@ void main() {
             .overrideWithValue(FakeMessageRepository(backend)),
         groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
         callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+        ...extra,
         authControllerProvider.overrideWith(
           () => _SignedIn(
             backend: backend,
@@ -154,6 +161,47 @@ void main() {
       ]) {
         expect(find.byIcon(icon), findsNothing, reason: '$icon must not appear');
       }
+    });
+
+    // Systest 2026-10-28: a family group (PD-15) names no single learner -- it lists its
+    // children -- so its Materials never appeared for anyone. Each child now brings its own.
+    testWidgets('a FAMILY group (no single learner) shows each child\'s Materials entry', (tester) async {
+      const family = ProfileView(
+        audience: ProfileAudience.other,
+        subject: ProfilePerson(id: 'c_family', displayName: 'family_group'),
+        isGroup: true,
+      );
+      await tester.pumpWidget(harness(
+        role: UserRole.parent,
+        child: const ConversationProfileScreen(conversationId: 'c_family'),
+        extra: [
+          conversationProfileProvider('c_family').overrideWith((ref) async => family),
+          lessonRepositoryProvider.overrideWithValue(_Children(const [
+            GroupChild(id: 'k1', name: 'learner_l'),
+            GroupChild(id: 'k2', name: 'learner_m'),
+          ])),
+          materialsRepositoryProvider.overrideWithValue(_SomeMaterials()),
+        ],
+      ));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('materials-entry-k2')), 200);
+      expect(find.byKey(const ValueKey('materials-entry-k1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('materials-entry-k2')), findsOneWidget);
+    });
+
+    testWidgets('a LEARNER group keeps its one entry, from its learner -- never twice', (tester) async {
+      await tester.pumpWidget(harness(
+        role: UserRole.parent,
+        child: const ConversationProfileScreen(conversationId: 'c_group_1'),
+        extra: [
+          // Its children list names the same learner; the entry still comes once.
+          lessonRepositoryProvider.overrideWithValue(_Children(const [GroupChild(id: 'l_1', name: 'learner_l')])),
+          materialsRepositoryProvider.overrideWithValue(_SomeMaterials()),
+        ],
+      ));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('materials-entry-l_1')), 200);
+      expect(find.byKey(const ValueKey('materials-entry-l_1')), findsOneWidget);
     });
 
     testWidgets('a teacher opening group info sees no contact or children section',
@@ -415,4 +463,26 @@ class _OnePhoto implements ProfilePhotoRepository {
 
   @override
   Future<void> remove({String? childId}) async {}
+}
+
+/// The group's children, from /conversations/:id/learners; nothing else is asked.
+class _Children implements LessonRepository {
+  _Children(this.children);
+  final List<GroupChild> children;
+
+  @override
+  Future<List<GroupChild>> groupChildren(String conversationId) async => children;
+
+  /// A build without progress shows none (the card hides on UnsupportedError).
+  @override
+  Future<ChildProgress> progress(String learnerId) async => throw UnsupportedError('no progress here');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// A materials server is there; the entry asks nothing of it until it is opened.
+class _SomeMaterials implements MaterialsRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
