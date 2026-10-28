@@ -427,5 +427,164 @@
       "isWord": false,
       "note": "starts with a mark"
     }
+  ],
+  "markedCases": [
+    {
+      "word": "كَتَبَ",
+      "letters": [
+        "ب"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "end"
+      ],
+      "note": "the vowel on the last letter"
+    },
+    {
+      "word": "كَتَبَ",
+      "letters": [
+        "ك"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "كِتَابْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "كِتَابْ",
+      "letters": [
+        "ب"
+      ],
+      "mark": "fatha",
+      "has": false,
+      "positions": [],
+      "note": "ب is there, but with a sukun"
+    },
+    {
+      "word": "كِتَابْ",
+      "letters": [
+        "ك"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "مَكْتُوبْ",
+      "letters": [
+        "ب"
+      ],
+      "mark": "damma",
+      "has": false,
+      "positions": [],
+      "note": "the old lesson's error: the damma is on ت"
+    },
+    {
+      "word": "مَكْتُوبْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "damma",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "قَرَأَ",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "إِبْرَةْ",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "أُمّْ",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "damma",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "سُئِلَ",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "مُعَلِّمَةْ",
+      "letters": [
+        "ل"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "shadda and the vowel together"
+    },
+    {
+      "word": "مُعَلِّمَةْ",
+      "letters": [
+        "ل"
+      ],
+      "mark": "fatha",
+      "has": false,
+      "positions": []
+    }
   ]
 }

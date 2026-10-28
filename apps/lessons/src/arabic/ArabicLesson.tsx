@@ -52,6 +52,10 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
   const unit = units.find((u) => u.id === unitId) ?? units[0];
   const words = unit ? unit.words.map((w) => w.text) : [];
   const others = unit ? units.filter((u) => u.id !== unit.id).flatMap((u) => u.words.map((w) => w.text)) : [];
+  // Lesson 3: units grouped by letter -- the letters first, then that letter's harakat.
+  const groups = [...new Set(units.flatMap((u) => (u.group ? [u.group] : [])))];
+  const grouped = groups.length > 0;
+  const row = grouped && unit ? units.filter((u) => u.group === unit.group) : units;
   // The quiz runs one unit at a time, as the old lesson's did (34 units would be one endless quiz).
   const unitQuiz = unit ? resolved.quiz.filter((q) => q.unit === unit.id) : [];
 
@@ -66,11 +70,20 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
       </header>
       <SectionHeader sections={LETTERS_SECTIONS} current={section} done={(s) => stars.has(s)} onSelect={setSection} labels={LABELS} />
 
-      {unit ? (
+      {unit && grouped ? (
         <nav className="letters-units" aria-label="الحروف">
-          {units.map((u) => (
+          {groups.map((g) => (
+            <button key={g} type="button" className={g === unit.group ? 'section section--current' : 'section'} aria-current={g === unit.group ? 'true' : undefined} onClick={() => setUnitId(units.find((u) => u.group === g)!.id)}>
+              {g}
+            </button>
+          ))}
+        </nav>
+      ) : null}
+      {unit ? (
+        <nav className="letters-units" aria-label={grouped ? 'الحركات' : 'الحروف'}>
+          {row.map((u) => (
             <button key={u.id} type="button" className={u.id === unit.id ? 'section section--current' : 'section'} aria-current={u.id === unit.id ? 'true' : undefined} onClick={() => setUnitId(u.id)}>
-              {u.forms[0] ?? u.name}
+              {grouped ? u.name : (u.forms[0] ?? u.name)}
             </button>
           ))}
         </nav>
