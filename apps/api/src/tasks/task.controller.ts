@@ -22,11 +22,16 @@ export class TaskController {
     return this.tasks.list(actorId, { view: 'mine', state, cursor });
   }
 
-  /** ?view=team|decisions|all &state=open|closed &cursor (all: the super admin). */
+  /**
+   * ?view=team|decisions|all &state=open|closed &cursor (all: the super admin).
+   * The view is required: the legacy Admin Web page still calls GET /tasks
+   * with ?scope= and a different shape, and must keep failing until PR-3
+   * replaces it.
+   */
   @Requires('tasks.team', 'tasks.manage')
   @Get('tasks')
   list(@ActorId() actorId: string, @Query('view') view?: string, @Query('state') state?: string, @Query('cursor') cursor?: string) {
-    return this.tasks.list(actorId, { view: view ?? 'team', state, cursor });
+    return this.tasks.list(actorId, { view: view ?? '', state, cursor });
   }
 
   /** { assignee: { kind, id }, title, body?, dueAt? } */

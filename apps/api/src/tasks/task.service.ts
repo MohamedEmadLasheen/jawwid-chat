@@ -136,9 +136,9 @@ export class TaskService {
   }
 
   /** ?view=mine|team|decisions|all &state=open|closed &cursor */
-  async list(actorId: string, query: { view?: string; state?: string; cursor?: string }) {
+  async list(actorId: string, query: { view: string; state?: string; cursor?: string }) {
     const viewer = await this.requireViewer(actorId);
-    const view = (query.view ?? 'mine') as TaskView;
+    const view = query.view as TaskView;
     if (!(TASK_VIEWS as readonly string[]).includes(view)) throw invalid('view: mine, team, decisions or all');
     const state = query.state ?? 'open';
     if (state !== 'open' && state !== 'closed') throw invalid('state: open or closed');
