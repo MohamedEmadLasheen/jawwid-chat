@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import pin from './quran-pin.json';
 import snapshot from './public/data/quran/manifest.json';
@@ -23,10 +23,43 @@ const anchor = {
   rangeSha256: snapshot.surahs.map((s) => s.rangeSha256),
 };
 
-export default defineConfig({
-  plugins: [react()],
+// AUDIO ORIGINS. Recitation reaches a lesson only from the app that opened it
+// (src/audio/audio-manifest.ts), so the build fixes which pages may hand it an
+// audio list (LESSONS_PARENT_ORIGINS) and where the files may come from
+// (LESSONS_MEDIA_ORIGINS, also added to the CSP's connect-src). Comma-separated
+// https origins; unset means a build that accepts no audio at all.
+function origins(value: string | undefined, name: string): string[] {
+  const list = (value ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+  for (const o of list) {
+    if (!/^https:\/\/[a-z0-9.-]+(:\d{1,5})?$/.test(o)) throw new Error(`${name}: ${JSON.stringify(o)} is not an https origin`);
+  }
+  return list;
+}
+
+function audioCsp(media: string[]): Plugin {
+  return {
+    name: 'lessons-audio-csp',
+    transformIndexHtml(html) {
+      // Verified audio plays from memory (blob:); its bytes are fetched from the media origins.
+      const out = html
+        .replace("media-src 'self';", "media-src 'self' blob:;")
+        .replace("connect-src 'self';", `connect-src 'self'${media.map((o) => ` ${o}`).join('')};`);
+      if (!out.includes("media-src 'self' blob:;")) throw new Error('index.html: the CSP has no media-src to extend');
+      return out;
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, '.', 'LESSONS_');
+  const audio = {
+    parents: origins(env.LESSONS_PARENT_ORIGINS, 'LESSONS_PARENT_ORIGINS'),
+    media: origins(env.LESSONS_MEDIA_ORIGINS, 'LESSONS_MEDIA_ORIGINS'),
+  };
+  return {
+  plugins: [react(), audioCsp(audio.media)],
   base: '/',
-  define: { __QURAN_ANCHOR__: JSON.stringify(anchor) },
+  define: { __QURAN_ANCHOR__: JSON.stringify(anchor), __LESSONS_AUDIO__: JSON.stringify(audio) },
   build: {
     outDir: 'dist',
     assetsInlineLimit: 0,
@@ -34,4 +67,5 @@ export default defineConfig({
     sourcemap: false,
   },
   server: { fs: { strict: true, allow: ['.'] } },
+  };
 });
