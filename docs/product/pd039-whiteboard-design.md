@@ -2,8 +2,8 @@
 
 Status: **DECIDED by the owner, 2026-10-28** (all five questions, with safeguards; §10).
 Code waits for the department head's GO (machine-load cap). No feature code exists yet.
-Claimed in `pd-registry/PD-39.md`. Migration slot `20261028120000` (`chat_pd039_whiteboards`)
-is assigned by the department head; earlier claims 20261027110000, 20261027120000 and 20261028110000 went to other PDs.
+Claimed in `pd-registry/PD-39.md`. Migration slot `20261028150000` (`chat_pd039_whiteboards`)
+is assigned by the department head; earlier claims 20261027110000, 20261027120000, 20261028110000 and 20261028120000 went to other PDs.
 
 The owner's request (2026-10-27): "we need to add in teacher account this one: Spahboard
 Interactive Whiteboard". The owner sent a feature analysis of Spahboard in eleven groups
@@ -404,7 +404,7 @@ off screen? `CallPresenter` pushes `/call` app-wide, and there is no `PopScope` 
 
 ## 6. Data model and authorisation
 
-### 6.1 Tables (migration `20261028120000_chat_pd039_whiteboards`)
+### 6.1 Tables (migration `20261028150000_chat_pd039_whiteboards`)
 
 ```
 chat.whiteboard
@@ -558,7 +558,7 @@ describes a general K-12 board.
 Each step is one PR, reviewed by the head, behind no feature flag except the tab's
 visibility.
 
-1. **API: boards, pages, assets, quotas, authz** (slot `20261028120000`).
+1. **API: boards, pages, assets, quotas, authz** (slot `20261028150000`).
    - Tests for §6.2 (every row of the table), §6.3 (key-is-not-a-capability, foreign asset
      in a page, the grant/confirm swap) and cross-organisation 404s.
    - Unit tests run with `--maxWorkers=2`. Integration runs in CI (G-19), or with a spec
