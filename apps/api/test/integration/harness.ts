@@ -48,8 +48,10 @@ export class PinnedCoverage implements CoverageService {
  */
 export function buildGraph(
   wrapIdentity: (inner: IdentityService) => IdentityService = (inner) => inner,
+  // PD-44: a suite that counts statements passes a client built with query
+  // events on; every service below then shares it, as they share this one.
+  prisma: PrismaService = new PrismaService(),
 ) {
-  const prisma = new PrismaService();
   const coverage = new PinnedCoverage();
   const identity = wrapIdentity(new PrismaIdentityService(prisma));
   const audit = new PrismaAuditService();

@@ -25,6 +25,7 @@ import { TeacherSupervisorModule } from './teacher-supervisors/teacher-superviso
 import { CalendarModule } from './calendar/calendar.module';
 import { SupervisionCaseModule } from './cases/supervision-case.module';
 import { ActionLogModule } from './action-log/action-log.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -80,6 +81,8 @@ import { ActionLogModule } from './action-log/action-log.module';
     SupervisionCaseModule,
     // PD-35 B7: a staff member's action log.
     ActionLogModule,
+    // PD-44: the manager Dashboard (counts from each page's own service).
+    DashboardModule,
   ],
 })
 export class AppModule {}
