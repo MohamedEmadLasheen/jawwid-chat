@@ -155,6 +155,41 @@ describe('the manager Dashboard', () => {
     expect(requested().filter((p) => p.startsWith('/dashboard/'))).toEqual([])
   })
 
+  it('shows the Lessons section: today by outcome, and the outcome queue where the server sends it (PR-3)', async () => {
+    routes['/dashboard/lessons'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [
+          tile('lessons.today_upcoming', 5),
+          tile('lessons.today_unreported', 2, { oldestAt: '2026-10-28T07:00:00.000Z' }),
+          tile('lessons.today_held', 7),
+          tile('lessons.today_student_absent', 1),
+          tile('lessons.today_teacher_absent', 0),
+          tile('lessons.today_cancelled', 1),
+          tile('lessons.needs_outcome', 3),
+          tile('lessons.rulings_open', 1),
+        ],
+      })
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['lessons.view', 'schedule.view'] }))
+    const section = await screen.findByRole('region', { name: 'Lessons' })
+    const unreported = await within(section).findByRole('link', { name: /Today's lessons with no outcome yet/ })
+    expect(unreported).toHaveAttribute('href', '/schedule?view=day')
+    expect(unreported).toHaveClass('dash-tile--alert')
+    expect(within(section).getByRole('link', { name: /Held today/ })).not.toHaveClass('dash-tile--alert')
+    expect(within(section).getByRole('link', { name: /Lessons waiting for an outcome/ })).toHaveAttribute('href', '/teachers/needs-action')
+    expect(within(section).getByRole('link', { name: /Late apologies to rule on/ })).toHaveAttribute('href', '/teachers/needs-action')
+    expect(requested()).not.toContain('/dashboard/chats')
+  })
+
+  it('leaves the outcome queue out when the server does (outside the Teachers department)', async () => {
+    routes['/dashboard/lessons'] = () =>
+      json({ generatedAt: NOW, tiles: [tile('lessons.today_upcoming', 1), tile('lessons.today_held', 0)] })
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['schedule.view'] }))
+    const section = await screen.findByRole('region', { name: 'Lessons' })
+    expect(await within(section).findByRole('link', { name: /Lessons still to come today/ })).toBeInTheDocument()
+    expect(within(section).queryByRole('link', { name: /Lessons waiting for an outcome/ })).not.toBeInTheDocument()
+  })
+
   it('is Arabic first: Arabic labels and digits, right to left', async () => {
     open(MANAGER, 'ar')
     expect(await screen.findByRole('heading', { level: 1, name: 'لوحة المتابعة' })).toBeInTheDocument()
