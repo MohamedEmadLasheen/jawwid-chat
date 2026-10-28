@@ -298,6 +298,12 @@ export enum CommErrorCode {
   DISCIPLINE_STATE = 'COMM.DISCIPLINE_STATE',
   /** PD-12 S2: open lessons fall inside the suspension; decide again with cancelCollidingLessons. 409. */
   DISCIPLINE_LESSONS_COLLIDE = 'COMM.DISCIPLINE_LESSONS_COLLIDE',
+  /**
+   * PD-12 S2: a permanent suspension's lessons are cancelled first; some could not
+   * be, so nothing was decided and the teacher is still active. `detail` names
+   * the cancelled and the not-cancelled lessons. 409.
+   */
+  DISCIPLINE_NOT_CANCELLED = 'COMM.DISCIPLINE_NOT_CANCELLED',
   /** PD-12 S3: only Operations (in scope), the Operations Manager and the super admin read instalments. 403. */
   BILLING_DENIED = 'COMM.BILLING_DENIED',
   /** PD-12 S3: no such family in the caller's organization, or none this caller may see. 404. */
