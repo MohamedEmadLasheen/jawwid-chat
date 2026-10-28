@@ -1026,6 +1026,14 @@ class L10nEn extends L10n {
       'A child of this group moved to another supervisor';
 
   @override
+  String systemGroupLearnerAdded(String learner) {
+    return '$learner joined this group';
+  }
+
+  @override
+  String get systemGroupLearnerAddedNoName => 'A child joined this group';
+
+  @override
   String systemCoverStarted(String cover, String supervisor, String date) {
     return '$cover is covering for $supervisor until $date';
   }

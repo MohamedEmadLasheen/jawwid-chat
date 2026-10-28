@@ -1,0 +1,565 @@
+{
+  "surah": 89,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson (which has no data file; its content lives in components/LessonData.ts and the components, and its reflection prompt in pages/Index.tsx), then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. NUMBERING: the old lesson had 31 entries for the surah's 30 ayat; it split real ayah 23 into two entries (its 23 and 24), so its entries 25-31 are real ayat 24-30 (its own code comment wrongly blamed ayah 30). The tafsir for ayah 23 is its two lines joined (MERGED); the tafsir for ayat 24-30 and the \"last ayah\" quiz question are renumbered through the map and held (RENUMBERED). Word meanings, complete-the-ayah words and the completion question are matched by text, not by the old numbers. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the full-surah and per-ayah audio URLs (the per-ayah audio used the old numbers, so from entry 24 on it played the wrong ayah), and every hand-typed Quran string (replaced by positions). The old quiz had difficulty levels, not categories; the categories were assigned by question type. The complete-the-ayah words are the answers of the complete-the-ayah and missing-word games (de-duplicated: ashr is in both); the two whole-ayah answers (ayat 2 and 4) became their last word. The reflection idea is the old model answer shown after a child submits. Emoji were stripped from the ends of lines. Not carried (no field or no such game in the engine): the motivational messages, the intro facts and intro quiz, the ayah-ordering, memory, build-the-ayah, match and meaning-choice games, and the games' hand-typed distractors. Matching aids, for alignment only and never stored: the old text writes wa-l-layl (4:1) with two lams, ibtalahu (15:5, 16:4) with a plain alif, and wa-ji'a (23:1) without the Uthmani extra alif, and splits off the vocative ya of ya-laytani (24:2) and ya-ayyatuha (27:1), which the Uthmani text joins to the next word; the word meanings al-fajr, al-shaf', al-watr, thamud (wa-), 'ad (bi-) and al-mirsad (la-bi-) were typed without the particles the verse words carry, so they point at the whole verse words, and the phrase layalin 'ashr points at wa-layalin (2:1)."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-89 (read as text, never built or run)",
+    "sha256": {
+      "components/LessonData.ts": "c58a41c61364cdbb226c752df34be888666cf0117fa6424532d14e22aa9beb85",
+      "components/QuizSection.tsx": "091ccc0dd1df2522dc31371521aa9db495d01212b47b3e938009e7bc251fafb7",
+      "components/InteractiveGames.tsx": "0a3133b2895d19437bb6bef9c170a4978b1b462821a3f71848e5df9b10f287f4",
+      "components/AudioPlayer.tsx": "3c791559a7a7cefa0ed3b054227d991c1d101819b19cf1c37c64100166e40ef5",
+      "pages/Index.tsx": "b8d7fe16b2c592913c624321e0402a9ee901ec175a152b86f97a33977441d5b9"
+    }
+  },
+  "intro": {
+    "text": "سورة الفجر تذكرنا بعظمة خلق الله، وتحدثنا عن بعض الأمم السابقة التي لم تطيع الله، وتعلمنا أن الله يحب العدل والرحمة ومساعدة المحتاجين.",
+    "review": "Grammar: \"lam tuti'\" is written \"lam tuti'u\" (lam needs the jussive). Teacher to correct."
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "يقسم الله بوقت الفجر، وهو الوقت الجميل الذي يبدأ فيه النهار",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "ويقسم بالليالي العشر الأولى من شهر ذي الحجة، وهي أيام مباركة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "ويقسم بالعدد الزوجي والعدد الفردي",
+      "review": "A generic reading of al-shaf' wa-l-watr (even and odd numbers). Many tafsir give other views, e.g. the Day of Sacrifice and the Day of Arafah, or creation in pairs and Allah the One. Teacher to choose."
+    },
+    {
+      "ayah": 4,
+      "text": "ويقسم بالليل عندما يمضي ويذهب",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "هل في هذا القسم ما يكفي لمن يفكر ويعقل؟",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "ألم تعلم ماذا فعل الله بقوم عاد الذين لم يطيعوه؟",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "إرم هي مدينة قوم عاد التي كانت فيها أعمدة كبيرة وقوية",
+      "review": "Says Iram is the city of 'Ad. Tafsir differ: many say Iram is the tribe (or its ancestor) and \"dhat al-'imad\" is their tall pillars or tents, or their great stature. Teacher to choose the wording."
+    },
+    {
+      "ayah": 8,
+      "text": "لم يكن هناك مدينة مثلها في القوة والجمال",
+      "review": "Follows the line on ayah 7 that Iram is a city; on the tribe reading, no people like them were created in the land. Teacher to choose with ayah 7."
+    },
+    {
+      "ayah": 9,
+      "text": "وقوم ثمود الذين كانوا ينحتون البيوت في الجبال الصخرية",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "وفرعون الذي كان عنده جيش كبير وقوي",
+      "review": "One reading of \"dhi al-awtad\" (his armies, which held his rule firm). Others: the stakes he tortured people with, or his great buildings. Teacher to choose."
+    },
+    {
+      "ayah": 11,
+      "text": "هؤلاء جميعاً ظلموا الناس وتجاوزوا الحدود",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "ونشروا الفساد والظلم في الأرض",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "فعاقبهم الله عقاباً شديداً بسبب ظلمهم",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "إن الله يرى كل شيء ويراقب أعمال الناس",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "عندما يعطي الله الإنسان نعماً كثيرة يقول: ربي أعطاني لأنه يحبني",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "وعندما يقل رزقه يظن أن الله لا يحبه، وهذا خطأ",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "لا! المشكلة أنكم لا تحسنون إلى اليتيم الذي فقد أباه",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "ولا تشجعون بعضكم على إطعام الفقراء والمحتاجين",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "وتأخذون أموال الميراث بطمع شديد",
+      "review": null
+    },
+    {
+      "ayah": 20,
+      "text": "وتحبون المال حباً كبيراً جداً",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "text": "يوم القيامة ستُزلزل الأرض زلزالاً شديداً",
+      "review": null
+    },
+    {
+      "ayah": 22,
+      "text": "ويأتي الله والملائكة صفوفاً منتظمة",
+      "review": null
+    },
+    {
+      "ayah": 23,
+      "text": "ويُؤتى بجهنم في ذلك اليوم في ذلك اليوم يتذكر الإنسان أعماله، لكن الوقت قد فات",
+      "review": "MERGED: the old lesson split this ayah into two (its 23 and 24); these are its two lines joined. They repeat \"fi dhalika al-yawm\" at the join. Teacher to smooth the wording."
+    },
+    {
+      "ayah": 24,
+      "text": "يتمنى لو أنه عمل أعمالاً صالحة أكثر في حياته",
+      "review": "RENUMBERED: this is the old lesson's entry 25, which it showed as ayah 25; it is real ayah 24 (the old lesson split ayah 23, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 25,
+      "text": "لا أحد يعذب مثل عذاب الله في ذلك اليوم",
+      "review": "RENUMBERED: this is the old lesson's entry 26, which it showed as ayah 26; it is real ayah 25 (the old lesson split ayah 23, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 26,
+      "text": "ولا أحد يقيد مثل قيد الله",
+      "review": "RENUMBERED: this is the old lesson's entry 27, which it showed as ayah 27; it is real ayah 26 (the old lesson split ayah 23, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 27,
+      "text": "يا أيتها النفس الهادئة المؤمنة التي تحب الله",
+      "review": "RENUMBERED: this is the old lesson's entry 28, which it showed as ayah 28; it is real ayah 27 (the old lesson split ayah 23, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 28,
+      "text": "ارجعي إلى الله وأنتِ سعيدة والله راضٍ عنكِ",
+      "review": "RENUMBERED: this is the old lesson's entry 29, which it showed as ayah 29; it is real ayah 28 (the old lesson split ayah 23, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 29,
+      "text": "ادخلي مع عباد الله الصالحين",
+      "review": "RENUMBERED: this is the old lesson's entry 30, which it showed as ayah 30; it is real ayah 29 (the old lesson split ayah 23, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 30,
+      "text": "وادخلي الجنة! وهذه أعظم مكافأة من الله",
+      "review": "RENUMBERED: this is the old lesson's entry 31, which it showed as ayah 31; it is real ayah 30 (the old lesson split ayah 23, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "وقت طلوع الشمس في الصباح الباكر",
+      "review": "Says al-fajr is \"the time of sunrise\". Al-fajr is dawn, the first light, before sunrise (the lesson's own tafsir line says it starts the day). Teacher to correct."
+    },
+    {
+      "ayah": 2,
+      "word": 1,
+      "meaning": "الليالي العشر الأولى من شهر ذي الحجة",
+      "review": "PHRASE: the meaning is of the phrase \"layalin 'ashr\"; the engine shows it on the one word wa-layalin (2:1). Teacher to confirm it reads right. The meaning names the first ten nights of Dhu al-Hijjah, the view of most tafsir; some say the last ten of Ramadan."
+    },
+    {
+      "ayah": 3,
+      "word": 1,
+      "meaning": "العدد الزوجي مثل 2 و 4 و 6",
+      "review": "A generic reading of al-shaf' wa-l-watr (even and odd numbers). Many tafsir give other views, e.g. the Day of Sacrifice and the Day of Arafah, or creation in pairs and Allah the One. Teacher to choose."
+    },
+    {
+      "ayah": 3,
+      "word": 2,
+      "meaning": "العدد الفردي مثل 1 و 3 و 5",
+      "review": "A generic reading of al-shaf' wa-l-watr (even and odd numbers). Many tafsir give other views, e.g. the Day of Sacrifice and the Day of Arafah, or creation in pairs and Allah the One. Teacher to choose."
+    },
+    {
+      "ayah": 5,
+      "word": 6,
+      "meaning": "العقل والتفكير",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 6,
+      "meaning": "قوم قدماء كانوا أقوياء جداً",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 1,
+      "meaning": "مدينة قوم عاد الكبيرة",
+      "review": "Says Iram is the city of 'Ad. Tafsir differ: many say Iram is the tribe (or its ancestor) and \"dhat al-'imad\" is their tall pillars or tents, or their great stature. Teacher to choose the wording."
+    },
+    {
+      "ayah": 7,
+      "word": 3,
+      "meaning": "الأعمدة الطويلة والقوية",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "word": 1,
+      "meaning": "قوم قدماء كانوا ينحتون الجبال",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "word": 3,
+      "meaning": "الجيش القوي الكبير",
+      "review": "One reading of \"dhi al-awtad\" (his armies, which held his rule firm). Others: the stakes he tortured people with, or his great buildings. Teacher to choose."
+    },
+    {
+      "ayah": 11,
+      "word": 2,
+      "meaning": "ظلموا وتجاوزوا الحدود",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "word": 3,
+      "meaning": "الله يرى ويراقب كل شيء",
+      "review": "PHRASE: the meaning is of the phrase \"inna rabbaka la-bil-mirsad\"; the engine shows it on the one word la-bil-mirsad (14:3). Teacher to confirm it reads right. Al-mirsad itself is the lookout, the place of watching."
+    },
+    {
+      "ayah": 17,
+      "word": 5,
+      "meaning": "الطفل الذي فقد أباه",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "word": 5,
+      "meaning": "الإنسان الفقير المحتاج",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "word": 2,
+      "meaning": "الميراث والمال المتروك",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "word": 4,
+      "meaning": "بطمع وجمع شديد",
+      "review": null
+    },
+    {
+      "ayah": 20,
+      "word": 4,
+      "meaning": "كثيراً جداً",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "word": 3,
+      "meaning": "زُلزلت بشدة",
+      "review": null
+    },
+    {
+      "ayah": 27,
+      "word": 3,
+      "meaning": "النفس الهادئة المؤمنة بالله",
+      "review": null
+    },
+    {
+      "ayah": 30,
+      "word": 2,
+      "meaning": "الجنة - المكان الجميل الذي أعده الله للمؤمنين",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 2,
+      "word": 2
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 17,
+      "word": 5
+    },
+    {
+      "ayah": 27,
+      "word": 3
+    },
+    {
+      "ayah": 30,
+      "word": 2
+    },
+    {
+      "ayah": 14,
+      "word": 3
+    },
+    {
+      "ayah": 18,
+      "word": 5
+    },
+    {
+      "ayah": 28,
+      "word": 5
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "سورة الفجر"
+        },
+        {
+          "text": "سورة الشمس"
+        },
+        {
+          "text": "سورة الليل"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الفجر؟",
+      "options": [
+        {
+          "text": "30 آية"
+        },
+        {
+          "text": "20 آية"
+        },
+        {
+          "text": "25 آية"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية التي تأتي بعد",
+      "word": {
+        "ayah": 1,
+        "word": 1
+      },
+      "options": [
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 3
+        },
+        {
+          "ayah": 5
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old question typed ayah 1 (wa-l-fajr) into its text; it now shows that word (1:1) after \"ma al-ayah allati ta'ti ba'd\". Teacher to confirm it reads well.",
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "word": {
+        "ayah": 17,
+        "word": 5
+      },
+      "options": [
+        {
+          "text": "الطفل الذي فقد أباه"
+        },
+        {
+          "text": "الإنسان الكبير"
+        },
+        {
+          "text": "الطفل السعيد"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "word": {
+        "ayah": 27,
+        "word": 3
+      },
+      "options": [
+        {
+          "text": "النفس الهادئة المؤمنة بالله"
+        },
+        {
+          "text": "النفس الحزينة"
+        },
+        {
+          "text": "النفس الغاضبة"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q5"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا حدث لقوم عاد وثمود وفرعون؟",
+      "options": [
+        {
+          "text": "عاقبهم الله بسبب ظلمهم"
+        },
+        {
+          "text": "أعطاهم الله مكافأة"
+        },
+        {
+          "text": "لم يحدث لهم شيء"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q6"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نتعلم من سورة الفجر؟",
+      "options": [
+        {
+          "text": "مساعدة اليتيم والمسكين عمل عظيم"
+        },
+        {
+          "text": "المال أهم شيء في الحياة"
+        },
+        {
+          "text": "لا نحتاج لمساعدة الآخرين"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "ما آخر آية في سورة الفجر؟",
+      "options": [
+        {
+          "ayah": 30
+        },
+        {
+          "ayah": 28
+        },
+        {
+          "ayah": 1
+        }
+      ],
+      "answer": 0,
+      "review": "RENUMBERED: the old options were its entries 31, 29 and 1; through the numbering map they are real ayat 30, 28 and 1 (the old lesson split ayah 23). The answer is still the last ayah (now 30, which the old lesson numbered 31); the second option is ayah 28, which it numbered 29. Teacher to confirm.",
+      "id": "q8"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 27,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 27,
+          "word": 3
+        },
+        {
+          "ayah": 28,
+          "word": 4
+        },
+        {
+          "ayah": 28,
+          "word": 5
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old distractors (al-karimah, al-salihah) were hand-typed, not words of this surah; they are now radiyah (28:4) and mardiyyah (28:5). The prompt shows two words: the old text's \"ya ayyatuha\" is one word in the Uthmani text.",
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الله يرى أعمالنا جميعاً ويعلم ما نفعل",
+      "review": null
+    },
+    {
+      "text": "مساعدة اليتيم والمسكين عمل عظيم يحبه الله",
+      "review": null
+    },
+    {
+      "text": "الظلم عاقبته سيئة والله يعاقب الظالمين",
+      "review": null
+    },
+    {
+      "text": "النفس المطمئنة المؤمنة تدخل الجنة",
+      "review": null
+    },
+    {
+      "text": "يجب أن نعمل الخير ونساعد الآخرين",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نكون من أصحاب النفس المطمئنة؟",
+    "ideas": [
+      "نكون من أصحاب النفس المطمئنة عندما نؤمن بالله ونعمل الخير ونساعد الآخرين ونكون رحماء باليتيم والمسكين."
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله يحب من يساعد اليتيم؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الجنة أعدها الله للذين يعملون الخير؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الفجر نزلت في مكة المكرمة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الفجر هو أول وقت في اليوم وهو وقت مبارك؟",
+      "review": "Says al-fajr is the first time of the day. The fasting day begins at dawn, but the Islamic day (the date) begins at sunset (maghrib). Teacher to check the wording."
+    },
+    {
+      "text": "هل تعلم أن النبي ﷺ كان يحب مساعدة الفقراء والمساكين؟",
+      "review": null
+    }
+  ]
+}

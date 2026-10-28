@@ -84,6 +84,19 @@ export const I = {
   addToFamily: { en: 'Add the children to this family', ar: 'إضافة الأطفال إلى هذه الأسرة' },
   childExists: { en: 'A child with this name is already in the family.', ar: 'يوجد طفل بهذا الاسم في الأسرة بالفعل.' },
   confirmTwin: { en: 'It is another child (for example a twin).', ar: 'إنه طفل آخر (توأم مثلًا).' },
+  // QA on #202: a manager with nobody to enter a family for.
+  noTeamSales: {
+    en: 'Add a Sales member first: a family entered by the Sales manager belongs to one of their team.',
+    ar: 'أضف عضوًا إلى فريق المبيعات أولًا: الأسرة التي يُدخلها مدير المبيعات تتبع أحد أعضاء فريقه.',
+  },
+  noTeamOperations: {
+    en: 'Add an Operations supervisor first: a family entered by the Operations manager belongs to one of their supervisors.',
+    ar: 'أضف مشرف عمليات أولًا: الأسرة التي يُدخلها مدير العمليات تتبع أحد مشرفيه.',
+  },
+  noTeamAny: {
+    en: 'Add a supervisor first: a family belongs to an Operations supervisor or a member of the Sales team.',
+    ar: 'أضف مشرفًا أولًا: الأسرة تتبع مشرف عمليات أو عضوًا في فريق المبيعات.',
+  },
 } satisfies Record<string, Pair>
 
 /** The server's refusal, in the reader's language. */
