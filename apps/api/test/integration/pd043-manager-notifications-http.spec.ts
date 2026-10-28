@@ -242,14 +242,18 @@ describe('3. a supervisor deactivated with teachers assigned (a trigger on chat.
     expect(rows[0]!.variables).toEqual({ supervisor: s.name, teachers: 2 });
   });
 
-  it('works for a writer that cannot write notifications itself (service_role)', async () => {
-    const s = await supervisorHolding('b', 1);
-    await g.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('set local role service_role');
-      await tx.$queryRawUnsafe(`select chat.deactivate_principal('staff', '${s.id}'::uuid, 'left', null, 'deactivated')::text`);
-    });
-    expect((await isLive(s.id)).isActive).toBe(false);
-    expect(await leftFor(s.name)).toHaveLength(1);
+  it('the ONE entry point: SECURITY DEFINER, a pinned search_path, no request role may call it', async () => {
+    // Today only the server-side writer may deactivate staff (service_role has no
+    // privilege on chat.staff; chat_app is refused by RT-032, below). DEFINER keeps
+    // the trigger working for any future writer without INSERT on chat.notification.
+    const [fn] = await g.prisma.$queryRaw<Array<{ definer: boolean; config: string[] | null; anyone: boolean; app: boolean }>>`
+      SELECT p.prosecdef AS definer, p.proconfig AS config,
+             has_function_privilege('public', p.oid, 'EXECUTE') AS anyone,
+             has_function_privilege('chat_app', p.oid, 'EXECUTE') AS app
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'chat' AND p.proname = 'notify_teacher_supervisor_left'`;
+    expect(fn).toMatchObject({ definer: true, anyone: false, app: false });
+    expect(fn!.config).toEqual(['search_path=pg_catalog, pg_temp']);
   });
 
   it('a request role (chat_app) cannot deactivate staff at all: RT-032 refuses it, never this trigger', async () => {
