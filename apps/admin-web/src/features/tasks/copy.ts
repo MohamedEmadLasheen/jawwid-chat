@@ -62,6 +62,10 @@ export const C = {
   to: { en: 'To', ar: 'إلى' },
   department: { en: '{department} (its manager, {name})', ar: '{department} (مديره، {name})' },
   optionalInstructions: { en: 'Instructions (optional)', ar: 'تعليمات (اختياري)' },
+  shortened: {
+    en: 'This list is shortened: not everyone is shown. Send it to a department, and its manager hands it on.',
+    ar: 'هذه القائمة مختصرة: لا يظهر الجميع. أرسلها إلى قسم، ويتولى مديره إسنادها.',
+  },
   note: { en: 'Note (optional)', ar: 'ملاحظة (اختياري)' },
   text: { en: 'Text', ar: 'النص' },
   dueAt: { en: 'Due', ar: 'الموعد' },

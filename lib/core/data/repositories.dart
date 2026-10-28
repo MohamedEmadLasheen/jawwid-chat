@@ -1119,8 +1119,8 @@ class NoFeedbackRepository implements FeedbackRepository {
 /// NO AUTHORIZATION LIVES HERE -- the server decides who sees a task and what they may
 /// do with it, and its `COMM.*` code reaches the caller intact.
 abstract interface class TaskRepository {
-  /// `GET /me/tasks?state=open`, most urgent first, every page.
-  Future<List<WorkTask>> myTasks();
+  /// `GET /me/tasks?state=open`, most urgent first, page after page (a bounded number).
+  Future<TaskList> myTasks();
 
   /// `GET /tasks/:id` -- with what the viewer may do now (`actions`).
   Future<WorkTask> task(String id);
@@ -1144,7 +1144,7 @@ class NoTaskRepository implements TaskRepository {
   const NoTaskRepository();
 
   @override
-  Future<List<WorkTask>> myTasks() async => const [];
+  Future<TaskList> myTasks() async => TaskList.empty;
 
   @override
   Future<WorkTask> task(String id) => throw UnsupportedError('no task server in this build');

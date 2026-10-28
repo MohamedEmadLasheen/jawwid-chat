@@ -4384,4 +4384,19 @@ class L10nAr extends L10n {
 
   @override
   String get taskCommentSent => 'أُضيف التعليق.';
+
+  @override
+  String scheduleFilterTodoMore(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'للإنجاز ($count+)',
+      many: 'للإنجاز ($count+)',
+      few: 'للإنجاز ($count+)',
+      two: 'للإنجاز (2+)',
+      one: 'للإنجاز (1+)',
+      zero: 'للإنجاز (+)',
+    );
+    return '$_temp0';
+  }
 }

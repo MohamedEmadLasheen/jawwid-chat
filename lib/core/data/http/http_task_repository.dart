@@ -10,10 +10,11 @@ class HttpTaskRepository implements TaskRepository {
   final ApiClient _client;
 
   /// A teacher's own list is short; this bounds a runaway cursor, not a real one.
+  /// Past it the list says there is more ("To do (N+)").
   static const _maxPages = 10;
 
   @override
-  Future<List<WorkTask>> myTasks() async {
+  Future<TaskList> myTasks() async {
     final tasks = <WorkTask>[];
     String? cursor;
     for (var page = 0; page < _maxPages; page++) {
@@ -24,7 +25,7 @@ class HttpTaskRepository implements TaskRepository {
       cursor = response.data?['nextCursor'] as String?;
       if (cursor == null) break;
     }
-    return tasks;
+    return TaskList(tasks, more: cursor != null);
   }
 
   @override

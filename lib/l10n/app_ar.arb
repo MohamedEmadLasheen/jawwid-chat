@@ -1683,5 +1683,6 @@
   "taskActionFailed": "تعذّر ذلك. حاول مرة أخرى.",
   "taskDoneSnack": "تم.",
   "taskNotMineSent": "أُرسلت إلى مديرك.",
-  "taskCommentSent": "أُضيف التعليق."
+  "taskCommentSent": "أُضيف التعليق.",
+  "scheduleFilterTodoMore": "{count, plural, zero{للإنجاز (+)} one{للإنجاز (1+)} two{للإنجاز (2+)} few{للإنجاز ({count}+)} many{للإنجاز ({count}+)} other{للإنجاز ({count}+)}}"
 }

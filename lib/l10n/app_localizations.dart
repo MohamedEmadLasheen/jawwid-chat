@@ -7362,6 +7362,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Comment added.'**
   String get taskCommentSent;
+
+  /// PD-47: the To do count when the list stopped before the end.
+  ///
+  /// In en, this message translates to:
+  /// **'To do ({count}+)'**
+  String scheduleFilterTodoMore(int count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

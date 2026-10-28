@@ -4298,4 +4298,9 @@ class L10nEn extends L10n {
 
   @override
   String get taskCommentSent => 'Comment added.';
+
+  @override
+  String scheduleFilterTodoMore(int count) {
+    return 'To do ($count+)';
+  }
 }

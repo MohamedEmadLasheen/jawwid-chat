@@ -11,7 +11,7 @@ import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../lessons/presentation/teacher_schedule_screen.dart';
 
 /// PD-47: the person's own open tasks, most urgent first, in the server's order.
-final myTasksProvider = FutureProvider.autoDispose<List<WorkTask>>((ref) {
+final myTasksProvider = FutureProvider.autoDispose<TaskList>((ref) {
   return ref.watch(taskRepositoryProvider).myTasks();
 });
 
@@ -132,7 +132,7 @@ class _TaskRow extends ConsumerWidget {
             TaskLevelChip(task: task),
             if (task.financial) _FinanceTag(),
             Text(due, style: theme.textTheme.bodySmall),
-            if (task.overdue) const _OverdueMark(),
+            if (task.overdue && task.reason != TaskReason.overdue) const _OverdueMark(),
             if (state != null) Text('· $state', style: theme.textTheme.bodySmall),
           ],
         ),
@@ -142,7 +142,8 @@ class _TaskRow extends ConsumerWidget {
   }
 }
 
-/// Overdue in a word and an icon, never by colour alone (also on a task a person set High).
+/// Overdue in a word and an icon, never by colour alone (also on a task a person set High) --
+/// unless the level's own reason already says it.
 class _OverdueMark extends StatelessWidget {
   const _OverdueMark();
 
@@ -195,6 +196,10 @@ Future<void> openTaskSheet(BuildContext context, WidgetRef ref, String taskId) a
   try {
     task = await ref.read(taskRepositoryProvider).task(taskId);
   } on AppError {
+    messenger.showSnackBar(SnackBar(content: Text(l10n.todoLoadFailed)));
+    return;
+  } on FormatException {
+    // A reply this build cannot read: said as a failure, never a crash.
     messenger.showSnackBar(SnackBar(content: Text(l10n.todoLoadFailed)));
     return;
   }
@@ -290,7 +295,7 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
                 ].join(' · '),
                 style: theme.textTheme.bodySmall,
               ),
-              if (t.overdue) const Padding(padding: EdgeInsets.only(top: Spacing.spacing1), child: Align(alignment: AlignmentDirectional.centerStart, child: _OverdueMark())),
+              if (t.overdue && t.reason != TaskReason.overdue) const Padding(padding: EdgeInsets.only(top: Spacing.spacing1), child: Align(alignment: AlignmentDirectional.centerStart, child: _OverdueMark())),
               if (t.instructions != null && !t.awaitingDecision)
                 Card(
                   key: const ValueKey('task-instructions'),

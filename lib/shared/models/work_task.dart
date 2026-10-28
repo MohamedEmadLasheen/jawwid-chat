@@ -50,6 +50,16 @@ enum TaskAction {
       };
 }
 
+/// `GET /me/tasks`, every page this build reads; [more] when the server had more still.
+class TaskList {
+  const TaskList(this.tasks, {this.more = false});
+
+  static const empty = TaskList([]);
+
+  final List<WorkTask> tasks;
+  final bool more;
+}
+
 class WorkTask {
   const WorkTask({
     required this.id,

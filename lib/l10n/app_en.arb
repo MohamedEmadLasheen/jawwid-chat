@@ -2940,5 +2940,7 @@
   "taskActionFailed": "Couldn't do that. Try again.",
   "taskDoneSnack": "Done.",
   "taskNotMineSent": "Sent to your manager.",
-  "taskCommentSent": "Comment added."
+  "taskCommentSent": "Comment added.",
+  "scheduleFilterTodoMore": "To do ({count}+)",
+  "@scheduleFilterTodoMore": {"placeholders": {"count": {"type": "int"}}, "description": "PD-47: the To do count when the list stopped before the end."}
 }

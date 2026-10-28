@@ -179,6 +179,48 @@ void main() {
     expect(find.bySemanticsLabel(RegExp(r'High\n')), findsOneWidget, reason: 'the level itself gives no reason: a person set it');
   });
 
+  testWidgets('"Not mine" cannot be sent without a reason', (tester) async {
+    await pump(tester);
+    await tester.tap(find.byKey(const ValueKey('schedule-filter-todo')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Prepare the Juz Amma revision sheet'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('task-not-mine')));
+    await tester.pumpAndSettle();
+    FilledButton send() => tester.widget<FilledButton>(find.byKey(const ValueKey('task-not-mine-send')));
+    expect(send().onPressed, isNull);
+    await tester.enterText(find.byKey(const ValueKey('task-not-mine-field')), '   ');
+    await tester.pump();
+    expect(send().onPressed, isNull, reason: 'spaces are not a reason');
+    expect(tasks.calls, isEmpty);
+  });
+
+  testWidgets('"Overdue" is said once: not again beside a level whose reason already says it', (tester) async {
+    await pump(tester);
+    await tester.tap(find.byKey(const ValueKey('schedule-filter-todo')));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel(RegExp('High · Overdue')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-overdue')), findsNothing);
+  });
+
+  testWidgets('a list that stops before the server\'s end says so on its count', (tester) async {
+    tasks.more = true;
+    await pump(tester);
+    expect(find.text('To do (2+)'), findsOneWidget);
+  });
+
+  testWidgets('in Arabic the list reads right to left: each title starts at the right', (tester) async {
+    await pump(tester, locale: 'ar');
+    await tester.tap(find.byKey(const ValueKey('schedule-filter-todo')));
+    await tester.pumpAndSettle();
+    final title = find.text('Prepare the Juz Amma revision sheet');
+    expect(Directionality.of(tester.element(title)), TextDirection.rtl);
+    final width = tester.getSize(find.byType(TeacherScheduleScreen)).width;
+    expect(tester.getTopRight(title).dx, greaterThan(width * 0.75), reason: 'the title hugs the right edge');
+    final chip = find.byKey(const ValueKey('task-level-t-manual'));
+    expect(tester.getTopRight(chip).dx, greaterThan(width * 0.6), reason: 'the chips start at the right too');
+  });
+
   test('an action this build does not know is never offered', () {
     final t = WorkTask.fromJson(wire('t', actions: ['complete', 'reassign', 'remove', 'something_new']))!;
     expect(t.actions, {TaskAction.complete});
@@ -193,7 +235,9 @@ class _Tasks implements TaskRepository {
   final calls = <String>[];
 
   @override
-  Future<List<WorkTask>> myTasks() async => [for (final r in rows.values) WorkTask.fromJson(r)!];
+  Future<TaskList> myTasks() async => TaskList([for (final r in rows.values) WorkTask.fromJson(r)!], more: more);
+
+  bool more = false;
 
   @override
   Future<WorkTask> task(String id) async => WorkTask.fromJson(rows[id])!;
