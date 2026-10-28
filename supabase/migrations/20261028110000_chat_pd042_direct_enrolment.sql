@@ -35,7 +35,8 @@
 --                                super admin) places or moves a child, except a
 --                                supervisor placing on themself a child they
 --                                are entering now. chat.syncing_supervision
---                                opens it for the academy's own import.
+--                                opens it for the academy's own import (named
+--                                source, audited; a convenience, not a boundary).
 --   family_sales_owner           the Sales supervisor accountable for a family,
 --                                beside (never instead of) PD-8 supervision.
 --                                Set by the Sales manager or the super admin;
@@ -579,9 +580,16 @@ $$;
 -- a request role naming somebody else). The Operations manager of the child's
 -- academy (or the super admin) places any child and moves it; an Operations
 -- supervisor places on themself only a child they are entering in this very
--- transaction -- never one that already exists (review P2). The academy's own
--- import (and test fixtures standing in for it) opens chat.syncing_supervision
--- for its statement, as chat.syncing_assignment does for teachers.
+-- transaction -- never one that already exists (review P2).
+--
+-- chat.syncing_supervision is an ACADEMY-IMPORT CONVENIENCE, NOT A SECURITY
+-- BOUNDARY: any server-side SQL session can set a GUC. What keeps request
+-- roles out is the grants (no request role can write this table at all). The
+-- import (and the test harness standing in for it) opens it for its own
+-- statement, names its source in chat.syncing_supervision_source, and every
+-- write it lets through is audited ('learner.supervision_imported') in the
+-- same transaction. Who may open it is pinned by
+-- test/unit/migrations/pd042-syncing-supervision-gate.spec.ts (an allowlist).
 
 create or replace function chat.guard_learner_supervision_assigner()
 returns trigger
@@ -595,6 +603,16 @@ begin
     return new;
   end if;
   if coalesce(current_setting('chat.syncing_supervision', true), '') = 'on' then
+    if length(btrim(coalesce(current_setting('chat.syncing_supervision_source', true), ''))) = 0 then
+      raise exception 'an import of supervision names its source (chat.syncing_supervision_source)'
+        using errcode = 'check_violation';
+    end if;
+    insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
+    values (new.assigned_by, 'learner.supervision_imported', 'learner', new.learner_id,
+            case when tg_op = 'UPDATE' then jsonb_build_object('supervisorId', old.supervisor_id) end,
+            jsonb_build_object('supervisorId', new.supervisor_id,
+                               'source', btrim(current_setting('chat.syncing_supervision_source', true))),
+            'academy import: ' || btrim(current_setting('chat.syncing_supervision_source', true)));
     return new;
   end if;
   if new.assigned_by is null then
