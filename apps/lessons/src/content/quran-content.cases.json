@@ -1,0 +1,914 @@
+{
+ "about": "PD-49: content cases shared by scripts/lessons/check-quran-content.py (selftest) and quran-content.test.ts; \"{{pin}}\" is the pinned dataset id. Stand-in verses, not Quran.",
+ "verses": [
+  "ألف باء تاء ثاء",
+  "جيم حاء خاء",
+  "دال ذال راء زاي سين",
+  "شين صاد",
+  "قاف"
+ ],
+ "base": {
+  "schema": 2,
+  "surah": 112,
+  "datasetId": "{{pin}}",
+  "lessonKey": "quran-112",
+  "retiredIds": [
+   "lesson-009"
+  ],
+  "segments": [
+   {
+    "id": "seg-001",
+    "from": 1,
+    "to": 3,
+    "theme": "theme-001"
+   },
+   {
+    "id": "seg-002",
+    "from": 4,
+    "to": 5
+   }
+  ],
+  "items": [
+   {
+    "id": "intro-001",
+    "kind": "intro",
+    "bands": [
+     "3-5"
+    ],
+    "text": "مقدمة",
+    "source": {
+     "work": "saadi",
+     "ref": "112"
+    }
+   },
+   {
+    "id": "theme-001",
+    "kind": "theme",
+    "bands": [
+     "9-12"
+    ],
+    "text": "موضوع",
+    "source": {
+     "work": "saadi",
+     "ref": "112:1-3"
+    }
+   },
+   {
+    "id": "tafsir-001",
+    "kind": "tafsir",
+    "bands": [
+     "6-8",
+     "9-12"
+    ],
+    "text": "شرح ﴿{{w:1:2}}﴾ هنا",
+    "ayah": 1,
+    "source": {
+     "work": "saadi",
+     "ref": "112:1"
+    },
+    "crossCheck": {
+     "work": "baghawi",
+     "ref": "112:1"
+    },
+    "ladder": [
+     "معنى",
+     "شرح"
+    ]
+   },
+   {
+    "id": "word-001",
+    "kind": "word",
+    "bands": [
+     "6-8"
+    ],
+    "text": "معنى",
+    "ayah": 3,
+    "word": 2,
+    "to": 3,
+    "source": {
+     "work": "sijistani-nuzha",
+     "ref": "1/10"
+    }
+   },
+   {
+    "id": "lesson-001",
+    "kind": "lesson",
+    "bands": [
+     "3-5"
+    ],
+    "text": "درس",
+    "behaviour": "good",
+    "ayat": [
+     1,
+     2
+    ],
+    "source": {
+     "work": "saadi",
+     "ref": "112"
+    }
+   },
+   {
+    "id": "reflection-001",
+    "kind": "reflection",
+    "bands": [
+     "9-12"
+    ],
+    "text": "سؤال",
+    "ideas": [
+     "فكرة"
+    ],
+    "source": {
+     "work": "saadi",
+     "ref": "112"
+    }
+   },
+   {
+    "id": "story-001",
+    "kind": "story",
+    "bands": [
+     "6-8"
+    ],
+    "text": "حكاية",
+    "order": 1,
+    "source": {
+     "work": "bukhari",
+     "ref": "1"
+    }
+   },
+   {
+    "id": "asbab-001",
+    "kind": "asbab",
+    "bands": [
+     "9-12"
+    ],
+    "text": "سبب",
+    "ayat": [
+     1,
+     2
+    ],
+    "source": {
+     "work": "bukhari",
+     "ref": "4971"
+    },
+    "pointer": {
+     "work": "wahidi-asbab",
+     "ref": "p. 1"
+    },
+    "verdicts": [
+     {
+      "work": "muzaini-muharrar",
+      "ref": "2/1",
+      "reason": "is",
+      "chain": "sahih"
+     }
+    ]
+   },
+   {
+    "id": "quiz-001",
+    "kind": "quiz",
+    "bands": [
+     "6-8"
+    ],
+    "text": "ما معنى الكلمة؟",
+    "category": "meanings",
+    "word": {
+     "ayah": 3,
+     "word": 2,
+     "to": 3
+    },
+    "options": [
+     {
+      "text": "معنى"
+     },
+     {
+      "text": "غيره"
+     }
+    ],
+    "answer": 0,
+    "basis": [
+     "word-001"
+    ]
+   },
+   {
+    "id": "quiz-002",
+    "kind": "quiz",
+    "bands": [
+     "9-12"
+    ],
+    "text": "hifz.complete",
+    "category": "hifz",
+    "prompt": {
+     "ayah": 2,
+     "words": 2
+    },
+    "options": [
+     {
+      "ayah": 2,
+      "word": 3,
+      "to": 3
+     },
+     {
+      "ayah": 1,
+      "word": 1,
+      "to": 1
+     }
+    ],
+    "answer": 0,
+    "basis": []
+   },
+   {
+    "id": "quiz-003",
+    "kind": "quiz",
+    "bands": [
+     "9-12"
+    ],
+    "text": "ما الدرس؟",
+    "category": "lessons",
+    "options": [
+     {
+      "text": "أ"
+     },
+     {
+      "text": "ب"
+     }
+    ],
+    "answer": 0,
+    "basis": [
+     "lesson-001",
+     "quiz-001"
+    ]
+   }
+  ]
+ },
+ "cases": [
+  {
+   "name": "clean",
+   "expect": "ok",
+   "op": "none",
+   "path": null,
+   "value": null
+  },
+  {
+   "name": "bad-id",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "id"
+   ],
+   "value": "tafsir-1"
+  },
+  {
+   "name": "id-kind-mismatch",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "id"
+   ],
+   "value": "word-009"
+  },
+  {
+   "name": "repeated-id",
+   "expect": "refused",
+   "op": "append",
+   "path": [
+    "items"
+   ],
+   "value": {
+    "id": "word-001",
+    "kind": "word",
+    "bands": [
+     "6-8"
+    ],
+    "text": "معنى",
+    "ayah": 3,
+    "word": 2,
+    "to": 3,
+    "source": {
+     "work": "sijistani-nuzha",
+     "ref": "1/10"
+    }
+   }
+  },
+  {
+   "name": "retired-id",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    4,
+    "id"
+   ],
+   "value": "lesson-009"
+  },
+  {
+   "name": "not-nfc",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "text"
+   ],
+   "value": "أ"
+  },
+  {
+   "name": "control-char",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "text"
+   ],
+   "value": "مقدمة\n"
+  },
+  {
+   "name": "bad-band",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "bands"
+   ],
+   "value": [
+    "2-3"
+   ]
+  },
+  {
+   "name": "extra-field",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "quote"
+   ],
+   "value": "x"
+  },
+  {
+   "name": "wrong-lesson-key",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "lessonKey"
+   ],
+   "value": "quran-001"
+  },
+  {
+   "name": "wrong-schema",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "schema"
+   ],
+   "value": 1
+  },
+  {
+   "name": "ayah-out-of-range",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "ayah"
+   ],
+   "value": 6
+  },
+  {
+   "name": "ayah-is-a-list",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "ayah"
+   ],
+   "value": [
+    1
+   ]
+  },
+  {
+   "name": "ayah-is-a-float",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "ayah"
+   ],
+   "value": 1.5
+  },
+  {
+   "name": "span-out-of-range",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    3,
+    "to"
+   ],
+   "value": 6
+  },
+  {
+   "name": "span-reversed",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    3,
+    "word"
+   ],
+   "value": 4
+  },
+  {
+   "name": "segments-gap",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "segments",
+    1,
+    "from"
+   ],
+   "value": 5
+  },
+  {
+   "name": "segments-short",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "segments",
+    1,
+    "to"
+   ],
+   "value": 4
+  },
+  {
+   "name": "theme-not-theme",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "segments",
+    0,
+    "theme"
+   ],
+   "value": "intro-001"
+  },
+  {
+   "name": "theme-not-scalar",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "segments",
+    0,
+    "theme"
+   ],
+   "value": [
+    "theme-001"
+   ]
+  },
+  {
+   "name": "token-out-of-range",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح ﴿{{w:4:3}}﴾"
+  },
+  {
+   "name": "token-unwrapped",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح {{w:1:2}} هنا"
+  },
+  {
+   "name": "token-touching-typed-arabic",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح ﴿{{w:1:2}}﴾هنا"
+  },
+  {
+   "name": "tokens-adjacent",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح ﴿{{w:1:1}}﴾ ﴿{{w:1:3}}﴾"
+  },
+  {
+   "name": "tokens-adjacent-punctuation",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح ﴿{{w:1:1}}﴾، ﴿{{w:1:3}}﴾"
+  },
+  {
+   "name": "tokens-with-prose-between",
+   "expect": "ok",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح ﴿{{w:1:1}}﴾ ثم ﴿{{w:1:3}}﴾"
+  },
+  {
+   "name": "token-span",
+   "expect": "ok",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح ﴿{{w:3:1-4}}﴾ هنا"
+  },
+  {
+   "name": "leftover-braces",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح {{w:1}} هنا"
+  },
+  {
+   "name": "leftover-close-braces",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "شرح }} هنا"
+  },
+  {
+   "name": "unknown-work",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "source"
+   ],
+   "value": {
+    "work": "muyassar",
+    "ref": "1"
+   }
+  },
+  {
+   "name": "verdict-as-source",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "source"
+   ],
+   "value": {
+    "work": "muzaini-muharrar",
+    "ref": "1"
+   }
+  },
+  {
+   "name": "pointer-as-report",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    7,
+    "source"
+   ],
+   "value": {
+    "work": "wahidi-asbab",
+    "ref": "1"
+   }
+  },
+  {
+   "name": "cross-check-as-primary",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "source"
+   ],
+   "value": {
+    "work": "baghawi",
+    "ref": "1"
+   }
+  },
+  {
+   "name": "ref-not-nfc",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "source",
+    "ref"
+   ],
+   "value": "أ"
+  },
+  {
+   "name": "ref-control",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "source",
+    "ref"
+   ],
+   "value": "1\t2"
+  },
+  {
+   "name": "ref-too-long",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "source",
+    "ref"
+   ],
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  {
+   "name": "verdict-with-text",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    7,
+    "verdicts",
+    0,
+    "quote"
+   ],
+   "value": "نص"
+  },
+  {
+   "name": "asbab-young-band",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    7,
+    "bands"
+   ],
+   "value": [
+    "6-8",
+    "9-12"
+   ]
+  },
+  {
+   "name": "hifz-text-option",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    9,
+    "options",
+    1
+   ],
+   "value": {
+    "text": "خاء"
+   }
+  },
+  {
+   "name": "hifz-free-question",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    9,
+    "text"
+   ],
+   "value": "أكمل الآية"
+  },
+  {
+   "name": "hifz-token-question",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    9,
+    "text"
+   ],
+   "value": "hifz.complete ﴿{{w:1:1}}﴾"
+  },
+  {
+   "name": "hifz-no-prompt-or-word",
+   "expect": "refused",
+   "op": "delete",
+   "path": [
+    "items",
+    9,
+    "prompt"
+   ],
+   "value": null
+  },
+  {
+   "name": "hifz-which-ayah-needs-word",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    9,
+    "text"
+   ],
+   "value": "hifz.which_ayah"
+  },
+  {
+   "name": "hifz-whole-ayah-options",
+   "expect": "ok",
+   "op": "set",
+   "path": [
+    "items",
+    9,
+    "options"
+   ],
+   "value": [
+    {
+     "ayah": 2
+    },
+    {
+     "ayah": 1
+    }
+   ]
+  },
+  {
+   "name": "quiz-no-basis",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    8,
+    "basis"
+   ],
+   "value": []
+  },
+  {
+   "name": "quiz-basis-missing",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    8,
+    "basis"
+   ],
+   "value": [
+    "word-777"
+   ]
+  },
+  {
+   "name": "quiz-answer",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    8,
+    "answer"
+   ],
+   "value": 2
+  },
+  {
+   "name": "quiz-options-same-rendered",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    9,
+    "options"
+   ],
+   "value": [
+    {
+     "ayah": 2,
+     "word": 3,
+     "to": 3
+    },
+    {
+     "ayah": 2,
+     "word": 3,
+     "to": 3
+    }
+   ]
+  },
+  {
+   "name": "quiz-options-text-equals-word",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    8,
+    "options"
+   ],
+   "value": [
+    {
+     "text": "معنى"
+    },
+    {
+     "text": "غيره"
+    },
+    {
+     "ayah": 1,
+     "word": 1,
+     "to": 1
+    },
+    {
+     "text": "ألف"
+    }
+   ]
+  },
+  {
+   "name": "quiz-prompt-whole",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    9,
+    "prompt",
+    "words"
+   ],
+   "value": 3
+  },
+  {
+   "name": "typed-quran",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "كما قال دال ذال راء زاي",
+   "pyOnly": true
+  },
+  {
+   "name": "typed-quran-in-idea",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    5,
+    "ideas"
+   ],
+   "value": [
+    "جيم حاء خاء"
+   ],
+   "pyOnly": true
+  },
+  {
+   "name": "uthmani-marks",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    0,
+    "text"
+   ],
+   "value": "نص ٱلله",
+   "pyOnly": true
+  },
+  {
+   "name": "typed-quran-split-by-a-token",
+   "expect": "refused",
+   "op": "set",
+   "path": [
+    "items",
+    2,
+    "text"
+   ],
+   "value": "دال ذال راء زاي ﴿{{w:1:1}}﴾",
+   "pyOnly": true
+  }
+ ]
+}
