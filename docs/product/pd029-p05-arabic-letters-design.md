@@ -1,6 +1,6 @@
 # PD-29 P0-5: Arabic lesson 1 (the letters) on the engine, design
 
-Status: **design for review**. No code is written yet. It covers plan row P0-5 and findings #4 (alif vs hamza) and #11 (full tashkeel) of `pd029-materials-quality-plan.md` §B4. The evidence is the static audit `finding-arabic.md` (head's notes folder, `audit/`). The old lesson is jawwid-lessons @ c231532, `src/lessons/arabic/lesson-1`. It was read as text only and is never built or run.
+Status: **APPROVED 2026-10-28**, with the owner's answers in §8. No code is written yet. It covers plan row P0-5 and findings #4 (alif vs hamza) and #11 (full tashkeel) of `pd029-materials-quality-plan.md` §B4. The evidence is the static audit `finding-arabic.md` (head's notes folder, `audit/`). The old lesson is jawwid-lessons @ c231532, `src/lessons/arabic/lesson-1`. It was read as text only and is never built or run.
 
 ## 1. What the old lesson is, and why this is not an extraction
 
@@ -16,7 +16,7 @@ P0-4 could copy the Quran lessons' prose as it was. Lesson 1's data cannot be co
   - «فِإِنَّ» should be «فَإِنَّ».
 - **Some are not words, or are non-standard:** «ظُهُوء», «نُبُوء», «دُرُوء»; «سَمَا» for سَمَاء; «مُوسِيقَا» for مُوسِيقَى.
 - **The games and the quiz compare letters in two different ways.** The games fold أ/إ/آ/ٱ into ا; the quiz compares exact characters. So one word "has the letter" in one game and not in another. The ء game cannot be won, and correct quiz answers can be scored wrong.
-- **Only 10.9% of the reading strings pass full tashkeel (#11).** Nearly every miss is the final letter (أَسَد, not أَسَدْ / أَسَدٌ).
+- **Only 10.9% of the reading strings pass full tashkeel (#11).** Nearly every miss is the final letter (أَسَد, not أَسَدْ).
 
 So P0-5 is a **rewrite as data**. The old words are the starting list. A checker proves every claim that can be proved mechanically, and the Teachers department signs off everything else, as with the Quran lessons.
 
@@ -48,13 +48,13 @@ So P0-5 is a **rewrite as data**. The old words are the starting list. A checker
   "provenance": { "source": "jawwid-lessons @ c231532 arabic/lesson-1 (read as text)", "sha256": { "lib/lessonData.ts": "…" } },
   "finalMark": "sukun",
   "units": [
-    { "id": "ba", "letters": ["ب"], "name": "بَاءٌ",
+    { "id": "ba", "letters": ["ب"], "name": "بَاءْ",
       "note": null,
       "words": [ { "text": "بَابْ", "was": "بَاب", "review": "ADDED TASHKEEL: final sukun" } ] },
-    { "id": "alif", "letters": ["ا"], "name": "أَلِفٌ",
+    { "id": "alif", "letters": ["ا"], "name": "أَلِفْ",
       "note": { "text": "…", "review": "AUTHORED: teacher to write or approve" },
       "words": [ … ] },
-    { "id": "hamza", "letters": ["ء", "أ", "إ", "ؤ", "ئ"], "name": "هَمْزَةٌ", "note": { … }, "words": [ … ] }
+    { "id": "hamza", "letters": ["ء", "أ", "إ", "ؤ", "ئ"], "name": "هَمْزَةْ", "note": { … }, "words": [ … ] }
   ]
 }
 ```
@@ -63,7 +63,7 @@ So P0-5 is a **rewrite as data**. The old words are the starting list. A checker
 
 ## 3. Alif and hamza (#4)
 
-- **The ا unit** teaches ا where it really occurs: in the middle (كِتَابٌ) and at the end (عَصَا). Its "start" tab is replaced by a note that a bare alif never begins a word, and that a word which seems to begin with alif begins with a hamza written on it (أَسَدٌ, إِبْرَةٌ). The note is new text, held for a teacher (AUTHORED).
+- **The ا unit** teaches ا where it really occurs: in the middle (كِتَابْ) and at the end (عَصَا). Its "start" tab is replaced by a note that a bare alif never begins a word, and that a word which seems to begin with alif begins with a hamza written on it (أَسَدْ, إِبْرَةْ). The note is new text, held for a teacher (AUTHORED).
   - Hamzat al-wasl (ٱ) is out of scope for lesson 1.
 - **One Hamza unit**, after the 28 letters, replaces the five separate "extra letters" ء/أ/إ/ؤ/ئ. It teaches one letter, hamza, which is written five ways:
   - on the line (ء);
@@ -84,7 +84,7 @@ One module, `apps/lessons/src/arabic/letters.ts`, used by every game, the quiz a
   - For the Hamza unit that is any of its five listed code points. That is the unit's declared letter set, not a fold.
   - For لا, it means the pair ل,ا.
 - `positions(word, unit)`: whether a unit letter occurs at the start, in the middle or at the end. This is decided by the letter's place in the word (first, inside, last), not by its glyph form.
-- **One fixture, two languages.** `letters.fixture.json` holds the cases: أَسَد has no ا; كِتَاب has ا in the middle; رَأْس has hamza (seat أ) in the middle; سُؤَال has hamza on waw; جُزْء ends in hamza; بِئْر has hamza on ya; لا in لَاعِبٌ.
+- **One fixture, two languages.** `letters.fixture.json` holds the cases: أَسَد has no ا; كِتَاب has ا in the middle; رَأْس has hamza (seat أ) in the middle; سُؤَال has hamza on waw; جُزْء ends in hamza; بِئْر has hamza on ya; لا in لَاعِبْ.
   - The TypeScript tests and the Python checker both run that fixture, so the browser and CI cannot disagree.
 
 **Quiz and games are proved, not hoped.** For every question the engine can build, the checker proves with the same rule that exactly one option is right. The quiz is fixed in the data ("which word contains …", "where is … in …") rather than drawn at random, so it can be checked. The old quiz's random distractor pools are what scored correct answers wrong.
@@ -92,19 +92,20 @@ One module, `apps/lessons/src/arabic/letters.ts`, used by every game, the quiz a
 ## 5. Full tashkeel (#11): what is added is listed and held
 
 - **The rule** is the audit's STRICT rule (`tashkeel_coverage.py`), ported into the checker. Every base letter carries a mark, including the final letter and the qamari lam of ال. The only exceptions are: a bare ا, ى, ٱ or آ; a madd و after a damma or a madd ي after a kasra; and the lam of ال before a shadda. The checker refuses a word that fails it.
-- **The final mark is one convention for the whole lesson** (`finalMark`). It is a teacher decision (§6):
-  - **(a) pausal sukun (أَسَدْ)**, how a child reads the word aloud on its own. **Recommended.**
-  - (b) the citation form with tanween (أَسَدٌ).
+- **The final mark is one convention for the whole lesson: pausal sukun** (`"finalMark": "sukun"`, the owner's decision of 2026-10-28, §8). A word ends the way a child reads it aloud on its own: أَسَدْ, كِتَابْ, هَمْزَةْ. Every added mark is still held for the Teachers department (§6).
+- **The checker enforces that one convention.** A word's last letter must carry a sukun (with a shadda where the letter is doubled, e.g. أُمّْ), unless it is a letter that takes no mark (a bare ا, ى, a madd و or ي).
+  - Any other final mark is refused: tanween (ـٌ ـٍ ـً) or a short vowel (ـَ ـُ ـِ).
+  - The one way past it is an explicit exception on the word itself: `"finalMarkException": "<reason>"`, for example a fixed expression a teacher wants kept as it is said. An exception is always also a held line. The generated review doc lists every exception in its own table, so none is silent.
 - **Every mark the rebuild adds is visible.** For each word the extractor keeps the old spelling in `was` and the new one in `text`. A word whose marks changed carries `review: "ADDED TASHKEEL: …"`, which says exactly what was added (final mark, qamari-lam sukun, an internal mark).
   - Like a held Quran line, it is **not shown** until a teacher clears it.
   - The review doc lists every such word, old → new, per unit, generated from the file.
-- **Expected size.** About 1,450 of lesson 1's ~1,620 reading strings lack only the final mark, so most words will be held at first. The teacher's review is then mostly one decision (the convention) plus a scan of the list. The doc groups the list by kind of change so it can be cleared in bulk.
+- **Expected size.** About 1,450 of lesson 1's ~1,620 reading strings lack only the final mark, so most words will be held at first. With the convention decided, the teacher's review is mostly a scan of the list. The doc groups the list by kind of change so it can be cleared in bulk.
   - Bulk clearing is a deliberate act in the file (`review: null`, per word, in a reviewed commit). It is never automatic.
 - **No mark is invented in the middle of a word** without a flag. Where the old word is missing an internal mark (e.g. تَلَألُؤ), the extractor adds nothing and holds the word as `INTERNAL MARK MISSING`.
 
 ## 6. What the Teachers department signs off
 
-1. **The final-mark convention:** (a) pausal sukun or (b) tanween.
+1. **Each added final sukun**, and any `finalMarkException`. The convention itself (pausal sukun) is the owner's decision (§8); what the teachers check is each word.
 2. **The word list per unit.** The words must be real, suitable for children, spelled correctly, and correctly vowelled. The checker has already proved that each word contains its unit's letter in the positions shown. It cannot prove that a word exists. The suspected non-words and non-standard spellings above arrive already held.
 3. **Every added mark**, listed old → new.
 4. **The authored text:** the alif note, the hamza unit's introduction, and the seat names.
@@ -118,7 +119,7 @@ Until all of that is approved, the lesson page shows nothing but "under review".
   - the route;
   - the lesson type and sections, with no content;
   - `letters.ts` and the shared fixture;
-  - `check-arabic-lesson.py`: schema, unit letters, positions computed, quiz single-answer proof, strict tashkeel, held flags, the approval gate, and a selftest.
+  - `check-arabic-lesson.py`: schema, unit letters, positions computed, quiz single-answer proof, strict tashkeel, the one `finalMark` convention (tanween or a vowel at the end refused unless the word carries `finalMarkException`), held flags, the approval gate, and a selftest.
 
   All of it is tested on a stand-in file of non-lesson words.
 - **PR-2, content:**
@@ -126,7 +127,7 @@ Until all of that is approved, the lesson page shows nothing but "under review".
   - `pd029-p05-lesson1-review.md`, generated from the file: per unit, the words, the added marks, the held lines and what was dropped.
 - **Out of scope:** lessons 2–10. The strict rule and `letters.ts` are built so each of them can follow as its own item. The plan's "full tashkeel for lessons 1–10" lands one lesson at a time.
 
-## 8. Open questions for the owner
+## 8. The owner's answers (2026-10-28)
 
-- Is the pausal sukun the right final mark for single words? This is the only decision that changes most of the file.
-- May the rebuild drop the games listed in §2 for now (writing practice, memory, speed, bubble, catch), or must one of them come back in P0-5?
+1. **Final mark: pausal sukun.** `finalMark` is `sukun` for the whole lesson, and the checker enforces it (§5). Each added mark is still held for the Teachers department.
+2. **Games: leave them out for now.** Writing practice and the memory, speed, bubble and catch games are dropped from lesson 1. They are recorded in the plan as a later PR (P0-5b).
