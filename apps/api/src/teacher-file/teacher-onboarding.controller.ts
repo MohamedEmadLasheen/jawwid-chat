@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Post, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { Requires } from '../platform/permissions/route-access';
@@ -29,6 +29,18 @@ export class TeacherOnboardingController {
   @Header('Cache-Control', 'no-store')
   giveSignIn(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
     return this.onboarding.giveSignIn(actorId, teacherId, body ?? {});
+  }
+
+  /**
+   * A new sign-in e-mail. { email, reason? } While the login waits: the reissue
+   * rule, and a new first sign-in code to the new address; once used: the
+   * super admin only, and every session ends.
+   */
+  @Requires('teachers.create')
+  @Patch(':teacherId/sign-in')
+  @Header('Cache-Control', 'no-store')
+  changeSignIn(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.onboarding.changeSignIn(actorId, teacherId, body ?? {});
   }
 
   /** A new first sign-in code while the teacher has not signed in; the old one dies. { reason? } */
