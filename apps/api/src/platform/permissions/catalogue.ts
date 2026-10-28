@@ -79,6 +79,9 @@ const ENTRIES = {
 
   'subscriptions.view': { label: { en: 'View subscriptions', ar: 'عرض الاشتراكات' }, risk: 'finance', introducedBy: 'PD-30' },
   'subscriptions.manage': { label: { en: 'Add free lessons and grant exceptions', ar: 'إضافة حصص مجانية ومنح الاستثناءات' }, risk: 'finance', introducedBy: 'PD-30' },
+  // PD-30-amendment-carried-over: only for a child the holder entered, within
+  // 14 days, for their own family, with no other package (the database decides).
+  'subscriptions.carry_over': { label: { en: 'Carry over a package from Jawwid Core', ar: 'ترحيل باقة الطالب من جوِّد كور' }, risk: 'finance', introducedBy: 'PD-42' },
 
   'schedule.view': { label: { en: 'View schedules and the calendar', ar: 'عرض الجداول والتقويم' }, risk: 'pii', introducedBy: 'PD-31' },
   'schedule.manage': { label: { en: 'Change schedules', ar: 'تعديل الجداول' }, risk: 'pii', introducedBy: 'PD-31' },

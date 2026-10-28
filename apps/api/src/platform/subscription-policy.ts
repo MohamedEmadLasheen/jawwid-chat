@@ -23,3 +23,22 @@ export function canGrantSubscriptionException(
   if (operationsRole === 'manager' && actor.staffRole === StaffRole.MANAGER) return true;
   return salesRole === 'manager';
 }
+
+/**
+ * PD-42 (PD-30-amendment-carried-over): who may hold `subscriptions.carry_over`
+ * -- the Operations and Sales supervisors who enter families, and their
+ * managers. Holding it is necessary, never sufficient: the database admits a
+ * supervisor's carried-over package only for a child they entered, within 14
+ * days, for their own family, with no other package (guard_learner_subscription).
+ */
+export function canCarryOverPackage(
+  actor: Actor,
+  operationsRole: OperationsDepartmentRole,
+  salesRole: SalesDepartmentRole,
+): boolean {
+  if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return false;
+  if (actor.staffRole === StaffRole.SUPER_ADMIN) return true;
+  if (operationsRole === 'manager' && actor.staffRole === StaffRole.MANAGER) return true;
+  if (operationsRole === 'member' && (actor.staffRole === StaffRole.ADMIN || actor.staffRole === StaffRole.COVERAGE)) return true;
+  return salesRole !== null;
+}
