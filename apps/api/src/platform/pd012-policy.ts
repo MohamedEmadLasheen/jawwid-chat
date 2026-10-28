@@ -114,9 +114,9 @@ export interface BillingAccess {
    */
   canVerify: boolean;
   /**
-   * PD-42: canEditParent reaches only the families chat.staff_owns_family says
-   * are the editor's own, whatever `scope` reads (a Sales member: the families
-   * they own; the Sales manager owns them all).
+   * PD-42: canEditParent reaches only a Sales account's own families, whatever
+   * `scope` reads: a Sales member, the families they own; the Sales manager,
+   * the families that have a Sales owner (salesEditsFamily).
    */
   editOwnedOnly?: boolean;
 }

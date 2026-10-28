@@ -34,6 +34,19 @@ export async function ownsFamily(prisma: PrismaService, actor: Actor, familyId: 
   return rows[0]?.owns === true;
 }
 
+/**
+ * PD-42: the contact records a Sales account edits (BillingAccess.editOwnedOnly):
+ * a Sales member, the families they own; the Sales manager, every family that
+ * has a Sales owner (read-only elsewhere, as PD-17 had it).
+ */
+export async function salesEditsFamily(prisma: PrismaService, actor: Actor, familyId: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<{ edits: boolean }[]>`
+    SELECT CASE WHEN chat.sales_department_role(${actor.actorId}::uuid) = 'manager'
+                THEN EXISTS (SELECT 1 FROM chat.family_sales_owner o WHERE o.family_id = ${familyId}::uuid)
+                ELSE chat.staff_owns_family(${actor.actorId}::uuid, ${familyId}::uuid) END AS edits`;
+  return rows[0]?.edits === true;
+}
+
 /** Is the family inside `access.scope` for this actor (all, reach or owned)? */
 export async function familyInScope(prisma: PrismaService, actor: Actor, access: BillingAccess, familyId: string): Promise<boolean> {
   if (access.scope === 'all') return true;

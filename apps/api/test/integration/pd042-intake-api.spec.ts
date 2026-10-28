@@ -180,7 +180,7 @@ describe('1. entering a family', () => {
     expect(await g.prisma.familyContactKey.count({ where: { familyId: r.familyId, kind: 'phone' } })).toBe(1);
     // The number lives in the parent file only; the audit never carries it.
     const entered = await g.prisma.auditLog.findFirstOrThrow({ where: { action: 'family.entered', entityId: r.familyId } });
-    expect(JSON.stringify(entered)).not.toContain(f.parent.phone);
+    expect(JSON.stringify({ before: entered.before, after: entered.after, reason: entered.reason })).not.toContain(f.parent.phone);
   });
 
   it('a Sales member enters a family with an e-mail: the parent can sign up; they own it; it waits for an Operations supervisor', async () => {

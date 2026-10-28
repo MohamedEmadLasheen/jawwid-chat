@@ -9,7 +9,7 @@ import type { BillingAccess } from '../platform/pd012-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { AvatarService } from '../communication/profile/avatar.service';
 import { signAvatar } from '../communication/profile/avatar-urls';
-import { billingAccessOf, ownsFamily, reachesFamily } from '../billing/billing-access';
+import { billingAccessOf, ownsFamily, reachesFamily, salesEditsFamily } from '../billing/billing-access';
 
 const NAME_MAX = 120;
 const SEARCH_LIMIT = 200;
@@ -100,7 +100,7 @@ export class ParentRecordService implements OnModuleInit {
     const { actor, scope, canEdit, editOwnedOnly } = await this.requireAdmin(actorId);
     const contact = await this.requireContact(actor, scope, contactId);
     // PD-42: a Sales account edits only the families it owns.
-    const editable = canEdit && (!editOwnedOnly || (await ownsFamily(this.prisma, actor, contact.familyId)));
+    const editable = canEdit && (!editOwnedOnly || (await salesEditsFamily(this.prisma, actor, contact.familyId)));
     return this.present(actor, contact.id, editable);
   }
 
@@ -255,7 +255,7 @@ export class ParentRecordService implements OnModuleInit {
   private async requireEditableContact(actorId: string, contactId: string) {
     const admin = await this.requireEditor(actorId);
     const contact = await this.requireContact(admin.actor, admin.scope, contactId);
-    if (admin.editOwnedOnly && !(await ownsFamily(this.prisma, admin.actor, contact.familyId))) {
+    if (admin.editOwnedOnly && !(await salesEditsFamily(this.prisma, admin.actor, contact.familyId))) {
       throw new CommError(CommErrorCode.PARENT_PROFILE_DENIED, 'a parent\'s contact record is edited by the family\'s own supervisor');
     }
     return { actor: admin.actor, contact };

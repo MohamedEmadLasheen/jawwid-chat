@@ -578,16 +578,18 @@ export class FamilyIntakeService {
 
   /** One transaction, with the database's refusals answered in words. */
   private async write<T>(s: Standing, fn: (tx: Tx) => Promise<T>): Promise<T> {
-    try {
-      return await this.lessons.write(() =>
-        this.prisma.$transaction(async (tx) => {
+    // The refusal is answered here, inside LessonService.write, which would
+    // otherwise turn every check_violation into a lesson's LESSON_STATE.
+    return this.lessons.write(async () => {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
           await this.conversations.assertActorLive(tx, s.actor);
           return fn(tx);
-        }),
-      );
-    } catch (e) {
-      throw dbRefusal(e);
-    }
+        });
+      } catch (e) {
+        throw dbRefusal(e);
+      }
+    });
   }
 }
 
