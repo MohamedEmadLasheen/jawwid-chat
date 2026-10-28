@@ -117,6 +117,8 @@ export class TeacherFileService {
         signIn: t.account?.status ?? 'none',
         // PD-43: how many set-up steps are still open (the file says which).
         setupMissing: setup.get(t.id)?.missing ?? 0,
+        // PD-43 §3.7: no live primary supervisor holds them -- the Teachers Manager covers them.
+        unsupervised: t.isActive && t.leftAt === null && setup.get(t.id)?.supervisor === false,
       })),
       // PD-26: who may be named as a complaint's handler.
       supervisors: await this.supervisors(org),

@@ -315,3 +315,12 @@ There is no `is_active`/`left_at` check on `chat.teacher`: PD-38 reads an inacti
 - **Set-up checklist**, a card at the top of an active teacher's file while any step is open (or the pay type and the shift category disagree). The list shows a **Setup incomplete** badge and a **Setup incomplete only** filter.
 
 A dialog that shows a first sign-in code (Give sign-in, Reactivate) stays mounted when the reloaded file no longer offers its button, so the code survives the reload.
+
+### Where a teacher is picked, and unsupervised teachers (PD-43 §3.5-§3.7)
+
+Warnings only: every teacher stays pickable (owner Q5, "students allowed").
+
+- `GET /teachers/candidates` (Change teacher) and `GET /trials/teachers` (trial booking, the Sales subscription form) carry `readiness: { setupIncomplete, notSignedIn, noSupervisor, loginSuspended }` per teacher, from `apps/api/src/platform/teacher-readiness.ts` (`chat.teacher_setup_state` and the login's status). `loginSuspended` is a login suspended through Accounts (G8).
+- Change teacher shows the notes beside the name ("Setup incomplete · Not signed in yet · No supervisor", or "Login suspended"); the radio stays enabled. The subscription form puts them in the option's label, and once such a teacher is chosen says "This teacher's set-up is not finished. Students are allowed; this is a warning."
+- `GET /teacher-files` rows carry `unsupervised` (active, no live primary supervisor). Every reader sees a **No supervisor** badge; the Teachers Manager and the super admin also get an "{n} unsupervised" count, an **Unsupervised only** filter and an **Assign supervisor** link to Organization's Teachers & supervisors tab (`/organization?tab=teachers`, or `/admin/teams?tab=teachers` in the Admin Portal).
+- The offboard preview's students link to their page, where Change teacher is.

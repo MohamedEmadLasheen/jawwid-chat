@@ -6,6 +6,7 @@ import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import { ALL_TEACHERS } from '../platform/teacher-scope';
+import { teacherReadiness } from '../platform/teacher-readiness';
 import { ActorKind, CardKind, LessonKind, LessonOutcome, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { LessonService, cancelReminders, dateField, invalid, stateError, textField } from './lesson.service';
@@ -118,7 +119,11 @@ export class TrialService {
   // Booking
   // ------------------------------------------------------------------
 
-  /** The organization's active teachers -- who a trial can be booked with. Names only. */
+  /**
+   * The organization's active teachers -- who a trial can be booked with, and
+   * who the subscription form assigns. Names, and (PD-43) whether each is still
+   * being set up: a warning beside the name, never a refusal (owner Q5).
+   */
   async teachers(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
     await this.requireSalesOrManager(actor);
@@ -127,7 +132,8 @@ export class TrialService {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
-    return { teachers: rows };
+    const readiness = await teacherReadiness(this.prisma, rows.map((r) => r.id));
+    return { teachers: rows.map((r) => ({ ...r, readiness: readiness.get(r.id) ?? null })) };
   }
 
   /** A teacher's free start times for a trial of `durationMinutes` (default 30). */

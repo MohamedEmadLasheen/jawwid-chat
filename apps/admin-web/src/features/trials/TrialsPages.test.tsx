@@ -205,7 +205,7 @@ describe('Trial lessons, as Sales', () => {
     expect(within(select).getByRole('option', { name: 'Teacher Two — Setup incomplete · No supervisor' })).toBeInTheDocument()
     await userEvent.selectOptions(select, 't-2')
     expect(select).toHaveValue('t-2')
-    expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; the Teachers Manager is told.')).toBeInTheDocument()
+    expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; this is a warning.')).toBeInTheDocument()
   })
 
   it('corrects an outcome, saying why', async () => {

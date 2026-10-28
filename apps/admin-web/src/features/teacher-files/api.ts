@@ -32,6 +32,8 @@ export interface TeacherSummary {
   away?: Away | null
   /** PD-43: how many set-up steps are not done (the file says which). Optional: older servers omit it. */
   setupMissing?: number
+  /** PD-43 §3.7: active, and no live primary supervisor holds them. Optional: older servers omit it. */
+  unsupervised?: boolean
 }
 
 export interface Person {
