@@ -195,6 +195,23 @@ describe('1. "Needs an Operations supervisor"', () => {
   });
 });
 
+describe('1b. a manager with nobody to enter a family for (QA on #202)', () => {
+  it('the Sales manager of an empty Sales team is told so, and never owns a family themself', async () => {
+    await sql(`delete from chat.department_member where staff_id = any($1::uuid[])`, [salesA, salesB]);
+    expect(await intake.options(salesManager)).toMatchObject({ standing: 'sales_manager', ready: true, onBehalfOf: [], noTeam: true });
+    const refused = await intake.enter(salesManager, form()).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(CommError);
+    expect((refused as CommError).code).toBe(CommErrorCode.INTAKE_INVALID);
+    expect((refused as CommError).message).toMatch(/add one first/);
+    // Naming themself is not an answer: the supervisor owns the family, the manager only enters it.
+    expect(await code(intake.enter(salesManager, form({ onBehalfOf: salesManager })))).toBe(CommErrorCode.INTAKE_INVALID);
+    expect(await g.prisma.familySalesOwner.count()).toBe(0);
+    // A team with people in it is not blocked; a supervisor never is.
+    expect(await intake.options(s.managerId)).toMatchObject({ noTeam: false });
+    expect(await intake.options(s.ownerId)).toMatchObject({ noTeam: false, onBehalfOf: [] });
+  });
+});
+
 describe('2. New Students lists the families entered by hand', () => {
   it('to whoever owns them: the entrant, the Operations manager, the super admin; never to another supervisor', async () => {
     const mine = await intake.enter(s.ownerId, form({ parent: { name: 'parent_mine', phone: phone(), email: `pd42_${randomUUID().slice(0, 8)}@example.test` } }));
