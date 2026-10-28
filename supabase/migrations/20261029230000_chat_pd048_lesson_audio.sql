@@ -169,7 +169,10 @@ create table chat.lesson_audio_review (
   category       text check (category in ('vowel', 'final_sukun', 'shadda', 'hamza', 'letter_sound', 'stress', 'noise', 'wrong_word', 'other')),
   reason         text check (reason is null or length(btrim(reason)) between 1 and 500),
   at             timestamptz not null default now(),
-  constraint lesson_audio_review_reason check ((action = 'approve') = (category is null and reason is null))
+  -- An approval carries neither; a reject or a withdraw carries both (what is wrong, and why).
+  constraint lesson_audio_review_reason check (
+    case when action = 'approve' then category is null and reason is null
+         else category is not null and reason is not null end)
 );
 
 -- One approval per reviewer per clip: two approvals are two people.
@@ -276,6 +279,12 @@ begin
   if p_text_sha256 is distinct from v_clip.text_sha256 or p_audio_sha256 is distinct from v_clip.audio_sha256 then
     raise exception 'what was heard is not this clip (the hashes differ): nothing is recorded' using errcode = 'check_violation';
   end if;
+  -- Said in words; the unique index lesson_audio_one_approval_each is the backstop.
+  if p_action = 'approve' and exists (
+    select 1 from chat.lesson_audio_review r where r.clip_id = p_clip and r.staff_id = v_actor and r.action = 'approve'
+  ) then
+    raise exception 'you have already approved this clip: the second approval is someone else''s' using errcode = 'insufficient_privilege';
+  end if;
   insert into chat.lesson_audio_review (clip_id, action, staff_id, text_sha256, render_sha256, audio_sha256, category, reason)
   values (p_clip, p_action, v_actor, v_clip.text_sha256, v_clip.render_sha256, v_clip.audio_sha256,
           case when p_action = 'approve' then null else p_category end,
@@ -346,6 +355,7 @@ $$;
 
 -- --- PD-40: the two keys and their bundles -------------------------------------------
 
+select set_config('chat.pd040_catalogue_change', 'on', true);
 -- BEGIN GENERATED pd048 catalogue rows -- by test/unit/authorization/pd040-catalogue-seed.spec.ts; do not edit
 insert into chat.permission (key, page, action, label_en, label_ar, risk, delegable, introduced_by) values
   ('lesson_audio.view', 'lesson_audio', 'view', 'Listen to lesson voice-over clips', 'الاستماع إلى تسجيلات نطق الدروس', 'none', true, 'PD-48'),
@@ -358,6 +368,7 @@ insert into chat.legacy_permission_bundle (tier, department_kind, permission_key
 
 update chat.permission set delegable = true where key in ('lesson_audio.review', 'lesson_audio.view');
 -- END GENERATED pd048 catalogue rows
+select set_config('chat.pd040_catalogue_change', 'off', true);
 
 -- --- PD-40: the Pronunciation reviewer template ---------------------------------------
 -- 20261029220000's function with only the template list (the generated block)

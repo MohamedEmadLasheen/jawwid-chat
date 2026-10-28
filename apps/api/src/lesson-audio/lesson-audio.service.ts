@@ -10,9 +10,13 @@ import { lessonAudioAllowed, type LessonAudioViewer } from './lesson-audio-gate'
 import { APPROVALS_REQUIRED, SHA256, STRING_ID, TRIES_PER_ROUND, lessonAudioKey } from './lesson-audio-key';
 import type { ClipRow, LessonAudioStore, ReviewRow } from './lesson-audio.store';
 import { lessonText, type LessonText } from './lesson-texts';
-import { VOICE_SOURCES, familyLicence } from './voice-sources';
+import { VOICE_SOURCES, familyLicence, type VoiceSource } from './voice-sources';
 
 export const LESSON_AUDIO_STORE = Symbol('LESSON_AUDIO_STORE');
+/** The voices that may be served (voice-sources.ts); a token so a spec can record a licence. */
+export const LESSON_VOICE_SOURCES = Symbol('LESSON_VOICE_SOURCES');
+/** The lessons' approved text (lesson-texts.ts); a token so a spec can use an approved lesson. */
+export const LESSON_TEXTS = Symbol('LESSON_TEXTS');
 /** How long a signed clip URL stays valid: one sitting. */
 export const LESSON_AUDIO_URL_TTL_SECONDS = 3600;
 /** One unit is the review page's page; the biggest lesson-1 unit is well under this. */
@@ -54,6 +58,8 @@ export class LessonAudioService {
     @Inject(LESSON_AUDIO_STORE) private readonly store: LessonAudioStore,
     private readonly permissions: PermissionService,
     @Optional() @Inject(OBJECT_STORAGE) private readonly storage: Pick<ObjectStorage, 'signedReadUrl'> | null = null,
+    @Optional() @Inject(LESSON_VOICE_SOURCES) private readonly voices: ReadonlyMap<string, VoiceSource> = VOICE_SOURCES,
+    @Optional() @Inject(LESSON_TEXTS) private readonly texts: (lesson: string) => LessonText | null = lessonText,
   ) {}
 
   // --- the learner ---------------------------------------------------------------
@@ -75,7 +81,7 @@ export class LessonAudioService {
     for (const s of text.strings.values()) {
       const c = servedClip(byString.get(s.id) ?? [], s.sha256);
       if (!c) continue;
-      const source = VOICE_SOURCES.get(`${c.vendor}:${c.voice}`);
+      const source = this.voices.get(`${c.vendor}:${c.voice}`);
       if (!source) continue; // a voice taken out of voice-sources.ts is off for everyone
       if (!lessonAudioAllowed(gate, familyLicence(source) !== null, viewer)) continue;
       const key = lessonAudioKey(lesson, s.id, c.audioSha256);
@@ -205,7 +211,7 @@ export class LessonAudioService {
   }
 
   private textOf(lesson: string): LessonText {
-    const text = lessonText(lesson);
+    const text = this.texts(lesson);
     if (!text) throw new CommError(CommErrorCode.LESSON_AUDIO_NOT_FOUND, `no lesson ${lesson} with voice-over`);
     return text;
   }

@@ -391,7 +391,9 @@ gate_lessons_supply_chain() {
   # word switches its voice-over clip off), and no lesson uses the browser's
   # own speech synthesis.
   "$PYTHON" -I scripts/lessons/lesson-audio-texts.py selftest || return 1
-  "$PYTHON" -I scripts/lessons/lesson-audio-texts.py check
+  "$PYTHON" -I scripts/lessons/lesson-audio-texts.py check || return 1
+  # PD-48: the operator's generation script plans and refuses as it must (no network, no key).
+  "$PYTHON" -I scripts/lessons/tts/tts.py selftest
 }
 
 gate_ci_wiring() {
