@@ -1,3 +1,4 @@
+import type { TeacherReadiness } from '@/features/teacher-files/readiness'
 import { api } from '@/core/api/client'
 
 /**
@@ -114,6 +115,8 @@ export interface TeacherCandidate {
   name: string
   isActive: boolean
   away: null | { kind: 'leave' | 'suspended'; until: string }
+  /** PD-43: still being set up -- a warning, never a reason to grey out. Optional: older servers omit it. */
+  readiness?: TeacherReadiness | null
 }
 
 export interface TransferPreview {

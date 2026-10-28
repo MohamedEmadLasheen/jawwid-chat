@@ -1,4 +1,6 @@
 import { useCallback, useId, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { studentPath } from '@/features/profiles/api'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ApiError } from '@/core/api/errors'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
@@ -89,8 +91,9 @@ function OffboardDialog({ teacherId, name, onClose }: { teacherId: string; name:
                 <p>{tx(T.moveStudentsFirst)}</p>
                 <ul aria-label={tx(T.studentsStillAssigned)}>
                   {p.students.map((s) => (
+                    // Their page has Change teacher.
                     <li key={s.id} dir="auto">
-                      {s.name}
+                      <Link to={studentPath(s.id)}>{s.name}</Link>
                     </li>
                   ))}
                 </ul>
