@@ -113,9 +113,9 @@ describe('the voice hook: one clip at a time, only verified bytes', () => {
     expect(result.current.has('alif-002')).toBe(false);
     await act(async () => {
       result.current.play('alif-001');
-      await new Promise((r) => setTimeout(r, 0));
     });
-    expect(played).toEqual(['blob:verified']);
+    // Fetching, hashing and playing take several ticks (more on a slow CI runner): wait for them.
+    await waitFor(() => expect(played).toEqual(['blob:verified']));
     expect(result.current.playing).toBe('alif-001');
 
     // The same list, but the file served is not the approved one: the button goes.
@@ -127,7 +127,6 @@ describe('the voice hook: one clip at a time, only verified bytes', () => {
     await waitFor(() => expect(swapped.result.current.has('alif-001')).toBe(true));
     await act(async () => {
       swapped.result.current.play('alif-001');
-      await new Promise((r) => setTimeout(r, 10));
     });
     await waitFor(() => expect(swapped.result.current.has('alif-001')).toBe(false));
     expect(swapped.result.current.has('alif.name')).toBe(true);
