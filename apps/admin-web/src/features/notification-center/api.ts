@@ -28,7 +28,7 @@ export interface InboxEntryDto {
   dueAt: string | null
   taskStatus: string | null
   count: number
-  action: { kind: string; conversationId?: string; lessonId?: string; learnerId?: string; familyId?: string } | null
+  action: { kind: string; conversationId?: string; lessonId?: string; learnerId?: string; familyId?: string; caseId?: string } | null
 }
 
 export interface InboxCountsDto {
@@ -74,6 +74,9 @@ export function routeFor(action: InboxEntryDto['action']): string | null {
       return '/calls'
     case 'view_payments':
       return '/payments'
+    // PD-35 B5: an escalation case, in Escalations (which re-checks who may see it).
+    case 'open_case':
+      return action.caseId ? `/cases?case=${enc(action.caseId)}` : null
     default:
       return null
   }
