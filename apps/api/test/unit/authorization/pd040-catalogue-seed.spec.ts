@@ -173,6 +173,23 @@ const LATER: readonly Later[] = [
       ['supervisor', 'teachers', 'tasks.team'],
     ],
   },
+  {
+    // PD-49: children's Quran content review. The Teachers Manager sees,
+    // checks and signs as a teacher (and delegates those); a Teachers
+    // supervisor sees. The scholar's step is in no bundle: the super admin
+    // grants the Scholar reviewer role (owner, 2026-10-29).
+    migration: '20261029235000_chat_pd049_lesson_content_review.sql',
+    tag: 'pd049',
+    permissions: ['lesson_content.view', 'lesson_content.check', 'lesson_content.review_teacher', 'lesson_content.review_scholar'],
+    bundles: [
+      ['manager', 'teachers', 'lesson_content.check'],
+      ['manager', 'teachers', 'lesson_content.review_teacher'],
+      ['manager', 'teachers', 'lesson_content.view'],
+      ['supervisor', 'teachers', 'lesson_content.view'],
+    ],
+    // Verified in pd040-legacy-bundles.spec.ts (legacyLessonContentKeys).
+    delegable: ['lesson_content.check', 'lesson_content.review_teacher', 'lesson_content.view'],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));

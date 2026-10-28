@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-505 routes.
+511 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -221,6 +221,12 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/learners/:id/transfer` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.transfer` |
 | GET | `/api/v1/learners/:id/transfer-preview` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transferPreview` |
 | GET | `/api/v1/learners/:id/transfers` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transfers` |
+| GET | `/api/v1/lesson-content/access` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.access` |
+| GET | `/api/v1/lesson-content/approvals/:scope` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.export` |
+| GET | `/api/v1/lesson-content/review/:scope` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.list` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/approve` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.approve` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/reject` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.reject` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/withdraw` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.withdraw` |
 | POST | `/api/v1/lesson-rulings/:id/decide` | lessons.manage | `lessons/lesson.controller.ts#LessonController.decide` |
 | GET | `/api/v1/lessons` | lessons.view | `lessons/lesson.controller.ts#LessonController.list` |
 | POST | `/api/v1/lessons` | lessons.manage | `lessons/lesson.controller.ts#LessonController.schedule` |

@@ -210,11 +210,17 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     'lessons.courses',
     // PD-41: the department's certificate requests, whoever filed them.
     'certificates.oversee',
+    // PD-49: the Teachers Manager checks and signs children's Quran content as a
+    // teacher, and delegates both. Never the scholar's step (super admin only).
+    'lesson_content.view',
+    'lesson_content.check',
+    'lesson_content.review_teacher',
   ],
   'manager:sales': [...CONVERSATION_STAFF, ...DEPARTMENT_MANAGER, ...SALES_MEMBER, 'subscriptions.manage'],
   'manager:none': [...CONVERSATION_STAFF, 'org.view', 'staff_profiles.team', 'staff_profiles.manage'],
   'supervisor:operations': [...CONVERSATION_STAFF, ...OPERATIONS_MEMBER],
-  'supervisor:teachers': [...CONVERSATION_STAFF, ...TEACHERS_MEMBER],
+  // PD-49: a Teachers supervisor sees content under review; signing needs a granted role.
+  'supervisor:teachers': [...CONVERSATION_STAFF, ...TEACHERS_MEMBER, 'lesson_content.view'],
   'supervisor:sales': [...CONVERSATION_STAFF, ...SALES_MEMBER],
   'supervisor:none': [...CONVERSATION_STAFF],
   'legacy_department:none': [],

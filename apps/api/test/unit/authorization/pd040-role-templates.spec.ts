@@ -78,7 +78,7 @@ describe('PD-40 PR-4: the template roles the migration seeds', () => {
     for (const key of t.permissions) expect({ key, known: byKey.has(key), inRoles: byKey.get(key)?.inRoles }).toEqual({ key, known: true, inRoles: true });
   });
 
-  it.each(ACCESS_ROLE_TEMPLATES.filter((t) => t.maxTier === 'specialist').map((t) => [t.key, t] as const))(
+  it.each(ACCESS_ROLE_TEMPLATES.filter((t) => t.maxTier === 'specialist' && !t.grantedBy).map((t) => [t.key, t] as const))(
     '%s: a specialist template a department manager can grant -- every key delegable and held by some manager bundle',
     (_key, t) => {
       for (const key of t.permissions) expect({ key, delegable: byKey.get(key)?.delegable }).toEqual({ key, delegable: true });
@@ -89,6 +89,42 @@ describe('PD-40 PR-4: the template roles the migration seeds', () => {
       expect(managers.length).toBeGreaterThan(0);
     },
   );
+
+  it.each(ACCESS_ROLE_TEMPLATES.filter((t) => t.grantedBy === 'super_admin').map((t) => [t.key, t] as const))(
+    '%s: a template only the super admin can grant -- it carries a key that is not delegable and in no department bundle',
+    (_key, t) => {
+      const kinds = ['operations', 'teachers', 'sales'] as const;
+      const bundles = [
+        ...kinds.map((kind) => legacyBundle('manager', { kind, position: 'manager' })),
+        ...kinds.map((kind) => legacyBundle('supervisor', { kind, position: 'member' })),
+        legacyBundle('manager', { kind: null, position: null }),
+        legacyBundle('supervisor', { kind: null, position: null }),
+      ];
+      const gate = t.permissions.filter((k) => byKey.get(k)?.delegable === false && bundles.every((b) => !b.has(k)));
+      expect({ key: t.key, gate: gate.length > 0 }).toEqual({ key: t.key, gate: true });
+      // So no department manager holds the whole role (H5: grant only what you hold).
+      expect(bundles.filter((b) => t.permissions.every((k) => b.has(k)))).toEqual([]);
+    },
+  );
+});
+
+describe('PD-49: the Scholar reviewer (owner, 2026-10-29)', () => {
+  const scholar = ACCESS_ROLE_TEMPLATES.find((t) => t.key === 'scholar_reviewer')!;
+
+  it("is a specialist role the super admin alone grants, holding the scholar's step and the view, nothing else", () => {
+    expect(scholar).toMatchObject({ maxTier: 'specialist', grantedBy: 'super_admin' });
+    expect([...scholar.permissions].sort()).toEqual(['lesson_content.review_scholar', 'lesson_content.view']);
+    expect(byKey.get('lesson_content.review_scholar')).toMatchObject({ delegable: false, inRoles: true });
+  });
+
+  it('everything its keys open is a lesson-content route, and something is', () => {
+    const keys = new Set<string>(scholar.permissions);
+    const reached = collectRoutes()
+      .filter((r) => r.access?.kind === 'requires' && r.access.anyOf.some((k) => keys.has(k)))
+      .map((r) => `${r.method} ${r.path}`);
+    expect(reached.length).toBeGreaterThan(0);
+    expect(reached.filter((r) => !/^[A-Z]+ \/lesson-content(\/|$)/.test(r))).toEqual([]);
+  });
 });
 
 describe('PD-40 PR-4: the Designer (plan §7, PD-41)', () => {

@@ -23,6 +23,7 @@ import { canCarryOverPackage, canGrantSubscriptionException } from '@platform/su
 import { accountAdminActs } from '@platform/account-admin-policy';
 import { decideTeacherOnboarding } from '@platform/teacher-onboarding-policy';
 import { CERTIFICATE_KEYS, legacyCertificateKeys } from '@platform/pd041-policy';
+import { LESSON_CONTENT_BUNDLED_KEYS, legacyLessonContentKeys } from '@platform/lesson-content-policy';
 import { StaffProfilePermission, profilePermissionsFor } from '@platform/staff-profile-policy';
 import { PERMISSIONS, PERMISSION_KEYS } from '@platform/permissions/catalogue';
 import {
@@ -107,6 +108,14 @@ function rules(): Record<string, Rule> {
     ...Object.fromEntries(
       CERTIFICATE_KEYS.map((key) => [key, (a: Account) => legacyCertificateKeys(a.actor, role(a, 'operations'), role(a, 'teachers')).has(key)]),
     ),
+    // PD-49: children's Quran content review, from the Teachers placement. The
+    // scholar's key is the super admin's alone by bundle (the role grants it).
+    ...Object.fromEntries(
+      [...LESSON_CONTENT_BUNDLED_KEYS, 'lesson_content.review_scholar' as const].map((key) => [
+        key,
+        (a: Account) => legacyLessonContentKeys(a.actor, role(a, 'teachers')).has(key),
+      ]),
+    ),
     'teacher_supervision.view': onPage,
     'teacher_supervision.record': recordsOnPage,
     'supervision.chats': supervises,
@@ -175,6 +184,17 @@ describe('PD-40: legacy bundles agree with the service rules', () => {
     expect(delegable.filter((k) => !(k in RULES))).toEqual([]);
     expect(PERMISSIONS.filter((p) => p.delegable && !p.inRoles).map((p) => p.key)).toEqual([]);
     // The minimal, read-only set PR-3 opens (plan §13 C3).
-    expect(delegable.sort()).toEqual(['billing.view', 'certificates.design', 'certificates.view', 'subscriptions.view']);
+    // PD-49 adds the three lesson_content keys the Teachers department delegates (verified above).
+    expect(delegable.sort()).toEqual([
+      'billing.view',
+      'certificates.design',
+      'certificates.view',
+      'lesson_content.check',
+      'lesson_content.review_teacher',
+      'lesson_content.view',
+      'subscriptions.view',
+    ]);
+    // ...and never the scholar's step: the super admin alone grants it (owner, 2026-10-29).
+    expect(delegable).not.toContain('lesson_content.review_scholar');
   });
 });

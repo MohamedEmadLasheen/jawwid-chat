@@ -19,6 +19,13 @@ export interface AccessRoleTemplate {
   permissions: readonly PermissionKey[];
   /** The migration whose generated block seeds it. */
   migration: string;
+  /**
+   * 'super_admin': only the super admin may grant this role -- it carries a key
+   * that is not delegable and in no legacy bundle, so no department manager
+   * holds or grants it (H5). pd040-role-templates.spec.ts holds it to that.
+   * Absent: a department manager who holds every key may grant it (S1).
+   */
+  grantedBy?: 'super_admin';
 }
 
 export const ACCESS_ROLE_TEMPLATES: readonly AccessRoleTemplate[] = [
@@ -32,5 +39,19 @@ export const ACCESS_ROLE_TEMPLATES: readonly AccessRoleTemplate[] = [
     maxTier: 'specialist',
     permissions: ['certificates.design', 'certificates.view'],
     migration: '20261029190000_chat_pd040_designer_template.sql',
+  },
+  {
+    // PD-49 (owner, 2026-10-29: "We have someone"): the qualified scholar who
+    // signs the last step of children's Quran content -- tafsir, lessons,
+    // stories, authenticated asbab -- and every game mechanic once. Content
+    // only: no family, child, chat or finance key. The super admin alone grants it.
+    key: 'scholar_reviewer',
+    nameEn: 'Scholar reviewer',
+    nameAr: 'المراجع الشرعي',
+    description: "Signs the scholar's step of children's Quran content and of each game mechanic, after the source check and the teacher.",
+    maxTier: 'specialist',
+    permissions: ['lesson_content.review_scholar', 'lesson_content.view'],
+    migration: '20261029235000_chat_pd049_lesson_content_review.sql',
+    grantedBy: 'super_admin',
   },
 ];

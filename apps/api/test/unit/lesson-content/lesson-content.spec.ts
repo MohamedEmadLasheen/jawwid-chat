@@ -1,0 +1,217 @@
+/**
+ * PD-49: the review of children's Quran content and of game mechanics
+ * (docs/product/pd049-children-quran-experience-plan.md §F.2-§F.3).
+ *
+ * A child sees an item only when its CURRENT text has every review step its
+ * kind needs, and is neither rejected nor withdrawn; a signature names the
+ * text it is for. Pure: a fake store and fake permissions (the database rules
+ * are in test/integration/pd049-lesson-content.spec.ts).
+ */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { CommError } from '@platform/errors';
+import { legacyLessonContentKeys, lessonContentAccess } from '@platform/lesson-content-policy';
+import { LessonContentService, itemStatus } from '../../../src/lesson-content/lesson-content.service';
+import type { LessonContentStore, ReviewRow } from '../../../src/lesson-content/lesson-content.store';
+import { canonicalJson, itemSha256, parseScope, parseSubjects, reviewScope, type Scope } from '../../../src/lesson-content/review-subjects';
+import { admin, manager, parent, teacher } from '../../support/fixtures';
+
+const VECTORS = join(__dirname, '../../../../lessons/src/content/item-hash.vectors.json');
+
+// Test items only (not lesson content).
+const TAFSIR = { id: 'tafsir-001', kind: 'tafsir', bands: ['6-8'], text: 'شرح', ayah: 1, source: { work: 'saadi', ref: '112:1' } };
+const WORD = { id: 'word-001', kind: 'word', bands: ['6-8'], text: 'معنى', ayah: 1, word: 1, to: 1, source: { work: 'saadi', ref: '112:1' } };
+
+function scope(): Scope {
+  const s = parseScope({
+    scope: 'quran-112',
+    subjects: [
+      { id: 'tafsir-001', kind: 'tafsir', itemSha256: itemSha256(TAFSIR), requiredSteps: ['check', 'teacher', 'scholar'], item: TAFSIR },
+      { id: 'word-001', kind: 'word', itemSha256: itemSha256(WORD), requiredSteps: ['check', 'teacher'], item: WORD },
+    ],
+  });
+  if (!s) throw new Error('fixture');
+  return s;
+}
+
+const row = (over: Partial<ReviewRow>): ReviewRow => ({
+  itemId: 'tafsir-001',
+  itemSha256: itemSha256(TAFSIR),
+  step: 'check',
+  action: 'approve',
+  staffId: 'staff-1',
+  staffName: 'Reviewer',
+  category: null,
+  reason: null,
+  at: new Date('2026-10-29T10:00:00Z'),
+  ...over,
+});
+
+class FakeStore implements LessonContentStore {
+  rows: ReviewRow[] = [];
+  reviewed: unknown[] = [];
+  async reviews() {
+    return this.rows;
+  }
+  async review(...args: unknown[]) {
+    this.reviewed.push(args);
+    return { state: 'open', steps: ['check'] };
+  }
+}
+
+const permissions = (keys: string[]) => ({ profileOf: async () => ({ tier: 'x', departmentKind: null, placement: null, permissions: new Set(keys) }) });
+
+function service(keys: string[], store = new FakeStore()) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { store, svc: new LessonContentService(store, permissions(keys) as any, (s) => (s === 'quran-112' ? scope() : null)) };
+}
+
+const refused = async (p: Promise<unknown>, code: string, status?: number) => {
+  const e = await p.then(() => null, (x: unknown) => x);
+  expect(e).toBeInstanceOf(CommError);
+  expect((e as CommError).code).toBe(code);
+  if (status) expect((e as CommError).status).toBe(status);
+};
+
+describe('the review subjects (generated from apps/lessons)', () => {
+  it('hash an item exactly as the lessons engine and its Python checker do', () => {
+    const vectors = JSON.parse(readFileSync(VECTORS, 'utf8')) as Array<{ item: unknown; sha256: string }>;
+    expect(vectors.length).toBeGreaterThan(0);
+    for (const v of vectors) expect(itemSha256(v.item)).toBe(v.sha256);
+    expect(canonicalJson({ b: 1, a: [{ d: 2, c: 3 }] })).toBe('{"a":[{"c":3,"d":2}],"b":1}');
+  });
+
+  it('refuse a scope whose item does not hash to its own itemSha256, or that is malformed', () => {
+    const good = { id: 'word-001', kind: 'word', itemSha256: itemSha256(WORD), requiredSteps: ['check', 'teacher'], item: WORD };
+    expect(parseScope({ scope: 'quran-112', subjects: [good] })).not.toBeNull();
+    expect(parseScope({ scope: 'quran-112', subjects: [{ ...good, itemSha256: '0'.repeat(64) }] })).toBeNull();
+    expect(parseScope({ scope: 'quran-112', subjects: [{ ...good, id: 'word-1' }] })).toBeNull();
+    expect(parseScope({ scope: 'quran-112', subjects: [good, good] })).toBeNull();
+    expect(parseScope({ scope: 'quran-112', subjects: [{ ...good, requiredSteps: ['owner'] }] })).toBeNull();
+    expect(parseScope({ scope: 'surah-112', subjects: [good] })).toBeNull();
+    // A mechanic has no source to check.
+    const m = { id: 'listen_glow', version: 1 };
+    expect(parseScope({ scope: 'play', subjects: [{ id: 'listen_glow', kind: 'mechanic', itemSha256: itemSha256(m), requiredSteps: ['teacher', 'scholar'], item: m }] })).not.toBeNull();
+    expect(parseScope({ scope: 'play', subjects: [{ id: 'listen_glow', kind: 'mechanic', itemSha256: itemSha256(m), requiredSteps: ['check', 'teacher'], item: m }] })).toBeNull();
+    // One bad scope never hides the good ones.
+    expect([...parseSubjects({ scopes: [{ scope: 'quran-112', subjects: [good] }, { scope: 'quran-113', subjects: 'x' }] }).keys()]).toEqual(['quran-112']);
+  });
+
+  it('the committed map holds no content yet: nothing can be reviewed before content exists', () => {
+    expect(reviewScope('quran-112')).toBeNull();
+    expect(reviewScope('play')).toBeNull();
+  });
+});
+
+describe('an item status', () => {
+  const tafsir = { id: 'tafsir-001', itemSha256: itemSha256(TAFSIR), requiredSteps: ['check', 'teacher', 'scholar'] as const };
+  const t = { ...tafsir, requiredSteps: [...tafsir.requiredSteps] };
+
+  it('is approved only with every required step signed for the current text', () => {
+    expect(itemStatus(t, [row({ step: 'check' }), row({ step: 'teacher', staffId: 's2' })]).approved).toBe(false);
+    const full = [row({ step: 'check' }), row({ step: 'teacher', staffId: 's2' }), row({ step: 'scholar', staffId: 's3' })];
+    expect(itemStatus(t, full)).toEqual({ state: 'open', signed: ['check', 'teacher', 'scholar'], approved: true, stale: false });
+  });
+
+  it('a rejection or a withdrawal is final for that text', () => {
+    const full = [row({ step: 'check' }), row({ step: 'teacher', staffId: 's2' }), row({ step: 'scholar', staffId: 's3' })];
+    expect(itemStatus(t, [...full, row({ step: 'scholar', action: 'withdraw', staffId: 's3', category: 'aqeedah', reason: 'x' })])).toMatchObject({ state: 'withdrawn', approved: false });
+    expect(itemStatus(t, [row({ step: 'teacher', action: 'reject', staffId: 's2', category: 'language', reason: 'x' })])).toMatchObject({ state: 'rejected', approved: false });
+  });
+
+  it('signatures of an earlier text do not count, and show the item as stale', () => {
+    const old = '1'.repeat(64);
+    const full = [row({ step: 'check', itemSha256: old }), row({ step: 'teacher', staffId: 's2', itemSha256: old }), row({ step: 'scholar', staffId: 's3', itemSha256: old })];
+    expect(itemStatus(t, full)).toEqual({ state: 'open', signed: [], approved: false, stale: true });
+  });
+});
+
+describe('LessonContentService', () => {
+  const body = (over: Record<string, unknown> = {}) => ({ step: 'check', itemSha256: itemSha256(TAFSIR), ...over });
+
+  it('lists a scope for anyone holding view or a step key, and nobody else', async () => {
+    const { svc } = service(['lesson_content.view']);
+    const out = await svc.list('quran-112', admin());
+    expect(out.items.map((i) => [i.id, i.next, i.canSign])).toEqual([
+      ['tafsir-001', 'check', false],
+      ['word-001', 'check', false],
+    ]);
+    await refused(service([]).svc.list('quran-112', admin()), 'COMM.LESSON_CONTENT_DENIED', 403);
+    await refused(service(['lesson_content.view']).svc.list('quran-999', admin()), 'COMM.LESSON_CONTENT_NOT_FOUND', 404);
+  });
+
+  it('signs only the step the reviewer holds the key for, of the text as built', async () => {
+    const { svc, store } = service(['lesson_content.check']);
+    await svc.review('quran-112', 'tafsir-001', 'approve', body(), admin('checker-1'));
+    expect(store.reviewed).toEqual([['quran-112', 'tafsir-001', itemSha256(TAFSIR), 'check', 'approve', null, null, 'checker-1']]);
+    await refused(svc.review('quran-112', 'tafsir-001', 'approve', body({ step: 'scholar' }), admin()), 'COMM.LESSON_CONTENT_DENIED', 403);
+    await refused(svc.review('quran-112', 'tafsir-001', 'approve', body({ step: 'owner' }), admin()), 'COMM.LESSON_CONTENT_INVALID', 422);
+    await refused(svc.review('quran-112', 'tafsir-404', 'approve', body(), admin()), 'COMM.LESSON_CONTENT_NOT_FOUND', 404);
+    await refused(svc.review('quran-112', 'tafsir-001', 'publish', body(), admin()), 'COMM.LESSON_CONTENT_INVALID', 422);
+  });
+
+  it('refuses a signature of a text the reviewer did not read (the item changed)', async () => {
+    const { svc, store } = service(['lesson_content.check']);
+    await refused(svc.review('quran-112', 'tafsir-001', 'approve', body({ itemSha256: '2'.repeat(64) }), admin()), 'COMM.LESSON_CONTENT_STATE', 409);
+    await refused(svc.review('quran-112', 'tafsir-001', 'approve', body({ itemSha256: 'nope' }), admin()), 'COMM.LESSON_CONTENT_INVALID', 422);
+    expect(store.reviewed).toEqual([]);
+  });
+
+  it('a rejection or withdrawal says what is wrong and why; an approval carries neither', async () => {
+    const { svc, store } = service(['lesson_content.review_scholar']);
+    await refused(svc.review('quran-112', 'tafsir-001', 'reject', body({ step: 'scholar' }), admin()), 'COMM.LESSON_CONTENT_INVALID', 422);
+    await refused(svc.review('quran-112', 'tafsir-001', 'reject', body({ step: 'scholar', category: 'aqeedah' }), admin()), 'COMM.LESSON_CONTENT_INVALID', 422);
+    await svc.review('quran-112', 'tafsir-001', 'reject', body({ step: 'scholar', category: 'aqeedah', reason: '  not as the source says  ' }), admin('scholar-1'));
+    expect(store.reviewed).toEqual([['quran-112', 'tafsir-001', itemSha256(TAFSIR), 'scholar', 'reject', 'aqeedah', 'not as the source says', 'scholar-1']]);
+  });
+
+  it('exports only items whose current text has every step it needs, in the lessons approvals format', async () => {
+    const store = new FakeStore();
+    store.rows = [
+      // tafsir: all three steps, current text.
+      row({ step: 'check' }),
+      row({ step: 'teacher', staffId: 's2' }),
+      row({ step: 'scholar', staffId: 's3' }),
+      // word: only the check.
+      row({ itemId: 'word-001', itemSha256: itemSha256(WORD), step: 'check' }),
+    ];
+    const { svc } = service(['lesson_content.view'], store);
+    expect(await svc.export('quran-112', admin())).toEqual({
+      surah: 112,
+      lessonKey: 'quran-112',
+      approvals: [{ id: 'tafsir-001', itemSha256: itemSha256(TAFSIR), steps: ['check', 'teacher', 'scholar'] }],
+    });
+    store.rows.push(row({ step: 'teacher', action: 'withdraw', staffId: 's2', category: 'wrong_meaning', reason: 'x' }));
+    expect((await svc.export('quran-112', admin())).approvals).toEqual([]);
+  });
+});
+
+describe('who holds what (plan §F.2)', () => {
+  it('the Teachers Manager checks and signs as a teacher; never the scholar step by bundle', () => {
+    expect([...legacyLessonContentKeys(manager(), 'manager')].sort()).toEqual(['lesson_content.check', 'lesson_content.review_teacher', 'lesson_content.view']);
+    expect([...legacyLessonContentKeys(admin(), 'member')]).toEqual(['lesson_content.view']);
+    expect([...legacyLessonContentKeys(manager(), null)]).toEqual([]);
+    expect([...legacyLessonContentKeys(admin('sa', 'super_admin'), null)]).toContain('lesson_content.review_scholar');
+  });
+
+  it('a step key implies seeing the content; nobody who is not live staff sees anything', () => {
+    expect(lessonContentAccess(admin(), new Set(['lesson_content.review_scholar']))).toEqual({ view: true, steps: ['scholar'] });
+    expect(lessonContentAccess(admin(), new Set(['lesson_content.view']))).toEqual({ view: true, steps: [] });
+    expect(lessonContentAccess(parent(), new Set(['lesson_content.view']))).toEqual({ view: false, steps: [] });
+    expect(lessonContentAccess(teacher(), new Set(['lesson_content.check']))).toEqual({ view: false, steps: [] });
+  });
+});
+
+describe('the migration and the code agree', () => {
+  const sql = readFileSync(join(__dirname, '../../../../../supabase/migrations/20261029235000_chat_pd049_lesson_content_review.sql'), 'utf8');
+
+  it('on the key each step needs', () => {
+    expect(sql).toContain("when 'check' then 'lesson_content.check'");
+    expect(sql).toContain("when 'teacher' then 'lesson_content.review_teacher'");
+    expect(sql).toContain("when 'scholar' then 'lesson_content.review_scholar'");
+  });
+
+  it('on the reject categories', () => {
+    expect(sql).toContain("'wrong_meaning', 'not_in_source', 'aqeedah', 'weak_report', 'too_hard_for_band', 'language', 'respect', 'other'");
+  });
+});

@@ -158,6 +158,15 @@ const ENTRIES = {
   'tasks.team': { label: { en: 'See the team\'s tasks', ar: 'عرض مهام الفريق' }, risk: 'pii', introducedBy: 'PD-47' },
   'tasks.create': { label: { en: 'Give tasks', ar: 'إسناد المهام' }, risk: 'pii', introducedBy: 'PD-47' },
   'tasks.manage': { label: { en: 'Remove, return and reassign tasks', ar: 'حذف المهام وإعادتها وإعادة إسنادها' }, risk: 'pii', introducedBy: 'PD-47' },
+
+  // PD-49: the review of children's Quran content and of game mechanics, step
+  // by step (plan §F.2). The Teachers department checks and signs; the scholar's
+  // step is a deliberate grant by the super admin alone (owner, 2026-10-29), so
+  // lesson_content.review_scholar is not delegable and in no bundle.
+  'lesson_content.view': { label: { en: 'See lesson content under review', ar: 'الاطلاع على محتوى الدروس قيد المراجعة' }, risk: 'none', introducedBy: 'PD-49', delegable: true },
+  'lesson_content.check': { label: { en: 'Check lesson content against its source', ar: 'مطابقة محتوى الدروس بمصدره' }, risk: 'none', introducedBy: 'PD-49', delegable: true },
+  'lesson_content.review_teacher': { label: { en: 'Approve lesson content as a teacher', ar: 'اعتماد محتوى الدروس تربويًّا' }, risk: 'none', introducedBy: 'PD-49', delegable: true },
+  'lesson_content.review_scholar': { label: { en: 'Approve lesson content as the scholar', ar: 'اعتماد محتوى الدروس شرعيًّا' }, risk: 'none', introducedBy: 'PD-49' },
 } as const satisfies Record<string, Entry>;
 
 export type PermissionKey = keyof typeof ENTRIES;
