@@ -25,6 +25,8 @@
  *      too; a failed activation is RESET_CODE_INVALID and spends the code;
  *      request roles, other organizations, concurrent activations; the code
  *      is in no audit row and no log line.
+ *   6. a PD-26 permanent suspension closes the login as offboarding does: a
+ *      waiting first sign-in code is superseded and the account deactivated.
  *
  * Synthetic people only (G-20).
  */
@@ -41,6 +43,15 @@ import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
 import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
+import { PrismaAuditService } from '@platform/audit.service';
+import { LessonService } from '../../src/lessons/lesson.service';
+import { SupervisionConversationService } from '../../src/supervision/supervision-conversation.service';
+import { CardPoster } from '../../src/supervision/card-poster';
+import { DisciplineService } from '../../src/discipline/discipline.service';
+import { SchedulingService } from '../../src/lessons/scheduling.service';
+import { TrialService } from '../../src/lessons/trial.service';
+import { NewStudentsService } from '../../src/new-students/new-students.service';
+import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { buildGraph, truncate } from './harness';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
@@ -574,5 +585,62 @@ describe('5. the department head\'s review of #184', () => {
     } finally {
       for (const s of spies) s.mockRestore();
     }
+  });
+});
+
+describe('6. a permanent suspension closes the login, as offboarding does (PD-26 follow-up to #205)', () => {
+  // DisciplineModule is not in this suite's Nest graph: built as pd012-s2 builds it.
+  const audit = new PrismaAuditService();
+  const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
+  const supervision = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
+  const cards = new CardPoster(g.conversations, g.outbox, audit);
+  const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
+  const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
+  const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
+  const discipline = new DisciplineService(g.prisma, g.conversations, supervision, cards, lessons, g.outbox, g.config, audit, trials);
+
+  /** An absence recorded and decided as a permanent suspension, by the Teachers manager. */
+  async function suspendPermanently(teacherId: string) {
+    const [{ today }] = await g.prisma.$queryRaw<Array<{ today: string }>>`SELECT chat.academy_today()::text AS today`;
+    const { violation } = await discipline.recordAbsence(m.teachersManager.id, teacherId, { occurredOn: today, note: 'missed the meeting' });
+    return discipline.decide(m.teachersManager.id, violation.id, { decision: 'permanent_suspension', note: 'serious misconduct' });
+  }
+  const openCodes = (accountId: string) =>
+    g.prisma.passwordResetCode.count({ where: { accountId, usedAt: null, supersededAt: null } });
+
+  it('a waiting first sign-in code is superseded and refused; the provisioned login is deactivated', async () => {
+    const address = email('ps');
+    const id = await createTeacher(m.teachersManager.id, { email: address });
+    const { account } = await teacherRow(id);
+    const { code } = await issueFirstLogin(account.id);
+    expect(await openCodes(account.id)).toBe(1);
+
+    await suspendPermanently(id);
+    const after = await g.prisma.account.findUniqueOrThrow({ where: { id: account.id } });
+    expect([after.status, after.isActive]).toEqual(['deactivated', false]);
+    expect(after.deactivatedAt).not.toBeNull();
+    expect(await openCodes(account.id)).toBe(0);
+    // The code no longer completes, and so never flips the login to active.
+    await expect(resets.complete(address, code, '1234')).rejects.toMatchObject({ code: 'AUTH.RESET_CODE_INVALID' });
+    expect((await g.prisma.account.findUniqueOrThrow({ where: { id: account.id } })).status).toBe('deactivated');
+    // Audited on the decision's row: which login, its status before, how many codes.
+    const row = await g.prisma.auditLog.findFirstOrThrow({ where: { action: 'teacher.discipline_permanent_suspension', entityId: id } });
+    expect(row.after).toMatchObject({ login: { accountId: account.id, statusBefore: 'provisioned', supersededCodes: 1 } });
+  });
+
+  it('an active login is deactivated through the revocation journal, and signing in is refused', async () => {
+    const address = email('pt');
+    const id = await createTeacher(m.teachersManager.id, { email: address });
+    const { account } = await teacherRow(id);
+    const { code } = await issueFirstLogin(account.id);
+    await resets.complete(address, code, '1234');
+    expect(await login(address, '1234')).toBe(200);
+
+    await suspendPermanently(id);
+    expect((await g.prisma.account.findUniqueOrThrow({ where: { id: account.id } })).status).toBe('deactivated');
+    const journal = await g.prisma.$queryRaw<Array<{ kind: string }>>`
+      SELECT principal_kind AS kind FROM chat.principal_revocation WHERE principal_id IN (${account.id}::uuid, ${id}::uuid) ORDER BY principal_kind`;
+    expect(journal.map((r) => r.kind)).toEqual(['account', 'teacher']);
+    expect(await login(address, '1234')).not.toBe(200);
   });
 });
