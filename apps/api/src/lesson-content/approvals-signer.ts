@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { createHash, createPrivateKey, createPublicKey, sign, type KeyObject } from 'node:crypto';
 import { canonicalJson } from './review-subjects';
 
@@ -22,6 +23,10 @@ export interface Signer {
 
 export interface ApprovalsPayload {
   v: 1;
+  /** The environment that signed it (APP_ENV): CI accepts only "production" approvals, under a production key. */
+  env: string;
+  /** When it was signed: a changed approvals file must be strictly newer than the one it replaces (no replay). */
+  issuedAt: string;
   datasetId: string;
   lessonKey: string;
   approvals: { id: string; approvalSha256: string; steps: string[]; signers: Signer[] }[];
@@ -58,6 +63,10 @@ export class ApprovalsSigner {
   constructor(raw: string | undefined = process.env.LESSON_APPROVALS_SIGNING_KEY) {
     this.key = readSigningKey(raw);
     this.keyId = this.key ? keyIdOf(createPublicKey(this.key)) : null;
+    // Said once, at boot, and never the value: a key that is set but unusable is a misconfiguration.
+    if (raw?.trim() && !this.key) {
+      new Logger('ApprovalsSigner').warn('LESSON_APPROVALS_SIGNING_KEY is set but is not a readable Ed25519 private key: approvals cannot be exported');
+    }
   }
 
   get available(): boolean {

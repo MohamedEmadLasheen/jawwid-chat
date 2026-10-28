@@ -161,14 +161,23 @@ export class LessonContentService {
         id: subject.id,
         approvalSha256: subject.approvalSha256,
         steps: status.signed,
-        // Who signed each step of THIS text, as the database recorded it.
+        // Who signed each step of THIS text, as the database recorded it: exactly one row
+        // per step (the unique index lesson_content_one_approval_per_step).
         signers: status.signed.map((step) => {
-          const r = reviews.find((x) => x.itemId === subject.id && x.approvalSha256 === subject.approvalSha256 && x.action === 'approve' && x.step === step)!;
-          return { step, staffId: r.staffId, at: new Date(r.at).toISOString() };
+          const rows = reviews.filter((x) => x.itemId === subject.id && x.approvalSha256 === subject.approvalSha256 && x.action === 'approve' && x.step === step);
+          if (rows.length !== 1) throw new Error(`lesson content ${s.scope}/${subject.id}: ${rows.length} signatures of the ${step} step`);
+          return { step, staffId: rows[0]!.staffId, at: new Date(rows[0]!.at).toISOString() };
         }),
       }))
       .sort((a, b) => a.id.localeCompare(b.id));
-    const payload: ApprovalsPayload = { v: 1, datasetId: s.datasetId, lessonKey: s.scope, approvals };
+    const payload: ApprovalsPayload = {
+      v: 1,
+      env: process.env.APP_ENV ?? 'local',
+      issuedAt: new Date().toISOString(),
+      datasetId: s.datasetId,
+      lessonKey: s.scope,
+      approvals,
+    };
     const signed = this.signer.sign(payload);
     if (!signed) {
       throw new CommError(CommErrorCode.LESSON_CONTENT_SIGNING_UNAVAILABLE, 'approvals are exported only signed, and the API has no signing key (LESSON_APPROVALS_SIGNING_KEY)', 503);

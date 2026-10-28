@@ -167,6 +167,9 @@ export interface Approval {
 
 export interface ApprovalsPayload {
   v: 1;
+  /** Only "production" approvals reach children (staging ones are signed with QA accounts). */
+  env: string;
+  issuedAt: string | null;
   datasetId: string;
   lessonKey: string;
   approvals: Approval[];
@@ -182,8 +185,13 @@ export interface Approvals {
 export interface ApprovalKey {
   id: string;
   publicKey: string;
+  /** "production" or "staging": only a production key's approvals reach children. */
+  env: string;
   addedAt?: string;
+  /** No new approvals after this (CI refuses a changed file it signs); what it signed before stays valid. */
   retiredAt?: string;
+  /** Nothing it ever signed is accepted. */
+  revokedAt?: string;
   note?: string;
 }
 
@@ -196,13 +204,15 @@ const STEPS: readonly Step[] = ['check', 'teacher', 'scholar'];
 function readApprovals(x: unknown, datasetId: string, lessonKey: string, keys: readonly ApprovalKey[]): Map<string, Approval> | null {
   if (!isObj(x) || Object.keys(x).sort().join() !== 'keyId,payload,signature') return null;
   const p = x.payload;
-  if (!isObj(p) || Object.keys(p).sort().join() !== 'approvals,datasetId,lessonKey,v' || p.v !== 1) return null;
-  if (p.datasetId !== datasetId || p.lessonKey !== lessonKey || !Array.isArray(p.approvals)) return null;
+  if (!isObj(p) || Object.keys(p).sort().join() !== 'approvals,datasetId,env,issuedAt,lessonKey,v' || p.v !== 1) return null;
+  if (p.env !== 'production' || p.datasetId !== datasetId || p.lessonKey !== lessonKey || !Array.isArray(p.approvals)) return null;
   if (x.keyId === null) {
     // Nothing signed: an unsigned file may only approve nothing.
     if (x.signature !== null || p.approvals.length > 0) return null;
-  } else if (typeof x.keyId !== 'string' || !keys.some((k) => k.id === x.keyId) || typeof x.signature !== 'string' || !SIGNATURE.test(x.signature)) {
-    return null;
+  } else {
+    const key = keys.find((k) => k.id === x.keyId);
+    if (!key || key.env !== 'production' || key.revokedAt || typeof x.signature !== 'string' || !SIGNATURE.test(x.signature)) return null;
+    if (typeof p.issuedAt !== 'string' || (key.retiredAt && !(p.issuedAt < key.retiredAt))) return null;
   }
   const out = new Map<string, Approval>();
   for (const a of p.approvals as unknown[]) {

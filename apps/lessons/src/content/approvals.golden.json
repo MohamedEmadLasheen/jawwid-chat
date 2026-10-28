@@ -1,0 +1,49 @@
+{
+ "about": "PD-49: the golden vector shared by the API's signer (lesson-content.spec.ts reproduces these bytes from a TEST-ONLY seed), scripts/lessons/verify-approvals.mjs (verifies it under `key`) and check-quran-content.py (reads it). `key` is a test key: it is NOT in approvals-keys.json, so nothing it signs can ever reach a child.",
+ "key": {
+  "id": "c6b06761883963a7",
+  "publicKey": "MCowBQYDK2VwAyEAczdh3iG4Y8LmU32hezGlRDB8/i6rPodReAnvHDB2NdU=",
+  "env": "production",
+  "addedAt": "2026-10-29T00:00:00Z",
+  "note": "TEST ONLY"
+ },
+ "envelope": {
+  "payload": {
+   "v": 1,
+   "env": "production",
+   "issuedAt": "2026-10-29T12:00:00.000Z",
+   "datasetId": "tanzil-uthmani-1.1",
+   "lessonKey": "quran-112",
+   "approvals": [
+    {
+     "id": "tafsir-001",
+     "approvalSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "steps": [
+      "check",
+      "teacher",
+      "scholar"
+     ],
+     "signers": [
+      {
+       "step": "check",
+       "staffId": "00000000-0000-4000-8000-000000000001",
+       "at": "2026-10-29T12:00:00.000Z"
+      },
+      {
+       "step": "teacher",
+       "staffId": "00000000-0000-4000-8000-000000000002",
+       "at": "2026-10-29T12:00:00.000Z"
+      },
+      {
+       "step": "scholar",
+       "staffId": "00000000-0000-4000-8000-000000000003",
+       "at": "2026-10-29T12:00:00.000Z"
+      }
+     ]
+    }
+   ]
+  },
+  "keyId": "c6b06761883963a7",
+  "signature": "QlKMnUpILJUkxn4KToDbT1xIvtTHvJQtvw8m1odAjZ8w02eBHyRg0XECkJVsd1seIGFS3zGvX44RD18deUr+CA=="
+ }
+}

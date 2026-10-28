@@ -1,0 +1,4 @@
+# PD-49: the public keys that let approvals of children's Quran content reach
+# children. Adding, retiring or revoking one is the owner's decision; enforcing
+# this file is a branch-protection setting (the owner's call).
+/apps/lessons/src/content/approvals-keys.json @MohamedEmadLasheen

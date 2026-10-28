@@ -57,6 +57,7 @@ QURAN = os.path.join(CONTENT, 'quran')
 APPROVALS = os.path.join(CONTENT, 'approvals')
 SOURCES = os.path.join(CONTENT, 'sources.json')
 APPROVAL_KEYS = os.path.join(CONTENT, 'approvals-keys.json')
+GOLDEN = os.path.join(CONTENT, 'approvals.golden.json')
 VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
 RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
@@ -529,6 +530,30 @@ def calibration_selftest(surahs):
     return failed
 
 
+def envelope_errors(appr, keys):
+    """The signed export's shape and key (keys: {id: key entry}). The Ed25519 signature is verify-approvals.mjs's."""
+    if not isinstance(appr, dict) or set(appr) != {'payload', 'keyId', 'signature'}:
+        return ['approvals: must be the signed export {payload, keyId, signature}']
+    p = appr['payload']
+    if not isinstance(p, dict) or set(p) != {'v', 'env', 'issuedAt', 'datasetId', 'lessonKey', 'approvals'} or p['v'] != 1 or not isinstance(p['approvals'], list):
+        return ['approvals: payload must be exactly {v: 1, env, issuedAt, datasetId, lessonKey, approvals}']
+    errors = []
+    if p['env'] != 'production':
+        errors.append(f'approvals: env {p["env"]!r}: only production approvals reach children')
+    if appr['keyId'] is None:
+        if appr['signature'] is not None or p['approvals']:
+            errors.append('approvals: an unsigned file may only approve nothing')
+        return errors
+    key = keys.get(appr['keyId'])
+    if key is None or not isinstance(appr['signature'], str) or not appr['signature']:
+        errors.append(f'approvals: signed by an unknown key {appr["keyId"]!r} (not in approvals-keys.json), or carries no signature')
+    elif key.get('env') != 'production' or key.get('revokedAt'):
+        errors.append(f'approvals: key {appr["keyId"]} is a {key.get("env")} key or revoked: it never approves for children')
+    elif not isinstance(p['issuedAt'], str) or (key.get('retiredAt') and not p['issuedAt'] < key['retiredAt']):
+        errors.append(f'approvals: issued {p["issuedAt"]!r}, after its key was retired ({key.get("retiredAt")})')
+    return errors
+
+
 def check_approvals(appr, content, works, keys):
     """The API's signed export (plan F.3): {payload, keyId, signature}. The signature itself is verified
     by scripts/lessons/verify-approvals.mjs (Node's crypto); here: its shape, its key, and what it approves."""
@@ -536,16 +561,12 @@ def check_approvals(appr, content, works, keys):
     err = errors.append
     if not isinstance(appr, dict) or set(appr) != {'payload', 'keyId', 'signature'}:
         return ['approvals: must be the signed export {payload, keyId, signature}']
+    errors += envelope_errors(appr, keys)
+    if errors:
+        return errors
     p = appr['payload']
-    if not isinstance(p, dict) or set(p) != {'v', 'datasetId', 'lessonKey', 'approvals'} or p['v'] != 1 or not isinstance(p['approvals'], list):
-        return ['approvals: payload must be exactly {v: 1, datasetId, lessonKey, approvals}']
     if p['datasetId'] != content.get('datasetId') or p['lessonKey'] != content.get('lessonKey'):
         err('approvals: datasetId and lessonKey must match the content file')
-    if appr['keyId'] is None:
-        if appr['signature'] is not None or p['approvals']:
-            err('approvals: an unsigned file may only approve nothing')
-    elif appr['keyId'] not in keys or not isinstance(appr['signature'], str) or not appr['signature']:
-        err(f'approvals: signed by an unknown key {appr["keyId"]!r} (not in approvals-keys.json), or carries no signature')
     items = {it.get('id'): it for it in content.get('items', []) if isinstance(it, dict)}
     seen = set()
     for a in p['approvals']:
@@ -645,10 +666,11 @@ def selftest():
     c = base()
     items = {it['id']: it for it in c['items']}
 
-    keys = {'0123456789abcdef'}
+    keys = {'0123456789abcdef': {'id': '0123456789abcdef', 'publicKey': 'test', 'env': 'production'}}
 
-    def appr(*entries, key='0123456789abcdef', lesson='quran-112'):
-        return {'payload': {'v': 1, 'datasetId': 'test-1', 'lessonKey': lesson, 'approvals': list(entries)},
+    def appr(*entries, key='0123456789abcdef', lesson='quran-112', env='production'):
+        return {'payload': {'v': 1, 'env': env, 'issuedAt': '2026-10-29T12:00:00.000Z', 'datasetId': 'test-1', 'lessonKey': lesson,
+                            'approvals': list(entries)},
                 'keyId': key, 'signature': 'A' * 86 + '=='}
 
     def a(iid, steps=('check', 'teacher', 'scholar'), sha=None):
@@ -675,12 +697,23 @@ def selftest():
         'signers-not-steps': (appr(dict(a('asbab-001'), signers=a('asbab-001')['signers'][1:])), 'exactly the steps signed'),
         'one-person-two-steps': (appr(dict(a('asbab-001'), signers=[dict(g, staffId='one') for g in a('asbab-001')['signers']])), 'different person'),
         'pre-signature-format': ({'surah': 112, 'lessonKey': 'quran-112', 'approvals': []}, 'signed export'),
+        'staging-payload': (appr(a('asbab-001'), env='staging'), 'only production'),
     }
     for name, (ap, expected) in appr_cases.items():
         errors = check_approvals(ap, c, works, keys)
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'approvals {name}: expected {expected or "no errors"}, got {errors}')
+    for name, key in (('staging-key', dict(keys['0123456789abcdef'], env='staging')),
+                      ('revoked-key', dict(keys['0123456789abcdef'], revokedAt='2026-01-01T00:00:00Z')),
+                      ('retired-before-signing', dict(keys['0123456789abcdef'], retiredAt='2000-01-01T00:00:00Z'))):
+        if not check_approvals(appr(a('asbab-001')), c, works, {'0123456789abcdef': key}):
+            failed.append(f'approvals {name}: accepted')
+    # The golden vector (the API's signer made it; verify-approvals.mjs verifies its signature) is a well-formed envelope.
+    golden = json.load(open(GOLDEN, encoding='utf-8'))
+    g_errors = envelope_errors(golden['envelope'], {golden['key']['id']: golden['key']})
+    if g_errors:
+        failed.append(f'the golden vector: {g_errors}')
 
     # The registry.
     for name, bad, expected in (
@@ -717,7 +750,7 @@ def main(argv):
         return selftest()
     dataset_id = json.load(open(PIN, encoding='utf-8'))['datasetId']
     reg_errors, works = check_sources(json.load(open(SOURCES, encoding='utf-8')))
-    approval_keys = {k.get('id') for k in json.load(open(APPROVAL_KEYS, encoding='utf-8')).get('keys', []) if isinstance(k, dict)}
+    approval_keys = {k.get('id'): k for k in json.load(open(APPROVAL_KEYS, encoding='utf-8')).get('keys', []) if isinstance(k, dict)}
     for e in reg_errors:
         print(f'quran-content: {e}')
     failed = 1 if reg_errors else 0

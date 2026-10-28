@@ -7,7 +7,7 @@
  * text it is for. Pure: a fake store and fake permissions (the database rules
  * are in test/integration/pd049-lesson-content.spec.ts).
  */
-import { createPublicKey, generateKeyPairSync, verify } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, verify } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommError } from '@platform/errors';
@@ -230,6 +230,8 @@ describe('LessonContentService', () => {
     const out = await svc.export('quran-112', admin());
     expect(out.payload).toEqual({
       v: 1,
+      env: process.env.APP_ENV ?? 'local',
+      issuedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       datasetId: DS,
       lessonKey: 'quran-112',
       approvals: [
@@ -253,6 +255,17 @@ describe('LessonContentService', () => {
     expect(verify(null, Buffer.from(canonicalJson({ ...out.payload, approvals: [] }), 'utf8'), pub, Buffer.from(out.signature, 'base64'))).toBe(false);
     store.rows.push(row({ step: 'teacher', action: 'withdraw', staffId: 's2', category: 'wrong_meaning', reason: 'x' }));
     expect((await svc.export('quran-112', admin())).payload.approvals).toEqual([]);
+  });
+
+  it("signs exactly the shared golden vector (verify-approvals.mjs verifies it; check-quran-content.py reads it)", () => {
+    const golden = JSON.parse(readFileSync(join(__dirname, '../../../../lessons/src/content/approvals.golden.json'), 'utf8'));
+    // The TEST-ONLY seed of the golden vector; its key is not in approvals-keys.json, so it approves nothing real.
+    const seed = createHash('sha256').update('PD-49 golden vector: a TEST-ONLY key, never a real one').digest();
+    const der = Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed]);
+    const signer = new ApprovalsSigner(der.toString('base64'));
+    expect(signer.keyId).toBe(golden.key.id);
+    expect(signer.sign(golden.envelope.payload)).toEqual(golden.envelope);
+    expect(createPublicKey(createPrivateKey({ key: der, format: 'der', type: 'pkcs8' })).export({ format: 'der', type: 'spki' }).toString('base64')).toBe(golden.key.publicKey);
   });
 
   it('exports nothing unsigned: no signing key is a 503', async () => {

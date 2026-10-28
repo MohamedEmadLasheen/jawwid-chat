@@ -56,13 +56,15 @@ function applyCase(c: Content, k: (typeof shared.cases)[number]): Content {
 }
 
 // A key the test registry knows. The engine checks the envelope's shape and key id; CI verifies the Ed25519 signature.
-const KEYS: ApprovalKey[] = [{ id: '0123456789abcdef', publicKey: 'test' }];
+const KEYS: ApprovalKey[] = [{ id: '0123456789abcdef', publicKey: 'test', env: 'production' }];
 const SIG = 'A'.repeat(86) + '==';
 
 async function approve(c: Content, steps: Step[] = ['check', 'teacher', 'scholar'], items = c.items): Promise<Approvals> {
   return {
     payload: {
       v: 1,
+      env: 'production',
+      issuedAt: '2026-10-29T12:00:00.000Z',
       datasetId: pin.datasetId,
       lessonKey: 'quran-112',
       approvals: await Promise.all(
@@ -235,14 +237,21 @@ describe('resolveQuranContent', () => {
       { ...good, payload: { ...p, approvals: [{ ...first, signers: first.signers.map((g) => ({ ...g, staffId: 'one' })) }] } },
       // The pre-signature format.
       { surah: 112, lessonKey: 'quran-112', approvals: p.approvals },
+      // Staging approvals never reach children.
+      { ...good, payload: { ...p, env: 'staging' } },
     ]) {
       await expect(resolveQuranContent(c, s, bad as unknown as Approvals, WORKS, KEYS)).resolves.toBeNull();
     }
+    // A staging, revoked or (before signing) retired key refuses everything.
+    for (const k of [{ env: 'staging' }, { revokedAt: '2026-01-01T00:00:00Z' }, { retiredAt: '2000-01-01T00:00:00Z' }]) {
+      await expect(resolveQuranContent(c, s, good, WORKS, [{ ...KEYS[0]!, ...k }])).resolves.toBeNull();
+    }
+    await expect(resolveQuranContent(c, s, good, WORKS, [{ ...KEYS[0]!, retiredAt: '2999-01-01T00:00:00Z' }])).resolves.not.toBeNull();
   });
 
   it('an empty, unsigned file approves nothing and refuses nothing', async () => {
     const c = content();
-    const empty: Approvals = { payload: { v: 1, datasetId: pin.datasetId, lessonKey: 'quran-112', approvals: [] }, keyId: null, signature: null };
+    const empty: Approvals = { payload: { v: 1, env: 'production', issuedAt: null, datasetId: pin.datasetId, lessonKey: 'quran-112', approvals: [] }, keyId: null, signature: null };
     const r = await resolveQuranContent(c, await surah(), empty, WORKS, KEYS);
     expect(r?.items).toEqual([]);
   });

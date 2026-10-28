@@ -397,6 +397,10 @@ gate_lessons_supply_chain() {
   fi
   node scripts/lessons/verify-approvals.mjs selftest || return 1
   node scripts/lessons/verify-approvals.mjs || return 1
+  # ...a change never adds a key together with what it signs, never re-commits an
+  # older export (a replay of something since withdrawn), never signs with a
+  # retired key (against the PR's base branch; GITHUB_BASE_REF in CI).
+  node scripts/lessons/verify-approvals.mjs diff || return 1
   # ...and the job that builds the production lessons bundle verifies them
   # before it builds; no other workflow builds that bundle (a hand-built or
   # elsewhere-built bundle cannot skip the check).

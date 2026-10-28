@@ -597,10 +597,6 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${MATERIALS_FRAME_ORIGINS}
-      - key: LESSON_APPROVALS_SIGNING_KEY
-        scope: RUN_TIME
-        type: SECRET
-        value: ${LESSON_APPROVALS_SIGNING_KEY}
       - key: FCM_PROJECT_ID
         scope: RUN_TIME
         type: GENERAL
