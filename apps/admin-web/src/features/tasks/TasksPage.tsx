@@ -220,7 +220,7 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   )
 }
 
-/** Overdue in words and an icon, never by colour alone. */
+/** Overdue in words and an icon, never by colour alone -- unless the level's own reason already says it. */
 function OverdueMark() {
   const tx = useCopy()
   return (
@@ -257,7 +257,7 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
         ) : (
           <>
             <span>{task.dueAt ? tx(C.due, { when: when(task.dueAt) }) : tx(C.noDue)}</span>
-            {task.overdue && <OverdueMark />}
+            {task.overdue && task.priorityReason !== 'overdue' && <OverdueMark />}
             <span>· {tx(C.age, { ago: duration(task.createdAt) })}</span>
           </>
         )}
@@ -320,7 +320,7 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
               <span dir="auto">{tx(C.assignedTo, { name: t.assigneeName })}</span>
               {t.createdBy && <span dir="auto">· {tx(C.createdBy, { name: t.createdBy.name })}</span>}
               <span>· {t.dueAt ? tx(C.due, { when: when(t.dueAt) }) : tx(C.noDue)}</span>
-              {t.overdue && t.state !== 'completed' && t.state !== 'removed' && <OverdueMark />}
+              {t.overdue && t.priorityReason !== 'overdue' && t.state !== 'completed' && t.state !== 'removed' && <OverdueMark />}
             </p>
             {link && (
               <p>
@@ -580,6 +580,7 @@ function ReassignDialog({
             ))}
           </select>
         </label>
+        {options.data?.truncated && <p className="field__hint" role="note">{tx(C.shortened)}</p>}
         <label className="field">
           <span className="field__label">{tx(C.optionalInstructions)}</span>
           <textarea className="textarea" rows={3} maxLength={2000} value={instructions} onChange={(e) => setInstructions(e.target.value)} />

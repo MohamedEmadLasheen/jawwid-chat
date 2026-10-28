@@ -4280,4 +4280,136 @@ class L10nAr extends L10n {
 
   @override
   String get adminWebOnlyAnotherAccount => 'استخدام حساب آخر';
+
+  @override
+  String scheduleFilterTodo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'للإنجاز ($count)',
+      many: 'للإنجاز ($count)',
+      few: 'للإنجاز ($count)',
+      two: 'للإنجاز (2)',
+      one: 'للإنجاز (1)',
+      zero: 'للإنجاز',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get todoEmpty => 'لا شيء لإنجازه.';
+
+  @override
+  String get todoLoadFailed => 'تعذّر تحميل مهامك. حاول مرة أخرى.';
+
+  @override
+  String get taskLevelHigh => 'عالية';
+
+  @override
+  String get taskLevelMedium => 'متوسطة';
+
+  @override
+  String get taskLevelLow => 'منخفضة';
+
+  @override
+  String get taskReasonOverdue => 'متأخرة';
+
+  @override
+  String get taskReasonDueSoon => 'قريبة الموعد';
+
+  @override
+  String get taskReasonSource => 'رفعها مصدرها';
+
+  @override
+  String get taskFinance => 'مالية';
+
+  @override
+  String taskTitleLessonReport(String learner, String when) {
+    return 'اكتب تقرير الحصة: $learner، $when';
+  }
+
+  @override
+  String taskTitleReportCorrection(String learner, String when) {
+    return 'صحّح تقرير الحصة: $learner، $when';
+  }
+
+  @override
+  String get taskTitleFromAcademy => 'مهمة من الأكاديمية';
+
+  @override
+  String taskDue(String when) {
+    return 'الموعد $when';
+  }
+
+  @override
+  String get taskNoDue => 'بلا موعد';
+
+  @override
+  String get taskStateReturned => 'أُعيدت بتعليمات';
+
+  @override
+  String get taskStateAwaiting => 'بانتظار قرار مديرك';
+
+  @override
+  String get taskStateWithdrawn => 'لم تعد مطلوبة';
+
+  @override
+  String taskGivenBy(String name) {
+    return 'أسندها $name';
+  }
+
+  @override
+  String get taskInstructions => 'التعليمات';
+
+  @override
+  String get taskWithdrawnNotice =>
+      'العمل الذي تمثله هذه المهمة لم يعد موجودًا. أقِرّ بذلك لإزالتها.';
+
+  @override
+  String get taskOpenLesson => 'فتح الحصة';
+
+  @override
+  String get taskMarkDone => 'تمّ الإنجاز';
+
+  @override
+  String get taskAcknowledge => 'إقرار';
+
+  @override
+  String get taskNotMine => 'ليست من مسؤوليتي';
+
+  @override
+  String get taskNotMineHint => 'اذكر السبب. يقرر مديرك ما يحدث بعد ذلك.';
+
+  @override
+  String get taskComment => 'إضافة تعليق';
+
+  @override
+  String get taskSend => 'إرسال';
+
+  @override
+  String get taskActionFailed => 'تعذّر ذلك. حاول مرة أخرى.';
+
+  @override
+  String get taskDoneSnack => 'تم.';
+
+  @override
+  String get taskNotMineSent => 'أُرسلت إلى مديرك.';
+
+  @override
+  String get taskCommentSent => 'أُضيف التعليق.';
+
+  @override
+  String scheduleFilterTodoMore(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'للإنجاز ($count+)',
+      many: 'للإنجاز ($count+)',
+      few: 'للإنجاز ($count+)',
+      two: 'للإنجاز (2+)',
+      one: 'للإنجاز (1+)',
+      zero: 'للإنجاز (+)',
+    );
+    return '$_temp0';
+  }
 }
