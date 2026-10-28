@@ -321,7 +321,7 @@ describe('3. what each decision does', () => {
     } finally {
       spy.mockRestore();
     }
-    expect([e.code, e.status]).toEqual([CommErrorCode.DISCIPLINE_LESSONS_COLLIDE, 409]);
+    expect([e.code, e.status]).toEqual([CommErrorCode.DISCIPLINE_NOT_CANCELLED, 409]);
     expect(e.detail).toMatchObject({ cancelledLessons: [], notCancelled: [{ lessonId: trial, reason: 'the trial group could not be reached' }] });
     expect(await teacherLive()).toBe(true);
     expect((await g.prisma.teacherViolation.findUniqueOrThrow({ where: { id: v } })).decision).toBeNull();

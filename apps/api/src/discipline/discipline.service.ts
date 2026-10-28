@@ -357,7 +357,7 @@ export class DisciplineService {
       const notCancelled = await this.cancelLessons(actorId, violation.teacherId, colliding, cancelReason, cancelled);
       if (notCancelled.length > 0) {
         throw new CommError(
-          CommErrorCode.DISCIPLINE_LESSONS_COLLIDE,
+          CommErrorCode.DISCIPLINE_NOT_CANCELLED,
           `${notCancelled.length} lesson(s) could not be cancelled; the teacher is not suspended`,
           409,
           { cancelledLessons: cancelled, notCancelled },
