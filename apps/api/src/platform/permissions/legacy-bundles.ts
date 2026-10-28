@@ -63,7 +63,19 @@ const k = (...keys: PermissionKey[]): readonly PermissionKey[] => keys;
 const CONVERSATION_STAFF = k('chat.use', 'chat.manage', 'chat.moderate', 'calls.use', 'stories.view', 'stories.publish', 'teacher_profiles.review');
 
 /** Running a department: the structure view, backups and covers, the team's profiles. */
-const DEPARTMENT_MANAGER = k('org.view', 'org.manage', 'org.covers', 'staff_profiles.team', 'staff_profiles.manage', 'reports.view');
+const DEPARTMENT_MANAGER = k(
+  'org.view',
+  'org.manage',
+  'org.covers',
+  'staff_profiles.team',
+  'staff_profiles.manage',
+  'reports.view',
+  // PD-40 PR-3 (owner 2026-10-28, S1): a department manager creates and manages
+  // the specialists of their department (decideStaffAccountCreate / Manage).
+  'staff_accounts.view',
+  'staff_accounts.create',
+  'staff_accounts.manage',
+);
 
 /** Operations supervisors: their families' money, contact record, lessons and journey (PD-8, PD-15, PD-17). */
 const OPERATIONS_MEMBER = k(

@@ -32,6 +32,16 @@ import real95 from '../../public/data/quran/surah-095.json';
 import real96 from '../../public/data/quran/surah-096.json';
 import real97 from '../../public/data/quran/surah-097.json';
 import real98 from '../../public/data/quran/surah-098.json';
+import real78 from '../../public/data/quran/surah-078.json';
+import real79 from '../../public/data/quran/surah-079.json';
+import real80 from '../../public/data/quran/surah-080.json';
+import real81 from '../../public/data/quran/surah-081.json';
+import real82 from '../../public/data/quran/surah-082.json';
+import real83 from '../../public/data/quran/surah-083.json';
+import real84 from '../../public/data/quran/surah-084.json';
+import real86 from '../../public/data/quran/surah-086.json';
+import real87 from '../../public/data/quran/surah-087.json';
+import real88 from '../../public/data/quran/surah-088.json';
 
 // Stand-in verses (not Quran text), 3, 2 and 4 words.
 const TEXTS = ['أحد اثنان ثلاثة', 'أربعة خمسة', 'ستة سبعة ثمانية تسعة'];
@@ -111,7 +121,7 @@ describe('lesson content: prose plus positions into the verified text', () => {
 
   it('Al-Buruj has reviewed content; a surah without any has none', () => {
     expect((contentFor(85) as LessonContent).surah).toBe(85);
-    expect(contentFor(86)).toBeNull();
+    expect(contentFor(77)).toBeNull();
   });
 });
 
@@ -143,6 +153,21 @@ describe('Al-Buruj, on the real verified text', () => {
 });
 
 // Every lesson rebuilt on the engine (Juz' Amma, batch 1), each on its real verified surah.
+// Juz' Amma batch 4 (78-84, 86-88), the last of it. An-Nazi'at's old lesson split ayah 40 and stopped at 45:
+// its tafsir is merged, renumbered, and ayah 46 is missing.
+const BATCH4: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
+  78: { file: real78, ayat: 40, held: 5, complete: 13 },
+  79: { file: real79, ayat: 46, held: 16, complete: 10 },
+  80: { file: real80, ayat: 42, held: 11, complete: 10 },
+  81: { file: real81, ayat: 29, held: 7, complete: 11 },
+  82: { file: real82, ayat: 19, held: 6, complete: 9 },
+  83: { file: real83, ayat: 36, held: 7, complete: 7 },
+  84: { file: real84, ayat: 25, held: 3, complete: 9 },
+  86: { file: real86, ayat: 17, held: 6, complete: 8 },
+  87: { file: real87, ayat: 19, held: 11, complete: 8 },
+  88: { file: real88, ayat: 26, held: 9, complete: 8 },
+};
+
 // Juz' Amma batch 3 (89-98). Al-Fajr's old lesson split ayah 23: its tafsir is merged and renumbered.
 const BATCH3: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
   89: { file: real89, ayat: 30, held: 24, complete: 8 },
@@ -180,13 +205,13 @@ const BATCH1: Record<number, { file: unknown; ayat: number; held: number; comple
   114: { file: real114, ayat: 6, held: 4, complete: 8 },
 };
 
-describe("Juz' Amma batches 1 to 3, each on its real verified text", () => {
+describe("Juz' Amma batches 1 to 4, each on its real verified text", () => {
   const anchor: QuranAnchor = {
     datasetId: realManifest.datasetId,
     fileSha256: realManifest.fileSha256,
     rangeSha256: realManifest.surahs.map((s) => s.rangeSha256),
   };
-  for (const [n, expected] of Object.entries({ ...BATCH1, ...BATCH2, ...BATCH3 })) {
+  for (const [n, expected] of Object.entries({ ...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4 })) {
     it(`surah ${n}: every position resolves, flagged lines are held, and it waits for approval`, async () => {
       const surah = Number(n);
       const fetcher: Fetcher = async (path) =>

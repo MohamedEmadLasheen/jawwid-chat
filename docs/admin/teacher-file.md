@@ -322,7 +322,7 @@ A dialog that shows a first sign-in code (Give sign-in, Reactivate) stays mounte
 Warnings only: every teacher stays pickable (owner Q5, "students allowed").
 
 - `GET /teachers/candidates` (Change teacher) and `GET /trials/teachers` (trial booking, the Sales subscription form) carry `readiness: { setupIncomplete, notSignedIn, noSupervisor, loginSuspended }` per teacher, from `apps/api/src/platform/teacher-readiness.ts` (`chat.teacher_setup_state` and the login's status). `loginSuspended` is a login suspended through Accounts (G8).
-- Change teacher shows the notes beside the name ("Setup incomplete · Not signed in yet · No supervisor", or "Login suspended"); the radio stays enabled. The subscription form puts them in the option's label, and once such a teacher is chosen says "This teacher's set-up is not finished. Students are allowed; this is a warning."
+- Change teacher shows the notes beside the name ("Setup incomplete · Not signed in yet · No supervisor", or "Login suspended"); the radio stays enabled. The subscription form puts them in the option's label, and once such a teacher is chosen says "This teacher's set-up is not finished. Students are allowed; this is a warning." -- and, for a teacher with no supervisor, "The Teachers Manager covers this teacher until a supervisor is set."
 - `GET /teacher-files` rows carry `unsupervised` (active, no live primary supervisor). Every reader sees a **No supervisor** badge; the Teachers Manager and the super admin also get an "{n} unsupervised" count, an **Unsupervised only** filter and an **Assign supervisor** link to Organization's Teachers & supervisors tab (`/organization?tab=teachers`, or `/admin/teams?tab=teachers` in the Admin Portal).
 - The offboard preview's students link to their page, where Change teacher is.
 
@@ -342,3 +342,13 @@ Warnings only: every teacher stays pickable (owner Q5, "students allowed").
 | No login (Give sign-in is for that), a closed login, an inactive teacher, the same address | 409 `COMM.TEACHER_FILE_CONFLICT` |
 | A suspended login | 409 `COMM.TEACHER_SIGN_IN_SUSPENDED` |
 | An address in use | the same scoped answers as when adding a teacher (gate P2-5) |
+
+### What the Teachers Manager is told (PD-43 §3.4, §3.7)
+
+PD-34 notifications, under Tasks, to the Teachers Manager (the super admin when the department has none), never to whoever acted; names only.
+
+| Key | When | Written by |
+|---|---|---|
+| `teacher_added_unsupervised` | a teacher is added with no supervisor, by anyone but the manager | `TeacherOnboardingService.add` |
+| `teacher_duplicate_hidden` | a sign-in or contact is refused because it is on a teacher out of the adder's reach; the adder's answer is unchanged | the same, after the answer (its timing must not leak) |
+| `teacher_supervisor_left` | a teacher supervisor is deactivated, on any path, while teachers are still assigned to them | `chat.notify_teacher_supervisor_left`, a trigger on `chat.staff` (migration `20261029150000`): SECURITY DEFINER, never blocks the deactivation, one per deactivation |

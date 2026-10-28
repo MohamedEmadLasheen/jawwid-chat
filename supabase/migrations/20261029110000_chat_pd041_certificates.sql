@@ -1015,6 +1015,8 @@ insert into chat.legacy_permission_bundle (tier, department_kind, permission_key
   ('supervisor', 'operations', 'certificates.view'),
   ('supervisor', 'teachers', 'certificates.request.teacher'),
   ('supervisor', 'teachers', 'certificates.story');
+
+update chat.permission set in_roles = false where key in ('certificates.types');
 -- END GENERATED pd041 catalogue rows
 
 select set_config('chat.pd040_catalogue_change', 'off', true);
