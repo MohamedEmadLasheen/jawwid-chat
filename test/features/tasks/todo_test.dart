@@ -167,6 +167,18 @@ void main() {
     expect(tasks.calls, ['acknowledge t-gone']);
   });
 
+  testWidgets('overdue is said in a word, not by colour alone -- even on a task a person set High', (tester) async {
+    tasks = _Tasks({
+      't-high': wire('t-high', actions: ['complete'], extra: {'effectivePriority': 'high', 'priorityReason': 'manual', 'overdue': true}),
+    });
+    await pump(tester);
+    await tester.tap(find.byKey(const ValueKey('schedule-filter-todo')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('task-overdue')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('task-overdue')), matching: find.text('Overdue')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'High\n')), findsOneWidget, reason: 'the level itself gives no reason: a person set it');
+  });
+
   test('an action this build does not know is never offered', () {
     final t = WorkTask.fromJson(wire('t', actions: ['complete', 'reassign', 'remove', 'something_new']))!;
     expect(t.actions, {TaskAction.complete});

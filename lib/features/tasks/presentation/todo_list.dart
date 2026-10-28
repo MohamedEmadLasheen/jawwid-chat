@@ -131,12 +131,33 @@ class _TaskRow extends ConsumerWidget {
           children: [
             TaskLevelChip(task: task),
             if (task.financial) _FinanceTag(),
-            Text(due, style: task.overdue ? theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error) : theme.textTheme.bodySmall),
+            Text(due, style: theme.textTheme.bodySmall),
+            if (task.overdue) const _OverdueMark(),
             if (state != null) Text('· $state', style: theme.textTheme.bodySmall),
           ],
         ),
       ),
       onTap: () => openTaskSheet(context, ref, task.id),
+    );
+  }
+}
+
+/// Overdue in a word and an icon, never by colour alone (also on a task a person set High).
+class _OverdueMark extends StatelessWidget {
+  const _OverdueMark();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.error;
+    return Row(
+      key: const ValueKey('task-overdue'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.warning_amber_rounded, size: 14, color: color),
+        const SizedBox(width: Spacing.spacing1),
+        Text(L10n.of(context).taskReasonOverdue, style: theme.textTheme.bodySmall?.copyWith(color: color, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 }
@@ -269,6 +290,7 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
                 ].join(' · '),
                 style: theme.textTheme.bodySmall,
               ),
+              if (t.overdue) const Padding(padding: EdgeInsets.only(top: Spacing.spacing1), child: Align(alignment: AlignmentDirectional.centerStart, child: _OverdueMark())),
               if (t.instructions != null && !t.awaitingDecision)
                 Card(
                   key: const ValueKey('task-instructions'),
