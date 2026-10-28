@@ -264,6 +264,10 @@ export enum CommErrorCode {
   TEACHER_HAS_SIGN_IN = 'COMM.TEACHER_HAS_SIGN_IN',
   /** PD-43: the database was too busy to finish adding the teacher; nothing was written. 503. */
   TEACHER_ONBOARDING_BUSY = 'COMM.TEACHER_ONBOARDING_BUSY',
+  /** PD-43: a teacher still has students; move them to other teachers before offboarding. 409. */
+  TEACHER_HAS_STUDENTS = 'COMM.TEACHER_HAS_STUDENTS',
+  /** PD-43: a teacher has lessons ahead; offboard with cancelOpenLessons to cancel them. 409. */
+  TEACHER_HAS_OPEN_LESSONS = 'COMM.TEACHER_HAS_OPEN_LESSONS',
   /** PD-12: no such certificate, or none this caller may see. 404. */
   CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
   /** PD-12: this caller may not request, issue or decline this certificate. 403. */

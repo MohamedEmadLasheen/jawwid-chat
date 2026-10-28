@@ -1,13 +1,14 @@
-import { Body, Controller, Header, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { Requires } from '../platform/permissions/route-access';
 import { TeacherOnboardingService } from './teacher-onboarding.service';
 
 /**
- * PD-43: adding a teacher. Who may, and which supervisor they may name, is
- * decided in TeacherOnboardingService and again in chat.create_teacher. Both
- * answers carry a first sign-in code exactly once: never cached.
+ * PD-43: adding a teacher, and (PR-1b) offboarding and reactivating one. Who
+ * may is decided in TeacherOnboardingService and again in the database
+ * (chat.create_teacher, chat.offboard_teacher, chat.reactivate_teacher). An
+ * answer that carries a first sign-in code is never cached.
  */
 @Controller('teachers')
 @UseFilters(CommErrorFilter)
@@ -36,5 +37,27 @@ export class TeacherOnboardingController {
   @Header('Cache-Control', 'no-store')
   reissue(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
     return this.onboarding.reissue(actorId, teacherId, body ?? {});
+  }
+
+  /** The students still assigned and the lessons ahead: what offboarding would meet. */
+  @Requires('teachers.offboard')
+  @Get(':teacherId/offboard-preview')
+  offboardPreview(@ActorId() actorId: string, @Param('teacherId') teacherId: string) {
+    return this.onboarding.offboardPreview(actorId, teacherId);
+  }
+
+  /** { reason, cancelOpenLessons? }. Refused while a student remains. */
+  @Requires('teachers.offboard')
+  @Post(':teacherId/offboard')
+  offboard(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.onboarding.offboard(actorId, teacherId, body ?? {});
+  }
+
+  /** { reason }. The super admin only (Layer 2); answers a new first sign-in code. */
+  @Requires('teachers.offboard')
+  @Post(':teacherId/reactivate')
+  @Header('Cache-Control', 'no-store')
+  reactivate(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.onboarding.reactivate(actorId, teacherId, body ?? {});
   }
 }
