@@ -7,10 +7,14 @@ import { rounds, shuffled, visitSeed } from './shuffle';
  * visit's seed (random per visit; tests pass one), into state: tapping never
  * reorders the cards. The answer is checked by ayah
  * number, so two ayat with the same words cannot fail a correct order. Rounds
- * walk the whole surah, so every ayah is asked.
+ * walk every ayah it is given: the whole of a short surah, or the current page
+ * of a long one (lesson/pages.ts).
  */
 export function OrderAyat({ ayahs, seed, onComplete }: { ayahs: Ayah[]; seed?: number; onComplete: () => void }) {
-  const plan = useMemo(() => rounds(ayahs.length), [ayahs.length]);
+  // Rounds by ayah NUMBER, from the first ayah given: a page of a long surah
+  // (ayat 21-40) asks 21-25, 26-30 ..., never 1-5.
+  const first = ayahs[0]?.ayah ?? 1;
+  const plan = useMemo(() => rounds(ayahs.length).map((r) => r.map((i) => i + first - 1)), [ayahs.length, first]);
   const [visit] = useState(() => seed ?? visitSeed());
   const [round, setRound] = useState(0);
   const [order, setOrder] = useState<number[]>(() => shuffled(plan[0] ?? [], visit));

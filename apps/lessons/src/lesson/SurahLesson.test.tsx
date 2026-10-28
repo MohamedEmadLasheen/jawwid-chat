@@ -25,6 +25,38 @@ describe('a surah lesson', () => {
     expect(screen.getByRole('note').textContent).toMatch(/التلاوة غير متاحة بعد/);
   });
 
+  it('a LONG surah (all 114 now): Verses and Listen show 20 ayat a page, and ordering plays the page shown', async () => {
+    const { fetcher, anchor } = await snapshot(2, 60, { basmala: true });
+    render(<SurahLesson surah={2} fetcher={fetcher} anchor={anchor} content={null} />);
+    await screen.findByRole('navigation', { name: 'صفحات السورة' });
+    const range = () => within(screen.getByRole('navigation', { name: 'صفحات السورة' })).getByRole('status').textContent;
+    const verses = () => screen.getAllByRole('listitem').map((li) => li.textContent);
+    expect(range()).toBe('الآيات ١–٢٠ من ٦٠');
+    expect(verses()).toHaveLength(20);
+    expect(verses()[0]).toMatch(/^verse 2:1/);
+    expect(screen.getByText(BASMALA)).toBeTruthy(); // above ayah 1, on page 1
+    fireEvent.click(screen.getByRole('button', { name: 'التالي' }));
+    expect(range()).toBe('الآيات ٢١–٤٠ من ٦٠');
+    expect(verses()[0]).toMatch(/^verse 2:21/);
+    expect(screen.queryByText(BASMALA)).toBeNull();
+    // Ordering plays the page shown, in rounds of 5: ayat 21-25 first, never 1-5.
+    fireEvent.click(screen.getByRole('button', { name: 'رتّب الآيات' }));
+    expect(screen.getByText(/الجولة ١ من ٤/)).toBeTruthy();
+    const asked = [...document.querySelectorAll('.card')].map((c) => Number(c.getAttribute('data-ayah'))).sort((a, b) => a - b);
+    expect(asked).toEqual([21, 22, 23, 24, 25]);
+    expect((screen.getByRole('button', { name: 'التالي' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'التالي' }));
+    expect((screen.getByRole('button', { name: 'التالي' }) as HTMLButtonElement).disabled).toBe(true); // the last page
+  });
+
+  it('a surah of up to 50 ayat has no pages: every ayah at once, as before', async () => {
+    const { fetcher, anchor } = await snapshot(78, 40, { basmala: true });
+    render(<SurahLesson surah={78} fetcher={fetcher} anchor={anchor} content={null} />);
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByRole('navigation', { name: 'صفحات السورة' })).toBeNull();
+    expect(screen.getAllByRole('listitem')).toHaveLength(40);
+  });
+
   it('the listening star cannot be earned while recitation is off', async () => {
     const { fetcher, anchor } = await snapshot(85, 22, { basmala: true });
     render(<SurahLesson surah={85} fetcher={fetcher} anchor={anchor} />);
