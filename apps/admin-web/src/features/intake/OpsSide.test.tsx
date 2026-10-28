@@ -308,6 +308,53 @@ describe('The Parent Profile: sign-in e-mail, Sales owner, Operations supervisor
   })
 })
 
+describe('The Parent Profile: the family history (S4)', () => {
+  beforeEach(() => {
+    on('GET', /\/parent-profiles\/p-1$/, () => json(parentProfile()))
+    on('GET', /\/family-intake\/families\/f-1$/, () => json({ error: { code: 'COMM.INTAKE_NOT_FOUND', message: 'no' } }, 404))
+  })
+
+  it('who entered it, who owns it, who placed it, and the package -- in order, with who did it and when', async () => {
+    on('GET', /\/family-intake\/families\/f-1\/history$/, () => json({
+      familyId: 'f-1',
+      entries: [
+        { id: 'audit:1', action: 'family.entered', at: '2026-10-20T09:00:00Z', actor: { id: 'sales-1', name: 'Sales One' },
+          subject: { kind: 'family', id: 'f-1', name: 'Parent Alpha' }, details: {}, reason: null },
+        { id: 'audit:2', action: 'subscription.carried_over', at: '2026-10-20T09:00:00Z', actor: { id: 'sales-1', name: 'Sales One' },
+          subject: { kind: 'learner', id: 'k-1', name: 'Child One' }, details: { total: 20, completed: 12, planMonths: 3 }, reason: null },
+        { id: 'audit:3', action: 'family.operations_supervisor_set', at: '2026-10-21T09:00:00Z', actor: { id: 'm-1', name: 'Manager One' },
+          subject: { kind: 'family', id: 'f-1', name: 'Parent Alpha' }, details: { supervisor: { id: 'sup-1', name: 'Supervisor One' } }, reason: null },
+        { id: 'audit:4', action: 'family.sales_owner_changed', at: '2026-10-22T09:00:00Z', actor: { id: 'sm-1', name: 'Sales Manager' },
+          subject: { kind: 'family', id: 'f-1', name: 'Parent Alpha' },
+          details: { from: { id: 'sales-1', name: 'Sales One' }, to: { id: 'sales-2', name: 'Sales Two' } }, reason: 'takes the renewals' },
+      ],
+    }))
+    renderWithProviders(<AppRoutes />, { staff, route: '/parents/p-1' })
+    const region = await screen.findByRole('region', { name: 'Family history' })
+    const items = within(region).getAllByRole('listitem')
+    expect(items).toHaveLength(4)
+    expect(items[0]).toHaveTextContent('Entered the family')
+    expect(items[0]).toHaveTextContent('Sales One')
+    expect(items[1]).toHaveTextContent('Carried over the package from Jawwid Core')
+    expect(items[1]).toHaveTextContent('Child One')
+    expect(items[1]).toHaveTextContent('Total lessons 20 · Completed lessons 12 · 3 months')
+    expect(items[2]).toHaveTextContent('Chose the Operations supervisor')
+    expect(items[2]).toHaveTextContent('Supervisor One')
+    expect(items[3]).toHaveTextContent('Changed the Sales owner')
+    expect(items[3]).toHaveTextContent('Sales One → Sales Two')
+    expect(items[3]).toHaveTextContent('takes the renewals')
+    expect(within(items[3]).getByText(/^\d/, { selector: 'time' })).toHaveAttribute('dateTime', '2026-10-22T09:00:00Z')
+  })
+
+  it('a family the viewer does not own: no history, nothing said', async () => {
+    on('GET', /\/family-intake\/families\/f-1\/history$/, () => json({ error: { code: 'COMM.INTAKE_NOT_FOUND', message: 'no' } }, 404))
+    renderWithProviders(<AppRoutes />, { staff, route: '/parents/p-1' })
+    expect(await screen.findByRole('heading', { level: 1, name: /^Parent Alpha/ })).toBeInTheDocument()
+    await waitFor(() => expect(sent('GET', /\/family-intake\/families\/f-1\/history$/).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('region', { name: 'Family history' })).not.toBeInTheDocument()
+  })
+})
+
 function studentProfile(): StudentProfile {
   return {
     id: 'k-1', name: 'Child One', avatarUrl: null, age: 9, birthDate: null, course: null, teacher: null, schedule: [],
