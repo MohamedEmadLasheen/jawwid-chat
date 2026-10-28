@@ -70,10 +70,53 @@ describe('PD-40: every route declares what it asks of staff', () => {
 
   it('the certificate keys open exactly the certificate routes', () => {
     const opened = (key: string) =>
-      routes.filter((r) => r.access?.kind === 'requires' && r.access.anyOf.includes(key as never)).map((r) => `${r.method} ${r.path}`);
-    expect(opened('certificates.view')).toEqual(['GET /learner-certificates']);
-    expect(opened('certificates.design')).toEqual(['POST /learner-certificates/:id/upload']);
-    expect(opened('certificates.deliver').sort()).toEqual(['POST /learner-certificates/:id/decline', 'POST /learner-certificates/:id/issue']);
+      routes
+        .filter((r) => r.access?.kind === 'requires' && r.access.anyOf.includes(key as never))
+        .map((r) => `${r.method} ${r.path}`)
+        .sort();
+    expect(opened('certificates.view')).toEqual([
+      'GET /certificates',
+      'GET /certificates/:id',
+      'GET /certificates/:id/files/:fileId',
+      'GET /certificates/access',
+      'GET /certificates/types',
+    ]);
+    expect(opened('certificates.design')).toEqual([
+      'POST /certificates/:id/files',
+      'POST /certificates/:id/files/upload',
+      'POST /certificates/:id/release',
+      'POST /certificates/:id/return',
+      'POST /certificates/:id/start',
+    ]);
+    // PD-41 owner safeguard 1: sending and the Story are the requester's, never the Designer's.
+    expect(opened('certificates.deliver')).toEqual(['GET /certificates/:id/delivery', 'POST /certificates/:id/send']);
+    expect(opened('certificates.story')).toEqual(['POST /certificates/:id/consent', 'POST /certificates/:id/story']);
+    expect(opened('certificates.types')).toEqual(['POST /certificates/types', 'POST /certificates/types/:id']);
+    // A teacher's own surface stays the app's; staff never reach it.
+    expect(routes.filter((r) => r.path.startsWith('/learner-certificates')).map((r) => [r.method, r.access?.kind])).toEqual([
+      ['GET', 'not_for_staff'],
+      ['POST', 'not_for_staff'],
+    ]);
+  });
+
+  it('PD-41: the Designer (certificates.view + certificates.design) reaches exactly the design routes', () => {
+    const designer = new Set(['certificates.view', 'certificates.design']);
+    const reached = routes
+      .filter((r) => r.access?.kind === 'requires' && r.access.anyOf.some((k) => designer.has(k)))
+      .map((r) => `${r.method} ${r.path}`)
+      .sort();
+    expect(reached).toEqual([
+      'GET /certificates',
+      'GET /certificates/:id',
+      'GET /certificates/:id/files/:fileId',
+      'GET /certificates/access',
+      'GET /certificates/types',
+      'POST /certificates/:id/files',
+      'POST /certificates/:id/files/upload',
+      'POST /certificates/:id/release',
+      'POST /certificates/:id/return',
+      'POST /certificates/:id/start',
+    ]);
   });
 
   it('docs/security/pd040-route-permissions.md is up to date', () => {

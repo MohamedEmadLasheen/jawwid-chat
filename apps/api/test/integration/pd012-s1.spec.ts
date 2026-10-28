@@ -5,9 +5,9 @@
  *   1. the supervision conversation: one per teacher; the teacher and the
  *      Teachers department, nobody else -- in the API, the chat list and the
  *      database
- *   2. certificates: the teacher's ticket lands privately; the Teachers
- *      department issues the real file into the learner's group, where the
- *      parent reads it; refusals for the wrong person, file, group and state
+ *   2. certificates: the teacher's ticket lands privately, as a SUGGESTION the
+ *      learner's Operations supervisor decides (PD-41; the design, approval,
+ *      delivery and Story are test/integration/pd041-certificates.spec.ts)
  *   3. leave: allowance by the manager, the teacher's ticket, approval as day_off
  *      entries, the computed balance, colliding lessons, cancel and withdraw
  *   4. the database refuses what the services would never send (the backstop)
@@ -28,8 +28,8 @@ import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { SupervisionConversationService } from '../../src/supervision/supervision-conversation.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { CertificateService } from '../../src/certificates/certificate.service';
+import { PermissionService } from '@platform/permissions/permission.service';
 import { LeaveService } from '../../src/leave/leave.service';
-import { LocalFsBlobStore } from '../../src/communication/attachments/blob-store';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -37,12 +37,11 @@ const audit = new PrismaAuditService();
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
 const supervision = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
 const cards = new CardPoster(g.conversations, g.outbox, audit);
-const certificates = new CertificateService(g.prisma, g.conversations, supervision, cards, g.storage, audit);
+const certificates = new CertificateService(g.prisma, g.conversations, supervision, cards, g.storage, audit, new PermissionService(g.prisma), g.notifications, g.stories);
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
 const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
 const leave = new LeaveService(g.prisma, g.conversations, supervision, cards, lessons, audit, trials);
-const blobs = new LocalFsBlobStore();
 
 let s: Scenario;
 let groupId: string;
@@ -52,7 +51,6 @@ let tsupId: string;
 let tmgrId: string;
 let teachersDept: string;
 
-const PDF = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(200, 0x20)]);
 const NEXT_YEAR = new Date().getUTCFullYear() + 1;
 const day = (mmdd: string) => `${NEXT_YEAR}-${mmdd}`;
 
@@ -84,7 +82,7 @@ async function cardsIn(conversationId: string) {
 }
 
 async function newCertificate(learnerId = s.learnerId) {
-  const out = await certificates.request(s.teacherId, {
+  const out = await certificates.suggest(s.teacherId, {
     learnerId,
     title: 'Juz Amma',
     achievement: 'Memorized Juz Amma with tajweed',
@@ -193,110 +191,45 @@ describe('1. the teacher supervision conversation', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('2. student certificates', () => {
-  it('the request is private: its card lands in the supervision conversation, never the group', async () => {
+describe('2. student certificates: the teacher suggests', () => {
+  it('the suggestion is private: its card lands in the supervision conversation, never the group', async () => {
     const { certificate, conversationId } = await newCertificate();
-    expect(certificate.state).toBe('requested');
-    expect(certificate.canDeliver).toBe(true);
+    expect(certificate.state).toBe('proposed');
 
     const privateCards = await cardsIn(conversationId);
     expect(privateCards.map((m) => m.card?.kind)).toEqual(['certificate_requested']);
     expect(privateCards[0].authorType).toBe('teacher');
     expect(privateCards[0].body).toContain('Juz Amma');
     expect(await cardsIn(groupId)).toEqual([]);
+    // The suggestion is born with its card, and its first act is in the history.
+    const row = await g.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id: certificate.id } });
+    expect(row.requestMessageId).toBe(privateCards[0].id);
+    const history = await g.prisma.appreciationCertificateEvent.findMany({ where: { certificateId: certificate.id } });
+    expect(history.map((e) => [e.kind, e.toState, e.actorTeacherId])).toEqual([['proposed', 'proposed', s.teacherId]]);
   });
 
-  it('only the learner\'s own teacher requests one', async () => {
+  it('only the learner\'s own teacher suggests one', async () => {
     const body = { learnerId: s.learnerId, title: 't', achievement: 'a', achievedOn: '2026-10-01', printedName: 'n' };
-    expect(await code(certificates.request(s.unrelatedTeacherId, body))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
-    expect(await code(certificates.request(s.ownerId, body))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
-    expect(await code(certificates.request(s.teacherId, { ...body, achievedOn: '2026-02-30' }))).toBe(CommErrorCode.VALIDATION);
+    expect(await code(certificates.suggest(s.unrelatedTeacherId, body))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
+    expect(await code(certificates.suggest(s.ownerId, body))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
+    expect(await code(certificates.suggest(s.teacherId, { ...body, achievedOn: '2026-02-30' }))).toBe(CommErrorCode.VALIDATION);
   });
 
-  it('the Teachers department lists them; Operations, parents and other teachers do not see them', async () => {
+  it('a teacher reads their own suggestions; staff and parents read none here', async () => {
     await newCertificate();
-    expect((await certificates.list(tsupId, { state: 'requested' })).certificates).toHaveLength(1);
-    expect((await certificates.list(s.teacherId, {})).certificates).toHaveLength(1);
-    expect((await certificates.list(s.unrelatedTeacherId, {})).certificates).toHaveLength(0);
-    expect(await code(certificates.list(s.ownerId, {}))).toBe(CommErrorCode.CERTIFICATE_DENIED);
-    expect(await code(certificates.list(s.parentId, {}))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect((await certificates.listOwnSuggestions(s.teacherId, {})).certificates).toHaveLength(1);
+    expect((await certificates.listOwnSuggestions(s.unrelatedTeacherId, {})).certificates).toHaveLength(0);
+    expect(await code(certificates.listOwnSuggestions(s.ownerId, {}))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect(await code(certificates.listOwnSuggestions(s.parentId, {}))).toBe(CommErrorCode.CERTIFICATE_DENIED);
   });
 
-  it('issuing delivers the real file into the group, where the parent reads it', async () => {
-    const { certificate, conversationId } = await newCertificate();
-    const { upload, conversationId: target } = await certificates.authorizeUpload(tsupId, certificate.id, {
-      mimeType: 'application/pdf',
-      byteSize: PDF.length,
-    });
-    expect(target).toBe(groupId);
-    expect(upload.objectKey.startsWith(`conversations/${groupId}/`)).toBe(true);
-    await blobs.put(upload.objectKey, 'application/pdf', PDF);
-
-    const issued = await certificates.issue(tsupId, certificate.id, {
-      objectKey: upload.objectKey,
-      mimeType: 'application/pdf',
-      byteSize: PDF.length,
-      fileName: 'certificate.pdf',
-    });
-    expect(issued.certificate.state).toBe('issued');
-    expect(issued.certificate.deliveredTo).toBe(groupId);
-
-    const delivered = await cardsIn(groupId);
-    expect(delivered.map((m) => m.card?.kind)).toEqual(['certificate_issued']);
-    expect(delivered[0].moderation).toBe('published');
-    expect(delivered[0].attachments.map((a) => a.objectKey)).toEqual([upload.objectKey]);
-
-    const parentView = await g.messages.list({ conversationId: groupId, actorId: s.parentId });
-    const seen = parentView.messages.find((m) => m.id === delivered[0].id);
-    expect(seen?.card?.kind).toBe('certificate_issued');
-    expect(seen?.attachments[0]?.url).toBeTruthy();
-
-    // ...and the teacher's request is answered where it was asked.
-    expect((await cardsIn(conversationId)).map((m) => m.card?.kind)).toEqual(['certificate_requested', 'certificate_issued']);
-
-    expect(await code(certificates.decline(tsupId, certificate.id, { reason: 'late' }))).toBe(CommErrorCode.CERTIFICATE_STATE);
-  });
-
-  it('refuses a file that is not what it claims, or that was not uploaded for this group', async () => {
+  it('the learner\'s Operations supervisor sees the suggestion on the Certificates page; the Teachers department does not decide it', async () => {
     const { certificate } = await newCertificate();
-    const { upload } = await certificates.authorizeUpload(tsupId, certificate.id, { mimeType: 'image/png', byteSize: PDF.length });
-    await blobs.put(upload.objectKey, 'image/png', PDF);
-    expect(
-      await code(certificates.issue(tsupId, certificate.id, { objectKey: upload.objectKey, mimeType: 'image/png', byteSize: PDF.length, fileName: 'c.png' })),
-    ).toBe(CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED);
-
-    const foreign = `conversations/${randomUUID()}/${randomUUID()}`;
-    await blobs.put(foreign, 'application/pdf', PDF);
-    expect(
-      await code(certificates.issue(tsupId, certificate.id, { objectKey: foreign, mimeType: 'application/pdf', byteSize: PDF.length, fileName: 'c.pdf' })),
-    ).toBe(CommErrorCode.ATTACHMENT_NOT_IN_CONVERSATION);
-
-    const missing = `conversations/${groupId}/${randomUUID()}`;
-    expect(
-      await code(certificates.issue(tsupId, certificate.id, { objectKey: missing, mimeType: 'application/pdf', byteSize: PDF.length, fileName: 'c.pdf' })),
-    ).toBe(CommErrorCode.CERTIFICATE_STATE);
-
-    expect(await code(certificates.authorizeUpload(s.ownerId, certificate.id, { mimeType: 'application/pdf', byteSize: 10 }))).toBe(
-      CommErrorCode.CERTIFICATE_DENIED,
-    );
-  });
-
-  it('declining answers the teacher privately, and nothing reaches the family', async () => {
-    const { certificate, conversationId } = await newCertificate();
-    expect(await code(certificates.decline(tsupId, certificate.id, {}))).toBe(CommErrorCode.VALIDATION);
-    const out = await certificates.decline(tsupId, certificate.id, { reason: 'the level is not finished yet' });
-    expect(out.certificate.state).toBe('declined');
-    expect((await cardsIn(conversationId)).map((m) => m.card?.kind)).toEqual(['certificate_requested', 'certificate_declined']);
-    expect(await cardsIn(groupId)).toEqual([]);
-  });
-
-  it('cannot be issued while the learner has no live group', async () => {
-    const { certificate } = await newCertificate();
-    await g.prisma.conversation.update({ where: { id: groupId }, data: { archivedAt: new Date() } });
-    expect(await code(certificates.authorizeUpload(tsupId, certificate.id, { mimeType: 'application/pdf', byteSize: 10 }))).toBe(
-      CommErrorCode.CERTIFICATE_STATE,
-    );
-    expect((await certificates.list(tsupId, { state: 'requested' })).certificates[0].canDeliver).toBe(false);
+    const forSupervisor = await certificates.list(s.ownerId, { status: 'suggested' });
+    expect(forSupervisor.certificates.map((c) => [c.id, c.actions])).toEqual([[certificate.id, ['accept', 'decline']]]);
+    // A Teachers-department member reaches teacher certificates, not this suggestion.
+    expect((await certificates.list(tsupId, { status: 'suggested' })).certificates).toEqual([]);
+    expect(await code(certificates.decline(tsupId, certificate.id, { reason: 'not this one, sorry' }))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
   });
 });
 
@@ -441,12 +374,12 @@ describe('4. the database backstop', () => {
     ).toMatch(/staff of the Teachers department/);
   });
 
-  it('a certificate request is written once; an allowance is never edited', async () => {
+  it('a certificate changes only by an act; an allowance is never edited', async () => {
     const { certificate } = await newCertificate();
     expect(
-      await sqlError(g.prisma.learnerCertificate.update({ where: { id: certificate.id }, data: { title: 'changed' } })),
-    ).toMatch(/written once/);
-    expect(await sqlError(g.prisma.learnerCertificate.delete({ where: { id: certificate.id } }))).toMatch(/never deleted/);
+      await sqlError(g.prisma.appreciationCertificate.update({ where: { id: certificate.id }, data: { title: 'changed' } })),
+    ).toMatch(/one act/);
+    expect(await sqlError(g.prisma.appreciationCertificate.delete({ where: { id: certificate.id } }))).toMatch(/never deleted/);
     await leave.setAllowance(tmgrId, s.teacherId, { year: NEXT_YEAR, days: 5 });
     expect(
       await sqlError(g.prisma.$executeRawUnsafe(`update chat.teacher_leave_allowance set days = 50`)),
@@ -482,7 +415,7 @@ describe('4. the database backstop', () => {
   it('a learner reassigned away is no longer the teacher\'s to request a certificate for', async () => {
     await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${s.newTeacherId}'::uuid where id = '${s.learnerId}'::uuid`);
     const body = { learnerId: s.learnerId, title: 't', achievement: 'a', achievedOn: '2026-10-01', printedName: 'n' };
-    expect(await code(certificates.request(s.teacherId, body))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
+    expect(await code(certificates.suggest(s.teacherId, body))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
   });
 });
 
@@ -536,7 +469,7 @@ const appUrl = process.env.DATABASE_APP_URL;
   it('no new PD-12 table is readable by a request role at all', async () => {
     const subject = await login(tsupId);
     for (const sql of [
-      'select count(*) from chat.learner_certificate',
+      'select count(*) from chat.appreciation_certificate',
       'select count(*) from chat.teacher_leave_request',
       'select count(*) from chat.teacher_leave_allowance',
       'select count(*) from chat.message_card_kind',

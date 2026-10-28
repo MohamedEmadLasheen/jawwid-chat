@@ -74,6 +74,29 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
       ['supervisor', 'teachers', 'reports.view'],
     ],
   },
+  {
+    // PD-41: the Certificates page -- Operations requests students', Teacher
+    // Supervision teachers'; managers oversee; the super admin keeps the types.
+    migration: '20261029110000_chat_pd041_certificates.sql',
+    tag: 'pd041',
+    permissions: ['certificates.request.student', 'certificates.request.teacher', 'certificates.story', 'certificates.oversee', 'certificates.types'],
+    bundles: [
+      ['manager', 'operations', 'certificates.deliver'],
+      ['manager', 'operations', 'certificates.oversee'],
+      ['manager', 'operations', 'certificates.request.student'],
+      ['manager', 'operations', 'certificates.story'],
+      ['manager', 'operations', 'certificates.view'],
+      ['manager', 'teachers', 'certificates.oversee'],
+      ['manager', 'teachers', 'certificates.request.teacher'],
+      ['manager', 'teachers', 'certificates.story'],
+      ['supervisor', 'operations', 'certificates.deliver'],
+      ['supervisor', 'operations', 'certificates.request.student'],
+      ['supervisor', 'operations', 'certificates.story'],
+      ['supervisor', 'operations', 'certificates.view'],
+      ['supervisor', 'teachers', 'certificates.request.teacher'],
+      ['supervisor', 'teachers', 'certificates.story'],
+    ],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));
