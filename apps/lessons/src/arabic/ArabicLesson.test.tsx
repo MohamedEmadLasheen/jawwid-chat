@@ -12,7 +12,11 @@ describe('the Arabic letters lesson page', () => {
     expect(screen.getByRole('status').textContent).toBe('هذا الدرس قيد المراجعة.');
     expect(screen.queryByText('كِتَابْ')).toBeNull();
     unmount();
-    render(<App pathname="/lessons/arabic/lesson-1" />);
+    // The real lesson 1 file is pending the Teachers department: its page shows nothing of it.
+    const real = render(<App pathname="/lessons/arabic/lesson-1" />);
+    expect(screen.getByRole('status').textContent).toBe('هذا الدرس قيد المراجعة.');
+    real.unmount();
+    render(<ArabicLesson lesson={1} content={null} />);
     expect(screen.getByRole('status').textContent).toBe('هذا الدرس قيد الإعداد.');
   });
 
