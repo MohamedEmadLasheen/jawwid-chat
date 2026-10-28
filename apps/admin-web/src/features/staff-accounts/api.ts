@@ -135,8 +135,21 @@ export const staffAccountsApi = {
   archiveRole: (roleId: string, reason: string) => api.post<{ role: AccessRole }>(`${rolePath(roleId)}/archive`, { reason }),
 }
 
-/** The tier rank a role's `maxTier` is compared with (plan §5): a role is granted up to its tier. */
-const RANK: Record<string, number> = { specialist: 1, admin: 2, coverage: 2, supervisor: 2, manager: 3 }
+/**
+ * The tier rank a role's `maxTier` is compared with (plan §5): a role is
+ * granted up to its tier. The legacy department tiers rank with the specialist
+ * (chat.staff_tier -> legacy_department, tier_rank 1).
+ */
+const RANK: Record<string, number> = {
+  specialist: 1,
+  finance: 1,
+  technical: 1,
+  academic: 1,
+  admin: 2,
+  coverage: 2,
+  supervisor: 2,
+  manager: 3,
+}
 
 /** May a role with this `maxTier` go to an account of this tier? Advisory, like `grantable`. */
 export function roleFitsTier(maxTier: string, tier: string): boolean {

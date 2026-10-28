@@ -85,6 +85,8 @@ export const SA = {
   },
   signInLabel: { ar: 'اسم الدخول', en: 'Sign-in' },
   codeLabel: { ar: 'الرمز', en: 'Code' },
+  copy: { ar: 'نسخ الرمز', en: 'Copy code' },
+  copied: { ar: 'تم النسخ', en: 'Copied' },
   validUntil: { ar: 'صالح حتى {when}', en: 'Valid until {when}' },
   emailedTo: { ar: 'وأُرسل أيضًا إلى {email}.', en: 'It was also e-mailed to {email}.' },
   emailedToSignIn: { ar: 'وأُرسل أيضًا إلى بريد الدخول.', en: 'It was also e-mailed to the sign-in address.' },
@@ -161,6 +163,11 @@ export const SA = {
   nameEn: { ar: 'الاسم (بالإنجليزية)', en: 'Name (English)' },
   descriptionOptional: { ar: 'الوصف (اختياري)', en: 'Description (optional)' },
   checklist: { ar: 'ما يفتحه الدور', en: 'What the role opens' },
+  notInChecklist: { ar: 'ليست في القائمة', en: 'Not in the checklist' },
+  notInChecklistHint: {
+    ar: 'يحملها هذا الدور لكنها لم تعد في القائمة. تُرسل كما هي، ويتحقق منها الخادم.',
+    en: 'This role holds them but the checklist no longer offers them. They are sent back unchanged, and the server checks them.',
+  },
   checklistHint: {
     ar: 'مجمّعة حسب الصفحة. صلاحيات مدير النظام لا تدخل في أي دور ولا تظهر هنا.',
     en: "Grouped by page. The super admin's own powers never go in a role and are not listed.",
@@ -190,7 +197,7 @@ export const TIER: Record<string, Pair> = {
 export const STATUS: Record<string, Pair> = {
   provisioned: { ar: 'غير مُعَدّ', en: 'Not set up' },
   active: { ar: 'نشط', en: 'Active' },
-  suspended: { ar: 'موقوف', en: 'Inactive' },
+  suspended: { ar: 'موقوف', en: 'Suspended' },
   deactivated: { ar: 'معطّل نهائيًا', en: 'Deactivated' },
 }
 
@@ -281,13 +288,22 @@ export function localized(error: unknown): ApiError | undefined {
 }
 
 /**
- * ACCESS_ROLE_CONFLICT names the grants that block an edit, as
- * "<staff id> (granted by <staff id>)", comma-separated. Parsed so the editor
- * can show names; null when the message has another shape.
+ * ACCESS_ROLE_CONFLICT's blocking grants: `detail.grants` (every one, parsed
+ * by the API from the full database text), else the message's
+ * "<staff id> (granted by <staff id>)" list, which may have been cut short.
+ * Null when neither has any.
  */
 export function blockingGrants(error: unknown): Array<{ staffId: string; grantedBy: string }> | null {
   if (!(error instanceof ApiError) || error.code !== 'COMM.ACCESS_ROLE_CONFLICT') return null
-  const list = /grant to:\s*(.+?);/.exec(error.messageEn)?.[1]
+  const detail = (error.detail as { grants?: unknown } | null)?.grants
+  if (Array.isArray(detail)) {
+    const grants = detail.filter(
+      (g): g is { staffId: string; grantedBy: string } =>
+        typeof g === 'object' && g !== null && typeof g.staffId === 'string' && typeof g.grantedBy === 'string',
+    )
+    if (grants.length > 0) return grants.map((g) => ({ staffId: g.staffId, grantedBy: g.grantedBy }))
+  }
+  const list = /grant to:\s*(.+?)(?:;|$)/.exec(error.messageEn)?.[1]
   if (!list) return null
   const out: Array<{ staffId: string; grantedBy: string }> = []
   for (const m of list.matchAll(/([^\s,()]+)\s*\(granted by ([^\s)]+)\)/g)) out.push({ staffId: m[1]!, grantedBy: m[2]! })

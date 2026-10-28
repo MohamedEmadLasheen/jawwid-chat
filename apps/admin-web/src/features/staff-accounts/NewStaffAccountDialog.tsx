@@ -5,7 +5,7 @@ import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { LoadingState } from '@/shared/components/States'
-import { Field } from '@/features/teacher-files/TeacherFileDialogs'
+import { Field } from '@/shared/components/Field'
 import { useStructure } from '@/features/organization/hooks'
 import { roleFitsTier, type AccessRole, type CreatableTier, type CreatedStaffAccount, type PermissionEntry } from './api'
 import { RISK, SA, TIER, describeError, pageLabel, useCopy } from './copy'
@@ -63,10 +63,10 @@ export function NewStaffAccountDialog({ onClose }: { onClose: () => void }) {
   // A role no longer offered (the tier changed) is never sent.
   const chosen = roleIds.filter((id) => offered.some((r) => r.id === id))
 
-  if (created) return <StaffCodeSheet signIn={created.signIn} firstLogin={created.firstLogin} onClose={close} />
+  if (created) return <StaffCodeSheet signIn={created.signIn} firstLogin={created.firstLogin} forCreation onClose={close} />
 
   const identityMissing = !form.name.trim() || !form.email.trim()
-  const placementBlocked = !superAdmin && (structure.isLoading || managed === null)
+  const placementBlocked = !superAdmin && (structure.isLoading || structure.error != null || managed === null)
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
 
   const next = () => {
@@ -167,12 +167,16 @@ export function NewStaffAccountDialog({ onClose }: { onClose: () => void }) {
                     ))}
                   </select>
                 </div>
+              ) : structure.error ? (
+                <StructureRefusal error={structure.error} />
               ) : (
                 structure.isLoading && <LoadingState compact />
               )}
             </>
           ) : structure.isLoading ? (
             <LoadingState compact />
+          ) : structure.error ? (
+            <StructureRefusal error={structure.error} />
           ) : managed ? (
             <>
               <dl className="sa-fixed">
@@ -233,6 +237,16 @@ export function NewStaffAccountDialog({ onClose }: { onClose: () => void }) {
         </>
       )}
     </Dialog>
+  )
+}
+
+/** GET /org/structure refused or failed: its own words, not "you do not run a department" (review of #239). */
+function StructureRefusal({ error }: { error: unknown }) {
+  const { locale } = useI18n()
+  return (
+    <div className="banner banner--danger" role="alert">
+      {describeError(error, locale)}
+    </div>
   )
 }
 

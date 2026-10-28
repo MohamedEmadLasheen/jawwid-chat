@@ -7,7 +7,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { LoadingState, QueryBoundary } from '@/shared/components/States'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
-import { Field } from '@/features/teacher-files/TeacherFileDialogs'
+import { Field } from '@/shared/components/Field'
 import type { AccessRole, PermissionEntry, RoleMaxTier, StaffAccount } from './api'
 import { SA, TIER, blockingGrants, describeError, localized, pageLabel, useCopy } from './copy'
 import { useAccessRoles, useArchiveRole, useDefineRole, usePermissionCatalogue, useStaffAccounts, useUpdateRole } from './hooks'
@@ -86,17 +86,14 @@ export function RolesPage() {
                     <td>
                       <div dir="auto">
                         <strong>{locale === 'ar' ? r.nameAr : r.nameEn}</strong>{' '}
-                        {r.template && (
-                          <span title={tx(SA.templateHint)}>
-                            <Badge tone="info">{tx(SA.template)}</Badge>
-                          </span>
-                        )}{' '}
+                        {r.template && <Badge tone="info">{tx(SA.template)}</Badge>}{' '}
                         {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}{' '}
                         {!canDefine && r.grantable && <Badge tone="ok">{tx(SA.youCanGrant)}</Badge>}
                       </div>
                       <div className="field__hint" dir="ltr">
                         {r.key}
                       </div>
+                      {r.template && <div className="field__hint">{tx(SA.templateHint)}</div>}
                       {r.description && (
                         <div className="field__hint" dir="auto">
                           {r.description}
@@ -197,9 +194,12 @@ function RoleEditorDialog({ role, staff, onClose }: { role: AccessRole | null; s
     offered.map((p) => p.key),
     offered,
   )
-  // A key the role holds that the catalogue no longer offers stays as it is.
+  // A key the role holds that the checklist does not offer (retired, or barred
+  // from roles) is shown checked and locked, and sent back unchanged: the
+  // server validates it (review of #239). Nothing is dropped silently.
   const offeredKeys = new Set(offered.map((p) => p.key))
-  const chosen = [...keys].filter((k) => offeredKeys.has(k) || role?.permissions.includes(k)).sort()
+  const locked = catalogue.data ? (role?.permissions ?? []).filter((k) => !offeredKeys.has(k)) : []
+  const chosen = [...new Set([...[...keys].filter((k) => offeredKeys.has(k)), ...locked])].sort()
 
   const toggle = (key: string, on: boolean) =>
     setKeys((prev) => {
@@ -276,6 +276,18 @@ function RoleEditorDialog({ role, staff, onClose }: { role: AccessRole | null; s
               ))}
             </fieldset>
           ))}
+          {locked.length > 0 && (
+            <fieldset>
+              <legend>{tx(SA.notInChecklist)}</legend>
+              <p className="field__hint">{tx(SA.notInChecklistHint)}</p>
+              {locked.map((k) => (
+                <label key={k}>
+                  <input type="checkbox" checked disabled readOnly />
+                  <span dir="ltr">{k}</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
         </div>
       )}
       {touched && chosen.length === 0 && <p className="field__error">{tx(SA.atLeastOne)}</p>}

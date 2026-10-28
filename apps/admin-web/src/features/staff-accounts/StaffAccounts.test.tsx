@@ -478,8 +478,12 @@ describe('PD-40: review of #239', () => {
   it('a refused list is an error state, not an empty list', async () => {
     on('GET', /\/admin\/staff-accounts$/, () => json({ error: { code: 'COMM.STAFF_ACCOUNT_DENIED', message: 'only the super admin and department managers see staff accounts' } }, 403))
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
-    expect(await screen.findByText('only the super admin and department managers see staff accounts')).toBeInTheDocument()
+    // The shared ErrorState: a 403 says "forbidden" and offers no retry.
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent("You don't have permission to access this.")
+    expect(within(alert).queryByRole('button', { name: /Retry/ })).not.toBeInTheDocument()
     expect(screen.queryByText('No staff accounts to show.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Specialist One' })).not.toBeInTheDocument()
   })
 
   it('renders in Arabic: the tabs, the page, a tier, a status and a role', async () => {
