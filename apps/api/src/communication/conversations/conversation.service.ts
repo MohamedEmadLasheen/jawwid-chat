@@ -1088,6 +1088,115 @@ export class ConversationService {
   }
 
   /**
+   * PD-42: children added to a family that already has its group (Add child, a
+   * trial sibling's Assign, a child placed on the family's supervisor later)
+   * join it, with the same authority as createFamilyGroup: the children's
+   * supervisor, their active backup or manager, the super admin.
+   *
+   * The group is the family's live family group whose children are all
+   * supervised by the new children's one supervisor (the earliest, if there
+   * were ever two). Each new child is anchored, then their active teachers who
+   * are not seated yet join (the member guard admits a teacher only of an
+   * anchored child); one system line `group.learner_added`, the audit row
+   * `family_group.learners_added`, and MEMBERSHIP_CHANGED for the teachers
+   * seated. Children already in it are skipped, so a second call adds nothing.
+   *
+   * Returns the group joined, or null when there is none to join (no group
+   * yet, or a child without a supervisor, or children of two supervisors).
+   */
+  async addLearnersToFamilyGroup(
+    actorId: string,
+    input: { familyId: string; learnerIds: readonly string[] },
+  ): Promise<{ conversationId: string; added: string[] } | null> {
+    const actor = await this.requireActor(actorId);
+    const gate = this.authz.canProvisionStudentGroup(actor);
+    if (!gate.allowed) throw new CommError(gate.code, gate.reason);
+    const ids = [...new Set(input.learnerIds)];
+    if (ids.length === 0) return null;
+    const learners = await this.prisma.learner.findMany({
+      where: { id: { in: ids } },
+      include: { family: { select: { id: true, organizationId: true } } },
+    });
+    if (
+      learners.length !== ids.length ||
+      learners.some((l) => l.organizationId !== actor.organizationId || l.familyId !== input.familyId)
+    ) {
+      throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'learner not found', 404);
+    }
+    const supervision = await this.prisma.learnerSupervision.findMany({ where: { learnerId: { in: ids } } });
+    const supervisors = new Set(supervision.map((r) => r.supervisorId));
+    if (supervision.length !== learners.length || supervisors.size !== 1) return null;
+    const supervisorId = supervision[0].supervisorId;
+
+    const groups = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT c.id::text AS id
+        FROM chat.conversation c
+       WHERE c.family_id = ${input.familyId}::uuid AND c.type = 'family_group' AND c.archived_at IS NULL
+         AND EXISTS (SELECT 1 FROM chat.conversation_learner cl WHERE cl.conversation_id = c.id)
+         AND NOT EXISTS (SELECT 1
+                           FROM chat.conversation_learner cl
+                           LEFT JOIN chat.learner_supervision ls ON ls.learner_id = cl.learner_id
+                          WHERE cl.conversation_id = c.id AND ls.supervisor_id IS DISTINCT FROM ${supervisorId}::uuid)
+       ORDER BY c.created_at, c.id
+       LIMIT 1`;
+    const conversationId = groups[0]?.id;
+    if (!conversationId) return null;
+
+    const scoped = this.authz.canProvisionStudentGroupFor(
+      actor,
+      provisioningTarget(learners[0], supervisorId, await this.actsForOrNull(actor, supervisorId)),
+    );
+    if (!scoped.allowed) throw provisioningRefusal(scoped);
+
+    const anchored = new Set(
+      (await this.prisma.conversationLearner.findMany({ where: { conversationId, learnerId: { in: ids } }, select: { learnerId: true } }))
+        .map((r) => r.learnerId),
+    );
+    const joining = learners
+      .filter((l) => !anchored.has(l.id))
+      .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    if (joining.length === 0) return { conversationId, added: [] };
+    const seated = new Set(
+      (await this.prisma.conversationMember.findMany({ where: { conversationId, leftAt: null }, select: { actorId: true } }))
+        .map((m) => m.actorId),
+    );
+    const teacherIds = [...new Set(joining.map((l) => l.teacherId).filter((t): t is string => !!t && !seated.has(t)))];
+    const teachers = teacherIds.length
+      ? await this.prisma.teacher.findMany({ where: { id: { in: teacherIds }, isActive: true, leftAt: null }, select: { id: true } })
+      : [];
+    const addedBy = actor.kind === ActorKind.STAFF ? actor.actorId : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.assertActorLive(tx, actor);
+      await tx.conversationLearner.createMany({
+        data: joining.map((l) => ({ conversationId, learnerId: l.id, organizationId: l.organizationId, addedBy })),
+      });
+      if (teachers.length > 0) {
+        await tx.conversationMember.createMany({
+          data: teachers.map((t) => ({
+            conversationId, actorId: t.id, actorKind: ActorKind.TEACHER, memberRole: MemberRole.TEACHER, addedBy,
+          })),
+        });
+      }
+      await this.systemMessage(tx, conversationId, 'group.learner_added', { learner: joining.map((l) => l.name).join(', ') });
+      await this.audit.audit(tx, {
+        actorId: addedBy,
+        action: 'family_group.learners_added',
+        entity: 'conversation',
+        entityId: conversationId,
+        after: { learnerIds: joining.map((l) => l.id), supervisorId, teacherIds: teachers.map((t) => t.id) },
+        reason: 'children added to the family (PD-42)',
+      });
+      if (teachers.length > 0) {
+        await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
+          conversationId, added: teachers.map((t) => t.id), removed: [],
+        });
+      }
+    });
+    return { conversationId, added: joining.map((l) => l.id) };
+  }
+
+  /**
    * PD-8: children moved to `newSupervisorId`. Called by OrgStructureService
    * INSIDE the transaction that writes the new chat.learner_supervision rows,
    * so the deferred coherence trigger judges the result, not the steps.

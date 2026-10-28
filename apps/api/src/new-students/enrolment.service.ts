@@ -154,7 +154,10 @@ export class NewStudentEnrolmentService {
     }
     if (!isUuid(trialId)) throw notFound();
     const supervisorId = typeof body.supervisorId === 'string' && isUuid(body.supervisorId) ? body.supervisorId : null;
-    if (!supervisorId) throw invalid('supervisorId: required');
+    // PD-42 PR-3: the trial's parent is already in Chat -- the children join that family.
+    const attachTo = body.familyId === undefined || body.familyId === null ? null
+      : typeof body.familyId === 'string' && isUuid(body.familyId) ? body.familyId.toLowerCase() : 'invalid';
+    if (attachTo === 'invalid') throw invalid('familyId: the family to add the children to');
     const form = await this.forms.get(org, trialId);
     if (!form) throw notFound();
     if (await this.prisma.studentEnrolment.findUnique({ where: { lessonId: trialId } })) {
@@ -162,8 +165,17 @@ export class NewStudentEnrolmentService {
     }
     const rawEmail = typeof body.email === 'string' && body.email.trim() ? body.email : form.parent.email ?? '';
     const email = normalizeEmail(rawEmail);
+    if (attachTo) return this.attachSibling(actor, trialId, form, attachTo, supervisorId, email || null);
+    if (!supervisorId) throw invalid('supervisorId: required');
     if (!email) throw invalid('email: the parent signs up with an e-mail address; enter a valid one');
-    if (await this.prisma.account.findUnique({ where: { subject: email }, select: { id: true } })) {
+    const holder = await this.prisma.account.findUnique({ where: { subject: email }, select: { id: true, kind: true } });
+    if (holder) {
+      // PD-42 PR-3: a parent already in Chat is answered with their family, so
+      // the children can be added to it (the trial sibling, plan §1.7).
+      const parent = holder.kind === 'family'
+        ? await this.prisma.contact.findFirst({ where: { accountId: holder.id, organizationId: org }, select: { familyId: true } })
+        : null;
+      if (parent) throw await parentExists(this.prisma, parent.familyId);
       throw new CommError(CommErrorCode.LESSON_STATE, 'this e-mail already belongs to an account in Chat', 409);
     }
     const supervisor = await this.prisma.staff.findFirst({ where: { id: supervisorId, organizationId: org } });
@@ -221,9 +233,7 @@ export class NewStudentEnrolmentService {
         for (const k of parentContactKeys(email, form.parent.phone)) {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pd042:${k.hash}`}, 0))`;
           const other = await tx.familyContactKey.findFirst({ where: { organizationId: org, keyHash: k.hash }, select: { familyId: true } });
-          if (other) {
-            throw new CommError(CommErrorCode.PARENT_EXISTS, 'this parent is already in Chat; add the children to their family', 409, { familyId: other.familyId });
-          }
+          if (other) throw await parentExists(tx, other.familyId);
           await tx.familyContactKey.create({ data: { organizationId: org, keyHash: k.hash, familyId: family.id, kind: k.kind, createdBy: actor.actorId } });
         }
 
@@ -281,10 +291,125 @@ export class NewStudentEnrolmentService {
       }),
     );
 
-    // The children's weekly times, from the form, where the teacher is free.
+    const schedules = await this.scheduleFromForm(actor, trialId, created.learners);
+    return { familyId: created.familyId, learnerIds: created.learners.map((l) => l.id), schedules };
+  }
+
+  /**
+   * PD-42 PR-3: the trial sibling (plan §1.7, §4.4). The trial's parent is
+   * already a family in Chat, so Assign adds the form's children to it instead
+   * of making a second family: no new family, parent or account; the children
+   * go to the family's Operations supervisor (brothers and sisters share one;
+   * PD-24 moves them together), and join its live group. Only to the family
+   * the trial's parent is in: one of the form's contact keys -- or the sign-in
+   * e-mail -- must be that family's.
+   */
+  private async attachSibling(
+    actor: Actor,
+    trialId: string,
+    form: PresentedForm,
+    familyId: string,
+    requested: string | null,
+    email: string | null,
+  ) {
+    const org = actor.organizationId as string;
+    const family = await this.prisma.family.findFirst({ where: { id: familyId, organizationId: org }, select: { id: true, primaryContactId: true } });
+    if (!family) throw notFound();
+    const contact = family.primaryContactId
+      ? await this.prisma.contact.findUnique({ where: { id: family.primaryContactId }, select: { id: true, accountId: true } })
+      : null;
+    const keys = parentContactKeys(email, form.parent.phone);
+    const held = keys.length
+      ? await this.prisma.familyContactKey.findMany({ where: { organizationId: org, keyHash: { in: keys.map((k) => k.hash) } }, select: { familyId: true } })
+      : [];
+    const account = email ? await this.prisma.account.findUnique({ where: { subject: email }, select: { id: true } }) : null;
+    const same = held.some((k) => k.familyId === family.id) || (account !== null && account.id === contact?.accountId);
+    if (!contact || !same || held.some((k) => k.familyId !== family.id)) {
+      throw invalid('familyId: this trial\'s parent is not that family\'s parent');
+    }
+    const current = await this.prisma.$queryRaw<Array<{ supervisor_id: string }>>`
+      SELECT DISTINCT ls.supervisor_id::text AS supervisor_id
+        FROM chat.learner_supervision ls JOIN chat.learner l ON l.id = ls.learner_id
+       WHERE l.family_id = ${family.id}::uuid`;
+    if (current.length > 1) {
+      throw new CommError(CommErrorCode.LESSON_STATE, 'this family\'s children have different supervisors; transfer them to one first (PD-24)', 409);
+    }
+    const supervisorId = current[0]?.supervisor_id ?? requested;
+    if (!supervisorId) throw invalid('supervisorId: required -- the family has no Operations supervisor yet');
+    if (requested && requested !== supervisorId) {
+      throw invalid('supervisorId: brothers and sisters share their Operations supervisor; this family\'s is already chosen');
+    }
+    const decision = this.authz.canAssignSupervision(actor, {
+      organizationId: org,
+      actsForNew: await this.authz.actsFor(actor, supervisorId, new Date()),
+      currentSupervisorId: null,
+      actsForCurrent: null,
+    });
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    const learners = await this.lessons.write(() =>
+      this.prisma.$transaction(async (tx) => {
+        await this.conversations.assertActorLive(tx, actor);
+        const created: Array<{ id: string; child: PresentedForm['children'][number] }> = [];
+        for (const child of form.children) {
+          const [{ id }] = await tx.$queryRaw<Array<{ id: string }>>`
+            SELECT chat.enrol_learner(${family.id}::uuid, ${child.name}, ${child.teacher.id}::uuid, ${actor.actorId}::uuid)::text AS id`;
+          await tx.learnerSupervision.create({
+            data: { learnerId: id, organizationId: org, supervisorId, assignedBy: actor.actorId, reason: 'enrolled from New Students (sibling)' },
+          });
+          const courseId = await this.courseFor(tx, org, actor.actorId, child.course);
+          await tx.learnerEnrollment.create({
+            data: { learnerId: id, organizationId: org, courseId, statedAge: child.age, statedAgeOn: todayUtc(), updatedBy: actor.actorId },
+          });
+          await this.audit.audit(tx, {
+            actorId: actor.actorId, action: 'learner.supervisor_assigned', entity: 'learner', entityId: id,
+            after: { supervisorId }, reason: 'enrolled from New Students (sibling)',
+          });
+          created.push({ id, child });
+        }
+        // The form's keys the family does not hold yet become its own (S1).
+        for (const k of keys) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pd042:${k.hash}`}, 0))`;
+          const other = await tx.familyContactKey.findFirst({ where: { organizationId: org, keyHash: k.hash }, select: { familyId: true } });
+          if (other && other.familyId !== family.id) throw invalid('familyId: this trial\'s parent is not that family\'s parent');
+          if (!other) await tx.familyContactKey.create({ data: { organizationId: org, keyHash: k.hash, familyId: family.id, kind: k.kind, createdBy: actor.actorId } });
+        }
+        await tx.studentEnrolment.create({
+          data: {
+            lessonId: trialId, organizationId: org, familyId: family.id, contactId: contact.id, accountId: contact.accountId,
+            learnerIds: created.map((l) => l.id), assignedBy: actor.actorId, origin: 'trial', kind: 'added_children',
+          },
+        });
+        await this.payments?.attachTrial(tx, trialId, family.id, created.map((l) => l.id));
+        await this.audit.audit(tx, {
+          actorId: actor.actorId, action: 'family.children_added', entity: 'family', entityId: family.id,
+          after: { origin: 'trial', kind: 'added_children', trialId, learnerIds: created.map((l) => l.id), supervisorId },
+          reason: 'trial sibling added to the family (PD-42)',
+        });
+        return created;
+      }),
+    );
+
+    const schedules = await this.scheduleFromForm(actor, trialId, learners);
+    let group: 'joined' | 'none' | 'not_joined' = 'none';
+    try {
+      const joined = await this.conversations.addLearnersToFamilyGroup(actor.actorId, { familyId: family.id, learnerIds: learners.map((l) => l.id) });
+      if (joined) {
+        await this.prisma.studentEnrolment.update({ where: { lessonId: trialId }, data: { groupConversationId: joined.conversationId } });
+        group = 'joined';
+      }
+    } catch (e) {
+      this.log.warn(`trial ${trialId}: children not added to the family group: ${e instanceof Error ? e.message : String(e)}`);
+      group = 'not_joined';
+    }
+    return { familyId: family.id, learnerIds: learners.map((l) => l.id), schedules, attached: true, group };
+  }
+
+  /** The children's weekly times, from the form, where the teacher is free (best effort; the answer says which were not). */
+  private async scheduleFromForm(actor: Actor, trialId: string, learners: Array<{ id: string; child: PresentedForm['children'][number] }>) {
     const duration = await this.trialMinutes(trialId);
     const schedules: Array<{ learnerId: string; set: boolean; reason: string | null }> = [];
-    for (const { id, child } of created.learners) {
+    for (const { id, child } of learners) {
       try {
         const learner = await this.prisma.learner.findUniqueOrThrow({ where: { id } });
         const slots = child.schedule.map((s) => ({ weekday: s.weekday, startMinute: minuteOf(s.time), durationMinutes: duration }));
@@ -296,7 +421,7 @@ export class NewStudentEnrolmentService {
         schedules.push({ learnerId: id, set: false, reason });
       }
     }
-    return { familyId: created.familyId, learnerIds: created.learners.map((l) => l.id), schedules };
+    return schedules;
   }
 
   /**
@@ -498,6 +623,18 @@ function todayUtc(): Date {
 
 function notFound() {
   return new CommError(CommErrorCode.LESSON_NOT_FOUND, 'new student not found', 404);
+}
+
+/**
+ * PD-42: the trial's parent is already a family in Chat. The Operations manager
+ * (the only one who assigns) reaches every family, so it is named: Assign with
+ * its familyId adds the children there.
+ */
+async function parentExists(db: Pick<Prisma.TransactionClient, 'family'>, familyId: string): Promise<CommError> {
+  const family = await db.family.findUnique({ where: { id: familyId }, select: { id: true, primaryContactId: true, displayName: true } });
+  return new CommError(CommErrorCode.PARENT_EXISTS, 'this parent is already in Chat; add the children to their family', 409, {
+    familyId, contactId: family?.primaryContactId ?? null, parentName: family?.displayName ?? null,
+  });
 }
 
 function invalid(reason: string) {
