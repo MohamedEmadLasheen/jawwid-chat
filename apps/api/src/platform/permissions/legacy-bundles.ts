@@ -125,6 +125,9 @@ const TEACHERS_MEMBER = k(
   // PD-40 shadow QA (2026-10-28): the stats reader is the Teachers department
   // (StatsService.isStatsReader), members included.
   'reports.view',
+  // PD-43 (owner Q1): teacher supervisors add teachers too, for themselves or
+  // with no supervisor (decideTeacherOnboarding narrows them).
+  'teachers.create',
 );
 
 /** Sales: enrolment, trials, payments (PD-16, PD-20). */
@@ -166,6 +169,9 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     ...TEACHERS_MEMBER,
     'leave.allowance',
     'teacher_files.edit',
+    // PD-43 owner N2, "Full teacher finance": payroll, as the super admin.
+    'teacher_files.finance',
+    'teachers.offboard',
     'materials.manage',
     'lessons.courses',
   ],

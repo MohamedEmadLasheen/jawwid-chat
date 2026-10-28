@@ -1,25 +1,30 @@
 import type { SectionId } from './stars';
-import { SECTIONS } from './stars';
 
 /** #14: the same section header on every surah, always visible, every section reachable. */
 export const SECTION_LABEL: Record<SectionId, string> = {
   listen: 'الاستماع',
   verses: 'الآيات',
+  meanings: 'المعاني',
+  complete: 'أكمل الآية',
   order: 'رتّب الآيات',
+  quiz: 'الاختبار',
+  benefits: 'الفوائد',
 };
 
 export function SectionHeader({
+  sections,
   current,
   done,
   onSelect,
 }: {
+  sections: readonly SectionId[];
   current: SectionId;
   done: (s: SectionId) => boolean;
   onSelect: (s: SectionId) => void;
 }) {
   return (
     <nav className="sections" aria-label="أقسام الدرس">
-      {SECTIONS.map((s) => (
+      {sections.map((s) => (
         <button
           key={s}
           type="button"

@@ -59,6 +59,17 @@ const ALLOWED: ReadonlyArray<string> = [
   // Nothing outside the two confined tables is read or written.
   'insert into chat.parent_file (contact_id, organization_id, phone, email)',
   'select e.contact_id, e.organization_id, btrim(t.phone), lower(btrim(t.email))',
+  // PD-43 (adding a teacher): chat.create_teacher writes the phone the Teachers
+  // department typed into the same admin-only Teacher File (PD-10 above), and
+  // compares its digits to refuse a contact already on another teacher's file,
+  // and compares the stored phone when a request is replayed (same adder, same
+  // arguments, PD-43 review P1).
+  // No new column. The writer is server-only (revoked from public, no
+  // request-role grant), returns only the teacher id, never puts the phone in
+  // an error, and audits `hasPhone`, never the number.
+  'insert into chat.teacher_file (teacher_id, organization_id, phone, email, joined_on, teaching_market, updated_by)',
+  'or (v_digits is not null and regexp_replace(coalesce(f.phone,   ),         ,   ,    ) = v_digits))) then',
+  'and f.phone is not distinct from v_phone',
 ];
 
 /** Strip comments so prose about phone privacy is not mistaken for a column. */

@@ -36,6 +36,18 @@ interface Block {
 /** Rows a later migration adds to the catalogue, oldest first. */
 const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readonly string[]; bundles: readonly BundleRow[] }> = [
   {
+    // PD-43: adding and offboarding teachers; the Teachers manager holds payroll (owner N2).
+    migration: '20261028100000_chat_pd043_teacher_onboarding.sql',
+    tag: 'pd043',
+    permissions: ['teachers.create', 'teachers.offboard'],
+    bundles: [
+      ['manager', 'teachers', 'teacher_files.finance'],
+      ['manager', 'teachers', 'teachers.create'],
+      ['manager', 'teachers', 'teachers.offboard'],
+      ['supervisor', 'teachers', 'teachers.create'],
+    ],
+  },
+  {
     // PD-40 shadow QA (2026-10-28): what Sales and Teachers-department members
     // reach today, so that enforcing refuses none of it (plan §14).
     migration: '20261028120000_chat_pd040_shadow_qa_bundles.sql',

@@ -38,6 +38,14 @@ JWT_ACCESS_SECRET	auth	yes	req	req	req
 JWT_REFRESH_SECRET	auth	yes	req	req	req
 JWT_ACCESS_TTL	auth	no	opt	req	req
 JWT_REFRESH_TTL	auth	no	opt	req	req
+# RESET_CODE_HASH_SECRET is CONSUMED by apps/api/src/platform/auth/password-reset.service.ts
+# (PD-43): the HMAC key under which every one-time code -- a reset (PD-21/PD-25)
+# or a first sign-in code -- is stored, so a database read or a backup cannot
+# recover a live code. At least 32 characters. Required in staging and
+# production: without it no code is issued or accepted (fails closed). Locally
+# a key is derived from JWT_REFRESH_SECRET. Rotating it voids every live code.
+# Generate one with: openssl rand -base64 48
+RESET_CODE_HASH_SECRET	auth	yes	opt	req	req
 # STORAGE. Two kinds of row live here, and the difference matters when reading
 # this file against the code.
 #

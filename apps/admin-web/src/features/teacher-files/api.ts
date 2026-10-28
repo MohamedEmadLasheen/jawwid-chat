@@ -10,7 +10,7 @@ import { api } from '@/core/api/client'
 export interface TeacherFileAccessFlags {
   canEditPersonal: boolean
   canWriteSupervision: boolean
-  /** PD-18: offer the payroll sections (super admin). Optional: older servers omit it. */
+  /** PD-18: offer the payroll sections (super admin, Teachers manager since PD-43). Optional: older servers omit it. */
   canViewFinance?: boolean
 }
 
@@ -215,7 +215,8 @@ export const timelineKeys = {
 }
 
 /**
- * PD-18 payroll (`/teacher-files/:id/finance*`), super admin only. Mirrored
+ * PD-18 payroll (`/teacher-files/:id/finance*`), the super admin and the
+ * Teachers manager (PD-43). Mirrored
  * from apps/api/src/teacher-file/teacher-payroll.service.ts. Amounts are
  * strings with two decimals ("1500.00"); the page formats them and never
  * computes a total itself -- the summary is the server's.

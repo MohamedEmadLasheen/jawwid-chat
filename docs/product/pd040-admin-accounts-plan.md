@@ -305,13 +305,19 @@ The rules below form one DB-free decision, `decideStaffAccountAdmin(actor, targe
 2. `POST /api/v1/admin/staff-accounts` creates the account in one transaction:
    - `chat.account` (kind `staff`, status **`provisioned`**), `chat.staff` (tier) and the affiliation (§9).
    - The grants, and the audit rows.
-   - A **setup code**: PD-21's `chat.password_reset_code` with a new `purpose = 'first_login'` and a longer TTL (proposal: 72 h, 5 tries).
+   - A **setup code**, through the first-login primitive PD-43 built (PR #184, migration `20261028100000_chat_pd043_teacher_onboarding`). It works for any account kind, so PD-40 reuses it:
+     - Issue the code with `PasswordResetService.issue({ ..., purpose: 'first_login' })` on the provisioned staff account. That gives 72 h (`FIRST_LOGIN_CODE_HOURS`) and 5 tries, and audits `account.first_login_code_issued`.
+     - `chat.guard_password_reset_code` allows `purpose = 'first_login'` only on the admin channel, for a `provisioned` account, expiring within 72 h.
+     - **PR-3 must widen that guard's staff-target rule.** As of #184 (b7af19ce), a `first_login` code may be issued only to a TEACHER account, and a staff account's code only by the super admin. PR-3 admits `first_login` for a `provisioned` staff account, issued by the super admin or by a manager for a `specialist` of their own department (S1, H3–H6).
 3. **Delivery** (§12 Q5): the setup code is e-mailed to the sign-in address through the PD-25 mailer, and also shown once to the creator, for hand delivery as a fallback.
 
 ### 6.2 First login
 
 1. The Admin Web sign-in page offers **"I have a setup code"**. That is the existing reset-code screen with new copy, completing through `POST /auth/password-reset` (`password-reset.controller.ts:27-36`).
-2. Completing the code sets the password (minimum 12 characters for staff, the bootstrap's floor), moves the account from `provisioned` to **`active`** (a new branch in `password-reset.service.ts`, guarded in SQL), and writes the `staff.activated` audit row.
+2. Completing the code sets the password, and in the same transaction calls `chat.activate_account_with_code(code)` (PD-43).
+   - The minimum password length is 4 for every account (#171), which supersedes this plan's earlier "12 for staff".
+   - That function moves the account from `provisioned` to **`active`** (never the super admin) and writes `account.activated` `{kind, codeId, issuer}`.
+   - Trigger `account_activation_is_by_first_login` refuses any other provisioned→active change.
 3. The person signs in. `GET /me` returns their permissions and `homePath`. A Designer lands on **`/certificates`** and sees only that item in the nav.
 4. **2FA:** not in PD-40, because none exists today. Recommended follow-up: TOTP, mandatory for any account holding a `finance`, `family_contact` or `admin` permission. Passkeys are already tracked under PD-23 phase B.
 
@@ -510,6 +516,8 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 
 ## 12. Questions for the owner (each with a recommendation)
 
+> **DECIDED 2026-10-28.** The owner approved the recommendations to Q3–Q6, with six security safeguards; see §13. The questions below are kept as asked.
+>
 > **2026-10-27:** Q1 and Q2 moved to PD-41, which owns the certificates workflow (`docs/product/pd041-certificates-design.md`). PD-41's design already has the Designer designing and uploading, never sending, and seeing a design projection only. PD-40 still needs Q3–Q6.
 
 1. **Does the Designer send the certificate to the family, or only prepare it?** Issuing posts the file into the family's group.
@@ -531,6 +539,41 @@ RLS: enabled, no chat_app grants (server-only, like learner_certificate)
 - No staff impersonation.
 - 2FA as a follow-up PD, mandatory for accounts holding finance or family-contact permissions.
 - "Deactivate" in the UI means reversible suspension; permanent offboarding stays with the super admin.
+
+---
+
+## 13. Owner decision on Q3–Q6 (2026-10-28) and its safeguards
+
+The owner answered, verbatim: "Approve all 4 recommendations, with these security safeguards". So:
+- **Q3:** managers create department staff (specialist) accounts only.
+- **Q4:** only the super admin defines roles.
+- **Q5:** the first-login code is e-mailed and shown once.
+- **Q6:** roles only, with no per-account overrides.
+
+### 13.1 Each safeguard, its mechanism and its test
+
+| # | Safeguard (owner) | Mechanism | State | Test |
+|---|---|---|---|---|
+| S1 | Managers create regular staff accounts only in their own department. Only the super admin creates supervisor accounts or assigns elevated supervisory roles. | H4: a manager creates tier `specialist` only, in their own department. Supervisor and manager tiers come from the super admin only. **A non-super-admin grantor may grant only a role with `max_tier = 'specialist'`, and only to a `specialist` account in their department.** | Tier rules: PR-3. Grant narrowing: **PR-3 changes `chat.require_access_grantor`**, which today admits any tier below manager (C1). Department fence: `chat.staff_in_managed_department`, which PR-3 extends to `department_account`. | Integration, against the API and the SQL. A manager is refused when: creating a supervisor or manager; granting to a supervisor; granting a role with `max_tier` above specialist; acting on another department's account. Plus the unit matrix for `decideStaffAccountAdmin`. |
+| S2 | RBAC enforced in the backend and the database, not only the UI. Never beyond one's own permissions, directly or through a role. No privilege escalation, no cross-department access. | Layer 1: `PermissionGuard`. Layer 2: the services. The SQL writers are the only path, and `guard_access_role_writes` refuses direct DML. H1: never the super admin. H5: every key of the role held and `delegable`. H7: only the super admin edits a role, so a manager cannot widen a role after granting it. H8: never oneself. No key is delegable until verified. | On main (#172, #174), except that the guard is still SHADOW for legacy tiers and enforce is the head's call after review and QA. PR-3 marks a verified, delegable set. | `pd040-access-roles` (integration): direct writes refused, H1/H3/H8, and a specialist refused over HTTP. `pd040-legacy-bundles`: no key is delegable unverified. PR-3 adds: a manager granting a role with one key they don't hold is refused (H5); a manager granting a non-delegable key is refused. |
+| S3 | The initial sign-in code is CSPRNG, single-use, 72 h, e-mailed to the sign-in address and shown to the creator once, never stored or logged in plaintext, with expiry and a reissue flow, and invalidated after use. | PD-43's first-login primitive (#184): `purpose = 'first_login'`, 72 h, 5 tries, `crypto.randomInt`. Single use comes from `used_at`, which is set in the same transaction that activates. Reissue supersedes every live code. Only a hash is stored. The plaintext is returned once in the creator's response. Logs carry the code id only. E-mail goes through PD-25's `SmtpRecoveryMailer` (`SMTP_URL` + `RECOVERY_MAIL_FROM`), with a first-login template. | Primitive: #184 (PD-43), with **gap G1** (§13.2, sent to PD-43). E-mail and the reissue route for staff: PR-3. | PR-3 tests, unit and integration: a code is shown once and appears in no audit row and no log line; after 72 h it is refused; a reissue kills the old code; a second use is refused; activation happens only through the code. |
+| S4 | Roles only, no per-account overrides. The super admin creates a role from a checklist in one step, validated so a role cannot grant unauthorized privileges. | `chat.define_access_role`: one call, keys and tier, unknown keys refused, at least one key, super admin only. There is no per-account grant table: grants are roles. **Addition (C2): a role can never contain a super-admin-only key** (`admin.inspect`, `org.departments`, `chat.export`, `staff_profiles.organization`, `staff_profiles.reporting_lines`, `accounts.support_session`, and PR-3's `access_roles.manage` / `staff_accounts.*` at tier manager), so no role can rebuild the super admin. A catalogue flag `inRoles: false` is mirrored in SQL. | Define and validation: on main. Exclusion: PR-3, with a migration. | Integration: defining a role with a super-admin-only key is refused. Unit: the catalogue flag matches the SQL rows. |
+| S5 | Audit logs for account creation, role assignment, code issuance and reissuance, and permission changes. | On main: `access_role.created`, `access_role.updated` and `access_role.archived`; `staff.access_role_granted` and `staff.access_role_revoked`, each with its resolved keys. PD-43: `account.first_login_code_issued` and `account.activated`. PR-3 adds: `staff.account_created`, `staff.tier_changed`, `staff.department_changed`, and a reissue audited as `account.first_login_code_issued` with `{ supersedes: <code id> }`. | Partly on main; the rest in PR-3. | `pd040-access-roles` asserts the grant, revoke and role audits once each. PR-3 asserts the rest. |
+| S6 | Verify consistency with the permission model and department structure first. Do not touch Jawwid Core. Follow the project safeguards. | §13.2. Nothing in PD-40 reads or writes Jawwid Core (the repo has no Core code: `jawwid-chat-is-not-core`). Slots, guards, G-20, the stack and hand merges are followed. | Done (this section). | — |
+
+### 13.2 Consistency check against main (`a547b0e2`, 2026-10-28)
+
+| # | Finding | Consequence |
+|---|---|---|
+| C1 | `chat.require_access_grantor` lets a manager grant to any account below tier manager. That includes supervisors (`admin`/`coverage`) in their department, and roles up to `max_tier` supervisor. Not reachable today, because nobody holds `staff_accounts.manage`. | **Conflicts with S1.** PR-3 narrows it: a non-super-admin grants only roles with `max_tier = 'specialist'`, only to `specialist` accounts. |
+| C2 | `chat.define_access_role` accepts any catalogue key, including the super admin's own powers. Only the super admin can call it, but a role could still reproduce super-admin powers for someone else. | **Gap against S4.** PR-3 adds the `inRoles: false` exclusion, in TypeScript and SQL. |
+| C3 | Every catalogue key is `delegable = false` (pinned by spec). | Consistent with S2, which fails safe: a manager can delegate nothing yet. PR-3 must verify and flip a minimal set, each key backed by a policy in `pd040-legacy-bundles`. Otherwise managers can create accounts but not give them anything. |
+| C4 | `chat.guard_password_reset_code` lets only the super admin issue a code for a staff account, and #184 (b7af19ce) allows `first_login` codes for teacher accounts only. | PR-3 widens it: `first_login` for a `provisioned` staff account, issued by the super admin, or by a manager for a `specialist` of their own department (S1). Nothing more. |
+| C5 | The departments are `operations`, `teachers` and `sales`, one each per organization, and `department_member` admits only `admin`/`coverage`. There is no home for a specialist yet. | PR-3 adds `chat.department_account` (specialists only) and keeps `department_member` closed to `general` departments (plan §9). S1's "own department" is `department.manager_id`, then `department_member`, then `department_account`. |
+| C6 | Reset and first-login codes were 6 digits stored as unkeyed `sha256(accountId:code)`. That's 10⁶ candidates, so a leaked table would recover a live code offline. | **Resolved in #184 (PD-43, b7af19ce).** EVERY one-time code, reset and first-login alike, is hashed with HMAC-SHA256 (`resetCodeHash(accountId, code)`) under a dedicated `RESET_CODE_HASH_SECRET`. The manifest marks it secret: optional locally (derived from `JWT_REFRESH_SECRET` there), required in staging and production, and the API fails closed without it. The table alone recovers nothing. The migration retires every code stored the old way. A reissue audits `after.supersedes`. A 5th wrong try supersedes the code. Activation requires the code to have been spent in the same transaction. |
+| C7 | The e-mail channel exists (PD-25 `SmtpRecoveryMailer`), but `SMTP_URL` is optional in production. When it is absent, the channel is unavailable. | **Deployment prerequisite for S3:** production needs `SMTP_URL` and `RECOVERY_MAIL_FROM`. The e-mail is sent after commit, with a first-login template (Arabic and English) and `emailed: false` when the channel is unavailable. Teachers get it in PD-43 PR-2; staff in PD-40 PR-3. On failure only the code id is logged. The development log sender (`RECOVERY_DELIVERY_LOG`) is refused at boot in production. |
+| C8 | `PermissionGuard` shadows legacy tiers, while a `specialist` is enforced from its first request. | Consistent with S2 for every new account. Enforcing for legacy accounts is the head's PR-6 decision, after an independent security review and a `SHADOW_DENIED` QA pass. |
+| C9 | The owner's "only the super admin creates supervisor accounts" matches PD-8: placing a supervisor in a department is `org.departments`, super admin only. | Consistent; no change. |
 
 ---
 
