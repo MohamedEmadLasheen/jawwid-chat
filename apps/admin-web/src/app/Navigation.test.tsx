@@ -49,6 +49,20 @@ const staff = (role: StaffRole) => makeStaff({ id: `staff_${role}`, name: `Synth
 const superAdmin = staff('super_admin')
 const OPERATOR_ROLES: StaffRole[] = ['manager', 'admin', 'coverage', 'finance', 'technical', 'academic']
 
+/** PD-44: what GET /dashboard/chats and /dashboard/cases answer a manager here. */
+const DASHBOARD_ROUTES = {
+  '/dashboard/chats': { generatedAt: '2026-10-28T09:00:00.000Z', tiles: [{ key: 'chats.waiting', count: 2, oldestAt: null, capped: false }] },
+  '/dashboard/cases': {
+    generatedAt: '2026-10-28T09:00:00.000Z',
+    tiles: [
+      { key: 'cases.mine_open', count: 0, oldestAt: null, capped: false },
+      { key: 'cases.department_open', count: 1, oldestAt: null, capped: false },
+      { key: 'cases.overdue', count: 0, oldestAt: null, capped: false },
+    ],
+  },
+}
+const dashboardManager = makeStaff({ id: 'staff_manager', role: 'manager', permissions: ['chat.use', 'cases.view'] })
+
 beforeEach(() => {
   localStorage.clear()
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
@@ -255,21 +269,13 @@ describe('The retired Families page', () => {
   })
 
   it('is no longer where the Dashboard sends the manager', async () => {
-    const fetchMock = routeFetch({
-      '/dashboard/header': { unattended_count: 3, open_escalations: 0 },
-      '/dashboard/team-now': [{
-        staff_id: 'staff_owner', name: 'Synthetic owner', presence: 'online', now_count: 2, today_count: 1,
-        late_replies: 0, workload_score: 1, workload_level: 'normal', inactivity_warning: false,
-      }],
-      '/dashboard/needs-action': [],
-    })
+    const fetchMock = routeFetch(DASHBOARD_ROUTES)
     vi.stubGlobal('fetch', fetchMock)
-    renderWithProviders(<AppRoutes />, { staff: staff('manager'), route: '/dashboard' })
-    // The count stays; it no longer opens a page.
-    expect(await screen.findByRole('button', { name: /Unattended/ })).toBeDisabled()
-    const row = (await screen.findByText('Synthetic owner')).closest('tr')!
-    expect(within(row).queryByRole('button')).not.toBeInTheDocument()
-    expect(within(row).getByText('2')).toBeInTheDocument()
+    renderWithProviders(<AppRoutes />, { staff: dashboardManager, route: '/dashboard' })
+    // PD-44: every tile opens a working page; none opens the retired families list.
+    await screen.findByRole('link', { name: /Chats waiting for our reply/ })
+    const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href') ?? '')
+    expect(hrefs.filter((h) => /^\/families(\/|\?|$)/.test(h))).toEqual([])
     expect(fetchMock.mock.calls.some(([url]) => /\/families(\?|$)/.test(String(url)))).toBe(false)
   })
 })
@@ -377,7 +383,8 @@ describe('The desktop rail', () => {
       // PD-13: Calls is its own destination for every operating role.
       // Teacher Profile V2: the certificate review queue sits under People beside
       // the other people pages, so for admin and coverage People is a menu.
-      ['manager', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories'], ['People & teams', 'More']],
+      // PD-44: the Dashboard is its own destination for a manager, beside Conversations.
+      ['manager', ['conversations', 'dashboard', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Dashboard', 'Calls', 'Stories'], ['People & teams', 'More']],
       ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       // PD-21: Accounts is every role's, so a department has two one-page destinations.
@@ -447,19 +454,13 @@ describe('The retired Inbox', () => {
     }
   })
 
-  it("is no longer where the Dashboard's needs-action list sends the manager", async () => {
-    vi.stubGlobal('fetch', routeFetch({
-      '/dashboard/header': { unattended_count: 0, open_escalations: 1 },
-      '/dashboard/team-now': [],
-      '/dashboard/needs-action': [{
-        kind: 'escalation', family_id: 'fam_1', family_name: 'Synthetic family', staff_id: null, staff_name: null,
-        absence_id: null, description: 'Escalated by a synthetic operator', at: '2026-10-28T08:00:00Z',
-      }],
-    }))
-    renderWithProviders(<AppRoutes />, { staff: staff('manager'), route: '/dashboard' })
-    // The item is still listed; it no longer opens the retired Inbox.
-    expect(await screen.findByText('Escalated by a synthetic operator')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Synthetic family' })).not.toBeInTheDocument()
+  it("is no longer where the Dashboard's cases send the manager", async () => {
+    vi.stubGlobal('fetch', routeFetch(DASHBOARD_ROUTES))
+    renderWithProviders(<AppRoutes />, { staff: dashboardManager, route: '/dashboard' })
+    // PD-44: an escalation is counted and opens the Cases page, never the retired Inbox.
+    expect(await screen.findByRole('link', { name: /Open cases in the department/ })).toHaveAttribute('href', '/cases?tab=department')
+    const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href') ?? '')
+    expect(hrefs.filter((h) => h.startsWith('/inbox'))).toEqual([])
   })
 })
 
