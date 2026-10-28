@@ -18,7 +18,7 @@ import { CommError, CommErrorCode } from '@platform/errors';
 import { TeacherScopeService } from '@platform/teacher-scope';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { TaskService } from '../../src/tasks/task.service';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -53,6 +53,11 @@ const setSince = (src: string, at: string) =>
     `insert into chat.config (key, value) values ($1, to_jsonb($2::text)) on conflict (key) do update set value = excluded.value`,
     `tasks.since.${src}`, at,
   );
+/** The learner goes to another teacher (the academy's fact, through its gate), and the lesson with them. */
+const giveTo = async (lesson: string, teacher: string) => {
+  await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${teacher}'::uuid where id = '${s.learnerId}'::uuid`);
+  await exec(`update chat.lesson set teacher_id = $2::uuid where id = $1::uuid and teacher_id is distinct from $2::uuid`, lesson, teacher);
+};
 const issues = async (key: string) =>
   (await g.prisma.$queryRaw<Array<{ attempts: number }>>`SELECT attempts FROM chat.work_task_source_issue WHERE source_key = ${key}`);
 const missTeacher = (lesson: string, by: string) =>
@@ -178,7 +183,7 @@ describe('lesson reports', () => {
       exec(`select set_config('chat.task_actor', $1, true)`, sa),
       exec(`update chat.work_task set assignee_teacher_id = $2::uuid where id = $1::uuid`, id, s.newTeacherId),
     ]).then(() => { throw new Error('moved by hand'); }, (e: Error) => expect(e.message).toMatch(/follows its source/));
-    await exec(`update chat.lesson set teacher_id = $2::uuid where id = $1::uuid`, lesson, s.newTeacherId);
+    await giveTo(lesson, s.newTeacherId);
     expect((await tasks.get(sa, id)).assignee).toEqual({ kind: 'teacher', id: s.newTeacherId });
     expect((await history(id)).map((e) => [e[0], e[1]])).toEqual([['created', 'system'], ['reassigned', 'system']]);
   });
@@ -282,7 +287,7 @@ describe('lesson reports', () => {
     await missTeacher(lesson, tsupA);
     const [v] = await g.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.teacher_violation WHERE lesson_id = ${lesson}::uuid`;
     const vt = (await taskFor(`violation_decision:${v.id}`)) as string;
-    await exec(`update chat.teacher_violation set decision = 'warning', decided_by = $2::uuid where id = $1::uuid`, v.id, tmgr);
+    await exec(`update chat.teacher_violation set decision = 'warning', decided_by = $2::uuid, decided_at = now(), suggested_step = 1 where id = $1::uuid`, v.id, tmgr);
     expect(await tasks.get(tmgr, vt)).toMatchObject({ state: 'completed', closedBy: { id: tmgr } });
   });
 
@@ -323,7 +328,7 @@ describe('corrections and rulings', () => {
                 values (chat.default_organization_id(), $1::uuid, $2::uuid, 'missing', 'please file it', $3::uuid)`, lesson, s.teacherId, tsupA);
     const [q] = await g.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.report_correction_request WHERE lesson_id = ${lesson}::uuid`;
     const id = (await taskFor(`report_correction:${q.id}`)) as string;
-    await exec(`update chat.lesson set teacher_id = $2::uuid where id = $1::uuid`, lesson, s.newTeacherId);
+    await giveTo(lesson, s.newTeacherId);
     expect((await tasks.get(sa, id)).assignee).toEqual({ kind: 'teacher', id: s.newTeacherId });
   });
 
