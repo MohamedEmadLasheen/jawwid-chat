@@ -90,6 +90,16 @@ const LATER: readonly Later[] = [
     ],
   },
   {
+    // PD-42 PR-2: a Sales account edits the contact record of the families it owns.
+    migration: '20261028210000_chat_pd042_intake_scope.sql',
+    tag: 'pd042b',
+    permissions: [],
+    bundles: [
+      ['manager', 'sales', 'parents.edit'],
+      ['supervisor', 'sales', 'parents.edit'],
+    ],
+  },
+  {
     // PD-40 PR-3 (owner 2026-10-28, plan §13): staff accounts and access roles;
     // department managers run their specialists (S1); the minimal delegable set
     // (C3); in_roles (S4/C2).

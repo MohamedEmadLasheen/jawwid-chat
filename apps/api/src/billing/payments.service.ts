@@ -408,7 +408,12 @@ export class PaymentsService {
           SELECT f.id FROM chat.family f
            WHERE f.organization_id = ${org}::uuid
              AND chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL`).map((r) => r.id)
-      : null;
+      : access.scope === 'owned'
+        ? (await this.prisma.$queryRaw<{ id: string }[]>`
+            SELECT f.id FROM chat.family f
+             WHERE f.organization_id = ${org}::uuid
+               AND chat.staff_owns_family(${actor.actorId}::uuid, f.id)`).map((r) => r.id)
+        : null;
     const where = { organizationId: org, ...(familyFilter ? { familyId: { in: familyFilter } } : {}) };
     const [rows, grouped] = await Promise.all([
       this.prisma.paymentReceipt.findMany({ where: { ...where, status }, orderBy: { uploadedAt: status === 'pending' ? 'asc' : 'desc' }, take: 200 }),
@@ -674,10 +679,14 @@ export class PaymentsService {
     return { actor, access };
   }
 
-  /** Trials have no family to reach: only staff who see every family (Sales, the Operations Manager, the super admin). */
+  /**
+   * Trials have no family to reach: only staff who see every family (Sales, the
+   * Operations Manager, the super admin). PD-42: a Sales member limited to the
+   * families they own ('owned') still works the trial desk.
+   */
   private async requireTrialRecorder(actorId: string, payer: TrialPayer) {
     const { actor, access } = await this.billing.requireRecorder(actorId);
-    if (access.scope !== 'all' || actor.organizationId !== payer.organizationId) {
+    if ((access.scope !== 'all' && access.scope !== 'owned') || actor.organizationId !== payer.organizationId) {
       throw new CommError(CommErrorCode.BILLING_DENIED, 'a trial\'s payment is requested by Sales or the Operations Manager');
     }
     return { actor, access };
@@ -686,8 +695,9 @@ export class PaymentsService {
   private async requirePayerInScope(actor: Actor, access: BillingAccess, familyId: string | null) {
     if (familyId) {
       await this.billing.requireFamily(actor, access, familyId);
-    } else if (access.scope !== 'all') {
-      // A trial's money, before Assign: no family for a supervisor to reach.
+    } else if (access.scope !== 'all' && access.scope !== 'owned') {
+      // A trial's money, before Assign: no family for a supervisor to reach
+      // (PD-42: trials stay every Sales member's).
       throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'not found');
     }
   }

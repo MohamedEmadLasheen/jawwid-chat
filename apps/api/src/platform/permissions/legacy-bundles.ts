@@ -147,6 +147,8 @@ const SALES_MEMBER = k(
   'org.covers',
   'accounts.administer',
   'parents.view',
+  // PD-42: the contact record of the families they own (BillingAccess.editOwnedOnly).
+  'parents.edit',
   'billing.view',
   'billing.record',
   'subscriptions.view',

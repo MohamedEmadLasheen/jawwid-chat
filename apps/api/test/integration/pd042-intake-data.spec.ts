@@ -462,6 +462,46 @@ describe('5. their own family, and the Sales switch', () => {
     expect(await handles(tsupId)).toBe(false);
   });
 
+  it('the request role keeps every write: the guards run as their owner, and chat_app executes none of them (G-19 on #202)', async () => {
+    const guards = await g.prisma.$queryRawUnsafe<Array<{ fn: string; definer: boolean; pinned: boolean; app: boolean }>>(`
+      select p.proname::text as fn, p.prosecdef as definer,
+             exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%') as pinned,
+             has_function_privilege('chat_app', p.oid, 'EXECUTE') as app
+        from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+       where t.tgname = 'zz_pd042_sales_scope'
+       order by 1`);
+    expect(guards).toHaveLength(8);
+    expect(guards.filter((x) => !x.definer || !x.pinned || x.app)).toEqual([]);
+    const helpers = await g.prisma.$queryRawUnsafe<Array<{ app: boolean }>>(`
+      select has_function_privilege('chat_app', f, 'EXECUTE') as app
+        from unnest(array['chat.sales_scope_refuses(uuid, uuid)', 'chat.pd042_acting_staff()']) f`);
+    expect(helpers.map((x) => x.app)).toEqual([false, false]);
+
+    // An ordinary staff write on the request role, with the switch at 'own'
+    // and nobody named as the acting Sales member: as before PD-42.
+    await sql(`insert into chat.config (key, value) values ('sales.family_scope', to_jsonb('own'::text))`);
+    const account = randomUUID();
+    const subject = `pd042_app_${account.slice(0, 8)}@example.test`;
+    await sql(`insert into chat.account (id, subject, kind) values ($1::uuid, $2, 'staff')`, account, subject);
+    await sql(`update chat.staff set account_id = $1::uuid where id = $2::uuid`, account, s.ownerId);
+    const ROLLBACK = new Error('rollback');
+    let updated: number | string = 'not run';
+    await g.prisma
+      .$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`set local role chat_app`);
+        await tx.$executeRawUnsafe(`select set_config('chat.actor_subject', $1, true)`, subject);
+        await tx.$executeRawUnsafe(`select set_config('chat.actor_organization', chat.default_organization_id()::text, true)`);
+        updated = await tx
+          .$executeRawUnsafe(`update chat.family set language = 'en' where id = $1::uuid`, s.familyId)
+          .catch((e: Error) => e.message);
+        throw ROLLBACK;
+      })
+      .catch((e: unknown) => {
+        if (e !== ROLLBACK) throw e;
+      });
+    expect(updated).toBe(1);
+  });
+
   it('a covering backup reaches the family but does not own it (review P2)', async () => {
     await activateBackup(g.prisma, s.ownerId, s.otherAdminId);
     expect((await one<{ basis: string | null }>(`select chat.staff_reaches_family($1::uuid, $2::uuid) as basis`, s.otherAdminId, s.familyId)).basis).toBe('backup');

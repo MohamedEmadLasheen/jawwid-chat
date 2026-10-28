@@ -20,15 +20,25 @@ describe('who reads and records a family\'s money (billing.family_read, PD-17; P
     ${'manager'}     | ${'manager'} | ${null}      | ${'all'}   | ${true}  | ${true}  | ${true}
     ${'admin'}       | ${'member'}  | ${null}      | ${'reach'} | ${false} | ${true}  | ${true}
     ${'coverage'}    | ${'member'}  | ${null}      | ${'reach'} | ${false} | ${true}  | ${true}
-    ${'manager'}     | ${null}      | ${'manager'} | ${'all'}   | ${false} | ${true}  | ${false}
-    ${'admin'}       | ${null}      | ${'member'}  | ${'all'}   | ${false} | ${true}  | ${false}
+    ${'manager'}     | ${null}      | ${'manager'} | ${'all'}   | ${false} | ${true}  | ${true}
+    ${'admin'}       | ${null}      | ${'member'}  | ${'all'}   | ${false} | ${true}  | ${true}
     ${'manager'}     | ${null}      | ${null}      | ${null}    | ${false} | ${false} | ${false}
     ${'manager'}     | ${'member'}  | ${null}      | ${null}    | ${false} | ${false} | ${false}
     ${'admin'}       | ${null}      | ${null}      | ${null}    | ${false} | ${false} | ${false}
     ${'admin'}       | ${'manager'} | ${null}      | ${null}    | ${false} | ${false} | ${false}
     ${'finance'}     | ${'member'}  | ${null}      | ${null}    | ${false} | ${false} | ${false}
   `('$role, Operations $ops, Sales $sales -> $scope', ({ role, ops, sales, scope, assign, record, edit }) => {
-    expect(decideBillingAccess(staff(role), ops, sales)).toEqual({ scope, canAssign: assign, canRecord: record, canEditParent: edit, canVerify: assign });
+    // PD-42: a Sales account edits only the families it owns (editOwnedOnly).
+    const owned = sales !== null && ops === null ? { editOwnedOnly: true } : {};
+    expect(decideBillingAccess(staff(role), ops, sales)).toEqual({ scope, canAssign: assign, canRecord: record, canEditParent: edit, canVerify: assign, ...owned });
+  });
+
+  it('PD-42: with the Sales switch at "own", a Sales member reads the families they own; the Sales manager still reads every family', () => {
+    expect(decideBillingAccess(staff('admin'), null, 'member', 'own')).toMatchObject({ scope: 'owned', canRecord: true, canEditParent: true, editOwnedOnly: true });
+    expect(decideBillingAccess(staff('manager'), null, 'manager', 'own')).toMatchObject({ scope: 'all', editOwnedOnly: true });
+    expect(decideBillingAccess(staff('admin'), 'member', null, 'own')).toMatchObject({ scope: 'reach' });
+    expect(decideBillingAccess(staff('manager'), 'manager', null, 'own')).toMatchObject({ scope: 'all' });
+    expect(decideBillingAccess(staff('admin'), null, 'member', 'all')).toMatchObject({ scope: 'all' });
   });
 
   it('never a teacher, a parent, an inactive or org-less staff member -- whatever department they claim', () => {

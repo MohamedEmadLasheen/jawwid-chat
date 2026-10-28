@@ -174,6 +174,8 @@ export class TeacherFileService {
       access: publicAccess(access),
       // PD-43: the sign-in's state, and whether this reader may send a new first sign-in code.
       signIn: await this.signInOf(actor, teacher),
+      // PD-43 PR-1b: which of Offboard / Reactivate the page offers (decideTeacherOnboarding; the routes re-check).
+      onboarding: await this.offboardingOffer(actor),
       // PD-43: what is set up for this teacher, read from the real rows. Done / not done: never an amount.
       setup: (await this.setupOf([teacher.id])).get(teacher.id) ?? null,
       teacher: {
@@ -566,6 +568,12 @@ export class TeacherFileService {
     return new Map(
       rows.map((r) => [r.id, { ...r.state, missing: Object.values(r.state).filter((done) => done === false).length }]),
     );
+  }
+
+  /** What GET /teacher-files/:id tells the page about offboarding and reactivating. */
+  private async offboardingOffer(actor: Actor) {
+    const o = decideTeacherOnboarding(actor, await this.teachersDepartmentRole(actor));
+    return { canOffboard: o.canOffboard, canReactivate: o.canReactivate };
   }
 
   /** What GET /teacher-files tells the page about adding a teacher. */
