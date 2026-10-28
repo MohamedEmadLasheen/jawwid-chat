@@ -10,6 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/clock_time.dart';
+import '../../tasks/presentation/todo_list.dart';
 import 'lesson_ticket_sheet.dart';
 import 'teacher_calendar.dart';
 
@@ -31,8 +32,8 @@ final myScheduleProvider = FutureProvider.autoDispose<List<ScheduledLesson>>((re
   ];
 });
 
-/// All lessons, or only the ones still owed a report.
-enum ScheduleFilter { all, needsReport }
+/// All lessons, only the ones still owed a report, or (PD-47) the teacher's To do.
+enum ScheduleFilter { all, needsReport, todo }
 
 class ScheduleFilterController extends Notifier<ScheduleFilter> {
   @override
@@ -183,9 +184,28 @@ class _ScheduleListTab extends ConsumerWidget {
     final l10n = L10n.of(context);
     final async = ref.watch(myScheduleProvider);
     final filter = ref.watch(scheduleFilterProvider);
+    // PD-47: the count beside "To do" -- a failed or pending list counts nothing.
+    final todo = ref.watch(myTasksProvider);
+    final todoCount = todo.value?.tasks.length ?? 0;
+    final todoMore = todo.value?.more ?? false;
+
+    if (filter == ScheduleFilter.todo) {
+      final header = _FilterBar(filter: filter, owed: async.value?.where((l) => l.needsReport).length ?? 0, todo: todoCount, todoMore: todoMore);
+      return RefreshIndicator(
+        onRefresh: () => ref.refresh(myTasksProvider.future),
+        child: todo.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => ListView(children: [header, _Message(text: l10n.todoLoadFailed, scrollable: false)]),
+          data: (list) => TodoList(tasks: list.tasks, header: header),
+        ),
+      );
+    }
 
     return RefreshIndicator(
-      onRefresh: () => ref.refresh(myScheduleProvider.future),
+      onRefresh: () {
+        ref.invalidate(myTasksProvider);
+        return ref.refresh(myScheduleProvider.future);
+      },
       child: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _Message(text: l10n.scheduleLoadFailed),
@@ -198,7 +218,7 @@ class _ScheduleListTab extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const _WorkloadSummary(),
-                _FilterBar(filter: filter, owed: owed),
+                _FilterBar(filter: filter, owed: owed, todo: todoCount, todoMore: todoMore),
                 if (shown.isEmpty) _Message(text: l10n.scheduleEmpty, scrollable: false),
               ],
             ),
@@ -226,12 +246,17 @@ class _Message extends StatelessWidget {
   }
 }
 
-/// All lessons, or only the ones still owed a report -- with how many there are.
+/// All lessons, or only the ones still owed a report -- with how many there are -- and
+/// (PD-47) the teacher's To do, with how many tasks are open.
 class _FilterBar extends ConsumerWidget {
-  const _FilterBar({required this.filter, required this.owed});
+  const _FilterBar({required this.filter, required this.owed, required this.todo, this.todoMore = false});
 
   final ScheduleFilter filter;
   final int owed;
+  final int todo;
+
+  /// The list stopped before the server's end: the count is "N+".
+  final bool todoMore;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -248,6 +273,12 @@ class _FilterBar extends ConsumerWidget {
             label: Text(l10n.scheduleFilterNeedsReport(owed)),
             selected: filter == ScheduleFilter.needsReport,
             onSelected: (_) => pick(ScheduleFilter.needsReport),
+          ),
+          ChoiceChip(
+            key: const ValueKey('schedule-filter-todo'),
+            label: Text(todoMore ? l10n.scheduleFilterTodoMore(todo) : l10n.scheduleFilterTodo(todo)),
+            selected: filter == ScheduleFilter.todo,
+            onSelected: (_) => pick(ScheduleFilter.todo),
           ),
         ],
       ),

@@ -339,6 +339,24 @@ describe('switching, links and keys', () => {
     expect(within(row!).getByTestId('task-overdue').querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
   })
 
+  it('"Overdue" is said once: not again beside a level whose reason already says it', async () => {
+    renderWithProviders(<TasksPage />, { staff: supervisor })
+    const [row] = await screen.findAllByRole('listitem')
+    expect(within(row!).getByTestId('task-level')).toHaveTextContent('High · Overdue')
+    expect(within(row!).queryByTestId('task-overdue')).toBeNull()
+  })
+
+  it('a shortened list of people says so', async () => {
+    on('GET', /\/tasks\/t-1$/, () => json(detail(BASE, ['reassign'])))
+    on('GET', /\/tasks\/assignees\?task=t-1/, () =>
+      json({ people: [{ kind: 'staff', id: 'sup-2', name: 'Sup Two' }], departments: [], truncated: true }))
+    renderWithProviders(<TasksPage />, { staff: manager, route: '/tasks?task=t-1' })
+    const panel = await screen.findByRole('region', { name: 'Call the family back' })
+    await userEvent.click(within(panel).getByRole('button', { name: 'Hand on' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/This list is shortened/)).toBeInTheDocument()
+  })
+
   it('a link to a task out of reach says so plainly, with no Retry', async () => {
     on('GET', /\/tasks\/t-9$/, () => json({ error: { code: 'COMM.TASK_NOT_FOUND', message: 'task not found' } }, 404))
     renderWithProviders(<TasksPage />, { staff: supervisor, route: '/tasks?task=t-9' })
