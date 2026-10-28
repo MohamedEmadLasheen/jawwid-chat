@@ -53,7 +53,7 @@ const STAFF = { kind: 'staff', actorId: 'owner', staffRole: 'super_admin' } as c
 const PARENT = { kind: 'contact', actorId: 'parent' } as const;
 const RECITER = 'test-reciter';
 const LICENCE = { confirmedBy: 'owner', confirmedAt: '2026-11-01', reference: 'test' };
-const source = (licence: AudioSourceSpec['licence']): AudioSourceSpec => ({ reciter: RECITER, name: 'Test', attribution: 'test', licence, archives: [] });
+const source = (licence: AudioSourceSpec['licence']): AudioSourceSpec => ({ reciter: RECITER, name: 'Test', attribution: 'test', licence, archives: [], naming: { ayah: /^$/, extras: [] } });
 /** Signed, short-lived, uncacheable read URLs: licensed audio is never at a permanent public address. */
 const signing = {
   signedReadUrl: async (key: string, ttl: number, opts?: { cacheControl?: string }) =>

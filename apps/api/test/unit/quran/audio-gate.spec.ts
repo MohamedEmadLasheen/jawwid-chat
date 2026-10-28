@@ -67,8 +67,8 @@ describe('the Quran audio release gate', () => {
       url: 'https://download.qurancomplex.gov.sa/new-sounds/huthify-01/hafs/huthify-ayat.rar',
       sha256: 'ad50fd0d8c362f6967141b5240cdbac4089efaf6d3a46ef159c3c8aaa05371f5',
       bytes: 842634506,
-      // Pinned after the first verified extraction; until then nothing can be written.
-      extractedManifestSha256: null,
+      // Pinned from the first verified extraction (evidence register, 2026-10-28).
+      extractedManifestSha256: '7daf7f2ac325e08d2c78f52215ff3ebded8e0b29cb968baadec847cc80fe1a69',
     }]);
     expect(AUDIO_SOURCES.get(KFGQPC_HUDHAIFY.reciter)).toBe(KFGQPC_HUDHAIFY);
     // No source has a licence yet: audio reaches no student anywhere.
