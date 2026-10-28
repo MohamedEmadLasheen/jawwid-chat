@@ -70,9 +70,12 @@ export interface ResolvedUnit {
   words: { id: string; text: string; positions: Position[] }[];
 }
 
+/** A question, and the unit it asks about: the quiz runs one unit at a time, as the old lesson's did. */
+export type ResolvedArabicQuiz = ResolvedQuiz & { unit: string };
+
 export interface ResolvedArabicLesson {
   units: ResolvedUnit[];
-  quiz: ResolvedQuiz[];
+  quiz: ResolvedArabicQuiz[];
   held: number;
   approved: boolean;
 }
@@ -132,7 +135,7 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
     }
     const cleared = (word: string) => vocabulary.has(word) && !flagged.has(word);
 
-    const quiz: ResolvedQuiz[] = [];
+    const quiz: ResolvedArabicQuiz[] = [];
     const quizIds = new Set<string>();
     for (const q of raw.quiz) {
       check(typeof q.id === 'string' && !!q.id && !quizIds.has(q.id) && isReview(q.review));
@@ -161,7 +164,7 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
         held++; // it would show a word still held for a teacher
         continue;
       }
-      if (shown(q)) quiz.push(item);
+      if (shown(q)) quiz.push({ ...item, unit: unit.id });
     }
 
     const units: ResolvedUnit[] = raw.units.map((u) => ({

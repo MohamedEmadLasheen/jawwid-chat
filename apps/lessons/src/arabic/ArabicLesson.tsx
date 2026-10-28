@@ -52,6 +52,8 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
   const unit = units.find((u) => u.id === unitId) ?? units[0];
   const words = unit ? unit.words.map((w) => w.text) : [];
   const others = unit ? units.filter((u) => u.id !== unit.id).flatMap((u) => u.words.map((w) => w.text)) : [];
+  // The quiz runs one unit at a time, as the old lesson's did (34 units would be one endless quiz).
+  const unitQuiz = unit ? resolved.quiz.filter((q) => q.unit === unit.id) : [];
 
   return (
     <main className="lesson">
@@ -64,7 +66,7 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
       </header>
       <SectionHeader sections={LETTERS_SECTIONS} current={section} done={(s) => stars.has(s)} onSelect={setSection} labels={LABELS} />
 
-      {section !== 'quiz' && unit ? (
+      {unit ? (
         <nav className="letters-units" aria-label="الحروف">
           {units.map((u) => (
             <button key={u.id} type="button" className={u.id === unit.id ? 'section section--current' : 'section'} aria-current={u.id === unit.id ? 'true' : undefined} onClick={() => setUnitId(u.id)}>
@@ -107,7 +109,7 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
         <PickWords key={unit.id} unit={unit} name={unit.name} withLetter={words} others={others} seed={shuffleSeed} onComplete={() => earn('pick')} />
       ) : null}
 
-      {section === 'quiz' && resolved.quiz.length ? <Quiz quiz={resolved.quiz} seed={shuffleSeed} onComplete={() => earn('quiz')} /> : null}
+      {section === 'quiz' && unit && unitQuiz.length ? <Quiz key={unit.id} quiz={unitQuiz} seed={shuffleSeed} onComplete={() => earn('quiz')} /> : null}
     </main>
   );
 }

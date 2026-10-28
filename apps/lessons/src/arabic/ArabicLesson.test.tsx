@@ -59,16 +59,20 @@ describe('the Arabic letters lesson page', () => {
     expect(screen.getByLabelText('النجوم').textContent).toBe('★☆☆☆');
   });
 
-  it('the quiz asks the proved questions and earns its star once', () => {
+  it('the quiz asks the proved questions of the chosen unit, and earns its star once', () => {
     render(<ArabicLesson lesson={1} content={standIn()} shuffleSeed={1} />);
     fireEvent.click(screen.getByRole('button', { name: 'الِاخْتِبَارُ' }));
+    // The alif unit's quiz: its one shown question, then its result.
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('أَيُّ كَلِمَةٍ فِيهَا حَرْفُ «أَلِفْ»؟');
     fireEvent.click(screen.getByRole('button', { name: 'كِتَابْ' }));
-    fireEvent.click(screen.getByRole('button', { name: 'التالي' }));
+    fireEvent.click(screen.getByRole('button', { name: 'النتيجة' }));
+    expect(screen.getByRole('status').textContent).toMatch(/١ من ١/);
+    // The hamza unit has its own.
+    fireEvent.click(screen.getByRole('button', { name: 'ء' }));
     expect(screen.getByTestId('quiz-word').textContent).toBe('جُزْءْ');
     fireEvent.click(screen.getByRole('button', { name: 'فِي آخِرِ الْكَلِمَةِ' }));
     fireEvent.click(screen.getByRole('button', { name: 'النتيجة' }));
-    expect(screen.getByRole('status').textContent).toMatch(/٢ من ٢/);
+    expect(screen.getByRole('status').textContent).toMatch(/١ من ١/);
     expect(screen.getByLabelText('النجوم').textContent).toBe('★☆☆☆');
   });
 });
