@@ -1,0 +1,566 @@
+{
+  "surah": 81,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. The old lesson had no data file: the ayat and tafsir came from components/ListenSection.tsx (VERSES and TAFSEER), the word meanings from MeaningsSection.tsx, the rest from the other components. NUMBERING: the old 29 entries are exactly the 29 real ayat. Two tafsir lines (ayat 9 and 26) opened with the whole ayah typed by hand and are empty now (CUT); a teacher writes them. Dropped: the five Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the per-ayah audio URLs, the reciter line and the typed basmala, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old complete-the-ayah and missing-word games (all their distractors are words of this surah). The two \"complete:\" quiz questions now show the ayah's first two words as a prompt under \"akmil\". The meaning questions keep the prose before the quoted word (\"ma ma'na kalimat\" / \"ma ma'na\"); q6's trailing \"fi al-ayah?\" is not carried. The old quiz categories were mapped (hifz, ma'ani, and \"fahm\" to lessons). Emoji were stripped from the ends of the tafsir lines, word meanings, reflection question and ideas (and the ideas' bullets); the intro is the \"what is it about?\" paragraph with its three inline emoji removed (its exact pieces joined). Many tafsir lines repeat the ayah's opening pair of words (e.g. wa-idha + the noun) as paraphrase, under the checker's limit; left as they are. Not carried (no field or no such game in the engine): the intro card (name, 29 ayat, Makki) and intro quiz, the ayah-ordering and memory games, the meaning-choice game and the match game (the match game's nushirat meaning is only there), the motivational and result messages, and the quiz's difficulty levels. Matching aids, for alignment only and never stored: the old text writes wa-l-layl (17:1) with two lams and al-maw'udah (8:2) with a full second waw; the word al-khunnas was typed without the bi- the verse word carries (15:3), so it points at the whole verse word."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-81 (read as text, never built or run)",
+    "sha256": {
+      "components/WelcomeSection.tsx": "39a5389cb8836a56f8a0cff3101cb87844a424728f4fb82ec4a606bc6ae5278e",
+      "components/IntroSection.tsx": "39fa87757af81e3ee966015a6f7a3152e98ba1efcf26887f1ab9940248d83b91",
+      "components/ListenSection.tsx": "9ba7b10d47180ed39ece7600e6c2dcbf757393cddbc36d0adfaf077db84a11ed",
+      "components/GamesSection.tsx": "28926b782dd72e87a5340fff57396e0cc894c73d53802be3cbce3b6c516901ed",
+      "components/MeaningsSection.tsx": "f077dc0ad0b52d32899be2dc4f9df310fb4e5d1389677beef29681c99e16bf71",
+      "components/LessonsSection.tsx": "08b89a0a20ca00205dcc5ed23e321e5e95c5ee615bc69efc0d8173816e96b076",
+      "components/QuizSection.tsx": "432c4cea7bca8e165c0e6d2e68281ddf49689e53d2011dc1d80c20ba1ae824e0",
+      "pages/Index.tsx": "f2c42fb7e81e86399c7fdba9941556da3548d215da7ece9b68bebd55376fc738"
+    }
+  },
+  "intro": {
+    "text": "سورة التكوير تذكرنا بأحداث عظيمة ستحدث يوم القيامة، وتؤكد أن القرآن كلام الله وأنه هداية للناس جميعًا",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "إذا الشمس ذهب ضوؤها ولُفّت",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "وإذا النجوم تساقطت وتناثرت",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "وإذا الجبال الكبيرة تحركت من مكانها",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "وإذا النوق الحوامل تُركت بلا راعٍ",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "وإذا الحيوانات البرية جُمعت معًا",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "وإذا البحار اشتعلت نارًا",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "وإذا الأرواح قُرنت بأجسادها",
+      "review": "One reading of \"zuwwijat\": souls joined to their bodies ('Ikrimah, al-Sha'bi). The view most tafsir put first ('Umar, Ibn 'Abbas, al-Tabari, Ibn Kathir): every soul is paired with its like (the righteous with the righteous, the wicked with the wicked). Teacher to choose."
+    },
+    {
+      "ayah": 8,
+      "text": "وإذا البنت التي دُفنت حية سُئلت",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": null,
+      "review": "CUT: the old line opened with the whole of ayah 9 typed by hand (\"bi-ayyi dhanbin qutilat\"), then went on \"and she was innocent?\". The Quran never goes in prose and nothing is left before the quote, so the line is empty. A teacher writes it."
+    },
+    {
+      "ayah": 10,
+      "text": "وإذا صحائف الأعمال فُتحت ونُشرت",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "text": "وإذا السماء أُزيلت وكُشفت",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "وإذا النار أُوقدت واشتعلت",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "وإذا الجنة قُرّبت لأهلها",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "عرفت كل نفس ما قدّمت من عمل",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "أقسم الله بالنجوم التي تختفي",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "النجوم التي تجري وتختفي",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "والليل إذا أقبل بظلامه",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "والصبح إذا أضاء وانتشر نوره",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "إن القرآن كلام جبريل الرسول الكريم",
+      "review": "Says the Quran is \"the speech of Jibril\". The ayah means the Quran is CONVEYED by a noble messenger (Jibril, who brought it down); it is the speech of Allah (the lesson's own intro and lessons say so). \"kalam Jibril\" is wrong and must not be shown. Teacher to rewrite, e.g. that Jibril brought it."
+    },
+    {
+      "ayah": 20,
+      "text": "جبريل صاحب قوة عظيمة عند الله",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "text": "مُطاع في السماء وأمين على الوحي",
+      "review": null
+    },
+    {
+      "ayah": 22,
+      "text": "وصاحبكم محمد ﷺ ليس بمجنون",
+      "review": null
+    },
+    {
+      "ayah": 23,
+      "text": "ولقد رأى محمد ﷺ جبريل في الأفق",
+      "review": null
+    },
+    {
+      "ayah": 24,
+      "text": "وما يبخل بما أوحي إليه من القرآن",
+      "review": null
+    },
+    {
+      "ayah": 25,
+      "text": "وما القرآن بكلام شيطان رجيم",
+      "review": null
+    },
+    {
+      "ayah": 26,
+      "text": null,
+      "review": "CUT: the old line opened with the whole of ayah 26 typed by hand (\"fa-ayna tadhhabun\"), then went on \"'an hadha al-Quran?\". The Quran never goes in prose and nothing is left before the quote, so the line is empty. A teacher writes it."
+    },
+    {
+      "ayah": 27,
+      "text": "ما القرآن إلا تذكير للعالمين",
+      "review": null
+    },
+    {
+      "ayah": 28,
+      "text": "لمن أراد منكم أن يسير في طريق الحق",
+      "review": null
+    },
+    {
+      "ayah": 29,
+      "text": "وما تريدون شيئًا إلا بمشيئة الله رب العالمين",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "ذهب ضوؤها ولُفّت",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "تساقطت وتناثرت",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 3,
+      "meaning": "تحركت من مكانها",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "تُركت بلا راعٍ",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 3,
+      "meaning": "جُمعت معًا",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 3,
+      "meaning": "اشتعلت نارًا",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 3,
+      "meaning": "قُرنت بأجسادها",
+      "review": "One reading of \"zuwwijat\": souls joined to their bodies ('Ikrimah, al-Sha'bi). The view most tafsir put first ('Umar, Ibn 'Abbas, al-Tabari, Ibn Kathir): every soul is paired with its like (the righteous with the righteous, the wicked with the wicked). Teacher to choose."
+    },
+    {
+      "ayah": 10,
+      "word": 2,
+      "meaning": "صحائف الأعمال",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "word": 3,
+      "meaning": "أُزيلت وكُشفت",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "word": 3,
+      "meaning": "أُوقدت واشتعلت",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "word": 3,
+      "meaning": "قُرّبت لأهلها",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "word": 3,
+      "meaning": "النجوم التي تختفي",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "word": 2,
+      "meaning": "النجوم التي تجري وتختفي",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "word": 3,
+      "meaning": "أقبل بظلامه",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "word": 3,
+      "meaning": "أضاء وانتشر نوره",
+      "review": null
+    },
+    {
+      "ayah": 24,
+      "word": 5,
+      "meaning": "بخيل - لا يبخل بالوحي",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 3,
+      "word": 3
+    },
+    {
+      "ayah": 6,
+      "word": 3
+    },
+    {
+      "ayah": 13,
+      "word": 3
+    },
+    {
+      "ayah": 14,
+      "word": 4
+    },
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 2,
+      "word": 2
+    },
+    {
+      "ayah": 3,
+      "word": 2
+    },
+    {
+      "ayah": 5,
+      "word": 2
+    },
+    {
+      "ayah": 10,
+      "word": 2
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول آية في سورة التكوير؟",
+      "options": [
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 3
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 6,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 5,
+          "word": 3
+        },
+        {
+          "ayah": 6,
+          "word": 3
+        },
+        {
+          "ayah": 10,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 13,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 12,
+          "word": 3
+        },
+        {
+          "ayah": 11,
+          "word": 3
+        },
+        {
+          "ayah": 13,
+          "word": 3
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "أضاءت"
+        },
+        {
+          "text": "ذهب ضوؤها ولُفّت"
+        },
+        {
+          "text": "كبرت"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 3
+      },
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "تساقطت وتناثرت"
+        },
+        {
+          "text": "أضاءت"
+        },
+        {
+          "text": "تجمعت"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 2,
+        "word": 3
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "أضاء"
+        },
+        {
+          "text": "أقبل بظلامه"
+        },
+        {
+          "text": "انتهى"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 17,
+        "word": 3
+      },
+      "id": "q6"
+    },
+    {
+      "category": "lessons",
+      "question": "سورة التكوير تتحدث عن...",
+      "options": [
+        {
+          "text": "قصة نبي"
+        },
+        {
+          "text": "أحداث يوم القيامة وأن القرآن كلام الله"
+        },
+        {
+          "text": "أحكام الصلاة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نتعلم من آخر آيات سورة التكوير؟",
+      "options": [
+        {
+          "text": "أن القرآن ذكر وهداية للعالمين"
+        },
+        {
+          "text": "أن الشمس ستنطفئ"
+        },
+        {
+          "text": "قصة الحيوانات"
+        }
+      ],
+      "answer": 0,
+      "review": "A distractor, \"that the sun will go out\" (an al-shams satantafi'), is close to what ayah 1 says (the sun is wrapped and its light is gone), though not of the last ayat the question asks about; a child who knows ayah 1 may doubt it. Teacher to keep or swap the distractor.",
+      "id": "q8"
+    },
+    {
+      "category": "hifz",
+      "question": "ما آخر آية في سورة التكوير؟",
+      "options": [
+        {
+          "ayah": 27
+        },
+        {
+          "ayah": 26
+        },
+        {
+          "ayah": 29
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "يوم القيامة يوم عظيم تتغير فيه كل الأشياء",
+      "review": null
+    },
+    {
+      "text": "القرآن كلام الله الذي أنزله على نبينا محمد ﷺ",
+      "review": null
+    },
+    {
+      "text": "جبريل عليه السلام هو الملك الذي نزل بالقرآن",
+      "review": null
+    },
+    {
+      "text": "علينا أن نسير في طريق الخير ونتبع القرآن",
+      "review": null
+    },
+    {
+      "text": "كل شيء بمشيئة الله رب العالمين",
+      "review": null
+    },
+    {
+      "text": "القرآن هداية ونور للناس جميعًا",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نتبع القرآن في حياتنا اليومية؟",
+    "ideas": [
+      "نقرأ القرآن كل يوم",
+      "نكون صادقين ونساعد الآخرين",
+      "نطيع وال\u062f\u064a\u0646\u0627 ونحترم الكبار",
+      "نصلي ونذكر الله دائمًا",
+      "نكون لطفاء مع الجميع"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن القرآن يهدي الناس إلى الخير؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الله يرى أعمالنا كلها؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة التكوير من أوائل السور التي نزلت؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن النبي ﷺ قال: من سرّه أن ينظر إلى يوم القيامة فليقرأ سورة التكوير؟",
+      "review": "Hadith (at-Tirmidhi, Ahmad; graded sahih): \"whoever would like to look at the Day of Resurrection as if seeing it with his eyes, let him recite idha al-shamsu kuwwirat, idha al-sama'u infatarat and idha al-sama'u inshaqqat\". The old line paraphrases it as a saying of the Prophet, drops \"as if seeing it with his eyes\" and names only At-Takwir. Teacher to word it faithfully or drop it."
+    },
+    {
+      "text": "هل تعلم أن حفظ القرآن ينير قلبك وعقلك؟",
+      "review": null
+    }
+  ]
+}

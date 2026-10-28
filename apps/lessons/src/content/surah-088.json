@@ -1,0 +1,558 @@
+{
+  "surah": 88,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. The old lesson had no data file: the ayat and tafsir came from components/LearnVersesSection.tsx (all 26 ayat, one entry each, numbered as the verified text), the word meanings from MeaningsSection.tsx, the rest from the other components; pages/Index.tsx was read and holds no lesson content. Cut (now empty, held): the tafsir of ayah 6, which opened with four words of ayah 6 typed, and of ayah 10, which quoted the whole of ayah 10 after one word. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the full-surah and per-ayah audio URLs and the reciter line, the typed basmala, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old completion game; its distractors are gone (the al-qari'ah and al-waqi'ah options were not of this surah), as the game draws its options from these words. In the final quiz the first-ayah question lost the typed basmala option, the \"wujuhun yawma'idhin\" completion lost a distractor that also completed the words shown (ayat 2 and 8 open alike), and the \"inna ilayna\" completion lost a typed distractor not of this surah (each flagged CHANGED); the three meaning questions were cut before the quoted word, which is now a position. The old quiz categories were mapped (hifz, ma'ani); its difficulty levels are not carried. Each lesson learned is its old title and text joined with \": \". The intro is the first two paragraphs of the welcome card joined with a space, their emoji badges and <strong> markup removed (the third paragraph, \"let's learn it together\", is not carried). The reflection ideas are the old six choices of things to reflect on; its \"choose 3\" hint and closing lines are not carried. Matching-only aids, never stored: ataka (1:2) typed with a plain alif where the Uthmani has ya + dagger alif; namariq (15:1) and zarabiyy (16:1) typed without the wa- the verse words carry; iyab typed without the -hum of iyabahum (25:3); each points at the whole verse word. Not carried (no field or no such game in the engine): the surah number, the welcome quiz (name, ayah count, theme), the ayah-ordering, start-end memory and build-the-ayah games, the meaning-choice and match games (they repeat the word list with the same or shorter meanings), and the encouragement lines."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-88 (read as text, never built or run)",
+    "sha256": {
+      "components/WelcomeSection.tsx": "2d2aec249da43d81ae504e040c56a0d540625cdf95c6d6ac6593aeecad0afa5f",
+      "components/ListenSection.tsx": "5b6549acea84b29c5f8e12de81089ab80cdc468d979f9df16d34f5ce16c3072e",
+      "components/LearnVersesSection.tsx": "459ea8834b21b6dc488c4a6a43073f39bb3c55feb5ebb09ede420557246c43c4",
+      "components/GamesSection.tsx": "53f850992f1ff454aeb1373c5552f793f35fb4678f55100bedae1d3271dccbd5",
+      "components/MeaningsSection.tsx": "dd16a228820c3bf3b7518a6a134f69db524f475e355b3f30fc470fafad0f589b",
+      "components/LessonsSection.tsx": "adfffc3b0aa80a4b914767da7fe4f32742ff36b04ba0ab740b418ebeebe22eba",
+      "components/QuizSection.tsx": "fe763d77e214688752ec582f6fa48ef722d7e4f92d7d5e47ea7c2e9348bfa1d7",
+      "pages/Index.tsx": "9a92c9ce6e828a483187b3fae016fad5c9ec4e4601d2509495588f511aaf962e"
+    }
+  },
+  "intro": {
+    "text": "سورة الغاشية تُذكّرنا بـيوم القيامة، وتُخبرنا عن حال الناس في الجنة وحال بعض الناس في النار. كما تدعونا للتفكّر في خلق الله مثل الإبل والسماء والجبال والأرض.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "هل سمعت يا محمد عن يوم القيامة الذي يغشى الناس بأهواله؟",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "وجوه بعض الناس يوم القيامة تكون ذليلة خائفة.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "كانت تعمل في الدنيا أعمالاً كثيرة لكنها لم تكن صالحة.",
+      "review": "Follows one view of \"'amilatun nasibah\": they toiled in this world in deeds that were not righteous (reported from Ibn 'Abbas). Many tafsir (e.g. at-Tabari) read it of the Hereafter: toiling and worn out in the Fire. Teacher to choose."
+    },
+    {
+      "ayah": 4,
+      "text": "تدخل نارًا شديدة الحرارة.",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "يُسقون من ماء شديد الحرارة.",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": null,
+      "review": "CUT: the old line opened \"laysa lahum ta'amun illa\" (the first four words of ayah 6, typed by hand), then went on \"a bitter thorny plant\". The Quran never goes in prose and nothing is left before the quote, so the line is empty. A teacher writes it."
+    },
+    {
+      "ayah": 7,
+      "text": "هذا الطعام لا يُشبع ولا يُغني من الجوع.",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "وجوه أخرى يوم القيامة تكون سعيدة ومُنعّمة.",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "راضية عن أعمالها الصالحة التي عملتها في الدنيا.",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": null,
+      "review": "CUT: the old line was \"they live\" followed by \"fi jannatin 'aliyah\" (the whole of ayah 10, typed by hand) and \"beautiful\". The Quran never goes in prose; before the quote only the one word \"ta'ish\" is left, so the line is empty. A teacher writes it."
+    },
+    {
+      "ayah": 11,
+      "text": "لا تسمع فيها كلامًا سيئًا أبدًا.",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "فيها أنهار ماء تجري دائمًا.",
+      "review": "Says \"rivers of water\". The verse word is 'ayn, a spring (many tafsir read it as a genus: flowing springs). Teacher to choose the wording."
+    },
+    {
+      "ayah": 13,
+      "text": "فيها أسرّة مرتفعة جميلة.",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "وأكواب جاهزة للشرب.",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "ووسائد مرتبة بشكل جميل.",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "وسجاد فاخر منتشر في كل مكان.",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "ألا ينظر الناس إلى الجمال كيف خلقها الله بشكل عجيب؟",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "وإلى السماء كيف رفعها الله عاليًا بدون أعمدة؟",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "وإلى الجبال كيف ثبّتها الله على الأرض؟",
+      "review": null
+    },
+    {
+      "ayah": 20,
+      "text": "وإلى الأرض كيف بسطها الله لنعيش عليها؟",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "text": "ذكّر الناس يا محمد، فأنت مُعلّم ومُذكّر.",
+      "review": null
+    },
+    {
+      "ayah": 22,
+      "text": "لست مُسيطرًا عليهم، إنما تُذكّرهم فقط.",
+      "review": null
+    },
+    {
+      "ayah": 23,
+      "text": "لكن من أعرض عن الحق وكفر...",
+      "review": null
+    },
+    {
+      "ayah": 24,
+      "text": "فإن الله سيعذّبه العذاب الشديد.",
+      "review": "Renders \"al-'adhab al-akbar\" as \"the severe punishment\". Common tafsir: the GREATEST punishment, the Fire of the Hereafter, as against lesser punishment in this world. Teacher to choose the wording."
+    },
+    {
+      "ayah": 25,
+      "text": "إن رجوع الناس جميعًا إلى الله.",
+      "review": null
+    },
+    {
+      "ayah": 26,
+      "text": "ثم إن الله سيحاسبهم على أعمالهم.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "يوم القيامة الذي يغشى الناس بأهواله",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "ذليلة خائفة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 2,
+      "meaning": "متعبة من العمل",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 4,
+      "meaning": "شديدة الحرارة",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 6,
+      "meaning": "نبات شوكي مُرّ",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 3,
+      "meaning": "سعيدة مُنعّمة",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "word": 4,
+      "meaning": "كلام سيء أو باطل",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "word": 1,
+      "meaning": "وسائد",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "word": 1,
+      "meaning": "سجاد فاخر",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "word": 4,
+      "meaning": "الجِمال",
+      "review": null
+    },
+    {
+      "ayah": 20,
+      "word": 4,
+      "meaning": "بُسِطَت ومُهِّدَت",
+      "review": null
+    },
+    {
+      "ayah": 25,
+      "word": 3,
+      "meaning": "رجوع",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 4
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 8,
+      "word": 3
+    },
+    {
+      "ayah": 10,
+      "word": 3
+    },
+    {
+      "ayah": 12,
+      "word": 3
+    },
+    {
+      "ayah": 17,
+      "word": 6
+    },
+    {
+      "ayah": 18,
+      "word": 4
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول آية في سورة الغاشية؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 3
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the third old option was the basmala, typed; it is not an ayah of this surah (it opens every surah but one). It is replaced by ayah 3. Teacher to confirm.",
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الغاشية؟",
+      "options": [
+        {
+          "text": "20 آية"
+        },
+        {
+          "text": "26 آية"
+        },
+        {
+          "text": "30 آية"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الجنة"
+        },
+        {
+          "text": "يوم القيامة"
+        },
+        {
+          "text": "السماء"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 4
+      },
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 2,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 3,
+          "word": 2
+        },
+        {
+          "ayah": 2,
+          "word": 3
+        },
+        {
+          "ayah": 10,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: ayat 2 and 8 both open with \"wujuhun yawma'idhin\", so the old distractor na'imah (8:3) was also a right completion of the words shown. It is replaced by nasibah (3:2). The prompt is ayah 2's first two words. Teacher to confirm.",
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "سعيدة"
+        },
+        {
+          "text": "ذليلة خائفة"
+        },
+        {
+          "text": "جميلة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 2,
+        "word": 3
+      },
+      "id": "q5"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 10,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 12,
+          "word": 3
+        },
+        {
+          "ayah": 10,
+          "word": 3
+        },
+        {
+          "ayah": 9,
+          "word": 2
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما هي الأشياء التي تدعونا السورة للتفكر فيها؟",
+      "options": [
+        {
+          "text": "الإبل والسماء والجبال والأرض"
+        },
+        {
+          "text": "البحار والأنهار"
+        },
+        {
+          "text": "النجوم والكواكب"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 17,
+        "words": 5
+      },
+      "options": [
+        {
+          "ayah": 18,
+          "word": 4
+        },
+        {
+          "ayah": 19,
+          "word": 4
+        },
+        {
+          "ayah": 17,
+          "word": 6
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q8"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "أكواب"
+        },
+        {
+          "text": "وسائد"
+        },
+        {
+          "text": "سجاد"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 15,
+        "word": 1
+      },
+      "id": "q9"
+    },
+    {
+      "category": "hifz",
+      "question": "ما آخر آية في سورة الغاشية؟",
+      "options": [
+        {
+          "ayah": 25
+        },
+        {
+          "ayah": 26
+        },
+        {
+          "ayah": 24
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q10"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 25,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 26,
+          "word": 4
+        },
+        {
+          "ayah": 25,
+          "word": 3
+        },
+        {
+          "ayah": 24,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractor \"'adhabahum\" was hand-typed and is not a word of this surah; it is replaced by al-'adhab (24:3). Teacher to confirm.",
+      "id": "q11"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "التفكّر في خلق الله: سورة الغاشية تدعونا للنظر والتفكّر في مخلوقات الله العجيبة مثل الإبل والسماء والجبال والأرض.",
+      "review": null
+    },
+    {
+      "text": "العمل الصالح: من يعمل الخير ويطيع الله يدخل الجنة ويكون سعيدًا يوم القيامة.",
+      "review": null
+    },
+    {
+      "text": "الحساب: الله سيحاسب كل الناس على أعمالهم، فعلينا أن نعمل الخير دائمًا.",
+      "review": null
+    },
+    {
+      "text": "الإيمان بالله: نؤمن بالله ونعبده ونشكره على نعمه الكثيرة.",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "ما الأشياء الجميلة التي خلقها الله حولنا وعلينا أن نتفكّر فيها؟",
+    "ideas": [
+      "السماء الجميلة والنجوم",
+      "الأزهار والأشجار",
+      "الطيور والحيوانات",
+      "البحار والأنهار",
+      "الجبال العالية",
+      "القمر والشمس"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله خلق السماء والجبال والأرض بنظام دقيق عجيب؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن التفكّر في خلق الله يزيد الإيمان والحب لله؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الجمل يمكنه أن يعيش أيامًا بدون ماء؟ سبحان الله!",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الجبال تُثبّت الأرض كالأوتاد؟",
+      "review": "Mountains as pegs (awtad) is the wording of An-Naba' 78:7, not of this surah; this surah says the mountains were \"set up firm\" (ayah 19). True, but not what this surah teaches. Teacher to keep or drop."
+    },
+    {
+      "text": "هل تعلم أن الأرض مُهيّأة لنا لنعيش عليها بسهولة؟ هذا من رحمة الله.",
+      "review": null
+    }
+  ]
+}

@@ -1,0 +1,460 @@
+{
+  "surah": 87,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. The old lesson had no data file: the ayat and tafsir came from components/LearnVersesSection.tsx (all 19 ayat, one entry each, numbered as the verified text), the word meanings from MeaningsSection.tsx, the intro from SurahIntroSection.tsx, the lessons, reflection and did-you-know from LessonsSection.tsx and the quiz from FinalQuizSection.tsx; WelcomeSection.tsx and pages/Index.tsx were read and hold no lesson content. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the per-ayah audio URLs and the reciter line, the typed basmala, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old completion and missing-word games; their hand-typed distractors not of this surah (al-karim, al-'azim, fa-abda', fa-ahsan, sabara, shakara, fa-shakara, wa-ajmal, wa-akbar, lil-'ulya, lil-kubra, ma'an, diya'an, takhsha, tahzan, fa-da'a) are gone, as the game draws its options from these words. In the final quiz the two completion questions lost their typed distractors (each flagged CHANGED), and the three meaning questions were cut before the quoted word, which is now a position. The old quiz categories were mapped (hifz, ma'ani, and \"fahm\" to lessons); its difficulty levels are not carried. The intro is the intro card's last three paragraphs joined with a space (the first two give the surah number and ayah count, not carried). The reflection ideas are the old four answer choices; its \"all these answers are right\" line is not carried. Emoji were stripped from the ends of lines. Matching-only aids, never stored: al-hayah (16:3) typed with an alif where the Uthmani has waw + dagger alif; the word cards fa-sawwa (2:3), al-mar'a (4:3), tazakka (14:4) and yakhfa (7:9) typed with a bare final alif maqsura where the Uthmani adds a dagger alif. Not carried (no field or no such game in the engine): the \"Makki\" surah type (agreed), the welcome lines, the intro quiz (name, ayah count), the ayah-ordering game, the meaning-choice and match games (they repeat the word list with the same or shorter meanings), and the encouragement lines."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-87 (read as text, never built or run)",
+    "sha256": {
+      "components/WelcomeSection.tsx": "4bd7b5ba6b3497352550b7cf02a9c14b5cc41fba6f5866120fa450251299790e",
+      "components/SurahIntroSection.tsx": "85cf67d71813bbba59f755e1d4b1248eb9bbe68db5b0b87fa4a9d474d8538906",
+      "components/ListenSection.tsx": "d6816e4a8cf38053a54d1fc9b6e00b096915f75876a27abb30f56521cdb92273",
+      "components/LearnVersesSection.tsx": "3a315adf270b652c637e3bdae9248105e447ee1cc810058b822c24fd42164828",
+      "components/GamesSection.tsx": "38a9477d85984a9797460c0fe9da0ec50fd9868bb1566d6d65374c887011cf10",
+      "components/MeaningsSection.tsx": "85d256fa592255931bd55081bb43724c27bb3a2e4550b7aa50d366be5203900d",
+      "components/LessonsSection.tsx": "9943d630fc179cce379c559a3663476e43b662fe9fa20aae266d36534070d64f",
+      "components/FinalQuizSection.tsx": "f238373de15b84a4de62ec1c448143b9fe374d840a6a4e78ee791fa2954f9a69",
+      "pages/Index.tsx": "5e749717b525e6655b7ae33090e6f270cdb32505dfee373f89e1e6bfc5c0c9c9"
+    }
+  },
+  "intro": {
+    "text": "سورة الأعلى تعلمنا أن نُسبّح الله ونشكره على كل شيء خلقه لنا. تذكرنا السورة أن من يطيع الله ويُزكّي نفسه ينجح ويدخل الجنة إن شاء الله. وتعلمنا أن الصلاة وذكر الله من أهم الأعمال التي تقربنا إلى الله.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "نزّه الله وعظّمه، فهو الأعلى فوق كل شيء",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "الله خلق كل شيء وجعله جميلًا ومتناسقًا",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "الله قدّر لكل شيء طريقه وهداه إليه",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "الله أنبت العشب والنباتات الخضراء",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "ثم جعل النبات يجف ويصبح أسود اللون",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "الله وعد النبي ﷺ أن يحفظ القرآن ولا ينساه",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "الله يعلم كل شيء، ما نقوله وما في قلوبنا",
+      "review": "Gives only the second half (\"He knows what is said aloud and what is hidden\"). The ayah opens \"illa ma sha'a Allah\" (except what Allah wills), continuing ayah 6: the Prophet will not forget except what Allah wills (common tafsir: what Allah wills to lift). Teacher to complete the line."
+    },
+    {
+      "ayah": 8,
+      "text": "الله يسهّل لنا طريق الخير والطاعة",
+      "review": "Says \"Allah makes the way of good easy for US\". The ayah addresses the Prophet: \"We will ease you toward ease\" (al-yusra, the easy way, the shari'ah, or Paradise). Teacher to check the wording."
+    },
+    {
+      "ayah": 9,
+      "text": "ذكّر الناس بالله لأن التذكير ينفعهم",
+      "review": "Gives \"in nafa'at al-dhikra\" as \"because reminding benefits them\". \"In\" is \"if\": remind, if the reminder benefits (many tafsir: remind everyone; it benefits whoever fears, ayah 10). Teacher to choose the wording."
+    },
+    {
+      "ayah": 10,
+      "text": "الذي يخاف الله سيتذكر ويعمل الخير",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "text": "الشخص الذي لا يسمع النصيحة يبتعد عنها",
+      "review": "Says al-ashqa is \"the person who does not listen to advice\". Common tafsir: al-ashqa (ayah 11), the most wretched, is the disbeliever who turns away from the reminder; he enters the greatest Fire (12) and in it neither dies nor lives (13), which is not the state of a believer who sins. Teacher to choose the wording for 11-13."
+    },
+    {
+      "ayah": 12,
+      "text": "من لا يطيع الله يعاقب يوم القيامة",
+      "review": "Generalises the verse to anyone who disobeys. Common tafsir: al-ashqa (ayah 11), the most wretched, is the disbeliever who turns away from the reminder; he enters the greatest Fire (12) and in it neither dies nor lives (13), which is not the state of a believer who sins. Teacher to choose the wording for 11-13."
+    },
+    {
+      "ayah": 13,
+      "text": "عقاب شديد لمن عصى الله ولم يتب",
+      "review": "Generalises the verse to anyone who disobeys. Common tafsir: al-ashqa (ayah 11), the most wretched, is the disbeliever who turns away from the reminder; he enters the greatest Fire (12) and in it neither dies nor lives (13), which is not the state of a believer who sins. Teacher to choose the wording for 11-13."
+    },
+    {
+      "ayah": 14,
+      "text": "نجح وفاز من طهّر نفسه وعمل الخير!",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "ذكر الله وصلّى، والصلاة من أحب الأعمال إلى الله",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "بعض الناس يحبون الدنيا أكثر من الآخرة",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "الجنة أفضل وأبقى من كل شيء في الدنيا!",
+      "review": "Renders al-akhirah (the Hereafter) as \"Paradise\". The verse says the Hereafter is better and more lasting than the life of this world. Teacher to check the wording."
+    },
+    {
+      "ayah": 18,
+      "text": "هذه الدروس موجودة في الكتب القديمة أيضًا",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "في صحف نبي الله إبراهيم وموسى عليهما السلام",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "نزّه الله وعظّمه وامدحه",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "الله الذي هو فوق كل شيء",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "جعل كل شيء متناسقًا وجميلًا",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "العشب والنباتات الخضراء",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 2,
+      "meaning": "نبات جاف ويابس",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 7,
+      "meaning": "ما يُقال بصوت عالٍ",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 9,
+      "meaning": "ما يكون سرًّا في القلب",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "word": 2,
+      "meaning": "نجح وفاز",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "word": 4,
+      "meaning": "طهّر نفسه وعمل الخير",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "word": 4,
+      "meaning": "الكتب المنزلة من الله",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 4
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 14,
+      "word": 4
+    },
+    {
+      "ayah": 17,
+      "word": 3
+    },
+    {
+      "ayah": 8,
+      "word": 2
+    },
+    {
+      "ayah": 5,
+      "word": 2
+    },
+    {
+      "ayah": 6,
+      "word": 3
+    },
+    {
+      "ayah": 15,
+      "word": 4
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول آية في سورة الأعلى؟",
+      "options": [
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 14
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 17,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 17,
+          "word": 3
+        },
+        {
+          "ayah": 1,
+          "word": 4
+        },
+        {
+          "ayah": 12,
+          "word": 4
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old distractors \"wa-ajmal\" and \"wa-a'la\" were hand-typed and are not words of this surah; they are replaced by al-a'la (1:4) and al-kubra (12:4). Teacher to confirm.",
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 14,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 10,
+          "word": 3
+        },
+        {
+          "ayah": 14,
+          "word": 4
+        },
+        {
+          "ayah": 2,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors \"sabara\" and \"shakara\" were hand-typed and are not words of this surah; they are replaced by yakhsha (10:3) and fa-sawwa (2:3). Teacher to confirm.",
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "السماء"
+        },
+        {
+          "text": "العشب والنباتات"
+        },
+        {
+          "text": "البحر"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 4,
+        "word": 3
+      },
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "نام كثيرًا"
+        },
+        {
+          "text": "طهّر نفسه وعمل الخير"
+        },
+        {
+          "text": "سافر بعيدًا"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 14,
+        "word": 4
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "الحيوانات"
+        },
+        {
+          "text": "الأشجار"
+        },
+        {
+          "text": "الكتب المنزلة من الله"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "word": {
+        "ayah": 18,
+        "word": 4
+      },
+      "id": "q6"
+    },
+    {
+      "category": "lessons",
+      "question": "كم عدد آيات سورة الأعلى؟",
+      "options": [
+        {
+          "text": "15 آية"
+        },
+        {
+          "text": "19 آية"
+        },
+        {
+          "text": "20 آية"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نتعلم من سورة الأعلى؟",
+      "options": [
+        {
+          "text": "أن الدنيا أفضل من الآخرة"
+        },
+        {
+          "text": "أن الآخرة خير وأبقى"
+        },
+        {
+          "text": "أن نلعب كثيرًا"
+        }
+      ],
+      "answer": 1,
+      "review": "TYPED: \"the right option\" carries \"khayrun wa-abqa\", two words of ayah 17 typed by hand (under the checker's limit, but it is typed Quran). Teacher to reword or keep.",
+      "id": "q8"
+    },
+    {
+      "category": "hifz",
+      "question": "ما آخر آية في سورة الأعلى؟",
+      "options": [
+        {
+          "ayah": 19
+        },
+        {
+          "ayah": 17
+        },
+        {
+          "ayah": 14
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "نُسبّح الله ونشكره على كل نعمة",
+      "review": null
+    },
+    {
+      "text": "الصلاة وذكر الله من أهم الأعمال",
+      "review": null
+    },
+    {
+      "text": "الآخرة خير وأبقى من الدنيا",
+      "review": "TYPED: \"al-akhirah khayrun wa-abqa\" carries \"khayrun wa-abqa\", two words of ayah 17 typed by hand (under the checker's limit, but it is typed Quran). Teacher to reword or keep."
+    },
+    {
+      "text": "من يعمل الخير ويُزكّي نفسه ينجح",
+      "review": null
+    },
+    {
+      "text": "الله يعلم كل شيء في السر والعلن",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نذكر الله ونشكره في حياتنا اليومية؟",
+    "ideas": [
+      "نقول سبحان الله والحمد لله كل يوم",
+      "نصلي الصلوات الخمس في وقتها",
+      "نشكر الله على الطعام والشراب",
+      "نكون لطفاء مع الآخرين"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن قول «سبحان الله» من أفضل الأذكار؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الصلاة تقربنا من الله؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن النبي ﷺ كان يقرأ سورة الأعلى في صلاة الجمعة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الأعلى من أوائل السور التي نزلت؟",
+      "review": null
+    }
+  ]
+}

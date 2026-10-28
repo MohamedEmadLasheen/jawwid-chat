@@ -186,9 +186,17 @@ export function SubscriptionForm({
                     )
                   })}
                 </select>
-                {readinessNote(teachers.data?.teachers.find((t) => t.id === c.teacherId)?.readiness, locale) && (
-                  <span className="field__hint">{tx(TR.teacherNotReady)}</span>
-                )}
+                {(() => {
+                  const readiness = teachers.data?.teachers.find((t) => t.id === c.teacherId)?.readiness
+                  if (!readinessNote(readiness, locale)) return null
+                  return (
+                    <>
+                      <span className="field__hint">{tx(TR.teacherNotReady)}</span>
+                      {/* PD-43 §3.7: an unsupervised teacher is the Teachers Manager's. */}
+                      {readiness?.noSupervisor && <span className="field__hint">{tx(TR.teacherManagerCovers)}</span>}
+                    </>
+                  )
+                })()}
               </div>
             </div>
             <div className="tj-row">

@@ -11,6 +11,7 @@ import { SupervisionConversationService } from '../supervision/supervision-conve
 import { LessonService } from '../lessons/lesson.service';
 import { TrialService } from '../lessons/trial.service';
 import { FIRST_LOGIN_MAILER, firstLoginMail, type MailSender } from '../account-recovery/recovery-delivery';
+import { NotificationService } from '../communication/notifications/notification.service';
 import { TeacherFileService } from './teacher-file.service';
 
 /**
@@ -28,6 +29,9 @@ import { TeacherFileService } from './teacher-file.service';
  *              rule, not creation's (department head on #198): an existing
  *              teacher is a live identity, so the code is always e-mailed and
  *              only the manager and the super admin see it.
+ *   changeSignIn() a new sign-in e-mail: while the login waits, the reissue
+ *              rule and a new code to the new address; once used, the super
+ *              admin only, and every session ends.
  *   reissue()  a new code while the teacher has not signed in; the old one dies.
  *              Owner, 2026-10-28, "E-mail only; managers can see": only the super
  *              admin, the Teachers manager and the teacher's CURRENT supervisor
@@ -68,6 +72,7 @@ export class TeacherOnboardingService {
     private readonly lessons: LessonService,
     private readonly trials: TrialService,
     @Inject(FIRST_LOGIN_MAILER) private readonly mailer: MailSender,
+    private readonly notifications: NotificationService,
     @Optional() teacherScope?: TeacherScopeService,
   ) {
     this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
@@ -119,7 +124,15 @@ export class TeacherOnboardingService {
         return { name: teacher.name, issued };
       });
     } catch (e) {
-      throw await this.refusal(e, actor, email, phone);
+      throw await this.refusal(e, actor, email, phone, name);
+    }
+    // Plan §3.7: an unsupervised teacher is the Teachers manager's; they are told
+    // unless they added the teacher themselves.
+    if (supervisorId === null) {
+      await this.tellTeachersManager(actor, 'teacher_added_unsupervised', `teacher_added_unsupervised:${id}`, {
+        teacher: created.name,
+        addedBy: actor.displayName,
+      });
     }
     const emailed = await this.deliver(email, created.issued);
     return {
@@ -170,6 +183,74 @@ export class TeacherOnboardingService {
       firstLogin: seesCode
         ? { code: issued.code, expiresAt: issued.expiresAt.toISOString(), emailed }
         : { expiresAt: issued.expiresAt.toISOString(), emailed },
+    };
+  }
+
+  /**
+   * PD-43 §3.3: a new sign-in e-mail (PATCH /teachers/:id/sign-in, { email, reason? }).
+   * While the login waits: the reissue rule (chat.change_teacher_sign_in), the
+   * old code dies and a new one goes to the NEW address in the same
+   * transaction -- seen only by the manager and the super admin, as on a
+   * reissue. Once the login has been used: the super admin only, and every
+   * session ends; the teacher signs in again with the new address.
+   */
+  async changeSignIn(actorId: string, teacherId: string, body: Record<string, unknown>) {
+    const { actor, onboarding } = await this.files.onboardingGate(actorId);
+    const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
+    if (!isUuid(teacherId)) throw notFound;
+    const email = requireEmail(body.email);
+    const reason = optionalText('reason', body.reason, 500) ?? 'sign-in e-mail changed';
+    const issuer = await this.issuerAccount(actor);
+    let done: { accountId: string; issued: { id: string; code: string; expiresAt: Date } | null; revoked: number };
+    try {
+      done = await this.prisma.$transaction(async (tx) => {
+        const [row] = await tx.$queryRaw<Array<{ changed: { accountId: string; status: string } }>>`
+          SELECT chat.change_teacher_sign_in(${teacherId}::uuid, ${email}::text, ${reason}::text, ${actor.actorId}::uuid) AS changed`;
+        const { accountId, status } = row!.changed;
+        if (status === 'provisioned') {
+          const issued = await this.resets.issueInTx(tx, {
+            accountId,
+            organizationId: actor.organizationId as string,
+            issuedByStaffId: actor.actorId,
+            issuedByAccountId: issuer,
+            reason: 'a first sign-in at a new address',
+            signOutEverywhere: false,
+            purpose: 'first_login',
+          });
+          return { accountId, issued, revoked: 0 };
+        }
+        const revoked = await this.auth.revokeAccountSessionsInTx(tx, accountId, 'sign-in e-mail changed', {
+          revokedBy: issuer,
+          actorId: actor.actorId,
+        });
+        return { accountId, issued: null, revoked };
+      });
+    } catch (e) {
+      if (e instanceof AuthError) throw e;
+      const text = errorText(e);
+      if (/no such teacher for you to change the sign-in of/.test(text)) throw notFound;
+      if (/only the super admin changes a sign-in that has been used/.test(text)) {
+        throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'only the super admin changes a sign-in that has been used');
+      }
+      if (/this sign-in is suspended/.test(text)) {
+        throw new CommError(CommErrorCode.TEACHER_SIGN_IN_SUSPENDED, 'this teacher’s sign-in is suspended; reactivate it first', 409);
+      }
+      const conflict = /an inactive teacher's sign-in is not changed|this teacher has no sign-in to change|this sign-in is closed|this is already the sign-in/.exec(text);
+      if (conflict) throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, conflict[0], 409);
+      throw await this.refusal(e, actor, email, null);
+    }
+    if (!done.issued) {
+      await this.auth.enforceAccountRevocation(done.accountId, done.revoked > 0);
+      return { teacherId, signIn: email, firstLogin: null };
+    }
+    const emailed = await this.deliver(email, done.issued);
+    const seesCode = onboarding.supervisorChoice === 'any';
+    return {
+      teacherId,
+      signIn: email,
+      firstLogin: seesCode
+        ? { code: done.issued.code, expiresAt: done.issued.expiresAt.toISOString(), emailed }
+        : { expiresAt: done.issued.expiresAt.toISOString(), emailed },
     };
   }
 
@@ -470,8 +551,39 @@ export class TeacherOnboardingService {
     }
   }
 
-  /** chat.create_teacher's refusals, as the API answers them. */
-  private async refusal(e: unknown, actor: Actor, email: string, phone: string | null): Promise<unknown> {
+  /**
+   * PD-34: a notification for the Teachers manager (the super admin when the
+   * department has none), never for the actor themselves. A side effect: a
+   * failure is logged, never thrown. The dedupe key makes a retry one.
+   */
+  private tellTeachersManager(actor: Actor, templateKey: string, dedupeKey: string, variables: Record<string, string>): Promise<void> {
+    return (async () => {
+      const recipients = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        WITH manager AS (
+          SELECT s.id FROM chat.department d JOIN chat.staff s ON s.id = d.manager_id
+           WHERE d.organization_id = ${actor.organizationId}::uuid AND d.kind = 'teachers' AND s.is_active AND s.left_at IS NULL)
+        SELECT id::text AS id FROM manager
+        UNION ALL
+        SELECT s.id::text FROM chat.staff s
+         WHERE NOT EXISTS (SELECT 1 FROM manager)
+           AND s.organization_id = ${actor.organizationId}::uuid AND s.role = 'super_admin' AND s.is_active AND s.left_at IS NULL`;
+      for (const r of recipients) {
+        if (r.id === actor.actorId) continue;
+        await this.notifications.schedule({
+          dedupeKey: `${dedupeKey}:${r.id}`,
+          templateKey,
+          eventType: templateKey,
+          recipientId: r.id,
+          priority: 'normal',
+          variables,
+          scheduledAt: new Date(),
+        });
+      }
+    })().catch((e) => this.log.error(`${templateKey} not scheduled: ${failureKind(e)}`));
+  }
+
+  /** chat.create_teacher's refusals, as the API answers them. `attemptedName`: the teacher being added, when it is an add. */
+  private async refusal(e: unknown, actor: Actor, email: string, phone: string | null, attemptedName?: string): Promise<unknown> {
     if (e instanceof CommError || e instanceof AuthError) return e;
     const tooBusy = busy(e);
     if (tooBusy) return tooBusy;
@@ -489,8 +601,8 @@ export class TeacherOnboardingService {
     if (/this teacher id is already used/.test(text)) {
       return new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'id: this teacher id is already used', 409);
     }
-    if (/this e-mail already signs in to Chat/.test(text)) return this.signInTaken(actor, email);
-    if (/this contact is already on a teacher's file/.test(text)) return this.contactTaken(actor, email, phone);
+    if (/this e-mail already signs in to Chat/.test(text)) return this.signInTaken(actor, email, attemptedName);
+    if (/this contact is already on a teacher's file/.test(text)) return this.contactTaken(actor, email, phone, attemptedName);
     return e;
   }
 
@@ -499,7 +611,7 @@ export class TeacherOnboardingService {
    * identical answer. The caller's scope is read on EVERY path, first, so the
    * time taken tells nothing either.
    */
-  private async signInTaken(actor: Actor, email: string): Promise<CommError> {
+  private async signInTaken(actor: Actor, email: string, attemptedName?: string): Promise<CommError> {
     const scope = await this.teacherScope.scopeOf(actor);
     const [holder] = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
       SELECT t.id::text AS id, t.name
@@ -508,11 +620,12 @@ export class TeacherOnboardingService {
     if (holder && scopeCovers(scope, holder.id)) {
       return new CommError(CommErrorCode.TEACHER_ALREADY_ADDED, 'this person is already a teacher here', 409, { teacher: holder });
     }
+    if (holder && attemptedName) this.tellHidden(actor, holder, attemptedName);
     return unavailable();
   }
 
   /** As signInTaken: a contact on the file of a teacher out of reach is the SAME answer as an e-mail out of reach. */
-  private async contactTaken(actor: Actor, email: string, phone: string | null): Promise<CommError> {
+  private async contactTaken(actor: Actor, email: string, phone: string | null, attemptedName?: string): Promise<CommError> {
     const scope = await this.teacherScope.scopeOf(actor);
     const digits = phone ? phone.replace(/[^0-9]/g, '') : null;
     const [holder] = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
@@ -525,7 +638,22 @@ export class TeacherOnboardingService {
     if (holder && scopeCovers(scope, holder.id)) {
       return new CommError(CommErrorCode.TEACHER_CONTACT_TAKEN, 'this phone or e-mail is already on a teacher’s file', 409, { teacher: holder });
     }
+    if (holder && attemptedName) this.tellHidden(actor, holder, attemptedName);
     return unavailable();
+  }
+
+  /**
+   * Plan §3.4: the adder was refused for details on a teacher out of their
+   * reach and was told nothing; someone who may see both is told. Never the
+   * e-mail or the phone: names only.
+   */
+  private tellHidden(actor: Actor, holder: { id: string; name: string }, attemptedName: string): void {
+    // Not awaited: on a refusal the write must not change how long the answer takes.
+    void this.tellTeachersManager(actor, 'teacher_duplicate_hidden', `teacher_duplicate_hidden:${holder.id}:${actor.actorId}`, {
+      holder: holder.name,
+      addedBy: actor.displayName,
+      name: attemptedName,
+    });
   }
 }
 
