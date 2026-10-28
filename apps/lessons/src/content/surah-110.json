@@ -1,0 +1,337 @@
+{
+  "surah": 110,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs, the two wrong options of the reflection question (only its right answer is kept, as the idea), and every hand-typed Quran string (replaced by positions). The \"choose the meaning\" game is carried into the quiz (q8-q10); its afwajan question repeated q3 and is skipped. Each lesson learned is its old title, description and example joined. Not carried over: the ayah-ordering, build-the-ayah and word-to-meaning matching games and the intro quiz (surah name, ayah count); the engine has no such games yet."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-110 (read as text, never built or run)",
+    "sha256": {
+      "lib/lessonData.ts": "b7bd1805f321a4907ff276003a7f67425f446c8666819dc0199eb75ae15d5a0a",
+      "components/TajweedSection.tsx": "df2e3559dac39774a36dd158fe2434aebec969610379768721e5db4169aca2cb",
+      "components/MemoryGames.tsx": "906ccf9ee09858cc81b48da93f376529b70543283f84dea69e1e35d86d760ca5",
+      "components/FinalQuiz.tsx": "193a84a46b5c56e4063620a2aac978e0f97dde712a64908f1d37b2a0621fd41e",
+      "components/LearnVerses.tsx": "c6890b45bced8c0ec144d960fbe5e96460e68f049b442db867017ee2f239c7d6",
+      "components/LessonIntro.tsx": "f98044ec32572db4bcc9497f27c79f8efd3d0019a65799e48800fc7ef8981e5b"
+    }
+  },
+  "intro": {
+    "text": "سورة النصر نزلت بعد فتح مكة، وهي تبشّر بنصر الله للإسلام ودخول الناس فيه، وتأمر بالتسبيح والاستغفار.",
+    "review": "Says the surah was revealed after the conquest of Mecca. Scholars differ: some say before the conquest (as a promise of it), and a well-known report (Ibn Umar) places it at Mina in the Farewell Hajj. Teacher to choose the wording."
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "عندما يأتي نصر الله ويُعطي المسلمين الفوز الكبير ويفتح لهم مكة.",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "ورأيت الناس الكثيرين يدخلون في دين الإسلام جماعات كبيرة.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "فقل سبحان الله والحمد لله، واطلب من الله أن يغفر لك، فالله يقبل التوبة دائمًا.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "مساعدة الله والفوز",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 5,
+      "meaning": "فتح مكة والانتصار",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 7,
+      "meaning": "جماعات كثيرة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 1,
+      "meaning": "قل سبحان الله",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 4,
+      "meaning": "اطلب المغفرة من الله",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 7,
+      "meaning": "كثير قبول التوبة",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 5
+    },
+    {
+      "ayah": 2,
+      "word": 7
+    },
+    {
+      "ayah": 3,
+      "word": 7
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما هي الآية الأولى من سورة النصر؟",
+      "options": [
+        {
+          "ayah": 3
+        },
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة النصر؟",
+      "options": [
+        {
+          "text": "5 آيات"
+        },
+        {
+          "text": "3 آيات"
+        },
+        {
+          "text": "7 آيات"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "فرادى"
+        },
+        {
+          "text": "جماعات كثيرة"
+        },
+        {
+          "text": "أعداء"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 2,
+        "word": 7
+      },
+      "id": "q3"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نتعلم من سورة النصر؟",
+      "options": [
+        {
+          "text": "نشكر الله ونسبحه عند النجاح"
+        },
+        {
+          "text": "لا نفعل شيئًا"
+        },
+        {
+          "text": "ننسى الله"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q4"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 3,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 3,
+          "word": 4
+        },
+        {
+          "ayah": 2,
+          "word": 7
+        },
+        {
+          "ayah": 1,
+          "word": 5
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q5"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نقول عندما ينعم الله علينا؟",
+      "options": [
+        {
+          "text": "لا شيء"
+        },
+        {
+          "text": "سبحان الله والحمد لله"
+        },
+        {
+          "text": "ننسى"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q6"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية الأخيرة من سورة النصر؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 3
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "اركض"
+        },
+        {
+          "text": "قل سبحان الله"
+        },
+        {
+          "text": "نم"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 3,
+        "word": 1
+      },
+      "id": "q8"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "كثير قبول التوبة"
+        },
+        {
+          "text": "كثير الغضب"
+        },
+        {
+          "text": "بعيد"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 3,
+        "word": 7
+      },
+      "id": "q9"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "الإغلاق"
+        },
+        {
+          "text": "فتح مكة والانتصار"
+        },
+        {
+          "text": "النوم"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 5
+      },
+      "id": "q10"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "شكر الله عند النجاح: عندما ننجح في شيء، نقول الحمد لله ونشكره. مثلاً: عندما تنجح في الامتحان، قل الحمد لله!",
+      "review": null
+    },
+    {
+      "text": "حمد الله على النعم: الله يعطينا نعمًا كثيرة، فعلينا أن نحمده دائمًا. مثلاً: الحمد لله على الصحة والطعام والعائلة.",
+      "review": null
+    },
+    {
+      "text": "طلب المغفرة من الله: نقول أستغفر الله دائمًا، والله يغفر لنا لأنه توّاب. مثلاً: إذا أخطأت، قل أستغفر الله وحاول ألا تكرر الخطأ.",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "ما الذي يجب أن نقوله عندما ينجحنا الله أو يعطينا نعمة؟",
+    "ideas": [
+      "سبحان الله والحمد لله وأستغفر الله"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن سورة النصر من أقصر سور القرآن الكريم؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة النصر نزلت في المدينة المنورة؟",
+      "review": "\"Madani\" means revealed after the Hijra, not necessarily in Medina; the report of Ibn Umar places its revelation at Mina during the Farewell Hajj, so \"in Medina\" may be wrong. Teacher to reword."
+    },
+    {
+      "text": "هل تعلم أن المسلمين فرحوا كثيرًا عندما فُتحت مكة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الناس دخلوا في الإسلام جماعات كبيرة بعد فتح مكة؟",
+      "review": null
+    }
+  ]
+}

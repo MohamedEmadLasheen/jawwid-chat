@@ -52,6 +52,34 @@ export function useReissueFirstLogin(teacherId: string) {
   return useMutation({ mutationFn: () => teacherFileApi.reissueFirstLogin(teacherId), gcTime: 0 })
 }
 
+/** PD-43: what offboarding would meet. Read fresh each time the dialog opens. */
+export function useOffboardPreview(teacherId: string) {
+  return useQuery({
+    queryKey: [...teacherFileKeys.detail(teacherId), 'offboard-preview'],
+    queryFn: () => teacherFileApi.offboardPreview(teacherId),
+    staleTime: 0,
+    gcTime: 0,
+  })
+}
+
+export function useOffboard(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { reason: string; cancelOpenLessons?: boolean }) => teacherFileApi.offboard(teacherId, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.all }),
+  })
+}
+
+/** PD-43: the super admin brings a teacher back; the answer holds a new first sign-in code. */
+export function useReactivate(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (reason: string) => teacherFileApi.reactivate(teacherId, reason),
+    gcTime: 0,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.all }),
+  })
+}
+
 export function useTeacherFile(teacherId: string) {
   return useQuery({
     queryKey: teacherFileKeys.detail(teacherId),

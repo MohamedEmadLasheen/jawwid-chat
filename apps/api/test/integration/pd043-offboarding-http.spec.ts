@@ -326,3 +326,15 @@ describe('5. the set-up checklist', () => {
     expect(list.json.teachers.find((t: { id: string }) => t.id === id)).toMatchObject({ setupMissing: 7 });
   });
 });
+
+describe('6. what the Teacher File offers', () => {
+  it('Offboard for the Teachers manager and the super admin; Reactivate for the super admin only', async () => {
+    const id = m.teachers[0]!.id;
+    const byManager = await http(m.teachersManager.subject, 'GET', `/teacher-files/${id}`);
+    expect(byManager.json.onboarding).toEqual({ canOffboard: true, canReactivate: false });
+    const bySuperAdmin = await http(m.superAdmin.subject, 'GET', `/teacher-files/${id}`);
+    expect(bySuperAdmin.json.onboarding).toEqual({ canOffboard: true, canReactivate: true });
+    const bySupervisor = await http(m.teacherSupervisors[0]!.subject, 'GET', `/teacher-files/${id}`);
+    if (bySupervisor.status === 200) expect(bySupervisor.json.onboarding).toEqual({ canOffboard: false, canReactivate: false });
+  });
+});

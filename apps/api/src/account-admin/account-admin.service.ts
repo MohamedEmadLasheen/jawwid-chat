@@ -4,7 +4,7 @@ import { PrismaService } from '../platform/prisma.service';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { AuthorizationService, type AccountAdminAct, type AccountAdminTarget } from '../platform/authorization.service';
-import { accountKindsAdministered, type AccountAdminStanding } from '../platform/account-admin-policy';
+import { accountAdminActs, accountKindsAdministered, type AccountAdminStanding } from '../platform/account-admin-policy';
 import { accountAdminStandingOf } from '../platform/account-admin-standing';
 import { AuthService } from '../platform/auth/auth.service';
 import { toSessionListDto, type SessionDto } from '../platform/auth/auth.dto';
@@ -62,6 +62,7 @@ const ACCOUNT_SELECT = {
     select: {
       id: true,
       name: true,
+      familyId: true,
       family: { select: { displayName: true, learners: { select: { name: true }, orderBy: { name: 'asc' }, take: 10 } } },
     },
     orderBy: { createdAt: 'asc' },
@@ -115,6 +116,8 @@ export class AccountAdminService {
     const kind = query.kind && kinds.includes(query.kind) ? [query.kind] : kinds;
     const q = query.q?.trim().slice(0, MAX_QUERY);
     const like = q ? { contains: q, mode: Prisma.QueryMode.insensitive } : undefined;
+    // PD-42 S3: under the Sales switch 'own', a Sales member sees the parents of their own families only.
+    const owned = await this.salesOwnedFamilies(actor, standing);
 
     const rows = await this.prisma.account.findMany({
       where: {
@@ -122,6 +125,7 @@ export class AccountAdminService {
         kind: { in: kind },
         // Never the caller's own, never the super admin's.
         NOT: [{ staff: { id: actor.actorId } }, { staff: { role: StaffRole.SUPER_ADMIN } }],
+        ...(owned ? { contacts: { some: { familyId: { in: owned } } } } : {}),
         ...(like
           ? {
               OR: [
@@ -163,6 +167,7 @@ export class AccountAdminService {
     // decision says which, for the logs). Every kind's acts include a reset.
     const decision = this.authz.canAdministerAccount(actor, toTarget(row), 'reset_password', standing);
     if (!decision.allowed) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, decision.reason);
+    await this.requireOwnedFamily(actor, standing, row);
     return this.summary(actor, row, standing);
   }
 
@@ -353,9 +358,39 @@ export class AccountAdminService {
   private async authorize(actor: Actor, accountId: string, act: AccountAdminAct): Promise<{ row: AccountRow }> {
     this.requireStaff(actor);
     const row = await this.loadRow(accountId);
-    const decision = this.authz.canAdministerAccount(actor, toTarget(row), act, await accountAdminStandingOf(this.prisma, actor));
+    const standing = await accountAdminStandingOf(this.prisma, actor);
+    const decision = this.authz.canAdministerAccount(actor, toTarget(row), act, standing);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    await this.requireOwnedFamily(actor, standing, row);
     return { row };
+  }
+
+  /**
+   * PD-42 S3: while the Sales switch is 'own', the families a Sales member (not
+   * the Sales manager, not Operations, not the super admin) administers parent
+   * accounts of: the ones they own. null when nothing narrows the caller.
+   */
+  private async salesOwnedFamilies(actor: Actor, standing: AccountAdminStanding): Promise<string[] | null> {
+    if (actor.staffRole === StaffRole.SUPER_ADMIN || standing.sales !== 'member') return null;
+    if (accountAdminActs(actor, standing, 'family').has('suspend')) return null; // Operations administers its own way.
+    const [{ scope }] = await this.prisma.$queryRaw<Array<{ scope: string }>>`SELECT chat.sales_family_scope() AS scope`;
+    if (scope !== 'own') return null;
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT f.id::text AS id FROM chat.family f
+       WHERE f.organization_id = ${actor.organizationId as string}::uuid
+         AND chat.staff_owns_family(${actor.actorId}::uuid, f.id)`;
+    return rows.map((r) => r.id);
+  }
+
+  /** A parent account of a family the narrowed Sales member does not own reads as not found. */
+  private async requireOwnedFamily(actor: Actor, standing: AccountAdminStanding, row: AccountRow) {
+    if (row.kind !== 'family') return;
+    const owned = await this.salesOwnedFamilies(actor, standing);
+    if (owned === null) return;
+    const familyId = row.contacts[0]?.familyId;
+    if (!familyId || !owned.includes(familyId)) {
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'a Sales supervisor administers the parents of their own families only');
+    }
   }
 
   /** Refuses non-staff before ANY lookup, so a parent or teacher learns nothing about account ids. */
