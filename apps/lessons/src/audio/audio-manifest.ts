@@ -13,7 +13,9 @@ import type { AudioFactory, AudioSource, Playable } from './audio-controller';
  *   postMessage({ type: 'jawwid:quran-audio', surah, ayahs: [{ ayah, audio }] })
  *
  * from a parent page, or injected by the mobile app's WebView into the lesson
- * itself. The engine accepts it only from an allowed origin, refuses the WHOLE
+ * itself, as DATA: exactly these fields (each entry { ayah, audio: { reciter,
+ * key, url, sha256 } }, nothing else -- no token, no text), at most 286 entries.
+ * The engine accepts it only from an allowed origin, refuses the WHOLE
  * list if any entry is not exactly that ayah's own key on an allowed media
  * origin, and then plays a file only after its bytes hash to the listed
  * SHA-256 (verifiedAudio). The allowed origins are fixed when CI builds the
@@ -48,25 +50,34 @@ export const BUILD_AUDIO_ORIGINS: AudioOrigins = {
 };
 
 const RECITER = /^[a-z0-9][a-z0-9-]{1,39}$/;
+/** The longest surah has 286 ayat; a URL is a signed storage link. */
+const MAX_ENTRIES = 286;
+const MAX_URL = 2048;
+/** The message is DATA in exactly this shape: any other field refuses it (no tokens, no text). */
+const only = (o: object, keys: readonly string[]) => Object.keys(o).every((k) => keys.includes(k));
 const HEX64 = /^[0-9a-f]{64}$/;
 const pad = (n: number) => String(n).padStart(3, '0');
 
 export function acceptAudioMessage(event: { origin: string; data: unknown }, surah: number, origins: AudioOrigins): AudioManifest | null {
   if (event.origin !== origins.self && !origins.parents.includes(event.origin)) return null;
   const data = event.data as { type?: unknown; surah?: unknown; ayahs?: unknown };
-  if (!data || data.type !== AUDIO_MESSAGE || data.surah !== surah || !Array.isArray(data.ayahs)) return null;
+  if (!data || typeof data !== 'object' || !only(data, ['type', 'surah', 'ayahs'])) return null;
+  if (data.type !== AUDIO_MESSAGE || data.surah !== surah || !Array.isArray(data.ayahs) || data.ayahs.length > MAX_ENTRIES) return null;
   const ayahs: AudioManifest['ayahs'] = new Map();
   let reciter: string | null = null;
   for (const entry of data.ayahs as Array<{ ayah?: unknown; audio?: unknown }>) {
-    const ayah = entry?.ayah;
+    if (!entry || typeof entry !== 'object' || !only(entry, ['ayah', 'audio'])) return null;
+    const ayah = entry.ayah;
     if (typeof ayah !== 'number' || !Number.isInteger(ayah) || ayah < 1 || ayah > 286 || ayahs.has(ayah)) return null;
     const a = entry.audio as { reciter?: unknown; key?: unknown; url?: unknown; sha256?: unknown } | null | undefined;
     if (a === null || a === undefined) continue;
+    if (typeof a !== 'object' || !only(a, ['reciter', 'key', 'url', 'sha256'])) return null;
     if (typeof a.reciter !== 'string' || !RECITER.test(a.reciter) || (reciter !== null && a.reciter !== reciter)) return null;
     reciter = a.reciter;
     // Exactly this ayah's own key: never another verse's file.
     if (a.key !== `quran/audio/${reciter}/${pad(surah)}${pad(ayah)}.mp3`) return null;
     if (typeof a.sha256 !== 'string' || !HEX64.test(a.sha256)) return null;
+    if (typeof a.url !== 'string' || a.url.length > MAX_URL) return null;
     let url: URL;
     try {
       url = new URL(String(a.url));

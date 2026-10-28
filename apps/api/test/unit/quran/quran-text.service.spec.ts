@@ -20,6 +20,7 @@ class FakeStore implements QuranStore {
   stored: StoredDataset | null;
   audioSourceValue: { reciter: string } | null = null;
   audience: AudioAudience = 'none';
+  testStaffIds: string[] = [];
   audioRows: Array<{ surah: number; ayah: number; objectKey: string; sha256: string }> = [];
   marks: TajweedMark[] = [];
   reviews: TajweedReview[] = [];
@@ -41,20 +42,23 @@ class FakeStore implements QuranStore {
     return this.rows.filter((r) => r.surah === surah && r.ayah >= from && r.ayah <= to);
   }
   async audioSource() { return this.audioSourceValue; }
-  async audioAudience() { return this.audience; }
+  async audioGate() { return { audience: this.audience, testStaffIds: this.testStaffIds }; }
   async audio(_reciter: string, surah: number, from: number, to: number) {
     return this.audioRows.filter((r) => r.surah === surah && r.ayah >= from && r.ayah <= to);
   }
   async tajweed() { return { marks: this.marks, reviews: this.reviews, withdrawn: this.withdrawn }; }
 }
 
-const STAFF = { kind: 'staff' } as const;
-const PARENT = { kind: 'contact' } as const;
+const STAFF = { kind: 'staff', actorId: 'owner', staffRole: 'super_admin' } as const;
+const PARENT = { kind: 'contact', actorId: 'parent' } as const;
 const RECITER = 'test-reciter';
 const LICENCE = { confirmedBy: 'owner', confirmedAt: '2026-11-01', reference: 'test' };
 const source = (licence: AudioSourceSpec['licence']): AudioSourceSpec => ({ reciter: RECITER, name: 'Test', attribution: 'test', licence, archives: [] });
-/** Signed, short-lived read URLs: licensed audio is never at a permanent public address. */
-const signing = { signedReadUrl: async (key: string, ttl: number) => `https://media.example.test/${key}?ttl=${ttl}&sig=x` } as unknown as ObjectStorage;
+/** Signed, short-lived, uncacheable read URLs: licensed audio is never at a permanent public address. */
+const signing = {
+  signedReadUrl: async (key: string, ttl: number, opts?: { cacheControl?: string }) =>
+    `https://media.example.test/${key}?ttl=${ttl}&cc=${encodeURIComponent(opts?.cacheControl ?? '')}&sig=x`,
+} as unknown as ObjectStorage;
 
 async function setup(adjust?: (store: FakeStore) => void, licence: AudioSourceSpec['licence'] = null) {
   const pinned = pinnedFor(syntheticRows());
@@ -150,7 +154,7 @@ describe('QuranTextService', () => {
       ];
     });
     const res = await service.ayahs({ surah: '113', from: '1', to: '5' }, STAFF);
-    expect(res.ayahs[1]!.audio).toEqual({ reciter: RECITER, key, url: `https://media.example.test/${key}?ttl=3600&sig=x`, sha256: 'b'.repeat(64) });
+    expect(res.ayahs[1]!.audio).toEqual({ reciter: RECITER, key, url: `https://media.example.test/${key}?ttl=3600&cc=${encodeURIComponent('private, no-store')}&sig=x`, sha256: 'b'.repeat(64) });
     expect(res.ayahs[2]!.audio).toBeNull();
     expect(res.ayahs[4]!.audio).toBeNull();
     // A parent or a student: no audio under staff_test.
@@ -164,7 +168,7 @@ describe('QuranTextService', () => {
       s.audioSourceValue = { reciter: RECITER };
       s.audioRows = [{ surah: 113, ayah: 1, objectKey: audioKey(RECITER, 113, 1), sha256: 'a'.repeat(64) }];
     };
-    const audioFor = async (service: QuranTextService, who: { kind: 'staff' | 'contact' }) =>
+    const audioFor = async (service: QuranTextService, who: { kind: string; actorId: string; staffRole?: string }) =>
       (await service.ayahs({ surah: '113', from: '1', to: '1' }, who)).ayahs[0]!.audio;
     const none = await setup(rows);
     expect(await audioFor(none.service, STAFF)).toBeNull();

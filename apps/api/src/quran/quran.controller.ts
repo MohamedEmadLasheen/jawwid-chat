@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseFilters } from '@nestjs/common';
+import { Controller, Get, Header, Query, UseFilters } from '@nestjs/common';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
 import { QuranTextService } from './quran-text.service';
@@ -20,6 +20,8 @@ export class QuranController {
   @SelfService()
   @RateLimited(ActionScope.QURAN_READ)
   @Get('ayahs')
+  // The answer can carry this caller's own signed audio URLs: never cached or shared.
+  @Header('Cache-Control', 'private, no-store')
   ayahs(@Query() query: Record<string, unknown>, @CurrentActor() actor: Actor) {
     // Audio rides only on what the release gate lets this account have (audio-gate.ts).
     return this.quran.ayahs(query ?? {}, actor);

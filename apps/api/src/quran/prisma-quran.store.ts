@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../platform/prisma.service';
 import { isReciterCode } from './audio-key';
-import { parseAudience, type AudioAudience } from './audio-gate';
+import { readAudioGate, type AudioGate } from './audio-gate';
 import type { AyahRow } from './quran-integrity';
 import type { QuranStore, StoredDataset } from './quran-text.service';
 import type { TajweedMark, TajweedReview } from './tajweed';
@@ -44,9 +44,8 @@ export class PrismaQuranStore implements QuranStore {
     return { reciter: v.reciter };
   }
 
-  async audioAudience(): Promise<AudioAudience> {
-    const row = await this.prisma.config.findUnique({ where: { key: 'quran.audio.enabled_for' } });
-    return parseAudience(row?.value);
+  audioGate(): Promise<AudioGate> {
+    return readAudioGate(this.prisma);
   }
 
   audio(reciter: string, surah: number, from: number, to: number) {

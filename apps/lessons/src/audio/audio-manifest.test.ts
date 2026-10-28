@@ -45,6 +45,13 @@ describe('accepting the audio list from the opener', () => {
     expect(await refused((d) => { (d.ayahs[0]!.audio as { sha256: string }).sha256 = 'nope'; })).toBeNull();
     expect(await refused((d) => { (d.ayahs[1]!.audio as { reciter: string }).reciter = 'someone-else'; })).toBeNull();
     expect(await refused((d) => { d.ayahs.push({ ayah: 1, audio: d.ayahs[0]!.audio }); })).toBeNull();
+    // Data only, exactly the agreed shape: an unknown field anywhere refuses the list.
+    expect(await refused((d) => { (d as Record<string, unknown>).token = 'x'; })).toBeNull();
+    expect(await refused((d) => { (d.ayahs[0] as Record<string, unknown>).text = 'verse'; })).toBeNull();
+    expect(await refused((d) => { (d.ayahs[0]!.audio as Record<string, unknown>).authorization = 'Bearer x'; })).toBeNull();
+    // Bounded: at most one entry per ayah of the longest surah, and short URLs.
+    expect(await refused((d) => { d.ayahs = Array.from({ length: 287 }, (_, i) => ({ ayah: i + 1, audio: null })); })).toBeNull();
+    expect(await refused((d) => { (d.ayahs[0]!.audio as { url: string }).url = `https://media.example.test/${'a'.repeat(2100)}`; })).toBeNull();
     // With no allowed media origin (a build without audio), nothing is ever accepted.
     expect(acceptAudioMessage({ origin: ORIGINS.self, data: await message() }, 85, { ...ORIGINS, media: [] })).toBeNull();
   });

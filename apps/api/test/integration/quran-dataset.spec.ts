@@ -28,6 +28,7 @@ import { PlatformModule } from '@platform/platform.module';
 import { AuthModule } from '@platform/auth/auth.module';
 import { AuthService } from '@platform/auth/auth.service';
 import { hashPassword } from '@platform/auth/password';
+import { seedOrgChat } from '../../src/cli/org-chat-seed';
 import { CommErrorCode } from '@platform/errors';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
@@ -100,8 +101,8 @@ async function refused(p: Promise<unknown>): Promise<string> {
   throw new Error('expected a refusal');
 }
 
-async function http(path: string) {
-  const r = await fetch(`${base}${path}`, { headers: { authorization: `Bearer ${token}` } });
+async function http(path: string, bearer = token) {
+  const r = await fetch(`${base}${path}`, { headers: { authorization: `Bearer ${bearer}` } });
   const json = (await r.json().catch(() => ({}))) as { error?: { code?: string } } & Record<string, any>;
   return { status: r.status, code: json.error?.code, json };
 }
@@ -265,7 +266,10 @@ describe('audio: written only by the server\'s ingest, one key per ayah', () => 
     expect(await refused(g.prisma.$executeRawUnsafe(
       `insert into chat.quran_ayah_audio (reciter_code, surah, ayah, sha256, byte_size) values ($1, 85, 3, $2, 10)`, reciter, 'e'.repeat(64),
     ))).toMatch(/only by the server's ingest/);
-    await ingestAyahAudio(storage, prismaAudioRowWriter(g.prisma), reciter, 85, 3);
+    const writer = prismaAudioRowWriter(g.prisma);
+    expect(await writer.exists(reciter, 85, 3)).toBe(false);
+    await ingestAyahAudio(storage, writer, reciter, 85, 3, createHash('sha256').update(MP3).digest('hex'));
+    expect(await writer.exists(reciter, 85, 3)).toBe(true);
     const stored = await g.prisma.$queryRawUnsafe<Array<{ object_key: string; sha256: string; byte_size: number }>>(
       `select object_key, sha256, byte_size from chat.quran_ayah_audio where reciter_code = $1 and surah = 85 and ayah = 3`, reciter,
     );
@@ -379,6 +383,45 @@ describe('GET /quran/ayahs', () => {
         null,
       ]);
       expect(r.json.ayahs[1].audio.url).toMatch(/&sig=/);
+    } finally {
+      await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('quran.audio', 'quran.audio.enabled_for')`);
+    }
+  });
+
+  it('over HTTP, a parent and a teacher get no audio: the gate admits only the testers until a licence is recorded', async () => {
+    // A second academy, seeded fresh for this run, gives real parent and teacher logins.
+    const domain = `qurands-${RUN}.qa.jawwid.test`;
+    const org = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'Quran audio gate QA')`, org, `qurands-${RUN}`);
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
+      const account = await tx.account.create({ data: { organizationId: org, subject: `owner@${domain}`, kind: 'staff', status: 'active', isActive: true } });
+      await tx.accountCredential.create({ data: { accountId: account.id, passwordHash: await hashPassword(PASSWORD) } });
+      await tx.staff.create({ data: { organizationId: org, name: 'QA Owner (gate)', role: 'super_admin', isActive: true, accountId: account.id } });
+    });
+    const m = await seedOrgChat(g.prisma as never, { organizationId: org, emailDomain: domain, password: PASSWORD, passwordHash: await hashPassword(PASSWORD), messages: false });
+    const auth = app.get(AuthService);
+    const parent = (await auth.login(m.families[0]!.parent.subject, PASSWORD)).accessToken;
+    const teacher = (await auth.login(m.teachers[0]!.subject, PASSWORD)).accessToken;
+    const supervisor = (await auth.login(m.supervisors[0]!.subject, PASSWORD)).accessToken; // family-facing staff
+    const setConfig = (key: string, value: unknown) => g.prisma.$executeRawUnsafe(
+      `insert into chat.config (key, value, scope, description) values ($1, $2::jsonb, 'quran', 'quran-dataset.spec')
+       on conflict (key) do update set value = excluded.value`, key, JSON.stringify(value),
+    );
+    await setConfig('quran.audio', { reciter: AUDIO_RECITER });
+    await setConfig('quran.audio.enabled_for', 'all'); // the widest setting; the test recitation has no licence
+    try {
+      const audioOf = async (bearer: string) => {
+        const r = await http('/quran/ayahs?surah=85&from=3&to=3', bearer);
+        expect(r.status).toBe(200);
+        return r.json.ayahs[0].audio;
+      };
+      expect(await audioOf(token)).not.toBeNull(); // the super admin: a tester
+      expect(await audioOf(parent)).toBeNull();
+      expect(await audioOf(teacher)).toBeNull();
+      expect(await audioOf(supervisor)).toBeNull(); // not a named tester
+      const r = await fetch(`${base}/quran/ayahs?surah=85&from=3&to=3`, { headers: { authorization: `Bearer ${parent}` } });
+      expect(r.headers.get('cache-control')).toBe('private, no-store');
     } finally {
       await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('quran.audio', 'quran.audio.enabled_for')`);
     }
