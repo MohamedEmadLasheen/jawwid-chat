@@ -235,6 +235,57 @@ describe('1b. PD-42: Assign keys the parent', () => {
   });
 });
 
+describe('1c. PD-42: a trial sibling joins the family it belongs to', () => {
+  async function refusalOf(p: Promise<unknown>): Promise<CommError> {
+    try {
+      await p;
+    } catch (e) {
+      if (e instanceof CommError) return e;
+      throw e;
+    }
+    throw new Error('expected a refusal, got success');
+  }
+
+  it('PARENT_EXISTS names the family; Assign with it adds the children there: one family, one account, the family\'s supervisor, its group', async () => {
+    const first = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    const { conversationId } = await enrolment.createGroup(s.ownerId, trialId);
+    const sibling = await subscribedTrial(EMAIL);
+
+    // The same parent: answered with the family, never a second one.
+    const refused = await refusalOf(enrolment.assign(s.managerId, sibling, { supervisorId: s.ownerId }));
+    expect(refused.code).toBe(CommErrorCode.PARENT_EXISTS);
+    expect(refused.detail).toMatchObject({ familyId: first.familyId, parentName: 'parent_p' });
+
+    // Only the Operations manager, and only to the family the trial's parent is in.
+    expect(await code(enrolment.assign(s.ownerId, sibling, { familyId: first.familyId }))).toBe(CommErrorCode.LESSON_DENIED);
+    const [{ id: stranger }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.family (display_name, owner_id) values ('fam_stranger', $1::uuid) returning id::text as id`, s.ownerId,
+    );
+    expect(await code(enrolment.assign(s.managerId, sibling, { familyId: stranger }))).toBe(CommErrorCode.VALIDATION);
+    // Siblings share their supervisor.
+    expect(await code(enrolment.assign(s.managerId, sibling, { familyId: first.familyId, supervisorId: s.otherAdminId }))).toBe(CommErrorCode.VALIDATION);
+
+    const added = await enrolment.assign(s.managerId, sibling, { familyId: first.familyId });
+    expect(added).toMatchObject({ familyId: first.familyId, attached: true, group: 'joined' });
+    expect(added.learnerIds).toHaveLength(2);
+    expect(await g.prisma.family.count({ where: { displayName: 'parent_p' } })).toBe(1);
+    expect(await g.prisma.account.count({ where: { subject: LOWER } })).toBe(1);
+    expect(await g.prisma.contact.count({ where: { familyId: first.familyId } })).toBe(1);
+    const supervision = await g.prisma.learnerSupervision.findMany({ where: { learnerId: { in: added.learnerIds } } });
+    expect(supervision.map((x) => [x.supervisorId, x.assignedBy])).toEqual([[s.ownerId, s.managerId], [s.ownerId, s.managerId]]);
+    const row = await g.prisma.studentEnrolment.findUniqueOrThrow({ where: { lessonId: sibling } });
+    expect(row).toMatchObject({ origin: 'trial', kind: 'added_children', familyId: first.familyId, groupConversationId: conversationId });
+    expect(await g.prisma.conversationLearner.count({ where: { conversationId, learnerId: { in: added.learnerIds } } })).toBe(2);
+    // The New Students entry: the sibling's form, now in the family's group.
+    const entry = (await enrolment.page(s.ownerId)).students.find((x) => x.trialId === sibling)!;
+    expect(entry.enrolment).toMatchObject({ familyId: first.familyId, groupConversationId: conversationId, canCreateGroup: false });
+    expect(await g.prisma.auditLog.findFirstOrThrow({ where: { action: 'family.children_added', entityId: first.familyId } }))
+      .toMatchObject({ actorId: s.managerId, after: expect.objectContaining({ origin: 'trial', kind: 'added_children', trialId: sibling }) });
+    // Once.
+    expect(await code(enrolment.assign(s.managerId, sibling, { familyId: first.familyId }))).toBe(CommErrorCode.LESSON_STATE);
+  });
+});
+
 describe('2. who sees which entry', () => {
   it('unassigned: Sales and the Operations manager; assigned: the supervisor and the manager, not Sales nor other supervisors', async () => {
     const ids = async (actor: string) => (await enrolment.page(actor)).students.map((x) => x.trialId);
