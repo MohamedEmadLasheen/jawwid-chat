@@ -690,8 +690,8 @@ export class TaskService {
   private rows(viewer: Viewer, where: Prisma.Sql, clock: Clock, order: Order = 'urgency', outer: Prisma.Sql = Prisma.sql`true`, limit = PAGE) {
     const orderBy =
       order === 'urgency'
-        ? Prisma.sql`ORDER BY r.k1, r.k2, r.k3, r.k4, r.created_at, r.id`
-        : Prisma.sql`ORDER BY r.closed_at DESC, r.id DESC`;
+        ? Prisma.sql`ORDER BY r.k1, r.k2, r.k3, coalesce(r.due_at, 'infinity'::timestamptz), r.created_at, r.id::uuid`
+        : Prisma.sql`ORDER BY r.closed_at DESC, r.id::uuid DESC`;
     return this.prisma.$queryRaw<Row[]>`
       SELECT * FROM (
       SELECT t.id::text AS id, t.kind, t.state, t.outcome,
@@ -731,7 +731,8 @@ export class TaskService {
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,
              CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END AS k3,
-             coalesce(t.due_at, 'infinity'::timestamptz) AS k4,
+             -- 'infinity' sorts the undated last; it stays text here because
+             -- the client driver cannot decode an infinite timestamp.
              coalesce(t.due_at, 'infinity'::timestamptz)::text AS k4_key,
              t.closed_at::text AS closed_at_key
         FROM chat.work_task t
@@ -846,7 +847,7 @@ function afterSql(c: Cursor | null): Prisma.Sql {
   if (!c) return Prisma.sql`true`;
   const k = c.keys;
   return c.order === 'urgency'
-    ? Prisma.sql`(r.k1, r.k2, r.k3, r.k4, r.created_at, r.id::uuid)
+    ? Prisma.sql`(r.k1, r.k2, r.k3, coalesce(r.due_at, 'infinity'::timestamptz), r.created_at, r.id::uuid)
                  > (${k[0]}::int, ${k[1]}::int, ${k[2]}::int, ${k[3]}::timestamptz, ${k[4]}::timestamptz, ${k[5]}::uuid)`
     : Prisma.sql`(r.closed_at, r.id::uuid) < (${k[0]}::timestamptz, ${k[1]}::uuid)`;
 }
