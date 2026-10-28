@@ -284,6 +284,26 @@ const CANDIDATES = {
 }
 
 describe('Change teacher', () => {
+  it('PD-43: a teacher still being set up is a warning beside the name, never greyed out', async () => {
+    on('GET', /\/teachers\/candidates$/, () =>
+      json({
+        teachers: [
+          { id: 't-2', name: 'Teacher Two', isActive: true, away: null, readiness: { setupIncomplete: true, notSignedIn: true, noSupervisor: true, loginSuspended: false } },
+          { id: 't-5', name: 'Teacher Five', isActive: true, away: null, readiness: { setupIncomplete: false, notSignedIn: false, noSupervisor: false, loginSuspended: true } },
+          { id: 't-6', name: 'Teacher Six', isActive: true, away: null, readiness: { setupIncomplete: false, notSignedIn: false, noSupervisor: false, loginSuspended: false } },
+        ],
+      }),
+    )
+    renderWithProviders(<ChangeTeacherDialog target={{ kind: 'learner', id: 'k-1', name: 'Child Alpha' }} onClose={() => undefined} onDone={() => undefined} />)
+    const two = await screen.findByRole('radio', { name: /^Teacher Two/ })
+    expect(two).toBeEnabled()
+    expect(two.closest('label')!).toHaveTextContent('Setup incomplete · Not signed in yet · No supervisor')
+    const five = screen.getByRole('radio', { name: /^Teacher Five/ })
+    expect(five).toBeEnabled()
+    expect(five.closest('label')!).toHaveTextContent('Login suspended')
+    expect(screen.getByRole('radio', { name: 'Teacher Six' })).toBeEnabled()
+  })
+
   it('greys out away and inactive teachers, and will not confirm until the busy weekly time has a free replacement', async () => {
     on('GET', /\/teachers\/candidates$/, () => json(CANDIDATES))
     on('GET', /\/learners\/k-1\/transfer-preview\?toTeacherId=t-2$/, () => json(PREVIEW))
