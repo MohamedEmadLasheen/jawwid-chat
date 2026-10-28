@@ -202,7 +202,8 @@ describe('the Teachers area', () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
     expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual([
-      'Statistics', 'Needs action', 'Schedules', 'Students', 'Teacher files', 'Certificates', 'Supervision', 'Escalations',
+      // PD-41: Certificates moved to its own page (/certificates).
+      'Statistics', 'Needs action', 'Schedules', 'Students', 'Teacher files', 'Supervision', 'Escalations',
     ])
     expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('aria-current', 'page')
     expect(within(tabs).getByRole('link', { name: 'Teacher files' })).toHaveAttribute('href', '/teachers/files')

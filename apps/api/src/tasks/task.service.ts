@@ -100,6 +100,7 @@ interface Row {
   title_params: Record<string, unknown> | null;
   eff_level: Level;
   eff_reason: PriorityReason;
+  eff_overdue: boolean;
   /** Sort keys, as text to the microsecond, for the cursor. */
   k1: number;
   k2: number;
@@ -117,6 +118,8 @@ interface EventRow {
   from_assignee: string | null;
   to_assignee: string | null;
   body: string | null;
+  before: unknown;
+  after: unknown;
   at: Date;
 }
 
@@ -227,10 +230,15 @@ export class TaskService {
     const clock = await this.clock(cursor?.asOf);
     const level = levelField(query.level, 'level');
     const category = categoryField(query.category);
-    if (query.overdue !== undefined && query.overdue !== 'true' && query.overdue !== 'false') throw invalid('overdue: true or false');
-    const filters = Prisma.sql`${category ? Prisma.sql`t.category = ${category}` : Prisma.sql`true`}
-      AND ${query.overdue === 'true' ? Prisma.sql`t.due_at < ${clock.asOf}::timestamptz` : Prisma.sql`true`}`;
-    const outer = Prisma.sql`${level ? Prisma.sql`r.eff_level = ${level}` : Prisma.sql`true`} AND ${afterSql(cursor)}`;
+    // overdue=true: past their deadline by their own floor rule (an instalment
+    // on its due day is due, not overdue); overdue=false: not past it.
+    if (query.overdue !== undefined && query.overdue !== '' && query.overdue !== 'true' && query.overdue !== 'false') {
+      throw invalid('overdue: true or false');
+    }
+    const filters = category ? Prisma.sql`t.category = ${category}` : Prisma.sql`true`;
+    const overdue =
+      query.overdue === 'true' ? Prisma.sql`r.eff_overdue` : query.overdue === 'false' ? Prisma.sql`NOT r.eff_overdue` : Prisma.sql`true`;
+    const outer = Prisma.sql`${level ? Prisma.sql`r.eff_level = ${level}` : Prisma.sql`true`} AND ${overdue} AND ${afterSql(cursor)}`;
     const limit = query.limit === undefined || query.limit === '' ? PAGE : Number(query.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > PAGE) throw invalid(`limit: 1 to ${PAGE}`);
     const rows = await this.rows(
@@ -256,7 +264,7 @@ export class TaskService {
     const events = await this.prisma.$queryRaw<EventRow[]>`
       SELECT e.id::text AS id, e.kind, e.actor_kind, e.actor_id::text AS actor_id,
              coalesce(s.name, te.name) AS actor_name,
-             e.from_assignee::text AS from_assignee, e.to_assignee::text AS to_assignee, e.body, e.at
+             e.from_assignee::text AS from_assignee, e.to_assignee::text AS to_assignee, e.body, e.before, e.after, e.at
         FROM chat.work_task_event e
         LEFT JOIN chat.staff s ON e.actor_kind = 'staff' AND s.id = e.actor_id
         LEFT JOIN chat.teacher te ON e.actor_kind = 'teacher' AND te.id = e.actor_id
@@ -271,6 +279,9 @@ export class TaskService {
         fromAssigneeId: e.from_assignee,
         toAssigneeId: e.to_assignee,
         body: e.body,
+        /** What changed, for a client to say "Medium -> High" or "due Mon -> Wed"; the created event's after holds the initial priority and category. */
+        before: e.before ?? null,
+        after: e.after ?? null,
         at: e.at.toISOString(),
       })),
     };
@@ -471,10 +482,10 @@ export class TaskService {
              count(*)::int AS scanned,
              count(*) FILTER (WHERE x.mine)::int AS mine,
              min(x.created_at) FILTER (WHERE x.mine) AS mine_oldest,
-             count(*) FILTER (WHERE x.mine AND x.due_at < now())::int AS mine_overdue,
+             count(*) FILTER (WHERE x.mine AND x.overdue)::int AS mine_overdue,
              count(*) FILTER (WHERE x.wide)::int AS wide,
              min(x.created_at) FILTER (WHERE x.wide) AS wide_oldest,
-             count(*) FILTER (WHERE x.wide AND x.due_at < now())::int AS wide_overdue,
+             count(*) FILTER (WHERE x.wide AND x.overdue)::int AS wide_overdue,
              count(*) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR x.unmanaged))::int AS decisions,
              min(x.created_at) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR x.unmanaged)) AS decisions_oldest,
              count(*) FILTER (WHERE x.wide AND NOT x.live)::int AS gone,
@@ -486,6 +497,7 @@ export class TaskService {
         FROM (
           SELECT t.created_at, t.due_at, t.state,
                  (e.level = 'high') AS urgent,
+                 e.overdue AS overdue,
                  (t.category = 'financial') AS financial,
                  ${mineSql(viewer)} AS mine,
                  ${wide} AS wide,
@@ -651,7 +663,7 @@ export class TaskService {
     const viewer = await this.requireViewer(actorId);
     const row = await this.visible(viewer, taskId);
     if (row.standing !== 'manager' && row.standing !== 'super_admin') {
-      throw denied('a task is removed, returned or reassigned by the responsible manager or the super admin');
+      throw denied('a task is removed, returned, reassigned, re-dated or re-prioritised by the responsible manager or the super admin');
     }
     return { viewer, row };
   }
@@ -706,7 +718,7 @@ export class TaskService {
              (SELECT count(*)::int FROM chat.work_task_event e WHERE e.task_id = t.id AND e.kind = 'out_of_scope') AS disputed,
              ${UNMANAGED} AS unmanaged,
              ${this.standingSql(viewer)} AS standing,
-             t.priority, t.category, e.level AS eff_level, e.reason AS eff_reason,
+             t.priority, t.category, e.level AS eff_level, e.reason AS eff_reason, e.overdue AS eff_overdue,
              t.source_type, t.source_id::text AS source_id, t.source_state,
              CASE t.source_type
                WHEN 'leave_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_leave_request q WHERE q.id = t.source_id)
@@ -779,6 +791,8 @@ export class TaskService {
       manualPriority: r.priority,
       effectivePriority: r.eff_level,
       priorityReason: r.eff_reason,
+      /** Past its deadline by its floor rule, whatever raised the level (a manual High task can be overdue too). */
+      overdue: r.eff_overdue,
       category: r.category,
       /**
        * PD-47 PR-2: a system task names its source; its title is the client's
@@ -809,6 +823,11 @@ function mineSql(viewer: Viewer): Prisma.Sql {
 }
 
 type Order = 'urgency' | 'closed';
+/** The cursor's key shapes: what Postgres prints for an int, a timestamptz and a uuid. */
+const INT = /^-?\d{1,3}$/;
+const MOMENT = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?([+-]\d{2}(:?\d{2})?|Z)$/;
+const MOMENT_OR_INFINITY = /^(infinity|\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?([+-]\d{2}(:?\d{2})?|Z))$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 interface Cursor {
   order: Order;
   asOf: string;
@@ -831,13 +850,14 @@ function cursorOf(cursor: string | undefined, order: Order): Cursor | null {
   } catch {
     throw invalid('cursor');
   }
+  // Every key is checked here, so a forged or truncated cursor is a 400, never a cast error.
   const keys = parsed.k;
+  const shape = order === 'urgency' ? [INT, INT, INT, MOMENT_OR_INFINITY, MOMENT, UUID] : [MOMENT, UUID];
   const ok =
     parsed.o === order &&
-    typeof parsed.a === 'string' && !Number.isNaN(Date.parse(parsed.a)) &&
-    Array.isArray(keys) && keys.every((x) => typeof x === 'string') &&
-    keys.length === (order === 'urgency' ? 6 : 2) &&
-    isUuid(keys[keys.length - 1] as string);
+    typeof parsed.a === 'string' && MOMENT.test(parsed.a) &&
+    Array.isArray(keys) && keys.length === shape.length &&
+    keys.every((x, i) => typeof x === 'string' && shape[i].test(x));
   if (!ok) throw invalid('cursor');
   return { order, asOf: parsed.a as string, keys: keys as string[] };
 }

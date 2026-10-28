@@ -831,7 +831,7 @@ begin
   if tg_op = 'INSERT' then
     insert into chat.work_task_event (task_id, organization_id, kind, actor_kind, actor_id, to_assignee, after)
     values (new.id, new.organization_id, 'created', v_kind, v_actor, v_to,
-            jsonb_build_object('dueAt', new.due_at));
+            jsonb_build_object('dueAt', new.due_at, 'priority', new.priority, 'category', new.category));
     return new;
   end if;
 

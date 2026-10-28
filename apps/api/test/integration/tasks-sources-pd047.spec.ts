@@ -269,6 +269,32 @@ describe('the database', () => {
     await expect(asSa(`update chat.work_task set state = 'completed', outcome = 'done' where id = $1::uuid`)).rejects.toThrow(/doing its work/);
   });
 
+  it('chat.task_system forges nothing: a request role reaches neither the tables nor the helpers, whatever it sets', async () => {
+    const lesson = await pastLesson(3_600_000);
+    await tasks.sweep();
+    const id = (await taskFor(`lesson_report:${lesson}`)) as string;
+    const attempt = (role: string, sql: string, ...args: unknown[]) =>
+      g.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`set local role ${role}`);
+        await tx.$executeRawUnsafe(`select set_config('chat.task_system', 'on', true)`);
+        await tx.$executeRawUnsafe(`select set_config('chat.task_actor', $1, true)`, s.teacherId);
+        return tx.$executeRawUnsafe(sql, ...args).then(() => 'executed', (e: Error) => e.message);
+      });
+    for (const role of ['chat_app', 'authenticated', 'anon']) {
+      expect(await attempt(role, `update chat.work_task set state = 'completed', outcome = 'done' where id = $1::uuid`, id)).toMatch(/permission denied/);
+      expect(await attempt(role,
+        `insert into chat.work_task (organization_id, kind, source_type, source_id, source_key, source_state, assignee_teacher_id)
+         values (chat.default_organization_id(), 'system', 'case', $1::uuid, 'case:' || $1, 'pending', $2::uuid)`,
+        randomUUID(), s.teacherId)).toMatch(/permission denied/);
+      expect(await attempt(role, `select chat.work_task_settle(chat.default_organization_id(), $1, $2::uuid)`, `lesson_report:${lesson}`, s.teacherId))
+        .toMatch(/permission denied/);
+      expect(await attempt(role, `insert into chat.work_task_event (task_id, organization_id, kind, actor_kind, actor_id, body)
+                                  values ($1::uuid, chat.default_organization_id(), 'commented', 'teacher', $2::uuid, 'x')`, id, s.teacherId))
+        .toMatch(/permission denied/);
+    }
+    expect((await tasks.get(s.teacherId, id)).state).toBe('open');
+  });
+
   it('the sweep reconciles a source whose trigger missed it: positive evidence only', async () => {
     const lesson = await pastLesson(3_600_000);
     await tasks.sweep();

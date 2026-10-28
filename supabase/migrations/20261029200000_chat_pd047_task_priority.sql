@@ -22,8 +22,10 @@
 --                                Never stored, so it cannot go stale.
 --
 -- The guard and the history trigger are redefined: a priority change is a
--- recorded change, and category, floor rule and source floor never change by
--- hand. Everything else is exactly 20261029160000's.
+-- recorded change, and category, floor rule and source floor never change at
+-- all here (source_floor stays null until PR-2/PR-2b redefine the guard for
+-- the sources' own helpers). The created event records the initial priority
+-- and category. Everything else is exactly 20261029160000's.
 --
 -- FAIL CLOSED: the tables keep their RLS and revoked grants. Every function
 -- pins its search_path.
@@ -66,13 +68,17 @@ $$;
 -- The effective level of a task at p_as_of: the highest of its manual level,
 -- what its floor rule gives, and its source floor. Pending tasks only; a
 -- closed task shows its manual level. Measured to the minute (owner Q-P2),
--- except the instalment rule, which counts the academy's calendar days.
---   rank    3 high | 2 medium | 1 low
---   reason  manual | due_soon | overdue | source -- whatever raised it
+-- except the instalment rule, which counts the academy's calendar days from
+-- local midnight.
+--   rank     3 high | 2 medium | 1 low
+--   reason   manual | due_soon | overdue | source -- whatever raised it
+--   overdue  the floor rule says the task is past its deadline, whether or not
+--            that raised the level (a manual High task can be overdue too):
+--            what the overdue filter and the Dashboard's overdue tiles count
 create or replace function chat.work_task_effective(
   p_priority text, p_floor_rule text, p_due_at timestamptz, p_source_floor text, p_state text,
   p_as_of timestamptz, p_zone text,
-  out rank integer, out level text, out reason text)
+  out rank integer, out level text, out reason text, out overdue boolean)
 language plpgsql
 stable
 set search_path = chat, pg_temp
@@ -85,10 +91,11 @@ declare
 begin
   rank := case p_priority when 'high' then 3 when 'medium' then 2 else 1 end;
   reason := 'manual';
+  overdue := false;
   if p_state in ('open', 'awaiting_decision') then
     if p_floor_rule = 'generic' and p_due_at is not null then
       if p_due_at < p_as_of then
-        v_date := 3; v_why := 'overdue';
+        v_date := 3; v_why := 'overdue'; overdue := true;
       elsif p_due_at <= p_as_of + interval '24 hours' then
         v_date := 3; v_why := 'due_soon';
       elsif p_due_at <= p_as_of + interval '72 hours' then
@@ -97,16 +104,19 @@ begin
     elsif p_floor_rule = 'overdue_only' then
       -- Routine work (lesson reports and their kin): Yellow while pending, Red
       -- only once overdue (owner 2026-10-28).
+      -- With no due date there is nothing "soon" about it: the floor is
+      -- routine, and the reason stays manual.
       if p_due_at is not null and p_due_at < p_as_of then
-        v_date := 3; v_why := 'overdue';
+        v_date := 3; v_why := 'overdue'; overdue := true;
       else
-        v_date := 2; v_why := 'due_soon';
+        v_date := 2; v_why := case when p_due_at is null then 'manual' else 'due_soon' end;
       end if;
     elsif p_floor_rule = 'instalment' and p_due_at is not null then
-      -- due_at is the start of the due day (D0) in the academy's zone.
-      v_day0 := p_due_at;
+      -- D0 is the academy day due_at falls on, from its local midnight; D-7
+      -- and D+1 are calendar days in the same zone (DST-correct).
+      v_day0 := date_trunc('day', p_due_at at time zone p_zone) at time zone p_zone;
       if p_as_of >= ((v_day0 at time zone p_zone) + interval '1 day') at time zone p_zone then
-        v_date := 3; v_why := 'overdue';
+        v_date := 3; v_why := 'overdue'; overdue := true;
       elsif p_as_of >= v_day0 then
         v_date := 3; v_why := 'due_soon';
       elsif p_as_of >= ((v_day0 at time zone p_zone) - interval '7 days') at time zone p_zone then
@@ -196,9 +206,10 @@ begin
   end if;
 
   -- UPDATE
-  -- source_state and source_floor change with the sources (PR-2, PR-2b), which
-  -- record source_withdrawn and source_raised. A category and a floor rule are
-  -- fixed at creation (PD-47 priority amendment §1).
+  -- Nothing here changes a task's source state or source floor: PR-2 and PR-2b
+  -- redefine this guard to let the sources' own helpers do it (recording
+  -- source_withdrawn and source_raised). A category and a floor rule are fixed
+  -- at creation (PD-47 priority amendment §1).
   if (new.id, new.organization_id, new.kind, new.source_type, new.source_id, new.source_key, new.source_state,
       new.source_floor, new.category, new.floor_rule, new.title, new.body, new.created_by, new.created_at)
      is distinct from
@@ -283,7 +294,7 @@ begin
   if tg_op = 'INSERT' then
     insert into chat.work_task_event (task_id, organization_id, kind, actor_kind, actor_id, to_assignee, after)
     values (new.id, new.organization_id, 'created', v_kind, v_actor, v_to,
-            jsonb_build_object('dueAt', new.due_at));
+            jsonb_build_object('dueAt', new.due_at, 'priority', new.priority, 'category', new.category));
     return new;
   end if;
 
@@ -321,6 +332,6 @@ end;
 $$;
 
 revoke all on function chat.work_task_academy_zone() from public;
-revoke all on function chat.work_task_effective(text, text, timestamptz, text, text, timestamptz, text) from public;
+revoke all on function chat.work_task_effective(text, text, timestamptz, text, text, timestamptz, text) from public; -- out: rank, level, reason, overdue
 revoke all on function chat.guard_work_task() from public;
 revoke all on function chat.record_work_task_event() from public;

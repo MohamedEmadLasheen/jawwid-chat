@@ -86,6 +86,21 @@ local/test/ci it also requires `--allow-non-local`.
 Every write lands in `chat.audit_log` (`staff.super_admin_bootstrapped`),
 recording the account and outcome, never the password or the address.
 
+**Template access roles (PD-40).** In the same transaction, the bootstrap runs
+`chat.seed_access_role_templates` for its organization. The organization then
+has every template role in `apps/api/src/platform/permissions/role-templates.ts`,
+today the `designer`. The output reports `templatesSeeded`, which is 0 on a dry
+run and on every later run.
+
+The seed adds only what is missing. If a role the super admin made already uses
+a template's key, the seed skips that template and records why in
+`chat.audit_log` (`access_role.template_skipped`).
+
+**Provisioning another organization.** Nothing in the API creates one. Whoever
+inserts a new `chat.organization` row then runs
+`select chat.seed_access_role_templates('<organization id>');` as the server
+role, or bootstraps its super admin, which does the same.
+
 ## Known gaps
 
 * **No forced password change.** The API has no change-password endpoint and no

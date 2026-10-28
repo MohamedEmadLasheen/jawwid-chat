@@ -81,9 +81,10 @@ describe('The navigation registry', () => {
     // Accounts (PD-21: where every staff role administers accounts),
     // Materials (PD-29: the library the super admin manages), the Schedule
     // (PD-38: the academy's calendar), Trials & new students (PD-11 T4,
-    // PD-16), Teacher credentials review and Escalations (PD-35 B5).
-    expect(keys).toHaveLength(28)
-    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases'].sort())
+    // PD-16), Teacher credentials review, Escalations (PD-35 B5) and
+    // Certificates (PD-41).
+    expect(keys).toHaveLength(29)
+    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases', 'certificates'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
     const more = destinations.find((d) => d.key === 'more')!
@@ -115,6 +116,8 @@ describe('The navigation registry', () => {
           ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
           // PD-29: Materials waits for the Teachers manager (GET /materials/admin/access).
           ...(visibleAreas(role).includes('materials') ? ['materials'] : []),
+          // PD-41: Certificates waits for GET /certificates/access.
+          ...(visibleAreas(role).includes('certificates') ? ['certificates'] : []),
         ]
         expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager, billingReader }).includes(a)), role).toEqual(withheld)
         expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
@@ -129,7 +132,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/materials'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/certificates', '/materials'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -354,8 +357,11 @@ describe('The desktop rail', () => {
     // then Teacher credentials review,
     expect(document.activeElement).toHaveAccessibleName('Teacher credentials review')
     await userEvent.keyboard('{ArrowDown}')
-    // PD-35 B5: then Escalations, closing the first People group,
+    // PD-35 B5: then Escalations,
     expect(document.activeElement).toHaveAccessibleName('Escalations')
+    await userEvent.keyboard('{ArrowDown}')
+    // PD-41: then Certificates, closing the first People group,
+    expect(document.activeElement).toHaveAccessibleName('Certificates')
     await userEvent.keyboard('{ArrowDown}')
     // PD-17: then Parents (an Operations section under People), then the menu wraps.
     expect(document.activeElement).toHaveAccessibleName('Parents')
@@ -482,7 +488,7 @@ describe('The drawer, below desktop width', () => {
     const people = within(nav).getByRole('group', { name: 'الأشخاص والفرق' })
     expect(within(people).getByRole('link', { name: 'الحصص التجريبية والطلاب الجدد' })).toHaveAttribute('href', '/trials')
     expect(within(people).getByRole('link', { name: 'مراجعة مؤهلات المعلمين' })).toHaveAttribute('href', '/teacher-profiles')
-    expect(within(nav).getAllByRole('link')).toHaveLength(28)
+    expect(within(nav).getAllByRole('link')).toHaveLength(29)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

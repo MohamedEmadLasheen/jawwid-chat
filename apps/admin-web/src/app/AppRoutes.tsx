@@ -24,7 +24,7 @@ import { TrialsPage } from '@/features/trials/TrialsPage'
 import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
-import { CertificatesPage } from '@/features/supervision/CertificatesPage'
+import { CertificatesPage } from '@/features/certificates/CertificatesPage'
 import { TeacherSupervisionPage } from '@/features/teacher-supervision/TeacherSupervisionPage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
@@ -66,6 +66,8 @@ function SuperAdminOnly({ children }: { children: ReactElement }) {
  *  conversations. The Dashboard stays at its own URL, under More. */
 function homeFor(role: Parameters<typeof isDepartment>[0]): string {
   if (isSuperAdmin(role)) return adminSectionPath('conversations')
+  // PD-40/PD-41: the Designer's whole Admin Web is the Certificates page.
+  if (role === 'specialist') return '/certificates'
   // Departments have no conversations — they only ever see their own tasks. Operators
   // land in their conversations: the chat workspace on the real API.
   return isDepartment(role) ? '/tasks' : '/chat'
@@ -99,7 +101,9 @@ export function AppRoutes() {
         <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />
         {/* PD-12: the department's queues, tabs of the same area. */}
-        <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
+        {/* PD-41: certificates have their own page; the PD-12 tab lands there. */}
+        <Route path="/certificates" element={<Area area="certificates"><CertificatesPage /></Area>} />
+        <Route path="/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         {/* PD-26: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
         {/* PD-35 B5: escalation cases -- a Teachers tab, and /cases for everyone else who opens or owns one. */}
@@ -162,10 +166,7 @@ export function AppRoutes() {
           path="/admin/:section"
           element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
         />
-        <Route
-          path="/admin/teachers/certificates"
-          element={<SuperAdminOnly><CertificatesPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
-        />
+        <Route path="/admin/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         <Route
           path="/admin/teachers/discipline"
           element={<Navigate to={`${adminSectionPath('teachers')}/supervision?section=absences`} replace />}
