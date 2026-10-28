@@ -121,6 +121,8 @@ export class PasswordResetService {
     tx: Prisma.TransactionClient,
     input: IssueResetInput,
   ): Promise<{ id: string; code: string; expiresAt: Date; revokedSessions: number }> {
+    // One account's codes are issued one at a time, so two at once cannot both pass the hourly count.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'password_reset_code:' + input.accountId}))`;
     const recent = await tx.passwordResetCode.count({
       where: { accountId: input.accountId, createdAt: { gte: new Date(Date.now() - 3_600_000) } },
     });

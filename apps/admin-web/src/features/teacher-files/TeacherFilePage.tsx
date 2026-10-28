@@ -8,7 +8,8 @@ import type { Complaint, EntryBrief, TeacherFile } from './api'
 import { T, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
-import { useTeacherFile } from './hooks'
+import { useReissueFirstLogin, useTeacherFile } from './hooks'
+import { FirstLoginCodeDialog } from './AddTeacherDialog'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
 import { AwayBadge, ComplaintItem, UpholdDialog } from './Complaint'
 import { SupervisionTimeline } from './SupervisionTimeline'
@@ -56,11 +57,13 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                         {tx(data.teacher.isActive ? T.active : T.inactive)}
                       </Badge>
                       <AwayBadge away={data.teacher.away} />
+                      <SignInBadge status={data.signIn?.status} />
                     </>
                   }
                   actions={
                     data.access.canWriteSupervision ? (
                       <>
+                        {data.signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}
                         {data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}
                         {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
                         <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />
@@ -388,5 +391,29 @@ function DaysOff({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent) =
         </ul>
       )}
     </Section>
+  )
+}
+
+/** PD-43: a login that waits for its first sign-in, or is suspended. Nothing for an active login. */
+function SignInBadge({ status }: { status?: string }) {
+  const tx = useCopy()
+  if (status === 'provisioned') return <Badge tone="warn">{tx(T.notSignedInYet)}</Badge>
+  if (status === 'suspended') return <Badge tone="outline">{tx(T.signInSuspended)}</Badge>
+  if (status === 'none') return <Badge tone="outline">{tx(T.noSignIn)}</Badge>
+  return null
+}
+
+/** PD-43: a new first sign-in code; the server decides who may and who sees it. */
+function SendCodeButton({ teacherId }: { teacherId: string }) {
+  const tx = useCopy()
+  const reissue = useReissueFirstLogin(teacherId)
+  const answer = reissue.data
+  return (
+    <>
+      <button type="button" className="btn" disabled={reissue.isPending} onClick={() => reissue.mutate()}>
+        {reissue.isPending ? tx(T.sending) : tx(T.sendNewCode)}
+      </button>
+      {answer && <FirstLoginCodeDialog signIn={answer.signIn} firstLogin={answer.firstLogin} onClose={() => reissue.reset()} />}
+    </>
   )
 }

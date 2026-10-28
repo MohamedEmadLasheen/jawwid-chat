@@ -152,7 +152,7 @@ describe('Add teacher', () => {
 
     on('POST', /\/teachers$/, () => json({ error: { code: 'COMM.TEACHER_EMAIL_UNAVAILABLE', message: 'x' } }, 409))
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
-    await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent('This e-mail can’t be used for a new teacher.'))
+    await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent('These details can’t be used for a new teacher.'))
   })
 
   it('cannot be closed while the server is answering; reopened, it starts clean', async () => {

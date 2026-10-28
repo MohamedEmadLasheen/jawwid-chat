@@ -28,7 +28,6 @@ function on(method: string, pattern: RegExp, handler: Handler) {
 }
 const calls = (method: string, pattern: RegExp) =>
   fetchMock.mock.calls.filter(([u, i]) => pattern.test(String(u)) && ((i as RequestInit)?.method ?? 'GET') === method)
-const bodyOf = (call: unknown[]) => JSON.parse(String((call[1] as RequestInit).body))
 
 const TEACHERS: TeacherSummary[] = [
   { id: 't-1', name: 'Teacher One', isActive: true, studentCount: 2, openComplaints: 1 },

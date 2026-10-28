@@ -224,6 +224,16 @@ export const T = {
   notEmailed: { en: 'It was not e-mailed: hand it to the teacher yourself.', ar: 'لم يُرسل بالبريد: سلّمه للمعلم بنفسك.' },
   done: { en: 'Done', ar: 'تم' },
   alreadyTeacher: { en: 'This person is already a teacher here.', ar: 'هذا الشخص معلم هنا بالفعل.' },
+  notSignedInYet: { en: 'Not signed in yet', ar: 'لم يسجّل الدخول بعد' },
+  signInSuspended: { en: 'Sign-in suspended', ar: 'الدخول موقوف' },
+  noSignIn: { en: 'No sign-in', ar: 'بلا حساب دخول' },
+  sendNewCode: { en: 'Send a new first sign-in code', ar: 'إرسال رمز دخول أول جديد' },
+  sending: { en: 'Sending…', ar: 'جارٍ الإرسال…' },
+  codeEmailed: { en: 'A new code was e-mailed to the teacher.', ar: 'أُرسل رمز جديد إلى بريد المعلم.' },
+  codeNotEmailedAskManager: {
+    en: 'The code could not be e-mailed. Ask the Teachers Manager to send it.',
+    ar: 'تعذّر إرسال الرمز بالبريد. اطلب من مدير قسم المعلمين إرساله.',
+  },
 } satisfies Record<string, Pair>
 
 const BY_CODE: Record<string, Pair> = {
@@ -245,9 +255,18 @@ const BY_CODE: Record<string, Pair> = {
     ar: 'يضيف المعلمين قسمُ المعلمين والمدير العام، ولا يسمّي المشرف إلا نفسه.',
   },
   'COMM.TEACHER_EMAIL_UNAVAILABLE': {
-    en: 'This e-mail can’t be used for a new teacher. Use another e-mail, or ask the Teachers Manager.',
-    ar: 'لا يمكن استخدام هذا البريد لمعلم جديد. استخدم بريدًا آخر أو اسأل مدير قسم المعلمين.',
+    en: 'These details can’t be used for a new teacher. Use another e-mail or phone, or ask the Teachers Manager.',
+    ar: 'لا يمكن استخدام هذه البيانات لمعلم جديد. استخدم بريدًا أو هاتفًا آخر، أو اسأل مدير قسم المعلمين.',
   },
+  'COMM.TEACHER_ALREADY_SIGNED_IN': {
+    en: 'This teacher has already signed in. Reset their password instead.',
+    ar: 'سجّل هذا المعلم الدخول من قبل. أعد تعيين كلمة مروره بدلًا من ذلك.',
+  },
+  'COMM.TEACHER_SIGN_IN_SUSPENDED': {
+    en: 'This teacher’s sign-in is suspended. Reactivate it first.',
+    ar: 'دخول هذا المعلم موقوف. أعد تفعيله أولًا.',
+  },
+  'COMM.TEACHER_ONBOARDING_BUSY': { en: 'The system was busy and nothing was saved. Try again.', ar: 'كان النظام مشغولًا ولم يُحفظ شيء. حاول مرة أخرى.' },
   'COMM.TEACHER_ALREADY_ADDED': { en: 'This person is already a teacher here.', ar: 'هذا الشخص معلم هنا بالفعل.' },
   'COMM.TEACHER_CONTACT_TAKEN': {
     en: 'This phone or e-mail is already on a teacher’s file.',

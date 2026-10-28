@@ -167,6 +167,8 @@ export class TeacherFileService {
 
     return {
       access: publicAccess(access),
+      // PD-43: the sign-in's state, and whether this reader may send a new first sign-in code.
+      signIn: await this.signInOf(actor, teacher),
       teacher: {
         id: teacher.id,
         name: teacher.name,
@@ -520,6 +522,22 @@ export class TeacherFileService {
       throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'only the Teachers department or the super admin adds a teacher');
     }
     return { actor, onboarding };
+  }
+
+  /**
+   * PD-43: `none` (no login yet) or the login's status. A new first sign-in code
+   * is offered only while the login waits, and only to whom the database would
+   * let issue it (chat.may_issue_teacher_first_login: the super admin, the
+   * Teachers manager, the CURRENT supervisor).
+   */
+  private async signInOf(actor: Actor, teacher: { id: string; accountId: string | null }) {
+    if (!teacher.accountId) return { status: 'none', canSendCode: false };
+    const account = await this.prisma.account.findUnique({ where: { id: teacher.accountId }, select: { status: true } });
+    const status = account?.status ?? 'none';
+    if (status !== 'provisioned') return { status, canSendCode: false };
+    const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT chat.may_issue_teacher_first_login(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok`;
+    return { status, canSendCode: row?.ok === true };
   }
 
   /** What GET /teacher-files tells the page about adding a teacher. */

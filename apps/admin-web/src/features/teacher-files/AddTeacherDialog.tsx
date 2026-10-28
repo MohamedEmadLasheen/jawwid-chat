@@ -1,9 +1,9 @@
-import { useId, useState } from 'react'
+import { useCallback, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ApiError } from '@/core/api/errors'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import type { AddedTeacher, TeacherOnboardingOffer } from './api'
+import type { AddedTeacher, FirstLogin, TeacherOnboardingOffer } from './api'
 import { T, describeError, useCopy } from './copy'
 import { Field } from './TeacherFileDialogs'
 import { useAddTeacher } from './hooks'
@@ -13,7 +13,8 @@ import { useAddTeacher } from './hooks'
  * /teacher-files `onboarding`): a picker of primary supervisors, or none, for
  * the Teachers manager and the super admin; "Me" or no supervisor for a
  * teacher supervisor (owner N1). On success the first sign-in code is shown
- * ONCE, in its own dialog, and is gone when that closes.
+ * ONCE, in its own dialog, and is gone when that closes. While the server is
+ * answering the dialog cannot be closed: closing then would lose the code.
  */
 export function AddTeacherDialog({
   offer,
@@ -36,7 +37,15 @@ export function AddTeacherDialog({
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
   const missing = (v: string) => (touched && !v.trim() ? tx(T.required) : null)
 
-  if (added) return <FirstLoginCodeDialog added={added} onClose={onClose} />
+  // Stable across keystrokes: the Dialog re-focuses whenever onClose changes.
+  const { isPending, reset } = add
+  const close = useCallback(() => {
+    if (isPending) return
+    reset()
+    onClose()
+  }, [isPending, reset, onClose])
+
+  if (added) return <FirstLoginCodeDialog signIn={added.signIn} firstLogin={added.firstLogin} onClose={close} />
 
   const submit = () => {
     setTouched(true)
@@ -57,10 +66,10 @@ export function AddTeacherDialog({
   return (
     <Dialog
       title={tx(T.addTeacher)}
-      onClose={onClose}
+      onClose={close}
       footer={
         <>
-          <DialogCancelButton onClick={onClose} />
+          <DialogCancelButton onClick={close} disabled={add.isPending} />
           <button type="button" className="btn btn--primary" disabled={add.isPending} onClick={submit}>
             {add.isPending ? tx(T.adding) : tx(T.add)}
           </button>
@@ -124,8 +133,12 @@ function AddRefusal({ error, basePath }: { error: unknown; basePath: string }) {
   )
 }
 
-/** Shown once. Closing it drops the code: nothing keeps it. */
-function FirstLoginCodeDialog({ added, onClose }: { added: AddedTeacher; onClose: () => void }) {
+/**
+ * Shown once; closing it drops the code, nothing keeps it. A reissue answered to
+ * a teacher supervisor carries no code (owner, "E-mail only; managers can
+ * see"): they are told whether it was e-mailed, and to ask the Manager if not.
+ */
+export function FirstLoginCodeDialog({ signIn, firstLogin, onClose }: { signIn: string; firstLogin: FirstLogin; onClose: () => void }) {
   const tx = useCopy()
   const { dateTime } = useI18n()
   return (
@@ -138,17 +151,23 @@ function FirstLoginCodeDialog({ added, onClose }: { added: AddedTeacher; onClose
         </button>
       }
     >
-      <p className="field__hint">{tx(T.firstLoginHint)}</p>
-      <dl className="tf-code">
-        <dt>{tx(T.signInLabel)}</dt>
-        <dd dir="ltr">{added.signIn}</dd>
-        <dt>{tx(T.codeLabel)}</dt>
-        <dd dir="ltr" className="tf-code__value">
-          {added.firstLogin.code}
-        </dd>
-      </dl>
-      <p className="field__hint">{tx(T.validUntil, { when: dateTime(added.firstLogin.expiresAt) })}</p>
-      <p className="field__hint">{tx(added.firstLogin.emailed ? T.emailedTo : T.notEmailed)}</p>
+      {firstLogin.code ? (
+        <>
+          <p className="field__hint">{tx(T.firstLoginHint)}</p>
+          <dl className="tf-code">
+            <dt>{tx(T.signInLabel)}</dt>
+            <dd dir="ltr">{signIn}</dd>
+            <dt>{tx(T.codeLabel)}</dt>
+            <dd dir="ltr" className="tf-code__value">
+              {firstLogin.code}
+            </dd>
+          </dl>
+          <p className="field__hint">{tx(T.validUntil, { when: dateTime(firstLogin.expiresAt) })}</p>
+          <p className="field__hint">{tx(firstLogin.emailed ? T.emailedTo : T.notEmailed)}</p>
+        </>
+      ) : (
+        <p>{tx(firstLogin.emailed ? T.codeEmailed : T.codeNotEmailedAskManager)}</p>
+      )}
     </Dialog>
   )
 }

@@ -91,7 +91,8 @@ export function recoveryMail(code: string, minutes: number): { subject: string; 
  */
 export function firstLoginMail(code: string, hours: number, signIn: string): { subject: string; text: string } {
   return {
-    subject: `رمز الدخول الأول إلى جوّد ${code} | Your Jawwid sign-in code`,
+    // Never the code in the subject: subjects are shown in notifications and kept in mail logs.
+    subject: 'رمز الدخول الأول إلى جوّد | Your Jawwid sign-in code',
     text: [
       'أُنشئ لك حساب في جوّد. لتختار كلمة مرورك، افتح التطبيق واختر «لديّ رمز»، ثم أدخل:',
       '',

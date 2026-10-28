@@ -103,10 +103,10 @@ export function Dialog({
   )
 }
 
-export function DialogCancelButton({ onClick }: { onClick: () => void }) {
+export function DialogCancelButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
   const { t } = useI18n()
   return (
-    <button type="button" className="btn" onClick={onClick}>
+    <button type="button" className="btn" onClick={onClick} disabled={disabled}>
       {t('common.cancel')}
     </button>
   )

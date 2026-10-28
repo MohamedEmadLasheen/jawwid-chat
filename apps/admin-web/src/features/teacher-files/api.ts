@@ -88,6 +88,8 @@ export interface DayOff extends EntryBrief {
 }
 
 export interface TeacherFile {
+  /** PD-43. Optional: older servers omit it. */
+  signIn?: TeacherSignIn
   access: TeacherFileAccessFlags
   teacher: { id: string; name: string; isActive: boolean; leftAt: string | null; away?: Away | null }
   personal: {
@@ -165,10 +167,23 @@ export interface NewTeacher {
   supervisorId: string | null
 }
 
+/** `code` is present only for whoever may see it: the creator of a new teacher, or the Teachers manager and the super admin on a reissue. */
 export interface FirstLogin {
-  code: string
+  code?: string
   expiresAt: string
   emailed: boolean
+}
+
+/** PD-43: a Teacher File's sign-in -- `none` until the teacher has a login. */
+export interface TeacherSignIn {
+  status: 'none' | 'provisioned' | 'active' | 'suspended' | 'deactivated'
+  canSendCode: boolean
+}
+
+export interface ReissuedCode {
+  teacherId: string
+  signIn: string
+  firstLogin: FirstLogin
 }
 
 export interface AddedTeacher {
@@ -183,6 +198,8 @@ export const teacherFileApi = {
       '/teacher-files',
     ),
   addTeacher: (body: NewTeacher) => api.post<AddedTeacher>('/teachers', body),
+  reissueFirstLogin: (teacherId: string) =>
+    api.post<ReissuedCode>(`/teachers/${encodeURIComponent(teacherId)}/first-login-code`, {}),
   detail: (teacherId: string) => api.get<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}`),
   updatePersonal: (teacherId: string, body: PersonalPatch) =>
     api.post<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}/personal`, body),

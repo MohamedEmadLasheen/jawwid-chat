@@ -247,9 +247,9 @@ export enum CommErrorCode {
   /** PD-43: this actor may not add a teacher, or may not name that supervisor. 403. */
   TEACHER_ONBOARDING_DENIED = 'COMM.TEACHER_ONBOARDING_DENIED',
   /**
-   * PD-43: the sign-in e-mail cannot be used. One answer, whatever holds it --
-   * another organization's account, a parent, a teacher out of the caller's
-   * reach -- so it tells nobody what exists (gate P2-5). 409.
+   * PD-43: the sign-in e-mail, or the phone, cannot be used. One answer,
+   * whatever holds it -- another organization's account, a parent, a teacher
+   * out of the caller's reach -- so it tells nobody what exists (gate P2-5). 409.
    */
   TEACHER_EMAIL_UNAVAILABLE = 'COMM.TEACHER_EMAIL_UNAVAILABLE',
   /** PD-43: that sign-in is a teacher the caller reaches; `detail.teacher` names them. 409. */
@@ -258,6 +258,10 @@ export enum CommErrorCode {
   TEACHER_CONTACT_TAKEN = 'COMM.TEACHER_CONTACT_TAKEN',
   /** PD-43: the teacher has signed in; a password reset, not a first sign-in code. 409. */
   TEACHER_ALREADY_SIGNED_IN = 'COMM.TEACHER_ALREADY_SIGNED_IN',
+  /** PD-43: the teacher's sign-in is suspended; reactivate it before anything else. 409. */
+  TEACHER_SIGN_IN_SUSPENDED = 'COMM.TEACHER_SIGN_IN_SUSPENDED',
+  /** PD-43: the database was too busy to finish adding the teacher; nothing was written. 503. */
+  TEACHER_ONBOARDING_BUSY = 'COMM.TEACHER_ONBOARDING_BUSY',
   /** PD-12: no such certificate, or none this caller may see. 404. */
   CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
   /** PD-12: this caller may not request, issue or decline this certificate. 403. */

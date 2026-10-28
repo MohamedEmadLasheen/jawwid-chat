@@ -20,6 +20,10 @@ import { TeacherFileService } from './teacher-file.service';
  *              to the sign-in address when the e-mail channel exists, and it is
  *              returned ONCE to the person who added the teacher either way.
  *   reissue()  a new code while the teacher has not signed in; the old one dies.
+ *              Owner, 2026-10-28, "E-mail only; managers can see": only the super
+ *              admin, the Teachers manager and the teacher's CURRENT supervisor
+ *              may (chat.may_issue_teacher_first_login); the code is always
+ *              e-mailed, and only the manager and the super admin see it.
  *
  * WHO decides twice: decideTeacherOnboarding here, and chat.create_teacher /
  * chat.may_issue_teacher_first_login in the database. WHAT a refusal may tell
@@ -99,16 +103,23 @@ export class TeacherOnboardingService {
   }
 
   async reissue(actorId: string, teacherId: string, body: Record<string, unknown>) {
-    const { actor } = await this.files.onboardingGate(actorId);
+    const { actor, onboarding } = await this.files.onboardingGate(actorId);
     const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
     if (!isUuid(teacherId)) throw notFound;
     const teacher = await this.prisma.teacher.findFirst({
       where: { id: teacherId, organizationId: actor.organizationId ?? '' },
       select: { id: true, account: { select: { id: true, subject: true, status: true } } },
     });
-    if (!teacher) throw notFound;
-    if (!teacher.account) throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'this teacher has no sign-in yet', 409);
-    if (teacher.account.status !== 'provisioned') {
+    // Reach FIRST: a teacher this caller may not send a code for is not found,
+    // whatever state its sign-in is in -- a 409 would tell them it exists.
+    if (!teacher || !(await this.maySendCode(actor.actorId, teacher.id))) throw notFound;
+    const account = teacher.account;
+    if (!account) throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'this teacher has no sign-in yet', 409);
+    if (account.status === 'suspended') {
+      throw new CommError(CommErrorCode.TEACHER_SIGN_IN_SUSPENDED, 'this teacher’s sign-in is suspended; reactivate it first', 409);
+    }
+    if (account.status === 'deactivated') throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'this teacher’s sign-in is closed', 409);
+    if (account.status !== 'provisioned') {
       throw new CommError(CommErrorCode.TEACHER_ALREADY_SIGNED_IN, 'this teacher has signed in; reset their password instead', 409);
     }
     const reason = optionalText('reason', body.reason, 500) ?? 'a new first sign-in code';
@@ -117,7 +128,7 @@ export class TeacherOnboardingService {
     try {
       issued = await this.prisma.$transaction((tx) =>
         this.resets.issueInTx(tx, {
-          accountId: teacher.account!.id,
+          accountId: account.id,
           organizationId: actor.organizationId as string,
           issuedByStaffId: actor.actorId,
           issuedByAccountId: issuer,
@@ -128,27 +139,38 @@ export class TeacherOnboardingService {
       );
     } catch (e) {
       if (e instanceof AuthError) throw e;
-      // chat.may_issue_teacher_first_login: a teacher out of the caller's reach is
-      // answered as one that does not exist.
       if (/a first sign-in code is issued by someone who may add this teacher/.test(errorText(e))) throw notFound;
       if (/a first sign-in code is for an account that has not signed in yet/.test(errorText(e))) {
         throw new CommError(CommErrorCode.TEACHER_ALREADY_SIGNED_IN, 'this teacher has signed in; reset their password instead', 409);
       }
-      throw e;
+      throw busy(e) ?? e;
     }
-    const emailed = await this.deliver(teacher.account.subject, issued);
+    const emailed = await this.deliver(account.subject, issued);
+    // Only the Teachers manager and the super admin see a reissued code.
+    const seesCode = onboarding.supervisorChoice === 'any';
     return {
       teacherId: teacher.id,
-      signIn: teacher.account.subject,
-      firstLogin: { code: issued.code, expiresAt: issued.expiresAt.toISOString(), emailed },
+      signIn: account.subject,
+      firstLogin: seesCode
+        ? { code: issued.code, expiresAt: issued.expiresAt.toISOString(), emailed }
+        : { expiresAt: issued.expiresAt.toISOString(), emailed },
     };
+  }
+
+  /** The database's own rule (chat.may_issue_teacher_first_login): asked, never re-derived. */
+  async maySendCode(staffId: string, teacherId: string): Promise<boolean> {
+    const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT chat.may_issue_teacher_first_login(${staffId}::uuid, ${teacherId}::uuid) AS ok`;
+    return row?.ok === true;
   }
 
   // ------------------------------------------------------------------
 
   private async issuerAccount(actor: Actor): Promise<string> {
     const staff = await this.prisma.staff.findUnique({ where: { id: actor.actorId }, select: { accountId: true } });
-    return staff?.accountId ?? actor.actorId;
+    // A signed-in staff member always has an account; never stand a staff id in for one.
+    if (!staff?.accountId) throw new Error(`staff ${actor.actorId} has no account`);
+    return staff.accountId;
   }
 
   /**
@@ -158,18 +180,30 @@ export class TeacherOnboardingService {
    */
   private async deliver(to: string, issued: { id: string; code: string }): Promise<boolean> {
     if (!this.mailer.available) return false;
+    // A slow provider must not hold the answer that shows the code: at most
+    // MAIL_TIMEOUT_MS, then emailed false (the send may still finish later).
+    const sending = this.mailer.send(to, firstLoginMail(issued.code, FIRST_LOGIN_CODE_HOURS, to));
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error('timed out'), { name: 'MailTimeout' })), MAIL_TIMEOUT_MS);
+    });
     try {
-      await this.mailer.send(to, firstLoginMail(issued.code, FIRST_LOGIN_CODE_HOURS, to));
+      await Promise.race([sending, late]);
       return true;
     } catch (e) {
+      sending.catch(() => undefined);
       this.log.error(`first sign-in code ${issued.id} not e-mailed: ${failureKind(e)}`);
       return false;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   /** chat.create_teacher's refusals, as the API answers them. */
   private async refusal(e: unknown, actor: Actor, email: string, phone: string | null): Promise<unknown> {
     if (e instanceof CommError || e instanceof AuthError) return e;
+    const tooBusy = busy(e);
+    if (tooBusy) return tooBusy;
     const text = errorText(e);
     if (/adds a teacher|only an active staff member adds a teacher/.test(text)) {
       return new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'only the Teachers department or the super admin adds a teacher');
@@ -189,23 +223,26 @@ export class TeacherOnboardingService {
     return e;
   }
 
-  /** Gate P2-5: a teacher the caller reaches is named; anything else is one identical answer. */
+  /**
+   * Gate P2-5: a teacher the caller reaches is named; anything else is one
+   * identical answer. The caller's scope is read on EVERY path, first, so the
+   * time taken tells nothing either.
+   */
   private async signInTaken(actor: Actor, email: string): Promise<CommError> {
+    const scope = await this.teacherScope.scopeOf(actor);
     const [holder] = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
       SELECT t.id::text AS id, t.name
         FROM chat.account a JOIN chat.teacher t ON t.account_id = a.id
        WHERE lower(a.subject) = ${email} AND a.kind = 'teacher' AND t.organization_id = ${actor.organizationId}::uuid`;
-    if (holder && scopeCovers(await this.teacherScope.scopeOf(actor), holder.id)) {
+    if (holder && scopeCovers(scope, holder.id)) {
       return new CommError(CommErrorCode.TEACHER_ALREADY_ADDED, 'this person is already a teacher here', 409, { teacher: holder });
     }
-    return new CommError(
-      CommErrorCode.TEACHER_EMAIL_UNAVAILABLE,
-      'This e-mail can’t be used for a new teacher. Use another e-mail, or ask the Teachers Manager.',
-      409,
-    );
+    return unavailable();
   }
 
+  /** As signInTaken: a contact on the file of a teacher out of reach is the SAME answer as an e-mail out of reach. */
   private async contactTaken(actor: Actor, email: string, phone: string | null): Promise<CommError> {
+    const scope = await this.teacherScope.scopeOf(actor);
     const digits = phone ? phone.replace(/[^0-9]/g, '') : null;
     const [holder] = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
       SELECT t.id::text AS id, t.name
@@ -214,15 +251,33 @@ export class TeacherOnboardingService {
          AND (lower(f.email) = ${email}
               OR (${digits}::text IS NOT NULL AND regexp_replace(coalesce(f.phone, ''), '[^0-9]', '', 'g') = ${digits}::text))
        LIMIT 1`;
-    const named = holder && scopeCovers(await this.teacherScope.scopeOf(actor), holder.id);
-    return new CommError(
-      CommErrorCode.TEACHER_CONTACT_TAKEN,
-      'this phone or e-mail is already on a teacher’s file',
-      409,
-      named ? { teacher: holder } : undefined,
-    );
+    if (holder && scopeCovers(scope, holder.id)) {
+      return new CommError(CommErrorCode.TEACHER_CONTACT_TAKEN, 'this phone or e-mail is already on a teacher’s file', 409, { teacher: holder });
+    }
+    return unavailable();
   }
 }
+
+/** The one answer for details someone else holds (gate P2-5): never a name, a kind or an organization. */
+function unavailable(): CommError {
+  return new CommError(
+    CommErrorCode.TEACHER_EMAIL_UNAVAILABLE,
+    'These details can’t be used for a new teacher. Use another e-mail or phone, or ask the Teachers Manager.',
+    409,
+  );
+}
+
+/** Prisma gave up on the transaction (P2028, P2034): nothing was written; say so cleanly. */
+function busy(e: unknown): CommError | null {
+  const code = (e as { code?: unknown })?.code;
+  if (code === 'P2028' || code === 'P2034') {
+    return new CommError(CommErrorCode.TEACHER_ONBOARDING_BUSY, 'the database was busy and nothing was written; try again', 503);
+  }
+  return null;
+}
+
+/** How long the answer that shows a code waits for the e-mail provider. */
+const MAIL_TIMEOUT_MS = 10_000;
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const PHONE = /^\+?[0-9][0-9 ()-]{5,30}$/;
