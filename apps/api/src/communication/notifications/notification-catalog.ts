@@ -33,7 +33,9 @@ export type ActionKind =
   | 'view_lesson'
   | 'view_payments'
   | 'open_stories'
-  | 'open_calls';
+  | 'open_calls'
+  /** PD-35 B5: an escalation case, opened in Escalations (refs.caseId). */
+  | 'open_case';
 
 export interface CatalogEntry {
   version: number;
@@ -80,6 +82,10 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   subscription_locked: { version: 1, category: 'payment', inbox: 'inbox.generic', action: 'view_payments' },
   subscription_unlocked: { version: 1, category: 'payment', inbox: 'inbox.generic', action: 'view_payments' },
   subscription_renewal_requested: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  // PD-35 B5: escalation cases, to their owner and the target department's manager.
+  case_opened: { version: 1, category: 'task', inbox: 'inbox.case_opened', action: 'open_case' },
+  case_assigned: { version: 1, category: 'task', inbox: 'inbox.case_assigned', action: 'open_case' },
+  case_due_soon: { version: 1, category: 'task', inbox: 'inbox.case_due_soon', action: 'open_case' },
   // PD-41: the Certificates page's work items.
   certificate_requested: { version: 1, category: 'task', inbox: 'inbox.generic' },
   certificate_returned: { version: 1, category: 'task', inbox: 'inbox.generic' },

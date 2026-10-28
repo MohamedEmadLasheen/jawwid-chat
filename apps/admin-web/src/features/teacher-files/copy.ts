@@ -305,6 +305,21 @@ export const T = {
   // PD-43 §3.4: the same name as an active teacher -- a warning, never a refusal
   similarName: { en: 'Possibly already added:', ar: 'ربما أُضيف من قبل:' },
   addAnyway: { en: 'Add anyway', ar: 'أضف على أي حال' },
+
+  // PD-43 §3.3: change the sign-in e-mail
+  changeSignIn: { en: 'Change sign-in e-mail', ar: 'تغيير بريد الدخول' },
+  newSignInEmail: { en: 'New sign-in e-mail', ar: 'بريد الدخول الجديد' },
+  change: { en: 'Change', ar: 'تغيير' },
+  changing: { en: 'Changing…', ar: 'جارٍ التغيير…' },
+  changeSignInWaitingHint: {
+    en: 'The code already sent stops working; a new one goes to the new address.',
+    ar: 'يتوقف الرمز المرسل سابقًا؛ ويُرسل رمز جديد إلى البريد الجديد.',
+  },
+  changeSignInActiveHint: {
+    en: 'Every session ends; the teacher signs in again with the new address and the same password.',
+    ar: 'تنتهي كل الجلسات؛ ويسجّل المعلم الدخول من جديد بالبريد الجديد وكلمة المرور نفسها.',
+  },
+  signInChanged: { en: 'Changed. The teacher signs in with {email} from now on.', ar: 'تم التغيير. يسجّل المعلم الدخول بـ {email} من الآن.' },
 } satisfies Record<string, Pair>
 
 const BY_CODE: Record<string, Pair> = {
