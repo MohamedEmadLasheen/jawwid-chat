@@ -18,6 +18,16 @@ All six questions in §E are answered, and every answer took the recommendation.
 | 5 | Difficulty levels (#6) | "Recommended set": three levels, set by the child's teacher. |
 | 6 | Rewards and competitions (#8, #9) | "Recommended set": points and levels are visible only to the family and the teacher. Competition is opt-in, within one teacher's group, with no public leaderboard. |
 
+## Owner decisions (2026-10-29): Arabic lessons 2–10 and Islamic studies
+
+The owner answered the two plan proposals (the department head's notes, `pd29-arabic-islamic-proposals.md`). The owner's words are quoted.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | The two plans | "Approve both". **Arabic lessons 2–10**, one lesson per PR, in the order 3, 6, 7, 8, 9, 2, 4, 5, 10, on the P0-5 engine. Then **Islamic studies** in batches of about 5, the Prophet ﷺ lessons first. Everything is held for teacher review. Both start **after** the 114-surah work. |
+| 2 | Hadith | "Research a hadith dataset". Before any Islamic lesson that cites hadith is built, research the published hadith collections and datasets (for example sunnah.com's API terms and open hadith corpora): their licence for commercial and educational redistribution, provenance, grading data, and Arabic text quality. The result is a short recommendation with sources for the owner. **Nothing is loaded until the owner approves it.** Until then, every hadith line stays held as teacher-verified text. |
+| 3 | Wudu and salah | "These lessons are designed for young children, who should not be expected to understand the differences between the four schools of fiqh. We need one simple, consistent, child-friendly teaching method for wudu and salah. The Teachers department, in consultation with a qualified Islamic scholar, should approve the method and verify every step before publication. Do not display school names or differences of opinion to children. Where legitimate scholarly differences exist, the content team should choose an appropriate teaching approach and keep the lessons simple, accurate, and age-appropriate." So: **no madhhab names or differences in child-facing content; every fiqh step is held; the review doc of each such lesson carries a "method sign-off by the Teachers department and a qualified scholar" gate**, which must be passed before publication. |
+
 ## 0. How this was audited (safety)
 
 - The lesson content lives in `MohamedEmadLasheen/jawwid-lessons`. Its history was infected
