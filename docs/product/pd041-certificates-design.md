@@ -1,9 +1,37 @@
 # PD-41 · The Certificates page: student and teacher appreciation certificates — review and design
 
-Status: **DESIGN, awaiting approval.** No feature code is written until the department head
-and the owner approve this document and answer §13.
-Claim: `docs/product/pd-registry/PD-41.md`. Migration slot: `20261027130000` (`chat_pd041_certificates`).
-Base: `main` @ `6e809f12`.
+Status: **DECIDED** (owner, 2026-10-28). All six recommendations in §13 are approved, with seven
+safeguards (§0). §14 maps each safeguard to its state, mechanism and test. Code starts only on
+the department head's GO, because of the machine-load cap.
+Claim: `docs/product/pd-registry/PD-41.md`. Migration slot: `20261028110000` (`chat_pd041_certificates`),
+renumbered from `20261027130000`.
+Base: `main` @ `a547b0e2`, with PD-40 merged (#164, #167, #172, #174).
+
+## 0. The owner's decision (2026-10-28, verbatim, relayed by the department head)
+
+> Approve all 6 recommendations, with the following safeguards:
+> 1. Only the authorized requester may send a certificate to a group after the certificate has been reviewed and approved. The Designer's role is limited to designing, uploading, and returning certificates for corrections.
+> 2. Every return-for-changes action must include a clear message, and the request must retain its history.
+> 3. Teacher certificate Stories must remain optional and must never be published automatically.
+> 4. Student certificate sharing requires explicit, documented family consent. Issuing a certificate must be separate from publishing it. If consent is missing or unclear, do not publish the certificate to Stories.
+> 5. The learner's assigned Operations supervisor makes the final decision on teacher-submitted certificate suggestions. Record the decision and notify the requester.
+> 6. The Super Admin manages certificate types, including enabling and disabling them. Disabling or retiring a type must not delete historical certificate records.
+> 7. Enforce permissions on the backend, and maintain an audit trail for requests, approvals, revisions, sharing consent, publication, and final sending.
+> Do not modify any Jawwid Core production code or database. Implement these changes only in the intended system and follow the existing project safeguards.
+
+**What the decision changes in this design** (each item is already worked into the sections
+below):
+- **An explicit approval state, `approved`** (§3). The requester of record reviews the uploaded
+  design and approves that exact revision. **Send and Story are impossible before approval.**
+  The approver cannot be the person who uploaded the revision.
+- **Consent is a recorded fact** (§4.3): who agreed, how, and when, kept in an append-only
+  table. A student Story is refused unless the latest consent record is a grant. A withdrawal
+  removes a Story that was already published.
+- **Teacher suggestions** are decided only by the learner's assigned Operations supervisor, or
+  their active PD-33 cover. The teacher is told the outcome (§6.2, §9).
+- **Types** are managed by the super admin through a new key, `certificates.types`. They are
+  disabled, never deleted (§4.2, §11).
+- **Jawwid Core is untouched.** Everything here is in this repository (Chat), as `jawwid-chat-is-not-core` requires.
 
 The owner's request, in short:
 - **Student certificates.** The Operations supervisor requests an appreciation certificate.
@@ -80,26 +108,47 @@ PD-41 owns the certificates workflow, its pages and its `certificates.*` permiss
    │                  in_design (In progress) ──return(message)──▶ changes_requested
    │                      │ upload final file                       (In progress, "needs you")
    │                      ▼
-   │                  uploaded  (Completed) ──redesign(message)──▶ in_design
+   │                  uploaded  (Completed · awaiting review) ──redesign(message)──▶ in_design
+   │                      │ approve (the requester of record reviews THIS revision; approver ≠ uploader)
+   │                      ▼
+   │                  approved  (Completed · approved) ──withdraw approval + redesign(message)──▶ in_design
    │                      │ send (server picks the group)
    │                      ▼
    │                    sent    (Sent)                                        (terminal for delivery)
    │
-   └── cancel(reason): from proposed*, requested, in_design, changes_requested, uploaded ──▶ cancelled (terminal)
+   └── cancel(reason): from proposed*, requested, in_design, changes_requested, uploaded, approved ──▶ cancelled (terminal)
 
-   Orthogonal, once: story_published_at — allowed from uploaded or sent, only when the request
-   opted in (publish_story = true). It never changes `state`.
+   Orthogonal, once: story_published_at. It is allowed only from `approved` or `sent`, only when
+   the request opted in (publish_story = true), and, for a STUDENT certificate, only while the
+   latest consent record is a grant (§4.3). It never changes `state`, and no transition
+   publishes one.
 ```
 
 **Notes on the rules**
-- Pending, In progress, Completed and Sent are the owner's four labels. `changes_requested` is
-  shown as *In progress · needs requester*, and `proposed` as *Suggested by teacher*.
-  `cancelled` and `declined` appear under *Closed*.
+- Pending, In progress, Completed and Sent are the owner's four labels.
+  - `changes_requested` is shown as *In progress · needs requester*.
+  - `proposed` is shown as *Suggested by teacher*.
+  - `uploaded` and `approved` are both *Completed*. Their chips read *awaiting your review* and
+    *approved · ready to send*.
+  - `cancelled` and `declined` appear under *Closed*.
 - **Who moves what:**
-  - The requester (or an overseer) accepts or declines a suggestion, edits, resubmits,
-    redesigns, sends, publishes the Story, and cancels.
-  - The Designer starts, uploads, replaces the file while still in `in_design`, and returns for
-    changes. **The Designer never cancels, sends or declines** (§13 Q1, Q2).
+  - **The requester of record** edits, resubmits, reviews and **approves**, asks for a redesign,
+    sends, records consent, publishes the Story, and cancels. An overseer may cancel, reassign
+    the Designer and read everything. It does **not** approve or send for someone else's request
+    (safeguard 1, "only the authorized requester").
+  - **The learner's assigned Operations supervisor**, or their active PD-33 cover, accepts or
+    declines a teacher's suggestion. Nobody else does, managers included (safeguard 5).
+  - **The Designer** starts, uploads, replaces the file while still in `in_design`, and returns
+    for changes with a message. **The Designer never approves, cancels, sends, declines or
+    publishes** (safeguard 1; §13 Q1, Q2).
+- **Approval is bound to a revision.** `approve` stores `approved_file_id = current_file_id`.
+  - Any later upload needs `in_design`, so it clears the approval. Send and Story check
+    `current_file_id = approved_file_id`.
+  - A requester who changes their mind after approving withdraws the approval with a
+    redesign message. That is one event, back to `in_design`.
+- **Four eyes.** The approver must not be the `uploaded_by` of the approved revision. This
+  matters while the transition rule lets the Teachers department design (§6.2), and for the
+  super admin, who holds every key.
 - **Request fields are editable only in `requested` and `changes_requested`.** Every edit is a
   history event with before and after. Once a design has started, the fields freeze until the
   Designer returns the request. The Designer always designs from a stable text.
@@ -107,10 +156,12 @@ PD-41 owns the certificates workflow, its pages and its `certificates.*` permiss
   request. The old row stays `sent` and the mistake stays visible in the history. Un-sending
   would mean deleting a message from a family's chat, and the message-deletion rules (PD-37)
   already govern that.
-- **Story and send are independent.** A requester may publish the Story before sending, or never
-  send (for example a teacher award announced only as a Story). Both need a current file.
+- **Issuing and publishing are separate acts** (safeguard 4). Send never creates a Story, and
+  Story never sends. A requester may publish the Story before sending, or never send (for
+  example a teacher award announced only as a Story). Both need `approved` or `sent`.
 - **Legacy mapping (in the migration):**
-  - PD-12 `issued` → `sent`.
+  - PD-12 `issued` → `sent`, with `approved_by = decided_by` (the issuer approved it by issuing).
+    Legacy rows have no consent record, so **no legacy certificate can become a student Story**.
   - `requested` (a teacher's open ticket, today awaiting the Teachers department) → `requested`.
     It is already accepted, so the open queue is not bounced back.
   - `declined` → `declined`.
@@ -125,7 +176,10 @@ id, certificate_id, kind, from_state, to_state,
 actor_staff_id | actor_teacher_id (exactly one),
 before jsonb, after jsonb, note text, at timestamptz default clock_timestamp()
 kind ∈ proposed, accepted, declined, requested, edited, started, returned, resubmitted,
-       file_uploaded, file_replaced, redesign_requested, sent, story_published, cancelled, reassigned
+       file_uploaded, file_replaced, approved, approval_withdrawn, redesign_requested, sent,
+       consent_granted, consent_withdrawn, story_published, story_withdrawn, cancelled, reassigned
+check: kind in (returned, redesign_requested, approval_withdrawn, declined, cancelled,
+                consent_withdrawn) ⇒ note is not null and length(btrim(note)) >= 10
 ```
 
 - **No transition can skip its event.** Every write to the certificate sets `changed_by_staff`
@@ -133,6 +187,12 @@ kind ∈ proposed, accepted, declined, requested, edited, started, returned, res
   state change with neither actor column set.
 - `before`/`after` hold request fields and file metadata only, never object keys or
   conversation ids.
+- **A return must say what to change** (safeguard 2). `return`, `redesign` and
+  `approval_withdrawn` need a message of at least 10 characters after trimming. Both the API
+  and the event CHECK above enforce it. The certificate also keeps the latest message as
+  `return_message`, so the requester sees it without opening the history.
+- Type changes (create, relabel, enable, disable) are not certificate events. They write
+  `chat.audit_log` as `certificate_type.*` (§4.2).
 - Each act also writes `chat.audit_log` (the existing `learner_certificate.*` actions, renamed
   `appreciation_certificate.*`), so PD-35 B7's action log shows it with no change.
 
@@ -140,7 +200,7 @@ kind ∈ proposed, accepted, declined, requested, edited, started, returned, res
 
 ## 4. Data model
 
-### 4.1 Extend in place: one migration at slot `20261027130000`
+### 4.1 Extend in place: one migration at slot `20261028110000`
 
 `alter table chat.learner_certificate rename to appreciation_certificate`. In Prisma, the model
 becomes `AppreciationCertificate` with `@@map("appreciation_certificate")`. The readers to update
@@ -164,7 +224,10 @@ are `certificate.service.ts`, `stats.service.ts:177`, and the two PD-12 integrat
 | `designer_note` | **new**, ≤1000 | "additional details" written *for* the Designer (colours, wording, Arabic or English) |
 | `publish_story` | **new**, `boolean not null default false` | the request's opt-in. Never acted on by itself |
 | `request_key` | **new**, `uuid not null`, `unique (organization_id, request_key)` | idempotent create (§8) |
-| `state` | check widened to `proposed, requested, in_design, changes_requested, uploaded, sent, cancelled, declined` | §3 |
+| `state` | check widened to `proposed, requested, in_design, changes_requested, uploaded, approved, sent, cancelled, declined` | §3 |
+| `approved_file_id`, `approved_by`, `approved_at` | **new**. Set together on `approve`, cleared together on `approval_withdrawn` or a new upload. The trigger requires `approved_by` to be a live requester and not `uploaded_by` of that file | safeguard 1 |
+| `return_message` | **new**, ≥10 characters when set: the latest return or redesign message | safeguard 2 |
+| `suggestion_decided_by`, `suggestion_decided_at` | **new**. The supervisor's accept or decline of a teacher's suggestion (the trigger checks they are the learner's assigned supervisor or their active cover) | safeguard 5 |
 | `assigned_designer_id`, `design_started_at` | **new** | who claimed it |
 | `current_file_id` | **new**, FK → `appreciation_certificate_file` | the file that will be sent |
 | `sent_at`, `sent_by` | **new**; together with the existing `conversation_id` and `issued_message_id` → `sent_message_id` | the delivery |
@@ -182,8 +245,10 @@ are `certificate.service.ts`, `stats.service.ts:177`, and the two PD-12 integrat
   `requested_by_staff` is set.
 - **State coherence:**
   - `sent` ⇔ `sent_at`, `sent_by`, `conversation_id` and `sent_message_id` are all set.
-  - `uploaded` or `sent` ⇒ `current_file_id` is set.
-  - `story_id` is set ⇒ `publish_story`, and the state is `uploaded` or `sent`.
+  - `uploaded`, `approved` or `sent` ⇒ `current_file_id` is set.
+  - `approved` or `sent` ⇒ `approved_file_id = current_file_id`, and `approved_by` is set.
+  - `story_id` is set ⇒ `publish_story`, and the state is `approved` or `sent`. For a student
+    certificate, the AFTER trigger re-checks that the latest consent row is a grant.
 
 ### 4.2 New tables
 
@@ -195,13 +260,17 @@ chat.certificate_category (            -- seeded; adding a category = a row + it
   story_audience text not null,        -- a StoryAudienceKind: 'all_families' | 'all_teachers' (§13 Q4)
   label_en text not null, label_ar text not null, sort smallint not null)
 
-chat.certificate_type (                -- per organization; super admin edits (§13 Q6)
+chat.certificate_type (                -- per organization; the super admin edits it (§13 Q6, safeguard 6)
   id uuid pk, organization_id uuid not null, category text not null references certificate_category,
   key text not null, label_en text not null, label_ar text not null,
   needs_juz boolean not null default false,
   needs_period text check (needs_period in ('month','term','year')),   -- null = no period
   is_active boolean not null default true, sort smallint not null default 0,
+  disabled_at timestamptz, disabled_by uuid references chat.staff,
   unique (organization_id, category, key))
+  -- never deleted: a BEFORE DELETE trigger refuses, and certificates reference it with
+  -- ON DELETE RESTRICT. Disabling hides a type from the request form only; history keeps
+  -- its label. `key` and `category` are immutable once a certificate uses the type.
 
 chat.appreciation_certificate_file (   -- the design revisions; append-only
   id uuid pk, certificate_id uuid not null, revision int not null,
@@ -225,6 +294,44 @@ chat.appreciation_certificate_event    -- §3.1
   `good_conduct`.
 - `teacher`: `teacher_of_month` (needs_period month), `excellence`, `years_of_service`.
 
+### 4.3 Family consent for a student Story (safeguard 4)
+
+```sql
+chat.certificate_story_consent (       -- append-only (chat.forbid_change), one row per act
+  id uuid pk, certificate_id uuid not null references chat.appreciation_certificate,
+  kind text not null check (kind in ('granted','withdrawn')),
+  given_by_contact_id uuid references chat.contact,  -- WHICH parent agreed (a contact of the learner's family)
+  method text check (method in ('in_chat','phone','in_person','written')),
+  evidence_message_id uuid references chat.message,  -- optional: the parent's "yes" in the family's chat
+  note text,                                         -- required when method is phone or in_person
+  recorded_by uuid not null references chat.staff, recorded_at timestamptz not null default clock_timestamp(),
+  constraint consent_grant_is_documented check (kind <> 'granted' or (given_by_contact_id is not null and method is not null
+                and (method in ('in_chat','written') or length(btrim(note)) >= 10))),
+  constraint consent_withdrawal_has_reason check (kind <> 'withdrawn' or length(btrim(note)) >= 10))
+```
+
+- **Recording consent is a separate act from publishing it.** It has its own route (§11). The
+  publish dialog never ticks it by default. The requester picks the parent from the family's
+  contacts and the method.
+  - "In chat" may link the parent's message, chosen from the student group or the direct
+    conversation the requester is a member of. The trigger checks that the message belongs to
+    a conversation about this learner, and that its author is `given_by_contact_id`.
+  - Phone and in-person need a note.
+- **Missing or unclear means no Story.** The Story route refuses with **409
+  `CERTIFICATE_STORY_CONSENT_MISSING`** unless the **latest** row for the certificate is
+  `granted`.
+  - The AFTER trigger on `appreciation_certificate.story_id` re-checks the same rule, so no
+    code path can skip it.
+  - "Unclear" is never something the system can record: a grant without a named parent and a
+    method fails the CHECK.
+- **A withdrawal after publication** deletes the certificate's Story in the same transaction,
+  through StoryService's existing delete (`story.controller.ts:209`). It writes
+  `story_withdrawn` and, because a Story is published once, the certificate cannot be
+  republished.
+- **Teacher certificates need no family consent.** The teacher Story stays opt-in at request
+  time and is published only by the explicit Story action (safeguard 3).
+- The consent table is server-only, like the rest. The Designer never sees it.
+
 **Grants:** RLS is enabled, with no `chat_app` grants, as on PD-12's table. The tables are
 server-only.
 
@@ -246,7 +353,8 @@ keep `certificate_issued`, so the Flutter card renderer and `stats.service` keep
 1. `GET /certificates/:id/delivery` returns the group the server would choose now: its title,
    type and member count. Members' names are shown only to holders of `certificates.deliver`;
    the Designer never calls it.
-2. `POST /certificates/:id/send { conversationId }` must echo that id. If the server's choice
+2. `POST /certificates/:id/send { conversationId }` needs state `approved`, with
+   `current_file_id = approved_file_id`, and must echo that id. If the server's choice
    changed in between (a group archived or recreated), the call returns **409
    `CERTIFICATE_TARGET_CHANGED`** instead of sending somewhere else.
 3. With no live group, the call returns 409 with PD-12's "open their Student Group first"
@@ -258,51 +366,75 @@ keep `certificate_issued`, so the Flutter card renderer and `stats.service` keep
 
 ### 6.1 Names (agreed with PD-40, 2026-10-27)
 
-PD-40's PR-1 ([#172](https://github.com/MohamedEmadLasheen/jawwid-chat/pull/172), `claude/pd40-route-permissions` @ `2372b6e6`) adopted these names. Its catalogue already holds `certificates.view`, `.design` and `.deliver`; `certificates.decline` is gone.
-- Until PD-41 PR-2 replaces them, today's PD-12 routes map as follows: `GET /learner-certificates` → view, `/:id/upload` → design, and `/:id/issue` and `/:id/decline` → deliver.
-- The Teachers department's legacy bundle holds view, design and deliver. That is today's `canSupervise`, and matches the transition rule in §6.2.
-- The Designer template is `view` + `design`, and never sends. This matches §13 Q1.
-- **PD-41 PR-1 adds** `certificates.request.student`, `.request.teacher`, `.story` and `.oversee` to `catalogue.ts`, and puts `@Requires` on its new routes.
-  - The route gate `bash scripts/qa/guards.sh pd040-routes` and the route spec fail on any undeclared handler or unknown key.
-  - Regenerate `docs/security/pd040-route-permissions.md` with `PD040_WRITE_ROUTE_TABLE=1`.
-- Keys stay `delegable=false` until a policy verifies their bundle. `decideCertificateAccess` (§6.3) is that policy for the certificate keys.
-- PR-1 therefore lands **after #172**, and PR-3 shrinks to reading PD-40 PR-2's `Actor.permissions` and `chat.staff_has_permission`.
-- PD-40 PR-2 ([#174](https://github.com/MohamedEmadLasheen/jawwid-chat/pull/174), slot `20261027150000`) provides `chat.staff_has_permission(staff, key)` and `chat.staff_access_profile(staff)`. Its TypeScript side is `PermissionService.profileOf(actor)`, which `decideCertificateAccess` reads.
-- PD-40 PR-4 pins the Designer route list (§11 ✱). That list is sent to PD-40 once this design is approved.
+**Checked against the merged catalogue** (`main` @ `a547b0e2`, PD-40 #164/#167/#172/#174):
+- **Already in place.** `apps/api/src/platform/permissions/catalogue.ts:104-108` and the seed
+  `20261027190000_chat_pd040_access_roles.sql:165-167` hold `certificates.view`, `.design` and
+  `.deliver`, all `delegable=false`. `certificates.decline` does not exist.
+- **Today's routes.** `certificate.controller.ts` on main declares `GET /learner-certificates` →
+  view, `/:id/upload` → design, and `/:id/issue` and `/:id/decline` → deliver.
+- **Legacy bundles.** Only the Teachers department holds certificate keys, manager and members
+  alike: view, design and deliver (`legacy-bundles.ts:99-106`; seed rows `:227-229`, `:332-334`).
+  That is today's `canSupervise`. **Operations holds none yet.**
+- **The Designer** is a role the super admin defines as data (`chat.define_access_role`,
+  `:634`; tier `specialist`). It is not seeded. Its template is `view` + `design`, and it never
+  sends (§13 Q1).
+- **Helpers PD-41 reads:** `chat.staff_has_permission(staff, key)` (`:541`),
+  `chat.staff_access_profile(staff)` (`:473`), and `PermissionService.profileOf(actor)` in
+  TypeScript.
+
+**What PD-41 PR-1 adds** (one catalogue row and one seed row per key, as PD-40 §3.2 requires):
+- **New keys:** `certificates.request.student`, `.request.teacher`, `.story`, `.oversee` and
+  `.types`. All are `delegable=false` until `decideCertificateAccess` (§6.3) verifies their
+  bundles in `pd040-legacy-bundles.spec.ts`.
+- **New legacy-bundle rows:**
+  - Operations: view, request.student, deliver and story for supervisors, plus oversee for
+    managers.
+  - Teachers: request.teacher and story for supervisors, plus oversee for managers.
+  - The super admin already holds `*`.
+- **A relabel:** `certificates.deliver` becomes "Send certificates to their group" / "إرسال
+  الشهادات إلى مجموعتها", because a teacher certificate does not go to a family. This is one
+  `update chat.permission` row, done inside `chat.pd040_access_change`.
+- **Wiring:** `@Requires` on every new route; regenerate `docs/security/pd040-route-permissions.md`
+  with `PD040_WRITE_ROUTE_TABLE=1`. `bash scripts/qa/guards.sh pd040-routes` must pass.
+- **The Designer route list** (§11 ✱) is sent to PD-40 for its exact-route spec.
 
 | Permission | Allows | Layer 2: which rows (PD-41's service decides) | Risk |
 |---|---|---|---|
 | `certificates.view` | open the page; list and read | the union of the rows the bases below reach | pii |
-| `certificates.request.student` | create, edit, resubmit, redesign or cancel student requests; accept or decline a teacher's suggestion | learners the caller acts for (PD-8 `learner_supervision` + `chat.staff_acts_for`: self, backup or manager; `conversation.service.ts:912-924`) | pii |
-| `certificates.request.teacher` | the same for teacher requests | teachers in the caller's PD-35 scope (`teacher-scope.ts:96-110`) | pii |
-| `certificates.design` | start, upload or replace the file, return for changes | every request of the organization in `requested`, `in_design` or `changes_requested`, plus its own `uploaded` and `sent` (read-only). **The design projection only (§6.4)** | pii (printed name) |
-| `certificates.deliver` | read the delivery target, send | rows the caller may request (same basis) | family_contact |
-| `certificates.story` | publish the Story | rows the caller may request, **and** `chat.current_can_publish_story()` | family_contact |
-| `certificates.oversee` | the full DTO of every request in the category, cancel or reassign any, the full history | the Operations manager for `student`, the Teachers manager for `teacher`, and the super admin for both | pii |
+| `certificates.request.student` | create, edit, resubmit, cancel, **review and approve** or ask for a redesign of a student request; accept or decline a teacher's suggestion | create: learners the caller acts for (PD-8 `learner_supervision` + `chat.staff_acts_for`, `conversation.service.ts:912-924`). Every later act: **the requester of record, or their active PD-33 cover** (not the manager). Suggestions: **the learner's assigned supervisor or their active cover only** (safeguard 5) | pii |
+| `certificates.request.teacher` | the same for teacher requests | create: teachers in the caller's PD-35 scope (`teacher-scope.ts:96-110`). Later acts: the requester of record | pii |
+| `certificates.design` | start, upload or replace the file (only in `in_design`), return for changes **with a message** | every request of the organization in `requested`, `in_design` or `changes_requested`, plus its own `uploaded`, `approved` and `sent` (read-only). **The design projection only (§6.4)** | pii (printed name) |
+| `certificates.deliver` | read the delivery target; send an **approved** certificate | the requester of record, or their active cover (safeguard 1) | family_contact |
+| `certificates.story` | record or withdraw family consent; publish the Story of an approved certificate | the requester of record, or their active cover, **and** `chat.current_can_publish_story()` | family_contact |
+| `certificates.oversee` | the full DTO of every request in the category, cancel or reassign the Designer, the full history. **Never approve, send or publish** for another's request | the Operations manager for `student`, the Teachers manager for `teacher`, and the super admin for both | pii |
+| `certificates.types` | create, relabel, enable or disable certificate types | the super admin only (bundle `*`); it is in no other bundle (safeguard 6) | admin |
 
-PD-40's `certificates.decline` is dropped. The requester **cancels**, and the Designer
-**returns**. Its `certificates.deliver` keeps the name but means *send* only. Upload is
-`certificates.design`.
+There is no `certificates.decline`: the requester **cancels**, and the Designer **returns**.
+`certificates.deliver` means *send* only; upload is `certificates.design`.
+
+**The super admin** holds every key, so it may request, approve and send its own requests. The
+four-eyes rule (§3) still stops it from approving a revision it uploaded itself.
 
 ### 6.2 Who holds what
 
-| | view | request.student | request.teacher | design | deliver | story | oversee |
-|---|---|---|---|---|---|---|---|
-| Ops supervisor (`supervisor@operations`) | ✔ | ✔ | | | ✔ | ✔ | |
-| Ops manager (`manager@operations`) | ✔ | ✔ | | | ✔ | ✔ | student |
-| Teacher Supervision member (`supervisor@teachers`) | ✔ | | ✔ | | ✔ | ✔ | |
-| Teachers manager (`manager@teachers`) | ✔ | | ✔ | | ✔ | ✔ | teacher |
-| **Designer** (`specialist` + role `designer`) | ✔ | | | ✔ | | | |
-| Super admin | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| teacher (not staff) | — | — | — | — | — | — | — |
+| | view | request.student | request.teacher | design | deliver | story | oversee | types |
+|---|---|---|---|---|---|---|---|---|
+| Ops supervisor (`supervisor@operations`) | ✔ | ✔ | | | ✔ | ✔ | | |
+| Ops manager (`manager@operations`) | ✔ | ✔ | | | ✔ | ✔ | student | |
+| Teacher Supervision member (`supervisor@teachers`) | ✔ | | ✔ | (✔ transition) | ✔ | ✔ | | |
+| Teachers manager (`manager@teachers`) | ✔ | | ✔ | (✔ transition) | ✔ | ✔ | teacher | |
+| **Designer** (`specialist` + the super admin's `designer` role) | ✔ | | | ✔ | | | | |
+| Super admin | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| teacher (not staff) | — | — | — | — | — | — | — | — |
 
 - A teacher keeps `POST /learner-certificates` (the suggestion) and `GET /learner-certificates`
   (own suggestions). Both are `@NotForStaff`.
-- **Before PD-40 lands**, these rows are what Layer 2 derives from today's tiers and departments,
-  so PD-41 can ship first. The **transition rule** is that `design` is also held by the Teachers
-  department (`canSupervise`), today's issuers, until the organization has an active Designer.
-  This keeps PD-12's "Teachers-department supervisors issue" (`BOUNDARY.md:1345`) working, and
-  can be removed later. §11 PR-3 removes it once PD-40's Designer exists.
+- **The transition rule.** PD-40 is merged and its guard runs in **shadow** mode. The
+  Teachers department keeps `certificates.design` (it is in the merged bundle), so PD-12's
+  issuers can still design until the organization has an active Designer.
+  - The four-eyes rule (§3) means a member who designed a revision cannot approve it.
+  - §12 PR-3 removes `design` from the Teachers bundle once a Designer exists. That is a bundle
+    edit and a spec change, and it is the department head's call to schedule.
 
 ### 6.3 Where it is decided
 
@@ -312,11 +444,16 @@ category, `{ request, deliver, story, oversee }`, plus `design` and `projection:
 - It reads `Actor.permissions` when PD-40's PR-2 exists, and the legacy department roles
   otherwise. The PD-40 bundle ⇔ policy spec pins the two to each other.
 - Row scope is applied in `CertificateService`.
-- The DB trigger re-checks the actor of each transition:
+- The DB trigger re-checks the actor of each transition with PD-40's `chat.staff_has_permission`:
   - `requested_by_staff` is live staff of the organization who reaches the recipient;
-  - the Designer acts through `chat.staff_has_permission(id, 'certificates.design')` (PD-40
-    PR-4's helper), or through the transition rule;
-  - the sender is not the Designer.
+  - `start`, `upload` and `return` need `certificates.design`;
+  - `approve` needs the requester of record (or their active cover), and an actor who is not
+    the revision's `uploaded_by`;
+  - `send` and `story` need `certificates.deliver` / `.story`, and the requester of record or
+    their cover. **A Designer-only account can never be the actor of approve, send or Story**,
+    even by a direct SQL write;
+  - `accept` / `decline` of a suggestion need the learner's `learner_supervision.supervisor_id`,
+    or an active PD-33 cover for them.
 
 ### 6.4 Designer redaction: the design projection
 
@@ -376,9 +513,11 @@ for a Designer (today it runs per open row: `certificate.service.ts:379`).
 | A double click on *Submit* | The form mints a `requestKey` (uuid) when it opens. With `unique (organization_id, request_key)`, a second POST with the same key returns **200 with the existing row** instead of a second request. |
 | The same certificate requested twice by two people | A **hard** partial unique index on `(organization_id, category, coalesce(learner_id, recipient_teacher_id), type_id, coalesce(juz, 0), coalesce(period_start, '-infinity'))` `where state not in ('cancelled','declined')`, for types with `needs_juz` or `needs_period`. "Juz' 12 for Amina" or "Teacher of the Month, October" can exist once. The answer is **409 `CERTIFICATE_DUPLICATE`**, with the existing id and its state, shown as "already requested by …". |
 | A near-duplicate (same recipient and type within 30 days, with no juz or period) | A **soft** check: 409 `CERTIFICATE_DUPLICATE_SUSPECTED` with the existing one. Resubmitting with `confirmDuplicate: true` files it, and the history records `confirmedDuplicate`. |
-| A double send, or two senders at once | `SELECT … FOR UPDATE` on the row. The state must be `uploaded`, and the trigger allows `uploaded → sent` once. A repeat with the **same** `conversationId` after success returns **200 with the existing delivery** (idempotent); a different id returns 409. `sent_message_id` is unique. One send per certificate means one group per certificate in v1. |
+| A double send, or two senders at once | `SELECT … FOR UPDATE` on the row. The state must be `approved`, with `current_file_id = approved_file_id`, and the trigger allows `approved → sent` once. A repeat with the **same** `conversationId` after success returns **200 with the existing delivery** (idempotent); a different id returns 409. `sent_message_id` is unique. One send per certificate means one group per certificate in v1. |
 | A double Story | The row lock, plus `story_id` is unique and written once (trigger). A repeat returns the existing story. |
 | A double upload confirm | `certificate_upload.consumed_at` is set once. A second confirm of the same `uploadId` returns the existing revision. |
+| A double approve, or an approve of a stale revision | `approve` carries the `fileId` the reviewer looked at. It must equal `current_file_id`; otherwise 409 `CERTIFICATE_REVISION_CHANGED`. A repeat on an approved row returns 200. |
+| Consent recorded twice | Each act is its own append-only row; only the **latest** counts. A repeat grant is harmless and visible in the history. |
 | Designers racing to claim | `start` locks the row; the second gets 409 "already started by …". An overseer may **reassign** (an event). |
 
 ---
@@ -395,9 +534,11 @@ a `notification-catalog.ts` entry and an Arabic-first copy.
 | `certificate.returned` | the requester of record | `cert:<id>:returned:<n>` | the same |
 | `certificate.uploaded` (and `file_replaced`) | the requester of record | `cert:<id>:uploaded:<revision>` | the same |
 | `certificate.cancelled` | the assigned Designer, if any | `cert:<id>:cancelled` | the same |
+| `certificate.approved` | the assigned Designer (so the job is closed for them) | `cert:<id>:approved:<revision>` | the same |
+| `certificate.suggestion_decided` (safeguard 5) | **the teacher who suggested it**, as a PD-34 notification **and** PD-12's card in their supervision conversation: `certificate_accepted` (a new kind) or the existing `certificate_declined` with the reason | `cert:<id>:suggestion` | the teacher app's supervision chat |
 
 - Sending notifies no staff member; the group card is the family's or the teacher's notice,
-  through the existing chat push.
+  through the existing chat push. A Story is announced only by the Stories feed itself.
 - Notification bodies carry the type and the printed name only, never family data.
 
 ---
@@ -427,8 +568,11 @@ row → side drawer:
             · internal note (requester/overseer only)
   Design  : [Start] · upload (drag & drop, PDF/PNG/JPEG/WebP ≤20 MB) · revisions list with preview
             · [Return for changes…]                                   ← Designer
-  Deliver : "Will be sent to: «Student group · Amina» (4 members)" [Send to group]
-            · [Publish as Story] (only if opted in; audience named)  ← requester / overseer
+  Review  : the uploaded revision, full size · [Approve this design] · [Ask for a redesign…]  ← requester
+  Deliver : (only once approved) "Will be sent to: «Student group · Amina» (4 members)" [Send to group]
+  Story   : (only if opted in, only once approved) consent status (student: "Family consent: not recorded"
+            → [Record consent…]: which parent, how, link to their message or a note)
+            · [Publish as Story] (disabled until consent is granted; audience named)  ← requester
             · [Ask for a redesign…] · [Cancel request…]
   History : the event timeline (who, what, when; before→after for edits)
 ```
@@ -451,7 +595,16 @@ row → side drawer:
   Story when ready".
 
 **Teacher suggestions** (PD-12 tickets) appear in Pending under the Students category with a
-*Suggested by teacher* chip, and Accept / Decline buttons for the learner's supervisor.
+*Suggested by teacher* chip.
+- Accept / Decline buttons are shown **only** to the learner's assigned Operations supervisor
+  or their active cover. Everyone else sees "awaiting «supervisor»".
+- Decline needs a reason, and the teacher is told the outcome either way.
+
+**Certificate types** (the super admin only, `certificates.types`): a *Types* tab with
+per-category lists, Arabic and English labels, "needs Juz' / needs a month", and an
+**Enabled** switch.
+- There is no Delete button. A disabled type is greyed out in filters and still labels its old
+  certificates.
 
 **The Designer's view** is the same page, filtered by the design projection:
 - no "New request" button, no Deliver section, no internal notes;
@@ -485,21 +638,27 @@ All are under `@Controller('certificates')` with `CommErrorFilter`.
 | GET | `/certificates/recipients?category&q` | `request.student` \| `request.teacher` | learners or teachers in Layer-2 reach; name and the signatory teacher only |
 | POST | `/certificates` | `request.*` (by category) | body includes `requestKey`, optional `confirmDuplicate` |
 | POST | `/certificates/:id/edit` · `/resubmit` · `/redesign` | `request.*` | |
-| POST | `/certificates/:id/accept` · `/decline` | `request.student` | teacher suggestions |
+| POST | `/certificates/:id/accept` · `/decline` | `request.student` | teacher suggestions; the learner's assigned supervisor or their active cover only; decline needs a reason |
+| POST | `/certificates/:id/approve` | `request.*` | body `{ fileId }`; the requester of record (or their cover), not the uploader |
+| POST | `/certificates/:id/withdraw-approval` | `request.*` | message ≥10 characters; → `in_design` |
 | POST | `/certificates/:id/cancel` | `request.*` \| `oversee` | reason required |
 | POST | `/certificates/:id/reassign` | `oversee` | designer change |
 | POST | `/certificates/:id/start` ✱ · `/return` ✱ | `design` | |
 | POST | `/certificates/:id/files/upload` ✱ · `/files` ✱ | `design` | §7 |
 | GET | `/certificates/:id/files/:fileId` ✱ | `view` | a short signed redirect |
 | GET | `/certificates/:id/delivery` | `deliver` | §5 |
-| POST | `/certificates/:id/send` | `deliver` | echo of `conversationId` |
-| POST | `/certificates/:id/story` | `story` | once |
+| POST | `/certificates/:id/send` | `deliver` | `approved` only; echo of `conversationId` |
+| POST | `/certificates/:id/consent` | `story` | student only; `{ kind: granted, contactId, method, evidenceMessageId?, note? }` or `{ kind: withdrawn, note }` |
+| POST | `/certificates/:id/story` | `story` | `approved` or `sent`; opted in; student: the latest consent is a grant; once |
+| GET | `/certificates/types/admin` · POST `/certificates/types` · POST `/certificates/types/:id` | `types` | the super admin; create, relabel, enable/disable; never delete |
 | POST | `/learner-certificates` | `@NotForStaff` | **kept for the teacher app**; now creates `proposed` |
 | GET | `/learner-certificates` | `@NotForStaff` | **kept**: a teacher's own suggestions. The staff branch is removed |
 | POST | `/learner-certificates/:id/upload` · `/issue` · `/decline` | — | **removed** in PR-2, when the Admin Web switches. Only the Admin Web called them (Flutter calls only the POST, `http_supervision_repository.dart:36`) |
 
 **New error codes:** `CERTIFICATE_DUPLICATE`, `CERTIFICATE_DUPLICATE_SUSPECTED`,
-`CERTIFICATE_TARGET_CHANGED`, and `CERTIFICATE_STORY_NOT_OPTED_IN`. The existing
+`CERTIFICATE_TARGET_CHANGED`, `CERTIFICATE_STORY_NOT_OPTED_IN`, `CERTIFICATE_NOT_APPROVED`,
+`CERTIFICATE_REVISION_CHANGED`, `CERTIFICATE_SELF_APPROVAL`, `CERTIFICATE_STORY_CONSENT_MISSING`
+and `CERTIFICATE_TYPE_DISABLED`. The existing
 `CERTIFICATE_NOT_FOUND`, `CERTIFICATE_DENIED` and `CERTIFICATE_STATE` are reused
 (`errors.ts:247-252`).
 
@@ -512,9 +671,9 @@ All are under `@Controller('certificates')` with `CommErrorFilter`.
 | PR | Scope | Behaviour change | Depends on |
 |---|---|---|---|
 | **PR-0** (this) | the claim, the slot and this design | none | — |
-| **PR-1** API + migration | migration `20261027130000`: rename, columns, category/type/file/upload/event tables, triggers, legacy mapping, the `certificate_awarded` kind, templates. `pd041-policy.ts` plus its matrix spec. `CertificateService` rewritten around the state machine. The new controller. The `/learner-certificates` teacher routes kept. The projection spec. Integration specs (rewritten `pd012-*`, new `pd041-*`: duplicates, races, send-once, Story-once, target-changed, redaction, trigger refusals attempted directly). `docs/contracts/API-CONTRACT.md`. | additive; legacy issue/decline still work until PR-2 | — |
+| **PR-1** API + migration | migration `20261028110000`: rename, columns, the category, type, file, upload, event and **consent** tables, triggers (approval, four eyes, consent, suggestion decider, type never deleted), legacy mapping, the `certificate_awarded` and `certificate_accepted` kinds, templates, and the five new catalogue keys plus their bundle rows. `pd041-policy.ts` plus its matrix spec. `CertificateService` rewritten around the state machine. The new controller. The `/learner-certificates` teacher routes kept. The projection spec. Integration specs (rewritten `pd012-*`, new `pd041-*`: duplicates, races, send-once, Story-once, target-changed, redaction, trigger refusals attempted directly). `docs/contracts/API-CONTRACT.md`. | additive; legacy issue/decline still work until PR-2 | — |
 | **PR-2** Admin Web | the `/certificates` page, form, drawer and history, the redirects, tests. Removes the three legacy staff routes. | the Teachers-tab page moves to `/certificates` | PR-1 |
-| **PR-3** PD-40 wiring | the policy reads `Actor.permissions` (`@Requires` already lands in PR-1, on top of #172); the ✱ list goes into PD-40's exact Designer spec; the DB check calls `chat.staff_has_permission`; the transition rule (§6.2) ends | the Designer can work | PD-40 PR-2, PR-4 (PR-1 = #172 is needed by PD-41 PR-1) |
+| **PR-3** Designer cut-over | the ✱ list into PD-40's exact Designer route spec; `design` removed from the Teachers bundle (the transition rule ends) once a Designer account exists | only the Designer designs | PR-1, plus a Designer created on the stack. PD-40 is **merged**, so PR-1 already reads `PermissionService.profileOf` and `chat.staff_has_permission` |
 | **PR-4** Flutter (small) | renders `certificate_awarded` in the supervision conversation (the file plus the type and period); the teacher's suggestion sheet copy says "suggest". | copy only | PR-1 |
 
 ### 12.2 Verification
@@ -528,12 +687,15 @@ All are under `@Controller('certificates')` with `CommErrorFilter`.
   2. The Designer (or, before PD-40, a Teachers-department member) starts it, uploads it, and
      returns it for changes once.
   3. The requester resubmits, and the Designer uploads again.
-  4. The requester sends it: the card is in the student group, and the parent sees the file.
-  5. The requester publishes the Story: it reaches the audience, and a second press returns the
-     same story.
-  6. The same for a teacher: the card lands in the supervision conversation, and the Story goes
+  4. Send is refused before approval. The Designer cannot approve, and neither can the person
+     who uploaded the revision. The requester approves the revision.
+  5. The requester sends it: the card is in the student group, and the parent sees the file.
+  6. Story is refused without consent. The requester records consent (parent plus method) and
+     publishes the Story: it reaches the audience, and a second press returns the same story.
+     A withdrawal removes the Story.
+  7. The same for a teacher: the card lands in the supervision conversation, and the Story goes
      to all teachers.
-  7. Negative checks: the Designer gets 403 on `/conversations`, `/stories` and `/families`; a
+  8. Negative checks: the Designer gets 403 on `/conversations`, `/stories` and `/families`; a
      double send makes one card; a duplicate request returns 409.
 
 ### 12.3 Follow-ups found during the review (not PD-41's scope)
@@ -546,7 +708,10 @@ All are under `@Controller('certificates')` with `CommErrorFilter`.
 
 ---
 
-## 13. Questions for the owner (each with a recommendation)
+## 13. Questions for the owner — DECIDED 2026-10-28
+
+**All six recommendations are approved** (§0), with the safeguards mapped in §14. The questions
+are kept as asked.
 
 1. **Who presses "Send to group", the Designer or the requester?**
    - **Recommended: the requester** (the Ops supervisor, or Teacher Supervision), or an overseer.
@@ -598,3 +763,28 @@ All are under `@Controller('certificates')` with `CommErrorFilter`.
 - Request fields freeze while the Designer works.
 - The Designer sees no family data, no internal note, and not where the certificate went.
 - Every act is in the history and in the audit log.
+
+---
+
+## 14. The owner's safeguards → state, mechanism, test
+
+Each safeguard is enforced **three times**:
+- Layer 1, PD-40's `PermissionGuard` with the route's `@Requires`;
+- Layer 2, `decideCertificateAccess` plus the row rules in `CertificateService`;
+- the database trigger, so a direct SQL write is refused too.
+
+Each one is proven by a DB-free unit test, an integration spec that also attempts the refused
+write **directly in SQL**, and an Admin Web test where it shows on screen.
+
+| # | Safeguard | State machine | Mechanism | Tests |
+|---|---|---|---|---|
+| 1 | Only the authorized requester sends, after review and approval; the Designer designs, uploads and returns, nothing else | `uploaded` → **`approved`** → `sent`. `approve`, `send` and `story` exist only from `approved` (Story also from `sent`). A new upload needs `in_design`, so it clears the approval | **The review is the requester's approval.** `POST /approve {fileId}` binds `approved_file_id` to the revision the requester looked at. The approver is the requester of record or their active cover, never the revision's uploader (four eyes). `send` needs `approved` and `current_file_id = approved_file_id`, plus the requester of record or their cover. The Designer role holds only `view` + `design`, and the trigger refuses a Designer-only actor on approve, send and Story | unit: the policy matrix (the Designer has no approve/deliver/story; the overseer cannot approve or send). integration: send before approval returns 409 `CERTIFICATE_NOT_APPROVED`; approve by the uploader returns 409 `CERTIFICATE_SELF_APPROVAL`; approve of a stale `fileId` returns 409 `CERTIFICATE_REVISION_CHANGED`; an upload after approval needs a redesign first; the SQL `update … set state='sent'` on an `uploaded` row is refused; a Designer's `send` returns 403 at the guard. Admin Web: no Send button before approval; the Designer sees no Approve, Send or Story |
+| 2 | Every return-for-changes has a clear message; the history is kept | `in_design` → `changes_requested` (Designer); `uploaded`/`approved` → `in_design` (requester's redesign, approval withdrawal) | The API refuses a message under 10 trimmed characters. `appreciation_certificate_event` CHECKs `note` for `returned`, `redesign_requested`, `approval_withdrawn`, `declined` and `cancelled`. The event table is append-only (`chat.forbid_change`), and an AFTER trigger writes every transition, so none is skipped. `return_message` shows the latest message | unit: message validation. integration: an empty or short return returns 400; the SQL insert of a `returned` event without a note is refused; the SQL update or delete of an event is refused; every transition in a scripted walk leaves exactly one event. Admin Web: Return/Redesign dialogs cannot submit empty |
+| 3 | Teacher Stories stay optional, never automatic | The Story is orthogonal to `state`, and no transition publishes one | `publish_story` is the request's opt-in only. A Story is created **only** by `POST /certificates/:id/story`, an explicit action by a holder of `certificates.story`. There is no listener, job or trigger that creates one | integration: a full teacher walk to `sent` with `publish_story = true` leaves `story_id` null and creates no `chat.story` row; Story without opt-in returns 409 `CERTIFICATE_STORY_NOT_OPTED_IN`; a second press returns the same story. unit: `send()` never calls StoryService (a spy) |
+| 4 | Student Stories need explicit, documented family consent; issuing is separate from publishing; missing or unclear consent means no Story | Consent is its own append-only record (§4.3). Story is allowed only from `approved`/`sent` **and** when the latest consent row is a grant | `POST /consent` records a named parent (a contact of the learner's family), a method, and a message link or a note. A CHECK refuses a grant without them. `POST /story` and the `story_id` trigger both require the latest row to be `granted`. A withdrawal deletes the published Story and blocks republishing. `send` and `story` are separate routes and separate transactions | integration: Story with no consent row returns 409 `CERTIFICATE_STORY_CONSENT_MISSING`; Story after a withdrawal returns 409; a SQL insert of a grant with no contact or method is refused; a SQL write of `story_id` without a grant is refused; an evidence message from another family's conversation is refused; withdrawal after publish leaves the story `deleted`; `send` leaves no Story and `story` sends no card. Legacy `issued` rows cannot be published. Admin Web: Publish stays disabled until consent shows *granted* |
+| 5 | The learner's assigned Ops supervisor decides teacher suggestions; the decision is recorded and the requester is told | `proposed` → `requested` (accept) or `declined` (decline, with a reason) | Only `learner_supervision.supervisor_id`, or their active PD-33 cover through `chat.staff_acts_for`, may accept or decline; managers, overseers and the Teachers department may not. The trigger re-checks this. The decision writes `suggestion_decided_by/at`, an event and `audit_log`. The teacher gets a PD-34 notification **and** a `certificate_accepted` / `certificate_declined` card in their supervision chat | unit: the decider matrix (assigned supervisor ✔, cover ✔, manager ✘, other supervisor ✘, Teachers member ✘). integration: each ✘ returns 404/403 and is refused by SQL; accept writes the event and posts the card plus the notification (dedupe: a second accept is a no-op); decline without a reason returns 400 |
+| 6 | The super admin manages types and enables or disables them; retiring never deletes history | — (types are not certificates) | `certificates.types` is in no bundle except `*`. Types are disabled (`is_active`, `disabled_at/by`), never deleted: a BEFORE DELETE trigger plus `ON DELETE RESTRICT`. `key` and `category` are immutable once used. Creating a request with a disabled type returns 409 `CERTIFICATE_TYPE_DISABLED`. Old certificates keep their type label. Every change writes `audit_log` as `certificate_type.*` | integration: a non-super-admin (Ops manager, Teachers manager, Designer) gets 403; a SQL `delete from chat.certificate_type` is refused; disabling a used type keeps its certificates listable with the label; a new request with it is refused; the audit rows exist. Admin Web: no Delete control; the Types tab is visible only to the super admin |
+| 7 | Backend enforcement; an audit trail for requests, approvals, revisions, consent, publication and final sending | Every transition | Three layers (above), with deny by default on the guard. **Two trails:** `appreciation_certificate_event`, which is per certificate, append-only and trigger-written, with the actor, before/after and note; and `chat.audit_log` (`appreciation_certificate.requested / accepted / declined / started / returned / file_uploaded / approved / approval_withdrawn / consent_granted / consent_withdrawn / story_published / story_withdrawn / sent / cancelled`), which PD-35 B7's action log already shows | `pd040-route-permissions.spec.ts` (every new route declared, and the exact Designer route set); `bash scripts/qa/guards.sh pd040-routes`; integration: a scripted walk asserts one event plus one audit row per act, and none carries an object key or a conversation id |
+
+**Not changed:** nothing in Jawwid Core, its code or its database. This repository has no Core
+code (`jawwid-chat-is-not-core`), and PD-41 adds no Core call.
