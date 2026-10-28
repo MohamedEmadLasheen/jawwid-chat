@@ -357,15 +357,15 @@ describe('Trials & new students, as the super admin', () => {
   const superAdmin = makeStaff({ id: 'staff_super', name: 'Synthetic owner', role: 'super_admin' })
 
   it('is linked from the Admin Portal\'s People & teams, and both tabs open', async () => {
-    const people = destinationsFor('super_admin', {}).find((d) => d.key === 'people')!
-    expect(entriesOf(people).map((e) => e.path)).toContain('/trials')
+    const listed = destinationsFor('super_admin', {}).find((d) => d.key === 'people')!
+    expect(entriesOf(listed).map((e) => e.path)).toContain('/trials')
 
     access({ sales: true, operations: true })
     on('GET', /\/trials\/new-students$/, () => json({ students: [] }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations' })
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
-    await userEvent.click(within(nav).getByRole('button', { name: 'People & teams' }))
-    const link = screen.getByRole('link', { name: 'Trials & new students' })
+    const people = within(nav).getByRole('group', { name: 'People & teams' })
+    const link = within(people).getByRole('link', { name: 'Trials & new students' })
     expect(link).toHaveAttribute('href', '/trials')
     await userEvent.click(link)
 
