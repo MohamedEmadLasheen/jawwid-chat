@@ -167,10 +167,10 @@ async function enteredDaysAgo(enrolmentId: string, days: number) {
   await g.prisma.$transaction([
     g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
     g.prisma.$executeRawUnsafe(
-      `update chat.student_enrolment set assigned_at = now() - make_interval(days => $2) where id = $1::uuid`, enrolmentId, days,
+      `update chat.student_enrolment set assigned_at = now() - make_interval(days => $2::int) where id = $1::uuid`, enrolmentId, days,
     ),
     g.prisma.$executeRawUnsafe(
-      `update chat.learner_intake set entered_at = now() - make_interval(days => $2) where enrolment_id = $1::uuid`, enrolmentId, days,
+      `update chat.learner_intake set entered_at = now() - make_interval(days => $2::int) where enrolment_id = $1::uuid`, enrolmentId, days,
     ),
   ]);
 }
@@ -559,8 +559,8 @@ describe('6. the carried-over package (PD-30-amendment-carried-over)', () => {
 
   it('F1: completed above the total is a manager\'s own entry; then the grace is counted once (21 of 20 -> one left)', async () => {
     const f = await intake(s.ownerId, 'operations');
-    await expect(carryOver(f.learnerId, s.ownerId, 20, 21)).rejects.toThrow(/learner_subscription_over_is_confirmed/);
-    // A supervisor cannot, even naming a manager as the confirmer.
+    // A supervisor cannot enter completed above the total -- unconfirmed, or naming a manager as the confirmer.
+    await expect(carryOver(f.learnerId, s.ownerId, 20, 21)).rejects.toThrow(/entered and confirmed by the super admin/);
     await expect(carryOver(f.learnerId, s.ownerId, 20, 21, { over: s.managerId })).rejects.toThrow(/entered and confirmed by the super admin/);
     // A manager confirms only their own entry.
     await expect(carryOver(f.learnerId, s.managerId, 20, 21, { over: salesManagerId })).rejects.toThrow(/entered and confirmed by the super admin/);
