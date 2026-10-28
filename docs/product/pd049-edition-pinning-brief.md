@@ -41,7 +41,7 @@ An engineer then records each decision in `apps/lessons/src/content/sources.json
 | B. Primary: al-Sa'di only, for every gloss | One source for tafsir and words | Al-Sa'di explains words only in passing; many words get no gloss of their own |
 | C. Keep Ibn al-Ha'im primary, citing a modern edition's pages for the author's words only | Ordered by ayah, convenient | Contradicts "pin a printing that is itself public domain" (owner, 2026-10-29). **Not recommended.** |
 
-- ☐ A ☐ B ☐ C. Decided by: the department head with the scholar (the owner if they wish).
+- **DECIDED 2026-10-29 by the department head: Option A**, within the owner's public-domain-only decision. The scholar still confirms the al-Sijistani printing below. `sources.json` (#255) now makes al-Sijistani the word-meaning primary and Ibn al-Ha'im a cross-check.
 
 ---
 

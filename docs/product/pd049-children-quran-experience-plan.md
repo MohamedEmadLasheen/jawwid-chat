@@ -94,13 +94,13 @@ If no such print can be identified for a work, the work is **not** a primary sou
 
 | Role | Work | Status | Notes |
 |---|---|---|---|
-| **Primary** (see the note below the table) | **al-Tibyan fi Tafsir Gharib al-Quran**, Ibn al-Ha'im (d. 815 AH) | Public domain (author's text) | Ordered by surah and ayah, so it maps to our positions. Glosses are short and accurate, but terse and in adult register (§A.5). **Edition:** to be pinned (§A.6, step 1); a modern edition may be read only for the author's words, never its notes. |
+| ~~Primary~~ cross-check (see the decision below the table) | **al-Tibyan fi Tafsir Gharib al-Quran**, Ibn al-Ha'im (d. 815 AH) | Public domain (author's text) | Ordered by surah and ayah, so it maps to our positions. Glosses are short and accurate, but terse and in adult register (§A.5). **Edition:** to be pinned (§A.6, step 1); a modern edition may be read only for the author's words, never its notes. |
 | Cross-check | **Tafsir Gharib al-Quran**, Ibn Qutaybah (d. 276 AH) | Public domain (author's text). The al-Sayyid Ahmad Saqr edition (1978) and others carry editors' apparatus. | The earliest standard gharib work. Ordered by surah. |
-| Cross-check | **Nuzhat al-Qulub (Gharib al-Quran)**, al-Sijistani (d. 330 AH) | Public domain; **a Bulaq print of 1295 AH (in a margin)** is reported, which itself has no modern apparatus | Alphabetical, so a reviewer's look-up, not a map |
+| **Primary** (decided 2026-10-29) | **Nuzhat al-Qulub (Gharib al-Quran)**, al-Sijistani (d. 330 AH) | Public domain; **a Bulaq print of 1295 AH (in a margin)** is reported, which itself has no modern apparatus | Alphabetical, so a reviewer's look-up, not a map |
 | Reference | **al-Mufradat fi Gharib al-Quran**, al-Raghib al-Isfahani (d. 502 AH) | Public domain | Ordered by root, deep. For the scholar's look-up on hard words. |
 | Reference | al-Sa'di and al-Baghawi (§A.1) | Public domain (§A.1) | They often explain the key word within the ayah's tafsir |
 
-**Edition research (2026-10-29): *al-Tibyan* has no public-domain printing.** Only the modern critical editions of 1992 and 2003 exist. By §A.0 it therefore cannot be the primary. `docs/product/pd049-edition-pinning-brief.md` asks for the decision. The recommendation (Option A) is: the primary is **al-Sijistani's *Nuzhat al-Qulub*, Bulaq 1295** (the text *al-Tibyan* is built on), with al-Sa'di's tafsir of the ayah where al-Sijistani has no entry, and Ibn al-Ha'im becomes a cross-check.
+**Edition research (2026-10-29): *al-Tibyan* has no public-domain printing.** Only the modern critical editions of 1992 and 2003 exist. By §A.0 it therefore cannot be the primary. **DECIDED 2026-10-29 (department head, Option A of `docs/product/pd049-edition-pinning-brief.md`):** the primary is **al-Sijistani's *Nuzhat al-Qulub*, Bulaq 1295** (the text *al-Tibyan* is built on), with al-Sa'di's tafsir of the ayah where al-Sijistani has no entry. Ibn al-Ha'im becomes a cross-check. The table above is superseded on this point.
 
 **Not used** (in copyright, so excluded by the owner's decision):
 - KFGQPC's al-Muyassar fi Gharib al-Quran;
