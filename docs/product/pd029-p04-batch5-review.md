@@ -33,10 +33,11 @@ That the Basmala is an ayah of Al-Fatihah is the Kufan count, which Hafs follows
 
 **The old lesson has no Tajweed**, so none is dropped.
 
-## 1 Al-Fatihah: 3 held
+## 1 Al-Fatihah: 4 held
 
 | Where | Old text | Why it is held |
 |---|---|---|
+| Tafsir, 1 | نبدأ باسم الله الرحمن الرحيم، فالله هو المعبود بحق، … | EDITED (2026-10-29): the line typed the whole Basmala in prose spelling. The typed-Quran check now matches on the rasm skeleton, so it catches standard spelling. Shortened to «نبدأ باسم الله، …», since the ayah itself is shown from the verified text. Teacher to confirm the wording. |
 | Word meaning, 5:2 | نطيع ونحب: نصلي ونصوم ونفعل كل ما يحبه الله | Gives na'budu as "we obey and love". Worship ('ibadah) is wider than obedience and love: it is everything Allah loves, done for Him alone (the explanation lists prayer, fasting and supplication). Teacher to confirm the wording. |
 | Lesson | عند الصعوبات: اطلب من الله المساعدة 'إياك نستعين' | TYPED: the line quotes "iyyaka nasta'in", two words of ayah 5, typed by hand. Teacher to rephrase it (e.g. without the quote), or keep the quote as a position. |
 | Reflection | ما هي النعم التي تشكر الله عليها؟ | CUT: the old question began "when you say 'al-hamdu lillahi rabbi al-'alamin'," which types the whole of ayah 2; only the question after it is kept. Teacher to restore the link to ayah 2 in prose (e.g. "when you praise Allah"). |
