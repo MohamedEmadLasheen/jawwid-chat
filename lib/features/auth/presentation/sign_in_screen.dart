@@ -31,6 +31,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   /// PD-28 (web only): PD-23's "Keep me signed in on this device". Unticked by default.
   bool _remember = false;
 
+  /// PD-40: "Use another account" put the Admin Web notice away. A new sign-in attempt
+  /// brings it back should the answer be the same.
+  bool _adminWebDismissed = false;
+
   @override
   void dispose() {
     _username.dispose();
@@ -89,6 +93,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final theme = Theme.of(context);
     final state = ref.watch(authControllerProvider);
     final isBusy = state is AuthSigningIn;
+    ref.listen(authControllerProvider, (previous, next) {
+      if (next is AuthSigningIn && _adminWebDismissed) setState(() => _adminWebDismissed = false);
+    });
+
+    // PD-40 (plan §8): a department specialist with no chat access. It was never signed in
+    // here (no shell, none of its requests), and its session is already ended; the screen
+    // says where the account works instead of showing the form.
+    if (state is AuthSignedOut && state.reason == SignedOutReason.usesAdminWeb && !_adminWebDismissed) {
+      return _AdminWebOnly(onAnotherAccount: () => setState(() => _adminWebDismissed = true));
+    }
 
     // PD-28: offered only in a browser that can keep a shared token safely (Web Locks and
     // localStorage, see BrowserTokenStore). The phone keeps every session anyway.
@@ -201,6 +215,53 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 }
 
+/// PD-40: "This account uses Admin Web", with the one thing left to do here: sign in as
+/// someone else. The WebPortalRefusal layout (PD-28), on the sign-in route.
+class _AdminWebOnly extends StatelessWidget {
+  const _AdminWebOnly({required this.onAnotherAccount});
+
+  final VoidCallback onAnotherAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    return Scaffold(
+      key: const ValueKey('admin-web-only'),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(Spacing.spacing7),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(Icons.laptop_outlined, size: 48, color: theme.colorScheme.primary),
+                  const SizedBox(height: Spacing.spacing6),
+                  Text(
+                    l10n.adminWebOnlyTitle,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: Spacing.spacing4),
+                  Text(l10n.adminWebOnlyBody, textAlign: TextAlign.center, style: theme.textTheme.bodyLarge),
+                  const SizedBox(height: Spacing.spacing7),
+                  FilledButton(
+                    key: const ValueKey('admin-web-only-another-account'),
+                    onPressed: onAnotherAccount,
+                    child: Text(l10n.adminWebOnlyAnotherAccount),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Explains why the user is here, when they did not arrive by choice (§7).
 class _SignInNotice extends StatelessWidget {
   const _SignInNotice({required this.state});
@@ -219,6 +280,8 @@ class _SignInNotice extends StatelessWidget {
       SignedOutReason.accountDisabled => l10n.signInFailedDisabled,
       SignedOutReason.accountLocked => l10n.signInFailedLocked,
       SignedOutReason.roleNotSupported => l10n.signInFailedRoleUnsupported,
+      // Shown full-screen by _AdminWebOnly; once put away, the form needs no second notice.
+      SignedOutReason.usesAdminWeb => null,
       SignedOutReason.sessionRevoked ||
       SignedOutReason.sessionExpired =>
         state.error == null ? l10n.sessionExpiredBody : l10n.signInFailedCredentials,

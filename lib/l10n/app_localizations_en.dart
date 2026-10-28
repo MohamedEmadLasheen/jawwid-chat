@@ -4190,4 +4190,14 @@ class L10nEn extends L10n {
 
   @override
   String get messageInfoFailed => 'Couldn\'t load message info';
+
+  @override
+  String get adminWebOnlyTitle => 'This account uses Admin Web';
+
+  @override
+  String get adminWebOnlyBody =>
+      'Department staff accounts work in Admin Web, in a browser. Sign in there with the same e-mail and password.';
+
+  @override
+  String get adminWebOnlyAnotherAccount => 'Use another account';
 }

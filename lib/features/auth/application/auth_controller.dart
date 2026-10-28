@@ -116,7 +116,7 @@ class AuthController extends Notifier<AuthState> {
       _adopt(principal);
       state = AuthAuthenticated(principal);
     } on AppError catch (error) {
-      if (error.code == AuthFailures.roleNotSupported) {
+      if (AuthFailures.refusesPrincipal(error.code)) {
         // The tokens are good -- only this app cannot act as the principal -- so the
         // server session is ended too, not orphaned for thirty days.
         await _logoutBestEffort();
@@ -168,7 +168,7 @@ class AuthController extends Notifier<AuthState> {
       _logger.warn('sign-in failed', data: {'kind': error.kind.name});
       // A principal the app cannot act as was still issued a real session (tokens are
       // already stored): end it on the server before the tokens are forgotten.
-      if (error.code == AuthFailures.roleNotSupported) await _logoutBestEffort();
+      if (AuthFailures.refusesPrincipal(error.code)) await _logoutBestEffort();
       // The same teardown a session ending performs, not just the tokens. A failed sign-in
       // must not be able to leave a principal adopted by the transport or a revocation watch
       // running: the router makes that unreachable today, and a controller whose safety

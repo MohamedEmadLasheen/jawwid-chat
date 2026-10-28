@@ -1651,5 +1651,8 @@
   "messageInfoDeliveredTo": "وصلت إلى",
   "messageInfoPending": "لم تصل بعد",
   "messageInfoNobody": "لا أحد",
-  "messageInfoFailed": "تعذّر تحميل معلومات الرسالة"
+  "messageInfoFailed": "تعذّر تحميل معلومات الرسالة",
+  "adminWebOnlyTitle": "هذا الحساب يستخدم لوحة التحكم (Admin Web)",
+  "adminWebOnlyBody": "حسابات موظفي الأقسام تعمل في لوحة التحكم (Admin Web) عبر المتصفح. سجّل الدخول هناك بالبريد الإلكتروني وكلمة المرور نفسيهما.",
+  "adminWebOnlyAnotherAccount": "استخدام حساب آخر"
 }
