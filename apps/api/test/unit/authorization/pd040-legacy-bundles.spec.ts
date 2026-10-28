@@ -20,6 +20,7 @@ import { decideTeacherFileAccess, teacherFilePageAccess } from '@platform/teache
 import { decidePageBasis } from '@platform/teacher-scope';
 import { canGrantSubscriptionException } from '@platform/subscription-policy';
 import { accountAdminActs } from '@platform/account-admin-policy';
+import { decideTeacherOnboarding } from '@platform/teacher-onboarding-policy';
 import { StaffProfilePermission, profilePermissionsFor } from '@platform/staff-profile-policy';
 import { PERMISSIONS, PERMISSION_KEYS } from '@platform/permissions/catalogue';
 import {
@@ -75,6 +76,8 @@ function rules(): Record<string, Rule> {
     ...accountAdminActs(a.actor, standing(a), 'teacher'),
   ];
   const profile = (a: Account) => profilePermissionsFor(a.actor.staffRole);
+  // PD-43: adding and offboarding teachers.
+  const onboarding = (a: Account) => decideTeacherOnboarding(a.actor, role(a, 'teachers'));
   const supervises: Rule = (a) => pd012(a).canSupervise;
   const writesSupervision: Rule = (a) => file(a).canWriteSupervision;
   const readsMoney: Rule = (a) => billing(a).scope !== null;
@@ -104,6 +107,8 @@ function rules(): Record<string, Rule> {
     'teacher_files.supervise': writesSupervision,
     'teacher_files.evaluate': writesSupervision,
     'teacher_files.finance': (a) => file(a).canViewFinance,
+    'teachers.create': (a) => onboarding(a).canCreate,
+    'teachers.offboard': (a) => onboarding(a).canOffboard,
     'accounts.administer': (a) => acts(a).length > 0,
     'accounts.support_session': (a) => acts(a).includes('impersonate'),
     'admin.inspect': (a) => authz.canInspectOrganization(a.actor).allowed,

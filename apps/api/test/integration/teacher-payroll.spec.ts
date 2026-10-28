@@ -137,9 +137,9 @@ afterAll(async () => {
 });
 
 describe('1. who reaches payroll', () => {
-  it('the super admin only; the file tells each reader whether to offer it', async () => {
+  it('the super admin and the Teachers manager (PD-43 N2); the file tells each reader whether to offer it', async () => {
     const t = shiftTeacher().id;
-    const refused = [m.teachersManager, m.teacherSupervisors[0], m.supervisors[0], m.operationsManager, m.teachers[0], m.families[0].parent];
+    const refused = [m.teacherSupervisors[0], m.supervisors[0], m.operationsManager, m.teachers[0], m.families[0].parent];
     for (const who of refused) {
       for (const [method, path, body] of [
         ['GET', `/teacher-files/${t}/finance`, undefined],
@@ -157,7 +157,10 @@ describe('1. who reaches payroll', () => {
     expect(ok.json).toMatchObject({ month, keyConfigured: true, terms: [], currentTerms: null, payoutAccount: null });
 
     expect((await http(owner(), 'GET', `/teacher-files/${t}`)).json.access.canViewFinance).toBe(true);
-    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${t}`)).json.access.canViewFinance).toBe(false);
+    // PD-43 N2 (owner 2026-10-27, "Full teacher finance"): the Teachers manager reads payroll too.
+    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${t}`)).json.access.canViewFinance).toBe(true);
+    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${t}/finance`)).status).toBe(200);
+    expect((await http(m.teacherSupervisors[0].subject, 'GET', `/teacher-files/${t}`)).json.access.canViewFinance).toBe(false);
   });
 
   it('a foreign or unknown teacher is the same 404', async () => {

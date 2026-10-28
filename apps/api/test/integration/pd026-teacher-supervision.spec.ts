@@ -279,17 +279,18 @@ describe('3. a decided deduction is priced from the default', () => {
     expect((await payroll.finance(superId, s.teacherId, today.slice(0, 7))).unpriced.violationIds).toEqual([violationId]);
   });
 
-  it('only the super admin sets a default, even with the application bypassed', async () => {
-    expect(await code(payroll.setDeductionDefault(tmgrId, { kind: 'deduction_1', currency: 'EGP', amount: '10' }))).toBe(
+  it('the super admin and the Teachers manager set a default (PD-43 N2); a supervisor never, even with the application bypassed', async () => {
+    await expect(payroll.setDeductionDefault(tmgrId, { kind: 'deduction_1', currency: 'EGP', amount: '10' })).resolves.toBeDefined();
+    expect(await code(payroll.setDeductionDefault(tsupId, { kind: 'deduction_1', currency: 'EGP', amount: '10' }))).toBe(
       CommErrorCode.TEACHER_FILE_DENIED,
     );
     const org = (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId;
     await expect(
-      g.prisma.teacherPayDefault.create({ data: { organizationId: org, kind: 'deduction_1', currency: 'EGP', amount: '10', createdBy: tmgrId } }),
-    ).rejects.toThrow(/super admin/);
+      g.prisma.teacherPayDefault.create({ data: { organizationId: org, kind: 'deduction_1', currency: 'EGP', amount: '10', createdBy: tsupId } }),
+    ).rejects.toThrow(/super admin or the Teachers manager/);
   });
 
-  it('the Rewards list shows amounts to the super admin only', async () => {
+  it('the Rewards list shows amounts to the super admin and the Teachers manager only', async () => {
     await terms('EGP');
     const bonus = await g.prisma.teacherSupervisionEntry.create({
       data: {
@@ -303,6 +304,9 @@ describe('3. a decided deduction is priced from the default', () => {
     await payroll.addAdjustment(superId, s.teacherId, { kind: 'bonus', bonusEntryId: bonus.id, amount: '300', reason: 'reward' });
     const asSuper = await payroll.rewards(superId);
     expect(asSuper.rewards[0]).toMatchObject({ reason: 'Ten perfect reports', recordedBy: { id: tsupId }, amount: { amount: '300.00', currency: 'EGP' } });
+    const asManager = await payroll.rewards(tmgrId);
+    expect(asManager.canViewAmounts).toBe(true);
+    expect(asManager.rewards[0]).toMatchObject({ amount: { amount: '300.00', currency: 'EGP' } });
     const asSupervisor = await payroll.rewards(tsupId);
     expect(asSupervisor.canViewAmounts).toBe(false);
     expect(asSupervisor.rewards[0]).not.toHaveProperty('amount');

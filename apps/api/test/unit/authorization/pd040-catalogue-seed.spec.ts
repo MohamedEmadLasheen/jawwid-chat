@@ -6,56 +6,120 @@
  * This spec renders that block from catalogue.ts and legacy-bundles.ts and
  * fails when the migration's copy differs, so the SQL rules (H5's "grant only
  * what you hold", chat.staff_access_profile) and the API can never disagree.
- * Regenerate with: PD040_WRITE_SEED=1 npx jest pd040-catalogue-seed
  *
- * A later migration that changes the catalogue adds its own rows; the
- * database-level check is test/integration/pd040-access-roles.spec.ts.
+ * A LATER MIGRATION THAT CHANGES THE CATALOGUE never edits that block: once
+ * applied anywhere, a migration file is frozen. It adds its own rows in a
+ * generated block of its own, listed in LATER below, and the 20261027190000
+ * block is rendered WITHOUT them. Together the blocks are the whole catalogue;
+ * the database-level check is test/integration/pd040-access-roles.spec.ts.
+ * Regenerate every block with: PD040_WRITE_SEED=1 npx jest pd040-catalogue-seed
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PERMISSIONS } from '@platform/permissions/catalogue';
 import { legacyBundle, legacyBundleNames, type LegacyTier, type StaffPlacement } from '@platform/permissions/legacy-bundles';
 
-const MIGRATION = join(__dirname, '..', '..', '..', '..', '..', 'supabase', 'migrations', '20261027190000_chat_pd040_access_roles.sql');
-const BEGIN = '-- BEGIN GENERATED pd040 seed -- by test/unit/authorization/pd040-catalogue-seed.spec.ts; do not edit';
-const END = '-- END GENERATED pd040 seed';
-
+const MIGRATIONS = join(__dirname, '..', '..', '..', '..', '..', 'supabase', 'migrations');
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
 
-function seed(): string {
-  const permissions = PERMISSIONS.map(
-    (p) => `  (${[q(p.key), q(p.page), q(p.action), q(p.label.en), q(p.label.ar), q(p.risk), String(p.delegable), q(p.introducedBy)].join(', ')})`,
-  );
-  const bundles: string[] = [];
+type BundleRow = readonly [tier: string, kind: string, key: string];
+
+interface Block {
+  migration: string;
+  begin: string;
+  end: string;
+  /** Which catalogue keys and bundle rows this block inserts. */
+  permission: (key: string) => boolean;
+  bundle: (row: BundleRow) => boolean;
+}
+
+/** Rows a later migration adds to the catalogue, oldest first. */
+const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readonly string[]; bundles: readonly BundleRow[] }> = [
+  {
+    // PD-43: adding and offboarding teachers; the Teachers manager holds payroll (owner N2).
+    migration: '20261028100000_chat_pd043_teacher_onboarding.sql',
+    tag: 'pd043',
+    permissions: ['teachers.create', 'teachers.offboard'],
+    bundles: [
+      ['manager', 'teachers', 'teacher_files.finance'],
+      ['manager', 'teachers', 'teachers.create'],
+      ['manager', 'teachers', 'teachers.offboard'],
+      ['supervisor', 'teachers', 'teachers.create'],
+    ],
+  },
+];
+
+const laterKey = new Set(LATER.flatMap((l) => l.permissions));
+const laterRow = new Set(LATER.flatMap((l) => l.bundles.map((r) => r.join('|'))));
+
+const BLOCKS: Block[] = [
+  {
+    migration: '20261027190000_chat_pd040_access_roles.sql',
+    begin: '-- BEGIN GENERATED pd040 seed -- by test/unit/authorization/pd040-catalogue-seed.spec.ts; do not edit',
+    end: '-- END GENERATED pd040 seed',
+    permission: (key) => !laterKey.has(key),
+    bundle: (row) => !laterRow.has(row.join('|')),
+  },
+  ...LATER.map((l) => ({
+    migration: l.migration,
+    begin: `-- BEGIN GENERATED ${l.tag} catalogue rows -- by test/unit/authorization/pd040-catalogue-seed.spec.ts; do not edit`,
+    end: `-- END GENERATED ${l.tag} catalogue rows`,
+    permission: (key: string) => l.permissions.includes(key),
+    bundle: (row: BundleRow) => l.bundles.some((r) => r.join('|') === row.join('|')),
+  })),
+];
+
+/** Every bundle row the TypeScript bundles hold, in a stable order. */
+function bundleRows(): BundleRow[] {
+  const rows: BundleRow[] = [];
   for (const name of legacyBundleNames()) {
     if (name === 'super_admin') continue;
     const [tier, kind] = name.split(':') as [LegacyTier, string];
     const placement: StaffPlacement =
       kind === 'none' ? { kind: null, position: null } : { kind: kind as StaffPlacement['kind'], position: tier === 'manager' ? 'manager' : 'member' };
-    for (const key of [...legacyBundle(tier, placement)].sort()) bundles.push(`  (${q(tier)}, ${q(kind)}, ${q(key)})`);
+    for (const key of [...legacyBundle(tier, placement)].sort()) rows.push([tier, kind, key]);
   }
-  return [
-    BEGIN,
-    'insert into chat.permission (key, page, action, label_en, label_ar, risk, delegable, introduced_by) values',
-    permissions.join(',\n') + ';',
-    '',
-    'insert into chat.legacy_permission_bundle (tier, department_kind, permission_key) values',
-    bundles.join(',\n') + ';',
-    END,
-  ].join('\n');
+  return rows;
+}
+
+function render(block: Block): string {
+  const permissions = PERMISSIONS.filter((p) => block.permission(p.key)).map(
+    (p) => `  (${[q(p.key), q(p.page), q(p.action), q(p.label.en), q(p.label.ar), q(p.risk), String(p.delegable), q(p.introducedBy)].join(', ')})`,
+  );
+  const bundles = bundleRows()
+    .filter(block.bundle)
+    .map(([tier, kind, key]) => `  (${q(tier)}, ${q(kind)}, ${q(key)})`);
+  const lines = [block.begin];
+  if (permissions.length > 0) {
+    lines.push('insert into chat.permission (key, page, action, label_en, label_ar, risk, delegable, introduced_by) values', permissions.join(',\n') + ';');
+  }
+  if (permissions.length > 0 && bundles.length > 0) lines.push('');
+  if (bundles.length > 0) {
+    lines.push('insert into chat.legacy_permission_bundle (tier, department_kind, permission_key) values', bundles.join(',\n') + ';');
+  }
+  lines.push(block.end);
+  return lines.join('\n');
 }
 
 describe('PD-40: the migration seeds exactly the TypeScript catalogue and bundles', () => {
-  it('the generated block is up to date', () => {
-    const sql = readFileSync(MIGRATION, 'utf8');
-    const start = sql.indexOf(BEGIN);
-    const end = sql.indexOf(END);
+  it.each(BLOCKS.map((b) => [b.migration, b] as const))('the generated block of %s is up to date', (_name, block) => {
+    const file = join(MIGRATIONS, block.migration);
+    const sql = readFileSync(file, 'utf8');
+    const start = sql.indexOf(block.begin);
+    const end = sql.indexOf(block.end);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    const current = sql.slice(start, end + END.length);
-    const want = seed();
-    if (process.env.PD040_WRITE_SEED === '1' && current !== want) writeFileSync(MIGRATION, sql.replace(current, want));
-    expect(readFileSync(MIGRATION, 'utf8').slice(start, start + want.length)).toBe(want);
+    const current = sql.slice(start, end + block.end.length);
+    const want = render(block);
+    if (process.env.PD040_WRITE_SEED === '1' && current !== want) writeFileSync(file, sql.replace(current, want));
+    expect(readFileSync(file, 'utf8').slice(start, start + want.length)).toBe(want);
+  });
+
+  it('every row a later block claims is in the TypeScript catalogue and bundles, so the blocks together are the whole of it', () => {
+    const keys = new Set(PERMISSIONS.map((p) => p.key));
+    const rows = new Set(bundleRows().map((r) => r.join('|')));
+    expect([...laterKey].filter((k) => !keys.has(k))).toEqual([]);
+    expect([...laterRow].filter((r) => !rows.has(r))).toEqual([]);
   });
 
   it('every bundle the code knows has rows or is deliberately empty', () => {
