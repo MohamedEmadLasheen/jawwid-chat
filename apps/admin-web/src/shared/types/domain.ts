@@ -42,7 +42,3 @@ export interface Staff {
   permissions?: string[]
 }
 
-export interface Paginated<T> {
-  items: T[]
-  next_cursor: string | null
-}
