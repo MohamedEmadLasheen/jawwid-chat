@@ -63,7 +63,8 @@ So P0-5 is a **rewrite as data**. The old words are the starting list. A checker
 - Each unit (its id stands for its name), each note and each word carries an `id`: a lowercase slug such as `ba-w1`, unique across the lesson.
 - An id is never reused or renumbered. A deleted word leaves a gap.
 - A clip binds to (id, SHA-256 of the text). Editing a text, for example adding a mark, changes the hash and invalidates the clip, so a stale recording can never play for changed text.
-- The checker enforces that ids are unique and well-formed. The voice-over design decides the rest.
+- Every reading string is stored in **NFC**, so marks are in canonical order and the same word always hashes the same.
+- The checker enforces that ids are unique and well-formed, and that text is NFC. The voice-over design decides the rest.
 
 **Nothing derivable is stored.** A word carries no "start / middle / end" label and no letter tag. The engine and the checker compute both from the word's own letters, using the rule in §4. A word filed under the wrong position cannot exist; a word filed under a unit whose letter it doesn't contain is refused.
 
