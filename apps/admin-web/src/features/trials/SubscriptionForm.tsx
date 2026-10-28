@@ -4,6 +4,7 @@ import type { Pair } from '../teachers/copy'
 import type { NewStudentDto, PaymentMethod, ScheduleSlot, SubscriptionFormInput } from './api'
 import { CURRENCIES, TR, WEEKDAY } from './copy'
 import { useTrialTeachers } from './hooks'
+import { readinessNote } from '@/features/teacher-files/readiness'
 import './trials.css'
 
 /**
@@ -177,10 +178,17 @@ export function SubscriptionForm({
                   onChange={(e) => setChild(i, { teacherId: e.target.value })}
                 >
                   <option value="">—</option>
-                  {(teachers.data?.teachers ?? []).map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
+                  {(teachers.data?.teachers ?? []).map((t) => {
+                    // PD-43: a warning in the label; every teacher stays pickable (owner Q5).
+                    const note = readinessNote(t.readiness, locale)
+                    return (
+                      <option key={t.id} value={t.id}>{note ? `${t.name} — ${note}` : t.name}</option>
+                    )
+                  })}
                 </select>
+                {readinessNote(teachers.data?.teachers.find((t) => t.id === c.teacherId)?.readiness, locale) && (
+                  <span className="field__hint">{tx(TR.teacherNotReady)}</span>
+                )}
               </div>
             </div>
             <div className="tj-row">

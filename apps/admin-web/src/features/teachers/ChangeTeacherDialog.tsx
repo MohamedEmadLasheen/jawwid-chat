@@ -11,6 +11,7 @@ import { opsApi, opsKeys, type TeacherCandidate, type TransferPreview, type Tran
 import { O, TRANSFER_REASON, arrow, describeOpsError, fill, formatDay } from './opsCopy'
 import { useOp, useScheduleOptions, useTeacherCandidates } from './opsHooks'
 import { weeklyLabel } from './WeeklyChangeDialog'
+import { readinessNote } from '@/features/teacher-files/readiness'
 import './teachers.css'
 
 export type ChangeTeacherTarget =
@@ -160,6 +161,8 @@ export function ChangeTeacherDialog({
             {(candidates.data?.teachers ?? []).map((t) => {
               const current = target.kind === 'learner' && t.id === target.currentTeacherId
               const why = current ? tx(O.isCurrent) : unavailable(t, tx, locale)
+              // PD-43: said beside the name; the teacher stays pickable.
+              const note = why ? null : readinessNote(t.readiness, locale)
               return (
                 <label key={t.id} className={`ts-teacher${why ? ' ts-teacher--off' : ''}`}>
                   <input
@@ -172,6 +175,7 @@ export function ChangeTeacherDialog({
                   />
                   <span dir="auto">{t.name}</span>
                   {why && <span className="ts-teacher__why">· {why}</span>}
+                  {note && <span className="ts-teacher__why">· {note}</span>}
                 </label>
               )
             })}
