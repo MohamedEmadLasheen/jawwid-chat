@@ -253,6 +253,24 @@ describe('3. the payout account', () => {
     for (const secret of [ACCOUNT_NUMBER, IBAN, 'QA Bank', '6000', '5500']) expect(text).not.toContain(secret);
   });
 
+  it('the Teachers manager reveals it too (PD-43 N2), and every reveal is audited as theirs, with its reason', async () => {
+    const before = await g.prisma.auditLog.count({ where: { entityId: t(), action: 'teacher_file.payout_account_revealed' } });
+    const r = await http(m.teachersManager.subject, 'POST', `/teacher-files/${t()}/finance/payout-account/reveal`, { reason: 'paying November' });
+    expect(r.status).toBe(201);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect(r.json).toEqual({ method: 'bank_transfer', details: account });
+    const audit = await g.prisma.auditLog.findMany({
+      where: { entityId: t(), action: 'teacher_file.payout_account_revealed' },
+      orderBy: { id: 'desc' },
+    });
+    expect(audit).toHaveLength(before + 1);
+    expect(audit[0]).toMatchObject({ actorId: m.teachersManager.id, reason: 'paying November' });
+    expect(JSON.stringify({ before: audit[0]!.before, after: audit[0]!.after })).not.toContain(ACCOUNT_NUMBER);
+    // A teacher supervisor still may not.
+    const refused = await http(m.teacherSupervisors[0]!.subject, 'POST', `/teacher-files/${t()}/finance/payout-account/reveal`, { reason: 'r' });
+    expect([refused.status, refused.code]).toEqual([403, 'COMM.TEACHER_FILE_DENIED']);
+  });
+
   it('refuses unknown fields, and a teacher with no account has nothing to reveal', async () => {
     const r = await http(owner(), 'POST', `/teacher-files/${t()}/finance/payout-account`, {
       method: 'e_wallet', details: { provider: 'QA Wallet', walletNumber: '01001234567', pin: '0000' }, reason: 'r',
