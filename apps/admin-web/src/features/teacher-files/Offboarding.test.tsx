@@ -174,7 +174,14 @@ describe('Reactivate', () => {
   const left = { teacher: { id: 't-1', name: 'Teacher One', isActive: false, leftAt: '2026-10-20T09:00:00Z' } }
 
   it('the super admin brings a teacher back; the new first sign-in code is shown once', async () => {
-    on('GET', /\/teacher-files\/t-1$/, () => json(file({ ...left, onboarding: { canOffboard: true, canReactivate: true } })))
+    // Once reactivated the file says the teacher is active: the code must stay on screen while it reloads.
+    on('GET', /\/teacher-files\/t-1$/, () =>
+      json(
+        calls('POST', /\/teachers\/t-1\/reactivate$/).length
+          ? file({ onboarding: { canOffboard: true, canReactivate: true }, signIn: { status: 'provisioned', canSendCode: true, canGive: false } })
+          : file({ ...left, onboarding: { canOffboard: true, canReactivate: true } }),
+      ),
+    )
     on('POST', /\/teachers\/t-1\/reactivate$/, () =>
       json({ teacherId: 't-1', signIn: 'teacher.one@example.test', firstLogin: { code: '604117', expiresAt: '2026-10-31T09:00:00Z', emailed: false } }, 201),
     )
@@ -188,6 +195,8 @@ describe('Reactivate', () => {
     expect(bodyOf(calls('POST', /\/teachers\/t-1\/reactivate$/)[0]!)).toEqual({ reason: 'Rejoined' })
     const shown = await screen.findByRole('dialog', { name: 'First sign-in code' })
     expect(within(shown).getByText('604117')).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /\/teacher-files\/t-1$/).length).toBeGreaterThan(1))
+    expect(await screen.findByText('604117')).toBeInTheDocument()
     await user.click(within(shown).getByRole('button', { name: 'Done' }))
     await waitFor(() => expect(screen.queryByText('604117')).not.toBeInTheDocument())
   })
@@ -236,5 +245,30 @@ describe('Set-up checklist', () => {
     expect(within(table).getByText('Teacher One')).toBeInTheDocument()
     expect(within(table).queryByText('Teacher Two')).not.toBeInTheDocument()
     expect(within(table).queryByText('Teacher Three')).not.toBeInTheDocument()
+  })
+})
+
+describe('Give sign-in (#198), the code and the refresh', () => {
+  it('the code stays on screen when the file reloads without Give sign-in', async () => {
+    on('GET', /\/teacher-files\/t-1$/, () =>
+      json(
+        calls('POST', /\/teachers\/t-1\/sign-in$/).length
+          ? file({ signIn: { status: 'provisioned', canSendCode: true, canGive: false } })
+          : file({ signIn: { status: 'none', canSendCode: false, canGive: true } }),
+      ),
+    )
+    on('POST', /\/teachers\/t-1\/sign-in$/, () =>
+      json({ teacherId: 't-1', signIn: 'teacher.one@example.test', firstLogin: { code: '482913', expiresAt: '2026-10-31T09:00:00Z', emailed: false } }, 201),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1' })
+    await user.click(await screen.findByRole('button', { name: 'Give sign-in' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Give sign-in' })
+    await user.type(within(dialog).getByLabelText('Sign-in e-mail'), 'teacher.one@example.test')
+    await user.click(within(dialog).getByRole('button', { name: 'Give sign-in' }))
+    await screen.findByRole('dialog', { name: 'First sign-in code' })
+    await waitFor(() => expect(calls('GET', /\/teacher-files\/t-1$/).length).toBeGreaterThan(1))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Give sign-in' })).not.toBeInTheDocument())
+    expect(screen.getByText('482913')).toBeInTheDocument()
   })
 })
