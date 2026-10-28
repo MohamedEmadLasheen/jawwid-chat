@@ -402,3 +402,105 @@ describe('PD-40: who is offered the Staff accounts page', () => {
     expect(screen.queryByRole('button', { name: 'New account' })).not.toBeInTheDocument()
   })
 })
+
+describe('PD-40: review of #239', () => {
+  it('the super admin may grant a specialist-tier role to a legacy department account (finance ranks 1)', async () => {
+    const financeAccount = staffAccount({ staffId: 'st-5', accountId: 'ac-5', name: 'Finance Two', tier: 'finance', status: 'active', setupPending: false, departmentId: null })
+    on('GET', /\/admin\/staff-accounts$/, () => json({ accounts: [financeAccount] }))
+    on('GET', /\/admin\/staff-accounts\/st-5$/, () => json(financeAccount))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/staff' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Finance Two' }))
+    const detail = await screen.findByRole('dialog', { name: 'Finance Two' })
+    const picker = await within(detail).findByLabelText('Add a role')
+    expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a role', 'Designer'])
+    expect(within(detail).queryByText('There are no roles you can grant.')).not.toBeInTheDocument()
+  })
+
+  it("never shows a code in a manager's reissue sheet, even if the server sends one", async () => {
+    on('GET', /\/admin\/staff-accounts\/st-1$/, () => json(staffAccount()))
+    on('POST', /\/admin\/staff-accounts\/st-1\/setup-code$/, () =>
+      json({ firstLogin: { code: '482913', expiresAt: '2026-10-31T09:00:00Z', emailed: true } }, 201),
+    )
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Specialist One' }))
+    await userEvent.click(await within(await screen.findByRole('dialog', { name: 'Specialist One' })).findByRole('button', { name: 'Send a new first sign-in code' }))
+    const reason = screen.getByRole('dialog', { name: 'New first sign-in code for Specialist One' })
+    await userEvent.type(within(reason).getByRole('textbox'), 'lost the e-mail')
+    await userEvent.click(within(reason).getByRole('button', { name: 'Send code' }))
+    const sheet = await screen.findByRole('dialog', { name: 'First sign-in code' })
+    expect(within(sheet).getByText("A new code was sent by e-mail to the account's sign-in address.")).toBeInTheDocument()
+    expect(screen.queryByText('482913')).not.toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: 'Copy code' })).not.toBeInTheDocument()
+  })
+
+  it("the super admin's reissue shows the code once, read digit by digit, with a Copy button", async () => {
+    on('GET', /\/admin\/staff-accounts\/st-1$/, () => json(staffAccount()))
+    on('POST', /\/admin\/staff-accounts\/st-1\/setup-code$/, () =>
+      json({ firstLogin: { code: '482913', expiresAt: '2026-10-31T09:00:00Z', emailed: false } }, 201),
+    )
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/staff' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Specialist One' }))
+    await userEvent.click(await within(await screen.findByRole('dialog', { name: 'Specialist One' })).findByRole('button', { name: 'Send a new first sign-in code' }))
+    const reason = screen.getByRole('dialog', { name: 'New first sign-in code for Specialist One' })
+    await userEvent.type(within(reason).getByRole('textbox'), 'a fresh code')
+    await userEvent.click(within(reason).getByRole('button', { name: 'Send code' }))
+    const sheet = await screen.findByRole('dialog', { name: 'First sign-in code' })
+    expect(within(sheet).getByLabelText('4 8 2 9 1 3')).toHaveTextContent('482913')
+    expect(within(sheet).getByRole('button', { name: 'Copy code' })).toBeInTheDocument()
+    expect(within(sheet).getByText(/was not e-mailed/)).toBeInTheDocument()
+  })
+
+  it('the code sheet at creation has the spaced reading and a Copy button too', async () => {
+    on('POST', CREATE, () => created({ code: '482913', expiresAt: '2026-10-31T09:00:00Z', emailed: true }))
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
+    await userEvent.click(await screen.findByRole('button', { name: 'New account' }))
+    const dialog = screen.getByRole('dialog', { name: 'New staff account' })
+    await identity(dialog)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }))
+    await userEvent.type(await within(dialog).findByLabelText('Reason'), 'a new colleague')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create account' }))
+    const sheet = await screen.findByRole('dialog', { name: 'First sign-in code' })
+    expect(within(sheet).getByLabelText('4 8 2 9 1 3')).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: 'Copy code' })).toBeInTheDocument()
+  })
+
+  it("says the organization structure's refusal, not \"you do not run a department\"", async () => {
+    on('GET', /\/org\/structure$/, () => json({ error: { code: 'COMM.ORG_FORBIDDEN', message: 'the structure is not available to you' } }, 403))
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
+    await userEvent.click(await screen.findByRole('button', { name: 'New account' }))
+    const dialog = screen.getByRole('dialog', { name: 'New staff account' })
+    await identity(dialog)
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('the structure is not available to you')
+    expect(within(dialog).queryByText(/You do not run a department/)).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Next' })).toBeDisabled()
+  })
+
+  it('a refused list is an error state, not an empty list', async () => {
+    on('GET', /\/admin\/staff-accounts$/, () => json({ error: { code: 'COMM.STAFF_ACCOUNT_DENIED', message: 'only the super admin and department managers see staff accounts' } }, 403))
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
+    expect(await screen.findByText('only the super admin and department managers see staff accounts')).toBeInTheDocument()
+    expect(screen.queryByText('No staff accounts to show.')).not.toBeInTheDocument()
+  })
+
+  it('renders in Arabic: the tabs, the page, a tier, a status and a role', async () => {
+    on('GET', /\/admin\/staff-accounts$/, () =>
+      json({ accounts: [staffAccount({ status: 'suspended', setupPending: false, roles: [{ id: 'r-1', key: 'designer', nameEn: 'Designer', nameAr: 'مصمم' }] })] }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff', locale: 'ar' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'حسابات الموظفين' })).toBeInTheDocument()
+    const tabs = screen.getByRole('navigation', { name: 'صفحات الحسابات' })
+    expect(within(tabs).getByRole('link', { name: 'الأدوار' })).toBeInTheDocument()
+    const row = (await screen.findByRole('button', { name: 'Specialist One' })).closest('tr')!
+    expect(within(row).getByText('متخصص')).toBeInTheDocument()
+    expect(within(row).getByText('موقوف')).toBeInTheDocument()
+    expect(within(row).getByText('مصمم')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'حساب جديد' })).toBeInTheDocument()
+  })
+
+  it('calls a suspended account Suspended in English', async () => {
+    on('GET', /\/admin\/staff-accounts$/, () => json({ accounts: [staffAccount({ status: 'suspended', setupPending: false })] }))
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
+    const row = (await screen.findByRole('button', { name: 'Specialist One' })).closest('tr')!
+    expect(within(row).getByText('Suspended')).toBeInTheDocument()
+  })
+})

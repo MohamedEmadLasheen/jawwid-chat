@@ -238,3 +238,72 @@ describe('PD-40: the Roles page', () => {
     expect(within(row).queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument()
   })
 })
+
+describe('PD-40: review of #239', () => {
+  it('says what a template is in text, not only in a tooltip', async () => {
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles' })
+    const designer = await rowOf('Designer')
+    expect(within(designer).getByText('Seeded from a template; it is edited like any role.')).toBeInTheDocument()
+    expect(designer.querySelector('[title]')).toBeNull()
+    const billing = await rowOf('Billing reader')
+    expect(within(billing).queryByText(/Seeded from a template/)).not.toBeInTheDocument()
+  })
+
+  it('a held key the checklist does not offer is shown, checked and locked, and sent back unchanged', async () => {
+    on('GET', /\/admin\/access-roles$/, () => json({ roles: [role({ permissions: ['certificates.view', 'retired.key'] })] }))
+    on('POST', /\/admin\/access-roles\/r-1$/, () => json({ role: role() }))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles' })
+    const row = await rowOf('Designer')
+    await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
+    const dialog = screen.getByRole('dialog', { name: 'Edit Designer' })
+    const other = await within(dialog).findByRole('group', { name: 'Not in the checklist' })
+    const held = within(other).getByRole('checkbox', { name: /retired\.key/ })
+    expect(held).toBeChecked()
+    expect(held).toBeDisabled()
+    await userEvent.click(held)
+    expect(held).toBeChecked()
+    await userEvent.type(within(dialog).getByLabelText('Reason'), 'renamed')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save role' }))
+    await waitFor(() => expect(calls('POST', /\/admin\/access-roles\/r-1$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/admin\/access-roles\/r-1$/)[0]).permissions).toEqual(['certificates.view', 'retired.key'])
+  })
+
+  it('a conflict lists every grant from detail.grants, even when the message was cut short', async () => {
+    const grants = Array.from({ length: 7 }, (_, i) => ({ staffId: `st-${i + 1}`, grantedBy: 'm-1' }))
+    on('POST', /\/admin\/access-roles\/r-1$/, () =>
+      json(
+        {
+          error: {
+            code: 'COMM.ACCESS_ROLE_CONFLICT',
+            message: 'this edit gives keys their granting manager may not grant to: st-1 (granted by m-1), st-2 (gran',
+            detail: { grants },
+          },
+        },
+        409,
+      ),
+    )
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles' })
+    const row = await rowOf('Designer')
+    await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
+    const dialog = screen.getByRole('dialog', { name: 'Edit Designer' })
+    await userEvent.click(await within(dialog).findByRole('checkbox', { name: /View instalments/ }))
+    await userEvent.type(within(dialog).getByLabelText('Reason'), 'wider')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save role' }))
+    const alert = await within(dialog).findByRole('alert')
+    expect(within(alert).getAllByRole('listitem')).toHaveLength(7)
+    expect(within(alert).getByText('Specialist One, granted by Manager One')).toBeInTheDocument()
+    expect(within(alert).getByText('st-7, granted by Manager One')).toBeInTheDocument()
+  })
+
+  it('renders in Arabic: the page, a role, its badge and the editor checklist', async () => {
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles', locale: 'ar' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'الأدوار' })).toBeInTheDocument()
+    const row = await rowOf('مصمم')
+    expect(within(row).getByText('قالب')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'دور جديد' }))
+    const dialog = screen.getByRole('dialog', { name: 'دور جديد' })
+    const group = await within(dialog).findByRole('group', { name: 'الشهادات' })
+    expect(within(group).getByRole('checkbox', { name: /عرض الشهادات/ })).toBeInTheDocument()
+    expect(within(group).getAllByText('بيانات شخصية').length).toBeGreaterThan(0)
+  })
+})
