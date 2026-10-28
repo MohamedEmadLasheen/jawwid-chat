@@ -11,7 +11,7 @@ twin of apps/lessons/src/arabic/letters.ts. Only marks are removed, and no
 letter is folded into another (أ إ آ ٱ ا ء are six letters). The selftest runs
 letters.fixture.json, the same cases the TypeScript tests run, so the two
 cannot disagree. This FAILS when:
-  * a word is not one written word, or does not contain its unit's letter
+  * a word is not one written word (letters and marks, in NFC), or does not contain its unit's letter
     (for example an أ word filed under alif);
   * a reading string misses full tashkeel on the STRICT rule (every letter
     marked, the qamari lam of ال included), the audit's rule;
@@ -34,6 +34,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 
 sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,7 +65,8 @@ def is_letter(ch):
 
 
 def is_word(w):
-    return isinstance(w, str) and len(w) > 0 and is_letter(w[0]) and all(is_letter(c) or is_mark(c) for c in w)
+    """One written word, in NFC (marks in canonical order) so its text hash, the voice-over binding, is stable."""
+    return isinstance(w, str) and len(w) > 0 and w == unicodedata.normalize('NFC', w) and is_letter(w[0]) and all(is_letter(c) or is_mark(c) for c in w)
 
 
 def letters_of(w):
@@ -315,6 +317,7 @@ def selftest():
         'alif-start-is-hamza': (lambda c: c['units'][0]['words'].append({'id': 'alif-w8', 'text': 'أَسَدْ', 'was': None, 'review': None}), 'does not contain'),
         'madda-is-not-alif': (lambda c: c['units'][0]['words'].append({'id': 'alif-w9', 'text': 'آدَمْ', 'was': None, 'review': None}), 'does not contain'),
         'not-a-word': (word(0, 0, text='كِتَابْ بَابْ'), 'not one written word'),
+        'not-nfc': (word(2, 1, text='الش' + chr(0x651) + chr(0x64E) + 'بَابْ'), 'not one written word'),
         'listed-twice': (lambda c: c['units'][1]['words'].append({'id': 'hamza-w9', 'text': 'جُزْءْ', 'was': None, 'review': None}), 'listed twice'),
         'word-id-reused': (word(0, 1, id='alif-w1'), 'used twice'),
         'note-takes-a-word-id': (lambda c: c['units'][0]['note'].update(id='hamza-w1'), 'used twice'),

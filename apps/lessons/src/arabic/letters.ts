@@ -29,10 +29,13 @@ export function isLetter(ch: string): boolean {
   return (c >= 0x621 && c <= 0x64a && c !== TATWEEL) || c === 0x671;
 }
 
-/** One written word: letters and marks only, starting with a letter. */
+/**
+ * One written word: letters and marks only, starting with a letter, in NFC
+ * (marks in canonical order), so its text hash -- the voice-over binding -- is stable.
+ */
 export function isWord(word: string): boolean {
   const chars = [...word];
-  return chars.length > 0 && isLetter(chars[0]!) && chars.every((ch) => isLetter(ch) || isMark(ch));
+  return chars.length > 0 && word === word.normalize('NFC') && isLetter(chars[0]!) && chars.every((ch) => isLetter(ch) || isMark(ch));
 }
 
 /** A word's letters, in order: every mark removed, no letter ever replaced. */

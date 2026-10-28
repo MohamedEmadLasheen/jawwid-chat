@@ -22,6 +22,11 @@ describe('the one letter rule (shared with the CI checker)', () => {
   it('accepts only letters and marks as a word', () => {
     expect(isWord('كِتَابْ')).toBe(true);
     for (const bad of ['', 'ab', 'كتاب ', 'كِتَاب1', String.fromCodePoint(0x64e) + 'ب', 'كـتاب']) expect(isWord(bad)).toBe(false);
+    // Marks out of canonical order (shadda typed before fatha) are not NFC: the text hash would not be stable.
+    const shaddaFirst = 'ح' + String.fromCodePoint(0x651, 0x64e) + 'بْ';
+    expect(shaddaFirst.normalize('NFC')).not.toBe(shaddaFirst);
+    expect(isWord(shaddaFirst)).toBe(false);
+    expect(isWord(shaddaFirst.normalize('NFC'))).toBe(true);
   });
 
   it('cuts a word into tappable pieces, each letter with its marks, a pair as one', () => {
