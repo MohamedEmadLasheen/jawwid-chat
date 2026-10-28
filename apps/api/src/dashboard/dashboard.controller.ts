@@ -3,6 +3,7 @@ import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ConversationService } from '../communication/conversations/conversation.service';
 import { SupervisionCaseService } from '../cases/supervision-case.service';
+import { CalendarService } from '../calendar/calendar.service';
 import { Requires } from '../platform/permissions/route-access';
 import { dashboardSection, type DashboardSection } from './dashboard-tile';
 
@@ -21,6 +22,7 @@ export class DashboardController {
   constructor(
     private readonly conversations: ConversationService,
     private readonly cases: SupervisionCaseService,
+    private readonly calendar: CalendarService,
   ) {}
 
   /** Chats waiting for a staff reply, in the caller's PD-8 scope. Links to /chat. */
@@ -37,5 +39,18 @@ export class DashboardController {
   async casesSection(@ActorId() actorId: string): Promise<DashboardSection> {
     const now = new Date();
     return dashboardSection(await this.cases.dashboardCounts(actorId), now);
+  }
+
+  /**
+   * Today's lessons by outcome, as the Schedule shows them to the caller; and,
+   * for the Teachers department and the super admin, lessons still waiting for
+   * an outcome and late apologies to rule on. Links to /schedule and
+   * /teachers/needs-action.
+   */
+  @Requires('lessons.view', 'schedule.view')
+  @Get('lessons')
+  async lessons(@ActorId() actorId: string): Promise<DashboardSection> {
+    const now = new Date();
+    return dashboardSection(await this.calendar.dashboardCounts(actorId, now), now);
   }
 }

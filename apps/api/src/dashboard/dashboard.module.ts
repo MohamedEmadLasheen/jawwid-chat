@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CommunicationModule } from '../communication/communication.module';
 import { SupervisionCaseModule } from '../cases/supervision-case.module';
+import { CalendarModule } from '../calendar/calendar.module';
 import { DashboardController } from './dashboard.controller';
 
 /**
@@ -9,7 +10,7 @@ import { DashboardController } from './dashboard.controller';
  * Nothing imports this module, so no cycle.
  */
 @Module({
-  imports: [CommunicationModule, SupervisionCaseModule],
+  imports: [CommunicationModule, SupervisionCaseModule, CalendarModule],
   controllers: [DashboardController],
 })
 export class DashboardModule {}
