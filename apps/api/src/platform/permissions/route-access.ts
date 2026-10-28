@@ -9,8 +9,10 @@ import type { PermissionKey } from './catalogue';
  *
  *   @Requires(...keys)  staff need at least one of the keys
  *   @SelfService()      any signed-in principal, about themself: their own
- *                       session, profile, notifications, devices, or an
- *                       advisory "what may I offer" probe
+ *                       session, profile, notifications, devices, support
+ *                       sessions or reports, an advisory "what may I offer"
+ *                       probe -- or shared reference data that holds nothing
+ *                       about anyone (the Quran text)
  *   @NotForStaff()      a parent's or a teacher's own surface; staff are refused
  *
  * Only STAFF callers are checked. A parent, a teacher or a support session
