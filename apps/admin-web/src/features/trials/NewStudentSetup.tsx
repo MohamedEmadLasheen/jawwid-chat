@@ -13,6 +13,9 @@ import { ChangeSupervisorDialog, transferNotice } from '@/features/organization/
 import { useCopy } from '@/features/organization/copy'
 import { orgKeys } from '@/features/organization/api'
 import { NS } from './newStudentsCopy'
+import { ApiError } from '@/core/api/errors'
+import { OP } from '@/features/intake/opsCopy'
+import { groupNotice } from '@/features/intake/OpsDialogs'
 
 const S: Record<string, Pair> = {
   setup: { en: 'Setup', ar: 'التجهيز' },
@@ -232,9 +235,11 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
         <AssignDialog
           s={s}
           onClose={() => setAssigning(false)}
-          onAssigned={(result) => {
+          onAssigned={(result, familyName) => {
             setAssigning(false)
             void qc.invalidateQueries({ queryKey: trialKeys.newStudents })
+            // PD-42 PR-3: a trial sibling went to the family the parent is already in.
+            if (result.attached) setDone(groupNotice(orgTx, result.group, familyName ?? s.parent.name))
             const missing = result.schedules.filter((x) => !x.set)
             if (missing.length > 0) setNotice(`${tx(S.timesNotSet)} ${[...new Set(missing.map((m) => m.reason))].join(' · ')}`)
           }}
@@ -244,7 +249,14 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
   )
 }
 
-function AssignDialog({ s, onClose, onAssigned }: { s: NewStudentDto; onClose: () => void; onAssigned: (r: AssignResult) => void }) {
+/** PD-42 PR-3: PARENT_EXISTS names the family the trial's parent is already in. */
+function existingFamily(error: unknown): { familyId: string; parentName: string | null } | null {
+  if (!(error instanceof ApiError) || error.code !== 'COMM.PARENT_EXISTS') return null
+  const d = (error.detail ?? {}) as { familyId?: unknown; parentName?: unknown }
+  return typeof d.familyId === 'string' ? { familyId: d.familyId, parentName: typeof d.parentName === 'string' ? d.parentName : null } : null
+}
+
+function AssignDialog({ s, onClose, onAssigned }: { s: NewStudentDto; onClose: () => void; onAssigned: (r: AssignResult, familyName?: string) => void }) {
   const { locale } = useI18n()
   const tx = (p: Pair | undefined) => (p ? (locale === 'ar' ? p.ar : p.en) : '')
   const id = useId()
@@ -257,6 +269,22 @@ function AssignDialog({ s, onClose, onAssigned }: { s: NewStudentDto; onClose: (
   const [touched, setTouched] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<unknown>(null)
+
+  const orgTx = useCopy()
+  const family = existingFamily(error)
+  const familyName = family?.parentName ?? s.parent.name
+  // The children join the family the parent is in, with its supervisor: nothing new for the parent.
+  const attach = async () => {
+    if (!family || pending) return
+    setPending(true)
+    setError(null)
+    try {
+      onAssigned(await trialsApi.assignNewStudent(s.trialId, { familyId: family.familyId }), familyName)
+    } catch (err) {
+      setError(err)
+      setPending(false)
+    }
+  }
 
   const save = async () => {
     setTouched(true)
@@ -301,7 +329,17 @@ function AssignDialog({ s, onClose, onAssigned }: { s: NewStudentDto; onClose: (
         <span className="field__hint">{tx(S.emailHint)}</span>
         {touched && !email.trim() && <span className="field__error">{tx(S.required)}</span>}
       </div>
-      {error ? <p className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</p> : null}
+      {family ? (
+        <div className="banner banner--warning" role="status">
+          <p>{orgTx(OP.parentExists)}</p>
+          <p className="field__hint">{orgTx(OP.parentExistsHint)}</p>
+          <button type="button" className="btn btn--sm btn--primary" disabled={pending} onClick={() => void attach()}>
+            {orgTx(OP.addToFamily, { name: familyName })}
+          </button>
+        </div>
+      ) : error ? (
+        <p className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</p>
+      ) : null}
     </Dialog>
   )
 }

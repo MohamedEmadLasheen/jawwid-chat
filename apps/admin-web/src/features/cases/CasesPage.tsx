@@ -32,10 +32,12 @@ const STATUS_TONE: Record<CaseStatus, 'warn' | 'info' | 'ok' | 'neutral'> = {
  */
 export function CasesPage({ header }: { header?: React.ReactNode }) {
   const tx = useCopy()
-  const [tab, setTab] = useState<CaseTab>('mine')
-  const [closed, setClosed] = useState(false)
-  // A case card in a department room links here as /cases?case=<id>.
+  // A case card in a department room links here as /cases?case=<id>; a
+  // Dashboard tile (PD-44) as /cases?tab=<tab>.
   const [params] = useSearchParams()
+  const asked = params.get('tab')
+  const [tab, setTab] = useState<CaseTab>(TABS.includes(asked as CaseTab) ? (asked as CaseTab) : 'mine')
+  const [closed, setClosed] = useState(false)
   const [openId, setOpenId] = useState<string | null>(params.get('case'))
   const list = useQuery({
     queryKey: keys.list(tab, closed),

@@ -56,9 +56,11 @@ const KIND_FILTERS = {
  *                          trial's card goes to the teacher's trial group, which
  *                          needs one) -- if any cannot be, nothing is decided;
  *                          then, in one transaction that refuses over any lesson
- *                          still open, the card, `teacher.suspended`, and the
- *                          teacher deactivated through chat.deactivate_principal
- *                          (RT-032: signed out everywhere)
+ *                          still open, the card, `teacher.suspended`, the login
+ *                          closed and its waiting codes superseded (as PD-43's
+ *                          offboarding), and the teacher deactivated through
+ *                          chat.deactivate_principal (RT-032: signed out
+ *                          everywhere)
  *   excused                kept on record, no longer counted
  *
  * The suggested step is computed on every read (ladder.ts); choosing anything
@@ -447,14 +449,7 @@ export class DisciplineService {
             endsOn: window.endsOn,
           });
         }
-        await this.audit.audit(tx, {
-          actorId: actor.actorId,
-          action: `teacher.discipline_${decision}`,
-          entity: 'teacher',
-          entityId: violation.teacherId,
-          after: { violationId: violation.id, suggestedStep: step, suspensionId, collidingLessons: colliding.map((l) => l.id) },
-          reason: note ?? `ladder step ${step}`,
-        });
+        let login: ClosedLogin | null = null;
         if (permanent) {
           // Nothing open may outlive the teacher: a lesson booked since the
           // cancellations above refuses the whole decision.
@@ -469,13 +464,31 @@ export class DisciplineService {
               409,
             );
           }
+          const why = `permanent suspension: ${note ?? `ladder step ${step}`}`;
+          // The login closes with the teacher, as PD-43's offboarding closes it
+          // (chat.offboard_teacher): a waiting first sign-in or reset code can
+          // no longer activate it.
+          login = await closeLoginInTx(tx, violation.teacherId, why, actor.actorId);
           // RT-032: the teacher's sessions are revoked through the journal, and a
           // node's completion barrier confirms it after this commit.
           await tx.$queryRaw`
-            SELECT chat.deactivate_principal('teacher', ${violation.teacherId}::uuid,
-                                             ${`permanent suspension: ${note ?? `ladder step ${step}`}`},
+            SELECT chat.deactivate_principal('teacher', ${violation.teacherId}::uuid, ${why},
                                              ${actor.actorId}::uuid, 'deactivated')::text`;
         }
+        await this.audit.audit(tx, {
+          actorId: actor.actorId,
+          action: `teacher.discipline_${decision}`,
+          entity: 'teacher',
+          entityId: violation.teacherId,
+          after: {
+            violationId: violation.id,
+            suggestedStep: step,
+            suspensionId,
+            collidingLessons: colliding.map((l) => l.id),
+            ...(login ? { login } : {}),
+          },
+          reason: note ?? `ladder step ${step}`,
+        });
       }),
     );
 
@@ -764,4 +777,41 @@ function addDays(day: string, n: number): string {
 
 function langOf(actor: Actor): CardLanguage {
   return actor.locale === 'en' ? 'en' : 'ar';
+}
+
+/** What closing a permanently suspended teacher's login did, for the audit row. */
+interface ClosedLogin {
+  accountId: string;
+  /** The account's status before: `active`, `provisioned`, `suspended` or already `deactivated`. */
+  statusBefore: string;
+  /** Waiting first sign-in and reset codes superseded. */
+  supersededCodes: number;
+}
+
+/**
+ * The teacher's login, closed whatever state it was in, and every waiting code
+ * superseded -- chat.offboard_teacher's own steps (PD-43), so a first sign-in
+ * code issued before the suspension cannot activate the account after it.
+ * An active login goes through chat.deactivate_principal (RT-032); one never
+ * used (provisioned) or suspended is simply deactivated. Null: no login.
+ */
+async function closeLoginInTx(tx: Tx, teacherId: string, reason: string, actorId: string): Promise<ClosedLogin | null> {
+  const [account] = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+    SELECT a.id::text AS id, a.status
+      FROM chat.teacher t JOIN chat.account a ON a.id = t.account_id
+     WHERE t.id = ${teacherId}::uuid
+       FOR UPDATE OF a`;
+  if (!account) return null;
+  if (account.status === 'active') {
+    await tx.$queryRaw`
+      SELECT chat.deactivate_principal('account', ${account.id}::uuid, ${reason}, ${actorId}::uuid, 'deactivated')::text`;
+  } else if (account.status === 'provisioned' || account.status === 'suspended') {
+    await tx.$executeRaw`
+      UPDATE chat.account SET status = 'deactivated', is_active = false, deactivated_at = coalesce(deactivated_at, now())
+       WHERE id = ${account.id}::uuid`;
+  }
+  const supersededCodes = await tx.$executeRaw`
+    UPDATE chat.password_reset_code SET superseded_at = now()
+     WHERE account_id = ${account.id}::uuid AND used_at IS NULL AND superseded_at IS NULL`;
+  return { accountId: account.id, statusBefore: account.status, supersededCodes };
 }

@@ -1,0 +1,429 @@
+{
+  "surah": 92,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson (which has no data file; its content lives in the components), then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the four Tajweed rules, the Tajweed quiz game and the two Tajweed questions of the final quiz (Tajweed comes only from the reviewed dataset; the old rules also called \"man bakhila\" ikhfa' where it is iqlab), the audio URLs and the reciter line, the typed basmala at the head of the listening list (not an ayah of this surah), and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old completion and missing-word games; the games' distractors were all words of this surah, and the game draws its own. The final quiz's \"fahm\" questions are categorised lessons (the surah's lesson) and hifz (the number of ayat, as in surah 108). The intro is the old \"about the surah\" card: its lead line, the two kinds of people and its closing line, joined with a space, \"، \" and \". \". Emoji were stripped from the ends of lines. Not carried (no field or no such game in the engine): the name and ayah-count cards, the intro quiz, the ayah-ordering and start-end memory games, the two word-meaning games (same words and meanings as the list), the reflection's feedback lines, and the final quiz's score lines."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-92 (read as text, never built or run)",
+    "sha256": {
+      "components/IntroSection.tsx": "ada154ca92cc6be1b539e77e4589ccd01a2125967a1a73e2b1f66a8f268b845f",
+      "components/AyahLearning.tsx": "8d3b6091a78b3bf198c5b4b1e2b06a4260bfa9aa81f35ecb3ee3f7c99f129b38",
+      "components/MemorizationGames.tsx": "6b28a95dec88b629fc5590a4783721f8c9aacf717c0cdecd364d681ac0f1369c",
+      "components/MeaningsSection.tsx": "43e810a88e07ab0e51e1dfbd32cec07de11419ed7478772f1e0c8c98864a42db",
+      "components/TajweedSection.tsx": "ec042fb8e0c1a9578681c5392da44406552486a37d1ca9b4167dff7db05bb080",
+      "components/LessonsAndReflection.tsx": "0fe8f003e185004c68e98070c3a035dcc6c97dd6ffe464dabc3ff3c156f4c5e4",
+      "components/FinalAssessment.tsx": "109f9d456cc8f5e0b5c543d55914ff1094233bd5a4915a5fc0673b0db40e7390",
+      "LessonApp.tsx": "c955d8fca9c268fee3f31b8a443f6c4874c028186359b87dca0677ccc482e753"
+    }
+  },
+  "intro": {
+    "text": "سورة الليل تعلمنا أن الناس نوعان: من يعمل الخير ويعطي ويطيع الله - فالله يوفقه للخير، من يبخل ولا يعمل الخير - فيبتعد عن طريق الخير. والله يجازي كل إنسان على عمله!",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "الله يُقسم بالليل عندما يغطي الأرض بظلامه",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "ويُقسم بالنهار عندما يظهر بنوره الجميل",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "ويُقسم بالله الذي خلق الرجل والمرأة",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "أعمال الناس مختلفة: منهم من يعمل الخير ومنهم من يعمل الشر",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "من أعطى من ماله وخاف الله",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "وآمن بالجنة والثواب الجميل",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "فالله سيسهّل له طريق الخير والسعادة",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "ومن بخل بماله وظن أنه لا يحتاج لله",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "ولم يؤمن بالجنة والثواب",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "فسيكون طريقه صعبًا وشقيًّا",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "text": "ماله لن ينفعه إذا هلك ووقع في العذاب",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "الله يبيّن لنا طريق الخير والصواب",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "لله ملك الدنيا والآخرة كلها",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "الله يحذرنا من نار شديدة الحرارة",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "لا يدخلها إلا من كان شقيًّا بعيدًا عن الخير",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "الذي كذّب بدين الله وأعرض عنه",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "وسيُبعَد عن النار من كان تقيًّا يخاف الله",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "الذي يعطي من ماله ليتقرب إلى الله ويطهّر نفسه",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "لا يعطي ماله ليرد جميل أحد عليه",
+      "review": null
+    },
+    {
+      "ayah": 20,
+      "text": "بل يعطي فقط لأنه يريد رضا الله العظيم",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "text": "وسوف يكون سعيدًا ويرضيه الله بالجنة",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "يغطي ويستر",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "ظهر وانكشف بنوره",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 2,
+      "meaning": "أعمالكم وجهودكم",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 2,
+      "meaning": "الجنة والمكافأة الجميلة",
+      "review": "The old card was \"al-husna\" alone; the verse word at 6:2 is \"bi-l-husna\" (with bi-, \"in\"), so the meaning covers only part of the word shown. The word also stands at 9:2 (wa-kadhdhaba bi-l-husna); the card points at 6:2. Common tafsir gives al-husna as \"la ilaha illa Allah\" (Ibn Abbas), Paradise or the reward (Mujahid, Qatada), or the replacement Allah promises the giver (Ikrimah); the card takes the second. Teacher to confirm the card."
+    },
+    {
+      "ayah": 18,
+      "word": 4,
+      "meaning": "يطهّر نفسه بالعطاء",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "word": 2,
+      "meaning": "يكون سعيدًا وراضيًا",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 7,
+      "word": 2
+    },
+    {
+      "ayah": 21,
+      "word": 2
+    },
+    {
+      "ayah": 5,
+      "word": 4
+    },
+    {
+      "ayah": 8,
+      "word": 4
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 1,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 1,
+          "word": 3
+        },
+        {
+          "ayah": 2,
+          "word": 3
+        },
+        {
+          "ayah": 21,
+          "word": 2
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 2,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 1,
+          "word": 3
+        },
+        {
+          "ayah": 2,
+          "word": 3
+        },
+        {
+          "ayah": 4,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "ما هي آخر آية في سورة الليل؟",
+      "options": [
+        {
+          "ayah": 21
+        },
+        {
+          "ayah": 7
+        },
+        {
+          "ayah": 12
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "يغطي ويستر"
+        },
+        {
+          "text": "يظهر وينكشف"
+        },
+        {
+          "text": "يسعد ويفرح"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 3
+      },
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "غطى واختفى"
+        },
+        {
+          "text": "ظهر وانكشف بنوره"
+        },
+        {
+          "text": "بخل ومنع"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 2,
+        "word": 3
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "يبخل بماله"
+        },
+        {
+          "text": "يطهّر نفسه بالعطاء"
+        },
+        {
+          "text": "يكذب ويعرض"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 18,
+        "word": 4
+      },
+      "id": "q6"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا يحدث لمن يعمل الخير ويعطي؟",
+      "options": [
+        {
+          "text": "يسهّل الله له طريق الخير"
+        },
+        {
+          "text": "يصعّب الله عليه"
+        },
+        {
+          "text": "لا شيء يحدث"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الليل؟",
+      "options": [
+        {
+          "text": "15 آية"
+        },
+        {
+          "text": "21 آية"
+        },
+        {
+          "text": "30 آية"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q8"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "أن الله يرى أعمالنا كلها، الخير والشر",
+      "review": "A true teaching, but not what the surah says: ayah 4 says people's strivings differ (\"inna sa'yakum la-shatta\"), and ayat 5-11 give each its outcome; it does not speak of Allah seeing deeds. Teacher to keep, reword or drop."
+    },
+    {
+      "text": "من يعمل الخير ويساعد الآخرين يوفقه الله للخير",
+      "review": null
+    },
+    {
+      "text": "الصدقة ومساعدة الآخرين من أجمل الأعمال عند الله",
+      "review": null
+    },
+    {
+      "text": "نعمل الخير لأننا نحب الله ونريد رضاه",
+      "review": null
+    },
+    {
+      "text": "من يعطي ويساعد سيكون سعيدًا في الدنيا والآخرة",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نكون من الذين يعملون الخير ويساعدون الآخرين؟",
+    "ideas": [
+      "أساعد أصدقائي في المدرسة",
+      "أتصدق من مصروفي",
+      "أبتسم في وجه الناس",
+      "أساعد أمي وأبي في البيت",
+      "أحفظ القرآن وأعلّمه لغيري",
+      "أحافظ على البيئة والنظافة"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله يحب من يساعد الآخرين؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الصدقة عمل يحبه الله كثيرًا؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الابتسامة في وجه أخيك صدقة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الليل نزلت في مكة المكرمة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن حفظ القرآن من أعظم الأعمال عند الله؟",
+      "review": null
+    }
+  ]
+}

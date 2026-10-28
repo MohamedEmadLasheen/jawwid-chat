@@ -2275,6 +2275,19 @@ model FamilySalesOwner {
   @@schema("chat")
 }
 
+/// PD-42 D1 (20261029120000 owns the DDL): the Operations supervisor a Sales
+/// owner suggests while the family waits for one. Advisory only.
+model FamilySupervisorSuggestion {
+  familyId       String   @id @map("family_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  supervisorId   String   @map("supervisor_id") @db.Uuid
+  suggestedBy    String   @map("suggested_by") @db.Uuid
+  suggestedAt    DateTime @default(now()) @map("suggested_at") @db.Timestamptz
+
+  @@map("family_supervisor_suggestion")
+  @@schema("chat")
+}
+
 /// PD-42: a keyed hash of a family's normalised e-mail or E.164 number -- one family per parent, per academy.
 model FamilyContactKey {
   organizationId String   @map("organization_id") @db.Uuid

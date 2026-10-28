@@ -32,6 +32,12 @@ export interface Staff {
   presence: Presence
   is_active: boolean
   last_activity_at?: string | null
+  /**
+   * PD-40: the permission keys /me reports. UX only -- a page or a Dashboard
+   * section is offered when the key is held; the server decides every request.
+   * Absent from an API that predates PD-40.
+   */
+  permissions?: string[]
 }
 
 export type TaskType = 'finance' | 'technical' | 'academic' | 'other'
@@ -52,21 +58,6 @@ export interface Task {
   result: string | null
   created_at: string
   done_at: string | null
-}
-
-/** Brief §7. LOW / MEDIUM / HIGH — there is no CRITICAL. */
-export type WorkloadLevel = 'low' | 'medium' | 'high'
-
-export interface TeamNowRow {
-  staff_id: string
-  name: string
-  presence: Presence
-  now_count: number
-  today_count: number
-  late_replies: number
-  workload_score: number
-  workload_level: WorkloadLevel
-  inactivity_warning: boolean
 }
 
 export interface Paginated<T> {

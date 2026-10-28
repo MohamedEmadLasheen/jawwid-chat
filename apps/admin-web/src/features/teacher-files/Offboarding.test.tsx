@@ -102,8 +102,9 @@ describe('Offboard', () => {
     )
     const { dialog } = await openOffboard()
     expect(await within(dialog).findByText('Move these students to other teachers first.')).toBeInTheDocument()
-    expect(within(dialog).getByText('Child Alpha')).toBeInTheDocument()
-    expect(within(dialog).getByText('Child Beta')).toBeInTheDocument()
+    // Each one opens the student's page, where Change teacher is.
+    expect(within(dialog).getByRole('link', { name: 'Child Alpha' })).toHaveAttribute('href', '/students/l-1')
+    expect(within(dialog).getByRole('link', { name: 'Child Beta' })).toHaveAttribute('href', '/students/l-2')
     expect(within(dialog).getByRole('button', { name: 'Offboard' })).toBeDisabled()
   })
 
@@ -270,5 +271,51 @@ describe('Give sign-in (#198), the code and the refresh', () => {
     await waitFor(() => expect(calls('GET', /\/teacher-files\/t-1$/).length).toBeGreaterThan(1))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Give sign-in' })).not.toBeInTheDocument())
     expect(screen.getByText('482913')).toBeInTheDocument()
+  })
+})
+
+describe('Unsupervised (plan §3.7)', () => {
+  const rows: TeacherSummary[] = [
+    { id: 't-1', name: 'Teacher One', isActive: true, studentCount: 0, openComplaints: 0, unsupervised: true },
+    { id: 't-2', name: 'Teacher Two', isActive: true, studentCount: 3, openComplaints: 0, unsupervised: false },
+    { id: 't-3', name: 'Teacher Three', isActive: false, studentCount: 0, openComplaints: 0, unsupervised: false },
+  ]
+  const offer = (supervisorChoice: 'any' | 'self_or_none') => ({ canAdd: true, supervisorChoice, supervisors: [], selfId: 'm-1' })
+
+  it('the Teachers manager: a count, a badge, a filter and a shortcut to assign a supervisor', async () => {
+    on('GET', /\/teacher-files$/, () => json({ access: { canEditPersonal: true, canWriteSupervision: true }, teachers: rows, onboarding: offer('any') }))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files' })
+    const table = await screen.findByRole('table')
+    expect(within(within(table).getByText('Teacher One').closest('tr')!).getByText('No supervisor')).toBeInTheDocument()
+    expect(within(within(table).getByText('Teacher Two').closest('tr')!).queryByText('No supervisor')).not.toBeInTheDocument()
+    expect(screen.getByText('1 unsupervised')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Assign supervisor' })).toHaveAttribute('href', '/organization?tab=teachers')
+    await user.click(screen.getByRole('checkbox', { name: 'Unsupervised only' }))
+    expect(within(table).getByText('Teacher One')).toBeInTheDocument()
+    expect(within(table).queryByText('Teacher Two')).not.toBeInTheDocument()
+  })
+
+  it('a teacher supervisor sees the badge, but neither the count nor the shortcut', async () => {
+    on('GET', /\/teacher-files$/, () => json({ access: { canEditPersonal: false, canWriteSupervision: true }, teachers: rows, onboarding: offer('self_or_none') }))
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 's-1', name: 'Supervisor One', role: 'admin' }), route: '/teachers/files' })
+    const table = await screen.findByRole('table')
+    expect(within(within(table).getByText('Teacher One').closest('tr')!).getByText('No supervisor')).toBeInTheDocument()
+    expect(screen.queryByText('1 unsupervised')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Assign supervisor' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Unsupervised, for the super admin', () => {
+  it('the shortcut opens the Admin Portal\'s Organization on its Teachers tab', async () => {
+    on('GET', /\/teacher-files$/, () =>
+      json({
+        access: { canEditPersonal: true, canWriteSupervision: true },
+        teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, studentCount: 0, openComplaints: 0, unsupervised: true }],
+        onboarding: { canAdd: true, supervisorChoice: 'any', supervisors: [], selfId: 'o-1' },
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: owner, route: '/admin/teachers' })
+    expect(await screen.findByRole('link', { name: 'Assign supervisor' })).toHaveAttribute('href', '/admin/teams?tab=teachers')
   })
 })

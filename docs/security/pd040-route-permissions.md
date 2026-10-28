@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-469 routes.
+475 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -162,8 +162,14 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/families/:id/payment-requests` | billing.record | `billing/payments.controller.ts#PaymentsController.createRequest` |
 | POST | `/api/v1/families/:id/payments` | billing.record | `billing/payments.controller.ts#PaymentsController.recordManual` |
 | POST | `/api/v1/family-intake` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.enter` |
+| GET | `/api/v1/family-intake/entered` | new_students.view | `new-students/intake.controller.ts#FamilyIntakeController.entered` |
+| GET | `/api/v1/family-intake/families/:familyId` | new_students.view | `new-students/intake.controller.ts#FamilyIntakeController.family` |
 | POST | `/api/v1/family-intake/families/:familyId/children` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.addChildren` |
+| POST | `/api/v1/family-intake/families/:familyId/operations-supervisor` | org.manage | `new-students/intake.controller.ts#FamilyIntakeController.assignOperationsSupervisor` |
+| POST | `/api/v1/family-intake/families/:familyId/sales-owner` | org.manage | `new-students/intake.controller.ts#FamilyIntakeController.changeSalesOwner` |
 | POST | `/api/v1/family-intake/families/:familyId/sign-in-email` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.setSignInEmail` |
+| POST | `/api/v1/family-intake/families/:familyId/supervisor-suggestion` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.suggestSupervisor` |
+| GET | `/api/v1/family-intake/learners/:learnerId/carried-over` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.carriedOverOf` |
 | POST | `/api/v1/family-intake/learners/:learnerId/carried-over` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.carryOver` |
 | POST | `/api/v1/family-intake/learners/:learnerId/carried-over/void` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.voidCarryOver` |
 | GET | `/api/v1/family-intake/options` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.options` |
