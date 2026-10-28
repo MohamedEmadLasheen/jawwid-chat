@@ -32,7 +32,7 @@ import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.ser
 import { contactKeyHash } from '../../src/new-students/contact-key';
 import { OrgStructureService } from '../../src/org/org-structure.service';
 import { CardPoster } from '../../src/supervision/card-poster';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -283,6 +283,24 @@ describe('1c. PD-42: a trial sibling joins the family it belongs to', () => {
       .toMatchObject({ actorId: s.managerId, after: expect.objectContaining({ origin: 'trial', kind: 'added_children', trialId: sibling }) });
     // Once.
     expect(await code(enrolment.assign(s.managerId, sibling, { familyId: first.familyId }))).toBe(CommErrorCode.LESSON_STATE);
+  });
+
+  it('review of #214: the match is the form\'s own e-mail -- an e-mail typed into Assign never satisfies it', async () => {
+    const first = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    const stranger = await subscribedTrial(`Other.${randomUUID().slice(0, 8)}@Example.Test`);
+    expect(await code(enrolment.assign(s.managerId, stranger, { familyId: first.familyId, email: EMAIL }))).toBe(CommErrorCode.VALIDATION);
+    expect(await g.prisma.studentEnrolment.count({ where: { lessonId: stranger } })).toBe(0);
+  });
+
+  it('review of #214: a family still waiting for its Operations supervisor is placed first, never partly', async () => {
+    const first = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    await withAssignmentGate(g.prisma, `insert into chat.learner (organization_id, family_id, name)
+      select organization_id, id, 'child_waiting' from chat.family where id = '${first.familyId}'::uuid`);
+    const sibling = await subscribedTrial(EMAIL);
+    const refused = await refusalOf(enrolment.assign(s.managerId, sibling, { familyId: first.familyId }));
+    expect(refused.code).toBe(CommErrorCode.LESSON_STATE);
+    expect(refused.message).toMatch(/Operations supervisor first/);
+    expect(await g.prisma.studentEnrolment.count({ where: { lessonId: sibling } })).toBe(0);
   });
 });
 

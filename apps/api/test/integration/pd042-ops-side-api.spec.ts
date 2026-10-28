@@ -195,6 +195,75 @@ describe('1. "Needs an Operations supervisor"', () => {
   });
 });
 
+describe('1a. review of #214', () => {
+  it('the Operations manager places a family only on a supervisor of their own department; the super admin, on any', async () => {
+    const otherManager = randomUUID();
+    const otherSupervisor = randomUUID();
+    await staff(otherManager, 'ops_m2', 'manager');
+    await staff(otherSupervisor, 'ops_s2', 'admin');
+    await department('operations', otherManager, [otherSupervisor]);
+    const r = await intake.enter(salesA, form());
+    expect((await intake.family(s.managerId, r.familyId)).supervisorChoices.map((x) => x.id)).not.toContain(otherSupervisor);
+    expect((await intake.family(superId, r.familyId)).supervisorChoices.map((x) => x.id)).toContain(otherSupervisor);
+    expect(await code(intake.assignOperationsSupervisor(s.managerId, r.familyId, { supervisorId: otherSupervisor }))).toBe(CommErrorCode.INTAKE_INVALID);
+    await intake.assignOperationsSupervisor(superId, r.familyId, { supervisorId: otherSupervisor });
+    expect(await g.prisma.learnerSupervision.findUniqueOrThrow({ where: { learnerId: r.learnerIds[0]! } })).toMatchObject({ supervisorId: otherSupervisor });
+  });
+
+  it('only the family\'s Sales owner suggests a supervisor', async () => {
+    const r = await intake.enter(salesA, form());
+    expect((await intake.family(salesManager, r.familyId)).can.suggestSupervisor).toBe(false);
+    expect(await code(intake.suggestSupervisor(salesManager, r.familyId, { supervisorId: s.ownerId }))).toBe(CommErrorCode.INTAKE_DENIED);
+    expect(await code(intake.suggestSupervisor(s.managerId, r.familyId, { supervisorId: s.ownerId }))).toBe(CommErrorCode.INTAKE_DENIED);
+    await expect(g.prisma.$executeRawUnsafe(
+      `insert into chat.family_supervisor_suggestion (family_id, supervisor_id, suggested_by) values ($1::uuid, $2::uuid, $3::uuid)`,
+      r.familyId, s.ownerId, salesManager,
+    )).rejects.toThrow(/Sales owner/);
+    await intake.suggestSupervisor(salesA, r.familyId, { supervisorId: s.ownerId });
+  });
+
+  it('the sign-up code is shown only to whoever is responsible now', async () => {
+    const withEmail = () => ({ parent: { name: 'parent_code', phone: phone(), email: `pd42_${randomUUID().slice(0, 8)}@example.test` } });
+    const code6 = async (familyId: string) => {
+      const contact = await g.prisma.contact.findFirstOrThrow({ where: { familyId } });
+      await g.prisma.parentSignupCode.create({
+        data: { organizationId: contact.organizationId, accountId: contact.accountId!, codeHash: 'a'.repeat(64), relayCode: '246810' },
+      });
+    };
+    const shown = async (viewer: string, familyId: string) => {
+      const e = await entry(viewer, familyId);
+      return e?.parentSignup.state === 'code_waiting' ? (e.parentSignup as { code?: string | null }).code ?? null : 'no entry or no code';
+    };
+    // Supervised by its entrant: the supervisor, the Operations manager, the super admin -- not its Sales owner.
+    const ops = await intake.enter(s.ownerId, form(withEmail()));
+    await intake.changeSalesOwner(salesManager, ops.familyId, { staffId: salesA, reason: 'renewals' });
+    await code6(ops.familyId);
+    expect(await shown(s.ownerId, ops.familyId)).toBe('246810');
+    expect(await shown(s.managerId, ops.familyId)).toBe('246810');
+    expect(await shown(superId, ops.familyId)).toBe('246810');
+    expect(await shown(salesA, ops.familyId)).toBeNull();
+    expect(await shown(salesManager, ops.familyId)).toBeNull();
+    // Waiting for its Operations supervisor: the Sales owner and the Sales manager relay it -- until it is placed.
+    const sales = await intake.enter(salesA, form(withEmail()));
+    await code6(sales.familyId);
+    expect(await shown(salesA, sales.familyId)).toBe('246810');
+    expect(await shown(salesManager, sales.familyId)).toBe('246810');
+    expect(await shown(s.managerId, sales.familyId)).toBe('246810');
+    await intake.assignOperationsSupervisor(s.managerId, sales.familyId, { supervisorId: s.otherAdminId });
+    expect(await shown(salesA, sales.familyId)).toBeNull();
+    expect(await shown(s.otherAdminId, sales.familyId)).toBe('246810');
+  });
+
+  it('the request roles have no privilege on the suggestion table', async () => {
+    const rows = await g.prisma.$queryRawUnsafe<Array<{ r: string; p: string; can: boolean }>>(`
+      select r, p, has_table_privilege(r, 'chat.family_supervisor_suggestion', p) as can
+        from unnest(array['anon', 'authenticated', 'chat_app']) r
+        cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE']) p`);
+    expect(rows).toHaveLength(12);
+    expect(rows.filter((x) => x.can)).toEqual([]);
+  });
+});
+
 describe('1b. a manager with nobody to enter a family for (QA on #202)', () => {
   it('the Sales manager of an empty Sales team is told so, and never owns a family themself', async () => {
     await sql(`delete from chat.department_member where staff_id = any($1::uuid[])`, [salesA, salesB]);
