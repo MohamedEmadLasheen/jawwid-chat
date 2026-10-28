@@ -22,6 +22,7 @@ import type { AuditService } from '../../platform/audit.service';
 import type { StaffAccessBasis } from '../../platform/staff-scope';
 import { Actor, SYSTEM_ACTOR, isConversationStaff } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
+import { dashboardTile, type DashboardTile } from '../../dashboard/dashboard-tile';
 import type { ConversationCoverDto, ConversationWithLearner, MemberAwayDto, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
 import {
@@ -1599,6 +1600,40 @@ export class ConversationService {
       orderBy: { lastActivityAt: 'desc' },
       take: 200,
     });
+  }
+
+  /**
+   * PD-44: the Dashboard's "chats waiting for our reply" -- exactly the rows of
+   * `listForActor` whose state is waiting_on_jawwid (conversationState: not
+   * resolved, a parent wrote after the last staff or teacher message) and that
+   * are not archived (an archived conversation takes no reply). The ids are the
+   * list's own (`visibleConversationIds`, PD-8), so the tile and the Chat list
+   * cannot disagree; the organization is restated as the list restates it.
+   *
+   * Two statements whatever the number of conversations. Unlike the list, the
+   * count is not capped at 200, so it is exact. Staff who may not hold
+   * conversations at all get no tile (absent, not zero).
+   */
+  async dashboardWaiting(actorId: string, now: Date = new Date()): Promise<DashboardTile[]> {
+    const actor = await this.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) {
+      throw new CommError(CommErrorCode.PERMISSION_DENIED, 'the Dashboard is for staff');
+    }
+    if (!actor.isActive) throw new CommError(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+    if (!isConversationStaff(actor) || !actor.organizationId) return [];
+
+    const ids = await this.authz.visibleConversationIds(actor, now);
+    if (ids.length === 0) return [dashboardTile('chats.waiting', 0)];
+    const [row] = await this.prisma.$queryRaw<Array<{ count: number; oldest: Date | null }>>`
+      SELECT count(*)::int AS count, min(c.last_customer_message_at) AS oldest
+        FROM chat.conversation c
+       WHERE c.id = ANY(${ids}::uuid[])
+         AND c.organization_id = ${actor.organizationId}::uuid
+         AND c.archived_at IS NULL
+         AND c.resolved_at IS NULL
+         AND c.last_customer_message_at IS NOT NULL
+         AND (c.last_staff_message_at IS NULL OR c.last_customer_message_at > c.last_staff_message_at)`;
+    return [dashboardTile('chats.waiting', row?.count ?? 0, row?.oldest ?? null)];
   }
 
   /**
