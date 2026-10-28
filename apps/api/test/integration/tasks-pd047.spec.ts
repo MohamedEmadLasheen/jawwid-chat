@@ -527,7 +527,7 @@ describe('the Dashboard (PD-44)', () => {
     const tile = (tiles: Array<{ key: string; count: number }>, key: string) => tiles.find((t) => t.key === key)?.count;
 
     const mine = await tasks.dashboardCounts(s.ownerId);
-    expect(mine.map((t) => t.key)).toEqual(['tasks.mine_open', 'tasks.mine_overdue']);
+    expect(mine.map((t) => t.key)).toEqual(['tasks.mine_open', 'tasks.mine_overdue', 'tasks.mine_urgent', 'tasks.mine_financial']);
     expect([tile(mine, 'tasks.mine_open'), tile(mine, 'tasks.mine_overdue')]).toEqual([1, 1]);
 
     const mgr = await tasks.dashboardCounts(s.managerId);
@@ -541,7 +541,8 @@ describe('the Dashboard (PD-44)', () => {
     // The super admin's wide tiles are view=all, and each equals its list.
     const top = await tasks.dashboardCounts(sa);
     expect(top.map((t) => t.key)).toEqual([
-      'tasks.mine_open', 'tasks.mine_overdue', 'tasks.all_open', 'tasks.all_overdue',
+      'tasks.mine_open', 'tasks.mine_overdue', 'tasks.mine_urgent', 'tasks.mine_financial',
+      'tasks.all_open', 'tasks.all_overdue', 'tasks.all_urgent', 'tasks.all_financial',
       'tasks.awaiting_decision', 'tasks.needs_reassignment', 'tasks.unmanaged',
     ]);
     expect(tile(top, 'tasks.all_open')).toBe((await tasks.list(sa, { view: 'all' })).items.length);

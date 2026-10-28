@@ -7,7 +7,7 @@
 import { nextState, TaskAction, TaskState } from '../../../src/tasks/task-transitions';
 
 const STATES: TaskState[] = ['open', 'awaiting_decision', 'completed', 'removed'];
-const ACTIONS: TaskAction[] = ['complete', 'out_of_scope', 'return', 'remove', 'reassign', 'comment', 'due'];
+const ACTIONS: TaskAction[] = ['complete', 'out_of_scope', 'return', 'remove', 'reassign', 'comment', 'due', 'priority'];
 
 describe('PD-47 task transitions', () => {
   it('open: every exit is possible, and a comment or a due date changes nothing', () => {
@@ -17,6 +17,13 @@ describe('PD-47 task transitions', () => {
     expect(nextState('open', 'reassign')).toBe('open');
     expect(nextState('open', 'comment')).toBe('open');
     expect(nextState('open', 'due')).toBe('open');
+    expect(nextState('open', 'priority')).toBe('open');
+  });
+
+  it('a priority may change while a task is pending, never once it is closed (PD-47 priority amendment)', () => {
+    expect(nextState('awaiting_decision', 'priority')).toBe('awaiting_decision');
+    expect(nextState('completed', 'priority')).toBeNull();
+    expect(nextState('removed', 'priority')).toBeNull();
   });
 
   it('open: there is nothing to return', () => {

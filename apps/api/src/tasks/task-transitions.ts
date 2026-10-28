@@ -6,15 +6,15 @@
  * lets the API refuse early with a precise code.
  */
 export type TaskState = 'open' | 'awaiting_decision' | 'completed' | 'removed';
-export type TaskAction = 'complete' | 'out_of_scope' | 'return' | 'remove' | 'reassign' | 'comment' | 'due';
+export type TaskAction = 'complete' | 'out_of_scope' | 'return' | 'remove' | 'reassign' | 'comment' | 'due' | 'priority';
 
 export const PENDING_STATES: readonly TaskState[] = ['open', 'awaiting_decision'];
 export const FINAL_STATES: readonly TaskState[] = ['completed', 'removed'];
 
 const NEXT: Readonly<Record<TaskState, Partial<Record<TaskAction, TaskState>>>> = {
-  open: { complete: 'completed', out_of_scope: 'awaiting_decision', remove: 'removed', reassign: 'open', comment: 'open', due: 'open' },
+  open: { complete: 'completed', out_of_scope: 'awaiting_decision', remove: 'removed', reassign: 'open', comment: 'open', due: 'open', priority: 'open' },
   // The work done while the decision waits still completes the task.
-  awaiting_decision: { complete: 'completed', return: 'open', remove: 'removed', reassign: 'open', comment: 'awaiting_decision', due: 'awaiting_decision' },
+  awaiting_decision: { complete: 'completed', return: 'open', remove: 'removed', reassign: 'open', comment: 'awaiting_decision', due: 'awaiting_decision', priority: 'awaiting_decision' },
   completed: {},
   removed: {},
 };
