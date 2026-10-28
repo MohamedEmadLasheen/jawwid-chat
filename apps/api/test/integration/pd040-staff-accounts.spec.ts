@@ -317,7 +317,8 @@ describe('PD-40 S1/S2: a department manager', () => {
   });
 
   it('grants nothing beyond what they hold and may delegate, nor a supervisory role (H5, C1, C3)', async () => {
-    const notHeld = await defineRole('designer_for_ops', ['certificates.view']); // the Teachers department's key
+    // Delegable, but the Teachers department's alone (PD-41 gives Operations certificates.view, not .design).
+    const notHeld = await defineRole('designer_for_ops', ['certificates.design']);
     const notDelegable = await defineRole('ops_contact_editor', ['parents.edit']);
     const supervisory = await defineRole('ops_supervisory', ['billing.view'], 'supervisor');
     for (const [label, roleId] of [['not held', notHeld], ['not delegable', notDelegable], ['supervisory', supervisory]] as const) {
