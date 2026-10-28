@@ -28,6 +28,9 @@ import { TeacherFileService } from './teacher-file.service';
  *              rule, not creation's (department head on #198): an existing
  *              teacher is a live identity, so the code is always e-mailed and
  *              only the manager and the super admin see it.
+ *   changeSignIn() a new sign-in e-mail: while the login waits, the reissue
+ *              rule and a new code to the new address; once used, the super
+ *              admin only, and every session ends.
  *   reissue()  a new code while the teacher has not signed in; the old one dies.
  *              Owner, 2026-10-28, "E-mail only; managers can see": only the super
  *              admin, the Teachers manager and the teacher's CURRENT supervisor
@@ -170,6 +173,74 @@ export class TeacherOnboardingService {
       firstLogin: seesCode
         ? { code: issued.code, expiresAt: issued.expiresAt.toISOString(), emailed }
         : { expiresAt: issued.expiresAt.toISOString(), emailed },
+    };
+  }
+
+  /**
+   * PD-43 §3.3: a new sign-in e-mail (PATCH /teachers/:id/sign-in, { email, reason? }).
+   * While the login waits: the reissue rule (chat.change_teacher_sign_in), the
+   * old code dies and a new one goes to the NEW address in the same
+   * transaction -- seen only by the manager and the super admin, as on a
+   * reissue. Once the login has been used: the super admin only, and every
+   * session ends; the teacher signs in again with the new address.
+   */
+  async changeSignIn(actorId: string, teacherId: string, body: Record<string, unknown>) {
+    const { actor, onboarding } = await this.files.onboardingGate(actorId);
+    const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
+    if (!isUuid(teacherId)) throw notFound;
+    const email = requireEmail(body.email);
+    const reason = optionalText('reason', body.reason, 500) ?? 'sign-in e-mail changed';
+    const issuer = await this.issuerAccount(actor);
+    let done: { accountId: string; issued: { id: string; code: string; expiresAt: Date } | null; revoked: number };
+    try {
+      done = await this.prisma.$transaction(async (tx) => {
+        const [row] = await tx.$queryRaw<Array<{ changed: { accountId: string; status: string } }>>`
+          SELECT chat.change_teacher_sign_in(${teacherId}::uuid, ${email}::text, ${reason}::text, ${actor.actorId}::uuid) AS changed`;
+        const { accountId, status } = row!.changed;
+        if (status === 'provisioned') {
+          const issued = await this.resets.issueInTx(tx, {
+            accountId,
+            organizationId: actor.organizationId as string,
+            issuedByStaffId: actor.actorId,
+            issuedByAccountId: issuer,
+            reason: 'a first sign-in at a new address',
+            signOutEverywhere: false,
+            purpose: 'first_login',
+          });
+          return { accountId, issued, revoked: 0 };
+        }
+        const revoked = await this.auth.revokeAccountSessionsInTx(tx, accountId, 'sign-in e-mail changed', {
+          revokedBy: issuer,
+          actorId: actor.actorId,
+        });
+        return { accountId, issued: null, revoked };
+      });
+    } catch (e) {
+      if (e instanceof AuthError) throw e;
+      const text = errorText(e);
+      if (/no such teacher for you to change the sign-in of/.test(text)) throw notFound;
+      if (/only the super admin changes a sign-in that has been used/.test(text)) {
+        throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'only the super admin changes a sign-in that has been used');
+      }
+      if (/this sign-in is suspended/.test(text)) {
+        throw new CommError(CommErrorCode.TEACHER_SIGN_IN_SUSPENDED, 'this teacher’s sign-in is suspended; reactivate it first', 409);
+      }
+      const conflict = /an inactive teacher's sign-in is not changed|this teacher has no sign-in to change|this sign-in is closed|this is already the sign-in/.exec(text);
+      if (conflict) throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, conflict[0], 409);
+      throw await this.refusal(e, actor, email, null);
+    }
+    if (!done.issued) {
+      await this.auth.enforceAccountRevocation(done.accountId, done.revoked > 0);
+      return { teacherId, signIn: email, firstLogin: null };
+    }
+    const emailed = await this.deliver(email, done.issued);
+    const seesCode = onboarding.supervisorChoice === 'any';
+    return {
+      teacherId,
+      signIn: email,
+      firstLogin: seesCode
+        ? { code: done.issued.code, expiresAt: done.issued.expiresAt.toISOString(), emailed }
+        : { expiresAt: done.issued.expiresAt.toISOString(), emailed },
     };
   }
 

@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-444 routes.
+445 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -429,6 +429,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/teachers/:teacherId/offboard` | teachers.offboard | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.offboard` |
 | GET | `/api/v1/teachers/:teacherId/offboard-preview` | teachers.offboard | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.offboardPreview` |
 | POST | `/api/v1/teachers/:teacherId/reactivate` | teachers.offboard | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.reactivate` |
+| PATCH | `/api/v1/teachers/:teacherId/sign-in` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.changeSignIn` |
 | POST | `/api/v1/teachers/:teacherId/sign-in` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.giveSignIn` |
 | POST | `/api/v1/teachers/:teacherId/supervision-conversation` | supervision.chats | `supervision/supervision.controller.ts#SupervisionController.ensureForTeacher` |
 | GET | `/api/v1/teachers/candidates` | lessons.view | `lessons/lifecycle.controller.ts#LifecycleController.candidates` |
