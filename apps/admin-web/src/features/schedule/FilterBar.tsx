@@ -1,4 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useI18n } from '@/core/i18n/I18nProvider'
+import { wallClock12 } from '@/core/time/academyTime'
 import type { CalendarOptions, CalendarStatus, Category, LessonKind } from './api'
 import { CATEGORY_LABEL, KIND_LABEL, S, STATUS_LABEL, WEEKDAYS, useScheduleText, type Pair } from './copy'
 import { activeFilterCount, clearFilters, type ListFilter, type ScalarFilter, type ViewState } from './viewState'
@@ -8,7 +10,15 @@ import { activeFilterCount, clearFilters, type ListFilter, type ScalarFilter, ty
  * combines with every other; the choice goes into the URL, and the calendar and
  * the stats bar re-read with it. Nothing is filtered in the browser: the
  * server applies each filter in SQL, so the numbers always match what is drawn.
+ *
+ * One filter is open at a time (owner, 2026-10-28): opening another closes it,
+ * and so do a click anywhere outside it and Escape, which returns focus to the
+ * filter's button. On a phone the same filters sit in a bottom sheet
+ * (`layout="sheet"`), one open at a time there too.
  */
+
+/** Which filter is open: one key, or none. */
+const OpenFilter = createContext<{ open: string | null; setOpen: (key: string | null) => void }>({ open: null, setOpen: () => {} })
 
 interface Choice {
   value: string
@@ -24,14 +34,57 @@ function Menu({
   count: number
   children: ReactNode
 }) {
+  const { open, setOpen } = useContext(OpenFilter)
+  const isOpen = open === label
+  const panelId = useId()
+  const box = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    // Into the panel, so the keyboard lands where the choices are.
+    panel.current?.querySelector<HTMLElement>('input, select, button')?.focus()
+    const outside = (e: PointerEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(null)
+    }
+    const escape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setOpen(null)
+      trigger.current?.focus()
+    }
+    document.addEventListener('pointerdown', outside)
+    // Capture: an open filter takes Escape before a surrounding sheet would close.
+    document.addEventListener('keydown', escape, true)
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('keydown', escape, true)
+    }
+  }, [isOpen, setOpen])
+
   return (
-    <details className="sc-filter">
-      <summary className={`chip${count > 0 ? ' sc-filter--on' : ''}`} aria-label={count > 0 ? `${label} (${count})` : label}>
+    <div className="sc-filter" ref={box}>
+      <button
+        ref={trigger}
+        type="button"
+        className={`chip sc-filter__trigger${count > 0 ? ' sc-filter--on' : ''}`}
+        aria-label={count > 0 ? `${label} (${count})` : label}
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? panelId : undefined}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(isOpen ? null : label)}
+      >
         {label}
         {count > 0 && <span className="sc-filter__count">{count}</span>}
-      </summary>
-      <div className="sc-filter__panel">{children}</div>
-    </details>
+        <span className="sc-filter__caret" aria-hidden="true" />
+      </button>
+      {isOpen && (
+        <div id={panelId} ref={panel} className="sc-filter__panel" role="dialog" aria-label={label}>
+          {children}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -91,12 +144,18 @@ export function FilterBar({
   state,
   options,
   onChange,
+  layout = 'inline',
 }: {
   state: ViewState
   options: CalendarOptions | undefined
   onChange: (next: ViewState) => void
+  /** `sheet`: stacked, full width, for the phone's bottom sheet. */
+  layout?: 'inline' | 'sheet'
 }) {
   const tx = useScheduleText()
+  const { locale } = useI18n()
+  const [open, setOpen] = useState<string | null>(null)
+  const openFilter = useMemo(() => ({ open, setOpen }), [open])
   const setList = (k: ListFilter) => (next: string[]) => onChange({ ...state, lists: { ...state.lists, [k]: next } })
   const setScalar = (k: ScalarFilter, v: string) => {
     const scalars = { ...state.scalars }
@@ -116,7 +175,8 @@ export function FilterBar({
   const n = activeFilterCount(state)
 
   return (
-    <div className="sc-filters" role="group" aria-label={tx(S.filters)}>
+    <OpenFilter.Provider value={openFilter}>
+    <div className={`sc-filters${layout === 'sheet' ? ' sc-filters--sheet' : ''}`} role="group" aria-label={tx(S.filters)}>
       <Menu label={tx(S.fTeacher)} count={list('teacherIds').length}>
         <Checklist name={tx(S.fTeacher)} choices={teachers} selected={list('teacherIds')} onChange={setList('teacherIds')} searchable />
       </Menu>
@@ -159,14 +219,14 @@ export function FilterBar({
             <span className="field__label">{tx(S.from)}</span>
             <select className="select select--sm" value={state.scalars.timeFrom ?? ''} onChange={(e) => setScalar('timeFrom', e.target.value)}>
               <option value="">{tx(S.any)}</option>
-              {HOURS.slice(0, 24).map((h) => <option key={h} value={h}>{h}</option>)}
+              {HOURS.slice(0, 24).map((h) => <option key={h} value={h}>{wallClock12(h, locale)}</option>)}
             </select>
           </label>
           <label className="field">
             <span className="field__label">{tx(S.to)}</span>
             <select className="select select--sm" value={state.scalars.timeTo ?? ''} onChange={(e) => setScalar('timeTo', e.target.value)}>
               <option value="">{tx(S.any)}</option>
-              {HOURS.slice(1).map((h) => <option key={h} value={h === '24:00' ? '24:00' : h}>{h}</option>)}
+              {HOURS.slice(1).map((h) => <option key={h} value={h}>{wallClock12(h, locale)}</option>)}
             </select>
           </label>
         </div>
@@ -208,5 +268,6 @@ export function FilterBar({
         </button>
       )}
     </div>
+    </OpenFilter.Provider>
   )
 }

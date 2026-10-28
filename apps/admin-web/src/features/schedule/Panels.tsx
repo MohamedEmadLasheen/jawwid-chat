@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { whenIn, ACADEMY_ZONE } from '@/core/time/academyTime'
+import { isoToAcademyWallClock } from '@/core/time/academyTime'
 import { Dialog } from '@/shared/components/Dialog'
 import { studentPath } from '@/features/profiles/api'
 import type { CalendarLesson, CalendarStats, Supervisor } from './api'
-import { CATEGORY_LABEL, KIND_LABEL, OUTCOME_LABEL, S, STATUS_LABEL, hoursOf, percentOf, useScheduleText } from './copy'
+import { CATEGORY_LABEL, KIND_LABEL, OUTCOME_LABEL, S, STATUS_LABEL, dayLabel, hoursOf, percentOf, useScheduleText } from './copy'
+import { lessonTime } from './Timeline'
 import { PALETTE, isPaletteKey, swatchClass } from './palette'
 
 /**
@@ -153,7 +154,7 @@ export function LessonDetails({
   const { locale } = useI18n()
   const supervisor = supervisors.find((s) => s.colorKey !== null && s.colorKey === lesson.colorKey)
   const rows: Array<[string, string]> = [
-    [tx(S.when), `${whenIn(lesson.startsAt, ACADEMY_ZONE, locale)}–${whenIn(lesson.endsAt, ACADEMY_ZONE, locale).split(' ').pop()}`],
+    [tx(S.when), `${dayLabel(isoToAcademyWallClock(lesson.startsAt).date, locale, { weekday: 'short', day: 'numeric', month: 'short' })} · ${lessonTime(lesson, locale)}`],
     [tx(S.status), tx(STATUS_LABEL[lesson.status])],
     [tx(S.fKind), tx(KIND_LABEL[lesson.kind])],
   ]
