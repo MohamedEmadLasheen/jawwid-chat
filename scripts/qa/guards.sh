@@ -202,7 +202,7 @@ title() {
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
     quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
     pd040-routes)  echo "PD-40 · every API route declares the permission it asks of staff" ;;
-    lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text" ;;
+    lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text; the API's voice-over text is current" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -392,7 +392,14 @@ gate_lessons_supply_chain() {
   # one rule (no folding), full tashkeel with the pausal sukun, and every quiz
   # question has exactly one right answer.
   "$PYTHON" -I scripts/lessons/check-arabic-lesson.py selftest || return 1
-  "$PYTHON" -I scripts/lessons/check-arabic-lesson.py
+  "$PYTHON" -I scripts/lessons/check-arabic-lesson.py || return 1
+  # PD-48: the API's copy of each lesson's approved text is current (a changed
+  # word switches its voice-over clip off), and no lesson uses the browser's
+  # own speech synthesis.
+  "$PYTHON" -I scripts/lessons/lesson-audio-texts.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/lesson-audio-texts.py check || return 1
+  # PD-48: the operator's generation script plans and refuses as it must (no network, no key).
+  "$PYTHON" -I scripts/lessons/tts/tts.py selftest
 }
 
 gate_ci_wiring() {

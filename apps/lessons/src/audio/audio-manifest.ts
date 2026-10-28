@@ -134,7 +134,11 @@ const browserDeps = (): VerifiedAudioDeps => ({
  * SHA-256 -- from memory (a blob: URL), so what plays is exactly what was checked.
  */
 export function verifiedAudio(m: AudioManifest, deps: VerifiedAudioDeps = browserDeps()): AudioFactory {
-  const expected = new Map([...m.ayahs.values()].map((a) => [a.url, a.sha256]));
+  return verifiedAudioFor(new Map([...m.ayahs.values()].map((a) => [a.url, a.sha256])), deps);
+}
+
+/** The same, for any list of (signed URL -> SHA-256): PD-48's lesson voice-over plays through it too. */
+export function verifiedAudioFor(expected: ReadonlyMap<string, string>, deps: VerifiedAudioDeps = browserDeps()): AudioFactory {
   return (url) => {
     let el: Playable | null = null;
     let blobUrl: string | null = null;
@@ -193,6 +197,10 @@ const early: Array<{ origin: string; data: unknown }> = [];
 export function clearEarlyAudioMessages(): void {
   early.length = 0;
 }
+/** Take the buffered early messages (each is accepted at most once, by whichever hook drains it). */
+export function drainEarlyAudioMessages(): Array<{ origin: string; data: unknown }> {
+  return early.splice(0);
+}
 if (typeof window !== 'undefined') {
   window.addEventListener('message', (e: MessageEvent) => {
     // Only from an origin that may send it at all, so junk cannot push the real list out.
@@ -217,7 +225,7 @@ export function useAudioManifest(surah: number, origins: AudioOrigins = BUILD_AU
       if (m) setManifest(m);
     };
     // Drained: a message is accepted from the buffer at most once.
-    for (const e of early.splice(0)) {
+    for (const e of drainEarlyAudioMessages()) {
       const m = acceptAudioMessage(e, surah, origins);
       if (m) setManifest(m);
     }

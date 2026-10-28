@@ -36,6 +36,7 @@ export type NavArea =
   | 'schedule'
   | 'cases'
   | 'certificates'
+  | 'lesson-audio'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -88,7 +89,8 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `materials` (PD-29) is offered under More beside the Admin Portal's sections.
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
     // `certificates` (PD-41) is offered under People: the page and its types.
-    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'settings']
+    // `lesson-audio` (PD-48): the voice-over review page, under More.
+    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'lesson-audio', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -101,7 +103,8 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // the Teachers manager (see SERVER_CONFIRMED_AREAS).
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
     // PD-41: the Certificates page -- offered when GET /certificates/access opens it.
-    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'settings']
+    // PD-48: Lesson audio -- offered when GET /lesson-audio/access opens it (the Teachers manager).
+    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -118,12 +121,14 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // teacher-profiles is here for the same reason stories is: admin and
     // coverage hold the reviewer role server-side
     // (AuthorizationService.canReviewTeacherProfile).
-    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates']
+    // PD-48: Lesson audio, for a Teachers supervisor (listens) -- on the server's word.
+    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio']
   }
   if (role === 'specialist') {
     // PD-40/PD-41: the Designer -- the Certificates page, and (PD-47) the
-    // tasks given to them, as every staff member has.
-    return ['certificates', 'tasks']
+    // tasks given to them, as every staff member has; PD-48: the Pronunciation
+    // reviewer -- the Lesson audio page, on the server's word.
+    return ['certificates', 'tasks', 'lesson-audio']
   }
   if (isDepartment(role)) {
     // Departments get tasks — they may not open family records — and, PD-21
@@ -179,6 +184,8 @@ export interface DepartmentAccess {
   supervisionPage?: boolean
   /** PD-41: GET /certificates/access -- the account holds a certificates key. */
   certificates?: boolean
+  /** PD-48: GET /lesson-audio/access -- the account holds lesson_audio.view or .review. */
+  lessonAudio?: boolean
 }
 
 /**
@@ -201,6 +208,8 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   schedule: (a) => a.calendar === true,
   // PD-41: the Certificates page, for whoever holds a certificates key.
   certificates: (a) => a.certificates === true,
+  // PD-48: the Lesson audio review page, for whoever may listen.
+  'lesson-audio': (a) => a.lessonAudio === true,
 }
 
 /** What navigation shows: the areas this role may open, minus those the server has not confirmed. */

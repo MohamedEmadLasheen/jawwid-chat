@@ -25,6 +25,8 @@ import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { CertificatesPage } from '@/features/certificates/CertificatesPage'
+import { LessonAudioPage } from '@/features/lesson-audio/LessonAudioPage'
+import type { Staff } from '@/shared/types/domain'
 import { TeacherSupervisionPage } from '@/features/teacher-supervision/TeacherSupervisionPage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
@@ -77,10 +79,12 @@ function SuperAdminOnly({ children }: { children: ReactElement }) {
 
 /** Where "/" (and so a fresh sign-in with no deep link) lands: the role's
  *  conversations. The Dashboard stays at its own URL, under More. */
-function homeFor(role: Parameters<typeof isDepartment>[0]): string {
+function homeFor(staff: Pick<Staff, 'role' | 'permissions'>): string {
+  const role = staff.role
   if (isSuperAdmin(role)) return adminSectionPath('conversations')
-  // PD-40/PD-41: the Designer's whole Admin Web is the Certificates page.
-  if (role === 'specialist') return '/certificates'
+  // PD-40/PD-41: the Designer's whole Admin Web is the Certificates page;
+  // PD-48: a Pronunciation reviewer's is Lesson audio.
+  if (role === 'specialist') return holdsAny(staff, ['lesson_audio.view', 'lesson_audio.review']) && !holdsAny(staff, ['certificates.view', 'certificates.design']) ? '/lesson-audio' : '/certificates'
   // The legacy department roles (finance, technical, academic) have no
   // conversations: they land on their Tasks (PD-47). Operators land in their
   // conversations: the chat workspace on the real API.
@@ -96,7 +100,7 @@ export function AppRoutes() {
   return (
     <AppShell>
       <Routes>
-        <Route path="/" element={<Navigate to={homeFor(staff.role)} replace />} />
+        <Route path="/" element={<Navigate to={homeFor(staff)} replace />} />
         <Route path="/chat" element={<Area area="chat"><ChatPage /></Area>} />
         <Route path="/chat/:conversationId" element={<Area area="chat"><ChatPage /></Area>} />
         {/* PD-13: the Calls page; the super admin reaches it as /admin/calls. A
@@ -117,6 +121,8 @@ export function AppRoutes() {
         {/* PD-12: the department's queues, tabs of the same area. */}
         {/* PD-41: certificates have their own page; the PD-12 tab lands there. */}
         <Route path="/certificates" element={<Area area="certificates"><CertificatesPage /></Area>} />
+        {/* PD-48: lesson voice-over review (listen; two different reviewers approve each clip). */}
+        <Route path="/lesson-audio" element={<Area area="lesson-audio"><LessonAudioPage /></Area>} />
         <Route path="/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         {/* PD-26: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
@@ -221,7 +227,7 @@ export function AppRoutes() {
           built. Adding it is a single Route here plus a nav registry entry —
           no refactor. (/calls was the other seam; PD-13 filled it.)
         */}
-        <Route path="*" element={<Navigate to={homeFor(staff.role)} replace />} />
+        <Route path="*" element={<Navigate to={homeFor(staff)} replace />} />
       </Routes>
     </AppShell>
   )

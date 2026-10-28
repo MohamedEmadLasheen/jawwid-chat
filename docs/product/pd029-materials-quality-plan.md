@@ -28,6 +28,36 @@ The owner answered the two plan proposals (the department head's notes, `pd29-ar
 | 2 | Hadith | "Research a hadith dataset". Before any Islamic lesson that cites hadith is built, research the published hadith collections and datasets (for example sunnah.com's API terms and open hadith corpora): their licence for commercial and educational redistribution, provenance, grading data, and Arabic text quality. The result is a short recommendation with sources for the owner. **Nothing is loaded until the owner approves it.** Until then, every hadith line stays held as teacher-verified text. |
 | 3 | Wudu and salah | "These lessons are designed for young children, who should not be expected to understand the differences between the four schools of fiqh. We need one simple, consistent, child-friendly teaching method for wudu and salah. The Teachers department, in consultation with a qualified Islamic scholar, should approve the method and verify every step before publication. Do not display school names or differences of opinion to children. Where legitimate scholarly differences exist, the content team should choose an appropriate teaching approach and keep the lessons simple, accurate, and age-appropriate." So: **no madhhab names or differences in child-facing content; every fiqh step is held; the review doc of each such lesson carries a "method sign-off by the Teachers department and a qualified scholar" gate**, which must be passed before publication. |
 
+### Hadith source: HadeethEnc.com, with written confirmation (owner, 2026-10-29)
+
+The research (decision 2) compared HadeethEnc.com, sunnah.com, and the open hadith corpora on GitHub and Kaggle. The owner chose **"HadeethEnc + written OK"**.
+
+- **The source is HadeethEnc.com** (موسوعة الأحاديث النبوية), under the IslamHouse content usage policy, which is published in the IslamHouse-API hub README and reached via `r.islamhouse.com/h/en/g`. It is the only candidate whose rights holder grants commercial use and offline storage in writing, and every hadith carries a grade and a takhrij.
+- **Written confirmation first.** The owner e-mails IslamHouse (`admin@islamhouse.com`) for written confirmation, because Jawwid is a paid app. The draft letter, in English and Arabic, is in the department head's notes. The owner sends all outbound letters.
+- **Nothing is downloaded or loaded** until the confirmation arrives, or until the owner says to proceed without it. Until then, every hadith line stays held as teacher-verified text.
+
+**Rules for every hadith shown (binding):**
+
+1. The matn is shown **unchanged**, always with its **grade** and its **source** (HadeethEnc.com and the takhrij). Nothing is added to it, cut from it or changed in it.
+2. Any child-friendly wording is **clearly labelled as Jawwid's own prose**, using the policy's wording: «أُعدّ هذا الشرح المبسّط بالاستفادة من مواد منشورة على HadeethEnc.com، وهو من إعداد جوّد بشكل مستقل.» / "This simplified explanation was prepared using material published on HadeethEnc.com. It was prepared independently by Jawwid." It is never presented as HadeethEnc's text.
+3. **A teacher picks** which hadith suit children. Nothing is listed by default, and a picked hadith is held until the Teachers department approves the lesson.
+4. **The cached copy is refreshed** when the source updates, and errors found are sent back to the publisher.
+5. **No ads** near hadith content.
+
+**Import plan (not started; it waits for the confirmation):**
+
+- **Pinning, as for the Quran dataset** (`quran-dataset-contract.md`):
+  - one snapshot file per import, with a dataset id such as `hadeethenc-ar-<date>`;
+  - a manifest holding `fileSha256`, the attribution, the source URL, the fetch date and the per-hadith `sha256` (over the matn in UTF-8);
+  - the pin repeated in code, with a guard that fails if the pins disagree.
+- **Scope:** Arabic only, and only the hadith a teacher picked (by HadeethEnc id), not the whole encyclopedia. A translation is a separate decision.
+- **Fetch:** once, from the documented API (`hadeethenc.com/api/v1/…`), server-side by an operator, never live from the client. The rate limits are not published, so fetch slowly.
+- **Provenance:** a dated archive copy of the policy text and of IslamHouse's reply is kept beside the snapshot.
+- **Refresh:** a scheduled diff against the source.
+  - A changed matn or grade flags the hadith and holds every lesson that cites it until a teacher re-checks it.
+  - The new snapshot gets new pins; nothing is overwritten in place.
+- **In the lesson file:** a lesson cites a hadith by `{ dataset, id, sha256 }`, as Quran content cites positions. The browser resolves it against the pinned snapshot and fails closed on any mismatch. Jawwid's own explanation is a separate, labelled, held field.
+
 ## 0. How this was audited (safety)
 
 - The lesson content lives in `MohamedEmadLasheen/jawwid-lessons`. Its history was infected

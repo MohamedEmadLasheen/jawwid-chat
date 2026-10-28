@@ -33,4 +33,15 @@ export const ACCESS_ROLE_TEMPLATES: readonly AccessRoleTemplate[] = [
     permissions: ['certificates.design', 'certificates.view'],
     migration: '20261029190000_chat_pd040_designer_template.sql',
   },
+  {
+    // PD-48 (owner Q4): the teachers the super admin or the Teachers Manager
+    // judge qualified to approve lesson voice-over. Two of them approve a clip.
+    key: 'pronunciation_reviewer',
+    nameEn: 'Pronunciation reviewer',
+    nameAr: 'مراجع النطق',
+    description: "Listens to the lessons' computer-voice clips and approves or rejects each one. Two reviewers approve a clip before it plays.",
+    maxTier: 'specialist',
+    permissions: ['lesson_audio.review', 'lesson_audio.view'],
+    migration: '20261029230000_chat_pd048_lesson_audio.sql',
+  },
 ];
