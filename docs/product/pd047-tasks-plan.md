@@ -239,6 +239,35 @@ A guard spec asserts that every adapter has a completion trigger and a test wher
 
 The **Needs action** page and the other source pages stay as they are. A task is the "you, by name" layer over them.
 
+**Phase B decisions (department head, 2026-10-29).**
+- **Already built:** `instalment_overdue`, `receipt_review` and `renewal_request` became PR-2b's financial sources (`instalment`, `receipt_review`, `renewal_request`; §5.1 of the priority amendment).
+- **PR-6a** (slot `20261029235800`): `family_unsupervised`, `teacher_setup`, `new_student_assign` / `new_student_group`.
+- **Complaints and parent feedback** (next, slot to come) use the records that already exist; no new state.
+  - `complaint:<entryId>`: a Teacher File entry (`chat.teacher_supervision_entry`, kind `complaint`). Its task is **done when a `complaint_resolution` entry refers to it** (`refers_to`, unique per complaint). It goes to the teacher's supervisor, else the Teachers manager.
+  - `parent_feedback:<feedbackId>`: PD-32's `chat.parent_feedback`. Its task is **done when that record reaches its closed state, `status = 'resolved'`**. It goes to the teacher's supervisor, else the Teachers manager.
+  - `schedule_change:<requestId>` (PD-11's `chat.schedule_change_request`) goes with these.
+- **`makeup_owed`** waits for its design note (below). No code until it is agreed.
+
+**`makeup_owed` -- design note (for agreement; no code yet).**
+- **What record means "a make-up is owed".** No new record is needed: the **original lesson** owes one, exactly by the rule `LessonService.owedMakeups` already applies (`apps/api/src/lessons/lesson.service.ts`, repeated by the database in `guard_lesson`). A lesson owes a make-up when all of these hold:
+  - it is not a trial;
+  - its outcome is a make-up cause: `teacher_apology` or `teacher_no_show`, and `student_apology` only where the academy's policy owes one for it;
+  - no **live** make-up replaces it (`lesson_one_live_makeup`: a `kind = 'makeup'` lesson with `makeup_for` = it, whose own outcome is not `teacher_apology`, `teacher_no_show`, `admin_cancelled` or `rescheduled`);
+  - no `lesson_ruling` of kind `makeup_followup` settles it.
+- **Key:** `makeup_owed:<lessonId>`, the original lesson.
+- **Who it goes to:** the teacher's supervisor, else the Teachers manager (`work_task_teacher_owner`). This is the same department that already sees `makeupsOverdue` on Needs action.
+- **Who creates it, and when:** the source itself, the moment the lesson's outcome is recorded as a cause. A trigger on `chat.lesson`, plus the sweep as a backstop. Under the 14-day cut-off, a lesson owed from before switch-on stays on Needs action only.
+- **Floor:** `overdue_only`, with `due_at` = the lesson's end + `lesson.makeup_window_days` (7). Yellow while there is time, Red once past the window (the moment Needs action lists it as overdue).
+- **When it ends:**
+  - **Done** when a live make-up is booked (`SchedulingService.bookMakeup`; actor = whoever booked it), or when a `makeup_followup` ruling settles it (`resolveMakeup`: substitute teacher, family credit, package extension or waived; actor = whoever decided).
+  - **Withdrawn** when the lesson's outcome is corrected away from a cause.
+  - **If a booked make-up is itself cancelled** (`teacher_apology`, `teacher_no_show`, `admin_cancelled`, `rescheduled`), the original lesson owes again. That should be a **fresh** task, because the first one was completed by the booking. One way is an episode per booked make-up, as PR-2b did for packages.
+- **Questions for agreement:**
+  1. Completed at **booking** (as above), or only once the make-up is **held**? Held is stricter, but then the task stays open for days after the work is arranged.
+  2. Should `student_apology` owe a make-up task at all, or only the teacher causes?
+  3. A `makeup_followup` ruling also raises PR-2's `lesson_ruling` task for the supervisor. Settling `makeup_owed` by the same decision is right, but confirm the two do not need to be one task.
+- **Waiting for the owner:** `teacher_unsupervised` (whether it replaces PD-43's notices), `trial_outcome` (one task handed on, or two), and `certificate` (with PD-41).
+
 #### 3.6.1 As built in PR-2 (#241)
 
 - **Day-one backfill.** Owner, 2026-10-29: "Yes, but only recent ones". At switch-on, only source items from the **last 14 days** become tasks, and older open items are left as they are.
@@ -264,6 +293,26 @@ The **Needs action** page and the other source pages stay as they are. A task is
   - The record is deleted when the occurrence resolves in any way: its task raised, completed, withdrawn or moved, or its source decided or gone.
   - The sweep returns its counts, and the worker logs any failures.
 - **The sweep** runs in batches of at most 60 rows under an advisory lock, and the source triggers wait at most 2 s for a lock.
+
+#### 3.6.2 As built in PR-6a (slot `20261029235800`)
+
+Migration `20261029235800_chat_pd047_phase_b_sources.sql`. The four set-up sources are all operational and Medium, with the generic floor, and a person may reassign them.
+
+| Source | Key | Assignee | Due | Done (actor) | Withdrawn |
+|---|---|---|---|---|---|
+| `family_unsupervised` | the family | the Operations manager, else the super admin | first waiting child + 48 h | every child has a `learner_supervision` row (who placed the last; an academy import names nobody) | the family has no children left |
+| `teacher_setup` | the teacher | `work_task_teacher_owner` | added + 7 days | `teacher_setup_state` all true (nobody: many people fill it in) | the teacher leaves; back if reactivated unfinished |
+| `new_student_assign` | the trial (the form's key) | the Operations manager, else the super admin | recorded + 24 h | its `student_enrolment` exists (`assigned_by`) | the outcome is corrected away; back if corrected back |
+| `new_student_group` | the enrolment (`new_family` only) | the children's live supervisor, else as above | entered + 24 h | `group_conversation_id` set (`group_created_by`) | -- |
+
+- **Raised by `chat.work_task_sweep_setup()`**, the third sweep that `TaskService.sweep` runs, with its own lock and batches. These sources are not raised at once by a trigger. Each one is a state that is often settled in the same request that creates it: a family entered together with its supervisor, or an enrolment that joins an existing group. A raise at once would announce work that is already done.
+- **Completed at once** by triggers on `learner_supervision`, `student_enrolment` and `trial_subscription`, in the source's own transaction and never blocking it. The sweep re-reads the evidence as a safety net.
+- **The guard** now lets the system complete two more source types without an actor: `teacher_setup` and `family_unsupervised`. Every other source still names its actor.
+- **One task per family, ever.** A child added later and left unsupervised shows on New Students only.
+- **Delivery:** no new rule key. Each task is announced once with the generic `task_assigned` (ids only).
+- **Privacy (G-07):** the form's contents never reach a task. The title names the trial's prospect, read behind sign-in. `src/` still names `trial_subscription` only in `new-students/`.
+- **Spec:** `tasks-setup-pd047.spec.ts`.
+- **Admin Web:** each source links to where its work is done: New Students, or the teacher's file.
 
 ### 3.7 Manual tasks, and who is responsible
 

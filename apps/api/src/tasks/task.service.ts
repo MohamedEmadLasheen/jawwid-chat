@@ -66,6 +66,8 @@ export const SOURCE_TYPES = [
   'lesson_report', 'report_correction', 'lesson_ruling', 'leave_decision', 'violation_decision', 'case',
   // PD-47 PR-2b: the financial sources (priority amendment §5).
   'instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed',
+  // PD-47 PR-6a: the set-up sources (chat.work_task_sweep_setup).
+  'family_unsupervised', 'teacher_setup', 'new_student_assign', 'new_student_group',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -427,9 +429,10 @@ export class TaskService {
       skipped: false, raised: 0, settled: 0, withdrawn: 0, restored: 0, rerouted: 0, floored: 0, orphaned: 0,
       failed: 0, declined: 0, issues: 0, batches: 0,
     };
-    // PR-2's sources, then PR-2b's financial ones: each sweep its own lock and batches.
+    // PR-2's sources, PR-2b's financial ones, then PR-6a's set-up ones: each sweep its own lock and batches.
+    const sweeps = [Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`, Prisma.sql`chat.work_task_sweep_setup(50)`];
     let skipped = 0;
-    for (const sweep of [Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`]) {
+    for (const sweep of sweeps) {
       for (let i = 0; i < SWEEP_BATCHES; i++) {
         const [row] = await this.prisma.$queryRaw<Array<{ r: Record<string, unknown> }>>`SELECT ${sweep} AS r`;
         const r = row?.r ?? {};
@@ -443,7 +446,7 @@ export class TaskService {
         if (r.more !== true) break;
       }
     }
-    total.skipped = skipped === 2;
+    total.skipped = skipped === sweeps.length;
     return total;
   }
 
@@ -973,6 +976,7 @@ export class TaskService {
                WHEN 'leave_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_leave_request q WHERE q.id = t.source_id)
                WHEN 'violation_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_violation q WHERE q.id = t.source_id)
                WHEN 'lesson_ruling' THEN (SELECT l.teacher_id::text FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id WHERE q.id = t.source_id)
+               WHEN 'teacher_setup' THEN t.source_id::text
              END AS source_teacher_id,
              CASE t.source_type
                WHEN 'lesson_report' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
@@ -1004,6 +1008,18 @@ export class TaskService {
                WHEN 'checkout_failed' THEN (SELECT jsonb_build_object('label', q.label, 'amountMinor', q.amount_minor, 'currency', q.currency,
                                                                       'familyName', f.display_name)
                                               FROM chat.payment_request q LEFT JOIN chat.family f ON f.id = q.family_id WHERE q.id = t.source_id)
+               -- PR-6a. A form is named by its trial's prospect, never by what the form holds (G-07).
+               WHEN 'family_unsupervised' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id,
+                                                                          'count', (SELECT count(*)::int FROM chat.learner l
+                                                                                     WHERE l.family_id = f.id
+                                                                                       AND NOT EXISTS (SELECT 1 FROM chat.learner_supervision ls WHERE ls.learner_id = l.id)))
+                                                  FROM chat.family f WHERE f.id = t.source_id)
+               WHEN 'teacher_setup' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id, 'count', chat.work_task_setup_missing(te.id))
+                                            FROM chat.teacher te WHERE te.id = t.source_id)
+               WHEN 'new_student_assign' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
+                                                 FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
+               WHEN 'new_student_group' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id)
+                                                FROM chat.student_enrolment e JOIN chat.family f ON f.id = e.family_id WHERE e.id = t.source_id)
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,
