@@ -7170,6 +7170,24 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Couldn\'t load message info'**
   String get messageInfoFailed;
+
+  /// PD-40: a department specialist without chat access signed in on the app.
+  ///
+  /// In en, this message translates to:
+  /// **'This account uses Admin Web'**
+  String get adminWebOnlyTitle;
+
+  /// PD-40: why a department specialist cannot use the app, and where to go.
+  ///
+  /// In en, this message translates to:
+  /// **'Department staff accounts work in Admin Web, in a browser. Sign in there with the same e-mail and password.'**
+  String get adminWebOnlyBody;
+
+  /// PD-40: dismisses the Admin Web notice and shows the sign-in form again.
+  ///
+  /// In en, this message translates to:
+  /// **'Use another account'**
+  String get adminWebOnlyAnotherAccount;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -253,3 +253,49 @@ describe('the super admin', () => {
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
   })
 })
+
+/**
+ * PD-40 PR-5b: what the department head verified on systest. A Sales manager
+ * holds no certificates key, so GET /certificates/access answers 403: the
+ * probe is a quiet "no" -- no Certificates entry, and no error anywhere.
+ */
+describe('the access probe, for a Sales manager', () => {
+  const salesManager = makeStaff({ id: 'm-5', name: 'Sales Manager', role: 'manager', permissions: ['trials.view'] })
+
+  async function renderAccounts(access: () => Response) {
+    on('GET', /\/certificates\/access$/, access)
+    on('GET', /\/lessons\/access$/, () => json({ lessonManager: false, sales: true, operations: false, calendar: false, supervisionPage: false }))
+    on('GET', /\/admin\/accounts(\?|$)/, () => json({ accounts: [], truncated: false, administers: ['family'] }))
+    on('GET', /\/admin\/impersonations/, () => json({ sessions: [] }))
+    const rendered = renderWithProviders(<AppRoutes />, { staff: salesManager, route: '/accounts' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Accounts' })).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /\/certificates\/access$/).length).toBeGreaterThan(0))
+    return rendered
+  }
+  const certificateLinks = () => screen.queryAllByRole('link', { name: 'Certificates' })
+
+  it('a 403 offers no Certificates entry and shows no error', async () => {
+    const { queryClient, container } = await renderAccounts(() =>
+      json({ error: { code: 'COMMON.FORBIDDEN', message: 'this account holds no certificates key' } }, 403),
+    )
+    await waitFor(() => expect(queryClient.getQueryState(['certificates', 'access'])?.status).toBe('error'))
+    expect(certificateLinks()).toHaveLength(0)
+    expect(screen.queryAllByRole('alert')).toHaveLength(0)
+    expect(container.ownerDocument.querySelector('.banner--danger, .state--forbidden')).toBeNull()
+    expect(screen.queryByText(/certificates key/)).not.toBeInTheDocument()
+    expect(screen.queryByText("You don't have permission to access this.")).not.toBeInTheDocument()
+    // The probe is asked once: retry is off, so a "no" is not hammered.
+    expect(calls('GET', /\/certificates\/access$/)).toHaveLength(1)
+  })
+
+  it('a 200 with canOpen false offers no Certificates entry either', async () => {
+    await renderAccounts(() => json({ canOpen: false, view: false, design: false, types: false, categories: { student: NO, teacher: NO } }))
+    expect(certificateLinks()).toHaveLength(0)
+    expect(screen.queryAllByRole('alert')).toHaveLength(0)
+  })
+
+  it('and canOpen true does offer it (the control for the two above)', async () => {
+    await renderAccounts(() => json(opsAccess))
+    await waitFor(() => expect(certificateLinks().length).toBeGreaterThan(0))
+  })
+})

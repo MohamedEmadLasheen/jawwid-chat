@@ -386,6 +386,29 @@ void main() {
       expect(repository.signOutCalls, 0);
     });
 
+    test('PD-40: a specialist sent to Admin Web is signed out with its own reason, its session ended', () async {
+      repository.currentUserError = const AppError(AppErrorKind.forbidden, code: AuthFailures.usesAdminWeb);
+
+      await controller().signIn(username: 'specialist', password: 'pw');
+
+      final state = container.read(provider) as AuthSignedOut;
+      expect(state.reason, SignedOutReason.usesAdminWeb);
+      expect(await tokens.read(), isNull);
+      expect(adopted, isEmpty, reason: 'never adopted, so no shell and no request as them');
+      expect(repository.signOutCalls, 1, reason: 'POST /auth/logout before the tokens are forgotten');
+    });
+
+    test('PD-40: on restore too', () async {
+      await tokens.write(AuthSession(accessToken: 'a', refreshToken: 'r', accessTokenExpiresAt: DateTime.utc(2030)));
+      repository.currentUserError = const AppError(AppErrorKind.forbidden, code: AuthFailures.usesAdminWeb);
+
+      await controller().restore();
+
+      expect((container.read(provider) as AuthSignedOut).reason, SignedOutReason.usesAdminWeb);
+      expect(await tokens.read(), isNull);
+      expect(repository.signOutCalls, 1);
+    });
+
     test('a refused principal on restore ends the stored session', () async {
       await tokens.write(
         AuthSession(
