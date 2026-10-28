@@ -1,8 +1,9 @@
 # PD-39 · The teacher whiteboard — design and MVP proposal
 
-Status: **PROPOSED, awaiting approval** (department head, then the product owner).
-No feature code exists yet. Claimed in `pd-registry/PD-39.md`; migration slot
-`20261027120000` (`chat_pd039_whiteboards`) is claimed and will be written after approval.
+Status: **DECIDED by the owner, 2026-10-28** (all five questions, with safeguards; §10).
+Code waits for the department head's GO (machine-load cap). No feature code exists yet.
+Claimed in `pd-registry/PD-39.md`. Migration slot `20261028110000` (`chat_pd039_whiteboards`)
+is claimed; it was renumbered from `20261028110000`.
 
 The owner's request (2026-10-27): "we need to add in teacher account this one: Spahboard
 Interactive Whiteboard". The owner sent a feature analysis of Spahboard in eleven groups
@@ -11,7 +12,9 @@ calculator/timer/stamps, camera and recording, pages and export, sharing). The o
 us to separate **built-in features** from **activities teachers create with the tools**.
 
 This document recommends what to build first, where to build it and how, and what to
-leave out. It ends with five questions for the owner.
+leave out. §9 has the owner's five questions and answers. §10 maps each of the owner's
+safeguards to its mechanism and test. §11 checks the design against permissions,
+storage and backups.
 
 ---
 
@@ -154,15 +157,15 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
   - The alternative is the King Fahd Complex (KFGQPC) Hafs text and font. Its terms need
     to be read and confirmed before we could use it.
 - **One shared dataset, built by PD-29, consumed here.**
-  - PD-29's materials-quality plan (draft #170, item P0-2) needs the same verified text,
+  - PD-29's materials-quality plan (#170, item P0-2) needs the same verified text,
     plus per-ayah audio and reviewed Tajweed marks.
   - So there is **one** dataset and **one** module (`apps/api/src/quran/`). PD-29 P0-2
     builds it, on its own migration slot. PD-39 only reads it, and its own migration does
     not create Quran tables.
   - PD-29 and PD-39 agreed the contract on 2026-10-27. The full text is
-    [`quran-dataset-contract.md`](quran-dataset-contract.md), built by PD-29 as PR #176 (dataset `tanzil-uthmani-1.1`,
-    module `apps/api/src/quran`, which exports `QuranTextService`). This section only
-    summarises it.
+    [`quran-dataset-contract.md`](quran-dataset-contract.md). It is built by PD-29 as
+    PR #176, **merged to main**, with dataset `tanzil-uthmani-1.1` and module
+    `apps/api/src/quran`, which exports `QuranTextService`. This section only summarises it.
   - The pinned source file lives at repo root, `data/quran/`. That way PD-29's lessons
     engine bundles the same file, and CI checks its hash and counts.
 - **How it is stored (the shared contract).**
@@ -401,7 +404,7 @@ off screen? `CallPresenter` pushes `/call` app-wide, and there is no `PopScope` 
 
 ## 6. Data model and authorisation
 
-### 6.1 Tables (migration `20261027120000_chat_pd039_whiteboards`)
+### 6.1 Tables (migration `20261028110000_chat_pd039_whiteboards`)
 
 ```
 chat.whiteboard
@@ -412,14 +415,17 @@ chat.whiteboard
   title text                1..120
   revision int              bumped on every page save
   bytes_total bigint        documents + assets, maintained for the quota
+  state text                'active' | 'trashed' | 'retained'   (§10, safeguards 4 and 5)
+  trashed_at, purge_after   set together when the teacher deletes; purge_after = +30 days
+  retained_until            set when the teacher leaves: their deactivation + 12 months
+  retention_notified_at     the expiry notice was sent (once)
   created_at, updated_at
-  deleted_at                soft delete; purged after 30 days (worker)
 
 chat.whiteboard_page
   id uuid pk, board_id fk, position smallint (0..49), unique (board_id, position) deferrable
   layout text check in ('plain','ruled','narrow_ruled','grid','arabic_lines')
   background text           a palette key, not free CSS
-  document jsonb            octet_length <= 1 MB
+  document jsonb            octet_length <= 512 KB (§6.4)
   revision int, updated_at
 
 chat.whiteboard_asset
@@ -429,6 +435,13 @@ chat.whiteboard_asset
   content_type, byte_size, sha256, width, height
   state text check in ('pending','ready')
   created_at, expires_at (exports only)
+
+chat.whiteboard_access_log   append-only by trigger; no request-role grants (§10, safeguard 1)
+  id bigint pk, organization_id, board_id, teacher_id
+  viewer_id, viewer_kind    who acted
+  basis text                'owner' | 'supervisor' | 'backup' | 'teachers_manager' | 'super_admin'
+  action text               'open' | 'export' | 'trash' | 'restore' | 'copy' | 'purge' | 'retain'
+  at timestamptz            now(), set by the database
 
 -- Not here: chat.quran_dataset / chat.quran_ayah / chat.quran_tajweed_mark are PD-29
 -- P0-2's migration (the shared dataset, §4.3). PD-39 reads them through QuranTextService.
@@ -446,9 +459,11 @@ services, as with every other `chat.*` table since the blanket-RLS trap.
 | Who | Read a board | Write a board |
 |---|---|---|
 | The owning teacher (active account) | yes | yes |
-| A **deactivated** teacher | no | no (boards kept; see owner question 5) |
-| Teachers department staff whose PD-35 scope covers the teacher (`TeacherScopeService.covers`): the teacher's supervisor, their active backup, the Teachers Manager | **read-only**, audited (owner question 1) | no |
-| Super admin of the organisation | read-only, audited | no |
+| A **deactivated** teacher (left) | no | no. The boards are retained for 12 months (§10, safeguard 4). |
+| The teacher's **assigned supervisor**, their **active backup**, the **Teachers Manager**: exactly `chat.staff_supervised_teacher_ids(staff, now())` | **read-only**, every access logged | no |
+| Super admin of the organisation | read-only, every access logged | no |
+| Other Teachers department members (not assigned to this teacher), **even while the PD-35 strict switch is OFF** | no | no |
+| A PD-21 support session opened on the teacher's account | read-only | **no**: it is staff acting, not the teacher |
 | Operations supervisors, Sales and other staff | no | no |
 | Other teachers | no | no |
 | Students and families | no (MVP). Phase 2: only the pages of an **active share** in a conversation they can read | never |
@@ -459,8 +474,13 @@ services, as with every other `chat.*` table since the blanket-RLS trap.
 - **Super admin cannot write.** Unlike PD-8's conversations, a board is the teacher's own
   work, and a staff edit would put words in the teacher's mouth (the same reason no one
   else writes a lesson report).
-- **Staff reads** are recorded with `whiteboard.viewed` in the audit log, with the board,
-  the teacher and the basis.
+- **Every access is logged** in `chat.whiteboard_access_log`: the viewer, the time, the
+  board and the basis. The row is written in the same transaction as the read. If the row
+  cannot be written, the read fails.
+- **Why not `TeacherScopeService.covers`.** While the PD-35 strict switch is OFF (the
+  default), it returns the *whole* Teachers department, which is wider than the owner's
+  list. `chat.staff_supervised_teacher_ids` is exactly the owner's four roles whatever the
+  switch says (§11).
 
 ### 6.3 Object storage: the signing call is the access decision
 
@@ -493,17 +513,20 @@ never enough to read an object.**
 
 | Limit | Default |
 |---|---|
-| Boards per teacher | 200 (deleted boards do not count) |
+| Boards per teacher | 200 active (boards in trash do not count) |
 | Pages per board | 50 |
-| Page document | 1 MB (JSON) |
+| Page document | 512 KB (JSON, checked by the database). A full page says "This page is full — add a page". |
+| Documents per teacher (Postgres) | 25 MB |
 | Image / PDF page asset | 10 MB, 8,000 px long edge |
 | Assets per board | 60 |
-| Storage per teacher | 500 MB (documents + assets) |
+| Assets per teacher (object storage) | 300 MB. Boards in trash count until they are purged. |
+| Organisation budgets (alert at 80%) | documents 1 GiB, assets 50 GiB (§11) |
 | Exports | 24 h, then purged; at most 5 in flight per teacher |
 | Writes | page save ≤ 2/s per board; grants ≤ 20/min per teacher |
 
 Over a limit, the API answers `COMM.WHITEBOARD_LIMIT` with which limit was hit, and the
-client says it plainly.
+client says it plainly. These replace the first draft's 1 MB pages and 500 MB per teacher,
+which did not fit the database (§11).
 
 ---
 
@@ -535,7 +558,7 @@ describes a general K-12 board.
 Each step is one PR, reviewed by the head, behind no feature flag except the tab's
 visibility.
 
-1. **API: boards, pages, assets, quotas, authz** (slot `20261027120000`).
+1. **API: boards, pages, assets, quotas, authz** (slot `20261028110000`).
    - Tests for §6.2 (every row of the table), §6.3 (key-is-not-a-capability, foreign asset
      in a page, the grant/confirm swap) and cross-organisation 404s.
    - Unit tests run with `--maxWorkers=2`. Integration runs in CI (G-19), or with a spec
@@ -545,9 +568,8 @@ visibility.
    - Widget and golden tests for Arabic text and strokes, run with `--concurrency=2`.
    - Manual QA in Chrome at `/teacher/` and on a tablet, when the QA session has a device.
 3. **Quran verses.**
-   - **Waits for PD-29 P0-2**: the shared dataset, loader and `GET /quran/ayahs`. These are
-     built in PD-29's PR #176, so this step needs #176 merged first. Steps 1, 2 and 4 do not
-     wait.
+   - Builds on PD-29 P0-2: the shared dataset, loader and `GET /quran/ayahs`. These are in
+     PR #176, **merged to main**, so nothing blocks this step.
    - This step adds the verse picker, the verse element and the Amiri Quran rendering.
    - The review sheet goes to the academy's Quran teacher **before** the tab is shown to
      teachers.
@@ -566,6 +588,7 @@ teachers' hands.
    (and active backup), the Teachers Manager and the super admin, never anyone else. Boards
    are lesson material, which supervisors already review through reports. No one but the
    teacher ever edits a board.
+   **DECIDED 2026-10-28 (owner):** approved, with the safeguards in §10.
 2. **Which Quran text do we use?**
    *Recommended: the Tanzil Project's Uthmani (Hafs) text.* Its terms are CC BY 3.0,
    verbatim only, credited "Tanzil Project — tanzil.net". It is drawn with the Amiri Quran
@@ -581,12 +604,169 @@ teachers' hands.
    *Recommended: no. Drawing on a laptop (`/teacher/`) and tablets; phones open boards
    read-only.* A phone screen is too small for a toolbar and a page. The board is built
    once, so this is a switch we can change later.
+   **DECIDED 2026-10-28 (owner):** approved, with the safeguards in §10.
 4. **In Phase 2, what do students do with a shared board?**
    *Recommended: watch only*, in a "board view" opened from a card in the lesson's group
    chat, beside the call (the call itself is not changed). Students drawing on the board is
    a later decision: it brings moderation and saving children's input.
+   **DECIDED 2026-10-28 (owner):** approved, with the safeguards in §10.
 5. **What happens to a teacher's boards when the teacher leaves?**
    *Recommended: they are kept.* They stay readable by the Teachers department (as in
    question 1) for 12 months, then deleted. A department manager can give a copy of a board
    to another teacher before that. While the teacher is active, a board the teacher deletes
    is recoverable for 30 days, then purged.
+   **DECIDED 2026-10-28 (owner):** approved, with the safeguards in §10.
+
+---
+
+## 10. The owner's decision (2026-10-28) and its safeguards
+
+The owner approved all four remaining recommendations (questions 1, 3, 4 and 5), with
+these safeguards. Quoted verbatim, as relayed by the department head:
+
+> 1. Keep board editing restricted to the teacher. The teacher's assigned supervisor, active
+>    backup supervisor, Teachers Manager, and Super Admin may view boards in read-only mode
+>    only. Log every access with the viewer, timestamp, and board identifier. Ensure
+>    read-only access cannot modify, delete, or overwrite board content.
+> 2. Support teacher drawing on laptops and tablets, and read-only viewing on phones, but
+>    verify actual device and browser compatibility before enforcing device restrictions.
+>    Show a clear message when a device does not support editing.
+> 3. In Phase 2, students may view a shared board through a clearly identified card in the
+>    lesson's group chat. Student editing and collaborative drawing remain out of scope for
+>    this phase.
+> 4. When a teacher leaves, retain their boards for the Teachers department for 12 months,
+>    with access limited to authorized staff and an auditable access history. Notify the
+>    responsible administrator before the retention period expires where feasible. When a
+>    teacher deletes a board, move it to recoverable trash for 30 days before permanent
+>    deletion.
+> 5. Make board deletion, recovery, and retention behavior explicit in the UI. Prevent
+>    accidental permanent deletion, and ensure recovery restores the board correctly.
+> 6. Confirm that these rules fit the existing permissions model, storage capacity, and
+>    backup strategy before implementation.
+>
+> Do not modify any Jawwid Core production code or database. Implement these changes only in
+> the intended system and follow the existing project safeguards.
+
+**Jawwid Core.** PD-39 lives entirely in this repository: the Chat API, its Postgres
+schema, and the Flutter app. Nothing in Jawwid Core is read, written or changed.
+
+### 10.1 Each safeguard: its mechanism and its test
+
+Every test below goes in the PR that builds the mechanism (§8). Integration specs prove
+their claims against the real database (in CI, G-19).
+
+| # | Safeguard | Mechanism | Test that proves it |
+|---|---|---|---|
+| 1a | Only the teacher edits | **Route layer.** Every board write route is `@NotForStaff()`, so PD-40's PermissionGuard refuses a staff caller before the service runs. **Service.** `WhiteboardService.assertOwner` requires a teacher actor, an active account, `actorId = board.teacher_id`, and a session that is not a PD-21 support session. **Database.** A trigger refuses any change to `teacher_id` and `organization_id`. | An integration matrix: every write route (page save, rename, reorder, asset grant/confirm, trash, restore, export) × every non-owner role (super admin, Teachers Manager, assigned supervisor, active backup, another teacher, a parent, a support session). Each answers 403/404, and afterwards the board's `revision`, every page's document SHA-256, `state` and asset rows are **unchanged**. |
+| 1b | Read-only viewers are exactly the four roles | Staff read routes are `@Requires('whiteboards.view')` (a key is necessary, never sufficient). The service then requires the teacher to be in `chat.staff_supervised_teacher_ids(staff, now())`: the assigned supervisor, the active backup, the Teachers Manager, the super admin. **This holds whatever the PD-35 switch says.** Outside that: 404. | A matrix with the switch both ON and OFF. The four roles can read. A Teachers department member not assigned to this teacher, an expired or dormant backup, an Operations supervisor, Sales, and another organisation's staff all get 404. The response has no write affordances (`canEdit: false`). |
+| 1c | Every access logged | `chat.whiteboard_access_log` (§6.1) records the viewer, basis, board, action and `at = now()`. It is written in **the same transaction** as the read or action, so there is no read without a row. It is append-only by trigger, and request roles get no grants. The Teachers Manager and super admin read it with `GET /whiteboards/:id/access-log` (`whiteboards.retention`). | Each read path (open, asset signing, export) writes exactly one row with the right basis. A forced failure of the log insert fails the read: nothing is served. UPDATE and DELETE on the log are refused by the database. |
+| 1d | Read-only cannot modify, delete or overwrite | Read routes are GET-only and run in read-only transactions (`SET TRANSACTION READ ONLY`, apart from the log insert done first in its own statement). The staff viewer in the app opens the board with no tools, no autosave and no trash. | 1a's matrix covers the server. A widget test confirms the read-only viewer builds no toolbar and never calls a write repository method. |
+| 2a | Drawing on laptops and tablets, read-only on phones | The client gate is a **capability check, not user-agent sniffing**. Editing is offered when the shortest side is at least `editMinShortestSideDp` (default 600) **and** the renderer is available (CanvasKit loaded; on the web, WebGL and WebAssembly). Otherwise the board opens read-only. The threshold comes from the server's client config, so it can be loosened without an app release. **It is a UX gate, not a security control.** The server accepts the owner's writes from any device, as PD-28's portal gate does. | Widget tests at 375×812, 768×1024 and 1280×800, with mouse, touch and stylus pointers, and with the renderer check forced off. |
+| 2b | Verify real devices before enforcing | **Before the gate ships switched on**, the QA session runs a compatibility matrix:<br>• current Chrome, Edge, Safari and Firefox on macOS and Windows (`/teacher/`);<br>• the iPad app with Apple Pencil and with touch;<br>• an Android tablet with a stylus;<br>• an iPhone and an Android phone (read-only).<br>Results go to `docs/mobile/evidence/pd39/compatibility.md`. Until the matrix passes, the gate ships in **report-only** mode: it logs what it would have decided and blocks nothing. | The matrix file, signed off by the head, is the release condition for turning the gate on. |
+| 2c | A clear message when editing isn't supported | A banner over the read-only board, in Arabic and English: "Editing boards needs a laptop or tablet. You can view this board here." If the renderer is missing: "This browser can't edit boards. Try the latest Chrome, Edge, Safari or Firefox." | Golden tests of both banners in both languages, RTL and LTR. |
+| 3 | Phase 2: view through a clearly identified card; no student editing | A dedicated message card kind, `whiteboard_share`, distinct from text and lesson cards. It shows a board icon, the board's title, the teacher's name, "View only", and "Live" or "Ended". The student viewer has no tools. The server accepts board operations **only from the owner's socket** on an active share, and delivery is authorised per recipient at delivery time (RT-009). | (Phase 2 PR) Golden tests of the card. An operation sent from a student's or a parent's socket is refused and delivered to nobody. Ending the share stops delivery with every push disabled. |
+| 4a | A leaver's boards kept 12 months for the Teachers department | When the teacher's account is deactivated (offboarding, not a temporary suspension), the same transaction moves every board that is not in trash to `state = 'retained'`, with `retained_until` = deactivation + 12 months, and logs `retain`. **Readers** are the 1b roles, plus the Teachers Manager and super admin even when the assignment has ended. **Copy to another teacher** (`POST /whiteboards/:id/copy {teacherId}`, `whiteboards.retention`): a new board owned by the new teacher, with assets copied server-side to new keys, logged `copy`. If the teacher is reactivated within the 12 months, the boards return to `active`. | Deactivate → every board is `retained` and the old teacher's session is refused. The manager and super admin can read; an unassigned supervisor gets 404. Copy creates an independent board whose assets sign under the new board, and the original is unchanged. Reactivate → the boards are `active` again. |
+| 4b | An auditable access history | The same log (1c), kept for as long as the board exists. When a board is purged, its log rows are kept, with the board id and teacher id still recorded, so the history outlives the board. | Purging leaves the log rows. `GET .../access-log` lists them in time order. |
+| 4c | Notify before retention expires, where feasible | A daily worker job takes boards whose `retained_until` is within 30 days and whose `retention_notified_at` is null. It sends one notification per teacher (not per board) to the Teachers Manager and the super admin, through the PD-34 notification pipeline: "N boards of {teacher} will be deleted on {date}. Copy any you want to keep." It then sets `retention_notified_at`. **Where feasible:** if PD-34 cannot reach a staff recipient (no device, no inbox), the same list appears on Admin Web's Teachers page as "Boards to be deleted soon". | Jobs run with a fake clock at day 334 (notified once), day 335 (not notified again) and day 365 (purged: rows and objects gone, log kept). |
+| 4d | Trash for 30 days, then permanent deletion | A teacher's delete sets `state = 'trashed'`, `trashed_at` and `purge_after = +30 days`, and logs `trash`. Nothing is removed. A daily purge job hard-deletes boards past `purge_after`: page rows, asset rows and their storage objects, and logs `purge`. **No API route deletes permanently**; only the purge job does. | Trash → the board is hidden from the list and shown under "Deleted boards". The purge job at day 29 leaves it; at day 30 it removes the rows and objects, and the log keeps `trash` and `purge`. No route reaches `purge`. |
+| 5a | Deletion, recovery and retention explicit in the UI | **Delete dialog:** "Move «{title}» to Deleted boards? You can restore it until {date}. After that it is deleted for good." **Deleted boards list:** each board shows "Deleted on {date} · Restorable until {date}". **A retained board** shows "Kept until {date}" to the staff who may see it. Every date is in the viewer's own time zone (PD-22). | Golden tests of the dialog, list and badges, in Arabic and English. |
+| 5b | Prevent accidental permanent deletion | There is **no "delete forever" action** in the MVP. Permanent deletion happens only through the 30-day purge (4d). Emptying the trash would be a separate owner decision. | The route table has no permanent-delete route, and a test asserts it. |
+| 5c | Recovery restores the board correctly | `POST /whiteboards/:id/restore` (owner only, while `trashed`) sets `state = 'active'` and clears `trashed_at` and `purge_after`. Nothing was removed while it was in trash, so pages, assets and revision come back as they were. If restoring would exceed the 200-board limit, it is refused with a plain message rather than partly restored. | Round trip: create a board with 3 pages, an image and a verse; trash it; restore it. Then page count, every page's document SHA-256, every asset's SHA-256, revision and title are identical, and every asset signs again. Restoring after purge answers 404. |
+| 6 | Fits permissions, storage and backups | §11. | — |
+
+---
+
+## 11. Safeguard 6: does it fit what exists? (checked 2026-10-28 against main `a547b0e2`)
+
+### 11.1 The permissions model (PD-40, merged)
+
+- **How PD-40 works.**
+  - `apps/api/src/platform/permissions/catalogue.ts` is the **staff** permission system.
+    Every route declares `@Requires(...)`, `@SelfService()` or `@NotForStaff()`
+    (`route-access.ts`).
+  - Teachers and parents pass that layer, and the service decides for them.
+  - A key is "necessary, never sufficient": the service still decides scope.
+- **Teacher routes.** All of them are `@NotForStaff()`. That is the first wall of
+  safeguard 1a.
+- **Two new catalogue keys, proposed.** Both are `risk: 'pii'` (a board can carry a child's
+  name or work), `delegable: false` (PD-40 H5/H8: only the super admin grants them), and
+  `introducedBy: 'PD-39'`.
+
+  | Key | Label (en / ar) | Legacy bundles |
+  |---|---|---|
+  | `whiteboards.view` | View teachers' boards (read-only) / عرض سبورات المعلمين (للقراءة فقط) | `manager:teachers`, `supervisor:teachers` (the super admin holds every key) |
+  | `whiteboards.retention` | Manage departed teachers' boards and read board access history / إدارة سبورات المعلمين المغادرين والاطلاع على سجل الوصول | `manager:teachers` |
+
+  `supervisor:teachers` gets `whiteboards.view` because the assigned supervisor and the
+  backup are Teachers department supervisors. The key only opens the door; 1b's
+  `staff_supervised_teacher_ids` then narrows it to the teacher's own supervisor.
+- **One correction to the first draft.**
+  - §6.2 first used `TeacherScopeService.covers`. Its `scopeOf` returns `ALL_TEACHERS` for
+    every Teachers department member while the PD-35 strict switch is OFF, which is the
+    default in production. That is wider than the owner's list.
+  - `chat.staff_supervised_teacher_ids` (migration `20261026160006`) returns exactly these,
+    in both switch states:
+    - for the super admin and the Teachers Manager, every teacher;
+    - for a Teachers department supervisor, their assigned teachers;
+    - for an active backup, the assigned teachers of the supervisor they back up.
+  - PD-39 uses it.
+  - **Consequence:** a teacher with no assigned supervisor is readable only by the Teachers
+    Manager and the super admin. That is correct under the owner's rule.
+
+### 11.2 Storage capacity
+
+- **Postgres.** The DigitalOcean cluster already in the project is 1 GB RAM / 10 GiB disk,
+  and every feature shares it.
+  - The first draft's limits did not fit. 1 MB pages × 50 pages × 200 boards is up to
+    10 GB **for one teacher**.
+  - The new limits (§6.4) are 512 KB per page and 25 MB per teacher, with an organisation
+    alert at 1 GiB of board documents.
+  - Estimate: an active teacher with 40 boards × 6 pages × ~40 KB (delta-encoded strokes,
+    before Postgres compression) holds about 10 MB. 50 teachers hold about 500 MB, about 5%
+    of the disk.
+  - The 25 MB cap keeps the worst case at 1.25 GB for 50 teachers. The organisation's real
+    teacher count and the production cluster's size should be confirmed when it is
+    provisioned.
+- **Object storage.** One S3-compatible bucket (`STORAGE_BUCKET`) is shared with chat
+  attachments, Materials and certificates. The code has no bucket-wide quota.
+  - Board images are capped at 300 MB per teacher. 50 teachers × 300 MB = 15 GB worst case.
+  - Exports expire after 24 h, and trash and retention purges free space.
+  - An organisation budget (50 GiB, alert at 80%) is computed from `bytes_total`.
+- **Monitoring.** The API exposes the organisation's board document and asset totals
+  beside its existing health metrics. The 80% alerts go to the same place as the other
+  operational alerts.
+
+### 11.3 The backup strategy (`docs/infrastructure/backup-recovery.md`)
+
+| Board data | Where it lives | Backed up today? |
+|---|---|---|
+| Boards, pages (the drawing itself), access log, retention state | Postgres | **Yes.** Encrypted `pg_dump` before every deploy and nightly, kept 30 days ("implemented and drilled"). Provider PITR is "not provisioned". |
+| Imported images, PDF pages, exports | Object storage | **No.** Object storage versioning and lifecycle rules are "not provisioned". This is the same gap chat attachments already have. |
+
+- **What this means.** Today, a lost bucket would lose a board's *images* but not its
+  drawing, text or verses. Those are in Postgres, and verses are only references to the
+  shared Quran dataset. The board would show "Image unavailable" placeholders.
+  - **This is an infrastructure item, not a PD-39 code item.** The head should raise it with
+    the owner: provisioning bucket versioning (30 days, as the backup doc plans) closes it
+    for boards and attachments together.
+  - I recommend doing that before teachers rely on boards for lesson preparation.
+- **Trash and backups.** Trash is the per-board recovery: a backup restores the whole
+  database, never one board. That is why the 30-day trash exists.
+- **Permanent deletion and backups.** A purged board leaves the live system on day 30. It
+  can survive in `pg_dump` archives for up to 30 more days, until they age out (about day
+  60). The same applies to a leaver's boards after their 12 months. The privacy text
+  shown to teachers should say "deleted within 60 days".
+- **Restore drill.** Add a board count, and one board's page SHA-256, to the restore
+  checklist (backup doc §5). This proves a restore brings boards back intact.
+
+### 11.4 Verdict
+
+**The safeguards fit**, with three changes now made in this design:
+
+1. Staff reads use `chat.staff_supervised_teacher_ids`, not the department-wide scope
+   (11.1).
+2. Lower storage limits: 512 KB per page, 25 MB of documents and 300 MB of images per
+   teacher (11.2).
+3. Two new PD-40 keys, `whiteboards.view` and `whiteboards.retention` (11.1).
+
+One item stays **open outside PD-39**: provisioning object storage versioning (11.3).
