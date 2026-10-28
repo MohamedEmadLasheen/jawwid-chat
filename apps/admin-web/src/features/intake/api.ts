@@ -153,6 +153,32 @@ export const intakeKeys = {
   entered: ['family-intake', 'entered'] as const,
   family: (id: string) => ['family-intake', 'family', id] as const,
   carriedOver: (learnerId: string) => ['family-intake', 'carried-over', learnerId] as const,
+  history: (familyId: string) => ['family-intake', 'history', familyId] as const,
+}
+
+/** S4: one line of a family's history -- who did what, when, about which family member. */
+export interface FamilyHistoryEntry {
+  id: string
+  action: string
+  at: string
+  actor: StaffRef | null
+  subject: { kind: 'family' | 'learner' | 'contact'; id: string; name: string | null }
+  details: {
+    supervisor?: StaffRef | null
+    from?: StaffRef | null
+    to?: StaffRef | null
+    total?: number | null
+    completed?: number | null
+    planMonths?: number | null
+    children?: number | null
+  }
+  /** Shown only where a person typed it (a Sales owner change, a package removed). */
+  reason: string | null
+}
+
+export interface FamilyHistory {
+  familyId: string
+  entries: FamilyHistoryEntry[]
 }
 
 const family = (id: string) => `/family-intake/families/${encodeURIComponent(id)}`
@@ -165,6 +191,8 @@ export const intakeApi = {
   /** New Students: the families entered by hand that this viewer owns. */
   entered: () => api.get<EnteredList>('/family-intake/entered'),
   family: (familyId: string) => api.get<FamilyOwnership>(family(familyId)),
+  /** S4: the family's history, oldest first. */
+  history: (familyId: string) => api.get<FamilyHistory>(`${family(familyId)}/history`),
   /** The Operations manager places a family waiting for its Operations supervisor. */
   assignSupervisor: (familyId: string, supervisorId: string) =>
     api.post<{ familyId: string; supervisorId: string; learnerIds: string[]; group: GroupJoin }>(`${family(familyId)}/operations-supervisor`, { supervisorId }),
