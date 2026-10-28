@@ -50,14 +50,20 @@ So P0-5 is a **rewrite as data**. The old words are the starting list. A checker
   "units": [
     { "id": "ba", "letters": ["ب"], "name": "بَاءْ",
       "note": null,
-      "words": [ { "text": "بَابْ", "was": "بَاب", "review": "ADDED TASHKEEL: final sukun" } ] },
+      "words": [ { "id": "ba-w1", "text": "بَابْ", "was": "بَاب", "review": "ADDED TASHKEEL: final sukun" } ] },
     { "id": "alif", "letters": ["ا"], "name": "أَلِفْ",
-      "note": { "text": "…", "review": "AUTHORED: teacher to write or approve" },
+      "note": { "id": "alif-note", "text": "…", "review": "AUTHORED: teacher to write or approve" },
       "words": [ … ] },
     { "id": "hamza", "letters": ["ء", "أ", "إ", "ؤ", "ئ"], "name": "هَمْزَةْ", "note": { … }, "words": [ … ] }
   ]
 }
 ```
+
+**Every reading string has a stable id, for voice-over.** The owner has asked for voice-over of letters, words and sentences; a separate session designs it.
+- Each unit (its id stands for its name), each note and each word carries an `id`: a lowercase slug such as `ba-w1`, unique across the lesson.
+- An id is never reused or renumbered. A deleted word leaves a gap.
+- A clip binds to (id, SHA-256 of the text). Editing a text, for example adding a mark, changes the hash and invalidates the clip, so a stale recording can never play for changed text.
+- The checker enforces that ids are unique and well-formed. The voice-over design decides the rest.
 
 **Nothing derivable is stored.** A word carries no "start / middle / end" label and no letter tag. The engine and the checker compute both from the word's own letters, using the rule in §4. A word filed under the wrong position cannot exist; a word filed under a unit whose letter it doesn't contain is refused.
 
