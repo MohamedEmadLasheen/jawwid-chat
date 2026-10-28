@@ -15,7 +15,11 @@ export interface ReviewRow {
 }
 
 export interface LessonContentStore {
-  /** Every review of a scope, oldest first. */
+  /** The content organization (chat.lesson_content_organization()), or null while unset. */
+  contentOrganization(): Promise<string | null>;
+  /** review_scholar through an explicitly granted role (chat.lesson_content_scholar_granted). */
+  scholarGranted(staffId: string): Promise<boolean>;
+  /** Every review of a scope by staff of the content organization, oldest first. */
   reviews(scope: string): Promise<ReviewRow[]>;
   /** chat.review_lesson_content: the text's state and signed steps afterwards. */
   review(
@@ -35,12 +39,23 @@ export interface LessonContentStore {
 export class PrismaLessonContentStore implements LessonContentStore {
   constructor(private readonly prisma: PrismaService) {}
 
+  async contentOrganization(): Promise<string | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string | null }>>`SELECT chat.lesson_content_organization()::text AS id`;
+    return rows[0]?.id ?? null;
+  }
+
+  async scholarGranted(staffId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT chat.lesson_content_scholar_granted(${staffId}::uuid) AS ok`;
+    return rows[0]?.ok === true;
+  }
+
   reviews(scope: string): Promise<ReviewRow[]> {
+    // Names are the content organization's own staff (the database signs no one else).
     return this.prisma.$queryRaw<ReviewRow[]>`
       SELECT r.item_id AS "itemId", r.approval_sha256 AS "approvalSha256", r.step, r.action, r.staff_id::text AS "staffId",
              s.name AS "staffName", r.category, r.reason, r.at
         FROM chat.lesson_content_review r JOIN chat.staff s ON s.id = r.staff_id
-       WHERE r.scope = ${scope}
+       WHERE r.scope = ${scope} AND s.organization_id = chat.lesson_content_organization()
        ORDER BY r.at, r.id`;
   }
 

@@ -21,11 +21,19 @@
 --
 -- Which steps an item NEEDS is decided by its kind, in code (requiredSteps in
 -- apps/lessons and apps/api); the database enforces how a step may be signed:
---   * by an ACTIVE staff member holding the step's key;
+--   * by an ACTIVE staff member of THE content organization (chat.config
+--     lesson_content.organization_id; unset = nobody signs): the lessons are
+--     one set of static files for every academy, so their review is too;
+--   * holding the step's key -- and the scholar's step only through an
+--     EXPLICITLY granted access role (scholar_reviewer). The super admin's
+--     implicit every-key does not count, nor does any bundle: no tafsir is
+--     signed "as the scholar" without the scholar (owner, 2026-10-29);
 --   * in order: teacher after check, scholar after teacher (no check for play);
 --   * one person, one step: nobody signs two steps of the same item;
 --   * a rejection or a withdrawal is final for that text. The fix is a new
---     text, hence a new hash, signed from the start.
+--     text, hence a new hash, signed from the start. Anyone who may sign a
+--     step may reject that text, and may withdraw it once anything is signed:
+--     stopping a text is never harder than letting it through.
 -- A changed item is a new hash: its old signatures still exist but no longer
 -- describe it ("stale" is derived, never stored).
 --
@@ -73,12 +81,42 @@ create function chat.lesson_content_step_key(p_step text)
 returns text
 language sql
 immutable
+set search_path = chat, pg_temp
 as $$
   select case p_step
            when 'check' then 'lesson_content.check'
            when 'teacher' then 'lesson_content.review_teacher'
            when 'scholar' then 'lesson_content.review_scholar'
          end
+$$;
+
+-- The one organization whose staff review lesson content, or null (nobody signs).
+create function chat.lesson_content_organization()
+returns uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select case when c.value #>> '{}' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              then (c.value #>> '{}')::uuid end
+    from chat.config c
+   where c.key = 'lesson_content.organization_id';
+$$;
+
+-- The scholar's key through a role explicitly granted to this person (live,
+-- not archived). Never the super admin's implicit every-key or a legacy bundle.
+create function chat.lesson_content_scholar_granted(p_staff uuid)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select exists (
+    select 1
+      from chat.staff_access_role g
+      join chat.access_role r on r.id = g.role_id and r.archived_at is null
+      join chat.access_role_permission p on p.role_id = r.id
+     where g.staff_id = p_staff and p.permission_key = 'lesson_content.review_scholar');
 $$;
 
 -- 'withdrawn' or 'rejected' (final for this text), else 'open'.
@@ -123,9 +161,21 @@ begin
   if tg_op <> 'INSERT' then
     raise exception 'a content review is a record; it is never changed or removed' using errcode = 'check_violation';
   end if;
-  if not exists (select 1 from chat.staff s where s.id = new.staff_id and s.is_active and s.left_at is null)
-     or not chat.staff_has_permission(new.staff_id, chat.lesson_content_step_key(new.step)) then
+  if chat.lesson_content_organization() is null then
+    raise exception 'lesson content review is not set up (chat.config lesson_content.organization_id): nobody signs'
+      using errcode = 'insufficient_privilege';
+  end if;
+  if not exists (select 1 from chat.staff s
+                  where s.id = new.staff_id and s.is_active and s.left_at is null
+                    and s.organization_id = chat.lesson_content_organization()) then
+    raise exception 'lesson content is reviewed only by active staff of the content organization' using errcode = 'insufficient_privilege';
+  end if;
+  if not chat.staff_has_permission(new.staff_id, chat.lesson_content_step_key(new.step)) then
     raise exception 'the % step is signed only by an active reviewer holding %', new.step, chat.lesson_content_step_key(new.step)
+      using errcode = 'insufficient_privilege';
+  end if;
+  if new.step = 'scholar' and not chat.lesson_content_scholar_granted(new.staff_id) then
+    raise exception 'the scholar step is signed only by someone granted the Scholar reviewer role, never by an implicit or bundled key'
       using errcode = 'insufficient_privilege';
   end if;
   v_state := coalesce(chat.lesson_content_state(new.scope, new.item_id, new.approval_sha256), 'open');
@@ -320,6 +370,8 @@ select chat.seed_access_role_templates(o.id) from chat.organization o;
 alter table chat.lesson_content_review enable row level security;
 revoke all on chat.lesson_content_review from public, anon, authenticated, chat_app;
 revoke all on function chat.lesson_content_step_key(text) from public;
+revoke all on function chat.lesson_content_organization() from public;
+revoke all on function chat.lesson_content_scholar_granted(uuid) from public;
 revoke all on function chat.lesson_content_state(text, text, text) from public;
 revoke all on function chat.lesson_content_steps(text, text, text) from public;
 revoke all on function chat.guard_lesson_content_review() from public;

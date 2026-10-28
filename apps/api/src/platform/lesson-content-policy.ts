@@ -14,6 +14,16 @@ import type { Actor } from './types';
  *   lesson_content.review_scholar  scholar             nobody by bundle: the super admin grants the
  *                                                      Scholar reviewer role (owner, 2026-10-29)
  *
+ * Two rules beyond the keys (review of #258):
+ *   - the scholar's step counts only through an EXPLICIT grant of a role that
+ *     carries review_scholar (scholar_reviewer). The super admin's implicit
+ *     every-key (and the legacy bundle written for it below) never signs as
+ *     the scholar;
+ *   - the lessons are one set of static files for every academy, so their
+ *     review belongs to ONE content organization (chat.config
+ *     lesson_content.organization_id). Staff of any other organization -- or
+ *     everyone, while it is unset -- see and sign nothing.
+ *
  * A key is necessary, never sufficient: the database
  * (chat.review_lesson_content) checks the key of the step again, that the
  * signer is active, that steps come in order, and that one person signs one
@@ -50,9 +60,17 @@ export interface LessonContentAccess {
   steps: ReviewStep[];
 }
 
+export interface LessonContentStanding {
+  /** The content organization (chat.config lesson_content.organization_id), or null while unset. */
+  contentOrganizationId: string | null;
+  /** review_scholar through an explicitly granted role (never the super admin's implicit key). */
+  scholarGranted: boolean;
+}
+
 /** What a set of keys opens. Signing any step implies seeing the content. */
-export function lessonContentAccess(actor: Actor, permissions: ReadonlySet<string>): LessonContentAccess {
+export function lessonContentAccess(actor: Actor, permissions: ReadonlySet<string>, standing: LessonContentStanding): LessonContentAccess {
   if (actor.kind !== ActorKind.STAFF || !actor.isActive) return { view: false, steps: [] };
-  const steps = REVIEW_STEPS.filter((s) => permissions.has(STEP_KEY[s]));
+  if (!standing.contentOrganizationId || actor.organizationId !== standing.contentOrganizationId) return { view: false, steps: [] };
+  const steps = REVIEW_STEPS.filter((s) => permissions.has(STEP_KEY[s]) && (s !== 'scholar' || standing.scholarGranted));
   return { view: steps.length > 0 || permissions.has('lesson_content.view'), steps };
 }

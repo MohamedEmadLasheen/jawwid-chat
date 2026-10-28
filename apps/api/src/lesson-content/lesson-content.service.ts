@@ -67,7 +67,9 @@ export class LessonContentService {
   ) {}
 
   async access(actor: Actor): Promise<LessonContentAccess> {
-    return lessonContentAccess(actor, (await this.permissions.profileOf(actor)).permissions);
+    const [profile, contentOrganizationId] = await Promise.all([this.permissions.profileOf(actor), this.store.contentOrganization()]);
+    const scholarGranted = contentOrganizationId !== null && actor.organizationId === contentOrganizationId ? await this.store.scholarGranted(actor.actorId) : false;
+    return lessonContentAccess(actor, profile.permissions, { contentOrganizationId, scholarGranted });
   }
 
   /** A scope's items, each with its status and its review history, for one reviewer. */
@@ -110,7 +112,10 @@ export class LessonContentService {
       throw new CommError(CommErrorCode.LESSON_CONTENT_INVALID, s.scope === 'play' ? 'step: teacher or scholar' : 'step: check, teacher or scholar', 422);
     }
     if (!access.steps.includes(step as ReviewStep)) {
-      throw new CommError(CommErrorCode.LESSON_CONTENT_DENIED, `the ${step} step needs its own key`);
+      throw new CommError(
+        CommErrorCode.LESSON_CONTENT_DENIED,
+        step === 'scholar' ? 'the scholar step needs the Scholar reviewer role, granted explicitly' : `the ${step} step needs its own key`,
+      );
     }
     if (typeof body.approvalSha256 !== 'string' || !SHA256.test(body.approvalSha256)) {
       throw new CommError(CommErrorCode.LESSON_CONTENT_INVALID, 'approvalSha256: the hash of the text you reviewed, as SHA-256 hex', 422);
@@ -160,7 +165,9 @@ export class LessonContentService {
 
   private async require(actor: Actor): Promise<LessonContentAccess> {
     const access = await this.access(actor);
-    if (!access.view) throw new CommError(CommErrorCode.LESSON_CONTENT_DENIED, 'lesson content review needs lesson_content.view or a review key');
+    if (!access.view) {
+      throw new CommError(CommErrorCode.LESSON_CONTENT_DENIED, 'lesson content is reviewed by the content organization, with lesson_content.view or a review key');
+    }
     return access;
   }
 }

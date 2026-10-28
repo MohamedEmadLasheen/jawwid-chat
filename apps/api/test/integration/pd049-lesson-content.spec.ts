@@ -10,7 +10,12 @@
  *     only sees, and the scholar's key comes only with the scholar_reviewer
  *     role, which the super admin grants and a department manager cannot;
  *   - reviews are never changed or removed; request roles reach nothing; every
- *     review is audited.
+ *     review is audited;
+ *   - (review of #258) only active staff of THE content organization sign
+ *     (chat.config lesson_content.organization_id; unset = nobody); the scholar
+ *     step needs the explicitly granted role -- the super admin's implicit
+ *     every-key never signs as the scholar; two people racing for one step:
+ *     one wins.
  *
  * Synthetic people and test hashes only (G-20). Each run uses its own scope.
  */
@@ -70,9 +75,21 @@ beforeAll(async () => {
     SELECT id::text FROM chat.access_role WHERE organization_id = ${orgId}::uuid AND key = 'scholar_reviewer'`;
   scholarRole = role[0]!.id;
   await g.prisma.$queryRaw`SELECT chat.grant_access_role(${scholar}::uuid, ${scholarRole}::uuid, 'spec', ${m.superAdmin.id}::uuid)`;
+  // This academy is the content organization.
+  await setContentOrg(orgId);
 });
 
+async function setContentOrg(id: string | null) {
+  await g.prisma.$executeRaw`DELETE FROM chat.config WHERE key = 'lesson_content.organization_id'`;
+  if (id) {
+    await g.prisma.$executeRaw`
+      INSERT INTO chat.config (key, value, scope, description)
+      VALUES ('lesson_content.organization_id', to_jsonb(${id}::text), 'global', 'PD-49 spec: the content organization')`;
+  }
+}
+
 afterAll(async () => {
+  await setContentOrg(null);
   await truncate(g.prisma);
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
   await g.prisma.$disconnect();
@@ -107,7 +124,8 @@ describe('PD-49: who signs which step', () => {
     const account = await g.prisma.account.create({ data: { organizationId: orgId, subject: `would-be@${DOMAIN}`, kind: 'staff', status: 'active', isActive: true } });
     const other = (await g.prisma.staff.create({ data: { organizationId: orgId, name: 'QA Specialist', role: 'specialist', isActive: true, accountId: account.id } })).id;
     const e = await sqlError(g.prisma.$queryRaw`SELECT chat.grant_access_role(${other}::uuid, ${scholarRole}::uuid, 'spec', ${m.teachersManager.id}::uuid)`);
-    expect(e).not.toBe('ok');
+    // The H5 refusal itself: the role holds a key the manager may not grant.
+    expect(e).toMatch(/permissions you may not grant: lesson_content\.review_scholar \(PD-40 H5\)/);
     expect(await holds(other, 'lesson_content.review_scholar')).toBe(false);
   });
 
@@ -116,6 +134,59 @@ describe('PD-49: who signs which step', () => {
       const r = await g.prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(`select has_table_privilege('${role}', 'chat.lesson_content_review', 'SELECT') as ok`);
       expect({ role, ok: r[0]!.ok }).toEqual({ role, ok: false });
     }
+  });
+});
+
+describe('PD-49: who may sign at all (review of #258)', () => {
+  it("the super admin never signs as the scholar: the implicit every-key is not the Scholar reviewer role", async () => {
+    expect(await holds(m.superAdmin.id, 'lesson_content.review_scholar')).toBe(true); // implicitly, as every key
+    const t = 'sa text two';
+    await sign('lesson-051', t, 'check', m.superAdmin.id);
+    await sign('lesson-051', t, 'teacher', m.teachersManager.id);
+    expect(await sqlError(sign('lesson-051', t, 'scholar', m.superAdmin.id))).toMatch(/granted the Scholar reviewer role/);
+  });
+
+  it('a suspended or departed signer is refused', async () => {
+    const account = await g.prisma.account.create({ data: { organizationId: orgId, subject: `scholar2@${DOMAIN}`, kind: 'staff', status: 'active', isActive: true } });
+    const second = (await g.prisma.staff.create({ data: { organizationId: orgId, name: 'QA Scholar Two', role: 'specialist', isActive: true, accountId: account.id } })).id;
+    await g.prisma.$queryRaw`SELECT chat.grant_access_role(${second}::uuid, ${scholarRole}::uuid, 'spec', ${m.superAdmin.id}::uuid)`;
+    const t = 'suspended text';
+    await sign('lesson-052', t, 'check', m.superAdmin.id);
+    await sign('lesson-052', t, 'teacher', m.teachersManager.id);
+    await g.prisma.staff.update({ where: { id: second }, data: { isActive: false } });
+    expect(await sqlError(sign('lesson-052', t, 'scholar', second))).toMatch(/active staff of the content organization/);
+  });
+
+  it('staff of another organization are refused, and nobody signs while the content organization is unset', async () => {
+    const other = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ('${other}'::uuid, 'pd49-x-${other.slice(0, 8)}', 'Another academy')`);
+    const otherOwner = await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
+      const account = await tx.account.create({ data: { organizationId: other, subject: `owner-x@${DOMAIN}`, kind: 'staff', status: 'active', isActive: true } });
+      return (await tx.staff.create({ data: { organizationId: other, name: 'QA Other Owner', role: 'super_admin', isActive: true, accountId: account.id } })).id;
+    });
+    expect(await sqlError(sign('lesson-053', 'other org', 'check', otherOwner))).toMatch(/active staff of the content organization/);
+    await setContentOrg(null);
+    try {
+      expect(await sqlError(sign('lesson-053', 'other org', 'check', m.superAdmin.id))).toMatch(/not set up/);
+    } finally {
+      await setContentOrg(orgId);
+    }
+  });
+
+  it('two people racing for the same step: exactly one signs', async () => {
+    const t = 'race text';
+    await sign('lesson-054', t, 'check', m.superAdmin.id);
+    // The teacher step, by two distinct holders of its key at once: the Teachers manager and a delegate.
+    const account = await g.prisma.account.create({ data: { organizationId: orgId, subject: `teacher-signer@${DOMAIN}`, kind: 'staff', status: 'active', isActive: true } });
+    const delegate = (await g.prisma.staff.create({ data: { organizationId: orgId, name: 'QA Teacher Signer', role: 'specialist', isActive: true, accountId: account.id } })).id;
+    const role = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT chat.define_access_role('teacher_signer', 'Teacher signer', 'Teacher signer', null, 'specialist',
+             array['lesson_content.review_teacher', 'lesson_content.view']::text[], 'spec', ${m.superAdmin.id}::uuid)::text AS id`;
+    await g.prisma.$queryRaw`SELECT chat.grant_access_role(${delegate}::uuid, ${role[0]!.id}::uuid, 'spec', ${m.superAdmin.id}::uuid)`;
+    const results = await Promise.allSettled([sign('lesson-054', t, 'teacher', m.teachersManager.id), sign('lesson-054', t, 'teacher', delegate)]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(String((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason)).toMatch(/already signed/);
   });
 });
 

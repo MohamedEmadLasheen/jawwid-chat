@@ -11,11 +11,15 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommError } from '@platform/errors';
 import { legacyLessonContentKeys, lessonContentAccess } from '@platform/lesson-content-policy';
-import { LessonContentService, itemStatus } from '../../../src/lesson-content/lesson-content.service';
+import { LessonContentService, itemStatus, refusal } from '../../../src/lesson-content/lesson-content.service';
 import type { LessonContentStore, ReviewRow } from '../../../src/lesson-content/lesson-content.store';
 import { PINNED_QURAN_DATASETS } from '../../../src/quran/pinned';
 import { approvalSha256, canonicalJson, canonicalSha256, parseScope, parseSubjects, reviewScope, type Scope } from '../../../src/lesson-content/review-subjects';
+import { Prisma } from '@prisma/client';
 import { admin, manager, parent, teacher } from '../../support/fixtures';
+
+// The fixtures' staff belong to this organization; it is the content organization unless a test says otherwise.
+const ORG = admin().organizationId!;
 
 const DS = [...PINNED_QURAN_DATASETS.keys()][0]!;
 const sha = (item: unknown, scope = 'quran-112') => approvalSha256(DS, scope, item);
@@ -54,6 +58,14 @@ const row = (over: Partial<ReviewRow>): ReviewRow => ({
 class FakeStore implements LessonContentStore {
   rows: ReviewRow[] = [];
   reviewed: unknown[] = [];
+  org: string | null = ORG;
+  granted = new Set<string>();
+  async contentOrganization() {
+    return this.org;
+  }
+  async scholarGranted(staffId: string) {
+    return this.granted.has(staffId);
+  }
   async reviews() {
     return this.rows;
   }
@@ -104,6 +116,11 @@ describe('the review subjects (generated from apps/lessons)', () => {
     expect(parseScope({ scope: 'play', datasetId: DS, subjects: [{ id: 'listen_glow', kind: 'mechanic', approvalSha256: sha(m, 'play'), requiredSteps: ['check', 'teacher'], item: m }] })).toBeNull();
     // One bad scope never hides the good ones.
     expect([...parseSubjects({ scopes: [{ scope: 'quran-112', datasetId: DS, subjects: [good] }, { scope: 'quran-113', datasetId: DS, subjects: 'x' }] }).keys()]).toEqual(['quran-112']);
+  });
+
+  it('every committed scope parses: a malformed or unpinned scope fails CI, never silently disappears', () => {
+    const committed = JSON.parse(readFileSync(join(__dirname, '../../../src/lesson-content/review-subjects.json'), 'utf8')) as { scopes: unknown[] };
+    expect(parseSubjects(committed).size).toBe(committed.scopes.length);
   });
 
   it('the committed map holds no content yet: nothing can be reviewed before content exists', () => {
@@ -166,8 +183,26 @@ describe('LessonContentService', () => {
     expect(store.reviewed).toEqual([]);
   });
 
+  it("the scholar step counts only through an explicit grant: the super admin's implicit key never signs as the scholar", async () => {
+    // Every key (as the super admin holds them), but no Scholar reviewer role.
+    const { svc } = service(['lesson_content.view', 'lesson_content.check', 'lesson_content.review_teacher', 'lesson_content.review_scholar']);
+    expect((await svc.access(admin('sa', 'super_admin'))).steps).toEqual(['check', 'teacher']);
+    await refused(svc.review('quran-112', 'tafsir-001', 'approve', body({ step: 'scholar' }), admin('sa', 'super_admin')), 'COMM.LESSON_CONTENT_DENIED', 403);
+  });
+
+  it('only the content organization reviews; nobody while it is unset', async () => {
+    const other = { ...admin('elsewhere'), organizationId: '00000000-0000-4000-8000-0000000000ff' };
+    await refused(service(['lesson_content.view']).svc.list('quran-112', other), 'COMM.LESSON_CONTENT_DENIED', 403);
+    const unset = new FakeStore();
+    unset.org = null;
+    await refused(service(['lesson_content.view'], unset).svc.list('quran-112', admin()), 'COMM.LESSON_CONTENT_DENIED', 403);
+  });
+
   it('a rejection or withdrawal says what is wrong and why; an approval carries neither', async () => {
-    const { svc, store } = service(['lesson_content.review_scholar']);
+    const granted = new FakeStore();
+    granted.granted.add('scholar-1');
+    granted.granted.add('admin-1');
+    const { svc, store } = service(['lesson_content.review_scholar'], granted);
     await refused(svc.review('quran-112', 'tafsir-001', 'reject', body({ step: 'scholar' }), admin()), 'COMM.LESSON_CONTENT_INVALID', 422);
     await refused(svc.review('quran-112', 'tafsir-001', 'reject', body({ step: 'scholar', category: 'aqeedah' }), admin()), 'COMM.LESSON_CONTENT_INVALID', 422);
     await svc.review('quran-112', 'tafsir-001', 'reject', body({ step: 'scholar', category: 'aqeedah', reason: '  not as the source says  ' }), admin('scholar-1'));
@@ -203,11 +238,30 @@ describe('who holds what (plan §F.2)', () => {
     expect([...legacyLessonContentKeys(admin('sa', 'super_admin'), null)]).toContain('lesson_content.review_scholar');
   });
 
-  it('a step key implies seeing the content; nobody who is not live staff sees anything', () => {
-    expect(lessonContentAccess(admin(), new Set(['lesson_content.review_scholar']))).toEqual({ view: true, steps: ['scholar'] });
-    expect(lessonContentAccess(admin(), new Set(['lesson_content.view']))).toEqual({ view: true, steps: [] });
-    expect(lessonContentAccess(parent(), new Set(['lesson_content.view']))).toEqual({ view: false, steps: [] });
-    expect(lessonContentAccess(teacher(), new Set(['lesson_content.check']))).toEqual({ view: false, steps: [] });
+  it('a step key implies seeing the content; nobody who is not live staff of the content organization sees anything', () => {
+    const st = { contentOrganizationId: ORG, scholarGranted: true };
+    expect(lessonContentAccess(admin(), new Set(['lesson_content.review_scholar']), st)).toEqual({ view: true, steps: ['scholar'] });
+    // The scholar's key without the explicit role opens nothing at all.
+    expect(lessonContentAccess(admin(), new Set(['lesson_content.review_scholar']), { ...st, scholarGranted: false })).toEqual({ view: false, steps: [] });
+    expect(lessonContentAccess(admin(), new Set(['lesson_content.view']), st)).toEqual({ view: true, steps: [] });
+    expect(lessonContentAccess(admin(), new Set(['lesson_content.view']), { ...st, contentOrganizationId: null })).toEqual({ view: false, steps: [] });
+    expect(lessonContentAccess(admin(), new Set(['lesson_content.view']), { ...st, contentOrganizationId: 'another' })).toEqual({ view: false, steps: [] });
+    expect(lessonContentAccess(parent(), new Set(['lesson_content.view']), st)).toEqual({ view: false, steps: [] });
+    expect(lessonContentAccess(teacher(), new Set(['lesson_content.check']), st)).toEqual({ view: false, steps: [] });
+  });
+});
+
+describe('database refusals become answers', () => {
+  const known = (code: string, message: string) =>
+    new Prisma.PrismaClientKnownRequestError(message, { code: 'P2010', clientVersion: 'test', meta: { code, message } });
+
+  it('one person signing a second step is a 403; an out-of-order or final text a 409', () => {
+    const one = refusal(known('42501', "ERROR: you already signed a step of this text: the next step is someone else's")) as CommError;
+    expect([one.code, one.status]).toEqual(['COMM.LESSON_CONTENT_DENIED', 403]);
+    const order = refusal(known('23514', 'ERROR: the scholar step comes after the teacher step')) as CommError;
+    expect([order.code, order.status]).toEqual(['COMM.LESSON_CONTENT_STATE', 409]);
+    const twice = refusal(known('23505', 'duplicate key value violates unique constraint "lesson_content_one_approval_per_step"')) as CommError;
+    expect([twice.code, twice.status]).toEqual(['COMM.LESSON_CONTENT_STATE', 409]);
   });
 });
 
