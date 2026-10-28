@@ -116,6 +116,8 @@ export interface ListQuery {
 export interface Assignees {
   people: Array<Principal & { name: string }>
   departments: Array<{ kind: 'operations' | 'teachers' | 'sales'; managerName: string }>
+  /** More people than the server lists. */
+  truncated?: boolean
 }
 
 export type Target = Principal | { department: 'operations' | 'teachers' | 'sales' }

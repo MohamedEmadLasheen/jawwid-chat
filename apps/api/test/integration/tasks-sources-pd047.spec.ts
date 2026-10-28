@@ -131,7 +131,8 @@ describe('lesson reports', () => {
       sourceState: 'pending',
       effectivePriority: 'medium',
       titleKey: 'task.lesson_report',
-      titleParams: expect.objectContaining({ learnerName: 'learner_l' }),
+      // PR-5: the lesson's id, so the teacher's To do opens the lesson itself.
+      titleParams: expect.objectContaining({ learnerName: 'learner_l', lessonId: lesson }),
     });
     const [{ n }] = await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM chat.work_task WHERE source_type = 'lesson_report'`;
     expect(Number(n)).toBe(1);

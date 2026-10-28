@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveArabicLesson, type ArabicLesson } from './arabic-lesson';
-import { standIn } from '../test/arabic-stand-in';
+import { harakatStandIn, standIn } from '../test/arabic-stand-in';
 
 describe('an Arabic letters lesson: words, positions and a quiz proved by the one rule', () => {
   it('resolves, computes each word\'s positions, and holds back flagged words and the questions that show them', () => {
@@ -77,6 +77,28 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
       const c = standIn();
       change(c);
       expect(resolveArabicLesson(c, 1)).toBeNull();
+    }
+  });
+
+  it('lesson 3 (the harakat): a marked unit holds the words where its letter CARRIES the mark', () => {
+    const r = resolveArabicLesson(harakatStandIn(), 3)!;
+    expect(r).not.toBeNull();
+    const fatha = r.units[0]!;
+    expect(fatha.group).toBe('ب');
+    expect(fatha.words.map((w) => [w.text, w.positions])).toEqual([['بَابْ', ['start']], ['كَتَبَ', ['end']]]);
+    expect(r.quiz.map((q) => q.id)).toEqual(['q1', 'q2']);
+    const bad: ((c: ArabicLesson) => void)[] = [
+      (c) => { c.units[0]!.words.push({ id: 'ba_fatha-003', text: 'بِنْتْ', was: null, review: null }); }, // ب, but with a kasra
+      (c) => { c.units[0]!.name = 'بِ'; }, // the name is not its own syllable
+      (c) => { (c.units[0] as { mark: string }).mark = 'sukun'; },
+      (c) => { c.units[0]!.letters = ['لا']; }, // a marked unit is one letter
+      (c) => { c.quiz[0] = { ...c.quiz[0]!, options: ['بَابْ', 'كَتَبَ'] } as never; }, // both carry بَ: two right answers
+      (c) => { c.units[0]!.group = ''; },
+    ];
+    for (const change of bad) {
+      const c = harakatStandIn();
+      change(c);
+      expect(resolveArabicLesson(c, 3)).toBeNull();
     }
   });
 });
