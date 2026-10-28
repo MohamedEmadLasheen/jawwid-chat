@@ -2117,17 +2117,32 @@ model FamilySalesOwner {
   @@schema("chat")
 }
 
-/// PD-42: sha-256 of a family's normalised e-mail or E.164 number -- one family per key. No plain value.
+/// PD-42: a keyed hash of a family's normalised e-mail or E.164 number -- one family per parent, per academy.
 model FamilyContactKey {
-  keyHash        String   @id @map("key_hash")
   organizationId String   @map("organization_id") @db.Uuid
+  /// HMAC-SHA256 under a server key (contactKeyHash); never a plain value.
+  keyHash        String   @map("key_hash")
   familyId       String   @map("family_id") @db.Uuid
   /// email | phone
   kind           String
   createdBy      String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
+  @@id([organizationId, keyHash])
   @@map("family_contact_key")
+  @@schema("chat")
+}
+
+/// PD-42: who entered a child by hand, and when -- written by the intake that created the child.
+model LearnerIntake {
+  learnerId      String   @id @map("learner_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  familyId       String   @map("family_id") @db.Uuid
+  enrolmentId    String   @map("enrolment_id") @db.Uuid
+  enteredBy      String   @map("entered_by") @db.Uuid
+  enteredAt      DateTime @map("entered_at") @db.Timestamptz
+
+  @@map("learner_intake")
   @@schema("chat")
 }
 

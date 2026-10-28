@@ -11,60 +11,81 @@
 --
 -- WHAT IS NEW
 --
+--   create_intake_family         a family entered by hand, owned by its entrant
+--                                (family.owner_id); noted as created in this
+--                                transaction. enrol_learner notes each child.
 --   student_enrolment            keyed by its own id. origin trial | intake,
 --     (generalised)              kind new_family | added_children. A trial
 --                                enrolment keeps lesson_id (still unique) and
---                                its PD-16 rules; an intake one has none and is
---                                written by a supervisor for a family they own.
---                                One new_family row per family. account_id may
---                                be null for an intake (no e-mail yet), set once.
---                                assigned_by / assigned_at mean "entered by /
---                                at" for an intake.
+--                                its PD-16 rules. An intake is written by a
+--                                supervisor for a family they own, lists ONLY
+--                                children created in the same transaction
+--                                (never an existing child), and a new family
+--                                comes with at least one contact key. One
+--                                new_family row per family. account_id may be
+--                                null for an intake (no e-mail yet), set once.
+--                                assigned_by / assigned_at: entered by / at.
+--   learner_intake               who entered each child and when, written only
+--                                by the intake that created the child.
 --   enrol_learner                also for an intake: a holder of
---                                new_students.manage who owns the family; the
---                                teacher is optional.
---   learner_supervision          an assigner who is not the super admin or a
---                                manager may only place a child on themself.
+--                                new_students.manage who owns the family (or
+--                                is entering it now); the teacher is optional.
+--   learner_supervision          always names its assigner, the authenticated
+--                                actor; only the Operations manager (or the
+--                                super admin) places or moves a child, except a
+--                                supervisor placing on themself a child they
+--                                are entering now. chat.syncing_supervision
+--                                opens it for the academy's own import.
 --   family_sales_owner           the Sales supervisor accountable for a family,
 --                                beside (never instead of) PD-8 supervision.
---   family_contact_key           sha-256 of a family's normalised e-mail or
---                                E.164 number: one family per key, so a parent
---                                is never entered twice. No plain value.
+--                                Set by the Sales manager or the super admin;
+--                                a Sales member owns only a family they are
+--                                entering in the same transaction.
+--   family_contact_key           HMAC of a family's normalised e-mail or E.164
+--                                number, per academy: one family per parent.
+--                                No plain value; removed only with the family.
 --   staff_owns_family            "their own family": super admin, Operations
---                                manager, Sales manager, PD-8 reach, Sales owner.
+--                                manager, Sales manager, PD-8 supervisor (self)
+--                                or their department manager, Sales owner. Not
+--                                a covering backup.
 --   staff_may_handle_family      the same, plus every Sales member while
 --                                sales.family_scope is 'all' (PR-4 wires it).
 --   learner_subscription         source 'carried_over' with lessons_used_before
 --                                (Core's completed lessons, exactly as entered),
---                                over_confirmed_by (a manager, when completed
---                                exceeds the total), plan_months 1..24 for this
---                                source only. Remaining is never stored: the
---                                compute below subtracts lessons_used_before.
+--                                over_confirmed_by (completed above the total:
+--                                a manager's own entry), plan_months 1..24 for
+--                                this source only. Remaining is never stored:
+--                                the compute below subtracts lessons_used_before.
 --   subscriptions.carry_over     a permission key, in the four Operations and
 --                                Sales bundles.
 --
 -- PD-30-AMENDMENT-CARRIED-OVER (owner 2026-10-28, "Allow, tightly limited").
 -- A supervisor's carried_over row is refused unless ALL hold:
---   1. the child's enrolment has origin intake (entered through the new form);
+--   1. the child was entered through the new form (chat.learner_intake);
 --   2. created_by is the staff member who entered the child;
 --   3. it is written within 14 days of that intake;
---   4. the child has no other standing ledger row;
---   5. created_by owns the family and holds subscriptions.carry_over.
+--   4. the child has no other standing ledger row (decided under a row lock);
+--   5. created_by owns the family (staff_owns_family) and holds
+--      subscriptions.carry_over.
 -- Everything else stays with can_grant_subscription_exception (the super
 -- admin, the Operations Manager, the Sales Manager). Condition 4 holds for
 -- them too: a carried-over package never sits on top of another.
 -- Raising the entitlement again (a re-add with more lessons left than the row
 -- it replaces) once the child has used a lesson in Chat is the managers' too:
--- grace is derived from the balance, so this is what keeps it given once.
+-- grace is derived from the balance, so this is what keeps it given once. A
+-- carried-over row is voided only by its entrant within the 14 days, or by
+-- the three managers.
 --
 -- REFUSALS are check_violation or insufficient_privilege with a message the
 -- API maps, never a bare unique_violation (Prisma drops 23505's message): the
 -- unique indexes stay as the concurrency backstop behind the guards.
 --
 -- Down (data written since is lost):
---   drop table chat.family_contact_key, chat.family_sales_owner;
+--   drop table chat.learner_intake, chat.family_contact_key, chat.family_sales_owner;
 --   drop function chat.staff_may_handle_family, chat.staff_owns_family,
---     chat.sales_family_scope, chat.guard_learner_supervision_assigner;
+--     chat.sales_family_scope, chat.guard_learner_supervision_assigner,
+--     chat.create_intake_family, chat.pd042_note_created,
+--     chat.pd042_created_in_this_transaction, chat.pd042_record_learner_intake;
 --   alter table chat.learner_subscription drop column lessons_used_before,
 --     drop column over_confirmed_by; restore its source / plan_months checks,
 --     guard_learner_subscription and compute_learner_access from 20261026140000;
@@ -74,7 +95,7 @@
 --   delete the subscriptions.carry_over rows (under chat.pd040_catalogue_change).
 
 -- ===========================================================================
--- 1. Settings and "their own family"
+-- 1. Settings, the families and children an intake creates, and "their own family"
 -- ===========================================================================
 
 -- PD-42 S3: 'all' (today: every Sales member reaches every family) until the
@@ -87,6 +108,58 @@ stable
 set search_path = chat, pg_temp
 as $$
   select case when (select value #>> '{}' from chat.config where key = 'sales.family_scope') = 'own' then 'own' else 'all' end;
+$$;
+
+-- What THIS transaction's intake created, as transaction-local lists (the
+-- pattern of chat.syncing_assignment): chat.create_intake_family adds the
+-- family, chat.enrol_learner each child. Only what is on these lists may be
+-- self-owned by a Sales member (review P1-B) or listed by an intake
+-- enrolment (review P1-A); nothing that already existed can be re-listed.
+create or replace function chat.pd042_created_in_this_transaction(p_list text, p_id uuid)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select p_id::text = any (string_to_array(coalesce(nullif(current_setting(p_list, true), ''), ''), ','));
+$$;
+
+create or replace function chat.pd042_note_created(p_list text, p_id uuid)
+returns void
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  perform set_config(p_list, concat_ws(',', nullif(current_setting(p_list, true), ''), p_id::text), true);
+end;
+$$;
+
+-- A family a supervisor enters by hand: owned (family.owner_id, PD-24) by its
+-- entrant until an Operations supervisor takes it.
+create or replace function chat.create_intake_family(p_display_name text, p_actor_id uuid)
+returns uuid
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  v_actor uuid := chat.trusted_staff_actor(p_actor_id);
+  v_org   uuid;
+  v_id    uuid;
+begin
+  select s.organization_id into v_org from chat.staff s where s.id = v_actor and s.is_active and s.left_at is null;
+  if v_org is null or not chat.staff_has_permission(v_actor, 'new_students.manage') then
+    raise exception 'a family is entered by a Sales or Operations supervisor, or their manager'
+      using errcode = 'insufficient_privilege';
+  end if;
+  if p_display_name is null or length(btrim(p_display_name)) not between 1 and 120 then
+    raise exception 'a family has a name' using errcode = 'check_violation';
+  end if;
+  insert into chat.family (organization_id, display_name, owner_id, language)
+  values (v_org, btrim(p_display_name), v_actor, 'ar')
+  returning id into v_id;
+  perform chat.pd042_note_created('chat.pd042_entered_families', v_id);
+  return v_id;
+end;
 $$;
 
 create table chat.family_sales_owner (
@@ -134,12 +207,14 @@ begin
   if tg_op = 'UPDATE' and new.family_id is distinct from old.family_id then
     raise exception 'a Sales owner row stays with its family' using errcode = 'check_violation';
   end if;
-  -- Entering: the Sales member themself, or the Sales manager / super admin
-  -- for a member. Changing: the Sales manager or the super admin only.
-  if not (exists (select 1 from chat.staff s where s.id = new.assigned_by and s.role = 'super_admin')
+  -- The Sales manager or the super admin set and change it. A Sales member
+  -- owns only the family they are entering in this very transaction (review
+  -- P1-B): never one that already existed.
+  if not (exists (select 1 from chat.staff s where s.id = new.assigned_by and s.organization_id = v_org and s.role = 'super_admin')
           or chat.sales_department_role(new.assigned_by) = 'manager'
-          or (tg_op = 'INSERT' and new.assigned_by = new.staff_id)) then
-    raise exception 'a family''s Sales owner is changed by the Sales manager or the super admin'
+          or (tg_op = 'INSERT' and new.assigned_by = new.staff_id
+              and chat.pd042_created_in_this_transaction('chat.pd042_entered_families', new.family_id))) then
+    raise exception 'a family''s Sales owner is set by the Sales manager or the super admin; a Sales member owns only a family they are entering'
       using errcode = 'insufficient_privilege';
   end if;
   new.assigned_at := now();
@@ -152,7 +227,9 @@ create trigger family_sales_owner_is_coherent
   for each row execute function chat.guard_family_sales_owner();
 
 -- "Their own family", whatever the Sales switch says: the families PD-42's
--- own actions (enter, add a child, carry a package over) are scoped to.
+-- own actions (enter, add a child, carry a package over) are scoped to. A
+-- covering backup acts FOR a supervisor; it does not own their families
+-- (review P2): the 'backup' basis of chat.staff_reaches_family is left out.
 create or replace function chat.staff_owns_family(p_staff uuid, p_family uuid)
 returns boolean
 language sql
@@ -167,7 +244,11 @@ as $$
        and (s.role = 'super_admin'
             or chat.is_operations_manager(s.id, f.organization_id)
             or chat.sales_department_role(s.id) = 'manager'
-            or chat.staff_reaches_family(s.id, f.id) is not null
+            or exists (select 1
+                         from chat.learner_supervision ls
+                         join chat.learner l on l.id = ls.learner_id
+                        where l.family_id = f.id
+                          and chat.staff_acts_for(s.id, ls.supervisor_id, now()) in ('self', 'manager'))
             or exists (select 1 from chat.family_sales_owner o where o.family_id = f.id and o.staff_id = s.id)));
 $$;
 
@@ -191,18 +272,21 @@ $$;
 -- ===========================================================================
 
 create table chat.family_contact_key (
-  -- sha-256 (hex) of the normalised e-mail (trimmed, lower case) or of the
-  -- number in E.164; the plain value lives only in the parent file (G-07).
-  key_hash         text primary key check (key_hash ~ '^[0-9a-f]{64}$'),
   organization_id  uuid not null references chat.organization (id),
+  -- HMAC-SHA256 (hex) of the normalised e-mail (trimmed, lower case) or of the
+  -- number in E.164, under a server key (contactKeyHash, keyed like PD-43's
+  -- code hash with its own label). The plain value lives only in the parent
+  -- file (G-07); a database read or backup cannot be reversed to it.
+  key_hash         text not null check (key_hash ~ '^[0-9a-f]{64}$'),
   family_id        uuid not null references chat.family (id) on delete cascade,
   kind             text not null check (kind in ('email', 'phone')),
   created_by       uuid references chat.staff (id),
-  created_at       timestamptz not null default now()
+  created_at       timestamptz not null default now(),
+  primary key (organization_id, key_hash)
 );
 
 comment on table chat.family_contact_key is
-  'PD-42 S1: hashed e-mail / E.164 keys of each family''s parents. The primary key makes a second family for the same parent impossible. Holds no plain contact value.';
+  'PD-42 S1: keyed hashes of each family''s parents'' e-mail / E.164 number. The primary key makes a second family for the same parent impossible within an academy. Holds no plain contact value. Never edited; removed only with its family.';
 
 create index family_contact_key_family_idx on chat.family_contact_key (family_id);
 
@@ -214,32 +298,38 @@ as $$
 declare
   v_org uuid;
 begin
+  if tg_op = 'DELETE' then
+    if exists (select 1 from chat.family f where f.id = old.family_id) then
+      raise exception 'a contact key is never removed while its family exists' using errcode = 'check_violation';
+    end if;
+    return old;
+  end if;
   if tg_op = 'UPDATE' then
-    raise exception 'a contact key never changes; remove it and add the new one' using errcode = 'check_violation';
+    raise exception 'a contact key never changes' using errcode = 'check_violation';
   end if;
   select organization_id into v_org from chat.family where id = new.family_id;
   if v_org is null then
     raise exception 'a contact key is for a family' using errcode = 'foreign_key_violation';
   end if;
+  new.organization_id := v_org;
   -- Said in words before the primary key would (Prisma drops 23505's message).
-  if exists (select 1 from chat.family_contact_key k where k.key_hash = new.key_hash) then
+  if exists (select 1 from chat.family_contact_key k where k.organization_id = v_org and k.key_hash = new.key_hash) then
     raise exception 'this parent is already in Chat' using errcode = 'check_violation';
   end if;
   if new.created_by is not null and not chat.staff_of(new.created_by, v_org) then
     raise exception 'a contact key is added by staff of the family''s organization' using errcode = 'insufficient_privilege';
   end if;
-  new.organization_id := v_org;
   new.created_at := now();
   return new;
 end;
 $$;
 
 create trigger family_contact_key_is_coherent
-  before insert or update on chat.family_contact_key
+  before insert or update or delete on chat.family_contact_key
   for each row execute function chat.guard_family_contact_key();
 
 -- ===========================================================================
--- 3. The enrolment record, generalised
+-- 3. The enrolment record, generalised; who entered each child
 -- ===========================================================================
 
 alter table chat.student_enrolment add column id uuid not null default gen_random_uuid();
@@ -268,15 +358,64 @@ alter table chat.student_enrolment add constraint student_enrolment_trial_family
 comment on table chat.student_enrolment is
   'PD-16 / PD-42: a family or children Chat created -- from an assigned trial form (origin trial, keyed by its lesson) or entered by a supervisor (origin intake). assigned_by / assigned_at: who entered them and when, immutable. Who supervises the children is chat.learner_supervision (live), never a copy here.';
 
+-- Who entered each child, once (review P1-A): written only by the intake
+-- enrolment that CREATED the child, so the carried-over package's conditions
+-- 1-3 read a fact nobody can restart by listing an existing child again.
+create table chat.learner_intake (
+  learner_id       uuid primary key references chat.learner (id) on delete cascade,
+  organization_id  uuid not null references chat.organization (id),
+  family_id        uuid not null references chat.family (id) on delete cascade,
+  enrolment_id     uuid not null references chat.student_enrolment (id),
+  entered_by       uuid not null references chat.staff (id),
+  entered_at       timestamptz not null
+);
+
+comment on table chat.learner_intake is
+  'PD-42: the staff member who entered a child by hand, and when -- written by the intake enrolment that created the child, never edited or removed. PD-30-amendment-carried-over reads it.';
+
+create index learner_intake_enrolment_idx on chat.learner_intake (enrolment_id);
+
+create or replace function chat.guard_learner_intake()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if exists (select 1 from chat.learner l where l.id = old.learner_id) then
+      raise exception 'who entered a child is never removed' using errcode = 'check_violation';
+    end if;
+    return old;
+  end if;
+  if tg_op = 'UPDATE' then
+    raise exception 'who entered a child never changes' using errcode = 'check_violation';
+  end if;
+  if coalesce(current_setting('chat.pd042_writing_learner_intake', true), '') <> 'on' then
+    raise exception 'who entered a child is recorded by their intake enrolment only' using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger learner_intake_is_written_by_its_enrolment
+  before insert or update or delete on chat.learner_intake
+  for each row execute function chat.guard_learner_intake();
+
 create or replace function chat.guard_student_enrolment()
 returns trigger
 language plpgsql
+set search_path = chat, pg_temp
 as $$
 begin
   if tg_op = 'DELETE' then
     raise exception 'an enrolment is never deleted' using errcode = 'check_violation';
   end if;
   if tg_op = 'INSERT' then
+    -- S1: a replay of an intake (same id) writes nothing. A BEFORE trigger runs
+    -- ahead of ON CONFLICT, so the skip is decided here.
+    if exists (select 1 from chat.student_enrolment e where e.id = new.id) then
+      return null;
+    end if;
     if not exists (select 1 from chat.family f where f.id = new.family_id and f.organization_id = new.organization_id)
        or not exists (select 1 from chat.contact c where c.id = new.contact_id and c.family_id = new.family_id
                          and (new.account_id is null or c.account_id = new.account_id)) then
@@ -301,11 +440,24 @@ begin
           using errcode = 'insufficient_privilege';
       end if;
     else
-      -- PD-42 intake: a supervisor (or their manager) for a family they own.
+      -- PD-42 intake: a supervisor (or their manager) for a family they own...
       if not chat.staff_has_permission(new.assigned_by, 'new_students.manage')
          or not chat.staff_owns_family(new.assigned_by, new.family_id) then
         raise exception 'a family is entered by its own Sales or Operations supervisor, or their manager'
           using errcode = 'insufficient_privilege';
+      end if;
+      -- ...listing only children this very intake created (review P1-A): an
+      -- existing child (PD-16, Core, an earlier intake) is never re-listed.
+      if exists (select 1 from unnest(new.learner_ids) l
+                  where not chat.pd042_created_in_this_transaction('chat.pd042_entered_learners', l)
+                     or exists (select 1 from chat.student_enrolment e where l = any (e.learner_ids))) then
+        raise exception 'an intake lists only the children it creates; an existing child is never entered again'
+          using errcode = 'check_violation';
+      end if;
+      -- A new family is entered with at least one contact key (S1).
+      if new.kind = 'new_family'
+         and not exists (select 1 from chat.family_contact_key k where k.family_id = new.family_id) then
+        raise exception 'a family is entered with its parent''s e-mail or number' using errcode = 'check_violation';
       end if;
     end if;
     if new.group_conversation_id is not null then
@@ -346,6 +498,28 @@ begin
 end;
 $$;
 
+-- The intake enrolment records who entered each of its children.
+create or replace function chat.pd042_record_learner_intake()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if new.origin = 'intake' then
+    perform set_config('chat.pd042_writing_learner_intake', 'on', true);
+    insert into chat.learner_intake (learner_id, organization_id, family_id, enrolment_id, entered_by, entered_at)
+    select l, new.organization_id, new.family_id, new.id, new.assigned_by, new.assigned_at
+      from unnest(new.learner_ids) l;
+    perform set_config('chat.pd042_writing_learner_intake', 'off', true);
+  end if;
+  return null;
+end;
+$$;
+
+create trigger student_enrolment_records_learner_intake
+  after insert on chat.student_enrolment
+  for each row execute function chat.pd042_record_learner_intake();
+
 -- A child with the teacher Sales chose (PD-16), or entered by a supervisor
 -- (PD-42), whose teacher may not be known yet.
 create or replace function chat.enrol_learner(
@@ -369,10 +543,10 @@ begin
   if not chat.is_operations_manager(v_actor, v_family.organization_id)
      and not (chat.staff_has_permission(v_actor, 'new_students.manage')
               and (chat.staff_owns_family(v_actor, v_family.id)
-                   -- the first child of a family the actor has just entered:
-                   -- nothing makes it theirs yet but the family's owner.
+                   -- the first child of a family the actor is entering in
+                   -- this transaction: nothing makes it theirs yet.
                    or (v_family.owner_id = v_actor
-                       and not exists (select 1 from chat.learner l where l.family_id = v_family.id)))) then
+                       and chat.pd042_created_in_this_transaction('chat.pd042_entered_families', v_family.id)))) then
     raise exception 'a child is enrolled by the Operations manager, the super admin, or the family''s own supervisor'
       using errcode = 'insufficient_privilege';
   end if;
@@ -393,13 +567,21 @@ begin
   insert into chat.learner (id, organization_id, family_id, name, teacher_id)
   values (v_id, v_family.organization_id, v_family.id, btrim(p_name), p_teacher_id);
   perform set_config('chat.syncing_assignment', 'off', true);
+  perform chat.pd042_note_created('chat.pd042_entered_learners', v_id);
   return v_id;
 end;
 $$;
 
 -- ===========================================================================
--- 4. Supervision: a supervisor places children only on themself
+-- 4. Supervision: who may place a child on a supervisor
 -- ===========================================================================
+-- Named, always, by the authenticated actor (chat.trusted_staff_actor refuses
+-- a request role naming somebody else). The Operations manager of the child's
+-- academy (or the super admin) places any child and moves it; an Operations
+-- supervisor places on themself only a child they are entering in this very
+-- transaction -- never one that already exists (review P2). The academy's own
+-- import (and test fixtures standing in for it) opens chat.syncing_supervision
+-- for its statement, as chat.syncing_assignment does for teachers.
 
 create or replace function chat.guard_learner_supervision_assigner()
 returns trigger
@@ -407,20 +589,33 @@ language plpgsql
 set search_path = chat, pg_temp
 as $$
 begin
-  if new.assigned_by is null or new.assigned_by = new.supervisor_id then
+  if tg_op = 'UPDATE'
+     and new.supervisor_id is not distinct from old.supervisor_id
+     and new.assigned_by is not distinct from old.assigned_by then
     return new;
   end if;
-  if not exists (select 1 from chat.staff s where s.id = new.assigned_by and s.is_active and s.left_at is null
-                    and (s.role in ('super_admin', 'manager')
-                         or chat.is_operations_manager(s.id, s.organization_id))) then
-    raise exception 'an Operations supervisor places children only on themself; anyone else is placed by the Operations manager'
-      using errcode = 'insufficient_privilege';
+  if coalesce(current_setting('chat.syncing_supervision', true), '') = 'on' then
+    return new;
   end if;
-  return new;
+  if new.assigned_by is null then
+    raise exception 'a supervision names who assigned it' using errcode = 'check_violation';
+  end if;
+  perform chat.trusted_staff_actor(new.assigned_by);
+  if chat.is_operations_manager(new.assigned_by, new.organization_id) then
+    return new;
+  end if;
+  if tg_op = 'INSERT'
+     and new.assigned_by = new.supervisor_id
+     and chat.pd042_created_in_this_transaction('chat.pd042_entered_learners', new.learner_id) then
+    return new;
+  end if;
+  raise exception 'an Operations supervisor places on themself only a child they are entering; anyone else is placed by the Operations manager'
+    using errcode = 'insufficient_privilege';
 end;
 $$;
 
-create trigger learner_supervision_assigner_is_entitled
+-- After guard_learner_supervision (alphabetical), which sets organization_id.
+create trigger learner_supervision_zz_assigner_is_entitled
   before insert or update on chat.learner_supervision
   for each row execute function chat.guard_learner_supervision_assigner();
 
@@ -428,16 +623,25 @@ create trigger learner_supervision_assigner_is_entitled
 -- 5. Families made through PD-16: their Sales owner
 -- ===========================================================================
 -- The Sales member who recorded the trial's form, while they are still a live
--- member of Sales; nobody otherwise (the Sales manager can set one later).
+-- member of Sales in the same academy; nobody otherwise (the Sales manager can
+-- set one later). assigned_by = the recorder is a self-assignment, which the
+-- guard accepts only for a family listed as entered in this transaction: the
+-- backfill lists exactly the PD-16 families for its own statement, then clears it.
+
+select set_config('chat.pd042_entered_families',
+  coalesce((select string_agg(e.family_id::text, ',') from chat.student_enrolment e where e.origin = 'trial' and e.kind = 'new_family'), ''),
+  true);
 
 insert into chat.family_sales_owner (family_id, organization_id, staff_id, assigned_by, reason)
 select e.family_id, e.organization_id, t.recorded_by, t.recorded_by, 'recorded the trial''s subscription form (PD-16), carried over by PD-42'
   from chat.student_enrolment e
-  join chat.trial_subscription t on t.lesson_id = e.lesson_id
-  join chat.staff s on s.id = t.recorded_by and s.is_active and s.left_at is null
+  join chat.trial_subscription t on t.lesson_id = e.lesson_id and t.organization_id = e.organization_id
+  join chat.staff s on s.id = t.recorded_by and s.organization_id = e.organization_id and s.is_active and s.left_at is null
  where e.origin = 'trial' and e.kind = 'new_family'
    and chat.sales_department_role(t.recorded_by) is not null
 on conflict (family_id) do nothing;
+
+select set_config('chat.pd042_entered_families', '', true);
 
 -- ===========================================================================
 -- 6. The carried-over package (PD-30's ledger)
@@ -462,7 +666,7 @@ alter table chat.learner_subscription add constraint learner_subscription_staff_
 alter table chat.learner_subscription add constraint learner_subscription_used_before_is_carried_over
   check (source = 'carried_over' or (lessons_used_before = 0 and over_confirmed_by is null));
 
--- PD-42 F1: completed above the total is entered as it is, confirmed by a manager.
+-- PD-42 F1: completed above the total is entered as it is, by a manager.
 alter table chat.learner_subscription add constraint learner_subscription_over_is_confirmed
   check ((lessons_used_before > lessons_included) = (over_confirmed_by is not null));
 
@@ -479,7 +683,7 @@ set search_path = chat, pg_temp
 as $$
 declare
   v_learner  chat.learner%rowtype;
-  v_intake   chat.student_enrolment%rowtype;
+  v_intake   chat.learner_intake%rowtype;
   v_previous chat.learner_subscription%rowtype;
   v_day      date;
   v_manager  boolean;
@@ -515,18 +719,18 @@ begin
     -- PD-42 and PD-30-amendment-carried-over: the package a child already had
     -- in Jawwid Core, carried over as it stood.
     if new.source = 'carried_over' then
+      -- One decision at a time per child: condition 4 cannot race (review P2).
+      perform 1 from chat.learner l where l.id = new.learner_id for update;
       -- Condition 4, for everyone: never on top of another package.
       if exists (select 1 from chat.learner_subscription s where s.learner_id = new.learner_id and s.voided_at is null) then
         raise exception 'a carried-over package is only for a child with no other package' using errcode = 'check_violation';
       end if;
-      select * into v_intake from chat.student_enrolment e
-       where new.learner_id = any (e.learner_ids) and e.origin = 'intake'
-       order by e.assigned_at limit 1;
+      select * into v_intake from chat.learner_intake i where i.learner_id = new.learner_id;
       v_manager := chat.can_grant_subscription_exception(new.created_by);
-      if v_intake.id is not null then
+      if v_intake.learner_id is not null then
         -- It counts from the child's intake day: lessons held in Chat since
         -- then use it, and Core's count covers everything before (PD-42 F5).
-        v_day := (v_intake.assigned_at at time zone chat.pd030_zone())::date;
+        v_day := (v_intake.entered_at at time zone chat.pd030_zone())::date;
         if new.starts_on <> v_day then
           raise exception 'a carried-over package starts on the day the child was entered (%)', v_day
             using errcode = 'check_violation';
@@ -534,10 +738,10 @@ begin
       elsif new.starts_on < chat.pd030_today() - 7 or new.starts_on > chat.pd030_today() + 30 then
         raise exception 'a subscription added by hand starts from a week ago to a month ahead' using errcode = 'check_violation';
       end if;
-      -- Conditions 1, 2, 3 and 5.
-      v_entrant := v_intake.id is not null
-        and new.created_by = v_intake.assigned_by
-        and now() <= v_intake.assigned_at + interval '14 days'
+      -- Conditions 1, 2, 3 and 5, read from who entered the child.
+      v_entrant := v_intake.learner_id is not null
+        and new.created_by = v_intake.entered_by
+        and now() <= v_intake.entered_at + interval '14 days'
         and chat.staff_owns_family(new.created_by, new.family_id)
         and chat.staff_has_permission(new.created_by, 'subscriptions.carry_over');
       -- Grace once: a re-add that leaves more lessons than the row it replaces,
@@ -556,8 +760,11 @@ begin
         raise exception 'a carried-over package is entered by the supervisor who entered the child, within 14 days, for their own family; otherwise by the super admin, the Operations Manager or the Sales Manager'
           using errcode = 'insufficient_privilege';
       end if;
-      if new.over_confirmed_by is not null and not chat.can_grant_subscription_exception(new.over_confirmed_by) then
-        raise exception 'completed lessons above the package are confirmed by the super admin, the Operations Manager or the Sales Manager'
+      -- F1: completed above the package is a manager's entry, confirmed by
+      -- that same manager (review P2: no named confirmer is trusted).
+      if new.lessons_used_before > new.lessons_included
+         and (not v_manager or new.over_confirmed_by is distinct from new.created_by) then
+        raise exception 'completed lessons above the package are entered and confirmed by the super admin, the Operations Manager or the Sales Manager'
           using errcode = 'insufficient_privilege';
       end if;
     end if;
@@ -587,6 +794,19 @@ begin
   end if;
   if new.voided_by is not null and not chat.staff_of(new.voided_by, new.organization_id) then
     raise exception 'a subscription is voided by staff of its organization' using errcode = 'insufficient_privilege';
+  end if;
+  -- A carried-over package is corrected (voided) by the supervisor who entered
+  -- it, within 14 days of the child's intake, or by the three managers (review P2).
+  if old.source = 'carried_over' and new.voided_at is not null then
+    select * into v_intake from chat.learner_intake i where i.learner_id = old.learner_id;
+    if new.voided_by is null
+       or not (chat.can_grant_subscription_exception(new.voided_by)
+               or (new.voided_by = old.created_by
+                   and v_intake.entered_by = new.voided_by
+                   and now() <= v_intake.entered_at + interval '14 days')) then
+      raise exception 'a carried-over package is corrected by the supervisor who entered it within 14 days, or by the super admin, the Operations Manager or the Sales Manager'
+        using errcode = 'insufficient_privilege';
+    end if;
   end if;
   return new;
 end;
@@ -696,7 +916,8 @@ select set_config('chat.pd040_catalogue_change', 'off', true);
 
 alter table chat.family_sales_owner enable row level security;
 alter table chat.family_contact_key enable row level security;
-revoke all on chat.family_sales_owner, chat.family_contact_key from public, anon, authenticated, chat_app;
+alter table chat.learner_intake enable row level security;
+revoke all on chat.family_sales_owner, chat.family_contact_key, chat.learner_intake from public, anon, authenticated, chat_app;
 
 revoke all on function chat.sales_family_scope() from public;
 revoke all on function chat.staff_owns_family(uuid, uuid) from public;
@@ -704,3 +925,8 @@ revoke all on function chat.staff_may_handle_family(uuid, uuid) from public;
 revoke all on function chat.guard_family_sales_owner() from public;
 revoke all on function chat.guard_family_contact_key() from public;
 revoke all on function chat.guard_learner_supervision_assigner() from public;
+revoke all on function chat.pd042_created_in_this_transaction(text, uuid) from public;
+revoke all on function chat.pd042_note_created(text, uuid) from public;
+revoke all on function chat.create_intake_family(text, uuid) from public;
+revoke all on function chat.guard_learner_intake() from public;
+revoke all on function chat.pd042_record_learner_intake() from public;

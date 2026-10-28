@@ -373,7 +373,7 @@ The form saves with this minimum. The rest is completed later, on the screens th
 | `new_students.manage` | exists | `supervisor:operations`, `supervisor:sales`, `manager:operations`, `manager:sales` (+ super admin) | enter a family; add a child; set a sign-in e-mail. Own families (§4.3). |
 | **`subscriptions.carry_over`** | **new** | the same four bundles | only the supervisor who entered the child, for their own family, within 14 days, with no other standing row (`PD-30-amendment-carried-over`) |
 | `subscriptions.manage` | exists (managers) | unchanged | late corrections (PD-30's three roles) |
-| `parents.edit` | exists | **add to `supervisor:sales`** | Sales: owned families only. PD-17's `canEditParent` gains a "Sales owner of this family" basis. |
+| `parents.edit` | exists | **add to `supervisor:sales`, in PR-2 or PR-4** (its own `LATER` catalogue block, with the `decideBillingAccess` change; not PR-1) | Sales: owned families only. PD-17's `canEditParent` gains a "Sales owner of this family" basis. |
 | `org.manage` | exists (managers) | unchanged | the Operations manager sets an Operations supervisor (§4.2); the Sales manager changes a Sales owner |
 
 **Deny by default:**
@@ -382,7 +382,8 @@ The form saves with this minimum. The rest is completed later, on the screens th
 - an actor with no scope gets 403 **before** any lookup, as PD-17 does.
 
 **How the two changes land, now that PD-40 is merged.** PD-40's consistency rule is one catalogue row plus one migration row. PD-42 makes both changes itself:
-- PR-1's migration inserts `subscriptions.carry_over` into `chat.permission` (risk `finance`, delegable, `introduced_by` PD-42). It inserts `(supervisor|manager, operations|sales, subscriptions.carry_over)` and `(supervisor, sales, parents.edit)` into `chat.legacy_permission_bundle`.
+- PR-1's migration inserts `subscriptions.carry_over` into `chat.permission` (risk `finance`, **not delegable** like every key until PD-40 PR-3 verifies the bundles, `introduced_by` PD-42). It inserts `(supervisor|manager, operations|sales, subscriptions.carry_over)` into `chat.legacy_permission_bundle`.
+- `(supervisor, sales, parents.edit)` is **deferred to PR-2 or PR-4**. PD-40's bundle spec pins each bundle to its Layer-2 policy, so the row lands in a `LATER` block of its own, in the same PR as the `decideBillingAccess` change that lets a Sales owner edit their families. A later migration can always add bundle rows; nothing is frozen by deferring it.
 - `catalogue.ts` and `legacy-bundles.ts` get the same rows. PD-40's seed spec (`pd040-catalogue-seed.spec.ts`) and `pd040-access-roles.spec.ts` prove the code and the tables are equal.
 - New routes declare `@Requires(...)`, so the `pd040-routes` guard and the route table pass. The route table is regenerated with `PD040_WRITE_ROUTE_TABLE=1`.
 - The **DB layer** asks the same question through `chat.staff_has_permission(staff, key)` (`20261027190000…:541-549`). The intake and carried-over guards call it, so a key that is missing refuses at the database as well (§15, S3).
