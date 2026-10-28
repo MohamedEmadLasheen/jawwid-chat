@@ -299,8 +299,9 @@ update chat.permission set delegable = true where key in ('lesson_content.check'
 select set_config('chat.pd040_catalogue_change', 'off', true);
 
 -- --- PD-40: the Scholar reviewer template ------------------------------------------
--- 20261029220000's function with only the template list (the generated block)
--- grown; every organization that exists today gets the new template. Its key
+-- 20261029230000's (PD-48) function, word for word -- its audit-once guard
+-- included -- with only the template list (the generated block) grown;
+-- every organization that exists today gets the new template. Its key
 -- (lesson_content.review_scholar) is not delegable: only the super admin grants
 -- this role (owner, 2026-10-29; plan §F.2).
 
@@ -325,6 +326,7 @@ begin
       from (values
 -- BEGIN GENERATED pd040 role templates -- by test/unit/authorization/pd040-role-templates.spec.ts; do not edit
         ('designer', 'Certificate designer', 'مصمم الشهادات', 'Designs and uploads certificates. Never sends one to a family.', 'specialist', array['certificates.design', 'certificates.view']::text[]),
+        ('pronunciation_reviewer', 'Pronunciation reviewer', 'مراجع النطق', 'Listens to the lessons'' computer-voice clips and approves or rejects each one. Two reviewers approve a clip before it plays.', 'specialist', array['lesson_audio.review', 'lesson_audio.view']::text[]),
         ('scholar_reviewer', 'Scholar reviewer', 'المراجع الشرعي', 'Signs the scholar''s step of children''s Quran content and of each game mechanic, after the source check and the teacher.', 'specialist', array['lesson_content.review_scholar', 'lesson_content.view']::text[])
 -- END GENERATED pd040 role templates
       ) as v (key, name_en, name_ar, description, max_tier, permissions)
@@ -347,7 +349,10 @@ begin
       -- of "designer" then has a trail (review of #231).
       select r.id into v_other from chat.access_role r
        where r.organization_id = p_org and r.key = t.key and not r.is_template;
-      if v_other is not null then
+      -- Said once: a re-run does not audit the same skipped role again (review of #254).
+      if v_other is not null and not exists (
+        select 1 from chat.audit_log a where a.action = 'access_role.template_skipped' and a.entity_id = v_other
+      ) then
         raise notice 'PD-40: organization % already has a role keyed % (%) that is not a template; the template is not seeded',
           p_org, t.key, v_other;
         insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)

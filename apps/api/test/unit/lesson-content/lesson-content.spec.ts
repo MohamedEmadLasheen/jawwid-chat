@@ -265,6 +265,33 @@ describe('database refusals become answers', () => {
   });
 });
 
+describe('seed_access_role_templates after PD-48 (review of #258, P1.1)', () => {
+  const MIG = join(__dirname, '../../../../../supabase/migrations');
+  const fn = (file: string) => {
+    const sql = readFileSync(join(MIG, file), 'utf8');
+    const start = sql.indexOf('create or replace function chat.seed_access_role_templates(p_org uuid)');
+    const end = sql.indexOf('\n$$;\n', start);
+    expect(start).toBeGreaterThan(-1);
+    return sql.slice(start, end);
+  };
+  const generated = /-- BEGIN GENERATED pd040 role templates[\s\S]*?-- END GENERATED pd040 role templates/;
+  const pd048 = fn('20261029230000_chat_pd048_lesson_audio.sql');
+  const pd049 = fn('20261029235000_chat_pd049_lesson_content_review.sql');
+
+  it("is PD-48's function word for word, apart from the generated template list", () => {
+    expect(pd049.replace(generated, '<templates>')).toBe(pd048.replace(generated, '<templates>'));
+  });
+
+  it('keeps the audit-once guard, so applying 235000 after 230000 reverts nothing', () => {
+    expect(pd049).toContain("a.action = 'access_role.template_skipped' and a.entity_id = v_other");
+  });
+
+  it('seeds both new templates beside the designer', () => {
+    const rows = generated.exec(pd049)![0];
+    for (const key of ['designer', 'pronunciation_reviewer', 'scholar_reviewer']) expect(rows).toContain(`('${key}', `);
+  });
+});
+
 describe('the migration and the code agree', () => {
   const sql = readFileSync(join(__dirname, '../../../../../supabase/migrations/20261029235000_chat_pd049_lesson_content_review.sql'), 'utf8');
 

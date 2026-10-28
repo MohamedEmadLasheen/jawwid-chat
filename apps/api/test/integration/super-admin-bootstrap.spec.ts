@@ -1,3 +1,4 @@
+import { ACCESS_ROLE_TEMPLATES } from '@platform/permissions/role-templates';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@platform/prisma.service';
 import { PrismaIdentityService } from '@platform/identity.service';
@@ -15,7 +16,6 @@ import {
   BootstrapRefusalCode,
   bootstrapSuperAdmin,
 } from '../../src/cli/super-admin-bootstrap';
-import { ACCESS_ROLE_TEMPLATES } from '@platform/permissions/role-templates';
 import { PinnedCoverage, seed, truncate } from './harness';
 
 /**

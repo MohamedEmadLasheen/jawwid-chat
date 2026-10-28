@@ -17,6 +17,8 @@ import { api } from '@/core/api/client'
  */
 export const AUDIO_MESSAGE = 'jawwid:quran-audio'
 export const READY_MESSAGE = 'jawwid:lesson-ready'
+/** PD-48: an Arabic letters lesson's voice-over -- a different message, never Quran audio. */
+export const VOICE_MESSAGE = 'jawwid:lesson-audio'
 const PER_REQUEST = 50
 /** 286 ayat (the longest surah) is 6 requests: never more. */
 const MAX_REQUESTS = 6
@@ -77,6 +79,38 @@ export async function lessonAudioMessage(surah: number): Promise<LessonAudioMess
   return ayahs.length ? { type: AUDIO_MESSAGE, surah, ayahs } : null
 }
 
+/** The lesson key of a lessons-site Arabic letters page (`…/lessons/arabic/lesson-N`), with its origin; null for anything else. */
+export function lessonLetters(url: string): { origin: string; lesson: string } | null {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return null
+  }
+  const m = /^\/lessons\/arabic\/lesson-(\d{1,3})\/?$/.exec(u.pathname)
+  const n = m ? Number(m[1]) : 0
+  if (!m || n < 1 || String(n) !== m[1] || (u.protocol !== 'https:' && u.protocol !== 'http:')) return null
+  return { origin: u.origin, lesson: `arabic-${String(n).padStart(3, '0')}` }
+}
+
+export interface VoiceMessage {
+  type: typeof VOICE_MESSAGE
+  lesson: string
+  clips: Array<{ id: string; audio: { key: string; url: string; sha256: string; textSha256: string } }>
+}
+
+/**
+ * PD-48: the approved clips THIS account may hear (the server's release gate
+ * decides), exactly as the API answered, field by field -- nothing added.
+ */
+export async function voiceMessage(lesson: string): Promise<VoiceMessage | null> {
+  const answer = await api.get<{ lesson: string; clips: VoiceMessage['clips'] }>(`/lesson-audio/${encodeURIComponent(lesson)}`)
+  if (answer.lesson !== lesson) return null
+  const clips = answer.clips.map((c) => ({ id: c.id, audio: { key: c.audio.key, url: c.audio.url, sha256: c.audio.sha256, textSha256: c.audio.textSha256 } }))
+  // Posted even when empty: an empty list clears what the lesson held before.
+  return { type: VOICE_MESSAGE, lesson, clips }
+}
+
 /**
  * For a framed lesson: fetch its audio list once, then post it when the frame
  * loads and whenever the lesson says it is ready -- only to the frame's own
@@ -84,6 +118,8 @@ export async function lessonAudioMessage(surah: number): Promise<LessonAudioMess
  */
 export function useLessonAudio(frame: RefObject<HTMLIFrameElement | null>, url: string, eligible: boolean): void {
   useEffect(() => {
+    const letters = eligible ? lessonLetters(url) : null
+    if (letters) return postVoice(frame.current, letters)
     const found = eligible ? lessonSurah(url) : null
     const origin = lessonsOrigin()
     const lesson = found && origin && found.origin === origin ? found : null
@@ -114,4 +150,34 @@ export function useLessonAudio(frame: RefObject<HTMLIFrameElement | null>, url: 
       window.removeEventListener('message', onReady)
     }
   }, [frame, url, eligible])
+}
+
+/** PD-48: the same for an Arabic letters lesson -- its voice-over, on load and whenever the lesson says it is ready. */
+function postVoice(el: HTMLIFrameElement | null, letters: { origin: string; lesson: string }): (() => void) | undefined {
+  const origin = lessonsOrigin()
+  if (!el || !origin || letters.origin !== origin) return undefined
+  let message: VoiceMessage | null = null
+  let live = true
+  const post = () => {
+    if (message) el.contentWindow?.postMessage(message, letters.origin)
+  }
+  const onReady = (e: MessageEvent) => {
+    const d = e.data as { type?: unknown; lesson?: unknown } | null
+    if (e.origin === letters.origin && e.source === el.contentWindow && d?.type === READY_MESSAGE && d.lesson === letters.lesson) post()
+  }
+  el.addEventListener('load', post)
+  window.addEventListener('message', onReady)
+  voiceMessage(letters.lesson).then(
+    (m) => {
+      if (!live) return
+      message = m
+      post()
+    },
+    () => undefined, // no voice-over for this account: the lesson plays without it
+  )
+  return () => {
+    live = false
+    el.removeEventListener('load', post)
+    window.removeEventListener('message', onReady)
+  }
 }

@@ -174,6 +174,22 @@ const LATER: readonly Later[] = [
     ],
   },
   {
+    // PD-48: lesson voice-over. The Teachers Manager listens and approves (and
+    // grants approving through the Pronunciation reviewer template); a
+    // Teachers supervisor listens.
+    migration: '20261029230000_chat_pd048_lesson_audio.sql',
+    tag: 'pd048',
+    permissions: ['lesson_audio.view', 'lesson_audio.review'],
+    bundles: [
+      ['manager', 'teachers', 'lesson_audio.review'],
+      ['manager', 'teachers', 'lesson_audio.view'],
+      ['supervisor', 'teachers', 'lesson_audio.view'],
+    ],
+    // Verified in pd040-legacy-bundles.spec.ts (legacyLessonAudioKeys), so the
+    // Teachers Manager may grant the Pronunciation reviewer role (S1, H5).
+    delegable: ['lesson_audio.review', 'lesson_audio.view'],
+  },
+  {
     // PD-49: children's Quran content review. The Teachers Manager sees,
     // checks and signs as a teacher (and delegates those); a Teachers
     // supervisor sees. The scholar's step is in no bundle: the super admin

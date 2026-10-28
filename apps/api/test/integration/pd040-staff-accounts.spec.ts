@@ -124,7 +124,7 @@ beforeAll(async () => {
   m = await seedOrgChat(g.prisma, { organizationId: orgId, emailDomain: DOMAIN, password: PASSWORD, passwordHash: await hashPassword(PASSWORD), messages: false });
   // PD-40 PR-4: the migration seeded the organizations that existed then; this one is new.
   const seeded = await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.seed_access_role_templates(${orgId}::uuid) AS n`;
-  // Every template there is (PD-49 added scholar_reviewer beside the designer).
+  // Every template of role-templates.ts (the Designer; PD-48's Pronunciation reviewer; PD-49's Scholar reviewer).
   expect(seeded[0]!.n).toBe(ACCESS_ROLE_TEMPLATES.length);
 
   process.env.REDIS_URL = REDIS_URL;
@@ -279,8 +279,8 @@ describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
       SELECT id::text AS id, is_template FROM chat.access_role WHERE organization_id = ${otherOrg.ownDesignerOrg}::uuid AND key = 'designer'`;
     expect(rows).toEqual([{ id: otherOrg.ownDesigner, is_template: false }]);
     const again = await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.seed_access_role_templates(${otherOrg.ownDesignerOrg}::uuid) AS n`;
-    // The designer is skipped; every other template is added.
-    expect(again[0]!.n).toBe(ACCESS_ROLE_TEMPLATES.length - 1);
+    // Every OTHER template is added (PD-48's Pronunciation reviewer); "designer" adds nothing.
+    expect(again[0]!.n).toBe(ACCESS_ROLE_TEMPLATES.filter((t) => t.key !== 'designer').length);
     const trail = await g.prisma.auditLog.findMany({ where: { action: 'access_role.template_skipped', entityId: otherOrg.ownDesigner } });
     expect(trail.length).toBeGreaterThanOrEqual(1);
     expect(trail[0]).toMatchObject({ actorId: null, after: { key: 'designer', existingRoleId: otherOrg.ownDesigner } });

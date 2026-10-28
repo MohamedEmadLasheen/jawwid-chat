@@ -25,4 +25,6 @@ export const TEXT = {
   check: 'تَحَقَّقْ',
   notYet: 'لَيْسَ بَعْدُ، اُنْظُرْ مَرَّةً أُخْرَى.',
   done: 'أَنْهَيْتُ',
+  // PD-48: the play button's label (only a string with a teacher-approved clip has one).
+  listen: 'اِسْتَمِعْ',
 } as const;

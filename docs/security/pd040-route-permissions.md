@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-511 routes.
+519 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -221,6 +221,14 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/learners/:id/transfer` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.transfer` |
 | GET | `/api/v1/learners/:id/transfer-preview` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transferPreview` |
 | GET | `/api/v1/learners/:id/transfers` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transfers` |
+| GET | `/api/v1/lesson-audio/:lesson` | self-service | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.learner` |
+| GET | `/api/v1/lesson-audio/access` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.access` |
+| POST | `/api/v1/lesson-audio/clips/:clipId/approve` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.approve` |
+| POST | `/api/v1/lesson-audio/clips/:clipId/reject` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.reject` |
+| POST | `/api/v1/lesson-audio/clips/:clipId/withdraw` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.withdraw` |
+| GET | `/api/v1/lesson-audio/review/:lesson` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.summary` |
+| GET | `/api/v1/lesson-audio/review/:lesson/units/:unit` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.unit` |
+| POST | `/api/v1/lesson-audio/strings/:lesson/:stringId/decision` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.decide` |
 | GET | `/api/v1/lesson-content/access` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.access` |
 | GET | `/api/v1/lesson-content/approvals/:scope` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.export` |
 | GET | `/api/v1/lesson-content/review/:scope` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.list` |
