@@ -466,7 +466,10 @@ async function bootstrap(): Promise<void> {
     if (Date.now() >= nextTaskSweep) {
       draining = true;
       try {
-        await tasks.sweep();
+        const swept = await tasks.sweep();
+        if (swept.failed > 0) {
+          log.warn(`task sweep: ${swept.failed} failed this run, ${swept.issues} source issue(s) recorded (chat.work_task_source_issue)`);
+        }
       } catch (e) {
         report(log, 'task source sweep', 'tasks.sweep', e);
       } finally {

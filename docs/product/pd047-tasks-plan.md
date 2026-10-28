@@ -239,6 +239,27 @@ A guard spec asserts that every adapter has a completion trigger and a test wher
 
 The **Needs action** page and the other source pages stay as they are. A task is the "you, by name" layer over them.
 
+#### 3.6.1 As built in PR-2 (#241)
+
+- **Day-one backfill.** Owner, 2026-10-29: "Yes, but only recent ones". At switch-on, only source items from the **last 14 days** become tasks, and older open items are left as they are.
+  - Each source has its own cut-off, `tasks.since.<source>` in `chat.config`.
+  - It is set on first use to that moment minus 14 days.
+- **Violations corrected away** (PD-15): a violation whose lesson's outcome was corrected away can no longer be decided (`DisciplineService.standing`).
+  - Its task is withdrawn, by the lesson trigger and by the sweep.
+  - A violation already corrected away is never raised.
+- **Other sources:**
+  - A **trial lesson** (no learner) raises no report task; trials are Phase B's `trial_outcome`.
+  - A **"missing" correction** whose lesson already has a report task raises none of its own.
+- **Owners that change:**
+  - A lesson given to another teacher moves its report task, as a reassignment by the system.
+  - A case whose owner left moves to its department's manager.
+  - Lesson-report, correction and case tasks are moved only by their source. The database guard enforces this.
+- **Nothing is silent:**
+  - A source occurrence that has no assignee, or whose trigger or sweep step failed, is recorded in `chat.work_task_source_issue`.
+  - It is warned once, then retried with a back-off: one hour, doubling, at most a day.
+  - The sweep returns its counts, and the worker logs any failures.
+- **The sweep** runs in batches of at most 60 rows under an advisory lock, and the source triggers wait at most 2 s for a lock.
+
 ### 3.7 Manual tasks, and who is responsible
 
 - **Create** (`tasks.create`): a manager for anyone in their team; the super admin for anyone; a teacher supervisor for their teachers (Q5). There is no peer-to-peer creation.

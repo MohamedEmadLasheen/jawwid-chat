@@ -25,6 +25,20 @@ export type Level = (typeof LEVELS)[number];
 export const CATEGORIES = ['financial', 'operational'] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type PriorityReason = 'manual' | 'due_soon' | 'overdue' | 'source';
+/** What one worker sweep did (chat.work_task_sweep, summed over its batches). */
+export interface SweepResult {
+  skipped: boolean;
+  raised: number;
+  settled: number;
+  withdrawn: number;
+  rerouted: number;
+  failed: number;
+  /** Source occurrences waiting on a recorded issue (chat.work_task_source_issue). */
+  issues: number;
+  batches: number;
+}
+const SWEEP_BATCHES = 20;
+
 /** PD-47 PR-2: the sources of system tasks (chat.work_task_sweep). */
 export const SOURCE_TYPES = ['lesson_report', 'report_correction', 'lesson_ruling', 'leave_decision', 'violation_decision', 'case'] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -308,10 +322,24 @@ export class TaskService {
     return this.move(viewer, row, 'complete', null, Prisma.sql`state = 'completed', outcome = 'acknowledged'`, 'completed', mineSql(viewer));
   }
 
-  /** PD-47 PR-2: the worker's sweep of the task sources (chat.work_task_sweep). */
-  async sweep(): Promise<number> {
-    const [r] = await this.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.work_task_sweep() AS n`;
-    return r?.n ?? 0;
+  /**
+   * PD-47 PR-2: the worker's sweep of the task sources (chat.work_task_sweep),
+   * batch after batch (each its own transaction, at most 60 rows) while more
+   * is waiting, up to SWEEP_BATCHES. Returns the totals; `failed` and
+   * `issues` are what the worker logs.
+   */
+  async sweep(): Promise<SweepResult> {
+    const total: SweepResult = { skipped: false, raised: 0, settled: 0, withdrawn: 0, rerouted: 0, failed: 0, issues: 0, batches: 0 };
+    for (let i = 0; i < SWEEP_BATCHES; i++) {
+      const [row] = await this.prisma.$queryRaw<Array<{ r: Record<string, unknown> }>>`SELECT chat.work_task_sweep(50) AS r`;
+      const r = row?.r ?? {};
+      if (r.skipped === true) return { ...total, skipped: total.batches === 0 };
+      total.batches += 1;
+      for (const k of ['raised', 'settled', 'withdrawn', 'rerouted', 'failed'] as const) total[k] += Number(r[k] ?? 0);
+      total.issues = Number(r.issues ?? 0);
+      if (r.more !== true) break;
+    }
+    return total;
   }
 
   /** Exit 2: the assignee says it is outside their responsibility. { comment } */
@@ -357,7 +385,7 @@ export class TaskService {
     if (row.source_type && NOT_REASSIGNABLE.has(row.source_type)) {
       throw denied(row.source_type === 'case'
         ? 'a case\'s task follows its owner: assign the case on its page'
-        : 'only the lesson\'s teacher writes its report: change the lesson\'s teacher on the Schedule');
+        : 'only the lesson\'s teacher writes its report: change the lesson\'s teacher on the Schedule, and the task follows');
     }
     const instructions = text(body.instructions, 'instructions', NOTE_MAX, false);
     const to = await this.targetOf(viewer, body.to);
@@ -391,7 +419,11 @@ export class TaskService {
                        ${to.principal.kind === 'staff' ? to.principal.id : null}::uuid,
                        ${to.principal.kind === 'teacher' ? to.principal.id : null}::uuid, NULL) = 'manager'`;
     const who = decider ? this.deciderSql(viewer) : this.handsOwnSql(viewer);
-    return this.move(viewer, row, 'reassign', instructions, set, 'reassigned', Prisma.sql`${who} AND ${target}`);
+    // A teacher's decision goes to someone who stands to that teacher -- decided again in the write.
+    const stands = row.source_teacher_id
+      ? Prisma.sql`chat.staff_teacher_scope(${to.principal.id}::uuid, ${row.source_teacher_id}::uuid) IS NOT NULL`
+      : Prisma.sql`true`;
+    return this.move(viewer, row, 'reassign', instructions, set, 'reassigned', Prisma.sql`${who} AND ${target} AND ${stands}`);
   }
 
   /** { dueAt: ISO timestamp | null }: the responsible manager or the super admin. */
