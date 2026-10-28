@@ -121,6 +121,9 @@ const TEACHERS_MEMBER = k(
   'cases.view',
   'cases.manage',
   'feedback.view',
+  // PD-43 (owner Q1): teacher supervisors add teachers too, for themselves or
+  // with no supervisor (decideTeacherOnboarding narrows them).
+  'teachers.create',
 );
 
 /** Sales: enrolment, trials, payments (PD-16, PD-20). */
@@ -156,6 +159,9 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     ...TEACHERS_MEMBER,
     'leave.allowance',
     'teacher_files.edit',
+    // PD-43 owner N2, "Full teacher finance": payroll, as the super admin.
+    'teacher_files.finance',
+    'teachers.offboard',
     'materials.manage',
     'lessons.courses',
   ],

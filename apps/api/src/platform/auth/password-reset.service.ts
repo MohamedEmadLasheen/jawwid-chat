@@ -11,6 +11,8 @@ import { RevocationUnconfirmedError } from '../realtime-revocation';
 
 /** How long a code lives: long enough to be passed on by hand. */
 export const RESET_CODE_MINUTES = 10;
+/** PD-43: how long a first sign-in code lives -- a new person may not open the app the same day. */
+export const FIRST_LOGIN_CODE_HOURS = 72;
 /** Wrong tries before a code is spent and the administrator must issue another. */
 export const RESET_CODE_TRIES = 5;
 /** Codes one account may be issued in an hour, whoever issues them. */
@@ -21,7 +23,17 @@ export const RESET_AUDIT = {
   COMPLETED: 'account.password_reset_completed',
   /** PD-25: a parent asked for a code, and one was sent to the contact method on file. */
   RECOVERY_SENT: 'account.recovery_code_sent',
+  /** PD-43: a first sign-in code for an account that has never signed in. Completing it writes `account.activated` (SQL). */
+  FIRST_LOGIN_ISSUED: 'account.first_login_code_issued',
 } as const;
+
+/**
+ * PD-43: what a code is for. `reset` -- a new password for an account in use
+ * (PD-21, PD-25). `first_login` -- the first password of a provisioned account;
+ * completing it also activates the account (chat.activate_account_with_code).
+ * Kind-agnostic: teachers now, PD-40's staff accounts later.
+ */
+export type ResetCodePurpose = 'reset' | 'first_login';
 
 /** PD-25: where a code the parent asked for is sent. */
 export type RecoveryChannel = 'email' | 'whatsapp';
@@ -43,6 +55,8 @@ export interface IssueResetInput {
   readonly reason: string;
   /** End every session now, before the person has chosen a new password (a compromised account). */
   readonly signOutEverywhere: boolean;
+  /** PD-43: `first_login` for an account that has never signed in. Default `reset`. */
+  readonly purpose?: ResetCodePurpose;
 }
 
 /**
@@ -62,6 +76,11 @@ export interface IssueResetInput {
  * The old password keeps working until step 2, unless the administrator chose
  * to sign the account out everywhere at step 1 -- then nothing works until the
  * person finishes the reset.
+ *
+ * PD-43 adds a purpose: a `first_login` code (72 hours) is how a new account
+ * gets its first password, and completing it activates the account, in the
+ * same transaction, through chat.activate_account_with_code -- the only way the
+ * database lets an account move from provisioned to active.
  *
  * PD-25 adds the parent's own way in: issueRecovery() stores a code the parent
  * asked for (channel email / whatsapp, no issuer) for AccountRecoveryService to
@@ -90,8 +109,11 @@ export class PasswordResetService {
     });
     if (recent >= RESET_CODES_PER_HOUR) throw new AuthError(AuthErrorCode.RATE_LIMITED, 3600);
 
+    const purpose: ResetCodePurpose = input.purpose ?? 'reset';
     const code = newCode();
-    const expiresAt = new Date(Date.now() + RESET_CODE_MINUTES * 60_000);
+    const expiresAt = new Date(
+      Date.now() + (purpose === 'first_login' ? FIRST_LOGIN_CODE_HOURS * 3_600_000 : RESET_CODE_MINUTES * 60_000),
+    );
     const { id, revoked } = await this.prisma.$transaction(async (tx) => {
       await tx.passwordResetCode.updateMany({
         where: { accountId: input.accountId, usedAt: null, supersededAt: null },
@@ -105,6 +127,7 @@ export class PasswordResetService {
           codeHash: codeHash(input.accountId, code),
           reason: input.reason,
           expiresAt,
+          purpose,
         },
         select: { id: true },
       });
@@ -117,10 +140,10 @@ export class PasswordResetService {
       // Never the code, nor its hash: only what an incident review needs.
       await this.audit.audit(tx, {
         actorId: input.issuedByStaffId,
-        action: RESET_AUDIT.ISSUED,
+        action: purpose === 'first_login' ? RESET_AUDIT.FIRST_LOGIN_ISSUED : RESET_AUDIT.ISSUED,
         entity: 'account',
         entityId: input.accountId,
-        after: { resetCodeId: row.id, expiresAt: expiresAt.toISOString(), signOutEverywhere: input.signOutEverywhere },
+        after: { resetCodeId: row.id, purpose, expiresAt: expiresAt.toISOString(), signOutEverywhere: input.signOutEverywhere },
         reason: input.reason,
       });
       return { id: row.id, revoked: revokedSessions };
@@ -184,9 +207,15 @@ export class PasswordResetService {
         action: RESET_AUDIT.COMPLETED,
         entity: 'account',
         entityId: account.id,
-        after: { resetCodeId: live.id, channel: live.channel, issuedBy: live.issuedBy, revokedSessions: count },
+        after: { resetCodeId: live.id, channel: live.channel, purpose: live.purpose, issuedBy: live.issuedBy, revokedSessions: count },
         reason: 'the account holder set a new password with a one-time reset code',
       });
+      // PD-43: a first sign-in code also activates the account (provisioned ->
+      // active), here, so the code is never spent without it. The SQL writer
+      // refuses anything but a spent first_login code of a provisioned account.
+      if (live.purpose === 'first_login') {
+        await tx.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text AS activated`;
+      }
       return count;
     });
     await this.enforce(account.id, revoked > 0);
