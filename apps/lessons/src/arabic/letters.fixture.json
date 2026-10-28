@@ -585,6 +585,39 @@
       "mark": "fatha",
       "has": false,
       "positions": []
+    },
+    {
+      "word": "تَتِمَّةْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "start"
+      ],
+      "note": "the same letter with two vowels: only the one with the fatha"
+    },
+    {
+      "word": "تَتِمَّةْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "the same letter with two vowels: only the one with the kasra"
+    },
+    {
+      "word": "تَتِمَّةْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "damma",
+      "has": false,
+      "positions": []
     }
   ]
 }
