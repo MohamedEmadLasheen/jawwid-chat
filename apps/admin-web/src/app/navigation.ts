@@ -89,7 +89,6 @@ export const SECTION_DESTINATION: Record<AdminSectionKey, DestinationKey> = {
 /** Operator areas. `settings` has no page, so it has no place (as before). */
 export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   chat: 'conversations',
-  inbox: 'conversations',
   calls: 'calls',
   organization: 'people',
   teachers: 'people',
@@ -111,7 +110,6 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
 
 export const AREA_PATH: Record<OperatorArea, string> = {
   chat: '/chat',
-  inbox: '/inbox',
   calls: '/calls',
   organization: '/organization',
   teachers: '/teachers',
@@ -131,7 +129,6 @@ export const AREA_PATH: Record<OperatorArea, string> = {
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
   chat: 'conversations',
-  inbox: 'conversations',
   calls: 'calls',
   organization: 'teams',
   teachers: 'academy',
@@ -241,7 +238,7 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
 
 function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
-  // navAreas, not visibleAreas: the legacy Inbox stays routable but is never offered.
+  // navAreas, not visibleAreas: some areas wait for the server to confirm them.
   for (const area of navAreas(role, access)) {
     const dest = AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue

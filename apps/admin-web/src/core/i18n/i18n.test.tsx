@@ -11,8 +11,8 @@ function Probe() {
     <div>
       <span data-testid="dir">{dir}</span>
       <span data-testid="locale">{locale}</span>
-      <span data-testid="nav">{t('nav.inbox')}</span>
-      <span data-testid="interpolated">{t('inbox.openCases', { count: 3 })}</span>
+      <span data-testid="nav">{t('nav.tasks')}</span>
+      <span data-testid="interpolated">{t('task.due', { date: 'tomorrow' })}</span>
       <span data-testid="duration">{duration(new Date(Date.now() - 12 * 60_000).toISOString())}</span>
       <span data-testid="number">{number(1234)}</span>
       <button type="button" onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')}>
@@ -28,7 +28,7 @@ describe('localisation', () => {
     expect(screen.getByTestId('dir')).toHaveTextContent('rtl')
     expect(document.documentElement.dir).toBe('rtl')
     expect(document.documentElement.lang).toBe('ar')
-    expect(screen.getByTestId('nav')).toHaveTextContent('الوارد')
+    expect(screen.getByTestId('nav')).toHaveTextContent('المهام')
   })
 
   it('switches direction and language together', async () => {
@@ -36,12 +36,12 @@ describe('localisation', () => {
     await userEvent.click(screen.getByRole('button', { name: 'toggle' }))
     expect(screen.getByTestId('dir')).toHaveTextContent('ltr')
     expect(document.documentElement.dir).toBe('ltr')
-    expect(screen.getByTestId('nav')).toHaveTextContent('Inbox')
+    expect(screen.getByTestId('nav')).toHaveTextContent('Tasks')
   })
 
   it('interpolates parameters', () => {
     renderWithProviders(<Probe />, { locale: 'en' })
-    expect(screen.getByTestId('interpolated')).toHaveTextContent('3 open cases')
+    expect(screen.getByTestId('interpolated')).toHaveTextContent('Due tomorrow')
   })
 
   it('formats durations and numbers in the active locale', () => {
@@ -66,7 +66,7 @@ describe('localisation', () => {
 
   it('never exposes an internal bucket name or score to an operator', () => {
     for (const locale of ['en', 'ar'] as const) {
-      for (const key of ['bucket.now', 'bucket.today', 'bucket.waiting_family', 'bucket.quiet'] as const) {
+      for (const key of ['bucket.now', 'bucket.today'] as const) {
         const value: string = messages[locale][key]
         expect(value).not.toMatch(/\d/)
         expect(value.toLowerCase()).not.toContain('bucket')

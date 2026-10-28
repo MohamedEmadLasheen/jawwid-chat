@@ -2,28 +2,9 @@ import { api, newIdempotencyKey, request, type SessionInfoDto } from './client'
 import { persistenceSupported, tokenStore } from '@/core/auth/tokens'
 import { deviceLabel } from '@/core/auth/device'
 import { ApiError } from './errors'
-import type {
-  AttentionBucket,
-  Case,
-  FamilyDetail,
-  Handoff,
-  InboxRow,
-  Message,
-  Paginated,
-  Staff,
-  Task,
-  TeamNowRow,
-  WorkloadLevel,
-} from '@/shared/types/domain'
+import type { Paginated, Staff, Task, TeamNowRow } from '@/shared/types/domain'
 
 /* ---------------------------------------------------------------- session */
-
-export interface DutyState {
-  in_shift: boolean
-  shift_ends_at: string | null
-  covering_for: string[]
-  sticky_threads: number
-}
 
 /** The principal the API reports (API-CONTRACT §3.2, `ActorDto`). */
 export interface ActorDto {
@@ -78,7 +59,6 @@ export const sessionApi = {
     if (!tokenStore.hasSession()) return null
     return toStaff(await api.get<ActorDto>('/me'))
   },
-  duty: () => api.get<DutyState>('/me/duty'),
   /**
    * `username` is the wire name of `chat.account.subject` (the decision gate
    * §5); for staff it is their email address.
@@ -131,97 +111,6 @@ export const sessionApi = {
   },
 }
 
-/**
- * Every threshold, weight and window from the brief lives here. The UI reads
- * labels and limits from this map; it never hardcodes 60 / 25 / 8 / 15.
- */
-export type AppConfig = Record<string, unknown>
-export const configApi = {
-  get: () => api.get<AppConfig>('/config'),
-  update: (patch: AppConfig) => api.patch<AppConfig>('/config', patch, newIdempotencyKey()),
-}
-
-/* ------------------------------------------------------------------ inbox */
-
-export type InboxSection = AttentionBucket | 'covering'
-
-export interface ShiftBanner {
-  minutes_remaining: number
-  waiting_count: number
-  follow_up_count: number
-  can_snooze: boolean
-}
-
-export const inboxApi = {
-  section: (section: InboxSection, cursor?: string, limit = 30) =>
-    api.get<Paginated<InboxRow>>('/inbox', { section, cursor, limit }),
-  awaySummary: () => api.get<{ handoffs: Handoff[]; since: string | null }>('/inbox/away-summary'),
-  shiftBanner: () => api.get<ShiftBanner | null>('/inbox/shift-banner'),
-  snoozeToNextShift: (familyIds: string[]) =>
-    api.post<void>('/inbox/snooze-to-next-shift', { family_ids: familyIds }, newIdempotencyKey()),
-  /**
-   * Brief §6: "this order is wrong" calibration logging. MVP-required — it is
-   * how the initial attention weights get replaced by real ones after 60-90 days.
-   */
-  orderFeedback: (input: {
-    family_id: string
-    section: InboxSection
-    position: number
-    what_i_would_have_done: string
-  }) => api.post<void>('/inbox/order-feedback', input, newIdempotencyKey()),
-}
-
-/* ----------------------------------------------------------------- family */
-
-export const familyApi = {
-  detail: (id: string) => api.get<FamilyDetail>(`/families/${id}`),
-  messages: (id: string, cursor?: string, limit = 40) =>
-    api.get<Paginated<Message>>(`/families/${id}/messages`, { cursor, limit }),
-  /**
-   * `on_behalf_mode` is intentionally absent: the server derives it from
-   * on_duty(). Brief §12 forbids the client choosing it.
-   */
-  sendMessage: (
-    id: string,
-    input: { body: string; visibility: 'customer' | 'internal'; case_id?: string | null },
-    idempotencyKey: string,
-  ) => api.post<Message>(`/families/${id}/messages`, input, idempotencyKey),
-  cases: (id: string) => api.get<Case[]>(`/families/${id}/cases`),
-  createCase: (
-    id: string,
-    input: { type: Case['type']; severity?: Case['severity']; is_blocking?: boolean; due_at?: string | null },
-  ) => api.post<Case>(`/families/${id}/cases`, input, newIdempotencyKey()),
-  addNote: (id: string, body: string, pinned = false) =>
-    api.post<void>(`/families/${id}/notes`, { body, pinned }, newIdempotencyKey()),
-  pinHandler: (id: string) => api.post<void>(`/families/${id}/pin-handler`, {}, newIdempotencyKey()),
-  deferToOwner: (id: string) =>
-    api.post<void>(`/families/${id}/defer-to-owner`, {}, newIdempotencyKey()),
-  transferImpact: (id: string, toStaffId: string) =>
-    api.get<{
-      families_affected: number
-      open_cases: number
-      open_tasks: number
-      target_workload_score: number
-      target_workload_level: WorkloadLevel
-    }>(`/families/${id}/transfer-impact`, { to_staff_id: toStaffId }),
-  /** The ONLY path that changes family.owner_id. `reason` is NOT NULL. */
-  transferOwnership: (id: string, toStaffId: string, reason: string) =>
-    api.post<void>(
-      `/families/${id}/transfer-ownership`,
-      { to_staff_id: toStaffId, reason },
-      newIdempotencyKey(),
-    ),
-}
-
-export const caseApi = {
-  update: (id: string, patch: Partial<Pick<Case, 'status' | 'severity' | 'is_blocking' | 'due_at' | 'handler_id'>>) =>
-    api.patch<Case>(`/cases/${id}`, patch, newIdempotencyKey()),
-  escalate: (id: string, reason: string) =>
-    api.post<void>(`/cases/${id}/escalate`, { reason }, newIdempotencyKey()),
-  followUp: (id: string, dueAt: string, reason: string) =>
-    api.post<void>(`/cases/${id}/follow-up`, { due_at: dueAt, reason }, newIdempotencyKey()),
-}
-
 /* ------------------------------------------------------------------ tasks */
 
 export const taskApi = {
@@ -233,15 +122,6 @@ export const taskApi = {
     cursor?: string
     limit?: number
   }) => api.get<Paginated<Task>>('/tasks', filters),
-  create: (input: {
-    family_id: string
-    case_id?: string | null
-    type: Task['type']
-    title: string
-    details?: string
-    owner_id: string
-    due_at?: string | null
-  }) => api.post<Task>('/tasks', input, newIdempotencyKey()),
   update: (id: string, patch: Partial<Pick<Task, 'status' | 'due_at' | 'result'>>) =>
     api.patch<Task>(`/tasks/${id}`, patch, newIdempotencyKey()),
 }
@@ -274,16 +154,8 @@ export interface ThisWeek {
 export const dashboardApi = {
   header: () => api.get<DashboardHeader>('/dashboard/header'),
   teamNow: () => api.get<TeamNowRow[]>('/dashboard/team-now'),
-  unattended: (cursor?: string) =>
-    api.get<Paginated<InboxRow>>('/dashboard/unattended', { cursor }),
   needsAction: () => api.get<NeedsActionItem[]>('/dashboard/needs-action'),
   thisWeek: () => api.get<ThisWeek>('/dashboard/this-week'),
-}
-
-export const staffApi = {
-  list: () => api.get<Staff[]>('/staff'),
-  offboard: (id: string, input: { mode: 'even' | 'named'; to_staff_id?: string; reason: string }) =>
-    api.post<void>(`/staff/${id}/offboard`, input, newIdempotencyKey()),
 }
 
 /* ------------------------------------------------------------------ admin */

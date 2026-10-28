@@ -4,7 +4,6 @@ import { canOpenArea, isDepartment, isSuperAdmin, type NavArea } from '@/core/pe
 import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
-import { InboxPage } from '@/features/inbox/InboxPage'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
@@ -67,7 +66,7 @@ function SuperAdminOnly({ children }: { children: ReactElement }) {
  *  conversations. The Dashboard stays at its own URL, under More. */
 function homeFor(role: Parameters<typeof isDepartment>[0]): string {
   if (isSuperAdmin(role)) return adminSectionPath('conversations')
-  // Departments have no inbox — they only ever see their own tasks. Operators
+  // Departments have no conversations — they only ever see their own tasks. Operators
   // land in their conversations: the chat workspace on the real API.
   return isDepartment(role) ? '/tasks' : '/chat'
 }
@@ -88,8 +87,6 @@ export function AppRoutes() {
             call link (members-only) lands on /calls/join/:id for both. */}
         <Route path="/calls" element={<Area area="calls"><CallsPage /></Area>} />
         <Route path="/calls/join/:scheduledCallId" element={<Area area="calls"><JoinLinkPage /></Area>} />
-        <Route path="/inbox" element={<Area area="inbox"><InboxPage /></Area>} />
-        <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
         {/* The Teachers area (features/teachers/area.tsx): Statistics is its base tab. */}
         <Route path="/teachers" element={<Area area="teachers"><TeacherStatsPage inTeachersArea /></Area>} />

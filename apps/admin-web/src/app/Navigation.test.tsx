@@ -79,9 +79,7 @@ describe('The navigation registry', () => {
     for (const role of OPERATOR_ROLES) {
       for (const [lessonManager, billingReader] of [[false, false], [true, false], [false, true], [true, true]] as const) {
         const listed = destinationsFor(role, { lessonManager, billingReader }).flatMap((d) => entriesOf(d).map((e) => e.path))
-        // Exactly the openable areas, with TWO deliberate exceptions: the legacy
-        // Inbox stays routable (old links) but is never offered -- its API
-        // routes (/inbox, /families/*) exist on no branch; and Teacher
+        // Exactly the openable areas, with one deliberate exception: Teacher
         // statistics is offered only when the server confirms the Teachers
         // department (GET /lessons/access), which the role alone cannot tell --
         // and Instalments likewise waits for Operations (GET /instalments/access).
@@ -91,7 +89,6 @@ describe('The navigation registry', () => {
         expect([...listed].sort(), role).toEqual([...allowed].sort())
         expect(listed, role).not.toContain('/inbox')
         const withheld = [
-          ...(visibleAreas(role).includes('inbox') ? ['inbox'] : []),
           ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
           // PD-38: the Schedule waits for GET /lessons/access to say `calendar`.
           ...(visibleAreas(role).includes('schedule') ? ['schedule'] : []),
@@ -366,7 +363,7 @@ describe('The desktop rail', () => {
   it('gives each operator role only its own destinations, and links a one-page destination directly', async () => {
     const cases: [StaffRole, string[], string[], string[]][] = [
       // role, destinations, direct links, menus
-      // Conversations is a direct link to /chat: the legacy Inbox is not offered.
+      // Conversations is a direct link to /chat (the legacy Inbox is retired).
       // PD-13: Calls is its own destination for every operating role.
       // Teacher Profile V2: the certificate review queue sits under People beside
       // the other people pages, so for admin and coverage People is a menu.
@@ -388,8 +385,14 @@ describe('The desktop rail', () => {
   })
 })
 
-describe('The legacy Inbox is not offered as a destination', () => {
-  it('no role is shown a link to /inbox (menus opened); operators\' Conversations goes to /chat; /inbox itself still routes', async () => {
+describe('The retired Inbox', () => {
+  // The legacy Inbox and everything it read (/inbox, /inbox/away-summary,
+  // /inbox/shift-banner, /me/duty, /config, /staff, /families/:id) answer 404
+  // for every persona: conversations live in Chat (/chat).
+  it('no role can open it, and no role is shown a link to /inbox (menus opened); operators\' Conversations goes to /chat', async () => {
+    for (const role of [...OPERATOR_ROLES, 'super_admin'] as StaffRole[]) {
+      expect(visibleAreas(role), role).not.toContain('inbox')
+    }
     for (const role of ['manager', 'admin', 'coverage', 'finance'] as StaffRole[]) {
       vi.stubGlobal('fetch', routeFetch({}))
       const { unmount } = renderWithProviders(<AppRoutes />, { staff: staff(role), route: '/' })
@@ -402,11 +405,51 @@ describe('The legacy Inbox is not offered as a destination', () => {
       }
       unmount()
     }
-    vi.stubGlobal('fetch', routeFetch({}))
-    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/inbox' })
-    await screen.findByRole('navigation', { name: 'Jawwid Operations' })
-    // Routed to the Inbox page itself, not refused: an old link still lands.
-    expect(document.querySelector('.state--forbidden')).toBeNull()
+  })
+
+  it('is not a route: /inbox and /inbox/:familyId fall to the unknown-path handling, like any other', async () => {
+    for (const route of ['/inbox', '/inbox/fam_1']) {
+      for (const [role, home] of [['admin', '/chat'], ['manager', '/chat']] as const) {
+        vi.stubGlobal('fetch', routeFetch({}))
+        const { unmount } = renderWithProviders(
+          <>
+            <AppRoutes />
+            <Where />
+          </>,
+          { staff: staff(role), route },
+        )
+        await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(home))
+        unmount()
+      }
+    }
+  })
+
+  it('the shell no longer asks for duty, shift banners, config or staff', async () => {
+    for (const role of ['manager', 'admin', 'coverage'] as StaffRole[]) {
+      const fetchMock = routeFetch({})
+      vi.stubGlobal('fetch', fetchMock)
+      const { unmount } = renderWithProviders(<AppRoutes />, { staff: staff(role), route: '/tasks' })
+      await screen.findByRole('navigation', { name: 'Jawwid Operations' })
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+      const paths = fetchMock.mock.calls.map(([url]) => String(url).replace(/^.*\/api\/v1/, '').split('?')[0])
+      expect(paths.filter((p) => /^\/(inbox|me\/duty|config|staff)(\/|$)/.test(p!)), role).toEqual([])
+      unmount()
+    }
+  })
+
+  it("is no longer where the Dashboard's needs-action list sends the manager", async () => {
+    vi.stubGlobal('fetch', routeFetch({
+      '/dashboard/header': { unattended_count: 0, open_escalations: 1 },
+      '/dashboard/team-now': [],
+      '/dashboard/needs-action': [{
+        kind: 'escalation', family_id: 'fam_1', family_name: 'Synthetic family', staff_id: null, staff_name: null,
+        absence_id: null, description: 'Escalated by a synthetic operator', at: '2026-10-28T08:00:00Z',
+      }],
+    }))
+    renderWithProviders(<AppRoutes />, { staff: staff('manager'), route: '/dashboard' })
+    // The item is still listed; it no longer opens the retired Inbox.
+    expect(await screen.findByText('Escalated by a synthetic operator')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Synthetic family' })).not.toBeInTheDocument()
   })
 })
 

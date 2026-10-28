@@ -131,15 +131,6 @@ export function DashboardPage() {
                 <Badge tone="danger">{item.kind}</Badge> {item.description}
               </span>
               <span className="kv__v">
-                {item.family_id && (
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    onClick={() => navigate(`/inbox/${item.family_id}`)}
-                  >
-                    {item.family_name ?? item.family_id}
-                  </button>
-                )}
                 {item.kind === 'auto_detected_absence' && item.absence_id && (
                   <button
                     type="button"

@@ -7,9 +7,7 @@ import {
   isOperator,
   managerOnly,
   navAreas,
-  ownershipActions,
   taskScopeFor,
-  UNLISTED_AREAS,
   visibleAreas,
 } from './capabilities'
 import { ROLES } from '@/test/utils'
@@ -29,7 +27,7 @@ describe('role → navigation', () => {
 
   it('gives the super admin every area, so no existing screen is hidden from it', () => {
     expect(visibleAreas('super_admin')).toEqual(
-      expect.arrayContaining(['inbox', 'tasks', 'dashboard', 'stories', 'settings']),
+      expect.arrayContaining(['tasks', 'dashboard', 'stories', 'settings']),
     )
   })
 
@@ -54,7 +52,7 @@ describe('role → navigation', () => {
       expect(isDepartment(role)).toBe(true)
       expect(visibleAreas(role)).toEqual(['tasks', 'accounts'])
       // Departments must never reach a family record (AI #5 matrix §1).
-      expect(canOpenArea(role, 'inbox')).toBe(false)
+      expect(canOpenArea(role, 'chat')).toBe(false)
     }
   })
 
@@ -76,19 +74,6 @@ describe('role → navigation', () => {
     }
   })
 
-  // The approved ownership policy: families.assign and moving families are the
-  // manager's and the super admin's; deactivation (and so full offboarding) is
-  // the super admin's alone.
-  it('offers ownership and offboarding actions exactly per the approved policy', () => {
-    for (const role of ROLES) {
-      const assigner = role === 'manager' || role === 'super_admin'
-      expect(ownershipActions.transferOwnership(role)).toBe(assigner)
-      expect(ownershipActions.moveStaffFamilies(role)).toBe(assigner)
-      expect(ownershipActions.deactivateStaff(role)).toBe(role === 'super_admin')
-      expect(ownershipActions.offboardStaff(role)).toBe(role === 'super_admin')
-    }
-  })
-
   it('requests the task scope that matches the role', () => {
     expect(taskScopeFor('admin')).toBe('mine')
     expect(taskScopeFor('coverage')).toBe('mine')
@@ -98,19 +83,7 @@ describe('role → navigation', () => {
   })
 })
 
-describe('the legacy Inbox is routable but never offered', () => {
-  // Its page calls /inbox and /families/*, which no API on any current branch
-  // serves. Offering it would present a destination that cannot load.
-  it('no role sees Inbox in navigation', () => {
-    for (const role of ROLES) expect(navAreas(role)).not.toContain('inbox')
-    expect(UNLISTED_AREAS.has('inbox')).toBe(true)
-  })
-
-  it('its route still opens for every role that could open it before (old links keep working)', () => {
-    for (const role of ROLES) expect(canOpenArea(role, 'inbox')).toBe(visibleAreas(role).includes('inbox'))
-    expect(canOpenArea('admin', 'inbox')).toBe(true)
-  })
-
+describe('navigation lists what a role may open', () => {
   it('operators and managers are offered Chat exactly once, and no navigation list repeats an entry', () => {
     for (const role of ROLES) {
       const areas = navAreas(role)
@@ -119,17 +92,17 @@ describe('the legacy Inbox is routable but never offered', () => {
     }
   })
 
-  it('nothing else is hidden: navigation is the openable areas minus Inbox -- and minus Teacher statistics, Instalments, Parents, Payments, Materials and the Schedule until the server confirms the department', () => {
+  it('nothing else is hidden: navigation is the openable areas minus Teacher statistics, Instalments, Parents, Payments, Materials and the Schedule until the server confirms the department', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
       expect(navAreas(role)).toEqual(
-        visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a)),
+        visibleAreas(role).filter((a) => a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a)),
       )
-      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'materials' && a !== 'schedule' && !money(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'materials' && a !== 'schedule'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'schedule'))
+      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !money(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'schedule'))
       // PD-38: the Schedule on GET /lessons/access's `calendar`.
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role))
     }
   })
 
