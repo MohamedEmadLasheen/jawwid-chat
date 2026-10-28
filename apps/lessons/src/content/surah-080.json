@@ -1,0 +1,646 @@
+{
+  "surah": 80,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Its content came from data/surahData.ts (intro, ayat and tafsir, word meanings, did-you-know) and the components (lessons and reflection in LessonsLearned.tsx, the games in MemorizationGames.tsx, the quiz in FinalAssessment.tsx). NUMBERING: the old 42 entries are exactly the 42 real ayat. The story of Ibn Umm Maktum concerns the Prophet (peace be upon him): the lines whose wording about him is doubtful against common tafsir are held and flagged PROPHET WORDING, not reworded (ayah 1 and the word and quiz meaning of 'abasa: \"kashshara\"; ayah 10 and the meaning of talahha: \"did not care about him\"). Dropped: the five Tajweed rules and the two Tajweed quiz questions (Tajweed comes only from the reviewed dataset), the full-surah and per-ayah audio URLs, the reciter line and the typed basmala, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old complete-the-ayah and missing-word games; the answer \"ila ta'amihi\" (two words) became its last word (24:4). The two \"what comes after ...\" questions typed a whole ayah into their text; they now show that ayah's last word. The meaning questions keep the prose before the quoted word. The old quiz categories were mapped (hifz, ma'ani). Each lesson learned is its old title and description joined with \": \". The reflection ideas are the four old answer choices (the old page said all are right). Emoji were stripped from the ends of the tafsir lines, the reflection question and ideas. Not carried (no field or no such game in the engine): the surah name, ayah count and \"Makki\" type (checked: 42, Makki), the intro quiz, the ayah-ordering and memory games, the word-meaning games (they draw on the same list), the games' distractors, the encouragements and result messages, and the quiz's difficulty levels. Matching aids, for alignment only and never stored: the old word list writes final alif maqsura without the Uthmani dagger alif after it (tawalla, al-a'ma, yazzakka, al-dhikra, istaghna, tasadda, talahha), and typed tawalla, aqbarahu and the missing-word answers 'inaban and zaytunan without the wa- / fa- the verse words carry, so they point at the whole verse words. The word yazzakka occurs in ayat 3 and 7; it is placed at its first occurrence (3:4)."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-80 (read as text, never built or run)",
+    "sha256": {
+      "data/surahData.ts": "ece84067f1e2a7019c2786ab01ea9708146cfecf337aaa3bbf36c259b6f79ffe",
+      "components/LessonIntro.tsx": "e2f0fefb858b99e2ed118e7164c5c33950c1fd78764152890cfca5ed1e3539f0",
+      "components/VerseByVerse.tsx": "138f973a1daf1e65fb799d9e178e5427cc385db2bb19f11898a04c4745b7cdda",
+      "components/MemorizationGames.tsx": "8408d9889d7aefeea47ec2761c88dcd3851cf3a84c0b155d64f2003930371860",
+      "components/WordMeanings.tsx": "356abc5a8e4f94f81f42e5e64882a9f7be42a8db28226f99d3d48631ef6f74e3",
+      "components/LessonsLearned.tsx": "6f68b97b1f3fa46eacbe25e298befd1e07a2e18f65e006d69aa6f47f37aa7318",
+      "components/FinalAssessment.tsx": "7ebdd4a928d9a0a2a328b383150ea12ff3f5029ec792a47cf787d7cc87c36892",
+      "pages/Index.tsx": "12da847e2588bcb599183568207f1d7712bc36d6aa5bb71543ae6c39a324f858"
+    }
+  },
+  "intro": {
+    "text": "سورة عبس تعلمنا أهمية الاهتمام بكل الناس واحترامهم، وأن الله يذكرنا بنعمه الكثيرة علينا مثل الطعام والماء والفواكه.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "عبس يعني كشّر وجهه، وتولى يعني أعرض وابتعد.",
+      "review": "PROPHET WORDING: the frown here is the Prophet's (peace be upon him), when Ibn Umm Maktum came to him while he was calling the Quraysh chiefs to Islam. \"kashshara wajhahu\" is a harsh, colloquial word for a face (in classical usage, baring the teeth); common tafsir says \"qattaba wajhahu\" / \"kalaha\" (he frowned) and stresses that he did it out of eagerness for the chiefs' guidance. Doubtful wording for the Prophet. Teacher to choose a respectful word; not reworded here."
+    },
+    {
+      "ayah": 2,
+      "text": "لأن رجلاً أعمى جاء يريد أن يتعلم.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "وما يدريك؟ ربما هذا الرجل يتعلم ويصبح أفضل.",
+      "review": "TYPED: the line opens with \"wa-ma yudrika?\", two words of the ayah typed by hand (under the checker's limit). Also, yazzakka is to be purified (of sin, by faith and good deeds); \"learns and becomes better\" is loose. Teacher to rephrase."
+    },
+    {
+      "ayah": 4,
+      "text": "أو يتذكر فينفعه ما يتعلمه.",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "أما الشخص الغني الذي لا يحتاج...",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "فأنت تهتم به وتتوجه إليه.",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "وليس عليك لوم إن لم يتعلم هذا الغني.",
+      "review": "Gives \"alla yazzakka\" as \"if this rich man does not learn\". The ayah: no blame is on you if he does not purify himself (by accepting Islam). Teacher to check the wording."
+    },
+    {
+      "ayah": 8,
+      "text": "وأما الذي جاءك مسرعاً يريد أن يتعلم...",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "وهو يخاف الله ويحبه.",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "فأنت تنشغل عنه ولا تهتم به.",
+      "review": "PROPHET WORDING: this is said to the Prophet (peace be upon him). \"wa-la tahtammu bihi\" (and you do not care about him) is harsher than the ayah and the tafsir: talahha is to be occupied, distracted from him (tatashagha), because he was busy calling the Quraysh chiefs, hoping for their guidance; it does not say he did not care. Doubtful wording for the Prophet. Teacher to choose; not reworded here."
+    },
+    {
+      "ayah": 11,
+      "text": "لا! إن هذا القرآن تذكير للناس.",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "فمن أراد أن يتعلم ويتذكر فليفعل.",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "هذا القرآن مكتوب في صحف عظيمة ومكرمة.",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "هذه الصحف عالية المكانة ونظيفة وطاهرة.",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "يحملها ملائكة كرام.",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "هؤلاء الملائكة طيبون ومطيعون لله.",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "ما أشد جحود الإنسان لنعم الله!",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "من أي شيء خلق الله الإنسان؟",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "الله خلق الإنسان وجعل له شكلاً جميلاً.",
+      "review": "Gives only \"Allah created man and gave him a beautiful form\"; the ayah says from a nutfah (a drop) He created him, then \"qaddarahu\": proportioned him and set his stages (and, in many tafsir, his provision, term and deeds). Partial. Teacher to check."
+    },
+    {
+      "ayah": 20,
+      "text": "ثم سهّل الله له طريق الحياة.",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "text": "ثم عندما يموت الإنسان يُدفن في الأرض.",
+      "review": null
+    },
+    {
+      "ayah": 22,
+      "text": "ثم يوم القيامة يبعثه الله من جديد.",
+      "review": null
+    },
+    {
+      "ayah": 23,
+      "text": "لكن الإنسان لم يفعل كل ما أمره الله به.",
+      "review": null
+    },
+    {
+      "ayah": 24,
+      "text": "لينظر الإنسان كيف يأتيه طعامه!",
+      "review": null
+    },
+    {
+      "ayah": 25,
+      "text": "الله ينزل المطر من السماء.",
+      "review": null
+    },
+    {
+      "ayah": 26,
+      "text": "ثم تنشق الأرض ليخرج منها النبات.",
+      "review": null
+    },
+    {
+      "ayah": 27,
+      "text": "فأنبت الله فيها الحبوب مثل القمح.",
+      "review": null
+    },
+    {
+      "ayah": 28,
+      "text": "وأنبت العنب والخضروات.",
+      "review": null
+    },
+    {
+      "ayah": 29,
+      "text": "وأنبت الزيتون والنخيل.",
+      "review": null
+    },
+    {
+      "ayah": 30,
+      "text": "وحدائق كبيرة وجميلة.",
+      "review": null
+    },
+    {
+      "ayah": 31,
+      "text": "وفواكه لذيذة وأعشاباً خضراء.",
+      "review": null
+    },
+    {
+      "ayah": 32,
+      "text": "كل هذا لكم ولحيواناتكم لتأكلوا وتستمتعوا.",
+      "review": null
+    },
+    {
+      "ayah": 33,
+      "text": "فإذا جاء يوم القيامة بصوته العظيم.",
+      "review": null
+    },
+    {
+      "ayah": 34,
+      "text": "في ذلك اليوم يهرب الإنسان من أخيه.",
+      "review": null
+    },
+    {
+      "ayah": 35,
+      "text": "ومن أمه وأبيه.",
+      "review": null
+    },
+    {
+      "ayah": 36,
+      "text": "ومن زوجته وأولاده.",
+      "review": null
+    },
+    {
+      "ayah": 37,
+      "text": "لأن كل شخص مشغول بنفسه في ذلك اليوم.",
+      "review": null
+    },
+    {
+      "ayah": 38,
+      "text": "بعض الوجوه ستكون مشرقة وسعيدة.",
+      "review": null
+    },
+    {
+      "ayah": 39,
+      "text": "تضحك وتفرح لأنها فعلت الخير.",
+      "review": null
+    },
+    {
+      "ayah": 40,
+      "text": "ووجوه أخرى عليها غبار وحزن.",
+      "review": null
+    },
+    {
+      "ayah": 41,
+      "text": "يغطيها ظلام وحزن شديد.",
+      "review": null
+    },
+    {
+      "ayah": 42,
+      "text": "هؤلاء هم الذين لم يؤمنوا بالله ولم يطيعوه.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "كشّر وجهه وبدا عليه الانزعاج",
+      "review": "PROPHET WORDING: the frown here is the Prophet's (peace be upon him), when Ibn Umm Maktum came to him while he was calling the Quraysh chiefs to Islam. \"kashshara wajhahu\" is a harsh, colloquial word for a face (in classical usage, baring the teeth); common tafsir says \"qattaba wajhahu\" / \"kalaha\" (he frowned) and stresses that he did it out of eagerness for the chiefs' guidance. Doubtful wording for the Prophet. Teacher to choose a respectful word; not reworded here."
+    },
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "أعرض وابتعد",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "الشخص الذي لا يرى بعينيه",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 4,
+      "meaning": "يتطهر ويتعلم الخير",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 4,
+      "meaning": "التذكير والموعظة",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 3,
+      "meaning": "شعر أنه غني ولا يحتاج",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 3,
+      "meaning": "اهتم به وتوجه إليه",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "word": 3,
+      "meaning": "انشغل عنه ولم يهتم",
+      "review": "PROPHET WORDING: this is said to the Prophet (peace be upon him). \"wa-lam yahtamm\" (and did not care) is harsher than the ayah and the tafsir: talahha is to be occupied, distracted from him (tatashagha), because he was busy calling the Quraysh chiefs, hoping for their guidance; it does not say he did not care. Doubtful wording for the Prophet. Teacher to choose; not reworded here."
+    },
+    {
+      "ayah": 11,
+      "word": 3,
+      "meaning": "تذكير وموعظة",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "word": 2,
+      "meaning": "ملائكة كرام يحملون الصحف",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "word": 2,
+      "meaning": "مطيعون وصالحون",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "word": 2,
+      "meaning": "قطرة ماء صغيرة جداً",
+      "review": null
+    },
+    {
+      "ayah": 20,
+      "word": 2,
+      "meaning": "الطريق",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "word": 3,
+      "meaning": "جعل له قبراً يُدفن فيه",
+      "review": null
+    },
+    {
+      "ayah": 22,
+      "word": 4,
+      "meaning": "أحياه وبعثه من جديد",
+      "review": null
+    },
+    {
+      "ayah": 33,
+      "word": 3,
+      "meaning": "صوت يوم القيامة العظيم",
+      "review": null
+    },
+    {
+      "ayah": 38,
+      "word": 3,
+      "meaning": "مشرقة ومضيئة من الفرح",
+      "review": null
+    },
+    {
+      "ayah": 39,
+      "word": 2,
+      "meaning": "فرحة ومسرورة",
+      "review": null
+    },
+    {
+      "ayah": 40,
+      "word": 4,
+      "meaning": "غبار وتراب",
+      "review": null
+    },
+    {
+      "ayah": 41,
+      "word": 2,
+      "meaning": "ظلمة وسواد",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 24,
+      "word": 4
+    },
+    {
+      "ayah": 25,
+      "word": 4
+    },
+    {
+      "ayah": 26,
+      "word": 4
+    },
+    {
+      "ayah": 27,
+      "word": 3
+    },
+    {
+      "ayah": 28,
+      "word": 1
+    },
+    {
+      "ayah": 29,
+      "word": 1
+    },
+    {
+      "ayah": 38,
+      "word": 3
+    },
+    {
+      "ayah": 39,
+      "word": 1
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول آية في سورة عبس؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 11
+        },
+        {
+          "ayah": 24
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the fourth old option was only the opening of ayah 24 (two words, \"fal-yanzuri al-insan\"); it is now the whole of ayah 24. Teacher to confirm.",
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة عبس؟",
+      "options": [
+        {
+          "text": "30"
+        },
+        {
+          "text": "42"
+        },
+        {
+          "text": "50"
+        },
+        {
+          "text": "35"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "كشّر وجهه"
+        },
+        {
+          "text": "ضحك"
+        },
+        {
+          "text": "بكى"
+        },
+        {
+          "text": "نام"
+        }
+      ],
+      "answer": 0,
+      "review": "PROPHET WORDING: the frown here is the Prophet's (peace be upon him), when Ibn Umm Maktum came to him while he was calling the Quraysh chiefs to Islam. \"kashshara wajhahu\" is a harsh, colloquial word for a face (in classical usage, baring the teeth); common tafsir says \"qattaba wajhahu\" / \"kalaha\" (he frowned) and stresses that he did it out of eagerness for the chiefs' guidance. Doubtful wording for the Prophet. Teacher to choose a respectful word; not reworded here. (This question's right answer is \"kashshara wajhahu\".)",
+      "word": {
+        "ayah": 1,
+        "word": 1
+      },
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "ماذا يأتي بعد",
+      "word": {
+        "ayah": 25,
+        "word": 4
+      },
+      "options": [
+        {
+          "ayah": 26
+        },
+        {
+          "ayah": 27
+        },
+        {
+          "ayah": 28
+        },
+        {
+          "ayah": 29
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old question typed the whole of ayah 25 into its text; it now shows that ayah's last word (25:4) after \"ماذا يأتي بعد\". Teacher to confirm it reads well.",
+      "id": "q4"
+    },
+    {
+      "category": "hifz",
+      "question": "ماذا يأتي بعد",
+      "word": {
+        "ayah": 27,
+        "word": 3
+      },
+      "options": [
+        {
+          "ayah": 28
+        },
+        {
+          "ayah": 29
+        },
+        {
+          "ayah": 30
+        },
+        {
+          "ayah": 31
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old question typed the whole of ayah 27 into its text; it now shows that ayah's last word (27:3) after \"ماذا يأتي بعد\". Teacher to confirm it reads well.",
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "صوت يوم القيامة العظيم"
+        },
+        {
+          "text": "الرياح الشديدة"
+        },
+        {
+          "text": "البرق"
+        },
+        {
+          "text": "الزلزال"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 33,
+        "word": 3
+      },
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "مشرقة ومضيئة من الفرح"
+        },
+        {
+          "text": "حزينة"
+        },
+        {
+          "text": "غاضبة"
+        },
+        {
+          "text": "نائمة"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 38,
+        "word": 3
+      },
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "ما آخر آية في سورة عبس؟",
+      "options": [
+        {
+          "ayah": 42
+        },
+        {
+          "ayah": 41
+        },
+        {
+          "ayah": 39
+        },
+        {
+          "ayah": 40
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q8"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "احترام جميع الناس: نتعلم أن نكون لطفاء مع كل الناس ونحترمهم جميعاً، سواء كانوا أغنياء أو فقراء.",
+      "review": null
+    },
+    {
+      "text": "شكر الله على نعمه: الله أنعم علينا بنعم كثيرة مثل الماء والطعام والفواكه، ويجب أن نشكره دائماً.",
+      "review": null
+    },
+    {
+      "text": "يوم القيامة يوم مهم: يوم القيامة يوم عظيم، الوجوه السعيدة هي التي فعلت الخير في الدنيا.",
+      "review": null
+    },
+    {
+      "text": "القرآن تذكرة: القرآن الكريم هو تذكير لنا جميعاً، ويجب أن نتعلمه ونعمل بما فيه.",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نكون لطفاء مع جميع الناس؟",
+    "ideas": [
+      "أساعد أصدقائي في المدرسة",
+      "أكون لطيفاً مع الجميع",
+      "أشارك ألعابي مع الآخرين",
+      "أبتسم في وجه كل الناس"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله يحب من يحسن معاملة الناس؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن شكر الله يزيد النعم؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة عبس نزلت في مكة المكرمة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الرجل الأعمى اسمه عبد الله بن أم مكتوم؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الله ذكر في السورة نعماً كثيرة مثل الماء والفواكه؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن عدد آيات سورة عبس 42 آية؟",
+      "review": null
+    }
+  ]
+}

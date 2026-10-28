@@ -1,0 +1,538 @@
+{
+  "surah": 82,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. The old lesson had no data file: the ayat and tafsir came from components/LearnVersesSection.tsx, the word meanings from MeaningsSection.tsx, the completion games from MemorizationGames.tsx, the quiz from FinalAssessment.tsx, the intro from IntroSection.tsx, and the lessons, reflection and did-you-know from TajweedAndLessons.tsx. NUMBERING: the old lesson has all 19 ayat, one entry each, in order. Dropped: the five Tajweed rules and the Tajweed question of the final quiz (Tajweed comes only from the reviewed dataset), the full-surah and per-ayah audio URLs, the reciter line and the typed basmala, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the complete-the-ayah and missing-word games (no duplicates); their hand-typed distractors are gone, as the game draws its options from these words. The old quiz had difficulty levels, not categories; the categories were assigned by question type. The quiz question \"which ayah is after ...\" typed ayah 1 into its text; it now shows ayah 1's last word (CHANGED). The reflection is the old reflection question with its eight good deeds (the choices a child picked from) as its ideas. Emoji were stripped from the ends of the tafsir lines, word meanings, did-you-know lines and ideas. The intro is the old \"what is the surah about?\" paragraph. Not carried (no field or no such game in the engine): the info card (name, ayah count, \"Makki\", number 82; Makki is the consensus for Al-Infitar, and the number is in did-you-know), the intro quiz (surah name, ayah count), the ayah-ordering game (first five ayat), the start-to-end memory game, the build-ayah-1 game, the choose-the-meaning and match games (same words and meanings as the list), the reflection's \"choose at least 3\" line and closing lines, the motivational messages and the quiz's difficulty levels. Matching aids, for alignment only and never stored: the old text splits off the vocative ya of ya-ayyuha (6:1), which the Uthmani text joins to the next word; it writes fa-sawwaka (7:3) and adraka (17:2, 18:3) with a plain alif where the Uthmani text has alif maqsura + dagger alif, and shay'an (19:6) with the hamza on a ya seat where the Uthmani text has it over a tatweel."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-82 (read as text, never built or run)",
+    "sha256": {
+      "components/IntroSection.tsx": "634340fe16651269efa3742d7adf2ada27bb4f56e2b8d6da884018355aff252e",
+      "components/ListenSection.tsx": "ccd01c14054f78d54ff47b601fd90b7d7e535cdb7a50a6efce93da282e215d63",
+      "components/LearnVersesSection.tsx": "c4fa073938c1abce16630577ed9bd080eb25c37f832cfc29e1adbcd7eb7b5cc1",
+      "components/MemorizationGames.tsx": "09571b94974d1a70a75a95e69f1ddd9db36a212f357fa9c959a05c8a0ef314fc",
+      "components/MeaningsSection.tsx": "7fcad97ff71ec943bbe85740450e8601938b0409e82a3633e2ce016de761dc20",
+      "components/TajweedAndLessons.tsx": "d42e2f2ad0970898745eebe83d9a8c7a4c6734ab4d6a016d0387f2c4799dd054",
+      "components/FinalAssessment.tsx": "72126d2b7db04b595d9639c70733175544a7afbdc3ea4638fc29649107be6a51",
+      "pages/Index.tsx": "c5cbb56adaf10531d778dd4c6cf61a98abf3433557c53442abee22779eae939f"
+    }
+  },
+  "intro": {
+    "text": "سورة الانفطار تذكّرنا بيوم القيامة، وتخبرنا أن الله يعلم كل ما نفعله، وأن الملائكة تكتب أعمال الناس. من يعمل الخير يدخل الجنة، ومن يعمل الشر يُعاقب.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "إذا انشقت السماء يوم القيامة",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "وإذا تساقطت النجوم وتفرقت",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "وإذا فاضت البحار واختلط ماؤها",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "وإذا خرج الناس من قبورهم أحياء",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "عرفت كل نفس ما عملت من خير وشر",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "يا إنسان، ما الذي خدعك وجعلك لا تطيع ربك الكريم؟",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "الله الذي خلقك وجعل جسمك متناسقًا ومعتدلًا",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "جعلك في أحسن صورة كما أراد الله",
+      "review": "Gives the ayah as \"He made you in the best form (ahsan surah), as Allah willed\". The ayah says He assembled you in whatever form He willed (fi ayyi suratin ma sha'a); common tafsir: in whatever likeness He chose (to a father, a mother, an uncle), tall or short, fair or dark. \"The best form\" is the wording of At-Tin (95:4). Teacher to choose the wording."
+    },
+    {
+      "ayah": 9,
+      "text": "لا! بل أنتم تكذبون بيوم الحساب",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "وإن عليكم ملائكة يحفظون أعمالكم",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "text": "ملائكة كرام يكتبون كل ما تفعلون",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "يعرفون كل شيء تعملونه",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "الذين يعملون الخير سيكونون في الجنة",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "والذين يعملون الشر سيكونون في النار",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "يدخلون النار يوم القيامة",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "ولن يستطيعوا الخروج منها",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "وما أعلمك ما هو يوم الحساب العظيم",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "ثم ما أعلمك ما هو يوم الحساب (تأكيد على عظمته)",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "يوم لا يستطيع أحد مساعدة أحد، والأمر كله لله وحده",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "انشقّت",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "تساقطت وتفرّقت",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 3,
+      "meaning": "فاضت واختلط ماؤها",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "أُخرج ما فيها",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 4,
+      "meaning": "خدعك",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 3,
+      "meaning": "جعلك متناسقًا",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 4,
+      "meaning": "جعلك معتدلًا ومتوازنًا",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "word": 1,
+      "meaning": "ملائكة كرام يكتبون أعمالنا",
+      "review": "PHRASE: the old card is the 2-word phrase at 11:1-2 (the whole ayah); the engine shows one word, so it points at the first word (11:1) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 13,
+      "word": 2,
+      "meaning": "الذين يعملون الخير",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "word": 4,
+      "meaning": "الجنة والسعادة",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "word": 2,
+      "meaning": "الذين يعملون الشر",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "word": 4,
+      "meaning": "النار والعذاب",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 11,
+      "word": 2
+    },
+    {
+      "ayah": 13,
+      "word": 4
+    },
+    {
+      "ayah": 14,
+      "word": 4
+    },
+    {
+      "ayah": 3,
+      "word": 2
+    },
+    {
+      "ayah": 4,
+      "word": 2
+    },
+    {
+      "ayah": 6,
+      "word": 2
+    },
+    {
+      "ayah": 12,
+      "word": 1
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "سورة الفلق"
+        },
+        {
+          "text": "سورة الانفطار"
+        },
+        {
+          "text": "سورة الناس"
+        },
+        {
+          "text": "سورة البقرة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الانفطار؟",
+      "options": [
+        {
+          "text": "10"
+        },
+        {
+          "text": "15"
+        },
+        {
+          "text": "19"
+        },
+        {
+          "text": "25"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "انشقت"
+        },
+        {
+          "text": "تساقطت"
+        },
+        {
+          "text": "فاضت"
+        },
+        {
+          "text": "خرجت"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 3
+      },
+      "id": "q3"
+    },
+    {
+      "category": "lessons",
+      "question": "من يكتب أعمالنا؟",
+      "options": [
+        {
+          "text": "الناس"
+        },
+        {
+          "text": "الملائكة"
+        },
+        {
+          "text": "الأنبياء"
+        },
+        {
+          "text": "الجن"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q4"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية التي بعد",
+      "word": {
+        "ayah": 1,
+        "word": 3
+      },
+      "options": [
+        {
+          "ayah": 3
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 4
+        },
+        {
+          "ayah": 5
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old question typed the whole of ayah 1 (\"idha al-sama'u infatarat\") into its text; it now shows ayah 1's last word (infatarat, 1:3) after \"ma al-ayah allati ba'd\". One old option was only the opening of ayah 5 (two words, 'alimat nafsun); it is now that whole ayah. Teacher to confirm it reads well.",
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "ملائكة كرام يكتبون أعمالنا"
+        },
+        {
+          "text": "أناس طيبون"
+        },
+        {
+          "text": "كتب كريمة"
+        },
+        {
+          "text": "أعمال حسنة"
+        }
+      ],
+      "answer": 0,
+      "review": "PHRASE: the old question asks about the 2-word phrase at 11:1-2 (the whole ayah); the engine shows one word, so it points at the first word (11:1) and the options cover the whole phrase. Teacher to confirm it reads right.",
+      "word": {
+        "ayah": 11,
+        "word": 1
+      },
+      "id": "q6"
+    },
+    {
+      "category": "lessons",
+      "question": "أين يكون الأبرار (الذين يعملون الخير)؟",
+      "options": [
+        {
+          "text": "في نعيم"
+        },
+        {
+          "text": "في جحيم"
+        },
+        {
+          "text": "في الأرض"
+        },
+        {
+          "text": "في السماء"
+        }
+      ],
+      "answer": 0,
+      "review": "TYPED: the question types al-abrar (13:2), and two options type na'im (13:4) and jahim (14:4), words of this surah, as prose (\"fi na'im\", \"fi jahim\"). Under the checker's limit, but Quran typed by hand. Teacher to rephrase, or the options to become positions.",
+      "id": "q7"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "أسعدك"
+        },
+        {
+          "text": "خدعك"
+        },
+        {
+          "text": "ساعدك"
+        },
+        {
+          "text": "علّمك"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 6,
+        "word": 4
+      },
+      "id": "q8"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية الأخيرة في سورة الانفطار؟",
+      "options": [
+        {
+          "ayah": 17
+        },
+        {
+          "ayah": 19
+        },
+        {
+          "ayah": 14
+        },
+        {
+          "ayah": 12
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q9"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "جعلك متناسقًا ومعتدلًا"
+        },
+        {
+          "text": "جعلك قويًا"
+        },
+        {
+          "text": "جعلك كبيرًا"
+        },
+        {
+          "text": "جعلك سعيدًا"
+        }
+      ],
+      "answer": 0,
+      "review": "PHRASE: the old question asks about the 2-word phrase at 7:3-4; the engine shows one word, so it points at the first word (7:3) and the options cover the whole phrase. Teacher to confirm it reads right.",
+      "word": {
+        "ayah": 7,
+        "word": 3
+      },
+      "id": "q10"
+    },
+    {
+      "category": "lessons",
+      "question": "لمن الأمر يوم القيامة؟",
+      "options": [
+        {
+          "text": "للناس"
+        },
+        {
+          "text": "للملائكة"
+        },
+        {
+          "text": "لله وحده"
+        },
+        {
+          "text": "للأنبياء"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q11"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "أن الله خلقنا وأعطانا نعمًا كثيرة، فيجب أن نشكره",
+      "review": null
+    },
+    {
+      "text": "أن الملائكة تكتب أعمالنا، فلنحرص على الأعمال الطيبة",
+      "review": null
+    },
+    {
+      "text": "أن من يعمل الخير يدخل الجنة، فلنكثر من الخير",
+      "review": null
+    },
+    {
+      "text": "أن الأمر كله لله يوم القيامة، فلنتوكل عليه",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "ما الأعمال الجيدة التي يمكننا أن نفعلها كل يوم؟",
+    "ideas": [
+      "أصلي صلواتي في وقتها",
+      "أساعد أمي وأبي في البيت",
+      "أكون لطيفًا مع أصدقائي",
+      "أقرأ القرآن كل يوم",
+      "أتصدق على المحتاجين",
+      "أقول الحق دائمًا",
+      "أحترم الكبار وأرحم الصغار",
+      "أحافظ على نظافتي ونظافة مكاني"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الملائكة تكتب كل أعمالنا الخيرة والسيئة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الله يحب من يعمل الخير ويساعد الآخرين؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الانفطار هي السورة رقم 82 في المصحف؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن يوم القيامة يوم عظيم لا يستطيع أحد مساعدة أحد فيه إلا الله؟",
+      "review": null
+    }
+  ]
+}

@@ -45,6 +45,12 @@ export interface AccountAdminTarget {
   /** Present when kind = staff. */
   staffId?: string | null;
   staffRole?: string | null;
+  /**
+   * PD-40 PR-3: the actor is the manager of the department this staff member
+   * (a specialist) belongs to -- chat.may_administer_staff_account, resolved
+   * by the caller. Absent = no.
+   */
+  managedByActor?: boolean;
 }
 
 export type Decision =
@@ -1391,8 +1397,13 @@ export class AuthorizationService {
       if (target.staffRole === StaffRole.SUPER_ADMIN) {
         return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, "the super admin's account is never administered from the portal");
       }
-      if (actor.staffRole !== StaffRole.SUPER_ADMIN) {
-        return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, "only the super admin administers a staff member's account");
+      // PD-40 PR-3 (owner 2026-10-28, S1): a department manager also
+      // administers the specialists of their department -- never anyone else.
+      if (actor.staffRole !== StaffRole.SUPER_ADMIN && target.managedByActor !== true) {
+        return deny(
+          CommErrorCode.ACCOUNT_ADMIN_DENIED,
+          "only the super admin, or a manager for a specialist of their department, administers a staff member's account",
+        );
       }
       if (act === 'impersonate') {
         return deny(CommErrorCode.ACCOUNT_ADMIN_DENIED, 'a staff account is never impersonated');
