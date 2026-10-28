@@ -213,7 +213,11 @@ beforeEach(async () => {
   await staff(salesId, 'sales_a', 'admin');
   await staff(otherSalesId, 'sales_b', 'admin');
   await staff(salesManagerId, 'sales_m', 'manager');
-  await staff(superId, 'super_s', 'super_admin');
+  // super_admin exists only through the bootstrap gate (20261013120000).
+  await g.prisma.$transaction([
+    g.prisma.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`),
+    g.prisma.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'super_s', 'super_admin', true)`, superId),
+  ]);
   await staff(tsupId, 'tsup_t', 'admin');
   await department('sales', salesManagerId, [salesId, otherSalesId]);
   await department('teachers', null, [tsupId]);
@@ -370,14 +374,23 @@ describe('2. who places a child on a supervisor', () => {
     )).rejects.toThrow(/anyone else is placed by the Operations manager/);
   });
 
-  it('the academy\'s own import opens chat.syncing_supervision for its statement only', async () => {
+  it('the academy\'s own import opens chat.syncing_supervision for its statement only, names its source, and is audited', async () => {
     await sql(`delete from chat.conversation_learner where learner_id = $1::uuid`, s.learnerId);
-    await g.prisma.$transaction([
+    await expect(g.prisma.$transaction([
       g.prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision', 'on', true)`),
       g.prisma.$executeRawUnsafe(
         `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = null where learner_id = $1::uuid`, s.learnerId, s.otherAdminId,
       ),
+    ])).rejects.toThrow(/names its source/);
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision', 'on', true)`),
+      g.prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision_source', 'pd042 spec: the import gate', true)`),
+      g.prisma.$executeRawUnsafe(
+        `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = null where learner_id = $1::uuid`, s.learnerId, s.otherAdminId,
+      ),
     ]);
+    expect(await g.prisma.auditLog.findFirst({ where: { action: 'learner.supervision_imported', entityId: s.learnerId } }))
+      .toMatchObject({ reason: 'academy import: pd042 spec: the import gate', before: { supervisorId: s.ownerId }, after: { supervisorId: s.otherAdminId, source: 'pd042 spec: the import gate' } });
     await expect(sql(
       `update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = null where learner_id = $1::uuid`, s.learnerId, s.ownerId,
     )).rejects.toThrow(/names who assigned it/);

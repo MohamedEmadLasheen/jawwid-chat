@@ -287,6 +287,7 @@ export async function supervise(
   for (const learnerId of learnerIds) {
     await prisma.$transaction([
       prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision', 'on', true)`),
+      prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision_source', 'test harness: supervise()', true)`),
       prisma.$executeRawUnsafe(
         `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
          values ($1::uuid, $2::uuid, $3::uuid)
