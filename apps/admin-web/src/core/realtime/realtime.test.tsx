@@ -71,31 +71,21 @@ describe('realtime', () => {
     tokenStore.clear()
   })
 
-  it('subscribes to the events the operator’s workspace depends on, and none of the retired Inbox’s', async () => {
+  it('subscribes to the events the operator’s workspace depends on, and none of the retired Inbox’s or on-duty Dashboard’s', async () => {
     mount()
     await waitFor(() => expect(handlers.size).toBeGreaterThan(0))
-    for (const event of ['task.updated', 'coverage.changed', 'ownership.changed', 'unattended.changed']) {
+    for (const event of ['task.updated', 'coverage.changed']) {
       expect(handlers.has(event), `missing handler for ${event}`).toBe(true)
     }
     for (const event of ['family.updated', 'message.created', 'case.updated', 'handoff.created', 'shift.ending']) {
       expect(handlers.has(event), `handler left for ${event}`).toBe(false)
     }
-  })
-
-  it('invalidates the dashboard on unattended.changed instead of writing the new count into the cache', async () => {
-    const queryClient = mount()
-    await waitFor(() => expect(handlers.has('unattended.changed')).toBe(true))
-
-    queryClient.setQueryData(qk.dashboardHeader, { unattended_count: 3, open_escalations: 0 })
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
-
-    emit('unattended.changed', { count: 9 })
-
-    // The refetch is what makes the server the single source of computed truth.
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.dashboardHeader })
-
-    // Critically: the payload must NOT have been patched into the cache.
-    expect(queryClient.getQueryData(qk.dashboardHeader)).toEqual({ unattended_count: 3, open_escalations: 0 })
+    // PD-44: the on-duty Dashboard's signals. The server never sent the first
+    // three; presence.changed is real, but only the chat thread listens to it
+    // (usePresence), and the new Dashboard polls its counts.
+    for (const event of ['ownership.changed', 'unattended.changed', 'escalation.created', 'presence.changed']) {
+      expect(handlers.has(event), `handler left for ${event}`).toBe(false)
+    }
   })
 
   it('refreshes tasks when a task changes', async () => {
@@ -106,15 +96,5 @@ describe('realtime', () => {
     emit('task.updated', { task: { id: 't1', family_id: 'fam_1' } })
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.tasksAll })
-  })
-
-  it('refreshes the dashboard when ownership changes', async () => {
-    const queryClient = mount()
-    await waitFor(() => expect(handlers.has('ownership.changed')).toBe(true))
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
-
-    emit('ownership.changed', { family_id: 'fam_1', from: 'staff_a', to: 'staff_b' })
-
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.dashboardAll })
   })
 })

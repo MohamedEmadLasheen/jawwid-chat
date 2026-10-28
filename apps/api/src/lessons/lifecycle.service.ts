@@ -9,6 +9,7 @@ import type { AuditService } from '../platform/audit.service';
 import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/realtime-revocation';
 import type { Actor } from '../platform/types';
 import { ALL_TEACHERS, scopeCovers, type TeacherScope } from '../platform/teacher-scope';
+import { teacherReadiness } from '../platform/teacher-readiness';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
@@ -133,12 +134,16 @@ export class LifecycleService {
         LEFT JOIN LATERAL chat.teacher_away(t.id, chat.academy_today()) a ON true
        WHERE t.organization_id = ${actor.organizationId}::uuid
        ORDER BY t.name`;
+    const shown = rows.filter((r) => scopeCovers(scope, r.id));
+    // PD-43: still being set up, unsupervised, a suspended login -- said beside the name, never a refusal.
+    const readiness = await teacherReadiness(this.prisma, shown.map((r) => r.id));
     return {
-      teachers: rows.filter((r) => scopeCovers(scope, r.id)).map((r) => ({
+      teachers: shown.map((r) => ({
         id: r.id,
         name: r.name,
         isActive: r.active,
         away: r.kind && r.kind !== 'day_off' && r.until ? { kind: r.kind, until: r.until.toISOString().slice(0, 10) } : null,
+        readiness: readiness.get(r.id) ?? null,
       })),
     };
   }

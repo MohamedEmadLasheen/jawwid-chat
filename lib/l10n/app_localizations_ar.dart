@@ -1044,6 +1044,14 @@ class L10nAr extends L10n {
       'انتقل طفل من هذه المجموعة إلى مشرف آخر';
 
   @override
+  String systemGroupLearnerAdded(String learner) {
+    return 'انضم $learner إلى هذه المجموعة';
+  }
+
+  @override
+  String get systemGroupLearnerAddedNoName => 'انضم طفل إلى هذه المجموعة';
+
+  @override
   String systemCoverStarted(String cover, String supervisor, String date) {
     return 'التغطية: $cover بدلًا من $supervisor حتى $date';
   }

@@ -81,6 +81,20 @@ describe('the cases queue', () => {
     expect(sent('GET', /\/cases\?tab=opened/).length).toBeGreaterThan(0)
   })
 
+  it('opens the tab the URL names, so a Dashboard tile lands on the list it counted (PD-44)', async () => {
+    on('GET', /\/cases\?tab=department/, () => json({ cases: [{ ...CASE, id: 'c-2', title: 'Department only' }] }))
+    renderWithProviders(<CasesPage />, { staff: makeStaff({ id: 'mgr-t', role: 'manager' }), route: '/cases?tab=department' })
+    expect(await screen.findByText('Department only')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'My department' })).toHaveAttribute('aria-selected', 'true')
+    expect(sent('GET', /\/cases\?tab=mine/)).toHaveLength(0)
+  })
+
+  it('falls back to Mine for a tab the URL names wrongly', async () => {
+    renderWithProviders(<CasesPage />, { staff: makeStaff({ id: 'mgr-t', role: 'manager' }), route: '/cases?tab=everything' })
+    expect(await screen.findByText('Late reports again')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Mine' })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('resolves a case with a note, and assigns it within the department', async () => {
     on('POST', /\/cases\/c-1\/status$/, () => json({ ...DETAIL, status: 'resolved', closedAt: '2026-10-27T09:00:00Z', canAct: true }))
     on('POST', /\/cases\/c-1\/assign$/, () => json({ ...DETAIL, owner: { id: 'tsup-2', name: 'Tsup Two' } }))

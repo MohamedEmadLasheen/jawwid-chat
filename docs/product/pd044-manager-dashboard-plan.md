@@ -471,3 +471,9 @@ PR-3 to PR-7 are independent of each other once PR-2 is in. The order above is a
 - Move `DisciplineService.standing()` into SQL, so `violations.open` becomes a true count with no cap.
 - Retire `chat.staff_workload` / `organization_workload_totals` (owner-based, pre-PD-8), or redefine them on PD-8 scope. The Staff Profiles directory still shows them.
 - Renewal requests as a tile (§2.4), once the owner places renewals in a manager's queue.
+
+### 9.1 Known limits (accepted by the department head, 2026-10-28)
+
+- **The Cases page's "Opened by me" tab has no tile.** That list re-checks every row with `canSee` (whether the opener still stands to the subject, `supervision-case.service.ts`), and that check cannot be bounded to a fixed number of statements. `cases.mine_open`, `cases.department_open` and `cases.overdue` count the other two tabs exactly (PR-1, #211).
+- **The Chat list's "Waiting for a reply" shows at most the list's 200 most recent conversations, plus open mentions.** The tile's count is exact, so above 200 the two can differ. At today's scale no manager's scope reaches 200.
+- **The super admin still opens `/dashboard` as a page of its own** (the same sections) until PR-8 moves them into the Admin Portal's Dashboard section and redirects.

@@ -1,0 +1,399 @@
+{
+  "surah": 93,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. The old lesson had no data file: the ayat and tafsir came from components/LearnAyahSection.tsx, the word meanings from MeaningsSection.tsx, the rest from the other components. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs, the reciter line and the typed basmala, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old completion game; its distractors hada and aghna were typed without the fa- the verse words carry, so they are not words of this surah as typed, and they are gone, as the game draws its options from these words. The quiz question \"which ayah is after ...\" typed ayah 2 into its text; it now shows ayah 2's last word. The old quiz categories were mapped (hifz, ma'ani, and \"fahm\" to lessons). Emoji were stripped from the ends of the tafsir lines, the word meanings and the reflection ideas. Each lesson learned is its old title and description joined with \": \". The intro is the two paragraphs of the old \"why was this surah revealed?\" card joined with a space, its <strong> markup removed and its line breaks read as single spaces (as the page rendered them). Not carried (no field or no such game in the engine): the \"Makki\" surah type and the surah number, the ayah-ordering, memory (ayah to its number) and listen-and-choose games, the word-meaning game (same words and meanings as the list), the intro quiz (surah name, ayah count), the reflection's prompt and closing lines, and the quiz's difficulty levels."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-93 (read as text, never built or run)",
+    "sha256": {
+      "components/IntroSection.tsx": "4dd589166f7e910ee47fad0dc032bfbd3ce7a8d87336aae52dc6e2a6e8a1318e",
+      "components/ListenSection.tsx": "200cdfb7ba4f93aa22a783f9c2f5075545f7017a74670cbb86971ada64e5a392",
+      "components/LearnAyahSection.tsx": "194b0a93b4ba93c0c63c01836f421edbcf768720816ea1d392ac0203d8d198fa",
+      "components/GamesSection.tsx": "852ff4a195912f30d17985711a75708ef1cb2988b6f9639e106eb531db947e09",
+      "components/MeaningsSection.tsx": "e83a741dcfb789f6315be53e08b4eb2b310702f192cd6ff919aeae2be74b1bc3",
+      "components/LessonsSection.tsx": "5df999dd92d1373a8f2db8a2102994ca85bd9b7af2abe6ec568aa0c3526170f1",
+      "components/QuizSection.tsx": "56e06a8e3bcf8b6dd23748b78c8c6b5ac49225536ce76c243e3f45013af31e1e"
+    }
+  },
+  "intro": {
+    "text": "نزلت سورة الضحى لتُطمئن قلب النبي محمد ﷺ وتُذكّره بنعم الله عليه. تعلمنا هذه السورة أن الله لا يتركنا أبدًا، وأن علينا أن نشكر الله على نعمه وأن نساعد الآخرين ونكون لطفاء مع الجميع.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "يُقسم الله بوقت الضحى، وهو أول النهار عندما تشرق الشمس",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "ويُقسم بالليل عندما يكون هادئًا ومظلمًا",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "الله لم يتركك يا محمد ولم يبتعد عنك، الله يحبك دائمًا",
+      "review": "Gives \"wa-ma qala\" as \"nor moved away from you\". Common tafsir: qala is to hate (ma qala = nor has He hated you, ma abghadaka), and wadda'aka is to leave, forsake (revealed when the revelation paused and it was said his Lord had left him). \"Allah loves you always\" is the line's own conclusion. Teacher to choose the wording."
+    },
+    {
+      "ayah": 4,
+      "text": "الجنة أفضل وأجمل من الدنيا كلها",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "الله سيعطيك أشياء جميلة كثيرة حتى ترضى وتفرح",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "كنت صغيرًا بلا أب وأم، فحماك الله ورعاك",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "الله أرشدك وعلّمك الطريق الصحيح",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "كنت فقيرًا فجعلك الله غنيًا",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "كن لطيفًا مع اليتيم ولا تؤذيه",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "إذا سألك أحد مساعدة فلا تصرخ عليه، ساعده!",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "text": "تحدث عن نعم الله عليك واشكره دائمًا",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "وقت الصباح عندما تشرق الشمس",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "هدأ وسكن (الليل أصبح هادئًا)",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 3,
+      "meaning": "طفل صغير ليس له أب",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 2,
+      "meaning": "فقير لا يملك مالًا",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "word": 4,
+      "meaning": "تظلم أو تؤذي",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "word": 2,
+      "meaning": "الشخص الذي يطلب المساعدة",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 3,
+      "word": 5
+    },
+    {
+      "ayah": 6,
+      "word": 4
+    },
+    {
+      "ayah": 9,
+      "word": 4
+    },
+    {
+      "ayah": 11,
+      "word": 4
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما هي أول آية في سورة الضحى؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 3
+        },
+        {
+          "ayah": 6
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: two old options were not ayat of this surah: \"bismillah\" (the opening of the basmala) and \"wa-al-'asr\" (Al-'Asr 103:1), both typed. They are replaced by ayat 3 and 6 of Ad-Duha.",
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الضحى؟",
+      "options": [
+        {
+          "text": "8 آيات"
+        },
+        {
+          "text": "11 آية"
+        },
+        {
+          "text": "13 آية"
+        },
+        {
+          "text": "7 آيات"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية التي بعد",
+      "options": [
+        {
+          "ayah": 4
+        },
+        {
+          "ayah": 3
+        },
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 6
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old question typed the whole of ayah 2 (\"wa-al-layli idha saja\") into its text; it now shows ayah 2's last word (saja) after \"ma al-ayah allati ba'd\". Two old options were only the openings of ayat 4 and 6 (three words each); they are now those whole ayat. Teacher to confirm it reads well.",
+      "word": {
+        "ayah": 2,
+        "word": 3
+      },
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "أشرق"
+        },
+        {
+          "text": "هدأ وسكن"
+        },
+        {
+          "text": "ارتفع"
+        },
+        {
+          "text": "انتهى"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 2,
+        "word": 3
+      },
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "لا تساعد"
+        },
+        {
+          "text": "لا تظلم ولا تؤذي"
+        },
+        {
+          "text": "لا تلعب"
+        },
+        {
+          "text": "لا تنام"
+        }
+      ],
+      "answer": 1,
+      "review": "PHRASE: the old question asks about the two words \"fa-la taqhar\" (9:3-4); the engine shows one word, so it points at taqhar (9:4) and the options carry the negation (\"do not wrong or hurt\"). Teacher to confirm it reads right.",
+      "word": {
+        "ayah": 9,
+        "word": 4
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ماذا تعني",
+      "options": [
+        {
+          "text": "غنيًا"
+        },
+        {
+          "text": "سعيدًا"
+        },
+        {
+          "text": "فقيرًا"
+        },
+        {
+          "text": "كبيرًا"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "word": {
+        "ayah": 8,
+        "word": 2
+      },
+      "id": "q6"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نتعلم من سورة الضحى؟",
+      "options": [
+        {
+          "text": "أن نشكر الله ونساعد الآخرين"
+        },
+        {
+          "text": "أن نلعب كثيرًا"
+        },
+        {
+          "text": "أن ننام مبكرًا"
+        },
+        {
+          "text": "أن نأكل كثيرًا"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "ما هي آخر آية في سورة الضحى؟",
+      "options": [
+        {
+          "ayah": 10
+        },
+        {
+          "ayah": 9
+        },
+        {
+          "ayah": 11
+        },
+        {
+          "ayah": 5
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q8"
+    },
+    {
+      "category": "lessons",
+      "question": "لماذا نزلت سورة الضحى؟",
+      "options": [
+        {
+          "text": "لتعليم الصلاة"
+        },
+        {
+          "text": "لتطمئن قلب النبي ﷺ وتذكره بنعم الله"
+        },
+        {
+          "text": "لتعليم الحساب"
+        },
+        {
+          "text": "لتعليم القراءة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الله لا يترك عباده: مهما شعرت بالحزن، تذكر أن الله معك دائمًا ولن يتركك أبدًا",
+      "review": null
+    },
+    {
+      "text": "نشكر الله على نعمه: الله أعطانا نعمًا كثيرة: الأهل، الطعام، الصحة... فلنشكره دائمًا",
+      "review": null
+    },
+    {
+      "text": "نكون لطفاء مع اليتيم: اليتيم يحتاج حبنا ورعايتنا، فلنكن لطفاء معه",
+      "review": null
+    },
+    {
+      "text": "نساعد المحتاجين: إذا سألنا أحد مساعدة، نساعده بلطف ولا نصرخ عليه",
+      "review": null
+    },
+    {
+      "text": "نتحدث عن نعم الله: نحكي للناس عن نعم الله علينا ونشكره في كل وقت",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نساعد من يحتاج المساعدة؟",
+    "ideas": [
+      "أساعد صديقي في المدرسة",
+      "أشارك ألعابي مع الآخرين",
+      "أكون لطيفًا مع الجميع",
+      "أدعو لمن يحتاج المساعدة"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله يحب من يساعد الآخرين؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن شكر الله يزيد النعم؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن النبي ﷺ كان يتيمًا وأصبح أعظم إنسان؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الابتسامة في وجه أخيك صدقة؟",
+      "review": "A hadith (at-Tirmidhi: \"your smiling in the face of your brother is charity for you\", graded hasan/sahih). True, but not something this surah teaches. Teacher to keep or drop."
+    }
+  ]
+}
