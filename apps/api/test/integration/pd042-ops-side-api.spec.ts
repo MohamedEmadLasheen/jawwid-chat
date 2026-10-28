@@ -481,3 +481,53 @@ describe('7. the verification report (S3, D2)', () => {
     expect(JSON.stringify(report)).not.toMatch(/parent_o|010\d{8}|@/);
   });
 });
+
+describe('8. the family history (S4)', () => {
+  it('who entered it, who owns it, who placed it, the package -- in order, each once; never a phone or an e-mail', async () => {
+    const f = form({
+      parent: { name: 'parent_h', phone: phone(), email: `pd42_${randomUUID().slice(0, 8)}@example.test` },
+      children: [{ name: 'child_h', carriedOver: { total: 20, completed: 4 } }],
+    });
+    const r = await intake.enter(salesA, f);
+    await intake.enter(salesA, f); // S1: a replay writes nothing, so it adds no line
+    await intake.suggestSupervisor(salesA, r.familyId, { supervisorId: s.otherAdminId });
+    await intake.assignOperationsSupervisor(s.managerId, r.familyId, { supervisorId: s.otherAdminId });
+    await intake.changeSalesOwner(salesManager, r.familyId, { staffId: salesB, reason: 'salesA moved to another market' });
+    await intake.voidCarryOver(s.managerId, r.learnerIds[0]!, { reason: 'typed 20 for 24' });
+
+    const h = await intake.history(salesB, r.familyId);
+    expect(h.entries.map((e) => e.action)).toEqual([
+      'subscription.carried_over', 'family.entered', 'family.sales_owner_set', 'family.supervisor_suggested',
+      'learner.supervisor_assigned', 'family.operations_supervisor_set', 'family.sales_owner_changed', 'subscription.voided',
+    ]);
+    const by = (action: string) => h.entries.find((e) => e.action === action)!;
+    expect(by('family.entered')).toMatchObject({ actor: { id: salesA, name: 'sales_a' }, subject: { kind: 'family', id: r.familyId } });
+    expect(by('subscription.carried_over')).toMatchObject({
+      subject: { kind: 'learner', id: r.learnerIds[0], name: 'child_h' }, details: { total: 20, completed: 4, planMonths: null },
+    });
+    expect(by('family.operations_supervisor_set')).toMatchObject({ actor: { id: s.managerId }, details: { supervisor: { id: s.otherAdminId } } });
+    expect(by('family.sales_owner_changed')).toMatchObject({
+      actor: { id: salesManager, name: 'sales_m' },
+      details: { from: { id: salesA, name: 'sales_a' }, to: { id: salesB, name: 'sales_b' } },
+      reason: 'salesA moved to another market',
+    });
+    expect(by('subscription.voided')).toMatchObject({ actor: { id: s.managerId }, reason: 'typed 20 for 24' });
+    for (let i = 1; i < h.entries.length; i += 1) {
+      expect(Date.parse(h.entries[i]!.at)).toBeGreaterThanOrEqual(Date.parse(h.entries[i - 1]!.at));
+    }
+    expect(JSON.stringify(h)).not.toMatch(/@example\.test|010\d{8}/);
+
+    // Read by whoever owns the family now; anyone else does not find it.
+    expect((await intake.history(s.otherAdminId, r.familyId)).entries).toHaveLength(8);
+    expect((await intake.history(s.managerId, r.familyId)).entries).toHaveLength(8);
+    expect(await code(intake.history(salesA, r.familyId))).toBe(CommErrorCode.INTAKE_NOT_FOUND);
+    expect(await code(intake.history(s.ownerId, r.familyId))).toBe(CommErrorCode.INTAKE_NOT_FOUND);
+    expect(await code(intake.history(tsupId, r.familyId))).toBe(CommErrorCode.INTAKE_DENIED);
+  });
+
+  it('a family from before PD-42 shows its own lines (a PD-16 enrolment), with no parent record needed', async () => {
+    const h = await intake.history(s.managerId, s.familyId);
+    expect(h.familyId).toBe(s.familyId);
+    expect(Array.isArray(h.entries)).toBe(true);
+  });
+});

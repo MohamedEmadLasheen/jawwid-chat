@@ -1,0 +1,463 @@
+{
+  "surah": 1,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson (data/fatihaData.ts and pages/SurahFatiha.tsx; the game components only for their two prompts), then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Numbering: the Basmala is ayah 1 in both the old lesson and the verified text (7 ayat), so nothing shifts. Each word meaning is the old card's meaning and its explanation joined with \": \" (three old meanings only repeat the word: Allah, al-rahman, al-rahim); the cards' examples are not carried. The old lesson has no fixed quiz: its \"choose the word\" and \"what does it mean\" games draw questions at random. q1-q3 and q4-q7 are fixed questions of those two kinds, with the old prompts verbatim (\"akmil al-ayah:\", \"ma ma'na:\"), the old card meanings as options and words of this surah as distractors; the complete-the-ayah words are the last words of ayat 2-7. Each lesson is a \"what we learn\" or \"how we apply it\" title and description joined with \": \". The reflection ideas are the old answer chips, emoji removed. Dropped: the audio URLs (everyayah, al-Husari) and the reciter line, the typed text of the surah, the cards' examples, the ayah-ordering, fix-the-error and matching games, the encouragement lines, the \"what we will learn today\" list, the info chips (Makki, 7 ayat, first surah) and the closing du'a. The old lesson has no Tajweed."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-1 (read as text, never built or run)",
+    "sha256": {
+      "data/fatihaData.ts": "e11e3b4a170779958549f3081a58ac2be17d2fefca3da8812ffe3e96f14fd233",
+      "pages/SurahFatiha.tsx": "8c727f652f34e740b1733274b6399d9e5fdff0d3cd9f1cd151b55e0493453ea7",
+      "components/games/ChooseWord.tsx": "93e57f5118e70feb440b7292dd48a1c13deac370054fd834a5440cec0a3f81b0",
+      "components/meanings/MeaningGames.tsx": "95aaa21ce4ab783bc4ea7fa88e05577052be31096529022768660a48eeeab81c"
+    }
+  },
+  "intro": {
+    "text": "أعظم سورة في القرآن الكريم، نقرأها في كل صلاة",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "نبدأ باسم الله الرحمن الرحيم، فالله هو المعبود بحق، والرحمن والرحيم اسمان يدلان على رحمته الواسعة التي وسعت كل شيء.",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "الثناء والشكر لله وحده، فهو رب كل المخلوقات ومالكها ومربيها، يرزقها ويدبر أمورها.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "الله ذو الرحمة الواسعة التي شملت جميع الخلق، والرحيم بالمؤمنين خاصة يوم القيامة.",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "الله هو المالك الحقيقي ليوم القيامة، يوم الحساب والجزاء، حيث يُجازى كل إنسان على عمله.",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "نخص الله وحده بالعبادة والطاعة، ونطلب منه وحده العون والمساعدة في جميع أمورنا.",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "نسأل الله أن يرشدنا ويوفقنا للطريق الصحيح، طريق الإسلام الذي يوصلنا إلى الجنة.",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "طريق الأنبياء والصالحين الذين أنعم الله عليهم بالهداية، لا طريق من غضب الله عليهم لتركهم الحق، ولا طريق الضالين التائهين عن الهدى.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "باسم: يعني نبدأ باسم الله، مثل ما نقول 'بسم الله' قبل الأكل!",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "الله: اسم ربنا الكريم الذي خلقنا وخلق كل شيء جميل",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "الرحمن: الله يرحم كل المخلوقات، الناس والحيوانات والطيور",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "الرحيم: الله يرحم المؤمنين الطيبين رحمة خاصة",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 1,
+      "meaning": "الشكر والثناء: نشكر الله ونقول له أنت الأفضل والأجمل",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 2,
+      "meaning": "لله وحده: الشكر كله لله لأنه هو الذي يعطينا كل شيء",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "خالق ومالك: الله هو الذي خلقنا ويرعانا ويهتم بنا",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 4,
+      "meaning": "كل المخلوقات: كل شيء في الكون: الناس، الحيوانات، الملائكة، النباتات",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 1,
+      "meaning": "صاحب وحاكم: الله هو المالك الحقيقي لكل شيء",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 2,
+      "meaning": "يوم: يوم خاص جداً سيأتي",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "الحساب والجزاء: يوم القيامة حيث يحاسب الله الناس على أعمالهم",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 1,
+      "meaning": "أنت وحدك يا الله: نتكلم مع الله مباشرة ونقول له: أنت فقط!",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 2,
+      "meaning": "نطيع ونحب: نصلي ونصوم ونفعل كل ما يحبه الله",
+      "review": "Gives na'budu as \"we obey and love\". Worship ('ibadah) is wider than obedience and love: it is everything Allah loves, done for Him alone (the explanation lists prayer, fasting and supplication). Teacher to confirm the wording."
+    },
+    {
+      "ayah": 5,
+      "word": 4,
+      "meaning": "نطلب المساعدة: نطلب من الله أن يساعدنا في كل شيء",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 1,
+      "meaning": "أرشدنا ودلنا: نطلب من الله أن يدلنا على الطريق الصحيح",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 2,
+      "meaning": "الطريق: الطريق الذي يوصلنا للجنة",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 3,
+      "meaning": "المستقيم الصحيح: الطريق الصحيح بدون اعوجاج، طريق الإسلام",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 3,
+      "meaning": "أعطيت النعم: الله أعطى نعماً كثيرة للأنبياء والصالحين",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 6,
+      "meaning": "الذين غضب الله عليهم: الناس الذين عرفوا الحق ولم يعملوا به",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 9,
+      "meaning": "التائهين عن الحق: الناس الذين ضاعوا عن طريق الله",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 2,
+      "word": 4
+    },
+    {
+      "ayah": 3,
+      "word": 2
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 5,
+      "word": 4
+    },
+    {
+      "ayah": 6,
+      "word": 3
+    },
+    {
+      "ayah": 7,
+      "word": 9
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "category": "hifz",
+      "question": "أكمل الآية:",
+      "prompt": {
+        "ayah": 2,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 7,
+          "word": 9
+        },
+        {
+          "ayah": 2,
+          "word": 4
+        },
+        {
+          "ayah": 6,
+          "word": 3
+        },
+        {
+          "ayah": 4,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "q2",
+      "category": "hifz",
+      "question": "أكمل الآية:",
+      "prompt": {
+        "ayah": 4,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 2,
+          "word": 4
+        },
+        {
+          "ayah": 6,
+          "word": 3
+        },
+        {
+          "ayah": 4,
+          "word": 3
+        },
+        {
+          "ayah": 7,
+          "word": 9
+        }
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "q3",
+      "category": "hifz",
+      "question": "أكمل الآية:",
+      "prompt": {
+        "ayah": 6,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 6,
+          "word": 3
+        },
+        {
+          "ayah": 4,
+          "word": 3
+        },
+        {
+          "ayah": 2,
+          "word": 4
+        },
+        {
+          "ayah": 7,
+          "word": 9
+        }
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "q4",
+      "category": "meanings",
+      "question": "ما معنى:",
+      "word": {
+        "ayah": 2,
+        "word": 1
+      },
+      "options": [
+        {
+          "text": "الشكر والثناء"
+        },
+        {
+          "text": "الطريق"
+        },
+        {
+          "text": "يوم"
+        },
+        {
+          "text": "أرشدنا ودلنا"
+        }
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "q5",
+      "category": "meanings",
+      "question": "ما معنى:",
+      "word": {
+        "ayah": 4,
+        "word": 3
+      },
+      "options": [
+        {
+          "text": "الطريق"
+        },
+        {
+          "text": "الشكر والثناء"
+        },
+        {
+          "text": "نطلب المساعدة"
+        },
+        {
+          "text": "الحساب والجزاء"
+        }
+      ],
+      "answer": 3,
+      "review": null
+    },
+    {
+      "id": "q6",
+      "category": "meanings",
+      "question": "ما معنى:",
+      "word": {
+        "ayah": 6,
+        "word": 2
+      },
+      "options": [
+        {
+          "text": "الحساب والجزاء"
+        },
+        {
+          "text": "الطريق"
+        },
+        {
+          "text": "كل المخلوقات"
+        },
+        {
+          "text": "أعطيت النعم"
+        }
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "q7",
+      "category": "meanings",
+      "question": "ما معنى:",
+      "word": {
+        "ayah": 5,
+        "word": 4
+      },
+      "options": [
+        {
+          "text": "الشكر والثناء"
+        },
+        {
+          "text": "الطريق"
+        },
+        {
+          "text": "نطلب المساعدة"
+        },
+        {
+          "text": "التائهين عن الحق"
+        }
+      ],
+      "answer": 2,
+      "review": null
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الله يحبنا ويرحمنا: الله رحمن رحيم، يحب عباده ويرحمهم دائماً",
+      "review": null
+    },
+    {
+      "text": "نشكر الله على كل شيء: الحمد لله على النعم الكثيرة: الصحة، الأهل، الطعام",
+      "review": null
+    },
+    {
+      "text": "نعبد الله وحده: الله وحده نعبد ومنه وحده نطلب المساعدة",
+      "review": null
+    },
+    {
+      "text": "نطلب الهداية من الله: نسأل الله أن يه\u062f\u064a\u0646\u0627 للطريق الصحيح دائماً",
+      "review": null
+    },
+    {
+      "text": "قبل الأكل: قل 'بسم الله' قبل أن تأكل",
+      "review": null
+    },
+    {
+      "text": "عند الاستيقاظ: قل 'الحمد لله' عندما تستيقظ",
+      "review": null
+    },
+    {
+      "text": "عند الصعوبات: اطلب من الله المساعدة 'إياك نستعين'",
+      "review": "TYPED: the line quotes \"iyyaka nasta'in\", two words of ayah 5, typed by hand. Teacher to rephrase it (e.g. without the quote), or keep the quote as a position."
+    },
+    {
+      "text": "في الصلاة: اقرأ الفاتحة في كل ركعة",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "ما هي النعم التي تشكر الله عليها؟",
+    "ideas": [
+      "الصحة",
+      "العائلة",
+      "الطعام",
+      "المدرسة",
+      "الأصدقاء"
+    ],
+    "review": "CUT: the old question began \"when you say 'al-hamdu lillahi rabbi al-'alamin',\" which types the whole of ayah 2; only the question after it is kept. Teacher to restore the link to ayah 2 in prose (e.g. \"when you praise Allah\")."
+  },
+  "didYouKnow": [
+    {
+      "text": "سورة الفاتحة هي أعظم سورة في القرآن",
+      "review": null
+    },
+    {
+      "text": "تسمى 'أم الكتاب' لأنها أساس القرآن",
+      "review": null
+    },
+    {
+      "text": "نقرأها في كل ركعة من الصلاة",
+      "review": null
+    },
+    {
+      "text": "هي رقية وشفاء بإذن الله",
+      "review": null
+    },
+    {
+      "text": "سورة الفاتحة تسمى \"السبع المثاني\" لأنها سبع آيات تُقرأ في كل ركعة!",
+      "review": null
+    }
+  ]
+}
