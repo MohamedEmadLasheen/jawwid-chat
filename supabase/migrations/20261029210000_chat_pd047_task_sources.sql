@@ -597,7 +597,8 @@ begin
   s_case := chat.work_task_since('case');
 
   -- The issue log shrinks: an occurrence resolved in any way (done, gone, its
-  -- task closed) takes its record with it.
+  -- task closed) takes its record with it. Only a key this sweep can judge is
+  -- dropped: another sweep's back-off (instalment:, package_low:, ...) holds.
   delete from chat.work_task_source_issue i
    where exists (select 1 from chat.work_task t
                   where t.organization_id = i.organization_id and t.source_key = i.source_key
@@ -615,7 +616,7 @@ begin
                                                        where q.id = split_part(i.source_key, ':', 2)::uuid and q.decision is null)
            when 'case' then not exists (select 1 from chat.supervision_case q
                                          where q.id = split_part(i.source_key, ':', 2)::uuid and q.status in ('open', 'in_progress'))
-           else true
+           else false
          end;
 
   -- Create: occurrences with no task yet, and no back-off running.

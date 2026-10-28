@@ -562,4 +562,16 @@ describe('the database', () => {
     const [{ n }] = await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM chat.work_task WHERE source_type = 'report_correction'`;
     expect(Number(n)).toBe(0);
   });
+
+  it('the issue log drops only the keys this sweep can judge: another source\'s back-off survives it', async () => {
+    const foreign = `instalment:${randomUUID()}`;
+    await exec(
+      `insert into chat.work_task_source_issue (organization_id, source_key, reason, next_try_at)
+       values (chat.default_organization_id(), $1, 'nobody to assign it to', now() + interval '1 hour')`,
+      foreign,
+    );
+    // PR-2's sweep alone: the financial sweep judges instalment: keys itself.
+    await g.prisma.$queryRaw`SELECT chat.work_task_sweep(50)`;
+    expect(await issues(foreign)).toEqual([{ attempts: 1 }]);
+  });
 });
