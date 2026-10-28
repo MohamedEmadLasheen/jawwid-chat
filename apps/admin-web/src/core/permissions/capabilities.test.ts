@@ -88,7 +88,8 @@ describe('navigation lists what a role may open', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
       // PD-41: Certificates waits for GET /certificates/access.
-      const certs = (a: string) => a === 'certificates'
+      // PD-48: Lesson audio waits for GET /lesson-audio/access.
+      const certs = (a: string) => a === 'certificates' || a === 'lesson-audio'
       expect(navAreas(role)).toEqual(
         visibleAreas(role).filter((a) => a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)),
       )
@@ -97,7 +98,8 @@ describe('navigation lists what a role may open', () => {
       expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'schedule' && !certs(a)))
       // PD-38: the Schedule on GET /lessons/access's `calendar`.
       expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role).filter((a) => !certs(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true })).toEqual(visibleAreas(role))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true })).toEqual(visibleAreas(role).filter((a) => a !== 'lesson-audio'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true, lessonAudio: true })).toEqual(visibleAreas(role))
     }
   })
 
@@ -137,9 +139,9 @@ describe('permission keys → pages', () => {
     expect(holdsAny(null, ['staff_accounts.view'])).toBe(false)
   })
 
-  it("gives a specialist PD-41's Certificates area and their Tasks -- never Accounts, so no staff-account tabs", () => {
+  it("gives a specialist PD-41's Certificates area, their Tasks and PD-48's Lesson audio -- never Accounts, so no staff-account tabs", () => {
     // PD-47 plan §3.12: Tasks is in every staff role's navigation -- a Designer
-    // may be given a task too. Still never Accounts.
-    expect(visibleAreas('specialist')).toEqual(['certificates', 'tasks'])
+    // may be given a task too. PD-48: Lesson audio, on the server's word. Still never Accounts.
+    expect(visibleAreas('specialist')).toEqual(['certificates', 'tasks', 'lesson-audio'])
   })
 })

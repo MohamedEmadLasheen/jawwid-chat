@@ -1,0 +1,7458 @@
+{
+  "lesson": 3,
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 arabic/lesson-3/lib/arabicData.ts, read as text, never built or run). Each unit is a letter carrying one haraka; a word belongs to it only if that letter carries that haraka (the one rule, with its mark). Words whose letter does not carry the vowel are left out and listed (decision B); words whose last letter carries the lesson's vowel keep it as a held final-mark exception (decision A). Every added mark is held (ADDED TASHKEEL)."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/arabic/lesson-3 (read as text, never built or run)",
+    "sha256": {
+      "lib/arabicData.ts": "bf15e26f17c9845ddefa3155562a606699d9a8cc20cfd82abc0a4561cf6c52ac"
+    }
+  },
+  "finalMark": "sukun",
+  "retiredIds": [],
+  "units": [
+    {
+      "id": "hamza_fatha",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "fatha",
+      "group": "أ",
+      "name": "أَ",
+      "forms": [
+        "أَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "hamza_fatha-001",
+          "text": "أَسَدْ",
+          "was": "أَسَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_fatha-002",
+          "text": "أَرْنَبْ",
+          "was": "أَرْنَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_fatha-003",
+          "text": "أَكَلْ",
+          "was": "أَكَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "hamza_fatha-004",
+          "text": "سَأَلْ",
+          "was": "سَأَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "hamza_fatha-005",
+          "text": "قَرَأَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "hamza_fatha-006",
+          "text": "أَمَلْ",
+          "was": "أَمَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_fatha-007",
+          "text": "أَخَذْ",
+          "was": "أَخَذَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "hamza_fatha-008",
+          "text": "بَدَأَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "hamza_fatha-009",
+          "text": "أَحَدْ",
+          "was": "أَحَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_fatha-010",
+          "text": "أَبَدْ",
+          "was": "أَبَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "hamza_kasra",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "kasra",
+      "group": "أ",
+      "name": "إِ",
+      "forms": [
+        "إِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "hamza_kasra-001",
+          "text": "إِبْرَةْ",
+          "was": "إِبْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_kasra-002",
+          "text": "سُئِلْ",
+          "was": "سُئِلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "hamza_kasra-003",
+          "text": "إِسْلَامْ",
+          "was": "إِسْلَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_kasra-004",
+          "text": "إِيمَانْ",
+          "was": "إِيمَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_kasra-005",
+          "text": "رُئِيْ",
+          "was": "رُئِيَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "hamza_kasra-006",
+          "text": "إِمَامْ",
+          "was": "إِمَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_kasra-007",
+          "text": "إِذَا",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "hamza_kasra-008",
+          "text": "إِلَى",
+          "was": null,
+          "review": null
+        }
+      ]
+    },
+    {
+      "id": "hamza_damma",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "damma",
+      "group": "أ",
+      "name": "أُ",
+      "forms": [
+        "أُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "hamza_damma-001",
+          "text": "أُمّْ",
+          "was": "أُمّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_damma-002",
+          "text": "أُذُنْ",
+          "was": "أُذُن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_damma-003",
+          "text": "أُسْرَةْ",
+          "was": "أُسْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_damma-004",
+          "text": "أُخْتْ",
+          "was": "أُخْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_damma-005",
+          "text": "يَقْرَأُ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "hamza_damma-006",
+          "text": "أُفُقْ",
+          "was": "أُفُق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_damma-007",
+          "text": "أُرْجُوحَةْ",
+          "was": "أُرْجُوحَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_damma-008",
+          "text": "أُنْشُودَةْ",
+          "was": "أُنْشُودَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_damma-009",
+          "text": "أُسْتَاذْ",
+          "was": "أُسْتَاذ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hamza_damma-010",
+          "text": "أُمَّةْ",
+          "was": "أُمَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ba_fatha",
+      "letters": [
+        "ب"
+      ],
+      "mark": "fatha",
+      "group": "ب",
+      "name": "بَ",
+      "forms": [
+        "بَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ba_fatha-001",
+          "text": "بَحْرْ",
+          "was": "بَحْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_fatha-002",
+          "text": "بَابْ",
+          "was": "بَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_fatha-003",
+          "text": "بَدْرْ",
+          "was": "بَدْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_fatha-004",
+          "text": "كَتَبَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ba_fatha-005",
+          "text": "سَبَبْ",
+          "was": "سَبَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_fatha-006",
+          "text": "جَبَلْ",
+          "was": "جَبَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_fatha-007",
+          "text": "لَعِبَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ba_fatha-008",
+          "text": "ذَهَبَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ba_fatha-009",
+          "text": "غَلَبَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ba_fatha-010",
+          "text": "بَطَلْ",
+          "was": "بَطَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ba_kasra",
+      "letters": [
+        "ب"
+      ],
+      "mark": "kasra",
+      "group": "ب",
+      "name": "بِ",
+      "forms": [
+        "بِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ba_kasra-001",
+          "text": "بِنْتْ",
+          "was": "بِنْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-002",
+          "text": "بِئْرْ",
+          "was": "بِئْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-003",
+          "text": "كَبِيرْ",
+          "was": "كَبِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-004",
+          "text": "حَبِيبْ",
+          "was": "حَبِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-005",
+          "text": "سَبِيلْ",
+          "was": "سَبِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-006",
+          "text": "بِسَاطْ",
+          "was": "بِسَاط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-007",
+          "text": "بِدَايَةْ",
+          "was": "بِدَايَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-008",
+          "text": "رَبِيعْ",
+          "was": "رَبِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-009",
+          "text": "بِلَادْ",
+          "was": "بِلَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_kasra-010",
+          "text": "جَبِينْ",
+          "was": "جَبِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ba_damma",
+      "letters": [
+        "ب"
+      ],
+      "mark": "damma",
+      "group": "ب",
+      "name": "بُ",
+      "forms": [
+        "بُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ba_damma-001",
+          "text": "بُرْجْ",
+          "was": "بُرْج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_damma-002",
+          "text": "بُسْتَانْ",
+          "was": "بُسْتَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_damma-003",
+          "text": "بُرْتُقَالْ",
+          "was": "بُرْتُقَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_damma-004",
+          "text": "بُومَةْ",
+          "was": "بُومَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_damma-005",
+          "text": "مَحْبُوبْ",
+          "was": "مَحْبُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_damma-006",
+          "text": "بُطُولْ",
+          "was": "بُطُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_damma-007",
+          "text": "بُنْدُقْ",
+          "was": "بُنْدُق",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ta_fatha",
+      "letters": [
+        "ت"
+      ],
+      "mark": "fatha",
+      "group": "ت",
+      "name": "تَ",
+      "forms": [
+        "تَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ta_fatha-001",
+          "text": "تَمْرْ",
+          "was": "تَمْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_fatha-002",
+          "text": "تَاجْ",
+          "was": "تَاج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_fatha-003",
+          "text": "تَفَّاحْ",
+          "was": "تَفَّاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_fatha-004",
+          "text": "كَتَبْ",
+          "was": "كَتَبَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ta_fatha-005",
+          "text": "فَتَحْ",
+          "was": "فَتَحَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ta_fatha-006",
+          "text": "بَيْتَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ta_fatha-007",
+          "text": "تَعَلَّمْ",
+          "was": "تَعَلَّمَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ta_fatha-008",
+          "text": "تَرَكْ",
+          "was": "تَرَكَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ta_fatha-009",
+          "text": "مَتَى",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "ta_fatha-010",
+          "text": "تَمَامْ",
+          "was": "تَمَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ta_kasra",
+      "letters": [
+        "ت"
+      ],
+      "mark": "kasra",
+      "group": "ت",
+      "name": "تِ",
+      "forms": [
+        "تِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ta_kasra-001",
+          "text": "تِينْ",
+          "was": "تِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_kasra-002",
+          "text": "تِلْمِيذْ",
+          "was": "تِلْمِيذ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_kasra-003",
+          "text": "تِسْعَةْ",
+          "was": "تِسْعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_kasra-004",
+          "text": "فَتِيلْ",
+          "was": "فَتِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_kasra-005",
+          "text": "تِجَارَةْ",
+          "was": "تِجَارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_kasra-006",
+          "text": "مُتِيمْ",
+          "was": "مُتِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_kasra-007",
+          "text": "تِبْرْ",
+          "was": "تِبْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_kasra-008",
+          "text": "حَتِّى",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "ta_kasra-009",
+          "text": "تِمْثَالْ",
+          "was": "تِمْثَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ta_damma",
+      "letters": [
+        "ت"
+      ],
+      "mark": "damma",
+      "group": "ت",
+      "name": "تُ",
+      "forms": [
+        "تُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ta_damma-001",
+          "text": "تُرَابْ",
+          "was": "تُرَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_damma-002",
+          "text": "تُفَّاحْ",
+          "was": "تُفَّاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_damma-003",
+          "text": "كُتُبْ",
+          "was": "كُتُب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_damma-004",
+          "text": "تُحْفَةْ",
+          "was": "تُحْفَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_damma-005",
+          "text": "تُوتْ",
+          "was": "تُوت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_damma-006",
+          "text": "تُرْسْ",
+          "was": "تُرْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_damma-007",
+          "text": "تُمْسَاحْ",
+          "was": "تُمْسَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "tha_fatha",
+      "letters": [
+        "ث"
+      ],
+      "mark": "fatha",
+      "group": "ث",
+      "name": "ثَ",
+      "forms": [
+        "ثَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tha_fatha-001",
+          "text": "ثَعْلَبْ",
+          "was": "ثَعْلَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_fatha-002",
+          "text": "ثَوْبْ",
+          "was": "ثَوْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_fatha-003",
+          "text": "ثَلْجْ",
+          "was": "ثَلْج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_fatha-004",
+          "text": "كَثَرْ",
+          "was": "كَثَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "tha_fatha-005",
+          "text": "مَثَلْ",
+          "was": "مَثَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_fatha-006",
+          "text": "بَعَثَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "tha_fatha-007",
+          "text": "ثَمَرْ",
+          "was": "ثَمَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_fatha-008",
+          "text": "ثَابِتْ",
+          "was": "ثَابِت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_fatha-009",
+          "text": "حَدَثَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "tha_fatha-010",
+          "text": "ثَلَاثَةْ",
+          "was": "ثَلَاثَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "tha_kasra",
+      "letters": [
+        "ث"
+      ],
+      "mark": "kasra",
+      "group": "ث",
+      "name": "ثِ",
+      "forms": [
+        "ثِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tha_kasra-001",
+          "text": "ثِقَةْ",
+          "was": "ثِقَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_kasra-002",
+          "text": "كَثِيرْ",
+          "was": "كَثِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_kasra-003",
+          "text": "ثِمَارْ",
+          "was": "ثِمَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_kasra-004",
+          "text": "أَثِيمْ",
+          "was": "أَثِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_kasra-005",
+          "text": "ثِيَابْ",
+          "was": "ثِيَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_kasra-006",
+          "text": "مَثِيلْ",
+          "was": "مَثِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_kasra-007",
+          "text": "ثِقَلْ",
+          "was": "ثِقَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_kasra-008",
+          "text": "حَثِيثْ",
+          "was": "حَثِيث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_kasra-009",
+          "text": "ثِنَاءْ",
+          "was": "ثِنَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "tha_damma",
+      "letters": [
+        "ث"
+      ],
+      "mark": "damma",
+      "group": "ث",
+      "name": "ثُ",
+      "forms": [
+        "ثُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tha_damma-001",
+          "text": "ثُلُثْ",
+          "was": "ثُلُث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_damma-002",
+          "text": "ثُعْبَانْ",
+          "was": "ثُعْبَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_damma-003",
+          "text": "ثُومْ",
+          "was": "ثُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_damma-004",
+          "text": "مَبْثُوثْ",
+          "was": "مَبْثُوث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_damma-005",
+          "text": "ثُلَاثَاءْ",
+          "was": "ثُلَاثَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_damma-006",
+          "text": "ثُمّْ",
+          "was": "ثُمَّ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "tha_damma-007",
+          "text": "حُثُوثْ",
+          "was": "حُثُوث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_damma-008",
+          "text": "بُثُورْ",
+          "was": "بُثُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_damma-009",
+          "text": "ثُبُوتْ",
+          "was": "ثُبُوت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_damma-010",
+          "text": "ثُرَيَّا",
+          "was": null,
+          "review": null
+        }
+      ]
+    },
+    {
+      "id": "jim_fatha",
+      "letters": [
+        "ج"
+      ],
+      "mark": "fatha",
+      "group": "ج",
+      "name": "جَ",
+      "forms": [
+        "جَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "jim_fatha-001",
+          "text": "جَمَلْ",
+          "was": "جَمَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_fatha-002",
+          "text": "جَبَلْ",
+          "was": "جَبَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_fatha-003",
+          "text": "جَنَّةْ",
+          "was": "جَنَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_fatha-004",
+          "text": "رَجَعْ",
+          "was": "رَجَعَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "jim_fatha-005",
+          "text": "نَجَحْ",
+          "was": "نَجَحَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "jim_fatha-006",
+          "text": "خَرَجَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "jim_fatha-007",
+          "text": "جَدِيدْ",
+          "was": "جَدِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_fatha-008",
+          "text": "جَمِيلْ",
+          "was": "جَمِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_fatha-009",
+          "text": "عَجَبْ",
+          "was": "عَجَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_fatha-010",
+          "text": "جَرَسْ",
+          "was": "جَرَس",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "jim_kasra",
+      "letters": [
+        "ج"
+      ],
+      "mark": "kasra",
+      "group": "ج",
+      "name": "جِ",
+      "forms": [
+        "جِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "jim_kasra-001",
+          "text": "جِدَارْ",
+          "was": "جِدَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-002",
+          "text": "رَجِيمْ",
+          "was": "رَجِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-003",
+          "text": "نَجِيبْ",
+          "was": "نَجِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-004",
+          "text": "جِسْمْ",
+          "was": "جِسْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-005",
+          "text": "جِلْدْ",
+          "was": "جِلْد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-006",
+          "text": "سَجِينْ",
+          "was": "سَجِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-007",
+          "text": "جِهَادْ",
+          "was": "جِهَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-008",
+          "text": "عَجِيبْ",
+          "was": "عَجِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-009",
+          "text": "جِرَاحْ",
+          "was": "جِرَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_kasra-010",
+          "text": "مَسْجِدْ",
+          "was": "مَسْجِد",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "jim_damma",
+      "letters": [
+        "ج"
+      ],
+      "mark": "damma",
+      "group": "ج",
+      "name": "جُ",
+      "forms": [
+        "جُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "jim_damma-001",
+          "text": "جُبْنْ",
+          "was": "جُبْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_damma-002",
+          "text": "جُنْدِي",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "jim_damma-003",
+          "text": "جُمْلَةْ",
+          "was": "جُمْلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_damma-004",
+          "text": "نُجُومْ",
+          "was": "نُجُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_damma-005",
+          "text": "جُزْءْ",
+          "was": "جُزْء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_damma-006",
+          "text": "وُجُودْ",
+          "was": "وُجُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_damma-007",
+          "text": "جُمُعَةْ",
+          "was": "جُمُعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_damma-008",
+          "text": "سُجُودْ",
+          "was": "سُجُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_damma-009",
+          "text": "جُنُونْ",
+          "was": "جُنُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "hha_fatha",
+      "letters": [
+        "ح"
+      ],
+      "mark": "fatha",
+      "group": "ح",
+      "name": "حَ",
+      "forms": [
+        "حَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "hha_fatha-001",
+          "text": "حَصَانْ",
+          "was": "حَصَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_fatha-002",
+          "text": "حَلِيبْ",
+          "was": "حَلِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_fatha-003",
+          "text": "حَدِيقَةْ",
+          "was": "حَدِيقَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_fatha-004",
+          "text": "فَحَصْ",
+          "was": "فَحَصَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "hha_fatha-005",
+          "text": "بَحَرْ",
+          "was": "بَحَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "hha_fatha-006",
+          "text": "فَتَحَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "hha_fatha-007",
+          "text": "حَمَامْ",
+          "was": "حَمَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_fatha-008",
+          "text": "حَجَرْ",
+          "was": "حَجَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_fatha-009",
+          "text": "سَحَابَةْ",
+          "was": "سَحَابَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_fatha-010",
+          "text": "حَبَلْ",
+          "was": "حَبَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "hha_kasra",
+      "letters": [
+        "ح"
+      ],
+      "mark": "kasra",
+      "group": "ح",
+      "name": "حِ",
+      "forms": [
+        "حِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "hha_kasra-001",
+          "text": "حِصَانْ",
+          "was": "حِصَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_kasra-002",
+          "text": "حِمَارْ",
+          "was": "حِمَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_kasra-003",
+          "text": "رَحِيمْ",
+          "was": "رَحِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_kasra-004",
+          "text": "حِكْمَةْ",
+          "was": "حِكْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_kasra-005",
+          "text": "حِسَابْ",
+          "was": "حِسَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_kasra-006",
+          "text": "حِوَارْ",
+          "was": "حِوَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_kasra-007",
+          "text": "حِينْ",
+          "was": "حِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_kasra-008",
+          "text": "صَحِيحْ",
+          "was": "صَحِيح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_kasra-009",
+          "text": "حِفْظْ",
+          "was": "حِفْظ",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "hha_damma",
+      "letters": [
+        "ح"
+      ],
+      "mark": "damma",
+      "group": "ح",
+      "name": "حُ",
+      "forms": [
+        "حُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "hha_damma-001",
+          "text": "حُوتْ",
+          "was": "حُوت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_damma-002",
+          "text": "حُرِّيَّةْ",
+          "was": "حُرِّيَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_damma-003",
+          "text": "حُلْمْ",
+          "was": "حُلْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_damma-004",
+          "text": "حُبّْ",
+          "was": "حُبّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_damma-005",
+          "text": "حُرُوفْ",
+          "was": "حُرُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_damma-006",
+          "text": "حُضُورْ",
+          "was": "حُضُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_damma-007",
+          "text": "حُقُوقْ",
+          "was": "حُقُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_damma-008",
+          "text": "رُحُومْ",
+          "was": "رُحُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_damma-009",
+          "text": "حُسُونْ",
+          "was": "حُسُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kha_fatha",
+      "letters": [
+        "خ"
+      ],
+      "mark": "fatha",
+      "group": "خ",
+      "name": "خَ",
+      "forms": [
+        "خَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kha_fatha-001",
+          "text": "خَبَزْ",
+          "was": "خَبَز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_fatha-002",
+          "text": "خَاتَمْ",
+          "was": "خَاتَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_fatha-003",
+          "text": "دَخَلْ",
+          "was": "دَخَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "kha_fatha-004",
+          "text": "نَخَلْ",
+          "was": "نَخَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "kha_fatha-005",
+          "text": "طَبَخَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "kha_fatha-006",
+          "text": "خَيْمَةْ",
+          "was": "خَيْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_fatha-007",
+          "text": "خَشَبْ",
+          "was": "خَشَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_fatha-008",
+          "text": "أَخَذْ",
+          "was": "أَخَذَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "kha_fatha-009",
+          "text": "خَطَأْ",
+          "was": "خَطَأ",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kha_kasra",
+      "letters": [
+        "خ"
+      ],
+      "mark": "kasra",
+      "group": "خ",
+      "name": "خِ",
+      "forms": [
+        "خِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kha_kasra-001",
+          "text": "خِيَارْ",
+          "was": "خِيَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-002",
+          "text": "دَاخِلْ",
+          "was": "دَاخِل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-003",
+          "text": "خِدْمَةْ",
+          "was": "خِدْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-004",
+          "text": "خِلَافْ",
+          "was": "خِلَاف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-005",
+          "text": "نَخِيلْ",
+          "was": "نَخِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-006",
+          "text": "خِطَابْ",
+          "was": "خِطَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-007",
+          "text": "أَخِيرْ",
+          "was": "أَخِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-008",
+          "text": "خِبْرَةْ",
+          "was": "خِبْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-009",
+          "text": "فَخِيمْ",
+          "was": "فَخِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_kasra-010",
+          "text": "خِزَانَةْ",
+          "was": "خِزَانَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kha_damma",
+      "letters": [
+        "خ"
+      ],
+      "mark": "damma",
+      "group": "خ",
+      "name": "خُ",
+      "forms": [
+        "خُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kha_damma-001",
+          "text": "خُبْزْ",
+          "was": "خُبْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-002",
+          "text": "خُطُوطْ",
+          "was": "خُطُوط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-003",
+          "text": "دُخُولْ",
+          "was": "دُخُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-004",
+          "text": "خُضَارْ",
+          "was": "خُضَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-005",
+          "text": "خُلُقْ",
+          "was": "خُلُق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-006",
+          "text": "خُطُوةْ",
+          "was": "خُطُوة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-007",
+          "text": "نُخُوتْ",
+          "was": "نُخُوت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-008",
+          "text": "خُصُومْ",
+          "was": "خُصُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-009",
+          "text": "خُرُوجْ",
+          "was": "خُرُوج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_damma-010",
+          "text": "خُطَبْ",
+          "was": "خُطَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dal_fatha",
+      "letters": [
+        "د"
+      ],
+      "mark": "fatha",
+      "group": "د",
+      "name": "دَ",
+      "forms": [
+        "دَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dal_fatha-001",
+          "text": "دَجَاجَةْ",
+          "was": "دَجَاجَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_fatha-002",
+          "text": "دَارْ",
+          "was": "دَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_fatha-003",
+          "text": "دَرْسْ",
+          "was": "دَرْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_fatha-004",
+          "text": "بَدَأْ",
+          "was": "بَدَأَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dal_fatha-005",
+          "text": "قَدَمْ",
+          "was": "قَدَمَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dal_fatha-006",
+          "text": "وَجَدَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "dal_fatha-007",
+          "text": "دَفْتَرْ",
+          "was": "دَفْتَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_fatha-008",
+          "text": "دَوَاءْ",
+          "was": "دَوَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_fatha-009",
+          "text": "هَدَفْ",
+          "was": "هَدَفَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dal_fatha-010",
+          "text": "دَلِيلْ",
+          "was": "دَلِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dal_kasra",
+      "letters": [
+        "د"
+      ],
+      "mark": "kasra",
+      "group": "د",
+      "name": "دِ",
+      "forms": [
+        "دِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dal_kasra-001",
+          "text": "دِيكْ",
+          "was": "دِيك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-002",
+          "text": "دِينْ",
+          "was": "دِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-003",
+          "text": "جَدِيدْ",
+          "was": "جَدِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-004",
+          "text": "دِفَاعْ",
+          "was": "دِفَاع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-005",
+          "text": "قَدِيمْ",
+          "was": "قَدِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-006",
+          "text": "دِرَاسَةْ",
+          "was": "دِرَاسَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-007",
+          "text": "بَدِيعْ",
+          "was": "بَدِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-008",
+          "text": "دِرْهَمْ",
+          "was": "دِرْهَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-009",
+          "text": "سَدِيدْ",
+          "was": "سَدِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_kasra-010",
+          "text": "دِمَاءْ",
+          "was": "دِمَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dal_damma",
+      "letters": [
+        "د"
+      ],
+      "mark": "damma",
+      "group": "د",
+      "name": "دُ",
+      "forms": [
+        "دُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dal_damma-001",
+          "text": "دُبّْ",
+          "was": "دُبّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_damma-002",
+          "text": "دُرُوسْ",
+          "was": "دُرُوس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_damma-003",
+          "text": "دُنْيَا",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "dal_damma-004",
+          "text": "دُعَاءْ",
+          "was": "دُعَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_damma-005",
+          "text": "دُخُولْ",
+          "was": "دُخُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_damma-006",
+          "text": "دُسْتُورْ",
+          "was": "دُسْتُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_damma-007",
+          "text": "دُرُوبْ",
+          "was": "دُرُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dhal_fatha",
+      "letters": [
+        "ذ"
+      ],
+      "mark": "fatha",
+      "group": "ذ",
+      "name": "ذَ",
+      "forms": [
+        "ذَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dhal_fatha-001",
+          "text": "ذَهَبْ",
+          "was": "ذَهَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_fatha-002",
+          "text": "ذَكَرْ",
+          "was": "ذَكَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dhal_fatha-003",
+          "text": "ذَيْلْ",
+          "was": "ذَيْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_fatha-004",
+          "text": "أَذَانْ",
+          "was": "أَذَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_fatha-005",
+          "text": "غَذَاءْ",
+          "was": "غَذَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_fatha-006",
+          "text": "أَخَذَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "dhal_fatha-007",
+          "text": "ذَرَّةْ",
+          "was": "ذَرَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_fatha-008",
+          "text": "ذَاكِرَةْ",
+          "was": "ذَاكِرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_fatha-009",
+          "text": "نَفَذَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "dhal_fatha-010",
+          "text": "ذَكَاءْ",
+          "was": "ذَكَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dhal_kasra",
+      "letters": [
+        "ذ"
+      ],
+      "mark": "kasra",
+      "group": "ذ",
+      "name": "ذِ",
+      "forms": [
+        "ذِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dhal_kasra-001",
+          "text": "ذِئْبْ",
+          "was": "ذِئْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_kasra-002",
+          "text": "ذِرَاعْ",
+          "was": "ذِرَاع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_kasra-003",
+          "text": "ذِكْرَى",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "dhal_kasra-004",
+          "text": "ذِمَّةْ",
+          "was": "ذِمَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_kasra-005",
+          "text": "لَذِيذْ",
+          "was": "لَذِيذ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_kasra-006",
+          "text": "ذِهْنْ",
+          "was": "ذِهْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_kasra-007",
+          "text": "حَذِرْ",
+          "was": "حَذِر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_kasra-008",
+          "text": "ذِلَّةْ",
+          "was": "ذِلَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_kasra-009",
+          "text": "ذِكْرْ",
+          "was": "ذِكْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dhal_damma",
+      "letters": [
+        "ذ"
+      ],
+      "mark": "damma",
+      "group": "ذ",
+      "name": "ذُ",
+      "forms": [
+        "ذُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dhal_damma-001",
+          "text": "ذُرَةْ",
+          "was": "ذُرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_damma-002",
+          "text": "ذُبَابْ",
+          "was": "ذُبَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_damma-003",
+          "text": "ذُنُوبْ",
+          "was": "ذُنُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_damma-004",
+          "text": "أُذُنْ",
+          "was": "أُذُن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_damma-005",
+          "text": "ذُكُورْ",
+          "was": "ذُكُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_damma-006",
+          "text": "ذُرِّيَّةْ",
+          "was": "ذُرِّيَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_damma-007",
+          "text": "ذُخُورْ",
+          "was": "ذُخُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_damma-008",
+          "text": "ذُهُولْ",
+          "was": "ذُهُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_damma-009",
+          "text": "ذُرُوفْ",
+          "was": "ذُرُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ra_fatha",
+      "letters": [
+        "ر"
+      ],
+      "mark": "fatha",
+      "group": "ر",
+      "name": "رَ",
+      "forms": [
+        "رَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ra_fatha-001",
+          "text": "رَجُلْ",
+          "was": "رَجُل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_fatha-002",
+          "text": "رَأْسْ",
+          "was": "رَأْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_fatha-003",
+          "text": "رَمْلْ",
+          "was": "رَمْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_fatha-004",
+          "text": "قَرَأْ",
+          "was": "قَرَأَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ra_fatha-005",
+          "text": "دَرَسْ",
+          "was": "دَرَسَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ra_fatha-006",
+          "text": "نَظَرَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ra_fatha-007",
+          "text": "رَبِيعْ",
+          "was": "رَبِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_fatha-008",
+          "text": "رَسَمْ",
+          "was": "رَسَمَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ra_fatha-009",
+          "text": "حَرَكَةْ",
+          "was": "حَرَكَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_fatha-010",
+          "text": "رَحْمَةْ",
+          "was": "رَحْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ra_kasra",
+      "letters": [
+        "ر"
+      ],
+      "mark": "kasra",
+      "group": "ر",
+      "name": "رِ",
+      "forms": [
+        "رِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ra_kasra-001",
+          "text": "رِسَالَةْ",
+          "was": "رِسَالَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_kasra-002",
+          "text": "رِجَالْ",
+          "was": "رِجَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_kasra-003",
+          "text": "كَرِيمْ",
+          "was": "كَرِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_kasra-004",
+          "text": "رِيَاضَةْ",
+          "was": "رِيَاضَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_kasra-005",
+          "text": "فَرِحْ",
+          "was": "فَرِح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_kasra-006",
+          "text": "رِحْلَةْ",
+          "was": "رِحْلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_kasra-007",
+          "text": "رِعَايَةْ",
+          "was": "رِعَايَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_kasra-008",
+          "text": "رِفْقْ",
+          "was": "رِفْق",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ra_damma",
+      "letters": [
+        "ر"
+      ],
+      "mark": "damma",
+      "group": "ر",
+      "name": "رُ",
+      "forms": [
+        "رُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ra_damma-001",
+          "text": "رُمَّانْ",
+          "was": "رُمَّان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_damma-002",
+          "text": "رُكْبَةْ",
+          "was": "رُكْبَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_damma-003",
+          "text": "دُرُوسْ",
+          "was": "دُرُوس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_damma-004",
+          "text": "رُوحْ",
+          "was": "رُوح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_damma-005",
+          "text": "حُرُوفْ",
+          "was": "حُرُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_damma-006",
+          "text": "رُؤْيَةْ",
+          "was": "رُؤْيَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_damma-007",
+          "text": "رُسُومْ",
+          "was": "رُسُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_damma-008",
+          "text": "رُكُوعْ",
+          "was": "رُكُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_damma-009",
+          "text": "سُرُورْ",
+          "was": "سُرُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "zay_fatha",
+      "letters": [
+        "ز"
+      ],
+      "mark": "fatha",
+      "group": "ز",
+      "name": "زَ",
+      "forms": [
+        "زَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zay_fatha-001",
+          "text": "زَهْرَةْ",
+          "was": "زَهْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_fatha-002",
+          "text": "زَرَافَةْ",
+          "was": "زَرَافَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_fatha-003",
+          "text": "زَيْتْ",
+          "was": "زَيْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_fatha-004",
+          "text": "مَزَرَعَةْ",
+          "was": "مَزَرَعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_fatha-005",
+          "text": "غَزَالْ",
+          "was": "غَزَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_fatha-006",
+          "text": "فَازَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "zay_fatha-007",
+          "text": "زَمَانْ",
+          "was": "زَمَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_fatha-008",
+          "text": "زَبَدْ",
+          "was": "زَبَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_fatha-009",
+          "text": "جَزَاءْ",
+          "was": "جَزَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_fatha-010",
+          "text": "زَكَاةْ",
+          "was": "زَكَاة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "zay_kasra",
+      "letters": [
+        "ز"
+      ],
+      "mark": "kasra",
+      "group": "ز",
+      "name": "زِ",
+      "forms": [
+        "زِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zay_kasra-001",
+          "text": "زِرَاعَةْ",
+          "was": "زِرَاعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-002",
+          "text": "زِينَةْ",
+          "was": "زِينَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-003",
+          "text": "غَزِيرْ",
+          "was": "غَزِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-004",
+          "text": "زِيَارَةْ",
+          "was": "زِيَارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-005",
+          "text": "وَزِيرْ",
+          "was": "وَزِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-006",
+          "text": "زِمَامْ",
+          "was": "زِمَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-007",
+          "text": "عَزِيزْ",
+          "was": "عَزِيز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-008",
+          "text": "زِنَادْ",
+          "was": "زِنَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-009",
+          "text": "حَزِينْ",
+          "was": "حَزِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_kasra-010",
+          "text": "زِحَامْ",
+          "was": "زِحَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "zay_damma",
+      "letters": [
+        "ز"
+      ],
+      "mark": "damma",
+      "group": "ز",
+      "name": "زُ",
+      "forms": [
+        "زُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zay_damma-001",
+          "text": "زُجَاجْ",
+          "was": "زُجَاج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_damma-002",
+          "text": "زُهُورْ",
+          "was": "زُهُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_damma-003",
+          "text": "عُزُوفْ",
+          "was": "عُزُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_damma-004",
+          "text": "زُبْدَةْ",
+          "was": "زُبْدَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_damma-005",
+          "text": "زُرَافَةْ",
+          "was": "زُرَافَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_damma-006",
+          "text": "زُمُرُّدْ",
+          "was": "زُمُرُّد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_damma-007",
+          "text": "زُهْدْ",
+          "was": "زُهْد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_damma-008",
+          "text": "زُيُوتْ",
+          "was": "زُيُوت",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sin_fatha",
+      "letters": [
+        "س"
+      ],
+      "mark": "fatha",
+      "group": "س",
+      "name": "سَ",
+      "forms": [
+        "سَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sin_fatha-001",
+          "text": "سَمَكَةْ",
+          "was": "سَمَكَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_fatha-002",
+          "text": "سَمَاءْ",
+          "was": "سَمَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_fatha-003",
+          "text": "سَرِيرْ",
+          "was": "سَرِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_fatha-004",
+          "text": "دَرَسَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "sin_fatha-005",
+          "text": "حَسَنْ",
+          "was": "حَسَن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_fatha-006",
+          "text": "جَلَسَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "sin_fatha-007",
+          "text": "سَعِيدْ",
+          "was": "سَعِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_fatha-008",
+          "text": "سَلَامْ",
+          "was": "سَلَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_fatha-009",
+          "text": "فَسَادْ",
+          "was": "فَسَادَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "sin_fatha-010",
+          "text": "سَبَبْ",
+          "was": "سَبَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sin_kasra",
+      "letters": [
+        "س"
+      ],
+      "mark": "kasra",
+      "group": "س",
+      "name": "سِ",
+      "forms": [
+        "سِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sin_kasra-001",
+          "text": "سِتَّةْ",
+          "was": "سِتَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_kasra-002",
+          "text": "سِرّْ",
+          "was": "سِرّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_kasra-003",
+          "text": "حَسِيبْ",
+          "was": "حَسِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_kasra-004",
+          "text": "سِلَاحْ",
+          "was": "سِلَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_kasra-005",
+          "text": "سِيَاسَةْ",
+          "was": "سِيَاسَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_kasra-006",
+          "text": "سِجْنْ",
+          "was": "سِجْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_kasra-007",
+          "text": "سِوَارْ",
+          "was": "سِوَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_kasra-008",
+          "text": "سِلْسِلَةْ",
+          "was": "سِلْسِلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sin_damma",
+      "letters": [
+        "س"
+      ],
+      "mark": "damma",
+      "group": "س",
+      "name": "سُ",
+      "forms": [
+        "سُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sin_damma-001",
+          "text": "سُوقْ",
+          "was": "سُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_damma-002",
+          "text": "سُكَّرْ",
+          "was": "سُكَّر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_damma-003",
+          "text": "سُؤَالْ",
+          "was": "سُؤَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_damma-004",
+          "text": "سُرُورْ",
+          "was": "سُرُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_damma-005",
+          "text": "سُلْطَانْ",
+          "was": "سُلْطَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_damma-006",
+          "text": "سُورَةْ",
+          "was": "سُورَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_damma-007",
+          "text": "سُمُوّْ",
+          "was": "سُمُوّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "shin_fatha",
+      "letters": [
+        "ش"
+      ],
+      "mark": "fatha",
+      "group": "ش",
+      "name": "شَ",
+      "forms": [
+        "شَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "shin_fatha-001",
+          "text": "شَمْسْ",
+          "was": "شَمْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_fatha-002",
+          "text": "شَجَرَةْ",
+          "was": "شَجَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_fatha-003",
+          "text": "شَارِعْ",
+          "was": "شَارِع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_fatha-004",
+          "text": "مَشَى",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "shin_fatha-005",
+          "text": "عَشَرَةْ",
+          "was": "عَشَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_fatha-006",
+          "text": "فَرَشَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "shin_fatha-007",
+          "text": "شَتَاءْ",
+          "was": "شَتَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_fatha-008",
+          "text": "شَبَابْ",
+          "was": "شَبَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_fatha-009",
+          "text": "نَشَاطْ",
+          "was": "نَشَاط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_fatha-010",
+          "text": "شَرَابْ",
+          "was": "شَرَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "shin_kasra",
+      "letters": [
+        "ش"
+      ],
+      "mark": "kasra",
+      "group": "ش",
+      "name": "شِ",
+      "forms": [
+        "شِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "shin_kasra-001",
+          "text": "شِتَاءْ",
+          "was": "شِتَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-002",
+          "text": "شِعْرْ",
+          "was": "شِعْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-003",
+          "text": "عَشِيرَةْ",
+          "was": "عَشِيرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-004",
+          "text": "شِفَاءْ",
+          "was": "شِفَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-005",
+          "text": "رَشِيدْ",
+          "was": "رَشِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-006",
+          "text": "شِرَاءْ",
+          "was": "شِرَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-007",
+          "text": "بَشِيرْ",
+          "was": "بَشِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-008",
+          "text": "شِبْهْ",
+          "was": "شِبْه",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-009",
+          "text": "حَشِيشْ",
+          "was": "حَشِيش",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_kasra-010",
+          "text": "شِعَارْ",
+          "was": "شِعَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "shin_damma",
+      "letters": [
+        "ش"
+      ],
+      "mark": "damma",
+      "group": "ش",
+      "name": "شُ",
+      "forms": [
+        "شُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "shin_damma-001",
+          "text": "شُرْطَةْ",
+          "was": "شُرْطَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_damma-002",
+          "text": "شُكْرْ",
+          "was": "شُكْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_damma-003",
+          "text": "شُمُوعْ",
+          "was": "شُمُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_damma-004",
+          "text": "نُشُورْ",
+          "was": "نُشُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_damma-005",
+          "text": "شُرُوقْ",
+          "was": "شُرُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_damma-006",
+          "text": "شُجُونْ",
+          "was": "شُجُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_damma-007",
+          "text": "شُهُودْ",
+          "was": "شُهُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_damma-008",
+          "text": "شُعُورْ",
+          "was": "شُعُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_damma-009",
+          "text": "شُؤُونْ",
+          "was": "شُؤُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sad_fatha",
+      "letters": [
+        "ص"
+      ],
+      "mark": "fatha",
+      "group": "ص",
+      "name": "صَ",
+      "forms": [
+        "صَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sad_fatha-001",
+          "text": "صَقْرْ",
+          "was": "صَقْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_fatha-002",
+          "text": "صَبَاحْ",
+          "was": "صَبَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_fatha-003",
+          "text": "صَدِيقْ",
+          "was": "صَدِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_fatha-004",
+          "text": "قَصَدْ",
+          "was": "قَصَدَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "sad_fatha-005",
+          "text": "فَصَلْ",
+          "was": "فَصَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "sad_fatha-006",
+          "text": "رَقَصَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "sad_fatha-007",
+          "text": "صَلَاةْ",
+          "was": "صَلَاة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_fatha-008",
+          "text": "صَحْرَاءْ",
+          "was": "صَحْرَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_fatha-009",
+          "text": "نَصَرْ",
+          "was": "نَصَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "sad_fatha-010",
+          "text": "صَوْتْ",
+          "was": "صَوْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sad_kasra",
+      "letters": [
+        "ص"
+      ],
+      "mark": "kasra",
+      "group": "ص",
+      "name": "صِ",
+      "forms": [
+        "صِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sad_kasra-001",
+          "text": "صِغَرْ",
+          "was": "صِغَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-002",
+          "text": "صِدْقْ",
+          "was": "صِدْق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-003",
+          "text": "نَصِيبْ",
+          "was": "نَصِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-004",
+          "text": "صِرَاعْ",
+          "was": "صِرَاع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-005",
+          "text": "حَصِيدْ",
+          "was": "حَصِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-006",
+          "text": "صِنَاعَةْ",
+          "was": "صِنَاعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-007",
+          "text": "قَصِيرْ",
+          "was": "قَصِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-008",
+          "text": "صِيَامْ",
+          "was": "صِيَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-009",
+          "text": "رَصِيدْ",
+          "was": "رَصِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_kasra-010",
+          "text": "صِحَّةْ",
+          "was": "صِحَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sad_damma",
+      "letters": [
+        "ص"
+      ],
+      "mark": "damma",
+      "group": "ص",
+      "name": "صُ",
+      "forms": [
+        "صُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sad_damma-001",
+          "text": "صُنْدُوقْ",
+          "was": "صُنْدُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-002",
+          "text": "صُورَةْ",
+          "was": "صُورَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-003",
+          "text": "نُصُوصْ",
+          "was": "نُصُوص",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-004",
+          "text": "صُبْحْ",
+          "was": "صُبْح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-005",
+          "text": "فُصُولْ",
+          "was": "فُصُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-006",
+          "text": "صُقُورْ",
+          "was": "صُقُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-007",
+          "text": "خُصُوصْ",
+          "was": "خُصُوص",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-008",
+          "text": "صُعُودْ",
+          "was": "صُعُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-009",
+          "text": "صُدُورْ",
+          "was": "صُدُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_damma-010",
+          "text": "صُمُودْ",
+          "was": "صُمُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dad_fatha",
+      "letters": [
+        "ض"
+      ],
+      "mark": "fatha",
+      "group": "ض",
+      "name": "ضَ",
+      "forms": [
+        "ضَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dad_fatha-001",
+          "text": "ضَفْدَعْ",
+          "was": "ضَفْدَع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_fatha-002",
+          "text": "ضَوْءْ",
+          "was": "ضَوْء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_fatha-003",
+          "text": "ضَرَبْ",
+          "was": "ضَرَبَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dad_fatha-004",
+          "text": "حَضَرْ",
+          "was": "حَضَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dad_fatha-005",
+          "text": "رَضَعْ",
+          "was": "رَضَعَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dad_fatha-006",
+          "text": "مَرِضَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "dad_fatha-007",
+          "text": "ضَيْفْ",
+          "was": "ضَيْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_fatha-008",
+          "text": "ضَحِكْ",
+          "was": "ضَحِكَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dad_fatha-009",
+          "text": "عَضَلَةْ",
+          "was": "عَضَلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_fatha-010",
+          "text": "ضَمِيرْ",
+          "was": "ضَمِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dad_kasra",
+      "letters": [
+        "ض"
+      ],
+      "mark": "kasra",
+      "group": "ض",
+      "name": "ضِ",
+      "forms": [
+        "ضِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dad_kasra-001",
+          "text": "ضِفَافْ",
+          "was": "ضِفَاف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_kasra-002",
+          "text": "رَاضِي",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "dad_kasra-003",
+          "text": "قَاضِي",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "dad_kasra-004",
+          "text": "ضِيَاءْ",
+          "was": "ضِيَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_kasra-005",
+          "text": "مَاضِي",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "dad_kasra-006",
+          "text": "ضِدّْ",
+          "was": "ضِدّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_kasra-007",
+          "text": "رَضِيعْ",
+          "was": "رَضِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_kasra-008",
+          "text": "ضِحْكْ",
+          "was": "ضِحْك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_kasra-009",
+          "text": "فَضِيلَةْ",
+          "was": "فَضِيلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_kasra-010",
+          "text": "ضِمْنْ",
+          "was": "ضِمْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dad_damma",
+      "letters": [
+        "ض"
+      ],
+      "mark": "damma",
+      "group": "ض",
+      "name": "ضُ",
+      "forms": [
+        "ضُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dad_damma-001",
+          "text": "ضُحَى",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "dad_damma-002",
+          "text": "ضُيُوفْ",
+          "was": "ضُيُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_damma-003",
+          "text": "حُضُورْ",
+          "was": "حُضُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_damma-004",
+          "text": "ضُعْفْ",
+          "was": "ضُعْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_damma-005",
+          "text": "ضُلُوعْ",
+          "was": "ضُلُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_damma-006",
+          "text": "عُضُو",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "dad_damma-007",
+          "text": "ضُرُوبْ",
+          "was": "ضُرُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_damma-008",
+          "text": "مَرْضُوضْ",
+          "was": "مَرْضُوض",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_damma-009",
+          "text": "ضُمُورْ",
+          "was": "ضُمُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "tta_fatha",
+      "letters": [
+        "ط"
+      ],
+      "mark": "fatha",
+      "group": "ط",
+      "name": "طَ",
+      "forms": [
+        "طَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tta_fatha-001",
+          "text": "طَائِرَةْ",
+          "was": "طَائِرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_fatha-002",
+          "text": "طَبِيبْ",
+          "was": "طَبِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_fatha-003",
+          "text": "طَعَامْ",
+          "was": "طَعَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_fatha-004",
+          "text": "بَطَلْ",
+          "was": "بَطَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "tta_fatha-005",
+          "text": "خَطَأْ",
+          "was": "خَطَأ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_fatha-006",
+          "text": "سَقَطَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "tta_fatha-007",
+          "text": "طَرِيقْ",
+          "was": "طَرِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_fatha-008",
+          "text": "طَاوِلَةْ",
+          "was": "طَاوِلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_fatha-009",
+          "text": "نَشَطَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "tta_fatha-010",
+          "text": "طَبَقْ",
+          "was": "طَبَق",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "tta_kasra",
+      "letters": [
+        "ط"
+      ],
+      "mark": "kasra",
+      "group": "ط",
+      "name": "طِ",
+      "forms": [
+        "طِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tta_kasra-001",
+          "text": "طِفْلْ",
+          "was": "طِفْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_kasra-002",
+          "text": "طِينْ",
+          "was": "طِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_kasra-003",
+          "text": "بَطِيخْ",
+          "was": "بَطِيخ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_kasra-004",
+          "text": "طِبَاعَةْ",
+          "was": "طِبَاعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_kasra-005",
+          "text": "خَطِيرْ",
+          "was": "خَطِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_kasra-006",
+          "text": "طِبّْ",
+          "was": "طِبّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_kasra-007",
+          "text": "طِوَالْ",
+          "was": "طِوَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_kasra-008",
+          "text": "طِلَاءْ",
+          "was": "طِلَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "tta_damma",
+      "letters": [
+        "ط"
+      ],
+      "mark": "damma",
+      "group": "ط",
+      "name": "طُ",
+      "forms": [
+        "طُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tta_damma-001",
+          "text": "طُيُورْ",
+          "was": "طُيُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_damma-002",
+          "text": "طُفُولَةْ",
+          "was": "طُفُولَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_damma-003",
+          "text": "خُطُوطْ",
+          "was": "خُطُوط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_damma-004",
+          "text": "طُوبْ",
+          "was": "طُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_damma-005",
+          "text": "طُلَّابْ",
+          "was": "طُلَّاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_damma-006",
+          "text": "طُرُقْ",
+          "was": "طُرُق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_damma-007",
+          "text": "طُبُولْ",
+          "was": "طُبُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_damma-008",
+          "text": "طُمُوحْ",
+          "was": "طُمُوح",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "zza_fatha",
+      "letters": [
+        "ظ"
+      ],
+      "mark": "fatha",
+      "group": "ظ",
+      "name": "ظَ",
+      "forms": [
+        "ظَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zza_fatha-001",
+          "text": "ظَرْفْ",
+          "was": "ظَرْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_fatha-002",
+          "text": "ظَبْيْ",
+          "was": "ظَبْي",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_fatha-003",
+          "text": "ظَلَامْ",
+          "was": "ظَلَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_fatha-004",
+          "text": "نَظَرْ",
+          "was": "نَظَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "zza_fatha-005",
+          "text": "حَظَرْ",
+          "was": "حَظَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "zza_fatha-006",
+          "text": "لَفَظَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "zza_fatha-007",
+          "text": "ظَاهِرْ",
+          "was": "ظَاهِر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_fatha-008",
+          "text": "ظَفَرْ",
+          "was": "ظَفَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "zza_fatha-009",
+          "text": "مَظَلَّةْ",
+          "was": "مَظَلَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_fatha-010",
+          "text": "ظَنّْ",
+          "was": "ظَنَّ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        }
+      ]
+    },
+    {
+      "id": "zza_kasra",
+      "letters": [
+        "ظ"
+      ],
+      "mark": "kasra",
+      "group": "ظ",
+      "name": "ظِ",
+      "forms": [
+        "ظِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zza_kasra-001",
+          "text": "ظِلّْ",
+          "was": "ظِلّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_kasra-002",
+          "text": "نَظِيفْ",
+          "was": "نَظِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_kasra-003",
+          "text": "حَظِيرَةْ",
+          "was": "حَظِيرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_kasra-004",
+          "text": "ظِهَارْ",
+          "was": "ظِهَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_kasra-005",
+          "text": "عَظِيمْ",
+          "was": "عَظِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_kasra-006",
+          "text": "ظِفْرْ",
+          "was": "ظِفْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_kasra-007",
+          "text": "ظِمَاءْ",
+          "was": "ظِمَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "zza_damma",
+      "letters": [
+        "ظ"
+      ],
+      "mark": "damma",
+      "group": "ظ",
+      "name": "ظُ",
+      "forms": [
+        "ظُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zza_damma-001",
+          "text": "ظُهْرْ",
+          "was": "ظُهْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-002",
+          "text": "ظُلْمْ",
+          "was": "ظُلْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-003",
+          "text": "ظُرُوفْ",
+          "was": "ظُرُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-004",
+          "text": "نُظُورْ",
+          "was": "نُظُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-005",
+          "text": "ظُفُورْ",
+          "was": "ظُفُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-006",
+          "text": "حُظُوظْ",
+          "was": "حُظُوظ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-007",
+          "text": "ظُنُونْ",
+          "was": "ظُنُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-008",
+          "text": "مَحْظُوظْ",
+          "was": "مَحْظُوظ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-009",
+          "text": "ظُهُورْ",
+          "was": "ظُهُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_damma-010",
+          "text": "ظُلُمَاتْ",
+          "was": "ظُلُمَات",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ain_fatha",
+      "letters": [
+        "ع"
+      ],
+      "mark": "fatha",
+      "group": "ع",
+      "name": "عَ",
+      "forms": [
+        "عَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ain_fatha-001",
+          "text": "عَيْنْ",
+          "was": "عَيْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_fatha-002",
+          "text": "عَسَلْ",
+          "was": "عَسَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_fatha-003",
+          "text": "عَلَمْ",
+          "was": "عَلَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_fatha-004",
+          "text": "سَعَدْ",
+          "was": "سَعَدَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ain_fatha-005",
+          "text": "جَعَلْ",
+          "was": "جَعَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ain_fatha-006",
+          "text": "سَمِعَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ain_fatha-007",
+          "text": "عَرَبِي",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "ain_fatha-008",
+          "text": "عَجَلَةْ",
+          "was": "عَجَلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_fatha-009",
+          "text": "نَعَمْ",
+          "was": "نَعَمَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ain_fatha-010",
+          "text": "عَمَلْ",
+          "was": "عَمَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ain_kasra",
+      "letters": [
+        "ع"
+      ],
+      "mark": "kasra",
+      "group": "ع",
+      "name": "عِ",
+      "forms": [
+        "عِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ain_kasra-001",
+          "text": "عِلْمْ",
+          "was": "عِلْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_kasra-002",
+          "text": "عِنَبْ",
+          "was": "عِنَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_kasra-003",
+          "text": "سَعِيدْ",
+          "was": "سَعِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_kasra-004",
+          "text": "عِبَادَةْ",
+          "was": "عِبَادَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_kasra-005",
+          "text": "عِطْرْ",
+          "was": "عِطْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_kasra-006",
+          "text": "عِنْدْ",
+          "was": "عِنْد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_kasra-007",
+          "text": "عِمَارَةْ",
+          "was": "عِمَارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ain_damma",
+      "letters": [
+        "ع"
+      ],
+      "mark": "damma",
+      "group": "ع",
+      "name": "عُ",
+      "forms": [
+        "عُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ain_damma-001",
+          "text": "عُصْفُورْ",
+          "was": "عُصْفُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_damma-002",
+          "text": "عُلُومْ",
+          "was": "عُلُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_damma-003",
+          "text": "عُمَرْ",
+          "was": "عُمَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_damma-004",
+          "text": "عُقُولْ",
+          "was": "عُقُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_damma-005",
+          "text": "عُيُونْ",
+          "was": "عُيُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_damma-006",
+          "text": "عُنُقْ",
+          "was": "عُنُق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_damma-007",
+          "text": "عُطُورْ",
+          "was": "عُطُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ghain_fatha",
+      "letters": [
+        "غ"
+      ],
+      "mark": "fatha",
+      "group": "غ",
+      "name": "غَ",
+      "forms": [
+        "غَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ghain_fatha-001",
+          "text": "غَزَالْ",
+          "was": "غَزَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_fatha-002",
+          "text": "غَابَةْ",
+          "was": "غَابَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_fatha-003",
+          "text": "غَيْمَةْ",
+          "was": "غَيْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_fatha-004",
+          "text": "صَغَرْ",
+          "was": "صَغَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ghain_fatha-005",
+          "text": "فَغَرْ",
+          "was": "فَغَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ghain_fatha-006",
+          "text": "بَلَغَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ghain_fatha-007",
+          "text": "غَنِيّْ",
+          "was": "غَنِيّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_fatha-008",
+          "text": "غَدَاءْ",
+          "was": "غَدَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_fatha-009",
+          "text": "شَغَلْ",
+          "was": "شَغَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ghain_fatha-010",
+          "text": "غَرَفَةْ",
+          "was": "غَرَفَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ghain_kasra",
+      "letters": [
+        "غ"
+      ],
+      "mark": "kasra",
+      "group": "غ",
+      "name": "غِ",
+      "forms": [
+        "غِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ghain_kasra-001",
+          "text": "غِنَاءْ",
+          "was": "غِنَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_kasra-002",
+          "text": "صَغِيرْ",
+          "was": "صَغِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_kasra-003",
+          "text": "غِطَاءْ",
+          "was": "غِطَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_kasra-004",
+          "text": "غِذَاءْ",
+          "was": "غِذَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_kasra-005",
+          "text": "شَغِيلْ",
+          "was": "شَغِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_kasra-006",
+          "text": "غِيَابْ",
+          "was": "غِيَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_kasra-007",
+          "text": "غِلَافْ",
+          "was": "غِلَاف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_kasra-008",
+          "text": "غِرَاسْ",
+          "was": "غِرَاس",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ghain_damma",
+      "letters": [
+        "غ"
+      ],
+      "mark": "damma",
+      "group": "غ",
+      "name": "غُ",
+      "forms": [
+        "غُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ghain_damma-001",
+          "text": "غُرَابْ",
+          "was": "غُرَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_damma-002",
+          "text": "غُرْفَةْ",
+          "was": "غُرْفَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_damma-003",
+          "text": "غُصُونْ",
+          "was": "غُصُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_damma-004",
+          "text": "غُرُوبْ",
+          "was": "غُرُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_damma-005",
+          "text": "غُبَارْ",
+          "was": "غُبَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_damma-006",
+          "text": "غُمُوضْ",
+          "was": "غُمُوض",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_damma-007",
+          "text": "شُغُولْ",
+          "was": "شُغُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_damma-008",
+          "text": "غُيُومْ",
+          "was": "غُيُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "fa_fatha",
+      "letters": [
+        "ف"
+      ],
+      "mark": "fatha",
+      "group": "ف",
+      "name": "فَ",
+      "forms": [
+        "فَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "fa_fatha-001",
+          "text": "فَرَاشَةْ",
+          "was": "فَرَاشَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_fatha-002",
+          "text": "فَأْرْ",
+          "was": "فَأْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_fatha-003",
+          "text": "فَجْرْ",
+          "was": "فَجْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_fatha-004",
+          "text": "سَفَرْ",
+          "was": "سَفَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "fa_fatha-005",
+          "text": "كَفَرْ",
+          "was": "كَفَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "fa_fatha-006",
+          "text": "عَرَفَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "fa_fatha-007",
+          "text": "فَوَاكِهْ",
+          "was": "فَوَاكِه",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_fatha-008",
+          "text": "فَرَحْ",
+          "was": "فَرَح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_fatha-009",
+          "text": "نَفَعْ",
+          "was": "نَفَعَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "fa_fatha-010",
+          "text": "فَصْلْ",
+          "was": "فَصْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "fa_kasra",
+      "letters": [
+        "ف"
+      ],
+      "mark": "kasra",
+      "group": "ف",
+      "name": "فِ",
+      "forms": [
+        "فِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "fa_kasra-001",
+          "text": "فِيلْ",
+          "was": "فِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_kasra-002",
+          "text": "فِضَّةْ",
+          "was": "فِضَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_kasra-003",
+          "text": "سَفِينَةْ",
+          "was": "سَفِينَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_kasra-004",
+          "text": "فِكْرَةْ",
+          "was": "فِكْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_kasra-005",
+          "text": "فِرَاشْ",
+          "was": "فِرَاش",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_kasra-006",
+          "text": "فِنَاءْ",
+          "was": "فِنَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_kasra-007",
+          "text": "فِدَاءْ",
+          "was": "فِدَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "fa_damma",
+      "letters": [
+        "ف"
+      ],
+      "mark": "damma",
+      "group": "ف",
+      "name": "فُ",
+      "forms": [
+        "فُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "fa_damma-001",
+          "text": "فُولْ",
+          "was": "فُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_damma-002",
+          "text": "فُسْتَانْ",
+          "was": "فُسْتَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_damma-003",
+          "text": "صُفُوفْ",
+          "was": "صُفُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_damma-004",
+          "text": "فُنُونْ",
+          "was": "فُنُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_damma-005",
+          "text": "فُرُوعْ",
+          "was": "فُرُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_damma-006",
+          "text": "فُؤَادْ",
+          "was": "فُؤَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_damma-007",
+          "text": "فُلُوسْ",
+          "was": "فُلُوس",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "qaf_fatha",
+      "letters": [
+        "ق"
+      ],
+      "mark": "fatha",
+      "group": "ق",
+      "name": "قَ",
+      "forms": [
+        "قَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "qaf_fatha-001",
+          "text": "قَمَرْ",
+          "was": "قَمَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_fatha-002",
+          "text": "قَلَمْ",
+          "was": "قَلَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_fatha-003",
+          "text": "قَطَارْ",
+          "was": "قَطَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_fatha-004",
+          "text": "صَقَرْ",
+          "was": "صَقَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "qaf_fatha-005",
+          "text": "فَقَدْ",
+          "was": "فَقَدَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "qaf_fatha-006",
+          "text": "سَبَقَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "qaf_fatha-007",
+          "text": "قَلْبْ",
+          "was": "قَلْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_fatha-008",
+          "text": "قَصَّةْ",
+          "was": "قَصَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_fatha-009",
+          "text": "حَقَّ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "qaf_fatha-010",
+          "text": "قَوِيّْ",
+          "was": "قَوِيّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "qaf_kasra",
+      "letters": [
+        "ق"
+      ],
+      "mark": "kasra",
+      "group": "ق",
+      "name": "قِ",
+      "forms": [
+        "قِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "qaf_kasra-001",
+          "text": "قِرْدْ",
+          "was": "قِرْد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_kasra-002",
+          "text": "قِطَّةْ",
+          "was": "قِطَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_kasra-003",
+          "text": "قِرَاءَةْ",
+          "was": "قِرَاءَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_kasra-004",
+          "text": "قِصَّةْ",
+          "was": "قِصَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_kasra-005",
+          "text": "قِيَادَةْ",
+          "was": "قِيَادَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_kasra-006",
+          "text": "قِسْمْ",
+          "was": "قِسْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "qaf_damma",
+      "letters": [
+        "ق"
+      ],
+      "mark": "damma",
+      "group": "ق",
+      "name": "قُ",
+      "forms": [
+        "قُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "qaf_damma-001",
+          "text": "قُرْآنْ",
+          "was": "قُرْآن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_damma-002",
+          "text": "قُوَّةْ",
+          "was": "قُوَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_damma-003",
+          "text": "حُقُوقْ",
+          "was": "حُقُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_damma-004",
+          "text": "قُلُوبْ",
+          "was": "قُلُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_damma-005",
+          "text": "قُدُومْ",
+          "was": "قُدُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_damma-006",
+          "text": "عُقُولْ",
+          "was": "عُقُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_damma-007",
+          "text": "قُطُوفْ",
+          "was": "قُطُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_damma-008",
+          "text": "قُصُورْ",
+          "was": "قُصُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kaf_fatha",
+      "letters": [
+        "ك"
+      ],
+      "mark": "fatha",
+      "group": "ك",
+      "name": "كَ",
+      "forms": [
+        "كَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kaf_fatha-001",
+          "text": "كَلْبْ",
+          "was": "كَلْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_fatha-002",
+          "text": "كَتَبْ",
+          "was": "كَتَبَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "kaf_fatha-003",
+          "text": "كَبِيرْ",
+          "was": "كَبِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_fatha-004",
+          "text": "سَكَنْ",
+          "was": "سَكَنَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "kaf_fatha-005",
+          "text": "حَكَمْ",
+          "was": "حَكَمَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "kaf_fatha-006",
+          "text": "مَلَكَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "kaf_fatha-007",
+          "text": "كَنْزْ",
+          "was": "كَنْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_fatha-008",
+          "text": "كَرِيمْ",
+          "was": "كَرِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_fatha-009",
+          "text": "شَكَرْ",
+          "was": "شَكَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "kaf_fatha-010",
+          "text": "كَوْكَبْ",
+          "was": "كَوْكَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kaf_kasra",
+      "letters": [
+        "ك"
+      ],
+      "mark": "kasra",
+      "group": "ك",
+      "name": "كِ",
+      "forms": [
+        "كِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kaf_kasra-001",
+          "text": "كِتَابْ",
+          "was": "كِتَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_kasra-002",
+          "text": "كِبَارْ",
+          "was": "كِبَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_kasra-003",
+          "text": "سَكِينَةْ",
+          "was": "سَكِينَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_kasra-004",
+          "text": "كِرَامْ",
+          "was": "كِرَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_kasra-005",
+          "text": "كِسَاءْ",
+          "was": "كِسَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_kasra-006",
+          "text": "كِفَاحْ",
+          "was": "كِفَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_kasra-007",
+          "text": "كِنَايَةْ",
+          "was": "كِنَايَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kaf_damma",
+      "letters": [
+        "ك"
+      ],
+      "mark": "damma",
+      "group": "ك",
+      "name": "كُ",
+      "forms": [
+        "كُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kaf_damma-001",
+          "text": "كُرَةْ",
+          "was": "كُرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_damma-002",
+          "text": "كُوبْ",
+          "was": "كُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_damma-003",
+          "text": "كُتُبْ",
+          "was": "كُتُب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_damma-004",
+          "text": "كُنُوزْ",
+          "was": "كُنُوز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_damma-005",
+          "text": "شُكُوكْ",
+          "was": "شُكُوك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_damma-006",
+          "text": "كُرُومْ",
+          "was": "كُرُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_damma-007",
+          "text": "سُكُونْ",
+          "was": "سُكُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_damma-008",
+          "text": "كُلِّيَّةْ",
+          "was": "كُلِّيَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "lam_fatha",
+      "letters": [
+        "ل"
+      ],
+      "mark": "fatha",
+      "group": "ل",
+      "name": "لَ",
+      "forms": [
+        "لَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "lam_fatha-001",
+          "text": "لَيْمُونْ",
+          "was": "لَيْمُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_fatha-002",
+          "text": "لَعِبْ",
+          "was": "لَعِبَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "lam_fatha-003",
+          "text": "لَوْنْ",
+          "was": "لَوْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_fatha-004",
+          "text": "عَلَمْ",
+          "was": "عَلَمَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "lam_fatha-005",
+          "text": "جَلَسْ",
+          "was": "جَلَسَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "lam_fatha-006",
+          "text": "أَكَلَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "lam_fatha-007",
+          "text": "لَبَنْ",
+          "was": "لَبَن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_fatha-008",
+          "text": "لَحْمْ",
+          "was": "لَحْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_fatha-009",
+          "text": "سَلَامْ",
+          "was": "سَلَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_fatha-010",
+          "text": "لَطِيفْ",
+          "was": "لَطِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "lam_kasra",
+      "letters": [
+        "ل"
+      ],
+      "mark": "kasra",
+      "group": "ل",
+      "name": "لِ",
+      "forms": [
+        "لِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "lam_kasra-001",
+          "text": "لِسَانْ",
+          "was": "لِسَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_kasra-002",
+          "text": "لِبَاسْ",
+          "was": "لِبَاس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_kasra-003",
+          "text": "جَلِيلْ",
+          "was": "جَلِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_kasra-004",
+          "text": "لِقَاءْ",
+          "was": "لِقَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_kasra-005",
+          "text": "لِحَافْ",
+          "was": "لِحَاف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_kasra-006",
+          "text": "قَلِيلْ",
+          "was": "قَلِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_kasra-007",
+          "text": "لِوَاءْ",
+          "was": "لِوَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_kasra-008",
+          "text": "دَلِيلْ",
+          "was": "دَلِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_kasra-009",
+          "text": "لِئَامْ",
+          "was": "لِئَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "lam_damma",
+      "letters": [
+        "ل"
+      ],
+      "mark": "damma",
+      "group": "ل",
+      "name": "لُ",
+      "forms": [
+        "لُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "lam_damma-001",
+          "text": "لُؤْلُؤْ",
+          "was": "لُؤْلُؤ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_damma-002",
+          "text": "لُغَةْ",
+          "was": "لُغَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_damma-003",
+          "text": "عُلُومْ",
+          "was": "عُلُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_damma-004",
+          "text": "لُعْبَةْ",
+          "was": "لُعْبَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_damma-005",
+          "text": "لُطْفْ",
+          "was": "لُطْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_damma-006",
+          "text": "حُلُولْ",
+          "was": "حُلُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_damma-007",
+          "text": "لُحُومْ",
+          "was": "لُحُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_damma-008",
+          "text": "لُزُومْ",
+          "was": "لُزُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "mim_fatha",
+      "letters": [
+        "م"
+      ],
+      "mark": "fatha",
+      "group": "م",
+      "name": "مَ",
+      "forms": [
+        "مَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "mim_fatha-001",
+          "text": "مَدْرَسَةْ",
+          "was": "مَدْرَسَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_fatha-002",
+          "text": "مَاءْ",
+          "was": "مَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_fatha-003",
+          "text": "مَسْجِدْ",
+          "was": "مَسْجِد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_fatha-004",
+          "text": "جَمَلْ",
+          "was": "جَمَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "mim_fatha-005",
+          "text": "عَلِمَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "mim_fatha-006",
+          "text": "مَكْتَبَةْ",
+          "was": "مَكْتَبَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_fatha-007",
+          "text": "مَلِكْ",
+          "was": "مَلِك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_fatha-008",
+          "text": "سَمَكَةْ",
+          "was": "سَمَكَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_fatha-009",
+          "text": "مَوْزْ",
+          "was": "مَوْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "mim_kasra",
+      "letters": [
+        "م"
+      ],
+      "mark": "kasra",
+      "group": "م",
+      "name": "مِ",
+      "forms": [
+        "مِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "mim_kasra-001",
+          "text": "مِفْتَاحْ",
+          "was": "مِفْتَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_kasra-002",
+          "text": "مِصْرْ",
+          "was": "مِصْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_kasra-003",
+          "text": "حَمِيدْ",
+          "was": "حَمِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_kasra-004",
+          "text": "مِلْحْ",
+          "was": "مِلْح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_kasra-005",
+          "text": "مِسْكْ",
+          "was": "مِسْك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_kasra-006",
+          "text": "مِنْبَرْ",
+          "was": "مِنْبَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_kasra-007",
+          "text": "مِيزَانْ",
+          "was": "مِيزَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "mim_damma",
+      "letters": [
+        "م"
+      ],
+      "mark": "damma",
+      "group": "م",
+      "name": "مُ",
+      "forms": [
+        "مُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "mim_damma-001",
+          "text": "مُعَلِّمْ",
+          "was": "مُعَلِّم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_damma-002",
+          "text": "مُسْلِمْ",
+          "was": "مُسْلِم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_damma-003",
+          "text": "مُؤْمِنْ",
+          "was": "مُؤْمِن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_damma-004",
+          "text": "مُدِيرْ",
+          "was": "مُدِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_damma-005",
+          "text": "مُلُوكْ",
+          "was": "مُلُوك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_damma-006",
+          "text": "هُمُومْ",
+          "was": "هُمُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "mim_damma-007",
+          "text": "مُرُوءَةْ",
+          "was": "مُرُوءَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "nun_fatha",
+      "letters": [
+        "ن"
+      ],
+      "mark": "fatha",
+      "group": "ن",
+      "name": "نَ",
+      "forms": [
+        "نَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "nun_fatha-001",
+          "text": "نَحْلَةْ",
+          "was": "نَحْلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_fatha-002",
+          "text": "نَجْمْ",
+          "was": "نَجْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_fatha-003",
+          "text": "نَهْرْ",
+          "was": "نَهْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_fatha-004",
+          "text": "بَنَى",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "nun_fatha-005",
+          "text": "سَنَةْ",
+          "was": "سَنَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_fatha-006",
+          "text": "حَزِنَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "nun_fatha-007",
+          "text": "نَارْ",
+          "was": "نَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_fatha-008",
+          "text": "نَظَرْ",
+          "was": "نَظَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "nun_fatha-009",
+          "text": "مَنَعْ",
+          "was": "مَنَعَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "nun_fatha-010",
+          "text": "نَبَاتْ",
+          "was": "نَبَات",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "nun_kasra",
+      "letters": [
+        "ن"
+      ],
+      "mark": "kasra",
+      "group": "ن",
+      "name": "نِ",
+      "forms": [
+        "نِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "nun_kasra-001",
+          "text": "نِعْمَةْ",
+          "was": "نِعْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_kasra-002",
+          "text": "نِظَامْ",
+          "was": "نِظَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_kasra-003",
+          "text": "حَسَنِ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "nun_kasra-004",
+          "text": "نِسَاءْ",
+          "was": "نِسَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_kasra-005",
+          "text": "نِدَاءْ",
+          "was": "نِدَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_kasra-006",
+          "text": "نِهَايَةْ",
+          "was": "نِهَايَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_kasra-007",
+          "text": "نِقَاشْ",
+          "was": "نِقَاش",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "nun_damma",
+      "letters": [
+        "ن"
+      ],
+      "mark": "damma",
+      "group": "ن",
+      "name": "نُ",
+      "forms": [
+        "نُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "nun_damma-001",
+          "text": "نُورْ",
+          "was": "نُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_damma-002",
+          "text": "نُجُومْ",
+          "was": "نُجُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_damma-003",
+          "text": "فُنُونْ",
+          "was": "فُنُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_damma-004",
+          "text": "نُقُودْ",
+          "was": "نُقُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_damma-005",
+          "text": "نُزُولْ",
+          "was": "نُزُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_damma-006",
+          "text": "جُنُونْ",
+          "was": "جُنُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_damma-007",
+          "text": "نُصُوصْ",
+          "was": "نُصُوص",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_damma-008",
+          "text": "نُفُوسْ",
+          "was": "نُفُوس",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ha_fatha",
+      "letters": [
+        "ه"
+      ],
+      "mark": "fatha",
+      "group": "ه",
+      "name": "هَ",
+      "forms": [
+        "هَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ha_fatha-001",
+          "text": "هَدِيَّةْ",
+          "was": "هَدِيَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_fatha-002",
+          "text": "هَوَاءْ",
+          "was": "هَوَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_fatha-003",
+          "text": "هَاتِفْ",
+          "was": "هَاتِف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_fatha-004",
+          "text": "ذَهَبْ",
+          "was": "ذَهَبَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ha_fatha-005",
+          "text": "وَجَهَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ha_fatha-006",
+          "text": "هَلَالْ",
+          "was": "هَلَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_fatha-007",
+          "text": "هَرَبْ",
+          "was": "هَرَبَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ha_fatha-008",
+          "text": "نَهَرْ",
+          "was": "نَهَرَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ha_fatha-009",
+          "text": "هَمَسْ",
+          "was": "هَمَسَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        }
+      ]
+    },
+    {
+      "id": "ha_kasra",
+      "letters": [
+        "ه"
+      ],
+      "mark": "kasra",
+      "group": "ه",
+      "name": "هِ",
+      "forms": [
+        "هِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ha_kasra-001",
+          "text": "هِلَالْ",
+          "was": "هِلَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-002",
+          "text": "فَاهِمْ",
+          "was": "فَاهِم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-003",
+          "text": "هِجْرَةْ",
+          "was": "هِجْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-004",
+          "text": "شَاهِدْ",
+          "was": "شَاهِد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-005",
+          "text": "هِدَايَةْ",
+          "was": "هِدَايَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-006",
+          "text": "ظَاهِرْ",
+          "was": "ظَاهِر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-007",
+          "text": "هِمَّةْ",
+          "was": "هِمَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-008",
+          "text": "مَاهِرْ",
+          "was": "مَاهِر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-009",
+          "text": "هِنْدْ",
+          "was": "هِنْد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_kasra-010",
+          "text": "بَاهِرْ",
+          "was": "بَاهِر",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ha_damma",
+      "letters": [
+        "ه"
+      ],
+      "mark": "damma",
+      "group": "ه",
+      "name": "هُ",
+      "forms": [
+        "هُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ha_damma-001",
+          "text": "هُدْهُدْ",
+          "was": "هُدْهُد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_damma-002",
+          "text": "هُمُومْ",
+          "was": "هُمُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_damma-003",
+          "text": "شُهُورْ",
+          "was": "شُهُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_damma-004",
+          "text": "هُدُوءْ",
+          "was": "هُدُوء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_damma-005",
+          "text": "ظُهُورْ",
+          "was": "ظُهُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_damma-006",
+          "text": "هُجُومْ",
+          "was": "هُجُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_damma-007",
+          "text": "هُرُوبْ",
+          "was": "هُرُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_damma-008",
+          "text": "سُهُولْ",
+          "was": "سُهُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_damma-009",
+          "text": "هُنَا",
+          "was": null,
+          "review": null
+        }
+      ]
+    },
+    {
+      "id": "waw_fatha",
+      "letters": [
+        "و"
+      ],
+      "mark": "fatha",
+      "group": "و",
+      "name": "وَ",
+      "forms": [
+        "وَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "waw_fatha-001",
+          "text": "وَرْدَةْ",
+          "was": "وَرْدَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_fatha-002",
+          "text": "وَلَدْ",
+          "was": "وَلَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_fatha-003",
+          "text": "وَطَنْ",
+          "was": "وَطَن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_fatha-004",
+          "text": "قَوَّةْ",
+          "was": "قَوَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_fatha-005",
+          "text": "حَوَّلْ",
+          "was": "حَوَّلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "waw_fatha-006",
+          "text": "دَعَوَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "waw_fatha-007",
+          "text": "وَقْتْ",
+          "was": "وَقْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_fatha-008",
+          "text": "وَعْدْ",
+          "was": "وَعْد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_fatha-009",
+          "text": "سَوَاءْ",
+          "was": "سَوَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_fatha-010",
+          "text": "وَصَلْ",
+          "was": "وَصَلَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        }
+      ]
+    },
+    {
+      "id": "waw_kasra",
+      "letters": [
+        "و"
+      ],
+      "mark": "kasra",
+      "group": "و",
+      "name": "وِ",
+      "forms": [
+        "وِ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "waw_kasra-001",
+          "text": "وِسَادَةْ",
+          "was": "وِسَادَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_kasra-002",
+          "text": "وِلَادَةْ",
+          "was": "وِلَادَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_kasra-003",
+          "text": "وِقَايَةْ",
+          "was": "وِقَايَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_kasra-004",
+          "text": "وِزَارَةْ",
+          "was": "وِزَارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_kasra-005",
+          "text": "وِعَاءْ",
+          "was": "وِعَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_kasra-006",
+          "text": "وِصَالْ",
+          "was": "وِصَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_kasra-007",
+          "text": "وِفَاقْ",
+          "was": "وِفَاق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_kasra-008",
+          "text": "وِدَادْ",
+          "was": "وِدَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_kasra-009",
+          "text": "وِسَامْ",
+          "was": "وِسَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "waw_damma",
+      "letters": [
+        "و"
+      ],
+      "mark": "damma",
+      "group": "و",
+      "name": "وُ",
+      "forms": [
+        "وُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "waw_damma-001",
+          "text": "وُجُودْ",
+          "was": "وُجُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-002",
+          "text": "وُرُودْ",
+          "was": "وُرُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-003",
+          "text": "وُصُولْ",
+          "was": "وُصُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-004",
+          "text": "وُقُوفْ",
+          "was": "وُقُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-005",
+          "text": "وُعُودْ",
+          "was": "وُعُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-006",
+          "text": "وُقُودْ",
+          "was": "وُقُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-007",
+          "text": "وُضُوءْ",
+          "was": "وُضُوء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-008",
+          "text": "وُجُوهْ",
+          "was": "وُجُوه",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-009",
+          "text": "وُلُوجْ",
+          "was": "وُلُوج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "waw_damma-010",
+          "text": "وُفُودْ",
+          "was": "وُفُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ya_fatha",
+      "letters": [
+        "ي"
+      ],
+      "mark": "fatha",
+      "group": "ي",
+      "name": "يَ",
+      "forms": [
+        "يَ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ya_fatha-001",
+          "text": "يَدْ",
+          "was": "يَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_fatha-002",
+          "text": "يَوْمْ",
+          "was": "يَوْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_fatha-003",
+          "text": "يَمِينْ",
+          "was": "يَمِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_fatha-004",
+          "text": "بَيَانْ",
+          "was": "بَيَانَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "ya_fatha-005",
+          "text": "حَيَاةْ",
+          "was": "حَيَاة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_fatha-006",
+          "text": "هَدَيَ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's vowel on the last letter",
+          "finalMarkException": "the lesson's vowel on the last letter"
+        },
+        {
+          "id": "ya_fatha-007",
+          "text": "يَقِينْ",
+          "was": "يَقِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_fatha-008",
+          "text": "يَسَارْ",
+          "was": "يَسَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_fatha-009",
+          "text": "زِيَارَةْ",
+          "was": "زِيَارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_fatha-010",
+          "text": "يَابِسْ",
+          "was": "يَابِس",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ya_damma",
+      "letters": [
+        "ي"
+      ],
+      "mark": "damma",
+      "group": "ي",
+      "name": "يُ",
+      "forms": [
+        "يُ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ya_damma-001",
+          "text": "يُونُسْ",
+          "was": "يُونُس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-002",
+          "text": "يُوسُفْ",
+          "was": "يُوسُف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-003",
+          "text": "يُسْرْ",
+          "was": "يُسْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-004",
+          "text": "يُمْنْ",
+          "was": "يُمْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-005",
+          "text": "يُحِبّْ",
+          "was": "يُحِبّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-006",
+          "text": "يُرِيدْ",
+          "was": "يُرِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-007",
+          "text": "يُسَاعِدْ",
+          "was": "يُسَاعِد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-008",
+          "text": "يُعَلِّمْ",
+          "was": "يُعَلِّم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-009",
+          "text": "يُكْرِمْ",
+          "was": "يُكْرِم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_damma-010",
+          "text": "يُنَادِي",
+          "was": null,
+          "review": null
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "hamza_fatha-q1",
+      "kind": "contains",
+      "unit": "hamza_fatha",
+      "options": [
+        "هُدْهُدْ",
+        "أَسَدْ",
+        "سُهُولْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "hamza_fatha-q2",
+      "kind": "position",
+      "unit": "hamza_fatha",
+      "word": "أَرْنَبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "hamza_kasra-q1",
+      "kind": "contains",
+      "unit": "hamza_kasra",
+      "options": [
+        "صُفُوفْ",
+        "سَفِينَةْ",
+        "إِبْرَةْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "hamza_kasra-q2",
+      "kind": "position",
+      "unit": "hamza_kasra",
+      "word": "سُئِلْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "hamza_damma-q1",
+      "kind": "contains",
+      "unit": "hamza_damma",
+      "options": [
+        "رَضَعْ",
+        "صُعُودْ",
+        "أُمّْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "hamza_damma-q2",
+      "kind": "position",
+      "unit": "hamza_damma",
+      "word": "أُذُنْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ba_fatha-q1",
+      "kind": "contains",
+      "unit": "ba_fatha",
+      "options": [
+        "مَاءْ",
+        "بَحْرْ",
+        "مِفْتَاحْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ba_fatha-q2",
+      "kind": "position",
+      "unit": "ba_fatha",
+      "word": "بَابْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ba_kasra-q1",
+      "kind": "contains",
+      "unit": "ba_kasra",
+      "options": [
+        "بِنْتْ",
+        "سُلْطَانْ",
+        "عَشَرَةْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ba_kasra-q2",
+      "kind": "position",
+      "unit": "ba_kasra",
+      "word": "بِئْرْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ba_damma-q1",
+      "kind": "contains",
+      "unit": "ba_damma",
+      "options": [
+        "بُرْجْ",
+        "هُجُومْ",
+        "قَوَّةْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ba_damma-q2",
+      "kind": "position",
+      "unit": "ba_damma",
+      "word": "بُسْتَانْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ta_fatha-q1",
+      "kind": "contains",
+      "unit": "ta_fatha",
+      "options": [
+        "تَمْرْ",
+        "غِنَاءْ",
+        "غِرَاسْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ta_fatha-q2",
+      "kind": "position",
+      "unit": "ta_fatha",
+      "word": "تَاجْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ta_kasra-q1",
+      "kind": "contains",
+      "unit": "ta_kasra",
+      "options": [
+        "ذُخُورْ",
+        "ذِكْرْ",
+        "تِينْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "ta_kasra-q2",
+      "kind": "position",
+      "unit": "ta_kasra",
+      "word": "تِلْمِيذْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ta_damma-q1",
+      "kind": "contains",
+      "unit": "ta_damma",
+      "options": [
+        "تُرَابْ",
+        "فُلُوسْ",
+        "قَلْبْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ta_damma-q2",
+      "kind": "position",
+      "unit": "ta_damma",
+      "word": "تُفَّاحْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "tha_fatha-q1",
+      "kind": "contains",
+      "unit": "tha_fatha",
+      "options": [
+        "فَخِيمْ",
+        "دَاخِلْ",
+        "ثَعْلَبْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "tha_fatha-q2",
+      "kind": "position",
+      "unit": "tha_fatha",
+      "word": "ثَوْبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "tha_kasra-q1",
+      "kind": "contains",
+      "unit": "tha_kasra",
+      "options": [
+        "دُنْيَا",
+        "ثِقَةْ",
+        "ذَيْلْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "tha_kasra-q2",
+      "kind": "position",
+      "unit": "tha_kasra",
+      "word": "كَثِيرْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "tha_damma-q1",
+      "kind": "contains",
+      "unit": "tha_damma",
+      "options": [
+        "فَأْرْ",
+        "غُصُونْ",
+        "ثُلُثْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "tha_damma-q2",
+      "kind": "position",
+      "unit": "tha_damma",
+      "word": "ثُعْبَانْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "jim_fatha-q1",
+      "kind": "contains",
+      "unit": "jim_fatha",
+      "options": [
+        "شَكَرْ",
+        "جَمَلْ",
+        "كِفَاحْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "jim_fatha-q2",
+      "kind": "position",
+      "unit": "jim_fatha",
+      "word": "جَبَلْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "jim_kasra-q1",
+      "kind": "contains",
+      "unit": "jim_kasra",
+      "options": [
+        "ذِهْنْ",
+        "نَفَذَ",
+        "جِدَارْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "jim_kasra-q2",
+      "kind": "position",
+      "unit": "jim_kasra",
+      "word": "رَجِيمْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "jim_damma-q1",
+      "kind": "contains",
+      "unit": "jim_damma",
+      "options": [
+        "شِرَاءْ",
+        "نَشَاطْ",
+        "جُبْنْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "jim_damma-q2",
+      "kind": "position",
+      "unit": "jim_damma",
+      "word": "جُنْدِي",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "hha_fatha-q1",
+      "kind": "contains",
+      "unit": "hha_fatha",
+      "options": [
+        "أُنْشُودَةْ",
+        "إِلَى",
+        "حَصَانْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "hha_fatha-q2",
+      "kind": "position",
+      "unit": "hha_fatha",
+      "word": "حَلِيبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "hha_kasra-q1",
+      "kind": "contains",
+      "unit": "hha_kasra",
+      "options": [
+        "شِفَاءْ",
+        "شَتَاءْ",
+        "حِصَانْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "hha_kasra-q2",
+      "kind": "position",
+      "unit": "hha_kasra",
+      "word": "حِمَارْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "hha_damma-q1",
+      "kind": "contains",
+      "unit": "hha_damma",
+      "options": [
+        "غِيَابْ",
+        "حُوتْ",
+        "غُبَارْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "hha_damma-q2",
+      "kind": "position",
+      "unit": "hha_damma",
+      "word": "حُرِّيَّةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kha_fatha-q1",
+      "kind": "contains",
+      "unit": "kha_fatha",
+      "options": [
+        "رُمَّانْ",
+        "خَبَزْ",
+        "رُكُوعْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "kha_fatha-q2",
+      "kind": "position",
+      "unit": "kha_fatha",
+      "word": "خَاتَمْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kha_kasra-q1",
+      "kind": "contains",
+      "unit": "kha_kasra",
+      "options": [
+        "نِدَاءْ",
+        "نَظَرْ",
+        "خِيَارْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "kha_kasra-q2",
+      "kind": "position",
+      "unit": "kha_kasra",
+      "word": "دَاخِلْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "kha_damma-q1",
+      "kind": "contains",
+      "unit": "kha_damma",
+      "options": [
+        "خُبْزْ",
+        "طِوَالْ",
+        "طُبُولْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "kha_damma-q2",
+      "kind": "position",
+      "unit": "kha_damma",
+      "word": "خُطُوطْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dal_fatha-q1",
+      "kind": "contains",
+      "unit": "dal_fatha",
+      "options": [
+        "فَقَدْ",
+        "دَجَاجَةْ",
+        "قِطَّةْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "dal_fatha-q2",
+      "kind": "position",
+      "unit": "dal_fatha",
+      "word": "دَارْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dal_kasra-q1",
+      "kind": "contains",
+      "unit": "dal_kasra",
+      "options": [
+        "سَبَقَ",
+        "دِيكْ",
+        "قِرَاءَةْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "dal_kasra-q2",
+      "kind": "position",
+      "unit": "dal_kasra",
+      "word": "دِينْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dal_damma-q1",
+      "kind": "contains",
+      "unit": "dal_damma",
+      "options": [
+        "ضَيْفْ",
+        "صُمُودْ",
+        "دُبّْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "dal_damma-q2",
+      "kind": "position",
+      "unit": "dal_damma",
+      "word": "دُرُوسْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dhal_fatha-q1",
+      "kind": "contains",
+      "unit": "dhal_fatha",
+      "options": [
+        "صَقْرْ",
+        "شُمُوعْ",
+        "ذَهَبْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "dhal_fatha-q2",
+      "kind": "position",
+      "unit": "dhal_fatha",
+      "word": "ذَكَرْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dhal_kasra-q1",
+      "kind": "contains",
+      "unit": "dhal_kasra",
+      "options": [
+        "ذِئْبْ",
+        "وُجُوهْ",
+        "حَيَاةْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "dhal_kasra-q2",
+      "kind": "position",
+      "unit": "dhal_kasra",
+      "word": "ذِرَاعْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dhal_damma-q1",
+      "kind": "contains",
+      "unit": "dhal_damma",
+      "options": [
+        "ذُرَةْ",
+        "نِسَاءْ",
+        "نُقُودْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "dhal_damma-q2",
+      "kind": "position",
+      "unit": "dhal_damma",
+      "word": "ذُبَابْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ra_fatha-q1",
+      "kind": "contains",
+      "unit": "ra_fatha",
+      "options": [
+        "ضُحَى",
+        "رَجُلْ",
+        "مَرْضُوضْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ra_fatha-q2",
+      "kind": "position",
+      "unit": "ra_fatha",
+      "word": "رَأْسْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ra_kasra-q1",
+      "kind": "contains",
+      "unit": "ra_kasra",
+      "options": [
+        "وِسَامْ",
+        "رِسَالَةْ",
+        "وُضُوءْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ra_kasra-q2",
+      "kind": "position",
+      "unit": "ra_kasra",
+      "word": "رِجَالْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ra_damma-q1",
+      "kind": "contains",
+      "unit": "ra_damma",
+      "options": [
+        "حُقُوقْ",
+        "رُمَّانْ",
+        "كَتَبْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ra_damma-q2",
+      "kind": "position",
+      "unit": "ra_damma",
+      "word": "رُكْبَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zay_fatha-q1",
+      "kind": "contains",
+      "unit": "zay_fatha",
+      "options": [
+        "حُثُوثْ",
+        "ثِنَاءْ",
+        "زَهْرَةْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "zay_fatha-q2",
+      "kind": "position",
+      "unit": "zay_fatha",
+      "word": "زَرَافَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zay_kasra-q1",
+      "kind": "contains",
+      "unit": "zay_kasra",
+      "options": [
+        "زِرَاعَةْ",
+        "لَعِبْ",
+        "سَلَامْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "zay_kasra-q2",
+      "kind": "position",
+      "unit": "zay_kasra",
+      "word": "زِينَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zay_damma-q1",
+      "kind": "contains",
+      "unit": "zay_damma",
+      "options": [
+        "عِبَادَةْ",
+        "زُجَاجْ",
+        "عُقُولْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "zay_damma-q2",
+      "kind": "position",
+      "unit": "zay_damma",
+      "word": "زُهُورْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sin_fatha-q1",
+      "kind": "contains",
+      "unit": "sin_fatha",
+      "options": [
+        "عِلْمْ",
+        "سَمَكَةْ",
+        "عُلُومْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "sin_fatha-q2",
+      "kind": "position",
+      "unit": "sin_fatha",
+      "word": "سَمَاءْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sin_kasra-q1",
+      "kind": "contains",
+      "unit": "sin_kasra",
+      "options": [
+        "دَجَاجَةْ",
+        "سِتَّةْ",
+        "دَوَاءْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "sin_kasra-q2",
+      "kind": "position",
+      "unit": "sin_kasra",
+      "word": "سِرّْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sin_damma-q1",
+      "kind": "contains",
+      "unit": "sin_damma",
+      "options": [
+        "ظُلْمْ",
+        "نَظِيفْ",
+        "سُوقْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sin_damma-q2",
+      "kind": "position",
+      "unit": "sin_damma",
+      "word": "سُكَّرْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "shin_fatha-q1",
+      "kind": "contains",
+      "unit": "shin_fatha",
+      "options": [
+        "كُتُبْ",
+        "شَمْسْ",
+        "لَعِبْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "shin_fatha-q2",
+      "kind": "position",
+      "unit": "shin_fatha",
+      "word": "شَجَرَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "shin_kasra-q1",
+      "kind": "contains",
+      "unit": "shin_kasra",
+      "options": [
+        "شِتَاءْ",
+        "رِسَالَةْ",
+        "رِفْقْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "shin_kasra-q2",
+      "kind": "position",
+      "unit": "shin_kasra",
+      "word": "شِعْرْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "shin_damma-q1",
+      "kind": "contains",
+      "unit": "shin_damma",
+      "options": [
+        "حُلْمْ",
+        "حِسَابْ",
+        "شُرْطَةْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "shin_damma-q2",
+      "kind": "position",
+      "unit": "shin_damma",
+      "word": "شُكْرْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sad_fatha-q1",
+      "kind": "contains",
+      "unit": "sad_fatha",
+      "options": [
+        "صَقْرْ",
+        "سُكَّرْ",
+        "شَجَرَةْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "sad_fatha-q2",
+      "kind": "position",
+      "unit": "sad_fatha",
+      "word": "صَبَاحْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sad_kasra-q1",
+      "kind": "contains",
+      "unit": "sad_kasra",
+      "options": [
+        "دَلِيلْ",
+        "دَرْسْ",
+        "صِغَرْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sad_kasra-q2",
+      "kind": "position",
+      "unit": "sad_kasra",
+      "word": "صِدْقْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sad_damma-q1",
+      "kind": "contains",
+      "unit": "sad_damma",
+      "options": [
+        "هُنَا",
+        "صُنْدُوقْ",
+        "وَقْتْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "sad_damma-q2",
+      "kind": "position",
+      "unit": "sad_damma",
+      "word": "صُورَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dad_fatha-q1",
+      "kind": "contains",
+      "unit": "dad_fatha",
+      "options": [
+        "تَرَكْ",
+        "تَمْرْ",
+        "ضَفْدَعْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "dad_fatha-q2",
+      "kind": "position",
+      "unit": "dad_fatha",
+      "word": "ضَوْءْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dad_kasra-q1",
+      "kind": "contains",
+      "unit": "dad_kasra",
+      "options": [
+        "صِغَرْ",
+        "قَصَدْ",
+        "ضِفَافْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "dad_kasra-q2",
+      "kind": "position",
+      "unit": "dad_kasra",
+      "word": "رَاضِي",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "dad_damma-q1",
+      "kind": "contains",
+      "unit": "dad_damma",
+      "options": [
+        "زُهْدْ",
+        "زِحَامْ",
+        "ضُحَى"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "dad_damma-q2",
+      "kind": "position",
+      "unit": "dad_damma",
+      "word": "ضُيُوفْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "tta_fatha-q1",
+      "kind": "contains",
+      "unit": "tta_fatha",
+      "options": [
+        "طَائِرَةْ",
+        "قَدِيمْ",
+        "دُرُوسْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "tta_fatha-q2",
+      "kind": "position",
+      "unit": "tta_fatha",
+      "word": "طَبِيبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "tta_kasra-q1",
+      "kind": "contains",
+      "unit": "tta_kasra",
+      "options": [
+        "حَكَمْ",
+        "طِفْلْ",
+        "كِبَارْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "tta_kasra-q2",
+      "kind": "position",
+      "unit": "tta_kasra",
+      "word": "طِينْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "tta_damma-q1",
+      "kind": "contains",
+      "unit": "tta_damma",
+      "options": [
+        "ذُكُورْ",
+        "حَذِرْ",
+        "طُيُورْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "tta_damma-q2",
+      "kind": "position",
+      "unit": "tta_damma",
+      "word": "طُفُولَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zza_fatha-q1",
+      "kind": "contains",
+      "unit": "zza_fatha",
+      "options": [
+        "غِطَاءْ",
+        "ظَرْفْ",
+        "غُرْفَةْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "zza_fatha-q2",
+      "kind": "position",
+      "unit": "zza_fatha",
+      "word": "ظَبْيْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zza_kasra-q1",
+      "kind": "contains",
+      "unit": "zza_kasra",
+      "options": [
+        "لُعْبَةْ",
+        "ظِلّْ",
+        "مَسْجِدْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "zza_kasra-q2",
+      "kind": "position",
+      "unit": "zza_kasra",
+      "word": "نَظِيفْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "zza_damma-q1",
+      "kind": "contains",
+      "unit": "zza_damma",
+      "options": [
+        "ظُهْرْ",
+        "عِطْرْ",
+        "عُيُونْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "zza_damma-q2",
+      "kind": "position",
+      "unit": "zza_damma",
+      "word": "ظُلْمْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ain_fatha-q1",
+      "kind": "contains",
+      "unit": "ain_fatha",
+      "options": [
+        "نَشَطَ",
+        "عَيْنْ",
+        "طِوَالْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ain_fatha-q2",
+      "kind": "position",
+      "unit": "ain_fatha",
+      "word": "عَسَلْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ain_kasra-q1",
+      "kind": "contains",
+      "unit": "ain_kasra",
+      "options": [
+        "عِلْمْ",
+        "كَبِيرْ",
+        "جَبِينْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ain_kasra-q2",
+      "kind": "position",
+      "unit": "ain_kasra",
+      "word": "عِنَبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ain_damma-q1",
+      "kind": "contains",
+      "unit": "ain_damma",
+      "options": [
+        "عُصْفُورْ",
+        "خَاتَمْ",
+        "خَطَأْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ain_damma-q2",
+      "kind": "position",
+      "unit": "ain_damma",
+      "word": "عُلُومْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ghain_fatha-q1",
+      "kind": "contains",
+      "unit": "ghain_fatha",
+      "options": [
+        "شُرْطَةْ",
+        "غَزَالْ",
+        "شُعُورْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ghain_fatha-q2",
+      "kind": "position",
+      "unit": "ghain_fatha",
+      "word": "غَابَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ghain_kasra-q1",
+      "kind": "contains",
+      "unit": "ghain_kasra",
+      "options": [
+        "غِنَاءْ",
+        "حَزِنَ",
+        "حَسَنِ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ghain_kasra-q2",
+      "kind": "position",
+      "unit": "ghain_kasra",
+      "word": "صَغِيرْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "ghain_damma-q1",
+      "kind": "contains",
+      "unit": "ghain_damma",
+      "options": [
+        "زَرَافَةْ",
+        "رُوحْ",
+        "غُرَابْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "ghain_damma-q2",
+      "kind": "position",
+      "unit": "ghain_damma",
+      "word": "غُرْفَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "fa_fatha-q1",
+      "kind": "contains",
+      "unit": "fa_fatha",
+      "options": [
+        "حَجَرْ",
+        "سُجُودْ",
+        "فَرَاشَةْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "fa_fatha-q2",
+      "kind": "position",
+      "unit": "fa_fatha",
+      "word": "فَأْرْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "fa_kasra-q1",
+      "kind": "contains",
+      "unit": "fa_kasra",
+      "options": [
+        "ظَاهِرْ",
+        "نَهَرْ",
+        "فِيلْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "fa_kasra-q2",
+      "kind": "position",
+      "unit": "fa_kasra",
+      "word": "فِضَّةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "fa_damma-q1",
+      "kind": "contains",
+      "unit": "fa_damma",
+      "options": [
+        "كِنَايَةْ",
+        "كَوْكَبْ",
+        "فُولْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "fa_damma-q2",
+      "kind": "position",
+      "unit": "fa_damma",
+      "word": "فُسْتَانْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "qaf_fatha-q1",
+      "kind": "contains",
+      "unit": "qaf_fatha",
+      "options": [
+        "خُصُومْ",
+        "قَمَرْ",
+        "وَجَدَ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "qaf_fatha-q2",
+      "kind": "position",
+      "unit": "qaf_fatha",
+      "word": "قَلَمْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "qaf_kasra-q1",
+      "kind": "contains",
+      "unit": "qaf_kasra",
+      "options": [
+        "حَسَنِ",
+        "قِرْدْ",
+        "فُنُونْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "qaf_kasra-q2",
+      "kind": "position",
+      "unit": "qaf_kasra",
+      "word": "قِطَّةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "qaf_damma-q1",
+      "kind": "contains",
+      "unit": "qaf_damma",
+      "options": [
+        "قُرْآنْ",
+        "ضَمِيرْ",
+        "رَضِيعْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "qaf_damma-q2",
+      "kind": "position",
+      "unit": "qaf_damma",
+      "word": "قُوَّةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kaf_fatha-q1",
+      "kind": "contains",
+      "unit": "kaf_fatha",
+      "options": [
+        "حَصِيدْ",
+        "صَحْرَاءْ",
+        "كَلْبْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "kaf_fatha-q2",
+      "kind": "position",
+      "unit": "kaf_fatha",
+      "word": "كَتَبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kaf_kasra-q1",
+      "kind": "contains",
+      "unit": "kaf_kasra",
+      "options": [
+        "كِتَابْ",
+        "مِلْحْ",
+        "مُدِيرْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "kaf_kasra-q2",
+      "kind": "position",
+      "unit": "kaf_kasra",
+      "word": "كِبَارْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kaf_damma-q1",
+      "kind": "contains",
+      "unit": "kaf_damma",
+      "options": [
+        "لُطْفْ",
+        "كُرَةْ",
+        "جَمَلْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "kaf_damma-q2",
+      "kind": "position",
+      "unit": "kaf_damma",
+      "word": "كُوبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "lam_fatha-q1",
+      "kind": "contains",
+      "unit": "lam_fatha",
+      "options": [
+        "حَمَامْ",
+        "لَيْمُونْ",
+        "حِكْمَةْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "lam_fatha-q2",
+      "kind": "position",
+      "unit": "lam_fatha",
+      "word": "لَعِبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "lam_kasra-q1",
+      "kind": "contains",
+      "unit": "lam_kasra",
+      "options": [
+        "لِسَانْ",
+        "كِبَارْ",
+        "كُوبْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "lam_kasra-q2",
+      "kind": "position",
+      "unit": "lam_kasra",
+      "word": "لِبَاسْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "lam_damma-q1",
+      "kind": "contains",
+      "unit": "lam_damma",
+      "options": [
+        "لُؤْلُؤْ",
+        "وَلَدْ",
+        "سَوَاءْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "lam_damma-q2",
+      "kind": "position",
+      "unit": "lam_damma",
+      "word": "عُلُومْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "mim_fatha-q1",
+      "kind": "contains",
+      "unit": "mim_fatha",
+      "options": [
+        "حَيَاةْ",
+        "مَدْرَسَةْ",
+        "يُوسُفْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "mim_fatha-q2",
+      "kind": "position",
+      "unit": "mim_fatha",
+      "word": "مَاءْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "mim_kasra-q1",
+      "kind": "contains",
+      "unit": "mim_kasra",
+      "options": [
+        "وَصَلْ",
+        "وَطَنْ",
+        "مِفْتَاحْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "mim_kasra-q2",
+      "kind": "position",
+      "unit": "mim_kasra",
+      "word": "مِصْرْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "mim_damma-q1",
+      "kind": "contains",
+      "unit": "mim_damma",
+      "options": [
+        "مُعَلِّمْ",
+        "عِطْرْ",
+        "عُيُونْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "mim_damma-q2",
+      "kind": "position",
+      "unit": "mim_damma",
+      "word": "مُسْلِمْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "nun_fatha-q1",
+      "kind": "contains",
+      "unit": "nun_fatha",
+      "options": [
+        "قَلَمْ",
+        "فُسْتَانْ",
+        "نَحْلَةْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "nun_fatha-q2",
+      "kind": "position",
+      "unit": "nun_fatha",
+      "word": "نَجْمْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "nun_kasra-q1",
+      "kind": "contains",
+      "unit": "nun_kasra",
+      "options": [
+        "كَلْبْ",
+        "قُوَّةْ",
+        "نِعْمَةْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "nun_kasra-q2",
+      "kind": "position",
+      "unit": "nun_kasra",
+      "word": "نِظَامْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "nun_damma-q1",
+      "kind": "contains",
+      "unit": "nun_damma",
+      "options": [
+        "نُورْ",
+        "فَصْلْ",
+        "فِدَاءْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "nun_damma-q2",
+      "kind": "position",
+      "unit": "nun_damma",
+      "word": "نُجُومْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ha_fatha-q1",
+      "kind": "contains",
+      "unit": "ha_fatha",
+      "options": [
+        "مَثَلْ",
+        "هَدِيَّةْ",
+        "كَثِيرْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ha_fatha-q2",
+      "kind": "position",
+      "unit": "ha_fatha",
+      "word": "هَوَاءْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ha_kasra-q1",
+      "kind": "contains",
+      "unit": "ha_kasra",
+      "options": [
+        "طَبِيبْ",
+        "هِلَالْ",
+        "نَشَطَ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ha_kasra-q2",
+      "kind": "position",
+      "unit": "ha_kasra",
+      "word": "فَاهِمْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "ha_damma-q1",
+      "kind": "contains",
+      "unit": "ha_damma",
+      "options": [
+        "يَسَارْ",
+        "يَدْ",
+        "هُدْهُدْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "ha_damma-q2",
+      "kind": "position",
+      "unit": "ha_damma",
+      "word": "شُهُورْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "waw_fatha-q1",
+      "kind": "contains",
+      "unit": "waw_fatha",
+      "options": [
+        "وَرْدَةْ",
+        "ضَيْفْ",
+        "ضِيَاءْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "waw_fatha-q2",
+      "kind": "position",
+      "unit": "waw_fatha",
+      "word": "وَلَدْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "waw_kasra-q1",
+      "kind": "contains",
+      "unit": "waw_kasra",
+      "options": [
+        "وِسَادَةْ",
+        "رِحْلَةْ",
+        "حُرُوفْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "waw_kasra-q2",
+      "kind": "position",
+      "unit": "waw_kasra",
+      "word": "وِلَادَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "waw_damma-q1",
+      "kind": "contains",
+      "unit": "waw_damma",
+      "options": [
+        "كَنْزْ",
+        "وُجُودْ",
+        "كِرَامْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "waw_damma-q2",
+      "kind": "position",
+      "unit": "waw_damma",
+      "word": "وُرُودْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ya_fatha-q1",
+      "kind": "contains",
+      "unit": "ya_fatha",
+      "options": [
+        "دِفَاعْ",
+        "يَدْ",
+        "دُبّْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ya_fatha-q2",
+      "kind": "position",
+      "unit": "ya_fatha",
+      "word": "يَوْمْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ya_damma-q1",
+      "kind": "contains",
+      "unit": "ya_damma",
+      "options": [
+        "زَهْرَةْ",
+        "يُونُسْ",
+        "زَبَدْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ya_damma-q2",
+      "kind": "position",
+      "unit": "ya_damma",
+      "word": "يُوسُفْ",
+      "answer": "start",
+      "review": null
+    }
+  ]
+}

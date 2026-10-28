@@ -156,7 +156,7 @@ describe('Al-Buruj, on the real verified text', () => {
 // Every lesson rebuilt on the engine (Juz' Amma, batch 1), each on its real verified surah.
 // Batch 5: Al-Fatihah. The Basmala is ayah 1 of 7, in the old lesson and in the verified text alike.
 const BATCH5: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
-  1: { file: real1, ayat: 7, held: 3, complete: 6 },
+  1: { file: real1, ayat: 7, held: 4, complete: 6 },
 };
 
 // Juz' Amma batch 4 (78-84, 86-88), the last of it. An-Nazi'at's old lesson split ayah 40 and stopped at 45:

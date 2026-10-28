@@ -1,0 +1,4 @@
+{
+ "_": "PD-48: the ONE voice each lesson is served in (owner Q5: one adult MSA voice). null until the pilot picks it; while null no learner hears the lesson. Read by lesson-audio.service.ts, the ingest and scripts/lessons/tts/tts.py. A change is a reviewed commit.",
+ "arabic-001": null
+}

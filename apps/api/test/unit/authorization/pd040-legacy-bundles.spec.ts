@@ -23,6 +23,7 @@ import { canCarryOverPackage, canGrantSubscriptionException } from '@platform/su
 import { accountAdminActs } from '@platform/account-admin-policy';
 import { decideTeacherOnboarding } from '@platform/teacher-onboarding-policy';
 import { CERTIFICATE_KEYS, legacyCertificateKeys } from '@platform/pd041-policy';
+import { LESSON_AUDIO_KEYS, legacyLessonAudioKeys } from '@platform/lesson-audio-policy';
 import { StaffProfilePermission, profilePermissionsFor } from '@platform/staff-profile-policy';
 import { PERMISSIONS, PERMISSION_KEYS } from '@platform/permissions/catalogue';
 import {
@@ -107,6 +108,8 @@ function rules(): Record<string, Rule> {
     ...Object.fromEntries(
       CERTIFICATE_KEYS.map((key) => [key, (a: Account) => legacyCertificateKeys(a.actor, role(a, 'operations'), role(a, 'teachers')).has(key)]),
     ),
+    // PD-48: lesson voice-over, from the Teachers placement.
+    ...Object.fromEntries(LESSON_AUDIO_KEYS.map((key) => [key, (a: Account) => legacyLessonAudioKeys(a.actor, role(a, 'teachers')).has(key)])),
     'teacher_supervision.view': onPage,
     'teacher_supervision.record': recordsOnPage,
     'supervision.chats': supervises,
@@ -175,6 +178,7 @@ describe('PD-40: legacy bundles agree with the service rules', () => {
     expect(delegable.filter((k) => !(k in RULES))).toEqual([]);
     expect(PERMISSIONS.filter((p) => p.delegable && !p.inRoles).map((p) => p.key)).toEqual([]);
     // The minimal, read-only set PR-3 opens (plan §13 C3).
-    expect(delegable.sort()).toEqual(['billing.view', 'certificates.design', 'certificates.view', 'subscriptions.view']);
+    // PD-48 adds the two lesson voice-over keys, verified above (legacyLessonAudioKeys).
+    expect(delegable.sort()).toEqual(['billing.view', 'certificates.design', 'certificates.view', 'lesson_audio.review', 'lesson_audio.view', 'subscriptions.view']);
   });
 });

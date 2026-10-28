@@ -8,6 +8,7 @@ import { FindLetter } from './FindLetter';
 import { clusters, POSITIONS } from './letters';
 import { PickWords } from './PickWords';
 import { POSITION_LABEL, TEXT } from './ui-text';
+import { useVoice, type Voice } from './voice';
 
 export type LettersSection = 'letters' | 'find' | 'pick' | 'quiz';
 export const LETTERS_SECTIONS: readonly LettersSection[] = ['letters', 'find', 'pick', 'quiz'];
@@ -19,6 +20,16 @@ function Word({ text, unit }: { text: string; unit: ResolvedUnit }) {
     <span className="letters-example">
       {clusters(text, unit).map((p, i) => (p.target ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>))}
     </span>
+  );
+}
+
+/** PD-48: a play button, only for a string that has a verified clip. */
+function Listen({ id, voice }: { id: string; voice: Voice }) {
+  if (!voice.has(id)) return null;
+  return (
+    <button type="button" className="voice" aria-label={TEXT.listen} aria-pressed={voice.playing === id} onClick={() => voice.play(id)}>
+      🔊
+    </button>
   );
 }
 
@@ -34,6 +45,19 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
   const [section, setSection] = useState<LettersSection>('letters');
   const [unitId, setUnitId] = useState<string | null>(null);
   const [, setStarsVersion] = useState(0);
+  // PD-48: the text of every string this build SHOWS, by id -- what a clip's textSha256 must match.
+  const texts = useMemo(() => {
+    const m = new Map<string, string>();
+    if (resolved && resolved.approved) {
+      for (const u of resolved.units) {
+        m.set(`${u.id}.name`, u.name);
+        if (u.note) m.set(u.note.id, u.note.text);
+        for (const w of u.words) m.set(w.id, w.text);
+      }
+    }
+    return m;
+  }, [resolved]);
+  const voice = useVoice(lesson, texts);
   const earn = (s: LettersSection) => {
     if (stars.award(s)) setStarsVersion((v) => v + 1);
   };
@@ -91,10 +115,18 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
 
       {section === 'letters' && unit ? (
         <section aria-label={unit.name}>
-          <h2>{unit.name}</h2>
+          <h2>
+            {unit.name}
+            <Listen id={`${unit.id}.name`} voice={voice} />
+          </h2>
           <p className="note">{TEXT.forms}</p>
           <p className="letters-forms">{unit.forms.join('  ')}</p>
-          {unit.note ? <p className="intro">{unit.note.text}</p> : null}
+          {unit.note ? (
+            <p className="intro">
+              {unit.note.text}
+              <Listen id={unit.note.id} voice={voice} />
+            </p>
+          ) : null}
           {POSITIONS.map((p) => {
             const at = unit.words.filter((w) => w.positions.includes(p));
             return at.length ? (
@@ -104,6 +136,7 @@ export function ArabicLesson({ lesson, content, shuffleSeed }: { lesson: number;
                   {at.map((w) => (
                     <li key={w.id}>
                       <Word text={w.text} unit={unit} />
+                      <Listen id={w.id} voice={voice} />
                     </li>
                   ))}
                 </ul>
