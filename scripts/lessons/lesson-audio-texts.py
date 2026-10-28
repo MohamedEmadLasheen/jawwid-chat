@@ -49,28 +49,56 @@ sys.dont_write_bytecode = True  # loading a sibling script must leave no __pycac
 
 
 def _lesson_content():
-    """PD-29's checker (scripts/lessons/check-lesson-content.py): the verified Quran and its folds."""
+    """PD-29's checker (scripts/lessons/check-lesson-content.py): the verified Quran."""
     spec = importlib.util.spec_from_file_location("lesson_content", str(ROOT / "scripts/lessons/check-lesson-content.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
-def shared_skeleton(mod):
-    """PD-29's rasm skeleton (#260): the ONE fold of the typed-Quran refusal, for both sides, so
-    Uthmani and standard spelling meet. Until #260 is on main, a byte-identical copy of its
-    definition over the same fold(); afterwards the shared function itself (department head, 2026-10-29)."""
-    if hasattr(mod, "skeleton"):
-        return mod.skeleton
-    return lambda t: " ".join(w for w in mod.fold(t).replace(chr(0x627), "").split() if w)
+# --- The rasm skeleton ------------------------------------------------------------------
+# ONE definition, shared with PD-29's typed-Quran refusal: scripts/lessons/rasm.py (PR #260),
+# loaded by path. Until #260 is on main, the copy below is used: it is rasm.py's rasm(),
+# byte for byte (#260 @ 89496317), and the selftest proves the two fold every verse alike.
+# Once rasm.py exists, it is the one used; this copy is then removed (follow-up PR).
+_MARKS = {c for c in range(0x64B, 0x660)} | {0x670, 0x640} | set(range(0x6D6, 0x6EE))
+# Alef in every form, and hamza in every form: the editions seat hamza differently
+# (Uthmani wa-<hamza><alef>tu against standard wa-<alef madda>tu, yastahzi'una on the line or on a ya).
+_ALEFS = {0x627, 0x623, 0x625, 0x622, 0x671, 0x621, 0x624, 0x626}
+_UNIFY = {0x649: 0x64A, 0x629: 0x647}
+_WAW_DAGGER = chr(0x648) + chr(0x670)  # Uthmani waw standing for an alef
+
+
+def rasm(text):
+    """A text's letter skeleton: no marks, no alef or hamza of any form, \u0649 as \u064a, \u0629 as \u0647."""
+    t = unicodedata.normalize("NFC", text).replace(_WAW_DAGGER, "")
+    out = []
+    for c in t:
+        o = ord(c)
+        if o in _MARKS or o in _ALEFS:
+            continue
+        o = _UNIFY.get(o, o)
+        out.append(chr(o) if 0x621 <= o <= 0x64A else " ")
+    return " ".join("".join(out).split())
+
+
+def shared_rasm():
+    """rasm() from scripts/lessons/rasm.py when it exists, else the identical copy above."""
+    path = ROOT / "scripts/lessons/rasm.py"
+    if not path.exists():
+        return rasm
+    spec = importlib.util.spec_from_file_location("lesson_rasm", str(path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.rasm
 
 
 def quran_index():
     """Every 4-word run of the verified Quran, and every whole shorter ayah of 2+ words, as rasm
-    skeletons (PD-29's skeleton), over all 114 surahs of the pinned dataset. Returns (grams, the
+    skeletons (rasm, shared with PD-29), over all 114 surahs of the pinned dataset. Returns (grams, the
     run lengths present, the fold), so the lengths are computed once."""
     mod = _lesson_content()
-    skeleton = shared_skeleton(mod)
+    skeleton = shared_rasm()
     grams = set()
     for verses in mod.verified_surahs().values():
         for v in verses:
@@ -228,11 +256,10 @@ def selftest():
     for name, t in (("the standard Basmala", basmala), ("Al-Ikhlas 1 in standard spelling", ikhlas_1),
                     ("a two-word ayah inside a note", note)):
         assert typed_quran(t, real), "%s was not recognised as Quran" % name
-    # 2:43 in standard spelling needs the shared skeleton to drop the Uthmani waw that carries a
-    # dagger alef (al-salah, al-zakah), asked of PD-29 for #260. The fixture enforces itself as
-    # soon as the shared function has that rule.
-    if real[2](chr(0x648) + chr(0x670)) == real[2](""):
-        assert typed_quran(salah, real), "aqimu al-salah wa-atu al-zakah in standard spelling was not recognised as Quran"
+    assert typed_quran(salah, real), "aqimu al-salah wa-atu al-zakah in standard spelling was not recognised as Quran"
+    # The copy here and rasm.py (once it exists) are one function: equal on every verse.
+    verses = [v for vs in _lesson_content().verified_surahs().values() for v in vs]
+    assert all(rasm(v) == shared_rasm()(v) for v in verses), "the vendored rasm() differs from scripts/lessons/rasm.py"
     # And ordinary lesson words are not: a word alone, and two words that are no ayah.
     for t in (u(0x628, 0x64E, 0x627, 0x628, 0x652), u(0x643, 0x650, 0x62A, 0x64E, 0x627, 0x628, 0x652) + " " + u(0x628, 0x64E, 0x627, 0x628, 0x652)):
         assert not typed_quran(t, real), "an ordinary lesson string was taken for Quran"
