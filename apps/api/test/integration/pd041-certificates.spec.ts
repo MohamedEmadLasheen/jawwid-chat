@@ -417,6 +417,10 @@ describe('4. a student Story needs the family\'s recorded consent', () => {
   it('no consent, no Story; documented consent, one Story; withdrawn consent takes it down', async () => {
     const c = await approved();
     expect(await code(svc.publishStory(s.ownerId, c.id))).toBe(CommErrorCode.CERTIFICATE_STORY_CONSENT_MISSING);
+    // The requester picks the parent from the family; the Designer is offered nobody.
+    const forRequester = (await svc.get(s.ownerId, c.id)) as { consentContacts?: Array<{ id: string }> };
+    expect(forRequester.consentContacts?.map((x) => x.id).sort()).toEqual([s.parentId, s.otherParentId].sort());
+    expect((await svc.get(designerId, c.id)) as object).not.toHaveProperty('consentContacts');
     // Unclear consent is not consent: by phone it must say when and how.
     expect(await code(svc.recordConsent(s.ownerId, c.id, { kind: 'granted', contactId: s.parentId, method: 'phone' }))).toBe(CommErrorCode.VALIDATION);
     await svc.recordConsent(s.ownerId, c.id, { kind: 'granted', contactId: s.parentId, method: 'phone', note: 'mother agreed by phone on 29 Oct' });

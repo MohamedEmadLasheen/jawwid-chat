@@ -869,3 +869,19 @@ The current Admin Web Certificates tab calls them, so that tab stops working unt
 - The slot note is corrected.
 - The spec title is fixed, and a test now shows the DB refusing a Designer as sender.
 
+
+### 15.2 PR-2 as built: the Admin Web page
+
+- **Page:** `/certificates` (`features/certificates`), under People. The nav offers it when
+  `GET /certificates/access` opens it. A `specialist` (the Designer) lands on it and has nothing
+  else.
+- **Old routes:** `/teachers/certificates` and `/admin/teachers/certificates` redirect to it.
+  The PD-12 Teachers tab, its page, its dialogs and its client calls are removed.
+- **Buttons** come only from each row's `actions`.
+  - Approve sends the revision on screen.
+  - Send shows the group the server named, and echoes it.
+  - Story names its audience.
+  - Consent picks the parent from the family's contacts. `GET /certificates/:id` adds
+    `consentContacts` only for whoever may record consent.
+- **The request form** makes one `requestKey` when it opens, and leaves the Story box unticked.
+- **Types:** a tab for the super admin, with enable and disable but no delete.
