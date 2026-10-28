@@ -316,6 +316,14 @@ const PATHS = {
       <path d="M12 6.5v13" />
     </>
   ),
+  /** PD-47: the Finance tag on a financial task. */
+  banknote: (
+    <>
+      <rect x="2.5" y="6" width="19" height="12" rx="1.5" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M6 9.5v.01M18 14.5v.01" />
+    </>
+  ),
 } satisfies Record<string, ReactElement>
 
 export type IconName = keyof typeof PATHS

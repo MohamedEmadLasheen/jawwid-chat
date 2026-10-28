@@ -8,6 +8,7 @@ import { contentFor } from '../content';
 import { resolveContent, type ResolvedContent } from '../content/lesson-content';
 import { Benefits } from './Benefits';
 import { SectionHeader } from './SectionHeader';
+import { pageCount, pageOf } from './pages';
 import { CONTENT_SECTIONS, QURAN_SECTIONS, StarLedger, type SectionId } from './stars';
 import { Verses } from './Verses';
 
@@ -21,7 +22,11 @@ import { Verses } from './Verses';
  * The Quran text itself only ever comes from the dataset.
  * The listening star needs an ayah actually played, so while recitation is
  * off (until the owner confirms the rights) it cannot be earned.
+ * A long surah (more than 50 ayat, lesson/pages.ts) is shown a page of 20 ayat
+ * at a time in Listen, Verses and the ordering game.
  */
+const arabic = (n: number) => n.toLocaleString('ar-EG');
+
 export function SurahLesson({
   surah,
   fetcher,
@@ -44,6 +49,7 @@ export function SurahLesson({
   const [state, setState] = useState<{ surah: Surah } | { error: string } | null>(null);
   const [section, setSection] = useState<SectionId>('listen');
   const [selected, setSelected] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
   const [playing, setPlaying] = useState<number | null>(null);
   const [heard, setHeard] = useState(false);
   const [audio, setAudio] = useState<AudioController | null>(null);
@@ -62,6 +68,7 @@ export function SurahLesson({
   useEffect(() => {
     let live = true;
     setState(null);
+    setPage(0);
     loadSurah(surah, fetcher, anchor).then(
       (s) => live && setState({ surah: s }),
       (e: unknown) => live && setState({ error: e instanceof Error ? e.message : String(e) }),
@@ -105,6 +112,27 @@ export function SurahLesson({
 
   const { info, ayahs } = state.surah;
   const available = audio?.availableFor(info.number) ?? false;
+  const pages = pageCount(ayahs.length);
+  const shown = pageOf(ayahs, page);
+  const goPage = (p: number) => {
+    audio?.stop();
+    setSelected(null);
+    setPage(Math.min(Math.max(0, p), pages - 1));
+  };
+  const pager =
+    pages > 1 ? (
+      <nav className="pager" aria-label="صفحات السورة">
+        <button type="button" onClick={() => goPage(page - 1)} disabled={page === 0}>
+          السابق
+        </button>
+        <span className="pager__range" role="status">
+          الآيات {arabic(shown[0]?.ayah ?? 1)}–{arabic(shown[shown.length - 1]?.ayah ?? 1)} من {arabic(ayahs.length)}
+        </span>
+        <button type="button" onClick={() => goPage(page + 1)} disabled={page === pages - 1}>
+          التالي
+        </button>
+      </nav>
+    ) : null;
   const select = (ayah: number) => {
     audio?.select();
     setSelected(ayah);
@@ -136,7 +164,8 @@ export function SurahLesson({
               التلاوة غير متاحة بعد.
             </p>
           )}
-          <Verses ayahs={ayahs} selected={selected} playing={playing} onSelect={(a) => { select(a); audio?.play(info.number, a); }} />
+          {pager}
+          <Verses ayahs={shown} selected={selected} playing={playing} onSelect={(a) => { select(a); audio?.play(info.number, a); }} />
           <button type="button" className="primary" disabled={!heard} onClick={() => earn('listen')}>
             أنهيت الاستماع
           </button>
@@ -145,7 +174,8 @@ export function SurahLesson({
 
       {section === 'verses' ? (
         <section aria-label="الآيات">
-          <Verses ayahs={ayahs} selected={selected} playing={playing} onSelect={select} />
+          {pager}
+          <Verses ayahs={shown} selected={selected} playing={playing} onSelect={select} />
           {selected !== null ? (
             <div className="verse-actions">
               <button type="button" disabled={!available} onClick={() => audio?.play(info.number, selected)}>
@@ -187,7 +217,12 @@ export function SurahLesson({
         <CompleteAyah ayahs={ayahs} items={approved.complete} seed={shuffleSeed} onComplete={() => earn('complete')} />
       ) : null}
 
-      {section === 'order' ? <OrderAyat ayahs={ayahs} seed={shuffleSeed} onComplete={() => earn('order')} /> : null}
+      {section === 'order' ? (
+        <>
+          {pager}
+          <OrderAyat key={page} ayahs={shown} seed={shuffleSeed} onComplete={() => earn('order')} />
+        </>
+      ) : null}
 
       {section === 'quiz' && approved ? <Quiz quiz={approved.quiz} seed={shuffleSeed} onComplete={() => earn('quiz')} /> : null}
 

@@ -85,8 +85,9 @@ function homeFor(staff: Pick<Staff, 'role' | 'permissions'>): string {
   // PD-40/PD-41: the Designer's whole Admin Web is the Certificates page;
   // PD-48: a Pronunciation reviewer's is Lesson audio.
   if (role === 'specialist') return holdsAny(staff, ['lesson_audio.view', 'lesson_audio.review']) && !holdsAny(staff, ['certificates.view', 'certificates.design']) ? '/lesson-audio' : '/certificates'
-  // Departments have no conversations — they only ever see their own tasks. Operators
-  // land in their conversations: the chat workspace on the real API.
+  // The legacy department roles (finance, technical, academic) have no
+  // conversations: they land on their Tasks (PD-47). Operators land in their
+  // conversations: the chat workspace on the real API.
   return isDepartment(role) ? '/tasks' : '/chat'
 }
 

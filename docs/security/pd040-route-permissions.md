@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-512 routes.
+513 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -449,6 +449,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/tasks/:id/reassign` | tasks.manage | `tasks/task.controller.ts#TaskController.reassign` |
 | POST | `/api/v1/tasks/:id/remove` | tasks.manage | `tasks/task.controller.ts#TaskController.remove` |
 | POST | `/api/v1/tasks/:id/return` | tasks.manage | `tasks/task.controller.ts#TaskController.returnTask` |
+| GET | `/api/v1/tasks/assignees` | tasks.create | tasks.manage | `tasks/task.controller.ts#TaskController.assignees` |
 | GET | `/api/v1/teacher-files` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.list` |
 | GET | `/api/v1/teacher-files/:teacherId` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.detail` |
 | POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_supervision.record | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |

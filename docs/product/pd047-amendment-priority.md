@@ -169,6 +169,37 @@ Today's alerts, from `communication/notifications/notification-catalog.ts:57-88`
 
 ---
 
+### 5.1 As built in PR-2b (slot `20261029233000`)
+
+- **Financial tasks follow their owner.** That owner is the family's billing supervisor, or the family's Sales owner, else the Sales manager.
+  - The sweep moves a task when its owner changes or leaves. Nobody reassigns it by hand: the API refuses, and so does the database guard.
+  - The one exception: when the owner has left and nobody live can follow (no billing supervisor, Sales owner or manager), the sweep records the task in the issue log, with its back-off, and the super admin may reassign it. Once an owner is live again, the sweep moves it to them.
+  - The Tasks page says where to change the owner.
+- **Completed on evidence, by who did it, the evidence in the history.** The completion event's `after` holds `evidence`: the covering payment (`paymentId`, `method`), the new package (`subscriptionId`) or the receipt's decision.
+  - An instalment or a failed checkout is completed by whoever recorded the payment that covered it. A part payment leaves it open.
+  - Only a card payment through Stripe records no staff actor, and neither does a package the system credits for a paid link. There the history names the system.
+- **Only a financial source completes as the system.** `completed` joins the event kinds the system may write, but the guard refuses a system completion with no actor for every other source type. A lesson, ruling or case closed without its actor fails into the issue log instead of closing silently.
+- **Packages run in episodes** (`chat.work_task_package_episode`). An episode is one stretch of the child's newest package running low, or one renewal asked for on it. The task's source is the episode.
+  - A new package completes the episode's task. A balance lifted above 2 by a correction does not: it withdraws the task, and the task comes back if the balance falls again.
+  - A voided package withdraws its episode's task. When the voided package was the newest (its payment voided), the older package becomes the newest again, and a low balance on it opens a fresh episode. The old task's key is spent; the new low still gets a task.
+  - A manager's removal holds for that package: it is not raised again while that package stays the newest. One exception the owner should know: if a newer package comes and is then voided, the older package becomes the newest again, and a low balance on it raises a fresh task even though its earlier task was removed. A voided payment is a new situation, so this is accepted.
+  - A package credited for a paid link names nobody itself, so its task is completed by whoever recorded the covering payment (a card payment: the system), with that payment in the evidence.
+  - The High floor at 0 never lowers within an episode. A child who ran out is in PD-30's grace, and the task stays Red until a package arrives, or until a correction above 2 withdraws it.
+- **A failed checkout of an instalment follows the instalment.** A link that expires and is replaced, or is cancelled while the money is still owed, leaves the task open. The instalment paid completes it; the instalment voided withdraws it. A standalone request cancelled withdraws its task.
+  - Only `checkout.session.async_payment_failed` marks a checkout `failed`. A card declined at the checkout leaves the session to expire, and raises no task. Today the task covers delayed payment methods only.
+- **`notifySales` stays for now.** It pushes "renewal requested" to every Sales member until PR-4 delivers task notifications. PR-4 then replaces it with the task's notification to its one owner (Q-F6).
+  - PR-4 keeps amounts out of notifications. Titles with amounts are for staff task lists only.
+- **An instalment task is Low of itself.** Its floor makes it Yellow from D-7 and Red from D0, so the task shows the due date as the reason, not a person's choice.
+- **Cut-offs (owner 2026-10-29: the last 14 days):**
+  - instalments by due date, as the academy's day;
+  - receipts by upload;
+  - failed checkouts and renewals by their time.
+  - A low balance is a present state and has no cut-off.
+- **Keys:**
+  - `package_low` and `renewal_request` are keyed by their episode.
+  - `checkout_failed` is keyed by its payment request, because a Stripe session has no uuid.
+- **The sweep counts** `floored` (raised to High by a used-up balance) and `orphaned` (an owner gone with nobody to follow), beside PR-2's counts.
+
 ## 6. THRESHOLDS: CONFIRMED by the owner 2026-10-28 ("Approve as proposed")
 
 | Task | 🟡 Yellow | 🔴 Red | Completed when | Why these numbers |

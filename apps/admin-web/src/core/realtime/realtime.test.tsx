@@ -74,10 +74,11 @@ describe('realtime', () => {
   it('subscribes to the events the operator’s workspace depends on, and none of the retired Inbox’s or on-duty Dashboard’s', async () => {
     mount()
     await waitFor(() => expect(handlers.size).toBeGreaterThan(0))
-    for (const event of ['task.updated', 'coverage.changed']) {
+    for (const event of ['task.changed', 'coverage.changed']) {
       expect(handlers.has(event), `missing handler for ${event}`).toBe(true)
     }
-    for (const event of ['family.updated', 'message.created', 'case.updated', 'handoff.created', 'shift.ending']) {
+    // PD-47: task.updated was the dead legacy page's; task.changed replaced it.
+    for (const event of ['task.updated', 'family.updated', 'message.created', 'case.updated', 'handoff.created', 'shift.ending']) {
       expect(handlers.has(event), `handler left for ${event}`).toBe(false)
     }
     // PD-44: the on-duty Dashboard's signals. The server never sent the first
@@ -90,10 +91,10 @@ describe('realtime', () => {
 
   it('refreshes tasks when a task changes', async () => {
     const queryClient = mount()
-    await waitFor(() => expect(handlers.has('task.updated')).toBe(true))
+    await waitFor(() => expect(handlers.has('task.changed')).toBe(true))
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
-    emit('task.updated', { task: { id: 't1', family_id: 'fam_1' } })
+    emit('task.changed', { taskId: 't1', revision: 2, change: 'reassigned' })
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.tasksAll })
   })

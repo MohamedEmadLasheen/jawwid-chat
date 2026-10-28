@@ -8,7 +8,6 @@ import {
   isOperator,
   managerOnly,
   navAreas,
-  taskScopeFor,
   visibleAreas,
 } from './capabilities'
 import { ROLES } from '@/test/utils'
@@ -73,14 +72,6 @@ describe('role → navigation', () => {
         expect(check(role)).toBe(expected)
       }
     }
-  })
-
-  it('requests the task scope that matches the role', () => {
-    expect(taskScopeFor('admin')).toBe('mine')
-    expect(taskScopeFor('coverage')).toBe('mine')
-    expect(taskScopeFor('manager')).toBe('team')
-    expect(taskScopeFor('finance')).toBe('department')
-    expect(taskScopeFor('super_admin')).toBe('team')
   })
 })
 
@@ -148,7 +139,9 @@ describe('permission keys → pages', () => {
     expect(holdsAny(null, ['staff_accounts.view'])).toBe(false)
   })
 
-  it("gives a specialist PD-41's Certificates and PD-48's Lesson audio areas only -- never Accounts, so no staff-account tabs", () => {
-    expect(visibleAreas('specialist')).toEqual(['certificates', 'lesson-audio'])
+  it("gives a specialist PD-41's Certificates area, their Tasks and PD-48's Lesson audio -- never Accounts, so no staff-account tabs", () => {
+    // PD-47 plan §3.12: Tasks is in every staff role's navigation -- a Designer
+    // may be given a task too. PD-48: Lesson audio, on the server's word. Still never Accounts.
+    expect(visibleAreas('specialist')).toEqual(['certificates', 'tasks', 'lesson-audio'])
   })
 })

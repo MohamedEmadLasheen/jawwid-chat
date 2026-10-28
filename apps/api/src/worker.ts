@@ -470,7 +470,7 @@ async function bootstrap(): Promise<void> {
         const swept = await tasks.sweep();
         if (!swept.skipped && (swept.failed > 0 || swept.issues !== lastTaskIssues)) {
           log.warn(
-            `task sweep: ${swept.failed} failed, ${swept.declined} declined this run; ` +
+            `task sweep: ${swept.failed} failed, ${swept.declined} declined, ${swept.orphaned} orphaned this run; ` +
               `source issues ${lastTaskIssues} -> ${swept.issues} (chat.work_task_source_issue)`,
           );
         }

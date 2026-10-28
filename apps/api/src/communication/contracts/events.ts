@@ -413,7 +413,7 @@ export interface CommEventPayloads {
 export interface TaskChangedPayload {
   taskId: string;
   revision: number;
-  change: 'created' | 'commented' | 'out_of_scope' | 'returned' | 'reassigned' | 'completed' | 'removed' | 'due_changed' | 'priority_changed' | 'source_withdrawn' | 'source_restored';
+  change: 'created' | 'commented' | 'out_of_scope' | 'returned' | 'reassigned' | 'completed' | 'removed' | 'due_changed' | 'priority_changed' | 'source_withdrawn' | 'source_restored' | 'source_raised';
 }
 
 /** PD-35 B5. Ids only: PD-34 reads the case through its own authorized path. */

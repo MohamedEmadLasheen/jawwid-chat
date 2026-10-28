@@ -1,4 +1,4 @@
-# PD-29 seed: the academy's 83 existing lessons
+# PD-29 seed: the academy's 83 existing lessons, and every surah
 
 `jawwid-lessons-manifest.csv` is the Materials library's first content: the 83
 lessons of the academy's lessons site. Generated from the read-only
@@ -7,7 +7,7 @@ nothing was fetched from or built out of the lessons repository.
 
 | Subject | Lessons | Path |
 |---|---|---|
-| Quran | 38 | `/lessons/quran/surah-N` (Al-Fatihah, and 78-114, Juz' Amma) |
+| Quran | 114 | `/lessons/quran/surah-N`, every surah. 1 and 78-114 (Juz' Amma) were the old site's lessons; 2-77 were added on 2026-10-28 (the owner: "make it the whole Quran"), as text-and-recitation lessons on the lessons engine |
 | Arabic language | 10 | `/lessons/arabic/lesson-N` |
 | Islamic studies | 35 | `/lessons/islamic/lesson-N` |
 
@@ -27,7 +27,8 @@ only until then.
   the path when an item is opened), so the library can move to a pinned,
   Chat-controlled snapshot origin by changing one variable, with no migration
   and no re-import.
-- `ref` = the path, so importing the manifest again updates the same 83 items
+- `ref` = the path, so importing the manifest again updates the items already
+  there (the first 83) and adds the new ones (surahs 2-77)
   instead of adding new ones.
 - `kind` `activity_link`. The lesson is framed from its own origin with sandbox
   `allow-scripts allow-same-origin allow-forms`; the site's origin is always on
@@ -41,7 +42,7 @@ only until then.
 - **Row order is the library's order** (PD-29 amendment 2026-10-26): an
   import stores each new item's row number as its `sort_order` (a
   `sort_order` column overrides it), and a re-import keeps it through `ref`.
-  Quran is listed by surah regardless -- Al-Fatihah first, then 114 down to 78.
+  Quran is listed by surah regardless -- Al-Fatihah first, then 114 down to 2.
   Arabic and Islamic studies keep the order of this file.
 - `status` `draft`. Nothing reaches families until a manager publishes it:
   per item on the Materials page, or by re-importing with `published`.
@@ -51,7 +52,8 @@ only until then.
 1. Set `MATERIALS_SITE_BASE_URL` on the API (and `MATERIALS_FRAME_ORIGINS` on
    Admin Web) to the lessons site's origin.
 2. Admin Web -> Materials -> Import. Choose this CSV. No files are needed.
-3. **Check**. Expect 83 new rows and no errors. Then **Import**.
+3. **Check**. Expect 159 rows and no errors: on a fresh library 159 new; on one
+   that has the first 83, 76 new (surahs 2-77) and 83 updated. Then **Import**.
 
 It is an admin import step, not a migration seed, so staff can edit, retire
 or re-tag any item afterwards, and the block above stays enforceable.

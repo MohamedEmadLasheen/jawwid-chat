@@ -158,8 +158,9 @@ describe('navigation and the opener', () => {
   it('the area waits for the server: offered only when GET /lesson-audio/access says the account may listen', () => {
     expect(navAreas('manager', {})).not.toContain('lesson-audio')
     expect(navAreas('manager', { lessonAudio: true })).toContain('lesson-audio')
-    expect(navAreas('specialist', { lessonAudio: true })).toEqual(['lesson-audio'])
-    expect(navAreas('specialist', { certificates: true })).toEqual(['certificates'])
+    // A specialist: Tasks (PD-47) always; Certificates and Lesson audio each on the server's word.
+    expect(navAreas('specialist', { lessonAudio: true })).toEqual(['tasks', 'lesson-audio'])
+    expect(navAreas('specialist', { certificates: true })).toEqual(['certificates', 'tasks'])
   })
 
   it('only a lessons-site Arabic letters page is handed voice-over, under its lesson key', () => {
