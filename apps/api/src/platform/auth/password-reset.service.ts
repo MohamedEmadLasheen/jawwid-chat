@@ -1,4 +1,4 @@
-import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { AUDIT_SERVICE } from '../tokens';
@@ -7,6 +7,7 @@ import { AuthError, AuthErrorCode } from './auth.errors';
 import { AuthService } from './auth.service';
 import { hashPassword, spendComparableTime } from './password';
 import { isPasswordLengthAcceptable } from './password-policy';
+import { MIN_SECRET_LENGTH } from './auth.config';
 import { RevocationUnconfirmedError } from '../realtime-revocation';
 
 /** How long a code lives: long enough to be passed on by hand. */
@@ -115,6 +116,11 @@ export class PasswordResetService {
       Date.now() + (purpose === 'first_login' ? FIRST_LOGIN_CODE_HOURS * 3_600_000 : RESET_CODE_MINUTES * 60_000),
     );
     const { id, revoked } = await this.prisma.$transaction(async (tx) => {
+      // A reissue kills every live code, and the audit names them.
+      const superseded = await tx.passwordResetCode.findMany({
+        where: { accountId: input.accountId, usedAt: null, supersededAt: null },
+        select: { id: true },
+      });
       await tx.passwordResetCode.updateMany({
         where: { accountId: input.accountId, usedAt: null, supersededAt: null },
         data: { supersededAt: new Date() },
@@ -124,7 +130,7 @@ export class PasswordResetService {
           organizationId: input.organizationId,
           accountId: input.accountId,
           issuedBy: input.issuedByStaffId,
-          codeHash: codeHash(input.accountId, code),
+          codeHash: resetCodeHash(input.accountId, code, purpose),
           reason: input.reason,
           expiresAt,
           purpose,
@@ -143,7 +149,13 @@ export class PasswordResetService {
         action: purpose === 'first_login' ? RESET_AUDIT.FIRST_LOGIN_ISSUED : RESET_AUDIT.ISSUED,
         entity: 'account',
         entityId: input.accountId,
-        after: { resetCodeId: row.id, purpose, expiresAt: expiresAt.toISOString(), signOutEverywhere: input.signOutEverywhere },
+        after: {
+          resetCodeId: row.id,
+          purpose,
+          supersedes: superseded.map((s) => s.id),
+          expiresAt: expiresAt.toISOString(),
+          signOutEverywhere: input.signOutEverywhere,
+        },
         reason: input.reason,
       });
       return { id: row.id, revoked: revokedSessions };
@@ -175,7 +187,7 @@ export class PasswordResetService {
       throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
     }
 
-    if (!sameHash(live.codeHash, codeHash(account.id, code))) {
+    if (!sameHash(live.codeHash, resetCodeHash(account.id, code, live.purpose === 'first_login' ? 'first_login' : 'reset'))) {
       const attempts = live.attempts + 1;
       await this.prisma.passwordResetCode.update({
         where: { id: live.id },
@@ -266,7 +278,7 @@ export class PasswordResetService {
           accountId: input.accountId,
           issuedBy: null,
           channel: input.channel,
-          codeHash: codeHash(input.accountId, code),
+          codeHash: resetCodeHash(input.accountId, code, 'reset'),
           reason: `the parent asked for a recovery code by ${input.channel}`,
           expiresAt,
         },
@@ -298,7 +310,7 @@ export class PasswordResetService {
       where: { accountId, channel: 'whatsapp', usedAt: null, supersededAt: null, expiresAt: { gt: new Date() } },
     });
     if (!live || live.attempts >= RESET_CODE_TRIES) return false;
-    if (!sameHash(live.codeHash, codeHash(accountId, code))) {
+    if (!sameHash(live.codeHash, resetCodeHash(accountId, code, 'reset'))) {
       const attempts = live.attempts + 1;
       await this.prisma.passwordResetCode.update({
         where: { id: live.id },
@@ -334,8 +346,24 @@ export function newCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, '0');
 }
 
-function codeHash(accountId: string, code: string): string {
-  return createHash('sha256').update(`${accountId}:${code}`).digest('hex');
+/** Labels the key derived for first sign-in codes, so it is never the refresh-token key itself. */
+const FIRST_LOGIN_KEY_LABEL = 'jawwid:first-login-code:v1';
+
+/**
+ * What is stored for a code. A reset code lives 10 minutes and keeps PD-21's
+ * sha256. A first sign-in code lives 72 hours, so it is a KEYED hash
+ * (owner rule: never recoverable from storage; PD-40 review G1): HMAC-SHA256
+ * under a key derived from JWT_REFRESH_SECRET for this purpose alone, as the
+ * refresh-token hash is keyed. Someone who reads chat.password_reset_code
+ * cannot try the 10^6 codes offline without the server's secret. Rotating that
+ * secret voids live first sign-in codes; the administrator issues new ones.
+ */
+export function resetCodeHash(accountId: string, code: string, purpose: ResetCodePurpose): string {
+  if (purpose !== 'first_login') return createHash('sha256').update(`${accountId}:${code}`).digest('hex');
+  const secret = (process.env.JWT_REFRESH_SECRET ?? '').trim();
+  if (secret.length < MIN_SECRET_LENGTH) throw new Error('JWT_REFRESH_SECRET is required to hash a first sign-in code');
+  const key = createHmac('sha256', secret).update(FIRST_LOGIN_KEY_LABEL).digest();
+  return createHmac('sha256', key).update(`${accountId}:${code}`).digest('hex');
 }
 
 function sameHash(a: string, b: string): boolean {
