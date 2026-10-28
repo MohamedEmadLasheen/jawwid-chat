@@ -244,7 +244,9 @@ describe('2. never a raw audit value', () => {
     const r = await add(m.teachersManager.subject, { email: email('h'), phone: '+20 100 555 0199' });
     const body = (await history(m.teachersManager.subject, r.json.teacher.id as string)).text;
     expect(body).not.toContain('@');
-    expect(body).not.toMatch(/555|0199/);
+    // The number itself, typed or as digits -- never a fragment a random uuid could hold.
+    expect(body).not.toContain('100 555 0199');
+    expect(body).not.toContain('1005550199');
     expect(body).not.toMatch(/supersedes|codeId|hasPhone/);
   });
 });
