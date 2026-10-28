@@ -405,6 +405,7 @@ export class CertificateService {
   }
 
   async cancel(actorId: string, id: string, body: Record<string, unknown>) {
+    await this.authorize(actorId, id, CertificateAct.CANCEL);
     const reason = reasonOf(body, 'reason');
     return this.act(actorId, id, CertificateAct.CANCEL, async (tx, l) => {
       await tx.appreciationCertificate.update({
@@ -417,13 +418,13 @@ export class CertificateService {
 
   /** Owner safeguard 1: the requester approves THIS revision; the uploader never does. */
   async approve(actorId: string, id: string, body: Record<string, unknown>) {
-    const fileId = body.fileId;
-    if (typeof fileId !== 'string' || !isUuid(fileId)) throw invalid('fileId: the revision you reviewed');
+    const fileId = typeof body.fileId === 'string' ? body.fileId : null;
     return this.act(
       actorId,
       id,
       CertificateAct.APPROVE,
       async (tx, l) => {
+        if (!fileId || !isUuid(fileId)) throw invalid('fileId: the revision you reviewed');
         await tx.appreciationCertificate.update({
           where: { id: l.row.id },
           data: { state: CertificateState.APPROVED, approvedFileId: fileId, approvedBy: l.actor.actorId, approvedAt: new Date(), ...stamp(l, 'approved', null) },
@@ -444,6 +445,7 @@ export class CertificateService {
   }
 
   async redesign(actorId: string, id: string, body: Record<string, unknown>) {
+    await this.authorize(actorId, id, CertificateAct.REDESIGN);
     const message = reasonOf(body, 'message');
     const out = await this.act(actorId, id, CertificateAct.REDESIGN, async (tx, l) => {
       await tx.appreciationCertificate.update({
@@ -456,6 +458,7 @@ export class CertificateService {
   }
 
   async withdrawApproval(actorId: string, id: string, body: Record<string, unknown>) {
+    await this.authorize(actorId, id, CertificateAct.WITHDRAW_APPROVAL);
     const message = reasonOf(body, 'message');
     return this.act(actorId, id, CertificateAct.WITHDRAW_APPROVAL, async (tx, l) => {
       await tx.appreciationCertificate.update({
@@ -491,6 +494,7 @@ export class CertificateService {
   }
 
   async decline(actorId: string, id: string, body: Record<string, unknown>) {
+    await this.authorize(actorId, id, CertificateAct.DECLINE);
     const reason = reasonOf(body, 'reason');
     let teacherToTell: string | null = null;
     const out = await this.act(actorId, id, CertificateAct.DECLINE, async (tx, l) => {
@@ -522,6 +526,7 @@ export class CertificateService {
 
   /** Owner safeguard 2: a return always says what to change. */
   async returnForChanges(actorId: string, id: string, body: Record<string, unknown>) {
+    await this.authorize(actorId, id, CertificateAct.RETURN);
     const message = reasonOf(body, 'message');
     const out = await this.act(actorId, id, CertificateAct.RETURN, async (tx, l) => {
       await tx.appreciationCertificate.update({
@@ -550,10 +555,10 @@ export class CertificateService {
    * served -- confirming copies the bytes to a pinned key (design §7).
    */
   async authorizeUpload(actorId: string, id: string, body: Record<string, unknown>) {
-    const mimeType = mimeField(body);
-    const byteSize = sizeField(body);
     const issued: { grant?: Awaited<ReturnType<ObjectStorage['authorizeUpload']>> } = {};
     await this.act(actorId, id, CertificateAct.UPLOAD, async (tx, l) => {
+      const mimeType = mimeField(body);
+      const byteSize = sizeField(body);
       const grant = await this.storage.authorizeUpload({ prefix: `certificate-uploads/${l.row.organizationId}/${l.row.id}`, mimeType, byteSize });
       await tx.certificateUpload.create({
         data: { objectKey: grant.objectKey, certificateId: l.row.id, mimeType, byteSize, issuedTo: l.actor.actorId, expiresAt: new Date(Date.now() + UPLOAD_TTL_MS) },
@@ -635,10 +640,10 @@ export class CertificateService {
   }
 
   async send(actorId: string, id: string, body: Record<string, unknown>) {
-    const conversationId = body.conversationId ?? null;
-    if (conversationId !== null && (typeof conversationId !== 'string' || !isUuid(conversationId))) throw invalid('conversationId: the group you were shown');
     const ctx = await this.ctx(actorId);
     const before = await this.requireRequesterSide(ctx, id, 'deliver');
+    const conversationId = body.conversationId ?? null;
+    if (conversationId !== null && (typeof conversationId !== 'string' || !isUuid(conversationId))) throw invalid('conversationId: the group you were shown');
     if (before.state === CertificateState.SENT) {
       if (before.conversationId === conversationId && before.sentBy) return { certificate: await this.dtoOf(ctx, id), replayed: true };
       throw new CommError(CommErrorCode.CERTIFICATE_STATE, 'this certificate was already sent', 409);
@@ -692,6 +697,7 @@ export class CertificateService {
    * backup included): both commit, or neither does.
    */
   async recordConsent(actorId: string, id: string, body: Record<string, unknown>) {
+    await this.authorize(actorId, id, CertificateAct.CONSENT);
     const kind = body.kind;
     if (kind !== 'granted' && kind !== 'withdrawn') throw invalid('kind: granted | withdrawn');
     const note = text(body, 'note', MAX_TEXT, false);
@@ -837,6 +843,15 @@ export class CertificateService {
     if (!v) throw notFound();
     if (!v.full || !ctx.access.categories[row.category as CertificateCategory][need] || !v.relation.actsAsRequester) throw denied();
     return row;
+  }
+
+  /**
+   * Is this act open to this caller on this certificate NOW? Run before the
+   * request body is read, so a refusal never depends on -- or reveals -- what
+   * shape the body had (review of #216: authorization first).
+   */
+  private async authorize(actorId: string, id: string, act: CertificateAct): Promise<void> {
+    await this.act(actorId, id, act, async () => undefined, undefined, false);
   }
 
   private async ctx(actorId: string): Promise<Ctx> {
