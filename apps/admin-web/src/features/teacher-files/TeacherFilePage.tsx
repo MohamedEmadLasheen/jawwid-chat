@@ -9,7 +9,7 @@ import { T, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useReissueFirstLogin, useTeacherFile } from './hooks'
-import { FirstLoginCodeDialog } from './AddTeacherDialog'
+import { FirstLoginCodeDialog, GiveSignInDialog } from './AddTeacherDialog'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
 import { AwayBadge, ComplaintItem, UpholdDialog } from './Complaint'
 import { SupervisionTimeline } from './SupervisionTimeline'
@@ -63,6 +63,7 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                   actions={
                     data.access.canWriteSupervision ? (
                       <>
+                        {data.signIn?.canGive && <GiveSignInButton teacherId={data.teacher.id} basePath={basePath} />}
                         {data.signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}
                         {data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}
                         {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
@@ -414,6 +415,20 @@ function SendCodeButton({ teacherId }: { teacherId: string }) {
         {reissue.isPending ? tx(T.sending) : tx(T.sendNewCode)}
       </button>
       {answer && <FirstLoginCodeDialog signIn={answer.signIn} firstLogin={answer.firstLogin} onClose={() => reissue.reset()} />}
+    </>
+  )
+}
+
+/** PD-43 Give sign-in, for a teacher who has no login. */
+function GiveSignInButton({ teacherId, basePath }: { teacherId: string; basePath: string }) {
+  const tx = useCopy()
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button type="button" className="btn" onClick={() => setOpen(true)}>
+        {tx(T.giveSignIn)}
+      </button>
+      {open && <GiveSignInDialog teacherId={teacherId} basePath={basePath} onClose={() => setOpen(false)} />}
     </>
   )
 }

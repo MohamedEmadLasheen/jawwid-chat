@@ -21,6 +21,8 @@ export interface Away {
 }
 
 export interface TeacherSummary {
+  /** PD-43: the login's status; `none` = Give sign-in is for this teacher. Optional: older servers omit it. */
+  signIn?: TeacherSignIn['status']
   id: string
   name: string
   isActive: boolean
@@ -178,6 +180,8 @@ export interface FirstLogin {
 export interface TeacherSignIn {
   status: 'none' | 'provisioned' | 'active' | 'suspended' | 'deactivated'
   canSendCode: boolean
+  /** Give sign-in: a login for a teacher who has none. Optional: older servers omit it. */
+  canGive?: boolean
 }
 
 export interface ReissuedCode {
@@ -198,6 +202,8 @@ export const teacherFileApi = {
       '/teacher-files',
     ),
   addTeacher: (body: NewTeacher) => api.post<AddedTeacher>('/teachers', body),
+  giveSignIn: (teacherId: string, email: string) =>
+    api.post<ReissuedCode>(`/teachers/${encodeURIComponent(teacherId)}/sign-in`, { email }),
   reissueFirstLogin: (teacherId: string) =>
     api.post<ReissuedCode>(`/teachers/${encodeURIComponent(teacherId)}/first-login-code`, {}),
   detail: (teacherId: string) => api.get<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}`),

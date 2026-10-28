@@ -85,6 +85,7 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                               {tx(row.isActive ? T.active : T.inactive)}
                             </Badge>
                             <AwayBadge away={row.away} />
+                            {row.signIn === 'none' && <Badge tone="outline">{tx(T.noSignIn)}</Badge>}
                           </span>
                         </td>
                       </tr>

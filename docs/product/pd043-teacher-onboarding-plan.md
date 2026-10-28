@@ -372,6 +372,41 @@ Where it shows:
 
 ---
 
+### 3.9 Give sign-in: a teacher who exists but has no login (department head, 2026-10-28)
+
+Teachers inserted before PD-43 have a `chat.teacher` row and no `account_id`, so they can never sign in (§1.1). PD-43 gives them a login **in place**: same teacher, same students, same history.
+
+**Who** (department head, #198): the **reissue** rule, because an existing teacher is a live identity:
+- the super admin and the Teachers Manager, for any teacher of the organization;
+- the teacher's **current** supervisor, whatever the strict switch says (`chat.may_give_teacher_sign_in`).
+
+The code is always e-mailed, and only the Manager and the super admin see it.
+
+**`chat.give_teacher_sign_in(p_teacher, p_email, p_reason, p_actor_id)`**, in slot `20261028160000`:
+- **Refused when:**
+  - the teacher is inactive or has left;
+  - the teacher already has a login (*"this teacher already has a sign-in"*): a provisioned login gets a new code instead, and an active one gets a reset;
+  - the caller may not reach the teacher. This refusal reads as *not found*.
+- **Duplicates:** the e-mail and contact checks of `chat.create_teacher` (§3.4), excluding the teacher's own file. The same scoped answers apply in the API (gate P2-5).
+- **Writes,** in one transaction, under an advisory lock on the teacher, so two calls at once make one login:
+  - a `provisioned` login (`kind = 'teacher'`), linked as `chat.teacher.account_id`;
+  - the Teacher File's e-mail, **only if it has none**: an e-mail already on file is not overwritten;
+  - the audit row `teacher.sign_in_given`, which never contains the e-mail.
+- **Errors:** `check_violation` for every refusal, never `unique_violation` (Prisma drops that message).
+
+**`POST /teachers/:id/sign-in`** (`teachers.create`) takes `{ email, reason? }`. In one transaction it runs the writer, then `issueInTx` for the first sign-in code. It answers `{ teacherId, signIn, firstLogin: { code, expiresAt, emailed } }` with `no-store`. The code is e-mailed after the commit, exactly as for a new teacher.
+
+| Refusal | Answer |
+|---|---|
+| The teacher already has a login | 409 `COMM.TEACHER_HAS_SIGN_IN` |
+| The teacher is inactive or has left | 409 `COMM.TEACHER_FILE_CONFLICT` |
+| The teacher is out of the caller's reach, or unknown | 404 `COMM.TEACHER_FILE_NOT_FOUND` |
+
+**Admin Web, on the Teacher File.** The file's detail gains `signIn: { status: 'none' | 'provisioned' | 'active' | 'suspended' | 'deactivated' }` and `access.canManageSignIn`.
+- **No login:** a **Give sign-in** button. It asks for the sign-in e-mail, then shows the code once.
+- **A login that has never been used:** **Send a new first sign-in code**, which calls #195's `POST /teachers/:id/first-login-code`.
+- **Teacher Files list:** a "No sign-in" badge, so the migration intake has a work list.
+
 ## 4. Permissions (PD-40 keys; deny by default; row scope in Layer 2)
 
 Teachers are not staff accounts, so PD-40 PR-3's `/admin/staff-accounts` and its hierarchy rules (H1–H10) do not apply to them. Teacher accounts are administered under #167's approved rule: **the super admin and the Teachers department**. The keys below follow #172's catalogue. **Two are new**: `teachers.create` and `teachers.offboard`. One existing key, `teacher_files.finance`, **joins `manager:teachers`**.
@@ -466,7 +501,8 @@ The `pd040-legacy-bundles` spec gains the matching Layer-2 rows:
 |---|---|---|---|
 | **PR-0** (#180, merged) | the plan, the PD-43 claim, slot `20261027180000` (renumbered by PR-1) | `guards.sh` | — |
 | **PR-1, data + keys** (as built) | Migration `20261028100000_chat_pd043_teacher_onboarding`: the PD-43 catalogue rows in their own generated block (`teachers.create` for `manager:teachers` and `supervisor:teachers`; `teachers.offboard` and `teacher_files.finance` for `manager:teachers`) with `chat.pd040_catalogue_change`; `password_reset_code.purpose` (`reset`/`first_login`, 72 h); `chat.activate_account_with_code` and the `account_activation_is_by_first_login` guard (provisioned → active only); `chat.create_teacher` (supervisor: any or none for the Manager and super admin, self or none for a primary teacher supervisor); `chat.is_teacher_payroll_author`: terms and payout writes narrowed, the deduction-default guard widened, to the super admin or the Teachers manager. In TypeScript: the two catalogue keys and bundles, `canViewFinance` for the Teachers manager (same commit), `decideTeacherOnboarding`, and `PasswordResetService` issuing and completing `first_login` (generic `account.activated` audit, for PD-40 PR-3 to reuse) | Unit: `pd043-teacher-onboarding-policy`, `pd043-first-login-code`, `pd040-legacy-bundles` rows, `teacher-file-access`, `pd040-catalogue-seed` (the applied 190000 block stays frozen; later rows have their own block). Integration `pd043-teacher-onboarding` (CI G-19), plus `teacher-payroll` and `pd026-teacher-supervision` updated for the Manager holding payroll | the PD-40 stack (merged a547b0e2) |
-| **PR-1b, offboarding data** | Slot `20261028200000`: `chat.offboard_teacher` (students guard in SQL), `chat.reactivate_teacher`, `chat.teacher_setup_state`, `chat.staff`'s `is_active`/`left_at` check (`not valid`, then validated), and the routes (`offboard-preview`, `offboard`, `reactivate`, `setup` on the file). Supervisor changes were already audited (`TeacherSupervisorService`) | `pd043-offboarding-http` | PR-1 | PR-1 |
+| **PR-2b, Give sign-in** (next, before the Core-migration intake) | Migration `20261028160000_chat_pd043_give_sign_in`: `chat.give_teacher_sign_in(teacher, email, reason, actor)`. `POST /teachers/:id/sign-in`. The Teacher File page's "Give sign-in" and "Send a new first sign-in code". See §3.9. | Integration `pd043-give-sign-in-http` (CI G-19); Admin Web vitest | PR-2 (#195) |
+| **PR-1b, offboarding data** | Slot `20261028200000`: `chat.offboard_teacher` (students guard in SQL), `chat.reactivate_teacher`, `chat.teacher_setup_state`, `chat.staff`'s `is_active`/`left_at` check (`not valid`, then validated), and the routes (`offboard-preview`, `offboard`, `reactivate`, `setup` on the file). Supervisor changes were already audited (`TeacherSupervisorService`) | `pd043-offboarding-http` | PR-1 |
 | **PR-2, API** | `TeacherOnboardingService`: create, give sign-in, change sign-in, setup, history, offboard preview, offboard, reactivate. A DB-free `decideTeacherOnboarding` matrix: adder × supervisor choice × strict scope. Scoped duplicate checks and the lock. Reset issues `first_login` for provisioned logins. `canViewFinance` extended to the Teachers Manager. Manager notifications for unsupervised teachers. Catalogue keys, bundles, `@Requires` on every new route, a regenerated route table. API contract and error codes. | Unit: the decision matrix. Duplicate answers identical in and out of scope for a strict-scope supervisor, with no disclosure. Normalization. `decideTeacherFileAccess`: `canViewFinance` is true for the super admin and the Teachers Manager, false for Teachers members and for Ops. Route spec plus the `pd040-routes` guard. Integration: create → code → login → `/me` → the supervision chat exists with the supervisor, or with the Manager when unsupervised. The Manager reads `/finance`, and a reveal writes an audit row. A supervisor gets 403 on `/finance`, and rewards come back without amounts for supervisors and Ops. | PR-1; #172 merged |
 | **PR-3, Admin Web** | The Add teacher dialog (Teacher Files, Organization, `/admin/teachers`), with the supervisor field: a picker for the Manager, "Me" / "No supervisor yet" for a supervisor, with the strict-scope notice; the one-time code panel; the checklist card, list badge and filters ("Setup incomplete", "Unsupervised"); the "Setup incomplete" / "Not signed in" / "No supervisor" notes in the Sales form and the Change teacher preview; Give sign-in; Change sign-in e-mail; the supervisor reason field | Vitest: the form's validation, the supervisor field per role, the code shown once, checklist rendering per role, the Payroll section shown for the Manager and hidden for a supervisor, buttons hidden without a key | PR-2 |
 | **PR-4, offboarding UI** | The Offboard dialog with preview and links to Change teacher; Reactivate (super admin); the Accounts "Login suspended" note | Vitest; one integration case for the offboard refusal in PR-1/2's spec | PR-2 |

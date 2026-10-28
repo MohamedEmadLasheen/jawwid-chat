@@ -9,8 +9,9 @@
  *   - select(key) (moving to another ayah) stops the audio and cancels any
  *     pending repeat;
  *   - dispose() (the lesson closing) stops everything for good.
- * One file per ayah: no timing tables. Audio is OFF until the owner confirms the
- * recitation rights (the source is null), and then `available` is false.
+ * One file per ayah: no timing tables; playThrough() recites verse by verse.
+ * Audio reaches a lesson only through the API's release gate (audio-manifest.ts);
+ * without it the source is NO_AUDIO and availableFor() is false.
  */
 export interface Playable {
   play(): Promise<void>;
@@ -60,8 +61,9 @@ export class AudioController {
     private readonly create: AudioFactory = htmlAudio,
   ) {}
 
-  get available(): boolean {
-    return this.source(1, 1) !== null;
+  /** Whether this surah has audio (its first ayah has a source). */
+  availableFor(surah: number): boolean {
+    return this.source(surah, 1) !== null;
   }
 
   get playing(): string | null {
@@ -87,6 +89,21 @@ export class AudioController {
     };
     void audio.play().catch(() => this.current?.audio === audio && this.setCurrent(null));
     this.emit();
+    return true;
+  }
+
+  /**
+   * Recite from `from` to `to`, verse by verse: each ayah's own file, the next
+   * starting when one ends. Any select/stop/play ends the run.
+   */
+  playThrough(surah: number, from: number, to: number): boolean {
+    if (!this.play(surah, from)) return false;
+    const audio = this.current!.audio;
+    audio.onended = () => {
+      if (this.current?.audio !== audio) return;
+      if (from < to) this.playThrough(surah, from + 1, to);
+      else this.setCurrent(null);
+    };
     return true;
   }
 

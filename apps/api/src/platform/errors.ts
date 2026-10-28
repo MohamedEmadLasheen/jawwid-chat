@@ -260,6 +260,8 @@ export enum CommErrorCode {
   TEACHER_ALREADY_SIGNED_IN = 'COMM.TEACHER_ALREADY_SIGNED_IN',
   /** PD-43: the teacher's sign-in is suspended; reactivate it before anything else. 409. */
   TEACHER_SIGN_IN_SUSPENDED = 'COMM.TEACHER_SIGN_IN_SUSPENDED',
+  /** PD-43: Give sign-in for a teacher who already has a login (send a new first sign-in code, or reset). 409. */
+  TEACHER_HAS_SIGN_IN = 'COMM.TEACHER_HAS_SIGN_IN',
   /** PD-43: the database was too busy to finish adding the teacher; nothing was written. 503. */
   TEACHER_ONBOARDING_BUSY = 'COMM.TEACHER_ONBOARDING_BUSY',
   /** PD-43: a teacher still has students; move them to other teachers before offboarding. 409. */

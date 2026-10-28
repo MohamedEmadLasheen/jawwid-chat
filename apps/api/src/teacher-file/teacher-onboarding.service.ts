@@ -22,6 +22,12 @@ import { TeacherFileService } from './teacher-file.service';
  *              sign-in code (issueInTx). After the commit the code is e-mailed
  *              to the sign-in address when the e-mail channel exists, and it is
  *              returned ONCE to the person who added the teacher either way.
+ *   giveSignIn()  a teacher who exists but has no login (inserted before PD-43;
+ *              the Core-migration intake) gets one in place, and its FIRST code
+ *              in the same transaction (chat.give_teacher_sign_in). The reissue
+ *              rule, not creation's (department head on #198): an existing
+ *              teacher is a live identity, so the code is always e-mailed and
+ *              only the manager and the super admin see it.
  *   reissue()  a new code while the teacher has not signed in; the old one dies.
  *              Owner, 2026-10-28, "E-mail only; managers can see": only the super
  *              admin, the Teachers manager and the teacher's CURRENT supervisor
@@ -113,6 +119,50 @@ export class TeacherOnboardingService {
       teacher: { id, name: created.name, supervisorId },
       signIn: email,
       firstLogin: { code: created.issued.code, expiresAt: created.issued.expiresAt.toISOString(), emailed },
+    };
+  }
+
+  async giveSignIn(actorId: string, teacherId: string, body: Record<string, unknown>) {
+    const { actor, onboarding } = await this.files.onboardingGate(actorId);
+    const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
+    if (!isUuid(teacherId)) throw notFound;
+    const email = requireEmail(body.email);
+    const reason = optionalText('reason', body.reason, 500) ?? 'sign-in given to an existing teacher';
+    const issuer = await this.issuerAccount(actor);
+    let issued: { id: string; code: string; expiresAt: Date };
+    try {
+      issued = await this.prisma.$transaction(async (tx) => {
+        const [row] = await tx.$queryRaw<Array<{ account: string }>>`
+          SELECT chat.give_teacher_sign_in(${teacherId}::uuid, ${email}::text, ${reason}::text, ${actor.actorId}::uuid)::text AS account`;
+        return this.resets.issueInTx(tx, {
+          accountId: row!.account,
+          organizationId: actor.organizationId as string,
+          issuedByStaffId: actor.actorId,
+          issuedByAccountId: issuer,
+          reason: 'a first sign-in for an existing teacher',
+          signOutEverywhere: false,
+          purpose: 'first_login',
+        });
+      });
+    } catch (e) {
+      const text = errorText(e);
+      if (/no such teacher for you to give a sign-in/.test(text)) throw notFound;
+      if (/an inactive teacher gets no sign-in/.test(text)) {
+        throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'this teacher is no longer active', 409);
+      }
+      if (/this teacher already has a sign-in/.test(text)) {
+        throw new CommError(CommErrorCode.TEACHER_HAS_SIGN_IN, 'this teacher already has a sign-in; send a new first sign-in code or reset it', 409);
+      }
+      throw await this.refusal(e, actor, email, null);
+    }
+    const emailed = await this.deliver(email, issued);
+    const seesCode = onboarding.supervisorChoice === 'any';
+    return {
+      teacherId,
+      signIn: email,
+      firstLogin: seesCode
+        ? { code: issued.code, expiresAt: issued.expiresAt.toISOString(), emailed }
+        : { expiresAt: issued.expiresAt.toISOString(), emailed },
     };
   }
 
@@ -367,7 +417,7 @@ export class TeacherOnboardingService {
     const tooBusy = busy(e);
     if (tooBusy) return tooBusy;
     const text = errorText(e);
-    if (/adds a teacher|only an active staff member adds a teacher/.test(text)) {
+    if (/adds a teacher|only an active staff member (adds a teacher|gives a teacher a sign-in)/.test(text)) {
       return new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'only the Teachers department or the super admin adds a teacher');
     }
     if (/the sign-in e-mail is an e-mail address/.test(text)) return invalid('email', 'must be an e-mail address');
