@@ -1849,6 +1849,18 @@ abstract class L10n {
   /// **'A child of this group moved to another supervisor'**
   String get systemGroupLearnerDetached;
 
+  /// PD-42: a child added to the family joined its group.
+  ///
+  /// In en, this message translates to:
+  /// **'{learner} joined this group'**
+  String systemGroupLearnerAdded(String learner);
+
+  /// No description provided for @systemGroupLearnerAddedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'A child joined this group'**
+  String get systemGroupLearnerAddedNoName;
+
   /// No description provided for @systemCoverStarted.
   ///
   /// In en, this message translates to:

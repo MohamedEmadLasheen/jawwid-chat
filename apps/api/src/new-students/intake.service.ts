@@ -90,23 +90,29 @@ export class FamilyIntakeService {
   /** What the form needs: who the caller enters as, who they may enter for, the teachers. */
   async options(actorId: string) {
     const s = await this.standing(actorId);
-    const onBehalfOf = s.standing === 'operations_manager' || s.standing === 'sales_manager' || s.standing === 'super_admin'
-      ? await this.prisma.$queryRaw<Array<{ id: string; name: string; kind: 'operations' | 'sales' }>>`
-          SELECT st.id::text AS id, st.name, d.kind
-            FROM chat.department_member m
-            JOIN chat.department d ON d.id = m.department_id
-            JOIN chat.staff st ON st.id = m.staff_id AND st.is_active AND st.left_at IS NULL
-           WHERE st.organization_id = ${s.org}::uuid
-             AND ((d.kind = 'operations' AND m.position = 'supervisor' AND ${s.standing !== 'sales_manager'})
-               OR (d.kind = 'sales' AND ${s.standing !== 'operations_manager'}))
-           ORDER BY st.name, st.id`
-      : [];
+    const onBehalfOf = isManager(s) ? await this.enterableFor(s) : [];
     const teachers = await this.prisma.teacher.findMany({
       where: { organizationId: s.org, isActive: true, leftAt: null },
       select: { id: true, name: true },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
-    return { standing: s.standing, manager: s.manager, ready: await this.ready(), onBehalfOf, teachers };
+    // QA on #202: a manager with nobody to enter a family for is told so,
+    // instead of a form that cannot be saved. They never own it themself.
+    const noTeam = isManager(s) && onBehalfOf.length === 0;
+    return { standing: s.standing, manager: s.manager, ready: await this.ready(), onBehalfOf, noTeam, teachers };
+  }
+
+  /** The supervisors a manager may enter a family for (D5): their department's. */
+  private async enterableFor(s: Standing) {
+    return this.prisma.$queryRaw<Array<{ id: string; name: string; kind: 'operations' | 'sales' }>>`
+      SELECT st.id::text AS id, st.name, d.kind
+        FROM chat.department_member m
+        JOIN chat.department d ON d.id = m.department_id
+        JOIN chat.staff st ON st.id = m.staff_id AND st.is_active AND st.left_at IS NULL
+       WHERE st.organization_id = ${s.org}::uuid
+         AND ((d.kind = 'operations' AND m.position = 'supervisor' AND ${s.standing !== 'sales_manager'})
+           OR (d.kind = 'sales' AND ${s.standing !== 'operations_manager'}))
+       ORDER BY st.name, st.id`;
   }
 
   async enter(actorId: string, body: unknown) {
@@ -251,14 +257,17 @@ export class FamilyIntakeService {
       return { replay: false as const, enrolmentId: input.intakeId, familyId: family.id, contactId: family.contactId, learners, supervisorId };
     });
 
-    if (created.replay) return created.result;
+    if (created.replay) return { ...created.result, group: null };
     const schedules = await this.schedule(s, created.learners);
+    // PD-42 PR-3: placed on the family's supervisor, they join its live group.
+    const group = created.supervisorId ? await this.joinGroup(s, created.familyId, created.learners.map((l) => l.id)) : 'none';
     return {
       enrolmentId: created.enrolmentId,
       familyId: created.familyId,
       learnerIds: created.learners.map((l) => l.id),
       supervision: created.supervisorId ? 'placed' : 'needs_operations_supervisor',
       schedules,
+      group,
       replay: false,
     };
   }
@@ -332,6 +341,383 @@ export class FamilyIntakeService {
   }
 
   // ------------------------------------------------------------------
+  // PR-3: the Operations side
+
+  /**
+   * New Students' families entered by hand (plan §10.3), to whoever owns them:
+   * the entrant's supervision or Sales ownership, their department manager,
+   * the Operations manager and the super admin; the Sales manager, the
+   * families with a Sales owner. No contact channel (G-07): the parent's name,
+   * the children, who entered them and when, who owns them, and the sign-up.
+   */
+  async entered(actorId: string) {
+    const s = await this.standing(actorId);
+    const everyFamily = s.standing === 'super_admin' || s.standing === 'operations_manager';
+    const rows = await this.prisma.$queryRaw<Array<{
+      id: string; kind: string; family_id: string; contact_id: string; parent_name: string | null; account_id: string | null;
+      learner_ids: string[]; entered_by: string; entered_by_name: string | null; entered_at: Date; group_id: string | null;
+    }>>`
+      SELECT e.id::text AS id, e.kind, e.family_id::text AS family_id, e.contact_id::text AS contact_id, c.name AS parent_name,
+             c.account_id::text AS account_id, e.learner_ids::text[] AS learner_ids, e.assigned_by::text AS entered_by,
+             st.name AS entered_by_name, e.assigned_at AS entered_at, e.group_conversation_id::text AS group_id
+        FROM chat.student_enrolment e
+        JOIN chat.contact c ON c.id = e.contact_id
+        LEFT JOIN chat.staff st ON st.id = e.assigned_by
+       WHERE e.organization_id = ${s.org}::uuid AND e.origin = 'intake'
+         AND (${everyFamily}
+              OR (${s.standing === 'sales_manager'} AND EXISTS (SELECT 1 FROM chat.family_sales_owner o WHERE o.family_id = e.family_id))
+              OR (${s.standing !== 'sales_manager'} AND chat.staff_owns_family(${s.actor.actorId}::uuid, e.family_id)))
+       ORDER BY e.assigned_at DESC, e.id`;
+    const families = [...new Set(rows.map((r) => r.family_id))];
+    const owners = await this.ownersOf(families);
+    const learnerIds = rows.flatMap((r) => r.learner_ids);
+    const children = learnerIds.length
+      ? await this.prisma.learner.findMany({ where: { id: { in: learnerIds } }, select: { id: true, name: true } })
+      : [];
+    const nameOf = new Map(children.map((c) => [c.id, c.name]));
+    const signup = await this.signupStates(rows.map((r) => r.account_id).filter((a): a is string => a !== null));
+    return {
+      viewer: s.standing,
+      canAssignSupervisor: everyFamily,
+      families: rows.map((r) => {
+        const o = owners.get(r.family_id)!;
+        // Who relays the sign-up code (review of #214, as PD-16): the super
+        // admin and the Operations manager; the children's supervisor; while
+        // no child has one yet, the Sales owner and the Sales manager.
+        const responsible = everyFamily || o.supervisorIds.includes(s.actor.actorId)
+          || (o.supervisorIds.length === 0 && (o.salesOwner?.id === s.actor.actorId || s.standing === 'sales_manager'));
+        const signupState = r.account_id ? (signup.get(r.account_id) ?? { state: 'not_started' as const }) : { state: 'no_email' as const };
+        return {
+          enrolmentId: r.id,
+          kind: r.kind as 'new_family' | 'added_children',
+          familyId: r.family_id,
+          contactId: r.contact_id,
+          parentName: r.parent_name,
+          children: r.learner_ids.map((id) => ({ id, name: nameOf.get(id) ?? null })),
+          enteredBy: { id: r.entered_by, name: r.entered_by_name },
+          enteredAt: r.entered_at.toISOString(),
+          supervisor: o.supervisor,
+          needsOperationsSupervisor: o.needsOperationsSupervisor,
+          salesOwner: o.salesOwner,
+          suggestion: o.needsOperationsSupervisor ? o.suggestion : null,
+          // D1: only the family's Sales owner suggests (review of #214).
+          canSuggestSupervisor: o.needsOperationsSupervisor && o.salesOwner?.id === s.actor.actorId,
+          groupConversationId: r.group_id ?? o.groupConversationId,
+          parentSignup: signupState.state === 'code_waiting' && !responsible
+            ? { state: 'code_waiting' as const, issuedAt: signupState.issuedAt }
+            : signupState,
+        };
+      }),
+    };
+  }
+
+  /** The family as the Parent Profile reads it: its sign-in, its owners, and what the viewer may do. */
+  async family(actorId: string, familyId: string) {
+    const s = await this.standing(actorId);
+    const family = await this.requireOwnFamily(s, familyId);
+    const o = (await this.ownersOf([family.id])).get(family.id)!;
+    const assigner = s.standing === 'super_admin' || s.standing === 'operations_manager';
+    const salesChanger = s.standing === 'super_admin' || s.standing === 'sales_manager';
+    const suggester = o.salesOwner?.id === s.actor.actorId;
+    const can = {
+      setSignInEmail: family.accountId === null,
+      addChild: true,
+      suggestSupervisor: suggester && o.needsOperationsSupervisor,
+      assignOperationsSupervisor: assigner && o.needsOperationsSupervisor,
+      changeSalesOwner: salesChanger,
+    };
+    return {
+      familyId: family.id,
+      contactId: family.contactId,
+      signIn: family.accountId !== null,
+      supervisor: o.supervisor,
+      needsOperationsSupervisor: o.needsOperationsSupervisor,
+      salesOwner: o.salesOwner,
+      suggestion: o.needsOperationsSupervisor ? o.suggestion : null,
+      can,
+      // Placing: the manager's own Operations department (the super admin: any); suggesting: any.
+      supervisorChoices: can.assignOperationsSupervisor ? await this.operationsSupervisors(s, 'place')
+        : can.suggestSupervisor ? await this.operationsSupervisors(s, 'suggest') : [],
+      salesOwnerChoices: can.changeSalesOwner ? await this.salesStaff(s.org) : [],
+    };
+  }
+
+  /**
+   * D1 / §4.2: the Operations manager (or the super admin) places a family's
+   * children who have no Operations supervisor on one -- the family's own, when
+   * some of its children already have one (siblings share it; PD-24 moves them
+   * together). family.owner_id follows. Once: moving them later is PD-24's.
+   */
+  async assignOperationsSupervisor(actorId: string, familyId: string, body: unknown) {
+    const s = await this.standing(actorId);
+    if (s.standing !== 'super_admin' && s.standing !== 'operations_manager') {
+      throw new CommError(CommErrorCode.INTAKE_DENIED, 'a family\'s Operations supervisor is chosen by the Operations manager');
+    }
+    const supervisorId = uuidField(body, 'supervisorId');
+    const family = await this.requireOwnFamily(s, familyId);
+    // The Operations manager places on a supervisor of their own department, as
+    // canAssignSupervision does; the super admin on any (review of #214).
+    if (!(await this.isOperationsSupervisor(s, supervisorId, 'place'))) {
+      throw new CommError(CommErrorCode.INTAKE_INVALID, 'supervisorId: a live Operations supervisor of your department', 400);
+    }
+    const placed = await this.write(s, async (tx) => {
+      await this.lock(tx, [family.id]);
+      const kids = await tx.$queryRaw<Array<{ id: string; supervisor_id: string | null }>>`
+        SELECT l.id::text AS id, ls.supervisor_id::text AS supervisor_id
+          FROM chat.learner l LEFT JOIN chat.learner_supervision ls ON ls.learner_id = l.id
+         WHERE l.family_id = ${family.id}::uuid
+         ORDER BY l.created_at, l.id`;
+      const waiting = kids.filter((k) => k.supervisor_id === null).map((k) => k.id);
+      if (waiting.length === 0) {
+        throw new CommError(CommErrorCode.INTAKE_STATE, 'this family already has its Operations supervisor; a change is a transfer (PD-24)', 409);
+      }
+      const current = [...new Set(kids.map((k) => k.supervisor_id).filter((x): x is string => x !== null))];
+      if (current.length > 0 && (current.length > 1 || current[0] !== supervisorId)) {
+        throw new CommError(CommErrorCode.INTAKE_INVALID, 'supervisorId: brothers and sisters share their Operations supervisor; this family\'s is already chosen', 400, { supervisorId: current[0] });
+      }
+      for (const learnerId of waiting) {
+        await tx.learnerSupervision.create({
+          data: { learnerId, organizationId: s.org, supervisorId, assignedBy: s.actor.actorId, reason: 'Operations supervisor chosen (PD-42)' },
+        });
+        await this.audit.audit(tx, {
+          actorId: s.actor.actorId, action: 'learner.supervisor_assigned', entity: 'learner', entityId: learnerId,
+          after: { supervisorId }, reason: 'Operations supervisor chosen (PD-42)',
+        });
+      }
+      const [owner] = await tx.$queryRaw<Array<{ owner_id: string }>>`SELECT owner_id::text AS owner_id FROM chat.family WHERE id = ${family.id}::uuid`;
+      if (owner?.owner_id !== supervisorId) {
+        await tx.$executeRaw`SELECT chat.transfer_ownership(${family.id}::uuid, ${supervisorId}::uuid,
+          'Operations supervisor chosen by the Operations manager (PD-42)', ${s.actor.actorId}::uuid)`;
+      }
+      await this.audit.audit(tx, {
+        actorId: s.actor.actorId, action: 'family.operations_supervisor_set', entity: 'family', entityId: family.id,
+        after: { supervisorId, learnerIds: waiting }, reason: 'Operations supervisor chosen (PD-42)',
+      });
+      return waiting;
+    });
+    const group = await this.joinGroup(s, family.id, placed);
+    return { familyId: family.id, supervisorId, learnerIds: placed, group };
+  }
+
+  /** D1: a Sales owner suggests the Operations supervisor of a family waiting for one. It places nothing. */
+  async suggestSupervisor(actorId: string, familyId: string, body: unknown) {
+    const s = await this.standing(actorId);
+    const supervisorId = uuidField(body, 'supervisorId');
+    const family = await this.requireOwnFamily(s, familyId);
+    const owner = await this.prisma.familySalesOwner.findUnique({ where: { familyId: family.id }, select: { staffId: true } });
+    if (owner?.staffId !== s.actor.actorId) {
+      throw new CommError(CommErrorCode.INTAKE_DENIED, 'a supervisor is suggested by the family\'s Sales owner; the Operations manager places it');
+    }
+    if (!(await this.isOperationsSupervisor(s, supervisorId, 'suggest'))) {
+      throw new CommError(CommErrorCode.INTAKE_INVALID, 'supervisorId: a live Operations supervisor of this academy', 400);
+    }
+    await this.write(s, async (tx) => {
+      await this.lock(tx, [family.id]);
+      const [{ waiting }] = await tx.$queryRaw<Array<{ waiting: boolean }>>`
+        SELECT EXISTS (SELECT 1 FROM chat.learner l
+                        WHERE l.family_id = ${family.id}::uuid
+                          AND NOT EXISTS (SELECT 1 FROM chat.learner_supervision ls WHERE ls.learner_id = l.id)) AS waiting`;
+      if (!waiting) throw new CommError(CommErrorCode.INTAKE_STATE, 'this family already has its Operations supervisor', 409);
+      await tx.$executeRaw`
+        INSERT INTO chat.family_supervisor_suggestion (family_id, organization_id, supervisor_id, suggested_by)
+        VALUES (${family.id}::uuid, ${s.org}::uuid, ${supervisorId}::uuid, ${s.actor.actorId}::uuid)
+        ON CONFLICT (family_id) DO UPDATE SET supervisor_id = EXCLUDED.supervisor_id, suggested_by = EXCLUDED.suggested_by`;
+      await this.audit.audit(tx, {
+        actorId: s.actor.actorId, action: 'family.supervisor_suggested', entity: 'family', entityId: family.id,
+        after: { supervisorId }, reason: 'suggested by the family\'s Sales owner (PD-42)',
+      });
+    });
+    return { familyId: family.id, supervisorId };
+  }
+
+  /** { staffId, reason } -- the Sales manager (or the super admin) sets or changes a family's Sales owner. */
+  async changeSalesOwner(actorId: string, familyId: string, body: unknown) {
+    const s = await this.standing(actorId);
+    if (s.standing !== 'super_admin' && s.standing !== 'sales_manager') {
+      throw new CommError(CommErrorCode.INTAKE_DENIED, 'a family\'s Sales owner is changed by the Sales manager');
+    }
+    const staffId = uuidField(body, 'staffId');
+    const raw = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+    const reason = typeof raw.reason === 'string' ? raw.reason.trim() : '';
+    if (reason.length < 1 || reason.length > 500) throw new CommError(CommErrorCode.INTAKE_INVALID, 'reason: required, at most 500 characters', 400);
+    const family = await this.requireOwnFamily(s, familyId);
+    const [target] = await this.prisma.$queryRaw<Array<{ sales: string | null }>>`
+      SELECT chat.sales_department_role(st.id) AS sales FROM chat.staff st
+       WHERE st.id = ${staffId}::uuid AND st.organization_id = ${s.org}::uuid AND st.is_active AND st.left_at IS NULL`;
+    if (!target?.sales) throw new CommError(CommErrorCode.INTAKE_INVALID, 'staffId: a live member of the Sales department', 400);
+    const result = await this.write(s, async (tx) => {
+      await this.lock(tx, [family.id]);
+      const current = await tx.familySalesOwner.findUnique({ where: { familyId: family.id } });
+      if (current?.staffId === staffId) throw new CommError(CommErrorCode.INTAKE_STATE, 'this is already the family\'s Sales owner', 409);
+      if (current) {
+        await tx.familySalesOwner.update({ where: { familyId: family.id }, data: { staffId, assignedBy: s.actor.actorId, reason } });
+        await this.audit.audit(tx, {
+          actorId: s.actor.actorId, action: 'family.sales_owner_changed', entity: 'family', entityId: family.id,
+          before: { salesOwnerId: current.staffId }, after: { salesOwnerId: staffId }, reason,
+        });
+      } else {
+        await tx.familySalesOwner.create({ data: { familyId: family.id, organizationId: s.org, staffId, assignedBy: s.actor.actorId, reason } });
+        await this.audit.audit(tx, {
+          actorId: s.actor.actorId, action: 'family.sales_owner_set', entity: 'family', entityId: family.id,
+          after: { salesOwnerId: staffId }, reason,
+        });
+      }
+      return { from: current?.staffId ?? null, to: staffId };
+    });
+    return { familyId: family.id, salesOwnerId: result.to, previousSalesOwnerId: result.from };
+  }
+
+  /** The Student Profile's "Current package": the carried-over row, the balance, and what the viewer may do. */
+  async carriedOverOf(actorId: string, learnerId: string) {
+    const s = await this.standing(actorId);
+    const learner = await this.requireOwnLearner(s, learnerId);
+    const [row] = await this.prisma.$queryRaw<Array<{
+      total: number; completed: number; plan_months: number | null; created_by: string; created_by_name: string | null;
+      created_at: Date; in_window: boolean;
+    }>>`
+      SELECT ls.lessons_included AS total, ls.lessons_used_before AS completed, ls.plan_months::int AS plan_months,
+             ls.created_by::text AS created_by, st.name AS created_by_name, ls.created_at,
+             ls.created_at > now() - interval '14 days' AS in_window
+        FROM chat.learner_subscription ls LEFT JOIN chat.staff st ON st.id = ls.created_by
+       WHERE ls.learner_id = ${learner.id}::uuid AND ls.source = 'carried_over' AND ls.voided_at IS NULL
+       LIMIT 1`;
+    const [facts] = await this.prisma.$queryRaw<Array<{ entered_by: string | null; entry_open: boolean; standing_rows: number }>>`
+      SELECT i.entered_by::text AS entered_by,
+             coalesce(i.entered_at > now() - interval '14 days', false) AS entry_open,
+             (SELECT count(*)::int FROM chat.learner_subscription x WHERE x.learner_id = ${learner.id}::uuid AND x.voided_at IS NULL) AS standing_rows
+        FROM (SELECT 1) one
+        LEFT JOIN chat.learner_intake i ON i.learner_id = ${learner.id}::uuid`;
+    const access = await this.prisma.learnerAccess.findUnique({ where: { learnerId: learner.id } });
+    const entrant = facts?.entered_by === s.actor.actorId;
+    return {
+      learnerId: learner.id,
+      package: row
+        ? {
+            total: row.total,
+            completed: row.completed,
+            remaining: row.total - row.completed,
+            planMonths: row.plan_months,
+            enteredBy: { id: row.created_by, name: row.created_by_name },
+            enteredAt: row.created_at.toISOString(),
+          }
+        : null,
+      access: access ? { state: access.state, balance: access.balance } : null,
+      can: {
+        carryOver: !row && !!facts?.entered_by && facts.standing_rows === 0 && ((entrant && facts.entry_open) || s.manager),
+        correct: !!row && ((row.created_by === s.actor.actorId && row.in_window) || s.manager),
+      },
+    };
+  }
+
+  /** Each family's supervision, Sales owner, suggestion and live group, for the lists above. */
+  private async ownersOf(familyIds: string[]) {
+    const out = new Map<string, {
+      supervisor: { id: string; name: string | null } | null;
+      supervisorIds: string[];
+      needsOperationsSupervisor: boolean;
+      salesOwner: { id: string; name: string | null } | null;
+      suggestion: { id: string; name: string | null } | null;
+      groupConversationId: string | null;
+    }>();
+    if (familyIds.length === 0) return out;
+    const rows = await this.prisma.$queryRaw<Array<{
+      family_id: string; children: number; supervised: number; supervisor_ids: string[]; supervisor_name: string | null;
+      sales_id: string | null; sales_name: string | null; suggested_id: string | null; suggested_name: string | null; group_id: string | null;
+    }>>`
+      SELECT f.id::text AS family_id,
+             (SELECT count(*)::int FROM chat.learner l WHERE l.family_id = f.id) AS children,
+             (SELECT count(*)::int FROM chat.learner l JOIN chat.learner_supervision ls ON ls.learner_id = l.id WHERE l.family_id = f.id) AS supervised,
+             coalesce((SELECT array_agg(DISTINCT ls.supervisor_id::text) FROM chat.learner l JOIN chat.learner_supervision ls ON ls.learner_id = l.id
+                        WHERE l.family_id = f.id), '{}') AS supervisor_ids,
+             (SELECT st.name FROM chat.learner l JOIN chat.learner_supervision ls ON ls.learner_id = l.id JOIN chat.staff st ON st.id = ls.supervisor_id
+               WHERE l.family_id = f.id ORDER BY l.created_at LIMIT 1) AS supervisor_name,
+             o.staff_id::text AS sales_id, so.name AS sales_name,
+             sg.supervisor_id::text AS suggested_id, ss.name AS suggested_name,
+             (SELECT c.id::text FROM chat.conversation c WHERE c.family_id = f.id AND c.type = 'family_group' AND c.archived_at IS NULL
+               ORDER BY c.created_at, c.id LIMIT 1) AS group_id
+        FROM chat.family f
+        LEFT JOIN chat.family_sales_owner o ON o.family_id = f.id
+        LEFT JOIN chat.staff so ON so.id = o.staff_id
+        LEFT JOIN chat.family_supervisor_suggestion sg ON sg.family_id = f.id
+        LEFT JOIN chat.staff ss ON ss.id = sg.supervisor_id
+       WHERE f.id = ANY(${familyIds}::uuid[])`;
+    for (const r of rows) {
+      out.set(r.family_id, {
+        supervisor: r.supervisor_ids.length === 1 ? { id: r.supervisor_ids[0]!, name: r.supervisor_name } : null,
+        supervisorIds: r.supervisor_ids,
+        needsOperationsSupervisor: r.children > 0 && r.supervised < r.children,
+        salesOwner: r.sales_id ? { id: r.sales_id, name: r.sales_name } : null,
+        suggestion: r.suggested_id ? { id: r.suggested_id, name: r.suggested_name } : null,
+        groupConversationId: r.group_id,
+      });
+    }
+    return out;
+  }
+
+  /** The parent's sign-up, by account: signed up, a code waiting (shown to the family's owners), or not started. */
+  private async signupStates(accountIds: string[]) {
+    const out = new Map<string, { state: 'signed_up' } | { state: 'code_waiting'; code: string | null; issuedAt: string } | { state: 'not_started' }>();
+    if (accountIds.length === 0) return out;
+    const [credentials, codes] = await Promise.all([
+      this.prisma.accountCredential.findMany({ where: { accountId: { in: accountIds } }, select: { accountId: true } }),
+      this.prisma.parentSignupCode.findMany({
+        where: { accountId: { in: accountIds }, usedAt: null, supersededAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+      }),
+    ]);
+    for (const c of codes) out.set(c.accountId, { state: 'code_waiting', code: c.relayCode, issuedAt: c.createdAt.toISOString() });
+    for (const c of credentials) out.set(c.accountId, { state: 'signed_up' });
+    return out;
+  }
+
+  /** Children just placed or added join the family's live group, after their own transaction (best effort, said in the answer). */
+  private async joinGroup(s: Standing, familyId: string, learnerIds: string[]): Promise<'joined' | 'none' | 'not_joined'> {
+    if (learnerIds.length === 0) return 'none';
+    try {
+      const joined = await this.conversations.addLearnersToFamilyGroup(s.actor.actorId, { familyId, learnerIds });
+      if (!joined) return 'none';
+      // The enrolments that listed these children now name the group they are in.
+      await this.prisma.$executeRaw`
+        UPDATE chat.student_enrolment
+           SET group_conversation_id = ${joined.conversationId}::uuid, group_created_by = ${s.actor.actorId}::uuid
+         WHERE family_id = ${familyId}::uuid AND group_conversation_id IS NULL AND learner_ids && ${learnerIds}::uuid[]`;
+      return 'joined';
+    } catch (e) {
+      this.log.warn(`family ${familyId}: children not added to the family group: ${e instanceof Error ? e.message : String(e)}`);
+      return 'not_joined';
+    }
+  }
+
+  /**
+   * The Operations supervisors a family may go to. To PLACE it: the Operations
+   * manager's own department's (the super admin: every one); to SUGGEST one:
+   * every one of the academy.
+   */
+  private async operationsSupervisors(s: Standing, purpose: 'place' | 'suggest') {
+    const own = purpose === 'place' && s.standing !== 'super_admin' ? s.actor.actorId : null;
+    return this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
+      SELECT DISTINCT st.id::text AS id, st.name
+        FROM chat.staff st
+        JOIN chat.department_member m ON m.staff_id = st.id AND m.position = 'supervisor'
+        JOIN chat.department d ON d.id = m.department_id AND d.kind = 'operations'
+       WHERE st.organization_id = ${s.org}::uuid AND st.is_active AND st.left_at IS NULL
+         AND (${own}::uuid IS NULL OR d.manager_id = ${own}::uuid)
+       ORDER BY name, id`;
+  }
+
+  private async isOperationsSupervisor(s: Standing, staffId: string, purpose: 'place' | 'suggest'): Promise<boolean> {
+    return (await this.operationsSupervisors(s, purpose)).some((x) => x.id === staffId);
+  }
+
+  private async salesStaff(org: string) {
+    return this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
+      SELECT st.id::text AS id, st.name
+        FROM chat.staff st
+       WHERE st.organization_id = ${org}::uuid AND st.is_active AND st.left_at IS NULL
+         AND chat.sales_department_role(st.id) IS NOT NULL
+       ORDER BY st.name, st.id`;
+  }
+
+  // ------------------------------------------------------------------
 
   /** Who the caller is, for PD-42; refused before any lookup when they enter nothing. */
   private async standing(actorId: string): Promise<Standing> {
@@ -371,7 +757,12 @@ export class FamilyIntakeService {
         ? { supervisorId: self, salesOwnerId: null, onBehalfOf: null }
         : { supervisorId: null, salesOwnerId: self, onBehalfOf: null };
     }
-    if (!onBehalfOf) throw new CommError(CommErrorCode.INTAKE_INVALID, 'onBehalfOf: a manager names the supervisor the family belongs to', 400);
+    if (!onBehalfOf) {
+      if ((await this.enterableFor(s)).length === 0) {
+        throw new CommError(CommErrorCode.INTAKE_INVALID, 'a family belongs to a supervisor of your department, and it has none yet: add one first', 400);
+      }
+      throw new CommError(CommErrorCode.INTAKE_INVALID, 'onBehalfOf: a manager names the supervisor the family belongs to', 400);
+    }
     const [t] = await this.prisma.$queryRaw<Array<{ ops: boolean; sales: string | null }>>`
       SELECT EXISTS (SELECT 1 FROM chat.department_member m JOIN chat.department d ON d.id = m.department_id
                       WHERE m.staff_id = st.id AND d.kind = 'operations' AND m.position = 'supervisor') AS ops,
@@ -557,22 +948,25 @@ export class FamilyIntakeService {
     }
   }
 
-  private async requireOwnFamily(s: Standing, familyId: string) {
+  /** A family the caller owns; with its primary parent unless `parent: 'optional'` (a child's own reads). */
+  private async requireOwnFamily(s: Standing, familyId: string, parent: 'required' | 'optional' = 'required') {
     if (!isUuid(familyId)) throw notFound();
     const [row] = await this.prisma.$queryRaw<Array<{ id: string; contact_id: string | null; account_id: string | null; owns: boolean }>>`
       SELECT f.id::text AS id, f.primary_contact_id::text AS contact_id, c.account_id::text AS account_id,
              chat.staff_owns_family(${s.actor.actorId}::uuid, f.id) AS owns
         FROM chat.family f LEFT JOIN chat.contact c ON c.id = f.primary_contact_id
        WHERE f.id = ${familyId.toLowerCase()}::uuid AND f.organization_id = ${s.org}::uuid`;
-    if (!row || !row.owns || !row.contact_id) throw notFound();
-    return { id: row.id, contactId: row.contact_id, accountId: row.account_id };
+    if (!row || !row.owns || (parent === 'required' && !row.contact_id)) throw notFound();
+    // contactId is set whenever the parent is required; the 'optional' callers do not read it.
+    return { id: row.id, contactId: row.contact_id as string, accountId: row.account_id };
   }
 
   private async requireOwnLearner(s: Standing, learnerId: string) {
     if (!isUuid(learnerId)) throw notFound();
     const learner = await this.prisma.learner.findFirst({ where: { id: learnerId.toLowerCase(), organizationId: s.org }, select: { id: true, familyId: true } });
     if (!learner) throw notFound();
-    await this.requireOwnFamily(s, learner.familyId);
+    // A child's package needs no parent record (families from before PD-16 may have none).
+    await this.requireOwnFamily(s, learner.familyId, 'optional');
     return learner;
   }
 
@@ -623,6 +1017,18 @@ export function payloadHash(payload: unknown): string {
 
 function notFound() {
   return new CommError(CommErrorCode.INTAKE_NOT_FOUND, 'family not found', 404);
+}
+
+/** A manager enters a family for one of their supervisors (D5); they never own it themself. */
+function isManager(s: Standing): boolean {
+  return s.standing === 'operations_manager' || s.standing === 'sales_manager' || s.standing === 'super_admin';
+}
+
+/** A required id in the body, as a lower-case uuid. */
+function uuidField(body: unknown, name: string): string {
+  const raw = (typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[name] : undefined);
+  if (typeof raw !== 'string' || !isUuid(raw)) throw new CommError(CommErrorCode.INTAKE_INVALID, `${name}: required`, 400);
+  return raw.toLowerCase();
 }
 
 function todayUtc(): Date {

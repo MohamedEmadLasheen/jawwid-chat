@@ -48,23 +48,6 @@ function registerHandlers(socket: Socket, qc: QueryClient): void {
   on('coverage.changed', () => {
     void qc.invalidateQueries({ queryKey: qk.coverageAll })
   })
-
-  on('ownership.changed', () => {
-    void qc.invalidateQueries({ queryKey: qk.dashboardAll })
-  })
-
-  on('unattended.changed', () => {
-    void qc.invalidateQueries({ queryKey: qk.dashboardHeader })
-  })
-
-  on('escalation.created', () => {
-    void qc.invalidateQueries({ queryKey: qk.needsAction })
-    void qc.invalidateQueries({ queryKey: qk.dashboardHeader })
-  })
-
-  on('presence.changed', () => {
-    void qc.invalidateQueries({ queryKey: qk.teamNow })
-  })
 }
 
 /** PD-37: well inside the server's 45 s presence TTL. */
