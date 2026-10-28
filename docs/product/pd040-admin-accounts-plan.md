@@ -654,3 +654,9 @@ Not covered: parameterised and write routes, and the Flutter staff app. Those co
   - Its exact routes are pinned by PD-41 in `pd040-route-permissions.spec.ts`.
   - This PR adds a check that everything its keys open is a `/certificates` or `/learner-certificates` route.
 - **Once seeded, a template is ordinary data.** The super admin edits or archives it like any other role. `GET /admin/access-roles` now marks it with `template: true`.
+
+**PR-4b, the review of #231 (migration `20261029220000_chat_pd040_template_followups`):**
+- **The seed no longer skips silently.** If an organization already has a non-template role with a template's key, the seed raises a notice and audits `access_role.template_skipped` (the key and the existing role's id). So a manager's later H5 refusal of "designer" has a trail. A template that is already seeded is still skipped quietly: that is what makes the seed idempotent.
+- **`is_template` is provenance only.** `chat.update_access_role` clears it when the super admin changes a template's keys. From then on it is the organization's own role. Its audit row records `template`.
+- **New organizations.** The super-admin bootstrap seeds the templates for its organization (`templatesSeeded` in its output). The runbook (`docs/admin/super-admin-bootstrap.md`) says how to seed an organization provisioned another way.
+

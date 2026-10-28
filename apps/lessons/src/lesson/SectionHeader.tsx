@@ -11,16 +11,19 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   benefits: 'الفوائد',
 };
 
-export function SectionHeader({
+export function SectionHeader<S extends string = SectionId>({
   sections,
   current,
   done,
   onSelect,
+  labels = SECTION_LABEL as Record<string, string>,
 }: {
-  sections: readonly SectionId[];
-  current: SectionId;
-  done: (s: SectionId) => boolean;
-  onSelect: (s: SectionId) => void;
+  sections: readonly S[];
+  current: S;
+  done: (s: S) => boolean;
+  onSelect: (s: S) => void;
+  /** The section names; the Quran lessons' by default. */
+  labels?: Record<string, string>;
 }) {
   return (
     <nav className="sections" aria-label="أقسام الدرس">
@@ -32,7 +35,7 @@ export function SectionHeader({
           aria-current={s === current ? 'step' : undefined}
           onClick={() => onSelect(s)}
         >
-          {SECTION_LABEL[s]}
+          {labels[s]}
           {done(s) ? <span className="section__star" aria-label="نجمة"> ★</span> : null}
         </button>
       ))}

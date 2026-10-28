@@ -270,7 +270,16 @@ export class CertificateService {
     const row = await this.findRow(this.prisma, ctx.actor, id);
     const [v] = await this.views(this.prisma, ctx, [row], true);
     if (!v) throw notFound();
-    return { certificate: v.full ? toFullDto(v.view) : toDesignDto(v.view) };
+    // Whoever may record the family's consent picks WHICH parent agreed from the family's contacts.
+    const consentContacts =
+      v.full && row.learnerId && v.view.acts.includes(CertificateAct.CONSENT)
+        ? await this.prisma.contact.findMany({
+            where: { family: { learners: { some: { id: row.learnerId } } }, isActive: true },
+            select: { id: true, name: true, relationship: true },
+            orderBy: { name: 'asc' },
+          })
+        : undefined;
+    return { certificate: v.full ? toFullDto(v.view) : toDesignDto(v.view), ...(consentContacts ? { consentContacts } : {}) };
   }
 
   /** The people a request may be for: the caller's learners (student) or teachers (teacher). */
