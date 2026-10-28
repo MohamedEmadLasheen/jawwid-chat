@@ -17,7 +17,7 @@
 --   chat.lesson_content_review   approve | reject | withdraw of ONE step of one
 --                                item, bound to the SHA-256 of the item's
 --                                canonical JSON (apps/lessons quran-content.ts,
---                                itemSha256). Append-only.
+--                                approvalSha256). Append-only.
 --
 -- Which steps an item NEEDS is decided by its kind, in code (requiredSteps in
 -- apps/lessons and apps/api); the database enforces how a step may be signed:
@@ -42,7 +42,7 @@ create table chat.lesson_content_review (
   scope        text not null check (scope ~ '^(quran-[0-9]{3}|play)$'),
   -- PD-29's ids (<kind>-NNN) for content; a mechanic's key for play.
   item_id      text not null,
-  item_sha256  text not null check (item_sha256 ~ '^[0-9a-f]{64}$'),
+  approval_sha256  text not null check (approval_sha256 ~ '^[0-9a-f]{64}$'),
   step         text not null check (step in ('check', 'teacher', 'scholar')),
   action       text not null check (action in ('approve', 'reject', 'withdraw')),
   staff_id     uuid not null references chat.staff (id),
@@ -62,8 +62,8 @@ create table chat.lesson_content_review (
 
 -- One approval per step per text: the backstop of "in order, once".
 create unique index lesson_content_one_approval_per_step
-  on chat.lesson_content_review (scope, item_id, item_sha256, step) where action = 'approve';
-create index lesson_content_review_item_idx on chat.lesson_content_review (scope, item_id, item_sha256);
+  on chat.lesson_content_review (scope, item_id, approval_sha256, step) where action = 'approve';
+create index lesson_content_review_item_idx on chat.lesson_content_review (scope, item_id, approval_sha256);
 
 comment on table chat.lesson_content_review is
   'PD-49: who signed which review step (check, teacher, scholar) of a children''s Quran content item or a game mechanic, for which exact item hash, when; or rejected or withdrew it, and why. Append-only; written only through chat.review_lesson_content.';
@@ -94,7 +94,7 @@ as $$
            else 'open'
          end
     from chat.lesson_content_review r
-   where r.scope = p_scope and r.item_id = p_item and r.item_sha256 = p_sha256;
+   where r.scope = p_scope and r.item_id = p_item and r.approval_sha256 = p_sha256;
 $$;
 
 -- The steps signed for this text, in order.
@@ -107,7 +107,7 @@ as $$
   select coalesce(array_agg(s.step order by array_position(array['check', 'teacher', 'scholar'], s.step)), '{}')
     from (select distinct r.step
             from chat.lesson_content_review r
-           where r.scope = p_scope and r.item_id = p_item and r.item_sha256 = p_sha256 and r.action = 'approve') s;
+           where r.scope = p_scope and r.item_id = p_item and r.approval_sha256 = p_sha256 and r.action = 'approve') s;
 $$;
 
 create function chat.guard_lesson_content_review()
@@ -128,11 +128,11 @@ begin
     raise exception 'the % step is signed only by an active reviewer holding %', new.step, chat.lesson_content_step_key(new.step)
       using errcode = 'insufficient_privilege';
   end if;
-  v_state := coalesce(chat.lesson_content_state(new.scope, new.item_id, new.item_sha256), 'open');
+  v_state := coalesce(chat.lesson_content_state(new.scope, new.item_id, new.approval_sha256), 'open');
   if v_state <> 'open' then
     raise exception 'this text of % is %: a corrected text is signed from the start', new.item_id, v_state using errcode = 'check_violation';
   end if;
-  v_steps := chat.lesson_content_steps(new.scope, new.item_id, new.item_sha256);
+  v_steps := chat.lesson_content_steps(new.scope, new.item_id, new.approval_sha256);
   if new.action = 'withdraw' and cardinality(v_steps) = 0 then
     raise exception 'only a signed text is withdrawn; reject it instead' using errcode = 'check_violation';
   end if;
@@ -149,7 +149,7 @@ begin
     end if;
     -- One person, one step: the steps are different people's judgements.
     if exists (select 1 from chat.lesson_content_review r
-                where r.scope = new.scope and r.item_id = new.item_id and r.item_sha256 = new.item_sha256
+                where r.scope = new.scope and r.item_id = new.item_id and r.approval_sha256 = new.approval_sha256
                   and r.action = 'approve' and r.staff_id = new.staff_id) then
       raise exception 'you already signed a step of this text: the next step is someone else''s' using errcode = 'insufficient_privilege';
     end if;
@@ -208,7 +208,7 @@ begin
   end if;
   -- One review at a time per text, so two people cannot both sign "the next step".
   perform pg_advisory_xact_lock(hashtext('pd049:' || p_scope || ':' || p_item || ':' || p_sha256));
-  insert into chat.lesson_content_review (scope, item_id, item_sha256, step, action, staff_id, category, reason)
+  insert into chat.lesson_content_review (scope, item_id, approval_sha256, step, action, staff_id, category, reason)
   values (p_scope, p_item, p_sha256, p_step, p_action, v_actor,
           case when p_action = 'approve' then null else p_category end,
           case when p_action = 'approve' then null else nullif(btrim(p_reason), '') end);
@@ -218,7 +218,7 @@ begin
   values (v_actor,
           case p_action when 'approve' then 'lesson_content.signed' when 'reject' then 'lesson_content.rejected' else 'lesson_content.withdrawn' end,
           'lesson_content_item', null, null,
-          jsonb_build_object('scope', p_scope, 'itemId', p_item, 'itemSha256', p_sha256, 'step', p_step,
+          jsonb_build_object('scope', p_scope, 'itemId', p_item, 'approvalSha256', p_sha256, 'step', p_step,
                              'state', v_state, 'steps', to_jsonb(v_steps),
                              'category', case when p_action = 'approve' then null else p_category end),
           -- audit_log needs a reason; a signature's is the step it signs.

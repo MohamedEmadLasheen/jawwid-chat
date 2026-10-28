@@ -30,16 +30,16 @@ export interface ItemStatus {
 const ORDER: readonly Step[] = ['check', 'teacher', 'scholar'];
 
 /** Pure: an item's status from the reviews of its scope. */
-export function itemStatus(subject: Pick<Subject, 'id' | 'itemSha256' | 'requiredSteps'>, reviews: readonly Pick<ReviewRow, 'itemId' | 'itemSha256' | 'step' | 'action'>[]): ItemStatus {
+export function itemStatus(subject: Pick<Subject, 'id' | 'approvalSha256' | 'requiredSteps'>, reviews: readonly Pick<ReviewRow, 'itemId' | 'approvalSha256' | 'step' | 'action'>[]): ItemStatus {
   const own = reviews.filter((r) => r.itemId === subject.id);
-  const current = own.filter((r) => r.itemSha256 === subject.itemSha256);
+  const current = own.filter((r) => r.approvalSha256 === subject.approvalSha256);
   const state = current.some((r) => r.action === 'withdraw') ? 'withdrawn' : current.some((r) => r.action === 'reject') ? 'rejected' : 'open';
   const signed = ORDER.filter((s) => current.some((r) => r.action === 'approve' && r.step === s));
   return {
     state,
     signed,
     approved: state === 'open' && subject.requiredSteps.every((s) => signed.includes(s)),
-    stale: own.some((r) => r.itemSha256 !== subject.itemSha256),
+    stale: own.some((r) => r.approvalSha256 !== subject.approvalSha256),
   };
 }
 
@@ -76,13 +76,13 @@ export class LessonContentService {
     const s = this.scopeOf(scope);
     const reviews = await this.store.reviews(s.scope);
     const items = [...s.subjects.values()].map((subject) => {
-      const own = reviews.filter((r) => r.itemId === subject.id && r.itemSha256 === subject.itemSha256);
+      const own = reviews.filter((r) => r.itemId === subject.id && r.approvalSha256 === subject.approvalSha256);
       const status = itemStatus(subject, reviews);
       const next = ORDER.find((step) => subject.requiredSteps.includes(step) && !status.signed.includes(step)) ?? null;
       return {
         id: subject.id,
         kind: subject.kind,
-        itemSha256: subject.itemSha256,
+        approvalSha256: subject.approvalSha256,
         item: subject.item,
         requiredSteps: subject.requiredSteps,
         ...status,
@@ -112,10 +112,10 @@ export class LessonContentService {
     if (!access.steps.includes(step as ReviewStep)) {
       throw new CommError(CommErrorCode.LESSON_CONTENT_DENIED, `the ${step} step needs its own key`);
     }
-    if (typeof body.itemSha256 !== 'string' || !SHA256.test(body.itemSha256)) {
-      throw new CommError(CommErrorCode.LESSON_CONTENT_INVALID, 'itemSha256: the hash of the text you reviewed, as SHA-256 hex', 422);
+    if (typeof body.approvalSha256 !== 'string' || !SHA256.test(body.approvalSha256)) {
+      throw new CommError(CommErrorCode.LESSON_CONTENT_INVALID, 'approvalSha256: the hash of the text you reviewed, as SHA-256 hex', 422);
     }
-    if (body.itemSha256 !== subject.itemSha256) {
+    if (body.approvalSha256 !== subject.approvalSha256) {
       throw new CommError(CommErrorCode.LESSON_CONTENT_STATE, 'this item changed since you opened it: read it again', 409);
     }
     let category: string | null = null;
@@ -131,8 +131,8 @@ export class LessonContentService {
       reason = body.reason.trim();
     }
     try {
-      const result = await this.store.review(s.scope, subject.id, subject.itemSha256, step, action as Action, category, reason, actor.actorId);
-      return { scope: s.scope, itemId: subject.id, itemSha256: subject.itemSha256, ...result };
+      const result = await this.store.review(s.scope, subject.id, subject.approvalSha256, step, action as Action, category, reason, actor.actorId);
+      return { scope: s.scope, itemId: subject.id, approvalSha256: subject.approvalSha256, ...result };
     } catch (e) {
       throw refusal(e);
     }
@@ -146,7 +146,7 @@ export class LessonContentService {
     const approvals = [...s.subjects.values()]
       .map((subject) => ({ subject, status: itemStatus(subject, reviews) }))
       .filter(({ status }) => status.approved)
-      .map(({ subject, status }) => ({ id: subject.id, itemSha256: subject.itemSha256, steps: status.signed }))
+      .map(({ subject, status }) => ({ id: subject.id, approvalSha256: subject.approvalSha256, steps: status.signed }))
       .sort((a, b) => a.id.localeCompare(b.id));
     if (s.scope === 'play') return { scope: 'play', approvals };
     return { surah: Number(s.scope.slice('quran-'.length)), lessonKey: s.scope, approvals };
