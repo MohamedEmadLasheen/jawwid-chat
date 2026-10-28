@@ -243,7 +243,7 @@ const BY_CODE: Record<string, Pair> = {
   'COMM.STAFF_ACCOUNT_NOT_FOUND': { ar: 'هذا الحساب غير موجود ضمن نطاقك.', en: 'This account is not within your reach.' },
   'COMM.STAFF_ACCOUNT_CONFLICT': { ar: 'هذا البريد يسجّل الدخول إلى Chat بالفعل.', en: 'This e-mail already signs in to Chat.' },
   'COMM.ACCESS_ROLE_INVALID': {
-    ar: 'لا يمكن تعريف هذا الدور: تحقّق من المعرّف والأسماء والصلاحيات.',
+    ar: 'لا يمكن تعريف هذا الدور: تحقّق من المعرّف والاسمين والصلاحيات.',
     en: 'This role cannot be defined: check the key, the names and the permissions.',
   },
   'COMM.ACCOUNT_ADMIN_STATE': {
