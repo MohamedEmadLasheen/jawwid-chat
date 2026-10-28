@@ -338,3 +338,35 @@ describe('6. what the Teacher File offers', () => {
     if (bySupervisor.status === 200) expect(bySupervisor.json.onboarding).toEqual({ canOffboard: false, canReactivate: false });
   });
 });
+
+describe('7. readiness: where a teacher is picked (plan §3.5-§3.7), warnings only', () => {
+  const NOT_READY = { setupIncomplete: true, notSignedIn: true, noSupervisor: true, loginSuspended: false };
+  const rowOf = async (subject: string, path: string, id: string) =>
+    ((await http(subject, 'GET', path)).json.teachers as Array<{ id: string; readiness?: unknown; unsupervised?: boolean }>).find((t) => t.id === id);
+
+  it('the Teacher Files list marks an unsupervised teacher', async () => {
+    const none = (await add(m.teachersManager.subject, { email: email('r') })).json.teacher.id as string;
+    const held = (await add(m.teachersManager.subject, { email: email('r'), supervisorId: m.teacherSupervisors[0]!.id })).json.teacher.id as string;
+    expect(await rowOf(m.teachersManager.subject, '/teacher-files', none)).toMatchObject({ unsupervised: true });
+    expect(await rowOf(m.teachersManager.subject, '/teacher-files', held)).toMatchObject({ unsupervised: false });
+  });
+
+  it('Change teacher and the Sales form say which teachers are still being set up', async () => {
+    const fresh = (await add(m.teachersManager.subject, { email: email('r') })).json.teacher.id as string;
+    expect(await rowOf(m.teachersManager.subject, '/teachers/candidates', fresh)).toMatchObject({ readiness: NOT_READY });
+    expect(await rowOf(m.salesManager.subject, '/trials/teachers', fresh)).toMatchObject({ readiness: NOT_READY });
+
+    const { id } = await signedInTeacher('r');
+    expect(await rowOf(m.teachersManager.subject, '/teachers/candidates', id)).toMatchObject({
+      readiness: { setupIncomplete: true, notSignedIn: false, noSupervisor: false, loginSuspended: false },
+    });
+  });
+
+  it('a login suspended through Accounts is said (G8), and the teacher stays pickable', async () => {
+    const { id } = await signedInTeacher('r');
+    const accountId = (await g.prisma.teacher.findUniqueOrThrow({ where: { id } })).accountId as string;
+    await g.prisma.$queryRaw`SELECT chat.deactivate_principal('account', ${accountId}::uuid, 'qa', null, 'suspended')::text`;
+    expect(await rowOf(m.teachersManager.subject, '/teachers/candidates', id)).toMatchObject({ isActive: true, readiness: { loginSuspended: true } });
+    expect(await rowOf(m.salesManager.subject, '/trials/teachers', id)).toMatchObject({ readiness: { loginSuspended: true } });
+  });
+});

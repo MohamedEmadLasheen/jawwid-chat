@@ -237,6 +237,11 @@ describe('teachers and their supervisors', () => {
     expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher U' })).toHaveValue('')
   })
 
+  it('opens on Teachers & supervisors from ?tab=teachers (the Teacher Files "Assign supervisor" shortcut)', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'owner', role: 'super_admin' }), route: '/admin/teams?tab=teachers' })
+    expect(await screen.findByRole('tab', { name: 'Teachers & supervisors', selected: true })).toBeInTheDocument()
+  })
+
   it('shows a teacher whose supervisor left as unassigned, naming the former supervisor', async () => {
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/organization' })
     const select = await screen.findByRole('combobox', { name: 'Supervisor for Teacher V' })
