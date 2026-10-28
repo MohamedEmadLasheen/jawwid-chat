@@ -1,0 +1,344 @@
+{
+  "surah": 108,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson (which has no data file; its content lives in the components), then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the five Tajweed rules, the Tajweed game and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs, the quiz question on the meaning of the whole of ayah 2 (its text was the ayah typed into the question, and there is no ayah-meaning question shape), and every hand-typed Quran string (replaced by positions). Not carried: the intro quiz and facts (name, ayah count, Makki), the reason for revelation paragraph, the order, start-end matching, build-the-ayah and listen games, the three word-meaning games, the lessons' titles and \"how to apply\" lines, and the second reflection prompt. The old lesson had no did-you-know lines and no reflection ideas. Emoji were stripped from the ends of lines."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-108 (read as text, never built or run)",
+    "sha256": {
+      "components/IntroSection.tsx": "ad4cd68bf54769a90b8d8529182f2fab463498a63cff3b6ebb340a0060d053d0",
+      "components/MeaningsSection.tsx": "f653fb4dbcb4a3c27ac7f79a233db51de8f88a76a74c1fb14a55e68b81c774b6",
+      "components/GamesSection.tsx": "d4045750aa072e1e92fcec73160104143dccf0e3ac04a1ce3800f97551065bbb",
+      "components/FinalQuiz.tsx": "6771cbea2dbd6345c0f0355b74b8cd83b4ffaa73eefe3fdb29c9dd7b33877cae",
+      "components/TajweedSection.tsx": "273ccede45ec748c9005bc8881f293a7e258741ac4bd6ca3e1f39fd995cfefc5",
+      "components/WelcomeSection.tsx": "33c27b154e341ebb664c8d83bec363db9ed50031f382891006a72d92c72e0d75"
+    }
+  },
+  "intro": {
+    "text": "سورة الكوثر هي أقصر سورة في القرآن الكريم! نزلت لتُفرح النبي محمد ﷺ وتُبشره بنهر جميل في الجنة اسمه الكوثر",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "يا محمد، لقد أعطاك الله نهراً جميلاً في الجنة اسمه الكوثر!",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "صلِّ لله واشكره على نعمه الكثيرة واذبح الأضحية لله",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "الذي يكرهك يا محمد هو الخاسر وليس أنت!",
+      "review": "Renders al-abtar as \"the loser\". Common tafsir: the one cut off from all good, whose remembrance is cut off (the lesson's own word meaning says \"cut off, with no good in him\"). Teacher to choose the wording."
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "نحن (الله سبحانه)",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "منحناك وأهديناك",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "نهر في الجنة / الخير الكثير",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 1,
+      "meaning": "أدِّ الصلاة",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 2,
+      "meaning": "لله وحده",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "واذبح الأضحية لله",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 1,
+      "meaning": "حقاً / بالتأكيد",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 2,
+      "meaning": "الذي يكرهك ويبغضك",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 3,
+      "meaning": "هو (ضمير)",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 4,
+      "meaning": "المقطوع الذي لا خير فيه",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 3,
+      "word": 4
+    },
+    {
+      "ayah": 1,
+      "word": 1
+    },
+    {
+      "ayah": 2,
+      "word": 2
+    },
+    {
+      "ayah": 3,
+      "word": 2
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها اليوم؟",
+      "options": [
+        {
+          "text": "سورة الفاتحة"
+        },
+        {
+          "text": "سورة الكوثر"
+        },
+        {
+          "text": "سورة الناس"
+        },
+        {
+          "text": "سورة الإخلاص"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الكوثر؟",
+      "options": [
+        {
+          "text": "2"
+        },
+        {
+          "text": "3"
+        },
+        {
+          "text": "4"
+        },
+        {
+          "text": "5"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "جبل كبير"
+        },
+        {
+          "text": "نهر في الجنة / الخير الكثير"
+        },
+        {
+          "text": "شجرة جميلة"
+        },
+        {
+          "text": "نجمة في السماء"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 3
+      },
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 1,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 3,
+          "word": 4
+        },
+        {
+          "ayah": 2,
+          "word": 3
+        },
+        {
+          "ayah": 1,
+          "word": 3
+        },
+        {
+          "ayah": 2,
+          "word": 2
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "محبك"
+        },
+        {
+          "text": "صديقك"
+        },
+        {
+          "text": "الذي يكرهك"
+        },
+        {
+          "text": "جارك"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "word": {
+        "ayah": 3,
+        "word": 2
+      },
+      "id": "q5"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية الثانية في سورة الكوثر؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old fourth option was the basmala, hand-typed and not an ayah of this surah; it is dropped, leaving the surah's three ayat as the options.",
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الكبير"
+        },
+        {
+          "text": "المقطوع الذي لا خير فيه"
+        },
+        {
+          "text": "الجميل"
+        },
+        {
+          "text": "القوي"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 3,
+        "word": 4
+      },
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "ما هو الدرس الأهم من سورة الكوثر؟",
+      "options": [
+        {
+          "text": "الكره والحقد"
+        },
+        {
+          "text": "شكر الله والصلاة له"
+        },
+        {
+          "text": "اللعب فقط"
+        },
+        {
+          "text": "النوم كثيراً"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q8"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الله أعطانا نعماً كثيرة مثل الأكل والشرب والأهل، يجب أن نشكره دائماً!",
+      "review": null
+    },
+    {
+      "text": "الصلاة هي أحب عمل إلى الله، وهي طريقتنا للتحدث مع الله!",
+      "review": null
+    },
+    {
+      "text": "النبي ﷺ كان يساعد الجميع ويحب الخير للناس",
+      "review": "A good lesson, but not one this surah teaches. Teacher to keep or drop."
+    },
+    {
+      "text": "الذي يكره الآخرين هو الخاسر! يجب أن نحب الجميع",
+      "review": "Generalises \"whoever hates the Prophet is the one cut off\" (ayah 3) to anyone who hates others, and adds \"we must love everyone\". Teacher to check the wording."
+    },
+    {
+      "text": "الله يحب الأطفال الذين يطيعون والديهم ويحترمونهم",
+      "review": "A good lesson, but not one this surah teaches. Teacher to keep or drop."
+    }
+  ],
+  "reflection": {
+    "question": "ما أجمل شيء تعلمته من سورة الكوثر؟",
+    "ideas": [],
+    "review": null
+  },
+  "didYouKnow": []
+}

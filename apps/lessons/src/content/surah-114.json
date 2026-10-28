@@ -1,0 +1,409 @@
+{
+  "surah": 114,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs, the typed basmala, and every hand-typed Quran string (replaced by positions). The completion and missing-word games' hand-typed distractors not of this surah (al-falaq, al-alamin, khaliq, qulub, uqul, wal-mala'ika, wash-shayatin, yanam, yal'ab) are gone: the game draws its options from this surah's words. The old quiz had no categories; they were assigned here. Not carried (the engine has no such game): the ayah-ordering and build-the-ayah games, the word-meaning match/choose/drag games, the intro quiz, and the reflection's closing note."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-114 (read as text, never built or run)",
+    "sha256": {
+      "data/surahData.ts": "646aa8b7506caa7aeb93530e161140e3af738d9b7ee2eb411bf564b7e9457522",
+      "components/IntroSection.tsx": "f9b0c844f41f5197d605a24fa76136ac2b9e7850bad2bdaf2164e7f0725b3cba",
+      "components/ListenSection.tsx": "46db521d57034b37bc998006809f75fbf97316607e986fd9df68e8d46db44873",
+      "components/MeaningsSection.tsx": "90dd7fcec33c8fdaaa13805d907fbbd73d6d8fa03972d96a115286dffc290113",
+      "components/MemoryGames.tsx": "7d9b9c67e4dbb789e02cf1411077402513b938b02825d398a30b72ee7bb1a579",
+      "components/TajweedAndLessons.tsx": "0a393c0e22e4931edeefacefe6ee8a3eff9b5c300c9a85819603d690ba1597b2",
+      "components/FinalQuiz.tsx": "21e4d9bf8c9d46fd541ab7bf37006a3238d63ea8085acdd02dd24cc522326b04"
+    }
+  },
+  "intro": {
+    "text": "سورة الناس هي آخر سورة في القرآن الكريم، وهي من المعوذتين. تعلمنا أن نستعيذ بالله ونطلب حمايته",
+    "review": "CUT: the old intro ended \"... and His protection min sharr al-waswas al-khannas\", which is ayah 4 typed in full. The Quran never goes in prose, so the text stops before it. Teacher to finish the sentence."
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "قل يا محمد: أستجير وأعتصم برب الناس وخالقهم",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "الذي يملك الناس جميعًا ويتصرف في شؤونهم",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "المعبود الحق الذي يستحق العبادة وحده",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "من شر الشيطان الذي يوسوس ثم يختفي عند ذكر الله",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "الذي يلقي الأفكار السيئة في قلوب الناس",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "سواء كان هذا الموسوس من الجن أو من الإنس",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "أستجير وأحتمي",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "خالق ومدبر",
+      "review": "The old card was \"rabb\" alone; the verse word at 1:3 is \"bi-rabbi\" (with the preposition bi-), so the meaning covers only part of the word shown. Teacher to confirm the card."
+    },
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "جميع البشر",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 1,
+      "meaning": "الذي يملك ويحكم",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 1,
+      "meaning": "المعبود بحق",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "الشيطان الذي يوسوس",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 4,
+      "meaning": "الذي يختفي عند ذكر الله",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 2,
+      "meaning": "يلقي أفكارًا سيئة",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 4,
+      "meaning": "قلوب",
+      "review": "Gives sudur as \"hearts\"; the word means chests (common tafsir: the chests, where the hearts are). Teacher to confirm the wording."
+    },
+    {
+      "ayah": 6,
+      "word": 2,
+      "meaning": "الجن",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 1,
+      "word": 4
+    },
+    {
+      "ayah": 2,
+      "word": 1
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 4,
+      "word": 4
+    },
+    {
+      "ayah": 5,
+      "word": 2
+    },
+    {
+      "ayah": 5,
+      "word": 4
+    },
+    {
+      "ayah": 6,
+      "word": 3
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "سورة الفلق"
+        },
+        {
+          "text": "سورة الناس"
+        },
+        {
+          "text": "سورة الإخلاص"
+        },
+        {
+          "text": "سورة الفاتحة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الناس؟",
+      "options": [
+        {
+          "text": "4 آيات"
+        },
+        {
+          "text": "5 آيات"
+        },
+        {
+          "text": "6 آيات"
+        },
+        {
+          "text": "7 آيات"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الذي يختفي عند ذكر الله"
+        },
+        {
+          "text": "الذي يجري"
+        },
+        {
+          "text": "الذي ينام"
+        },
+        {
+          "text": "الذي يأكل"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 4,
+        "word": 4
+      },
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "ما هي أول آية في سورة الناس؟",
+      "options": [
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 3
+        },
+        {
+          "ayah": 6
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q4"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا تعلمنا من سورة الناس؟",
+      "options": [
+        {
+          "text": "أن نلعب كثيرًا"
+        },
+        {
+          "text": "أن نطلب الحماية من الله"
+        },
+        {
+          "text": "أن ننام مبكرًا"
+        },
+        {
+          "text": "أن نأكل كثيرًا"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "يلقي أفكارًا سيئة"
+        },
+        {
+          "text": "يغني"
+        },
+        {
+          "text": "يرقص"
+        },
+        {
+          "text": "يكتب"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 5,
+        "word": 2
+      },
+      "id": "q6"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 4,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 1,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 4
+        },
+        {
+          "ayah": 6,
+          "word": 2
+        },
+        {
+          "ayah": 5,
+          "word": 4
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 5,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 4,
+          "word": 3
+        },
+        {
+          "ayah": 5,
+          "word": 4
+        },
+        {
+          "ayah": 6,
+          "word": 2
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old options were two-word phrases (the answer \"sudur al-nas\"), and its three distractors (qulub, uqul, aydi al-nas) were hand-typed, not of this surah. It now asks only for the next word, sudur; the two distractors are words of this surah.",
+      "id": "q8"
+    },
+    {
+      "category": "lessons",
+      "question": "هل كان النبي ﷺ يقرأ المعوذات قبل النوم؟",
+      "options": [
+        {
+          "text": "نعم"
+        },
+        {
+          "text": "لا"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "أن نطلب الحماية من الله دائمًا",
+      "review": null
+    },
+    {
+      "text": "أن الله هو ربنا وملكنا وإلهنا",
+      "review": null
+    },
+    {
+      "text": "أن نبتعد عن الشر والوسوسة",
+      "review": null
+    },
+    {
+      "text": "أن نلجأ إلى الله عند الخوف",
+      "review": null
+    },
+    {
+      "text": "أن نقرأ المعوذات للحماية",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "متى يمكننا قراءة سورة الناس لنطلب حماية الله؟",
+    "ideas": [
+      "قبل النوم",
+      "عند الخوف من شيء",
+      "في الصباح والمساء",
+      "عند الشعور بالوسوسة",
+      "في أي وقت نحتاج حماية الله"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن النبي ﷺ كان يقرأ المعوذات قبل النوم كل ليلة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الناس تحمي الإنسان بإذن الله من الوسوسة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الناس هي آخر سورة في القرآن الكريم؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن قراءة المعوذات ثلاث مرات صباحًا ومساءً سنة نبوية؟",
+      "review": null
+    }
+  ]
+}
