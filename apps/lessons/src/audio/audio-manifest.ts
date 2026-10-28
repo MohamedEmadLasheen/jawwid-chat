@@ -183,6 +183,24 @@ export function verifiedAudio(m: AudioManifest, deps: VerifiedAudioDeps = browse
 }
 
 /**
+ * Messages that arrive before the lesson has mounted. A WebView injects the list
+ * as soon as the page has loaded, which can be before React has run its effects;
+ * they are kept (the last few, unchecked) and checked like any other when the
+ * hook starts listening.
+ */
+const early: Array<{ origin: string; data: unknown }> = [];
+/** Tests only: start from an empty buffer. */
+export function clearEarlyAudioMessages(): void {
+  early.length = 0;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', (e: MessageEvent) => {
+    early.push({ origin: e.origin, data: e.data });
+    if (early.length > 4) early.shift();
+  });
+}
+
+/**
  * The lesson's audio list, if the opener has sent one this account may have.
  * Says "ready" to the allowed parents, so the opener knows when to send it.
  */
@@ -194,6 +212,10 @@ export function useAudioManifest(surah: number, origins: AudioOrigins = BUILD_AU
       const m = acceptAudioMessage({ origin: e.origin, data: e.data }, surah, origins);
       if (m) setManifest(m);
     };
+    for (const e of early) {
+      const m = acceptAudioMessage(e, surah, origins);
+      if (m) setManifest(m);
+    }
     window.addEventListener('message', onMessage);
     if (window.parent !== window) for (const p of origins.parents) window.parent.postMessage({ type: READY_MESSAGE, surah }, p);
     return () => window.removeEventListener('message', onMessage);

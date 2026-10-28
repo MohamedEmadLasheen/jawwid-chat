@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../shared/models/materials.dart';
 import '../../../shared/utils/app_clock.dart';
+import 'lesson_audio.dart';
 
 /// PD-29 Materials. Every method is one endpoint; NO AUTHORIZATION LIVES HERE --
 /// the server decides who may read a child's page (the family, the child's own
@@ -28,6 +29,11 @@ abstract interface class MaterialsRepository {
 
   /// `GET /materials/items?q&surah` -- the teacher's picker (published items only).
   Future<List<MaterialItem>> picker({String? query, int? surah});
+
+  /// `GET /quran/ayahs?surah` (50 ayat a request) -- the audio list for a framed
+  /// Quran lesson ([lessonAudioMessage]), or null when the release gate gives
+  /// this account no audio.
+  Future<Map<String, Object?>?> lessonAudio(int surah);
 }
 
 /// A build with no materials server (fixtures, tests that do not override it):
@@ -49,6 +55,8 @@ class NoMaterialsRepository implements MaterialsRepository {
   Future<String> recitation(int surah) async => _none();
   @override
   Future<List<MaterialItem>> picker({String? query, int? surah}) async => _none();
+  @override
+  Future<Map<String, Object?>?> lessonAudio(int surah) async => null;
 }
 
 /// Overridden at startup with [HttpMaterialsRepository].
@@ -115,6 +123,22 @@ class HttpMaterialsRepository implements MaterialsRepository {
 
   @override
   Future<String> recitation(int surah) async => (await _post('/materials/recitations/$surah/open'))['url'] as String? ?? '';
+
+  @override
+  Future<Map<String, Object?>?> lessonAudio(int surah) async {
+    final ayahs = <Object?>[];
+    var from = 1;
+    int? count;
+    while (count == null || from <= count) {
+      final d = await _get('/quran/ayahs', {'surah': '$surah', 'from': '$from', if (count != null) 'to': '${from + 49 < count ? from + 49 : count}'});
+      count = ((d['surah'] as Map?)?['ayahCount'] as num?)?.toInt() ?? 0;
+      final page = (d['ayahs'] as List?) ?? const [];
+      if (page.isEmpty) break;
+      ayahs.addAll(page);
+      from = (((page.last as Map?)?['ayah'] as num?)?.toInt() ?? count) + 1;
+    }
+    return lessonAudioMessage(surah, ayahs);
+  }
 
   @override
   Future<List<MaterialItem>> picker({String? query, int? surah}) async {

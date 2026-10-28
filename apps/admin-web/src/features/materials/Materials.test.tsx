@@ -211,6 +211,64 @@ describe('Materials > Library', () => {
     expect(frame.getAttribute('allow') ?? '').not.toMatch(/camera|microphone|geolocation/)
   })
 
+  describe('a framed Quran lesson gets its audio list from the release gate', () => {
+    const RECITER = 'kfgqpc-huthify-hafs'
+    const audioOf = (a: number) => ({
+      reciter: RECITER,
+      key: `quran/audio/${RECITER}/078${String(a).padStart(3, '0')}.mp3`,
+      url: `https://media.example.test/078${a}?sig=x`,
+      sha256: 'a'.repeat(64),
+    })
+    function ayahsRoute(withAudio: (a: number) => boolean) {
+      on('GET', /\/quran\/ayahs\?/, (url) => {
+        const q = new URL(url, 'https://api.example.test').searchParams
+        const from = Number(q.get('from') ?? 1)
+        const to = Math.min(Number(q.get('to') ?? from + 49), 40)
+        const ayahs = []
+        for (let a = from; a <= to; a++) ayahs.push({ ayah: a, basmala: null, text: 'stand-in verse', sha256: 'b'.repeat(64), audio: withAudio(a) ? audioOf(a) : null })
+        return json({ surah: { number: 78, nameAr: 'النبأ', nameEn: 'An-Naba', ayahCount: 40 }, ayahs })
+      })
+    }
+    async function framedLesson() {
+      const dialog = await preview('frame-site', 'https://lessons.example.test/lessons/quran/surah-78')
+      const frame = await waitFor(() => {
+        const f = dialog.querySelector('iframe')
+        if (!f) throw new Error('no frame yet')
+        return f as HTMLIFrameElement
+      })
+      const post = vi.fn()
+      ;(frame.contentWindow as unknown as { postMessage: unknown }).postMessage = post
+      frame.dispatchEvent(new Event('load'))
+      return { frame, post }
+    }
+
+    it('posts {ayah, audio} of the ayat the server gave audio for -- data only -- to the lesson\'s own origin', async () => {
+      ayahsRoute((a) => a <= 2)
+      const { post } = await framedLesson()
+      await waitFor(() => expect(post).toHaveBeenCalled())
+      const [message, origin] = post.mock.calls.at(-1)!
+      expect(origin).toBe('https://lessons.example.test')
+      expect(message).toEqual({ type: 'jawwid:quran-audio', surah: 78, ayahs: [{ ayah: 1, audio: audioOf(1) }, { ayah: 2, audio: audioOf(2) }] })
+      // No Quran text, no hash of it, no credential crosses into the lesson.
+      expect(JSON.stringify(message)).not.toMatch(/stand-in verse|basmala|bbbb|Bearer|access-1/)
+    })
+
+    it('posts nothing when the gate gave this account no audio', async () => {
+      ayahsRoute(() => false)
+      const { post } = await framedLesson()
+      await waitFor(() => expect(calls('GET', /\/quran\/ayahs\?/).length).toBeGreaterThan(0))
+      await new Promise((r) => setTimeout(r, 50))
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('a lesson that is not a Quran surah page asks for nothing', async () => {
+      ayahsRoute(() => true)
+      await preview('frame-site', 'https://lessons.example.test/lessons/arabic/letters-1')
+      await new Promise((r) => setTimeout(r, 50))
+      expect(calls('GET', /\/quran\/ayahs/)).toEqual([])
+    })
+  })
+
   it('any other link is never framed: it is offered to open in the browser', async () => {
     const dialog = await preview('browser', 'https://elsewhere.example.test/game')
     expect(await within(dialog).findByRole('link', { name: 'Open in a new tab' })).toHaveAttribute('href', 'https://elsewhere.example.test/game')

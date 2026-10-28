@@ -91,6 +91,41 @@ void main() {
       expect(allow(Uri.parse('https://evil.example.test/api/v1/materials/play/m-1/tok/x')), isFalse);
     });
 
+    testWidgets('a Quran lesson of the lessons site is handed the audio list the release gate gave this account', (tester) async {
+      final message = {'type': 'jawwid:quran-audio', 'surah': 78, 'ayahs': <Object?>[]};
+      final materials = _Materials()
+        ..items = [game]
+        ..lessonAudioAnswer = message
+        ..openAs = const OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/quran/surah-78');
+      final activity = _Activity();
+      await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('An-Naba game'));
+      await tester.pumpAndSettle();
+      // Asked once, however often the view rebuilds.
+      expect(materials.lessonAudioAsked, [78]);
+      expect(await activity.audios.last, message);
+    });
+
+    testWidgets('an uploaded package, or a lessons page that is not a surah, asks for no audio', (tester) async {
+      for (final opened in const [
+        OpenedMaterial(kind: 'activity_package', mode: 'package', presentation: MaterialPresentation.frameIsolated, url: _Materials.playUrl),
+        OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/arabic/lesson-1'),
+      ]) {
+        final materials = _Materials()
+          ..items = [game]
+          ..openAs = opened;
+        final activity = _Activity();
+        await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('An-Naba game'));
+        await tester.pumpAndSettle();
+        expect(materials.lessonAudioAsked, isEmpty);
+        expect(activity.audios, isNotEmpty);
+        expect(activity.audios, everyElement(isNull));
+      }
+    });
+
     testWidgets('a lesson of the lessons site is framed keeping its own origin, pinned to its host', (tester) async {
       final materials = _Materials()
         ..items = [game]
@@ -292,12 +327,15 @@ class _Activity implements ActivityViewFactory {
   final urls = <String>[];
   final sandboxes = <String>[];
   final allows = <bool Function(Uri)>[];
+  final audios = <Future<Map<String, Object?>?>?>[];
 
   @override
-  Widget build(BuildContext context, {required String url, required String sandbox, required bool Function(Uri uri) allow}) {
+  Widget build(BuildContext context,
+      {required String url, required String sandbox, required bool Function(Uri uri) allow, Future<Map<String, Object?>?>? audio}) {
     urls.add(url);
     sandboxes.add(sandbox);
     allows.add(allow);
+    audios.add(audio);
     return const Text('activity');
   }
 }
@@ -355,6 +393,15 @@ class _Materials implements MaterialsRepository {
 
   @override
   Future<String> recitation(int surah) async => 'https://audio.example.test/$surah.mp3';
+
+  final lessonAudioAsked = <int>[];
+  Map<String, Object?>? lessonAudioAnswer;
+
+  @override
+  Future<Map<String, Object?>?> lessonAudio(int surah) async {
+    lessonAudioAsked.add(surah);
+    return lessonAudioAnswer;
+  }
 
   @override
   Future<List<MaterialItem>> picker({String? query, int? surah}) async => items;

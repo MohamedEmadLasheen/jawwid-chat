@@ -1,3 +1,4 @@
+import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/widgets.dart';
@@ -18,15 +19,17 @@ class _IframeActivityFactory implements ActivityViewFactory {
   const _IframeActivityFactory();
 
   @override
-  Widget build(BuildContext context, {required String url, required String sandbox, required bool Function(Uri uri) allow}) =>
-      _ActivityFrame(url: url, sandbox: sandbox);
+  Widget build(BuildContext context,
+          {required String url, required String sandbox, required bool Function(Uri uri) allow, Future<Map<String, Object?>?>? audio}) =>
+      _ActivityFrame(url: url, sandbox: sandbox, audio: audio);
 }
 
 class _ActivityFrame extends StatefulWidget {
-  const _ActivityFrame({required this.url, required this.sandbox});
+  const _ActivityFrame({required this.url, required this.sandbox, this.audio});
 
   final String url;
   final String sandbox;
+  final Future<Map<String, Object?>?>? audio;
 
   @override
   State<_ActivityFrame> createState() => _ActivityFrameState();
@@ -35,22 +38,54 @@ class _ActivityFrame extends StatefulWidget {
 class _ActivityFrameState extends State<_ActivityFrame> {
   static int _next = 0;
   late final String _viewType = 'pd29-activity-${_next++}';
+  web.HTMLIFrameElement? _frame;
+  Map<String, Object?>? _message;
+  JSFunction? _onReady;
+
+  /// The audio list, to the frame's window and the lesson's exact origin only.
+  void _post() {
+    final frame = _frame;
+    final message = _message;
+    if (frame == null || message == null) return;
+    frame.contentWindow?.postMessage(message.jsify(), Uri.parse(widget.url).origin.toJS);
+  }
 
   @override
   void initState() {
     super.initState();
+    final audio = widget.audio;
+    if (audio != null) {
+      audio.then((m) {
+        _message = m;
+        _post();
+      }, onError: (Object _) {});
+      // The lesson says it is ready: hand it the list again (it may have loaded first).
+      _onReady = ((web.MessageEvent e) {
+        final data = e.data.dartify();
+        final fromFrame = e.source != null && e.source!.strictEquals(_frame?.contentWindow).toDart;
+        if (fromFrame && e.origin == Uri.parse(widget.url).origin && data is Map && data['type'] == 'jawwid:lesson-ready') _post();
+      }).toJS;
+      web.window.addEventListener('message', _onReady);
+    }
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (int _) {
-      final frame = web.HTMLIFrameElement()
+      final frame = _frame = web.HTMLIFrameElement()
         ..src = widget.url
         ..referrerPolicy = 'no-referrer'
         ..allow = 'autoplay; fullscreen';
       frame.setAttribute('sandbox', widget.sandbox);
+      frame.addEventListener('load', ((web.Event _) => _post()).toJS);
       frame.style
         ..border = '0'
         ..width = '100%'
         ..height = '100%';
       return frame;
     });
+  }
+
+  @override
+  void dispose() {
+    if (_onReady != null) web.window.removeEventListener('message', _onReady);
+    super.dispose();
   }
 
   @override

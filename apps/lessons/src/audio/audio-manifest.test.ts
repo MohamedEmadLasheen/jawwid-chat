@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { AUDIO_MESSAGE, acceptAudioMessage, manifestSource, useAudioManifest, verifiedAudio, type AudioOrigins } from './audio-manifest';
+import { AUDIO_MESSAGE, acceptAudioMessage, clearEarlyAudioMessages, manifestSource, useAudioManifest, verifiedAudio, type AudioOrigins } from './audio-manifest';
 import { sha256Bytes } from '../quran/sha256';
 
 const ORIGINS: AudioOrigins = { self: 'https://lessons.example.test', parents: ['https://admin.example.test'], media: ['https://media.example.test'] };
@@ -22,6 +22,8 @@ async function message(change?: (d: { type: string; surah: number; ayahs: Array<
 }
 
 describe('accepting the audio list from the opener', () => {
+  beforeEach(() => clearEarlyAudioMessages());
+
   it('accepts it from an allowed parent, or from the lesson itself (a WebView injecting it)', async () => {
     const m = acceptAudioMessage({ origin: 'https://admin.example.test', data: await message() }, 85, ORIGINS)!;
     expect(m.reciter).toBe(RECITER);
@@ -54,6 +56,13 @@ describe('accepting the audio list from the opener', () => {
     expect(await refused((d) => { (d.ayahs[0]!.audio as { url: string }).url = `https://media.example.test/${'a'.repeat(2100)}`; })).toBeNull();
     // With no allowed media origin (a build without audio), nothing is ever accepted.
     expect(acceptAudioMessage({ origin: ORIGINS.self, data: await message() }, 85, { ...ORIGINS, media: [] })).toBeNull();
+  });
+
+  it('a list that arrived BEFORE the lesson mounted is not lost (a WebView injects it when the page loads)', async () => {
+    const data = await message();
+    window.dispatchEvent(new MessageEvent('message', { origin: ORIGINS.self, data }));
+    const { result } = renderHook(() => useAudioManifest(85, ORIGINS));
+    expect(result.current?.surah).toBe(85);
   });
 
   it('the hook keeps the last accepted list for this surah, and drops it when the surah changes', async () => {
