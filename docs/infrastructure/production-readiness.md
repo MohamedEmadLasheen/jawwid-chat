@@ -25,7 +25,7 @@ Legend: ✅ done and verified · 🟡 partial · ❌ not done · ⛔ blocked
 | ✅ | **Restore tested** | ✅ | Drill executed 2026-09-05: 0 errors, 31 tables, 57 config rows |
 | 🟡 | Redis configured | 🟡 | Local ✅, `appendonly` + `noeviction`. No managed instance |
 | 🟡 | Workers configured | 🟡 | Code ✅ — `src/worker.ts` drains the outbox, same image as the API (ADR-004). No worker process runs anywhere |
-| 🟡 | Object storage configured | 🟡 | MinIO ✅, private bucket ✅. No production bucket |
+| 🟡 | Object storage configured | 🟡 | MinIO ✅, private bucket ✅. No production bucket (none on the DigitalOcean account, checked 2026-10-28). Versioning + 30-day lifecycle scripted (`storage-versioning.sh`) and enforced by the production deploy |
 | ❌ | Push configured | ❌ | No Firebase or Apple credentials |
 | ❌ | LiveKit configured | ❌ | No project |
 | 🟡 | Core integration configured | 🟡 | Boundary being reworked to API/webhook per the locked decision |
@@ -93,9 +93,11 @@ first two; AI #7 thereafter.
 
 Everything the repository can do is done. The rest needs accounts, money or
 DNS, so it is the owner's. In this order — each step names what it unblocks.
-Re-verified against the live GitHub configuration on 2026-10-22: the `staging`
-Environment exists and holds only `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and
-`LIVEKIT_URL`; there is no `production` Environment and no repository variable.
+Re-verified on 2026-10-28. In GitHub, the `staging` Environment exists and holds
+only `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` (`LIVEKIT_URL` is gone and must
+be re-added). There is no `production` Environment and no repository variable.
+On DigitalOcean, the "Jawwid Chat" project holds only the Postgres cluster:
+there is no app, no Spaces bucket and no Spaces key.
 
 1. **Create the DigitalOcean account and a project** (e.g. `jawwid-chat`).
    Optionally save the project's id as the repository or Environment variable
@@ -146,19 +148,49 @@ Environment exists and holds only `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and
    outside GitHub. Secrets there are write-only, and an archive nobody can
    decrypt is not a backup (`backup-recovery.md` §3). Without it, the deploy
    stops at the backup step, before any migration.
-7. **Provision the remaining services and set their values** in each
+7. **Create the production bucket on DigitalOcean Spaces, versioned, before
+   anything is uploaded.** Attachments, voice notes, avatars, Materials and
+   whiteboard images exist only in the bucket, so a delete is final unless the
+   bucket keeps versions (`backup-recovery.md` §1).
+   * **Spaces, not R2.** Cloudflare R2 does not implement bucket versioning, so
+     it cannot meet this requirement. Use the same region as the app (`fra1`).
+   * Create the bucket (private), and a Spaces access key for the API.
+   * With that key in your shell (never pasted anywhere), run:
+     ```bash
+     STORAGE_ENDPOINT=https://fra1.digitaloceanspaces.com STORAGE_BUCKET=<bucket>        STORAGE_ACCESS_KEY=… STORAGE_SECRET_KEY=… scripts/infra/storage-versioning.sh apply
+     ```
+     It enables versioning, sets a lifecycle that expires deleted or overwritten
+     versions after **30 days** and abandoned uploads after 1 day, reads both
+     back, and fails unless they took.
+   * Then prove the provider honours the expiry rule: run `--verify-expiry
+     start`, and `--verify-expiry check <id>` two to three days later.
+     DigitalOcean documents expiry of current objects, and of old versions only
+     indirectly. Until `check` passes, the 30-day bound is unproven.
+   * The production deploy re-checks versioning and the lifecycle on every run,
+     and refuses to release without them. The API's storage key therefore needs
+     read access to the bucket's configuration (`s3:GetBucketVersioning`,
+     `s3:GetLifecycleConfiguration`). A full-access Spaces key has it; a key
+     limited to one bucket may not, and the deploy then says so.
+8. **Provision the remaining services and set their values** in each
    Environment, under the manifest's own names (`infra/env/<env>.env.example`
    lists every one; `scripts/infra/check-env.sh <env>` is what judges them):
    `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
    storage (`STORAGE_ENDPOINT`, `STORAGE_BUCKET`, `STORAGE_REGION`,
    `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_SIGNING_SECRET`),
    LiveKit for production, and push, Core and `SENTRY_DSN` where the
-   environment requires them. Also set **`TRUSTED_PROXY_HOPS`** (variable). It
+   environment requires them.
+   **`SMTP_URL` (secret) and `RECOVERY_MAIL_FROM` (variable) are REQUIRED in
+   production.** E-mail carries the first-login and reset codes for staff and
+   teachers (PD-40, PD-43) and parents' password recovery (PD-25), so a
+   production without it leaves people unable to sign in. Both are needed:
+   `SMTP_URL` alone leaves the e-mail channel off. The manifest marks both
+   `req`, so the production deploy refuses without them.
+   Also set **`TRUSTED_PROXY_HOPS`** (variable). It
    is required, and it is the number of proxies App Platform puts in front of
    the API. Establish it from DigitalOcean rather than by guessing, and confirm
    it after the first deploy (the login rate limiter keys on the address it
    yields).
-8. **First deploy.** Actions → **Deploy staging** → `first_deploy` = true. The run
+9. **First deploy.** Actions → **Deploy staging** → `first_deploy` = true. The run
    creates the app and prints its id. Save the id as the `DIGITALOCEAN_APP_ID`
    secret of `staging`; every later run requires it and refuses without it.
    Point both hosts' DNS (CNAME) at the app's default ingress, which the
@@ -166,10 +198,10 @@ Environment exists and holds only `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and
    resolves. Then re-run **Deploy staging** normally: the smoke test is the
    proof. Repeat for production with **Deploy production**, giving a commit
    staging has already run.
-9. **Then** the rest of **What would make this green**: a restore drill against
+10. **Then** the rest of **What would make this green**: a restore drill against
    staging (6), observability (7), multi-instance realtime (8), on-call (9).
 
-What the repository guarantees meanwhile: until steps 1–8 are done, every
+What the repository guarantees meanwhile: until steps 1–9 are done, every
 deploy run fails at its first step with the missing item named, and changes
 nothing. It never reports a deployment that did not happen (ADR-003).
 
