@@ -49,7 +49,6 @@ function EnteredFamiliesList({ data }: { data: EnteredList }) {
   const { number } = useI18n()
   const [filter, setFilter] = useState<Filter>('all')
   const [now] = useState(() => Date.now())
-  const sales = data.viewer === 'sales_member' || data.viewer === 'sales_manager'
   const filters: Filter[] = ['all', 'needs', 'waiting', 'signed_up', ...(MANAGERS.has(data.viewer) ? (['recent'] as const) : [])]
   const label: Record<Filter, string> = {
     all: tx(OP.all), needs: tx(OP.needs), waiting: tx(OP.waiting), signed_up: tx(OP.signedUp), recent: tx(OP.recent),
@@ -72,7 +71,7 @@ function EnteredFamiliesList({ data }: { data: EnteredList }) {
       ) : (
         <div className="ns-list">
           {shown.map((f) => (
-            <EnteredCard key={f.enrolmentId} f={f} canAssign={data.canAssignSupervisor} canSuggest={sales} />
+            <EnteredCard key={f.enrolmentId} f={f} canAssign={data.canAssignSupervisor} canSuggest={f.canSuggestSupervisor === true} />
           ))}
         </div>
       )}

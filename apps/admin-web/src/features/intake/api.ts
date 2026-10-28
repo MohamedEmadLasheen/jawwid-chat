@@ -100,6 +100,8 @@ export interface EnteredFamily {
   needsOperationsSupervisor: boolean
   salesOwner: StaffRef | null
   suggestion: StaffRef | null
+  /** Only the family's Sales owner suggests its Operations supervisor (D1). */
+  canSuggestSupervisor?: boolean
   groupConversationId: string | null
   parentSignup: ParentSignup
 }

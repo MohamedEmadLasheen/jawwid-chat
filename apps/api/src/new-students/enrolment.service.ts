@@ -165,7 +165,9 @@ export class NewStudentEnrolmentService {
     }
     const rawEmail = typeof body.email === 'string' && body.email.trim() ? body.email : form.parent.email ?? '';
     const email = normalizeEmail(rawEmail);
-    if (attachTo) return this.attachSibling(actor, trialId, form, attachTo, supervisorId, email || null);
+    // The sibling match is the form's own e-mail and number (review of #214):
+    // an e-mail typed into Assign never satisfies it.
+    if (attachTo) return this.attachSibling(actor, trialId, form, attachTo, supervisorId, normalizeEmail(form.parent.email ?? '') || null);
     if (!supervisorId) throw invalid('supervisorId: required');
     if (!email) throw invalid('email: the parent signs up with an e-mail address; enter a valid one');
     const holder = await this.prisma.account.findUnique({ where: { subject: email }, select: { id: true, kind: true } });
@@ -327,14 +329,8 @@ export class NewStudentEnrolmentService {
     if (!contact || !same || held.some((k) => k.familyId !== family.id)) {
       throw invalid('familyId: this trial\'s parent is not that family\'s parent');
     }
-    const current = await this.prisma.$queryRaw<Array<{ supervisor_id: string }>>`
-      SELECT DISTINCT ls.supervisor_id::text AS supervisor_id
-        FROM chat.learner_supervision ls JOIN chat.learner l ON l.id = ls.learner_id
-       WHERE l.family_id = ${family.id}::uuid`;
-    if (current.length > 1) {
-      throw new CommError(CommErrorCode.LESSON_STATE, 'this family\'s children have different supervisors; transfer them to one first (PD-24)', 409);
-    }
-    const supervisorId = current[0]?.supervisor_id ?? requested;
+    const placed = await this.familySupervision(this.prisma, family.id);
+    const supervisorId = placed.supervisorId ?? requested;
     if (!supervisorId) throw invalid('supervisorId: required -- the family has no Operations supervisor yet');
     if (requested && requested !== supervisorId) {
       throw invalid('supervisorId: brothers and sisters share their Operations supervisor; this family\'s is already chosen');
@@ -350,6 +346,13 @@ export class NewStudentEnrolmentService {
     const learners = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
         await this.conversations.assertActorLive(tx, actor);
+        // The family's lock (the one PD-42's placing and Add child take), then
+        // its supervision again: nothing changed since it was read.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pd042:${family.id}`}, 0))`;
+        const now = await this.familySupervision(tx, family.id);
+        if (now.supervisorId !== placed.supervisorId) {
+          throw new CommError(CommErrorCode.LESSON_STATE, 'the family\'s supervisor changed meanwhile; reload', 409);
+        }
         const created: Array<{ id: string; child: PresentedForm['children'][number] }> = [];
         for (const child of form.children) {
           const [{ id }] = await tx.$queryRaw<Array<{ id: string }>>`
@@ -403,6 +406,28 @@ export class NewStudentEnrolmentService {
       group = 'not_joined';
     }
     return { familyId: family.id, learnerIds: learners.map((l) => l.id), schedules, attached: true, group };
+  }
+
+  /**
+   * The family's one Operations supervisor, or null when none of its children
+   * has one yet. A family partly placed (a child waiting) or split between two
+   * supervisors is refused: brothers and sisters are placed together, and the
+   * placing is the Operations manager's own step (review of #214) -- never a
+   * partial supervision here.
+   */
+  private async familySupervision(db: Pick<Prisma.TransactionClient, '$queryRaw'>, familyId: string): Promise<{ supervisorId: string | null }> {
+    const kids = await db.$queryRaw<Array<{ supervisor_id: string | null }>>`
+      SELECT ls.supervisor_id::text AS supervisor_id
+        FROM chat.learner l LEFT JOIN chat.learner_supervision ls ON ls.learner_id = l.id
+       WHERE l.family_id = ${familyId}::uuid`;
+    if (kids.some((k) => k.supervisor_id === null)) {
+      throw new CommError(CommErrorCode.LESSON_STATE, 'this family is waiting for its Operations supervisor: assign the family\'s Operations supervisor first', 409);
+    }
+    const supervisors = [...new Set(kids.map((k) => k.supervisor_id as string))];
+    if (supervisors.length > 1) {
+      throw new CommError(CommErrorCode.LESSON_STATE, 'this family\'s children have different supervisors; transfer them to one first (PD-24)', 409);
+    }
+    return { supervisorId: supervisors[0] ?? null };
   }
 
   /** The children's weekly times, from the form, where the teacher is free (best effort; the answer says which were not). */

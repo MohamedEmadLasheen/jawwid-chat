@@ -14,8 +14,8 @@
 --   chat.family_supervisor_suggestion
 --       one per family: the suggested Operations supervisor (a live
 --       supervisor of an Operations department of the family's academy), who
---       suggested it (someone who owns the family, chat.staff_owns_family)
---       and when. Replaced by a new suggestion; never edited in place
+--       suggested it (the family's Sales owner, chat.family_sales_owner) and
+--       when. Replaced by a new suggestion; never edited in place
 --       otherwise; removed only with the family. Server-side only.
 --
 -- Everything else PR-3 does (placing the family, the Sales owner change, the
@@ -35,6 +35,9 @@ create table chat.family_supervisor_suggestion (
 
 comment on table chat.family_supervisor_suggestion is
   'PD-42 D1: the Operations supervisor a family''s Sales owner suggests while the family waits for one. Advisory: the Operations manager places the family (chat.learner_supervision).';
+
+create index family_supervisor_suggestion_supervisor_idx on chat.family_supervisor_suggestion (supervisor_id);
+create index family_supervisor_suggestion_suggested_by_idx on chat.family_supervisor_suggestion (suggested_by);
 
 create or replace function chat.guard_family_supervisor_suggestion()
 returns trigger
@@ -60,8 +63,8 @@ begin
     raise exception 'the suggested name is a live Operations supervisor of the family''s academy'
       using errcode = 'check_violation';
   end if;
-  if not chat.staff_owns_family(new.suggested_by, new.family_id) then
-    raise exception 'a supervisor is suggested by someone who owns the family'
+  if not exists (select 1 from chat.family_sales_owner o where o.family_id = new.family_id and o.staff_id = new.suggested_by) then
+    raise exception 'a supervisor is suggested by the family''s Sales owner'
       using errcode = 'insufficient_privilege';
   end if;
   new.suggested_at := now();

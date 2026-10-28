@@ -381,6 +381,12 @@ export class FamilyIntakeService {
       canAssignSupervisor: everyFamily,
       families: rows.map((r) => {
         const o = owners.get(r.family_id)!;
+        // Who relays the sign-up code (review of #214, as PD-16): the super
+        // admin and the Operations manager; the children's supervisor; while
+        // no child has one yet, the Sales owner and the Sales manager.
+        const responsible = everyFamily || o.supervisorIds.includes(s.actor.actorId)
+          || (o.supervisorIds.length === 0 && (o.salesOwner?.id === s.actor.actorId || s.standing === 'sales_manager'));
+        const signupState = r.account_id ? (signup.get(r.account_id) ?? { state: 'not_started' as const }) : { state: 'no_email' as const };
         return {
           enrolmentId: r.id,
           kind: r.kind as 'new_family' | 'added_children',
@@ -394,8 +400,12 @@ export class FamilyIntakeService {
           needsOperationsSupervisor: o.needsOperationsSupervisor,
           salesOwner: o.salesOwner,
           suggestion: o.needsOperationsSupervisor ? o.suggestion : null,
+          // D1: only the family's Sales owner suggests (review of #214).
+          canSuggestSupervisor: o.needsOperationsSupervisor && o.salesOwner?.id === s.actor.actorId,
           groupConversationId: r.group_id ?? o.groupConversationId,
-          parentSignup: r.account_id ? (signup.get(r.account_id) ?? { state: 'not_started' as const }) : { state: 'no_email' as const },
+          parentSignup: signupState.state === 'code_waiting' && !responsible
+            ? { state: 'code_waiting' as const, issuedAt: signupState.issuedAt }
+            : signupState,
         };
       }),
     };
@@ -408,7 +418,7 @@ export class FamilyIntakeService {
     const o = (await this.ownersOf([family.id])).get(family.id)!;
     const assigner = s.standing === 'super_admin' || s.standing === 'operations_manager';
     const salesChanger = s.standing === 'super_admin' || s.standing === 'sales_manager';
-    const suggester = s.standing === 'sales_member' || s.standing === 'sales_manager';
+    const suggester = o.salesOwner?.id === s.actor.actorId;
     const can = {
       setSignInEmail: family.accountId === null,
       addChild: true,
@@ -425,7 +435,9 @@ export class FamilyIntakeService {
       salesOwner: o.salesOwner,
       suggestion: o.needsOperationsSupervisor ? o.suggestion : null,
       can,
-      supervisorChoices: can.suggestSupervisor || can.assignOperationsSupervisor ? await this.operationsSupervisors(s.org) : [],
+      // Placing: the manager's own Operations department (the super admin: any); suggesting: any.
+      supervisorChoices: can.assignOperationsSupervisor ? await this.operationsSupervisors(s, 'place')
+        : can.suggestSupervisor ? await this.operationsSupervisors(s, 'suggest') : [],
       salesOwnerChoices: can.changeSalesOwner ? await this.salesStaff(s.org) : [],
     };
   }
@@ -443,8 +455,10 @@ export class FamilyIntakeService {
     }
     const supervisorId = uuidField(body, 'supervisorId');
     const family = await this.requireOwnFamily(s, familyId);
-    if (!(await this.isOperationsSupervisor(s.org, supervisorId))) {
-      throw new CommError(CommErrorCode.INTAKE_INVALID, 'supervisorId: a live Operations supervisor of this academy', 400);
+    // The Operations manager places on a supervisor of their own department, as
+    // canAssignSupervision does; the super admin on any (review of #214).
+    if (!(await this.isOperationsSupervisor(s, supervisorId, 'place'))) {
+      throw new CommError(CommErrorCode.INTAKE_INVALID, 'supervisorId: a live Operations supervisor of your department', 400);
     }
     const placed = await this.write(s, async (tx) => {
       await this.lock(tx, [family.id]);
@@ -490,7 +504,11 @@ export class FamilyIntakeService {
     const s = await this.standing(actorId);
     const supervisorId = uuidField(body, 'supervisorId');
     const family = await this.requireOwnFamily(s, familyId);
-    if (!(await this.isOperationsSupervisor(s.org, supervisorId))) {
+    const owner = await this.prisma.familySalesOwner.findUnique({ where: { familyId: family.id }, select: { staffId: true } });
+    if (owner?.staffId !== s.actor.actorId) {
+      throw new CommError(CommErrorCode.INTAKE_DENIED, 'a supervisor is suggested by the family\'s Sales owner; the Operations manager places it');
+    }
+    if (!(await this.isOperationsSupervisor(s, supervisorId, 'suggest'))) {
       throw new CommError(CommErrorCode.INTAKE_INVALID, 'supervisorId: a live Operations supervisor of this academy', 400);
     }
     await this.write(s, async (tx) => {
@@ -595,6 +613,7 @@ export class FamilyIntakeService {
   private async ownersOf(familyIds: string[]) {
     const out = new Map<string, {
       supervisor: { id: string; name: string | null } | null;
+      supervisorIds: string[];
       needsOperationsSupervisor: boolean;
       salesOwner: { id: string; name: string | null } | null;
       suggestion: { id: string; name: string | null } | null;
@@ -625,6 +644,7 @@ export class FamilyIntakeService {
     for (const r of rows) {
       out.set(r.family_id, {
         supervisor: r.supervisor_ids.length === 1 ? { id: r.supervisor_ids[0]!, name: r.supervisor_name } : null,
+        supervisorIds: r.supervisor_ids,
         needsOperationsSupervisor: r.children > 0 && r.supervised < r.children,
         salesOwner: r.sales_id ? { id: r.sales_id, name: r.sales_name } : null,
         suggestion: r.suggested_id ? { id: r.suggested_id, name: r.suggested_name } : null,
@@ -666,23 +686,25 @@ export class FamilyIntakeService {
     }
   }
 
-  private async isOperationsSupervisor(org: string, staffId: string): Promise<boolean> {
-    const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
-      SELECT EXISTS (SELECT 1 FROM chat.staff st
-                       JOIN chat.department_member m ON m.staff_id = st.id AND m.position = 'supervisor'
-                       JOIN chat.department d ON d.id = m.department_id AND d.kind = 'operations'
-                      WHERE st.id = ${staffId}::uuid AND st.organization_id = ${org}::uuid AND st.is_active AND st.left_at IS NULL) AS ok`;
-    return row?.ok === true;
-  }
-
-  private async operationsSupervisors(org: string) {
+  /**
+   * The Operations supervisors a family may go to. To PLACE it: the Operations
+   * manager's own department's (the super admin: every one); to SUGGEST one:
+   * every one of the academy.
+   */
+  private async operationsSupervisors(s: Standing, purpose: 'place' | 'suggest') {
+    const own = purpose === 'place' && s.standing !== 'super_admin' ? s.actor.actorId : null;
     return this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
       SELECT DISTINCT st.id::text AS id, st.name
         FROM chat.staff st
         JOIN chat.department_member m ON m.staff_id = st.id AND m.position = 'supervisor'
         JOIN chat.department d ON d.id = m.department_id AND d.kind = 'operations'
-       WHERE st.organization_id = ${org}::uuid AND st.is_active AND st.left_at IS NULL
+       WHERE st.organization_id = ${s.org}::uuid AND st.is_active AND st.left_at IS NULL
+         AND (${own}::uuid IS NULL OR d.manager_id = ${own}::uuid)
        ORDER BY st.name, st.id`;
+  }
+
+  private async isOperationsSupervisor(s: Standing, staffId: string, purpose: 'place' | 'suggest'): Promise<boolean> {
+    return (await this.operationsSupervisors(s, purpose)).some((x) => x.id === staffId);
   }
 
   private async salesStaff(org: string) {
