@@ -196,16 +196,6 @@ export const familyApi = {
   pinHandler: (id: string) => api.post<void>(`/families/${id}/pin-handler`, {}, newIdempotencyKey()),
   deferToOwner: (id: string) =>
     api.post<void>(`/families/${id}/defer-to-owner`, {}, newIdempotencyKey()),
-  list: (filters: {
-    q?: string
-    owner_id?: string
-    on_duty_id?: string
-    bucket?: AttentionBucket
-    state?: string
-    needs_reply?: boolean
-    cursor?: string
-    limit?: number
-  }) => api.get<Paginated<InboxRow>>('/families', filters),
   transferImpact: (id: string, toStaffId: string) =>
     api.get<{
       families_affected: number

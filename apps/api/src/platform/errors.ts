@@ -439,6 +439,10 @@ export enum CommErrorCode {
   // --- PD-35 B6: department rooms ---
   /** Calls are not available in a department room (a later PD-19 decision). 403. */
   CALL_NOT_IN_ROOM = 'COMM.CALL_NOT_IN_ROOM',
+
+  // --- PD-35 B7: the action log ---
+  /** No such staff member, or not one whose log the caller may read (self, their department's manager, the super admin). 404. */
+  ACTION_LOG_NOT_FOUND = 'COMM.ACTION_LOG_NOT_FOUND',
 }
 
 export class CommError extends Error {

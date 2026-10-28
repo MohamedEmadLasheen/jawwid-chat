@@ -225,6 +225,54 @@ describe('The retired Coverage page', () => {
   })
 })
 
+describe('The retired Families page', () => {
+  // The API never served GET /families: family records live in Chat, the
+  // Parent Profile (/parents) and Accounts (/accounts).
+  it('is listed for no role', () => {
+    for (const role of [...OPERATOR_ROLES, 'super_admin'] as StaffRole[]) {
+      expect(visibleAreas(role), role).not.toContain('families')
+      const entries = destinationsFor(role, { lessonManager: true, billingReader: true }).flatMap(entriesOf)
+      expect(entries.map((e) => e.path)).not.toContain('/families')
+      expect(entries.map((e) => e.key)).not.toContain('families')
+    }
+  })
+
+  it('is not a route: /families falls to the unknown-path handling, like any other', async () => {
+    for (const [role, home] of [['manager', '/chat'], ['super_admin', '/admin/conversations']] as const) {
+      vi.stubGlobal('fetch', routeFetch({}))
+      const { unmount } = renderWithProviders(
+        <>
+          <AppRoutes />
+          <Where />
+        </>,
+        { staff: staff(role), route: '/families?bucket=now' },
+      )
+      await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(home))
+      expect(screen.queryByRole('heading', { name: 'Families' })).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('is no longer where the Dashboard sends the manager', async () => {
+    const fetchMock = routeFetch({
+      '/dashboard/header': { unattended_count: 3, open_escalations: 0 },
+      '/dashboard/team-now': [{
+        staff_id: 'staff_owner', name: 'Synthetic owner', presence: 'online', now_count: 2, today_count: 1,
+        late_replies: 0, workload_score: 1, workload_level: 'normal', inactivity_warning: false,
+      }],
+      '/dashboard/needs-action': [],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithProviders(<AppRoutes />, { staff: staff('manager'), route: '/dashboard' })
+    // The count stays; it no longer opens a page.
+    expect(await screen.findByRole('button', { name: /Unattended/ })).toBeDisabled()
+    const row = (await screen.findByText('Synthetic owner')).closest('tr')!
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(row).getByText('2')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => /\/families(\?|$)/.test(String(url)))).toBe(false)
+  })
+})
+
 describe('The desktop rail', () => {
   beforeEach(() => viewport(1440))
 
@@ -320,8 +368,8 @@ describe('The desktop rail', () => {
       // role, destinations, direct links, menus
       // Conversations is a direct link to /chat: the legacy Inbox is not offered.
       // PD-13: Calls is its own destination for every operating role.
-      // Teacher Profile V2: the certificate review queue joins Families under
-      // People, so for admin and coverage People becomes a menu of two pages.
+      // Teacher Profile V2: the certificate review queue sits under People beside
+      // the other people pages, so for admin and coverage People is a menu.
       ['manager', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories'], ['People & teams', 'More']],
       ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],

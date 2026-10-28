@@ -29,7 +29,7 @@ describe('role → navigation', () => {
 
   it('gives the super admin every area, so no existing screen is hidden from it', () => {
     expect(visibleAreas('super_admin')).toEqual(
-      expect.arrayContaining(['inbox', 'families', 'tasks', 'dashboard', 'stories', 'settings']),
+      expect.arrayContaining(['inbox', 'tasks', 'dashboard', 'stories', 'settings']),
     )
   })
 
@@ -54,7 +54,6 @@ describe('role → navigation', () => {
       expect(isDepartment(role)).toBe(true)
       expect(visibleAreas(role)).toEqual(['tasks', 'accounts'])
       // Departments must never reach a family record (AI #5 matrix §1).
-      expect(canOpenArea(role, 'families')).toBe(false)
       expect(canOpenArea(role, 'inbox')).toBe(false)
     }
   })

@@ -28,7 +28,6 @@ export const qk = {
   family: (id: string) => ['family', id] as const,
   familyMessages: (id: string) => ['family', id, 'messages'] as const,
   familyCases: (id: string) => ['family', id, 'cases'] as const,
-  families: (filters: Record<string, unknown>) => ['families', filters] as const,
   transferImpact: (id: string, to: string) => ['family', id, 'transfer-impact', to] as const,
 
   tasks: (filters: Record<string, unknown>) => ['tasks', filters] as const,
