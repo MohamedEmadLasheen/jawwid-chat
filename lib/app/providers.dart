@@ -88,6 +88,12 @@ final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
   return const NoLessonRepository();
 });
 
+/// PD-47: the person's own tasks (the teacher's "To do"). A harmless default like the
+/// lesson repository's: a build without a task server has nothing to do.
+final taskRepositoryProvider = Provider<TaskRepository>((ref) {
+  return const NoTaskRepository();
+});
+
 /// PD-12 S1. A harmless default like the lesson repository's: a build without a
 /// supervision server offers no supervision ticket.
 final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {

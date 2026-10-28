@@ -59,7 +59,9 @@ export const HIFZ_QUESTIONS = {
 export type HifzQuestion = keyof typeof HIFZ_QUESTIONS;
 
 /** The review steps an item needs before it shows (plan section F.2). */
-export function requiredSteps(item: { kind: Kind; aqeedah?: boolean; category?: QuizCategory }): Step[] {
+export function requiredSteps(item: { kind: Kind; aqeedah?: boolean; scholarCheck?: boolean; category?: QuizCategory }): Step[] {
+  // A possible quotation the checker flagged (a whole short ayah typed in prose) goes to the scholar.
+  if (item.scholarCheck) return ['check', 'teacher', 'scholar'];
   if (item.kind === 'word') return item.aqeedah ? ['check', 'teacher', 'scholar'] : ['check', 'teacher'];
   if (item.kind === 'quiz') {
     return item.category === 'tafsir' || item.category === 'asbab' || item.category === 'lessons' || item.aqeedah
@@ -294,13 +296,14 @@ function parse(raw: unknown, surah: Surah, works: Map<string, Work>) {
       id, kind, bands: bands(it.bands), text: [], ayah: null, ayat: null, words: null, ideas: [], order: null, behaviour: null, quiz: null,
     };
     const common = ['id', 'kind', 'bands', 'text'];
-    const cited = ['crossCheck', 'ladder', 'aqeedah'];
+    const cited = ['crossCheck', 'ladder', 'aqeedah', 'scholarCheck'];
     const cites: Cite[] = [];
     const extra = (x: Record<string, unknown>) => {
       if (x.crossCheck !== undefined) cites.push(cite(x.crossCheck, ['primary', 'cross-check'], kind));
       if (x.ladder !== undefined && (!Array.isArray(x.ladder) || x.ladder.length === 0)) refuse('ladder');
       if (Array.isArray(x.ladder)) x.ladder.forEach(prose);
       if (x.aqeedah !== undefined && typeof x.aqeedah !== 'boolean') refuse('aqeedah');
+      if (x.scholarCheck !== undefined && typeof x.scholarCheck !== 'boolean') refuse('scholarCheck');
     };
     const pair = (x: unknown): [number, number] => {
       if (!Array.isArray(x) || x.length !== 2) return refuse('ayat must be [from, to]');
@@ -342,7 +345,7 @@ function parse(raw: unknown, surah: Surah, works: Map<string, Work>) {
         if (it.ayat !== undefined) out.ayat = pair(it.ayat);
         break;
       case 'asbab': {
-        keysExactly(it, [...common, 'source', 'ayat', 'verdicts'], ['pointer', 'aqeedah']);
+        keysExactly(it, [...common, 'source', 'ayat', 'verdicts'], ['pointer', 'aqeedah', 'scholarCheck']);
         if (!out.bands.every((b) => b === '9-12')) refuse('asbab is for 9-12 only');
         out.ayat = pair(it.ayat);
         if (it.pointer !== undefined) cites.push(cite(it.pointer, ['pointer'], kind));
@@ -358,7 +361,7 @@ function parse(raw: unknown, surah: Surah, works: Map<string, Work>) {
         break;
       }
       case 'quiz': {
-        keysExactly(it, [...common, 'category', 'options', 'answer', 'basis'], ['prompt', 'word', 'aqeedah']);
+        keysExactly(it, [...common, 'category', 'options', 'answer', 'basis'], ['prompt', 'word', 'aqeedah', 'scholarCheck']);
         const category = it.category as QuizCategory;
         if (!['hifz', 'meanings', 'tafsir', 'lessons', 'asbab'].includes(category)) refuse('category');
         const hifz = category === 'hifz';
@@ -399,6 +402,7 @@ function parse(raw: unknown, surah: Surah, works: Map<string, Work>) {
           out.words = span(w.ayah, w.word, w.to);
         }
         if (it.aqeedah !== undefined && typeof it.aqeedah !== 'boolean') refuse('aqeedah');
+        if (it.scholarCheck !== undefined && typeof it.scholarCheck !== 'boolean') refuse('scholarCheck');
         if (hifz) {
           // A fixed question, never prose; and the positions it is about.
           if (typeof it.text !== 'string' || !Object.hasOwn(HIFZ_QUESTIONS, it.text)) return refuse('a hifz question is one of the fixed keys');
@@ -450,7 +454,7 @@ export async function resolveQuranContent(
     for (const i of parsed.items) {
       const a = approved.get(i.out.id);
       if (!a || a.approvalSha256 !== (await approvalSha256(datasetId, lessonKey, i.raw))) continue;
-      const r = i.raw as { kind: Kind; aqeedah?: boolean; category?: QuizCategory };
+      const r = i.raw as { kind: Kind; aqeedah?: boolean; scholarCheck?: boolean; category?: QuizCategory };
       if (!requiredSteps(r).every((s) => a.steps.includes(s))) continue;
       if (!i.cites.every((c) => isPinned(byId.get(c.work)?.edition))) continue;
       if (i.out.kind === 'asbab') {

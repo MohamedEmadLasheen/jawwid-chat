@@ -26,8 +26,14 @@ verified text. This FAILS when:
     the chain is sound, nothing rejects it): disputed reports are left out;
   * a hifz quiz carries authored prose: its question must be a fixed key, its
     options positions, and it must carry the prompt or word its key names;
-  * prose carries Uthmani-only marks or four consecutive words of ANY ayah of
-    the Quran (typed Quran), checked run by run between quotations;
+  * prose types Quran, checked run by run between quotations on the shared
+    rasm skeleton (scripts/lessons/rasm.py, so standard spelling is caught too):
+      - four consecutive words of ANY ayah of the Quran, or Uthmani-only marks: refused;
+      - a whole 2-3-word ayah of the lesson's own surah: refused;
+      - a whole 2-3-word ayah of another surah: a possible quotation -- the item
+        must carry "scholarCheck": true, which adds the scholar's step
+        (department head's calibration on PD-29's data, 2026-10-29: whole-Quran
+        matches shorter than four words are mostly ordinary tafsir phrasing);
   * a surah has both a schema-1 and a schema-2 file;
   * an approval names a missing item, does not match the item's approval hash
     (canonical JSON of {datasetId, lessonKey, item}), lacks a required review
@@ -52,11 +58,20 @@ APPROVALS = os.path.join(CONTENT, 'approvals')
 SOURCES = os.path.join(CONTENT, 'sources.json')
 VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
+RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
 PIN = os.path.join(ROOT, 'apps', 'lessons', 'quran-pin.json')
 
-_spec = importlib.util.spec_from_file_location('v1', os.path.join(HERE, 'check-lesson-content.py'))
-v1 = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(v1)
+def _load(name, file):
+    spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, file))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+v1 = _load('v1', 'check-lesson-content.py')
+# The ONE typed-Quran fold, shared with PD-29 and PD-48 (rasm.py). Positions keep v1.fold.
+RASM = _load('rasm', 'rasm.py')
+rasm = RASM.rasm
 
 BANDS = ('3-5', '6-8', '9-12')
 KINDS = ('intro', 'tafsir', 'tafsir_x', 'word', 'lesson', 'reflection', 'story', 'theme', 'asbab', 'quiz')
@@ -96,6 +111,8 @@ def approval_sha256(dataset_id, lesson_key, item):
 
 def required_steps(item):
     kind = item.get('kind')
+    if item.get('scholarCheck'):
+        return ('check', 'teacher', 'scholar')
     if kind == 'word':
         return ('check', 'teacher', 'scholar') if item.get('aqeedah') else ('check', 'teacher')
     if kind == 'quiz':
@@ -119,16 +136,32 @@ def is_int(x):
     return isinstance(x, int) and not isinstance(x, bool)
 
 
-def quran_grams(all_verses):
-    """RUN-word windows of every ayah of the Quran (a whole shorter ayah; never a one-word ayah, which reads as a name)."""
-    grams = set()
+def quran_index(all_verses, own_verses):
+    """What typed prose is matched against, on the rasm skeleton.
+
+    all_verses: every ayah of the Quran (and the Basmala, which the verses carry
+    apart); own_verses: the lesson's own surah. Returns (refuse4, own_short, short):
+      refuse4    four-word windows of every ayah;
+      own_short  whole 2-3-word ayat of the own surah (refused);
+      short      whole 2-3-word ayat of other surahs (a possible quotation: held
+                 for the scholar).
+    One-word ayat are left out everywhere, as in schema 1: the disjointed
+    letters fold to ordinary particles (alif-lam-mim to lam-mim, "not") and
+    many one-word ayat are surah names, so they would flag ordinary prose.
+    """
+    refuse4, own_short, short = set(), set(), set()
     for v in all_verses:
-        ws = v1.fold(v).split()
-        if len(ws) < 2:
-            continue
-        k = min(v1.RUN, len(ws))
-        grams.update(tuple(ws[i:i + k]) for i in range(len(ws) - k + 1))
-    return grams
+        ws = tuple(rasm(v).split())
+        if len(ws) >= v1.RUN:
+            refuse4.update(ws[i:i + v1.RUN] for i in range(len(ws) - v1.RUN + 1))
+        elif len(ws) >= 2:
+            short.add(ws)
+    for v in own_verses:
+        ws = tuple(rasm(v).split())
+        if 2 <= len(ws) < v1.RUN:
+            own_short.add(ws)
+            short.discard(ws)
+    return refuse4, own_short, short
 
 
 def check_sources(reg):
@@ -162,8 +195,8 @@ def is_pinned(ed):
     return isinstance(ed, dict) and set(ed) == EDITION_KEYS and all(isinstance(ed[k], str) and ed[k].strip() for k in EDITION_KEYS)
 
 
-def check(content, verses, dataset_id, works, grams):
-    """verses: the surah's verse texts, ayah 1 first; grams: quran_grams() of the whole Quran. Returns errors."""
+def check(content, verses, dataset_id, works, index):
+    """verses: the surah's verse texts, ayah 1 first; index: quran_index() for this surah. Returns errors."""
     errors = []
     err = errors.append
     n = len(verses)
@@ -304,7 +337,7 @@ def check(content, verses, dataset_id, works, grams):
         if not isinstance(bands, list) or not bands or len(set(map(str, bands))) != len(bands) or not all(b in BANDS for b in bands):
             err(f'{where}: bands must be a non-empty subset of {BANDS}')
         common = ('id', 'kind', 'bands', 'text')
-        cited = ('crossCheck', 'ladder', 'aqeedah')
+        cited = ('crossCheck', 'ladder', 'aqeedah', 'scholarCheck')
         shapes = {
             'intro': ((*common, 'source'), cited),
             'theme': ((*common, 'source'), cited),
@@ -314,8 +347,8 @@ def check(content, verses, dataset_id, works, grams):
             'lesson': ((*common, 'source'), (*cited, 'ayat', 'behaviour')),
             'reflection': ((*common, 'source', 'ideas'), cited),
             'story': ((*common, 'source', 'order'), (*cited, 'ayat')),
-            'asbab': ((*common, 'source', 'ayat', 'verdicts'), ('pointer', 'aqeedah')),
-            'quiz': ((*common, 'category', 'options', 'answer', 'basis'), ('prompt', 'word', 'aqeedah')),
+            'asbab': ((*common, 'source', 'ayat', 'verdicts'), ('pointer', 'aqeedah', 'scholarCheck')),
+            'quiz': ((*common, 'category', 'options', 'answer', 'basis'), ('prompt', 'word', 'aqeedah', 'scholarCheck')),
         }
         if not keys(where, it, *shapes[kind]):
             continue
@@ -328,8 +361,9 @@ def check(content, verses, dataset_id, works, grams):
                 err(f'{where}: {it["text"]} needs its {HIFZ_QUESTIONS[it["text"]]}')
         else:
             text(f'{where}.text', it['text'])
-        if 'aqeedah' in it and not isinstance(it['aqeedah'], bool):
-            err(f'{where}: aqeedah must be true or false')
+        for flag in ('aqeedah', 'scholarCheck'):
+            if flag in it and not isinstance(it[flag], bool):
+                err(f'{where}: {flag} must be true or false')
         if kind != 'quiz':
             cite(f'{where}.source', it['source'], SOURCE_ROLES.get(kind, ('primary',)), kind)
         if 'crossCheck' in it:
@@ -427,16 +461,71 @@ def check(content, verses, dataset_id, works, grams):
         if kinds_by_id.get(t) != 'theme':
             err(f'segments: theme {t!r} is not a theme item')
 
-    # Typed Quran, run by run between quotations: Uthmani-only marks, or RUN
-    # consecutive words of any ayah of the whole Quran (a whole shorter ayah).
-    sizes = {len(g) for g in grams}
+    flagged = {it.get('id'): it.get('scholarCheck') is True for it in items if isinstance(it, dict)}
+    errors += typed_quran(prose_runs, index, flagged)
+    return errors
+
+
+def typed_quran(prose_runs, index, flagged):
+    """Typed Quran, run by run between quotations, on the rasm skeleton (see quran_index)."""
+    errors = []
+    err = errors.append
+    refuse4, own_short, short = index
     for where, t in prose_runs:
         if v1.UTHMANI_ONLY.search(t):
             err(f'{where}: carries Uthmani-only marks (Quran belongs in positions or quotations, never typed)')
-        ws = v1.fold(t).split()
-        if any(tuple(ws[i:i + k]) in grams for k in sizes for i in range(len(ws) - k + 1)):
-            err(f'{where}: contains {v1.RUN} consecutive words of an ayah, or a whole ayah (use a quotation, not typed Quran)')
+        ws = tuple(rasm(t).split())
+
+        def has(table, sizes):
+            return any(ws[i:i + k] in table for k in sizes for i in range(len(ws) - k + 1))
+        if has(refuse4, (v1.RUN,)):
+            err(f'{where}: contains {v1.RUN} consecutive words of an ayah (use a quotation, not typed Quran)')
+        elif has(own_short, (2, 3)):
+            err(f'{where}: contains a whole ayah of this surah (use a quotation, not typed Quran)')
+        elif has(short, (2, 3)):
+            item_id = where.split(' ')[1].split('.')[0] if where.startswith('item ') else None
+            if not flagged.get(item_id):
+                err(f'{where}: a possible quotation (a whole short ayah) -- set "scholarCheck": true so the scholar reviews it, '
+                    'or quote it as a position')
     return errors
+
+
+def _u(*cps):
+    return ''.join(chr(c) for c in cps)
+
+
+# Calibration fixtures on the real text (department head, 2026-10-29), as code points so no
+# Arabic is typed into this rule: standard spellings, each folded by rasm() to meet the Uthmani.
+DHALIKA_AL_KITAB = ' '.join([_u(0x630, 0x644, 0x643), _u(0x627, 0x644, 0x643, 0x62A, 0x627, 0x628), _u(0x644, 0x627), _u(0x631, 0x64A, 0x628)])  # 2:2
+HADHA_MA_WAADA = ' '.join([_u(0x647, 0x630, 0x627), _u(0x645, 0x627), _u(0x648, 0x639, 0x62F), _u(0x627, 0x644, 0x631, 0x62D, 0x645, 0x646)])  # 36:52
+KHALAQA_AL_INSAN = ' '.join([_u(0x62E, 0x644, 0x642), _u(0x627, 0x644, 0x625, 0x646, 0x633, 0x627, 0x646)])  # 55:3, a whole two-word ayah
+ORDINARY = ' '.join([_u(0x633, 0x648, 0x631, 0x629), _u(0x627, 0x644, 0x625, 0x62E, 0x644, 0x627, 0x635), _u(0x62A, 0x639, 0x644, 0x645, 0x646, 0x627),
+                     _u(0x623, 0x646), _u(0x627, 0x644, 0x644, 0x647), _u(0x648, 0x627, 0x62D, 0x62F)])  # "surat al-Ikhlas teaches us that Allah is one"
+CALIBRATION = [
+    # (name, prose, lesson surah, scholarCheck, expected: 'refused' | 'held' | 'ok')
+    ('the standard Basmala', RASM.BASMALA, 112, False, 'refused'),
+    ('Al-Ikhlas 1, in its own lesson', RASM.IKHLAS_1, 112, False, 'refused'),
+    ('Al-Ikhlas 2 (two words), in its own lesson', RASM.IKHLAS_2, 112, False, 'refused'),
+    ('Al-Ikhlas 2 in another lesson: held for the scholar', RASM.IKHLAS_2, 113, False, 'held'),
+    ('Al-Ikhlas 2 in another lesson, flagged for the scholar', RASM.IKHLAS_2, 113, True, 'ok'),
+    ('dhalika al-kitabu la rayba (2:2)', DHALIKA_AL_KITAB, 112, False, 'refused'),
+    ('hadha ma wa\'ada al-rahman (36:52)', HADHA_MA_WAADA, 112, True, 'refused'),
+    ('khalaqa al-insan (55:3) in a tafsir line: held, not refused', KHALAQA_AL_INSAN, 112, False, 'held'),
+    ('khalaqa al-insan in its own lesson', KHALAQA_AL_INSAN, 55, False, 'refused'),
+    ('ordinary prose about the surah', ORDINARY, 112, False, 'ok'),
+]
+
+
+def calibration_selftest(surahs):
+    """surahs: {n: [verse texts]} of the verified Quran. Returns failures."""
+    every = [v for n in sorted(surahs) for v in surahs[n]]
+    failed = []
+    for name, prose, lesson, flag, expected in CALIBRATION:
+        errors = typed_quran([('item tafsir-001.text', 'شرح: ' + prose)], quran_index(every, surahs[lesson]), {'tafsir-001': flag})
+        got = 'ok' if not errors else ('held' if all('possible quotation' in e for e in errors) else 'refused')
+        if got != expected:
+            failed.append(f'calibration {name}: expected {expected}, got {got} {errors}')
+    return failed
 
 
 def check_approvals(appr, content, works):
@@ -519,7 +608,7 @@ def selftest():
     ]}
     reg_errors, works = check_sources(reg)
     assert not reg_errors, reg_errors
-    grams = quran_grams(verses)
+    index = quran_index(verses, verses)
 
     def base():
         return json.loads(json.dumps(shared['base']).replace('{{pin}}', 'test-1'))
@@ -527,7 +616,7 @@ def selftest():
     failed = []
     for case in shared['cases']:
         c = apply_case(base(), case)
-        errors = check(c, verses, 'test-1', works, grams)
+        errors = check(c, verses, 'test-1', works, index)
         ok = not errors if case['expect'] == 'ok' else bool(errors)
         if not ok:
             failed.append(f'{case["name"]}: expected {case["expect"]}, got {errors}')
@@ -575,11 +664,21 @@ def selftest():
     # The shared hash vectors (quran-content.test.ts checks the same file).
     failed += check_vectors(json.load(open(VECTORS, encoding='utf-8')))
 
+    # The typed-Quran calibration, on the real verified text, and rasm()'s own fixtures.
+    surahs = v1.verified_surahs()
+    failed += calibration_selftest(surahs)
+    if RASM.selftest(surahs) != 0:
+        failed.append('rasm.py selftest')
+    # The TypeScript port's vectors (apps/lessons/src/quran/rasm.vectors.json) are rasm.py's own.
+    for v in json.load(open(RASM_VECTORS, encoding='utf-8'))['vectors']:
+        if RASM.rasm(v['input']) != v['skeleton']:
+            failed.append(f'rasm.vectors.json {v["name"]}: stale (regenerate it from rasm.py)')
+
     for f in failed:
         print(f'quran-content selftest: FAIL {f}')
     if not failed:
-        print(f'quran-content selftest: {len(shared["cases"])} shared content cases and {len(appr_cases)} approval cases, each as expected; '
-              'the registry and the hash vectors checked')
+        print(f'quran-content selftest: {len(shared["cases"])} shared content cases, {len(appr_cases)} approval cases and '
+              f'{len(CALIBRATION)} typed-Quran calibration cases on the verified text, each as expected; the registry and the hash vectors checked')
     return 1 if failed else 0
 
 
@@ -598,14 +697,14 @@ def main(argv):
             print(f'quran-content: approvals/{f}: no content file for it')
             failed += 1
     surahs = v1.verified_surahs() if files else {}
-    grams = quran_grams([v for s in sorted(surahs) for v in surahs[s]]) if files else set()
+    every = [v for s in sorted(surahs) for v in surahs[s]]
     for f in files:
         number = int(f[6:9])
         content = json.load(open(os.path.join(QURAN, f), encoding='utf-8'))
         errors = []
         if os.path.exists(os.path.join(CONTENT, f)):
             errors.append('this surah also has a schema-1 file (content/' + f + '); a surah has one or the other')
-        errors += check(content, surahs[number], dataset_id, works, grams) if content.get('surah') == number else [f'surah is {content.get("surah")!r}, not {number}']
+        errors += check(content, surahs[number], dataset_id, works, quran_index(every, surahs[number])) if content.get('surah') == number else [f'surah is {content.get("surah")!r}, not {number}']
         appr = None
         if f in approvals:
             appr = json.load(open(os.path.join(APPROVALS, f), encoding='utf-8'))

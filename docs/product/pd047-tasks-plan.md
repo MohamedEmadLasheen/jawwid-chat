@@ -356,6 +356,13 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
 - Teachers create no tasks.
 - Staff on mobile (Sales) come later.
 
+**As built in PR-5.**
+- **"To do (N)"** is a third chip beside "All" and "Needs a report". It lists `GET /me/tasks` in the server's order, with the read-only level chip.
+  - The chip uses the theme's own measured pairs: danger for High, the strong accent on its subtle ground for Medium (the gold rule), and success for Low.
+- **The sheet** reads `GET /tasks/:id` fresh and offers only its `actions`: done, acknowledge, "Not mine" (with a reason) and comment.
+- **"Open the lesson"** opens a lesson-report or correction task's lesson in the Schedule's own lesson actions. `titleParams` carries `lessonId` for this.
+- **Refresh:** the list refreshes on pull and after every action. Live refresh waits for PR-4's `task.changed` delivery (§3.10).
+
 ### 3.13 Security notes
 
 - Fail closed: RLS on and no grants. The database guard names a live actor of the same organization. There are no deletes. History is append-only.

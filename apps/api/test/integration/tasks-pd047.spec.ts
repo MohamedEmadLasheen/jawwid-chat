@@ -654,6 +654,32 @@ describe('what the Tasks page is offered (PR-3)', () => {
     }
   });
 
+  it('a teacher\'s decision offers only departments whose manager supervises the teacher, and reassign accepts each', async () => {
+    // A leave request raises its decision for the teacher's supervisor at once (PR-2).
+    let week = 0;
+    const leaveTask = async () => {
+      week += 1;
+      const [{ id }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        `insert into chat.teacher_leave_request (organization_id, teacher_id, first_day, last_day, reason)
+         values (chat.default_organization_id(), $1::uuid, chat.academy_today() + $2::int, chat.academy_today() + $2::int, 'family')
+         returning id::text as id`,
+        s.teacherId, 20 + week * 7,
+      );
+      const [{ task }] = await g.prisma.$queryRaw<Array<{ task: string }>>`
+        SELECT id::text AS task FROM chat.work_task WHERE source_key = ${`leave_decision:${id}`}`;
+      return task;
+    };
+    const probe = await leaveTask();
+    const on = await tasks.assignees(tmgr, { task: probe });
+    expect(on.departments.map((d) => d.kind)).toEqual(['teachers']);
+    for (const d of on.departments) {
+      await expect(tasks.reassign(tmgr, await leaveTask(), { to: { department: d.kind } })).resolves.toBeDefined();
+    }
+    for (const p of on.people) {
+      await expect(tasks.reassign(tmgr, await leaveTask(), { to: { kind: p.kind, id: p.id } })).resolves.toBeDefined();
+    }
+  });
+
   it('whoever may not hand a task on is offered nobody; nor is anyone offered across organizations', async () => {
     const t = await manual(s.managerId, staff(s.ownerId));
     expect(await tasks.assignees(s.ownerId, { task: t.id })).toEqual({ people: [], departments: [], truncated: false });

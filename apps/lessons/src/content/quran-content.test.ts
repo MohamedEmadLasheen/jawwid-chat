@@ -112,6 +112,9 @@ describe('required review steps (plan F.2)', () => {
     expect(requiredSteps({ kind: 'word', aqeedah: true })).toContain('scholar');
     expect(requiredSteps({ kind: 'quiz', category: 'hifz' })).toEqual(['check', 'teacher']);
     expect(requiredSteps({ kind: 'quiz', category: 'tafsir' })).toContain('scholar');
+    // A possible quotation the checker flagged goes to the scholar, whatever its kind.
+    expect(requiredSteps({ kind: 'word', scholarCheck: true })).toContain('scholar');
+    expect(requiredSteps({ kind: 'quiz', category: 'hifz', scholarCheck: true })).toContain('scholar');
     for (const kind of ['intro', 'tafsir', 'tafsir_x', 'lesson', 'reflection', 'story', 'theme', 'asbab'] as const) {
       expect(requiredSteps({ kind })).toContain('scholar');
     }

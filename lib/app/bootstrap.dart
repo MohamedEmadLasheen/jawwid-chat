@@ -19,6 +19,7 @@ import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_sales_payments_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/http_supervision_repository.dart';
+import '../core/data/http/http_task_repository.dart';
 import '../core/data/http/http_teacher_profile_repository.dart';
 import '../core/data/http/http_trial_repository.dart';
 import '../core/errors/app_error.dart';
@@ -188,6 +189,9 @@ List<Override> _httpOverrides() {
     ),
     lessonRepositoryProvider.overrideWithValue(
       HttpLessonRepository(client: client),
+    ),
+    taskRepositoryProvider.overrideWithValue(
+      HttpTaskRepository(client: client),
     ),
     supervisionRepositoryProvider.overrideWithValue(
       HttpSupervisionRepository(client: client),
