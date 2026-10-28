@@ -19,6 +19,17 @@ type Standing = 'super_admin' | 'manager' | 'supervisor';
 export const TASK_VIEWS = ['mine', 'team', 'decisions', 'all'] as const;
 export type TaskView = (typeof TASK_VIEWS)[number];
 export const DEPARTMENT_KINDS = ['operations', 'teachers', 'sales'] as const;
+/** PD-47 priority amendment: the manual level a person sets, and the effective one the server computes. */
+export const LEVELS = ['high', 'medium', 'low'] as const;
+export type Level = (typeof LEVELS)[number];
+export const CATEGORIES = ['financial', 'operational'] as const;
+export type Category = (typeof CATEGORIES)[number];
+export type PriorityReason = 'manual' | 'due_soon' | 'overdue' | 'source';
+/** The reference time and zone every effective level of one response is computed at. */
+interface Clock {
+  asOf: string;
+  zone: string;
+}
 
 const TITLE_MAX = 200;
 const BODY_MAX = 4000;
@@ -68,6 +79,17 @@ interface Row {
   disputed: number;
   unmanaged: boolean;
   standing: Standing | null;
+  priority: Level;
+  category: Category;
+  eff_level: Level;
+  eff_reason: PriorityReason;
+  eff_overdue: boolean;
+  /** Sort keys, as text to the microsecond, for the cursor. */
+  k1: number;
+  k2: number;
+  k3: number;
+  k4_key: string;
+  closed_at_key: string | null;
 }
 
 interface EventRow {
@@ -79,6 +101,8 @@ interface EventRow {
   from_assignee: string | null;
   to_assignee: string | null;
   body: string | null;
+  before: unknown;
+  after: unknown;
   at: Date;
 }
 
@@ -112,7 +136,7 @@ export class TaskService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /** { assignee: { kind: 'staff' | 'teacher', id }, title, body?, dueAt? } */
+  /** { assignee: { kind: 'staff' | 'teacher', id }, title, body?, dueAt?, priority?, category? } */
   async create(actorId: string, body: Record<string, unknown>) {
     const viewer = await this.requireViewer(actorId);
     if (viewer.kind !== 'staff') throw denied('teachers do not create tasks');
@@ -120,18 +144,25 @@ export class TaskService {
     const title = text(body.title, 'title', TITLE_MAX, true) as string;
     const detail = text(body.body, 'body', BODY_MAX, false);
     const dueAt = dueField(body.dueAt);
+    const priority = levelField(body.priority, 'priority') ?? 'medium';
+    const category = categoryField(body.category) ?? 'operational';
     await this.requireLive(viewer.organizationId, assignee);
     const standing = await this.standingTo(viewer, assignee);
     const allowed =
       standing === 'super_admin' || standing === 'manager' || (standing === 'supervisor' && assignee.kind === 'teacher');
     if (!allowed) throw denied('a task is given by the assignee\'s manager, a teacher\'s supervisor, or the super admin');
+    // Owner Q-F3: a manager (or the super admin) may mark a manual task financial.
+    if (category === 'financial' && standing !== 'super_admin' && standing !== 'manager') {
+      throw denied('a manager or the super admin marks a task financial');
+    }
 
     const id = await this.asActor(viewer.id, null, async (tx) => {
       const [row] = await tx.$queryRaw<Array<{ id: string; revision: number }>>`
-        INSERT INTO chat.work_task (organization_id, kind, assignee_staff_id, assignee_teacher_id, title, body, due_at, created_by)
+        INSERT INTO chat.work_task (organization_id, kind, assignee_staff_id, assignee_teacher_id, title, body, due_at, created_by,
+                                    priority, category)
         VALUES (${viewer.organizationId}::uuid, 'manual',
                 ${assignee.kind === 'staff' ? assignee.id : null}::uuid, ${assignee.kind === 'teacher' ? assignee.id : null}::uuid,
-                ${title}, ${detail}, ${dueAt}::timestamptz, ${viewer.id}::uuid)
+                ${title}, ${detail}, ${dueAt}::timestamptz, ${viewer.id}::uuid, ${priority}, ${category})
         RETURNING id::text AS id, revision`;
       await this.signal(tx, row.id, row.revision, 'created');
       return row.id;
@@ -139,8 +170,18 @@ export class TaskService {
     return this.summary(await this.load(viewer, id));
   }
 
-  /** ?view=mine|team|decisions|all &state=open|closed &cursor */
-  async list(actorId: string, query: { view: string; state?: string; cursor?: string }) {
+  /**
+   * ?view=mine|team|decisions|all &state=open|closed &level=high|medium|low
+   * &category=financial|operational &overdue=true &cursor
+   *
+   * Pending tasks come most urgent first (PD-47 priority amendment §3): the
+   * effective level (red, yellow, green), then financial before operational
+   * inside a level, then the soonest due (most overdue first), then the undated,
+   * oldest first. The first page fixes `asOf`; the cursor carries it, so a task
+   * crossing a boundary while someone pages never moves between pages. Closed
+   * tasks come newest first.
+   */
+  async list(actorId: string, query: { view: string; state?: string; cursor?: string; level?: string; category?: string; overdue?: string; limit?: string }) {
     const viewer = await this.requireViewer(actorId);
     const view = query.view as TaskView;
     if (!(TASK_VIEWS as readonly string[]).includes(view)) throw invalid('view: mine, team, decisions or all');
@@ -167,12 +208,35 @@ export class TaskService {
         : state === 'open'
           ? Prisma.sql`t.state IN ('open', 'awaiting_decision')`
           : Prisma.sql`t.state IN ('completed', 'removed') AND t.closed_at > now() - make_interval(days => ${CLOSED_DAYS}::int)`;
-    const after = cursorSql(query.cursor);
-    const rows = await this.rows(viewer, Prisma.sql`t.organization_id = ${viewer.organizationId}::uuid AND ${scope} AND ${states} AND ${after}`);
-    const last = rows.length === PAGE ? rows[rows.length - 1] : undefined;
+    const order: Order = view !== 'decisions' && state === 'closed' ? 'closed' : 'urgency';
+    const cursor = cursorOf(query.cursor, order);
+    const clock = await this.clock(cursor?.asOf);
+    const level = levelField(query.level, 'level');
+    const category = categoryField(query.category);
+    // overdue=true: past their deadline by their own floor rule (an instalment
+    // on its due day is due, not overdue); overdue=false: not past it.
+    if (query.overdue !== undefined && query.overdue !== '' && query.overdue !== 'true' && query.overdue !== 'false') {
+      throw invalid('overdue: true or false');
+    }
+    const filters = category ? Prisma.sql`t.category = ${category}` : Prisma.sql`true`;
+    const overdue =
+      query.overdue === 'true' ? Prisma.sql`r.eff_overdue` : query.overdue === 'false' ? Prisma.sql`NOT r.eff_overdue` : Prisma.sql`true`;
+    const outer = Prisma.sql`${level ? Prisma.sql`r.eff_level = ${level}` : Prisma.sql`true`} AND ${overdue} AND ${afterSql(cursor)}`;
+    const limit = query.limit === undefined || query.limit === '' ? PAGE : Number(query.limit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > PAGE) throw invalid(`limit: 1 to ${PAGE}`);
+    const rows = await this.rows(
+      viewer,
+      Prisma.sql`t.organization_id = ${viewer.organizationId}::uuid AND ${scope} AND ${states} AND ${filters}`,
+      clock,
+      order,
+      outer,
+      limit,
+    );
+    const last = rows.length === limit ? rows[rows.length - 1] : undefined;
     return {
+      asOf: clock.asOf,
       items: rows.map((r) => this.summary(r)),
-      nextCursor: last ? Buffer.from(`${last.created_at_key}|${last.id}`).toString('base64url') : null,
+      nextCursor: last ? cursorFor(last, order, clock.asOf) : null,
     };
   }
 
@@ -183,7 +247,7 @@ export class TaskService {
     const events = await this.prisma.$queryRaw<EventRow[]>`
       SELECT e.id::text AS id, e.kind, e.actor_kind, e.actor_id::text AS actor_id,
              coalesce(s.name, te.name) AS actor_name,
-             e.from_assignee::text AS from_assignee, e.to_assignee::text AS to_assignee, e.body, e.at
+             e.from_assignee::text AS from_assignee, e.to_assignee::text AS to_assignee, e.body, e.before, e.after, e.at
         FROM chat.work_task_event e
         LEFT JOIN chat.staff s ON e.actor_kind = 'staff' AND s.id = e.actor_id
         LEFT JOIN chat.teacher te ON e.actor_kind = 'teacher' AND te.id = e.actor_id
@@ -198,6 +262,9 @@ export class TaskService {
         fromAssigneeId: e.from_assignee,
         toAssigneeId: e.to_assignee,
         body: e.body,
+        /** What changed, for a client to say "Medium -> High" or "due Mon -> Wed"; the created event's after holds the initial priority and category. */
+        before: e.before ?? null,
+        after: e.after ?? null,
         at: e.at.toISOString(),
       })),
     };
@@ -288,6 +355,19 @@ export class TaskService {
   }
 
   /**
+   * { priority: high | medium | low }: the manual level. The responsible manager
+   * (the line manager, or the manager who created the task) or the super admin,
+   * as for the due date (owner, 2026-10-28). Recorded as priority_changed.
+   */
+  async setPriority(actorId: string, taskId: string, body: Record<string, unknown>) {
+    const { viewer, row } = await this.forDecider(actorId, taskId);
+    const priority = levelField(body.priority, 'priority');
+    if (!priority) throw invalid('priority: high, medium or low');
+    if (row.priority === priority) throw invalid('priority: unchanged');
+    return this.move(viewer, row, 'priority', null, Prisma.sql`priority = ${priority}`, 'priority_changed', this.deciderSql(viewer));
+  }
+
+  /**
    * The assignee, a responsible manager or the super admin. It changes nothing
    * but the history. A teacher's supervisor reads the task and stays silent
    * (owner Q3: read-only). { body }
@@ -324,7 +404,8 @@ export class TaskService {
    * PD-44: the Dashboard's task tiles -- `list`'s own predicates, counted,
    * pending tasks only, so each tile equals the list it links to:
    *   everyone            tasks.mine_open, tasks.mine_overdue           (view=mine)
-   *   a department's      tasks.team_open, tasks.team_overdue           (view=team)
+   *                       tasks.mine_urgent (level=high), tasks.mine_financial (category=financial)
+   *   a department's      tasks.team_open, tasks.team_overdue, _urgent, _financial (view=team)
    *   manager             tasks.awaiting_decision                       (view=decisions)
    *                       tasks.needs_reassignment (team, assignee gone)
    *   the super admin     tasks.all_open, tasks.all_overdue             (view=all), the
@@ -345,6 +426,7 @@ export class TaskService {
         wide: number; wide_oldest: Date | null; wide_overdue: number;
         decisions: number; decisions_oldest: Date | null;
         gone: number; unmanaged: number;
+        mine_urgent: number; mine_financial: number; wide_urgent: number; wide_financial: number;
       }>
     >`
       SELECT (${sa}::boolean OR EXISTS (
@@ -352,22 +434,31 @@ export class TaskService {
              count(*)::int AS scanned,
              count(*) FILTER (WHERE x.mine)::int AS mine,
              min(x.created_at) FILTER (WHERE x.mine) AS mine_oldest,
-             count(*) FILTER (WHERE x.mine AND x.due_at < now())::int AS mine_overdue,
+             count(*) FILTER (WHERE x.mine AND x.overdue)::int AS mine_overdue,
              count(*) FILTER (WHERE x.wide)::int AS wide,
              min(x.created_at) FILTER (WHERE x.wide) AS wide_oldest,
-             count(*) FILTER (WHERE x.wide AND x.due_at < now())::int AS wide_overdue,
+             count(*) FILTER (WHERE x.wide AND x.overdue)::int AS wide_overdue,
              count(*) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR x.unmanaged))::int AS decisions,
              min(x.created_at) FILTER (WHERE x.decides AND (x.state = 'awaiting_decision' OR x.unmanaged)) AS decisions_oldest,
              count(*) FILTER (WHERE x.wide AND NOT x.live)::int AS gone,
-             count(*) FILTER (WHERE x.unmanaged)::int AS unmanaged
+             count(*) FILTER (WHERE x.unmanaged)::int AS unmanaged,
+             count(*) FILTER (WHERE x.mine AND x.urgent)::int AS mine_urgent,
+             count(*) FILTER (WHERE x.mine AND x.financial)::int AS mine_financial,
+             count(*) FILTER (WHERE x.wide AND x.urgent)::int AS wide_urgent,
+             count(*) FILTER (WHERE x.wide AND x.financial)::int AS wide_financial
         FROM (
           SELECT t.created_at, t.due_at, t.state,
+                 (e.level = 'high') AS urgent,
+                 e.overdue AS overdue,
+                 (t.category = 'financial') AS financial,
                  ${mineSql(viewer)} AS mine,
                  ${wide} AS wide,
                  ${this.deciderSql(viewer)} AS decides,
                  ${unmanaged} AS unmanaged,
                  coalesce(a.is_active AND a.left_at IS NULL, ta.is_active AND ta.left_at IS NULL, false) AS live
             FROM chat.work_task t
+            CROSS JOIN LATERAL chat.work_task_effective(t.priority, t.floor_rule, t.due_at, t.source_floor, t.state,
+                                                         now(), chat.work_task_academy_zone()) e
             LEFT JOIN chat.staff a ON a.id = t.assignee_staff_id
             LEFT JOIN chat.teacher ta ON ta.id = t.assignee_teacher_id
            WHERE t.organization_id = ${viewer.organizationId}::uuid
@@ -376,15 +467,20 @@ export class TaskService {
            LIMIT ${TILE_SCAN}
         ) x`;
     const capped = (r?.scanned ?? 0) >= TILE_SCAN;
+    // *_urgent: effective High (list level=high); *_financial: list category=financial.
     const tiles = [
       dashboardTile('tasks.mine_open', r?.mine ?? 0, r?.mine_oldest ?? null, capped),
       dashboardTile('tasks.mine_overdue', r?.mine_overdue ?? 0, null, capped),
+      dashboardTile('tasks.mine_urgent', r?.mine_urgent ?? 0, null, capped),
+      dashboardTile('tasks.mine_financial', r?.mine_financial ?? 0, null, capped),
     ];
     if (r?.manages) {
       const scope = sa ? 'all' : 'team';
       tiles.push(
         dashboardTile(`tasks.${scope}_open`, r.wide, r.wide_oldest, capped),
         dashboardTile(`tasks.${scope}_overdue`, r.wide_overdue, null, capped),
+        dashboardTile(`tasks.${scope}_urgent`, r.wide_urgent, null, capped),
+        dashboardTile(`tasks.${scope}_financial`, r.wide_financial, null, capped),
         dashboardTile('tasks.awaiting_decision', r.decisions, r.decisions_oldest, capped),
         dashboardTile('tasks.needs_reassignment', r.gone, null, capped),
       );
@@ -519,7 +615,7 @@ export class TaskService {
     const viewer = await this.requireViewer(actorId);
     const row = await this.visible(viewer, taskId);
     if (row.standing !== 'manager' && row.standing !== 'super_admin') {
-      throw denied('a task is removed, returned or reassigned by the responsible manager or the super admin');
+      throw denied('a task is removed, returned, reassigned, re-dated or re-prioritised by the responsible manager or the super admin');
     }
     return { viewer, row };
   }
@@ -542,14 +638,26 @@ export class TaskService {
     }
   }
 
+  /** `asOf` from the cursor (a later page), or the database's now; and the academy's zone. */
+  private async clock(asOf?: string): Promise<Clock> {
+    const [c] = await this.prisma.$queryRaw<Array<{ as_of: string; zone: string }>>`
+      SELECT coalesce(${asOf ?? null}::timestamptz, now())::text AS as_of, chat.work_task_academy_zone() AS zone`;
+    return { asOf: c.as_of, zone: c.zone };
+  }
+
   private async load(viewer: Viewer, id: string): Promise<Row> {
-    const [row] = await this.rows(viewer, Prisma.sql`t.organization_id = ${viewer.organizationId}::uuid AND t.id = ${id}::uuid`);
+    const [row] = await this.rows(viewer, Prisma.sql`t.organization_id = ${viewer.organizationId}::uuid AND t.id = ${id}::uuid`, await this.clock());
     if (!row) throw notFound();
     return row;
   }
 
-  private rows(viewer: Viewer, where: Prisma.Sql) {
+  private rows(viewer: Viewer, where: Prisma.Sql, clock: Clock, order: Order = 'urgency', outer: Prisma.Sql = Prisma.sql`true`, limit = PAGE) {
+    const orderBy =
+      order === 'urgency'
+        ? Prisma.sql`ORDER BY r.k1, r.k2, r.k3, coalesce(r.due_at, 'infinity'::timestamptz), r.created_at, r.id::uuid`
+        : Prisma.sql`ORDER BY r.closed_at DESC, r.id::uuid DESC`;
     return this.prisma.$queryRaw<Row[]>`
+      SELECT * FROM (
       SELECT t.id::text AS id, t.kind, t.state, t.outcome,
              t.assignee_staff_id::text AS assignee_staff_id, t.assignee_teacher_id::text AS assignee_teacher_id,
              coalesce(a.name, ta.name) AS assignee_name,
@@ -561,16 +669,28 @@ export class TaskService {
              t.revision,
              (SELECT count(*)::int FROM chat.work_task_event e WHERE e.task_id = t.id AND e.kind = 'out_of_scope') AS disputed,
              ${UNMANAGED} AS unmanaged,
-             ${this.standingSql(viewer)} AS standing
+             ${this.standingSql(viewer)} AS standing,
+             t.priority, t.category, e.level AS eff_level, e.reason AS eff_reason, e.overdue AS eff_overdue,
+             -e.rank AS k1,
+             CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,
+             CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END AS k3,
+             -- 'infinity' sorts the undated last; it stays text here because
+             -- the client driver cannot decode an infinite timestamp.
+             coalesce(t.due_at, 'infinity'::timestamptz)::text AS k4_key,
+             t.closed_at::text AS closed_at_key
         FROM chat.work_task t
+        CROSS JOIN LATERAL chat.work_task_effective(t.priority, t.floor_rule, t.due_at, t.source_floor, t.state,
+                                                     ${clock.asOf}::timestamptz, ${clock.zone}) e
         LEFT JOIN chat.staff a ON a.id = t.assignee_staff_id
         LEFT JOIN chat.teacher ta ON ta.id = t.assignee_teacher_id
         LEFT JOIN chat.staff cb ON cb.id = t.created_by
         LEFT JOIN chat.staff xs ON xs.id = t.closed_by
         LEFT JOIN chat.teacher xt ON xt.id = t.closed_by
        WHERE ${where}
-       ORDER BY t.created_at DESC, t.id DESC
-       LIMIT ${PAGE}`;
+      ) r
+      WHERE ${outer}
+      ${orderBy}
+      LIMIT ${limit}`;
   }
 
   private summary(r: Row) {
@@ -598,6 +718,13 @@ export class TaskService {
       closedAt: r.closed_at?.toISOString() ?? null,
       closeReason: r.close_reason,
       revision: r.revision,
+      /** PD-47 priority: what a person set, what the server computed, and what raised it. */
+      manualPriority: r.priority,
+      effectivePriority: r.eff_level,
+      priorityReason: r.eff_reason,
+      /** Past its deadline by its floor rule, whatever raised the level (a manual High task can be overdue too). */
+      overdue: r.eff_overdue,
+      category: r.category,
     };
   }
 }
@@ -616,12 +743,66 @@ function mineSql(viewer: Viewer): Prisma.Sql {
   return viewer.kind === 'staff' ? Prisma.sql`t.assignee_staff_id = ${viewer.id}::uuid` : Prisma.sql`t.assignee_teacher_id = ${viewer.id}::uuid`;
 }
 
-/** Keyset paging on (created_at to the microsecond, id), newest first. */
-function cursorSql(cursor: string | undefined): Prisma.Sql {
-  if (cursor === undefined || cursor === '') return Prisma.sql`true`;
-  const [at, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-  if (!at || !id || !isUuid(id) || Number.isNaN(Date.parse(at))) throw invalid('cursor');
-  return Prisma.sql`(t.created_at, t.id) < (${at}::timestamptz, ${id}::uuid)`;
+type Order = 'urgency' | 'closed';
+/** The cursor's key shapes: what Postgres prints for an int, a timestamptz and a uuid. */
+const INT = /^-?\d{1,3}$/;
+const MOMENT = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?([+-]\d{2}(:?\d{2})?|Z)$/;
+const MOMENT_OR_INFINITY = /^(infinity|\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?([+-]\d{2}(:?\d{2})?|Z))$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+interface Cursor {
+  order: Order;
+  asOf: string;
+  keys: string[];
+}
+
+/** The last row's sort keys, and the page's asOf, opaque to the client. */
+function cursorFor(r: Row, order: Order, asOf: string): string {
+  const keys = order === 'urgency'
+    ? [String(r.k1), String(r.k2), String(r.k3), r.k4_key, r.created_at_key, r.id]
+    : [r.closed_at_key ?? '', r.id];
+  return Buffer.from(JSON.stringify({ o: order, a: asOf, k: keys })).toString('base64url');
+}
+
+function cursorOf(cursor: string | undefined, order: Order): Cursor | null {
+  if (cursor === undefined || cursor === '') return null;
+  let parsed: { o?: unknown; a?: unknown; k?: unknown };
+  try {
+    parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+  } catch {
+    throw invalid('cursor');
+  }
+  // Every key is checked here, so a forged or truncated cursor is a 400, never a cast error.
+  const keys = parsed.k;
+  const shape = order === 'urgency' ? [INT, INT, INT, MOMENT_OR_INFINITY, MOMENT, UUID] : [MOMENT, UUID];
+  const ok =
+    parsed.o === order &&
+    typeof parsed.a === 'string' && MOMENT.test(parsed.a) &&
+    Array.isArray(keys) && keys.length === shape.length &&
+    keys.every((x, i) => typeof x === 'string' && shape[i].test(x));
+  if (!ok) throw invalid('cursor');
+  return { order, asOf: parsed.a as string, keys: keys as string[] };
+}
+
+/** Keyset paging: everything after the cursor in the list's own order. */
+function afterSql(c: Cursor | null): Prisma.Sql {
+  if (!c) return Prisma.sql`true`;
+  const k = c.keys;
+  return c.order === 'urgency'
+    ? Prisma.sql`(r.k1, r.k2, r.k3, coalesce(r.due_at, 'infinity'::timestamptz), r.created_at, r.id::uuid)
+                 > (${k[0]}::int, ${k[1]}::int, ${k[2]}::int, ${k[3]}::timestamptz, ${k[4]}::timestamptz, ${k[5]}::uuid)`
+    : Prisma.sql`(r.closed_at, r.id::uuid) < (${k[0]}::timestamptz, ${k[1]}::uuid)`;
+}
+
+function levelField(v: unknown, field: string): Level | null {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string' || !(LEVELS as readonly string[]).includes(v)) throw invalid(`${field}: high, medium or low`);
+  return v as Level;
+}
+
+function categoryField(v: unknown): Category | null {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string' || !(CATEGORIES as readonly string[]).includes(v)) throw invalid('category: financial or operational');
+  return v as Category;
 }
 
 function principalOf(v: unknown, field: string): Principal {

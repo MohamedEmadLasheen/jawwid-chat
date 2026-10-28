@@ -15,11 +15,11 @@ import { TaskService } from './task.service';
 export class TaskController {
   constructor(private readonly tasks: TaskService) {}
 
-  /** ?state=open|closed &cursor: the caller's own tasks. */
+  /** ?state=open|closed &level &category &overdue &cursor: the caller's own tasks, most urgent first. */
   @SelfService()
   @Get('me/tasks')
-  mine(@ActorId() actorId: string, @Query('state') state?: string, @Query('cursor') cursor?: string) {
-    return this.tasks.list(actorId, { view: 'mine', state, cursor });
+  mine(@ActorId() actorId: string, @Query() q: Record<string, string | undefined>) {
+    return this.tasks.list(actorId, { view: 'mine', state: q.state, cursor: q.cursor, level: q.level, category: q.category, overdue: q.overdue, limit: q.limit });
   }
 
   /**
@@ -30,11 +30,13 @@ export class TaskController {
    */
   @Requires('tasks.team', 'tasks.manage')
   @Get('tasks')
-  list(@ActorId() actorId: string, @Query('view') view?: string, @Query('state') state?: string, @Query('cursor') cursor?: string) {
-    return this.tasks.list(actorId, { view: view ?? '', state, cursor });
+  list(@ActorId() actorId: string, @Query() q: Record<string, string | undefined>) {
+    return this.tasks.list(actorId, {
+      view: q.view ?? '', state: q.state, cursor: q.cursor, level: q.level, category: q.category, overdue: q.overdue, limit: q.limit,
+    });
   }
 
-  /** { assignee: { kind, id }, title, body?, dueAt? } */
+  /** { assignee: { kind, id }, title, body?, dueAt?, priority?, category? } */
   @Requires('tasks.create')
   @Post('tasks')
   create(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
@@ -87,6 +89,13 @@ export class TaskController {
   @Post('tasks/:id/reassign')
   reassign(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.tasks.reassign(actorId, id, body ?? {});
+  }
+
+  /** { priority: high | medium | low }: the manual level (PD-47 priority amendment). */
+  @Requires('tasks.manage')
+  @Post('tasks/:id/priority')
+  priority(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.tasks.setPriority(actorId, id, body ?? {});
   }
 
   /** { dueAt: ISO timestamp | null } */
