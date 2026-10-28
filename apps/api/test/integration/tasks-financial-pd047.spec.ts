@@ -53,7 +53,8 @@ const tasksOf = async (type: string) =>
     SELECT id::text AS id FROM chat.work_task WHERE source_type = ${type} ORDER BY created_at, id`).map((r) => r.id);
 const issues = async (key: string) =>
   g.prisma.$queryRaw<Array<{ attempts: number }>>`SELECT attempts FROM chat.work_task_source_issue WHERE source_key = ${key}`;
-const completion = async (id: string) => (await tasks.get(smgr, id)).history.find((e) => e.kind === 'completed');
+/** The completion event, read as the super admin (who sees every task). */
+const completion = async (id: string) => (await tasks.get(sa, id)).history.find((e) => e.kind === 'completed');
 const SOURCES = ['instalment', 'renewal_request', 'receipt_review', 'checkout_failed'];
 
 /** A child instalment of family_x's learner_l, due `days` from the academy's today. */
@@ -144,6 +145,19 @@ async function receipt(requestId: string): Promise<string> {
 
 const leave = (id: string) => exec(`update chat.staff set is_active = false, left_at = now() where id = $1::uuid`, id);
 
+/**
+ * The instalment task's owner leaves with nobody live to follow. Its first owner
+ * (s.ownerId) owns the family and cannot be deactivated, so the child moves to
+ * s.otherAdminId first, who then leaves; Operations is left without a manager.
+ */
+async function orphanTheOwner() {
+  await exec(`update chat.learner_supervision set supervisor_id = $2::uuid, assigned_by = $3::uuid where learner_id = $1::uuid`,
+    s.learnerId, s.otherAdminId, s.managerId);
+  await tasks.sweep();
+  await leave(s.otherAdminId);
+  await exec(`update chat.department set manager_id = null where kind = 'operations'`);
+}
+
 beforeAll(async () => {
   await g.prisma.$connect();
   [{ org, today }] = await g.prisma.$queryRaw<Array<{ org: string; today: string }>>`
@@ -200,6 +214,8 @@ describe('instalments', () => {
   });
 
   it('is due at the academy\'s local midnight, in the academy\'s zone', async () => {
+    // Other suites need the academy's zone as it was: put it back afterwards, never delete it.
+    const [was] = await g.prisma.$queryRaw<Array<{ v: string }>>`SELECT value::text AS v FROM chat.config WHERE key = 'schedule.timezone'`;
     await exec(`insert into chat.config (key, value) values ('schedule.timezone', to_jsonb('Pacific/Kiritimati'::text))
                 on conflict (key) do update set value = excluded.value`);
     try {
@@ -209,7 +225,8 @@ describe('instalments', () => {
         SELECT ((chat.academy_today() + 3)::timestamp at time zone 'Pacific/Kiritimati') AS due`;
       expect((await tasks.get(s.ownerId, (await taskFor(`instalment:${inst}`)) as string)).dueAt).toBe(due.toISOString());
     } finally {
-      await exec(`delete from chat.config where key = 'schedule.timezone'`);
+      if (was) await exec(`update chat.config set value = $1::jsonb where key = 'schedule.timezone'`, was.v);
+      else await exec(`delete from chat.config where key = 'schedule.timezone'`);
     }
   });
 
@@ -293,8 +310,7 @@ describe('instalments', () => {
     const inst = await instalment(3);
     await tasks.sweep();
     const id = (await taskFor(`instalment:${inst}`)) as string;
-    await leave(s.ownerId);
-    await leave(s.managerId);
+    await orphanTheOwner();
     const swept = await tasks.sweep();
     expect(swept.orphaned).toBe(1);
     expect(await issues(`instalment:${inst}`)).toEqual([{ attempts: 1 }]);
@@ -302,24 +318,23 @@ describe('instalments', () => {
     expect(await issues(`instalment:${inst}`)).toEqual([{ attempts: 1 }]); // the back-off holds
     // Nobody else: a manager of another department neither sees nor moves it.
     expect([CommErrorCode.TASK_DENIED, CommErrorCode.TASK_NOT_FOUND])
-      .toContain(await code(tasks.reassign(smgr, id, { to: { kind: 'staff', id: s.otherAdminId } })));
+      .toContain(await code(tasks.reassign(smgr, id, { to: { kind: 'staff', id: s.ownerId } })));
     // The database refuses anyone but the super admin, whatever the API does.
     await expect(
       g.prisma.$transaction([
         exec(`select set_config('chat.task_actor', $1, true)`, smgr),
-        exec(`update chat.work_task set assignee_staff_id = $2::uuid where id = $1::uuid`, id, s.otherAdminId),
+        exec(`update chat.work_task set assignee_staff_id = $2::uuid where id = $1::uuid`, id, s.ownerId),
       ]),
     ).rejects.toThrow(/follows its source/);
-    await tasks.reassign(sa, id, { to: { kind: 'staff', id: s.otherAdminId } });
-    expect((await tasks.get(sa, id)).assignee).toEqual({ kind: 'staff', id: s.otherAdminId });
+    await tasks.reassign(sa, id, { to: { kind: 'staff', id: s.ownerId } });
+    expect((await tasks.get(sa, id)).assignee).toEqual({ kind: 'staff', id: s.ownerId });
   });
 
   it('an orphan goes to a newly appointed manager on the next sweep, not after its back-off', async () => {
     const inst = await instalment(3);
     await tasks.sweep();
     const id = (await taskFor(`instalment:${inst}`)) as string;
-    await leave(s.ownerId);
-    await leave(s.managerId);
+    await orphanTheOwner();
     expect((await tasks.sweep()).orphaned).toBe(1);
     const fresh = randomUUID();
     await exec(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'omgr_f', 'manager', true)`, fresh);
