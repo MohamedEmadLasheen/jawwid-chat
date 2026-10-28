@@ -292,6 +292,9 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `أصبح ${String(p.supervisor)} مشرفك؛ سجلّ المحادثة كما هو` : 'تغيّر مشرفك؛ سجلّ المحادثة كما هو',
       'group.learner_detached': () => 'انتقل طفل من هذه المجموعة إلى مشرف آخر',
+      // PD-42: a child added to the family joined its group.
+      'group.learner_added': (p: Record<string, unknown>) =>
+        p.learner ? `انضم ${String(p.learner)} إلى هذه المجموعة` : 'انضم طفل إلى هذه المجموعة',
       // PD-33. Worded without a gendered verb: the names are anyone's.
       // A list preview carries the kind only: then the line is generic.
       'cover.started': (p: Record<string, unknown>) =>
@@ -567,6 +570,7 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `${String(p.supervisor)} is now your supervisor; the chat history is kept` : 'Your supervisor changed; the chat history is kept',
       'group.learner_detached': () => 'A child of this group moved to another supervisor',
+      'group.learner_added': (p: Record<string, unknown>) => (p.learner ? `${String(p.learner)} joined this group` : 'A child joined this group'),
       'cover.started': (p: Record<string, unknown>) =>
         p.cover && p.supervisor
           ? `${String(p.cover)} is covering for ${String(p.supervisor)} until ${coverDay(p.until, 'en-GB')}`

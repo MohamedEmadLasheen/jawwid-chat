@@ -86,6 +86,14 @@ describe('Add family (PD-42)', () => {
     expect(screen.queryByRole('button', { name: 'Add family' })).not.toBeInTheDocument()
   })
 
+  it('a manager with nobody to enter a family for: Add family is disabled, with what to do first (QA on #202)', async () => {
+    on('GET', /\/family-intake\/options$/, () => json({ ...OPTIONS, standing: 'sales_manager', manager: true, onBehalfOf: [], noTeam: true }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents' })
+    const button = await screen.findByRole('button', { name: 'Add family' })
+    expect(button).toBeDisabled()
+    expect(screen.getByText('Add a Sales member first: a family entered by the Sales manager belongs to one of their team.')).toBeInTheDocument()
+  })
+
   it('requires only the parent\'s name, a phone or an e-mail, and the child\'s name; sends nothing before the review', async () => {
     on('GET', /\/family-intake\/options$/, () => json(OPTIONS))
     const dialog = await openForm()
