@@ -291,10 +291,30 @@ export class StoryService {
       );
     }
 
-    return this.storage.authorizeUpload({
+    const grant = await this.storage.authorizeUpload({
       prefix: 'stories',
       mimeType: params.mimeType,
       byteSize: params.byteSize,
+    });
+    // PD-41 (review of #216): the key is this publisher's, recorded, so create()
+    // can refuse any media key Stories did not issue to them.
+    await this.prisma.storyMediaGrant.create({
+      data: { objectKey: grant.objectKey, organizationId: actor.organizationId as string, issuedTo: actor.actorId, mimeType: params.mimeType, byteSize: params.byteSize },
+    });
+    return grant;
+  }
+
+  /**
+   * PD-41: media the certificate workflow copied, server side, into `stories/`
+   * for this staff member -- recorded as a grant like an upload, so create()
+   * treats it the same way. Never reachable from a route.
+   */
+  async grantCertificateMedia(actorId: string, objectKey: string, mimeType: string, byteSize: number): Promise<void> {
+    const actor = await this.requireActor(actorId);
+    this.requirePublisher(actor);
+    if (!/^stories\/[^/]+$/.test(objectKey)) throw new CommError(CommErrorCode.STORY_MEDIA_NOT_GRANTED, 'story media lives under stories/');
+    await this.prisma.storyMediaGrant.create({
+      data: { objectKey, organizationId: actor.organizationId as string, issuedTo: actor.actorId, mimeType, byteSize, source: 'certificate' },
     });
   }
 
@@ -378,6 +398,16 @@ export class StoryService {
     // The result is discarded; publish() resolves again for real.
     await this.audience.resolve(actor, input.audiences);
 
+    // The media key is a NAME, not a capability (design R7): only a `stories/`
+    // key Stories itself issued to this publisher, not yet used by a story.
+    const mediaKey = hasMedia ? (input.mediaObjectKey as string) : null;
+    if (mediaKey) {
+      const grant = await this.prisma.storyMediaGrant.findUnique({ where: { objectKey: mediaKey } });
+      if (!grant || grant.issuedTo !== actor.actorId || grant.organizationId !== actor.organizationId || grant.storyId !== null) {
+        throw new CommError(CommErrorCode.STORY_MEDIA_NOT_GRANTED, 'story media is uploaded through POST /stories/media, by you, once');
+      }
+    }
+
     const created = await this.prisma.$transaction(async (tx) => {
       const story = await tx.story.create({
         data: {
@@ -398,6 +428,14 @@ export class StoryService {
           createdBy: actor.actorId,
         },
       });
+      if (mediaKey) {
+        // Claimed under the transaction: two drafts cannot share one grant.
+        const claimed = await tx.storyMediaGrant.updateMany({
+          where: { objectKey: mediaKey, issuedTo: actor.actorId, storyId: null },
+          data: { storyId: story.id },
+        });
+        if (claimed.count !== 1) throw new CommError(CommErrorCode.STORY_MEDIA_NOT_GRANTED, 'this story media was already used');
+      }
 
       await tx.storyAudience.createMany({
         data: input.audiences.map((a) => ({
@@ -1222,6 +1260,30 @@ export class StoryService {
     });
 
     return { ok: true, alreadyDeleted: false };
+  }
+
+  /**
+   * PD-41: a certificate's Story taken down because the family withdrew consent
+   * -- inside the certificate's own transaction, by whoever answers for the
+   * certificate now (a PD-33 backup included), so the withdrawal and the
+   * removal commit together or not at all. The author rule of remove() does not
+   * apply: the certificate workflow decided this act, and the trail says so.
+   */
+  async retireForCertificate(tx: Prisma.TransactionClient, storyId: string, staffId: string, reason: string): Promise<void> {
+    const story = await tx.story.findUnique({ where: { id: storyId }, select: { id: true, state: true } });
+    if (!story || story.state === StoryState.DELETED) return;
+    const now = new Date();
+    await tx.story.update({ where: { id: storyId }, data: { state: StoryState.DELETED, deletedAt: now, deletedBy: staffId, deletedReason: reason } });
+    await this.outbox.enqueue(tx, CommEvent.STORY_RETIRED, { storyId, reason: 'deleted', at: now.toISOString() });
+    await this.audit.audit(tx, {
+      actorId: staffId,
+      action: 'story.deleted',
+      entity: 'story',
+      entityId: storyId,
+      before: { state: story.state },
+      after: { state: StoryState.DELETED, by: 'certificate_consent_withdrawn' },
+      reason,
+    });
   }
 
   // -------------------------------------------------------------------------
