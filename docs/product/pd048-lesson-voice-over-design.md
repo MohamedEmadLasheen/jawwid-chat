@@ -511,7 +511,7 @@ create table chat.lesson_audio_string_decision (  -- append-only; bound to the t
 
 ## 12. Out of scope
 
-- **Quran recitation, in every form.** Quran audio is licensed human recitation under its own legal process (`quran.audio`, `chat.quran_ayah_audio`). **It is never TTS.** The plan script refuses a lesson whose strings include typed Quran (the P0-4 checker's typed-Quran detector), so lesson-1 voice-over cannot leak into Quran text.
+- **Quran recitation, in every form.** Quran audio is licensed human recitation under its own legal process (`quran.audio`, `chat.quran_ayah_audio`). **It is never TTS.** The generation script voices only `arabic-NNN` letters lessons and refuses any other lesson key. Only those lessons have a text map in the API, so lesson voice-over cannot reach Quran text.
 - The `islamic/` lessons and Arabic lessons 2–10. Each follows as its own item, on the same pipeline.
 - Syllable drills (بَ بِ بُ بْ): not in lesson 1 (§3).
 - Voicing UI text and quiz questions.
@@ -637,3 +637,72 @@ The department head relayed the answers, from the owner's replies to these quest
    - **Release gate R-48a (written confirmation).** Before `lesson_audio.enabled_for` is set to `all` on production, Microsoft must confirm **in writing** that a parent-facing notice satisfies Code of Conduct Responsible AI requirement 3 for this use. The confirmation is recorded with the licence in `voice-sources.ts` (§7.6). **If Microsoft will not confirm, the vendor switches to Amazon Polly** (§2.8 option 2). The Azure clips are then switched off by removing the voice from `voice-sources.ts`, then regenerated with Polly and reviewed again.
    - **Owner to approve: the notice wording** (Arabic and English) before it is published. The proposed English is: "Lesson pronunciation audio is computer-generated and checked by our teachers before use." Its Arabic, wording for the owner to approve: «صوت نطق الدروس مولَّد حاسوبيًا، ويراجعه معلمونا قبل استخدامه.» Both are drafts until the owner approves them.
    - The parent-notice surfaces are a separate small item (parent terms, enrolment, settings), tracked in the rollout (§15 step 6). Without them, R-48a is not met.
+
+## 18. The code PR as built (2026-10-29)
+
+The department head said go on 2026-10-29. One draft PR carries what §15 split into PR-1 to PR-4. It is on migration slot `20261029230000`. No vendor account, key or API call was made.
+
+**Database** (`mig/20261029230000_chat_pd048_lesson_audio.sql`):
+- The three append-only tables of §11.
+- `chat.lesson_audio_clip_state`: a clip's state is derived from its reviews, never stored.
+- `chat.review_lesson_audio_clip` and `chat.decide_lesson_audio_string`, which take the authenticated actor through `chat.trusted_staff_actor`.
+- `chat.lesson_audio_approvals_required() = 2` and `chat.lesson_audio_tries_per_round() = 3`. A unit spec holds them equal to the API's constants.
+- A reject or withdraw needs both a category and a reason. The same reviewer approving twice is refused in words, with the unique index as the backstop.
+- Request roles have no grants.
+- The rate-limit row `abuse.throttle.lesson_audio_read_actor`. The release gate is deliberately not inserted: unset means none.
+
+**PD-40:**
+- `lesson_audio.view` and `lesson_audio.review`, both delegable and verified by `legacyLessonAudioKeys` in the legacy-bundles spec. They are added through the `pd048` LATER block.
+- The `pronunciation_reviewer` template. `chat.seed_access_role_templates` is redefined (20261029220000's function with the list grown by one) and run for every organization that exists.
+
+**API** (`apps/api/src/lesson-audio/`):
+- Modules:
+  - `lesson-audio-key.ts`: the derived key.
+  - `recipe.ts`: the canonical recipe and its hash. Python's `tts.py` computes the same hash, pinned by a shared constant.
+  - `lesson-texts.ts`: loads the generated `texts/arabic-001.json` and fails closed if any entry does not hash to its text.
+  - `voice-sources.ts`: four voices (Azure Hamed/Zariyah, Polly Zeina/Hala), none licensed. `familyLicence` also requires R-48a's vendor confirmation for Azure.
+  - `lesson-audio-gate.ts`: the release gate, separate from Quran audio's.
+  - The store, the service and the controller.
+- Routes (all in the PD-40 route table):
+  - `GET /lesson-audio/access`;
+  - `GET /lesson-audio/review/:lesson`;
+  - `GET /lesson-audio/review/:lesson/units/:unit`;
+  - `POST /lesson-audio/clips/:id/approve|reject|withdraw`;
+  - `POST /lesson-audio/strings/:lesson/:id/decision`;
+  - `GET /lesson-audio/:lesson` (self-service, rate limited).
+
+**Ingest:** `apps/api/src/cli/ingest-lesson-audio.ts`.
+- Dry run by default.
+- `--write` uploads to a temporary key, hashes what storage holds, copies it to the content-addressed key, hashes again, and inserts through `chat.ingesting_lesson_audio`.
+- `--export` prints states and hashes for the plan.
+
+**Text map and guard:**
+- `scripts/lessons/lesson-audio-texts.py` writes the API's text map from the lesson file. It includes only approved strings: words whose spelling is held nowhere, notes not held, and every unit name. Arabic is written as `\u` escapes.
+- The `lessons-supply-chain` gate runs it. It fails while the map is stale and on any `speechSynthesis` in `apps/lessons`. It also runs the `tts.py` selftest.
+
+**Operator script:** `scripts/lessons/tts/tts.py`, standard library only.
+- `plan` needs no network or key.
+- `generate` is the only vendor call: Azure REST, or Polly signed with SigV4. Its key is read from the operator's shell at run time and never written.
+- The runbook is `scripts/lessons/tts/README.md`. The lexicons, `lexicon/azure.json` and `lexicon/polly.json`, start empty.
+
+**Engine** (`apps/lessons/src/arabic/voice.ts`):
+- The `jawwid:lesson-audio` message, checked as §7.5 says.
+- `verifiedAudioFor` is factored out of the Quran player, with its behaviour unchanged.
+- The letters section shows a play button only for a string with a verified clip.
+
+**Admin Web:**
+- `/lesson-audio` (§9).
+- The materials opener posts `jawwid:lesson-audio` to a lessons-site letters page.
+- A Pronunciation reviewer specialist lands on the page.
+
+**Verified:**
+- API unit tests: 1,911 pass, plus 26 for PD-48.
+- Integration tests on a private database with a private Redis: PD-48 7/7, plus the PD-40 access-roles and staff-accounts specs. The latter now counts templates from `role-templates.ts`.
+- Lessons: 174 vitest tests and the typecheck pass.
+- Admin Web: 848 vitest tests and the typecheck pass.
+- Guards: `pd-registry`, `g20`, `secret-scan` and `lessons-supply-chain` pass.
+
+**Not in this PR (follow-ups):**
+- The Flutter openers (`activity_view_{web,mobile}`) posting `jawwid:lesson-audio`.
+- The parent notice surfaces of Q7: the parent terms and privacy notice, the enrolment line, and Settings → About lesson audio. Its wording waits for the owner.
+- Generating any clip. That needs an account the owner opens, the pilot probe (§15 step 3), and R-48a before `all`.
