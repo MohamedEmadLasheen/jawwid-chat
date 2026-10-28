@@ -199,8 +199,9 @@ describe('1. the lifecycle, newest first', () => {
     expect(r.json.teacherId).toBe(id);
     const events = r.json.events as Event[];
     const actions = events.map((e) => e.action);
-    // Newest first.
-    expect(actions[0]).toBe('teacher.reactivated');
+    // Newest first. Reactivation writes its row and the new code's in ONE
+    // transaction: same time, so the two lead together (the later write first).
+    expect(actions.slice(0, 2).sort()).toEqual(['account.first_login_code_issued', 'teacher.reactivated']);
     expect(actions).toEqual(expect.arrayContaining([
       'teacher.created', 'account.first_login_code_issued', 'account.activated', 'teacher.offboarded', 'teacher.reactivated',
     ]));
