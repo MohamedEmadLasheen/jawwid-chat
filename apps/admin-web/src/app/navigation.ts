@@ -108,6 +108,8 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   cases: 'people',
   // PD-41: the Certificates page.
   certificates: 'people',
+  // PD-48: lesson voice-over review.
+  'lesson-audio': 'more',
   // PD-44: out of More, its own destination (the super admin's stays in the
   // Admin Portal's More until PD-44 PR-8).
   dashboard: 'dashboard',
@@ -132,6 +134,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   schedule: '/schedule',
   cases: '/cases',
   certificates: '/certificates',
+  'lesson-audio': '/lesson-audio',
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
@@ -152,6 +155,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   schedule: 'calendar',
   cases: 'tasks',
   certificates: 'star',
+  'lesson-audio': 'approvals',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
@@ -269,6 +273,14 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     path: AREA_PATH.certificates,
     icon: AREA_ICON.certificates,
     label: { message: 'nav.certificates' },
+    inDevelopment: false,
+  })
+  // PD-48: the super admin holds every key, so reviews lesson voice-over too.
+  out.get('more')?.[0]?.entries.push({
+    key: 'lesson-audio',
+    path: AREA_PATH['lesson-audio'],
+    icon: AREA_ICON['lesson-audio'],
+    label: { message: 'nav.lesson-audio' },
     inDevelopment: false,
   })
   // One registry group inside a destination needs no heading.

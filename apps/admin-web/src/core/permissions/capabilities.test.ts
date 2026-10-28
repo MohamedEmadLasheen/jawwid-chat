@@ -97,7 +97,8 @@ describe('navigation lists what a role may open', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
       // PD-41: Certificates waits for GET /certificates/access.
-      const certs = (a: string) => a === 'certificates'
+      // PD-48: Lesson audio waits for GET /lesson-audio/access.
+      const certs = (a: string) => a === 'certificates' || a === 'lesson-audio'
       expect(navAreas(role)).toEqual(
         visibleAreas(role).filter((a) => a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)),
       )
@@ -106,7 +107,8 @@ describe('navigation lists what a role may open', () => {
       expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'schedule' && !certs(a)))
       // PD-38: the Schedule on GET /lessons/access's `calendar`.
       expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role).filter((a) => !certs(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true })).toEqual(visibleAreas(role))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true })).toEqual(visibleAreas(role).filter((a) => a !== 'lesson-audio'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true, lessonAudio: true })).toEqual(visibleAreas(role))
     }
   })
 
@@ -146,7 +148,7 @@ describe('permission keys → pages', () => {
     expect(holdsAny(null, ['staff_accounts.view'])).toBe(false)
   })
 
-  it("gives a specialist PD-41's Certificates area only -- never Accounts, so no staff-account tabs", () => {
-    expect(visibleAreas('specialist')).toEqual(['certificates'])
+  it("gives a specialist PD-41's Certificates and PD-48's Lesson audio areas only -- never Accounts, so no staff-account tabs", () => {
+    expect(visibleAreas('specialist')).toEqual(['certificates', 'lesson-audio'])
   })
 })

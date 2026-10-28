@@ -1,0 +1,16 @@
+/* PD-48: the Lesson audio review page. Layout only; colours come from the theme tokens. */
+.lesson-audio__note { padding: var(--space-3, 12px); border-radius: var(--radius-2, 8px); background: var(--surface-warn, var(--surface-2)); }
+.lesson-audio__units { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); margin-block: var(--space-3, 12px); }
+.lesson-audio__units button[aria-pressed='true'] { outline: 2px solid var(--accent, currentColor); }
+.lesson-audio__bar { display: flex; gap: var(--space-2, 8px); margin-block-end: var(--space-3, 12px); }
+.lesson-audio__strings { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3, 12px); }
+.lesson-audio__strings > li { padding: var(--space-3, 12px); border: 1px solid var(--border, currentColor); border-radius: var(--radius-2, 8px); }
+.lesson-audio__strings > li.is-playing { outline: 2px solid var(--accent, currentColor); }
+/* The vowelled text, large enough that every mark is seen (design §9: at least 40 px). */
+.lesson-audio__text { font-size: 2.75rem; line-height: 1.6; }
+.lesson-audio__meta { display: flex; gap: var(--space-2, 8px); align-items: center; }
+.lesson-audio__clip { margin-block-start: var(--space-2, 8px); display: grid; gap: var(--space-2, 8px); }
+.lesson-audio__clip.is-rejected, .lesson-audio__clip.is-withdrawn { opacity: 0.6; }
+.lesson-audio__row { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); align-items: center; }
+.lesson-audio__voice { color: var(--text-muted, inherit); font-size: 0.875em; }
+.lesson-audio__form { display: grid; gap: var(--space-2, 8px); max-width: 32rem; }
