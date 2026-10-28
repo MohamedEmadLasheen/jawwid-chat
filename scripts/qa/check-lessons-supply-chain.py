@@ -9,8 +9,10 @@ The old lessons repo was infected through its build config (a postcss.config.js
 loader, .vscode folderOpen tasks, a fake font holding a second payload). The
 engine is written from scratch, and this keeps it that way. It FAILS when:
   * package.json: a dependency is not an exact version; it declares optional,
-    peer or bundled dependencies; or any lifecycle-looking script (install
-    hooks, prepack/postpack, and any pre*/post* script);
+    peer or bundled dependencies; an `overrides` entry is not a plain exact
+    version (no ranges, nesting, $references or npm: aliases); or any
+    lifecycle-looking script (install hooks, prepack/postpack, and any
+    pre*/post* script);
   * package-lock.json: an entry is not lockfileVersion 3, is a link, or is not
     resolved from EXACTLY https://registry.npmjs.org/<name>/-/<basename>-<version>.tgz
     with an sha512 integrity (so an entry cannot point react at another
@@ -124,6 +126,16 @@ def check(base, paths=None, api_integrity=API_INTEGRITY):
     for field in ('optionalDependencies', 'peerDependencies', 'bundledDependencies', 'bundleDependencies'):
         if pkg.get(field):
             errors.append(f'package.json must not declare {field}')
+    # Overrides hold transitive packages back to releases past the cooldown
+    # (rollup, postcss, @babel/*, the browserslist family): reviewed pins, so
+    # each must be one plain exact version of the package it names.
+    overrides = pkg.get('overrides') or {}
+    if not isinstance(overrides, dict):
+        errors.append('package.json overrides must be an object of exact versions')
+        overrides = {}
+    for name, version in overrides.items():
+        if not isinstance(version, str) or not EXACT.match(version):
+            errors.append(f'package.json overrides.{name} = {version!r} is not a plain exact version')
     for script in (pkg.get('scripts') or {}):
         if HOOK.match(script):
             errors.append(f'package.json must not define the lifecycle script {script!r}')
@@ -285,7 +297,12 @@ def selftest():
 
     cases = {
         'clean': (lambda d: None, None),
+        'clean-with-override': (edit_pkg(lambda k: k.update(overrides={'rollup': '4.64.12'})), None),
         'range': (edit_pkg(lambda k: k['dependencies'].update(react='^18.3.1')), 'not an exact version'),
+        'override-range': (edit_pkg(lambda k: k.update(overrides={'rollup': '^4.64.12'})), 'not a plain exact version'),
+        'override-alias': (edit_pkg(lambda k: k.update(overrides={'rollup': 'npm:attacker-pkg@1.0.0'})), 'not a plain exact version'),
+        'override-nested': (edit_pkg(lambda k: k.update(overrides={'vite': {'rollup': '4.64.12'}})), 'not a plain exact version'),
+        'override-ref': (edit_pkg(lambda k: k.update(overrides={'react': '$react'})), 'not a plain exact version'),
         'lifecycle-prepack': (edit_pkg(lambda k: k['scripts'].update(prepack='node x')), 'lifecycle script'),
         'lifecycle-pretest': (edit_pkg(lambda k: k['scripts'].update(pretest='node x')), 'lifecycle script'),
         'registry-host': (lock_entry(resolved='https://evil.example/evil-1.0.0.tgz'), 'not https://registry.npmjs.org/evil/'),

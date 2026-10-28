@@ -23,5 +23,17 @@
     "typescript": "5.9.3",
     "vite": "6.4.3",
     "vitest": "2.1.9"
+  },
+  "overrides": {
+    "rollup": "4.64.12",
+    "postcss": "8.5.31",
+    "@babel/parser": "7.29.9",
+    "@babel/types": "7.29.8",
+    "@babel/helper-string-parser": "7.29.7",
+    "browserslist": "4.29.4",
+    "caniuse-lite": "1.0.30001817",
+    "electron-to-chromium": "1.5.463",
+    "node-releases": "2.0.59",
+    "baseline-browser-mapping": "2.11.30"
   }
 }
