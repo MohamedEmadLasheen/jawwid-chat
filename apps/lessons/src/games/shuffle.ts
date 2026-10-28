@@ -28,6 +28,11 @@ export function shuffled<T>(items: readonly T[], seed: number): T[] {
   return out;
 }
 
+/** A fresh seed for each visit, so a child does not learn one fixed order. */
+export function visitSeed(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0]!;
+}
+
 /**
  * The ayat a game asks about, round by round: consecutive windows that together
  * cover EVERY ayah of the surah (the old games only ever used the first few).

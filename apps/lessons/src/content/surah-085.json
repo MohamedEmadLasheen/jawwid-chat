@@ -1,0 +1,462 @@
+{
+  "surah": 85,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs, and every hand-typed Quran string (replaced by positions)."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-85 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "0c1e90eaf0ab22fbdaecb7e6244e4405a503d3ab5085d22830e2fe5cfa14ce0f",
+      "components/QuizSection.tsx": "3e7883cb1a611efc768e73724587c3bd63f3b63bcddb109fac7d7ab727bf0d60",
+      "components/MeaningsSection.tsx": "7ecfc7f5e2b89569e5739c170037c465dfed92e098434da99abe35eeba18b95e",
+      "components/GamesSection.tsx": "b7e51867cc49b205776c0b14c9c0117b030e6fc4d5f9e54eef5126ce10abaacd"
+    }
+  },
+  "intro": {
+    "text": "سورة البروج تذكرنا بعظمة خلق الله في السماء والنجوم، وتخبرنا عن أناس آمنوا بالله وصبروا على إيمانهم، وأن الله يحب الصابرين ويكافئهم بالجنة.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "يُقسم الله بالسماء الجميلة التي فيها النجوم الكبيرة",
+      "review": "Says al-buruj are \"the big stars\". Common tafsir gives the great stars, or the mansions of the sun and moon. Teacher to choose the wording."
+    },
+    {
+      "ayah": 2,
+      "text": "ويُقسم بيوم القيامة الذي وعد الله به",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "ويُقسم بمن يشهد ومن يُشهد عليه يوم القيامة",
+      "review": "A generic reading of shahid/mashhud. Many tafsir name Friday and the Day of Arafah. Teacher to choose."
+    },
+    {
+      "ayah": 4,
+      "text": "لُعن الأشرار الذين حفروا حفرة كبيرة في الأرض",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "وأشعلوا فيها نارًا كبيرة جدًا",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "وجلسوا حول تلك النار يراقبون",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "وكانوا يشاهدون ما يفعلونه بالمؤمنين الطيبين",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "لم يكرهوا المؤمنين إلا لأنهم آمنوا بالله القوي المحمود",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "الله الذي يملك كل شيء في السماوات والأرض والله يرى كل شيء ويعلم كل شيء",
+      "review": "MERGED: the old lesson split this ayah into two (its 9 and 10); these are its two lines joined."
+    },
+    {
+      "ayah": 10,
+      "text": "الذين آذوا المؤمنين والمؤمنات ولم يرجعوا عن أفعالهم السيئة ولم يتوبوا إلى الله سيعاقبهم الله بنار جهنم ولهم عذاب شديد بالنار",
+      "review": "MERGED: the old lesson split this ayah into four (its 11-14); these are its four lines joined."
+    },
+    {
+      "ayah": 11,
+      "text": "أما الذين آمنوا بالله وعملوا أعمالًا طيبة لهم جنات جميلة تجري فيها الأنهار وهذا هو الفوز العظيم من الله",
+      "review": "MERGED: the old lesson split this ayah into three (its 15-17); these are its three lines joined."
+    },
+    {
+      "ayah": 12,
+      "text": "إن عقاب الله شديد جدًا للظالمين",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "الله هو الذي يخلق كل شيء ويعيده",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "والله كثير المغفرة وكثير المحبة لعباده",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "صاحب العرش العظيم الكريم",
+      "review": "In Hafs, al-majid (with damma) describes Allah, not the Throne; this line reads it as the Throne's. Teacher to correct."
+    },
+    {
+      "ayah": 16,
+      "text": "الله يفعل كل ما يريد ولا يعجزه شيء",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": null,
+      "review": "MISSING: the old lesson never reached ayat 17-22, so there is no line. A teacher writes it."
+    },
+    {
+      "ayah": 18,
+      "text": null,
+      "review": "MISSING: the old lesson never reached ayat 17-22, so there is no line. A teacher writes it."
+    },
+    {
+      "ayah": 19,
+      "text": null,
+      "review": "MISSING: the old lesson never reached ayat 17-22, so there is no line. A teacher writes it."
+    },
+    {
+      "ayah": 20,
+      "text": null,
+      "review": "MISSING: the old lesson never reached ayat 17-22, so there is no line. A teacher writes it."
+    },
+    {
+      "ayah": 21,
+      "text": null,
+      "review": "MISSING: the old lesson never reached ayat 17-22, so there is no line. A teacher writes it."
+    },
+    {
+      "ayah": 22,
+      "text": null,
+      "review": "MISSING: the old lesson never reached ayat 17-22, so there is no line. A teacher writes it."
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "النجوم الكبيرة في السماء",
+      "review": "Says al-buruj are \"the big stars\". Common tafsir gives the great stars, or the mansions of the sun and moon. Teacher to choose the wording."
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "حفرة كبيرة في الأرض",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 3,
+      "meaning": "الحطب الذي يشعل النار",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 9,
+      "meaning": "المحمود الذي يستحق الشكر",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "word": 10,
+      "meaning": "يرى كل شيء",
+      "review": "Meaning given as \"sees everything\"; shahid is the Witness who knows and sees all. Teacher to confirm."
+    },
+    {
+      "ayah": 12,
+      "word": 2,
+      "meaning": "عقاب شديد",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "word": 3,
+      "meaning": "كثير المحبة",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "word": 3,
+      "meaning": "العظيم الكريم",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 2,
+      "word": 2
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 5,
+      "word": 3
+    },
+    {
+      "ayah": 11,
+      "word": 14
+    },
+    {
+      "ayah": 12,
+      "word": 4
+    },
+    {
+      "ayah": 14,
+      "word": 3
+    },
+    {
+      "ayah": 15,
+      "word": 3
+    },
+    {
+      "ayah": 16,
+      "word": 1
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول آية في سورة البروج؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 3
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "ما آخر آية في سورة البروج؟",
+      "options": [
+        {
+          "ayah": 15
+        },
+        {
+          "ayah": 16
+        },
+        {
+          "ayah": 22
+        }
+      ],
+      "answer": 2,
+      "review": "CORRECTED: the old answer was \"fa''alun lima yurid\", which is ayah 16. The surah ends at ayah 22.",
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 14,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 15,
+          "word": 3
+        },
+        {
+          "ayah": 14,
+          "word": 3
+        },
+        {
+          "ayah": 8,
+          "word": 9
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 11,
+        "words": 13
+      },
+      "options": [
+        {
+          "ayah": 14,
+          "word": 3
+        },
+        {
+          "ayah": 11,
+          "word": 14
+        },
+        {
+          "ayah": 15,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors (al-azim, al-mubin) were hand-typed; these two are words of this surah.",
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "النجوم الكبيرة في السماء"
+        },
+        {
+          "text": "الجبال العالية"
+        },
+        {
+          "text": "البحار الواسعة"
+        }
+      ],
+      "answer": 0,
+      "review": "Says al-buruj are \"the big stars\". Common tafsir gives the great stars, or the mansions of the sun and moon. Teacher to choose the wording.",
+      "word": {
+        "ayah": 1,
+        "word": 3
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "حفرة كبيرة في الأرض"
+        },
+        {
+          "text": "نهر كبير"
+        },
+        {
+          "text": "جبل عالٍ"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 4,
+        "word": 3
+      },
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "كثير المحبة"
+        },
+        {
+          "text": "كثير القوة"
+        },
+        {
+          "text": "كثير العلم"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 14,
+        "word": 3
+      },
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "ماذا نتعلم من سورة البروج؟",
+      "options": [
+        {
+          "text": "الصبر على الإيمان بالله"
+        },
+        {
+          "text": "كيف نطبخ الطعام"
+        },
+        {
+          "text": "كيف نلعب الكرة"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q8"
+    },
+    {
+      "category": "meanings",
+      "question": "من يدخل الجنة حسب السورة؟",
+      "options": [
+        {
+          "text": "من آمن بالله وعمل الصالحات"
+        },
+        {
+          "text": "من لديه مال كثير"
+        },
+        {
+          "text": "من يلعب كثيرًا"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الصبر على الإيمان بالله مهما حصل",
+      "review": null
+    },
+    {
+      "text": "الله قوي وعادل ويرى كل شيء",
+      "review": null
+    },
+    {
+      "text": "من يعمل الخير ويؤمن بالله يدخل الجنة",
+      "review": null
+    },
+    {
+      "text": "الله يحب عباده المؤمنين ويغفر لهم",
+      "review": null
+    },
+    {
+      "text": "يجب أن نكون ثابتين على فعل الخير",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نكون ثابتين على فعل الخير والإيمان بالله؟",
+    "ideas": [
+      "نصلي كل يوم ونقرأ القرآن",
+      "نساعد الآخرين ونكون طيبين",
+      "نصبر عندما نواجه صعوبات",
+      "نتذكر أن الله يرانا ويحبنا"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله يحب الصابرين؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الجنة أعدها الله لمن يعمل الخير؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن البروج هي النجوم الكبيرة في السماء؟",
+      "review": "Says al-buruj are \"the big stars\". Common tafsir gives the great stars, or the mansions of the sun and moon. Teacher to choose the wording."
+    },
+    {
+      "text": "هل تعلم أن الله هو الغفور الودود؟",
+      "review": null
+    }
+  ]
+}

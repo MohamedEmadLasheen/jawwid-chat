@@ -4,16 +4,22 @@
  * stars be farmed). Kept in memory for now; per-child storage comes with the
  * completion events (plan P1-1/P1-3).
  */
-export type SectionId = 'listen' | 'verses' | 'order';
+export type SectionId = 'listen' | 'verses' | 'meanings' | 'complete' | 'order' | 'quiz' | 'benefits';
 
-export const SECTIONS: readonly SectionId[] = ['listen', 'verses', 'order'];
+/** Every lesson: the Quran sections, built from the verified text alone. */
+export const QURAN_SECTIONS: readonly SectionId[] = ['listen', 'verses', 'order'];
+
+/** A lesson with reviewed content (src/content/) adds the rest, in this order. */
+export const CONTENT_SECTIONS: readonly SectionId[] = ['listen', 'verses', 'meanings', 'complete', 'order', 'quiz', 'benefits'];
 
 export class StarLedger {
   private readonly earned = new Set<SectionId>();
 
-  /** True only the first time a section is completed. */
+  constructor(private readonly sections: readonly SectionId[] = QURAN_SECTIONS) {}
+
+  /** True only the first time a section of this lesson is completed. */
   award(section: SectionId): boolean {
-    if (this.earned.has(section)) return false;
+    if (!this.sections.includes(section) || this.earned.has(section)) return false;
     this.earned.add(section);
     return true;
   }
@@ -27,6 +33,6 @@ export class StarLedger {
   }
 
   get max(): number {
-    return SECTIONS.length;
+    return this.sections.length;
   }
 }
