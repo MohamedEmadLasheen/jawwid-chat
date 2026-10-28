@@ -79,7 +79,7 @@ If no such print can be identified for a work, the work is **not** a primary sou
 
 | Role | Work | Status | Notes |
 |---|---|---|---|
-| **Primary** | **Taysir al-Karim al-Rahman fi Tafsir Kalam al-Mannan**, 'Abd al-Rahman al-Sa'di | The author died 22 Jumada al-Akhira 1376 AH = **24 January 1957** (often misdated 1956). **Public domain under life + 50 (Saudi Arabia, Egypt, Qatar) since about 2007.** **EU (life + 70): protected until 31 December 2027**, free from 1 January 2028. | Clear, concise, lesson-oriented, and it largely avoids isra'iliyyat, which makes it the closest classical fit for children. **Edition:** NOT the al-Luwayhiq critical edition (Ula al-Nuha 2000 / al-Rushd 2008), whose apparatus is the editor's. Pin an early print with no modern editor's apparatus (§A.6, step 1). |
+| **Primary** | **Taysir al-Karim al-Rahman fi Tafsir Kalam al-Mannan**, 'Abd al-Rahman al-Sa'di | The author died 22 Jumada al-Akhira 1376 AH = **24 January 1957** (often misdated 1956). **Public domain under life + 50 (Saudi Arabia, Egypt, Qatar) since about 2007.** **EU (life + 70): protected until 31 December 2027**, free from 1 January 2028. **US: possibly protected until about 2051–2053** (URAA, 95 years from the 1955–58 first printing; for counsel). Our own cited wording is unaffected; only verbatim text would be. | Clear, concise, lesson-oriented, and it largely avoids isra'iliyyat, which makes it the closest classical fit for children. **Edition:** NOT the al-Luwayhiq critical edition (Ula al-Nuha 2000 / al-Rushd 2008), whose apparatus is the editor's. Pin an early print with no modern editor's apparatus (§A.6, step 1). |
 | **Cross-check 1** | **Ma'alim al-Tanzil**, al-Baghawi (d. 516 AH) | Public domain everywhere (author's text) | A concise, Sunni, narration-based tafsir widely regarded as sound in method (the scholar confirms). It is used to confirm the meaning of each ayah. |
 | **Cross-check 2** | **Tafsir al-Quran al-'Azim**, Ibn Kathir (d. 774 AH), the full original | Public domain everywhere (author's text). Its modern abridgements (al-Misbah al-Munir, al-'Adawi's Sahih, etc.) are in copyright and **not used**. | Used for narrations and for checking that a meaning is the established one. It includes weak reports, so **nothing is taken from a narration in it without the asbab/hadith rule** (§A.3). |
 | Reference only | Tafsir al-Jalalayn (al-Mahalli d. 864, al-Suyuti d. 911) | Public domain | Very short glosses, useful for word sense. **Caution:** it reinterprets some divine attributes (ta'wil). The scholar never accepts a line about Allah's attributes from it. |
@@ -94,11 +94,13 @@ If no such print can be identified for a work, the work is **not** a primary sou
 
 | Role | Work | Status | Notes |
 |---|---|---|---|
-| **Primary** | **al-Tibyan fi Tafsir Gharib al-Quran**, Ibn al-Ha'im (d. 815 AH) | Public domain (author's text) | Ordered by surah and ayah, so it maps to our positions. Glosses are short and accurate, but terse and in adult register (§A.5). **Edition:** to be pinned (§A.6, step 1); a modern edition may be read only for the author's words, never its notes. |
+| ~~Primary~~ cross-check (see the decision below the table) | **al-Tibyan fi Tafsir Gharib al-Quran**, Ibn al-Ha'im (d. 815 AH) | Public domain (author's text) | Ordered by surah and ayah, so it maps to our positions. Glosses are short and accurate, but terse and in adult register (§A.5). **Edition:** to be pinned (§A.6, step 1); a modern edition may be read only for the author's words, never its notes. |
 | Cross-check | **Tafsir Gharib al-Quran**, Ibn Qutaybah (d. 276 AH) | Public domain (author's text). The al-Sayyid Ahmad Saqr edition (1978) and others carry editors' apparatus. | The earliest standard gharib work. Ordered by surah. |
-| Cross-check | **Nuzhat al-Qulub (Gharib al-Quran)**, al-Sijistani (d. 330 AH) | Public domain; **a Bulaq print of 1295 AH (in a margin)** is reported, which itself has no modern apparatus | Alphabetical, so a reviewer's look-up, not a map |
+| **Primary** (decided 2026-10-29) | **Nuzhat al-Qulub (Gharib al-Quran)**, al-Sijistani (d. 330 AH) | Public domain; **a Bulaq print of 1295 AH (in a margin)** is reported, which itself has no modern apparatus | Alphabetical, so a reviewer's look-up, not a map |
 | Reference | **al-Mufradat fi Gharib al-Quran**, al-Raghib al-Isfahani (d. 502 AH) | Public domain | Ordered by root, deep. For the scholar's look-up on hard words. |
 | Reference | al-Sa'di and al-Baghawi (§A.1) | Public domain (§A.1) | They often explain the key word within the ayah's tafsir |
+
+**Edition research (2026-10-29): *al-Tibyan* has no public-domain printing.** Only the modern critical editions of 1992 and 2003 exist. By §A.0 it therefore cannot be the primary. **DECIDED 2026-10-29 (department head, Option A of `docs/product/pd049-edition-pinning-brief.md`):** the primary is **al-Sijistani's *Nuzhat al-Qulub*, Bulaq 1295** (the text *al-Tibyan* is built on), with al-Sa'di's tafsir of the ayah where al-Sijistani has no entry. Ibn al-Ha'im becomes a cross-check. The table above is superseded on this point.
 
 **Not used** (in copyright, so excluded by the owner's decision):
 - KFGQPC's al-Muyassar fi Gharib al-Quran;
@@ -166,7 +168,7 @@ Otherwise **there is no asbab section for that ayah: no placeholder, no "unknown
 
 ### A.6 Steps before the pilot is written
 
-1. **Pin the editions** (an engineer plus the scholar), for al-Sa'di, Ibn al-Ha'im, al-Baghawi, Ibn Kathir and al-Wahidi. Record each in `sources.json` (§A.0) in a reviewed commit. A work with no pinned edition can be a cross-check but not the primary.
+1. **Pin the editions** (an engineer plus the scholar), for al-Sa'di, the word-meaning primary, al-Baghawi, Ibn Kathir, al-Wahidi and the hadith collections. The candidates, and a form the scholar can tick, are in `docs/product/pd049-edition-pinning-brief.md`. Record each in `sources.json` (§A.0) in a reviewed commit. A work with no pinned edition can be a cross-check but not the primary.
 2. **Write the authoring guide** for the three bands, with three worked examples per kind, approved by the Teachers department and the scholar.
 3. **Approve the respect rules and the mechanics** (§C.4) with the scholar.
 4. Then write the pilot (§G.2).
