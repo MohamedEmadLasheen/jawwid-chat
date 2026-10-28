@@ -398,7 +398,11 @@ export class NewStudentEnrolmentService {
     try {
       const joined = await this.conversations.addLearnersToFamilyGroup(actor.actorId, { familyId: family.id, learnerIds: learners.map((l) => l.id) });
       if (joined) {
-        await this.prisma.studentEnrolment.update({ where: { lessonId: trialId }, data: { groupConversationId: joined.conversationId } });
+        // group_created_by: who put the enrolment's children in the group (student_enrolment_group_is_whole).
+        await this.prisma.studentEnrolment.update({
+          where: { lessonId: trialId },
+          data: { groupConversationId: joined.conversationId, groupCreatedBy: actor.actorId },
+        });
         group = 'joined';
       }
     } catch (e) {

@@ -677,7 +677,8 @@ export class FamilyIntakeService {
       if (!joined) return 'none';
       // The enrolments that listed these children now name the group they are in.
       await this.prisma.$executeRaw`
-        UPDATE chat.student_enrolment SET group_conversation_id = ${joined.conversationId}::uuid
+        UPDATE chat.student_enrolment
+           SET group_conversation_id = ${joined.conversationId}::uuid, group_created_by = ${s.actor.actorId}::uuid
          WHERE family_id = ${familyId}::uuid AND group_conversation_id IS NULL AND learner_ids && ${learnerIds}::uuid[]`;
       return 'joined';
     } catch (e) {
@@ -700,7 +701,7 @@ export class FamilyIntakeService {
         JOIN chat.department d ON d.id = m.department_id AND d.kind = 'operations'
        WHERE st.organization_id = ${s.org}::uuid AND st.is_active AND st.left_at IS NULL
          AND (${own}::uuid IS NULL OR d.manager_id = ${own}::uuid)
-       ORDER BY st.name, st.id`;
+       ORDER BY name, id`;
   }
 
   private async isOperationsSupervisor(s: Standing, staffId: string, purpose: 'place' | 'suggest'): Promise<boolean> {
@@ -947,22 +948,25 @@ export class FamilyIntakeService {
     }
   }
 
-  private async requireOwnFamily(s: Standing, familyId: string) {
+  /** A family the caller owns; with its primary parent unless `parent: 'optional'` (a child's own reads). */
+  private async requireOwnFamily(s: Standing, familyId: string, parent: 'required' | 'optional' = 'required') {
     if (!isUuid(familyId)) throw notFound();
     const [row] = await this.prisma.$queryRaw<Array<{ id: string; contact_id: string | null; account_id: string | null; owns: boolean }>>`
       SELECT f.id::text AS id, f.primary_contact_id::text AS contact_id, c.account_id::text AS account_id,
              chat.staff_owns_family(${s.actor.actorId}::uuid, f.id) AS owns
         FROM chat.family f LEFT JOIN chat.contact c ON c.id = f.primary_contact_id
        WHERE f.id = ${familyId.toLowerCase()}::uuid AND f.organization_id = ${s.org}::uuid`;
-    if (!row || !row.owns || !row.contact_id) throw notFound();
-    return { id: row.id, contactId: row.contact_id, accountId: row.account_id };
+    if (!row || !row.owns || (parent === 'required' && !row.contact_id)) throw notFound();
+    // contactId is set whenever the parent is required; the 'optional' callers do not read it.
+    return { id: row.id, contactId: row.contact_id as string, accountId: row.account_id };
   }
 
   private async requireOwnLearner(s: Standing, learnerId: string) {
     if (!isUuid(learnerId)) throw notFound();
     const learner = await this.prisma.learner.findFirst({ where: { id: learnerId.toLowerCase(), organizationId: s.org }, select: { id: true, familyId: true } });
     if (!learner) throw notFound();
-    await this.requireOwnFamily(s, learner.familyId);
+    // A child's package needs no parent record (families from before PD-16 may have none).
+    await this.requireOwnFamily(s, learner.familyId, 'optional');
     return learner;
   }
 

@@ -208,9 +208,12 @@ describe('1. Assign', () => {
     // Sales can no longer edit or withdraw a form that became a family.
     await expect(g.prisma.$executeRawUnsafe(`update chat.trial_subscription set parent_name = 'x' where lesson_id = $1::uuid`, trialId))
       .rejects.toThrow(/already enrolled/);
-    // The same e-mail cannot make a second account.
+    // The same e-mail cannot make a second account. Since PD-42 PR-3 the answer
+    // names the family the parent is already in (PARENT_EXISTS), so the
+    // children can join it (1c); the frozen form above still answers LESSON_STATE.
     const again = await subscribedTrial();
-    expect(await code(enrolment.assign(s.managerId, again, { supervisorId: s.ownerId }))).toBe(CommErrorCode.LESSON_STATE);
+    expect(await code(enrolment.assign(s.managerId, again, { supervisorId: s.ownerId }))).toBe(CommErrorCode.PARENT_EXISTS);
+    expect(await g.prisma.account.count({ where: { subject: LOWER } })).toBe(1);
   });
 
   it('the database refuses a child with a teacher from anyone but the Operations manager (or, PD-42, the family\'s own supervisor)', async () => {
