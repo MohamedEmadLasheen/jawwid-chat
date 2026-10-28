@@ -13,6 +13,16 @@ describe('the one letter rule (shared with the CI checker)', () => {
     });
   }
 
+  // Lesson 3 (the harakat): a unit with a mark counts a letter only where it carries that mark.
+  const HARAKA: Record<string, string> = { fatha: String.fromCodePoint(0x64e), kasra: String.fromCodePoint(0x650), damma: String.fromCodePoint(0x64f) };
+  for (const c of fixture.markedCases) {
+    it(`${c.word} / ${c.letters.join('')} with ${c.mark}: ${c.has ? c.positions.join(', ') : 'not there'}`, () => {
+      const unit = { letters: c.letters, mark: HARAKA[c.mark]! };
+      expect(has(c.word, unit)).toBe(c.has);
+      expect(positions(c.word, unit)).toEqual(c.positions);
+    });
+  }
+
   for (const m of fixture.marks) {
     it(`U+${m.cp.toString(16).toUpperCase()} (${m.note}) is ${m.isMark ? '' : 'not '}a mark`, () => {
       expect(isMark(String.fromCodePoint(m.cp))).toBe(m.isMark);
@@ -71,5 +81,7 @@ describe('the one letter rule (shared with the CI checker)', () => {
       { text: 'مْ', target: false },
     ]);
     expect(clusters('لَأْمْ', { letters: ['ل'] }).map((p) => p.text)).toEqual(['لَأْ', 'مْ']);
+    // With a mark, only the letter that carries it is the target: in بَابْ the first ب (fatha), not the last (sukun).
+    expect(clusters('بَابْ', { letters: ['ب'], mark: String.fromCodePoint(0x64e) }).map((p) => p.target)).toEqual([true, false, false]);
   });
 });
