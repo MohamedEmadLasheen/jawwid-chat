@@ -8,6 +8,7 @@ import { PresenceService } from '../realtime/presence.service';
 import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
+import { Requires, SelfService } from '../../platform/permissions/route-access';
 
 /** The most people one `GET /presence` may ask about. */
 const MAX_PEOPLE = 100;
@@ -34,6 +35,7 @@ export class PresenceController {
 
   /** `GET /presence?staff=<id,…>&teachers=<id,…>` -- up to 100 people. */
   @RateLimited(ActionScope.PRESENCE_READ)
+  @Requires('chat.use')
   @Get('presence')
   async read(@ActorId() actorId: string, @Query('staff') staff?: string, @Query('teachers') teachers?: string) {
     const viewer = await this.conversations.requireActor(actorId);
@@ -57,6 +59,7 @@ export class PresenceController {
   }
 
   /** The caller's own presence settings (staff only). */
+  @SelfService()
   @Get('me/presence')
   async settings(@ActorId() actorId: string) {
     const staffId = await this.requireStaff(actorId);
@@ -68,6 +71,7 @@ export class PresenceController {
    * `PATCH /me/presence { hideLastSeen }` -- WhatsApp's switch. On: nobody sees
    * the caller's last seen, and the caller sees nobody's. Online stays visible.
    */
+  @SelfService()
   @Patch('me/presence')
   async update(@ActorId() actorId: string, @Body() body: { hideLastSeen?: unknown }) {
     const staffId = await this.requireStaff(actorId);

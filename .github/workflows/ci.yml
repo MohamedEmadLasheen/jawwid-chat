@@ -114,6 +114,11 @@ jobs:
         # is written, and pinned.ts, data/quran/<id>.json and the file agree.
         run: bash scripts/qa/guards.sh quran-dataset
 
+      - name: PD-40 · every API route declares the permission it asks of staff
+        # A route with no @Requires / @SelfService / @NotForStaff / @Public is
+        # refused to staff by PermissionGuard; this fails the build first.
+        run: bash scripts/qa/guards.sh pd040-routes
+
       - name: Every gate in scripts/qa/guards.sh runs in CI
         # Anti-drift: fails if guards.sh defines a gate this job never calls.
         run: bash scripts/qa/guards.sh ci-wiring
