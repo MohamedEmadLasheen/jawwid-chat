@@ -161,6 +161,10 @@ export const ADMIN_SCHEDULE_LABEL: Bilingual = { en: 'Schedule', ar: 'الجدو
 /** PD-11 T4 / PD-16: trial lessons and new students, under People. */
 export const ADMIN_TRIALS_LABEL: Bilingual = { en: 'Trials & new students', ar: 'الحصص التجريبية والطلاب الجدد' }
 
+/** Teacher Profile V2: the credential review queue, under People -- not "Teacher profiles",
+ *  whose Arabic is Teacher files' own name. */
+export const ADMIN_TEACHER_CREDENTIALS_LABEL: Bilingual = { en: 'Teacher credentials review', ar: 'مراجعة مؤهلات المعلمين' }
+
 /** PD-35 B5: escalation cases, under People. */
 export const ADMIN_CASES_LABEL: Bilingual = { en: 'Escalations', ar: 'التصعيدات' }
 
@@ -226,6 +230,15 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     path: AREA_PATH.trials,
     icon: AREA_ICON.trials,
     label: { text: ADMIN_TRIALS_LABEL },
+    inDevelopment: false,
+  })
+  // Teacher Profile V2: the server admits the super admin as a credential
+  // reviewer (canReviewTeacherProfile), at /teacher-profiles.
+  out.get('people')?.[0]?.entries.push({
+    key: 'teacher-profiles',
+    path: AREA_PATH['teacher-profiles'],
+    icon: AREA_ICON['teacher-profiles'],
+    label: { text: ADMIN_TEACHER_CREDENTIALS_LABEL },
     inDevelopment: false,
   })
   // PD-29: the super admin manages the Materials library at /materials, the

@@ -67,9 +67,9 @@ describe('The navigation registry', () => {
     // Accounts (PD-21: where every staff role administers accounts),
     // Materials (PD-29: the library the super admin manages), the Schedule
     // (PD-38: the academy's calendar), Trials & new students (PD-11 T4,
-    // PD-16) and Escalations (PD-35 B5).
-    expect(keys).toHaveLength(27)
-    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'cases'].sort())
+    // PD-16), Teacher credentials review and Escalations (PD-35 B5).
+    expect(keys).toHaveLength(28)
+    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
     const more = destinations.find((d) => d.key === 'more')!
@@ -113,11 +113,12 @@ describe('The navigation registry', () => {
     // -- except Chat, the one workspace it writes in (PD-8), Accounts, the
     // one page every staff role shares (PD-21), the Schedule it shares with
     // the Teachers department and Operations (PD-38), Trials & new students,
-    // which it shares with Sales and Operations (PD-11 T4, PD-16), Escalations
+    // which it shares with Sales and Operations (PD-11 T4, PD-16), Teacher
+    // credentials review (the queue it reviews with operators), Escalations
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/cases', '/materials'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/materials'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -347,6 +348,9 @@ describe('The desktop rail', () => {
     // PD-11 T4 / PD-16: then Trials & new students,
     expect(document.activeElement).toHaveAccessibleName('Trials & new students')
     await userEvent.keyboard('{ArrowDown}')
+    // then Teacher credentials review,
+    expect(document.activeElement).toHaveAccessibleName('Teacher credentials review')
+    await userEvent.keyboard('{ArrowDown}')
     // PD-35 B5: then Escalations, closing the first People group,
     expect(document.activeElement).toHaveAccessibleName('Escalations')
     await userEvent.keyboard('{ArrowDown}')
@@ -432,7 +436,8 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getAllByRole('link', { name: 'التصعيدات' })[0]).toHaveAttribute('href', '/cases')
     const people = within(nav).getByRole('group', { name: 'الأشخاص والفرق' })
     expect(within(people).getByRole('link', { name: 'الحصص التجريبية والطلاب الجدد' })).toHaveAttribute('href', '/trials')
-    expect(within(nav).getAllByRole('link')).toHaveLength(27)
+    expect(within(people).getByRole('link', { name: 'مراجعة مؤهلات المعلمين' })).toHaveAttribute('href', '/teacher-profiles')
+    expect(within(nav).getAllByRole('link')).toHaveLength(28)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {
