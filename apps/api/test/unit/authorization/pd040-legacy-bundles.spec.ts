@@ -18,7 +18,7 @@ import { StaffRole } from '@communication/contracts/vocab';
 import { decideBillingAccess, decidePd012PageAccess, decidePd012StaffAccess, type OperationsDepartmentRole } from '@platform/pd012-policy';
 import { decideTeacherFileAccess, teacherFilePageAccess } from '@platform/teacher-file-policy';
 import { decidePageBasis } from '@platform/teacher-scope';
-import { canGrantSubscriptionException } from '@platform/subscription-policy';
+import { canCarryOverPackage, canGrantSubscriptionException } from '@platform/subscription-policy';
 import { accountAdminActs } from '@platform/account-admin-policy';
 import { StaffProfilePermission, profilePermissionsFor } from '@platform/staff-profile-policy';
 import { PERMISSIONS, PERMISSION_KEYS } from '@platform/permissions/catalogue';
@@ -92,6 +92,7 @@ function rules(): Record<string, Rule> {
     'billing.verify': (a) => billing(a).canVerify,
     'parents.edit': (a) => billing(a).canEditParent,
     'subscriptions.manage': (a) => canGrantSubscriptionException(a.actor, role(a, 'operations'), role(a, 'sales')),
+    'subscriptions.carry_over': (a) => canCarryOverPackage(a.actor, role(a, 'operations'), role(a, 'sales')),
     'certificates.view': supervises,
     'certificates.design': supervises,
     'certificates.deliver': supervises,

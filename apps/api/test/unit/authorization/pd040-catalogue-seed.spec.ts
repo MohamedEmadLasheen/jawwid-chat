@@ -49,6 +49,19 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
       ['supervisor', 'teachers', 'reports.view'],
     ],
   },
+  {
+    // PD-42 (PD-30-amendment-carried-over): the supervisors who enter
+    // families, and their managers, may carry a package over from Core.
+    migration: '20261028110000_chat_pd042_direct_enrolment.sql',
+    tag: 'pd042',
+    permissions: ['subscriptions.carry_over'],
+    bundles: [
+      ['manager', 'operations', 'subscriptions.carry_over'],
+      ['manager', 'sales', 'subscriptions.carry_over'],
+      ['supervisor', 'operations', 'subscriptions.carry_over'],
+      ['supervisor', 'sales', 'subscriptions.carry_over'],
+    ],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));
