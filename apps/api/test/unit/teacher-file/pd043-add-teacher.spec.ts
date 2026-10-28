@@ -14,11 +14,11 @@ import { PasswordResetService, FIRST_LOGIN_CODE_HOURS } from '@platform/auth/pas
 import { firstLoginMail } from '../../../src/account-recovery/recovery-delivery';
 
 describe('the first sign-in e-mail', () => {
-  it('Arabic first, then English; the code alone on its line; 72 hours; the sign-in name', () => {
+  it('Arabic first, then English; the code alone on its line, never in the subject; 72 hours; the sign-in name', () => {
     const mail = firstLoginMail('482913', FIRST_LOGIN_CODE_HOURS, 'new.teacher@example.test');
     const lines = mail.text.split('\n');
     expect(lines).toContain('482913');
-    expect(mail.subject).toContain('482913');
+    expect(mail.subject).not.toContain('482913');
     expect(mail.text).toContain('72');
     expect(mail.text).toContain('new.teacher@example.test');
     expect(mail.text.search(/[؀-ۿ]/)).toBeLessThan(mail.text.search(/Jawwid/));
@@ -42,9 +42,11 @@ describe('PasswordResetService.issueInTx', () => {
 
   it('writes in the caller\'s transaction and opens none of its own', async () => {
     const created: Array<Record<string, unknown>> = [];
+    const order: string[] = [];
     const tx = {
+      $executeRaw: jest.fn(async () => (order.push('lock'), 0)),
       passwordResetCode: {
-        count: jest.fn(async () => 0),
+        count: jest.fn(async () => (order.push('count'), 0)),
         findMany: jest.fn(async () => []),
         updateMany: jest.fn(async () => ({ count: 0 })),
         create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => (created.push(data), { id: 'code-1' })),
@@ -57,6 +59,8 @@ describe('PasswordResetService.issueInTx', () => {
       accountId: 'acc', organizationId: 'org', issuedByStaffId: 'staff', issuedByAccountId: 'staff-acc', reason: 'new teacher', signOutEverywhere: false, purpose: 'first_login',
     });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+    // The hourly count runs under a per-account lock, so two issues at once cannot both pass it.
+    expect(order.slice(0, 2)).toEqual(['lock', 'count']);
     expect(created[0]).toMatchObject({ purpose: 'first_login', accountId: 'acc' });
     expect(out).toMatchObject({ id: 'code-1', code: expect.stringMatching(/^[0-9]{6}$/) });
     expect(audit.audit).toHaveBeenCalledWith(tx, expect.objectContaining({ action: 'account.first_login_code_issued' }));

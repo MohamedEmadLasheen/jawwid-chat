@@ -155,6 +155,30 @@ describe('Add teacher', () => {
     await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent('This e-mail can’t be used for a new teacher.'))
   })
 
+  it('cannot be closed while the server is answering; reopened, it starts clean', async () => {
+    listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })
+    let answer!: (r: Response) => void
+    on('POST', /\/teachers$/, () => new Promise<Response>((resolve) => (answer = resolve)))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files' })
+    await user.click(await screen.findByRole('button', { name: 'Add teacher' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add teacher' })
+    await user.type(within(dialog).getByLabelText('Full name'), 'New Teacher')
+    await user.type(within(dialog).getByLabelText('Sign-in e-mail'), 'new.teacher@example.test')
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled())
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: 'Add teacher' })).toBeInTheDocument()
+
+    answer(json(ADDED, 201))
+    const shown = await screen.findByRole('dialog', { name: 'First sign-in code' })
+    await user.click(within(shown).getByRole('button', { name: 'Done' }))
+    await user.click(screen.getByRole('button', { name: 'Add teacher' }))
+    const again = await screen.findByRole('dialog', { name: 'Add teacher' })
+    expect(within(again).getByLabelText('Full name')).toHaveValue('')
+    expect(screen.queryByText('482913')).not.toBeInTheDocument()
+  })
+
   it('requires a name and a sign-in e-mail before asking the server', async () => {
     listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })
     const user = userEvent.setup()

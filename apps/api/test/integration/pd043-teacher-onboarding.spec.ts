@@ -484,13 +484,20 @@ describe('5. the department head\'s review of #184', () => {
       expect(await sqlError(insert(m.teacherSupervisors[1]!.id))).toMatch(/a first sign-in code is issued by someone who may add this teacher/);
       expect(await sqlError(insert(m.teacherSupervisors[0]!.id))).toBe('ok');
       expect(await sqlError(insert(m.teachersManager.id))).toBe('ok');
-      // A supervisor who added a teacher with no supervisor still issues that teacher's code.
+      // Having added a teacher (with no supervisor) is NOT enough to reissue its code later
+      // (#195 review P1, owner "E-mail only; managers can see").
       const theirs = await teacherRow(await createTeacher(m.teacherSupervisors[1]!.id, { email: email('v') }));
-      await expect(issueFirstLogin(theirs.account.id, m.teacherSupervisors[1]!)).resolves.toMatchObject({ code: expect.any(String) });
+      expect(await sqlError(issueFirstLogin(theirs.account.id, m.teacherSupervisors[1]!))).toMatch(
+        /a first sign-in code is issued by someone who may add this teacher/,
+      );
     } finally {
       await strict(false);
     }
-    expect(teacher.id).toBeDefined();
+    // Strict scope off changes nothing: a teacher supervisor who is not the CURRENT one is refused.
+    expect(await sqlError(insert(m.teacherSupervisors[1]!.id))).toMatch(/a first sign-in code is issued by someone who may add this teacher/);
+    await g.prisma.$executeRaw`UPDATE chat.teacher_supervisor_assignment SET supervisor_id = ${m.teacherSupervisors[1]!.id}::uuid WHERE teacher_id = ${teacher.id}::uuid`;
+    expect(await sqlError(insert(m.teacherSupervisors[0]!.id))).toMatch(/a first sign-in code is issued by someone who may add this teacher/);
+    expect(await sqlError(insert(m.teacherSupervisors[1]!.id))).toBe('ok');
   });
 
   it('P2-3: a reset code is a keyed hash too', async () => {

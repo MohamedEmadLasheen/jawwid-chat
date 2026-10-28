@@ -57,6 +57,7 @@ function issuing() {
   const created: Array<Record<string, unknown>> = [];
   const audits: Array<Record<string, unknown>> = [];
   const tx = {
+    $executeRaw: jest.fn(async () => 0),
     passwordResetCode: {
       count: jest.fn(async () => 0),
       findMany: jest.fn(async () => [{ id: OLD_CODE }]),

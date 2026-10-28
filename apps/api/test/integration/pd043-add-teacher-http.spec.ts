@@ -12,15 +12,20 @@
  *      organization's account, this organization's parent, and a teacher the
  *      caller does not reach -- nothing to tell them apart; only a teacher the
  *      caller reaches is named. There is no e-mail-check endpoint.
- *   4. POST /teachers/:id/first-login-code reissues while the teacher has not
- *      signed in; never after; never by someone outside the department.
+ *   4. POST /teachers/:id/first-login-code (owner 2026-10-28, "E-mail only;
+ *      managers can see"): only the super admin, the Teachers manager and the
+ *      teacher's CURRENT supervisor reissue; the code is always e-mailed; only
+ *      the manager and the super admin see it. A former or out-of-reach
+ *      supervisor gets 404 before anything else. Ten codes an hour at most.
+ *   6. G2: the code is e-mailed after the commit; a failed send logs the
+ *      code's id only (a fake mailer stands in for SMTP).
  *   5. GET /teacher-files tells the page whether to offer "Add teacher" and
  *      which supervisors it may name.
  *
  * Synthetic people only (G-20).
  */
 import { randomUUID } from 'node:crypto';
-import type { INestApplication } from '@nestjs/common';
+import { Logger, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type Redis from 'ioredis';
 import { PlatformModule } from '@platform/platform.module';
@@ -34,6 +39,7 @@ import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { TeacherFileModule } from '../../src/teacher-file/teacher-file.module';
 import { LessonModule } from '../../src/lessons/lesson.module';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
+import { FIRST_LOGIN_MAILER, type MailSender } from '../../src/account-recovery/recovery-delivery';
 import { buildGraph, truncate } from './harness';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
@@ -54,6 +60,24 @@ let m: SeedManifest;
 let orgId: string;
 let app: INestApplication;
 let base: string;
+
+/** Stands in for SMTP. Off by default (no channel: emailed false), as in CI. */
+interface FakeMailer extends MailSender {
+  available: boolean;
+  fail: boolean;
+  sent: Array<{ to: string; subject: string; text: string; committed: boolean }>;
+}
+const mailer: FakeMailer = {
+  available: false,
+  fail: false,
+  sent: [],
+  async send(to, mail) {
+    if (mailer.fail) throw Object.assign(new Error(`550 mailbox unavailable <${to}>`), { name: 'SMTPError', responseCode: 550 });
+    // Read OUTSIDE the request's transaction: true only once it has committed.
+    const committed = (await g.prisma.account.count({ where: { subject: to } })) === 1;
+    mailer.sent.push({ to, ...mail, committed });
+  },
+};
 
 const tokens = new Map<string, string>();
 async function tokenFor(subject: string): Promise<string> {
@@ -105,7 +129,10 @@ beforeAll(async () => {
   process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({
     imports: [PlatformModule, AuthModule, CommunicationModule, TeacherFileModule, LessonModule],
-  }).compile();
+  })
+    .overrideProvider(FIRST_LOGIN_MAILER)
+    .useValue(mailer)
+    .compile();
   app = moduleRef.createNestApplication({ logger: false, rawBody: true });
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/live', 'health/ready'] });
   app.useGlobalFilters(new CommErrorFilter());
@@ -230,6 +257,24 @@ describe('3. gate P2-5: a sign-in already in use', () => {
     }
   });
 
+  it('a contact on the file of a teacher out of reach is the same answer as an e-mail out of reach', async () => {
+    const theirs = await add(m.teacherSupervisors[0]!.subject, { email: email('u'), phone: '+20 122 333 4445', supervisorId: 'self' });
+    expect(theirs.status).toBe(201);
+    await strict(true);
+    try {
+      const byPhone = await add(m.teacherSupervisors[1]!.subject, { email: email('v'), phone: '+201223334445', supervisorId: 'self' });
+      const byEmail = await add(m.teacherSupervisors[1]!.subject, { email: m.families[0]!.parent.subject, supervisorId: 'self' });
+      expect({ status: byPhone.status, body: byPhone.json }).toEqual({ status: byEmail.status, body: byEmail.json });
+      expect(byPhone.code).toBe('COMM.TEACHER_EMAIL_UNAVAILABLE');
+    } finally {
+      await strict(false);
+    }
+    // A teacher the caller reaches is named.
+    const named = await add(m.teachersManager.subject, { email: email('w'), phone: '+20 122 333 4445' });
+    expect([named.status, named.code]).toEqual([409, 'COMM.TEACHER_CONTACT_TAKEN']);
+    expect(named.json.error?.detail).toEqual({ teacher: { id: theirs.json.teacher.id, name: 'QA Added Teacher' } });
+  });
+
   it('there is no e-mail-check endpoint', async () => {
     for (const path of ['/teachers/email-check', '/teachers/check-email', `/teachers/by-email/${encodeURIComponent(m.teachers[0]!.subject)}`]) {
       const r = await http(m.teachersManager.subject, 'GET', path);
@@ -238,28 +283,118 @@ describe('3. gate P2-5: a sign-in already in use', () => {
   });
 });
 
-describe('4. POST /teachers/:id/first-login-code', () => {
-  it('reissues while the teacher has not signed in: the old code dies, the new one works; then never again', async () => {
+describe('4. POST /teachers/:id/first-login-code (owner: "E-mail only; managers can see")', () => {
+  const reissue = (subject: string, id: string) => http(subject, 'POST', `/teachers/${id}/first-login-code`, { reason: 'lost the code' });
+  const assign = (teacherId: string, supervisorId: string) =>
+    g.prisma.$executeRaw`UPDATE chat.teacher_supervisor_assignment SET supervisor_id = ${supervisorId}::uuid WHERE teacher_id = ${teacherId}::uuid`;
+
+  it('the Teachers manager reissues and sees the code; the old code dies; never once the teacher has signed in', async () => {
     const address = email('m');
     const first = await add(m.teachersManager.subject, { email: address });
     const id = first.json.teacher.id as string;
-    const again = await http(m.teachersManager.subject, 'POST', `/teachers/${id}/first-login-code`, { reason: 'lost the code' });
+    const again = await reissue(m.teachersManager.subject, id);
     expect([again.status, again.headers.get('cache-control')]).toEqual([201, 'no-store']);
     expect(again.json).toMatchObject({ teacherId: id, signIn: address, firstLogin: { code: expect.stringMatching(/^[0-9]{6}$/), emailed: false } });
     if (again.json.firstLogin.code !== first.json.firstLogin.code) {
       expect((await http(null, 'POST', '/auth/password-reset', { username: address, code: first.json.firstLogin.code, password: '1234' })).status).toBe(401);
     }
     expect((await http(null, 'POST', '/auth/password-reset', { username: address, code: again.json.firstLogin.code, password: '1234' })).status).toBe(201);
-    const after = await http(m.teachersManager.subject, 'POST', `/teachers/${id}/first-login-code`, {});
+    const after = await reissue(m.teachersManager.subject, id);
     expect([after.status, after.code]).toEqual([409, 'COMM.TEACHER_ALREADY_SIGNED_IN']);
   });
 
-  it('outside the department, or an unknown teacher: the same 404/403 as anywhere else', async () => {
-    const r = await add(m.teachersManager.subject, { email: email('n') });
-    const ops = await http(m.supervisors[0]!.subject, 'POST', `/teachers/${r.json.teacher.id}/first-login-code`, {});
+  it('the CURRENT supervisor reissues but never sees the code: it is e-mailed, or they are told to ask the Manager', async () => {
+    const me = m.teacherSupervisors[0]!;
+    const r = await add(m.teachersManager.subject, { email: email('n'), supervisorId: me.id });
+    mailer.available = true;
+    try {
+      const sent = await reissue(me.subject, r.json.teacher.id);
+      expect(sent.status).toBe(201);
+      expect(sent.json.firstLogin).toEqual({ expiresAt: expect.any(String), emailed: true });
+      expect(sent.text).not.toMatch(/"code"/);
+    } finally {
+      mailer.available = false;
+    }
+    const unsent = await reissue(me.subject, r.json.teacher.id);
+    expect(unsent.json.firstLogin).toEqual({ expiresAt: expect.any(String), emailed: false });
+  });
+
+  it('a FORMER supervisor, the one who added it, or one out of reach: 404, before any other answer', async () => {
+    const [a, b] = [m.teacherSupervisors[0]!, m.teacherSupervisors[1]!];
+    // Added by a with themselves, then handed to b: a no longer reissues.
+    const moved = await add(a.subject, { email: email('o'), supervisorId: 'self' });
+    await assign(moved.json.teacher.id, b.id);
+    expect(await reissue(a.subject, moved.json.teacher.id)).toMatchObject({ status: 404, code: 'COMM.TEACHER_FILE_NOT_FOUND' });
+    expect((await reissue(b.subject, moved.json.teacher.id)).status).toBe(201);
+    // Added by a with no supervisor: having added it is not enough.
+    const none = await add(a.subject, { email: email('p'), supervisorId: null });
+    expect(await reissue(a.subject, none.json.teacher.id)).toMatchObject({ status: 404, code: 'COMM.TEACHER_FILE_NOT_FOUND' });
+    // Out of reach AND already signed in: still 404, never the 409 that would tell.
+    expect(await reissue(a.subject, m.teachers[9]!.id)).toMatchObject({ status: 404, code: 'COMM.TEACHER_FILE_NOT_FOUND' });
+    // Outside the department, or an unknown teacher.
+    const ops = await reissue(m.supervisors[0]!.subject, moved.json.teacher.id);
     expect([ops.status, ops.code]).toEqual([403, 'COMM.TEACHER_ONBOARDING_DENIED']);
-    const unknown = await http(m.teachersManager.subject, 'POST', `/teachers/${randomUUID()}/first-login-code`, {});
-    expect([unknown.status, unknown.code]).toEqual([404, 'COMM.TEACHER_FILE_NOT_FOUND']);
+    expect(await reissue(m.teachersManager.subject, randomUUID())).toMatchObject({ status: 404, code: 'COMM.TEACHER_FILE_NOT_FOUND' });
+  });
+
+  it('a suspended login is reported as suspended, not as signed in', async () => {
+    const r = await add(m.teachersManager.subject, { email: email('q') });
+    const account = await g.prisma.account.findUniqueOrThrow({ where: { subject: r.json.signIn } });
+    await g.prisma.account.update({ where: { id: account.id }, data: { status: 'suspended', isActive: false } });
+    const answer = await reissue(m.teachersManager.subject, r.json.teacher.id);
+    expect([answer.status, answer.code]).toEqual([409, 'COMM.TEACHER_SIGN_IN_SUSPENDED']);
+  });
+
+  it('ten codes an hour per login, the first one included', async () => {
+    const r = await add(m.teachersManager.subject, { email: email('r') });
+    const statuses = [];
+    for (let i = 0; i < 10; i++) statuses.push((await reissue(m.teachersManager.subject, r.json.teacher.id)).status);
+    expect(statuses.slice(0, 9)).toEqual(Array(9).fill(201));
+    expect(statuses[9]).toBe(429);
+  });
+});
+
+describe('6. G2: the e-mail', () => {
+  it('goes to the sign-in address after the commit; the code is not in the subject', async () => {
+    mailer.available = true;
+    mailer.sent.length = 0;
+    try {
+      const address = email('s');
+      const r = await add(m.teachersManager.subject, { email: address });
+      expect(r.json.firstLogin.emailed).toBe(true);
+      expect(mailer.sent).toHaveLength(1);
+      expect(mailer.sent[0]).toMatchObject({ to: address, committed: true });
+      expect(mailer.sent[0]!.text.split('\n')).toContain(r.json.firstLogin.code);
+      expect(mailer.sent[0]!.subject).not.toContain(r.json.firstLogin.code);
+    } finally {
+      mailer.available = false;
+    }
+  });
+
+  it('a failed send: emailed false, and the log names the code\'s id only', async () => {
+    const lines: string[] = [];
+    const spy = jest.spyOn(Logger.prototype, 'error').mockImplementation(function (this: Logger, ...args: unknown[]) {
+      lines.push(args.map(String).join(' '));
+    });
+    mailer.available = true;
+    mailer.fail = true;
+    try {
+      const address = email('t');
+      const r = await add(m.teachersManager.subject, { email: address });
+      expect(r.status).toBe(201);
+      expect(r.json.firstLogin.emailed).toBe(false);
+      const account = await g.prisma.account.findUniqueOrThrow({ where: { subject: address } });
+      const code = await g.prisma.passwordResetCode.findFirstOrThrow({ where: { accountId: account.id, usedAt: null, supersededAt: null } });
+      const line = lines.find((l) => l.includes(code.id));
+      expect(line).toBeDefined();
+      expect(line).not.toContain(r.json.firstLogin.code);
+      expect(line).not.toContain(address);
+      expect(line).not.toMatch(/mailbox unavailable/);
+    } finally {
+      mailer.available = false;
+      mailer.fail = false;
+      spy.mockRestore();
+    }
   });
 });
 
@@ -270,5 +405,17 @@ describe('5. GET /teacher-files offers the form', () => {
     expect(manager.json.onboarding.supervisors.map((s: { id: string }) => s.id).sort()).toEqual(m.teacherSupervisors.map((s) => s.id).sort());
     const supervisor = await http(m.teacherSupervisors[0]!.subject, 'GET', '/teacher-files');
     expect(supervisor.json.onboarding).toEqual({ canAdd: true, supervisorChoice: 'self_or_none', supervisors: [], selfId: m.teacherSupervisors[0]!.id });
+
+  });
+
+  it('a Teacher File says whether its sign-in waits and who may send a new code', async () => {
+    const r = await add(m.teachersManager.subject, { email: email('x'), supervisorId: m.teacherSupervisors[0]!.id });
+    const id = r.json.teacher.id as string;
+    const as = async (subject: string) => (await http(subject, 'GET', `/teacher-files/${id}`)).json.signIn;
+    expect(await as(m.teachersManager.subject)).toEqual({ status: 'provisioned', canSendCode: true });
+    expect(await as(m.teacherSupervisors[0]!.subject)).toEqual({ status: 'provisioned', canSendCode: true });
+    // Strict scope off, the other supervisor reads the file but is not the current supervisor.
+    expect(await as(m.teacherSupervisors[1]!.subject)).toEqual({ status: 'provisioned', canSendCode: false });
+    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${m.teachers[0]!.id}`)).json.signIn).toEqual({ status: 'active', canSendCode: false });
   });
 });
