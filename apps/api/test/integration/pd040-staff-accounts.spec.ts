@@ -238,8 +238,9 @@ describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
       name: 'QA Ops Designer', email: email('ops-designer'), tier: 'specialist', departmentId: m.departments.operations, roleIds: [designerTemplate], reason: 'spec',
     });
     expect({ status: ops.status, code: ops.code }).toEqual({ status: 403, code: CommErrorCode.STAFF_ACCOUNT_DENIED });
-    // The reason is H5: the Operations manager holds neither key.
-    expect(ops.json.error.message).toMatch(/may not grant: certificates\.design, certificates\.view/);
+    // The reason is H5: certificates.design is the Teachers department's alone (PD-41 #216 gives
+    // Operations certificates.view, so view may or may not be listed beside it).
+    expect(ops.json.error.message).toMatch(/may not grant: certificates\.design(, certificates\.view)? \(PD-40 H5\)/);
   });
 
   it('the Teachers manager never grants it across their department or from another organization (S1, S2)', async () => {
