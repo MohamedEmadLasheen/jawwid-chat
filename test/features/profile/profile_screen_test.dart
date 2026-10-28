@@ -19,8 +19,8 @@ import 'package:jawwid_chat/features/conversations/presentation/conversation_til
 import 'package:jawwid_chat/features/materials/data/materials_repository.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
 import 'package:jawwid_chat/features/profile/application/profile_controller.dart';
-import 'package:jawwid_chat/features/profile/domain/profile_view.dart';
 import 'package:jawwid_chat/features/profile/data/profile_photo_repository.dart';
+import 'package:jawwid_chat/features/profile/domain/profile_view.dart';
 import 'package:jawwid_chat/features/profile/presentation/my_profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_sections.dart';

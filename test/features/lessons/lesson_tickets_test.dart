@@ -573,7 +573,7 @@ void main() {
     group('a family group\'s children each get their progress and Materials', () {
       const one = GroupChild(id: 'k1', name: 'learner_l');
       const two = GroupChild(id: 'k2', name: 'learner_m');
-      final month = ChildProgress(attended: 3, apologised: 0, absent: 0, attendedAllTime: 3, streak: 3, makeupsOwed: 0);
+      const month = ChildProgress(attended: 3, apologised: 0, absent: 0, attendedAllTime: 3, streak: 3, makeupsOwed: 0);
       Widget section({required bool entries}) =>
           SingleChildScrollView(child: GroupChildrenSection(conversationId: 'c1', withChildEntries: entries));
 
