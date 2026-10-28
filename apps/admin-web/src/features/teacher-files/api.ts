@@ -192,6 +192,15 @@ export interface TeacherSignIn {
   canSendCode: boolean
   /** Give sign-in: a login for a teacher who has none. Optional: older servers omit it. */
   canGive?: boolean
+  /** Change sign-in e-mail: while it waits, the reissue rule; once used, the super admin. Optional: older servers omit it. */
+  canChange?: boolean
+}
+
+/** PD-43: PATCH /teachers/:id/sign-in. `firstLogin` is null once the teacher has signed in (their sessions end instead). */
+export interface ChangedSignIn {
+  teacherId: string
+  signIn: string
+  firstLogin: FirstLogin | null
 }
 
 export interface ReissuedCode {
@@ -252,6 +261,8 @@ export const teacherFileApi = {
   addTeacher: (body: NewTeacher) => api.post<AddedTeacher>('/teachers', body),
   giveSignIn: (teacherId: string, email: string) =>
     api.post<ReissuedCode>(`/teachers/${encodeURIComponent(teacherId)}/sign-in`, { email }),
+  changeSignIn: (teacherId: string, body: { email: string; reason: string }) =>
+    api.patch<ChangedSignIn>(`/teachers/${encodeURIComponent(teacherId)}/sign-in`, body),
   reissueFirstLogin: (teacherId: string) =>
     api.post<ReissuedCode>(`/teachers/${encodeURIComponent(teacherId)}/first-login-code`, {}),
   offboardPreview: (teacherId: string) => api.get<OffboardPreview>(`/teachers/${encodeURIComponent(teacherId)}/offboard-preview`),
