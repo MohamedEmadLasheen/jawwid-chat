@@ -55,9 +55,35 @@ async function code(p: Promise<unknown>): Promise<string> {
   throw new Error('expected a refusal, got success');
 }
 
+/** Every phone and e-mail this file's fixtures typed, to prove no answer carries one (G-07). */
+const typed: string[] = [];
+
 function phone(): string {
   n += 1;
-  return `010${String(20_000_000 + n).slice(-8)}`;
+  const value = `010${String(20_000_000 + n).slice(-8)}`;
+  typed.push(value);
+  return value;
+}
+
+function email(): string {
+  const value = `pd42_${randomUUID().slice(0, 8)}@example.test`;
+  typed.push(value);
+  return value;
+}
+
+/**
+ * No phone or e-mail a fixture typed appears in `value`. Ids are taken out
+ * first: a pattern such as 010 and eight digits matches inside a random uuid
+ * (G-19 run 40735626384: ...-010259547393), so the check names the exact
+ * values, never a shape.
+ */
+function expectNoContact(value: unknown) {
+  const text = withoutIds(value);
+  for (const t of typed) expect(text).not.toContain(t);
+}
+
+function withoutIds(value: unknown): string {
+  return JSON.stringify(value).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>');
 }
 
 function form(over: Record<string, unknown> = {}) {
@@ -239,7 +265,7 @@ describe('1a. review of #214', () => {
   });
 
   it('the sign-up code is shown only to whoever is responsible now', async () => {
-    const withEmail = () => ({ parent: { name: 'parent_code', phone: phone(), email: `pd42_${randomUUID().slice(0, 8)}@example.test` } });
+    const withEmail = () => ({ parent: { name: 'parent_code', phone: phone(), email: email() } });
     const code6 = async (familyId: string) => {
       const contact = await g.prisma.contact.findFirstOrThrow({ where: { familyId } });
       await g.prisma.parentSignupCode.create({
@@ -299,7 +325,7 @@ describe('1b. a manager with nobody to enter a family for (QA on #202)', () => {
 
 describe('2. New Students lists the families entered by hand', () => {
   it('to whoever owns them: the entrant, the Operations manager, the super admin; never to another supervisor', async () => {
-    const mine = await intake.enter(s.ownerId, form({ parent: { name: 'parent_mine', phone: phone(), email: `pd42_${randomUUID().slice(0, 8)}@example.test` } }));
+    const mine = await intake.enter(s.ownerId, form({ parent: { name: 'parent_mine', phone: phone(), email: email() } }));
     const theirs = await intake.enter(salesA, form());
 
     const seen = await intake.entered(s.ownerId);
@@ -325,7 +351,7 @@ describe('2. New Students lists the families entered by hand', () => {
     // Nobody outside Sales and Operations.
     expect(await code(intake.entered(tsupId))).toBe(CommErrorCode.INTAKE_DENIED);
     // No contact channel on the list (G-07).
-    expect(JSON.stringify(await intake.entered(s.managerId))).not.toMatch(/@example\.test|010\d{8}/);
+    expectNoContact(await intake.entered(s.managerId));
   });
 
   it('added children are their own entry, beside the family\'s', async () => {
@@ -433,7 +459,7 @@ describe('5. the family, as the profiles read it', () => {
     expect(await code(intake.family(s.ownerId, r.familyId))).toBe(CommErrorCode.INTAKE_NOT_FOUND);
     expect(await code(intake.family(tsupId, r.familyId))).toBe(CommErrorCode.INTAKE_DENIED);
 
-    await intake.setSignInEmail(salesA, r.familyId, { email: `pd42_${randomUUID().slice(0, 8)}@example.test` });
+    await intake.setSignInEmail(salesA, r.familyId, { email: email() });
     expect(await intake.family(salesA, r.familyId)).toMatchObject({ signIn: true, can: expect.objectContaining({ setSignInEmail: false }) });
   });
 });
@@ -478,14 +504,15 @@ describe('7. the verification report (S3, D2)', () => {
     expect(report.partlySupervised).toEqual([]);
     expect(supervised.familyId).not.toBe(owned.familyId);
     // Read-only: nothing it says carries a name of a parent, a phone or an e-mail.
-    expect(JSON.stringify(report)).not.toMatch(/parent_o|010\d{8}|@/);
+    expectNoContact(report);
+    expect(withoutIds(report)).not.toMatch(/parent_o|@/);
   });
 });
 
 describe('8. the family history (S4)', () => {
   it('who entered it, who owns it, who placed it, the package -- in order, each once; never a phone or an e-mail', async () => {
     const f = form({
-      parent: { name: 'parent_h', phone: phone(), email: `pd42_${randomUUID().slice(0, 8)}@example.test` },
+      parent: { name: 'parent_h', phone: phone(), email: email() },
       children: [{ name: 'child_h', carriedOver: { total: 20, completed: 4 } }],
     });
     const r = await intake.enter(salesA, f);
@@ -515,7 +542,7 @@ describe('8. the family history (S4)', () => {
     for (let i = 1; i < h.entries.length; i += 1) {
       expect(Date.parse(h.entries[i]!.at)).toBeGreaterThanOrEqual(Date.parse(h.entries[i - 1]!.at));
     }
-    expect(JSON.stringify(h)).not.toMatch(/@example\.test|010\d{8}/);
+    expectNoContact(h);
 
     // Read by whoever owns the family now; anyone else does not find it.
     expect((await intake.history(s.otherAdminId, r.familyId)).entries).toHaveLength(8);
