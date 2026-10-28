@@ -194,7 +194,9 @@ describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
     expect(await audits(staffId, 'staff.account_created')).toHaveLength(1);
     expect(await audits(staffId, 'staff.access_role_granted')).toHaveLength(1);
     expect(await audits(accountId, 'account.first_login_code_issued')).toHaveLength(1);
-    const trail = JSON.stringify(await g.prisma.auditLog.findMany({ where: { entityId: { in: [staffId, accountId] } } }));
+    const trail = JSON.stringify(await g.prisma.auditLog.findMany({ where: { entityId: { in: [staffId, accountId] } } }), (_k, v) =>
+      typeof v === 'bigint' ? v.toString() : v,
+    );
     expect(trail).not.toContain(created.json.firstLogin.code);
     expect(trail).not.toContain(address);
 
