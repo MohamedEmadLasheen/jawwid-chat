@@ -1,200 +1,230 @@
-# PD-47 amendment: task priority and colour (plan)
+# PD-47 amendment: task priority, colour and the financial tier (plan)
 
-**State:** **DRAFT for the department head's review.** No code is written. It is built after #228 (PR-1) merges.
-**Claim:** `docs/product/pd-registry/PD-47-amendment-priority.md`, which amends `docs/product/pd047-tasks-plan.md`.
-**Slot:** this asks for **one new slot** for **PR-1b** (§7). It does not fold into PR-2.
+**State:** **revision 2, DRAFT for the owner's approval of the thresholds (§6).** No code is written. Nothing in §5–§6 is built until the owner approves the numbers.
+**Claim:** `docs/product/pd-registry/PD-47-amendment-priority.md`. It amends `docs/product/pd047-tasks-plan.md`.
+**Slots:**
+- PR-1b is `20261029200000`, assigned by the department head and claimed in `docs/product/migration-slots/20261029200000.md`.
+- The financial sources (PR-2b, §8) need **a second slot, requested**.
 
-The owner's request (2026-10-28), relayed verbatim by the department head:
+**Base:** `main` @ `90b9d2d7`. `mig/` is `supabase/migrations/`.
 
-> "Tasks should be sorted so that the most important and most urgent tasks appear first, with a color-coded system... Red: High-priority tasks that are urgent and require immediate attention. Yellow: Medium-priority tasks that need attention soon but are not urgent. Green: Low-priority tasks that are less urgent and can be handled later. Tasks should be automatically ordered by priority, with the most urgent and important tasks appearing at the top of the list."
+## What changed in revision 2
 
-The owner's decisions (2026-10-28), relayed by the department head:
-1. **A person sets the colour, and the due date can raise it.**
-   - The creator picks High, Medium or Low.
-   - The **effective** colour is the higher of that choice and the due-date floor: overdue, or due within 24 h → Red; due within 3 days → at least Yellow.
-   - So nothing important can sit Green past its deadline.
-2. **Who may change it:** the responsible manager and the super admin, the same people as for the due date. Every change goes in the history.
-3. **Order inside a colour:** soonest due first (most overdue first), then tasks with no due date, oldest first.
+The owner answered Q-P1 and Q-P2 and changed the rules on 2026-10-28. Their words, relayed verbatim by the department head:
+
+> "Financial tasks must have the highest priority, especially package expirations, upcoming installment payments, overdue payments, and subscription renewals. These tasks should be clearly prioritized and color-coded based on how urgent they are. I don't want teachers' routine lesson reports turning red immediately after every lesson, because that would make genuinely urgent financial alerts less noticeable. Please design the priority rules so that:
+> - 🔴 Red highlights critical financial deadlines, overdue payments, and actions requiring immediate attention.
+> - 🟡 Yellow highlights upcoming package expirations, installment due dates, and renewals that need attention soon.
+> - 🟢 Green indicates tasks that are not urgent.
+>
+> Routine lesson reports should remain yellow until their 24-hour deadline passes, then turn red only if overdue. Financial tasks should be prioritized above routine operational tasks when sorting the task list. Please propose clear time thresholds for package expiration and installment reminders before implementing the rules."
+
+Q-P2: "To the minute".
+
+| Change | Where |
+|---|---|
+| A source rule may **replace** the generic due-date floor. Lesson reports have **no due-soon floor** (Yellow until overdue). | §2 |
+| A **category**: financial or operational. Financial sorts first **inside each colour**. | §3, §4 |
+| Four **financial sources**, mapped to the systems that own them today, each with a dedupe key and a double-notification check | §5 |
+| **Proposed thresholds**, which the owner approves before anything is built | §6 |
+| Q-P1 is closed (no Red on creation for routine reports). Q-P2 is closed: **to the minute**. | §10 |
+
+The owner's earlier decisions (2026-10-28) stand:
+- a manual High, Medium or Low, set by the creator;
+- the effective level is the higher of that choice and the floor;
+- the responsible manager and the super admin change it, and every change goes in the history;
+- inside a level, soonest due first, then tasks with no due date, oldest first.
 
 ---
 
 ## 1. Data
 
-- **One new column**, `chat.work_task.priority text not null default 'medium' check (priority in ('high', 'medium', 'low'))`. It holds the *manual* priority only.
-  - The default covers a manual task created without one, and every existing row.
-  - A system task takes its source rule's priority (§5).
-- **The effective priority is never stored.** It is computed at read time from `priority`, `due_at`, `state` and a reference time `as_of`, so it cannot go stale.
-  - It lives in one SQL function, `chat.work_task_effective(p_priority, p_due_at, p_state, p_as_of) returns (rank int, level text, reason text)`.
-  - A TypeScript mirror exists for the clients and the unit spec. A spec proves the two agree at every boundary.
-
-| Pending task | Effective | `reason` |
-|---|---|---|
-| `due_at < as_of` | high | `overdue` |
-| `due_at <= as_of + 24 h` | high | `due_soon` (unless the manual priority is already high) |
-| `due_at <= as_of + 3 days` | the greater of manual and medium | `due_soon` if that raised it |
-| otherwise, or no due date | manual | `manual` |
-| completed / removed | manual (no floor: it is done) | `manual` |
-
-`rank` is 3 for high, 2 for medium and 1 for low. "The greater" means the higher rank. `reason` is `manual` whenever the floor did not raise the level.
+- **`chat.work_task.priority`** is `text not null default 'medium'` with `check in ('high', 'medium', 'low')`. It holds the **manual** level only.
+- **`chat.work_task.category`** is `text not null default 'operational'` with `check in ('financial', 'operational')`.
+  - A system task takes its category from its source (§5).
+  - For a manual task, a manager may tick "financial" when creating it (Q-F3).
+  - It never changes after creation; the guard keeps it immutable.
+- **`chat.work_task.source_floor`** is `text null` with `check in ('high', 'medium')`. A source that is not driven by a date sets it, for example the package balance in §6. It is written by the source's trigger in the same transaction as the change it follows, and recorded as an event (§2.3).
+- **The effective level is never stored.** One SQL function computes it at read time: `chat.work_task_effective(priority, category, floor_rule, due_at, source_floor, state, as_of) → (rank, level, reason)`. A TypeScript mirror exists for the clients and the unit spec, and a spec proves the two agree on a boundary grid.
 
 ---
 
-## 2. Events and the guard
+## 2. The floor: per source, to the minute
 
-- **A new event kind**, `priority_changed`, with `before { priority }` and `after { priority }`. The history trigger writes it in the same transaction, like every other change.
-- **The guard counts a priority change as a recorded change.** It also bumps `activity_at` and `revision`, so the "every change is an event" rule from #228 holds.
-- `task.changed` gains `change: 'priority_changed'`.
-- **Who:** `POST tasks/:id/priority { priority }`, under `@Requires('tasks.manage')`. `TaskService` allows it for a decider only: the responsible manager (the line manager, or the creating manager per §3.7) or the super admin. It refuses the assignee and a teacher's supervisor, as for the due date.
-- **On create:** `POST tasks` accepts `priority`, and defaults to `medium`.
+### 2.1 The rules
+
+Each source names its **floor rule**. Manual tasks use `generic`. The effective level of a pending task is the highest of three things:
+- the manual priority;
+- the level its rule gives at `as_of`;
+- its `source_floor`.
+
+| Rule | High (Red) | Medium (Yellow) | Used by |
+|---|---|---|---|
+| `generic` | overdue, or due within 24 h | due within 3 days | manual tasks; most operational sources |
+| `overdue_only` | overdue only | always, while pending (the routine floor) | routine, high-volume work: §2.2 |
+| `instalment` | from the start of the due day (D0, academy day) | from D−7 | upcoming and overdue instalments (§6) |
+| `none` | only through `source_floor` | only through `source_floor` | the package balance (§6) |
+
+- A closed task shows its manual level, with no floor.
+- `reason` is `manual`, `due_soon`, `overdue` or `source`, whichever raised the level. When two apply, the higher level's reason wins.
+- "Due within 24 h" is measured **to the minute** against `due_at` (owner, Q-P2). The academy-day rules (`instalment`) use `schedule.timezone` (`mig/20260905090100_chat_config_defaults.sql:17`, Africa/Cairo), the same "today" as `statusOf` (`apps/api/src/billing/instalment.ts:15-20`).
+
+### 2.2 Routine sources without a due-soon floor
+
+The owner named lesson reports. These have the same shape: routine, one per lesson, and done within a day by the person who taught it. **Recommended for `overdue_only` (Q-F1):**
+
+| Source | Volume | Why routine |
+|---|---|---|
+| `lesson_report` | one per lesson held (about 2,000 a week) | the owner's example |
+| `report_correction` | per correction request | the same teacher fixes the same report |
+| `trial_outcome` (attendance part) | one per trial lesson | the teacher's after-lesson step, like a report |
+| `makeup_owed` | per teacher-cancelled lesson | handled from the Needs action queue, inside a 7-day window (`lesson.service.ts:423`) |
+
+Every other operational source keeps `generic`: leave, violation, ruling, case, unsupervised family or teacher, set-up, new students, complaints, feedback, schedule change, certificates.
+
+### 2.3 Events
+
+- **`priority_changed`:** a person changed the manual level. It records before and after, and is allowed only for a decider (§9).
+- **`source_raised`:** a source moved `source_floor`, for example when the package balance reached 0. The actor is `system`, which #228's event CHECK must allow for this kind (PR-1b extends it).
+- Both are written by the history trigger and count as recorded changes for the guard, so the rule that every change is an event holds.
+- `task.changed` gains the changes `priority_changed` and `source_raised`.
 
 ---
 
 ## 3. Sort
 
-Every pending list view (`mine`, `team`, `decisions`, `all`) is ordered **by the server**:
+On every pending view (`mine`, `team`, `decisions`, `all`):
 
 ```
-ORDER BY rank DESC,              -- red, then yellow, then green
-         (due_at IS NULL),        -- dated before undated
-         due_at ASC,              -- most overdue first, then soonest
-         created_at ASC, id ASC   -- undated: oldest first; a total order
+ORDER BY rank DESC,                                 -- red, yellow, green: colour first
+         (category = 'financial') DESC,             -- inside a colour, financial first
+         (due_at IS NULL), due_at ASC,              -- most overdue first, then soonest
+         created_at ASC, id ASC                     -- undated: oldest first; a total order
 ```
 
-- **Stable paging.** `rank` depends on time, so the **first page fixes `as_of`** (the server's `now()`), and the cursor carries it. The cursor is `{ as_of, rank, has_due, due_at, created_at, id }`. Every later page computes the rank with the same `as_of`, so paging a list never skips or repeats a row while it crosses a boundary. A fresh load re-sorts with the new time.
-- **The index.** No index can hold a time-dependent rank, so the sort is computed over the view's pending rows. Those are bounded: a person's own list is tens of rows, and the super admin's All view is the organization's pending set.
-  - New partial index: `work_task_pending_due_idx on (organization_id, due_at nulls last, created_at, id) where state in ('open', 'awaiting_decision')`.
-  - The existing per-assignee pending indexes gain `due_at` the same way.
-  - A perf spec seeds 20,000 pending tasks and asserts the All view's first page stays under a fixed budget. The plan is read with `EXPLAIN (ANALYZE)` in the integration spec.
-- **The Closed tab** keeps `closed_at DESC`. A finished task has no urgency.
-- **A filter** `?level=high|medium|low` on the effective level, so each Dashboard tile has a list that equals it (§6).
+- **Colour stays primary.** A Red operational task (an overdue leave decision) stays above a Yellow financial one (an instalment due next week). That is the department head's reading of "prioritized above routine operational tasks".
+- **Alternative for the owner, one line (Q-F2):** financial strictly first, `ORDER BY (category = 'financial') DESC, rank DESC, …`. Then every financial task, Yellow ones included, sits above every operational task, Red included.
+- **Stable paging.** The first page fixes `as_of`, and the cursor carries `{ as_of, rank, financial, has_due, due_at, created_at, id }`.
+- **Index:** a partial `(organization_id, due_at nulls last, created_at, id)` over pending tasks; the per-assignee pending indexes gain `due_at`. A perf spec covers 20,000 pending tasks.
+- **The Closed tab** keeps `closed_at DESC`.
+- **Filters:** `?level=`, `?overdue=` and `?category=`, so each Dashboard tile has a list that equals it.
 
 ---
 
-## 4. The API shape
+## 4. API and interface
 
-Each task in a list or detail response gains these fields:
+- **Every task carries:**
+  - `manualPriority`, `effectivePriority`;
+  - `priorityReason` (`manual | due_soon | overdue | source`);
+  - `category`;
+  - `asOf` on the list.
+  Clients draw what the server sent and never compute the level.
+- **Never colour alone.** The priority chip has three parts:
+  - **an icon:** a triangle with "!" for High, a clock for Medium, a down-chevron for Low;
+  - **a text label:** High / Medium / Low, in ar: عالية / متوسطة / منخفضة;
+  - **a reason**, when the level was raised: "Overdue" / "متأخرة", "Due soon" / "قريبة الموعد", or the source's own words, such as "Balance used up" / "نفد رصيد الحصص".
 
-```
-manualPriority:    'high' | 'medium' | 'low'
-effectivePriority: 'high' | 'medium' | 'low'
-priorityReason:    'manual' | 'due_soon' | 'overdue'
-```
+  The icon is `aria-hidden`, and the chip's accessible name is the full text.
+- **The Finance tag** sits beside the chip on every financial task: a banknote icon plus the text "Finance" / "مالية". It is neutral-styled, so it never competes with the level's colour.
+- **Contrast, under the gold rule** (only accent-700 may carry text):
 
-Every value is computed with the response's `asOf`, which the list returns too. The clients never compute the colour themselves; they draw what the server sent.
+  | Level | Light | Dark |
+  |---|---|---|
+  | High | `danger-700` on `danger-50` | `danger-200` on `danger-950` |
+  | Medium | `accent-700` on `accent-50` | neutral `text-strong` on `accent-900`, icon `accent-300` |
+  | Low | `success-700` on `success-50` | `success-200` on `success-950` |
 
----
-
-## 5. System tasks: priority by source
-
-All defaults are Medium unless the source says otherwise. The due date then raises the colour.
-
-| Source (plan §3.6) | Manual priority | Due date | Effect |
-|---|---|---|---|
-| `lesson_report` | medium | lesson end + 24 h (Q10) | **Red from the moment it is created** (due within 24 h). See Q-P1. |
-| `report_correction` | medium | request + 48 h | Yellow, then Red in the last 24 h |
-| `lesson_ruling` | medium | ruling + 48 h | as above |
-| `leave_decision` | **high** if the leave starts within 3 days, else medium | the day before the first leave day, or request + 48 h if that is earlier | |
-| `violation_decision` | medium | recorded + 3 days | |
-| `case` | medium | the case's `due_on` (end of that academy day), none if unset | |
-| `family_unsupervised` | **high** | created + 24 h | a family nobody answers |
-| `teacher_unsupervised` | medium | created + 3 days | |
-| `teacher_setup` | low | the teacher's first lesson, if any | |
-| `new_student_assign` | **high** | created + 24 h | |
-| `new_student_group` | medium | created + 48 h | |
-| `trial_outcome` | medium | trial end + 24 h | |
-| `instalment_overdue` | **high** | the instalment's due date | already overdue, so Red |
-| `receipt_review` | medium | uploaded + 48 h | |
-| `renewal_request` | medium | requested + 48 h | |
-| `certificate` | low | per PD-41 | |
-| `complaint`, `parent_feedback` | **high** / medium | received + 48 h | an open complaint is the more urgent |
-| `makeup_owed`, `schedule_change` | medium | the makeup window's end; request + 48 h | |
-
-The rules live in each adapter, one value each, and the adapter spec asserts them.
+  - A contrast spec fails the build below 4.5:1 for text and 3:1 for the icon.
+  - The layout is RTL-correct, and icons are not mirrored.
+- **Surfaces:**
+  - Admin Web Tasks (PR-3): server order, a level and category filter, and the priority control for deciders.
+  - The Flutter teacher "To do" (PR-5): read-only chip.
+  - The Dashboard: `tasks.*_urgent` (effective High) and `tasks.*_financial` tiles, each equal to its filtered list.
 
 ---
 
-## 6. Interface
+## 5. Financial sources: who owns them today
 
-### 6.1 Never colour alone
+| Owner's term | What it is in the data today | Owned by | Task source | Assignee | Dedupe key (one task, not a daily duplicate) |
+|---|---|---|---|---|---|
+| **Package expiration** | **No end date exists.** A package is lessons. Balance = included − used, in `chat.compute_learner_access` (`mig/20261026140000_chat_pd030_subscription_lock.sql:421-494`, redefined `mig/20261028110000…:~836-905`). Grace is 2 lessons after 0 (`subscription.grace_lessons`, `:94-101`), then the group locks. **Nothing warns before 0** (`billing/subscription-reads.ts:21,140` only reads `lessonsLeft`). | PD-30 | **new: `package_low`** | the family's Sales owner (`chat.family_sales_owner`, PD-42), else the Sales manager (Q-F4) | `package_low:<learnerId>:<id of the learner's newest chat.learner_subscription row>`. A new purchase adds a row, which completes the open task; the next depletion makes a new key |
+| **Upcoming instalment** | `chat.family_instalment` (`mig/20261021150000…:149`). Status: `due` on the due day, `overdue` after (`billing/instalment.ts:15-20`). | PD-17 / PD-27 | **new: `instalment`** (replaces plan §3.6's `instalment_overdue`) | `responsibleSupervisor`: the child's PD-8 supervisor, or the family's billing supervisor (`billing/billing.service.ts:203-218`); else the Operations manager | `instalment:<instalmentId>`. **One task carries the instalment from D−7 through overdue**: it goes Yellow, then Red, and is completed by its payment |
+| **Overdue payment** | the same instalment past its due day. PD-30 locks the child's group from D+1 (`mig/20261026140000…:472-489`). | PD-27 / PD-30 | the **same `instalment` task**, Red with reason `overdue` | as above | as above. No second task |
+| **Subscription renewal** | `chat.renewal_request`: a parent taps "Request renewal" from the locked banner (`subscriptions/subscription-effects.service.ts:204-238`), at most once a day per child (`mig/20261026140000…:811`). **There is no recurring billing**: Stripe is one-off Checkout (`billing/stripe.gateway.ts:94`), with no `invoice.payment_failed`. | PD-30 | **new: `renewal_request`** (plan §3.6, now financial) | the family's Sales owner, else the Sales manager | `renewal_request:<learnerId>:<id of the newest learner_subscription row>`, so repeat taps on later days join the same task (a history comment) |
+| (related) **Receipt to review** | `chat.payment_receipt.status = 'pending'` (`mig/20261022170000_chat_pd027_payments.sql:206`). There is **no staff alert today** (`billing/parent-payments.service.ts:66-120`). | PD-27 | **new: `receipt_review`**, financial | the family's responsible billing supervisor, else the Operations manager | `receipt_review:<receiptId>` |
+| (related) **Failed card payment** | the Checkout `async_payment_failed` webhook marks it failed and tells nobody (`billing/checkout.service.ts:159-174`) | PD-27 | **new, optional: `checkout_failed`** (Q-F5) | as for the instalment | `checkout_failed:<checkoutId>` |
 
-Every task row carries a **priority chip** with three parts:
-- **an icon:**
-  - High: a filled triangle with "!";
-  - Medium: a clock;
-  - Low: a down-chevron in a circle.
-- **a text label:** High / Medium / Low, in ar: عالية / متوسطة / منخفضة.
-- **when the date raised the level, a reason suffix:** "Overdue" / "متأخرة", or "Due soon" / "قريبة الموعد", with the due time beside it in the viewer's zone (12-hour).
+### No double notification
 
-The icon is `aria-hidden`. The chip's accessible name is the full text, for example "High priority, overdue". A 3 px leading stripe in the colour is decorative only.
+Today's alerts, from `communication/notifications/notification-catalog.ts:57-88`:
 
-### 6.2 Colour tokens and contrast
-
-These are new design tokens. Their text and icon pairs meet **4.5:1 in light and dark** (and 3:1 for the icon and stripe as non-text):
-
-| Level | Light: chip text / chip background | Dark: chip text / chip background |
+| Today | Recipients | With PD-47 |
 |---|---|---|
-| High (red) | `danger-700` on `danger-50` | `danger-200` on `danger-950` |
-| Medium (yellow) | **`accent-700`** on `accent-50` (the gold rule: only accent-700 carries text) | neutral `text-strong` on `accent-900`, with the icon in `accent-300` (non-text, ≥ 3:1). No gold text: only accent-700 may carry it, and it fails on a dark background |
-| Low (green) | `success-700` on `success-50` | `success-200` on `success-950` |
-
-The exact hex values are picked in PR-3, and a contrast spec computes every pair against WCAG 2.1. The build fails below 4.5:1 for text and 3:1 for the icon and stripe.
-
-### 6.3 Surfaces
-
-- **Admin Web Tasks page (PR-3):**
-  - rows in server order (the client never re-sorts);
-  - the chip leads the row (on the right in RTL), and icons are not mirrored;
-  - a filter by level;
-  - in the detail drawer, a High / Medium / Low segmented control for deciders only, with every change in the history timeline ("priority Medium → High by …").
-- **The Flutter teacher "To do" (PR-5):** the same chip as a widget, in ar and en and RTL. The teacher sees the level and cannot change it.
-- **The Dashboard (PR-4 tiles, already in #228's `GET /dashboard/tasks`):** new tiles `tasks.mine_urgent`, `tasks.team_urgent` and, for the super admin, `tasks.all_urgent`. Each counts effective **High** and equals `list(view, level=high)`. The existing `*_overdue` tiles equal `list(view, overdue=true)`, a filter added beside `level`.
+| `payment_d7/d3/d0/p3/p7` | **parents only** | unchanged. The `instalment` task is the first staff signal, so nothing is doubled. |
+| `subscription_grace`, `subscription_locked`, `subscription_unlocked` | parents and the **child's supervisor** (`subscription-effects.service.ts:379-405`) | unchanged. The `package_low` task goes to the **Sales owner**, not the supervisor. Its PD-34 notification fires once, when it is assigned, and never per grace step. |
+| `subscription_renewal_requested` | **every Sales member** (`subscription-effects.service.ts:407-423`) | **replaced** by the task's assignment notification to the one owner (Q-F6). Keeping both would push the owner twice and everyone else needlessly. |
+| receipts, failed checkouts, low balance | nobody on the staff side | the new tasks are the first staff signal |
 
 ---
 
-## 7. Delivery
+## 6. PROPOSED THRESHOLDS (owner approval required before any rule is built)
 
-**Recommendation: a new small PR-1b on its own slot, landing between PR-1 (#228) and PR-2.** I am not folding it into PR-2, for three reasons:
-- **It is user-visible on its own.** Manual tasks get colours as soon as PR-3 ships, without waiting for the sources.
-- **It is small and reviewable alone:** one column, one function, one event kind, a guard and trigger redefinition, the sort, the routes and the filter.
-- **It keeps PR-2 focused** on the sources and their completion triggers. PR-2 then only sets each adapter's priority from §5.
+| Task | 🟡 Yellow | 🔴 Red | Completed when | Why these numbers |
+|---|---|---|---|---|
+| **Package expiration** (`package_low`) | created when the balance is **2 lessons or fewer** | when the balance reaches **0**, the moment PD-30's grace begins (`source_floor` → high) | the balance rises above 2 (a new package or an exception) | 2 lessons is about one week at the common 2-a-week plans, enough time to sell a renewal. 0 is when PD-30 starts the 2-lesson grace (`subscription.grace_lessons` = 2), after which the group locks. |
+| **Upcoming instalment** (`instalment`) | from **D−7** (the instalment's due day minus 7, 00:00 academy time) | from **D0**, the due day itself | a payment settles it, or it is voided (voided means acknowledged, plan Q4) | D−7 is when parents get their first reminder (`payment_d7`, `mig/20260905093100…:114`), so staff see it the same day. D0 is the parents' "high" reminder (`payment_d0`), and PD-30 locks from D+1, so the due day is the last day to act. |
+| **Overdue payment** | — | **immediately** (from D+1, academy day) | as above | overdue status starts at D+1 (`instalment.ts:17`), the same moment the group locks (`mig/20261026140000…:472-489`) |
+| **Subscription renewal** (`renewal_request`) | — | **immediately on request**: a request only exists while the child is locked | a new package lifts the lock | the child cannot attend until it is handled |
+| **Receipt to review** | on upload | **48 h** after upload | approved or rejected | the parent has paid and is waiting, and reminders do not pause for a pending receipt (`parent-payments.service.ts:66-120`) |
+| **Failed card payment** (optional) | — | immediately | a later payment settles the instalment | money expected and not received |
+
+One table rule: **the instalment and package floors replace the generic 24 h / 3-day floor** for these sources. A manager can still raise any task by hand.
+
+---
+
+## 7. Everything else, kept from revision 1
+
+- the manual level and who may change it (§9);
+- the `priority_changed` history event;
+- the level computed at read time with `as_of`;
+- never colour alone;
+- ar and en, RTL;
+- 4.5:1 contrast;
+- Dashboard tiles equal to their lists.
+
+---
+
+## 8. Delivery
 
 | PR | Content | Slot |
 |---|---|---|
-| **PR-1b** | `priority` column; `chat.work_task_effective`; `priority_changed` in the history trigger and the guard; indexes; the sort plus `as_of` keyset; `?level=` and `?overdue=`; `POST tasks/:id/priority`; create accepts `priority`; DTO fields; the urgent Dashboard tiles; integration and unit specs | **one new slot, requested** |
-| PR-2 | as planned, plus each adapter's priority and due date per §5 | `20261029170000` (as assigned) |
-| PR-3 / PR-5 | the chip and the tokens, as in §6 | none |
+| **PR-1b** | `priority`, `category`, `source_floor`; `chat.work_task_effective` with the four floor rules; `priority_changed` and `source_raised` in the guard and the history trigger; indexes; the sort plus the `as_of` keyset; filters; `POST tasks/:id/priority`; create takes `priority` and `category`; DTO fields; the urgent and financial Dashboard tiles; specs | **`20261029200000`** (assigned) |
+| PR-2 | the Phase A sources, with their floor rule (`lesson_report` and `report_correction` are `overdue_only`) | `20261029170000` |
+| **PR-2b** | **the financial sources** (`instalment`, `package_low`, `renewal_request`, `receipt_review`, and `checkout_failed` if Q-F5 says yes). Their completion triggers on `chat.family_instalment`, the payment ledger, `chat.learner_subscription`, `chat.renewal_request` and `chat.payment_receipt`, and `notifySales` replaced (Q-F6). Moved **ahead** of the other Phase B sources, because the owner named finance first. | **a second slot, requested** |
+| PR-3 / PR-5 | the chip, the Finance tag, the tokens | none |
+
+**Order:** #228 → PR-1b → PR-2 → PR-2b → the rest of Phase B.
 
 ---
 
-## 8. Tests
+## 9. Who may change the level
 
-- **Unit:** the TypeScript mirror of the rule at each boundary:
-  - overdue by 1 s;
-  - exactly 24 h, and 24 h + 1 s;
-  - exactly 3 days, and 3 days + 1 s;
-  - no due date;
-  - each manual level;
-  - a closed task.
-  Its outputs are compared with the SQL function's over the same grid (integration).
-- **Integration:**
-  - **sort:** a mixed set in the expected order in every view;
-  - **paging:** stable with `as_of` across a boundary crossing;
-  - **who may change it:** the responsible manager, the creating manager and the super admin may; the assignee, a teacher's supervisor and another organization may not;
-  - **history:** the `priority_changed` event is written, and a direct UPDATE of `priority` without an actor is refused;
-  - **Dashboard parity:** each `*_urgent` and `*_overdue` tile equals its filtered list, for a member, a manager and the super admin;
-  - **performance:** the perf budget above.
-- **Admin Web (PR-3):**
-  - the chip renders the icon, label and reason with its accessible name;
-  - RTL renders correctly;
-  - the contrast spec passes for every token pair, light and dark;
-  - only deciders see the priority control.
-- **Flutter (PR-5):** a widget test of the chip in ar and en, light and dark.
+- **The responsible manager** (the line manager, or the creating manager per plan §3.7) **and the super admin**: the same people as for the due date.
+- **Not** the assignee, a teacher's supervisor or another organization.
+- `source_floor` is the source's alone. A person can raise a task above it, never below it.
 
 ---
 
-## 9. Open questions for the owner
+## 10. Owner questions
 
 | # | Question | Recommendation |
 |---|---|---|
-| **Q-P1** | A lesson report is due 24 h after the lesson (Q10). By the floor rule it is **Red from the moment the lesson ends**, so a teacher's list is mostly Red right after teaching. | **Accept it.** An unfiled report is the most urgent thing a teacher owes, and the task leaves their list as soon as the report is filed. The alternative is moving the report's due date to end + 48 h: Yellow for the first day, Red only in the second. That changes Q10, so it would need the owner. |
-| Q-P2 | Should "Due soon" mean within 24 h (Red) and within 3 days (Yellow), measured to the minute? Or by calendar day in the viewer's time zone? | **To the minute.** It is the same everywhere and never ambiguous across zones. The due time is shown beside the label. |
+| Q-P1 | Lesson reports Red from creation? | **CLOSED** by the owner: Yellow until overdue (`overdue_only`). |
+| Q-P2 | Minutes or calendar days? | **CLOSED** by the owner: to the minute. |
+| **Q-F1** | Which other routine sources get `overdue_only`? | **`report_correction`, `trial_outcome` attendance and `makeup_owed`** (§2.2). All are routine and high-volume, and none should drown out finance. |
+| **Q-F2** | Colour first with finance second inside each colour, or finance strictly first? | **Colour first, finance second inside each colour.** An overdue operational task is still more urgent than an instalment due next week. |
+| **Q-F3** | May a manager tick "financial" on a manual task? | **Yes.** It is a sort tier and a tag only, so it adds no permission and no risk. |
+| **Q-F4** | Who owns a package that is running out: Sales (sells the renewal) or the child's supervisor (already gets the PD-30 grace push)? | **The family's Sales owner, else the Sales manager.** Renewing is a sale, and the supervisor keeps today's pushes. |
+| **Q-F5** | Add a task when a card payment fails? | **Yes, Red.** Today nobody is told (`checkout.service.ts:159-174`). |
+| **Q-F6** | Replace the "renewal requested" push to every Sales member with the task's notification to the family's Sales owner? | **Yes.** One accountable person, and no double push. |
+| **Q-F7** | Approve the thresholds in §6 (2 lessons / 0 lessons; D−7 / D0 / D+1; 48 h for receipts)? | **Approve as proposed.** Each one sits on a timing PD-27 or PD-30 already uses. |
