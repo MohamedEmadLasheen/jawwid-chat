@@ -10,10 +10,11 @@
  *                                      in the SAME transaction that spends the
  *                                      code; a reset code never activates.
  *
- * A first sign-in code lives 72 hours, so only a KEYED hash of it is stored
- * (owner rule, PD-40 review G1): HMAC-SHA256 under a key derived from
- * JWT_REFRESH_SECRET for this purpose alone, so the database by itself cannot
- * recover a live code by trying all 10^6. A reset code keeps PD-21's hash.
+ * Only a KEYED hash of any code is stored (owner rule "never stored in
+ * plaintext"; PD-40 review G1, department head P2-3): HMAC-SHA256 under
+ * RESET_CODE_HASH_SECRET, so the database by itself cannot recover a live code
+ * by trying all 10^6. Staging and production refuse to hash without it; local
+ * development and tests derive a key from JWT_REFRESH_SECRET -- never unkeyed.
  *
  * Kind-agnostic: PD-40's staff accounts reuse it unchanged. The database rules
  * (only a first sign-in code activates, only from provisioned, never the super
@@ -30,13 +31,18 @@ import {
 } from '@platform/auth/password-reset.service';
 
 const SECRET = 'pd43-unit-refresh-secret-at-least-32-chars!';
-const inherited = process.env.JWT_REFRESH_SECRET;
-beforeAll(() => {
+const ENV = ['JWT_REFRESH_SECRET', 'RESET_CODE_HASH_SECRET', 'APP_ENV'] as const;
+const inherited = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
+beforeEach(() => {
   process.env.JWT_REFRESH_SECRET = SECRET;
+  delete process.env.RESET_CODE_HASH_SECRET;
+  process.env.APP_ENV = 'test';
 });
 afterAll(() => {
-  if (inherited === undefined) delete process.env.JWT_REFRESH_SECRET;
-  else process.env.JWT_REFRESH_SECRET = inherited;
+  for (const k of ENV) {
+    if (inherited[k] === undefined) delete process.env[k];
+    else process.env[k] = inherited[k];
+  }
 });
 
 jest.setTimeout(30_000);
@@ -92,24 +98,35 @@ describe('issue(): the purpose decides how long a code lives', () => {
     expect(audits[0]!.after).toMatchObject({ purpose: 'first_login', supersedes: [OLD_CODE] });
   });
 
-  it('a first sign-in code is stored as a keyed hash, a reset code as before', async () => {
+  it('every code, first sign-in or reset, is stored as a keyed hash', async () => {
     const { service, created } = issuing();
-    const { code } = await service.issue({ ...input, purpose: 'first_login' });
-    const unkeyed = createHash('sha256').update(`${ACCOUNT}:${code}`).digest('hex');
-    expect(created[0]!.codeHash).not.toBe(unkeyed);
-    expect(created[0]!.codeHash).toBe(resetCodeHash(ACCOUNT, code, 'first_login'));
+    const unkeyed = (code: string) => createHash('sha256').update(`${ACCOUNT}:${code}`).digest('hex');
+    const first = await service.issue({ ...input, purpose: 'first_login' });
+    expect(created[0]!.codeHash).not.toBe(unkeyed(first.code));
+    expect(created[0]!.codeHash).toBe(resetCodeHash(ACCOUNT, first.code));
     const reset = await service.issue(input);
-    expect(created[1]!.codeHash).toBe(createHash('sha256').update(`${ACCOUNT}:${reset.code}`).digest('hex'));
+    expect(created[1]!.codeHash).not.toBe(unkeyed(reset.code));
+    expect(created[1]!.codeHash).toBe(resetCodeHash(ACCOUNT, reset.code));
   });
 
-  it('the key is the server\'s: another JWT_REFRESH_SECRET gives another hash', () => {
-    const mine = resetCodeHash(ACCOUNT, '123456', 'first_login');
+  it('the key is RESET_CODE_HASH_SECRET when set; locally a key derived from JWT_REFRESH_SECRET', () => {
+    const derived = resetCodeHash(ACCOUNT, '123456');
     process.env.JWT_REFRESH_SECRET = 'another-refresh-secret-of-at-least-32-chars';
-    try {
-      expect(resetCodeHash(ACCOUNT, '123456', 'first_login')).not.toBe(mine);
-    } finally {
-      process.env.JWT_REFRESH_SECRET = SECRET;
-    }
+    expect(resetCodeHash(ACCOUNT, '123456')).not.toBe(derived);
+    process.env.RESET_CODE_HASH_SECRET = 'a-dedicated-reset-code-hash-secret-32+chars';
+    const dedicated = resetCodeHash(ACCOUNT, '123456');
+    process.env.JWT_REFRESH_SECRET = SECRET;
+    // The dedicated secret alone decides it.
+    expect(resetCodeHash(ACCOUNT, '123456')).toBe(dedicated);
+  });
+
+  it.each(['staging', 'production'])('%s fails closed without RESET_CODE_HASH_SECRET, or with a short one', (env) => {
+    process.env.APP_ENV = env;
+    expect(() => resetCodeHash(ACCOUNT, '123456')).toThrow(/RESET_CODE_HASH_SECRET/);
+    process.env.RESET_CODE_HASH_SECRET = 'too-short';
+    expect(() => resetCodeHash(ACCOUNT, '123456')).toThrow(/RESET_CODE_HASH_SECRET/);
+    process.env.RESET_CODE_HASH_SECRET = 'a-dedicated-reset-code-hash-secret-32+chars';
+    expect(resetCodeHash(ACCOUNT, '123456')).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('a reset is unchanged: 10 minutes, the reset audit, purpose reset', async () => {
@@ -126,7 +143,7 @@ describe('issue(): the purpose decides how long a code lives', () => {
   });
 });
 
-function completing(purpose: 'reset' | 'first_login') {
+function completing(purpose: 'reset' | 'first_login', activation: 'ok' | 'refused' = 'ok') {
   const code = '123456';
   const live = {
     id: CODE_ID,
@@ -135,9 +152,10 @@ function completing(purpose: 'reset' | 'first_login') {
     channel: 'admin',
     issuedBy: ISSUER,
     attempts: 0,
-    codeHash: resetCodeHash(ACCOUNT, code, purpose),
+    codeHash: resetCodeHash(ACCOUNT, code),
   };
   const raw: Array<{ sql: string; values: unknown[] }> = [];
+  const retired: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
   const order: string[] = [];
   const tx = {
     passwordResetCode: { updateMany: jest.fn(async () => (order.push('spend'), { count: 1 })) },
@@ -145,12 +163,19 @@ function completing(purpose: 'reset' | 'first_login') {
     $queryRaw: jest.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
       order.push('activate');
       raw.push({ sql: strings.join('$'), values });
+      if (activation === 'refused') throw new Error('only a provisioned account is activated by a first sign-in code');
       return [{ activated: ACCOUNT }];
     }),
   };
   const prisma = {
     account: { findUnique: jest.fn(async () => ({ id: ACCOUNT })) },
-    passwordResetCode: { findFirst: jest.fn(async () => live) },
+    passwordResetCode: {
+      findFirst: jest.fn(async () => live),
+      updateMany: jest.fn(async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        retired.push(args);
+        return { count: 1 };
+      }),
+    },
     $transaction: jest.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
   };
   const auth = {
@@ -159,7 +184,7 @@ function completing(purpose: 'reset' | 'first_login') {
   };
   const audit = { audit: jest.fn(async () => undefined) };
   const service = new PasswordResetService(prisma as never, auth as never, audit as never);
-  return { service, code, raw, order };
+  return { service, code, raw, order, retired };
 }
 
 describe('complete(): a first sign-in code activates the account in the same transaction', () => {
@@ -176,6 +201,12 @@ describe('complete(): a first sign-in code activates the account in the same tra
     const { service, code, raw } = completing('reset');
     await expect(service.complete('teacher@example.test', code, '1234')).resolves.toEqual({ ok: true });
     expect(raw).toEqual([]);
+  });
+
+  it('a refused activation is RESET_CODE_INVALID (no oracle, no 500) and the code is spent afterwards', async () => {
+    const { service, code, retired } = completing('first_login', 'refused');
+    await expect(service.complete('teacher@example.test', code, '1234')).rejects.toMatchObject({ code: 'AUTH.RESET_CODE_INVALID' });
+    expect(retired).toEqual([{ where: { id: CODE_ID, usedAt: null, supersededAt: null }, data: { supersededAt: expect.any(Date) } }]);
   });
 
   it('the password minimum is the same 4 for a first sign-in (#171)', async () => {

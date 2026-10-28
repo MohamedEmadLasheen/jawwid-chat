@@ -18,10 +18,18 @@
  *      and deduction defaults; a supervisor writes none of them, while PD-26's
  *      automatic pricing of a supervisor's deduction still writes its amount.
  *
+ *   5. the department head's review of #184: a replay is the same actor's,
+ *      with the same arguments, while the login waits; the activation guard
+ *      checks a code spent in this transaction, not a setting; only someone
+ *      who may add teachers issues a first sign-in code; reset codes are keyed
+ *      too; a failed activation is RESET_CODE_INVALID and spends the code;
+ *      request roles, other organizations, concurrent activations; the code
+ *      is in no audit row and no log line.
+ *
  * Synthetic people only (G-20).
  */
 import { createHash, randomUUID } from 'node:crypto';
-import type { INestApplication } from '@nestjs/common';
+import { Logger, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type Redis from 'ioredis';
 import { PlatformModule } from '@platform/platform.module';
@@ -315,13 +323,14 @@ describe('3. the first sign-in code', () => {
     const live = await g.prisma.passwordResetCode.findFirstOrThrow({ where: { accountId: account.id, usedAt: null } });
     // An unspent code activates nothing.
     expect(await sqlError(g.prisma.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text`)).toMatch(
-      /a spent first sign-in code/,
+      /first sign-in code spent in this transaction/,
     );
     await resets.complete(account.subject, code, '1234');
-    // A spent code activates once.
+    // A spent code activates once: called again, it was not spent in this transaction.
     expect(await sqlError(g.prisma.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text`)).toMatch(
-      /only a provisioned account is activated by a first sign-in code/,
+      /first sign-in code spent in this transaction/,
     );
+    expect(await g.prisma.auditLog.count({ where: { action: 'account.activated', entityId: account.id } })).toBe(1);
   });
 
   it('only a keyed hash is stored: the database alone cannot recover the code (owner rule, PD-40 review G1)', async () => {
@@ -401,5 +410,159 @@ describe('4. pay (owner N2: "Full teacher finance")', () => {
       data: { organizationId: orgId, teacherId: m.teachers[0]!.id, kind: 'deduction', month: month(), amount: '50', currency: 'EGP', reason: 'spec', createdBy: m.teacherSupervisors[0]!.id },
     });
     expect(adjustment.createdBy).toBe(m.teacherSupervisors[0]!.id);
+  });
+});
+
+describe('5. the department head\'s review of #184', () => {
+  const strict = (on: boolean) =>
+    g.prisma.$executeRaw`UPDATE chat.config SET value = ${JSON.stringify(on)}::jsonb WHERE key = 'teacher_supervisor.strict_scope'`;
+  const asRequestRole = <T>(sql: string) =>
+    g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local role chat_app`);
+      return tx.$queryRawUnsafe<T>(sql);
+    });
+
+  it('P1: a replay is the same actor\'s, with the same arguments, while the login still waits; anything else is refused', async () => {
+    const id = randomUUID();
+    const address = email('s');
+    await createTeacher(m.teachersManager.id, { id, email: address });
+    // Another adder replaying the id and e-mail, naming themselves: refused, nothing changes.
+    const me = m.teacherSupervisors[0]!.id;
+    expect(await sqlError(createTeacher(me, { id, email: address, supervisorId: me }))).toMatch(/this teacher id is already used/);
+    expect((await teacherRow(id)).assignment).toBeUndefined();
+    // The same adder with different arguments: refused.
+    expect(await sqlError(createTeacher(m.teachersManager.id, { id, email: address, name: 'Another Name' }))).toMatch(/this teacher id is already used/);
+    expect(await sqlError(createTeacher(m.teachersManager.id, { id, email: address, supervisorId: m.teacherSupervisors[1]!.id }))).toMatch(
+      /this teacher id is already used/,
+    );
+    // The same adder, the same arguments: the same teacher.
+    expect(await createTeacher(m.teachersManager.id, { id, email: address })).toBe(id);
+    // Once the teacher has signed in, even the same request is refused.
+    const { account } = await teacherRow(id);
+    const { code } = await issueFirstLogin(account.id);
+    await resets.complete(address, code, '1234');
+    expect(await sqlError(createTeacher(m.teachersManager.id, { id, email: address }))).toMatch(/this teacher id is already used/);
+  });
+
+  it('P2-1: setting the transaction flag by hand activates nothing; only a code spent in this transaction does', async () => {
+    const { account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: email('t') }));
+    const forged = await sqlError(
+      g.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`select set_config('chat.activating_account', '${account.id}', true)`);
+        await tx.$executeRawUnsafe(`update chat.account set status = 'active', is_active = true where id = '${account.id}'::uuid`);
+      }),
+    );
+    expect(forged).toMatch(/an account becomes active from provisioned only with a first sign-in code/);
+    // A code spent in an EARLIER transaction is not enough either.
+    const { code } = await issueFirstLogin(account.id);
+    const live = await g.prisma.passwordResetCode.findFirstOrThrow({ where: { accountId: account.id, usedAt: null, supersededAt: null } });
+    await g.prisma.passwordResetCode.update({ where: { id: live.id }, data: { usedAt: new Date() } });
+    expect(await sqlError(g.prisma.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text`)).toMatch(
+      /spent in this transaction/,
+    );
+    expect(code).toMatch(/^[0-9]{6}$/);
+    expect((await g.prisma.account.findUniqueOrThrow({ where: { id: account.id } })).status).toBe('provisioned');
+  });
+
+  it('P2-2: only someone who may add teachers issues a first sign-in code, and a supervisor only within their scope', async () => {
+    const { teacher, account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: email('u'), supervisorId: m.teacherSupervisors[0]!.id }));
+    // One live code per account: each attempt first retires the last one.
+    const insert = async (issuer: string) => {
+      await g.prisma.passwordResetCode.updateMany({ where: { accountId: account.id, usedAt: null, supersededAt: null }, data: { supersededAt: new Date() } });
+      return g.prisma.$executeRaw`
+        INSERT INTO chat.password_reset_code (organization_id, account_id, issued_by, code_hash, reason, expires_at, purpose)
+        VALUES (${orgId}::uuid, ${account.id}::uuid, ${issuer}::uuid, ${'b'.repeat(64)}, 'r', now() + interval '1 hour', 'first_login')`;
+    };
+    for (const outsider of [m.supervisors[0]!.id, m.operationsManager.id, m.salesManager.id]) {
+      expect(await sqlError(insert(outsider))).toMatch(/a first sign-in code is issued by someone who may add this teacher/);
+    }
+    await strict(true);
+    try {
+      expect(await sqlError(insert(m.teacherSupervisors[1]!.id))).toMatch(/a first sign-in code is issued by someone who may add this teacher/);
+      expect(await sqlError(insert(m.teacherSupervisors[0]!.id))).toBe('ok');
+      expect(await sqlError(insert(m.teachersManager.id))).toBe('ok');
+      // A supervisor who added a teacher with no supervisor still issues that teacher's code.
+      const theirs = await teacherRow(await createTeacher(m.teacherSupervisors[1]!.id, { email: email('v') }));
+      await expect(issueFirstLogin(theirs.account.id, m.teacherSupervisors[1]!)).resolves.toMatchObject({ code: expect.any(String) });
+    } finally {
+      await strict(false);
+    }
+    expect(teacher.id).toBeDefined();
+  });
+
+  it('P2-3: a reset code is a keyed hash too', async () => {
+    const address = email('w');
+    const { account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: address }));
+    const staff = await g.prisma.staff.findUniqueOrThrow({ where: { id: m.teachersManager.id } });
+    const { code } = await resets.issue({
+      accountId: account.id, organizationId: orgId, issuedByStaffId: staff.id, issuedByAccountId: staff.accountId!, reason: 'r', signOutEverywhere: false,
+    });
+    const row = await g.prisma.passwordResetCode.findFirstOrThrow({ where: { accountId: account.id, usedAt: null, supersededAt: null } });
+    expect(row.purpose).toBe('reset');
+    expect(row.codeHash).not.toBe(createHash('sha256').update(`${account.id}:${code}`).digest('hex'));
+  });
+
+  it('P2-4: a failed activation answers RESET_CODE_INVALID, sets no password, and spends the code', async () => {
+    const address = email('x');
+    const { account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: address }));
+    const { code } = await issueFirstLogin(account.id);
+    // The login is taken out of the provisioned state before the teacher uses the code.
+    await g.prisma.account.update({ where: { id: account.id }, data: { status: 'suspended', isActive: false } });
+    await expect(resets.complete(address, code, '1234')).rejects.toMatchObject({ code: 'AUTH.RESET_CODE_INVALID' });
+    expect(await g.prisma.accountCredential.count({ where: { accountId: account.id } })).toBe(0);
+    expect(await g.prisma.passwordResetCode.count({ where: { accountId: account.id, usedAt: null, supersededAt: null } })).toBe(0);
+    expect((await g.prisma.account.findUniqueOrThrow({ where: { id: account.id } })).status).toBe('suspended');
+  });
+
+  it('a request role calls neither writer', async () => {
+    const id = randomUUID();
+    expect(
+      await sqlError(
+        asRequestRole(`select chat.create_teacher('${id}'::uuid, 'x', 'rr@${DOMAIN}', null, null, null, null, 'r', '${m.teachersManager.id}'::uuid)`),
+      ),
+    ).toMatch(/permission denied/);
+    expect(await sqlError(asRequestRole(`select chat.activate_account_with_code('${randomUUID()}'::uuid)`))).toMatch(/permission denied/);
+  });
+
+  it('a supervisor of another organization is refused', async () => {
+    const other = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ('${other}'::uuid, '${SLUG}${other.slice(0, 8)}', 'PD-43 other academy')`);
+    const foreign = await g.prisma.staff.create({ data: { organizationId: other, name: 'QA Foreign Supervisor', role: 'admin', isActive: true } });
+    expect(await sqlError(createTeacher(m.teachersManager.id, { email: email('y'), supervisorId: foreign.id }))).toMatch(/one organization/);
+  });
+
+  it('two activations of one code at once: one succeeds, one is RESET_CODE_INVALID, one audit row', async () => {
+    const address = email('z');
+    const { account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: address }));
+    const { code } = await issueFirstLogin(account.id);
+    const results = await Promise.allSettled([resets.complete(address, code, '1234'), resets.complete(address, code, '5678')]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toMatchObject({ code: 'AUTH.RESET_CODE_INVALID' });
+    expect(await g.prisma.auditLog.count({ where: { action: 'account.activated', entityId: account.id } })).toBe(1);
+  });
+
+  it('the code is in no audit row and no log line', async () => {
+    const lines: string[] = [];
+    const spies = (['log', 'warn', 'error', 'debug', 'verbose'] as const).map((level) =>
+      jest.spyOn(Logger.prototype, level).mockImplementation(function (this: Logger, ...args: unknown[]) {
+        lines.push(args.map(String).join(' '));
+      }),
+    );
+    try {
+      const address = email('aa');
+      const { account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: address }));
+      const { code } = await issueFirstLogin(account.id);
+      await expect(resets.complete(address, '000000' === code ? '111111' : '000000', '1234')).rejects.toBeDefined();
+      await resets.complete(address, code, '1234');
+      const token = new RegExp(`\\b${code}\\b`);
+      expect(lines.filter((l) => token.test(l))).toEqual([]);
+      const audits = await g.prisma.auditLog.findMany({ where: { entityId: account.id } });
+      expect(audits.length).toBeGreaterThan(0);
+      expect(audits.filter((a) => token.test(JSON.stringify({ before: a.before, after: a.after, reason: a.reason })))).toEqual([]);
+    } finally {
+      for (const s of spies) s.mockRestore();
+    }
   });
 });
