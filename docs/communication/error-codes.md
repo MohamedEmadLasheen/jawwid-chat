@@ -129,8 +129,18 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | Code | HTTP | Meaning |
 |---|---|---|
 | `COMM.CERTIFICATE_NOT_FOUND` | 404 | No such certificate, or a learner the teacher does not teach (one code for both, so a teacher cannot probe other learners). |
-| `COMM.CERTIFICATE_DENIED` | 403 | Only the Teachers department and the super admin see, issue or decline certificates. Never retry. |
-| `COMM.CERTIFICATE_STATE` | 409 | Already decided, the file has not been uploaded, or the learner has no live group to deliver into. Refresh; do not retry. |
+| `COMM.CERTIFICATE_DENIED` | 403 | PD-41: the caller may not do this to this certificate (not the requester of record, not the learner's supervisor, not a designer, or no key). Never retry. |
+| `COMM.CERTIFICATE_STATE` | 409 | The certificate's state does not allow this act, the file has not been uploaded, or the recipient has no live group. Refresh; do not retry. |
+| `COMM.CERTIFICATE_DUPLICATE` | 409 | PD-41: the same certificate (recipient, type, Juz' or period) is already open or sent; `detail.certificateId` names it. |
+| `COMM.CERTIFICATE_DUPLICATE_SUSPECTED` | 409 | PD-41: a similar certificate was requested in the last 30 days; resend with `confirmDuplicate: true` to file another. |
+| `COMM.CERTIFICATE_NOT_APPROVED` | 409 | PD-41: send and Story need the requester's approval of the current design first. |
+| `COMM.CERTIFICATE_REVISION_CHANGED` | 409 | PD-41: the design changed since it was reviewed; review `detail.currentFileId`. |
+| `COMM.CERTIFICATE_SELF_APPROVAL` | 403 | PD-41: the person who uploaded a design does not approve it (four eyes). |
+| `COMM.CERTIFICATE_TARGET_CHANGED` | 409 | PD-41: the group the server would send into changed since it was shown; `detail.conversationId` is the new one. Check and send again. |
+| `COMM.CERTIFICATE_STORY_NOT_OPTED_IN` | 409 | PD-41: the request did not opt in to a Story. |
+| `COMM.CERTIFICATE_STORY_CONSENT_MISSING` | 409 | PD-41: a student certificate's Story needs the family's recorded consent; none, or it was withdrawn. |
+| `COMM.CERTIFICATE_STORY_NEEDS_IMAGE` | 409 | PD-41: a Story shows an image; this certificate's file is a PDF. |
+| `COMM.CERTIFICATE_TYPE_DISABLED` | 409 | PD-41: the certificate type is disabled; pick an active one. |
 | `COMM.LEAVE_NOT_FOUND` | 404 | No such leave request or teacher, or one the caller may not see. |
 | `COMM.LEAVE_DENIED` | 403 | Leave is requested by a teacher for themselves, decided by the Teachers department, and the allowance is set by its manager or the super admin. Never retry. |
 | `COMM.LEAVE_STATE` | 409 | The leave does not allow it: already decided or withdrawn, overlapping another open or approved request, in the past, or crossing a calendar year. |

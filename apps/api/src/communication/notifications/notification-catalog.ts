@@ -80,6 +80,11 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   subscription_locked: { version: 1, category: 'payment', inbox: 'inbox.generic', action: 'view_payments' },
   subscription_unlocked: { version: 1, category: 'payment', inbox: 'inbox.generic', action: 'view_payments' },
   subscription_renewal_requested: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  // PD-41: the Certificates page's work items.
+  certificate_requested: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_returned: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_uploaded: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_suggestion_decided: { version: 1, category: 'task', inbox: 'inbox.generic' },
 };
 
 const FALLBACK: CatalogEntry = { version: 1, category: 'system', inbox: 'inbox.generic' };

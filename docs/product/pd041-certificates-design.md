@@ -788,3 +788,36 @@ write **directly in SQL**, and an Admin Web test where it shows on screen.
 
 **Not changed:** nothing in Jawwid Core, its code or its database. This repository has no Core
 code (`jawwid-chat-is-not-core`), and PD-41 adds no Core call.
+
+---
+
+## 15. PR-1 as built (2026-10-29): where the code differs from this design
+
+The API and migration are in `20261029110000_chat_pd041_certificates.sql`, `apps/api/src/certificates/*`
+and `apps/api/src/platform/pd041-policy.ts`. The contract is `docs/contracts/API-CONTRACT.md` §3.10c.
+
+The code differs from the sections above in seven places:
+1. **PD-12's open tickets become `proposed`**, not `requested` (§3, legacy mapping). Owner
+   safeguard 5 gives a teacher's suggestion to the learner's Operations supervisor to decide, so
+   an undecided PD-12 ticket waits for that supervisor. `issued` becomes `sent`, and the
+   issuer is recorded as approver and sender. `declined` stays.
+2. **There is no separate `story_image` revision** (§4.2, §7). A Story is published from the
+   approved certificate file itself, which must be an image
+   (`COMM.CERTIFICATE_STORY_NEEDS_IMAGE` for a PDF). A second file can come later if the owner
+   wants PDF certificates with Stories.
+3. **There is no `reassign`; it is replaced by `release`** (§11). The working Designer, or an
+   overseer, puts an in-design request back to Pending, and any Designer takes it from there.
+4. **`certificates.deliver` keeps PD-40's label** ("Send certificates to the family"). PD-40's
+   generated seed block is frozen, and a relabel needs its own reviewed change.
+5. **Every write is one act.** `action_seq` goes up by one, and `last_action`, `last_note` and
+   the actor travel with each write. The trigger refuses any other write and records each act
+   in `appreciation_certificate_event`. This makes safeguards 2 and 7 hold even against direct
+   SQL.
+6. **A live Story pins the approval.** While the Story is up, the approval cannot be withdrawn
+   and the request cannot be cancelled; withdrawing consent takes the Story down first.
+7. **The Designer's history hides consent and Story acts**, and shows notes only for returns
+   and redesigns.
+
+**Merge order:** PR-1 removes the PD-12 staff routes (`/learner-certificates/:id/upload|issue|decline`).
+The current Admin Web Certificates tab calls them, so that tab stops working until PR-2 (the
+`/certificates` page) lands. Merge PR-1 and PR-2 together, or one right after the other.
