@@ -2254,6 +2254,8 @@
     "description": "PD-28: shown in the browser instead of starting a recording."
   },
   "materialsTitle": "Materials",
+  "activityLoadFailed": "This lesson couldn't load.",
+  "@activityLoadFailed": {"description": "PD-29: an activity (a lesson page in the app) failed to load -- TLS, the network or a 404 -- instead of a blank page; Try again reloads it."},
   "@materialsTitle": {
     "description": "PD-29: the child's Materials page title."
   },
