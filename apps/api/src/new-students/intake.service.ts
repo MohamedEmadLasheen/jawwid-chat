@@ -64,7 +64,7 @@ interface Ownership {
  *   voidCarryOver correct it (the entrant within 14 days, or the three managers).
  *   setSignInEmail the parent's e-mail, when it was not known at intake.
  *
- * The database decides every rule again (20261028110000, 20261028200000): this
+ * The database decides every rule again (20261028110000, 20261028210000): this
  * service asks first only to answer in words. Duplicates (S1): the parent's
  * e-mail and E.164 number are keyed (contactKeyHash) and locked
  * (pg_advisory_xact_lock) for the transaction, so two supervisors entering the
@@ -562,7 +562,7 @@ export class FamilyIntakeService {
 }
 
 /**
- * A refusal raised by the database (a guard of 20261028110000 / 20261028200000)
+ * A refusal raised by the database (a guard of 20261028110000 / 20261028210000)
  * becomes an answer with its words. Anything else is rethrown untouched.
  */
 export function dbRefusal(e: unknown): unknown {

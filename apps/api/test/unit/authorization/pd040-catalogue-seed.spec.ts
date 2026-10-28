@@ -76,7 +76,7 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
   },
   {
     // PD-42 PR-2: a Sales account edits the contact record of the families it owns.
-    migration: '20261028200000_chat_pd042_intake_scope.sql',
+    migration: '20261028210000_chat_pd042_intake_scope.sql',
     tag: 'pd042b',
     permissions: [],
     bundles: [
