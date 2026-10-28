@@ -220,7 +220,7 @@ describe('GET /dashboard/chats -- chats.waiting', () => {
     expect(await code(g.conversations.dashboardWaiting(s.parentId))).toBe(CommErrorCode.PERMISSION_DENIED);
     expect(await code(g.conversations.dashboardWaiting(s.teacherId))).toBe(CommErrorCode.PERMISSION_DENIED);
     // admin_b owns no family (a family's primary owner cannot be deactivated before offboarding).
-    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.otherAdminId}::uuid`;
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.otherAdminId}::uuid`;
     expect(await code(g.conversations.dashboardWaiting(s.otherAdminId))).toBe(CommErrorCode.ACTOR_INACTIVE);
   });
 
