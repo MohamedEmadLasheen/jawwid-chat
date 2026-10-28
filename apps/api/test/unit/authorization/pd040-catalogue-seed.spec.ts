@@ -48,6 +48,19 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
     ],
   },
   {
+    // PD-42 (PD-30-amendment-carried-over): the supervisors who enter
+    // families, and their managers, may carry a package over from Core.
+    migration: '20261028110000_chat_pd042_direct_enrolment.sql',
+    tag: 'pd042',
+    permissions: ['subscriptions.carry_over'],
+    bundles: [
+      ['manager', 'operations', 'subscriptions.carry_over'],
+      ['manager', 'sales', 'subscriptions.carry_over'],
+      ['supervisor', 'operations', 'subscriptions.carry_over'],
+      ['supervisor', 'sales', 'subscriptions.carry_over'],
+    ],
+  },
+  {
     // PD-40 shadow QA (2026-10-28): what Sales and Teachers-department members
     // reach today, so that enforcing refuses none of it (plan §14).
     migration: '20261028120000_chat_pd040_shadow_qa_bundles.sql',
@@ -59,19 +72,6 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
       ['supervisor', 'sales', 'cases.view'],
       ['supervisor', 'sales', 'lessons.view'],
       ['supervisor', 'teachers', 'reports.view'],
-    ],
-  },
-  {
-    // PD-42 (PD-30-amendment-carried-over): the supervisors who enter
-    // families, and their managers, may carry a package over from Core.
-    migration: '20261028110000_chat_pd042_direct_enrolment.sql',
-    tag: 'pd042',
-    permissions: ['subscriptions.carry_over'],
-    bundles: [
-      ['manager', 'operations', 'subscriptions.carry_over'],
-      ['manager', 'sales', 'subscriptions.carry_over'],
-      ['supervisor', 'operations', 'subscriptions.carry_over'],
-      ['supervisor', 'sales', 'subscriptions.carry_over'],
     ],
   },
 ];
