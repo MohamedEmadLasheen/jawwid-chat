@@ -8,7 +8,6 @@ import {
   isOperator,
   managerOnly,
   navAreas,
-  taskScopeFor,
   visibleAreas,
 } from './capabilities'
 import { ROLES } from '@/test/utils'
@@ -74,14 +73,6 @@ describe('role → navigation', () => {
       }
     }
   })
-
-  it('requests the task scope that matches the role', () => {
-    expect(taskScopeFor('admin')).toBe('mine')
-    expect(taskScopeFor('coverage')).toBe('mine')
-    expect(taskScopeFor('manager')).toBe('team')
-    expect(taskScopeFor('finance')).toBe('department')
-    expect(taskScopeFor('super_admin')).toBe('team')
-  })
 })
 
 describe('navigation lists what a role may open', () => {
@@ -146,7 +137,9 @@ describe('permission keys → pages', () => {
     expect(holdsAny(null, ['staff_accounts.view'])).toBe(false)
   })
 
-  it("gives a specialist PD-41's Certificates area only -- never Accounts, so no staff-account tabs", () => {
-    expect(visibleAreas('specialist')).toEqual(['certificates'])
+  it("gives a specialist PD-41's Certificates area and their Tasks -- never Accounts, so no staff-account tabs", () => {
+    // PD-47 plan §3.12: Tasks is in every staff role's navigation -- a Designer
+    // may be given a task too. Still never Accounts.
+    expect(visibleAreas('specialist')).toEqual(['certificates', 'tasks'])
   })
 })

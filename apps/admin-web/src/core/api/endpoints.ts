@@ -2,7 +2,7 @@ import { api, newIdempotencyKey, request, type SessionInfoDto } from './client'
 import { persistenceSupported, tokenStore } from '@/core/auth/tokens'
 import { deviceLabel } from '@/core/auth/device'
 import { ApiError } from './errors'
-import type { Paginated, Staff, Task } from '@/shared/types/domain'
+import type { Staff } from '@/shared/types/domain'
 
 /* ---------------------------------------------------------------- session */
 
@@ -112,21 +112,6 @@ export const sessionApi = {
       tokenStore.clear()
     }
   },
-}
-
-/* ------------------------------------------------------------------ tasks */
-
-export const taskApi = {
-  list: (filters: {
-    scope: 'mine' | 'team' | 'department'
-    status?: string
-    type?: string
-    overdue?: boolean
-    cursor?: string
-    limit?: number
-  }) => api.get<Paginated<Task>>('/tasks', filters),
-  update: (id: string, patch: Partial<Pick<Task, 'status' | 'due_at' | 'result'>>) =>
-    api.patch<Task>(`/tasks/${id}`, patch, newIdempotencyKey()),
 }
 
 /* ------------------------------------------------------------------ admin */

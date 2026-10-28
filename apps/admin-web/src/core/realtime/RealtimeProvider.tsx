@@ -41,7 +41,7 @@ function registerHandlers(socket: Socket, qc: QueryClient): void {
     handler: (payload: ServerEvents[K]) => void,
   ) => socket.on(event as string, handler as (p: unknown) => void)
 
-  on('task.updated', () => {
+  on('task.changed', () => {
     void qc.invalidateQueries({ queryKey: qk.tasksAll })
   })
 

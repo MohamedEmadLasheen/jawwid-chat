@@ -15,7 +15,7 @@ export const qk = {
   teacherProfileReview: (profileId: string) =>
     ['teacher-profile-reviews', profileId] as const,
 
-  tasks: (filters: Record<string, unknown>) => ['tasks', filters] as const,
+  // PD-47: everything under ['tasks'] (features/tasks), so one invalidation refreshes the page.
   tasksAll: ['tasks'] as const,
 
   coverageAll: ['coverage'] as const,

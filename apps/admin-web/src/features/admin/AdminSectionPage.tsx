@@ -15,6 +15,7 @@ import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
 import { PaymentsPage } from '@/features/payments/PaymentsPage'
 import { CallsPage } from '@/features/calls-page/CallsPage'
+import { TasksPage } from '@/features/tasks/TasksPage'
 
 /**
  * One route, `/admin/:section`, for every Admin Portal section. The four built
@@ -58,6 +59,8 @@ export function AdminSectionPage() {
       return <AdminPayments section={section} />
     case 'calls':
       return <CallsPage />
+    case 'tasks':
+      return <AdminTasks section={section} />
     default:
       return <DevelopmentPlaceholder section={section} />
   }
@@ -73,6 +76,12 @@ function AdminParents({ section }: { section: NonNullable<ReturnType<typeof find
 function AdminPayments({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {
   const eyebrow = useEyebrow(section)
   return <PaymentsPage eyebrow={eyebrow} />
+}
+
+/** PD-47: the Tasks page, with the super admin's All and Decisions tabs. */
+function AdminTasks({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {
+  const eyebrow = useEyebrow(section)
+  return <TasksPage eyebrow={eyebrow} />
 }
 
 function AdminInstalments({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {

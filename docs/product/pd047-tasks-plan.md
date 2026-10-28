@@ -335,6 +335,21 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
 - The legacy `taskApi`, `Task` type, query keys and `task.updated` handler are replaced. `homeFor` for the legacy department roles keeps `/tasks`, which now works.
 - Tasks goes into the navigation of every staff role.
 
+**As built in PR-3.**
+- **Two reads were added to the API**, so the page offers only what the server would accept:
+  - `GET /tasks/:id` returns `actions`: what this viewer may do now, by the routes' own rules. The routes still decide on every write.
+  - `GET /tasks/assignees[?task=]` lists the live people the caller may give a task to, or hand this task on to, and the departments with a live manager (`tasks.create` or `tasks.manage`).
+  - `titleParams` of the instalment, `package_low` and `renewal_request` tasks carry the child's id, for the link to the Student Profile.
+- **Tabs by role:**
+  - everyone: Mine and Closed;
+  - `tasks.team` / `tasks.manage`: Team;
+  - `tasks.manage`: Decisions;
+  - the super admin: Decisions and All, without Team.
+- **The super admin's Tasks** is an Admin Portal section (`managed`).
+- **Every staff role has Tasks in its navigation**, the Designer (`specialist`) included.
+- **Realtime:** `task.changed` refreshes the page. Its delivery is PR-4's.
+- **Level colours:** each level has its own measured pair, light and dark (`tasks.css`, tested at 4.5:1 for text and 3:1 for the icon).
+
 **Flutter (teacher app and `/teacher/` web, one build), if Q2 is approved.**
 - A **"To do (N)"** segment at the top of the Schedule tab, beside the "Needs report" filter.
 - The teacher can: open a task (for example straight to the report sheet), add a comment, say **"Not mine"** (out of scope), acknowledge a task that is no longer needed, and mark a manual task done.

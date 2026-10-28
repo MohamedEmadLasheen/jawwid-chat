@@ -42,26 +42,6 @@ export interface Staff {
   permissions?: string[]
 }
 
-export type TaskType = 'finance' | 'technical' | 'academic' | 'other'
-export type TaskStatus = 'open' | 'in_progress' | 'done' | 'cancelled'
-
-export interface Task {
-  id: string
-  case_id: string | null
-  family_id: string
-  family_name?: string
-  type: TaskType
-  title: string
-  details: string | null
-  owner_id: string
-  owner_name?: string
-  status: TaskStatus
-  due_at: string | null
-  result: string | null
-  created_at: string
-  done_at: string | null
-}
-
 export interface Paginated<T> {
   items: T[]
   next_cursor: string | null

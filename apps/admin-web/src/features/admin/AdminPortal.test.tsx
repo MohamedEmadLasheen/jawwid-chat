@@ -130,7 +130,7 @@ describe('Admin Portal registry and navigation', () => {
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'read_only').map((s) => s.key).sort()).toEqual(
       ['conversations', 'dashboard', 'instalments', 'reports', 'users'],
     )
-    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['calls', 'parents', 'payments', 'stories', 'teachers', 'teams'])
+    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['calls', 'parents', 'payments', 'stories', 'tasks', 'teachers', 'teams'])
   })
 
   it('every section is reachable from the navigation, and the unbuilt ones are marked', async () => {
