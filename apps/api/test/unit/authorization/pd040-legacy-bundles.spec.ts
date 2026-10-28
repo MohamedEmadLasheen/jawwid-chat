@@ -17,6 +17,7 @@
 import { StaffRole } from '@communication/contracts/vocab';
 import { decideBillingAccess, decidePd012PageAccess, decidePd012StaffAccess, type OperationsDepartmentRole } from '@platform/pd012-policy';
 import { decideTeacherFileAccess, teacherFilePageAccess } from '@platform/teacher-file-policy';
+import { decideStaffAccountCreate } from '@platform/staff-account-policy';
 import { decidePageBasis } from '@platform/teacher-scope';
 import { canCarryOverPackage, canGrantSubscriptionException } from '@platform/subscription-policy';
 import { accountAdminActs } from '@platform/account-admin-policy';
@@ -81,6 +82,11 @@ function rules(): Record<string, Rule> {
   const supervises: Rule = (a) => pd012(a).canSupervise;
   const writesSupervision: Rule = (a) => file(a).canWriteSupervision;
   const readsMoney: Rule = (a) => billing(a).scope !== null;
+  const runsStaff: Rule = (a) =>
+    decideStaffAccountCreate(a.actor, { managedDepartmentId: a.placement.position === 'manager' ? a.placement.kind : null, permissions: new Set(['staff_accounts.create']) }, {
+      tier: 'specialist',
+      departmentId: a.placement.position === 'manager' ? a.placement.kind : null,
+    }).allowed;
   // PD-26 amendment: the Teacher Supervision page, Teachers department or Operations.
   const basis = (a: Account) => decidePageBasis(a.actor, role(a, 'teachers'), role(a, 'operations'));
   const onPage: Rule = (a) => decidePd012PageAccess(pd012(a), basis(a)).canSupervise;
@@ -121,6 +127,11 @@ function rules(): Record<string, Rule> {
     'staff_profiles.manage': (a) =>
       profile(a).has(StaffProfilePermission.TEAM_RESPONSIBILITIES_MANAGE) || profile(a).has(StaffProfilePermission.ORG_RESPONSIBILITIES_MANAGE),
     'staff_profiles.reporting_lines': (a) => profile(a).has(StaffProfilePermission.REPORTING_LINES_MANAGE),
+    // PD-40 PR-3: the super admin, or a department manager (role and relation both).
+    'staff_accounts.view': runsStaff,
+    'staff_accounts.create': runsStaff,
+    'staff_accounts.manage': runsStaff,
+    'access_roles.manage': (a) => a.actor.staffRole === StaffRole.SUPER_ADMIN,
   };
 }
 
@@ -157,7 +168,11 @@ describe('PD-40: legacy bundles agree with the service rules', () => {
     }
   });
 
-  it('no key is delegable yet: delegation (PD-40 PR-3) waits for every bundle to be verified', () => {
-    expect(PERMISSIONS.filter((p) => p.delegable).map((p) => p.key)).toEqual([]);
+  it('a key is delegable only once its bundles are verified here, and never if a role may not hold it (PD-40 C3)', () => {
+    const delegable = PERMISSIONS.filter((p) => p.delegable).map((p) => p.key);
+    expect(delegable.filter((k) => !(k in RULES))).toEqual([]);
+    expect(PERMISSIONS.filter((p) => p.delegable && !p.inRoles).map((p) => p.key)).toEqual([]);
+    // The minimal, read-only set PR-3 opens (plan §13 C3).
+    expect(delegable.sort()).toEqual(['billing.view', 'certificates.design', 'certificates.view', 'subscriptions.view']);
   });
 });
