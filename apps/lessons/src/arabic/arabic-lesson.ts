@@ -1,5 +1,5 @@
 import type { ResolvedQuiz } from '../content/lesson-content';
-import { POSITIONS, has, isLetter, isWord, positions, type Position } from './letters';
+import { POSITIONS, has, isLetter, isPhrase, isWord, positions, type Position } from './letters';
 import { POSITION_LABEL, askContains, askPosition } from './ui-text';
 
 /**
@@ -112,7 +112,7 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
     for (const u of raw.units) {
       check(typeof u.id === 'string' && UNIT_ID.test(u.id) && !byId.has(u.id));
       check(Array.isArray(u.letters) && u.letters.length > 0 && u.letters.every((l) => typeof l === 'string' && [...l].length > 0 && [...l].every(isLetter)));
-      check(typeof u.name === 'string' && isWord(u.name));
+      check(typeof u.name === 'string' && isPhrase(u.name));
       check(Array.isArray(u.forms) && u.forms.every((f) => typeof f === 'string' && f.length > 0));
       check(u.note === null || (typeof u.note === 'object' && typeof u.note.text === 'string' && u.note.text.trim().length > 0 && isReview(u.note.review)));
       check(Array.isArray(u.words));

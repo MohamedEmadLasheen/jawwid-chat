@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './letters.fixture.json';
-import { clusters, has, isLetter, isMark, isWord, lettersOf, positions } from './letters';
+import { clusters, has, isLetter, isMark, isPhrase, isWord, lettersOf, positions } from './letters';
 
 const units = fixture.units as Record<string, string[]>;
 
@@ -29,6 +29,12 @@ describe('the one letter rule (shared with the CI checker)', () => {
       expect(isWord(text)).toBe(w.isWord);
     });
   }
+
+  it('a unit name may be a short phrase of written words, one space apart', () => {
+    expect(isPhrase('بَاءْ')).toBe(true);
+    expect(isPhrase('أَلِفٌ مَقْصُورَةْ')).toBe(true);
+    for (const bad of ['', ' بَاءْ', 'أَلِفٌ  مَقْصُورَةْ', 'بَاءْ ', 'بَاءْ1']) expect(isPhrase(bad)).toBe(false);
+  });
 
   it('removes marks only: hamza seats, madda and wasla stay letters of their own', () => {
     expect(lettersOf('أَسَدْ')).toEqual(['أ', 'س', 'د']);

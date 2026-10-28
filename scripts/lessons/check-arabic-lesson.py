@@ -89,6 +89,11 @@ def is_word(w):
     return is_str(w) and len(w) > 0 and w == unicodedata.normalize('NFC', w) and is_letter(w[0]) and all(is_letter(c) or is_mark(c) for c in w)
 
 
+def is_phrase(t):
+    """A unit's name: one written word, or a short phrase of them (أَلِفٌ مَقْصُورَةْ), one space apart."""
+    return is_str(t) and all(is_word(w) for w in t.split(' '))
+
+
 def letters_of(w):
     return [c for c in w if is_letter(c)]
 
@@ -216,10 +221,17 @@ def check(lesson, number):
             err(f'{where}: letters must be a list of letters (one, or a pair such as لا)')
             continue
         units[u['id']] = u
-        if not is_word(u['name']):
-            err(f'{where}: name {u["name"]!r} is not one written word')
+        if not is_phrase(u['name']):
+            err(f'{where}: name {u["name"]!r} is not one written word or a phrase of them')
         else:
-            tashkeel(f'{where} name', u['name'], err)
+            # Every word fully vowelled; only the LAST takes the pausal sukun (the first of
+            # أَلِفٌ مَقْصُورَةْ keeps its case ending, as Arabic is read in pause).
+            *inner, last = u['name'].split(' ')
+            for w in inner:
+                gaps = unmarked(w)
+                if gaps:
+                    err(f'{where} name: {w!r} is not fully vowelled ({", ".join(gaps)} unmarked)')
+            tashkeel(f'{where} name', last, err)
         if not isinstance(u['forms'], list) or not u['forms'] or not all(is_str(f) and f and all(c == chr(0x640) or any(c in l for l in u['letters']) for c in f) for f in u['forms']):
             err(f'{where}: each form is the unit\'s letter, with tatweel only')
         if u['note'] is not None:
@@ -404,6 +416,10 @@ def selftest():
         'internal-mark-missing': (word(0, 0, text='كتَابْ'), 'not fully vowelled'),
         'qamari-lam-unmarked': (word(2, 0, text='البَحْرْ'), 'not fully vowelled'),
         'unit-name-tanween': (lambda c: c['units'][2].update(name='بَاءٌ'), 'tanween'),
+        'unit-name-phrase': (lambda c: c['units'][2].update(name='أَلِفٌ مَقْصُورَةْ'), None),
+        'unit-name-phrase-last-word-tanween': (lambda c: c['units'][2].update(name='أَلِفٌ مَقْصُورَةٌ'), 'tanween'),
+        'unit-name-phrase-inner-unvowelled': (lambda c: c['units'][2].update(name='الف مَقْصُورَةْ'), 'not fully vowelled'),
+        'unit-name-double-space': (lambda c: c['units'][2].update(name='أَلِفٌ  مَقْصُورَةْ'), 'not one written word'),
         'note-unvowelled': (lambda c: c['units'][0]['note'].update(text='لا تبدأ كلمة بألف.'), 'note'),
         'was-not-held': (word(0, 2, review=None), 'not held'),
         'was-equals-text': (word(0, 2, was='بَابْ'), 'was equals text'),

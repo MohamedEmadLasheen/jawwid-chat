@@ -38,6 +38,11 @@ export function isWord(word: string): boolean {
   return chars.length > 0 && word === word.normalize('NFC') && isLetter(chars[0]!) && chars.every((ch) => isLetter(ch) || isMark(ch));
 }
 
+/** A unit's name: one written word, or a short phrase of them (أَلِفٌ مَقْصُورَةْ), one space apart. */
+export function isPhrase(text: string): boolean {
+  return text.split(' ').every(isWord);
+}
+
 /** A word's letters, in order: every mark removed, no letter ever replaced. */
 export function lettersOf(word: string): string[] {
   return [...word].filter(isLetter);
