@@ -294,6 +294,7 @@ export class SupervisionCaseService {
         ownerId,
         previousOwnerId: row.owner_id,
         assignedBy: actor.actorId,
+        assignedAt: new Date().toISOString(),
       });
       await this.audit.audit(tx, {
         actorId: actor.actorId,

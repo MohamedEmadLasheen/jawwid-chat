@@ -22,6 +22,7 @@ import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
 import { OffboardButton, ReactivateButton } from './Offboarding'
+import { ChangeSignInButton } from './ChangeSignIn'
 
 /**
  * PD-10: one teacher's file. Sections in the order the owner listed them;
@@ -67,6 +68,11 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                         {/* Mounted whatever the file says: a code shown once must outlive the reload. */}
                         <GiveSignInButton show={!!data.signIn?.canGive} teacherId={data.teacher.id} basePath={basePath} />
                         {data.signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}
+                        <ChangeSignInButton
+                          show={!!data.signIn?.canChange}
+                          teacherId={data.teacher.id}
+                          signedIn={data.signIn?.status === 'active'}
+                        />
                         {data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}
                         {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
                         <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />

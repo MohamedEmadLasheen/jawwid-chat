@@ -107,6 +107,18 @@ export class OutboxWorker {
         return;
       }
 
+      /**
+       * PD-35 B5: an escalation case opened, assigned or due tomorrow. No
+       * conversation: to the people it is for, by actor room (a signal) and the
+       * PD-34 pipeline (a 'task' entry and a generic push). See deliverCase.
+       */
+      case CommEvent.CASE_OPENED:
+      case CommEvent.CASE_ASSIGNED:
+      case CommEvent.CASE_DUE_SOON: {
+        await this.deliverCase(type, payload);
+        return;
+      }
+
       /** PD-36: a summons answered or closed -- Group Info re-reads; so does the target's list. */
       case CommEvent.MENTION_UPDATED: {
         const target = payload.targetActorId as string | undefined;
@@ -640,6 +652,78 @@ export class OutboxWorker {
    * still hold (the rule's respect_quiet_hours). A mention the author took back
    * before this ran (edited or deleted away) sends nothing.
    */
+  /**
+   * PD-35 B5. Who a case event is for, read LIVE from the case (an owner who no
+   * longer fits it -- chat.case_owner_fits -- is not told; B5 R2):
+   *
+   *   case.opened    told: the owner and the target department's manager
+   *   case.assigned  told: the new owner. Signalled: also the previous owner
+   *                  and the manager, whose lists change
+   *   case.due_soon  told: the owner, or the manager when there is none; never
+   *                  for a closed case
+   *
+   * Never told: the person who did it. "Told" is a PD-34 entry (category 'task',
+   * action open_case) with a generic push; every recipient's actor room gets
+   * the event itself, ids only, so Escalations refreshes.
+   */
+  private async deliverCase(type: CommEventName, payload: Record<string, unknown>): Promise<void> {
+    const caseId = payload.caseId as string | undefined;
+    if (!caseId) return;
+    const [c] = await this.prisma.$queryRaw<Array<{ status: string; owner_id: string | null; owner_fits: boolean; manager_id: string | null }>>`
+      SELECT c.status, c.owner_id::text AS owner_id, d.manager_id::text AS manager_id,
+             (c.owner_id IS NOT NULL AND chat.case_owner_fits(c.owner_id, c.target_department_id, c.teacher_id, c.learner_id)) AS owner_fits
+        FROM chat.supervision_case c JOIN chat.department d ON d.id = c.target_department_id
+       WHERE c.id = ${caseId}::uuid`;
+    if (!c) return;
+    const owner = c.owner_fits ? c.owner_id : null;
+    const by = (payload.openedBy ?? payload.assignedBy ?? null) as string | null;
+    const without = (ids: Array<string | null>) => [...new Set(ids.filter((x): x is string => !!x && x !== by))];
+
+    let told: string[];
+    let signalled: string[];
+    let dedupe: (recipient: string) => string;
+    let ruleKey: 'case_opened' | 'case_assigned' | 'case_due_soon';
+    if (type === CommEvent.CASE_OPENED) {
+      ruleKey = 'case_opened';
+      told = without([owner, c.manager_id]);
+      signalled = told;
+      dedupe = (r) => `case_opened:${caseId}:${r}`;
+    } else if (type === CommEvent.CASE_ASSIGNED) {
+      ruleKey = 'case_assigned';
+      // The owner the event named -- unless the case has since moved on.
+      const named = payload.ownerId as string | null;
+      told = named && named === owner ? without([named]) : [];
+      // Every list that changed, the assigner's included (they may be the previous owner).
+      signalled = [...new Set([owner, payload.previousOwnerId as string | null, c.manager_id].filter((x): x is string => !!x))];
+      dedupe = (r) => `case_assigned:${caseId}:${r}:${String(payload.assignedAt ?? '')}`;
+    } else {
+      if (c.status === 'resolved' || c.status === 'cancelled') return;
+      ruleKey = 'case_due_soon';
+      told = without([owner ?? c.manager_id]);
+      signalled = told;
+      dedupe = (r) => `case_due_soon:${caseId}:${String(payload.dueOn ?? '')}:${r}`;
+    }
+
+    if (signalled.length > 0) await this.realtime.toUsers(signalled, type, payload as never);
+    if (!this.pipeline) return;
+    for (const recipientId of told) {
+      const recipient = await this.identity.resolveActor(recipientId);
+      if (!recipient || !recipient.isActive || recipient.kind !== ActorKind.STAFF) continue;
+      await this.pipeline.emit({
+        dedupeKey: dedupe(recipientId),
+        ruleKey,
+        eventType: ruleKey,
+        templateKey: ruleKey,
+        recipientId,
+        locale: recipient.locale,
+        priority: 'normal',
+        subject: { type: 'supervision_case', id: caseId },
+        refs: { caseId },
+        scheduledAt: new Date(),
+      });
+    }
+  }
+
   private async notifyMention(conversationId: string, payload: Record<string, unknown>): Promise<void> {
     const mentionId = payload.mentionId as string;
     const target = payload.targetActorId as string;
