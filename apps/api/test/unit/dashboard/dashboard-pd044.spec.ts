@@ -10,6 +10,7 @@ import { DashboardController } from '../../../src/dashboard/dashboard.controller
 import { dashboardSection, dashboardTile } from '../../../src/dashboard/dashboard-tile';
 import type { ConversationService } from '@communication/conversations/conversation.service';
 import type { SupervisionCaseService } from '../../../src/cases/supervision-case.service';
+import type { TaskService } from '../../../src/tasks/task.service';
 
 describe('PD-44 dashboard tiles', () => {
   it('a tile is a count, an optional oldest time and a capped flag -- nothing about a person', () => {
@@ -34,7 +35,9 @@ describe('PD-44 DashboardController', () => {
   const caseTiles = [dashboardTile('cases.mine_open', 1), dashboardTile('cases.overdue', 0)];
   const conversations = { dashboardWaiting: jest.fn(async () => waiting) } as unknown as ConversationService;
   const cases = { dashboardCounts: jest.fn(async () => caseTiles) } as unknown as SupervisionCaseService;
-  const controller = new DashboardController(conversations, cases);
+  const taskTiles = [dashboardTile('tasks.mine_open', 1)];
+  const tasks = { dashboardCounts: jest.fn(async () => taskTiles) } as unknown as TaskService;
+  const controller = new DashboardController(conversations, cases, tasks);
 
   it('serves each section from the owning page\'s service, unchanged', async () => {
     const chats = await controller.chats('staff-1');
@@ -43,6 +46,8 @@ describe('PD-44 DashboardController', () => {
     expect(conversations.dashboardWaiting).toHaveBeenCalledWith('staff-1', expect.any(Date));
     expect((await controller.casesSection('staff-1')).tiles).toBe(caseTiles);
     expect(cases.dashboardCounts).toHaveBeenCalledWith('staff-1');
+    expect((await controller.tasksSection('staff-1')).tiles).toBe(taskTiles);
+    expect(tasks.dashboardCounts).toHaveBeenCalledWith('staff-1');
   });
 
   it('each section requires the PD-40 key of the page it links to -- no dashboard key of its own', () => {
@@ -50,5 +55,7 @@ describe('PD-44 DashboardController', () => {
       Reflect.getMetadata(ROUTE_ACCESS, DashboardController.prototype[handler]) as RouteAccess;
     expect(access('chats')).toEqual({ kind: 'requires', anyOf: ['chat.use'] });
     expect(access('casesSection')).toEqual({ kind: 'requires', anyOf: ['cases.view'] });
+    // PD-47: everyone's own tasks are self-service, like the Tasks page itself.
+    expect(access('tasksSection')).toEqual({ kind: 'self' });
   });
 });

@@ -513,6 +513,16 @@ export enum CommErrorCode {
   /** A field failed validation. 400. */
   CASE_INVALID = 'COMM.CASE_INVALID',
 
+  // --- PD-47: tasks ---
+  /** No such task, or not one the caller may see (assignee, responsible manager, teacher supervisor, super admin). 404. */
+  TASK_NOT_FOUND = 'COMM.TASK_NOT_FOUND',
+  /** The caller may see the task but not do this (only the assignee completes or disputes; only the responsible manager or the super admin decides). 403. */
+  TASK_DENIED = 'COMM.TASK_DENIED',
+  /** The task is closed, or the action is not one of its exits from where it stands. 409. */
+  TASK_STATE = 'COMM.TASK_STATE',
+  /** A field failed validation, or the new assignee is not a live person of the organization. 400. */
+  TASK_INVALID = 'COMM.TASK_INVALID',
+
   // --- PD-35 B6: department rooms ---
   /** Calls are not available in a department room (a later PD-19 decision). 403. */
   CALL_NOT_IN_ROOM = 'COMM.CALL_NOT_IN_ROOM',

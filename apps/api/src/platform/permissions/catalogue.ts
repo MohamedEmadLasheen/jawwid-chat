@@ -152,6 +152,12 @@ const ENTRIES = {
   'teachers.offboard': { label: { en: 'Offboard teachers', ar: 'إنهاء عمل المعلمين' }, risk: 'admin', introducedBy: 'PD-43' },
 
   'feedback.view': { label: { en: 'View parent feedback', ar: 'عرض ملاحظات أولياء الأمور' }, risk: 'family_contact', introducedBy: 'PD-32' },
+
+  // PD-47: tasks. A person's own tasks need no key (self-service); these watch,
+  // give and decide others' (TaskService decides whose, live).
+  'tasks.team': { label: { en: 'See the team\'s tasks', ar: 'عرض مهام الفريق' }, risk: 'pii', introducedBy: 'PD-47' },
+  'tasks.create': { label: { en: 'Give tasks', ar: 'إسناد المهام' }, risk: 'pii', introducedBy: 'PD-47' },
+  'tasks.manage': { label: { en: 'Remove, return and reassign tasks', ar: 'حذف المهام وإعادتها وإعادة إسنادها' }, risk: 'pii', introducedBy: 'PD-47' },
 } as const satisfies Record<string, Entry>;
 
 export type PermissionKey = keyof typeof ENTRIES;

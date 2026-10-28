@@ -153,6 +153,26 @@ const LATER: readonly Later[] = [
     // Safeguard 6: the types are the super admin's alone; no role ever carries them.
     barred: ['certificates.types'],
   },
+  {
+    // PD-47: tasks. Managers watch, give and decide their team's; a teacher
+    // supervisor watches and gives their own teachers' (owner Q3, Q5).
+    migration: '20261029160000_chat_pd047_work_tasks.sql',
+    tag: 'pd047',
+    permissions: ['tasks.team', 'tasks.create', 'tasks.manage'],
+    bundles: [
+      ['manager', 'operations', 'tasks.create'],
+      ['manager', 'operations', 'tasks.manage'],
+      ['manager', 'operations', 'tasks.team'],
+      ['manager', 'sales', 'tasks.create'],
+      ['manager', 'sales', 'tasks.manage'],
+      ['manager', 'sales', 'tasks.team'],
+      ['manager', 'teachers', 'tasks.create'],
+      ['manager', 'teachers', 'tasks.manage'],
+      ['manager', 'teachers', 'tasks.team'],
+      ['supervisor', 'teachers', 'tasks.create'],
+      ['supervisor', 'teachers', 'tasks.team'],
+    ],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));

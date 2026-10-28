@@ -501,6 +501,9 @@ export async function truncate(prisma: PrismaService): Promise<void> {
   try {
     await prisma.$transaction([
       prisma.$executeRawUnsafe(`set local lock_timeout = '60s'`),
+      // PD-47: chat.work_task and its history refuse TRUNCATE; the CASCADE from
+      // chat.staff reaches them, so the harness says it is the harness.
+      prisma.$executeRawUnsafe(`select set_config('chat.test_truncate', 'on', true)`),
       prisma.$executeRawUnsafe(sql),
     ]);
   } catch (e) {
