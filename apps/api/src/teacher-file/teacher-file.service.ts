@@ -12,7 +12,7 @@ import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole }
 import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
 import { decideTeacherOnboarding, type TeacherOnboardingAccess } from '../platform/teacher-onboarding-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
-import { ActorKind, ConversationType } from '../communication/contracts/vocab';
+import { ActorKind, ConversationType, StaffRole } from '../communication/contracts/vocab';
 import { staffComplaintSource } from '../supervision/complaint-source';
 
 /**
@@ -544,22 +544,29 @@ export class TeacherFileService {
    * Teachers manager, the CURRENT supervisor).
    */
   private async signInOf(actor: Actor, teacher: { id: string; accountId: string | null; isActive: boolean; leftAt: Date | null }) {
+    const live = teacher.isActive && teacher.leftAt === null;
     if (!teacher.accountId) {
       // Give sign-in (chat.may_give_teacher_sign_in), for an active teacher only.
-      const live = teacher.isActive && teacher.leftAt === null;
       const [row] = live
         ? await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
             SELECT chat.may_give_teacher_sign_in(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok`
         : [];
-      return { status: 'none', canSendCode: false, canGive: row?.ok === true };
+      return { status: 'none', canSendCode: false, canGive: row?.ok === true, canChange: false };
     }
     const account = await this.prisma.account.findUnique({ where: { id: teacher.accountId }, select: { status: true } });
     const status = account?.status ?? 'none';
-    if (status !== 'provisioned') return { status, canSendCode: false, canGive: false };
-    const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
-      SELECT chat.may_issue_teacher_first_login(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok`;
-    return { status, canSendCode: row?.ok === true, canGive: false };
+    // Change sign-in e-mail (chat.change_teacher_sign_in): once used, the super admin only.
+    if (status === 'active') {
+      return { status, canSendCode: false, canGive: false, canChange: live && actor.staffRole === StaffRole.SUPER_ADMIN };
+    }
+    if (status !== 'provisioned') return { status, canSendCode: false, canGive: false, canChange: false };
+    // While it waits: the reissue rule, for sending a code and for changing the address alike.
+    const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean; change: boolean }>>`
+      SELECT chat.may_issue_teacher_first_login(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok,
+             chat.may_give_teacher_sign_in(${actor.actorId}::uuid, ${teacher.id}::uuid) AS change`;
+    return { status, canSendCode: row?.ok === true, canGive: false, canChange: live && row?.change === true };
   }
+
 
   /** chat.teacher_setup_state for each teacher, with `missing`: how many of its steps are not done. */
   private async setupOf(teacherIds: string[]): Promise<Map<string, TeacherSetup>> {

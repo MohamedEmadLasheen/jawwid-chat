@@ -253,11 +253,12 @@ describe('4. the Teacher File tells the page', () => {
   it('signIn { status, canSendCode, canGive }', async () => {
     const none = await legacyTeacher();
     const file = await http(m.teachersManager.subject, 'GET', `/teacher-files/${none}`);
-    expect(file.json.signIn).toEqual({ status: 'none', canSendCode: false, canGive: true });
+    expect(file.json.signIn).toEqual({ status: 'none', canSendCode: false, canGive: true, canChange: false });
     expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${m.teachers[0]!.id}`)).json.signIn).toEqual({
       status: 'active',
       canSendCode: false,
       canGive: false,
+      canChange: false,
     });
     // A supervisor gives a login only to their CURRENT teacher, strict scope on or off.
     expect((await http(m.teacherSupervisors[0]!.subject, 'GET', `/teacher-files/${none}`)).json.signIn.canGive).toBe(false);
