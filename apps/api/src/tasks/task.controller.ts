@@ -43,6 +43,16 @@ export class TaskController {
     return this.tasks.create(actorId, body ?? {});
   }
 
+  /**
+   * ?task=<id>: who the caller may hand that task on to; without it, who they
+   * may give a new task to. { people: [{ kind, id, name }], departments: [{ kind, managerName }] }
+   */
+  @Requires('tasks.create', 'tasks.manage')
+  @Get('tasks/assignees')
+  assignees(@ActorId() actorId: string, @Query() q: Record<string, string | undefined>) {
+    return this.tasks.assignees(actorId, { task: q.task });
+  }
+
   @SelfService()
   @Get('tasks/:id')
   get(@ActorId() actorId: string, @Param('id') id: string) {

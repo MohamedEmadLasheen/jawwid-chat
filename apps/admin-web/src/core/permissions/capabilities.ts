@@ -121,8 +121,9 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates']
   }
   if (role === 'specialist') {
-    // PD-40/PD-41: the Designer -- the Certificates page and nothing else.
-    return ['certificates']
+    // PD-40/PD-41: the Designer -- the Certificates page, and (PD-47) the
+    // tasks given to them, as every staff member has.
+    return ['certificates', 'tasks']
   }
   if (isDepartment(role)) {
     // Departments get tasks — they may not open family records — and, PD-21
@@ -216,9 +217,3 @@ export const managerOnly = {
   viewUnattended: isManager,
 } as const
 
-/** The task scope a role should request from the API. */
-export function taskScopeFor(role: StaffRole): 'mine' | 'team' | 'department' {
-  if (isManager(role) || isSuperAdmin(role)) return 'team'
-  if (isDepartment(role)) return 'department'
-  return 'mine'
-}
