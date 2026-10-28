@@ -26,6 +26,7 @@ import { PlatformModule } from '@platform/platform.module';
 import { AuthModule } from '@platform/auth/auth.module';
 import { hashPassword } from '@platform/auth/password';
 import { CommErrorCode } from '@platform/errors';
+import { ACCESS_ROLE_TEMPLATES } from '@platform/permissions/role-templates';
 import { CommunicationModule } from '@communication/communication.module';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
@@ -123,7 +124,8 @@ beforeAll(async () => {
   m = await seedOrgChat(g.prisma, { organizationId: orgId, emailDomain: DOMAIN, password: PASSWORD, passwordHash: await hashPassword(PASSWORD), messages: false });
   // PD-40 PR-4: the migration seeded the organizations that existed then; this one is new.
   const seeded = await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.seed_access_role_templates(${orgId}::uuid) AS n`;
-  expect(seeded[0]!.n).toBe(1);
+  // Every template there is (PD-49 added scholar_reviewer beside the designer).
+  expect(seeded[0]!.n).toBe(ACCESS_ROLE_TEMPLATES.length);
 
   process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({
@@ -277,7 +279,8 @@ describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
       SELECT id::text AS id, is_template FROM chat.access_role WHERE organization_id = ${otherOrg.ownDesignerOrg}::uuid AND key = 'designer'`;
     expect(rows).toEqual([{ id: otherOrg.ownDesigner, is_template: false }]);
     const again = await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT chat.seed_access_role_templates(${otherOrg.ownDesignerOrg}::uuid) AS n`;
-    expect(again[0]!.n).toBe(0);
+    // The designer is skipped; every other template is added.
+    expect(again[0]!.n).toBe(ACCESS_ROLE_TEMPLATES.length - 1);
     const trail = await g.prisma.auditLog.findMany({ where: { action: 'access_role.template_skipped', entityId: otherOrg.ownDesigner } });
     expect(trail.length).toBeGreaterThanOrEqual(1);
     expect(trail[0]).toMatchObject({ actorId: null, after: { key: 'designer', existingRoleId: otherOrg.ownDesigner } });
