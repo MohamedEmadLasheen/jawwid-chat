@@ -46,6 +46,16 @@ export function useFamilyOwnership(familyId: string | undefined) {
   })
 }
 
+/** S4: the family's history on the Parent Profile (a refusal hides it). */
+export function useFamilyHistory(familyId: string | undefined) {
+  return useQuery({
+    queryKey: intakeKeys.history(familyId ?? ''),
+    queryFn: () => intakeApi.history(familyId as string),
+    enabled: !!familyId,
+    retry: refusedOnce,
+  })
+}
+
 export function useCarriedOver(learnerId: string) {
   return useQuery({ queryKey: intakeKeys.carriedOver(learnerId), queryFn: () => intakeApi.carriedOver(learnerId), enabled: !!learnerId, retry: refusedOnce })
 }

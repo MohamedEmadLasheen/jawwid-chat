@@ -125,7 +125,11 @@ beforeEach(async () => {
   // This spec builds its own world rather than using harness seed(): the
   // predicate needs shapes the shared fixture has no reason to carry (a second
   // organization, a contact without can_message, an offboarded teacher).
-  await g.prisma.$executeRawUnsafe(`
+  // PD-47: the CASCADE from chat.staff reaches chat.work_task, which refuses
+  // TRUNCATE unless the transaction says it is a test's cleanup.
+  await g.prisma.$transaction([
+    g.prisma.$executeRawUnsafe(`select set_config('chat.test_truncate', 'on', true)`),
+    g.prisma.$executeRawUnsafe(`
     truncate chat.message_receipt, chat.message_reaction, chat.message_attachment,
              chat.message_hidden_for, chat.message_approval, chat.call_participant,
              chat.call, chat.notification, chat.outbox_event,
@@ -133,7 +137,8 @@ beforeEach(async () => {
              chat.message, chat.conversation, chat.learner,
              chat.contact, chat.family, chat.staff, chat.teacher,
              chat.event_log, chat.audit_log
-    restart identity cascade`);
+    restart identity cascade`),
+  ]);
 
   w = {
     adminA: randomUUID(),

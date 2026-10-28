@@ -3546,6 +3546,57 @@ Mentioned row, Join / Step in / Not for me banner, Group Info rows; app @ picker
 
 ---
 
+### PD-42 · Entering families by hand (the intake from Jawwid Core), without a trial
+
+**Closed 2026-10-28** by the product owner. The original request (2026-10-27): "We need a way to add parents and students to the system without going through the trial lesson process, since not all students attend trial lessons." The design questions Q1–Q5 were answered "Approve all 5 recommendations", with five safeguards. F4 was answered "Allow, tightly limited", recorded as `PD-30-amendment-carried-over`. Plan: `pd042-direct-enrolment-plan.md`.
+
+**Decision.** Sales supervisors and Operations supervisors enter the families they already handle in Jawwid Core, by hand, in Chat. Nothing in Core is read or changed (D6).
+
+- **Who enters:**
+  - an **Operations supervisor**, for children placed on themself;
+  - a **Sales member**, for a family they own;
+  - the Operations manager, the Sales manager or the super admin, **for** one of their department's supervisors (D5). The supervisor owns the family. The manager is recorded as the one who entered it, and never owns it themself.
+- **Required fields:** the parent's name, a phone or an e-mail, and each child's name.
+- **The child's current package:** total, completed and plan length, exactly as typed. The remaining lessons are computed, never stored, and no payment is created.
+- **"Add child":** adds a child to a family the caller owns. If the family has a live group, the child joins it.
+- **The trial sibling:** Assign on a trial whose parent is already in Chat answers `PARENT_EXISTS` naming the family. Assigning with that family adds the children there.
+- **A Sales-entered family:** it waits for its Operations supervisor. The Operations manager places it, and its Sales owner may suggest a name (D1).
+- **The Sales owner:** set and changed only by the Sales manager or the super admin, with a reason.
+
+**Canonical rule.** One family per parent.
+
+- **Contact keys:** the parent's e-mail and E.164 number are keyed (HMAC, `chat.family_contact_key`) and locked for the transaction. A second family for the same parent is impossible.
+- **Replays:** a replayed intake id writes nothing.
+- **Family history:** who entered each family and child, who owns it, and who placed it are durable columns plus one audit row per act, shown on the Parent Profile's Family history.
+- **Opening the intake:** `/family-intake` is closed (`INTAKE_NOT_READY`) until the contact-key backfill has keyed every existing family.
+
+**The Sales scope (D2).** `SALES_FAMILY_SCOPE=all|own` is written to `chat.config` at boot.
+
+- **`all` (the default):** changes nothing.
+- **`own`:** narrows a Sales member to the families they own, at the API and at the database. The Sales manager keeps every family.
+- **Switching on:** only after the read-only `pd042-ownership-report` is clean, both managers have signed it off, and the owner gives a GO.
+- **PD-42's own actions:** owner-scoped from day one.
+
+**Implementation phase.**
+- PR-1 #194: data.
+- PR-2 #202: intake, the Sales switch and the backfill.
+- PR-3 #214: the Operations side, the group join, the trial sibling and the report.
+- The follow-up: the Family history, the Action log lines and these docs.
+- Migrations: `20261028110000`, `20261028210000`, `20261029120000`.
+
+**Consequences.**
+- **Permission keys:** `subscriptions.carry_over` (new, in the Operations and Sales bundles), and `parents.edit` for the Sales bundles, limited to the families a Sales account owns.
+- **The PD-30 ledger:** gains the `carried_over` source.
+- **PD-16 Assign:** keys its parents.
+
+**Not changed.** The PD-16 trial flow, PD-24's transfer (a later move of an Operations supervisor), and PD-30's lock and grace rules (a carried-over package is counted by them; D3).
+
+**Deferred.** The second guardian (Q4).
+
+**Closed.** 2026-10-28.
+
+---
+
 ### PD-44 · A real manager Dashboard on data the API already computes
 
 **Closed 2026-10-28** by the product owner: "Remove Inbox, rebuild Dashboard",

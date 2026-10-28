@@ -320,7 +320,31 @@ export const T = {
     ar: 'تنتهي كل الجلسات؛ ويسجّل المعلم الدخول من جديد بالبريد الجديد وكلمة المرور نفسها.',
   },
   signInChanged: { en: 'Changed. The teacher signs in with {email} from now on.', ar: 'تم التغيير. يسجّل المعلم الدخول بـ {email} من الآن.' },
+
+  // PD-43: the teacher's and their login's history
+  historyTitle: { en: 'Sign-in and status history', ar: 'سجل الدخول والحالة' },
+  historyEmpty: { en: 'Nothing recorded yet.', ar: 'لا يوجد شيء مسجّل بعد.' },
+  historyByTeacher: { en: 'By the teacher', ar: 'بواسطة المعلم' },
+  historyAutomatic: { en: 'Automatic', ar: 'تلقائي' },
+  historySupervisorChanged: { en: 'Supervisor changed: {from} → {to}', ar: 'تغيير المشرف: {from} ← {to}' },
+  historyNone: { en: 'none', ar: 'لا أحد' },
 } satisfies Record<string, Pair>
+
+/** PD-43: each history action in words; an unknown one is shown as it is. */
+export const HISTORY_ACTION: Record<string, Pair> = {
+  'teacher.created': { en: 'Added', ar: 'أُضيف' },
+  'teacher.sign_in_given': { en: 'Sign-in given', ar: 'مُنح حساب دخول' },
+  'teacher.sign_in_changed': { en: 'Sign-in e-mail changed', ar: 'تغيّر بريد الدخول' },
+  'teacher_supervisor.unassigned': { en: 'Supervisor removed', ar: 'أُزيل المشرف' },
+  'teacher.offboarded': { en: 'Offboarded', ar: 'انتهى عمله' },
+  'teacher.reactivated': { en: 'Reactivated', ar: 'أُعيد تفعيله' },
+  'account.first_login_code_issued': { en: 'First sign-in code sent', ar: 'أُرسل رمز الدخول الأول' },
+  'account.activated': { en: 'Signed in for the first time', ar: 'سجّل الدخول لأول مرة' },
+  'account.password_reset_issued': { en: 'Password reset code sent', ar: 'أُرسل رمز إعادة تعيين كلمة المرور' },
+  'account.password_reset_completed': { en: 'Password reset', ar: 'أُعيد تعيين كلمة المرور' },
+  'account.suspended': { en: 'Sign-in suspended', ar: 'أُوقف الدخول' },
+  'account.reactivated': { en: 'Sign-in reactivated', ar: 'أُعيد تفعيل الدخول' },
+}
 
 const BY_CODE: Record<string, Pair> = {
   'COMM.LESSON_DENIED': {

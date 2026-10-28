@@ -352,3 +352,12 @@ PD-34 notifications, under Tasks, to the Teachers Manager (the super admin when 
 | `teacher_added_unsupervised` | a teacher is added with no supervisor, by anyone but the manager | `TeacherOnboardingService.add` |
 | `teacher_duplicate_hidden` | a sign-in or contact is refused because it is on a teacher out of the adder's reach; the adder's answer is unchanged | the same, after the answer (its timing must not leak) |
 | `teacher_supervisor_left` | a teacher supervisor is deactivated, on any path, while teachers are still assigned to them | `chat.notify_teacher_supervisor_left`, a trigger on `chat.staff` (migration `20261029150000`): SECURITY DEFINER, never blocks the deactivation, one per deactivation |
+
+### Teacher history (PD-43 §4)
+
+**`GET /teachers/:id/history`** (`teacher_files.view`) returns `{ teacherId, events: [{ at, action, actor: {id, name} | null, reason, detail }] }`, newest first (at most 200). It is read exactly as the Teacher File is: the department gate, then the PD-35 scope (404 out of a strict supervisor's scope).
+
+- **The teacher** (`entity 'teacher'`): `teacher.created`, `teacher.sign_in_given`, `teacher.sign_in_changed`, `teacher_supervisor.assigned` / `.unassigned` (`detail.from` / `detail.to` name the supervisors), `teacher.offboarded`, `teacher.reactivated`.
+- **Their login** (`entity 'account'`): `account.first_login_code_issued`, `account.activated`, `account.password_reset_issued`, `account.password_reset_completed`, `account.suspended`, `account.reactivated`. Session bookkeeping is left out.
+- Never a raw before/after: an audit row may hold an e-mail, a phone flag or a code id; the answer holds names only. `actor` is null when no staff member acted (the teacher's own first sign-in reads "By the teacher").
+- The Teacher File shows it as **Sign-in and status history**.

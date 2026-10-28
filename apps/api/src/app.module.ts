@@ -27,6 +27,7 @@ import { CalendarModule } from './calendar/calendar.module';
 import { SupervisionCaseModule } from './cases/supervision-case.module';
 import { ActionLogModule } from './action-log/action-log.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { TaskModule } from './tasks/task.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -85,6 +86,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ActionLogModule,
     // PD-44: the manager Dashboard (counts from each page's own service).
     DashboardModule,
+    // PD-47: tasks -- every person's responsibilities, with the four exits.
+    TaskModule,
   ],
 })
 export class AppModule {}
