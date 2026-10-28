@@ -33,6 +33,10 @@ export interface SweepResult {
   withdrawn: number;
   restored: number;
   rerouted: number;
+  /** PR-2b: financial tasks raised to High by their source (a balance used up). */
+  floored: number;
+  /** PR-2b: financial tasks whose assignee left with nobody live to follow (for the super admin). */
+  orphaned: number;
   failed: number;
   /** Candidates whose raise declined (no assignee, not standing, covered): recorded with a back-off. */
   declined: number;
@@ -337,7 +341,10 @@ export class TaskService {
    * `issues` are what the worker logs.
    */
   async sweep(): Promise<SweepResult> {
-    const total: SweepResult = { skipped: false, raised: 0, settled: 0, withdrawn: 0, restored: 0, rerouted: 0, failed: 0, declined: 0, issues: 0, batches: 0 };
+    const total: SweepResult = {
+      skipped: false, raised: 0, settled: 0, withdrawn: 0, restored: 0, rerouted: 0, floored: 0, orphaned: 0,
+      failed: 0, declined: 0, issues: 0, batches: 0,
+    };
     // PR-2's sources, then PR-2b's financial ones: each sweep its own lock and batches.
     let skipped = 0;
     for (const sweep of [Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`]) {
@@ -349,7 +356,7 @@ export class TaskService {
           break;
         }
         total.batches += 1;
-        for (const k of ['raised', 'settled', 'withdrawn', 'restored', 'rerouted', 'failed', 'declined'] as const) total[k] += Number(r[k] ?? 0);
+        for (const k of ['raised', 'settled', 'withdrawn', 'restored', 'rerouted', 'floored', 'orphaned', 'failed', 'declined'] as const) total[k] += Number(r[k] ?? 0);
         total.issues = Number(r.issues ?? 0);
         if (r.more !== true) break;
       }
@@ -398,7 +405,11 @@ export class TaskService {
     if (!decider && !handsOwn) {
       throw denied('a task is reassigned by the responsible manager, the super admin, or a department manager it was sent to');
     }
-    if (row.source_type && NOT_REASSIGNABLE.has(row.source_type)) {
+    // PR-2b: the super admin hands on a financial task whose assignee left
+    // with nobody live to follow; the sweep moves it to its owner again later.
+    const orphaned = viewer.superAdmin && !!row.source_type && FINANCIAL.has(row.source_type)
+      && !(await this.isLive(viewer.organizationId, assigneeOf(row)));
+    if (row.source_type && NOT_REASSIGNABLE.has(row.source_type) && !orphaned) {
       throw denied(
         row.source_type === 'case'
           ? 'a case\'s task follows its owner: assign the case on its page'
@@ -636,10 +647,14 @@ export class TaskService {
     return { id: actorId, kind: p.kind, organizationId: p.organization_id, superAdmin: p.role === 'super_admin' };
   }
 
-  private async requireLive(org: string, p: Principal) {
+  private async isLive(org: string, p: Principal): Promise<boolean> {
     const [r] = await this.prisma.$queryRaw<Array<{ kind: string | null }>>`
       SELECT chat.task_principal_kind(${p.id}::uuid, ${org}::uuid) AS kind`;
-    if (r?.kind !== p.kind) throw invalid(`${p.kind}: a live person of this organization`);
+    return r?.kind === p.kind;
+  }
+
+  private async requireLive(org: string, p: Principal) {
+    if (!(await this.isLive(org, p))) throw invalid(`${p.kind}: a live person of this organization`);
   }
 
   private async standingTo(viewer: Viewer, p: Principal): Promise<Standing | null> {
@@ -796,11 +811,11 @@ export class TaskService {
                                          FROM chat.family_instalment i JOIN chat.family f ON f.id = i.family_id
                                          LEFT JOIN chat.learner ln ON ln.id = i.learner_id WHERE i.id = t.source_id)
                WHEN 'package_low' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'balance', a.balance)
-                                          FROM chat.learner_subscription s JOIN chat.learner ln ON ln.id = s.learner_id
-                                          LEFT JOIN chat.learner_access a ON a.learner_id = s.learner_id WHERE s.id = t.source_id)
+                                          FROM chat.work_task_package_episode e JOIN chat.learner ln ON ln.id = e.learner_id
+                                          LEFT JOIN chat.learner_access a ON a.learner_id = e.learner_id WHERE e.id = t.source_id)
                WHEN 'renewal_request' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'balance', a.balance)
-                                              FROM chat.learner_subscription s JOIN chat.learner ln ON ln.id = s.learner_id
-                                              LEFT JOIN chat.learner_access a ON a.learner_id = s.learner_id WHERE s.id = t.source_id)
+                                              FROM chat.work_task_package_episode e JOIN chat.learner ln ON ln.id = e.learner_id
+                                              LEFT JOIN chat.learner_access a ON a.learner_id = e.learner_id WHERE e.id = t.source_id)
                WHEN 'receipt_review' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'amountMinor', r.amount_minor, 'currency', r.currency)
                                              FROM chat.payment_receipt r JOIN chat.family f ON f.id = r.family_id WHERE r.id = t.source_id)
                WHEN 'checkout_failed' THEN (SELECT jsonb_build_object('label', q.label, 'amountMinor', q.amount_minor, 'currency', q.currency,
