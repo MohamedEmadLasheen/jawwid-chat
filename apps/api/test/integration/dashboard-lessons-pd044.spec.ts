@@ -119,13 +119,21 @@ async function outcome(lessonId: string, value: string) {
   ]);
 }
 
-/** A late apology waiting for the Teachers department's ruling. */
+/**
+ * A late apology waiting for the Teachers department's ruling, on an absence
+ * (guard_lesson_ruling: only an absence, only from its start to 48 hours on).
+ * Written as data, triggers off for this one statement, so the fixture does
+ * not depend on the hour the suite runs at.
+ */
 async function openRuling(lessonId: string) {
-  await g.prisma.$executeRawUnsafe(
-    `insert into chat.lesson_ruling (organization_id, lesson_id, kind, opened_by_kind, opened_by, reason)
-     values (chat.default_organization_id(), $1::uuid, 'late_apology', 'contact', $2::uuid, 'the family apologised late')`,
-    lessonId, s.parentId,
-  );
+  await g.prisma.$transaction([
+    g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
+    g.prisma.$executeRawUnsafe(
+      `insert into chat.lesson_ruling (organization_id, lesson_id, kind, opened_by_kind, opened_by, reason)
+       values (chat.default_organization_id(), $1::uuid, 'late_apology', 'contact', $2::uuid, 'the family apologised late')`,
+      lessonId, s.parentId,
+    ),
+  ]);
 }
 
 /**
@@ -245,7 +253,7 @@ describe('GET /dashboard/lessons -- today and the outcome queue', () => {
     await outcome(ids.cancelled!, 'admin_cancelled');
     await outcome(ids.apology!, 'student_apology');
     await outcome(ids.paused!, 'suspended');
-    await openRuling(ids.apology!);
+    await openRuling(ids.studentAbsent!);
   });
 
   it('equals the Schedule page and the Needs action queue for every persona', async () => {
@@ -305,8 +313,11 @@ describe('GET /dashboard/lessons -- today and the outcome queue', () => {
   });
 
   it('runs the same number of statements for 9 lessons as for 30 (no N+1)', async () => {
+    // The configuration cache (30 s) is emptied before each run, so both runs read it alike.
+    g.config.invalidate();
     const small = await counted(() => calendar.dashboardCounts(tmgr));
     for (let i = 0; i < 21; i += 1) await lessonToday(s.secondLearnerId, s.newTeacherId, 17 * 60 + i * 20, 15);
+    g.config.invalidate();
     const large = await counted(() => calendar.dashboardCounts(tmgr));
     await expectParity(tmgr, true);
     expect(large.n).toBe(small.n);
