@@ -9,6 +9,7 @@ import { AccountSection, PersonalSection } from './PersonalSection'
 import { ResponsibilitiesSection } from './ResponsibilitiesSection'
 import { WorkloadSection } from './WorkloadSection'
 import { ActivitySection } from './ActivitySection'
+import { ActionLogSection } from './ActionLogSection'
 import { TeamSection } from './TeamSection'
 import { OrganizationPanel } from './OrganizationPanel'
 import { ReportingLineDialog } from './ReportingLineDialog'
@@ -27,6 +28,7 @@ import { PresencePrivacy } from '@/features/chat/PresencePrivacy'
  *   manager      + My team (viewer.team) and the team's profiles via links
  *   super admin  + the organization overview (viewer.organizationOverview)
  *   audit        activity, when access.canReadAudit
+ *   action log   what they did (PD-35 B7), when the server answers it
  *
  * The URL names only WHICH profile to ask for. Whether it can be seen, and
  * what can be changed on it, is the server's decision on every request.
@@ -86,6 +88,8 @@ export function ProfilePage() {
             showDirectReports={profile.role === 'manager' || profile.role === 'super_admin' || profile.workload.directReports > 0}
           />
           {profile.access.canReadAudit && <ActivitySection query={activity} />}
+          {/* PD-35 B7: what they did -- shown when the server lets the viewer read it. */}
+          <ActionLogSection staffId={profile.staffId} />
         </div>
       </div>
 
