@@ -5,6 +5,8 @@ import { renderWithProviders, makeStaff, ROLES } from '@/test/utils'
 import { TeacherProfilesPage } from './TeacherProfilesPage'
 import type { CertificateReviewItem, ReviewCertificate } from '@/core/api/endpoints'
 import { visibleAreas } from '@/core/permissions/capabilities'
+import { AppRoutes } from '@/app/AppRoutes'
+import { destinationsFor, entriesOf } from '@/app/navigation'
 
 /**
  * Teacher CREDENTIAL review.
@@ -104,6 +106,28 @@ describe('navigation', () => {
       const operator = role === 'admin' || role === 'coverage' || role === 'manager' || role === 'super_admin'
       expect(areas.includes('teacher-profiles')).toBe(operator)
     }
+  })
+})
+
+describe('the super admin\'s link', () => {
+  // The server admits the super admin as a reviewer, so the Admin Portal links
+  // the queue under People & teams -- named so it is not mistaken for Teacher
+  // files. Operators keep their own label.
+  it('is "Teacher credentials review" under People & teams, and opens the queue', async () => {
+    const people = destinationsFor('super_admin').find((d) => d.key === 'people')!
+    const entry = entriesOf(people).find((e) => e.path === '/teacher-profiles')
+    expect(entry?.label).toEqual({ text: { en: 'Teacher credentials review', ar: 'مراجعة مؤهلات المعلمين' } })
+    const operatorPeople = destinationsFor('admin').find((d) => d.key === 'people')!
+    expect(entriesOf(operatorPeople).find((e) => e.path === '/teacher-profiles')?.label).toEqual({ message: 'nav.teacher-profiles' })
+
+    routes({})
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/conversations' })
+    const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
+    const group = within(nav).getByRole('group', { name: 'People & teams' })
+    const link = within(group).getByRole('link', { name: 'Teacher credentials review' })
+    expect(link).toHaveAttribute('href', '/teacher-profiles')
+    await userEvent.click(link)
+    expect(await screen.findByText('Ahmed Al-Masri')).toBeInTheDocument()
   })
 })
 
