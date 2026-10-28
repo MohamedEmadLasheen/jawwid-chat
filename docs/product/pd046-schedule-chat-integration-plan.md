@@ -1,7 +1,7 @@
 # PD-46: Schedule ↔ Chat in real time, and the supervisor's Upcoming lessons (plan)
 
-**State:** **DRAFT, plan only.** No code is written. It waits for the owner's answers (§7) and the department head's GO.
-**Claim:** `docs/product/pd-registry/PD-46.md`. **No migration slot is claimed.** PR-1 needs one (§6), and the department head assigns it.
+**State:** **APPROVED.** On 2026-10-28 the owner answered Q1–Q8 "Approve all 8 (Recommended)", relayed verbatim by the department head (§7). No feature code is written. PR-1 waits for the department head's GO (machine load).
+**Claim:** `docs/product/pd-registry/PD-46.md`. **PR-1's migration slot is `20261028240000`**, assigned by the department head and claimed in `docs/product/migration-slots/20261028240000.md`. Later PRs that need DDL (PR-2's card key if it does not land with PR-1, and PR-4) ask for their own slots.
 **Base:** `main` @ `03fd9175`. All paths are relative to the repository root. SQL migrations live in `supabase/migrations/`, abbreviated `mig/`.
 **Frozen:** the call workstreams W1–W8, `lib/core/realtime/realtime_socket.dart` and `lib/core/realtime/call_realtime_client.dart`. Nothing here edits them (§3.6).
 
@@ -244,7 +244,7 @@ lesson.changed {
 
 | PR | Content | Slot |
 |---|---|---|
-| PR-1 | `lesson.revision` + bump trigger + unannounced table; `outbox_event.idempotency_key`; `LessonEvents.record`; `lesson.changed` + `schedule.refreshed` in `events.ts` and the worker's fan-out; integration spec | **one migration slot** (head assigns) |
+| PR-1 | `lesson.revision` + bump trigger + unannounced table; `outbox_event.idempotency_key`; `LessonEvents.record`; `lesson.changed` + `schedule.refreshed` in `events.ts` and the worker's fan-out; integration spec | **`20261028240000`** (assigned) |
 | PR-2 | `LessonWriter` and the move of every §1.1 writer; the `lesson-writer` guard; `message_card.idempotency_key` + keyed `postCard` (same slot if landed together, else a second) | 0–1 |
 | PR-3 | Clients: Admin Web `/schedule` + Chat ticket refresh; Flutter `chat_signal.dart` kind + calendar/ticket invalidation; live card footer | none |
 | PR-4 | Item 5 API: `chat.lesson_watch_mark`, `GET /lessons/upcoming`, mark/unmark, `lessons.watch` key, audit | one slot |
@@ -254,9 +254,15 @@ Each PR: failing tests first, CI G-19 as the integration proof, and no local con
 
 ---
 
-## 7. Questions for the owner (with recommendations)
+## 7. Owner decisions
 
-| # | Question | Recommendation |
+**DECIDED 2026-10-28.** The owner's answer, relayed verbatim by the department head:
+
+> "Approve all 8 (Recommended)"
+
+Every recommendation below is therefore the decision. The table keeps the question for the record.
+
+| # | Question | Decision |
 |---|---|---|
 | Q1 | The window for "upcoming". | **−15 / +10 min**, a config value (`lesson.upcoming_before_minutes` = 15, `lesson.upcoming_after_minutes` = 10). |
 | Q2 | When a lesson changes after its card was posted, should the old card be rewritten? | **No.** A card is history. Add a **live "Now:" footer** and post a new card for the change. |
