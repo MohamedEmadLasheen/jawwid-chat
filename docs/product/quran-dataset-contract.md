@@ -57,6 +57,7 @@ Agreed 2026-10-27 between the PD-29 materials-quality session and the PD-39 sess
   - It is idempotent: the same id with the same fingerprints is skipped, and the same id with different ones fails the deploy.
   - The API has no code path that writes the text.
 - **Any consumer outside the API** that reads `data/quran/` directly (the `apps/lessons` CI build, a JSON snapshot) **must first run `python3 -I scripts/db/load-quran.py --check <id>`**, which checks the SHA-256, digest, counts and Basmala. The build fails on a non-zero exit. It then uses the same split, carrying the dataset id and `fileSha256`.
+  - `apps/lessons` also writes the snapshot's `fileSha256` and every surah's `rangeSha256` into its bundle at build time, and checks the Basmala against `BASMALA_SHA256` in the browser. The CI build is the trust anchor; a snapshot changed on the host after it is refused.
 - `chat.loading_quran` and `chat.ingesting_quran_audio` route writes through their one function. They are **not a security boundary**: anyone who can run SQL as the owner can set them. The boundary is the grants, since no request role can touch these tables.
 
 ## API (read-only, any signed-in account)

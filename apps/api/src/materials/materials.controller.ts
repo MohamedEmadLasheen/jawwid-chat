@@ -100,7 +100,8 @@ export class MaterialsController {
 
   // --- Reading ---
 
-  @Requires('materials.view')
+  // PD-40: the surah list is shared reference data, like /quran/ayahs.
+  @SelfService()
   @Get('materials/quran/surahs')
   surahs() {
     return this.reader.surahs();

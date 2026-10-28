@@ -24,9 +24,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/admin/accounts/:accountId/suspend` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.suspend` |
 | GET | `/api/v1/admin/conversations` | admin.inspect | `admin/admin.controller.ts#AdminController.conversations` |
 | GET | `/api/v1/admin/conversations/:id/messages` | admin.inspect | `admin/admin.controller.ts#AdminController.messages` |
-| GET | `/api/v1/admin/impersonations` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.list` |
+| GET | `/api/v1/admin/impersonations` | self-service | `account-admin/impersonation.controller.ts#ImpersonationController.list` |
 | POST | `/api/v1/admin/impersonations` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.start` |
-| GET | `/api/v1/admin/impersonations/:id/actions` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.actions` |
+| GET | `/api/v1/admin/impersonations/:id/actions` | self-service | `account-admin/impersonation.controller.ts#ImpersonationController.actions` |
 | POST | `/api/v1/admin/impersonations/:id/end` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.end` |
 | POST | `/api/v1/admin/impersonations/:id/token` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.token` |
 | GET | `/api/v1/admin/overview` | admin.inspect | `admin/admin.controller.ts#AdminController.overview` |
@@ -215,7 +215,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/materials/items` | materials.view | `materials/materials.controller.ts#MaterialsController.picker` |
 | POST | `/api/v1/materials/items/:id/open` | materials.view | `materials/materials.controller.ts#MaterialsController.open` |
 | GET | `/api/v1/materials/play/:itemId/:token/*path` | public | `materials/play.controller.ts#MaterialsPlayController.file` |
-| GET | `/api/v1/materials/quran/surahs` | materials.view | `materials/materials.controller.ts#MaterialsController.surahs` |
+| GET | `/api/v1/materials/quran/surahs` | self-service | `materials/materials.controller.ts#MaterialsController.surahs` |
 | POST | `/api/v1/materials/recitations/:surah/open` | materials.view | `materials/materials.controller.ts#MaterialsController.openRecitation` |
 | GET | `/api/v1/me` | self-service | `platform/auth/auth.controller.ts#MeController.me` |
 | DELETE | `/api/v1/me/avatar` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.remove` |
@@ -299,7 +299,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/org/department-members/:staffId/remove` | org.departments | `org/org-structure.controller.ts#OrgStructureController.removeDepartmentMember` |
 | POST | `/api/v1/org/departments` | org.departments | `org/org-structure.controller.ts#OrgStructureController.upsertDepartment` |
 | POST | `/api/v1/org/departments/:departmentId/members` | org.departments | `org/org-structure.controller.ts#OrgStructureController.setDepartmentMember` |
-| GET | `/api/v1/org/group-candidates` | org.view | `org/org-structure.controller.ts#OrgStructureController.groupCandidates` |
+| GET | `/api/v1/org/group-candidates` | chat.manage | `org/org-structure.controller.ts#OrgStructureController.groupCandidates` |
 | GET | `/api/v1/org/learners` | org.view | `org/org-structure.controller.ts#OrgStructureController.learners` |
 | POST | `/api/v1/org/learners/:learnerId/supervisor` | org.manage | `org/org-structure.controller.ts#OrgStructureController.assignSupervisor` |
 | POST | `/api/v1/org/staff/:id/calendar-color` | schedule.manage | `calendar/calendar.controller.ts#CalendarController.setColor` |
@@ -328,8 +328,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/quick-replies` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.createQuickReply` |
 | DELETE | `/api/v1/quick-replies/:id` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.deleteQuickReply` |
 | PATCH | `/api/v1/quick-replies/:id` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.updateQuickReply` |
-| GET | `/api/v1/quran/ayahs` | materials.view | `quran/quran.controller.ts#QuranController.ayahs` |
-| GET | `/api/v1/quran/tajweed` | materials.view | `quran/quran.controller.ts#QuranController.tajweed` |
+| GET | `/api/v1/quran/ayahs` | self-service | `quran/quran.controller.ts#QuranController.ayahs` |
+| GET | `/api/v1/quran/tajweed` | self-service | `quran/quran.controller.ts#QuranController.tajweed` |
 | POST | `/api/v1/schedule-change-requests/:id/decide` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.decideChange` |
 | GET | `/api/v1/scheduled-calls` | calls.use | `scheduled-calls/scheduled-call.controller.ts#ScheduledCallController.upcoming` |
 | POST | `/api/v1/scheduled-calls` | calls.use | `scheduled-calls/scheduled-call.controller.ts#ScheduledCallController.create` |
@@ -347,7 +347,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/staff-profiles/:staffId/responsibilities` | staff_profiles.manage | `staff-profile/staff-profile.controller.ts#StaffProfileController.assign` |
 | POST | `/api/v1/staff-profiles/:staffId/responsibilities/:responsibilityId/end` | staff_profiles.manage | `staff-profile/staff-profile.controller.ts#StaffProfileController.end` |
 | GET | `/api/v1/staff-profiles/organization` | staff_profiles.organization | `staff-profile/staff-profile.controller.ts#StaffProfileController.organization` |
-| GET | `/api/v1/staff-profiles/team` | staff_profiles.team | `staff-profile/staff-profile.controller.ts#StaffProfileController.team` |
+| GET | `/api/v1/staff-profiles/team` | self-service | `staff-profile/staff-profile.controller.ts#StaffProfileController.team` |
 | GET | `/api/v1/staff/:id/action-log` | self-service | `action-log/action-log.controller.ts#ActionLogController.list` |
 | GET | `/api/v1/stats/me` | self-service | `lessons/stats.controller.ts#StatsController.mine` |
 | GET | `/api/v1/stats/teachers` | reports.view | `lessons/stats.controller.ts#StatsController.teachers` |

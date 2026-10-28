@@ -4,7 +4,7 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { AuthError, AuthErrorCode } from '../platform/auth/auth.errors';
 import type { Actor } from '../platform/types';
 import { ImpersonationService, type AdministratorContext } from './impersonation.service';
-import { Requires } from '../platform/permissions/route-access';
+import { Requires, SelfService } from '../platform/permissions/route-access';
 
 interface AdminRequest {
   actor?: Actor;
@@ -39,14 +39,16 @@ export class ImpersonationController {
   }
 
   /** The record: the super admin's whole organization, anyone else their own. `?accountId=` narrows it. */
-  @Requires('accounts.support_session')
+  // PD-40: the caller's own support sessions (the super admin: all of them),
+  // so self-service. Starting, re-tokening and ending one stay gated.
+  @SelfService()
   @Get()
   list(@CurrentActor() actor: Actor, @Query('accountId') accountId?: string) {
     return this.impersonations.list(actor, { accountId: typeof accountId === 'string' ? accountId : undefined });
   }
 
   /** The trail: every request made in one support session. */
-  @Requires('accounts.support_session')
+  @SelfService()
   @Get(':id/actions')
   actions(@CurrentActor() actor: Actor, @Param('id') id: string) {
     return this.impersonations.actions(actor, id);
