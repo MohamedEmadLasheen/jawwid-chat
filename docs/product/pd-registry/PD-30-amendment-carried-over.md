@@ -3,7 +3,7 @@ pd: PD-30
 kind: amendment
 subject: Supervisors may record a carried-over package from Core (no payment), tightly limited, for PD-42 intake (owner 2026-10-28)
 branch: claude/pd42-direct-enrol-7a765a
-pr: #173
+pr: #173, #194
 state: IN PROGRESS
 ---
 Owner, 2026-10-28, verbatim: "Allow, tightly limited (Recommended)".
