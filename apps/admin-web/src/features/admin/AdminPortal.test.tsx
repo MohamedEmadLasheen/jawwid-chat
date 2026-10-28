@@ -139,11 +139,12 @@ describe('Admin Portal registry and navigation', () => {
     const nav = await screen.findByRole('navigation')
 
     // Five destinations hold all twenty-one sections plus Chat, (PD-21)
-    // Accounts, (PD-29) Materials, (PD-38) the Schedule and (PD-35 B5)
+    // Accounts, (PD-29) Materials, (PD-38) the Schedule, (PD-11 T4, PD-16)
+    // Trials & new students, Teacher credentials review and (PD-35 B5)
     // Escalations. Below desktop width the drawer lists every one of them, none
     // behind a toggle. (The desktop rail's menus are covered in
     // app/Navigation.test.tsx.)
-    expect(within(nav).getAllByRole('link')).toHaveLength(26)
+    expect(within(nav).getAllByRole('link')).toHaveLength(28)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })

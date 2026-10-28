@@ -72,13 +72,15 @@ export function visibleAreas(role: StaffRole): NavArea[] {
   if (isSuperAdmin(role)) {
     // `teachers` stays routable for the super admin; it is offered as the
     // Admin Portal's Reports section rather than as an operator area.
-    // `instalments` and `trials` likewise: offered as Admin Portal sections.
+    // `instalments` likewise: offered as an Admin Portal section.
+    // `trials` (PD-11 T4, PD-16) is offered under People beside the Admin Portal's sections.
     // `chat` is the real conversation workspace: offered beside the read-only
     // Conversations section, so the super admin can reply (PD-8).
     // `calls` stays routable too (a call link lands on /calls/join/:id); the
     // page itself is offered as the Admin Portal's Calls section.
-    // `teacher-profiles` (the teacher certificate review queue) is routable
-    // too: the server admits the super admin as a reviewer.
+    // `teacher-profiles` (the teacher certificate review queue) is offered
+    // under People as Teacher credentials review: the server admits the super
+    // admin as a reviewer.
     // `parents` (PD-17) likewise: offered as the Admin Portal's Parents section.
     // `accounts` (PD-21) is offered beside the read-only Users section.
     // `payments` (PD-27) likewise: offered as the Admin Portal's Payments section.
