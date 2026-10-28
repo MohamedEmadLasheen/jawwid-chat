@@ -57,6 +57,7 @@ export const ROLE_PROFILE_PERMISSIONS: Readonly<Record<StaffRole, readonly Staff
   [StaffRole.FINANCE]: [P.SELF_EDIT],
   [StaffRole.TECHNICAL]: [P.SELF_EDIT],
   [StaffRole.ACADEMIC]: [P.SELF_EDIT],
+  [StaffRole.SPECIALIST]: [P.SELF_EDIT],
   [StaffRole.MANAGER]: [
     P.SELF_EDIT,
     P.TEAM_VIEW,

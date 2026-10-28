@@ -2,7 +2,8 @@
  * PD-40: PermissionGuard, the page and action gate.
  *
  * Checked on real route metadata (the decorators on a test controller) with a
- * stubbed department lookup:
+ * stubbed chat.staff_access_profile -- answered here from the TypeScript
+ * bundles, which pd040-catalogue-seed.spec.ts pins to the SQL ones:
  *   - only staff are checked; parents, teachers and public routes pass;
  *   - a route that declares nothing is refused to staff, in shadow mode too;
  *   - self-service passes without a lookup; a held key passes;
@@ -18,7 +19,8 @@ import { Public } from '@platform/auth/auth.guard';
 import { CommError, CommErrorCode } from '@platform/errors';
 import { NotForStaff, Requires, SelfService } from '@platform/permissions/route-access';
 import { PERMISSION_GUARD_MODE, PermissionGuard, shadowDenials } from '@platform/permissions/permission.guard';
-import type { PrismaService } from '@platform/prisma.service';
+import { NO_ACCESS, type AccessProfile, type PermissionService } from '@platform/permissions/permission.service';
+import { legacyTierOf, permissionsOf, type StaffPlacement } from '@platform/permissions/legacy-bundles';
 import type { Actor } from '@platform/types';
 import { admin, parent, teacher } from '../../support/fixtures';
 
@@ -52,10 +54,28 @@ function context(actor: Actor | undefined, handler: keyof Routes | 'media', cls:
   } as unknown as ExecutionContext;
 }
 
-/** The department lookup: one row, or none. Counts its calls. */
-function departments(rows: Array<{ kind: string; position: string }>) {
+/**
+ * chat.staff_access_profile for an actor placed in `rows[0]` (or nowhere), with
+ * `granted` keys from access roles. Counts its calls.
+ */
+function departments(rows: Array<{ kind: string; position: string }>, granted: string[] = []) {
   const calls = { n: 0 };
-  const prisma = { $queryRaw: async () => (calls.n++, rows) } as unknown as PrismaService;
+  const placement: StaffPlacement = rows[0]
+    ? { kind: rows[0].kind as StaffPlacement['kind'], position: rows[0].position as StaffPlacement['position'] }
+    : { kind: null, position: null };
+  const prisma = {
+    profileOf: async (actor: Actor): Promise<AccessProfile> => {
+      calls.n++;
+      if (actor.kind !== 'staff') return NO_ACCESS;
+      const tier = actor.staffRole === 'specialist' ? 'specialist' : legacyTierOf(actor.staffRole);
+      return {
+        tier,
+        departmentKind: placement.kind,
+        placement: placement.position,
+        permissions: new Set([...permissionsOf(actor, placement), ...granted]),
+      };
+    },
+  } as unknown as PermissionService;
   return { prisma, calls };
 }
 
@@ -103,7 +123,7 @@ describe('PD-40: PermissionGuard', () => {
     }
   });
 
-  it('passes self-service without a department lookup', async () => {
+  it('passes self-service without a profile lookup', async () => {
     const { prisma, calls } = departments(TEACHERS_MEMBER);
     const guard = new PermissionGuard(new Reflector(), prisma);
     expect(await guard.canActivate(context(admin(), 'me'))).toBe(true);
@@ -136,6 +156,20 @@ describe('PD-40: PermissionGuard', () => {
     expect(await refusal(guard.canActivate(context(specialist, 'certificates')))).toBe(CommErrorCode.PERMISSION_DENIED);
     expect(await refusal(guard.canActivate(context(specialist, 'teacherOwn')))).toBe(CommErrorCode.PERMISSION_DENIED);
     expect(await guard.canActivate(context(specialist, 'me'))).toBe(true);
+    expect(shadowDenials.size).toBe(0);
+  });
+
+  it('a specialist reaches exactly what its granted roles hold -- the Designer opens certificates, not payments', async () => {
+    const guard = new PermissionGuard(new Reflector(), departments([], ['certificates.view', 'certificates.design']).prisma);
+    const designer = admin('designer-1', 'specialist');
+    expect(await guard.canActivate(context(designer, 'certificates'))).toBe(true);
+    expect(await refusal(guard.canActivate(context(designer, 'payments')))).toBe(CommErrorCode.PERMISSION_DENIED);
+    expect(shadowDenials.size).toBe(0);
+  });
+
+  it('a granted role adds to a legacy bundle: an Operations supervisor given certificates.view opens them', async () => {
+    const guard = new PermissionGuard(new Reflector(), departments([{ kind: 'operations', position: 'member' }], ['certificates.view']).prisma);
+    expect(await guard.canActivate(context(admin(), 'certificates'))).toBe(true);
     expect(shadowDenials.size).toBe(0);
   });
 

@@ -8,7 +8,8 @@
  */
 import { MeController, AuthController } from '@platform/auth/auth.controller';
 import { AuthError, AuthErrorCode } from '@platform/auth/auth.errors';
-import { PERMISSIONS_DEFERRED, toActorDto, toTokenPairDto } from '@platform/auth/auth.dto';
+import { NO_PERMISSIONS, toActorDto, toTokenPairDto } from '@platform/auth/auth.dto';
+import { NO_ACCESS, type AccessProfile, type PermissionService } from '@platform/permissions/permission.service';
 import type { AuthService } from '@platform/auth/auth.service';
 import type { Actor } from '@platform/types';
 import { LoginRateLimiter } from '@platform/auth/login-rate-limit';
@@ -42,11 +43,18 @@ const EXPECTED_KEYS = [
 ].sort();
 
 describe('GET /me', () => {
-  const controller = new MeController();
+  /** PD-40: the profile chat.staff_access_profile would answer -- staff hold keys, nobody else does. */
+  const access = {
+    profileOf: async (actor: Actor): Promise<AccessProfile> =>
+      actor.kind === 'staff'
+        ? { tier: 'manager', departmentKind: 'operations', placement: 'manager', permissions: new Set(['org.view', 'chat.use']) }
+        : NO_ACCESS,
+  } as unknown as PermissionService;
+  const controller = new MeController(access);
 
-  it('returns the actor the guard attached, and nothing else decides it', () => {
+  it('returns the actor the guard attached, and nothing else decides it', async () => {
     const actor = contactActor({ displayName: 'أم أحمد', familyId: 'family-7' });
-    const dto = controller.me({ headers: {}, actor });
+    const dto = await controller.me({ headers: {}, actor });
 
     expect(dto.actorId).toBe(actor.actorId);
     expect(dto.kind).toBe('contact');
@@ -55,38 +63,38 @@ describe('GET /me', () => {
     expect(dto.organizationId).toBe(ORG_A);
   });
 
-  it('is 401 when no actor was attached -- never an anonymous default', () => {
-    expect(() => controller.me({ headers: {} })).toThrow(AuthError);
+  it('is 401 when no actor was attached -- never an anonymous default', async () => {
+    await expect(controller.me({ headers: {} })).rejects.toThrow(AuthError);
     try {
-      controller.me({ headers: {} });
+      await controller.me({ headers: {} });
     } catch (e) {
       expect((e as AuthError).code).toBe(AuthErrorCode.UNAUTHENTICATED);
     }
   });
 
-  it('a staff actor carries its server-asserted role; the client never infers one', () => {
-    const dto = controller.me({ headers: {}, actor: staffActor({ staffRole: 'manager' }) });
+  it('a staff actor carries its server-asserted role; the client never infers one', async () => {
+    const dto = await controller.me({ headers: {}, actor: staffActor({ staffRole: 'manager' }) });
     expect(dto.staffRole).toBe('manager');
     expect(dto.familyId).toBeNull();
     expect(dto.canMessage).toBeNull();
   });
 
-  it('a teacher carries no staffRole -- a teacher is not a staff role', () => {
-    const dto = controller.me({ headers: {}, actor: teacherActor() });
+  it('a teacher carries no staffRole -- a teacher is not a staff role', async () => {
+    const dto = await controller.me({ headers: {}, actor: teacherActor() });
     expect(dto.kind).toBe('teacher');
     expect(dto.staffRole).toBeNull();
   });
 
-  it('permissions is [] -- deferred by decision, not missing by accident', () => {
-    const dto = controller.me({ headers: {}, actor: staffActor({ staffRole: 'manager' }) });
-    expect(dto.permissions).toEqual([]);
-    expect(PERMISSIONS_DEFERRED).toEqual([]);
-    // A manager and a parent get the same empty array: no client-side matrix.
-    expect(controller.me({ headers: {}, actor: contactActor() }).permissions).toEqual([]);
+  it('PD-40: a staff member gets the keys chat.staff_access_profile answers, sorted; a parent gets none', async () => {
+    const dto = await controller.me({ headers: {}, actor: staffActor({ staffRole: 'manager' }) });
+    expect(dto.permissions).toEqual(['chat.use', 'org.view']);
+    expect((await controller.me({ headers: {}, actor: contactActor() })).permissions).toEqual([]);
+    expect((await controller.me({ headers: {}, actor: teacherActor() })).permissions).toEqual([]);
   });
 
-  it('the permissions array is frozen, so a caller cannot grow it in place', () => {
-    expect(Object.isFrozen(PERMISSIONS_DEFERRED)).toBe(true);
+  it('the default permissions array is frozen, so a caller cannot grow it in place', () => {
+    expect(NO_PERMISSIONS).toEqual([]);
+    expect(Object.isFrozen(NO_PERMISSIONS)).toBe(true);
   });
 });
 

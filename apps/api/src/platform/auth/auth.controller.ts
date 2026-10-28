@@ -13,6 +13,7 @@ import {
   type ClientAddressPolicy,
 } from './client-address';
 import { SelfService } from '../permissions/route-access';
+import { PermissionService } from '../permissions/permission.service';
 
 interface LoginBody {
   username?: unknown;
@@ -141,11 +142,15 @@ export class AuthController {
  */
 @Controller('me')
 export class MeController {
+  constructor(private readonly access: PermissionService) {}
+
+  /** PD-40: with the caller's permission keys, so the Admin Web shows only the pages they may open. */
   @SelfService()
   @Get()
-  me(@Req() request: AuthenticatedRequest): ActorDto {
+  async me(@Req() request: AuthenticatedRequest): Promise<ActorDto> {
     if (!request.actor) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
-    return toActorDto(request.actor);
+    const { permissions } = await this.access.profileOf(request.actor);
+    return toActorDto(request.actor, [...permissions].sort());
   }
 }
 
