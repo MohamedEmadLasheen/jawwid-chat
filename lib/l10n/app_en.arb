@@ -2254,6 +2254,8 @@
     "description": "PD-28: shown in the browser instead of starting a recording."
   },
   "materialsTitle": "Materials",
+  "activityLoadFailed": "This lesson couldn't load.",
+  "@activityLoadFailed": {"description": "PD-29: an activity (a lesson page in the app) failed to load -- TLS, the network or a 404 -- instead of a blank page; Try again reloads it."},
   "@materialsTitle": {
     "description": "PD-29: the child's Materials page title."
   },
@@ -2897,5 +2899,11 @@
   "messageInfoNobody": "Nobody",
   "@messageInfoNobody": {"description": "PD-37: an empty Message info section."},
   "messageInfoFailed": "Couldn't load message info",
-  "@messageInfoFailed": {"description": "PD-37: Message info could not be read."}
+  "@messageInfoFailed": {"description": "PD-37: Message info could not be read."},
+  "adminWebOnlyTitle": "This account uses Admin Web",
+  "@adminWebOnlyTitle": {"description": "PD-40: a department specialist without chat access signed in on the app."},
+  "adminWebOnlyBody": "Department staff accounts work in Admin Web, in a browser. Sign in there with the same e-mail and password.",
+  "@adminWebOnlyBody": {"description": "PD-40: why a department specialist cannot use the app, and where to go."},
+  "adminWebOnlyAnotherAccount": "Use another account",
+  "@adminWebOnlyAnotherAccount": {"description": "PD-40: dismisses the Admin Web notice and shows the sign-in form again."}
 }

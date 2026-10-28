@@ -14,6 +14,15 @@ abstract final class AuthFailures {
   /// since the alternative is to guess a role and hand someone a screen.
   static const roleNotSupported = 'auth_role_not_supported';
 
+  /// PD-40 (plan §8): a department `specialist` whose `/me` holds no `chat.use`. It works in
+  /// Admin Web only; every chat request would be refused, so it is told so, by name, instead
+  /// of the generic [roleNotSupported].
+  static const usesAdminWeb = 'auth_uses_admin_web';
+
+  /// A principal this app refuses after a good sign-in -- a session was issued, so it is
+  /// ended on the server before the tokens are forgotten.
+  static bool refusesPrincipal(String? code) => code == roleNotSupported || code == usesAdminWeb;
+
   /// A build with no session registry wired (PD-23's `GET /me/sessions` family). The client
   /// says so rather than fabricating a list of devices.
   static const sessionsNotSupported = 'auth_sessions_not_supported';

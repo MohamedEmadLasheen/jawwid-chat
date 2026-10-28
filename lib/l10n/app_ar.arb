@@ -1474,6 +1474,7 @@
   "webPortalStaffBody": "برجاء استخدام لوحة التحكم (Admin Web)، أو تطبيق جَوِّد على هاتفك.",
   "voiceNoteWebUnavailable": "يمكن تسجيل الرسائل الصوتية من تطبيق الهاتف.",
   "materialsTitle": "المواد التعليمية",
+  "activityLoadFailed": "تعذّر تحميل هذا الدرس.",
   "materialsEntrySubtitle": "المكتبة وتدريب هذا الأسبوع وخريطة الحفظ",
   "materialsTabLibrary": "المكتبة",
   "materialsTabPractice": "تدريب هذا الأسبوع",
@@ -1651,5 +1652,8 @@
   "messageInfoDeliveredTo": "وصلت إلى",
   "messageInfoPending": "لم تصل بعد",
   "messageInfoNobody": "لا أحد",
-  "messageInfoFailed": "تعذّر تحميل معلومات الرسالة"
+  "messageInfoFailed": "تعذّر تحميل معلومات الرسالة",
+  "adminWebOnlyTitle": "هذا الحساب يستخدم لوحة التحكم (Admin Web)",
+  "adminWebOnlyBody": "حسابات موظفي الأقسام تعمل في لوحة التحكم (Admin Web) عبر المتصفح. سجّل الدخول هناك بالبريد الإلكتروني وكلمة المرور نفسيهما.",
+  "adminWebOnlyAnotherAccount": "استخدام حساب آخر"
 }

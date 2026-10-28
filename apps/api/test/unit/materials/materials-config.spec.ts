@@ -63,13 +63,13 @@ describe('PD-29 site paths and the 83-lesson seed', () => {
     expect(parseItemRow({ title_ar: 'x', subject: 'quran', path: '/a', kind: 'video' }).errors.join()).toContain('activity_link');
   });
 
-  it('the shipped manifest: 83 valid rows, ref = path, every age, drafts, Quran rows name their surah', () => {
+  it('the shipped manifest: 159 valid rows (every surah), ref = path, every age, drafts, Quran rows name their surah', () => {
     const csv = readFileSync(join(__dirname, '../../../../../docs/product/pd029-seed/jawwid-lessons-manifest.csv'), 'utf8');
     const rows = parseCsv(csv);
-    expect(rows).toHaveLength(83);
+    expect(rows).toHaveLength(159);
     const parsed = rows.map((r) => parseItemRow(r));
     expect(parsed.flatMap((p) => p.errors)).toEqual([]);
-    expect(new Set(parsed.map((p) => p.fields.externalRef)).size).toBe(83);
+    expect(new Set(parsed.map((p) => p.fields.externalRef)).size).toBe(159);
     for (const { fields } of parsed) {
       expect(fields.externalRef).toBe(fields.sitePath);
       expect(fields.sitePath).toMatch(/^\/lessons\/(quran\/surah|arabic\/lesson|islamic\/lesson)-\d+$/);
@@ -79,7 +79,10 @@ describe('PD-29 site paths and the 83-lesson seed', () => {
       if (fields.subject === 'quran') expect(fields.surah).toBe(Number(fields.sitePath!.split('-').pop()));
     }
     const count = (s: string) => parsed.filter((p) => p.fields.subject === s).length;
-    expect([count('quran'), count('arabic'), count('islamic_studies')]).toEqual([38, 10, 35]);
+    expect([count('quran'), count('arabic'), count('islamic_studies')]).toEqual([114, 10, 35]);
+    // Every surah, once each: 1 to 114.
+    const surahs = parsed.filter((p) => p.fields.subject === 'quran').map((p) => p.fields.surah).sort((a, b) => (a ?? 0) - (b ?? 0));
+    expect(surahs).toEqual(Array.from({ length: 114 }, (_, i) => i + 1));
     // No base URL is written into the seed: the site is configuration.
     expect(csv).not.toMatch(/https?:\/\//);
   });

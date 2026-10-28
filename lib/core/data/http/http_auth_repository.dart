@@ -259,6 +259,13 @@ class HttpAuthRepository implements AuthRepository {
     final displayName = actor['displayName'];
     final locale = actor['locale'];
 
+    if (usesAdminWebOnly(actor)) {
+      throw const AppError(
+        AppErrorKind.forbidden,
+        code: AuthFailures.usesAdminWeb,
+        debugDetail: 'a specialist without chat.use works in Admin Web',
+      );
+    }
     final role = roleFor(actor['kind'], staffRole: actor['staffRole'], salesDepartment: salesDepartment);
     return AuthUser(
       id: id,
@@ -267,6 +274,16 @@ class HttpAuthRepository implements AuthRepository {
       locale: locale is String && locale.isNotEmpty ? locale : null,
       isSuperAdmin: role == UserRole.sales && actor['staffRole'] == superAdminStaffRole,
     );
+  }
+
+  /// PD-40 (plan §8): a staff `specialist` whose `/me` `permissions` lack `chat.use`. Such an
+  /// account has no conversations to open here; it belongs in Admin Web, and is told so.
+  /// `permissions` is optional on the wire: missing, or not a list, means no keys.
+  static bool usesAdminWebOnly(Map<String, Object?> actor) {
+    if (actor['kind'] != Wire.actorStaff || actor['staffRole'] != specialistStaffRole) return false;
+    final permissions = actor['permissions'];
+    final keys = permissions is List ? permissions.whereType<String>() : const <String>[];
+    return !keys.contains(chatUsePermission);
   }
 
   /// `ActorDto.kind` -> [UserRole].
@@ -305,3 +322,9 @@ const salesStaffRoles = {'admin', 'coverage', 'manager'};
 
 /// PD-20 amendment: the organization's super admin uses the app with the Sales tabs.
 const superAdminStaffRole = 'super_admin';
+
+/// PD-40: a department account with no implicit powers -- only what its access roles open.
+const specialistStaffRole = 'specialist';
+
+/// PD-40: the permission key that opens the chat app (and its socket) to a staff account.
+const chatUsePermission = 'chat.use';

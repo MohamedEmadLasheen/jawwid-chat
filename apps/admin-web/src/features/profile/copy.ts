@@ -231,10 +231,13 @@ export const T = {
   qaUsers: { en: 'All accounts (read-only)', ar: 'جميع الحسابات (قراءة فقط)' },
   qaDirectory: { en: 'Edit staff profiles and responsibilities', ar: 'تعديل ملفات الموظفين ومسؤولياتهم' },
   qaHealth: { en: 'Fix unassigned and incomplete profiles', ar: 'معالجة الملفات غير المسندة وغير المكتملة' },
+  // PD-40 PR-5b: the Accounts page's Staff accounts and Roles tabs.
   qaPermissions: {
-    en: 'Roles and permissions: no management screen exists yet. The super admin role is granted only by the bootstrap procedure.',
-    ar: 'الأدوار والصلاحيات: لا توجد شاشة إدارة بعد. يُمنح دور المدير العام فقط عبر إجراء التهيئة.',
+    ar: 'تُدار الأدوار والصلاحيات في صفحة الحسابات، ضمن تبويبي حسابات الموظفين والأدوار. يُمنح دور المدير العام فقط عبر إجراء التهيئة.',
+    en: 'Roles and permissions are managed on the Accounts page, under the Staff accounts and Roles tabs. The super admin role is granted only by the bootstrap procedure.',
   },
+  qaStaffAccounts: { ar: 'حسابات الموظفين', en: 'Staff accounts' },
+  qaRoles: { ar: 'الأدوار', en: 'Roles' },
 
   // Activity
   activity: { en: 'Profile activity', ar: 'نشاط الملف' },
