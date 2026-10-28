@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from '@/core/auth/SessionProvider'
-import { canOpenArea, isDepartment, isSuperAdmin, type NavArea } from '@/core/permissions/capabilities'
+import { canOpenArea, holdsAny, isDepartment, isSuperAdmin, type NavArea } from '@/core/permissions/capabilities'
 import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
@@ -36,6 +36,9 @@ import { CallsPage } from '@/features/calls-page/CallsPage'
 import { JoinLinkPage } from '@/features/calls-page/JoinLinkPage'
 import { TeacherProfilesPage } from '@/features/teacher-profiles/TeacherProfilesPage'
 import { AccountsPage } from '@/features/accounts/AccountsPage'
+import { StaffAccountsPage } from '@/features/staff-accounts/StaffAccountsPage'
+import { RolesPage } from '@/features/staff-accounts/RolesPage'
+import { ROLE_PAGE_KEYS, STAFF_ACCOUNT_KEYS } from '@/features/staff-accounts/AccountsTabs'
 import { SupportSessionPage } from '@/features/support/SupportSessionPage'
 import { DevicesPage } from '@/features/devices/DevicesPage'
 import { NotificationsPage } from '@/features/notification-center/NotificationsPage'
@@ -52,6 +55,16 @@ function Area({ area, children }: { area: NavArea; children: ReactElement }) {
   const { staff } = useSession()
   if (!staff) return null
   return canOpenArea(staff.role, area) ? children : <ForbiddenPage />
+}
+
+/**
+ * PD-40: a page that belongs to a permission, not a role -- open when GET /me
+ * reports one of `any`. Same rule as Area: UX, not security.
+ */
+function RequirePermission({ any, children }: { any: readonly string[]; children: ReactElement }) {
+  const { staff } = useSession()
+  if (!staff) return null
+  return holdsAny(staff, any) ? children : <ForbiddenPage />
 }
 
 /** The Admin Portal sections. Same rule as Area: UX, not security -- every
@@ -146,6 +159,15 @@ export function AppRoutes() {
         />
         {/* PD-21: account administration -- every staff role; the server decides each account and action. */}
         <Route path="/accounts" element={<Area area="accounts"><AccountsPage /></Area>} />
+        {/* PD-40: tabs of the Accounts page, each for the permission keys /me reports; the server decides every request. */}
+        <Route
+          path="/accounts/staff"
+          element={<Area area="accounts"><RequirePermission any={STAFF_ACCOUNT_KEYS}><StaffAccountsPage /></RequirePermission></Area>}
+        />
+        <Route
+          path="/accounts/roles"
+          element={<Area area="accounts"><RequirePermission any={ROLE_PAGE_KEYS}><RolesPage /></RequirePermission></Area>}
+        />
         {/* PD-21: a support session (acting as a parent or teacher); the token lives in memory only. */}
         <Route path="/support/:impersonationId" element={<Area area="accounts"><SupportSessionPage /></Area>} />
         {/*

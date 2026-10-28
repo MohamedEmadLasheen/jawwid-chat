@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canOpenArea,
+  holdsAny,
   isDepartment,
   isManager,
   isSuperAdmin,
@@ -126,5 +127,26 @@ describe('navigation lists what a role may open', () => {
       }
     }
     expect(navAreas('finance', { sales: true })).not.toContain('trials')
+  })
+})
+
+/** PD-40 PR-5: the smallest key gate -- the keys /me reports; UX only. */
+describe('permission keys → pages', () => {
+  const staff = (role: 'manager' | 'super_admin' | 'specialist', permissions?: string[]) => ({ role, ...(permissions ? { permissions } : {}) })
+
+  it('opens a page only for a held key', () => {
+    expect(holdsAny(staff('manager', ['staff_accounts.view']), ['staff_accounts.view'])).toBe(true)
+    expect(holdsAny(staff('manager', ['org.view']), ['staff_accounts.view', 'access_roles.manage'])).toBe(false)
+    expect(holdsAny(staff('manager', ['access_roles.manage']), ['staff_accounts.view', 'access_roles.manage'])).toBe(true)
+  })
+
+  it('fails closed when /me sent no keys, except for the super admin, who holds every key', () => {
+    expect(holdsAny(staff('manager'), ['staff_accounts.view'])).toBe(false)
+    expect(holdsAny(staff('super_admin'), ['access_roles.manage'])).toBe(true)
+    expect(holdsAny(null, ['staff_accounts.view'])).toBe(false)
+  })
+
+  it("gives a specialist PD-41's Certificates area only -- never Accounts, so no staff-account tabs", () => {
+    expect(visibleAreas('specialist')).toEqual(['certificates'])
   })
 })

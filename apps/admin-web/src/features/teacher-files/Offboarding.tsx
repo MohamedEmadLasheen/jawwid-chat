@@ -7,7 +7,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { QueryBoundary } from '@/shared/components/States'
 import type { Reactivated } from './api'
 import { T, describeError, useCopy } from './copy'
-import { Field } from './TeacherFileDialogs'
+import { Field } from '@/shared/components/Field'
 import { FirstLoginCodeDialog } from './AddTeacherDialog'
 import { useOffboard, useOffboardPreview, useReactivate } from './hooks'
 

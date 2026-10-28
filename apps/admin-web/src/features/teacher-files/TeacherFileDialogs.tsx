@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Field } from '@/shared/components/Field'
 import type { NewEntry, TeacherFile } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
@@ -24,60 +25,6 @@ function ServerError({ error }: { error: unknown }) {
   return (
     <div className="banner banner--danger" role="alert">
       {describeError(error, locale)}
-    </div>
-  )
-}
-
-export function Field({
-  label,
-  value,
-  onChange,
-  type = 'text',
-  multiline = false,
-  error,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  type?: 'text' | 'tel' | 'email' | 'date' | 'month' | 'number'
-  multiline?: boolean
-  error?: string | null
-}) {
-  const id = useId()
-  return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      {multiline ? (
-        <textarea
-          id={id}
-          className="input tf-textarea"
-          value={value}
-          dir="auto"
-          rows={4}
-          maxLength={4000}
-          onChange={(e) => onChange(e.target.value)}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-err` : undefined}
-        />
-      ) : (
-        <input
-          id={id}
-          className="input"
-          type={type}
-          value={value}
-          dir={type === 'text' ? 'auto' : 'ltr'}
-          onChange={(e) => onChange(e.target.value)}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-err` : undefined}
-        />
-      )}
-      {error && (
-        <span id={`${id}-err`} className="field__error">
-          {error}
-        </span>
-      )}
     </div>
   )
 }
