@@ -15,6 +15,7 @@ import { LessonService, type Tx } from '../lessons/lesson.service';
 import { ParentFeedbackService } from '../teacher-file/parent-feedback.service';
 import { DepartmentRoomService, type RoomChange } from '../org/department-room.service';
 import { CardPoster } from '../supervision/card-poster';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 
 export const CASE_SUBJECTS = ['teacher', 'lesson', 'learner', 'complaint', 'feedback'] as const;
 export type CaseSubjectKind = (typeof CASE_SUBJECTS)[number];
@@ -191,6 +192,53 @@ export class SupervisionCaseService {
       ? (await Promise.all(rows.map(async (r) => ((await this.canSee(actor, r)) ? r : null)))).filter((r): r is Row => r !== null)
       : rows;
     return { cases: shown.map((r) => this.summary(r)) };
+  }
+
+  /**
+   * PD-44: the Dashboard's case tiles -- `list`'s own tab predicates, counted,
+   * open cases only (open, in_progress):
+   *
+   *   cases.mine_open        the `mine` tab: owned by the caller while chat.case_owner_fits
+   *   cases.department_open  the `department` tab: the departments the caller manages
+   *                          (the super admin: every case). Absent for anyone who
+   *                          manages no department -- that tab is always empty for them.
+   *   cases.overdue          of those two tabs together, the ones whose due date
+   *                          (chat.academy_today, as the due-soon sweep reads it) has passed
+   *
+   * The `opened` tab is not counted: its per-row canSee cannot be bounded.
+   * One statement whatever the number of cases; the counts are exact (the
+   * list stops at 200).
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.requireStaff(actorId);
+    const me = actor.actorId;
+    const superAdmin = actor.staffRole === StaffRole.SUPER_ADMIN;
+    const [r] = await this.prisma.$queryRaw<
+      Array<{ manages: boolean; mine: number; mine_oldest: Date | null; dept: number; dept_oldest: Date | null; overdue: number }>
+    >`
+      SELECT (${superAdmin}::boolean OR EXISTS (SELECT 1 FROM chat.department d2 WHERE d2.manager_id = ${me}::uuid)) AS manages,
+             count(*) FILTER (WHERE x.mine)::int AS mine,
+             min(x.created_at) FILTER (WHERE x.mine) AS mine_oldest,
+             count(*) FILTER (WHERE x.dept)::int AS dept,
+             min(x.created_at) FILTER (WHERE x.dept) AS dept_oldest,
+             count(*) FILTER (WHERE x.due_on < chat.academy_today())::int AS overdue
+        FROM (
+          SELECT c.created_at, c.due_on,
+                 CASE WHEN c.owner_id = ${me}::uuid
+                      THEN chat.case_owner_fits(c.owner_id, c.target_department_id, c.teacher_id, c.learner_id)
+                      ELSE false END AS mine,
+                 (${superAdmin}::boolean OR d.manager_id = ${me}::uuid) AS dept
+            FROM chat.supervision_case c
+            JOIN chat.department d ON d.id = c.target_department_id
+           WHERE c.organization_id = ${actor.organizationId}::uuid
+             AND c.status IN ('open', 'in_progress')
+             AND (c.owner_id = ${me}::uuid OR ${superAdmin}::boolean OR d.manager_id = ${me}::uuid)
+        ) x
+       WHERE x.mine OR x.dept`;
+    const tiles = [dashboardTile('cases.mine_open', r?.mine ?? 0, r?.mine_oldest ?? null)];
+    if (r?.manages) tiles.push(dashboardTile('cases.department_open', r.dept, r.dept_oldest));
+    tiles.push(dashboardTile('cases.overdue', r?.overdue ?? 0));
+    return tiles;
   }
 
   async get(actorId: string, caseId: string) {
