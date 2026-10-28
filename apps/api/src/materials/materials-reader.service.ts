@@ -21,6 +21,8 @@ import { academyWeekStart } from './week';
 import { ACADEMY_ZONE, canonicalZone } from '../platform/time-zone';
 import { linkPresentation, readMaterialsConfig, type MaterialsConfig } from './materials-config';
 import { AGE_GROUPS, MARK_STATUSES, SUBJECTS, ageGroupOf, type AgeGroup } from './vocab';
+import { RECITATION_HOSTS, recitationHostOf, type RecitationHost } from './recitation-hosts';
+import { audioAllowed, readAudioGate } from '../quran/audio-gate';
 
 /** How long a signed storage URL for a file (audio, video, PDF, image) lives. */
 export const FILE_URL_TTL_SECONDS = 60 * 60;
@@ -75,6 +77,7 @@ export class MaterialsReaderService {
     private readonly admin: MaterialsAdminService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Inject(RECITATION_HOSTS) private readonly recitationHosts: readonly RecitationHost[],
   ) {}
 
   surahs() {
@@ -136,7 +139,7 @@ export class MaterialsReaderService {
    * is never empty only because a week passed.
    */
   async practice(actorId: string, learnerId: string) {
-    const { learner } = await this.child(actorId, learnerId, 'read_materials');
+    const { actor, learner } = await this.child(actorId, learnerId, 'read_materials');
     const since = new Date(Date.now() - PRACTICE_WINDOW_DAYS * 24 * 3_600_000);
     const select = { lessonId: true, submittedAt: true, lessonNumber: true, nextTasks: true, homework: true } as const;
     let reports = await this.prisma.lessonReport.findMany({
@@ -165,7 +168,7 @@ export class MaterialsReaderService {
     const itemIds = [...new Set(rows.flatMap((r) => (r.itemId ? [r.itemId] : [])))];
     const items = itemIds.length ? await this.prisma.materialItem.findMany({ where: { id: { in: itemIds } } }) : [];
     const itemById = new Map(items.map((i) => [i.id, i]));
-    const recited = await this.recitedSurahs(learner.organizationId);
+    const recited = await this.recitedSurahs(learner.organizationId, actor);
     return {
       child: { id: learner.id, name: learner.name },
       current,
@@ -292,6 +295,12 @@ export class MaterialsReaderService {
   }
 
   /** A surah's recitation from the organization's default source: its own track, or the source's template. */
+  /**
+   * One surah's recitation from the organization's default source -- only
+   * through the release gate (quran/audio-gate.ts): an external URL must be on
+   * a host allowed in code (recitation-hosts.ts), and with no recorded licence
+   * (an uploaded file has none) only the testers may open it, never a family.
+   */
   async openRecitation(actorId: string, surahParam: string) {
     const actor = await this.conversations.requireActor(actorId);
     if (!actor.isActive || !actor.organizationId) throw notFound('recitation');
@@ -301,10 +310,15 @@ export class MaterialsReaderService {
     const source = await this.prisma.recitationSource.findFirst({ where: { organizationId: actor.organizationId, isDefault: true, isActive: true } });
     if (!source) throw notFound('recitation');
     const track = await this.prisma.recitationTrack.findUnique({ where: { sourceId_surah: { sourceId: source.id, surah: surah.number } } });
+    const gate = await readAudioGate(this.prisma);
     let url: string | null = null;
-    if (track?.url) url = track.url;
-    else if (track?.objectKey) url = await this.storage.signedReadUrl(track.objectKey, FILE_URL_TTL_SECONDS);
-    else if (source.urlTemplate) url = renderTemplate(source.urlTemplate, surah.number);
+    if (track?.url || (!track?.objectKey && source.urlTemplate)) {
+      const external = track?.url ?? renderTemplate(source.urlTemplate!, surah.number);
+      const host = recitationHostOf(this.recitationHosts, external);
+      if (host && audioAllowed(gate, host.licence, actor)) url = external;
+    } else if (track?.objectKey && audioAllowed(gate, null, actor)) {
+      url = await this.storage.signedReadUrl(track.objectKey, FILE_URL_TTL_SECONDS, { cacheControl: 'private, no-store' });
+    }
     if (!url) throw notFound('recitation');
     return { surah: surah.number, source: { name: source.name }, url };
   }
@@ -329,15 +343,26 @@ export class MaterialsReaderService {
     return e?.birthDate ? ageOn(e.birthDate, now) : e?.statedAge && e.statedAgeOn ? e.statedAge + ageOn(e.statedAgeOn, now) : null;
   }
 
-  /** Which surahs the organization's default recitation source covers. */
-  private async recitedSurahs(organizationId: string): Promise<(surah: number) => boolean> {
+  /** Which surahs THIS viewer could open a recitation for (the same rules as openRecitation). */
+  private async recitedSurahs(organizationId: string, actor: Actor): Promise<(surah: number) => boolean> {
     const source = await this.prisma.recitationSource.findFirst({ where: { organizationId, isDefault: true, isActive: true } });
     if (!source) return () => false;
-    if (source.urlTemplate) return () => true;
-    const tracks = await this.prisma.recitationTrack.findMany({ where: { sourceId: source.id }, select: { surah: true } });
-    const set = new Set(tracks.map((t) => t.surah));
-    return (n) => set.has(n);
+    const gate = await readAudioGate(this.prisma);
+    const external = (url: string) => {
+      const host = recitationHostOf(this.recitationHosts, url);
+      return !!host && audioAllowed(gate, host.licence, actor);
+    };
+    const uploaded = audioAllowed(gate, null, actor);
+    const tracks = await this.prisma.recitationTrack.findMany({ where: { sourceId: source.id }, select: { surah: true, url: true, objectKey: true } });
+    const bySurah = new Map(tracks.map((t) => [t.surah, t]));
+    return (n) => {
+      const t = bySurah.get(n);
+      if (t?.url) return external(t.url);
+      if (t?.objectKey) return uploaded;
+      return !!source.urlTemplate && external(renderTemplate(source.urlTemplate, n));
+    };
   }
+
 
   private async write<T>(fn: () => Promise<T>): Promise<T> {
     try {
