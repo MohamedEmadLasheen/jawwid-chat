@@ -146,9 +146,43 @@ export type NewEntry =
   | { kind: 'day_off'; body: string; dayOffOn: string }
   | { kind: 'day_off_cancellation'; body: string; refersTo: string }
 
+/** PD-43: what GET /teacher-files says about adding a teacher. Optional: older servers omit it. */
+export interface TeacherOnboardingOffer {
+  canAdd: boolean
+  /** 'any' = the Teachers manager and the super admin pick any primary supervisor, or none; 'self_or_none' = a teacher supervisor. */
+  supervisorChoice: 'any' | 'self_or_none' | null
+  supervisors: Person[]
+  selfId: string
+}
+
+/** PD-43: POST /teachers. `supervisorId` is a staff id, 'self' (a teacher supervisor) or null. */
+export interface NewTeacher {
+  id: string
+  name: string
+  email: string
+  phone?: string
+  joinedOn?: string
+  supervisorId: string | null
+}
+
+export interface FirstLogin {
+  code: string
+  expiresAt: string
+  emailed: boolean
+}
+
+export interface AddedTeacher {
+  teacher: { id: string; name: string; supervisorId: string | null }
+  signIn: string
+  firstLogin: FirstLogin
+}
+
 export const teacherFileApi = {
   list: () =>
-    api.get<{ access: TeacherFileAccessFlags; teachers: TeacherSummary[]; supervisors?: Person[] }>('/teacher-files'),
+    api.get<{ access: TeacherFileAccessFlags; teachers: TeacherSummary[]; supervisors?: Person[]; onboarding?: TeacherOnboardingOffer }>(
+      '/teacher-files',
+    ),
+  addTeacher: (body: NewTeacher) => api.post<AddedTeacher>('/teachers', body),
   detail: (teacherId: string) => api.get<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}`),
   updatePersonal: (teacherId: string, body: PersonalPatch) =>
     api.post<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}/personal`, body),

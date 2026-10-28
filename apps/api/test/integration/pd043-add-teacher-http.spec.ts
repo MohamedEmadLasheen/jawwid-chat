@@ -71,7 +71,7 @@ async function http(subject: string | null, method: string, path: string, body?:
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await r.text();
-  const json = (text ? JSON.parse(text) : {}) as { error?: { code?: string; message?: string } } & Record<string, any>;
+  const json = (text ? JSON.parse(text) : {}) as { error?: { code?: string; message?: string; detail?: Record<string, unknown> } } & Record<string, any>;
   return { status: r.status, code: json.error?.code, json, text, headers: r.headers };
 }
 
@@ -224,7 +224,7 @@ describe('3. gate P2-5: a sign-in already in use', () => {
       // The Teachers manager reaches every teacher: that one is named.
       const named = await add(m.teachersManager.subject, { email: theirs.json.signIn });
       expect([named.status, named.code]).toEqual([409, 'COMM.TEACHER_ALREADY_ADDED']);
-      expect(named.json.error.detail).toEqual({ teacher: { id: theirs.json.teacher.id, name: 'QA Added Teacher' } });
+      expect(named.json.error?.detail).toEqual({ teacher: { id: theirs.json.teacher.id, name: 'QA Added Teacher' } });
     } finally {
       await strict(false);
     }

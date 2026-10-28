@@ -58,6 +58,7 @@ function issuing() {
   const audits: Array<Record<string, unknown>> = [];
   const tx = {
     passwordResetCode: {
+      count: jest.fn(async () => 0),
       findMany: jest.fn(async () => [{ id: OLD_CODE }]),
       updateMany: jest.fn(async () => ({ count: 1 })),
       create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {

@@ -10,6 +10,7 @@ import { TeacherScopeService, pageRowVisible, scopeCovers, type PageScope } from
 import { complaintAbout, familiesOfComplaints, familyOfConversation } from './complaint-family';
 import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
 import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
+import { decideTeacherOnboarding, type TeacherOnboardingAccess } from '../platform/teacher-onboarding-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind, ConversationType } from '../communication/contracts/vocab';
 import { staffComplaintSource } from '../supervision/complaint-source';
@@ -114,6 +115,8 @@ export class TeacherFileService {
       })),
       // PD-26: who may be named as a complaint's handler.
       supervisors: await this.supervisors(org),
+      // PD-43: whether the page offers "Add teacher", and which supervisor the form may name.
+      onboarding: await this.onboardingOffer(actor),
     };
   }
 
@@ -504,6 +507,42 @@ export class TeacherFileService {
       );
     }
     return { actor, access };
+  }
+
+  /**
+   * PD-43: the add-a-teacher decision (decideTeacherOnboarding) for this actor.
+   * Refuses with TEACHER_ONBOARDING_DENIED before anything is looked up.
+   */
+  async onboardingGate(actorId: string, needs: (o: TeacherOnboardingAccess) => boolean = (o) => o.canCreate) {
+    const actor = await this.conversations.requireActor(actorId);
+    const onboarding = decideTeacherOnboarding(actor, await this.teachersDepartmentRole(actor));
+    if (!needs(onboarding)) {
+      throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'only the Teachers department or the super admin adds a teacher');
+    }
+    return { actor, onboarding };
+  }
+
+  /** What GET /teacher-files tells the page about adding a teacher. */
+  private async onboardingOffer(actor: Actor) {
+    const o = decideTeacherOnboarding(actor, await this.teachersDepartmentRole(actor));
+    return {
+      canAdd: o.canCreate,
+      supervisorChoice: o.supervisorChoice,
+      supervisors: o.supervisorChoice === 'any' ? await this.primaryTeacherSupervisors(actor.organizationId as string) : [],
+      selfId: actor.actorId,
+    };
+  }
+
+  /** The live primary supervisors of the Teachers department: who may hold a teacher (PD-35). */
+  private async primaryTeacherSupervisors(organizationId: string) {
+    return this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
+      SELECT s.id::text AS id, s.name
+        FROM chat.department_member m
+        JOIN chat.department d ON d.id = m.department_id AND d.kind = 'teachers'
+        JOIN chat.staff s ON s.id = m.staff_id
+       WHERE d.organization_id = ${organizationId}::uuid AND m.position = 'supervisor'
+         AND s.is_active AND s.left_at IS NULL
+       ORDER BY s.name`;
   }
 
   private async teachersDepartmentRole(actor: Actor): Promise<TeachersDepartmentRole> {
