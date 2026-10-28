@@ -202,7 +202,7 @@ title() {
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
     quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
     pd040-routes)  echo "PD-40 · every API route declares the permission it asks of staff" ;;
-    lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside" ;;
+    lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -377,7 +377,11 @@ gate_lessons_supply_chain() {
   fi
   "$PYTHON" -I scripts/qa/check-lessons-supply-chain.py selftest || return 1
   "$PYTHON" -I scripts/qa/check-lessons-supply-chain.py || return 1
-  "$PYTHON" -I scripts/lessons/test_build_quran_snapshot.py
+  "$PYTHON" -I scripts/lessons/test_build_quran_snapshot.py || return 1
+  # P0-4: each lesson's reviewed content resolves in the verified surah and
+  # carries no typed Quran.
+  "$PYTHON" -I scripts/lessons/check-lesson-content.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/check-lesson-content.py
 }
 
 gate_ci_wiring() {

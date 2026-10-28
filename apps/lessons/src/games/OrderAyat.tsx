@@ -1,11 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Ayah } from '../quran/dataset';
-import { rounds, shuffled } from './shuffle';
-
-/** A fresh seed for each visit, so a child does not learn one fixed order. */
-function visitSeed(): number {
-  return crypto.getRandomValues(new Uint32Array(1))[0]!;
-}
+import { rounds, shuffled, visitSeed } from './shuffle';
 
 /**
  * Put the ayat in order (#16). Each round's order is shuffled ONCE, from the

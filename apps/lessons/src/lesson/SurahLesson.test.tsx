@@ -5,6 +5,12 @@ import { SurahLesson } from './SurahLesson';
 import { App } from '../App';
 import { BASMALA, snapshot } from '../test/fixtures';
 import type { AudioFactory, Playable } from '../audio/audio-controller';
+import { resolveContent, type LessonContent } from '../content/lesson-content';
+import { contentFor } from '../content';
+import { loadSurah, type Fetcher, type QuranAnchor } from '../quran/dataset';
+// The real verified snapshot, built by CI before the tests (scripts/lessons/build-quran-snapshot.py).
+import realManifest from '../../public/data/quran/manifest.json';
+import realSurah from '../../public/data/quran/surah-085.json';
 import type { Ayah } from '../quran/dataset';
 
 describe('a surah lesson', () => {
@@ -61,5 +67,104 @@ describe('routes', () => {
   it('keeps the lessons site\'s paths and refuses anything else', () => {
     render(<App pathname="/lessons/quran/surah-0" />);
     expect(screen.getByRole('alert').textContent).toMatch(/غير موجود/);
+  });
+});
+
+// Stand-in verses (not Quran text) and content for them.
+const TEXTS = ['أحد اثنان ثلاثة', 'أربعة خمسة', 'ستة سبعة ثمانية تسعة'];
+const CONTENT: LessonContent = {
+  surah: 85,
+  datasetId: 'tanzil-uthmani-1.1',
+  review: { status: 'approved', by: 'Teachers department', note: '' },
+  provenance: {},
+  intro: { text: 'مقدمة الدرس', review: null },
+  tafsir: [
+    { ayah: 1, text: 'شرح الأولى', review: null },
+    { ayah: 2, text: 'شرح فيه شك', review: 'unsure' },
+    { ayah: 3, text: null, review: 'missing' },
+  ],
+  words: [{ ayah: 1, word: 3, meaning: 'معنى الكلمة', review: null }],
+  complete: [{ ayah: 1, word: 3 }, { ayah: 2, word: 2 }, { ayah: 3, word: 4 }],
+  quiz: [{ id: 'q1', category: 'hifz', question: 'ما أول آية؟', options: [{ ayah: 1 }, { ayah: 2 }], answer: 0, review: null }],
+  lessons: [{ text: 'درس مستفاد', review: null }],
+  reflection: { question: 'سؤال التأمل', ideas: ['فكرة'], review: null },
+  didYouKnow: [{ text: 'هل تعلم هذا', review: null }],
+};
+
+describe('a lesson with reviewed content', () => {
+  const sections = () => within(screen.getByRole('navigation', { name: 'أقسام الدرس' })).getAllByRole('button').map((b) => b.textContent);
+
+  it('PENDING review shows nothing beyond the verified Quran: no prose, no content sections', async () => {
+    const { fetcher, anchor } = await snapshot(85, 3, { basmala: true, texts: TEXTS });
+    const pending = { ...CONTENT, review: { status: 'pending' as const, by: null, note: '' } };
+    render(<SurahLesson surah={85} fetcher={fetcher} anchor={anchor} content={pending} />);
+    await screen.findByRole('heading', { name: 'سورة البروج' });
+    expect(sections()).toEqual(['الاستماع', 'الآيات', 'رتّب الآيات']);
+    expect(screen.getByText(/محتوى الدرس قيد المراجعة/)).toBeTruthy();
+    expect(screen.queryByText('مقدمة الدرس')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'الآيات' }));
+    fireEvent.click(screen.getAllByRole('listitem')[0]!.querySelector('button')!);
+    expect(screen.queryByTestId('tafsir')).toBeNull();
+    expect(screen.queryByText('شرح الأولى')).toBeNull();
+  });
+
+  it('the real Al-Buruj file resolves on the real verified text, but is pending, so only the Quran is shown', async () => {
+    const fetcher: Fetcher = async (path) =>
+      structuredClone(path.endsWith('manifest.json') ? realManifest : path.endsWith('surah-085.json') ? realSurah : null);
+    const anchor: QuranAnchor = {
+      datasetId: realManifest.datasetId,
+      fileSha256: realManifest.fileSha256,
+      rangeSha256: realManifest.surahs.map((x) => x.rangeSha256),
+    };
+    const s = await loadSurah(85, fetcher, anchor);
+    expect(resolveContent(contentFor(85), s)).toMatchObject({ approved: false, held: 18 });
+    render(<SurahLesson surah={85} fetcher={fetcher} anchor={anchor} />);
+    expect(await screen.findAllByRole('listitem')).toHaveLength(22);
+    expect(sections()).toEqual(['الاستماع', 'الآيات', 'رتّب الآيات']);
+    expect(screen.getByText(/محتوى الدرس قيد المراجعة/)).toBeTruthy();
+  });
+
+  it('APPROVED: adds its sections and its prose, shows the tafsir under the selected ayah, and still never a flagged line', async () => {
+    const { fetcher, anchor } = await snapshot(85, 3, { basmala: true, texts: TEXTS });
+    render(<SurahLesson surah={85} fetcher={fetcher} anchor={anchor} content={CONTENT} shuffleSeed={1} />);
+    await screen.findByRole('heading', { name: 'سورة البروج' });
+    expect(sections()).toEqual(['الاستماع', 'الآيات', 'المعاني', 'أكمل الآية', 'رتّب الآيات', 'الاختبار', 'الفوائد']);
+    expect(screen.getByText('مقدمة الدرس')).toBeTruthy();
+    expect(screen.getByLabelText('النجوم').textContent).toBe('☆'.repeat(7));
+    fireEvent.click(screen.getByRole('button', { name: 'الآيات' }));
+    fireEvent.click(screen.getAllByRole('listitem')[0]!.querySelector('button')!);
+    expect(screen.getByTestId('tafsir').textContent).toBe('شرح الأولى');
+    fireEvent.click(screen.getAllByRole('listitem')[1]!.querySelector('button')!);
+    expect(screen.getByTestId('tafsir').textContent).toMatch(/قيد المراجعة/);
+    expect(screen.queryByText('شرح فيه شك')).toBeNull();
+  });
+
+  it('the meanings show each word cut from the verified verse', async () => {
+    const { fetcher, anchor } = await snapshot(85, 3, { basmala: true, texts: TEXTS });
+    render(<SurahLesson surah={85} fetcher={fetcher} anchor={anchor} content={CONTENT} shuffleSeed={1} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'المعاني' }));
+    const row = screen.getByRole('listitem');
+    expect(row.textContent).toMatch(/ثلاثة/);
+    expect(row.textContent).toMatch(/معنى الكلمة/);
+    fireEvent.click(screen.getByRole('button', { name: 'أنهيت المعاني' }));
+    expect(screen.getByLabelText('النجوم').textContent).toBe('★' + '☆'.repeat(6));
+  });
+
+  it('refuses content whose positions do not resolve: the Quran sections only, and says so', async () => {
+    const { fetcher, anchor } = await snapshot(85, 3, { basmala: true, texts: TEXTS });
+    const bad = { ...CONTENT, words: [{ ayah: 3, word: 9, meaning: 'x', review: null }] };
+    render(<SurahLesson surah={85} fetcher={fetcher} anchor={anchor} content={bad} />);
+    await screen.findByRole('heading', { name: 'سورة البروج' });
+    expect(sections()).toEqual(['الاستماع', 'الآيات', 'رتّب الآيات']);
+    expect(screen.getByText(/محتوى الدرس قيد المراجعة/)).toBeTruthy();
+    expect(screen.queryByText('مقدمة الدرس')).toBeNull();
+  });
+
+  it('a surah with no content gets the three Quran sections and no note', async () => {
+    const { fetcher, anchor } = await snapshot(86, 3, { basmala: true, texts: TEXTS });
+    render(<SurahLesson surah={86} fetcher={fetcher} anchor={anchor} content={null} />);
+    await screen.findByRole('heading');
+    expect(sections()).toEqual(['الاستماع', 'الآيات', 'رتّب الآيات']);
+    expect(screen.queryByText(/محتوى الدرس قيد المراجعة/)).toBeNull();
   });
 });
