@@ -23,6 +23,12 @@
 --   a guard on a parent's name and photo (chat.contact) and a family's
 --       country (chat.family), which carry no actor column: checked when the
 --       API names the acting staff member (chat.acting_staff_id).
+--   The guards are SECURITY DEFINER with a pinned search_path, and no request
+--       role executes them or their helpers: they fire on the request role's
+--       own writes (chat_app may not EXECUTE sales_scope_refuses), and they
+--       read the family, its owner and the department outside RLS, so a row
+--       the caller cannot see never lets a write through. Naming someone in
+--       chat.acting_staff_id can only add a refusal, never lift one.
 --   student_enrolment.intake_payload_hash: a replayed intake is the same intake.
 --   parents.edit for the Sales bundles (manager:sales, supervisor:sales): the
 --       service limits a Sales member to the families they own
@@ -58,6 +64,7 @@ comment on function chat.sales_scope_refuses(uuid, uuid) is
 create or replace function chat.pd042_sales_scope_parent_file()
 returns trigger
 language plpgsql
+security definer
 set search_path = chat, pg_temp
 as $$
 begin
@@ -75,6 +82,7 @@ create trigger zz_pd042_sales_scope
 create or replace function chat.pd042_sales_scope_family_billing()
 returns trigger
 language plpgsql
+security definer
 set search_path = chat, pg_temp
 as $$
 begin
@@ -92,6 +100,7 @@ create trigger zz_pd042_sales_scope
 create or replace function chat.pd042_sales_scope_family_instalment()
 returns trigger
 language plpgsql
+security definer
 set search_path = chat, pg_temp
 as $$
 declare
@@ -118,6 +127,7 @@ create trigger zz_pd042_sales_scope
 create or replace function chat.pd042_sales_scope_payment_request()
 returns trigger
 language plpgsql
+security definer
 set search_path = chat, pg_temp
 as $$
 declare
@@ -142,6 +152,7 @@ create trigger zz_pd042_sales_scope
 create or replace function chat.pd042_sales_scope_payment()
 returns trigger
 language plpgsql
+security definer
 set search_path = chat, pg_temp
 as $$
 declare
@@ -168,6 +179,7 @@ create trigger zz_pd042_sales_scope
 create or replace function chat.pd042_sales_scope_learner_subscription()
 returns trigger
 language plpgsql
+security definer
 set search_path = chat, pg_temp
 as $$
 declare
@@ -213,6 +225,7 @@ $$;
 create or replace function chat.pd042_sales_scope_contact()
 returns trigger
 language plpgsql
+security definer
 set search_path = chat, pg_temp
 as $$
 begin
@@ -231,6 +244,7 @@ create trigger zz_pd042_sales_scope
 create or replace function chat.pd042_sales_scope_family()
 returns trigger
 language plpgsql
+security definer
 set search_path = chat, pg_temp
 as $$
 begin
