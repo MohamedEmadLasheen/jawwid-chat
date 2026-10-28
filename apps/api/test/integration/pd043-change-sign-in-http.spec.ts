@@ -295,7 +295,7 @@ describe('3. refusals', () => {
   it('a malformed address is 400, and nothing changes', async () => {
     const t = await waiting();
     const r = await change(m.teachersManager.subject, t.id, { email: 'not an address' });
-    expect([r.status, r.code]).toEqual([400, 'COMM.VALIDATION']);
+    expect([r.status, r.code]).toEqual([400, 'COMMON.VALIDATION']);
     expect((await g.prisma.account.findFirstOrThrow({ where: { subject: t.address } })).status).toBe('provisioned');
   });
 });
