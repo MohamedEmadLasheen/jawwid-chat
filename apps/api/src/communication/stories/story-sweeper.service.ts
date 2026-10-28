@@ -162,7 +162,10 @@ export class StorySweeper {
     for (const story of due) {
       if (!story.mediaObjectKey) continue;
       try {
-        await this.storage.delete(story.mediaObjectKey);
+        // Only Stories' own namespace is ever deleted (PD-41, review of #216): a
+        // key from anywhere else -- a legacy row naming a conversation's file or
+        // a certificate design -- is unlinked below but its bytes are left alone.
+        if (story.mediaObjectKey.startsWith('stories/')) await this.storage.delete(story.mediaObjectKey);
       } catch (err) {
         // A storage failure must not abort the batch or lose the row: it stays
         // unpurged and the next pass retries it.

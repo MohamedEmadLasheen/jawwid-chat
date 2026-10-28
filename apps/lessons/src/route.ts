@@ -1,5 +1,7 @@
-/** The paths the lessons site has always used (Chat's items store them): /lessons/quran/surah-N. */
-export type Route = { kind: 'surah'; surah: number } | { kind: 'index' } | { kind: 'not-found' };
+/** The paths the lessons site has always used (Chat's items store them): /lessons/quran/surah-N, /lessons/arabic/lesson-N. */
+export type Route = { kind: 'surah'; surah: number } | { kind: 'arabic'; lesson: number } | { kind: 'index' } | { kind: 'not-found' };
+
+export const ARABIC_LESSONS: readonly number[] = [1];
 
 export function route(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '') || '/';
@@ -9,5 +11,9 @@ export function route(pathname: string): Route {
     const n = Number(m[1]);
     if (n >= 1 && n <= 114 && String(n) === m[1]) return { kind: 'surah', surah: n };
   }
+  // The Arabic lessons that exist on the engine: lesson 1 (P0-5). The others answer
+  // "not found" until each is built (pd029-p05-arabic-letters-design.md §2).
+  const a = /^\/lessons\/arabic\/lesson-(\d{1,2})$/.exec(path);
+  if (a && ARABIC_LESSONS.includes(Number(a[1])) && String(Number(a[1])) === a[1]) return { kind: 'arabic', lesson: Number(a[1]) };
   return { kind: 'not-found' };
 }

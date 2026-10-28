@@ -788,3 +788,100 @@ write **directly in SQL**, and an Admin Web test where it shows on screen.
 
 **Not changed:** nothing in Jawwid Core, its code or its database. This repository has no Core
 code (`jawwid-chat-is-not-core`), and PD-41 adds no Core call.
+
+---
+
+## 15. PR-1 as built (2026-10-29): where the code differs from this design
+
+The API and migration are in `20261029110000_chat_pd041_certificates.sql`, `apps/api/src/certificates/*`
+and `apps/api/src/platform/pd041-policy.ts`. The contract is `docs/contracts/API-CONTRACT.md` §3.10c.
+
+The code differs from the sections above in seven places:
+1. **PD-12's open tickets become `proposed`**, not `requested` (§3, legacy mapping). Owner
+   safeguard 5 gives a teacher's suggestion to the learner's Operations supervisor to decide, so
+   an undecided PD-12 ticket waits for that supervisor. `issued` becomes `sent`, and the
+   issuer is recorded as approver and sender. `declined` stays.
+2. **There is no separate `story_image` revision** (§4.2, §7). A Story is published from the
+   approved certificate file itself, which must be an image
+   (`COMM.CERTIFICATE_STORY_NEEDS_IMAGE` for a PDF). A second file can come later if the owner
+   wants PDF certificates with Stories.
+3. **There is no `reassign`; it is replaced by `release`** (§11). The working Designer, or an
+   overseer, puts an in-design request back to Pending, and any Designer takes it from there.
+4. **`certificates.deliver` keeps PD-40's label** ("Send certificates to the family"). PD-40's
+   generated seed block is frozen, and a relabel needs its own reviewed change.
+5. **Every write is one act.** `action_seq` goes up by one, and `last_action`, `last_note` and
+   the actor travel with each write. The trigger refuses any other write and records each act
+   in `appreciation_certificate_event`. This makes safeguards 2 and 7 hold even against direct
+   SQL.
+6. **A live Story pins the approval.** While the Story is up, the approval cannot be withdrawn
+   and the request cannot be cancelled; withdrawing consent takes the Story down first.
+7. **The Designer's history hides consent and Story acts**, and shows notes only for returns
+   and redesigns.
+
+**Merge order:** PR-1 removes the PD-12 staff routes (`/learner-certificates/:id/upload|issue|decline`).
+The current Admin Web Certificates tab calls them, so that tab stops working until PR-2 (the
+`/certificates` page) lands. Merge PR-1 and PR-2 together, or one right after the other.
+
+### 15.1 The department head's review of #216 (2026-10-29)
+
+**P1s, fixed:**
+- **A PD-33 backup can withdraw consent.** The withdrawal and the Story's removal now commit in
+  one transaction, through `StoryService.retireForCertificate` (audited `story.deleted`, without
+  the author rule). They commit together or not at all.
+- **Stories accepts only its own media.** `chat.story_media_grant` records every key
+  `POST /stories/media` issues, and the certificate copies. `StoryService.create` accepts only a
+  `stories/` key granted to the same publisher, and claims it once inside the transaction
+  (`COMM.STORY_MEDIA_NOT_GRANTED`). The retention sweep deletes bytes only under `stories/`. A
+  legacy row naming another key is unlinked and its bytes are left alone. This closes design R7.
+
+**P2s, changed:**
+- **Listing is scoped in the query:** the categories overseen, the learners reached, the
+  teachers in PD-35 scope, suggestions for overseers, and designers past suggestion. It is
+  keyset-paged on `(requestedAt, id)`.
+- **Who answers for a certificate is decided now, not by the record.** That is
+  `chat.certificate_responsible`:
+  - for a student, whoever acts for the learner's CURRENT supervisor, so a PD-24 transfer moves
+    approve, send, consent and Story with the child; the requester of record only when nobody
+    supervises the learner;
+  - for a teacher, the requester of record while they still hold `certificates.request.teacher`.
+- **The insert guard checks reach:** a student request must come from staff who act for the
+  learner's supervisor, or an overseer. PD-35's teacher scope is a runtime switch, so the API
+  applies it.
+- **Consent is tied to its act.** `certificate_consent_granted` counts only a consent row whose
+  history event of the same seq and kind exists.
+- **Written consent needs a note** saying where the signed document is kept.
+- **A Story is published in two phases.** It is created hidden (a draft), linked under the
+  certificate's lock where consent is decided again, then published. A crash leaves at worst a
+  linked draft, which a retry publishes.
+- **Every file is checked whole.** Images must end where their format ends. A PDF must end with
+  `%%EOF` and carry no `/JavaScript`, `/JS`, `/Launch`, `/EmbeddedFile`, `/RichMedia`, `/XFA`,
+  `/SubmitForm`, `/ImportData` or `/GoToR`. **Launch requirement:** names inside compressed
+  object streams are not seen, so a malware scan of every upload is required before production.
+- **Orphaned suggestions are handled.**
+  - An overseer (the Operations or Teachers manager, or the super admin) may cancel an undecided
+    suggestion.
+  - When nobody supervises the learner, the Operations manager decides.
+
+**Nits, done:**
+- `search_path` is pinned on the three helpers.
+- The type's labels are copied onto the certificate when it is sent.
+- `GET :id/delivery` writes nothing; the send opens a missing teacher supervision conversation.
+- The slot note is corrected.
+- The spec title is fixed, and a test now shows the DB refusing a Designer as sender.
+
+
+### 15.2 PR-2 as built: the Admin Web page
+
+- **Page:** `/certificates` (`features/certificates`), under People. The nav offers it when
+  `GET /certificates/access` opens it. A `specialist` (the Designer) lands on it and has nothing
+  else.
+- **Old routes:** `/teachers/certificates` and `/admin/teachers/certificates` redirect to it.
+  The PD-12 Teachers tab, its page, its dialogs and its client calls are removed.
+- **Buttons** come only from each row's `actions`.
+  - Approve sends the revision on screen.
+  - Send shows the group the server named, and echoes it.
+  - Story names its audience.
+  - Consent picks the parent from the family's contacts. `GET /certificates/:id` adds
+    `consentContacts` only for whoever may record consent.
+- **The request form** makes one `requestKey` when it opens, and leaves the Story box unticked.
+- **Types:** a tab for the super admin, with enable and disable but no delete.
