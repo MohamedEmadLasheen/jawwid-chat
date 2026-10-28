@@ -29,6 +29,11 @@ export const C = {
   closedOn: { en: 'Closed {when}', ar: 'أُغلقت {when}' },
   // The panel
   close: { en: 'Close', ar: 'إغلاق' },
+  overdue: { en: 'Overdue', ar: 'متأخرة' },
+  notFound: {
+    en: 'This task is not here, or it is not yours to see.',
+    ar: 'هذه المهمة غير موجودة، أو ليست مما يحق لك رؤيته.',
+  },
   openSource: { en: 'Open', ar: 'فتح' },
   createdBy: { en: 'Given by {name}', ar: 'أسندها {name}' },
   instructions: { en: 'Instructions', ar: 'التعليمات' },

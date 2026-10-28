@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
@@ -10,6 +10,8 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
 import { QueryBoundary } from '@/shared/components/States'
+import { ApiError } from '@/core/api/errors'
+import { Icon } from '@/shared/components/Icon'
 import { describeError } from '@/features/teacher-files/copy'
 import {
   tasksApi,
@@ -71,7 +73,7 @@ function useTabs(): { tabs: Tab[]; closedViews: TaskView[] } {
 export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
   const { staff } = useSession()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const { tabs, closedViews } = useTabs()
   const asked = params.get('tab') as Tab | null
   const [tab, setTab] = useState<Tab>(asked && tabs.includes(asked) ? asked : 'mine')
@@ -83,6 +85,35 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const [overdue, setOverdue] = useState(params.get('overdue') === 'true')
   const [openId, setOpenId] = useState<string | null>(params.get('task'))
   const [creating, setCreating] = useState(false)
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const { dir } = useI18n()
+
+  // The tab, the filters and the open task live in the URL, so a view can be
+  // shared, reloaded, or returned to with Back.
+  useEffect(() => {
+    const next = new URLSearchParams()
+    if (tab !== 'mine') next.set('tab', tab)
+    if (level) next.set('level', level)
+    if (category) next.set('category', category)
+    if (overdue && tab !== 'closed') next.set('overdue', 'true')
+    if (openId) next.set('task', openId)
+    if (next.toString() !== params.toString()) setParams(next, { replace: true })
+  }, [tab, level, category, overdue, openId, params, setParams])
+
+  const pick = (t: Tab) => {
+    setTab(t)
+    setOpenId(null)
+  }
+  // The tabs' own keys (WAI-ARIA tabs): arrows move, Home and End jump; in
+  // Arabic the arrows follow the reading direction.
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const step = { ArrowRight: dir === 'rtl' ? -1 : 1, ArrowLeft: dir === 'rtl' ? 1 : -1 }[e.key as 'ArrowRight' | 'ArrowLeft']
+    const to = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : step !== undefined ? (i + step + tabs.length) % tabs.length : null
+    if (to === null) return
+    e.preventDefault()
+    pick(tabs[to]!)
+    tabRefs.current[to]?.focus()
+  }
 
   const query: ListQuery = useMemo(
     () => ({
@@ -120,17 +151,21 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
       />
       <div className="tasks__bar">
         <div role="tablist" className="tasks__tabs" aria-label={tx(C.title)}>
-          {tabs.map((t) => (
+          {tabs.map((t, i) => (
             <button
               key={t}
+              ref={(el) => {
+                tabRefs.current[i] = el
+              }}
+              id={`tasks-tab-${t}`}
               type="button"
               role="tab"
               aria-selected={tab === t}
+              aria-controls="tasks-tabpanel"
+              tabIndex={tab === t ? 0 : -1}
               className="tasks__tab"
-              onClick={() => {
-                setTab(t)
-                setOpenId(null)
-              }}
+              onClick={() => pick(t)}
+              onKeyDown={(e) => onTabKey(e, i)}
             >
               {tx(TAB_LABEL[t])}
             </button>
@@ -163,7 +198,7 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
         </div>
       </div>
       <div className="tasks__body">
-        <div>
+        <div id="tasks-tabpanel" role="tabpanel" aria-labelledby={`tasks-tab-${tab}`}>
           <QueryBoundary isLoading={list.isLoading} error={list.error} isEmpty={items.length === 0} emptyTitle={tx(C.empty)} onRetry={() => list.refetch()}>
             <ul className="tasks__list">
               {items.map((t) => (
@@ -177,10 +212,22 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
             )}
           </QueryBoundary>
         </div>
-        {openId && <TaskPanel id={openId} onClose={() => setOpenId(null)} />}
+        {/* Keyed by the task: a draft, a dialog or a date typed for one task never carries to the next. */}
+        {openId && <TaskPanel key={openId} id={openId} onClose={() => setOpenId(null)} />}
       </div>
       {creating && <NewTaskDialog onClose={() => setCreating(false)} />}
     </div>
+  )
+}
+
+/** Overdue in words and an icon, never by colour alone. */
+function OverdueMark() {
+  const tx = useCopy()
+  return (
+    <span className="tasks__overdue" data-testid="task-overdue">
+      <Icon name="alert" size={14} />
+      {tx(C.overdue)}
+    </span>
   )
 }
 
@@ -193,7 +240,7 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
   const closed = task.state === 'completed' || task.state === 'removed'
   return (
     <li className={`tasks__row${selected ? ' tasks__row--selected' : ''}`}>
-      <button type="button" className="tasks__title" dir="auto" onClick={onOpen}>
+      <button type="button" className="tasks__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
         {title(task)}
       </button>
       <div className="tasks__chips">
@@ -209,7 +256,8 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
           task.closedAt && <span>{tx(C.closedOn, { when: when(task.closedAt) })}</span>
         ) : (
           <>
-            <span className={task.overdue ? 'tasks__overdue' : undefined}>{task.dueAt ? tx(C.due, { when: when(task.dueAt) }) : tx(C.noDue)}</span>
+            <span>{task.dueAt ? tx(C.due, { when: when(task.dueAt) }) : tx(C.noDue)}</span>
+            {task.overdue && <OverdueMark />}
             <span>· {tx(C.age, { ago: duration(task.createdAt) })}</span>
           </>
         )}
@@ -240,6 +288,19 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const state = t ? stateOf(t) : 'open'
   const due = t?.dueAt ? isoToAcademyWallClock(t.dueAt) : null
 
+  // A link to a task the viewer cannot see (or that is not there) says so; it
+  // is not a failure to retry.
+  if (one.error instanceof ApiError && (/TASK_NOT_FOUND$/.test(one.error.code) || one.error.status === 404)) {
+    return (
+      <section className="tasks__panel card" aria-label={tx(C.title)}>
+        <div className="tasks__panel-head">
+          <p className="tasks__text" role="status">{tx(C.notFound)}</p>
+          <button type="button" className="btn btn--ghost" onClick={onClose}>{tx(C.close)}</button>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="tasks__panel card" aria-label={t ? title(t) : tx(C.title)}>
       <QueryBoundary isLoading={one.isLoading} error={one.error} onRetry={() => one.refetch()}>
@@ -258,7 +319,8 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
             <p className="tasks__meta">
               <span dir="auto">{tx(C.assignedTo, { name: t.assigneeName })}</span>
               {t.createdBy && <span dir="auto">· {tx(C.createdBy, { name: t.createdBy.name })}</span>}
-              <span className={t.overdue ? 'tasks__overdue' : undefined}>· {t.dueAt ? tx(C.due, { when: when(t.dueAt) }) : tx(C.noDue)}</span>
+              <span>· {t.dueAt ? tx(C.due, { when: when(t.dueAt) }) : tx(C.noDue)}</span>
+              {t.overdue && t.state !== 'completed' && t.state !== 'removed' && <OverdueMark />}
             </p>
             {link && (
               <p>
@@ -323,6 +385,7 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                 )}
                 {can.has('due') && (
                   <DueControl
+                    key={t.dueAt ?? 'none'}
                     date={due?.date ?? ''}
                     time={due?.time ?? ''}
                     disabled={op.isPending}
@@ -431,6 +494,8 @@ function DueControl({ date, time, disabled, onSave }: { date: string; time: stri
 function History({ task }: { task: TaskDetail }) {
   const tx = useCopy()
   const when = useWhen()
+  // "before → after" reads in the page's direction.
+  const arrow = useI18n().dir === 'rtl' ? '←' : '→'
   return (
     <ol className="tasks__history">
       {task.history.map((e) => {
@@ -440,10 +505,10 @@ function History({ task }: { task: TaskDetail }) {
           <li key={e.id}>
             <strong>{tx(EVENT_LABEL[e.kind])}</strong>
             {e.kind === 'priority_changed' && before?.priority && after?.priority && (
-              <> — {tx(LEVEL_LABEL[before.priority as Level])} → {tx(LEVEL_LABEL[after.priority as Level])}</>
+              <> — {tx(LEVEL_LABEL[before.priority as Level])} {arrow} {tx(LEVEL_LABEL[after.priority as Level])}</>
             )}
             {e.kind === 'due_changed' && (
-              <> — {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} → {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
+              <> — {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} {arrow} {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
             )}
             {' · '}
             <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span> · <time dateTime={e.at}>{when(e.at)}</time>

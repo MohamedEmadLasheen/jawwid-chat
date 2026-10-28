@@ -81,8 +81,9 @@ function homeFor(role: Parameters<typeof isDepartment>[0]): string {
   if (isSuperAdmin(role)) return adminSectionPath('conversations')
   // PD-40/PD-41: the Designer's whole Admin Web is the Certificates page.
   if (role === 'specialist') return '/certificates'
-  // Departments have no conversations — they only ever see their own tasks. Operators
-  // land in their conversations: the chat workspace on the real API.
+  // The legacy department roles (finance, technical, academic) have no
+  // conversations: they land on their Tasks (PD-47). Operators land in their
+  // conversations: the chat workspace on the real API.
   return isDepartment(role) ? '/tasks' : '/chat'
 }
 

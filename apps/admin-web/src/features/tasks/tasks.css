@@ -1,48 +1,6 @@
-/* PD-47: the Tasks page. Tokens only, except the level pairs below, which are
-   measured (TasksPage.test.tsx): text 4.5:1, icon 3:1, light and dark. Gold
-   carries text only as accent-700 (#7a5716) on gold-50. */
-:root {
-  --task-high-fg: #b42318;
-  --task-high-bg: #fdeeec;
-  --task-high-icon: #b42318;
-  --task-medium-fg: #7a5716;
-  --task-medium-bg: #fbf5ea;
-  --task-medium-icon: #7a5716;
-  --task-low-fg: #1e7a4c;
-  --task-low-bg: #e8f5ee;
-  --task-low-icon: #1e7a4c;
-  --task-finance-fg: #4f5f66;
-  --task-finance-bg: #f2f4f4;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --task-high-fg: #ffb4a6;
-    --task-high-bg: #3a1d18;
-    --task-high-icon: #ffb4a6;
-    --task-medium-fg: #e6edef;
-    --task-medium-bg: #4a3510;
-    --task-medium-icon: #e8c47a;
-    --task-low-fg: #a7e3c1;
-    --task-low-bg: #14291f;
-    --task-low-icon: #a7e3c1;
-    --task-finance-fg: #b3c0c5;
-    --task-finance-bg: #1f2a2e;
-  }
-}
-:root[data-theme='dark'] {
-  --task-high-fg: #ffb4a6;
-  --task-high-bg: #3a1d18;
-  --task-high-icon: #ffb4a6;
-  --task-medium-fg: #e6edef;
-  --task-medium-bg: #4a3510;
-  --task-medium-icon: #e8c47a;
-  --task-low-fg: #a7e3c1;
-  --task-low-bg: #14291f;
-  --task-low-icon: #a7e3c1;
-  --task-finance-fg: #b3c0c5;
-  --task-finance-bg: #1f2a2e;
-}
-
+/* PD-47: the Tasks page. Tokens only. The level pairs are the app's own
+   (tokens.css, light and dark), measured in TasksPage.test.tsx: text 4.5:1,
+   icon 3:1. Gold carries text only as gold-700 on gold-50 (the gold rule). */
 .task-level,
 .task-finance {
   display: inline-flex;
@@ -55,14 +13,11 @@
   line-height: 1.4;
   white-space: nowrap;
 }
-.task-level--high { color: var(--task-high-fg); background: var(--task-high-bg); }
-.task-level--high .icon { color: var(--task-high-icon); }
-.task-level--medium { color: var(--task-medium-fg); background: var(--task-medium-bg); }
-.task-level--medium .icon { color: var(--task-medium-icon); }
-.task-level--low { color: var(--task-low-fg); background: var(--task-low-bg); }
-.task-level--low .icon { color: var(--task-low-icon); }
+.task-level--high { color: var(--danger); background: var(--danger-soft); }
+.task-level--medium { color: var(--gold-700); background: var(--gold-50); }
+.task-level--low { color: var(--ok); background: var(--ok-soft); }
 .task-level__reason { font-weight: 400; }
-.task-finance { color: var(--task-finance-fg); background: var(--task-finance-bg); font-weight: 500; }
+.task-finance { color: var(--text-muted); background: var(--surface-sunken); font-weight: 500; }
 
 .tasks__bar {
   display: flex;
@@ -140,13 +95,21 @@
 }
 .tasks__row--selected {
   border-color: var(--accent);
+  border-inline-start-width: 4px;
+  background: var(--surface-selected);
 }
 .tasks__title {
   all: unset;
   cursor: pointer;
   font-weight: 600;
-  display: block;
-  min-block-size: 24px;
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+}
+.tasks__title[aria-current='true'] {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .tasks__title:focus-visible {
   outline: 2px solid var(--focus);
@@ -165,6 +128,9 @@
   font-size: var(--fs-sm);
 }
 .tasks__overdue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--danger);
   font-weight: 600;
 }

@@ -290,19 +290,89 @@ const contrast = (a: string, b: string) => {
 }
 
 describe('the level colours', () => {
-  it('every level\'s text is 4.5:1 and its icon 3:1 on its own ground, light and dark (both ways of choosing dark)', () => {
-    const css = readFileSync(join(__dirname, 'tasks.css'), 'utf8')
-    const blocks = [...css.matchAll(/\{([^{}]*--task-high-fg:[^{}]*)\}/g)].map((m) => m[1]!)
-    expect(blocks).toHaveLength(3)
-    for (const block of blocks) {
-      const v = (name: string) => new RegExp(`--task-${name}:\\s*(#[0-9a-f]{6});`, 'i').exec(block)?.[1] as string
-      for (const level of ['high', 'medium', 'low']) {
-        expect(contrast(v(`${level}-fg`), v(`${level}-bg`)), `${level} text`).toBeGreaterThanOrEqual(4.5)
-        expect(contrast(v(`${level}-icon`), v(`${level}-bg`)), `${level} icon`).toBeGreaterThanOrEqual(3)
-      }
-      expect(contrast(v('finance-fg'), v('finance-bg')), 'finance').toBeGreaterThanOrEqual(4.5)
+  it('every level is drawn in the app\'s own pair, 4.5:1 light and dark; gold carries text only as gold-700 on gold-50', () => {
+    const tasksCss = readFileSync(join(__dirname, 'tasks.css'), 'utf8')
+    const tokens = readFileSync(join(__dirname, '../../core/theme/tokens.css'), 'utf8')
+    // The light values are the first :root block; the dark ones the prefers-color-scheme block.
+    const light = tokens.slice(tokens.indexOf(':root {'), tokens.indexOf('}', tokens.indexOf(':root {')))
+    const darkStart = tokens.indexOf(":root:not([data-theme='light']) {")
+    const dark = tokens.slice(darkStart, tokens.indexOf('}', darkStart))
+    const value = (block: string, name: string, fallback?: string): string => {
+      const m = new RegExp(`--${name}:\\s*(#[0-9a-f]{6}|var\\(--([a-z0-9-]+)\\));`, 'i').exec(block)
+      if (!m) return fallback as string
+      return m[2] ? value(block, m[2], value(light, m[2])) : m[1]!
     }
-    // The gold rule: gold carries text only as accent-700 on gold-50 (light).
-    expect(blocks[0]).toMatch(/--task-medium-fg:\s*#7a5716;/)
+    const pairs = [...tasksCss.matchAll(/\.task-(level--\w+|finance) \{ color: var\(--([a-z0-9-]+)\); background: var\(--([a-z0-9-]+)\);/g)]
+    expect(pairs.map((m) => m[1])).toEqual(['level--high', 'level--medium', 'level--low', 'finance'])
+    for (const [, what, fg, bg] of pairs) {
+      for (const [theme, block] of [['light', light], ['dark', dark]] as const) {
+        const ratio = contrast(value(block, fg!, value(light, fg!)), value(block, bg!, value(light, bg!)))
+        // The icon is drawn in the text colour, so 4.5:1 for the text is 3:1 for the icon too.
+        expect(ratio, `${what} ${theme}`).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+    expect(tasksCss).toMatch(/\.task-level--medium \{ color: var\(--gold-700\); background: var\(--gold-50\);/)
+    expect(tasksCss).not.toMatch(/#[0-9a-f]{6}/i)
+  })
+})
+
+describe('switching, links and keys', () => {
+  it('a comment typed for one task never goes to the next one opened', async () => {
+    on('GET', /\/tasks\/t-2$/, () => json(detail(INSTALMENT, ['comment'])))
+    on('POST', /\/comments$/, () => json({}))
+    renderWithProviders(<TasksPage />, { staff: supervisor, route: '/tasks?task=t-1' })
+    const panel = await screen.findByRole('region', { name: 'Call the family back' })
+    await userEvent.type(within(panel).getByRole('textbox', { name: 'Add a comment' }), 'meant for the first')
+    await userEvent.click(screen.getByRole('button', { name: /Instalment due/ }))
+    const next = await screen.findByRole('region', { name: /Instalment due/ })
+    expect(within(next).getByRole('textbox', { name: 'Add a comment' })).toHaveValue('')
+    expect(within(next).getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
+
+  it('overdue is said in a word and an icon, not by colour alone -- even on a task a person set High', async () => {
+    const manualHigh = { ...BASE, id: 't-3', manualPriority: 'high' as const, effectivePriority: 'high' as const, priorityReason: 'manual' as const, overdue: true }
+    on('GET', /\/me\/tasks/, () => json(page([manualHigh])))
+    renderWithProviders(<TasksPage />, { staff: supervisor })
+    const [row] = await screen.findAllByRole('listitem')
+    expect(within(row!).getByTestId('task-level')).toHaveTextContent(/^High$/)
+    expect(within(row!).getByTestId('task-overdue')).toHaveTextContent('Overdue')
+    expect(within(row!).getByTestId('task-overdue').querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('a link to a task out of reach says so plainly, with no Retry', async () => {
+    on('GET', /\/tasks\/t-9$/, () => json({ error: { code: 'COMM.TASK_NOT_FOUND', message: 'task not found' } }, 404))
+    renderWithProviders(<TasksPage />, { staff: supervisor, route: '/tasks?task=t-9' })
+    expect(await screen.findByText('This task is not here, or it is not yours to see.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Retry|Try again/ })).toBeNull()
+  })
+
+  it('the Designer has their own tasks, like every staff member', async () => {
+    renderWithProviders(<TasksPage />, { staff: makeStaff({ id: 'des-1', role: 'specialist', permissions: ['certificates.design'] }) })
+    await screen.findAllByRole('listitem')
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Mine', 'Closed'])
+  })
+
+  it('the tabs move with the arrow keys, in the reading direction, and control their panel', async () => {
+    renderWithProviders(<TasksPage />, { staff: manager })
+    await screen.findAllByRole('listitem')
+    const mine = screen.getByRole('tab', { name: 'Mine' })
+    expect(mine).toHaveAttribute('aria-controls', 'tasks-tabpanel')
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'tasks-tab-mine')
+    mine.focus()
+    await userEvent.keyboard('{ArrowRight}')
+    expect(screen.getByRole('tab', { name: 'Team' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Team' })).toHaveFocus()
+    await userEvent.keyboard('{End}')
+    expect(screen.getByRole('tab', { name: 'Closed' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('in Arabic the history reads right to left', async () => {
+    on('GET', /\/tasks\/t-1$/, () =>
+      json(detail(BASE, [], [
+        { id: 'ev-2', kind: 'priority_changed', actor: { kind: 'staff', id: 'mgr-1', name: 'Ops Manager' }, fromAssigneeId: null, toAssigneeId: 'sup-1', body: null, before: { priority: 'low' }, after: { priority: 'high' }, at: '2026-10-27T09:00:00Z' },
+      ])))
+    renderWithProviders(<TasksPage />, { staff: supervisor, route: '/tasks?task=t-1', locale: 'ar' })
+    const panel = await screen.findByRole('region', { name: 'Call the family back' })
+    expect(within(panel).getAllByRole('listitem')[0]).toHaveTextContent('منخفضة ← عالية')
   })
 })

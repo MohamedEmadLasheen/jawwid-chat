@@ -606,4 +606,59 @@ describe('what the Tasks page is offered (PR-3)', () => {
     expect(await code(tasks.assignees(s.teacherId, {}))).toBe(CommErrorCode.TASK_DENIED);
     expect(await code(tasks.assignees(farStaff, { task: t.id }))).toBe(CommErrorCode.TASK_NOT_FOUND);
   });
+
+  /** A system task raised as its source would raise it (chat.work_task_raise). */
+  const raise = async (type: string, to: { kind: 'staff' | 'teacher'; id: string }, category = 'operational', floor = 'none') => {
+    const source = randomUUID();
+    await g.prisma.$queryRaw`SELECT chat.work_task_raise(chat.default_organization_id(), ${type}, ${source}::uuid,
+      ${to.kind === 'staff' ? to.id : null}::uuid, ${to.kind === 'teacher' ? to.id : null}::uuid, 'medium', ${category}, ${floor}, NULL)`;
+    const [{ id }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.work_task WHERE source_key = ${`${type}:${source}`}`;
+    return { id, key: `${type}:${source}` };
+  };
+
+  it('a system task: no "done" for its assignee, no handing on what follows its source, acknowledged once its work went away', async () => {
+    const t = await raise('lesson_report', teacher(s.teacherId), 'operational', 'overdue_only');
+    expect((await tasks.get(s.teacherId, t.id)).actions.sort()).toEqual(['comment', 'out_of_scope']);
+    expect((await tasks.get(tmgr, t.id)).actions.sort()).toEqual(['comment', 'due', 'priority', 'remove']);
+    await g.prisma.$queryRaw`SELECT chat.work_task_withdraw(chat.default_organization_id(), ${t.key})`;
+    expect((await tasks.get(s.teacherId, t.id)).actions.sort()).toEqual(['acknowledge', 'comment', 'out_of_scope']);
+  });
+
+  it('the super admin alone is offered to hand on a financial task whose assignee left with nobody to follow', async () => {
+    const t = await raise('instalment', staff(s.otherAdminId), 'financial', 'instalment');
+    expect((await tasks.get(sa, t.id)).actions).not.toContain('reassign');
+    await g.prisma.$executeRawUnsafe(`update chat.staff set is_active = false, left_at = now() where id = $1::uuid`, s.otherAdminId);
+    expect((await tasks.get(sa, t.id)).actions).toContain('reassign');
+    expect((await tasks.assignees(sa, { task: t.id })).people.length).toBeGreaterThan(0);
+  });
+
+  it('a department\'s manager is offered to hand on their own task, and every department offered is accepted', async () => {
+    const t = await manual(sa, staff(smgr));
+    expect((await tasks.get(smgr, t.id)).actions.sort()).toEqual(['comment', 'complete', 'out_of_scope', 'reassign']);
+    const on = await tasks.assignees(smgr, { task: t.id });
+    expect(on.departments.map((d) => d.kind).sort()).toEqual(['operations', 'teachers']);
+    for (const d of on.departments) {
+      const each = await manual(sa, staff(smgr));
+      await expect(tasks.reassign(smgr, each.id, { to: { department: d.kind } })).resolves.toBeDefined();
+    }
+  });
+
+  it('every person and department offered for handing on is one reassign accepts', async () => {
+    const probe = await manual(s.managerId, staff(s.ownerId));
+    const on = await tasks.assignees(s.managerId, { task: probe.id });
+    expect(on.truncated).toBe(false);
+    for (const to of [...on.people.map((p) => ({ kind: p.kind, id: p.id })), ...on.departments.map((d) => ({ department: d.kind }))]) {
+      const each = await manual(s.managerId, staff(s.ownerId));
+      await expect(tasks.reassign(s.managerId, each.id, { to })).resolves.toBeDefined();
+    }
+  });
+
+  it('whoever may not hand a task on is offered nobody; nor is anyone offered across organizations', async () => {
+    const t = await manual(s.managerId, staff(s.ownerId));
+    expect(await tasks.assignees(s.ownerId, { task: t.id })).toEqual({ people: [], departments: [], truncated: false });
+    expect((await tasks.assignees(tsupB, {})).people).toEqual([]);
+    expect((await tasks.assignees(sa, {})).people.map((p) => p.id)).not.toContain(farStaff);
+    expect((await tasks.assignees(farStaff, {})).people.map((p) => p.id)).not.toContain(s.ownerId);
+  });
 });
