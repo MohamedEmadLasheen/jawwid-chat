@@ -20,7 +20,12 @@ export interface SectionSpec {
 export const SECTIONS: readonly SectionSpec[] = [
   { key: 'chats', title: { en: 'Chats', ar: 'المحادثات' }, requires: ['chat.use'] },
   { key: 'cases', title: { en: 'Escalation cases', ar: 'حالات التصعيد' }, requires: ['cases.view'] },
+  { key: 'lessons', title: { en: 'Lessons', ar: 'الحصص' }, requires: ['lessons.view', 'schedule.view'] },
 ]
+
+/** Today on the Schedule (its day view opens on today); the Teachers department's queue. */
+const TODAY = () => '/schedule?view=day'
+const NEEDS_ACTION = () => '/teachers/needs-action'
 
 export interface TileSpec {
   label: Bilingual
@@ -57,6 +62,54 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     // Overdue counts the caller's own cases and their department's together:
     // the department list holds both for a manager, Mine for anyone else.
     href: (present) => (present.has('cases.department_open') ? '/cases?tab=department' : '/cases?tab=mine'),
+  },
+  'lessons.today_upcoming': {
+    label: { en: 'Lessons still to come today', ar: 'حصص قادمة اليوم' },
+    icon: 'calendar',
+    backlog: false,
+    href: TODAY,
+  },
+  'lessons.today_unreported': {
+    label: { en: "Today's lessons with no outcome yet", ar: 'حصص اليوم بلا نتيجة' },
+    icon: 'clock',
+    backlog: true,
+    href: TODAY,
+  },
+  'lessons.today_held': {
+    label: { en: 'Held today', ar: 'حصص تمّت اليوم' },
+    icon: 'check',
+    backlog: false,
+    href: TODAY,
+  },
+  'lessons.today_student_absent': {
+    label: { en: 'Student absent today', ar: 'غياب الطالب اليوم' },
+    icon: 'users',
+    backlog: false,
+    href: TODAY,
+  },
+  'lessons.today_teacher_absent': {
+    label: { en: 'Teacher absent today', ar: 'غياب المعلّم اليوم' },
+    icon: 'academy',
+    backlog: false,
+    href: TODAY,
+  },
+  'lessons.today_cancelled': {
+    label: { en: 'Cancelled today', ar: 'حصص أُلغيت اليوم' },
+    icon: 'calendar',
+    backlog: false,
+    href: TODAY,
+  },
+  'lessons.needs_outcome': {
+    label: { en: 'Lessons waiting for an outcome', ar: 'حصص تنتظر تسجيل النتيجة' },
+    icon: 'tasks',
+    backlog: true,
+    href: NEEDS_ACTION,
+  },
+  'lessons.rulings_open': {
+    label: { en: 'Late apologies to rule on', ar: 'اعتذارات متأخرة تنتظر قرارًا' },
+    icon: 'approvals',
+    backlog: true,
+    href: NEEDS_ACTION,
   },
 }
 

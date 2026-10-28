@@ -11,6 +11,7 @@ import { dashboardSection, dashboardTile } from '../../../src/dashboard/dashboar
 import type { ConversationService } from '@communication/conversations/conversation.service';
 import type { SupervisionCaseService } from '../../../src/cases/supervision-case.service';
 import type { TaskService } from '../../../src/tasks/task.service';
+import type { CalendarService } from '../../../src/calendar/calendar.service';
 
 describe('PD-44 dashboard tiles', () => {
   it('a tile is a count, an optional oldest time and a capped flag -- nothing about a person', () => {
@@ -37,7 +38,9 @@ describe('PD-44 DashboardController', () => {
   const cases = { dashboardCounts: jest.fn(async () => caseTiles) } as unknown as SupervisionCaseService;
   const taskTiles = [dashboardTile('tasks.mine_open', 1)];
   const tasks = { dashboardCounts: jest.fn(async () => taskTiles) } as unknown as TaskService;
-  const controller = new DashboardController(conversations, cases, tasks);
+  const lessonTiles = [dashboardTile('lessons.today_held', 4)];
+  const calendar = { dashboardCounts: jest.fn(async () => lessonTiles) } as unknown as CalendarService;
+  const controller = new DashboardController(conversations, cases, tasks, calendar);
 
   it('serves each section from the owning page\'s service, unchanged', async () => {
     const chats = await controller.chats('staff-1');
@@ -48,6 +51,8 @@ describe('PD-44 DashboardController', () => {
     expect(cases.dashboardCounts).toHaveBeenCalledWith('staff-1');
     expect((await controller.tasksSection('staff-1')).tiles).toBe(taskTiles);
     expect(tasks.dashboardCounts).toHaveBeenCalledWith('staff-1');
+    expect((await controller.lessons('staff-1')).tiles).toBe(lessonTiles);
+    expect(calendar.dashboardCounts).toHaveBeenCalledWith('staff-1', expect.any(Date));
   });
 
   it('each section requires the PD-40 key of the page it links to -- no dashboard key of its own', () => {
@@ -57,5 +62,6 @@ describe('PD-44 DashboardController', () => {
     expect(access('casesSection')).toEqual({ kind: 'requires', anyOf: ['cases.view'] });
     // PD-47: everyone's own tasks are self-service, like the Tasks page itself.
     expect(access('tasksSection')).toEqual({ kind: 'self' });
+    expect(access('lessons')).toEqual({ kind: 'requires', anyOf: ['lessons.view', 'schedule.view'] });
   });
 });
