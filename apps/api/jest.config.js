@@ -24,6 +24,12 @@ const base = {
 module.exports = {
   projects: [
     { ...base, displayName: 'unit', testMatch: ['<rootDir>/test/unit/**/*.spec.ts'] },
-    { ...base, displayName: 'integration', testMatch: ['<rootDir>/test/integration/**/*.spec.ts'] },
+    {
+      ...base,
+      displayName: 'integration',
+      testMatch: ['<rootDir>/test/integration/**/*.spec.ts'],
+      // 60 s for tests and hooks (truncating hooks outran the 5 s default under CI load).
+      setupFilesAfterEnv: ['<rootDir>/test/setup-integration.ts'],
+    },
   ],
 };

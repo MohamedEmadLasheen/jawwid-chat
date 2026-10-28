@@ -212,10 +212,12 @@ describe('1. Assign', () => {
     expect(await code(enrolment.assign(s.managerId, again, { supervisorId: s.ownerId }))).toBe(CommErrorCode.LESSON_STATE);
   });
 
-  it('the database refuses a child with a teacher from anyone but the Operations manager', async () => {
+  it('the database refuses a child with a teacher from anyone but the Operations manager (or, PD-42, the family\'s own supervisor)', async () => {
     const done = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    // admin_b: an Operations supervisor who does not supervise this family. (Since
+    // PD-42, admin_a -- its own supervisor -- may add a child: "Add child".)
     await expect(g.prisma.$queryRawUnsafe(
-      `select chat.enrol_learner($1::uuid, 'sneaky', $2::uuid, $3::uuid)`, done.familyId, s.teacherId, s.ownerId,
+      `select chat.enrol_learner($1::uuid, 'sneaky', $2::uuid, $3::uuid)`, done.familyId, s.teacherId, s.otherAdminId,
     )).rejects.toThrow(/Operations manager/);
     await expect(g.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('set local role chat_app');

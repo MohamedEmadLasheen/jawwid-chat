@@ -334,10 +334,11 @@ async function otherFamily() {
      values ('${learnerId}'::uuid, '${familyId}'::uuid, 'learner_n', '${s.teacherId}'::uuid)`,
   );
   await g.prisma.$executeRawUnsafe(
-    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
-     values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
+    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by)
+     values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`,
     learnerId,
     s.otherAdminId,
+    s.managerId,
   );
   return { familyId, parentId, learnerId };
 }
