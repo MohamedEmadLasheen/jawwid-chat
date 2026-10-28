@@ -38,6 +38,12 @@
      - the pre-2002 status of these recordings is unverified;
      - abroad, the status differs.
    - Permission must be requested from the producer of the chosen edition, with the heirs' consent for the moral rights. Letter F-3 is ready.
+   - **Section I (owner's direction: pursue Husary)** sets out the licensing routes and the letters:
+     - Established apps disclose **no licence**. The norm is notice-and-takedown.
+     - The **National Media Authority's Holy Quran Radio** openly claims all rights, holds the digitised archive (471 Husary recordings on its official portal), and has a verified contact.
+     - **Recommended first letter: F-3b to the NMA (quran@maspero.eg).** Send F-3a to the Ministry of Awqaf (1961 murattal) the same week, and F-3d to the heirs.
+     - Letters F-3a to F-3e plus a Schedule of Rights, in Arabic and English, and the lawyer's checklist.
+     - Owner sends; nothing has been sent.
 5. **Egypt adds two layers on top of copyright:**
    - **Law No. 82 of 2002:**
      - performers and producers have 50-year exclusive rights;
@@ -218,6 +224,7 @@ Source: the English text on WIPO Lex, https://www.wipo.int/wipolex/en/legislatio
 | Art. 166, 167, 168 | Terms: performers 50 years from performance; producers 50 years from recording or publication (whichever is first); broadcasters 20 years from first broadcast. |
 | Art. 171 | Exceptions are narrow. The teaching exception covers "short extracts" (171(6)) and copies "in educational institutes" (171(7)). **It cannot cover a full per-ayah Mushaf in a paid app** *(legal interpretation)*. |
 | Art. 183 | Commercial exploitation of public-domain works, recordings and performances needs a **licence from the competent ministry**, for a fee of at most EGP 1,000. **Even expired recordings are not free for paid use in Egypt.** |
+| *Law 163/2023 (added in section I)* | Since 7 Aug 2023, the **Egyptian Intellectual Property Authority** replaces "the competent ministries", including Culture and the Supreme Council for Media Regulation, in their IP functions. So the Art. 183 licence and the Art. 185 register now most likely sit with that Authority *(interpretation; confirm with counsel)*. |
 | Art. 185 (as amended 2020) | A register of dispositions is kept at the competent ministry. In the 2002 text, an unregistered disposition is not valid against third parties. **Ask counsel whether to register Jawwid's licences.** |
 | Art. 181 | Criminal penalties: at least one month's imprisonment and/or a fine of EGP 5,000–10,000, multiplied **per work**. This includes dissemination "through computer networks, Internet" without written authorisation (181(4)). Repeat offences carry higher penalties, confiscation and possible closure. |
 
@@ -604,6 +611,315 @@ Keep them **off** in every environment that real students use. It doesn't matter
 
 ---
 
+## I. Al-Husary: practical licensing routes (the owner's direction, 2026-10-28)
+
+**The owner's direction.** Pursue Al-Husary seriously. Find how established apps obtain the recordings, who can authorise Jawwid, and the fastest route. Prepare the letters.
+
+**Guard rails, unchanged:**
+- Husary stays **disabled for paying students** until the rights are verified.
+- Other apps using the recordings does **not** prove that our use is authorised.
+- **Nothing was sent to any organisation or person.** Contact is the owner's own action, using the letters in I-5.
+- No audio was downloaded.
+
+Sources were read on 2026-10-28 (evidence log, rows 63–80). The same labels apply: **[fact]**, **[secondary]**, **[interpretation]**, **[unresolved]**.
+
+### I-1. How established apps get Al-Husary: what they publicly say
+
+| App / platform | What it says about Husary audio rights | Label |
+|---|---|---|
+| **About 37 App Store apps carrying Husary**, from an App Store search on 2026-10-28 for "Husary / الحصري / المصحف المعلم" and the main app names. They include high-volume apps (Athkar, iQuran, Quran Majeed, Al Quran by Greentech, Prayer Now, Elmohafez) and many single-reciter Husary apps. | **None of the store descriptions names a licensor, a licence or a rights statement for the recitation.** | [fact, store text] |
+| **Quran.com / Quran Foundation** | Content is for "personal, non-commercial use only". The developer terms disclaim non-infringement (see C and B-3). | [fact] |
+| **Quran for Android** (open source; one of the most-installed Quran apps) | Its maintainer, publicly, in 2021: the content is free "as far as we know, we take anything down whenever we get copyright notices about it" (GitHub quran/quran_android #755). | [fact] **This is a notice-and-takedown posture, not a licence.** |
+| **Tarteel QUL** (the source many apps take ayah-by-ayah Husary files and timings from: "resource 112", Husary Muʿallim and Murattal) | At least five public requests for written permission to use Husary audio in apps (#644, #718, #727, #823, #957), the earliest from July 2026. **None has a maintainer answer.** The only reply points to the repository's MIT licence, which covers the code, not the audio. | [fact] |
+| **Islamic Network** | Copyright "still belongs to … the reciter"; they "may ask you to remove" (see C). | [fact] |
+| **Egypt's official Holy Quran Radio portal and app** (`misrquran.gov.eg`; app `com.mcit.holyquranradio`, built by the Ministry of Communications for the National Media Authority, launched March 2026) | Lists **471 Husary recordings** (e.g. «المصحف المجود لفضيلة الشيخ محمود خليل الحصري», in segments). Footer: «جميع الحقوق محفوظة لإذاعة القرآن الكريم المصرية» ("all rights reserved to the Egyptian Holy Quran Radio"). No download links. Support e-mail on the official store listing: **quran@maspero.eg**. | [fact] **The only party seen distributing Husary that claims rights openly is the state Quran Radio, under the NMA.** |
+| **Streaming stores** (Apple Music catalogue) | 10+ competing ℗ claimants. The largest, **Injaz Digital** (104 releases), is a YouTube rights-management and digital-distribution company with offices in Dubai and Cairo (info@injazdigital.com). Its site lists Quran-reciter partners. | [fact]. Whose rights Injaz distributes is [unresolved]. |
+| Muslim Pro, Athan, Ana Muslim, Ayah, Al-Moshaf | Not established. Muslim Pro's terms URL returned 404. The others' legal pages were not reached or are JavaScript-only. | [unresolved] |
+
+**Conclusion [interpretation].** The established-app practice is mostly **unlicensed use under a notice-and-takedown assumption**, by apps that are free and often based outside Egypt. That is no model for a **paid, Egypt-based** service. Art. 181 makes unauthorised internet dissemination a **crime**, not just a takedown. No app examined discloses a licence that Jawwid could copy or join.
+
+### I-2. Who can authorise what
+
+| Candidate | Can it authorise? | Which edition | Official contact | Verified? |
+|---|---|---|---|---|
+| **National Media Authority: Holy Quran Radio** (الهيئة الوطنية للإعلام – إذاعة القرآن الكريم) | **Most likely yes, for the radio holdings.** It claims all rights on its official portal, holds the digitised archive (a presidential digitisation mandate, 2026), and already distributes digitally. | Radio editions, including the **Mujawwad Mushaf** (listed) and other radio recordings. Possibly broadcast masters of the murattal, [unresolved]. | **quran@maspero.eg** (support e-mail on the official app's store listing). The postal address was not read on an official page. Use the Maspero head office, confirmed by phone. | E-mail: **[fact]**. Address: [unverified]. |
+| **Ministry of Awqaf: Supreme Council for Islamic Affairs** (وزارة الأوقاف – المجلس الأعلى للشئون الإسلامية) | **Likely yes, for the 1961 Hafs murattal** it funded and supervised (H-1), *if* it retained the producer's rights. **Also central under Law 102/1985**: Awqaf's own recordings are exempt from Al-Azhar licensing, and the Minister of Awqaf licenses them. | 1961 Hafs murattal (and possibly the 1960s Warsh/Qālūn/Dūrī recordings). | Official site `awqaf.gov.eg`. It could not be reached from this research environment, so no contact detail was taken from it. **The owner should take the contact from the site's «اتصل بنا» page or deliver by hand to the Ministry's head office.** | [unverified] |
+| **Sono Cairo** (صوت القاهرة للصوتيات والمرئيات), an NMA company | **Yes, for its own label edition.** It enforces "contracts only through Sono Cairo" (2021 precedent; regulator notice). | «مصحف حفص – صوت القاهرة» and other label releases. | No official site or contact found. **Route through the NMA** (send F-3c to the NMA, asking that it be forwarded to Sono Cairo). | [unverified] |
+| **Al-Husary heirs** | **Required in every route, for moral rights** (Art. 155: credit; consent to per-ayah segmentation). Possibly residual economic rights under the original contracts [unresolved]. | All editions. | Through the **Sheikh Al-Husary Association**: 6th of October City, Central Axis, Al-Husary Square, next to Al-Husary Mosque; tel. 01143331333 (from the association's own contact page). The association is a charity founded by admirers, **not shown to represent the heirs**; ask it to forward. | Contact: [fact]. Representation: [unresolved]. |
+| **Injaz Digital** (distributor) | **Only if it proves a sublicensable grant from the producer.** A distributor's ℗ claim alone is not enough. | The releases it distributes (104 on Apple). | info@injazdigital.com; WhatsApp +971 58 691 5958 (its own site). | Contact: [fact]. Rights: [unresolved]. |
+| **Al-Azhar: Islamic Research Academy** (مجمع البحوث الإسلامية) | **Regulatory licence** under Law 102/1985 for "recording for circulation", unless the Awqaf exemption covers the licensed recording. **No published procedure for audio or apps was found.** In July 2026 the Academy discussed protecting digital Mushaf copies (press). | All, as a regulatory overlay. | Through counsel. | [unverified] |
+| **Egyptian Intellectual Property Authority** (Law 163/2023) | **Art. 183** commercial licence for public-domain recordings, and the **Art. 185** register, now most likely with this Authority, which replaced the Ministry of Culture and the Media Council in IP functions (in force 7 Aug 2023). | Any edition treated as public domain; registration of Jawwid's licences. | Official site not reachable from here. Through counsel. | Law: [fact, secondary transcription + WIPO Lex dates]. Contact: [unverified]. |
+
+### I-3. Routes ranked
+
+Each route is scored by how fast it is likely to move, its likely cost, and how complete the grant can be. "Complete" means it covers a paid subscription, self-hosting, streaming, per-ayah segmentation and worldwide use.
+
+| Rank | Route | Edition | Speed | Cost | Completeness if granted | Why |
+|---|---|---|---|---|---|---|
+| **1** | **NMA Holy Quran Radio** (F-3b), **plus the heirs' consent** (F-3d) | Mujawwad Mushaf and other radio holdings; possibly the murattal broadcast masters | Medium. One verified e-mail channel; the institution is actively digitising and "investing" its archive. | Unknown; likely a commercial fee | **High.** It holds the digital masters and can supply files and grant streaming and hosting. Segmentation needs the heirs' consent. | The only candidate with a **verified official contact**, **the masters already digitised**, and an **open rights claim**. |
+| **2** | **Ministry of Awqaf / Supreme Council for Islamic Affairs** (F-3a), **plus the heirs** (F-3d) | **1961 Hafs murattal**, the most-used Husary set | Slow (ministerial) | Possibly nominal for education [unresolved] | **Highest legal value** if it still holds the producer's rights: it may resolve copyright **and** Law 102/1985 together *(interpretation)*. It may need the NMA for the masters. | The best legal fit for the flagship murattal. Send in parallel with rank 1. |
+| **3** | **Sono Cairo via the NMA** (F-3c) | The Sono Cairo Hafs edition | Slow to medium | Commercial | High for its edition | An active enforcer. Worth it only if the owner prefers that edition. |
+| **4** | **Injaz Digital** (F-3e) | Its 104 releases | **Fastest to answer** (private company) | Commercial | **Only as good as its chain of title.** Accept only with written proof that the producer authorised it to sublicense apps. | Useful mainly to *find out who it licenses from*. |
+| — | "Public domain" via an Art. 183 licence (Egyptian IP Authority) | Pre-1976 editions | Slow | ≤ EGP 1,000 per work, plus counsel | Weak: moral rights, Law 102 and foreign markets remain | **Not recommended** as the main route (H-3). |
+
+**Recommended first letter: F-3b to the National Media Authority, Holy Quran Radio (quran@maspero.eg).** Send **F-3a to the Ministry of Awqaf the same week**, delivered by hand or through its official contact, because the 1961 murattal is the edition most likely wanted. **F-3d to the heirs** goes with whichever producer answers first.
+
+### I-4. What a valid permission must contain
+
+Every grant must cover all of the following, in writing and itemised (Art. 149). Each letter attaches the same **Schedule of Rights**.
+
+1. Identification of the **exact edition** (title, date, riwayah) and the grantor's **capacity** (producer or assignee), with the chain of title.
+2. **Delivery of the master files** by the grantor: lossless where possible, per surah or per ayah, with a **SHA-256 for each file** and a manifest.
+3. Reproduction and **storage on Jawwid's servers**, including backups and CDN caches.
+4. **Streaming** to enrolled students, and **in-app offline playback** that cannot be extracted.
+5. **Per-ayah segmentation** and technical transcoding, with **no change to the performance**. Segments reviewed by certified teachers.
+6. Use inside a **paid educational subscription** (no separate sale of files, no redistribution outside the platform).
+7. **Territory: worldwide. Term:** perpetual, or ≥ 10 years renewable. Non-exclusive. Fee stated.
+8. **Credit line** (Art. 155), and a **warranty** that the grantor holds the rights and that no third-party consent is missing. Notification of any heirs' or performer's conditions.
+9. Consent to **registration** of the licence (Art. 185 / Egyptian IP Authority) if counsel advises it.
+10. Signature by an **authorised signatory**, on letterhead, with the institution's stamp.
+
+### I-5. Letters F-3a to F-3e (Arabic and English)
+
+> **To be sent by the owner, not by this research.** Each letter attaches the **Schedule of Rights**, Arabic and English, below.
+
+#### Schedule of Rights (جدول الحقوق المطلوبة): attach to F-3a, F-3b, F-3c and F-3e
+
+**العربية**
+
+> **جدول الحقوق المطلوبة — ترخيص غير حصري لأكاديمية جوّد (Jawwid Academy)**
+>
+> 1. **التسجيل**: [اسم الإصدار، تاريخه، الرواية] بصوت فضيلة الشيخ محمود خليل الحصري، مع بيان صفة المرخِّص (منتج التسجيل أو المتنازَل إليه) وسند ملكيته.
+> 2. **تسليم الملفات الأصلية (الماستر)** من المرخِّص بأعلى جودة متاحة (يُفضَّل غير مضغوطة)، مقسّمة بالسورة أو بالآية، مع **بصمة SHA-256 لكل ملف** وقائمة بها.
+> 3. **النسخ والتخزين** على خوادم الأكاديمية ونسخها الاحتياطية وشبكات توزيع المحتوى التابعة لها.
+> 4. **البث (Streaming)** للطلاب المسجلين، و**الاستماع دون اتصال داخل التطبيق** بصورة غير قابلة للاستخراج.
+> 5. **التقسيم آيةً آيةً** والتحويل التقني للصيغة دون أي تعديل في الأداء، مع مراجعة التقسيم من معلمين مجازين.
+> 6. **الاستخدام ضمن خدمة تعليمية باشتراك مدفوع**، دون بيع الملفات منفصلة أو إعادة توزيعها خارج المنصة.
+> 7. **النطاق**: جميع الدول — **المدة**: غير محددة أو ١٠ سنوات قابلة للتجديد — **غير حصري** — **المقابل**: [يُحدَّد].
+> 8. **صيغة النسبة** المعتمدة، و**ضمان** المرخِّص لملكيته للحقوق وعدم الحاجة إلى موافقة طرف آخر، أو بيان أي موافقة لازمة (الورثة/المؤدي).
+> 9. الموافقة على **قيد الترخيص** لدى الجهة المختصة إن لزم.
+> 10. **التوقيع** من مفوَّض بالتوقيع على ورق رسمي مختوم.
+
+**English**
+
+> **Schedule of Rights: non-exclusive licence to Jawwid Academy**
+>
+> 1. **Recording:** [edition, date, riwayah] by Sheikh Mahmoud Khalil Al-Husary, with the licensor's capacity (producer or assignee) and proof of title.
+> 2. **Delivery of master files** by the licensor, at the best available quality (lossless preferred), per surah or per ayah, with a **SHA-256 for each file** and a manifest.
+> 3. **Reproduction and storage** on the Academy's servers, backups and CDN.
+> 4. **Streaming** to enrolled students, and **in-app offline playback** that cannot be extracted.
+> 5. **Verse-by-verse segmentation** and technical format conversion, with no change to the performance; segments reviewed by certified teachers.
+> 6. **Use within a paid educational subscription**, with no separate sale of files and no redistribution outside the platform.
+> 7. **Territory:** worldwide. **Term:** perpetual, or 10 years renewable. **Non-exclusive.** **Fee:** [to be set].
+> 8. The approved **credit line**, and the licensor's **warranty** of title and that no other consent is needed, or a statement of any consent required (heirs/performer).
+> 9. Consent to **registration** of the licence with the competent authority if required.
+> 10. **Signature** by an authorised signatory, on stamped letterhead.
+
+#### F-3a: the Ministry of Awqaf, Supreme Council for Islamic Affairs (1961 Hafs murattal)
+
+**العربية**
+
+> **الموضوع: طلب ترخيص باستخدام «المصحف المرتل» (رواية حفص عن عاصم – 1961) بصوت فضيلة الشيخ محمود خليل الحصري في منصة تعليمية للأطفال**
+>
+> معالي وزير الأوقاف / السيد الأمين العام للمجلس الأعلى للشئون الإسلامية، المحترم،
+> السلام عليكم ورحمة الله وبركاته،
+>
+> تتشرف **أكاديمية جوّد** — أكاديمية لتحفيظ القرآن الكريم للأطفال عبر الإنترنت تخدم الأسر في مصر وخارجها — بالتقدم بهذا الطلب، تقديرًا لدور الوزارة التاريخي في مشروع «المصحف المرتل» الذي أشرفت الوزارة على تنفيذه وتمويله من خلال المجلس الأعلى للشئون الإسلامية عام 1961.
+>
+> نرجو التكرم بما يلي:
+> 1. إفادتنا بما إذا كانت الوزارة/المجلس يحتفظ بحقوق منتج هذا التسجيل، وبالنسخة الأصلية منه، أو بالجهة التي آلت إليها.
+> 2. منحنا ترخيصًا غير حصري وفق **جدول الحقوق المرفق**، مع تسليم الملفات الأصلية مصحوبة ببصمات SHA-256.
+> 3. إفادتنا — في ضوء المادة الأولى من القانون رقم 102 لسنة 1985 التي تستثني ما تقوم به وزارة الأوقاف من تسجيل وتداول المصحف الشريف وتجعل الترخيص فيه لمعالي الوزير أو من ينيبه — بما إذا كان ترخيص الوزارة يغني عن ترخيص مستقل من مجمع البحوث الإسلامية لهذا التسجيل.
+> 4. التكرم بإبلاغ ورثة فضيلة الشيخ الحصري بطلبنا أو إفادتنا بطريقة التواصل المعتمدة معهم.
+>
+> ونتعهد بنسبة التلاوة إلى فضيلة الشيخ وإلى الوزارة في كل موضع، وبعدم إدخال أي تعديل على الأداء، وبالالتزام بما تضعونه من شروط.
+>
+> وتفضلوا بقبول فائق الاحترام،
+> [الاسم والصفة] — أكاديمية جوّد · [البريد] · [الهاتف] · [العنوان]
+> المرفقات: جدول الحقوق المطلوبة · نبذة عن الأكاديمية
+
+**English**
+
+> **Subject: Licence request for the 1961 Murattal Mushaf (Hafs ʿan ʿĀṣim) by Sheikh Mahmoud Khalil Al-Husary, for a children's educational platform**
+>
+> To H.E. the Minister of Awqaf / the Secretary-General of the Supreme Council for Islamic Affairs,
+> Assalāmu ʿalaykum wa raḥmatullāhi wa barakātuh.
+>
+> **Jawwid Academy**, an online Quran memorisation academy for children focused on Egypt, respectfully submits this request. We recognise the Ministry's historic role in the 1961 Murattal Mushaf, which it funded and supervised through the Supreme Council for Islamic Affairs.
+>
+> We kindly ask the Ministry to:
+> 1. Confirm whether the Ministry or the Council retains the producer's rights in this recording and its original master, or which body now holds them.
+> 2. Grant a non-exclusive licence under the **attached Schedule of Rights**, with delivery of the master files and their SHA-256 checksums.
+> 3. Advise whether, given Article 1 of Law No. 102 of 1985 (which exempts the Ministry's own recording and circulation of the Mushaf and places its licensing with the Minister or his delegate), the Ministry's licence makes a separate licence from the Islamic Research Academy unnecessary for this recording.
+> 4. Forward our request to Sheikh Al-Husary's heirs, or tell us the approved way to contact them.
+>
+> We undertake to credit the Sheikh and the Ministry wherever the recitation is used, never to alter the performance, and to follow any conditions the Ministry sets.
+>
+> With our highest respect,
+> [Name, title], Jawwid Academy · [e-mail] · [phone] · [address]
+> Enclosures: Schedule of Rights · Academy profile
+
+#### F-3b: the National Media Authority, Holy Quran Radio (recommended first letter)
+
+**العربية**
+
+> **الموضوع: طلب ترخيص باستخدام تسجيلات فضيلة الشيخ محمود خليل الحصري المحفوظة لدى إذاعة القرآن الكريم في منصة تعليمية للأطفال**
+>
+> السيد رئيس الهيئة الوطنية للإعلام / السيد رئيس إذاعة القرآن الكريم، المحترم،
+> السلام عليكم ورحمة الله وبركاته،
+>
+> نهنئكم على إطلاق البوابة والتطبيق الرسميين لإذاعة القرآن الكريم وما يحفظانه من تراث التلاوة المصرية.
+>
+> **أكاديمية جوّد** أكاديمية لتحفيظ القرآن الكريم للأطفال عبر الإنترنت، تخدم الأسر في مصر وخارجها، ونرغب في إتاحة تلاوة فضيلة الشيخ الحصري لطلابنا آيةً آيةً.
+>
+> نرجو التكرم بما يلي:
+> 1. إفادتنا بإصدارات فضيلة الشيخ التي تملك الهيئة حقوقها (ومنها «المصحف المجود» المدرج على البوابة، و«المصحف المرتل» إن كان لديكم)، وبالإدارة المختصة بالترخيص التجاري والتعاقد.
+> 2. منحنا ترخيصًا غير حصري وفق **جدول الحقوق المرفق** للإصدار: [المصحف المرتل / المصحف المجود / المصحف المعلم]، مع تسليم الملفات الأصلية مصحوبة ببصمات SHA-256.
+> 3. إحالة الطلب إلى شركة **صوت القاهرة للصوتيات والمرئيات** إن كانت الحقوق لديها.
+> 4. إفادتنا بموقف الهيئة من موافقة ورثة فضيلة الشيخ على التقسيم آيةً آيةً وصيغة النسبة.
+>
+> وتفضلوا بقبول وافر الاحترام،
+> [الاسم والصفة] — أكاديمية جوّد · [البريد] · [الهاتف] · [العنوان]
+> المرفقات: جدول الحقوق المطلوبة · نبذة عن الأكاديمية
+
+**English**
+
+> **Subject: Licence request for Sheikh Mahmoud Khalil Al-Husary's recordings held by the Holy Quran Radio, for a children's educational platform**
+>
+> To the Chairman of the National Media Authority / the Head of the Holy Quran Radio,
+> Assalāmu ʿalaykum wa raḥmatullāhi wa barakātuh.
+>
+> Congratulations on launching the official Holy Quran Radio portal and app, and on preserving Egypt's heritage of recitation.
+>
+> **Jawwid Academy** is an online Quran memorisation academy for children, serving families in Egypt and abroad. We would like to offer Sheikh Al-Husary's recitation to our students verse by verse.
+>
+> We kindly ask the Authority to:
+> 1. Tell us which of the Sheikh's editions the Authority holds rights in (including the Mujawwad Mushaf listed on the portal, and the Murattal Mushaf if held), and which department handles commercial licensing and contracts.
+> 2. Grant a non-exclusive licence under the **attached Schedule of Rights** for the edition: [Murattal / Mujawwad / Muʿallim], with delivery of the master files and their SHA-256 checksums.
+> 3. Forward the request to **Sono Cairo** if it holds the rights.
+> 4. Tell us the Authority's position on the heirs' consent to verse-by-verse segmentation and to the credit line.
+>
+> With our sincere respect,
+> [Name, title], Jawwid Academy · [e-mail] · [phone] · [address]
+> Enclosures: Schedule of Rights · Academy profile
+
+#### F-3c: Sono Cairo (through the NMA)
+
+**العربية**
+
+> **الموضوع: طلب ترخيص باستخدام إصدار «مصحف حفص» بصوت فضيلة الشيخ محمود خليل الحصري من إنتاج صوت القاهرة**
+>
+> السيد رئيس مجلس إدارة شركة صوت القاهرة للصوتيات والمرئيات، المحترم،
+> السلام عليكم ورحمة الله وبركاته،
+>
+> **أكاديمية جوّد** أكاديمية لتحفيظ القرآن الكريم للأطفال عبر الإنترنت. نرجو التكرم بإفادتنا بالإصدارات التي تملك الشركة حقوقها من تلاوات فضيلة الشيخ الحصري، ومنحنا ترخيصًا غير حصري وفق **جدول الحقوق المرفق** للإصدار [اسم الإصدار وتاريخه]، مع تسليم الملفات الأصلية مصحوبة ببصمات SHA-256، وبيان أي موافقة لازمة من ورثة فضيلته.
+>
+> وتفضلوا بقبول فائق الاحترام،
+> [الاسم والصفة] — أكاديمية جوّد · [البريد] · [الهاتف]
+> المرفقات: جدول الحقوق المطلوبة
+
+**English**
+
+> **Subject: Licence request for the Sono Cairo "Hafs Mushaf" edition by Sheikh Mahmoud Khalil Al-Husary**
+>
+> To the Chairman of Sono Cairo,
+> Assalāmu ʿalaykum wa raḥmatullāhi wa barakātuh.
+>
+> **Jawwid Academy** is an online Quran memorisation academy for children. Please tell us which of Sheikh Al-Husary's editions Sono Cairo holds rights in. We ask for a non-exclusive licence under the **attached Schedule of Rights** for [edition and date], with delivery of the master files and their SHA-256 checksums, and a statement of any consent needed from the Sheikh's heirs.
+>
+> With our highest respect,
+> [Name, title], Jawwid Academy · [e-mail] · [phone]
+> Enclosure: Schedule of Rights
+
+#### F-3d: the heirs of Sheikh Al-Husary (moral-rights consent), through the Sheikh Al-Husary Association
+
+**العربية**
+
+> **الموضوع: طلب موافقة ورثة فضيلة الشيخ محمود خليل الحصري على نسبة التلاوة وتقسيمها آيةً آيةً لأغراض تعليمية**
+>
+> السادة القائمون على جمعية الشيخ الحصري — مع رجاء التكرم بإحالته إلى ورثة فضيلته،
+> السلام عليكم ورحمة الله وبركاته،
+>
+> **أكاديمية جوّد** أكاديمية لتحفيظ القرآن الكريم للأطفال. نسعى للحصول على ترخيص من الجهة المنتجة لتسجيل فضيلة الشيخ [اسم الإصدار]، ونرجو من ورثة فضيلته الكرام:
+> 1. **الموافقة الكتابية على صيغة النسبة**: «تلاوة فضيلة الشيخ محمود خليل الحصري — رحمه الله» [أو الصيغة التي يرتضونها].
+> 2. **الموافقة الكتابية على تقسيم التلاوة إلى ملف لكل آية** وتحويل صيغتها تقنيًا، **دون حذف أو إضافة أو أي تعديل في الأداء**، مع مراجعة التقسيم من معلمين مجازين، لاستخدامها داخل منصتنا التعليمية (وقد تكون باشتراك مدفوع)، في جميع الدول.
+> 3. إفادتنا بأي حقوق مالية يرى الورثة أنها ما زالت لهم في هذا التسجيل، أو بأي شروط يرغبون فيها.
+>
+> ونتعهد بصون التلاوة وإجلال صاحبها، جزاه الله عن القرآن وأهله خير الجزاء.
+>
+> [الاسم والصفة] — أكاديمية جوّد · [البريد] · [الهاتف]
+
+**English**
+
+> **Subject: Request for the consent of Sheikh Mahmoud Khalil Al-Husary's heirs to credit and verse-by-verse segmentation for education**
+>
+> To the Sheikh Al-Husary Association, kindly forwarded to the Sheikh's heirs,
+> Assalāmu ʿalaykum wa raḥmatullāhi wa barakātuh.
+>
+> **Jawwid Academy** teaches children to memorise the Quran. We are seeking a licence from the producer of the Sheikh's recording [edition]. We respectfully ask his heirs for:
+> 1. **Written consent to the credit line**: "Recitation by Sheikh Mahmoud Khalil Al-Husary, may Allah have mercy on him" (or the wording they prefer).
+> 2. **Written consent to splitting the recitation into one file per ayah**, and to technical format conversion, **with nothing removed, added or altered in the performance**, the segments reviewed by certified teachers. The use would be within our educational platform (possibly by paid subscription), worldwide.
+> 3. Information on any economic rights the heirs consider they still hold in this recording, or any conditions they wish to set.
+>
+> We undertake to preserve the recitation and honour the reciter. May Allah reward him on behalf of the Quran and its people.
+>
+> [Name, title], Jawwid Academy · [e-mail] · [phone]
+
+#### F-3e: Injaz Digital (chain-of-title inquiry, then a licence only if proven)
+
+**العربية**
+
+> **الموضوع: استفسار عن سند حقوق إصدارات فضيلة الشيخ محمود خليل الحصري التي توزعونها، وإمكانية الترخيص لتطبيق تعليمي**
+>
+> السادة / إنجاز ديجيتال، المحترمين،
+> السلام عليكم ورحمة الله وبركاته،
+>
+> نلاحظ أن عددًا كبيرًا من إصدارات فضيلة الشيخ الحصري على المنصات الرقمية يحمل اسم شركتكم في سطر (℗). نرجو التكرم بإفادتنا:
+> 1. بالجهة المنتجة/المالكة التي توزعون هذه الإصدارات نيابةً عنها، وبصفة تعاقدكم (موزع/مرخَّص له/مالك).
+> 2. بما إذا كان تعاقدكم يخولكم **الترخيص من الباطن لتطبيقات تعليمية**؛ فإن كان كذلك، نرجو تقديم عرض وفق **جدول الحقوق المرفق** مع صورة من سند التخويل.
+>
+> [الاسم والصفة] — أكاديمية جوّد · [البريد] · [الهاتف]
+> المرفقات: جدول الحقوق المطلوبة
+
+**English**
+
+> **Subject: Chain of title for the Sheikh Mahmoud Khalil Al-Husary releases you distribute, and possible licensing for an educational app**
+>
+> To Injaz Digital,
+> Assalāmu ʿalaykum wa raḥmatullāhi wa barakātuh.
+>
+> Many of Sheikh Al-Husary's digital releases carry your company in the (℗) line. Please tell us:
+> 1. On whose behalf (which producer or owner) you distribute these releases, and in what capacity (distributor, licensee or owner).
+> 2. Whether your agreement authorises you to **sublicense educational apps**. If it does, please send an offer under the **attached Schedule of Rights**, with a copy of the authorisation.
+>
+> [Name, title], Jawwid Academy · [e-mail] · [phone]
+> Enclosure: Schedule of Rights
+
+### I-6. Next steps
+
+1. **The owner** sends F-3b to `quran@maspero.eg`, and sends F-3a to the Ministry of Awqaf through its official contact or by hand, **in the same week**. Keep proof of sending and delivery.
+2. **The owner** sends F-3d to the Sheikh Al-Husary Association, timed with whichever producer answers.
+3. **Optional:** F-3e to Injaz Digital, for chain-of-title information only.
+4. **Engineering, meanwhile:**
+   - keep building and testing with Al-Hudhaify (KFGQPC);
+   - design the ingest so a licensed Husary master can be dropped in later (per-ayah segments plus a SHA-256 manifest);
+   - keep a `reciter_code` such as `husary-murattal-1961` **disabled for paying students** until the rights record exists.
+5. **Follow-up:** if there's no answer within 3–4 weeks, re-send by registered post to the head office. Ask counsel whether an Art. 183 / Egyptian IP Authority route is worth running alongside.
+6. **When a grant arrives:** counsel reviews it against I-4 before any file is ingested. The owner switches Husary on for paying students only after counsel's sign-off.
+
+**Egyptian IP lawyer's checklist:**
+1. Who holds the producer's rights in the chosen edition today? Verify the grantor's chain of title (the 1961 Awqaf funding; any transfer to ERTU/NMA or Sono Cairo).
+2. Pre-2002 protection of performances and phonograms (Law 354/1954, as amended by Law 38/1992), and how Law 82/2002 applies to the edition. Is any right still running? When does it end?
+3. Is the grant's form valid under Art. 149 (itemised rights, purpose, duration, place), signed by an authorised signatory?
+4. Moral rights (Art. 155): is the heirs' consent sufficient for per-ayah segmentation, and who the heirs are.
+5. Law 102/1985: does an Awqaf licence for an Awqaf recording satisfy Art. 1, or is an Islamic Research Academy licence also needed for in-app streaming and offline playback? What is the procedure?
+6. Law 163/2023: is the Egyptian IP Authority now the "competent ministry" for Art. 183 (public-domain licence) and Art. 185 (register of dispositions)? Should Jawwid's licence be registered?
+7. Distributor claims (Injaz Digital and others): is there any risk that a distributor's ℗ claim conflicts with the grantor's?
+8. Foreign markets: does the licence's worldwide grant suffice, and are there country-specific religious-publication rules for the first non-Egyptian markets?
+9. Contract terms: warranty and indemnity, termination, and what happens to segments and caches on termination.
+
+---
+
 ## Final classification (the brief's decision rule)
 
 | Category | Recordings |
@@ -695,3 +1011,21 @@ All entries were checked on **2026-10-28** (UTC). "Capture SHA-256" is the first
 | 60 | EveryAyah: Husary folders | https://everyayah.com/data/ | 08:48:01 | `fc0ed8704ae3e5b9` | Five Husary folders including Muʿallim and Mujawwad; no licence |
 | 61 | KFGQPC: audio page (Husary absent) | https://qurancomplex.gov.sa/quran-audios/ | 08:56:51 | `c75630d05fa24cb8` | Nine recordings, none by Al-Husary |
 | 62 | English Wikipedia: Al-Husary | https://en.wikipedia.org/wiki/Mahmoud_Khalil_Al-Hussary | 09:00 (API) | n/a | Secondary: 17 Sept 1917 – 24 Nov 1980 |
+| 63 | App Store search API (Husary apps and major Quran apps, EG + US) | https://itunes.apple.com/search?…&entity=software | 09:41:43 | `19a70babf6f5d92c` (raw JSON) | ~37 apps carrying Husary; no licensor named in any description |
+| 64 | Quran for Android: issue #755 (maintainer, 2021-02-11) | https://github.com/quran/quran_android/issues/755 | ≈09:42 (API) | n/a | "we take anything down whenever we get copyright notices" |
+| 65 | Tarteel QUL: Husary licensing requests #644, #718, #727, #823, #957 | https://github.com/TarteelAI/quranic-universal-library/issues/718 (and the others) | ≈09:49 (API) | n/a | Open since July–Oct 2026; no maintainer answer; repository LICENSE is MIT (code) |
+| 66 | Muslim Pro terms | https://www.muslimpro.com/terms-of-service | 09:42:25 | `1471070119c2cd5c` (**HTTP 404**) | Not readable |
+| 67 | Elmohafez | https://www.elmohafez.com/ | 09:42:26 | `78d881a4435a65e1` | No rights statement found |
+| 68 | Holy Quran Radio portal: home (rendered in browser) | https://misrquran.gov.eg/home | ≈09:44 | n/a (rendered) | Footer «جميع الحقوق محفوظة لإذاعة القرآن الكريم المصرية» |
+| 69 | Holy Quran Radio portal: Husary recordings (rendered in browser) | https://misrquran.gov.eg/records?id=64f361c0-7b18-4ffb-afce-a165008655c6 | ≈09:45 | n/a (rendered) | 471 Husary recordings, including «المصحف المجود»; no download links |
+| 70 | Holy Quran Radio API: reciters lookup | https://api.misrquran.gov.eg/api/QuraanLookup/QuraanRecordingsRecitersLookup | 09:44:06 | `03d8922152c41285` | Husary listed with id `64f361c0-…` |
+| 71 | Holy Quran Radio portal: privacy policy (rendered) | https://misrquran.gov.eg/privacy-policy | ≈09:46 | n/a (rendered) | All rights reserved to the Holy Quran Radio |
+| 72 | Google Play: official Holy Quran Radio app | https://play.google.com/store/apps/details?id=com.mcit.holyquranradio | 09:43:00 | `f64e7c22604d0f43` | Developer: Ministry of Communications; support e-mail quran@maspero.eg; portal misrquran.gov.eg |
+| 73 | NMA press: thanks to the Ministry of Communications for the portal and app | https://www.maspero.eg/press-center/2026/03/19/938044/… | 09:42:59 | `291f322e4520cc33` | Official launch; 60+ years of archive |
+| 74 | Al-Nahar: launch of the official Quran Radio site and app | https://www.alnaharegypt.com/1169478 | 09:43:00 | `8cd9183a46d54778` | Secondary: rare recitations of the great reciters |
+| 75 | Sheikh Al-Husary Association: contact page | https://elhosary.co/تواصل-معنا/ | 09:46:13 | `af806679a933e6d3` | Address and phone |
+| 76 | Injaz Digital: home | https://www.injazdigital.com/ | 09:48:19 | `2e28d9c01137fd59` | Distributor and YouTube rights manager; Dubai and Cairo; info@injazdigital.com |
+| 77 | WIPO Lex: Law 163/2023 (Egyptian IP Authority) | https://www.wipo.int/wipolex/en/legislation/details/22398 | 09:46:41 | `b108126941c5bc9a` | In force 7 Aug 2023 |
+| 78 | Law 163/2023 text (secondary transcription) | https://alberonsy.com/?p=3853 | 09:46:43 | `bcfe0e249d459324` | The Authority replaces the ministries (incl. Culture) and the Media Council in IP functions |
+| 79 | Ministry of Awqaf site | https://awqaf.gov.eg/ | 09:46:10 | **no response** (curl); the browser was not approved for this site | Contact not verified |
+| 80 | Islamic Research Academy and digital Mushaf (Youm7, July 2026) | https://www.youm7.com/story/2026/7/14/…/7481642 | (search result only) | n/a | Secondary: the Academy is studying the protection of digital Mushaf copies; no audio-licence procedure published |
