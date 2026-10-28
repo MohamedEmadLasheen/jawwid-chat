@@ -85,8 +85,9 @@ void main() {
     expect(notices.acknowledged, 0);
   });
 
-  testWidgets('asked once per account per session: the shell built again asks nothing', (tester) async {
+  testWidgets('shown once per account per session, even when the record did not reach the server', (tester) async {
     await pump(tester, gated);
+    notices.failAcknowledge = true;
     await tester.tap(find.byKey(const ValueKey('lesson-audio-notice-tick')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('lesson-audio-notice-ok')));
@@ -99,7 +100,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.byType(LessonAudioNoticeDialog), findsNothing);
-    expect(notices.asked, 1);
+    // The server still says "needed": the next sign-in asks again.
+    expect(notices.needed, isTrue);
   });
 
   testWidgets('a parent finds About lesson audio in Settings, with its terms', (tester) async {
@@ -128,6 +130,7 @@ class _FakeNotices implements ParentNoticeRepository {
   _FakeNotices({required this.needed});
 
   bool needed;
+  bool failAcknowledge = false;
   int asked = 0;
   int acknowledged = 0;
 
@@ -139,6 +142,7 @@ class _FakeNotices implements ParentNoticeRepository {
 
   @override
   Future<void> acknowledgeLessonAudio() async {
+    if (failAcknowledge) throw StateError('offline');
     acknowledged++;
     needed = false;
   }

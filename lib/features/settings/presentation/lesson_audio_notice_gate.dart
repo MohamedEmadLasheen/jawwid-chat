@@ -29,12 +29,13 @@ class _LessonAudioNoticeGateState extends ConsumerState<LessonAudioNoticeGate> {
   }
 
   Future<void> _maybeAsk() async {
-    final user = ref.read(authControllerProvider).user;
-    if (user == null || ref.read(lessonAudioNoticeAskedProvider).contains(user.id)) return;
-    ref.read(lessonAudioNoticeAskedProvider.notifier).mark(user.id);
+    // The server first: a parent who acknowledged (or a build with no API) needs nothing else.
     final repo = ref.read(parentNoticeRepositoryProvider);
     final needs = await repo.needsLessonAudio().catchError((Object _) => false);
     if (!needs || !mounted) return;
+    final user = ref.read(authControllerProvider).user;
+    if (user == null || ref.read(lessonAudioNoticeAskedProvider).contains(user.id)) return;
+    ref.read(lessonAudioNoticeAskedProvider.notifier).mark(user.id);
     final accepted = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => const LessonAudioNoticeDialog());
     // Without a record (dismissed, or the request failed) the next sign-in asks again.
     if (accepted == true) await repo.acknowledgeLessonAudio().catchError((Object _) {});
