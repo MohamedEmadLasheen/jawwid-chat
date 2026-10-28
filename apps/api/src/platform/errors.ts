@@ -473,6 +473,30 @@ export enum CommErrorCode {
   // --- PD-35 B7: the action log ---
   /** No such staff member, or not one whose log the caller may read (self, their department's manager, the super admin). 404. */
   ACTION_LOG_NOT_FOUND = 'COMM.ACTION_LOG_NOT_FOUND',
+
+  // --- PD-42: entering families by hand ---
+  /** Families are entered by Sales and Operations supervisors (for their own families) and their managers. 403, before any lookup. */
+  INTAKE_DENIED = 'COMM.INTAKE_DENIED',
+  /** No such family or child, or not one of the caller's own families. 404. */
+  INTAKE_NOT_FOUND = 'COMM.INTAKE_NOT_FOUND',
+  /** A field failed validation (the message names it). 400. */
+  INTAKE_INVALID = 'COMM.INTAKE_INVALID',
+  /** The intake id was used by someone else or for another body, or the change does not apply any more. 409. */
+  INTAKE_STATE = 'COMM.INTAKE_STATE',
+  /**
+   * Entering families waits for the contact-key backfill (every existing
+   * family's parents keyed), so that no parent is entered twice. 409; the
+   * operator runs family-contact-keys-backfill --apply.
+   */
+  INTAKE_NOT_READY = 'COMM.INTAKE_NOT_READY',
+  /**
+   * This parent is already in Chat (the e-mail or the number). `detail` names
+   * the family only when the caller may handle it; otherwise it says nothing
+   * more. 409. Add the children to that family instead.
+   */
+  PARENT_EXISTS = 'COMM.PARENT_EXISTS',
+  /** A child with this name (and date of birth) is already in the family; resend with confirmDuplicate for twins. 409. */
+  CHILD_EXISTS = 'COMM.CHILD_EXISTS',
 }
 
 export class CommError extends Error {
