@@ -31,8 +31,11 @@ export interface SweepResult {
   raised: number;
   settled: number;
   withdrawn: number;
+  restored: number;
   rerouted: number;
   failed: number;
+  /** Candidates whose raise declined (no assignee, not standing, covered): recorded with a back-off. */
+  declined: number;
   /** Source occurrences waiting on a recorded issue (chat.work_task_source_issue). */
   issues: number;
   batches: number;
@@ -329,13 +332,13 @@ export class TaskService {
    * `issues` are what the worker logs.
    */
   async sweep(): Promise<SweepResult> {
-    const total: SweepResult = { skipped: false, raised: 0, settled: 0, withdrawn: 0, rerouted: 0, failed: 0, issues: 0, batches: 0 };
+    const total: SweepResult = { skipped: false, raised: 0, settled: 0, withdrawn: 0, restored: 0, rerouted: 0, failed: 0, declined: 0, issues: 0, batches: 0 };
     for (let i = 0; i < SWEEP_BATCHES; i++) {
       const [row] = await this.prisma.$queryRaw<Array<{ r: Record<string, unknown> }>>`SELECT chat.work_task_sweep(50) AS r`;
       const r = row?.r ?? {};
       if (r.skipped === true) return { ...total, skipped: total.batches === 0 };
       total.batches += 1;
-      for (const k of ['raised', 'settled', 'withdrawn', 'rerouted', 'failed'] as const) total[k] += Number(r[k] ?? 0);
+      for (const k of ['raised', 'settled', 'withdrawn', 'restored', 'rerouted', 'failed', 'declined'] as const) total[k] += Number(r[k] ?? 0);
       total.issues = Number(r.issues ?? 0);
       if (r.more !== true) break;
     }
@@ -385,7 +388,7 @@ export class TaskService {
     if (row.source_type && NOT_REASSIGNABLE.has(row.source_type)) {
       throw denied(row.source_type === 'case'
         ? 'a case\'s task follows its owner: assign the case on its page'
-        : 'only the lesson\'s teacher writes its report: change the lesson\'s teacher on the Schedule, and the task follows');
+        : 'only the lesson\'s teacher writes its report or correction: change the lesson\'s teacher on the Schedule, and the task follows');
     }
     const instructions = text(body.instructions, 'instructions', NOTE_MAX, false);
     const to = await this.targetOf(viewer, body.to);

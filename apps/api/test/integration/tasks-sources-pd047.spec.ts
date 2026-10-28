@@ -259,6 +259,24 @@ describe('lesson reports', () => {
     expect(await taskFor(`violation_decision:${v2.id}`)).toBeUndefined();
   });
 
+  it('a violation corrected back to its outcome restores its withdrawn task (PD-15)', async () => {
+    const lesson = await pastLesson(HOUR);
+    await missTeacher(lesson, tsupA);
+    const [v] = await g.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.teacher_violation WHERE lesson_id = ${lesson}::uuid`;
+    const vt = (await taskFor(`violation_decision:${v.id}`)) as string;
+    const correct = (from: string, to: string, note: string | null) => g.prisma.$transaction([
+      exec(`insert into chat.lesson_correction (organization_id, lesson_id, from_outcome, to_outcome, reason, corrected_by)
+            values (chat.default_organization_id(), $1::uuid, $2, $3, 'corrected', $4::uuid)`, lesson, from, to, tmgr),
+      exec(`update chat.lesson set outcome = $2, outcome_note = $3, outcome_by = $4::uuid, outcome_by_kind = 'staff', outcome_at = now()
+             where id = $1::uuid`, lesson, to, note, tmgr),
+    ]);
+    await correct('teacher_no_show', 'admin_cancelled', 'the teacher was there');
+    expect((await tasks.get(tsupA, vt)).sourceState).toBe('withdrawn');
+    await correct('admin_cancelled', 'teacher_no_show', null);
+    expect(await tasks.get(tsupA, vt)).toMatchObject({ state: 'open', sourceState: 'pending' });
+    expect((await history(vt)).map((e) => e[0])).toEqual(['created', 'source_withdrawn', 'source_restored']);
+  });
+
   it('a violation decided is its task completed, by the person who decided', async () => {
     const lesson = await pastLesson(HOUR);
     await missTeacher(lesson, tsupA);
@@ -296,6 +314,17 @@ describe('corrections and rulings', () => {
     expect((await tasks.get(s.teacherId, id)).effectivePriority).toBe('medium');
     await lessons.report(s.teacherId, lesson, { covered: 'Al-Mulk 1-15' });
     expect(await tasks.get(s.teacherId, id)).toMatchObject({ state: 'completed', closedBy: { id: s.teacherId } });
+  });
+
+  it('a correction\'s task follows the lesson\'s teacher, like the report\'s', async () => {
+    await setSince('lesson_report', '2999-01-01T00:00:00Z');
+    const lesson = await pastLesson(HOUR);
+    await exec(`insert into chat.report_correction_request (organization_id, lesson_id, teacher_id, kind, reason, requested_by)
+                values (chat.default_organization_id(), $1::uuid, $2::uuid, 'missing', 'please file it', $3::uuid)`, lesson, s.teacherId, tsupA);
+    const [q] = await g.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.report_correction_request WHERE lesson_id = ${lesson}::uuid`;
+    const id = (await taskFor(`report_correction:${q.id}`)) as string;
+    await exec(`update chat.lesson set teacher_id = $2::uuid where id = $1::uuid`, lesson, s.newTeacherId);
+    expect((await tasks.get(sa, id)).assignee).toEqual({ kind: 'teacher', id: s.newTeacherId });
   });
 
   it('a late-apology ruling is the teacher\'s supervisor\'s task, completed by the ruling', async () => {
@@ -406,6 +435,20 @@ describe('cases', () => {
     expect((await history(id)).map((e) => e[0])).toEqual(['created', 'reassigned', 'completed']);
   });
 
+  it('a case whose owner left moves to its department\'s manager, by the system', async () => {
+    await asCaseActor(tmgr,
+      `insert into chat.supervision_case (organization_id, subject_kind, subject_id, target_department_id, title, owner_id, opened_by)
+       values (chat.default_organization_id(), 'teacher', $1::uuid, $2::uuid, 'owner leaves', $3::uuid, $4::uuid)`,
+      s.teacherId, tdept, tsupA, tmgr);
+    const [{ id: caseId }] = await g.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.supervision_case`;
+    const id = (await taskFor(`case:${caseId}`)) as string;
+    expect((await tasks.get(tmgr, id)).assignee).toEqual(staff(tsupA));
+    await exec(`update chat.staff set is_active = false, left_at = now() where id = $1::uuid`, tsupA);
+    await tasks.sweep();
+    expect((await tasks.get(tmgr, id)).assignee).toEqual(staff(tmgr));
+    expect((await history(id)).slice(-1)).toEqual([['reassigned', 'system', null]]);
+  });
+
   it('a case re-dated re-dates its task, by the person who did it', async () => {
     await asCaseActor(tmgr,
       `insert into chat.supervision_case (organization_id, subject_kind, subject_id, target_department_id, title, owner_id, opened_by)
@@ -494,5 +537,29 @@ describe('the database', () => {
     expect(await issues(`lesson_report:${lesson}`)).toHaveLength(1);
     await tasks.sweep();
     expect(await tasks.get(s.teacherId, id)).toMatchObject({ state: 'completed', closedBy: { id: s.teacherId } });
+    expect(await issues(`lesson_report:${lesson}`)).toEqual([]);
+  });
+
+  it('declined candidates never starve the batch: 61 of them, and the real one is raised in the first sweep', async () => {
+    // 61 past lessons with report tasks, each with a "missing" correction that its report task covers.
+    await exec(
+      `insert into chat.lesson (organization_id, learner_id, teacher_id, starts_at, ends_at, created_by_kind, created_by)
+       select l.organization_id, l.id, $2::uuid, now() - (n || ' hours')::interval - interval '30 minutes', now() - (n || ' hours')::interval, 'staff', $3::uuid
+         from chat.learner l, generate_series(2, 62) n where l.id = $1::uuid`,
+      s.learnerId, s.teacherId, tsupA,
+    );
+    await tasks.sweep();
+    await exec(
+      `insert into chat.report_correction_request (organization_id, lesson_id, teacher_id, kind, reason, requested_by)
+       select l.organization_id, l.id, l.teacher_id, 'missing', 'please file it', $1::uuid
+         from chat.lesson l where l.outcome is null and l.learner_id = $2::uuid`,
+      tsupA, s.learnerId,
+    );
+    const real = await pastLesson(0);
+    const [{ r }] = await g.prisma.$queryRaw<Array<{ r: Record<string, unknown> }>>`SELECT chat.work_task_sweep(50) AS r`;
+    expect(r).toMatchObject({ skipped: false, failed: 0 });
+    expect(await taskFor(`lesson_report:${real}`)).toBeDefined();
+    const [{ n }] = await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM chat.work_task WHERE source_type = 'report_correction'`;
+    expect(Number(n)).toBe(0);
   });
 });

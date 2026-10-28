@@ -261,6 +261,7 @@ async function bootstrap(): Promise<void> {
   let nextSeatSweep = 0;
   let nextCaseDueSweep = 0;
   let nextTaskSweep = 0;
+  let lastTaskIssues = 0;
   let nextRoomSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
@@ -467,9 +468,13 @@ async function bootstrap(): Promise<void> {
       draining = true;
       try {
         const swept = await tasks.sweep();
-        if (swept.failed > 0) {
-          log.warn(`task sweep: ${swept.failed} failed this run, ${swept.issues} source issue(s) recorded (chat.work_task_source_issue)`);
+        if (!swept.skipped && (swept.failed > 0 || swept.issues !== lastTaskIssues)) {
+          log.warn(
+            `task sweep: ${swept.failed} failed, ${swept.declined} declined this run; ` +
+              `source issues ${lastTaskIssues} -> ${swept.issues} (chat.work_task_source_issue)`,
+          );
         }
+        if (!swept.skipped) lastTaskIssues = swept.issues;
       } catch (e) {
         report(log, 'task source sweep', 'tasks.sweep', e);
       } finally {

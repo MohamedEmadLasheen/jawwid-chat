@@ -247,6 +247,8 @@ begin
     perform chat.work_task_signal(r.id, r.revision, 'completed');
     v_n := v_n + 1;
   end loop;
+  -- The occurrence is resolved: whatever was recorded about it goes.
+  delete from chat.work_task_source_issue where organization_id = p_org and source_key = p_key;
   perform chat.work_task_end_system(v_saved);
   return v_n;
 end;
@@ -271,6 +273,33 @@ begin
      returning id, revision
   loop
     perform chat.work_task_signal(r.id, r.revision, 'source_withdrawn');
+    v_n := v_n + 1;
+  end loop;
+  delete from chat.work_task_source_issue where organization_id = p_org and source_key = p_key;
+  perform chat.work_task_end_system(v_saved);
+  return v_n;
+end;
+$$;
+
+-- The source stands again (a violation's lesson corrected back): the withdrawn
+-- task is pending again, recorded as source_restored.
+create or replace function chat.work_task_restore(p_org uuid, p_key text)
+returns integer
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  v_saved text[] := chat.work_task_begin_system(null);
+  v_n     integer := 0;
+  r record;
+begin
+  for r in
+    update chat.work_task set source_state = 'pending'
+     where organization_id = p_org and source_key = p_key
+       and state in ('open', 'awaiting_decision') and source_state = 'withdrawn'
+     returning id, revision
+  loop
+    perform chat.work_task_signal(r.id, r.revision, 'source_restored');
     v_n := v_n + 1;
   end loop;
   perform chat.work_task_end_system(v_saved);
@@ -299,6 +328,7 @@ begin
     perform chat.work_task_signal(r.id, r.revision, 'reassigned');
     v_n := v_n + 1;
   end loop;
+  delete from chat.work_task_source_issue where organization_id = p_org and source_key = p_key;
   perform chat.work_task_end_system(v_saved);
   return v_n;
 end;
@@ -544,6 +574,8 @@ declare
   v_withdrawn integer := 0;
   v_rerouted  integer := 0;
   v_failed    integer := 0;
+  v_declined  integer := 0;
+  v_restored  integer := 0;
   v_more      boolean := false;
   v_n         integer;
   r           record;
@@ -564,6 +596,28 @@ begin
   s_violation := chat.work_task_since('violation_decision');
   s_case := chat.work_task_since('case');
 
+  -- The issue log shrinks: an occurrence resolved in any way (done, gone, its
+  -- task closed) takes its record with it.
+  delete from chat.work_task_source_issue i
+   where exists (select 1 from chat.work_task t
+                  where t.organization_id = i.organization_id and t.source_key = i.source_key
+                    and t.state in ('completed', 'removed'))
+      or case split_part(i.source_key, ':', 1)
+           when 'lesson_report' then not exists (select 1 from chat.lesson l
+                                                  where l.id = split_part(i.source_key, ':', 2)::uuid and l.outcome is null)
+           when 'report_correction' then not exists (select 1 from chat.report_correction_request q
+                                                      where q.id = split_part(i.source_key, ':', 2)::uuid and q.resolution is null)
+           when 'lesson_ruling' then not exists (select 1 from chat.lesson_ruling q
+                                                  where q.id = split_part(i.source_key, ':', 2)::uuid and q.decision is null)
+           when 'leave_decision' then not exists (select 1 from chat.teacher_leave_request q
+                                                   where q.id = split_part(i.source_key, ':', 2)::uuid and q.state = 'requested')
+           when 'violation_decision' then not exists (select 1 from chat.teacher_violation q
+                                                       where q.id = split_part(i.source_key, ':', 2)::uuid and q.decision is null)
+           when 'case' then not exists (select 1 from chat.supervision_case q
+                                         where q.id = split_part(i.source_key, ':', 2)::uuid and q.status in ('open', 'in_progress'))
+           else true
+         end;
+
   -- Create: occurrences with no task yet, and no back-off running.
   for r in
     select x.org, x.src, x.id from (
@@ -573,6 +627,11 @@ begin
       union all
       select q.organization_id, 'report_correction', q.id, q.requested_at from chat.report_correction_request q
        where q.resolution is null and q.requested_at >= s_corr
+         -- A "missing" request whose lesson has an open report task asks for that task's work.
+         and not (q.kind = 'missing' and exists (
+               select 1 from chat.work_task t
+                where t.organization_id = q.organization_id and t.source_key = 'lesson_report:' || q.lesson_id
+                  and t.state in ('open', 'awaiting_decision')))
       union all
       select q.organization_id, 'lesson_ruling', q.id, q.opened_at from chat.lesson_ruling q
        where q.decision is null and q.opened_at >= s_ruling
@@ -581,7 +640,7 @@ begin
        where q.state = 'requested' and q.requested_at >= s_leave
       union all
       select q.organization_id, 'violation_decision', q.id, q.recorded_at from chat.teacher_violation q
-       where q.decision is null and q.recorded_at >= s_violation
+       where q.decision is null and q.recorded_at >= s_violation and chat.work_task_violation_stands(q.id)
       union all
       select q.organization_id, 'case', q.id, q.created_at from chat.supervision_case q
        where q.status in ('open', 'in_progress') and q.created_at >= s_case
@@ -604,6 +663,14 @@ begin
             when 'case' then chat.work_task_raise_case(r.id)
           end) is not null then
         v_raised := v_raised + 1;
+      else
+        -- Declined (no assignee, not standing, covered): recorded with a back-off,
+        -- so it is not picked again every minute and never starves the batch.
+        v_declined := v_declined + 1;
+        if not exists (select 1 from chat.work_task_source_issue i
+                        where i.organization_id = r.org and i.source_key = r.src || ':' || r.id and i.next_try_at > now()) then
+          perform chat.work_task_note_issue(r.org, r.src || ':' || r.id, 'not raised: its source declined it (see its raise rule)');
+        end if;
       end if;
     exception when others then
       v_failed := v_failed + 1;
@@ -664,31 +731,57 @@ begin
     end;
   end loop;
 
-  -- Owners: a case's task follows its (live) owner, else its department's
-  -- manager; a lesson report follows the lesson's teacher.
+  -- A violation corrected back to its outcome stands again: its withdrawn task is pending again.
   for r in
-    select t.organization_id as org, t.source_key as key,
-           case t.source_type when 'case' then chat.work_task_case_assignee(t.source_id) end as staff_id,
-           case t.source_type when 'lesson_report' then (select l.teacher_id from chat.lesson l where l.id = t.source_id) end as teacher_id,
-           case t.source_type when 'case' then
-             (select e.actor_id from chat.supervision_case_event e
-               where e.case_id = t.source_id and e.kind in ('assigned', 'opened') order by e.at desc limit 1) end as actor
+    select t.organization_id as org, t.source_key as key
       from chat.work_task t
-     where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-       and ((t.source_type = 'case'
-             and chat.work_task_case_assignee(t.source_id) is not null
-             and t.assignee_staff_id is distinct from chat.work_task_case_assignee(t.source_id))
-         or (t.source_type = 'lesson_report'
-             and t.assignee_teacher_id is distinct from (select l.teacher_id from chat.lesson l where l.id = t.source_id)))
+      join chat.teacher_violation q on q.id = t.source_id
+     where t.kind = 'system' and t.source_type = 'violation_decision' and t.source_state = 'withdrawn'
+       and t.state in ('open', 'awaiting_decision') and q.decision is null and chat.work_task_violation_stands(q.id)
      limit v_left + 1
   loop
     if v_left = 0 then v_more := true; exit; end if;
     v_left := v_left - 1;
     begin
-      -- A departed owner leaves no actor of the move: then it is the system's.
-      v_n := chat.work_task_reroute(r.org, r.key, r.staff_id, r.teacher_id,
-                                    case when r.staff_id is not null and chat.task_principal_any(r.actor, r.org) is not null then r.actor end);
-      v_rerouted := v_rerouted + v_n;
+      v_restored := v_restored + chat.work_task_restore(r.org, r.key);
+    exception when others then
+      v_failed := v_failed + 1;
+      perform chat.work_task_note_issue(r.org, r.key, sqlerrm);
+    end;
+  end loop;
+
+  -- Owners: a case's task follows its live owner, else its department's
+  -- manager (then the system moves it: the owner is gone); a lesson report
+  -- and a correction follow the lesson's teacher. Retries respect the back-off.
+  for r in
+    select z.* from (
+      select t.organization_id as org, t.source_key as key, t.assignee_staff_id, t.assignee_teacher_id,
+             case t.source_type when 'case' then chat.work_task_case_assignee(t.source_id) end as staff_id,
+             case t.source_type
+               when 'lesson_report' then (select l.teacher_id from chat.lesson l where l.id = t.source_id)
+               when 'report_correction' then (select l.teacher_id from chat.report_correction_request q
+                                                join chat.lesson l on l.id = q.lesson_id where q.id = t.source_id)
+             end as teacher_id,
+             case t.source_type when 'case' then
+               (select case when c.owner_id = chat.work_task_case_assignee(c.id) then
+                          (select e.actor_id from chat.supervision_case_event e
+                            where e.case_id = c.id and e.kind in ('assigned', 'opened') order by e.at desc limit 1) end
+                  from chat.supervision_case c where c.id = t.source_id) end as actor
+        from chat.work_task t
+       where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
+         and t.source_type in ('case', 'lesson_report', 'report_correction')
+         and not exists (select 1 from chat.work_task_source_issue i
+                          where i.organization_id = t.organization_id and i.source_key = t.source_key and i.next_try_at > now())
+    ) z
+     where (z.staff_id is not null and z.assignee_staff_id is distinct from z.staff_id)
+        or (z.teacher_id is not null and z.assignee_teacher_id is distinct from z.teacher_id)
+     limit v_left + 1
+  loop
+    if v_left = 0 then v_more := true; exit; end if;
+    v_left := v_left - 1;
+    begin
+      v_rerouted := v_rerouted + chat.work_task_reroute(r.org, r.key, r.staff_id, r.teacher_id,
+                                                        case when chat.task_principal_any(r.actor, r.org) is not null then r.actor end);
     exception when others then
       v_failed := v_failed + 1;
       perform chat.work_task_note_issue(r.org, r.key, sqlerrm);
@@ -696,7 +789,8 @@ begin
   end loop;
 
   return jsonb_build_object('skipped', false, 'raised', v_raised, 'settled', v_settled, 'withdrawn', v_withdrawn,
-                            'rerouted', v_rerouted, 'failed', v_failed, 'more', v_more,
+                            'restored', v_restored, 'rerouted', v_rerouted, 'failed', v_failed, 'declined', v_declined,
+                            'more', v_more,
                             'issues', (select count(*) from chat.work_task_source_issue));
 end;
 $$;
@@ -718,6 +812,7 @@ as $$
 declare
   v record;
 begin
+  -- Each step is its own subtransaction, recorded under its own source key.
   begin
     if old.outcome is null and new.outcome is not null then
       if new.outcome in ('held', 'student_no_show') then
@@ -730,17 +825,37 @@ begin
     if new.teacher_id is distinct from old.teacher_id then
       perform chat.work_task_reroute(new.organization_id, 'lesson_report:' || new.id, null, new.teacher_id, null);
     end if;
-    -- An outcome corrected away withdraws its undecided violations' tasks (PD-15).
-    if new.outcome is distinct from old.outcome then
-      for v in select q.id from chat.teacher_violation q
-                where q.lesson_id = new.id and q.decision is null and not chat.work_task_violation_stands(q.id)
-      loop
-        perform chat.work_task_withdraw(new.organization_id, 'violation_decision:' || v.id);
-      end loop;
-    end if;
   exception when others then
     perform chat.work_task_note_issue(new.organization_id, 'lesson_report:' || new.id, sqlerrm);
   end;
+  -- ... and its open correction requests' tasks.
+  if new.teacher_id is distinct from old.teacher_id then
+    for v in select q.id from chat.report_correction_request q where q.lesson_id = new.id and q.resolution is null
+    loop
+      begin
+        perform chat.work_task_reroute(new.organization_id, 'report_correction:' || v.id, null, new.teacher_id, null);
+      exception when others then
+        perform chat.work_task_note_issue(new.organization_id, 'report_correction:' || v.id, sqlerrm);
+      end;
+    end loop;
+  end if;
+  -- An outcome corrected away withdraws its undecided violations' tasks; one
+  -- corrected back restores them (PD-15).
+  if new.outcome is distinct from old.outcome then
+    for v in select q.id, chat.work_task_violation_stands(q.id) as stands
+               from chat.teacher_violation q where q.lesson_id = new.id and q.decision is null
+    loop
+      begin
+        if v.stands then
+          perform chat.work_task_restore(new.organization_id, 'violation_decision:' || v.id);
+        else
+          perform chat.work_task_withdraw(new.organization_id, 'violation_decision:' || v.id);
+        end if;
+      exception when others then
+        perform chat.work_task_note_issue(new.organization_id, 'violation_decision:' || v.id, sqlerrm);
+      end;
+    end loop;
+  end if;
   return null;
 end;
 $$;
@@ -895,9 +1010,13 @@ create trigger supervision_case_moves_its_task after update of owner_id, status,
 
 -- The history may name the system as the actor of a reassignment: a source
 -- moved its own owner (a lesson's teacher, a departed case owner).
+alter table chat.work_task_event drop constraint work_task_event_kind_check;
+alter table chat.work_task_event add constraint work_task_event_kind_check check (kind in (
+  'created', 'reassigned', 'commented', 'out_of_scope', 'returned', 'completed', 'removed', 'due_changed',
+  'source_withdrawn', 'source_restored', 'priority_changed', 'source_raised'));
 alter table chat.work_task_event drop constraint work_task_event_system_kinds;
 alter table chat.work_task_event add constraint work_task_event_system_kinds
-  check (actor_kind <> 'system' or kind in ('created', 'source_withdrawn', 'source_raised', 'reassigned'));
+  check (actor_kind <> 'system' or kind in ('created', 'source_withdrawn', 'source_restored', 'source_raised', 'reassigned'));
 
 -- ===========================================================================
 -- 6. The guard, the history trigger and the event guard, redefined
@@ -1003,8 +1122,10 @@ begin
     if not v_system then
       raise exception 'a task''s source state and floor change only with its source' using errcode = 'check_violation';
     end if;
-    if new.source_state is distinct from old.source_state and not (old.source_state = 'pending' and new.source_state = 'withdrawn') then
-      raise exception 'a source is withdrawn once, never revived' using errcode = 'check_violation';
+    if new.source_state is distinct from old.source_state
+       and not (old.source_state = 'pending' and new.source_state = 'withdrawn'
+                or old.source_state = 'withdrawn' and new.source_state = 'pending') then
+      raise exception 'a source is pending or withdrawn' using errcode = 'check_violation';
     end if;
   end if;
   if old.state in ('completed', 'removed') then
@@ -1129,7 +1250,8 @@ begin
   end if;
   if new.source_state is distinct from old.source_state then
     insert into chat.work_task_event (task_id, organization_id, kind, actor_kind, actor_id, to_assignee, before, after)
-    values (new.id, new.organization_id, 'source_withdrawn', 'system', null, v_to,
+    values (new.id, new.organization_id,
+            case when new.source_state = 'withdrawn' then 'source_withdrawn' else 'source_restored' end, 'system', null, v_to,
             jsonb_build_object('sourceState', old.source_state), jsonb_build_object('sourceState', new.source_state));
   end if;
   if new.source_floor is distinct from old.source_floor then
@@ -1206,6 +1328,7 @@ revoke all on function chat.work_task_since(text) from public;
 revoke all on function chat.work_task_raise(uuid, text, uuid, uuid, uuid, text, text, text, timestamptz) from public;
 revoke all on function chat.work_task_settle(uuid, text, uuid) from public;
 revoke all on function chat.work_task_withdraw(uuid, text) from public;
+revoke all on function chat.work_task_restore(uuid, text) from public;
 revoke all on function chat.work_task_reroute(uuid, text, uuid, uuid, uuid) from public;
 revoke all on function chat.work_task_redate(uuid, text, timestamptz, uuid) from public;
 revoke all on function chat.work_task_end_of_day(date) from public;

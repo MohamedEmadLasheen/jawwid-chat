@@ -244,19 +244,24 @@ The **Needs action** page and the other source pages stay as they are. A task is
 - **Day-one backfill.** Owner, 2026-10-29: "Yes, but only recent ones". At switch-on, only source items from the **last 14 days** become tasks, and older open items are left as they are.
   - Each source has its own cut-off, `tasks.since.<source>` in `chat.config`.
   - It is set on first use to that moment minus 14 days.
+  - It replaces the never-applied `tasks.lesson_report_since` of an earlier PR-2 draft.
 - **Violations corrected away** (PD-15): a violation whose lesson's outcome was corrected away can no longer be decided (`DisciplineService.standing`).
   - Its task is withdrawn, by the lesson trigger and by the sweep.
   - A violation already corrected away is never raised.
+  - A lesson corrected **back** to the violation's outcome makes the same violation stand again, because it is unique per lesson and kind. Its withdrawn task is then **pending again**, recorded as `source_restored`, rather than raised a second time.
 - **Other sources:**
   - A **trial lesson** (no learner) raises no report task; trials are Phase B's `trial_outcome`.
   - A **"missing" correction** whose lesson already has a report task raises none of its own.
 - **Owners that change:**
-  - A lesson given to another teacher moves its report task, as a reassignment by the system.
+  - A lesson given to another teacher moves its report task, and its open correction tasks, as a reassignment by the system.
   - A case whose owner left moves to its department's manager.
   - Lesson-report, correction and case tasks are moved only by their source. The database guard enforces this.
 - **Nothing is silent:**
   - A source occurrence that has no assignee, or whose trigger or sweep step failed, is recorded in `chat.work_task_source_issue`.
   - It is warned once, then retried with a back-off: one hour, doubling, at most a day.
+    - A raise that declines is recorded the same way, so the batch is never starved.
+    - So an occurrence that waited for a manager is raised **at most 24 h after** one becomes live again.
+  - The record is deleted when the occurrence resolves in any way: its task raised, completed, withdrawn or moved, or its source decided or gone.
   - The sweep returns its counts, and the worker logs any failures.
 - **The sweep** runs in batches of at most 60 rows under an advisory lock, and the source triggers wait at most 2 s for a lock.
 
