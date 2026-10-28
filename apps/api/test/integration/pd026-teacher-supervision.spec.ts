@@ -401,9 +401,11 @@ describe('6. the known limits, closed (PD-26 amendment 2026-10-26)', () => {
     expect(await g.prisma.teacherPayAdjustment.count()).toBe(0);
   });
 
-  it('a reward with an amount is the super admin\'s; the Teachers department records one without', async () => {
+  it('a reward with an amount is payroll\'s (the super admin and, since PD-43 N2, the Teachers manager); a supervisor records one without', async () => {
     await terms('EGP');
-    expect(await code(payroll.recordReward(tmgrId, s.teacherId, { reason: 'x', amount: '10' }))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
+    expect(await code(payroll.recordReward(tsupId, s.teacherId, { reason: 'x', amount: '10' }))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
+    await payroll.recordReward(tmgrId, s.teacherId, { reason: 'Ten perfect reports', amount: '10' });
+    expect(await g.prisma.teacherPayAdjustment.count({ where: { teacherId: s.teacherId, createdBy: tmgrId } })).toBe(1);
     await expect(timeline.bonus(tmgrId, s.teacherId, { reason: 'Covered a class' })).resolves.toMatchObject({ kind: 'bonus' });
   });
 

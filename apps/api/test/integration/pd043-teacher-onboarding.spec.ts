@@ -20,7 +20,7 @@
  *
  * Synthetic people only (G-20).
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type Redis from 'ioredis';
@@ -127,6 +127,15 @@ beforeAll(async () => {
   await g.prisma.$executeRawUnsafe(
     `insert into chat.organization (id, slug, display_name) values ('${orgId}'::uuid, '${SLUG}${orgId.slice(0, 8)}', 'PD-43 QA academy')`,
   );
+  // seedOrgChat needs the organization's super admin (the bootstrap CLI's job).
+  await g.prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
+    const account = await tx.account.create({
+      data: { organizationId: orgId, subject: `owner@${DOMAIN}`, kind: 'staff', status: 'active', isActive: true },
+    });
+    await tx.accountCredential.create({ data: { accountId: account.id, passwordHash: await hashPassword(PASSWORD) } });
+    await tx.staff.create({ data: { organizationId: orgId, name: 'QA Organization Owner', role: 'super_admin', isActive: true, accountId: account.id } });
+  });
   m = await seedOrgChat(g.prisma, { organizationId: orgId, emailDomain: DOMAIN, password: PASSWORD, passwordHash: await hashPassword(PASSWORD), messages: false });
 
   process.env.REDIS_URL = REDIS_URL;
@@ -313,6 +322,36 @@ describe('3. the first sign-in code', () => {
     expect(await sqlError(g.prisma.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text`)).toMatch(
       /only a provisioned account is activated by a first sign-in code/,
     );
+  });
+
+  it('only a keyed hash is stored: the database alone cannot recover the code (owner rule, PD-40 review G1)', async () => {
+    const { account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: email('q') }));
+    const { code } = await issueFirstLogin(account.id);
+    const row = await g.prisma.passwordResetCode.findFirstOrThrow({ where: { accountId: account.id, usedAt: null, supersededAt: null } });
+    expect(row.codeHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.codeHash).not.toBe(createHash('sha256').update(`${account.id}:${code}`).digest('hex'));
+  });
+
+  it('a reissue kills the old code and says so in the audit; five wrong tries spend a code and the account stays provisioned', async () => {
+    const address = email('r');
+    const { account } = await teacherRow(await createTeacher(m.teachersManager.id, { email: address }));
+    const first = await issueFirstLogin(account.id);
+    const firstRow = await g.prisma.passwordResetCode.findFirstOrThrow({ where: { accountId: account.id, usedAt: null, supersededAt: null } });
+    const second = await issueFirstLogin(account.id);
+    expect((await g.prisma.passwordResetCode.findUniqueOrThrow({ where: { id: firstRow.id } })).supersededAt).not.toBeNull();
+    const reissued = await g.prisma.$queryRaw<Array<{ after: Record<string, unknown> }>>`
+      SELECT after FROM chat.audit_log WHERE action = 'account.first_login_code_issued' AND entity_id = ${account.id}::uuid ORDER BY id DESC LIMIT 1`;
+    expect(reissued[0]!.after).toMatchObject({ purpose: 'first_login', supersedes: [firstRow.id] });
+    if (first.code !== second.code) await expect(resets.complete(address, first.code, '1234')).rejects.toMatchObject({ code: 'AUTH.RESET_CODE_INVALID' });
+
+    const wrong = second.code === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i++) await expect(resets.complete(address, wrong, '1234')).rejects.toMatchObject({ code: 'AUTH.RESET_CODE_INVALID' });
+    // The sixth try is the right code: too late, the code is spent.
+    await expect(resets.complete(address, second.code, '1234')).rejects.toMatchObject({ code: 'AUTH.RESET_CODE_INVALID' });
+    expect((await g.prisma.account.findUniqueOrThrow({ where: { id: account.id } })).status).toBe('provisioned');
+    const third = await issueFirstLogin(account.id);
+    await expect(resets.complete(address, third.code, '1234')).resolves.toEqual({ ok: true });
+    expect((await g.prisma.account.findUniqueOrThrow({ where: { id: account.id } })).status).toBe('active');
   });
 
   it('PD-21 reactivation (suspended to active) is untouched', async () => {
