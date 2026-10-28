@@ -302,6 +302,9 @@ export const T = {
   unsupervisedOnly: { en: 'Unsupervised only', ar: 'بلا مشرف فقط' },
   unsupervisedCount: { en: '{n} unsupervised', ar: '{n} بلا مشرف' },
   assignSupervisor: { en: 'Assign supervisor', ar: 'تعيين مشرف' },
+  // PD-43 §3.4: the same name as an active teacher -- a warning, never a refusal
+  similarName: { en: 'Possibly already added:', ar: 'ربما أُضيف من قبل:' },
+  addAnyway: { en: 'Add anyway', ar: 'أضف على أي حال' },
 } satisfies Record<string, Pair>
 
 const BY_CODE: Record<string, Pair> = {

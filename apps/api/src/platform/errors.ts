@@ -268,6 +268,11 @@ export enum CommErrorCode {
   TEACHER_HAS_STUDENTS = 'COMM.TEACHER_HAS_STUDENTS',
   /** PD-43: a teacher has lessons ahead; offboard with cancelOpenLessons to cancel them. 409. */
   TEACHER_HAS_OPEN_LESSONS = 'COMM.TEACHER_HAS_OPEN_LESSONS',
+  /**
+   * PD-43 §3.4: an active teacher the caller reaches has the same name;
+   * `detail.teachers` names them. A warning: confirmSimilarName continues. 409.
+   */
+  TEACHER_SIMILAR_NAME = 'COMM.TEACHER_SIMILAR_NAME',
   /** PD-12: no such certificate, or none this caller may see. 404. */
   CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
   /** PD-12: this caller may not request, issue or decline this certificate. 403. */

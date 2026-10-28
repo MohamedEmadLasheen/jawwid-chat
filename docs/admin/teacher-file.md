@@ -257,6 +257,7 @@ After the commit, the code is e-mailed to the sign-in address when the e-mail ch
 | `COMM.TEACHER_ALREADY_ADDED` | the e-mail signs in a teacher the caller reaches; `error.detail.teacher` names them |
 | `COMM.TEACHER_EMAIL_UNAVAILABLE` | the e-mail, or the phone, belongs to anyone else: another organization's account, a parent, staff, or a teacher out of the caller's reach. It is one identical answer, so it tells nobody what exists. There is no e-mail-check endpoint. |
 | `COMM.TEACHER_CONTACT_TAKEN` | the phone or e-mail is on the file of a teacher the caller reaches, named in `error.detail.teacher` |
+| `COMM.TEACHER_SIMILAR_NAME` | a **warning**, not a refusal (plan §3.4): an **active** teacher the caller reaches has the same name, folded the PD-42 way (`chat.search_fold`: case, diacritics, tatweel, alef/yeh/heh variants; spaces collapsed). `error.detail.teachers` names them; send the same request again with `confirmSimilarName: true` to add anyway. A match out of the caller's reach gives no warning, so nothing is disclosed. The form shows "Possibly already added: «name»" and **Add anyway**. |
 
 ### Give sign-in: a teacher who exists but has no login
 
