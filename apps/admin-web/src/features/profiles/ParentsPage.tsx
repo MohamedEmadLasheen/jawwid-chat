@@ -38,9 +38,20 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
         <div className="toolbar">
           <SearchField value={q} onChange={setQ} label={tx(P.search)} clearLabel={t('common.cancel')} />
           {intake.data?.ready && (
-            <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={intake.data.noTeam}
+              aria-describedby={intake.data.noTeam ? 'add-family-no-team' : undefined}
+              onClick={() => setAdding(true)}
+            >
               {tx(I.addFamily)}
             </button>
+          )}
+          {intake.data?.ready && intake.data.noTeam && (
+            <p id="add-family-no-team" className="field__hint">
+              {tx(intake.data.standing === 'sales_manager' ? I.noTeamSales : intake.data.standing === 'operations_manager' ? I.noTeamOperations : I.noTeamAny)}
+            </p>
           )}
         </div>
         {adding && intake.data && <IntakeDialog options={intake.data} initial={{ kind: 'new' }} onClose={() => setAdding(false)} />}

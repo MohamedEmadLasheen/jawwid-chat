@@ -192,6 +192,39 @@ describe('Admin chat workspace', () => {
     })
   })
 
+  it('opens on "Waiting for a reply" from the Dashboard: exactly the rows the waiting tile counts (PD-44)', async () => {
+    stubApi({
+      conversations: [
+        conv('c1', { title: 'Parent wrote last', state: 'waiting_on_jawwid', needsReply: true }),
+        conv('c2', { title: 'We answered', state: 'waiting_on_customer' }),
+        conv('c3', { title: 'Resolved while waiting', state: 'resolved', needsReply: true }),
+        conv('c4', { title: 'Closed conversation', state: 'waiting_on_jawwid', needsReply: true, archivedAt: '2026-10-20T08:00:00.000Z' }),
+        // Archived by this viewer only: the server still counts it, so the view shows it.
+        conv('c5', { title: 'Put away by me', state: 'waiting_on_jawwid', needsReply: true, viewerState: { archived: true } as ChatConversation['viewerState'] }),
+      ],
+      messages: {},
+    })
+    renderChat('/chat?view=waiting')
+
+    const chip = await screen.findByRole('button', { name: /Waiting for a reply/ })
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('Parent wrote last')).toBeInTheDocument()
+    expect(screen.getByText('Put away by me')).toBeInTheDocument()
+    expect(screen.queryByText('We answered')).not.toBeInTheDocument()
+    expect(screen.queryByText('Resolved while waiting')).not.toBeInTheDocument()
+    expect(screen.queryByText('Closed conversation')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^All/ }))
+    expect(await screen.findByText('We answered')).toBeInTheDocument()
+  })
+
+  it('offers "Waiting for a reply" only while something waits', async () => {
+    stubApi({ conversations: [conv('c1', { state: 'waiting_on_customer' })], messages: {} })
+    renderChat()
+    await screen.findByText('Group c1')
+    expect(screen.queryByRole('button', { name: /Waiting for a reply/ })).not.toBeInTheDocument()
+  })
+
   it('renders a thread in server (seq) order, numerically', async () => {
     stubApi({
       conversations: [conv('c1')],
