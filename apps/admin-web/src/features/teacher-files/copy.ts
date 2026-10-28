@@ -297,6 +297,11 @@ export const T = {
   },
   setupIncomplete: { en: 'Setup incomplete', ar: 'التجهيز غير مكتمل' },
   setupIncompleteOnly: { en: 'Setup incomplete only', ar: 'غير المكتمل فقط' },
+  // PD-43 §3.7: teachers no supervisor holds; the Teachers Manager covers them
+  noSupervisorBadge: { en: 'No supervisor', ar: 'بلا مشرف' },
+  unsupervisedOnly: { en: 'Unsupervised only', ar: 'بلا مشرف فقط' },
+  unsupervisedCount: { en: '{n} unsupervised', ar: '{n} بلا مشرف' },
+  assignSupervisor: { en: 'Assign supervisor', ar: 'تعيين مشرف' },
   // PD-43 §3.4: the same name as an active teacher -- a warning, never a refusal
   similarName: { en: 'Possibly already added:', ar: 'ربما أُضيف من قبل:' },
   addAnyway: { en: 'Add anyway', ar: 'أضف على أي حال' },

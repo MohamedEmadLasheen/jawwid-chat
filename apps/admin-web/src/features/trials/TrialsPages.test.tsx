@@ -183,6 +183,31 @@ describe('Trial lessons, as Sales', () => {
     )
   })
 
+  it('PD-43: the assigned-teacher select says which teachers are still being set up; any may be chosen', async () => {
+    access({ sales: true })
+    on('GET', /\/trials\/teachers$/, () =>
+      json({
+        teachers: [
+          { id: 't-1', name: 'Teacher One', readiness: { setupIncomplete: false, notSignedIn: false, noSupervisor: false, loginSuspended: false } },
+          { id: 't-2', name: 'Teacher Two', readiness: { setupIncomplete: true, notSignedIn: false, noSupervisor: true, loginSuspended: false } },
+        ],
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'The student subscribed' }))
+    const child = within(dialog).getByRole('group', { name: 'Child 1' })
+    const select = within(child).getByLabelText('Assigned teacher')
+    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3))
+    expect(within(select).getByRole('option', { name: 'Teacher One' })).toBeInTheDocument()
+    expect(within(select).getByRole('option', { name: 'Teacher Two — Setup incomplete · No supervisor' })).toBeInTheDocument()
+    await userEvent.selectOptions(select, 't-2')
+    expect(select).toHaveValue('t-2')
+    expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; this is a warning.')).toBeInTheDocument()
+  })
+
   it('corrects an outcome, saying why', async () => {
     access({ sales: true })
     on('POST', /\/trials\/tr-sub\/correction$/, () => json(trial('tr-sub', { outcome: 'no_show' }), 201))

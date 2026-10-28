@@ -1,3 +1,4 @@
+import type { TeacherReadiness } from '@/features/teacher-files/readiness'
 import { api } from '@/core/api/client'
 import type { TransferResult } from '@/features/organization/api'
 
@@ -145,7 +146,8 @@ const id = (v: string) => encodeURIComponent(v)
 export const trialsApi = {
   prospects: () => api.get<{ prospects: ProspectDto[] }>('/trials/prospects'),
   createProspect: (body: { displayName: string; level?: string; note?: string }) => api.post<ProspectDto>('/trials/prospects', body),
-  teachers: () => api.get<{ teachers: Array<{ id: string; name: string }> }>('/trials/teachers'),
+  /** PD-43: `readiness` is a warning beside the name (older servers omit it). */
+  teachers: () => api.get<{ teachers: Array<{ id: string; name: string; readiness?: TeacherReadiness | null }> }>('/trials/teachers'),
   slots: (teacherId: string, durationMinutes: number) =>
     api.get<{ teacherId: string; durationMinutes: number; slots: string[] }>('/trials/slots', { teacherId, durationMinutes: String(durationMinutes) }),
   list: (query: { from?: string; to?: string; teacherId?: string } = {}) => api.get<{ trials: TrialDto[] }>('/trials', query),
