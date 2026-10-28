@@ -303,8 +303,30 @@ describe('instalments', () => {
     // Nobody else: a manager of another department neither sees nor moves it.
     expect([CommErrorCode.TASK_DENIED, CommErrorCode.TASK_NOT_FOUND])
       .toContain(await code(tasks.reassign(smgr, id, { to: { kind: 'staff', id: s.otherAdminId } })));
+    // The database refuses anyone but the super admin, whatever the API does.
+    await expect(
+      g.prisma.$transaction([
+        exec(`select set_config('chat.task_actor', $1, true)`, smgr),
+        exec(`update chat.work_task set assignee_staff_id = $2::uuid where id = $1::uuid`, id, s.otherAdminId),
+      ]),
+    ).rejects.toThrow(/follows its source/);
     await tasks.reassign(sa, id, { to: { kind: 'staff', id: s.otherAdminId } });
     expect((await tasks.get(sa, id)).assignee).toEqual({ kind: 'staff', id: s.otherAdminId });
+  });
+
+  it('an orphan goes to a newly appointed manager on the next sweep, not after its back-off', async () => {
+    const inst = await instalment(3);
+    await tasks.sweep();
+    const id = (await taskFor(`instalment:${inst}`)) as string;
+    await leave(s.ownerId);
+    await leave(s.managerId);
+    expect((await tasks.sweep()).orphaned).toBe(1);
+    const fresh = randomUUID();
+    await exec(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'omgr_f', 'manager', true)`, fresh);
+    await exec(`update chat.department set manager_id = $1::uuid where kind = 'operations'`, fresh);
+    await tasks.sweep();
+    expect((await tasks.get(fresh, id)).assignee).toEqual({ kind: 'staff', id: fresh });
+    expect(await issues(`instalment:${inst}`)).toEqual([]);
   });
 
   it('sorts first among the operational tasks of its colour', async () => {
@@ -368,15 +390,33 @@ describe('packages and renewals', () => {
   it('a payment voided takes its package back: the old package, low again, is a fresh task', async () => {
     await packageOf(2);
     const [first] = await tasksOf('package_low');
-    // A renewal link paid by transfer credits a package (PD-30); the system entered it.
+    // A renewal link paid by transfer credits a package (PD-30). The system
+    // entered the package; whoever recorded the transfer did the work.
     const req = await request({ lessons: 8, amount: 40000 });
     const { payment } = await pay(req, { by: s.managerId, amount: 40000 });
-    expect(await tasks.get(smgr, first)).toMatchObject({ state: 'completed', closedBy: null });
+    const [{ id: credited }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.learner_subscription WHERE request_id = ${req}::uuid`;
+    expect(await tasks.get(smgr, first)).toMatchObject({ state: 'completed', closedBy: { id: s.managerId } });
+    expect((await completion(first))?.after).toEqual({
+      outcome: 'done', evidence: { subscriptionId: credited, paymentId: payment.id, method: 'bank_transfer' },
+    });
     await g.prisma.$transaction((tx) => ledger.voidPayment(tx, payment, s.managerId, 'entered twice'));
     const after = await tasksOf('package_low');
     expect(after).toHaveLength(2);
     expect(await tasks.get(smgr, after[1])).toMatchObject({ state: 'open', sourceState: 'pending', effectivePriority: 'medium' });
     expect((await tasks.get(smgr, first)).state).toBe('completed');
+  });
+
+  it('a manager\'s removal holds: no sweep and no balance change raises it again on that package', async () => {
+    await packageOf(2);
+    const [id] = await tasksOf('package_low');
+    await tasks.remove(sa, id, { reason: 'the family is leaving' });
+    await tasks.sweep();
+    await exec(`update chat.learner_access set balance = 1 where learner_id = $1::uuid`, s.learnerId);
+    await exec(`update chat.learner_access set balance = 0 where learner_id = $1::uuid`, s.learnerId);
+    await tasks.sweep();
+    expect(await tasksOf('package_low')).toEqual([id]);
+    expect((await tasks.get(sa, id)).state).toBe('removed');
   });
 
   it('a renewal the parent asks for is High at once, and a new package completes it', async () => {

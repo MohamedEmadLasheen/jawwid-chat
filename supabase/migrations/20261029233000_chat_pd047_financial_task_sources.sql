@@ -223,6 +223,7 @@ as $$
 declare
   v_pay chat.payment;
   v_req chat.payment_request;
+  v_link uuid;
 begin
   case p_type
     when 'instalment' then
@@ -242,15 +243,21 @@ begin
         into actor, evidence
         from chat.payment_receipt x where x.id = p_source;
     when 'package_low', 'renewal_request' then
-      select s.created_by, jsonb_build_object('subscriptionId', s.id) into actor, evidence
+      select s.created_by, jsonb_build_object('subscriptionId', s.id), s.request_id into actor, evidence, v_link
         from chat.work_task_package_episode e
         join chat.learner_subscription s on s.id = chat.work_task_newest_package(e.learner_id)
        where e.id = p_source;
+      -- A package credited for a paid link names nobody itself: whoever
+      -- recorded the covering payment did the work (a card payment, nobody).
+      if actor is null and v_link is not null then
+        v_pay := chat.work_task_covering_payment(v_link, null);
+        actor := v_pay.recorded_by;
+      end if;
     else
       null;
   end case;
   if v_pay.id is not null then
-    evidence := jsonb_build_object('paymentId', v_pay.id, 'method', v_pay.method);
+    evidence := coalesce(evidence, '{}'::jsonb) || jsonb_build_object('paymentId', v_pay.id, 'method', v_pay.method);
   end if;
 end;
 $$;
@@ -565,8 +572,10 @@ begin
   s_receipt := chat.work_task_since('receipt_review');
   s_checkout := chat.work_task_since('checkout_failed');
 
-  -- The issue log shrinks with these sources too: an occurrence resolved, or
-  -- the move it waited for made.
+  -- The issue log shrinks with these sources too: an occurrence resolved, the
+  -- move it waited for made, an orphan given an owner again (so the owner
+  -- loop below moves it this sweep, not after its back-off), or an episode
+  -- that is no longer due.
   delete from chat.work_task_source_issue i
    where split_part(i.source_key, ':', 1) in ('instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed')
      and (exists (select 1 from chat.work_task t
@@ -574,7 +583,9 @@ begin
                      and (t.state in ('completed', 'removed')
                           or chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is not null
                              and coalesce(chat.work_task_financial_owner(t.source_type, t.source_id), t.assignee_staff_id)
-                                 is not distinct from t.assignee_staff_id))
+                                 is not distinct from t.assignee_staff_id
+                          or i.reason like 'orphaned:%' and t.state in ('open', 'awaiting_decision')
+                             and chat.work_task_financial_owner(t.source_type, t.source_id) is not null))
           or case split_part(i.source_key, ':', 1)
                when 'instalment' then not exists (select 1 from chat.family_instalment x
                                                    where x.id = split_part(i.source_key, ':', 2)::uuid
@@ -586,9 +597,14 @@ begin
                                                         where x.id = split_part(i.source_key, ':', 2)::uuid and x.paid_at is null
                                                           and (x.cancelled_at is null
                                                                or n.id is not null and n.paid_on is null and n.voided_at is null))
+               -- An episode: gone, its package voided or no longer the newest,
+               -- or (a low balance) above 2 again.
                else not exists (select 1 from chat.work_task_package_episode e
                                   join chat.learner_subscription x on x.id = e.subscription_id
-                                 where e.id = split_part(i.source_key, ':', 2)::uuid and x.voided_at is null)
+                                  left join chat.learner_access a on a.learner_id = e.learner_id
+                                 where e.id = split_part(i.source_key, ':', 2)::uuid and x.voided_at is null
+                                   and chat.work_task_newest_package(e.learner_id) = x.id
+                                   and (e.source_type <> 'package_low' or a.balance <= 2))
              end);
 
   -- Create. A package candidate's key is its unraised episode's (whose
@@ -648,7 +664,10 @@ begin
     v_key := r.key;
     if r.src in ('package_low', 'renewal_request') then
       v_ep := chat.work_task_episode_for(r.src, r.id);
-      v_key := r.src || ':' || coalesce(v_ep::text, r.id::text);
+      if v_ep is null then
+        continue; -- the child is busy with another writer: the next sweep's
+      end if;
+      v_key := r.src || ':' || v_ep;
     end if;
     begin
       if (case r.src
@@ -758,7 +777,7 @@ begin
     if v_left = 0 then v_more := true; exit; end if;
     v_left := v_left - 1;
     perform chat.work_task_note_issue(r.org, r.key,
-      'its assignee left and nobody live follows (billing supervisor, Sales owner or their manager): the super admin may reassign it');
+      'orphaned: its assignee left and nobody live follows (billing supervisor, Sales owner or their manager): the super admin may reassign it');
     v_orphaned := v_orphaned + 1;
   end loop;
 
