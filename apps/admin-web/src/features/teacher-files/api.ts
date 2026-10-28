@@ -173,6 +173,8 @@ export interface NewTeacher {
   phone?: string
   joinedOn?: string
   supervisorId: string | null
+  /** PD-43 §3.4: add even though an active teacher has the same name (after COMM.TEACHER_SIMILAR_NAME). */
+  confirmSimilarName?: boolean
 }
 
 /** `code` is present only for whoever may see it: the creator of a new teacher, or the Teachers manager and the super admin on a reissue. */

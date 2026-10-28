@@ -155,6 +155,32 @@ describe('Add teacher', () => {
     await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent('These details can’t be used for a new teacher.'))
   })
 
+  it('the same name as a teacher the adder can see: a warning naming them, and "Add anyway"', async () => {
+    listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })
+    on('POST', /\/teachers$/, (_u, init) =>
+      JSON.parse(String(init.body)).confirmSimilarName
+        ? json(ADDED, 201)
+        : json({ error: { code: 'COMM.TEACHER_SIMILAR_NAME', message: 'similar', detail: { teachers: [{ id: 't-1', name: 'Teacher One' }] } } }, 409),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files' })
+    await user.click(await screen.findByRole('button', { name: 'Add teacher' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add teacher' })
+    await user.type(within(dialog).getByLabelText('Full name'), 'Teacher One')
+    await user.type(within(dialog).getByLabelText('Sign-in e-mail'), 'second.one@example.test')
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+    const warning = await within(dialog).findByRole('alert')
+    expect(warning).toHaveTextContent('Possibly already added:')
+    expect(within(warning).getByRole('link', { name: 'Teacher One' })).toHaveAttribute('href', '/teachers/files/t-1')
+    await user.click(within(dialog).getByRole('button', { name: 'Add anyway' }))
+    await waitFor(() => expect(calls('POST', /\/teachers$/)).toHaveLength(2))
+    const [first, second] = calls('POST', /\/teachers$/).map(bodyOf)
+    expect(first.confirmSimilarName).toBeUndefined()
+    // The same teacher id: a double click still makes one teacher.
+    expect(second).toEqual({ ...first, confirmSimilarName: true })
+    expect(await screen.findByRole('dialog', { name: 'First sign-in code' })).toBeInTheDocument()
+  })
+
   it('cannot be closed while the server is answering; reopened, it starts clean', async () => {
     listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })
     let answer!: (r: Response) => void

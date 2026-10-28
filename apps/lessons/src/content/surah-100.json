@@ -1,0 +1,391 @@
+{
+  "surah": 100,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs and the reciter line, and every hand-typed Quran string (replaced by positions). The quiz question on the meaning of \"bu'thira ma fi al-qubur\" typed four words of ayah 9 into its text; it now points at bu'thira (9:4). The completion game's answers are the complete-the-ayah words; its distractors were all words of this surah, and the game draws its own. The old quiz's last question (the lesson of the surah) was filed under \"ma'ani\"; it is categorised \"lessons\" here. Each lesson learned is its old title and description joined with \": \". Emoji were stripped from the ends of the did-you-know lines. Not carried (no field or no such game in the engine): the \"Makki\" surah type, the ayah-ordering, choose-the-ayah and build-the-ayah games, the four word-meaning games, the intro quiz, the \"simple examples\" list under the lessons, the reflection's feedback lines, and the extra did-you-know line about horses (a repeat of the third)."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-100 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "892681f0d5f3f0873a51e18c1d17cf3c739c2de997bbd40a743d9082ccb28e63",
+      "components/IntroSection.tsx": "77960465361a10f340040174fc820b129781497d2d16732d9df43f6dab026aeb",
+      "components/ListenSection.tsx": "15945e6b4a5df875cf8d0bba9c9bbc32dc4414909819c588275b5794687ba3a5",
+      "components/MeaningsSection.tsx": "cc89949e9ab2462ddc2cf38a098515b42303add8488b53f0761d05c096cfade2",
+      "components/MemoryGames.tsx": "29db8b88c6aec785615358dc81cee822b0e20065eb73dd8ad4709cf181e52bca",
+      "components/TajweedSection.tsx": "3969c67dc93c87935effadb355506af14048460914902394e04352d343fbff1e",
+      "components/FinalQuiz.tsx": "6e0c2e2e3af92b30ce39a94967324ec54a66e4fa2d4c6e57a58ee2d32c455c38"
+    }
+  },
+  "intro": {
+    "text": "سورة العاديات تتحدث عن الخيل التي تجري بسرعة كبيرة في سبيل الله، وتذكرنا بأن نشكر الله على نعمه الكثيرة ولا ننساها أبداً.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "الله يُقسم بالخيل التي تجري بسرعة كبيرة وتصدر صوتاً عالياً",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "الخيل التي تُخرج شرارات النار من حوافرها عندما تجري على الصخور",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "الخيل التي تهجم في وقت الصباح الباكر",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "الخيل التي تُثير الغبار الكثير عندما تجري",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "الخيل التي تدخل وسط الأعداء بشجاعة",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "بعض الناس ينسون شكر الله على نعمه الكثيرة",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "الإنسان يعرف في قلبه أنه لا يشكر الله كما يجب",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "الإنسان يحب المال والأشياء الجميلة حباً كبيراً",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "ألا يعلم الإنسان أن الله سيُخرج الناس من قبورهم يوم القيامة",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "الله يعلم كل ما في قلوب الناس من خير وشر",
+      "review": "Gives \"wa-hussila ma fi al-sudur\" as \"Allah knows all that is in people's hearts\". Common tafsir: what was hidden in the breasts is brought out and made plain (Ibn Abbas: brought out and exposed), on the Day of Resurrection. Allah's knowledge is ayah 11. Teacher to choose the wording."
+    },
+    {
+      "ayah": 11,
+      "text": "الله يعلم كل شيء عن الناس يوم القيامة",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "الخيل التي تجري بسرعة",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "صوت الخيل عندما تجري",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 1,
+      "meaning": "الخيل التي تُخرج شراراً من حوافرها",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 2,
+      "meaning": "إخراج النار والشرر",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 1,
+      "meaning": "الخيل التي تهجم على الأعداء",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "الغبار الذي يتطاير",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 4,
+      "meaning": "جاحد لنعم الله ولا يشكره",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "word": 4,
+      "meaning": "أُخرج ما في القبور",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "word": 4,
+      "meaning": "القلوب",
+      "review": "Gives sudur as \"hearts\"; the word means chests (common tafsir: the breasts, where the hearts are). Teacher to confirm the wording."
+    },
+    {
+      "ayah": 11,
+      "word": 5,
+      "meaning": "يعلم كل شيء",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 2,
+      "word": 2
+    },
+    {
+      "ayah": 3,
+      "word": 2
+    },
+    {
+      "ayah": 6,
+      "word": 4
+    },
+    {
+      "ayah": 11,
+      "word": 5
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما هي أول آية في سورة العاديات؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 3
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة العاديات؟",
+      "options": [
+        {
+          "text": "11"
+        },
+        {
+          "text": "7"
+        },
+        {
+          "text": "5"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الخيل التي تجري بسرعة"
+        },
+        {
+          "text": "الرياح القوية"
+        },
+        {
+          "text": "الأنهار الجارية"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 1
+      },
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 2,
+        "words": 1
+      },
+      "options": [
+        {
+          "ayah": 2,
+          "word": 2
+        },
+        {
+          "ayah": 1,
+          "word": 2
+        },
+        {
+          "ayah": 3,
+          "word": 2
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "جاحد لنعم الله"
+        },
+        {
+          "text": "شاكر لله"
+        },
+        {
+          "text": "صابر"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 6,
+        "word": 4
+      },
+      "id": "q5"
+    },
+    {
+      "category": "hifz",
+      "question": "ما هي الآية السادسة في السورة؟",
+      "options": [
+        {
+          "ayah": 6
+        },
+        {
+          "ayah": 7
+        },
+        {
+          "ayah": 5
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q6"
+    },
+    {
+      "category": "hifz",
+      "question": "ما هي آخر آية في سورة العاديات؟",
+      "options": [
+        {
+          "ayah": 11
+        },
+        {
+          "ayah": 10
+        },
+        {
+          "ayah": 8
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "أُخرج ما في القبور"
+        },
+        {
+          "text": "دُفن في القبور"
+        },
+        {
+          "text": "زُيّن القبور"
+        }
+      ],
+      "answer": 0,
+      "review": "PHRASE: the old question asks about the typed phrase \"bu'thira ma fi al-qubur\" (9:4-7, four words of the ayah); the engine shows one word, so it points at bu'thira (9:4) and the options mean the whole phrase. Teacher to confirm it reads right.",
+      "word": {
+        "ayah": 9,
+        "word": 4
+      },
+      "id": "q8"
+    },
+    {
+      "category": "lessons",
+      "question": "ما الدرس الذي نتعلمه من سورة العاديات؟",
+      "options": [
+        {
+          "text": "شكر الله على النعم"
+        },
+        {
+          "text": "اللعب كثيراً"
+        },
+        {
+          "text": "النوم مبكراً"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "شكر الله على النعم: يجب أن نشكر الله دائماً على كل النعم التي أعطانا إياها مثل الطعام والشراب والأهل",
+      "review": null
+    },
+    {
+      "text": "الله يعلم كل شيء: الله يعلم ما في قلوبنا وما نفعله، لذلك يجب أن نكون صادقين دائماً",
+      "review": null
+    },
+    {
+      "text": "عمل الخير دائماً: يجب أن نعمل الخير ونساعد الناس لأن الله يحب من يفعل الخير",
+      "review": "A good lesson, but not one this surah teaches: the surah blames man's ingratitude and his love of \"al-khayr\", which in ayah 8 is wealth (common tafsir), not doing good. Teacher to keep or drop."
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نشكر الله على النعم التي أعطانا إياها؟",
+    "ideas": [
+      "نقول الحمد لله دائماً",
+      "نصلي ونقرأ القرآن",
+      "نساعد الآخرين",
+      "نحافظ على النعم ولا نضيعها"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله يعلم كل ما في قلوبنا؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الله يحب من يشكره على نعمه؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الخيل من أجمل المخلوقات التي خلقها الله؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة العاديات عدد آياتها 11 آية؟",
+      "review": null
+    }
+  ]
+}
