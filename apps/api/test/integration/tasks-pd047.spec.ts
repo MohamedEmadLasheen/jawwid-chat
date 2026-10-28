@@ -335,7 +335,7 @@ describe('exit 4: reassign', () => {
 
   it('not to an inactive person', async () => {
     const t = await manual(s.managerId, staff(s.ownerId));
-    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.otherAdminId}::uuid`;
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.otherAdminId}::uuid`;
     expect(await code(tasks.reassign(s.managerId, t.id, { to: staff(s.otherAdminId) }))).toBe(CommErrorCode.TASK_INVALID);
   });
 });
@@ -366,7 +366,7 @@ describe('nothing disappears on its own', () => {
   it('an inactive assignee keeps the task, flagged for reassignment (Q11)', async () => {
     // admin_b: admin_a owns the family and cannot be deactivated.
     const t = await manual(s.managerId, staff(s.otherAdminId));
-    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.otherAdminId}::uuid`;
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.otherAdminId}::uuid`;
     const [row] = (await tasks.list(s.managerId, { view: 'team' })).items;
     expect(row).toMatchObject({ id: t.id, state: 'open', needsReassignment: true });
   });
@@ -433,7 +433,7 @@ describe('the database', () => {
         g.prisma.$executeRawUnsafe(`update chat.work_task set state = 'removed' where id = $1::uuid`, t.id),
       ]);
     await expect(removeAs(farStaff)).rejects.toThrow(/live person of its organization/);
-    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.otherAdminId}::uuid`;
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.otherAdminId}::uuid`;
     await expect(removeAs(s.otherAdminId)).rejects.toThrow(/live person of its organization/);
     expect(await code(tasks.get(farStaff, t.id))).toBe(CommErrorCode.TASK_NOT_FOUND);
   });

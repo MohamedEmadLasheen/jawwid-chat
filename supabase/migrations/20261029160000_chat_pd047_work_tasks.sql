@@ -337,7 +337,7 @@ begin
   if coalesce(current_setting('chat.test_truncate', true), '') = 'on' then
     return null;
   end if;
-  raise exception 'tasks and their history are never truncated' using errcode = 'check_violation';
+  raise exception 'tasks and their history are never truncated (a test''s cleanup sets chat.test_truncate in its transaction)' using errcode = 'check_violation';
 end;
 $$;
 
