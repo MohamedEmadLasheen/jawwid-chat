@@ -30,6 +30,8 @@ Almost every hold is the one final mark, the pausal sukun. That is the owner's d
 
 ## Decisions for the teachers
 
+**One bulk decision first: ta marbuta with the pausal sukun (ـةْ, e.g. مَدْرَسَةْ).** In pause it is read as هْ. Confirm that ـةْ is the written convention you want; most children's books write it, some leave ة bare. 256 words end this way (256 of them held), so this one answer clears or changes them all at once.
+
 1. **The words below.** Every word must be a real word, suitable for a child, spelled correctly and fully vowelled. The checker has already proved three things: each word holds its unit's letter, each is fully vowelled, and each ends in the pausal sukun.
 2. **The suspected words** (next section), held with a reason.
 3. **The two notes**: drafts written by the rebuild, held.
