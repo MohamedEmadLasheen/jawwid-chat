@@ -309,7 +309,7 @@ describe('3. the first sign-in code', () => {
     const insert = (hours: number) =>
       g.prisma.$executeRaw`
         INSERT INTO chat.password_reset_code (organization_id, account_id, issued_by, code_hash, reason, expires_at, purpose)
-        VALUES (${orgId}::uuid, ${account.id}::uuid, ${m.teachersManager.id}::uuid, ${'a'.repeat(64)}, 'r', now() + make_interval(hours => ${hours}), 'first_login')`;
+        VALUES (${orgId}::uuid, ${account.id}::uuid, ${m.teachersManager.id}::uuid, ${'a'.repeat(64)}, 'r', now() + make_interval(hours => ${hours}::int), 'first_login')`;
     expect(await sqlError(insert(73))).toMatch(/a first sign-in code lives at most 72 hours/);
     expect(await sqlError(insert(72))).toBe('ok');
   });

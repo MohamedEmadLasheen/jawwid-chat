@@ -398,7 +398,7 @@ begin
     ) then
       return p_id;
     end if;
-    raise exception 'this teacher id is already used' using errcode = 'unique_violation';
+    raise exception 'this teacher id is already used' using errcode = 'check_violation';
   end if;
 
   if length(v_name) not between 1 and 120 then
@@ -406,14 +406,16 @@ begin
   end if;
 
   -- Never a name, a kind or a family: the API decides what the caller may be told.
+  -- check_violation, not unique_violation: Prisma turns 23505 into a bare
+  -- "Unique constraint failed" and drops the message the API needs.
   if exists (select 1 from chat.account a where lower(a.subject) = v_email) then
-    raise exception 'this e-mail already signs in to Chat' using errcode = 'unique_violation';
+    raise exception 'this e-mail already signs in to Chat' using errcode = 'check_violation';
   end if;
   if exists (select 1 from chat.teacher_file f
               where f.organization_id = v_actor.organization_id
                 and (lower(f.email) = v_email
                      or (v_digits is not null and regexp_replace(coalesce(f.phone, ''), '[^0-9]', '', 'g') = v_digits))) then
-    raise exception 'this contact is already on a teacher''s file' using errcode = 'unique_violation';
+    raise exception 'this contact is already on a teacher''s file' using errcode = 'check_violation';
   end if;
 
   insert into chat.account (organization_id, subject, kind, status, is_active)
