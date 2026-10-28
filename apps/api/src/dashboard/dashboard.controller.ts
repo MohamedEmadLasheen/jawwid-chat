@@ -3,7 +3,8 @@ import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ConversationService } from '../communication/conversations/conversation.service';
 import { SupervisionCaseService } from '../cases/supervision-case.service';
-import { Requires } from '../platform/permissions/route-access';
+import { TaskService } from '../tasks/task.service';
+import { Requires, SelfService } from '../platform/permissions/route-access';
 import { dashboardSection, type DashboardSection } from './dashboard-tile';
 
 /**
@@ -21,6 +22,7 @@ export class DashboardController {
   constructor(
     private readonly conversations: ConversationService,
     private readonly cases: SupervisionCaseService,
+    private readonly tasks: TaskService,
   ) {}
 
   /** Chats waiting for a staff reply, in the caller's PD-8 scope. Links to /chat. */
@@ -37,5 +39,18 @@ export class DashboardController {
   async casesSection(@ActorId() actorId: string): Promise<DashboardSection> {
     const now = new Date();
     return dashboardSection(await this.cases.dashboardCounts(actorId), now);
+  }
+
+  /**
+   * PD-47: tasks -- the caller's own, and for whoever manages a department their
+   * team's, the decisions waiting and the tasks whose assignee is gone; the super
+   * admin's unmanaged ones. Links to /tasks. Self-service, like the Tasks page:
+   * everyone has their own tasks, and TaskService decides the rest.
+   */
+  @SelfService()
+  @Get('tasks')
+  async tasksSection(@ActorId() actorId: string): Promise<DashboardSection> {
+    const now = new Date();
+    return dashboardSection(await this.tasks.dashboardCounts(actorId), now);
   }
 }
