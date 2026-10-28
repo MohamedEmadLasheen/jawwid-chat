@@ -11,6 +11,7 @@ import { SupervisionConversationService } from '../supervision/supervision-conve
 import { LessonService } from '../lessons/lesson.service';
 import { TrialService } from '../lessons/trial.service';
 import { FIRST_LOGIN_MAILER, firstLoginMail, type MailSender } from '../account-recovery/recovery-delivery';
+import { NotificationService } from '../communication/notifications/notification.service';
 import { TeacherFileService } from './teacher-file.service';
 
 /**
@@ -71,6 +72,7 @@ export class TeacherOnboardingService {
     private readonly lessons: LessonService,
     private readonly trials: TrialService,
     @Inject(FIRST_LOGIN_MAILER) private readonly mailer: MailSender,
+    private readonly notifications: NotificationService,
     @Optional() teacherScope?: TeacherScopeService,
   ) {
     this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
@@ -122,7 +124,15 @@ export class TeacherOnboardingService {
         return { name: teacher.name, issued };
       });
     } catch (e) {
-      throw await this.refusal(e, actor, email, phone);
+      throw await this.refusal(e, actor, email, phone, name);
+    }
+    // Plan §3.7: an unsupervised teacher is the Teachers manager's; they are told
+    // unless they added the teacher themselves.
+    if (supervisorId === null) {
+      await this.tellTeachersManager(actor, 'teacher_added_unsupervised', `teacher_added_unsupervised:${id}`, {
+        teacher: created.name,
+        addedBy: actor.displayName,
+      });
     }
     const emailed = await this.deliver(email, created.issued);
     return {
@@ -541,8 +551,39 @@ export class TeacherOnboardingService {
     }
   }
 
-  /** chat.create_teacher's refusals, as the API answers them. */
-  private async refusal(e: unknown, actor: Actor, email: string, phone: string | null): Promise<unknown> {
+  /**
+   * PD-34: a notification for the Teachers manager (the super admin when the
+   * department has none), never for the actor themselves. A side effect: a
+   * failure is logged, never thrown. The dedupe key makes a retry one.
+   */
+  private tellTeachersManager(actor: Actor, templateKey: string, dedupeKey: string, variables: Record<string, string>): Promise<void> {
+    return (async () => {
+      const recipients = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        WITH manager AS (
+          SELECT s.id FROM chat.department d JOIN chat.staff s ON s.id = d.manager_id
+           WHERE d.organization_id = ${actor.organizationId}::uuid AND d.kind = 'teachers' AND s.is_active AND s.left_at IS NULL)
+        SELECT id::text AS id FROM manager
+        UNION ALL
+        SELECT s.id::text FROM chat.staff s
+         WHERE NOT EXISTS (SELECT 1 FROM manager)
+           AND s.organization_id = ${actor.organizationId}::uuid AND s.role = 'super_admin' AND s.is_active AND s.left_at IS NULL`;
+      for (const r of recipients) {
+        if (r.id === actor.actorId) continue;
+        await this.notifications.schedule({
+          dedupeKey: `${dedupeKey}:${r.id}`,
+          templateKey,
+          eventType: templateKey,
+          recipientId: r.id,
+          priority: 'normal',
+          variables,
+          scheduledAt: new Date(),
+        });
+      }
+    })().catch((e) => this.log.error(`${templateKey} not scheduled: ${failureKind(e)}`));
+  }
+
+  /** chat.create_teacher's refusals, as the API answers them. `attemptedName`: the teacher being added, when it is an add. */
+  private async refusal(e: unknown, actor: Actor, email: string, phone: string | null, attemptedName?: string): Promise<unknown> {
     if (e instanceof CommError || e instanceof AuthError) return e;
     const tooBusy = busy(e);
     if (tooBusy) return tooBusy;
@@ -560,8 +601,8 @@ export class TeacherOnboardingService {
     if (/this teacher id is already used/.test(text)) {
       return new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'id: this teacher id is already used', 409);
     }
-    if (/this e-mail already signs in to Chat/.test(text)) return this.signInTaken(actor, email);
-    if (/this contact is already on a teacher's file/.test(text)) return this.contactTaken(actor, email, phone);
+    if (/this e-mail already signs in to Chat/.test(text)) return this.signInTaken(actor, email, attemptedName);
+    if (/this contact is already on a teacher's file/.test(text)) return this.contactTaken(actor, email, phone, attemptedName);
     return e;
   }
 
@@ -570,7 +611,7 @@ export class TeacherOnboardingService {
    * identical answer. The caller's scope is read on EVERY path, first, so the
    * time taken tells nothing either.
    */
-  private async signInTaken(actor: Actor, email: string): Promise<CommError> {
+  private async signInTaken(actor: Actor, email: string, attemptedName?: string): Promise<CommError> {
     const scope = await this.teacherScope.scopeOf(actor);
     const [holder] = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
       SELECT t.id::text AS id, t.name
@@ -579,11 +620,12 @@ export class TeacherOnboardingService {
     if (holder && scopeCovers(scope, holder.id)) {
       return new CommError(CommErrorCode.TEACHER_ALREADY_ADDED, 'this person is already a teacher here', 409, { teacher: holder });
     }
+    if (holder && attemptedName) this.tellHidden(actor, holder, attemptedName);
     return unavailable();
   }
 
   /** As signInTaken: a contact on the file of a teacher out of reach is the SAME answer as an e-mail out of reach. */
-  private async contactTaken(actor: Actor, email: string, phone: string | null): Promise<CommError> {
+  private async contactTaken(actor: Actor, email: string, phone: string | null, attemptedName?: string): Promise<CommError> {
     const scope = await this.teacherScope.scopeOf(actor);
     const digits = phone ? phone.replace(/[^0-9]/g, '') : null;
     const [holder] = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
@@ -596,7 +638,22 @@ export class TeacherOnboardingService {
     if (holder && scopeCovers(scope, holder.id)) {
       return new CommError(CommErrorCode.TEACHER_CONTACT_TAKEN, 'this phone or e-mail is already on a teacher’s file', 409, { teacher: holder });
     }
+    if (holder && attemptedName) this.tellHidden(actor, holder, attemptedName);
     return unavailable();
+  }
+
+  /**
+   * Plan §3.4: the adder was refused for details on a teacher out of their
+   * reach and was told nothing; someone who may see both is told. Never the
+   * e-mail or the phone: names only.
+   */
+  private tellHidden(actor: Actor, holder: { id: string; name: string }, attemptedName: string): void {
+    // Not awaited: on a refusal the write must not change how long the answer takes.
+    void this.tellTeachersManager(actor, 'teacher_duplicate_hidden', `teacher_duplicate_hidden:${holder.id}:${actor.actorId}`, {
+      holder: holder.name,
+      addedBy: actor.displayName,
+      name: attemptedName,
+    });
   }
 }
 

@@ -188,6 +188,24 @@ describe('PD-21: staff accounts', () => {
     }
   });
 
+  it('PD-40 PR-3: a department manager administers a specialist of their department -- only when the database says so, and never by impersonation', () => {
+    const own = staffAccount({ staffRole: 'specialist', managedByActor: true });
+    for (const act of ['reset_password', 'suspend', 'reactivate', 'sign_out'] as const) {
+      expect({ act, ok: authz.canAdministerAccount(OPS_MANAGER.actor, own, act, OPS_MANAGER.standing).allowed }).toEqual({ act, ok: true });
+      refused(authz.canAdministerAccount(OPS_MANAGER.actor, staffAccount({ staffRole: 'specialist' }), act, OPS_MANAGER.standing), CommErrorCode.ACCOUNT_ADMIN_DENIED);
+    }
+    refused(authz.canAdministerAccount(OPS_MANAGER.actor, own, 'impersonate', OPS_MANAGER.standing), CommErrorCode.ACCOUNT_ADMIN_DENIED);
+    // The fact never lifts the hard rules: not the super admin's account, not one's own.
+    refused(
+      authz.canAdministerAccount(OPS_MANAGER.actor, staffAccount({ staffRole: StaffRole.SUPER_ADMIN, managedByActor: true }), 'suspend', OPS_MANAGER.standing),
+      CommErrorCode.ACCOUNT_ADMIN_DENIED,
+    );
+    refused(
+      authz.canAdministerAccount(OPS_MANAGER.actor, staffAccount({ staffId: OPS_MANAGER.actor.actorId, managedByActor: true }), 'suspend', OPS_MANAGER.standing),
+      CommErrorCode.ACCOUNT_ADMIN_DENIED,
+    );
+  });
+
   it('a staff account is never impersonated, not even by the super admin', () => {
     refused(authz.canAdministerAccount(superAdmin(), staffAccount(), 'impersonate', none), CommErrorCode.ACCOUNT_ADMIN_DENIED);
   });

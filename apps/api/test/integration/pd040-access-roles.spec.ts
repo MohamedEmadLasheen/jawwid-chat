@@ -145,12 +145,12 @@ afterAll(async () => {
 
 describe('PD-40: the catalogue and the bundles in the database', () => {
   it('chat.permission is the TypeScript catalogue, row for row', async () => {
-    const rows = await g.prisma.$queryRaw<Array<{ key: string; risk: string; delegable: boolean }>>`
-      SELECT key, risk, delegable FROM chat.permission`;
+    const rows = await g.prisma.$queryRaw<Array<{ key: string; risk: string; delegable: boolean; in_roles: boolean }>>`
+      SELECT key, risk, delegable, in_roles FROM chat.permission`;
     // One ordering for both sides: the database's collation and localeCompare
     // disagree on '_' against a letter (teacher_supervision.* vs teachers.*).
     const byKey = (a: { key: string }, b: { key: string }) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
-    expect(rows.sort(byKey)).toEqual(PERMISSIONS.map((p) => ({ key: p.key, risk: p.risk, delegable: p.delegable })).sort(byKey));
+    expect(rows.sort(byKey)).toEqual(PERMISSIONS.map((p) => ({ key: p.key, risk: p.risk, delegable: p.delegable, in_roles: p.inRoles })).sort(byKey));
   });
 
   it('chat.legacy_permission_bundle is legacy-bundles.ts, row for row', async () => {
@@ -219,10 +219,13 @@ describe('PD-40: roles and grants', () => {
     // A specialist-tier role is never granted to a supervisor or a manager.
     expect(await sqlError(grant(m.superAdmin.id, m.supervisors[0]!.id, designerRole))).toMatch(/granted up to a specialist/);
     expect(await sqlError(grant(m.superAdmin.id, m.operationsManager.id, designerRole))).toMatch(/granted up to a specialist/);
-    // Until PR-3 hands out staff_accounts.manage, a manager grants nothing -- not even in their own department.
-    expect(await sqlError(grant(m.operationsManager.id, m.supervisors[0]!.id, managerRole))).toMatch(/only the super admin changes/);
-    expect(await sqlError(grant(m.operationsManager.id, designer.id, designerRole))).toMatch(/only the super admin changes/);
-    expect(await sqlError(revoke(m.operationsManager.id, designer.id, designerRole))).toMatch(/only the super admin changes/);
+    // PD-40 PR-3 (C1): a manager acts only on the specialists of their own department -- never a
+    // supervisor of it, never a specialist outside it (this one belongs to none).
+    expect(await sqlError(grant(m.operationsManager.id, m.supervisors[0]!.id, managerRole))).toMatch(/specialists of their own department/);
+    expect(await sqlError(grant(m.operationsManager.id, designer.id, designerRole))).toMatch(/specialists of their own department/);
+    expect(await sqlError(revoke(m.operationsManager.id, designer.id, designerRole))).toMatch(/specialists of their own department/);
+    // A supervisor holds no staff_accounts.manage, so grants nothing at all.
+    expect(await sqlError(grant(m.supervisors[0]!.id, designer.id, designerRole))).toMatch(/only the super admin changes/);
     // The super admin may widen a legacy account up to the role's tier.
     expect(await grant(m.superAdmin.id, m.operationsManager.id, managerRole)).toBe(true);
     expect((await profile(m.operationsManager.id)).permissions).toContain('certificates.view');

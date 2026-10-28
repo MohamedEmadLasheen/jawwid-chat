@@ -136,6 +136,10 @@ export const TR = {
     en: 'This teacher’s set-up is not finished. Students are allowed; this is a warning.',
     ar: 'تجهيز هذا المعلم لم يكتمل. إسناد الطلاب مسموح؛ هذا تنبيه فقط.',
   },
+  teacherManagerCovers: {
+    en: 'The Teachers Manager covers this teacher until a supervisor is set.',
+    ar: 'مدير قسم المعلمين مسؤول عن هذا المعلم حتى يُعيَّن له مشرف.',
+  },
   packagePrice: { en: 'Package price', ar: 'سعر الباقة' },
   lessonPrice: { en: 'Price per lesson', ar: 'سعر الحصة' },
   schedule: { en: 'Schedule', ar: 'المواعيد' },

@@ -120,6 +120,38 @@ export interface MailSender {
 
 export const FIRST_LOGIN_MAILER = Symbol('FirstLoginMailer');
 
+/**
+ * One message, at most `timeoutMs`: a slow provider never holds the caller's
+ * answer (the send may still finish later). The send starts inside the try, so
+ * a sender that throws at once is a failure like any other. On failure: what
+ * kind it was -- never the provider's text, which quotes the recipient.
+ */
+export async function sendWithin(
+  mailer: MailSender,
+  to: string,
+  mail: { subject: string; text: string },
+  timeoutMs: number,
+): Promise<{ sent: true } | { sent: false; failure: string }> {
+  if (!mailer.available) return { sent: false, failure: 'unavailable' };
+  let sending: Promise<void> | undefined;
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error('timed out'), { name: 'MailTimeout' })), timeoutMs);
+  });
+  try {
+    sending = mailer.send(to, mail);
+    await Promise.race([sending, late]);
+    return { sent: true };
+  } catch (e) {
+    sending?.catch(() => undefined);
+    const x = e as { name?: unknown; code?: unknown; responseCode?: unknown };
+    const failure = [x?.name, x?.code, x?.responseCode].filter((v) => typeof v === 'string' || typeof v === 'number').join(' ');
+    return { sent: false, failure: failure || 'error' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function selectMailSender(env: Env = process.env): MailSender {
   if (env.SMTP_URL && env.RECOVERY_MAIL_FROM) {
     const transport = createTransport(env.SMTP_URL);

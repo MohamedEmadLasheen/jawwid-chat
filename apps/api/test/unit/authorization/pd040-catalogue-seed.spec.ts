@@ -28,13 +28,32 @@ interface Block {
   migration: string;
   begin: string;
   end: string;
+  /** A later block's attribute changes, rendered after its rows. */
+  later?: Later;
+  /** Whether an attribute is rendered as the catalogue says (false: as it was before a later block changed it). */
+  current: boolean;
   /** Which catalogue keys and bundle rows this block inserts. */
   permission: (key: string) => boolean;
   bundle: (row: BundleRow) => boolean;
 }
 
+interface Later {
+  migration: string;
+  tag: string;
+  permissions: readonly string[];
+  bundles: readonly BundleRow[];
+  /** Existing keys this migration makes delegable (earlier blocks render them as they were: not delegable). */
+  delegable?: readonly string[];
+  /**
+   * Keys this migration bars from roles (in_roles = false). Append-only: a later
+   * key with inRoles false is barred by its own block, never by editing an
+   * earlier one. Together the lists are every key catalogue.ts bars.
+   */
+  barred?: readonly string[];
+}
+
 /** Rows a later migration adds to the catalogue, oldest first. */
-const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readonly string[]; bundles: readonly BundleRow[] }> = [
+const LATER: readonly Later[] = [
   {
     // PD-43: adding and offboarding teachers; the Teachers manager holds payroll (owner N2).
     migration: '20261028100000_chat_pd043_teacher_onboarding.sql',
@@ -85,6 +104,31 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
     ],
   },
   {
+    // PD-40 PR-3 (owner 2026-10-28, plan §13): staff accounts and access roles;
+    // department managers run their specialists (S1); the minimal delegable set
+    // (C3); in_roles (S4/C2).
+    migration: '20261029100000_chat_pd040_staff_accounts.sql',
+    tag: 'pd040staff',
+    permissions: ['staff_accounts.view', 'staff_accounts.create', 'staff_accounts.manage', 'access_roles.manage'],
+    bundles: (['operations', 'teachers', 'sales'] as const).flatMap((kind) =>
+      (['staff_accounts.create', 'staff_accounts.manage', 'staff_accounts.view'] as const).map((key) => ['manager', kind, key] as const),
+    ),
+    delegable: ['billing.view', 'certificates.design', 'certificates.view', 'subscriptions.view'],
+    barred: [
+      'access_roles.manage',
+      'accounts.administer',
+      'accounts.support_session',
+      'admin.inspect',
+      'chat.export',
+      'org.departments',
+      'staff_accounts.create',
+      'staff_accounts.manage',
+      'staff_accounts.view',
+      'staff_profiles.organization',
+      'staff_profiles.reporting_lines',
+    ],
+  },
+  {
     // PD-41: the Certificates page -- Operations requests students', Teacher
     // Supervision teachers'; managers oversee; the super admin keeps the types.
     migration: '20261029110000_chat_pd041_certificates.sql',
@@ -106,11 +150,15 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
       ['supervisor', 'teachers', 'certificates.request.teacher'],
       ['supervisor', 'teachers', 'certificates.story'],
     ],
+    // Safeguard 6: the types are the super admin's alone; no role ever carries them.
+    barred: ['certificates.types'],
   },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));
+const laterDelegable = new Set(LATER.flatMap((l) => l.delegable ?? []));
 const laterRow = new Set(LATER.flatMap((l) => l.bundles.map((r) => r.join('|'))));
+const laterBarred = LATER.flatMap((l) => l.barred ?? []);
 
 const BLOCKS: Block[] = [
   {
@@ -119,6 +167,7 @@ const BLOCKS: Block[] = [
     end: '-- END GENERATED pd040 seed',
     permission: (key) => !laterKey.has(key),
     bundle: (row) => !laterRow.has(row.join('|')),
+    current: false,
   },
   ...LATER.map((l) => ({
     migration: l.migration,
@@ -126,6 +175,8 @@ const BLOCKS: Block[] = [
     end: `-- END GENERATED ${l.tag} catalogue rows`,
     permission: (key: string) => l.permissions.includes(key),
     bundle: (row: BundleRow) => l.bundles.some((r) => r.join('|') === row.join('|')),
+    later: l,
+    current: true,
   })),
 ];
 
@@ -143,8 +194,10 @@ function bundleRows(): BundleRow[] {
 }
 
 function render(block: Block): string {
+  // A key a later block made delegable is written here as it was before: not delegable.
+  const delegable = (p: (typeof PERMISSIONS)[number]) => p.delegable && (block.current || !laterDelegable.has(p.key));
   const permissions = PERMISSIONS.filter((p) => block.permission(p.key)).map(
-    (p) => `  (${[q(p.key), q(p.page), q(p.action), q(p.label.en), q(p.label.ar), q(p.risk), String(p.delegable), q(p.introducedBy)].join(', ')})`,
+    (p) => `  (${[q(p.key), q(p.page), q(p.action), q(p.label.en), q(p.label.ar), q(p.risk), String(delegable(p)), q(p.introducedBy)].join(', ')})`,
   );
   const bundles = bundleRows()
     .filter(block.bundle)
@@ -156,6 +209,16 @@ function render(block: Block): string {
   if (permissions.length > 0 && bundles.length > 0) lines.push('');
   if (bundles.length > 0) {
     lines.push('insert into chat.legacy_permission_bundle (tier, department_kind, permission_key) values', bundles.join(',\n') + ';');
+  }
+  const flips = block.later?.delegable ?? [];
+  if (flips.length > 0) {
+    if (lines.length > 1) lines.push('');
+    lines.push(`update chat.permission set delegable = true where key in (${[...flips].sort().map(q).join(', ')});`);
+  }
+  const barred = block.later?.barred ?? [];
+  if (barred.length > 0) {
+    if (lines.length > 1) lines.push('');
+    lines.push(`update chat.permission set in_roles = false where key in (${[...barred].sort().map(q).join(', ')});`);
   }
   lines.push(block.end);
   return lines.join('\n');
@@ -180,6 +243,16 @@ describe('PD-40: the migration seeds exactly the TypeScript catalogue and bundle
     const rows = new Set(bundleRows().map((r) => r.join('|')));
     expect([...laterKey].filter((k) => !keys.has(k))).toEqual([]);
     expect([...laterRow].filter((r) => !rows.has(r))).toEqual([]);
+    const delegable = new Set(PERMISSIONS.filter((p) => p.delegable).map((p) => p.key));
+    expect([...laterDelegable].filter((k) => !delegable.has(k))).toEqual([]);
+    // Every delegable key is made so by a later block: the first seed made none delegable.
+    expect([...delegable].filter((k) => !laterDelegable.has(k))).toEqual([]);
+  });
+
+  it('the barred lists are, together and once each, exactly the keys catalogue.ts keeps out of roles', () => {
+    const barred = PERMISSIONS.filter((p) => !p.inRoles).map((p) => p.key).sort();
+    expect([...laterBarred].sort()).toEqual(barred);
+    expect(new Set(laterBarred).size).toBe(laterBarred.length);
   });
 
   it('every bundle the code knows has rows or is deliberately empty', () => {
