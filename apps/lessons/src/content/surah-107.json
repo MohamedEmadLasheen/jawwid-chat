@@ -1,0 +1,425 @@
+{
+  "surah": 107,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the five Tajweed rules, the Tajweed game and the two Tajweed quiz questions (Tajweed comes only from the reviewed dataset), the audio URLs, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old \"complete the ayah\" and \"missing word\" games; the missing-word answer 'an salatihim (5:3-4) is left out because it is two words, and the games' hand-typed distractors (several not words of this surah) are gone: the game draws its options from this surah's words. Four word meanings were typed without the particle the verse word carries; they point at the whole verse word (1:4, 4:1, 4:2, 7:1). The old quiz had no categories; they were assigned here. Not carried: the intro quiz and facts (name, ayah count, Makki), the \"why it was revealed\" line, the ordering, build-the-ayah and start-end matching games, the three word-meaning games, the lessons' titles, the \"how we apply these lessons\" list and the second reflection prompt. Emoji were stripped from the ends of lines."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-107 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "b912fa6c26dd7cc0baea2f77ef0ae1801674ec335a1ea89617efffee77d0a222",
+      "components/SurahIntro.tsx": "09330a2ab0bcd145fcf9e83d8ad9b46b4bc4e00224789ffcaeebf46dc0e2ed51",
+      "components/VerseByVerse.tsx": "d4c7893a7dd8b8884612779692a9af130934adba1f1a0e49a08188d6f9cf2c43",
+      "components/WordMeanings.tsx": "f6f68309a3fba4aefa93e0a1705a1fc9032e48eab8a0ea3728fca6d964405243",
+      "components/MemorizationGames.tsx": "892a21a21fbf3edcd95670c2bea9b2dcff6e7d0f7657d59a6910b88a749f158c",
+      "components/LessonsAndQuiz.tsx": "b7bdef393ba358dcc09c650513b484f4a64c1d48dd1b68448eb01677515c5302",
+      "components/TajweedSection.tsx": "1ed2ca0740c233755a8223c679a1ebb8cb1041338aeb5968f0ced690b8cf39f7"
+    }
+  },
+  "intro": {
+    "text": "سورة الماعون هي سورة قصيرة وجميلة، تتحدث عن أهمية مساعدة الآخرين والصلاة والعطاء.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "هل رأيت الشخص الذي لا يؤمن بيوم الحساب؟ هذا شخص لا يصدق أن الله سيحاسبنا.",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "هذا الشخص السيء يدفع اليتيم (الطفل الذي ليس له أب) ويؤذيه بدل أن يكون لطيفاً معه.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "ولا يشجع الناس على إطعام الفقراء والمحتاجين. يعني لا يحب مساعدة الآخرين.",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "عقاب شديد لبعض المصلين... لكن أي مصلين؟ تعال نعرف في الآية التالية!",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "الذين لا يهتمون بصلاتهم ولا يصلونها في وقتها. يعني يتكاسلون عن الصلاة.",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "الذين يعملون الأشياء الحسنة فقط ليراهم الناس، وليس حباً في الله.",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "ويرفضون أن يعطوا الأشياء البسيطة للناس مثل الماء أو الملح أو الأدوات. يعني بخلاء جداً.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "هل رأيت وعلمت",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "لا يصدق ولا يؤمن",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "يوم الحساب والجزاء",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "يدفع بقوة ويؤذي",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 4,
+      "meaning": "الطفل الذي مات أبوه",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 2,
+      "meaning": "يشجع ويحث",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 4,
+      "meaning": "أكل وغذاء",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 5,
+      "meaning": "الفقير المحتاج",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 1,
+      "meaning": "عذاب شديد",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 2,
+      "meaning": "الذين يصلون",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 5,
+      "meaning": "غافلون ولا يهتمون",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 3,
+      "meaning": "يتظاهرون أمام الناس",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 1,
+      "meaning": "يرفضون أن يعطوا",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 2,
+      "meaning": "الأشياء البسيطة كالماء والملح",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 4
+    },
+    {
+      "ayah": 2,
+      "word": 4
+    },
+    {
+      "ayah": 3,
+      "word": 5
+    },
+    {
+      "ayah": 5,
+      "word": 5
+    },
+    {
+      "ayah": 7,
+      "word": 2
+    },
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 3,
+      "word": 2
+    },
+    {
+      "ayah": 4,
+      "word": 2
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الماعون؟",
+      "options": [
+        {
+          "text": "5"
+        },
+        {
+          "text": "7"
+        },
+        {
+          "text": "10"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الأشياء البسيطة كالماء والملح"
+        },
+        {
+          "text": "الصلاة"
+        },
+        {
+          "text": "القرآن"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 7,
+        "word": 2
+      },
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "يدفعه ويؤذيه"
+        },
+        {
+          "text": "يساعده"
+        },
+        {
+          "text": "يلعب معه"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 2,
+        "word": 3
+      },
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية التي تأتي بعد",
+      "word": {
+        "ayah": 4,
+        "word": 2
+      },
+      "options": [
+        {
+          "ayah": 5
+        },
+        {
+          "ayah": 7
+        },
+        {
+          "ayah": 6
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old question typed the whole of ayah 4 into its text; it now shows ayah 4's last word (li-l-musallin) after \"ma al-ayah allati ta'ti ba'd\". Teacher to confirm it reads well.",
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "يتظاهرون أمام الناس"
+        },
+        {
+          "text": "يصلون لله"
+        },
+        {
+          "text": "يساعدون الفقراء"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 6,
+        "word": 3
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "غافلون ولا يهتمون"
+        },
+        {
+          "text": "سعداء"
+        },
+        {
+          "text": "خائفون"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 5,
+        "word": 5
+      },
+      "id": "q6"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 3,
+        "words": 4
+      },
+      "options": [
+        {
+          "ayah": 3,
+          "word": 5
+        },
+        {
+          "ayah": 2,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 2
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old distractor al-musallin is not a word of this surah; it is now li-l-musallin (4:2). The distractor al-yatimi (typed with kasra) shows as the surah's al-yatima (2:4).",
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "ما الدرس الرئيسي من سورة الماعون؟",
+      "options": [
+        {
+          "text": "مساعدة الآخرين والإخلاص في العبادة"
+        },
+        {
+          "text": "قراءة القرآن فقط"
+        },
+        {
+          "text": "الذهاب للمدرسة"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q8"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "يجب أن نكون لطفاء مع الأطفال الذين ليس لهم أب أو أم، ونساعدهم ونلعب معهم.",
+      "review": "Says the orphan has \"no father or mother\". The yatim of this surah is a child whose father has died, as the lesson's own word meaning and did-you-know line say. Teacher to align the wording."
+    },
+    {
+      "text": "الله يحب الذين يطعمون الفقراء ويشاركون طعامهم مع الآخرين.",
+      "review": null
+    },
+    {
+      "text": "يجب أن نصلي في وقتها ونحن سعداء، لأن الصلاة تجعلنا قريبين من الله.",
+      "review": null
+    },
+    {
+      "text": "نعمل الأشياء الحسنة لأن الله يحبها، وليس لكي يمدحنا الناس.",
+      "review": null
+    },
+    {
+      "text": "نشارك أشياءنا مع الآخرين بسعادة، حتى الأشياء الصغيرة مثل الأقلام والألعاب.",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "ما أجمل شيء تعلمته من سورة الماعون؟",
+    "ideas": [
+      "مساعدة اليتيم والفقير",
+      "المحافظة على الصلاة",
+      "مشاركة أشيائي مع الآخرين",
+      "الإخلاص لله في كل عمل"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "سورة الماعون تتكون من 7 آيات فقط!",
+      "review": null
+    },
+    {
+      "text": "كلمة 'الماعون' تعني الأشياء البسيطة التي نستخدمها كل يوم",
+      "review": null
+    },
+    {
+      "text": "قراءة القرآن كل يوم تجعلنا أقرب إلى الله",
+      "review": null
+    },
+    {
+      "text": "اليتيم هو الطفل الذي فقد أباه، ويجب أن نكون لطفاء معه",
+      "review": null
+    },
+    {
+      "text": "الصلاة هي أحب الأعمال إلى الله",
+      "review": null
+    },
+    {
+      "text": "من يساعد الفقراء يحبه الله كثيراً",
+      "review": null
+    },
+    {
+      "text": "الإخلاص يعني أن نعمل الخير لله وحده",
+      "review": null
+    },
+    {
+      "text": "سورة الماعون نزلت في مكة المكرمة",
+      "review": "Makki is disputed: many scholars count it Madani, or its first three ayat Makki and the rest Madani. Teacher to confirm."
+    }
+  ]
+}
