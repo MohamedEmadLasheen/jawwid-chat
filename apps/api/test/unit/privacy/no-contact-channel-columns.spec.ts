@@ -70,6 +70,10 @@ const ALLOWED: ReadonlyArray<string> = [
   'insert into chat.teacher_file (teacher_id, organization_id, phone, email, joined_on, teaching_market, updated_by)',
   'or (v_digits is not null and regexp_replace(coalesce(f.phone,   ),         ,   ,    ) = v_digits))) then',
   'and f.phone is not distinct from v_phone',
+  // PD-43 PR-1b (the set-up checklist): chat.teacher_setup_state asks only
+  // whether the admin-only Teacher File holds a phone or an e-mail. It returns
+  // a boolean, never the value; server-only like the writer above.
+  'exists (select 1 from chat.teacher_file f where f.teacher_id = t.id and num_nonnulls(f.phone, f.email) > 0),',
 ];
 
 /** Strip comments so prose about phone privacy is not mistaken for a column. */

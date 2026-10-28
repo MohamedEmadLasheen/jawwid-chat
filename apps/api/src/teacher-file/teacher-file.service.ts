@@ -102,6 +102,7 @@ export class TeacherFileService {
     const studentCount = new Map(students.map((r) => [r.teacherId, r._count._all]));
     const open = await this.openComplaintCounts(ids);
     const away = await this.awayToday(ids);
+    const setup = await this.setupOf(ids);
 
     return {
       access: publicAccess(access),
@@ -112,6 +113,8 @@ export class TeacherFileService {
         studentCount: studentCount.get(t.id) ?? 0,
         openComplaints: open.get(t.id) ?? 0,
         away: away.get(t.id) ?? null,
+        // PD-43: how many set-up steps are still open (the file says which).
+        setupMissing: setup.get(t.id)?.missing ?? 0,
       })),
       // PD-26: who may be named as a complaint's handler.
       supervisors: await this.supervisors(org),
@@ -169,6 +172,8 @@ export class TeacherFileService {
       access: publicAccess(access),
       // PD-43: the sign-in's state, and whether this reader may send a new first sign-in code.
       signIn: await this.signInOf(actor, teacher),
+      // PD-43: what is set up for this teacher, read from the real rows. Done / not done: never an amount.
+      setup: (await this.setupOf([teacher.id])).get(teacher.id) ?? null,
       teacher: {
         id: teacher.id,
         name: teacher.name,
@@ -515,12 +520,14 @@ export class TeacherFileService {
    * PD-43: the add-a-teacher decision (decideTeacherOnboarding) for this actor.
    * Refuses with TEACHER_ONBOARDING_DENIED before anything is looked up.
    */
-  async onboardingGate(actorId: string, needs: (o: TeacherOnboardingAccess) => boolean = (o) => o.canCreate) {
+  async onboardingGate(
+    actorId: string,
+    needs: (o: TeacherOnboardingAccess) => boolean = (o) => o.canCreate,
+    refusal = 'only the Teachers department or the super admin adds a teacher',
+  ) {
     const actor = await this.conversations.requireActor(actorId);
     const onboarding = decideTeacherOnboarding(actor, await this.teachersDepartmentRole(actor));
-    if (!needs(onboarding)) {
-      throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'only the Teachers department or the super admin adds a teacher');
-    }
+    if (!needs(onboarding)) throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, refusal);
     return { actor, onboarding };
   }
 
@@ -538,6 +545,17 @@ export class TeacherFileService {
     const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
       SELECT chat.may_issue_teacher_first_login(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok`;
     return { status, canSendCode: row?.ok === true };
+  }
+
+  /** chat.teacher_setup_state for each teacher, with `missing`: how many of its steps are not done. */
+  private async setupOf(teacherIds: string[]): Promise<Map<string, TeacherSetup>> {
+    if (teacherIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; state: Omit<TeacherSetup, 'missing'> }>>`
+      SELECT t.id::text AS id, chat.teacher_setup_state(t.id) AS state
+        FROM unnest(${teacherIds}::uuid[]) AS t(id)`;
+    return new Map(
+      rows.map((r) => [r.id, { ...r.state, missing: Object.values(r.state).filter((done) => done === false).length }]),
+    );
   }
 
   /** What GET /teacher-files tells the page about adding a teacher. */
@@ -985,4 +1003,20 @@ function requireDate(field: string, value: unknown): Date {
   const d = new Date(`${value}T00:00:00.000Z`);
   if (Number.isNaN(d.getTime()) || isoDate(d) !== value) throw invalid(field, 'is not a calendar date');
   return d;
+}
+
+/** PD-43: the set-up checklist. Each step is done or not; `missing` counts the ones that are not. */
+interface TeacherSetup {
+  signedIn: boolean;
+  supervisor: boolean;
+  contact: boolean;
+  payTerms: boolean;
+  payoutAccount: boolean;
+  leaveAllowance: boolean;
+  shift: boolean;
+  availability: boolean;
+  profile: boolean;
+  /** PD-38's category and PD-18's salary type agree (hourly with hourly). */
+  payMatchesShift: boolean;
+  missing: number;
 }

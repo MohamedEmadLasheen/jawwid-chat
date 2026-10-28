@@ -257,3 +257,32 @@ After the commit, the code is e-mailed to the sign-in address when the e-mail ch
 | `COMM.TEACHER_ALREADY_ADDED` | the e-mail signs in a teacher the caller reaches; `error.detail.teacher` names them |
 | `COMM.TEACHER_EMAIL_UNAVAILABLE` | the e-mail, or the phone, belongs to anyone else: another organization's account, a parent, staff, or a teacher out of the caller's reach. It is one identical answer, so it tells nobody what exists. There is no e-mail-check endpoint. |
 | `COMM.TEACHER_CONTACT_TAKEN` | the phone or e-mail is on the file of a teacher the caller reaches, named in `error.detail.teacher` |
+
+## Offboarding and reactivating a teacher (PD-43 PR-1b)
+
+Migration `20261028200000_chat_pd043_offboarding_and_setup.sql`. Nothing is deleted: the Teacher File and its history stay readable.
+
+| Route | Who | What |
+|---|---|---|
+| `GET /teachers/:id/offboard-preview` | Teachers manager, super admin | `{ teacherId, isActive, students: [{id, name}], openLessons, canOffboard }` |
+| `POST /teachers/:id/offboard` `{ reason, cancelOpenLessons? }` | Teachers manager, super admin | 201 `{ teacherId, cancelledLessons, notCancelled }` |
+| `POST /teachers/:id/reactivate` `{ reason }` | super admin only (owner Q6) | 201 `{ teacherId, signIn, firstLogin: { code, expiresAt, emailed } }`, `Cache-Control: no-store` |
+
+All three carry PD-40 key `teachers.offboard`; reactivation is narrowed to the super admin in the service and in `chat.reactivate_teacher`.
+
+Offboarding is one transaction: `chat.offboard_teacher` closes the teacher (`is_active = false`, `left_at`) and the login (`deactivated`, whether it had signed in or not), retires any waiting first sign-in code, ends the supervisor assignment and audits `teacher.offboarded`; every session is revoked in the same transaction and the realtime barrier runs after it. Lessons ahead are cancelled after the commit, one by one with the family's card, as the discipline ladder does; a lesson that could not be cancelled is listed in `notCancelled`, never fatal. The family's card never carries the offboarding reason.
+
+Reactivation brings back the same teacher with no supervisor: the login waits again (`provisioned`) and a new first sign-in code is issued in the same transaction, shown to the super admin and e-mailed. The old password never comes back.
+
+| Error | When |
+|---|---|
+| `COMM.TEACHER_HAS_STUDENTS` | a student is still assigned; `error.detail.students` lists them. Refused in SQL too. |
+| `COMM.TEACHER_HAS_OPEN_LESSONS` | lessons ahead and `cancelOpenLessons` not set |
+| `COMM.TEACHER_FILE_CONFLICT` | offboarding a teacher who has left; reactivating one who is active |
+| `COMM.TEACHER_ONBOARDING_DENIED` | anyone else |
+
+`chat.teacher` now has `chat.staff`'s rule (`teacher_left_at_matches_is_active`): an inactive teacher has a leaving date. A writer that forgets it is given `now()`; bringing a teacher back clears it.
+
+### The set-up checklist
+
+`GET /teacher-files/:id` carries `setup`: `signedIn`, `supervisor`, `contact`, `payTerms`, `payoutAccount`, `leaveAllowance` (this academy year), `shift` (a current PD-38 pattern), `availability` (hourly teachers count as having it), `profile`, `payMatchesShift` (an hourly pattern with hourly pay, and the reverse), and `missing` (how many are not done). `GET /teacher-files` carries `setupMissing` per teacher. Read live from `chat.teacher_setup_state`, never stored, and never an amount.

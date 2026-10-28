@@ -13,7 +13,7 @@
  *   3. POST /teachers/:id/reactivate: the super admin only (owner Q6); the
  *      same teacher, a waiting login and a new first sign-in code, e-mailed
  *      and shown to the super admin.
- *   4. chat.teacher: is_active and left_at agree, and the writers refuse a
+ *   4. chat.teacher: an inactive teacher has a leaving date, and the writers refuse a
  *      request role.
  *   5. The set-up checklist on the Teacher File, and the count on the list.
  *
@@ -277,9 +277,16 @@ describe('3. reactivation', () => {
 });
 
 describe('4. the database', () => {
-  it('is_active and left_at agree on chat.teacher', async () => {
+  it('an inactive teacher has a leaving date, as on chat.staff', async () => {
     const id = (await add(m.teachersManager.subject, { email: email('f') })).json.teacher.id as string;
-    expect(await sqlError(g.prisma.$executeRaw`UPDATE chat.teacher SET left_at = now() WHERE id = ${id}::uuid`)).toMatch(/teacher_left_at_matches_is_active/);
+    const [c] = await g.prisma.$queryRaw<{ validated: boolean }[]>`
+      SELECT convalidated AS validated FROM pg_constraint WHERE conname = 'teacher_left_at_matches_is_active'`;
+    expect(c).toEqual({ validated: true });
+    // A writer that forgets the date is given one; bringing the teacher back clears it.
+    await g.prisma.$executeRaw`UPDATE chat.teacher SET is_active = false WHERE id = ${id}::uuid`;
+    expect((await g.prisma.teacher.findUniqueOrThrow({ where: { id } })).leftAt).not.toBeNull();
+    await g.prisma.$executeRaw`UPDATE chat.teacher SET is_active = true WHERE id = ${id}::uuid`;
+    expect((await g.prisma.teacher.findUniqueOrThrow({ where: { id } })).leftAt).toBeNull();
   });
 
   it('a request role calls neither writer', async () => {
