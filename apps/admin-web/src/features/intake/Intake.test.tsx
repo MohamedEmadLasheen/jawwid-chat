@@ -36,6 +36,7 @@ const bodyOf = (call: unknown[] | undefined) => {
 const OPTIONS: IntakeOptions = {
   standing: 'operations_supervisor',
   manager: false,
+  ready: true,
   onBehalfOf: [],
   teachers: [{ id: 't-1', name: 'Teacher Omega' }],
 }
@@ -71,6 +72,14 @@ async function openForm() {
 describe('Add family (PD-42)', () => {
   it('is offered only when the server says this viewer enters families', async () => {
     on('GET', /\/family-intake\/options$/, () => json({ error: { code: 'COMM.INTAKE_DENIED', message: 'no' } }, 403))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Parents' })).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /\/family-intake\/options$/).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('button', { name: 'Add family' })).not.toBeInTheDocument()
+  })
+
+  it('waits for the contact-key backfill: not offered until the server says the intake is open', async () => {
+    on('GET', /\/family-intake\/options$/, () => json({ ...OPTIONS, ready: false }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Parents' })).toBeInTheDocument()
     await waitFor(() => expect(calls('GET', /\/family-intake\/options$/).length).toBeGreaterThan(0))

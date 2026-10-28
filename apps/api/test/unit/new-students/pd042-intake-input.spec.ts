@@ -6,8 +6,11 @@
  */
 import { Prisma } from '@prisma/client';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { foldName, parseAddChildren, parseCarriedOver, parseIntake, parseSignInEmail } from '../../../src/new-students/intake-input';
-import { dbRefusal } from '../../../src/new-students/intake.service';
+import { e164ForKey, foldName, parseAddChildren, parseCarriedOver, parseIntake, parseSignInEmail } from '../../../src/new-students/intake-input';
+import { dbRefusal, payloadHash } from '../../../src/new-students/intake.service';
+import { parentContactKeys } from '../../../src/new-students/enrolment.service';
+import { planContactKeys } from '../../../src/parent-profile/family-contact-keys';
+import { contactKeyHash } from '../../../src/new-students/contact-key';
 import { salesFamilyScopeFromEnv } from '../../../src/platform/sales-scope';
 
 const ID = '7f2b8c1e-4d3a-4b5c-9e6f-0a1b2c3d4e5f';
@@ -54,6 +57,17 @@ describe('PD-42 -- parseIntake', () => {
     expect(invalid(() => parseIntake({ ...minimal, parent: { name: 'P', phone: '12' } }))).toMatch(/parent\.phone/);
   });
 
+  it('a local number is read only in its stated country -- or when it is unmistakably an Egyptian mobile (review of #202)', () => {
+    expect(invalid(() => parseIntake({ ...minimal, parent: { name: 'P', phone: '050 123 4567' } }))).toMatch(/country/);
+    expect(invalid(() => parseIntake({ ...minimal, parent: { name: 'P', phone: '55 123 456' } }))).toMatch(/country/);
+    expect(parseIntake({ ...minimal, parent: { name: 'P', phone: '00971 50 123 4567' } }).parent.phoneE164).toBe('+971501234567');
+    expect(e164ForKey('010-0123-4567', null)).toBe('+201001234567');
+    expect(e164ForKey('011 2345 6789', null)).toBe('+201123456789');
+    expect(e164ForKey('050 123 4567', null)).toBe('ambiguous');
+    expect(e164ForKey('050 123 4567', 'AE')).toBe('+971501234567');
+    expect(e164ForKey('+20 not a number', null)).toBeNull();
+  });
+
   it('refuses rather than adjusts: the same child twice, weekly times without a teacher, a future birth date, an unknown payment method', () => {
     expect(invalid(() => parseIntake({ ...minimal, children: [{ name: 'أحمد' }, { name: 'احمد' }] }))).toMatch(/listed twice/);
     expect(invalid(() => parseIntake({ ...minimal, children: [{ name: 'C', schedule: [{ weekday: 1, time: '17:00' }] }] }))).toMatch(/need the child's teacher/);
@@ -80,6 +94,47 @@ describe('PD-42 -- parseIntake', () => {
   });
 });
 
+describe('PD-42 -- the intake\'s payload hash and PD-16\'s keys', () => {
+  it('a replay is recognised by what it asked for', () => {
+    const a = payloadHash({ route: 'enter', parent: { name: 'P' }, children: [{ name: 'C' }] });
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    expect(payloadHash({ route: 'enter', parent: { name: 'P' }, children: [{ name: 'C' }] })).toBe(a);
+    expect(payloadHash({ route: 'enter', parent: { name: 'P' }, children: [{ name: 'D' }] })).not.toBe(a);
+  });
+
+  it('PD-16 Assign keys the e-mail, and the phone only when it reads as one number', () => {
+    expect(parentContactKeys('A@B.test', '010 0123 4567').map((k) => k.kind)).toEqual(['email', 'phone']);
+    expect(parentContactKeys('a@b.test', '050 123 4567').map((k) => k.kind)).toEqual(['email']);
+    expect(parentContactKeys('a@b.test', '+99 000 333 444').map((k) => k.kind)).toEqual(['email']);
+    expect(parentContactKeys('A@B.test', null)[0]!.hash).toBe(contactKeyHash('email', 'a@b.test'));
+  });
+});
+
+describe('PD-42 -- the contact-key backfill plan', () => {
+  const src = (familyId: string, over: Record<string, unknown> = {}) => ({
+    familyId, organizationId: 'o', countryCode: null, contactId: `c-${familyId}`, subject: null, fileEmail: null, filePhone: null, ...over,
+  });
+
+  it('keys each parent once: e-mails from the account and the file, the phone in E.164; the oldest family keeps a shared key', () => {
+    const plan = planContactKeys([
+      src('f1', { subject: 'A@x.test', fileEmail: 'a@x.test', filePhone: '010 0123 4567' }),
+      src('f2', { filePhone: '+20 100 123 4567' }),
+      src('f3', { filePhone: '050 123 4567' }),
+      src('f4', { filePhone: '050 123 4567', countryCode: 'AE' }),
+    ], new Map());
+    expect(plan.inserts.map((k) => [k.familyId, k.kind])).toEqual([['f1', 'email'], ['f1', 'phone'], ['f4', 'phone']]);
+    expect(plan.collisions).toEqual([{ familyId: 'f2', otherFamilyId: 'f1', kind: 'phone' }]);
+    expect(plan.unreadable).toEqual([{ familyId: 'f3', contactId: 'c-f3' }]);
+  });
+
+  it('is idempotent: keys already there are counted, not written again', () => {
+    const first = planContactKeys([src('f1', { subject: 'a@x.test' })], new Map());
+    const existing = new Map(first.inserts.map((k) => [`${k.organizationId}|${k.keyHash}`, k.familyId]));
+    const second = planContactKeys([src('f1', { subject: 'a@x.test' })], existing);
+    expect(second).toMatchObject({ inserts: [], already: 1, collisions: [], unreadable: [] });
+  });
+});
+
 describe('PD-42 -- foldName', () => {
   it('folds the spellings one family\'s name is typed with', () => {
     expect(foldName('  أحمد  ')).toBe(foldName('احمد'));
@@ -98,7 +153,7 @@ describe('PD-42 -- the database\'s refusals, in words', () => {
     new Prisma.PrismaClientKnownRequestError('Raw query failed', { code: 'P2010', clientVersion: 'x', meta: { code, message: `ERROR: ${message}` } });
 
   it('maps each guard to its answer, and leaves anything else alone', () => {
-    expect(dbRefusal(pg('23514', 'this parent is already in Chat'))).toMatchObject({ code: CommErrorCode.PARENT_EXISTS });
+    expect(dbRefusal(pg('23514', 'this parent is already in Chat'))).toMatchObject({ code: CommErrorCode.PARENT_EXISTS, detail: undefined });
     expect(dbRefusal(pg('42501', 'a carried-over package is entered by the supervisor who entered the child'))).toMatchObject({
       code: CommErrorCode.INTAKE_DENIED, message: 'a carried-over package is entered by the supervisor who entered the child',
     });
@@ -116,7 +171,7 @@ describe('PD-42 -- SALES_FAMILY_SCOPE', () => {
     else process.env.SALES_FAMILY_SCOPE = saved;
   });
 
-  it('unset writes nothing; "own" (any case) narrows; anything else is "all"', () => {
+  it('unset writes nothing; "own" and "all" (any case) are read; anything else refuses to boot', () => {
     delete process.env.SALES_FAMILY_SCOPE;
     expect(salesFamilyScopeFromEnv()).toBeNull();
     process.env.SALES_FAMILY_SCOPE = '  OWN ';
@@ -124,6 +179,8 @@ describe('PD-42 -- SALES_FAMILY_SCOPE', () => {
     process.env.SALES_FAMILY_SCOPE = 'all';
     expect(salesFamilyScopeFromEnv()).toBe('all');
     process.env.SALES_FAMILY_SCOPE = 'true';
-    expect(salesFamilyScopeFromEnv()).toBe('all');
+    expect(() => salesFamilyScopeFromEnv()).toThrow(/must be 'all' or 'own'/);
+    process.env.SALES_FAMILY_SCOPE = 'owned';
+    expect(() => salesFamilyScopeFromEnv()).toThrow(/must be 'all' or 'own'/);
   });
 });
