@@ -273,7 +273,9 @@ export class MaterialsReaderService {
       if (!this.config.siteBase) {
         throw new CommError(CommErrorCode.MATERIAL_UNAVAILABLE, 'the lessons site is not configured on this deployment', 409);
       }
-      return { itemId: item.id, kind: item.kind, mode: 'link', presentation: 'frame-site', url: `${this.config.siteBase}${item.sitePath}` };
+      // audioEligible: only the academy's own lessons site may be handed Quran audio by the
+      // opener (PD-29 audio); an allowlisted third-party frame never is.
+      return { itemId: item.id, kind: item.kind, mode: 'link', presentation: 'frame-site', url: `${this.config.siteBase}${item.sitePath}`, audioEligible: true };
     }
     if (item.source === 'url') {
       return { itemId: item.id, kind: item.kind, mode: 'link', presentation: linkPresentation(item.url as string, this.config), url: item.url };

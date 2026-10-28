@@ -183,20 +183,47 @@ export function verifiedAudio(m: AudioManifest, deps: VerifiedAudioDeps = browse
 }
 
 /**
+ * Messages that arrive before the lesson has mounted. A WebView injects the list
+ * as soon as the page has loaded, which can be before React has run its effects;
+ * they are kept (the last few, unchecked) and checked like any other when the
+ * hook starts listening.
+ */
+const early: Array<{ origin: string; data: unknown }> = [];
+/** Tests only: start from an empty buffer. */
+export function clearEarlyAudioMessages(): void {
+  early.length = 0;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', (e: MessageEvent) => {
+    // Only from an origin that may send it at all, so junk cannot push the real list out.
+    if (e.origin !== window.location.origin && !BUILD_AUDIO_ORIGINS.parents.includes(e.origin)) return;
+    early.push({ origin: e.origin, data: e.data });
+    if (early.length > 4) early.shift();
+  });
+}
+
+/**
  * The lesson's audio list, if the opener has sent one this account may have.
  * Says "ready" to the allowed parents, so the opener knows when to send it.
  */
 export function useAudioManifest(surah: number, origins: AudioOrigins = BUILD_AUDIO_ORIGINS): AudioManifest | null {
-  const [manifest, setManifest] = useState<AudioManifest | null>(null);
+  // Kept with its surah rather than cleared on each effect run: StrictMode runs
+  // effects twice, and the buffer below is drained by the first.
+  const [held, setHeld] = useState<AudioManifest | null>(null);
   useEffect(() => {
-    setManifest(null);
+    const setManifest = (m: AudioManifest) => setHeld(m);
     const onMessage = (e: MessageEvent) => {
       const m = acceptAudioMessage({ origin: e.origin, data: e.data }, surah, origins);
       if (m) setManifest(m);
     };
+    // Drained: a message is accepted from the buffer at most once.
+    for (const e of early.splice(0)) {
+      const m = acceptAudioMessage(e, surah, origins);
+      if (m) setManifest(m);
+    }
     window.addEventListener('message', onMessage);
     if (window.parent !== window) for (const p of origins.parents) window.parent.postMessage({ type: READY_MESSAGE, surah }, p);
     return () => window.removeEventListener('message', onMessage);
   }, [surah, origins]);
-  return manifest;
+  return held?.surah === surah ? held : null;
 }

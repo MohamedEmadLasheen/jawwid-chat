@@ -37,7 +37,8 @@ cd "$ROOT"
   --no-web-resources-cdn \
   --no-wasm-dry-run \
   --base-href /teacher/ \
-  --dart-define=JAWWID_API_BASE_URL="$API_BASE_URL"
+  --dart-define=JAWWID_API_BASE_URL="$API_BASE_URL" \
+  --dart-define=JAWWID_LESSONS_ORIGIN="${LESSONS_ORIGIN:-}"
 
 # Replace the previous build, keeping the placeholder that lets the Admin Web
 # image build without a portal in it (local Admin Web work).
