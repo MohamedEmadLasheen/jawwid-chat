@@ -565,9 +565,10 @@ describe('6. the super admin keeps the types; disabling deletes nothing', () => 
     const old = await studentRequest({ typeId: excellenceTypeId, juz: undefined });
     await types.update(superId, excellenceTypeId, { isActive: false });
     expect((await types.list(s.ownerId, { category: 'student' })).types.map((t) => t.key)).toEqual(['juz_completed']);
+    // Listed by sort, then label: "Excellence" before "Juz' completed".
     expect((await types.list(superId, { category: 'student', includeDisabled: 'true' })).types.map((t) => [t.key, t.isActive])).toEqual([
-      ['juz_completed', true],
       ['excellence', false],
+      ['juz_completed', true],
     ]);
     expect(await code(studentRequest({ typeId: excellenceTypeId, juz: undefined }))).toBe(CommErrorCode.CERTIFICATE_TYPE_DISABLED);
     // The old certificate still reads with its type's label.
@@ -594,7 +595,9 @@ describe('7. the trail, duplicates, and what the Designer sees', () => {
     ]);
     const events = await g.prisma.appreciationCertificateEvent.findMany({ where: { certificateId: c.id }, orderBy: { seq: 'asc' } });
     expect(events.map((e) => e.seq)).toEqual([1, 2, 3, 4, 5]);
-    expect(JSON.stringify([acts, events])).not.toMatch(/certificates\/|certificate-uploads\/|conversations\//);
+    // audit_log ids are BigInt.
+    const trail = JSON.stringify([acts, events], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
+    expect(trail).not.toMatch(/certificates\/|certificate-uploads\/|conversations\//);
   });
 
   it('a double submit returns the first request; the same Juz twice is refused; a near-duplicate needs confirming', async () => {
