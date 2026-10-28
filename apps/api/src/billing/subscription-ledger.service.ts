@@ -197,6 +197,7 @@ export class SubscriptionLedger {
        WHERE r.organization_id = ${actor.organizationId as string}::uuid
          AND r.requested_at > now() - interval '30 days'
          AND (${access.scope !== 'reach'} OR chat.staff_reaches_family(${actor.actorId}::uuid, r.family_id) IS NOT NULL)
+         AND (${access.scope !== 'owned'} OR chat.staff_owns_family(${actor.actorId}::uuid, r.family_id))
        ORDER BY r.requested_at DESC
        LIMIT 200`;
     return {

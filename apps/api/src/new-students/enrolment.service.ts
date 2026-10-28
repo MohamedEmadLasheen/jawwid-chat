@@ -426,17 +426,7 @@ export class NewStudentEnrolmentService {
 
   /** The course a child's form names, from the academy's list -- added to it when new. */
   private async courseFor(tx: Prisma.TransactionClient, org: string, actorId: string, name: string): Promise<string | null> {
-    const clean = name.trim().slice(0, 80);
-    if (!clean) return null;
-    const found = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT id::text AS id FROM chat.course WHERE organization_id = ${org}::uuid AND lower(btrim(name)) = lower(${clean}) LIMIT 1`;
-    if (found[0]) return found[0].id;
-    const course = await tx.course.create({ data: { organizationId: org, name: clean, createdBy: actorId } });
-    await this.audit.audit(tx, {
-      actorId, action: 'course.created', entity: 'course', entityId: course.id,
-      after: { name: clean }, reason: 'course named on a subscription form',
-    });
-    return course.id;
+    return courseNamed(tx, this.audit, org, actorId, name, 'course named on a subscription form');
   }
 
   /** A regular lesson lasts as long as the trial did (30 minutes when unknown). */
@@ -447,7 +437,32 @@ export class NewStudentEnrolmentService {
   }
 }
 
-function minuteOf(hhmm: string): number {
+/**
+ * The course a form names, from the academy's list -- added to it when new
+ * (PD-16; PD-42's intake form too). Inside the caller's transaction.
+ */
+export async function courseNamed(
+  tx: Prisma.TransactionClient,
+  audit: AuditService,
+  org: string,
+  actorId: string,
+  name: string,
+  reason: string,
+): Promise<string | null> {
+  const clean = name.trim().slice(0, 80);
+  if (!clean) return null;
+  const found = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id::text AS id FROM chat.course WHERE organization_id = ${org}::uuid AND lower(btrim(name)) = lower(${clean}) LIMIT 1`;
+  if (found[0]) return found[0].id;
+  const course = await tx.course.create({ data: { organizationId: org, name: clean, createdBy: actorId } });
+  await audit.audit(tx, {
+    actorId, action: 'course.created', entity: 'course', entityId: course.id,
+    after: { name: clean }, reason,
+  });
+  return course.id;
+}
+
+export function minuteOf(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
   return h * 60 + m;
 }

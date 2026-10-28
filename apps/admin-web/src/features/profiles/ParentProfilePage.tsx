@@ -17,6 +17,9 @@ import { parentPath, studentPath, type FamilyBilling, type ParentProfile, type T
 import { METHOD_LABEL, P, TIMELINE_STATUS, countryName, describeError, isProfileRefusal, planLabel, useCopy } from './copy'
 import { useFamilyBilling, useParent, useParentPhoto } from './hooks'
 import { FamilyFeedbackSection } from './FamilyFeedbackSection'
+import { IntakeDialog } from '@/features/intake/IntakeDialog'
+import { I } from '@/features/intake/copy'
+import { useIntakeOptions } from '@/features/intake/hooks'
 import {
   CancelRequestDialog,
   EditBillingDialog,
@@ -320,8 +323,19 @@ function NoteSection({ profile, onEdit }: { profile: ParentProfile; onEdit: () =
 
 function ChildrenSection({ profile }: { profile: ParentProfile }) {
   const tx = useCopy()
+  // PD-42: "Add child", when the server says this viewer enters families (it decides the family).
+  const intake = useIntakeOptions()
+  const [adding, setAdding] = useState(false)
+  const action = intake.data ? (
+    <button type="button" className="btn btn--sm" onClick={() => setAdding(true)}>
+      {tx(I.addChild)}
+    </button>
+  ) : undefined
   return (
-    <Section id="pf-children" title={`${tx(P.children)} (${profile.childrenCount})`}>
+    <Section id="pf-children" title={`${tx(P.children)} (${profile.childrenCount})`} action={action}>
+      {adding && intake.data && (
+        <IntakeDialog options={intake.data} initial={{ kind: 'add', familyId: profile.family.id, familyName: profile.name }} onClose={() => setAdding(false)} />
+      )}
       {profile.children.length === 0 ? (
         <p className="tf-muted">{tx(P.noChildren)}</p>
       ) : (
