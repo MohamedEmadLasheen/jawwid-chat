@@ -145,7 +145,7 @@ describe('New Students: the families entered by hand', () => {
 
   it('a Sales member gets no "Recently entered" filter, and suggests the supervisor instead of choosing it', async () => {
     on('GET', /\/lessons\/access$/, () => json({ lessonManager: false, sales: true, operations: false }))
-    on('GET', /\/family-intake\/entered$/, () => json(list({ viewer: 'sales_member', canAssignSupervisor: false, families: [family({ suggestion: null })] })))
+    on('GET', /\/family-intake\/entered$/, () => json(list({ viewer: 'sales_member', canAssignSupervisor: false, families: [family({ suggestion: null, canSuggestSupervisor: true })] })))
     on('GET', /\/family-intake\/families\/f-1$/, () =>
       json(ownership({ suggestion: null, can: { setSignInEmail: true, addChild: true, suggestSupervisor: true, assignOperationsSupervisor: false, changeSalesOwner: false } })))
     on('POST', /\/family-intake\/families\/f-1\/supervisor-suggestion$/, () => json({ familyId: 'f-1', supervisorId: 'sup-1' }, 201))
@@ -160,6 +160,15 @@ describe('New Students: the families entered by hand', () => {
     await userEvent.selectOptions(await within(dialog).findByLabelText('Operations supervisor'), 'sup-1')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Suggest' }))
     await waitFor(() => expect(sent('POST', /\/family-intake\/families\/f-1\/supervisor-suggestion$/)).toEqual([{ supervisorId: 'sup-1' }]))
+  })
+
+  it('review of #214: only the family\'s Sales owner is offered "Suggest a supervisor" -- not the Sales manager', async () => {
+    on('GET', /\/lessons\/access$/, () => json({ lessonManager: false, sales: true, operations: false }))
+    on('GET', /\/family-intake\/entered$/, () => json(list({ viewer: 'sales_manager', canAssignSupervisor: false, families: [family({ suggestion: null, canSuggestSupervisor: false })] })))
+    const region = await enteredSection()
+    const card = within(region).getByRole('heading', { name: 'Parent Alpha' }).closest('article')!
+    expect(within(card).queryByRole('button', { name: 'Suggest a supervisor' })).not.toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: 'Choose the supervisor' })).not.toBeInTheDocument()
   })
 
   it('the Operations manager chooses the supervisor, the suggestion preselected', async () => {

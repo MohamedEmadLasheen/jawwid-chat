@@ -196,23 +196,39 @@ describe('1. "Needs an Operations supervisor"', () => {
 });
 
 describe('1a. review of #214', () => {
-  it('the Operations manager places a family only on a supervisor of their own department; the super admin, on any', async () => {
-    const otherManager = randomUUID();
-    const otherSupervisor = randomUUID();
-    await staff(otherManager, 'ops_m2', 'manager');
-    await staff(otherSupervisor, 'ops_s2', 'admin');
-    await department('operations', otherManager, [otherSupervisor]);
-    const r = await intake.enter(salesA, form());
-    expect((await intake.family(s.managerId, r.familyId)).supervisorChoices.map((x) => x.id)).not.toContain(otherSupervisor);
-    expect((await intake.family(superId, r.familyId)).supervisorChoices.map((x) => x.id)).toContain(otherSupervisor);
-    expect(await code(intake.assignOperationsSupervisor(s.managerId, r.familyId, { supervisorId: otherSupervisor }))).toBe(CommErrorCode.INTAKE_INVALID);
-    await intake.assignOperationsSupervisor(superId, r.familyId, { supervisorId: otherSupervisor });
-    expect(await g.prisma.learnerSupervision.findUniqueOrThrow({ where: { learnerId: r.learnerIds[0]! } })).toMatchObject({ supervisorId: otherSupervisor });
+  it('the Operations manager places a family only on a supervisor of their own department -- the academy\'s one; never another academy\'s', async () => {
+    // One Operations department per academy (department_one_kind_per_organization): "their own department" is it.
+    await expect(department('operations', null, [])).rejects.toThrow(/23505|unique|duplicate/i);
+    const foreignOrg = randomUUID();
+    const foreignSupervisor = randomUUID();
+    await sql(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'Other')`, foreignOrg, `pd42-${foreignOrg.slice(0, 8)}`);
+    await sql(`insert into chat.staff (id, organization_id, name, role, is_active) values ($1::uuid, $2::uuid, 'ops_x', 'admin', true)`, foreignSupervisor, foreignOrg);
+    const [{ id: foreignDept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.department (organization_id, kind, display_name) values ($1::uuid, 'operations', 'operations') returning id::text as id`, foreignOrg,
+    );
+    await sql(`insert into chat.department_member (staff_id, organization_id, department_id, position) values ($1::uuid, $2::uuid, $3::uuid, 'supervisor')`,
+      foreignSupervisor, foreignOrg, foreignDept);
+    try {
+      const r = await intake.enter(salesA, form());
+      const placeable = (await intake.family(s.managerId, r.familyId)).supervisorChoices.map((x) => x.id).sort();
+      expect(placeable).toEqual([s.ownerId, s.otherAdminId].sort());
+      expect((await intake.family(superId, r.familyId)).supervisorChoices.map((x) => x.id).sort()).toEqual(placeable);
+      for (const who of [s.managerId, superId]) {
+        expect(await code(intake.assignOperationsSupervisor(who, r.familyId, { supervisorId: foreignSupervisor }))).toBe(CommErrorCode.INTAKE_INVALID);
+      }
+    } finally {
+      await sql(`delete from chat.department_member where organization_id = $1::uuid`, foreignOrg);
+      await sql(`delete from chat.department where organization_id = $1::uuid`, foreignOrg);
+      await sql(`delete from chat.staff where organization_id = $1::uuid`, foreignOrg);
+      await sql(`delete from chat.organization where id = $1::uuid`, foreignOrg);
+    }
   });
 
   it('only the family\'s Sales owner suggests a supervisor', async () => {
     const r = await intake.enter(salesA, form());
     expect((await intake.family(salesManager, r.familyId)).can.suggestSupervisor).toBe(false);
+    expect((await entry(salesManager, r.familyId))!.canSuggestSupervisor).toBe(false);
+    expect((await entry(salesA, r.familyId))!.canSuggestSupervisor).toBe(true);
     expect(await code(intake.suggestSupervisor(salesManager, r.familyId, { supervisorId: s.ownerId }))).toBe(CommErrorCode.INTAKE_DENIED);
     expect(await code(intake.suggestSupervisor(s.managerId, r.familyId, { supervisorId: s.ownerId }))).toBe(CommErrorCode.INTAKE_DENIED);
     await expect(g.prisma.$executeRawUnsafe(
