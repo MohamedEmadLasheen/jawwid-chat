@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ArabicLesson } from './ArabicLesson';
-import { standIn } from '../test/arabic-stand-in';
+import { harakatStandIn, standIn } from '../test/arabic-stand-in';
 import { App } from '../App';
 
 describe('the Arabic letters lesson page', () => {
@@ -78,5 +78,20 @@ describe('the Arabic letters lesson page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'النتيجة' }));
     expect(screen.getByRole('status').textContent).toMatch(/١ من ١/);
     expect(screen.getByLabelText('النجوم').textContent).toBe('★☆☆☆');
+  });
+
+  it('lesson 3: the letters first, then that letter\'s harakat; only the letter carrying the mark counts', () => {
+    render(<ArabicLesson lesson={3} content={harakatStandIn()} />);
+    expect(within(screen.getByRole('navigation', { name: 'الحروف' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['ب']);
+    expect(within(screen.getByRole('navigation', { name: 'الحركات' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['بَ', 'بِ']);
+    // كَتَبَ under بَ: its ب is the last letter.
+    expect(screen.getByTestId('examples-end').textContent).toContain('كَتَبَ');
+    fireEvent.click(screen.getByRole('button', { name: 'اِبْحَثْ عَنِ الْحَرْفِ' }));
+    const word = () => within(screen.getByRole('group', { name: 'الكلمة' }));
+    // In بَابْ, the last ب carries a sukun: it is not بَ.
+    fireEvent.click(word().getByRole('button', { name: 'بْ' }));
+    expect(screen.getByRole('status').textContent).toBe('حَاوِلْ مَرَّةً أُخْرَى.');
+    fireEvent.click(word().getByRole('button', { name: 'بَ' }));
+    expect(screen.getByRole('status').textContent).toBe('أَحْسَنْتَ!');
   });
 });

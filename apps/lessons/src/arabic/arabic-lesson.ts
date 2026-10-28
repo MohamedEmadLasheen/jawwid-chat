@@ -1,5 +1,5 @@
 import type { ResolvedQuiz } from '../content/lesson-content';
-import { POSITIONS, has, isLetter, isPhrase, isWord, positions, type Position } from './letters';
+import { HARAKA, POSITIONS, has, isLetter, isPhrase, isWord, positions, type Haraka, type LetterUnit, type Position } from './letters';
 import { POSITION_LABEL, askContains, askPosition } from './ui-text';
 
 /**
@@ -40,6 +40,13 @@ export interface ArabicUnit {
   /** A lowercase slug (ba, lam_alif); its name and note strings are `<id>.name` and `<id>.note`. */
   id: string;
   letters: string[];
+  /**
+   * Lesson 3 (the harakat): the unit is the letter CARRYING this mark, and its name
+   * is that syllable (بَ). Its words are the ones where the letter carries it.
+   */
+  mark?: Haraka;
+  /** The picker's first row: units of one group (the letter) sit under it. */
+  group?: string;
   name: string;
   forms: string[];
   note: { text: string; review: Review } | null;
@@ -61,9 +68,12 @@ export interface ArabicLesson {
   quiz: ArabicQuizItem[];
 }
 
-export interface ResolvedUnit {
+export interface ResolvedUnit extends LetterUnit {
   id: string;
   letters: string[];
+  /** The mark's code point, so the unit IS the letter rule (letters.ts). */
+  mark?: string;
+  group?: string;
   name: string;
   forms: string[];
   note: { id: string; text: string } | null;
@@ -84,6 +94,11 @@ export const UNIT_ID = /^[a-z][a-z0-9_]*$/;
 export const WORD_ID = /^[a-z][a-z0-9_]*-[0-9]{3}$/;
 
 class Refused extends Error {}
+
+/** The unit as the one letter rule sees it: its letters, and its mark if it has one. */
+function ruleOf(u: ArabicUnit): LetterUnit {
+  return u.mark === undefined ? { letters: u.letters } : { letters: u.letters, mark: HARAKA[u.mark] };
+}
 
 function check(ok: boolean): asserts ok {
   if (!ok) throw new Refused();
@@ -116,6 +131,11 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
       check(typeof u.id === 'string' && UNIT_ID.test(u.id) && !byId.has(u.id));
       check(Array.isArray(u.letters) && u.letters.length > 0 && u.letters.every((l) => typeof l === 'string' && [...l].length > 0 && [...l].every(isLetter)));
       check(typeof u.name === 'string' && isPhrase(u.name));
+      if (u.mark !== undefined) {
+        // A marked unit is one letter with one haraka; its name is exactly that syllable.
+        check(Object.hasOwn(HARAKA, u.mark) && u.letters.every((l) => [...l].length === 1) && u.letters.some((l) => u.name === l + HARAKA[u.mark!]));
+      }
+      check(u.group === undefined || (typeof u.group === 'string' && u.group.length > 0 && u.group.length <= 8));
       check(Array.isArray(u.forms) && u.forms.every((f) => typeof f === 'string' && f.length > 0));
       check(u.note === null || (typeof u.note === 'object' && typeof u.note.text === 'string' && u.note.text.trim().length > 0 && isReview(u.note.review)));
       check(Array.isArray(u.words));
@@ -123,7 +143,7 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
       for (const w of u.words) {
         check(typeof w.id === 'string' && WORD_ID.test(w.id) && w.id.slice(0, -4) === u.id && !wordIds.has(w.id) && !retired.has(w.id));
         wordIds.add(w.id);
-        check(typeof w.text === 'string' && isWord(w.text) && has(w.text, u) && isReview(w.review));
+        check(typeof w.text === 'string' && isWord(w.text) && has(w.text, ruleOf(u)) && isReview(w.review));
         check(w.was === null || typeof w.was === 'string');
         if (w.finalMarkException !== undefined) {
           check(typeof w.finalMarkException === 'string' && w.finalMarkException.trim().length > 0);
@@ -147,13 +167,13 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
       if (q.kind === 'contains') {
         check(Array.isArray(q.options) && q.options.length >= 2 && q.options.length <= 4 && new Set(q.options).size === q.options.length);
         check(q.options.every((o) => typeof o === 'string' && vocabulary.has(o)) && typeof q.answer === 'number');
-        const right = q.options.flatMap((o, i) => (has(o, unit) ? [i] : []));
+        const right = q.options.flatMap((o, i) => (has(o, ruleOf(unit)) ? [i] : []));
         check(right.length === 1 && right[0] === q.answer); // exactly one right answer, and it is the answer
         item = { id: q.id, question: askContains(unit.name), prompt: null, word: null, options: q.options, answer: q.answer };
         words = q.options;
       } else if (q.kind === 'position') {
         check(typeof q.word === 'string' && vocabulary.has(q.word) && typeof q.answer === 'string' && POSITIONS.includes(q.answer));
-        const at = positions(q.word, unit);
+        const at = positions(q.word, ruleOf(unit));
         check(at.length === 1 && at[0] === q.answer); // the letter is in exactly one place
         item = { id: q.id, question: askPosition(unit.name), prompt: null, word: q.word, options: POSITIONS.map((p) => POSITION_LABEL[p]), answer: POSITIONS.indexOf(q.answer) };
         words = [q.word];
@@ -170,6 +190,8 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
     const units: ResolvedUnit[] = raw.units.map((u) => ({
       id: u.id,
       letters: u.letters,
+      ...(u.mark === undefined ? {} : { mark: HARAKA[u.mark] }),
+      ...(u.group === undefined ? {} : { group: u.group }),
       name: u.name,
       forms: u.forms,
       note: u.note && shown(u.note) ? { id: `${u.id}.note`, text: u.note.text } : null,
@@ -179,7 +201,7 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
           if (!ok) held++;
           return ok;
         })
-        .map((w) => ({ id: w.id, text: w.text, positions: positions(w.text, u) })),
+        .map((w) => ({ id: w.id, text: w.text, positions: positions(w.text, ruleOf(u)) })),
     }));
     return { units, quiz, held, approved };
   } catch {

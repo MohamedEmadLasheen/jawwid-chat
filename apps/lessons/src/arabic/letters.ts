@@ -10,11 +10,25 @@
  * word "had" the letter in one place and not in the other.
  */
 export type Position = 'start' | 'middle' | 'end';
+
+/** The three harakat of lesson 3, by name and code point. */
+export type Haraka = 'fatha' | 'kasra' | 'damma';
+export const HARAKA: Record<Haraka, string> = {
+  fatha: String.fromCodePoint(0x64e),
+  kasra: String.fromCodePoint(0x650),
+  damma: String.fromCodePoint(0x64f),
+};
 export const POSITIONS: readonly Position[] = ['start', 'middle', 'end'];
 
-/** A unit's letters. One entry is one letter, or a sequence matched as a pair (لا). */
+/**
+ * A unit's letters. One entry is one letter, or a sequence matched as a pair (لا).
+ * With a `mark` (one haraka: fatha, kasra or damma, as its code point), a letter
+ * counts only where it CARRIES that mark (lesson 3, the harakat): بَ in كَتَبَ is
+ * the last letter, not the first.
+ */
 export interface LetterUnit {
   letters: readonly string[];
+  mark?: string;
 }
 
 const TATWEEL = 0x640;
@@ -48,14 +62,27 @@ export function lettersOf(word: string): string[] {
   return [...word].filter(isLetter);
 }
 
-/** Where each of the unit's letters (or pairs) occurs in the word's letters. */
+/** Each letter's own marks, in the order of lettersOf. */
+function marksOf(word: string): string[][] {
+  const out: string[][] = [];
+  for (const ch of word) {
+    if (isLetter(ch)) out.push([]);
+    else if (isMark(ch) && out.length) out[out.length - 1]!.push(ch);
+  }
+  return out;
+}
+
+/** Where each of the unit's letters (or pairs) occurs in the word's letters (carrying the unit's mark, if it has one). */
 function occurrences(word: string, unit: LetterUnit): { at: number; length: number }[] {
   const ls = lettersOf(word);
+  const marks = unit.mark ? marksOf(word) : [];
   const out: { at: number; length: number }[] = [];
   for (const entry of unit.letters) {
     const seq = [...entry];
     for (let i = 0; i + seq.length <= ls.length; i++) {
-      if (seq.every((ch, k) => ls[i + k] === ch)) out.push({ at: i, length: seq.length });
+      if (!seq.every((ch, k) => ls[i + k] === ch)) continue;
+      if (unit.mark && !marks[i]!.includes(unit.mark)) continue;
+      out.push({ at: i, length: seq.length });
     }
   }
   return out.sort((a, b) => a.at - b.at);
