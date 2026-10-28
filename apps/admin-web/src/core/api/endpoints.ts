@@ -2,7 +2,7 @@ import { api, newIdempotencyKey, request, type SessionInfoDto } from './client'
 import { persistenceSupported, tokenStore } from '@/core/auth/tokens'
 import { deviceLabel } from '@/core/auth/device'
 import { ApiError } from './errors'
-import type { Paginated, Staff, Task, TeamNowRow } from '@/shared/types/domain'
+import type { Paginated, Staff, Task } from '@/shared/types/domain'
 
 /* ---------------------------------------------------------------- session */
 
@@ -15,6 +15,8 @@ export interface ActorDto {
   isActive: boolean
   staffRole: string | null
   organizationId: string | null
+  /** PD-40: the caller's permission keys (UX only: the server decides every request). */
+  permissions?: string[]
 }
 
 interface TokenPairDto {
@@ -50,6 +52,7 @@ export function toStaff(actor: ActorDto): Staff {
     role: actor.staffRole as Staff['role'],
     presence: 'online',
     is_active: actor.isActive,
+    ...(actor.permissions ? { permissions: actor.permissions } : {}),
   }
 }
 
@@ -124,38 +127,6 @@ export const taskApi = {
   }) => api.get<Paginated<Task>>('/tasks', filters),
   update: (id: string, patch: Partial<Pick<Task, 'status' | 'due_at' | 'result'>>) =>
     api.patch<Task>(`/tasks/${id}`, patch, newIdempotencyKey()),
-}
-
-/* -------------------------------------------------------------- dashboard */
-
-export interface DashboardHeader {
-  unattended_count: number
-  open_escalations: number
-}
-
-export interface NeedsActionItem {
-  kind: 'escalation' | 'auto_detected_absence' | 'high_admin_new_now'
-  family_id: string | null
-  family_name: string | null
-  staff_id: string | null
-  staff_name: string | null
-  absence_id: string | null
-  description: string
-  at: string
-}
-
-export interface ThisWeek {
-  renewals: { due: number; renewed: number; no_reply: number; refused: number }
-  at_risk: { reason: string; count: number }[]
-  target_compliance_pct: number
-  median_first_reply_by_shift: { shift: string; median_minutes: number }[]
-}
-
-export const dashboardApi = {
-  header: () => api.get<DashboardHeader>('/dashboard/header'),
-  teamNow: () => api.get<TeamNowRow[]>('/dashboard/team-now'),
-  needsAction: () => api.get<NeedsActionItem[]>('/dashboard/needs-action'),
-  thisWeek: () => api.get<ThisWeek>('/dashboard/this-week'),
 }
 
 /* ------------------------------------------------------------------ admin */

@@ -383,8 +383,9 @@ describe('The desktop rail', () => {
       // PD-13: Calls is its own destination for every operating role.
       // Teacher Profile V2: the certificate review queue sits under People beside
       // the other people pages, so for admin and coverage People is a menu.
-      // PD-44: the Dashboard is its own destination for a manager, beside Conversations.
-      ['manager', ['conversations', 'dashboard', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Dashboard', 'Calls', 'Stories'], ['People & teams', 'More']],
+      // PD-44: the Dashboard is its own destination for a manager, beside
+      // Conversations, which leaves More holding Tasks alone: a direct link.
+      ['manager', ['conversations', 'dashboard', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Dashboard', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       // PD-21: Accounts is every role's, so a department has two one-page destinations.

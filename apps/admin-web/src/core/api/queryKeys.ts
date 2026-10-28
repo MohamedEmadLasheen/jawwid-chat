@@ -20,12 +20,6 @@ export const qk = {
 
   coverageAll: ['coverage'] as const,
 
-  dashboardHeader: ['dashboard', 'header'] as const,
-  teamNow: ['dashboard', 'team-now'] as const,
-  needsAction: ['dashboard', 'needs-action'] as const,
-  thisWeek: ['dashboard', 'this-week'] as const,
-  dashboardAll: ['dashboard'] as const,
-
   // Stories studio: everything under ['stories'], so one invalidation of
   // studioAll refreshes the list, a story, its numbers and its viewers.
   studioAll: ['stories'] as const,

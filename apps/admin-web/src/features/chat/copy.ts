@@ -70,6 +70,7 @@ export const chatCopy = {
     filterGroups: 'المجموعات',
     // PD-35: groups joined to support, kept out of the main list.
     filterJoined: 'انضممت إليها',
+    filterWaiting: 'تنتظر ردّنا',
     joinGroup: 'الانضمام إلى مجموعة',
     joinGroupHint: 'مجموعات طلاب معلميك. ينضم اسمك إلى المجموعة ويراه الأعضاء.',
     joinGroupSearch: 'ابحث باسم الطالب أو المعلم',
@@ -345,6 +346,7 @@ export const chatCopy = {
     filterGroups: 'Groups',
     // PD-35: groups joined to support, kept out of the main list.
     filterJoined: 'Joined',
+    filterWaiting: 'Waiting for a reply',
     joinGroup: 'Join a group',
     joinGroupHint: "Your teachers' students' groups. Members see that you joined.",
     joinGroupSearch: 'Search by student or teacher',
