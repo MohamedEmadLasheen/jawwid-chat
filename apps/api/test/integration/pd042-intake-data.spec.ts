@@ -176,6 +176,24 @@ async function enteredDaysAgo(enrolmentId: string, days: number) {
 }
 
 /**
+ * The academy's zone (chat.config 'schedule.timezone', read by
+ * chat.pd030_zone()) pinned for this file to one where it is about noon right
+ * now, so "a lesson today" never depends on the hour CI runs at: with Cairo it
+ * failed G-19 whenever a run fell in the first minutes after Cairo's midnight
+ * (2026-10-28, ~21:00 UTC, on #251 and #252). Restored after the file.
+ */
+let zoneBefore: unknown = undefined;
+async function pinAcademyNoon() {
+  const offset = 12 - new Date().getUTCHours(); // -11 .. +12: local time is 12:00-12:59 there
+  // Etc/GMT names count the other way: Etc/GMT-3 is UTC+3.
+  const zone = offset === 0 ? 'Etc/GMT' : `Etc/GMT${offset > 0 ? '-' : '+'}${Math.abs(offset)}`;
+  await sql(
+    `insert into chat.config (key, value) values ('schedule.timezone', to_jsonb($1::text))
+     on conflict (key) do update set value = excluded.value`, zone,
+  );
+}
+
+/**
  * A lesson of the child that took place today (academy date) and was used:
  * the teacher recorded that the student did not attend (PD-30 counts it).
  */
@@ -187,7 +205,8 @@ async function usedLesson(learnerId: string) {
   );
   // Inside today, never two lessons of one teacher at once.
   const back = Math.min(since - 60, 40 * 60) - lessonsMade * 4 * 60;
-  if (back < 60) throw new Error('too close to the academy\'s midnight to place a lesson today; rerun');
+  // The zone is pinned to about noon (pinAcademyNoon): there is always room today.
+  if (back < 60) throw new Error(`no room left today for lesson ${lessonsMade} (since midnight: ${since}s); the zone pin did not hold`);
   const startsAt = new Date(Date.now() - back * 1000);
   const dto = await lessons.schedule(tsupId, { learnerId, startsAt: startsAt.toISOString(), endsAt: new Date(startsAt.getTime() + 3 * MIN).toISOString() });
   await lessons.absence(s.teacherId, dto.id, {});
@@ -195,15 +214,23 @@ async function usedLesson(learnerId: string) {
 
 beforeAll(async () => {
   await g.prisma.$connect();
+  const row = await g.prisma.config.findUnique({ where: { key: 'schedule.timezone' } });
+  zoneBefore = row ? row.value : null;
 });
 afterAll(async () => {
   await sql(`delete from chat.config where key = 'sales.family_scope'`);
+  if (zoneBefore === null) {
+    await sql(`delete from chat.config where key = 'schedule.timezone'`);
+  } else if (zoneBefore !== undefined) {
+    await sql(`update chat.config set value = $1::jsonb where key = 'schedule.timezone'`, JSON.stringify(zoneBefore));
+  }
   await truncate(g.prisma);
   await g.prisma.$disconnect();
 });
 beforeEach(async () => {
   await sql(`delete from chat.config where key = 'sales.family_scope'`);
   await truncate(g.prisma);
+  await pinAcademyNoon();
   s = await seed(g.prisma);
   salesId = randomUUID();
   otherSalesId = randomUUID();
