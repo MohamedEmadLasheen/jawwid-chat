@@ -18,7 +18,7 @@ describe('the Arabic letters lesson page', () => {
 
   it('refuses a file that fails a proof', () => {
     const bad = standIn();
-    bad.units[0]!.words.push({ id: 'alif-w9', text: 'أَسَدْ', was: null, review: null });
+    bad.units[0]!.words.push({ id: 'alif-009', text: 'أَسَدْ', was: null, review: null });
     render(<ArabicLesson lesson={1} content={bad} />);
     expect(screen.getByRole('alert').textContent).toMatch(/تعذّر التحقق/);
   });

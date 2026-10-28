@@ -11,10 +11,10 @@ describe('route', () => {
     expect(route('/')).toEqual({ kind: 'index' });
   });
 
-  it('maps /lessons/arabic/lesson-N for the ten Arabic lessons only', () => {
+  it('maps /lessons/arabic/lesson-1, the only Arabic lesson on the engine; the others are not found until built', () => {
     expect(route('/lessons/arabic/lesson-1')).toEqual({ kind: 'arabic', lesson: 1 });
-    expect(route('/lessons/arabic/lesson-10/')).toEqual({ kind: 'arabic', lesson: 10 });
-    for (const bad of ['/lessons/arabic/lesson-0', '/lessons/arabic/lesson-11', '/lessons/arabic/lesson-01', '/lessons/islamic/lesson-1']) {
+    expect(route('/lessons/arabic/lesson-1/')).toEqual({ kind: 'arabic', lesson: 1 });
+    for (const bad of ['/lessons/arabic/lesson-0', '/lessons/arabic/lesson-2', '/lessons/arabic/lesson-10', '/lessons/arabic/lesson-01', '/lessons/islamic/lesson-1']) {
       expect(route(bad)).toEqual({ kind: 'not-found' });
     }
   });

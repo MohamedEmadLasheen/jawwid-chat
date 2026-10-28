@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './letters.fixture.json';
-import { clusters, has, isWord, lettersOf, positions } from './letters';
+import { clusters, has, isLetter, isMark, isWord, lettersOf, positions } from './letters';
 
 const units = fixture.units as Record<string, string[]>;
 
@@ -10,6 +10,23 @@ describe('the one letter rule (shared with the CI checker)', () => {
       const unit = { letters: units[c.unit]! };
       expect(has(c.word, unit)).toBe(c.has);
       expect(positions(c.word, unit)).toEqual(c.positions);
+    });
+  }
+
+  for (const m of fixture.marks) {
+    it(`U+${m.cp.toString(16).toUpperCase()} (${m.note}) is ${m.isMark ? '' : 'not '}a mark`, () => {
+      expect(isMark(String.fromCodePoint(m.cp))).toBe(m.isMark);
+    });
+  }
+  for (const l of fixture.letters) {
+    it(`U+${l.cp.toString(16).toUpperCase()} (${l.note}) is ${l.isLetter ? '' : 'not '}a letter`, () => {
+      expect(isLetter(String.fromCodePoint(l.cp))).toBe(l.isLetter);
+    });
+  }
+  for (const w of fixture.words) {
+    const text = 'cps' in w && w.cps ? String.fromCodePoint(...w.cps) : (w as { text: string }).text;
+    it(`${JSON.stringify(text)} ${'note' in w ? `(${w.note}) ` : ''}is ${w.isWord ? '' : 'not '}one written word`, () => {
+      expect(isWord(text)).toBe(w.isWord);
     });
   }
 
@@ -41,5 +58,12 @@ describe('the one letter rule (shared with the CI checker)', () => {
       { text: 'بْ', target: false },
     ]);
     expect(clusters('أَسَدْ', { letters: ['ا'] }).some((p) => p.target)).toBe(false);
+    // The lam-alif ligature is never split: marking only its alif (or only its lam) would break it on screen.
+    expect(clusters('سَلَامْ', { letters: ['ا'] })).toEqual([
+      { text: 'سَ', target: false },
+      { text: 'لَا', target: true },
+      { text: 'مْ', target: false },
+    ]);
+    expect(clusters('لَأْمْ', { letters: ['ل'] }).map((p) => p.text)).toEqual(['لَأْ', 'مْ']);
   });
 });

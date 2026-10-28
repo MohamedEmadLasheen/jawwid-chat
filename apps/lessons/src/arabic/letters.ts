@@ -70,9 +70,14 @@ export function positions(word: string, unit: LetterUnit): Position[] {
   return POSITIONS.filter((p) => found.has(p));
 }
 
+/** The letters a lam joins into one glyph with (the lam-alif ligatures لا لأ لإ لآ). */
+const LIGATURE_ALIFS = new Set(['ا', 'أ', 'إ', 'آ']);
+
 /**
- * The word as tappable pieces: each letter with its own marks, and a pair (لا)
- * as one piece. `target` marks the pieces that are the unit's letter.
+ * The word as tappable pieces: each letter with its own marks; a pair (لا) as
+ * one piece; and a lam with the alif after it always as one piece, because
+ * marking half of the lam-alif ligature breaks it on screen. `target` marks the
+ * pieces that hold the unit's letter.
  */
 export function clusters(word: string, unit: LetterUnit): { text: string; target: boolean }[] {
   const pieces: string[] = [];
@@ -81,12 +86,14 @@ export function clusters(word: string, unit: LetterUnit): { text: string; target
     else pieces[pieces.length - 1] += ch;
   }
   const hits = occurrences(word, unit);
+  const target = pieces.map((_, i) => hits.some((h) => i >= h.at && i < h.at + h.length));
   const out: { text: string; target: boolean }[] = [];
   for (let i = 0; i < pieces.length; ) {
-    const hit = hits.find((h) => h.at === i);
-    const length = hit ? hit.length : 1;
-    out.push({ text: pieces.slice(i, i + length).join(''), target: !!hit });
-    i += length;
+    let j = i + 1;
+    for (const h of hits) if (h.at === i) j = Math.max(j, i + h.length);
+    while (j < pieces.length && pieces[j - 1]![0] === 'ل' && LIGATURE_ALIFS.has(pieces[j]![0]!)) j++;
+    out.push({ text: pieces.slice(i, j).join(''), target: target.slice(i, j).some(Boolean) });
+    i = j;
   }
   return out;
 }

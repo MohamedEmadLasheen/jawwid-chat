@@ -7,17 +7,18 @@ export function standIn(): ArabicLesson {
     review: { status: 'approved', by: 'test', note: '' },
     provenance: {},
     finalMark: 'sukun',
+    retiredIds: ['alif-004'],
     units: [
       {
         id: 'alif',
         letters: ['ا'],
         name: 'أَلِفْ',
         forms: ['ا', 'ـا'],
-        note: { id: 'alif-note', text: 'مُلَاحَظَةْ', review: null },
+        note: { text: 'مُلَاحَظَةْ', review: null },
         words: [
-          { id: 'alif-w1', text: 'كِتَابْ', was: null, review: null },
-          { id: 'alif-w2', text: 'عَصَا', was: null, review: null },
-          { id: 'alif-w3', text: 'بَابْ', was: 'بَاب', review: 'ADDED TASHKEEL: final sukun' },
+          { id: 'alif-001', text: 'كِتَابْ', was: null, review: null },
+          { id: 'alif-002', text: 'عَصَا', was: null, review: null },
+          { id: 'alif-003', text: 'بَابْ', was: 'بَاب', review: 'ADDED TASHKEEL: final sukun' },
         ],
       },
       {
@@ -27,9 +28,9 @@ export function standIn(): ArabicLesson {
         forms: ['ء', 'أ', 'إ', 'ؤ', 'ئ'],
         note: null,
         words: [
-          { id: 'hamza-w1', text: 'أَسَدْ', was: null, review: null },
-          { id: 'hamza-w2', text: 'رَأْسْ', was: null, review: null },
-          { id: 'hamza-w3', text: 'جُزْءْ', was: null, review: null },
+          { id: 'hamza-001', text: 'أَسَدْ', was: null, review: null },
+          { id: 'hamza-002', text: 'رَأْسْ', was: null, review: null },
+          { id: 'hamza-003', text: 'جُزْءْ', was: null, review: null },
         ],
       },
     ],
