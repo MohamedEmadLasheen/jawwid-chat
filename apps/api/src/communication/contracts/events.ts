@@ -431,6 +431,8 @@ export interface CaseAssignedPayload {
   ownerId: string | null;
   previousOwnerId: string | null;
   assignedBy: string;
+  /** When, so each assignment (back and forth too) is its own notification. */
+  assignedAt: string;
 }
 
 export interface CaseDueSoonPayload {
