@@ -624,7 +624,16 @@ Not covered: parameterised and write routes, and the Flutter staff app. Those co
 | `POST /:staffId/setup-code` | `staff_accounts.manage` | A reissue for a provisioned account. It supersedes every live code, and the audit names them. |
 | `GET /admin/access-roles`, `GET /admin/permissions` | `staff_accounts.view` or `access_roles.manage` | The roles, each with `grantable` for this caller, and the checklist they're made from. |
 | `POST /admin/access-roles`, `/:roleId`, `/:roleId/archive` | `access_roles.manage` | The super admin only (H7, S4). |
-| PD-21 `/admin/accounts/:id/{password-reset,suspend,reactivate,sessions/*}` | `accounts.administer` | Also open to a department manager for their own specialists (`managedByActor`, decided by `chat.may_administer_staff_account`). Never impersonation. |
+| PD-21 `/admin/accounts/:id/{password-reset,suspend,reactivate,sessions/*}` | `accounts.administer` | Also open to a department manager for their own specialists while the subset rule below holds (`managedByActor`, decided by `chat.may_administer_staff_account`). A manager's reset code is e-mailed, never returned. Never impersonation. |
+
+**After the department head's review (2026-10-28):**
+- **P1: a reset code is impersonation.** Administering an account includes resetting its password, which is as good as holding the account. So a manager administers a specialist only while every key the specialist holds is one the manager holds and may delegate. `chat.may_administer_staff_account` applies that rule, and so do `decideStaffAccountManage`, the grantor rule, the reset-code guard and the list. Otherwise only the super admin administers that account.
+- **P1: manager-issued codes are e-mailed only.** When a manager issues a code for a staff account (a PD-21 reset or a setup-code reissue), it goes to the sign-in address and is never returned. With e-mail off, the manager issues none (409). Only the super admin sees a staff member's code. Creation keeps the owner's rule (shown once and e-mailed): a new account holds only what its creator granted.
+- **P2: role edits.** `chat.update_access_role` refuses an edit that adds a key a granting manager may not grant. The refusal names those grants (`COMM.ACCESS_ROLE_CONFLICT`, 409). `chat.grant_access_role` reads the role `FOR SHARE`, so a grant and an edit never interleave.
+- **P2: suspend, reactivate and sign-out.** The database refuses them for a staff account too, using the same predicate:
+  - `chat.guard_staff_account_status` takes the actor from `chat.account_admin_actor` (set by the PD-21 service) or from `deactivate_principal`'s requester. A suspension that names nobody is an operator's (the CLI). A reactivation always names someone.
+  - `chat.guard_staff_session_revocation` checks a session ended by another account.
+- **P2: defence in depth.** `chat.staff_access_profile` ignores a role's barred keys, and the migration stops if any role holds one. `accounts.administer` is barred too. The `in_roles` generator is append-only: each migration bars its own keys.
 
 **Still to come:**
 - PR-4: the Designer template role, seeded with PD-41's keys.

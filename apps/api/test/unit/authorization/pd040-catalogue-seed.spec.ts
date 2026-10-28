@@ -44,8 +44,12 @@ interface Later {
   bundles: readonly BundleRow[];
   /** Existing keys this migration makes delegable (earlier blocks render them as they were: not delegable). */
   delegable?: readonly string[];
-  /** This migration adds chat.permission.in_roles and sets it from catalogue.ts. */
-  inRoles?: boolean;
+  /**
+   * Keys this migration bars from roles (in_roles = false). Append-only: a later
+   * key with inRoles false is barred by its own block, never by editing an
+   * earlier one. Together the lists are every key catalogue.ts bars.
+   */
+  barred?: readonly string[];
 }
 
 /** Rows a later migration adds to the catalogue, oldest first. */
@@ -110,13 +114,26 @@ const LATER: readonly Later[] = [
       (['staff_accounts.create', 'staff_accounts.manage', 'staff_accounts.view'] as const).map((key) => ['manager', kind, key] as const),
     ),
     delegable: ['billing.view', 'certificates.design', 'certificates.view', 'subscriptions.view'],
-    inRoles: true,
+    barred: [
+      'access_roles.manage',
+      'accounts.administer',
+      'accounts.support_session',
+      'admin.inspect',
+      'chat.export',
+      'org.departments',
+      'staff_accounts.create',
+      'staff_accounts.manage',
+      'staff_accounts.view',
+      'staff_profiles.organization',
+      'staff_profiles.reporting_lines',
+    ],
   },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));
 const laterDelegable = new Set(LATER.flatMap((l) => l.delegable ?? []));
 const laterRow = new Set(LATER.flatMap((l) => l.bundles.map((r) => r.join('|'))));
+const laterBarred = LATER.flatMap((l) => l.barred ?? []);
 
 const BLOCKS: Block[] = [
   {
@@ -173,10 +190,10 @@ function render(block: Block): string {
     if (lines.length > 1) lines.push('');
     lines.push(`update chat.permission set delegable = true where key in (${[...flips].sort().map(q).join(', ')});`);
   }
-  if (block.later?.inRoles) {
-    const barred = PERMISSIONS.filter((p) => !p.inRoles).map((p) => p.key).sort();
+  const barred = block.later?.barred ?? [];
+  if (barred.length > 0) {
     if (lines.length > 1) lines.push('');
-    lines.push(`update chat.permission set in_roles = false where key in (${barred.map(q).join(', ')});`);
+    lines.push(`update chat.permission set in_roles = false where key in (${[...barred].sort().map(q).join(', ')});`);
   }
   lines.push(block.end);
   return lines.join('\n');
@@ -205,6 +222,12 @@ describe('PD-40: the migration seeds exactly the TypeScript catalogue and bundle
     expect([...laterDelegable].filter((k) => !delegable.has(k))).toEqual([]);
     // Every delegable key is made so by a later block: the first seed made none delegable.
     expect([...delegable].filter((k) => !laterDelegable.has(k))).toEqual([]);
+  });
+
+  it('the barred lists are, together and once each, exactly the keys catalogue.ts keeps out of roles', () => {
+    const barred = PERMISSIONS.filter((p) => !p.inRoles).map((p) => p.key).sort();
+    expect([...laterBarred].sort()).toEqual(barred);
+    expect(new Set(laterBarred).size).toBe(laterBarred.length);
   });
 
   it('every bundle the code knows has rows or is deliberately empty', () => {

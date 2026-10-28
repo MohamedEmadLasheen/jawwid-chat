@@ -365,6 +365,11 @@ export enum CommErrorCode {
   STAFF_ACCOUNT_CONFLICT = 'COMM.STAFF_ACCOUNT_CONFLICT',
   /** PD-40 PR-3: an access role that cannot be defined -- an unknown or super-admin-only key, a bad tier, a taken key. 400. */
   ACCESS_ROLE_INVALID = 'COMM.ACCESS_ROLE_INVALID',
+  /**
+   * PD-40 PR-3: the edit adds a key that a manager who granted this role may not
+   * grant; the message names those grants -- revoke them first (H5). 409.
+   */
+  ACCESS_ROLE_CONFLICT = 'COMM.ACCESS_ROLE_CONFLICT',
   /** PD-21: no such account in the caller's organization. 404. */
   ACCOUNT_ADMIN_NOT_FOUND = 'COMM.ACCOUNT_ADMIN_NOT_FOUND',
   /** PD-21: not in a state for this (suspend an inactive account, reactivate one that is not suspended, impersonate an inactive one). 409. */

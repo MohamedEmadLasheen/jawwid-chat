@@ -63,7 +63,7 @@ const ENTRIES = {
 
   'admin.inspect': { label: { en: 'Inspect the whole organization', ar: 'الاطلاع على المؤسسة كاملة' }, risk: 'admin', introducedBy: 'PD-5', inRoles: false },
 
-  'accounts.administer': { label: { en: 'Reset, suspend and reactivate accounts', ar: 'إعادة تعيين الحسابات وإيقافها وتفعيلها' }, risk: 'admin', introducedBy: 'PD-21' },
+  'accounts.administer': { label: { en: 'Reset, suspend and reactivate accounts', ar: 'إعادة تعيين الحسابات وإيقافها وتفعيلها' }, risk: 'admin', introducedBy: 'PD-21', inRoles: false },
   'accounts.support_session': { label: { en: 'Open an account as its owner (support)', ar: 'فتح حساب نيابةً عن صاحبه (الدعم)' }, risk: 'admin', introducedBy: 'PD-21', inRoles: false },
 
   'org.view': { label: { en: 'View the organization structure', ar: 'عرض الهيكل التنظيمي' }, risk: 'pii', introducedBy: 'PD-8' },

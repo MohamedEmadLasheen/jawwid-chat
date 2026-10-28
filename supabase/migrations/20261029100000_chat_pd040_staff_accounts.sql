@@ -11,7 +11,11 @@
 --          chat.may_administer_staff_account, chat.require_access_grantor
 --   S2     every rule here too, so a service that skips the API's check is
 --          still refused; a grant holds only keys the grantor holds and may
---          delegate (H5, unchanged), now with a minimal delegable set (C3)
+--          delegate (H5), now with a minimal delegable set (C3); a manager
+--          administers a specialist only while the specialist holds nothing
+--          beyond that (review of #212, P1), a role edit never widens a
+--          manager's grant past it (P2), and suspending, reactivating or
+--          signing out a staff account is refused here too (P2)
 --   S3/C4  a staff account's first sign-in or reset code is issued by the super
 --          admin, or by the manager of the specialist's department --
 --          chat.guard_password_reset_code (PD-43's, with that one branch widened)
@@ -53,10 +57,23 @@ insert into chat.legacy_permission_bundle (tier, department_kind, permission_key
 
 update chat.permission set delegable = true where key in ('billing.view', 'certificates.design', 'certificates.view', 'subscriptions.view');
 
-update chat.permission set in_roles = false where key in ('access_roles.manage', 'accounts.support_session', 'admin.inspect', 'chat.export', 'org.departments', 'staff_accounts.create', 'staff_accounts.manage', 'staff_accounts.view', 'staff_profiles.organization', 'staff_profiles.reporting_lines');
+update chat.permission set in_roles = false where key in ('access_roles.manage', 'accounts.administer', 'accounts.support_session', 'admin.inspect', 'chat.export', 'org.departments', 'staff_accounts.create', 'staff_accounts.manage', 'staff_accounts.view', 'staff_profiles.organization', 'staff_profiles.reporting_lines');
 -- END GENERATED pd040staff catalogue rows
 
 select set_config('chat.pd040_catalogue_change', 'off', true);
+
+-- S4 in depth: no role already holds a key barred above. None can -- only the
+-- super admin defines roles, and nothing before this PR offered it -- but if
+-- one did, stop here rather than leave it in force.
+do $$
+begin
+  if exists (select 1 from chat.access_role_permission arp
+               join chat.permission p on p.key = arp.permission_key
+              where not p.in_roles) then
+    raise exception 'PD-40 S4: an access role holds a key that never goes in a role; remove it before this migration';
+  end if;
+end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 2. Where a specialist belongs (C5)
@@ -123,6 +140,14 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 3. Who administers a staff account (S1): the API's decideStaffAccountManage
 -- ---------------------------------------------------------------------------
+-- A manager administers a specialist of their department only while EVERY key
+-- the specialist holds is one the manager holds and may delegate (review of
+-- #212, P1). Otherwise a reset code is a way in: the manager signs in as the
+-- specialist and gains, say, the billing.verify the super admin granted them.
+-- Such an account is the super admin's alone. The keys are read from the
+-- grants, not from chat.staff_access_profile, so a suspended specialist is
+-- judged by what reactivating them would restore. A specialist holds no legacy
+-- bundle: the grants are everything they hold.
 create function chat.may_administer_staff_account(p_actor uuid, p_target uuid)
 returns boolean
 language plpgsql
@@ -130,18 +155,28 @@ stable
 set search_path = chat, pg_temp
 as $$
 declare
-  a chat.staff%rowtype;
-  t chat.staff%rowtype;
+  a      chat.staff%rowtype;
+  t      chat.staff%rowtype;
+  v_held text[];
 begin
   select * into a from chat.staff where id = p_actor;
   select * into t from chat.staff where id = p_target;
   if a.id is null or t.id is null or not a.is_active or a.left_at is not null then return false; end if;
   if a.organization_id <> t.organization_id or a.id = t.id or t.role = 'super_admin' then return false; end if;
   if a.role = 'super_admin' then return true; end if;
-  return a.role = 'manager'
-     and t.role = 'specialist'
-     and chat.staff_has_permission(a.id, 'staff_accounts.manage')
-     and chat.staff_in_managed_department(a.id, t.id);
+  if a.role <> 'manager' or t.role <> 'specialist' or not chat.staff_in_managed_department(a.id, t.id) then
+    return false;
+  end if;
+  select p.permissions into v_held from chat.staff_access_profile(a.id) p;
+  if not ('staff_accounts.manage' = any (coalesce(v_held, array[]::text[]))) then return false; end if;
+  return not exists (
+    select 1
+      from chat.staff_access_role sar
+      join chat.access_role_permission arp on arp.role_id = sar.role_id
+      join chat.permission p on p.key = arp.permission_key
+     where sar.staff_id = t.id
+       and (not p.delegable or not p.in_roles or not (p.key = any (v_held)))
+  );
 end;
 $$;
 
@@ -298,8 +333,10 @@ begin
   if p_actor.role <> 'manager' or not chat.staff_has_permission(p_actor.id, 'staff_accounts.manage') then
     raise exception 'only the super admin changes another staff member''s access (PD-40)' using errcode = 'insufficient_privilege';
   end if;
-  if p_target.role <> 'specialist' or not chat.staff_in_managed_department(p_actor.id, p_target.id) then
-    raise exception 'a manager changes the access of the specialists of their own department only (PD-40 S1)'
+  -- The specialist of their department, holding nothing the manager may not
+  -- grant (chat.may_administer_staff_account: the reset and status rules too).
+  if not chat.may_administer_staff_account(p_actor.id, p_target.id) then
+    raise exception 'a manager changes the access of the specialists of their own department only, while they hold nothing the manager may not grant (PD-40 S1, H5)'
       using errcode = 'insufficient_privilege';
   end if;
   if p_granting and p_role.max_tier <> 'specialist' then
@@ -317,6 +354,185 @@ begin
         using errcode = 'insufficient_privilege';
     end if;
   end if;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 6b. What a staff member holds: PR-2's chat.staff_access_profile, a role's
+--     barred keys left out (review of #212, P2 -- defence in depth for S4)
+-- ---------------------------------------------------------------------------
+create or replace function chat.staff_access_profile(p_staff uuid)
+returns table (tier text, department_kind text, placement text, permissions text[])
+language plpgsql
+stable
+set search_path = chat, pg_temp
+as $$
+declare
+  v_staff    chat.staff%rowtype;
+  v_tier     text;
+  v_kind     text;
+  v_position text;
+  v_fitted   text;
+  v_keys     text[];
+begin
+  select * into v_staff from chat.staff s where s.id = p_staff;
+  if not found or not v_staff.is_active or v_staff.left_at is not null then
+    return query select null::text, null::text, null::text, array[]::text[];
+    return;
+  end if;
+  v_tier := chat.staff_tier(v_staff.role);
+
+  -- The department the staff member runs, else the one they belong to (PD-8:
+  -- one of either per person).
+  select d.kind, 'manager' into v_kind, v_position
+    from chat.department d
+   where d.manager_id = p_staff and d.organization_id = v_staff.organization_id
+   limit 1;
+  if v_kind is null then
+    select d.kind, 'member' into v_kind, v_position
+      from chat.department_member m
+      join chat.department d on d.id = m.department_id
+     where m.staff_id = p_staff and d.organization_id = v_staff.organization_id
+     limit 1;
+  end if;
+
+  -- A placement that does not fit the tier -- a manager listed as a member, a
+  -- supervisor as a manager -- counts as no department: a stale row widens
+  -- nothing (legacyBundle() in legacy-bundles.ts).
+  v_fitted := case
+    when (v_tier = 'manager' and v_position = 'manager') or (v_tier = 'supervisor' and v_position = 'member') then v_kind
+    else 'none'
+  end;
+
+  if v_tier = 'super_admin' then
+    select array_agg(p.key order by p.key) into v_keys from chat.permission p;
+  else
+    select array_agg(k order by k) into v_keys
+      from (
+        select b.permission_key as k
+          from chat.legacy_permission_bundle b
+         where b.tier = v_tier and b.department_kind = v_fitted
+        union
+        select arp.permission_key
+          from chat.staff_access_role sar
+          join chat.access_role r on r.id = sar.role_id and r.organization_id = v_staff.organization_id
+          join chat.access_role_permission arp on arp.role_id = sar.role_id
+          -- S4 in depth: a key barred from roles counts for nobody through one.
+          join chat.permission p on p.key = arp.permission_key and p.in_roles
+         where sar.staff_id = p_staff
+      ) held;
+  end if;
+
+  return query select v_tier, v_kind, v_position, coalesce(v_keys, array[]::text[]);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 6c. Grants and role edits never interleave; an edit never widens a
+--     manager's grant past H5 (review of #212, P2). PR-2's functions, with
+--     only the marked lines added.
+-- ---------------------------------------------------------------------------
+create or replace function chat.grant_access_role(p_staff uuid, p_role uuid, p_reason text, p_actor_id uuid default null)
+returns boolean
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  v_actor  chat.staff := chat.require_live_staff(chat.trusted_staff_actor(p_actor_id));
+  v_reason text := chat.require_reason(p_reason);
+  v_target chat.staff%rowtype;
+  v_role   chat.access_role%rowtype;
+  v_keys   text[];
+  v_added  boolean;
+begin
+  select * into v_target from chat.staff where id = p_staff for update;
+  -- FOR SHARE: chat.update_access_role locks the role FOR UPDATE, so a grant
+  -- and an edit of the same role never interleave (its H5 recheck sees this grant).
+  select * into v_role from chat.access_role where id = p_role for share;
+  if v_target.id is null or v_role.id is null then
+    raise exception 'no such staff member or role in this organization' using errcode = 'no_data_found';
+  end if;
+  perform chat.require_access_grantor(v_actor, v_target, v_role, true);
+
+  perform set_config('chat.pd040_access_change', 'on', true);
+  insert into chat.staff_access_role (staff_id, role_id, granted_by, reason)
+  values (p_staff, p_role, v_actor.id, v_reason)
+  on conflict do nothing;
+  v_added := found;
+  if v_added then
+    select array_agg(permission_key order by permission_key) into v_keys from chat.access_role_permission where role_id = p_role;
+    insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
+    values (v_actor.id, 'staff.access_role_granted', 'staff', p_staff, null,
+            jsonb_build_object('roleId', p_role, 'roleKey', v_role.key, 'permissions', to_jsonb(v_keys)), v_reason);
+  end if;
+  perform set_config('chat.pd040_access_change', 'off', true);
+  return v_added;
+end;
+$$;
+
+create or replace function chat.update_access_role(
+  p_role        uuid,
+  p_name_en     text,
+  p_name_ar     text,
+  p_description text,
+  p_permissions text[],
+  p_reason      text,
+  p_actor_id    uuid default null
+) returns void
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  v_actor  chat.staff := chat.require_live_staff(chat.trusted_staff_actor(p_actor_id));
+  v_reason text := chat.require_reason(p_reason);
+  v_role   chat.access_role%rowtype;
+  v_before  text[];
+  v_keys    text[];
+  v_blocked text[];
+begin
+  perform chat.require_super_admin_for_roles(v_actor);
+  select * into v_role from chat.access_role where id = p_role for update;
+  if not found or v_role.organization_id <> v_actor.organization_id then
+    raise exception 'no such role in this organization' using errcode = 'no_data_found';
+  end if;
+  select array_agg(permission_key order by permission_key) into v_before from chat.access_role_permission where role_id = p_role;
+  perform set_config('chat.pd040_access_change', 'on', true);
+  update chat.access_role
+     set name_en = coalesce(btrim(p_name_en), name_en),
+         name_ar = coalesce(btrim(p_name_ar), name_ar),
+         description = coalesce(p_description, description),
+         updated_at = now()
+   where id = p_role;
+  v_keys := case when p_permissions is null then v_before else chat.set_access_role_permissions(p_role, p_permissions) end;
+  -- H5 after the fact (review of #212, P2): a key this edit ADDS must be one
+  -- every manager who granted the role holds and may delegate. Otherwise the
+  -- edit is refused, naming those grants: the super admin revokes them first
+  -- (or grants the role themself). Removing keys never widens anyone.
+  if p_permissions is not null then
+    select array_agg(sar.staff_id::text || ' (granted by ' || sar.granted_by::text || ')' order by sar.staff_id) into v_blocked
+      from chat.staff_access_role sar
+      join chat.staff g on g.id = sar.granted_by
+     where sar.role_id = p_role
+       and g.role <> 'super_admin'
+       and exists (
+         select 1
+           from unnest(v_keys) k
+           join chat.permission p on p.key = k
+          where not (k = any (coalesce(v_before, array[]::text[])))
+            and (not p.delegable or not p.in_roles or not chat.staff_has_permission(g.id, k)));
+    if v_blocked is not null then
+      raise exception 'this edit gives keys their granting manager may not grant to: %; revoke those grants first (PD-40 H5)',
+        array_to_string(v_blocked, ', ')
+        using errcode = 'insufficient_privilege';
+    end if;
+  end if;
+  insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
+  values (v_actor.id, 'access_role.updated', 'access_role', p_role,
+          jsonb_build_object('nameEn', v_role.name_en, 'nameAr', v_role.name_ar, 'permissions', to_jsonb(v_before)),
+          jsonb_build_object('nameEn', coalesce(btrim(p_name_en), v_role.name_en), 'nameAr', coalesce(btrim(p_name_ar), v_role.name_ar),
+                             'permissions', to_jsonb(v_keys)),
+          v_reason);
+  perform set_config('chat.pd040_access_change', 'off', true);
 end;
 $$;
 
@@ -427,7 +643,80 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 8. Server-only
+-- 8. Suspending, reactivating, signing out a staff account (S2; review of
+--    #212, P2): the database refuses what chat.may_administer_staff_account
+--    refuses, so the rule is not the API's alone
+-- ---------------------------------------------------------------------------
+-- The actor is the administrator the writer names: chat.account_admin_actor,
+-- which the PD-21 service sets for its transaction, else the requester
+-- chat.deactivate_principal records (chat.revocation_requested_by). A
+-- suspension that names nobody is an operator's (the deactivate-principal
+-- CLI); a reactivation always names someone.
+create function chat.guard_staff_account_status()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_actor  uuid;
+  v_target uuid;
+begin
+  v_actor := nullif(coalesce(nullif(current_setting('chat.account_admin_actor', true), ''),
+                             current_setting('chat.revocation_requested_by', true)), '')::uuid;
+  select s.id into v_target from chat.staff s where s.account_id = new.id;
+  if v_actor is null then
+    if new.status = 'active' then
+      raise exception 'a staff account is reactivated by a named administrator (PD-40)' using errcode = 'insufficient_privilege';
+    end if;
+    return new;
+  end if;
+  if v_target is null or not chat.may_administer_staff_account(v_actor, v_target) then
+    raise exception 'only the super admin, or a manager for a specialist of their department, suspends or reactivates a staff account (PD-40 S1)'
+      using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger staff_account_status_by_administrator before update of status on chat.account
+  for each row
+  when (new.kind = 'staff'
+        and ((new.status = 'suspended' and old.status <> 'suspended') or (old.status = 'suspended' and new.status = 'active')))
+  execute function chat.guard_staff_account_status();
+
+-- A session ended by ANOTHER account (chat.session.revoked_by): for a staff
+-- account's session, that account's staff member must administer it. Signing
+-- oneself out (revoked_by = the account, or null) is untouched.
+create function chat.guard_staff_session_revocation()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_kind   text;
+  v_target uuid;
+  v_actor  uuid;
+begin
+  select a.kind into v_kind from chat.account a where a.id = new.account_id;
+  if v_kind is distinct from 'staff' then return new; end if;
+  select s.id into v_target from chat.staff s where s.account_id = new.account_id;
+  select s.id into v_actor from chat.staff s where s.account_id = new.revoked_by;
+  if v_actor is null or v_target is null or not chat.may_administer_staff_account(v_actor, v_target) then
+    raise exception 'only the super admin, or a manager for a specialist of their department, signs a staff account out (PD-40 S1)'
+      using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger staff_session_revoked_by_administrator before update of revoked_at on chat.session
+  for each row
+  when (old.revoked_at is null and new.revoked_at is not null
+        and new.revoked_by is not null and new.revoked_by is distinct from new.account_id)
+  execute function chat.guard_staff_session_revocation();
+
+-- ---------------------------------------------------------------------------
+-- 9. Server-only
 -- ---------------------------------------------------------------------------
 alter table chat.department_account enable row level security;
 revoke all on chat.department_account from public, anon, authenticated, chat_app;
@@ -438,3 +727,8 @@ revoke all on function chat.set_access_role_permissions(uuid, text[]) from publi
 revoke all on function chat.require_access_grantor(chat.staff, chat.staff, chat.access_role, boolean) from public;
 revoke all on function chat.staff_in_managed_department(uuid, uuid) from public;
 revoke all on function chat.guard_password_reset_code() from public;
+revoke all on function chat.staff_access_profile(uuid) from public;
+revoke all on function chat.grant_access_role(uuid, uuid, text, uuid) from public;
+revoke all on function chat.update_access_role(uuid, text, text, text, text[], text, uuid) from public;
+revoke all on function chat.guard_staff_account_status() from public;
+revoke all on function chat.guard_staff_session_revocation() from public;

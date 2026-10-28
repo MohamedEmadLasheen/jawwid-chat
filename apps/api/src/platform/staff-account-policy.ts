@@ -1,4 +1,5 @@
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
+import { PERMISSIONS } from './permissions/catalogue';
 import type { Actor } from './types';
 
 /**
@@ -10,7 +11,14 @@ import type { Actor } from './types';
  *   create a supervisor / manager    yes (placed later, PD-8)   never (S1)                             never
  *   create a super admin             never (bootstrap CLI only, PD-5)
  *   manage an account (roles, code,  any staff but the super    the specialists of the department      never
- *   suspend, reactivate, sign out)   admin and themselves       they run
+ *   suspend, reactivate, sign out)   admin and themselves       they run, while the specialist holds
+ *                                                               nothing the manager may not grant
+ *
+ * THE LAST CONDITION (review of #212, P1): administering an account includes
+ * resetting its password, so it is as good as holding what the account holds.
+ * A specialist the super admin granted more than their manager may grant is
+ * the super admin's alone -- otherwise the manager resets, signs in as them and
+ * holds it too.
  *
  * "Department manager" is chat.department.manager_id = the actor, with staff
  * role manager, holding the staff_accounts.* key the act needs. The key is
@@ -38,12 +46,21 @@ export interface StaffAccountTarget {
   role: string;
   /** chat.department_account.department_id: where a specialist belongs. */
   departmentId: string | null;
+  /** Every key the target holds through their roles (a specialist holds nothing else). */
+  permissions: ReadonlySet<string>;
 }
 
 export type StaffAccountDecision = { allowed: true } | { allowed: false; reason: string };
 
 const yes: StaffAccountDecision = { allowed: true };
 const no = (reason: string): StaffAccountDecision => ({ allowed: false, reason });
+
+const MAY_DELEGATE: ReadonlySet<string> = new Set(PERMISSIONS.filter((p) => p.delegable && p.inRoles).map((p) => p.key));
+
+/** The keys of `held` a manager could not grant: not delegable, never in a role, or not their own. */
+export function beyondDelegation(held: ReadonlySet<string>, standing: StaffAccountStanding): string[] {
+  return [...held].filter((k) => !MAY_DELEGATE.has(k) || !standing.permissions.has(k)).sort();
+}
 
 const liveStaff = (actor: Actor) => actor.kind === ActorKind.STAFF && actor.isActive && !!actor.organizationId;
 
@@ -89,6 +106,10 @@ export function decideStaffAccountManage(actor: Actor, standing: StaffAccountSta
   }
   if (target.role !== 'specialist' || target.departmentId !== standing.managedDepartmentId) {
     return no('a manager manages the specialists of the department they run only (PD-40 S1)');
+  }
+  const beyond = beyondDelegation(target.permissions, standing);
+  if (beyond.length > 0) {
+    return no(`this specialist holds what you may not grant (${beyond.join(', ')}); only the super admin manages them (PD-40 H5)`);
   }
   return yes;
 }

@@ -8,7 +8,10 @@
  *       only in the department they run; only the super admin creates
  *       supervisors and managers;
  *   S2  nobody acts on themselves or on the super admin; another
- *       organization's account is never in reach.
+ *       organization's account is never in reach;
+ *   H5  a manager manages a specialist only while the specialist holds
+ *       nothing the manager may not grant (review of #212, P1: managing
+ *       includes a reset code, so it is as good as holding the account).
  */
 import { StaffRole } from '@communication/contracts/vocab';
 import {
@@ -29,7 +32,10 @@ const holds = (...keys: string[]): ReadonlySet<string> => new Set(keys);
 const ALL_STAFF_KEYS = holds('staff_accounts.view', 'staff_accounts.create', 'staff_accounts.manage');
 
 const SUPER = { actor: staff('super-1', StaffRole.SUPER_ADMIN), standing: { managedDepartmentId: null, permissions: ALL_STAFF_KEYS } };
-const OPS_MANAGER = { actor: staff('ops-mgr', StaffRole.MANAGER), standing: { managedDepartmentId: OPS, permissions: ALL_STAFF_KEYS } };
+const OPS_MANAGER = {
+  actor: staff('ops-mgr', StaffRole.MANAGER),
+  standing: { managedDepartmentId: OPS, permissions: holds(...ALL_STAFF_KEYS, 'billing.view', 'subscriptions.view', 'billing.verify', 'accounts.administer') },
+};
 const OPS_MANAGER_WITHOUT_KEYS = { actor: staff('ops-mgr-2', StaffRole.MANAGER), standing: { managedDepartmentId: OPS, permissions: holds() } };
 const MANAGER_NO_DEPT = { actor: staff('mgr-x', StaffRole.MANAGER), standing: { managedDepartmentId: null, permissions: ALL_STAFF_KEYS } };
 const SUPERVISOR = { actor: staff('sup-1', StaffRole.ADMIN), standing: { managedDepartmentId: null, permissions: ALL_STAFF_KEYS } };
@@ -40,6 +46,7 @@ const target = (over: Partial<StaffAccountTarget> = {}): StaffAccountTarget => (
   organizationId: ORG,
   role: 'specialist',
   departmentId: OPS,
+  permissions: holds(),
   ...over,
 });
 
@@ -109,6 +116,21 @@ describe('PD-40 S1/S2: managing a staff account', () => {
       expect(manage(who, target({ organizationId: 'org-elsewhere' }))).toBe(false);
     }
     expect(manage(OPS_MANAGER, target({ staffId: OPS_MANAGER.actor.actorId }))).toBe(false);
+  });
+
+  it('a manager manages their specialist only while every key the specialist holds is one they hold and may delegate (H5)', () => {
+    expect(manage(OPS_MANAGER, target({ permissions: holds('billing.view', 'subscriptions.view') }))).toBe(true);
+    for (const [why, key] of [
+      ['held, not delegable', 'billing.verify'],
+      ['delegable, not held', 'certificates.view'],
+      ['never in a role', 'accounts.administer'],
+    ] as const) {
+      const t = target({ permissions: holds('billing.view', key) });
+      expect({ why, ok: manage(OPS_MANAGER, t) }).toEqual({ why, ok: false });
+      expect(decideStaffAccountManage(OPS_MANAGER.actor, OPS_MANAGER.standing, t)).toEqual({ allowed: false, reason: expect.stringContaining(key) });
+      // Such an account is the super admin's.
+      expect({ why, ok: manage(SUPER, t) }).toEqual({ why, ok: true });
+    }
   });
 
   it('a supervisor, a specialist and a manager with no department manage nobody', () => {

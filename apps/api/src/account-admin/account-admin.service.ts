@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AUDIT_SERVICE } from '../platform/tokens';
@@ -11,6 +11,7 @@ import { toSessionListDto, type SessionDto } from '../platform/auth/auth.dto';
 import { PasswordResetService, RESET_CODE_MINUTES } from '../platform/auth/password-reset.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
+import { FIRST_LOGIN_MAILER, recoveryMail, sendWithin, type MailSender } from '../account-recovery/recovery-delivery';
 import type { Actor } from '../platform/types';
 
 export const ACCOUNT_AUDIT = {
@@ -28,6 +29,8 @@ const LIST_LIMIT = 100;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_REASON = 500;
 const MAX_QUERY = 80;
+const MAIL_TIMEOUT_MS = 10_000;
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export interface AccountSummaryDto {
   accountId: string;
@@ -83,7 +86,8 @@ type AccountRow = Prisma.AccountGetPayload<{ select: typeof ACCOUNT_SELECT }>;
  * it records, with the administrator as actor and their reason.
  *
  * No route here ever returns a password, a password hash, a login identifier
- * or a contact channel.
+ * or a contact channel. A reset code a manager issues for a staff account is
+ * not returned either (PD-40, review of #212): it goes to the sign-in address.
  */
 @Injectable()
 export class AccountAdminService {
@@ -95,6 +99,7 @@ export class AccountAdminService {
     private readonly auth: AuthService,
     private readonly resets: PasswordResetService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Optional() @Inject(FIRST_LOGIN_MAILER) private readonly mailer?: MailSender,
   ) {}
 
   /**
@@ -179,18 +184,32 @@ export class AccountAdminService {
    * Issues a one-time reset code and returns it to the administrator ONCE.
    * The administrator passes it on; the person sets their own password with
    * POST /auth/password-reset. The administrator never learns a password.
+   *
+   * PD-40 (review of #212, P1): a code a MANAGER issues for a staff account is
+   * never returned -- holding it is holding the account, and with it every key
+   * the account holds. It goes to the account's sign-in address only; with the
+   * e-mail channel off, a manager issues none. Only the super admin sees a
+   * staff member's code.
    */
   async issuePasswordReset(
     actor: Actor,
     actorAccountId: string,
     accountId: string,
     input: { reason?: unknown; signOutEverywhere?: unknown },
-  ): Promise<{ code: string; expiresAt: string; expiresInMinutes: number; signedOutSessions: number }> {
+  ): Promise<{ code?: string; emailed?: boolean; expiresAt: string; expiresInMinutes: number; signedOutSessions: number }> {
     const reason = requireReason(input.reason);
     const { row } = await this.authorize(actor, accountId, 'reset_password');
     // Offboarded is final; a suspended account may be reset (and then reactivated).
     if (row.status === 'deactivated') {
       throw new CommError(CommErrorCode.ACCOUNT_ADMIN_STATE, 'a deactivated account has no password to reset', 409);
+    }
+    const emailOnly = row.kind === 'staff' && actor.staffRole !== StaffRole.SUPER_ADMIN;
+    let signIn: string | null = null;
+    if (emailOnly) {
+      signIn = (await this.prisma.account.findUniqueOrThrow({ where: { id: row.id }, select: { subject: true } })).subject;
+      if (!this.mailer?.available || !EMAIL.test(signIn)) {
+        throw new CommError(CommErrorCode.ACCOUNT_ADMIN_STATE, 'this code can only be e-mailed, and e-mail is not available for it; ask the super admin', 409);
+      }
     }
     const issued = await this.resets.issue({
       accountId: row.id,
@@ -200,12 +219,11 @@ export class AccountAdminService {
       reason,
       signOutEverywhere: input.signOutEverywhere === true,
     });
-    return {
-      code: issued.code,
-      expiresAt: issued.expiresAt.toISOString(),
-      expiresInMinutes: RESET_CODE_MINUTES,
-      signedOutSessions: issued.revokedSessions,
-    };
+    const expiry = { expiresAt: issued.expiresAt.toISOString(), expiresInMinutes: RESET_CODE_MINUTES, signedOutSessions: issued.revokedSessions };
+    if (!emailOnly || !this.mailer || signIn === null) return { code: issued.code, ...expiry };
+    const sent = await sendWithin(this.mailer, signIn, recoveryMail(issued.code, RESET_CODE_MINUTES), MAIL_TIMEOUT_MS);
+    if (!sent.sent) this.log.error(`reset code for account ${row.id} not e-mailed: ${sent.failure}`);
+    return { emailed: sent.sent, ...expiry };
   }
 
   // -------------------------------------------------------------------------
@@ -232,6 +250,7 @@ export class AccountAdminService {
     await this.authorize(actor, accountId, 'suspend');
 
     const outcome = await this.prisma.$transaction(async (tx) => {
+      await nameAdministrator(tx, actor);
       const status = await lockStatus(tx, accountId);
       if (status === 'suspended') return { changed: false, revoked: 0 };
       if (status !== 'active') {
@@ -276,6 +295,7 @@ export class AccountAdminService {
     await this.authorize(actor, accountId, 'reactivate');
 
     const changed = await this.prisma.$transaction(async (tx) => {
+      await nameAdministrator(tx, actor);
       const status = await lockStatus(tx, accountId);
       if (status === 'active') return false;
       if (status !== 'suspended') {
@@ -461,6 +481,14 @@ function toTarget(row: AccountRow, managedByActor = false): AccountAdminTarget {
     staffRole: row.staff?.role ?? null,
     managedByActor,
   };
+}
+
+/**
+ * PD-40: names the administrator for the database's own check on a staff
+ * account's suspension or reactivation (chat.guard_staff_account_status).
+ */
+async function nameAdministrator(tx: Prisma.TransactionClient, actor: Actor): Promise<void> {
+  await tx.$queryRaw`SELECT set_config('chat.account_admin_actor', ${actor.actorId}::text, true)`;
 }
 
 /** Locks the account row for the rest of the transaction and reads its status. */

@@ -5,7 +5,7 @@ import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { isUuid } from '../communication/conversations/conversation.service';
 import type { Actor } from '../platform/types';
 import { FIRST_LOGIN_CODE_HOURS, PasswordResetService } from '../platform/auth/password-reset.service';
-import { FIRST_LOGIN_MAILER, firstLoginMail, type MailSender } from '../account-recovery/recovery-delivery';
+import { FIRST_LOGIN_MAILER, firstLoginMail, sendWithin, type MailSender } from '../account-recovery/recovery-delivery';
 import { PermissionService } from '../platform/permissions/permission.service';
 import { PERMISSIONS } from '../platform/permissions/catalogue';
 import {
@@ -39,7 +39,12 @@ export interface StaffAccountDto {
 }
 
 export interface FirstLoginDto {
-  code: string;
+  /**
+   * Shown once, to the super admin, and to the manager who CREATES the account.
+   * Absent when a manager reissues it: then it goes by e-mail only, so nobody
+   * but the person holds a way into a live identity (review of #212, P1).
+   */
+  code?: string;
   expiresAt: string;
   /** Sent to the sign-in address. False: the channel is off or the provider failed -- hand the code over. */
   emailed: boolean;
@@ -94,7 +99,8 @@ const roleInvalid = (why: string) => new CommError(CommErrorCode.ACCESS_ROLE_INV
  * The first sign-in code is PD-43's primitive (PasswordResetService,
  * purpose first_login): issued in the transaction that creates the account,
  * shown once in this response, e-mailed after the commit, never written to the
- * audit trail or a log line.
+ * audit trail or a log line. A REISSUE by a manager is e-mailed only and never
+ * returned (review of #212, P1): only the super admin sees a reissued code.
  */
 @Injectable()
 export class StaffAccountsService {
@@ -125,11 +131,13 @@ export class StaffAccountsService {
       });
       ids = rows.map((r) => r.id);
     } else if (actor.staffRole === StaffRole.MANAGER && standing.managedDepartmentId) {
+      // The ones they may administer: a specialist holding more than the manager may grant is the super admin's (H5).
       const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT s.id::text AS id
           FROM chat.department_account da
           JOIN chat.staff s ON s.id = da.staff_id
          WHERE da.department_id = ${standing.managedDepartmentId}::uuid AND s.role = 'specialist'
+           AND chat.may_administer_staff_account(${actor.actorId}::uuid, s.id)
          ORDER BY s.name`;
       ids = rows.map((r) => r.id);
     } else {
@@ -227,12 +235,21 @@ export class StaffAccountsService {
     return this.get(actor, staffId);
   }
 
-  /** A new first sign-in code for an account that has not signed in yet. It kills every earlier one. Body: `{ reason }`. */
+  /**
+   * A new first sign-in code for an account that has not signed in yet. It
+   * kills every earlier one. The super admin sees it; a manager's goes by e-mail
+   * only -- and with the channel off, a manager issues none (it would kill the
+   * live code and deliver nothing). Body: `{ reason }`.
+   */
   async reissueSetupCode(actor: Actor, actorAccountId: string, staffId: string, body: Record<string, unknown>): Promise<{ firstLogin: FirstLoginDto }> {
     const { row } = await this.reach(actor, staffId);
     const reason = text('reason', body.reason, 500);
     if (!row.account_id || row.status !== 'provisioned') {
       throw new CommError(CommErrorCode.ACCOUNT_ADMIN_STATE, 'this account has signed in already; reset its password instead', 409);
+    }
+    const seesCode = actor.staffRole === StaffRole.SUPER_ADMIN;
+    if (!seesCode && !this.mailer.available) {
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_STATE, 'the e-mail channel is off, so only the super admin can issue a new code', 409);
     }
     const accountId = row.account_id;
     const subject = (await this.prisma.account.findUniqueOrThrow({ where: { id: accountId }, select: { subject: true } })).subject;
@@ -253,7 +270,8 @@ export class StaffAccountsService {
       throw refusal(e);
     }
     const emailed = await this.deliver(subject, issued);
-    return { firstLogin: { code: issued.code, expiresAt: issued.expiresAt.toISOString(), emailed } };
+    const expiresAt = issued.expiresAt.toISOString();
+    return { firstLogin: seesCode ? { code: issued.code, expiresAt, emailed } : { expiresAt, emailed } };
   }
 
   // -------------------------------------------------------------------------
@@ -382,7 +400,17 @@ export class StaffAccountsService {
     if (!isUuid(staffId)) throw notFound();
     const row = await this.row(staffId);
     if (!row) throw notFound();
-    const target: StaffAccountTarget = { staffId: row.staff_id, organizationId: row.organization_id, role: row.role, departmentId: row.department_id };
+    const held = await this.prisma.$queryRaw<Array<{ key: string }>>`
+      SELECT DISTINCT arp.permission_key AS key
+        FROM chat.staff_access_role sar JOIN chat.access_role_permission arp ON arp.role_id = sar.role_id
+       WHERE sar.staff_id = ${row.staff_id}::uuid`;
+    const target: StaffAccountTarget = {
+      staffId: row.staff_id,
+      organizationId: row.organization_id,
+      role: row.role,
+      departmentId: row.department_id,
+      permissions: new Set(held.map((h) => h.key)),
+    };
     if (!decideStaffAccountManage(actor, await this.standing(actor), target).allowed) throw notFound();
     return { row };
   }
@@ -432,21 +460,9 @@ export class StaffAccountsService {
   /** After the commit, to the sign-in address; on failure only the code's id is logged -- never the code, the address or the provider's text. */
   private async deliver(to: string, issued: { id: string; code: string }): Promise<boolean> {
     if (!this.mailer.available) return false;
-    const sending = this.mailer.send(to, firstLoginMail(issued.code, FIRST_LOGIN_CODE_HOURS, to));
-    let timer: NodeJS.Timeout | undefined;
-    const late = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(Object.assign(new Error('timed out'), { name: 'MailTimeout' })), MAIL_TIMEOUT_MS);
-    });
-    try {
-      await Promise.race([sending, late]);
-      return true;
-    } catch (e) {
-      sending.catch(() => undefined);
-      this.log.error(`first sign-in code ${issued.id} not e-mailed: ${failureKind(e)}`);
-      return false;
-    } finally {
-      clearTimeout(timer);
-    }
+    const result = await sendWithin(this.mailer, to, firstLoginMail(issued.code, FIRST_LOGIN_CODE_HOURS, to), MAIL_TIMEOUT_MS);
+    if (!result.sent) this.log.error(`first sign-in code ${issued.id} not e-mailed: ${result.failure}`);
+    return result.sent;
   }
 }
 
@@ -486,11 +502,6 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-function failureKind(e: unknown): string {
-  const x = e as { name?: unknown; code?: unknown; responseCode?: unknown };
-  return [x?.name, x?.code, x?.responseCode].filter((v) => typeof v === 'string' || typeof v === 'number').join(' ') || 'error';
-}
-
 /** A database refusal of an account write, as the API's codes. Unknown errors pass through untouched. */
 function refusal(e: unknown): unknown {
   if (e instanceof CommError) return e;
@@ -509,6 +520,9 @@ function roleRefusal(e: unknown): unknown {
   if (e instanceof CommError) return e;
   const t = errorText(e);
   if (/only the super admin defines/.test(t)) return new CommError(CommErrorCode.STAFF_ACCOUNT_DENIED, 'only the super admin defines and changes access roles');
+  if (/their granting manager may not grant/.test(t)) {
+    return new CommError(CommErrorCode.ACCESS_ROLE_CONFLICT, t.replace(/^[\s\S]*?(?:ERROR|Message):\s*/i, '').split('\n')[0]!.slice(0, 600), 409);
+  }
   if (/no such role/.test(t)) return notFound();
   if (/unknown permission|super admin's own powers|super admin''s own powers|at least one permission|access_role_key|violates check constraint|a reason is required|duplicate key|access_role_key_per_organization/.test(t)) {
     return roleInvalid(t.replace(/^[\s\S]*?(?:ERROR|Message):\s*/i, '').split('\n')[0]!.slice(0, 300));
