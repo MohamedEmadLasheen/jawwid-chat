@@ -14,5 +14,7 @@ import { WorkPatternService } from './work-pattern.service';
   imports: [CommunicationModule, LessonModule],
   controllers: [CalendarController],
   providers: [CalendarService, WorkPatternService],
+  // PD-44: the Dashboard's Lessons section counts through CalendarService.
+  exports: [CalendarService],
 })
 export class CalendarModule {}
