@@ -1,0 +1,111 @@
+{
+ "about": "GENERATED from scripts/lessons/rasm.py (the shared rasm skeleton) and its fixtures; rasm.ts must fold each input to the same skeleton, and the verified words at ref (word n = the n-th space token) too. Inputs are standard spellings, escaped; the Uthmani side is never typed here, only referenced.",
+ "vectors": [
+  {
+   "name": "the standard Basmala",
+   "input": "\u0628\u0650\u0633\u0652\u0645\u0650 \u0627\u0644\u0644\u0651\u064e\u0647\u0650 \u0627\u0644\u0631\u0651\u064e\u062d\u0652\u0645\u064e\u0646\u0650 \u0627\u0644\u0631\u0651\u064e\u062d\u0650\u064a\u0645\u0650",
+   "ref": {
+    "surah": 1,
+    "ayah": 1,
+    "word": 1,
+    "count": 4
+   },
+   "skeleton": "\u0628\u0633\u0645 \u0644\u0644\u0647 \u0644\u0631\u062d\u0645\u0646 \u0644\u0631\u062d\u064a\u0645"
+  },
+  {
+   "name": "Al-Ikhlas 1",
+   "input": "\u0642\u064f\u0644\u0652 \u0647\u064f\u0648\u064e \u0627\u0644\u0644\u0651\u064e\u0647\u064f \u0623\u064e\u062d\u064e\u062f\u064c",
+   "ref": {
+    "surah": 112,
+    "ayah": 1,
+    "word": 1,
+    "count": 4
+   },
+   "skeleton": "\u0642\u0644 \u0647\u0648 \u0644\u0644\u0647 \u062d\u062f"
+  },
+  {
+   "name": "Al-Ikhlas 2 (a two-word ayah)",
+   "input": "\u0627\u0644\u0644\u0651\u064e\u0647\u064f \u0627\u0644\u0635\u0651\u064e\u0645\u064e\u062f\u064f",
+   "ref": {
+    "surah": 112,
+    "ayah": 2,
+    "word": 1,
+    "count": 2
+   },
+   "skeleton": "\u0644\u0644\u0647 \u0644\u0635\u0645\u062f"
+  },
+  {
+   "name": "al-Baqarah 43, its first four words",
+   "input": "\u0648\u064e\u0623\u064e\u0642\u0650\u064a\u0645\u064f\u0648\u0627 \u0627\u0644\u0635\u0651\u064e\u0644\u064e\u0627\u0629\u064e \u0648\u064e\u0622\u062a\u064f\u0648\u0627 \u0627\u0644\u0632\u0651\u064e\u0643\u064e\u0627\u0629\u064e",
+   "ref": {
+    "surah": 2,
+    "ayah": 43,
+    "word": 1,
+    "count": 4
+   },
+   "skeleton": "\u0648\u0642\u064a\u0645\u0648 \u0644\u0635\u0644\u0647 \u0648\u062a\u0648 \u0644\u0632\u0643\u0647"
+  },
+  {
+   "name": "al-salah alone (waw + dagger alef)",
+   "input": "\u0627\u0644\u0635\u0651\u064e\u0644\u064e\u0627\u0629\u064e",
+   "ref": {
+    "surah": 2,
+    "ayah": 43,
+    "word": 2,
+    "count": 1
+   },
+   "skeleton": "\u0644\u0635\u0644\u0647"
+  },
+  {
+   "name": "dhalika al-kitabu la rayba",
+   "input": "\u0630\u0644\u0643 \u0627\u0644\u0643\u062a\u0627\u0628 \u0644\u0627 \u0631\u064a\u0628",
+   "ref": {
+    "surah": 2,
+    "ayah": 2,
+    "word": 1,
+    "count": 4
+   },
+   "skeleton": "\u0630\u0644\u0643 \u0644\u0643\u062a\u0628 \u0644 \u0631\u064a\u0628"
+  },
+  {
+   "name": "hadha ma wa'ada al-rahman",
+   "input": "\u0647\u0630\u0627 \u0645\u0627 \u0648\u0639\u062f \u0627\u0644\u0631\u062d\u0645\u0646",
+   "ref": {
+    "surah": 36,
+    "ayah": 52,
+    "word": 7,
+    "count": 6
+   },
+   "skeleton": "\u0647\u0630 \u0645 \u0648\u0639\u062f \u0644\u0631\u062d\u0645\u0646"
+  },
+  {
+   "name": "khalaqa al-insan",
+   "input": "\u062e\u0644\u0642 \u0627\u0644\u0625\u0646\u0633\u0627\u0646",
+   "ref": {
+    "surah": 55,
+    "ayah": 3,
+    "word": 1,
+    "count": 2
+   },
+   "skeleton": "\u062e\u0644\u0642 \u0644\u0646\u0633\u0646"
+  },
+  {
+   "name": "ordinary words",
+   "input": "\u0628\u064e\u0627\u0628\u0652",
+   "ref": null,
+   "skeleton": "\u0628\u0628"
+  },
+  {
+   "name": "ordinary words",
+   "input": "\u0643\u0650\u062a\u064e\u0627\u0628\u0652 \u0628\u064e\u0627\u0628\u0652",
+   "ref": null,
+   "skeleton": "\u0643\u062a\u0628 \u0628\u0628"
+  },
+  {
+   "name": "ordinary words",
+   "input": "\u0633\u0648\u0631\u0629 \u0627\u0644\u0625\u062e\u0644\u0627\u0635 \u062a\u0639\u0644\u0645\u0646\u0627 \u0623\u0646 \u0627\u0644\u0644\u0647 \u0648\u0627\u062d\u062f",
+   "ref": null,
+   "skeleton": "\u0633\u0648\u0631\u0647 \u0644\u062e\u0644\u0635 \u062a\u0639\u0644\u0645\u0646 \u0646 \u0644\u0644\u0647 \u0648\u062d\u062f"
+  }
+ ]
+}
