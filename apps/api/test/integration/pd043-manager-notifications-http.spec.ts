@@ -212,18 +212,88 @@ describe('2. a sign-in or contact on a teacher out of the adder\'s reach', () =>
   });
 });
 
-describe('3. a supervisor deactivated with teachers assigned (last: it deactivates a seeded supervisor)', () => {
-  it('tells the Teachers manager once, naming the supervisor and how many teachers they held', async () => {
-    const leaving = m.teacherSupervisors[1]!;
-    for (const label of ['s1', 's2']) {
-      expect((await add(m.teachersManager.subject, { name: `QA Held ${label}`, email: email(label), supervisorId: leaving.id })).status).toBe(201);
+describe('3. a supervisor deactivated with teachers assigned (a trigger on chat.staff)', () => {
+  /** A primary teacher supervisor of this organization's Teachers department, holding `teachers` new teachers. */
+  async function supervisorHolding(label: string, teachers: number) {
+    const id = randomUUID();
+    const name = `QA Leaving Supervisor ${label}`;
+    await g.prisma.$executeRaw`INSERT INTO chat.staff (id, organization_id, name, role) VALUES (${id}::uuid, ${orgId}::uuid, ${name}, 'admin')`;
+    await g.prisma.$executeRaw`
+      INSERT INTO chat.department_member (staff_id, organization_id, department_id, position)
+      SELECT ${id}::uuid, ${orgId}::uuid, d.id, 'supervisor' FROM chat.department d WHERE d.organization_id = ${orgId}::uuid AND d.kind = 'teachers'`;
+    for (let i = 0; i < teachers; i++) {
+      const t = await legacyTeacher(`QA Held ${label} ${i}`);
+      await g.prisma.$executeRaw`INSERT INTO chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id, assigned_by, reason)
+        VALUES (${t}::uuid, ${orgId}::uuid, ${id}::uuid, ${m.teachersManager.id}::uuid, 'spec')`;
     }
-    const held = Number((await g.prisma.$queryRaw<Array<{ n: bigint }>>`
-      SELECT count(*) AS n FROM chat.teacher_supervisor_assignment WHERE supervisor_id = ${leaving.id}::uuid`)[0]!.n);
-    await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${leaving.id}::uuid, 'left the academy', null, 'deactivated')::text`;
-    const rows = await told(m.teachersManager.id, 'teacher_supervisor_left');
+    return { id, name };
+  }
+  const leftFor = async (supervisor: string) =>
+    (await told(m.teachersManager.id, 'teacher_supervisor_left')).filter((r) => (r.variables as { supervisor: string }).supervisor === supervisor);
+  const isLive = async (id: string) =>
+    (await g.prisma.staff.findUniqueOrThrow({ where: { id }, select: { isActive: true, leftAt: true } }));
+
+  it('tells the Teachers manager once, naming the supervisor and how many teachers they held', async () => {
+    const s = await supervisorHolding('a', 2);
+    await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${s.id}::uuid, 'left the academy', null, 'deactivated')::text`;
+    const rows = await leftFor(s.name);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ eventType: 'teacher_supervisor_left', status: 'scheduled' });
-    expect(rows[0]!.variables).toEqual({ supervisor: leaving.name, teachers: held });
+    expect(rows[0]!.variables).toEqual({ supervisor: s.name, teachers: 2 });
+  });
+
+  it('works for a writer that cannot write notifications itself (service_role)', async () => {
+    const s = await supervisorHolding('b', 1);
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('set local role service_role');
+      await tx.$queryRawUnsafe(`select chat.deactivate_principal('staff', '${s.id}'::uuid, 'left', null, 'deactivated')::text`);
+    });
+    expect((await isLive(s.id)).isActive).toBe(false);
+    expect(await leftFor(s.name)).toHaveLength(1);
+  });
+
+  it('a request role (chat_app) cannot deactivate staff at all: RT-032 refuses it, never this trigger', async () => {
+    const s = await supervisorHolding('c', 1);
+    const out = await g.prisma
+      .$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('set local role chat_app');
+        await tx.$executeRawUnsafe(`update chat.staff set is_active = false, left_at = now() where id = '${s.id}'::uuid`);
+      })
+      .then(() => 'ok', (e: Error) => e.message);
+    // RLS may hide the row (nothing changes) or the journal refuses it; either way no 42501 from the trigger's own reads.
+    if (out !== 'ok') expect(out).toMatch(/RT-032|row-level security|permission denied for table staff/);
+    expect((await isLive(s.id)).isActive).toBe(true);
+    expect(await leftFor(s.name)).toHaveLength(0);
+  });
+
+  it('one notification per deactivation: a repeat in the same transaction, or of one already out, adds none', async () => {
+    const s = await supervisorHolding('d', 1);
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.id}::uuid`;
+      await tx.$executeRaw`UPDATE chat.staff SET is_active = true, left_at = null WHERE id = ${s.id}::uuid`;
+      await tx.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.id}::uuid`;
+    });
+    await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${s.id}::uuid, 'again', null, 'deactivated')::text`;
+    expect(await leftFor(s.name)).toHaveLength(1);
+  });
+
+  it('a notification that cannot be written never blocks the deactivation', async () => {
+    const s = await supervisorHolding('e', 1);
+    await g.prisma.$executeRawUnsafe(
+      `alter table chat.notification add constraint pd043_spec_refuses_supervisor_left check (template_key <> 'teacher_supervisor_left') not valid`,
+    );
+    try {
+      await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${s.id}::uuid, 'left', null, 'deactivated')::text`;
+    } finally {
+      await g.prisma.$executeRawUnsafe('alter table chat.notification drop constraint pd043_spec_refuses_supervisor_left');
+    }
+    expect(await isLive(s.id)).toMatchObject({ isActive: false, leftAt: expect.any(Date) });
+    expect(await leftFor(s.name)).toHaveLength(0);
+  });
+
+  it('a supervisor with no teachers: nobody is told', async () => {
+    const s = await supervisorHolding('f', 0);
+    await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${s.id}::uuid, 'left', null, 'deactivated')::text`;
+    expect(await leftFor(s.name)).toHaveLength(0);
   });
 });
