@@ -3,6 +3,7 @@ import { CallService } from '../calls/call.service';
 import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
+import { Requires } from '../../platform/permissions/route-access';
 
 @Controller('calls')
 @UseFilters(CommErrorFilter)
@@ -13,6 +14,7 @@ export class CallController {
    * Start a call. The participant set comes from conversation membership and
    * the room name is minted server-side; neither is client-supplied.
    */
+  @Requires('calls.use')
   @Post()
   @RateLimited(ActionScope.CALL_START)
   async start(@ActorId() actorId: string, @Body() body: { conversationId: string }) {
@@ -23,17 +25,20 @@ export class CallController {
    * Mint a short-lived media token. Re-runs the full authorization chain, so a
    * revoked permission takes effect on the next join even mid-call.
    */
+  @Requires('calls.use')
   @Post(':id/token')
   async token(@ActorId() actorId: string, @Param('id') id: string) {
     return this.calls.issueToken(id, actorId);
   }
 
+  @Requires('calls.use')
   @Post(':id/accept')
   async accept(@ActorId() actorId: string, @Param('id') id: string) {
     await this.calls.accept(id, actorId);
     return { ok: true };
   }
 
+  @Requires('calls.use')
   @Post(':id/decline')
   async decline(@ActorId() actorId: string, @Param('id') id: string) {
     await this.calls.decline(id, actorId);
@@ -51,12 +56,14 @@ export class CallController {
    * call's own locked state: ACTIVE ends `answered`, RINGING ends `missed`, and
    * `declined` comes only from the decline endpoint.
    */
+  @Requires('calls.use')
   @Post(':id/end')
   async end(@ActorId() actorId: string, @Param('id') id: string) {
     await this.calls.end(id, actorId);
     return { ok: true };
   }
 
+  @Requires('calls.use')
   @Get('history/:conversationId')
   async history(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
     return { calls: await this.calls.history(conversationId, actorId) };
@@ -76,6 +83,7 @@ export class CallController {
    * response's `nextCursor`; `limit` is clamped server-side, so a client cannot
    * ask for the whole table.
    */
+  @Requires('calls.use')
   @Get('history')
   async accountHistory(
     @ActorId() actorId: string,

@@ -4,6 +4,7 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { AuthError, AuthErrorCode } from '../platform/auth/auth.errors';
 import type { Actor } from '../platform/types';
 import { ImpersonationService, type AdministratorContext } from './impersonation.service';
+import { Requires } from '../platform/permissions/route-access';
 
 interface AdminRequest {
   actor?: Actor;
@@ -30,6 +31,7 @@ export class ImpersonationController {
   constructor(private readonly impersonations: ImpersonationService) {}
 
   /** Body: `{ accountId, reason }`. Returns the support session and an access token for it. */
+  @Requires('accounts.support_session')
   @Post()
   @HttpCode(201)
   start(@Req() request: AdminRequest, @Body() body: { accountId?: unknown; reason?: unknown }) {
@@ -37,18 +39,21 @@ export class ImpersonationController {
   }
 
   /** The record: the super admin's whole organization, anyone else their own. `?accountId=` narrows it. */
+  @Requires('accounts.support_session')
   @Get()
   list(@CurrentActor() actor: Actor, @Query('accountId') accountId?: string) {
     return this.impersonations.list(actor, { accountId: typeof accountId === 'string' ? accountId : undefined });
   }
 
   /** The trail: every request made in one support session. */
+  @Requires('accounts.support_session')
   @Get(':id/actions')
   actions(@CurrentActor() actor: Actor, @Param('id') id: string) {
     return this.impersonations.actions(actor, id);
   }
 
   /** A fresh access token (after a reload, or to keep working); extends by one step, never past the hour. */
+  @Requires('accounts.support_session')
   @Post(':id/token')
   @HttpCode(200)
   token(@Req() request: AdminRequest, @Param('id') id: string) {
@@ -56,6 +61,7 @@ export class ImpersonationController {
   }
 
   /** Exit: ends the support session and its session. Idempotent. */
+  @Requires('accounts.support_session')
   @Post(':id/end')
   @HttpCode(200)
   end(@Req() request: AdminRequest, @Param('id') id: string) {

@@ -6,6 +6,8 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
+import { complaintAbout, familiesOfComplaints } from '../teacher-file/complaint-family';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
@@ -93,7 +95,8 @@ export class DisciplineService {
     if (query.kind !== undefined && !(query.kind in KIND_FILTERS)) throw invalid(`kind: ${Object.keys(KIND_FILTERS).join(' | ')}`);
 
     // PD-35: the violations of the teachers in the caller's scope.
-    const scope = await this.supervision.teacherScope.scopeOf(actor);
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const scope = page.teachers;
     const where: Prisma.TeacherViolationWhereInput = {
       organizationId: actor.organizationId,
       ...(scope.all ? {} : { AND: [{ teacherId: { in: [...scope.teacherIds] } }] }),
@@ -102,11 +105,11 @@ export class DisciplineService {
       ...(query.teacherId ? { teacherId: query.teacherId } : {}),
       ...(query.kind ? { kind: { in: [...KIND_FILTERS[query.kind as keyof typeof KIND_FILTERS]] } } : {}),
     };
-    const rows = await this.standing(await this.prisma.teacherViolation.findMany({
+    const rows = await this.visible(page, await this.standing(await this.prisma.teacherViolation.findMany({
       where,
       orderBy: state === 'open' ? { occurredAt: 'asc' } : { occurredAt: 'desc' },
       take: 500,
-    }));
+    })));
     return { violations: await this.dtos(rows) };
   }
 
@@ -120,7 +123,9 @@ export class DisciplineService {
       where: { teacherId: teacher.id, month: new Date(`${m}-01T00:00:00Z`) },
       orderBy: { occurredAt: 'asc' },
     }));
+    // The count is the teacher's (it sets the next step); the rows listed are the caller's (P2-4).
     const counted = rows.filter((r) => r.decision !== Decision.EXCUSED).length;
+    const shown = await this.visible(await this.supervision.teacherScope.pageRowsOf(actor), rows);
     const suspensions = await this.prisma.teacherSuspension.findMany({
       where: { teacherId: teacher.id },
       orderBy: { startsOn: 'desc' },
@@ -131,7 +136,7 @@ export class DisciplineService {
       month: m,
       counted,
       nextStep: decisionForStep(counted + 1),
-      violations: await this.dtos(rows),
+      violations: await this.dtos(shown),
       suspensions: suspensions.map((s) => ({
         id: s.id,
         kind: s.kind,
@@ -152,7 +157,11 @@ export class DisciplineService {
     if (!isUuid(lessonId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
     const lesson = await this.prisma.lesson.findFirst({ where: { id: lessonId, organizationId: actor.organizationId } });
     if (!lesson) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
-    await this.supervision.requireTeacherInScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    // P2-4: an Operations supervisor records lateness on their own families' lessons only.
+    if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), lesson.teacherId, { learnerId: lesson.learnerId })) {
+      throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+    }
     const minutes = body.minutes;
     if (typeof minutes !== 'number' || !Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
       throw invalid('minutes: a whole number of minutes, 1 to 240');
@@ -249,7 +258,11 @@ export class DisciplineService {
       where: { id: complaintId, organizationId: actor.organizationId ?? '', kind: 'complaint' },
     });
     if (!complaint) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
-    await this.supervision.requireTeacherInScope(actor, complaint.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, complaint.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    const about = complaintAbout(complaint, await familiesOfComplaints(this.prisma, [complaint]));
+    if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), complaint.teacherId, about)) {
+      throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
+    }
     const note = textField(body, 'note', false);
     const row = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
@@ -559,8 +572,41 @@ export class DisciplineService {
     if (!isUuid(id)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
     const v = await this.prisma.teacherViolation.findFirst({ where: { id, organizationId: actor.organizationId } });
     if (!v || (await this.standing([v])).length === 0) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
-    await this.supervision.requireTeacherInScope(actor, v.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, v.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    if ((await this.visible(await this.supervision.teacherScope.pageRowsOf(actor), [v])).length === 0) {
+      throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
+    }
     return v;
+  }
+
+  /**
+   * P2-4: of an Operations-only teacher's violations, those about another
+   * family's child do not show -- lateness or an absence on their lesson, or
+   * the upheld complaint of another family. Teacher-level ones (an absence with
+   * no lesson, a management complaint) do.
+   */
+  private async visible<T extends { id: string; teacherId: string; lessonId: string | null; complaintEntryId: string | null }>(
+    page: PageScope,
+    rows: T[],
+  ): Promise<T[]> {
+    const partial = rows.filter((r) => !scopeCovers(page.whole, r.teacherId));
+    if (partial.length === 0) return rows;
+    const scope = this.supervision.teacherScope;
+    const learnerOf = await scope.learnersOfLessons(partial.map((r) => r.lessonId).filter((x): x is string => !!x));
+    const complaintIds = partial.map((r) => r.complaintEntryId).filter((x): x is string => !!x);
+    const complaints = complaintIds.length
+      ? await this.prisma.teacherSupervisionEntry.findMany({
+          where: { id: { in: complaintIds } },
+          select: { id: true, parentFeedbackId: true, conversationId: true, complaintSource: true },
+        })
+      : [];
+    const familyOf = await familiesOfComplaints(this.prisma, complaints);
+    const complaintOf = new Map(complaints.map((c) => [c.id, c]));
+    return rows.filter((r) => {
+      if (r.lessonId) return pageRowVisible(page, r.teacherId, { learnerId: learnerOf.get(r.lessonId) ?? null });
+      const c = r.complaintEntryId ? complaintOf.get(r.complaintEntryId) : undefined;
+      return pageRowVisible(page, r.teacherId, c ? complaintAbout(c, familyOf) : null);
+    });
   }
 
   /**
@@ -586,8 +632,10 @@ export class DisciplineService {
 
   private async requireSupervisor(actorId: string): Promise<Actor> {
     const actor = await this.conversations.requireActor(actorId);
-    if (!(await this.supervision.staffAccess(actor)).canSupervise) {
-      throw new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s');
+    // PD-26 amendment: the Teachers department, or an Operations supervisor for
+    // the teachers of their families (narrowed below by the page scope).
+    if (!(await this.supervision.pageAccess(actor)).canSupervise) {
+      throw new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s and, for the teachers of their families, Operations\'');
     }
     return actor;
   }
@@ -596,7 +644,7 @@ export class DisciplineService {
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'teacher not found');
     const t = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId ?? '' } });
     if (!t) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'teacher not found');
-    await this.supervision.requireTeacherInScope(actor, t.id, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, t.id, CommErrorCode.DISCIPLINE_NOT_FOUND);
     return t;
   }
 

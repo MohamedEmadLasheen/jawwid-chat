@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry quran-dataset pd040-routes ci-wiring"
 
 title() {
   case "$1" in
@@ -200,6 +200,8 @@ title() {
     backup-client) echo "The backup drill runs the pg_dump it is given" ;;
     backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
+    quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
+    pd040-routes)  echo "PD-40 · every API route declares the permission it asks of staff" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -333,6 +335,30 @@ gate_pd_registry() {
   fi
   "$PYTHON" -I scripts/docs/registry-index.py selftest || return 1
   "$PYTHON" -I scripts/docs/registry-index.py check
+}
+
+gate_quran_dataset() {
+  # The shared Quran dataset (docs/product/quran-dataset-contract.md): the
+  # loader's refusals are tested (tampered file, count mismatch, split,
+  # duplicate or empty ayah), and every pinned fingerprint agrees with its
+  # manifest and its vendored file.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the quran-dataset gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/db/test_load_quran.py || return 1
+  "$PYTHON" -I scripts/db/check-quran-pins.py
+}
+
+gate_pd040_routes() {
+  # PD-40: a route with no @Requires / @SelfService / @NotForStaff / @Public is
+  # refused to staff at runtime. This catches it before it ships, without Node.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the pd040-routes gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/qa/check-route-permissions.py selftest || return 1
+  "$PYTHON" -I scripts/qa/check-route-permissions.py check
 }
 
 gate_ci_wiring() {

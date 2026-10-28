@@ -9,6 +9,8 @@ import { SupportSessionInterceptor } from './support-session.interceptor';
 import Redis from 'ioredis';
 import { AuthService } from './auth.service';
 import { AuthenticatedGuard } from './auth.guard';
+import { PermissionGuard } from '../permissions/permission.guard';
+import { PermissionService } from '../permissions/permission.service';
 import { ActionThrottleGuard } from './action-throttle.guard';
 import { AuthController, MeController, MeSessionsController } from './auth.controller';
 import { AuthErrorFilter } from './auth.errors';
@@ -88,6 +90,7 @@ export const loginRateLimitStoreProvider = {
   controllers: [AuthController, MeController, MeSessionsController, ParentSignupController, PasswordResetController],
   providers: [
     AuthService,
+    PermissionService,
     ParentSignupService,
     PasswordResetService,
     LoginRateLimiter,
@@ -97,6 +100,10 @@ export const loginRateLimitStoreProvider = {
     // client is identifiable.
     { provide: CLIENT_ADDRESS_POLICY, useFactory: () => readClientAddressPolicy() },
     { provide: APP_GUARD, useClass: AuthenticatedGuard },
+    // PD-40: the page and action gate. MUST stay directly after
+    // AuthenticatedGuard (it reads the actor that guard attached) and before
+    // the throttle, so a refused request spends no action budget.
+    { provide: APP_GUARD, useClass: PermissionGuard },
     // Phase 8 abuse limits. MUST stay after AuthenticatedGuard: Nest runs
     // global guards in registration order, and this one counts against the
     // actor that guard resolved from the token. It shares the login limiter's
@@ -110,7 +117,7 @@ export const loginRateLimitStoreProvider = {
   ],
   // RATE_LIMIT_STORE (PD-37): the realtime gateway spends the same per-actor
   // action budget for a socket cursor move as ActionThrottleGuard does for HTTP.
-  exports: [AuthService, LoginRateLimiter, PasswordResetService, RATE_LIMIT_STORE],
+  exports: [AuthService, LoginRateLimiter, PasswordResetService, RATE_LIMIT_STORE, PermissionService],
 })
 export class AuthModule implements NestModule {
   /**

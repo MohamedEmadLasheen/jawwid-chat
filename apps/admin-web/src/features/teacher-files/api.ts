@@ -139,7 +139,7 @@ export interface PersonalPatch {
 }
 
 export type NewEntry =
-  | { kind: 'complaint'; body: string; source: 'management' | 'parent'; handledBy?: string }
+  | { kind: 'complaint'; body: string; source: 'management' | 'parent'; handledBy?: string; sourceConversationId?: string }
   | { kind: 'complaint_resolution'; body: string; refersTo: string }
   | { kind: 'complaint_followup'; body: string; refersTo: string }
   | { kind: 'monthly_comment'; body: string; month: string }
@@ -306,3 +306,39 @@ export const payrollKeys = {
   all: (teacherId: string) => ['teacher-files', 'finance', teacherId] as const,
   finance: (teacherId: string, month: string) => ['teacher-files', 'finance', teacherId, month] as const,
 }
+
+/**
+ * PD-26 amendment (owner 2026-10-27): the Teacher Supervision page's own reads,
+ * the same for the Teachers department, the super admin and an Operations
+ * supervisor (the teachers of their families). Nothing of the Teacher File.
+ */
+export interface SupervisionDirectory {
+  basis: 'super_admin' | 'teachers' | 'operations'
+  access: { canWriteSupervision: boolean; canViewFinance: boolean }
+  /** `operationsOnly`: reached only through Operations -- a parent's complaint about them names its family chat. */
+  teachers: Array<{ id: string; name: string; isActive: boolean; away: Away | null; operationsOnly?: boolean }>
+  /** Who may handle a complaint. */
+  supervisors: Person[]
+  /** The caller's own families' student groups (Operations), to name where a parent's complaint came from. */
+  familyChats?: Array<{ conversationId: string; learnerName: string }>
+}
+
+export interface HeldLesson {
+  id: string
+  kind: 'regular' | 'trial'
+  startsAt: string
+  /** The learner's name, or the trial's booking label. */
+  label: string
+}
+
+export const supervisionDirectoryApi = {
+  directory: () => api.get<SupervisionDirectory>('/teacher-supervision/directory'),
+  heldLessons: (teacherId: string, kind: 'regular' | 'trial') =>
+    api.get<{ lessons: HeldLesson[] }>(`/teacher-supervision/teachers/${encodeURIComponent(teacherId)}/held-lessons`, { kind }),
+}
+
+export const supervisionDirectoryKeys = {
+  directory: ['teacher-supervision', 'directory'] as const,
+  held: (teacherId: string, kind: string) => ['teacher-supervision', 'held-lessons', teacherId, kind] as const,
+}
+

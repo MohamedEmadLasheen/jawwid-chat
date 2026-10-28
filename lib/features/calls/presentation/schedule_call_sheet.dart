@@ -6,6 +6,7 @@ import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/utils/app_clock.dart';
+import '../../../shared/utils/clock_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../application/upcoming_calls_controller.dart';
 import '../data/scheduled_call_repository.dart';
@@ -198,8 +199,7 @@ class _ScheduleCallSheetState extends ConsumerState<ScheduleCallSheet> {
                   key: const ValueKey('schedule-time'),
                   icon: Icons.schedule_outlined,
                   label: l10n.callScheduleTime,
-                  value: material.formatTimeOfDay(
-                    _time,
+                  value: formatClockTime(context, _time,
                     alwaysUse24HourFormat: use24h,
                   ),
                   onTap: _saving ? null : _pickTime,

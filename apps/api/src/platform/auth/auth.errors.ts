@@ -45,7 +45,7 @@ export enum AuthErrorCode {
    * it. Counted for ANY e-mail typed, known or not, so it enumerates nothing.
    */
   SIGNUP_LOCKED = 'AUTH.SIGNUP_LOCKED',
-  /** 400. PD-16 parent sign-up: the chosen password is too short. */
+  /** 400. PD-16 parent sign-up / PD-21 reset: the chosen password is outside 4..128 characters. */
   PASSWORD_TOO_WEAK = 'AUTH.PASSWORD_TOO_WEAK',
   /**
    * 401. PD-21 password reset: the code is wrong, expired, used up or was never
@@ -78,7 +78,7 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   [AuthErrorCode.RATE_LIMITED]: 'too many attempts; try again later',
   [AuthErrorCode.SIGNUP_CODE_INVALID]: 'the code is not valid; ask for a new one',
   [AuthErrorCode.SIGNUP_LOCKED]: 'too many wrong codes; please contact your supervisor',
-  [AuthErrorCode.PASSWORD_TOO_WEAK]: 'choose a password of at least 8 characters',
+  [AuthErrorCode.PASSWORD_TOO_WEAK]: 'choose a password of at least 4 characters',
   [AuthErrorCode.RESET_CODE_INVALID]: 'the code is not valid; ask your administrator for a new one',
 };
 

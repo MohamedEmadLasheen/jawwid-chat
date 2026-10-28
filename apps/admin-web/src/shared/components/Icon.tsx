@@ -128,6 +128,7 @@ const PATHS = {
   chevronUp: <path d="m6 15 6-6 6 6" />,
   chevronForward: <path d="m9 6 6 6-6 6" />,
   arrowBack: <path d="M19 12H5M11 6l-6 6 6 6" />,
+  expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   search: (
     <>
       <circle cx="11" cy="11" r="7" />

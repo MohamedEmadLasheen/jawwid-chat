@@ -27,6 +27,10 @@ export const A = {
   locked: { en: 'Locked', ar: 'مقفل مؤقتًا' },
   children: { en: 'Children: {names}', ar: 'الأطفال: {names}' },
   empty: { en: 'No accounts to show.', ar: 'لا توجد حسابات لعرضها.' },
+  noneAdministered: {
+    en: 'Your department does not administer accounts. Ask the Operations or Teachers department.',
+    ar: 'قسمك لا يدير الحسابات. تواصل مع قسم العمليات أو قسم المعلمين.',
+  },
   truncated: { en: 'Showing the first 100. Search to narrow the list.', ar: 'تُعرض أول 100 نتيجة. ابحث لتضييق القائمة.' },
 
   resetPassword: { en: 'Reset password', ar: 'إعادة تعيين كلمة المرور' },

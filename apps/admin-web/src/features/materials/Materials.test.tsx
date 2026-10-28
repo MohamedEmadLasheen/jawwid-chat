@@ -162,6 +162,33 @@ describe('Materials > Library', () => {
     expect(within(dialog).queryByRole('link')).not.toBeInTheDocument()
   })
 
+  it('a framed lesson takes the whole window, with a way back and real full screen', async () => {
+    const requestFullscreen = vi.fn(() => Promise.resolve())
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true })
+    HTMLElement.prototype.requestFullscreen = requestFullscreen
+    try {
+      const dialog = await preview('frame-site', 'https://lessons.example.test/lessons/quran/surah-78')
+      // Above the navigation, not a side sheet beside it.
+      expect(dialog).toHaveClass('dialog--full')
+      expect(dialog).not.toHaveClass('dialog--sheet')
+      const frame = await waitFor(() => {
+        const f = dialog.querySelector('.mt-stage iframe')
+        if (!f) throw new Error('no frame yet')
+        return f
+      })
+      expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin allow-forms')
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Full screen' }))
+      expect(requestFullscreen).toHaveBeenCalledTimes(1)
+      expect(requestFullscreen.mock.contexts[0]).toBe(dialog.querySelector('.mt-stage'))
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Back to the library' }))
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Letters song' })).not.toBeInTheDocument())
+      expect(screen.getByRole('list', { name: 'Library' })).toBeInTheDocument()
+    } finally {
+      delete (document as { fullscreenEnabled?: boolean }).fullscreenEnabled
+      delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen
+    }
+  })
+
   async function preview(presentation: string, url: string) {
     on('POST', /\/materials\/items\/m-2\/open$/, () => json({ itemId: 'm-2', kind: 'activity_link', mode: 'link', presentation, url }, 201))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/materials' })
@@ -187,6 +214,9 @@ describe('Materials > Library', () => {
   it('any other link is never framed: it is offered to open in the browser', async () => {
     const dialog = await preview('browser', 'https://elsewhere.example.test/game')
     expect(await within(dialog).findByRole('link', { name: 'Open in a new tab' })).toHaveAttribute('href', 'https://elsewhere.example.test/game')
+    // Nothing to frame, so the side sheet is enough; no full-screen control.
+    await waitFor(() => expect(dialog).toHaveClass('dialog--sheet'))
+    expect(within(dialog).queryByRole('button', { name: 'Full screen' })).not.toBeInTheDocument()
     expect(within(dialog).getByRole('link', { name: 'Open in a new tab' })).toHaveAttribute('rel', 'noopener noreferrer')
     expect(dialog.querySelector('iframe')).toBeNull()
   })
