@@ -12,19 +12,20 @@ export const QURAN_SECTIONS: readonly SectionId[] = ['listen', 'verses', 'order'
 /** A lesson with reviewed content (src/content/) adds the rest, in this order. */
 export const CONTENT_SECTIONS: readonly SectionId[] = ['listen', 'verses', 'meanings', 'complete', 'order', 'quiz', 'benefits'];
 
-export class StarLedger {
-  private readonly earned = new Set<SectionId>();
+/** One lesson's stars; S is its section ids (the Quran lessons' by default, the letters lesson's its own). */
+export class StarLedger<S extends string = SectionId> {
+  private readonly earned = new Set<S>();
 
-  constructor(private readonly sections: readonly SectionId[] = QURAN_SECTIONS) {}
+  constructor(private readonly sections: readonly S[] = QURAN_SECTIONS as readonly string[] as readonly S[]) {}
 
   /** True only the first time a section of this lesson is completed. */
-  award(section: SectionId): boolean {
+  award(section: S): boolean {
     if (!this.sections.includes(section) || this.earned.has(section)) return false;
     this.earned.add(section);
     return true;
   }
 
-  has(section: SectionId): boolean {
+  has(section: S): boolean {
     return this.earned.has(section);
   }
 

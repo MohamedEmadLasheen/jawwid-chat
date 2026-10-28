@@ -57,3 +57,14 @@ button { font: inherit; }
 .choice--right { border-color: var(--accent); background: #e7f2ef; }
 .quiz__question { font-size: 1.2rem; }
 .benefits { line-height: 1.9; }
+/* The Arabic letters lesson (P0-5). */
+.letters-units { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-block-end: 1rem; }
+.letters-forms { font-size: 2rem; letter-spacing: 0.3em; }
+.letters-examples { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.letters-example { display: inline-block; font-size: 1.6rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.25rem 0.75rem; }
+.letters-example mark { background: none; color: var(--accent); font-weight: 700; }
+.letters-word { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-block: 0.75rem; }
+.piece { font-size: 2rem; min-inline-size: 3rem; border: 1px solid var(--border); background: var(--surface); border-radius: 0.75rem; padding: 0.25rem 0.5rem; cursor: pointer; }
+.piece:disabled { cursor: default; }
+.piece--right { border-color: var(--accent); background: #e7f2ef; }
+.choice--picked { border-color: var(--accent); background: #e7f2ef; }

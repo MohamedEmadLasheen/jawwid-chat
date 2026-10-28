@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { route } from './route';
 import { SurahLesson } from './lesson/SurahLesson';
+import { ArabicLesson } from './arabic/ArabicLesson';
 import { NO_AUDIO } from './audio/audio-controller';
 import { manifestSource, useAudioManifest, verifiedAudio } from './audio/audio-manifest';
 
@@ -14,6 +15,7 @@ function Lesson({ surah }: { surah: number }) {
 export function App({ pathname = window.location.pathname }: { pathname?: string }) {
   const r = route(pathname);
   if (r.kind === 'surah') return <Lesson surah={r.surah} />;
+  if (r.kind === 'arabic') return <ArabicLesson lesson={r.lesson} />;
   if (r.kind === 'index') {
     return (
       <main className="lesson">
