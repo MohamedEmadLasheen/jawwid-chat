@@ -21,7 +21,9 @@ export class OrgStructureController {
   }
 
   /** The families, parents, children and teachers this staff member may put in a family group. */
-  @Requires('org.view')
+  // PD-40: the families the caller may open a family group for -- the
+  // family-group helper, so the same key as POST /conversations/family-group.
+  @Requires('chat.manage')
   @Get('group-candidates')
   groupCandidates(@ActorId() actorId: string) {
     return this.org.groupCandidates(actorId);
