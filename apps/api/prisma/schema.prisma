@@ -2232,6 +2232,8 @@ model StudentEnrolment {
   origin              String    @default("trial")
   /// new_family | added_children (PD-42).
   kind                String    @default("new_family")
+  /// PD-42: sha-256 of what an intake asked for; a replay with another body is refused.
+  intakePayloadHash   String?   @map("intake_payload_hash")
   /// Who entered the family or children (assigned the trial form), and when. Immutable.
   assignedBy          String    @map("assigned_by") @db.Uuid
   assignedAt          DateTime  @default(now()) @map("assigned_at") @db.Timestamptz

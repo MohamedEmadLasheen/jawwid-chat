@@ -6,6 +6,22 @@ import { loadSurah, type Fetcher, type QuranAnchor } from '../quran/dataset';
 // The real verified snapshot, built by CI before the tests (scripts/lessons/build-quran-snapshot.py).
 import realManifest from '../../public/data/quran/manifest.json';
 import realSurah from '../../public/data/quran/surah-085.json';
+import real107 from '../../public/data/quran/surah-107.json';
+import real108 from '../../public/data/quran/surah-108.json';
+import real109 from '../../public/data/quran/surah-109.json';
+import real110 from '../../public/data/quran/surah-110.json';
+import real111 from '../../public/data/quran/surah-111.json';
+import real112 from '../../public/data/quran/surah-112.json';
+import real113 from '../../public/data/quran/surah-113.json';
+import real114 from '../../public/data/quran/surah-114.json';
+import real99 from '../../public/data/quran/surah-099.json';
+import real100 from '../../public/data/quran/surah-100.json';
+import real101 from '../../public/data/quran/surah-101.json';
+import real102 from '../../public/data/quran/surah-102.json';
+import real103 from '../../public/data/quran/surah-103.json';
+import real104 from '../../public/data/quran/surah-104.json';
+import real105 from '../../public/data/quran/surah-105.json';
+import real106 from '../../public/data/quran/surah-106.json';
 
 // Stand-in verses (not Quran text), 3, 2 and 4 words.
 const TEXTS = ['أحد اثنان ثلاثة', 'أربعة خمسة', 'ستة سبعة ثمانية تسعة'];
@@ -114,4 +130,53 @@ describe('Al-Buruj, on the real verified text', () => {
     // Each game word really is that word of the verified verse.
     for (const c of r.complete) expect(wordsOf(s.ayahs[c.ayah - 1]!.text)[c.word - 1]).toBe(c.text);
   });
+});
+
+// Every lesson rebuilt on the engine (Juz' Amma, batch 1), each on its real verified surah.
+// Juz' Amma batch 2 (99-106).
+const BATCH2: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
+  99: { file: real99, ayat: 8, held: 7, complete: 8 },
+  100: { file: real100, ayat: 11, held: 4, complete: 5 },
+  101: { file: real101, ayat: 11, held: 7, complete: 3 },
+  102: { file: real102, ayat: 8, held: 4, complete: 4 },
+  103: { file: real103, ayat: 3, held: 7, complete: 4 },
+  104: { file: real104, ayat: 9, held: 10, complete: 9 },
+  105: { file: real105, ayat: 5, held: 4, complete: 5 },
+  106: { file: real106, ayat: 4, held: 10, complete: 4 },
+};
+
+const BATCH1: Record<number, { file: unknown; ayat: number; held: number; complete: number }> = {
+  107: { file: real107, ayat: 7, held: 4, complete: 9 },
+  108: { file: real108, ayat: 3, held: 5, complete: 6 },
+  109: { file: real109, ayat: 6, held: 10, complete: 4 },
+  110: { file: real110, ayat: 3, held: 2, complete: 3 },
+  111: { file: real111, ayat: 5, held: 9, complete: 4 },
+  112: { file: real112, ayat: 4, held: 5, complete: 5 },
+  113: { file: real113, ayat: 5, held: 4, complete: 5 },
+  114: { file: real114, ayat: 6, held: 4, complete: 8 },
+};
+
+describe("Juz' Amma batches 1 and 2, each on its real verified text", () => {
+  const anchor: QuranAnchor = {
+    datasetId: realManifest.datasetId,
+    fileSha256: realManifest.fileSha256,
+    rangeSha256: realManifest.surahs.map((s) => s.rangeSha256),
+  };
+  for (const [n, expected] of Object.entries({ ...BATCH1, ...BATCH2 })) {
+    it(`surah ${n}: every position resolves, flagged lines are held, and it waits for approval`, async () => {
+      const surah = Number(n);
+      const fetcher: Fetcher = async (path) =>
+        structuredClone(path.endsWith('manifest.json') ? realManifest : path.endsWith(`surah-${n.padStart(3, '0')}.json`) ? expected.file : null);
+      const s = await loadSurah(surah, fetcher, anchor);
+      expect(s.ayahs).toHaveLength(expected.ayat);
+      const r = resolveContent(contentFor(surah), s)!;
+      expect(r).not.toBeNull();
+      expect(r.approved).toBe(false);
+      expect(r.held).toBe(expected.held);
+      expect(r.complete).toHaveLength(expected.complete);
+      // Each game word, meaning word and quiz word really is that word of the verified verse.
+      for (const c of r.complete) expect(wordsOf(s.ayahs[c.ayah - 1]!.text)[c.word - 1]).toBe(c.text);
+      expect(new Set(r.complete.map((c) => c.text)).size).toBeGreaterThanOrEqual(3);
+    });
+  }
 });

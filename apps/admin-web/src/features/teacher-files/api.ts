@@ -30,6 +30,8 @@ export interface TeacherSummary {
   openComplaints: number
   /** PD-26. Optional: older servers omit it. */
   away?: Away | null
+  /** PD-43: how many set-up steps are not done (the file says which). Optional: older servers omit it. */
+  setupMissing?: number
 }
 
 export interface Person {
@@ -92,6 +94,10 @@ export interface DayOff extends EntryBrief {
 export interface TeacherFile {
   /** PD-43. Optional: older servers omit it. */
   signIn?: TeacherSignIn
+  /** PD-43 PR-1b: which of Offboard / Reactivate to offer. Optional: older servers omit it. */
+  onboarding?: { canOffboard: boolean; canReactivate: boolean }
+  /** PD-43 PR-1b: the set-up checklist, read live. Optional: older servers omit it. */
+  setup?: TeacherSetup | null
   access: TeacherFileAccessFlags
   teacher: { id: string; name: string; isActive: boolean; leftAt: string | null; away?: Away | null }
   personal: {
@@ -167,6 +173,8 @@ export interface NewTeacher {
   phone?: string
   joinedOn?: string
   supervisorId: string | null
+  /** PD-43 §3.4: add even though an active teacher has the same name (after COMM.TEACHER_SIMILAR_NAME). */
+  confirmSimilarName?: boolean
 }
 
 /** `code` is present only for whoever may see it: the creator of a new teacher, or the Teachers manager and the super admin on a reissue. */
@@ -190,6 +198,44 @@ export interface ReissuedCode {
   firstLogin: FirstLogin
 }
 
+/** PD-43: each set-up step done or not (never an amount); `missing` counts the ones that are not. */
+export interface TeacherSetup {
+  signedIn: boolean
+  supervisor: boolean
+  contact: boolean
+  payTerms: boolean
+  payoutAccount: boolean
+  leaveAllowance: boolean
+  shift: boolean
+  availability: boolean
+  profile: boolean
+  /** The PD-18 pay type and the PD-38 shift category agree (hourly with hourly). */
+  payMatchesShift: boolean
+  missing: number
+}
+
+/** PD-43: GET /teachers/:id/offboard-preview. With no student left, a lesson ahead is a trial or the like. */
+export interface OffboardPreview {
+  teacherId: string
+  isActive: boolean
+  students: Person[]
+  openLessons: Array<{ id: string; kind: string; startsAt: string; endsAt: string }>
+  canOffboard: boolean
+}
+
+export interface Offboarded {
+  teacherId: string
+  cancelledLessons: string[]
+  notCancelled: Array<{ lessonId: string; reason: string }>
+}
+
+/** `signIn` and `firstLogin` are null for a teacher who never had a login: Give sign-in is for them. */
+export interface Reactivated {
+  teacherId: string
+  signIn: string | null
+  firstLogin: FirstLogin | null
+}
+
 export interface AddedTeacher {
   teacher: { id: string; name: string; supervisorId: string | null }
   signIn: string
@@ -206,6 +252,11 @@ export const teacherFileApi = {
     api.post<ReissuedCode>(`/teachers/${encodeURIComponent(teacherId)}/sign-in`, { email }),
   reissueFirstLogin: (teacherId: string) =>
     api.post<ReissuedCode>(`/teachers/${encodeURIComponent(teacherId)}/first-login-code`, {}),
+  offboardPreview: (teacherId: string) => api.get<OffboardPreview>(`/teachers/${encodeURIComponent(teacherId)}/offboard-preview`),
+  offboard: (teacherId: string, body: { reason: string; cancelOpenLessons?: boolean }) =>
+    api.post<Offboarded>(`/teachers/${encodeURIComponent(teacherId)}/offboard`, body),
+  reactivate: (teacherId: string, reason: string) =>
+    api.post<Reactivated>(`/teachers/${encodeURIComponent(teacherId)}/reactivate`, { reason }),
   detail: (teacherId: string) => api.get<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}`),
   updatePersonal: (teacherId: string, body: PersonalPatch) =>
     api.post<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}/personal`, body),

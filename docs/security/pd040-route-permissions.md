@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-461 routes.
+467 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -159,6 +159,12 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/families/:id/instalments` | billing.record | `billing/billing.controller.ts#BillingController.createInstalments` |
 | POST | `/api/v1/families/:id/payment-requests` | billing.record | `billing/payments.controller.ts#PaymentsController.createRequest` |
 | POST | `/api/v1/families/:id/payments` | billing.record | `billing/payments.controller.ts#PaymentsController.recordManual` |
+| POST | `/api/v1/family-intake` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.enter` |
+| POST | `/api/v1/family-intake/families/:familyId/children` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.addChildren` |
+| POST | `/api/v1/family-intake/families/:familyId/sign-in-email` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.setSignInEmail` |
+| POST | `/api/v1/family-intake/learners/:learnerId/carried-over` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.carryOver` |
+| POST | `/api/v1/family-intake/learners/:learnerId/carried-over/void` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.voidCarryOver` |
+| GET | `/api/v1/family-intake/options` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.options` |
 | GET | `/api/v1/health` | public | `infra/health/health.controller.ts#HealthController.detail` |
 | GET | `/api/v1/health/live` | public | `infra/health/health.controller.ts#HealthController.live` |
 | GET | `/api/v1/health/ready` | public | `infra/health/health.controller.ts#HealthController.ready` |

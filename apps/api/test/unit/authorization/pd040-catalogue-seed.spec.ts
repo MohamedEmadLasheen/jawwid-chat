@@ -75,6 +75,16 @@ const LATER: ReadonlyArray<{ migration: string; tag: string; permissions: readon
     ],
   },
   {
+    // PD-42 PR-2: a Sales account edits the contact record of the families it owns.
+    migration: '20261028210000_chat_pd042_intake_scope.sql',
+    tag: 'pd042b',
+    permissions: [],
+    bundles: [
+      ['manager', 'sales', 'parents.edit'],
+      ['supervisor', 'sales', 'parents.edit'],
+    ],
+  },
+  {
     // PD-41: the Certificates page -- Operations requests students', Teacher
     // Supervision teachers'; managers oversee; the super admin keeps the types.
     migration: '20261029110000_chat_pd041_certificates.sql',

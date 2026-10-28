@@ -332,6 +332,8 @@ export class AvatarService {
   ): Promise<void> {
     const hadPhoto = row.avatarObjectKey !== null;
     await this.prisma.$transaction(async (tx) => {
+      // PD-42 S3: a staff member's write names them, for the Sales-scope guard on chat.contact.
+      if (actor.kind === 'staff') await tx.$executeRaw`SELECT set_config('chat.acting_staff_id', ${actor.actorId}, true)`;
       const data = { avatarObjectKey: objectKey };
       const updated =
         kind === 'contact'

@@ -257,6 +257,7 @@ After the commit, the code is e-mailed to the sign-in address when the e-mail ch
 | `COMM.TEACHER_ALREADY_ADDED` | the e-mail signs in a teacher the caller reaches; `error.detail.teacher` names them |
 | `COMM.TEACHER_EMAIL_UNAVAILABLE` | the e-mail, or the phone, belongs to anyone else: another organization's account, a parent, staff, or a teacher out of the caller's reach. It is one identical answer, so it tells nobody what exists. There is no e-mail-check endpoint. |
 | `COMM.TEACHER_CONTACT_TAKEN` | the phone or e-mail is on the file of a teacher the caller reaches, named in `error.detail.teacher` |
+| `COMM.TEACHER_SIMILAR_NAME` | a **warning**, not a refusal (plan §3.4): an **active** teacher the caller reaches has the same name, folded the PD-42 way (`chat.search_fold`: case, diacritics, tatweel, alef/yeh/heh variants; spaces collapsed). `error.detail.teachers` names them; send the same request again with `confirmSimilarName: true` to add anyway. A match out of the caller's reach gives no warning, so nothing is disclosed. The form shows "Possibly already added: «name»" and **Add anyway**. |
 
 ### Give sign-in: a teacher who exists but has no login
 
@@ -305,3 +306,13 @@ There is no `is_active`/`left_at` check on `chat.teacher`: PD-38 reads an inacti
 ### The set-up checklist
 
 `GET /teacher-files/:id` carries `setup`: `signedIn`, `supervisor`, `contact`, `payTerms`, `payoutAccount`, `leaveAllowance` (this academy year), `shift` (a current PD-38 pattern), `availability` (hourly teachers count as having it), `profile`, `payMatchesShift` (an hourly pattern with hourly pay, and the reverse), and `missing` (how many are not done). `GET /teacher-files` carries `setupMissing` per teacher. Read live from `chat.teacher_setup_state`, never stored, and never an amount.
+
+### On the Admin Web
+
+`GET /teacher-files/:id` carries `onboarding: { canOffboard, canReactivate }` (from `decideTeacherOnboarding`; the routes re-check), and the Teacher File offers:
+
+- **Offboard** (Teachers manager, super admin; active teachers). The dialog loads the preview: the students still assigned are listed and block it; otherwise each lesson ahead is listed and the teacher is offboarded only once the actor ticks "Cancel this lesson / these lessons" and gives a reason.
+- **Reactivate** (super admin; teachers who left). A reason, then the new first sign-in code is shown once, in the same dialog as when adding a teacher.
+- **Set-up checklist**, a card at the top of an active teacher's file while any step is open (or the pay type and the shift category disagree). The list shows a **Setup incomplete** badge and a **Setup incomplete only** filter.
+
+A dialog that shows a first sign-in code (Give sign-in, Reactivate) stays mounted when the reloaded file no longer offers its button, so the code survives the reload.
