@@ -45,7 +45,11 @@ export function usePlaying(audio: AudioController | null): string | null {
   return playing;
 }
 
-/** A whole ayah on a big card. The text is the verified verse, verbatim; nothing animates it. */
+/**
+ * A whole ayah on a big card. The text is the verified verse, verbatim; nothing animates it.
+ * Its accessible name is what it shows ("the ayah N", then the verse itself), never a label
+ * that would hide the verse from a screen reader.
+ */
 export function VerseCard({
   ayah,
   shape,
@@ -53,7 +57,6 @@ export function VerseCard({
   mark = null,
   disabled = false,
   onPress,
-  label,
 }: {
   ayah: Ayah;
   shape: number;
@@ -61,13 +64,14 @@ export function VerseCard({
   mark?: 'right' | 'shown' | null;
   disabled?: boolean;
   onPress?: () => void;
-  label?: string;
 }) {
   const cls = ['play-card', glow ? 'play-card--glow' : '', mark ? `play-card--${mark}` : ''].filter(Boolean).join(' ');
   return (
-    <button type="button" className={cls} data-ayah={ayah.ayah} disabled={disabled} onClick={onPress} aria-label={label ?? `الآية ${arabic(ayah.ayah)}`}>
-      <span className="play-card__shape" aria-hidden="true">
-        {SHAPES[shape % SHAPES.length]} {arabic(ayah.ayah)}
+    <button type="button" className={cls} data-ayah={ayah.ayah} disabled={disabled} onClick={onPress}>
+      <span className="play-card__shape">
+        <span aria-hidden="true">{SHAPES[shape % SHAPES.length]} </span>
+        <span className="sr-only">الآية </span>
+        {arabic(ayah.ayah)}
       </span>
       <span className="play-card__verse">{ayah.text}</span>
       {mark ? (
@@ -79,12 +83,15 @@ export function VerseCard({
   );
 }
 
-/** Beads: progress as a count of filled beads, never a colour alone. */
+/** Beads: progress as a count of filled beads, never a colour alone; a screen reader hears the count as text. */
 export function Beads({ done, total, label }: { done: number; total: number; label: string }) {
   return (
-    <p className="beads" aria-label={`${label}: ${arabic(done)} من ${arabic(total)}`}>
-      {'●'.repeat(done)}
-      {'○'.repeat(Math.max(0, total - done))}
+    <p className="beads">
+      <span aria-hidden="true">
+        {'●'.repeat(done)}
+        {'○'.repeat(Math.max(0, total - done))}
+      </span>
+      <span className="sr-only">{`${label}: ${arabic(done)} من ${arabic(total)}`}</span>
     </p>
   );
 }

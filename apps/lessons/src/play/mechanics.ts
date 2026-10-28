@@ -8,7 +8,8 @@ import { TIERS, type Tier } from './adapt';
  * PD-49 game mechanics (plan §C). A mechanic reaches a child only when a
  * teacher and the scholar signed exactly its record (scope 'play': the review
  * system's approval hash of {datasetId, lessonKey: 'play', mechanic}), as for
- * content items -- the respect rules of §C.4 are part of what they sign.
+ * content items -- the respect rules of §C.4 and the game's code (codeSha256)
+ * are part of what they sign.
  * None is signed yet, so no child sees a game.
  */
 export type Skill = 'listening' | 'recitation' | 'recognition' | 'structure';
@@ -22,10 +23,15 @@ export interface Mechanic {
   tiers: Tier[];
   needsAudio: boolean;
   respect: string[];
+  /** The game's file in play/games/, and SHA-256 of its bytes, a NUL, then common.tsx's bytes: what is signed includes the code (check-quran-content.py verifies it). */
+  code: string;
+  codeSha256: string;
 }
 
 const SKILLS: readonly Skill[] = ['listening', 'recitation', 'recognition', 'structure'];
 const ID = /^[a-z][a-z0-9_]{1,62}$/;
+const CODE = /^[A-Z][A-Za-z0-9]*\.tsx$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 
 /** The registry, validated: one malformed mechanic refuses them all (fail closed). */
 export function parseMechanics(raw: unknown): Mechanic[] | null {
@@ -34,7 +40,8 @@ export function parseMechanics(raw: unknown): Mechanic[] | null {
   const seen = new Set<string>();
   for (const m of list as Partial<Mechanic>[]) {
     const keys = m && typeof m === 'object' ? Object.keys(m).sort().join() : '';
-    if (keys !== 'bands,id,nameAr,needsAudio,respect,skill,tiers,version') return null;
+    if (keys !== 'bands,code,codeSha256,id,nameAr,needsAudio,respect,skill,tiers,version') return null;
+    if (typeof m.code !== 'string' || !CODE.test(m.code) || typeof m.codeSha256 !== 'string' || !SHA256.test(m.codeSha256)) return null;
     if (typeof m.id !== 'string' || !ID.test(m.id) || seen.has(m.id)) return null;
     if (!Number.isInteger(m.version) || (m.version as number) < 1 || typeof m.nameAr !== 'string' || !m.nameAr.trim()) return null;
     if (!SKILLS.includes(m.skill as Skill) || typeof m.needsAudio !== 'boolean') return null;

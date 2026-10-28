@@ -16,7 +16,10 @@ export interface Round {
   options: Ayah[];
 }
 
-/** The rounds, decided ONCE from the seed: targets walk the segment, distractors come from the rest of the surah. */
+/**
+ * The rounds, decided ONCE from the seed: targets walk the segment, distractors come from the rest of the
+ * surah (far ones first; the plan's §B.3 records why not another surah), and the target's place is drawn.
+ */
 export function planRounds(ayahs: Ayah[], pool: Ayah[], count: number, options: number, seed: number): Round[] {
   const next = rng(seed);
   const rounds: Round[] = [];
@@ -30,7 +33,10 @@ export function planRounds(ayahs: Ayah[], pool: Ayah[], count: number, options: 
       .map((x) => x.a);
     const picked: Ayah[] = [];
     for (const a of others) if (picked.length < options - 1 && !picked.some((p) => p.text === a.text)) picked.push(a);
-    rounds.push({ target, options: shuffled([target, ...picked], seed + r) });
+    // The target goes to an rng-chosen place among the shuffled distractors: never a fixed position.
+    const opts = shuffled(picked, seed + r);
+    opts.splice(Math.floor(next() * (opts.length + 1)), 0, target);
+    rounds.push({ target, options: opts });
   }
   return rounds;
 }

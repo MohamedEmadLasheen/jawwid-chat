@@ -59,6 +59,7 @@ SOURCES = os.path.join(CONTENT, 'sources.json')
 VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
 MECHANICS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'play', 'mechanics.json')
+GAMES_DIR = os.path.join(ROOT, 'apps', 'lessons', 'src', 'play', 'games')
 PLAY_APPROVALS = os.path.join(APPROVALS, 'play.json')
 RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
 PIN = os.path.join(ROOT, 'apps', 'lessons', 'quran-pin.json')
@@ -565,13 +566,24 @@ def check_approvals(appr, content, works):
     return errors
 
 
-MECHANIC_KEYS = {'id', 'version', 'nameAr', 'skill', 'bands', 'tiers', 'needsAudio', 'respect'}
+MECHANIC_KEYS = {'id', 'version', 'nameAr', 'skill', 'bands', 'tiers', 'needsAudio', 'respect', 'code', 'codeSha256'}
 SKILLS = ('listening', 'recitation', 'recognition', 'structure')
 TIERS = ('L1', 'L2', 'L3', 'L4', 'L5')
 
 
-def check_mechanics(reg):
-    """The game mechanics registry (apps/lessons/src/play/mechanics.json; mechanics.ts applies the same)."""
+def code_sha256(code, games_dir=GAMES_DIR):
+    """SHA-256 of a game's file, a NUL byte, then common.tsx: the code a mechanic's signature covers."""
+    with open(os.path.join(games_dir, code), 'rb') as f:
+        game = f.read()
+    with open(os.path.join(games_dir, 'common.tsx'), 'rb') as f:
+        common = f.read()
+    return hashlib.sha256(game + b'\0' + common).hexdigest()
+
+
+def check_mechanics(reg, games_dir=GAMES_DIR):
+    """The game mechanics registry (apps/lessons/src/play/mechanics.json; mechanics.ts applies the same).
+    Each record names its game's file and carries the code's hash, so signing a mechanic signs its code:
+    change the game (or common.tsx) and the hash, the record and so the approval no longer match."""
     errors = []
     items = reg.get('mechanics') if isinstance(reg, dict) else None
     if not isinstance(items, list):
@@ -592,6 +604,11 @@ def check_mechanics(reg):
             errors.append(f'mechanics: {mid}: tiers')
         if not isinstance(m['respect'], list) or not m['respect'] or not all(isinstance(r, str) and r.strip() for r in m['respect']):
             errors.append(f'mechanics: {mid}: the respect rules (plan C.4) the scholar signs')
+        code = m['code']
+        if not isinstance(code, str) or not re.fullmatch(r'[A-Z][A-Za-z0-9]*\.tsx', code) or not os.path.isfile(os.path.join(games_dir, code)):
+            errors.append(f'mechanics: {mid}: code must name its game file in play/games/')
+        elif m['codeSha256'] != code_sha256(code, games_dir):
+            errors.append(f'mechanics: {mid}: codeSha256 is not the code of {code} + common.tsx (the game changed: re-hash, and it is re-signed)')
         out[mid] = m
     return errors, out
 
@@ -734,6 +751,14 @@ def selftest():
             failed.append(f'play approvals {name}: expected {expected or "no errors"}, got {errors}')
     if check_mechanics({'mechanics': [dict(m0, extra=1)]})[0] == []:
         failed.append('mechanics: an extra field was accepted')
+    for name, bad, expected in (
+        ('duplicate id', [m0, dict(m0)], 'unique'),
+        ('changed code', [dict(m0, codeSha256='0' * 64)], 'codeSha256'),
+        ('no such file', [dict(m0, code='Nope.tsx')], 'code must name'),
+        ('common.tsx', [dict(m0, code='common.tsx')], 'code must name'),
+    ):
+        if not any(expected in e for e in check_mechanics({'mechanics': bad})[0]):
+            failed.append(f'mechanics: {name} was accepted')
 
     # The shared hash vectors (quran-content.test.ts checks the same file).
     failed += check_vectors(json.load(open(VECTORS, encoding='utf-8')))

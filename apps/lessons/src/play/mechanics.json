@@ -1,9 +1,11 @@
 {
-  "about": "PD-49 game mechanics (plan section C). Each is signed once by a teacher and the scholar (scope 'play' in the review system) before any child plays it; until then it never appears. A mechanic's record is what is signed: change it and it waits for review again. The respect rules are the plan's section C.4, stated for this mechanic.",
+  "about": "PD-49 game mechanics (plan section C). Each is signed once by a teacher and the scholar (scope 'play' in the review system) before any child plays it; until then it never appears. A mechanic's record is what is signed, and it carries the SHA-256 of its game's code (play/games/<code>, a NUL, then common.tsx): change the record or the code and it waits for review again. The respect rules are the plan's section C.4, stated for this mechanic.",
   "mechanics": [
     {
       "id": "listen_glow",
       "version": 1,
+      "code": "ListenGlow.tsx",
+      "codeSha256": "82a1f2864fae4d159696aab220ea9447d97b51ce7cd8df5c0c12567daadcfbcf",
       "nameAr": "اسمع والمس",
       "skill": "listening",
       "bands": ["3-5"],
@@ -19,6 +21,8 @@
     {
       "id": "echo",
       "version": 1,
+      "code": "Echo.tsx",
+      "codeSha256": "1c4ccc405dc9b573cef2bfcc150334cbb22a1ca529b3204cd3835b92b9a65a76",
       "nameAr": "ردّد معي",
       "skill": "recitation",
       "bands": ["3-5"],
@@ -33,6 +37,8 @@
     {
       "id": "which_heard",
       "version": 1,
+      "code": "WhichHeard.tsx",
+      "codeSha256": "f22360277769b4bd298d8aeb10c6e5c90efcdf6c90cad33bd06bc5ebb9b9e891",
       "nameAr": "أيّ آية سمعت؟",
       "skill": "recognition",
       "bands": ["3-5"],
@@ -48,13 +54,15 @@
     {
       "id": "count_ayat",
       "version": 1,
+      "code": "CountAyat.tsx",
+      "codeSha256": "0266c549d9a74295c05e212a217427576d83a5beed4425b41f6ae1793107b3b1",
       "nameAr": "عُدّ الآيات",
       "skill": "structure",
       "bands": ["3-5"],
       "tiers": ["L1"],
       "needsAudio": false,
       "respect": [
-        "The surah's ayat are shown whole and in order; the next one to count is lit by its frame only.",
+        "The segment's ayat are shown whole and in order; the next one to count is lit by its frame only.",
         "A grown-up reads each ayah to the child (or the recitation plays, where it is allowed), then the child touches it to count.",
         "Nothing is moved, hidden or scored; no music."
       ]
