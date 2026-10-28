@@ -177,6 +177,14 @@ describe('PD-48: a clip is a record, written by the ingest only', () => {
     }
   });
 
+  it('the attempt is counted by the database under the lock, whatever the caller says', async () => {
+    const first = await insertClip('ba-905', WORD, 7);
+    const second = await insertClip('ba-905', WORD, 9);
+    const rows = await g.prisma.$queryRaw<Array<{ attempt: number }>>`
+      SELECT attempt::int FROM chat.lesson_audio_clip WHERE id IN (${first.id}::uuid, ${second.id}::uuid) ORDER BY created_at, attempt`;
+    expect(rows.map((r) => r.attempt)).toEqual([1, 2]);
+  });
+
   it('only arabic-NNN lessons: a quran- or surah- lesson key is refused', async () => {
     for (const lesson of ['quran-001', 'surah-085', 'islamic-001']) {
       expect(await sqlError(insertClip('ba-902', WORD, 1, { lesson }))).toMatch(/lesson_key|check constraint/);

@@ -48,28 +48,54 @@ SKIP_DIRS = {"node_modules", "dist", "public", ".vite"}
 sys.dont_write_bytecode = True  # loading a sibling script must leave no __pycache__ in the tree
 
 
+# The rasm skeleton both sides are folded to (review of #254): Tanzil's Uthmani text and a
+# lesson's standard spelling differ mostly in alef forms -- the dagger alef, maddah and wasla
+# (\u0671\u0644\u0631\u064e\u0651\u062d\u0652\u0645\u064e\u0640\u0670\u0646\u0650 against \u0627\u0644\u0631\u064e\u0651\u062d\u0652\u0645\u064e\u0646\u0650), in waw-for-alef (\u0671\u0644\u0635\u064e\u0651\u0644\u064e\u0648\u0670\u0629\u064e against \u0627\u0644\u0635\u064e\u0651\u0644\u064e\u0627\u0629\u064e), and in
+# small marks. Written as code points, so no Arabic is typed into this rule.
+_MARKS = {c for c in range(0x64B, 0x660)} | {0x670, 0x640} | set(range(0x6D6, 0x6EE))
+# Alef in every form, and hamza in every form: the editions seat hamza differently
+# (Uthmani wa-<hamza><alef>tu against standard wa-<alef madda>tu, yastahzi'una on the line or on a ya).
+_ALEFS = {0x627, 0x623, 0x625, 0x622, 0x671, 0x621, 0x624, 0x626}
+_UNIFY = {0x649: 0x64A, 0x629: 0x647}
+_WAW_DAGGER = chr(0x648) + chr(0x670)  # Uthmani waw standing for an alef
+
+
+def rasm(text):
+    """A text's letter skeleton: no marks, no alef or hamza of any form, \u0649 as \u064a, \u0629 as \u0647."""
+    t = unicodedata.normalize("NFC", text).replace(_WAW_DAGGER, "")
+    out = []
+    for c in t:
+        o = ord(c)
+        if o in _MARKS or o in _ALEFS:
+            continue
+        o = _UNIFY.get(o, o)
+        out.append(chr(o) if 0x621 <= o <= 0x64A else " ")
+    return " ".join("".join(out).split())
+
+
 def quran_index():
-    """Every 4-word run of the verified Quran, and every whole shorter ayah of 2+ words, folded
-    exactly as PD-29's typed-Quran rule folds them (check-lesson-content.py), over all 114 surahs."""
+    """Every 4-word run of the verified Quran, and every whole shorter ayah of 2+ words, as rasm
+    skeletons (rasm), over all 114 surahs of the pinned dataset (PD-29's verified snapshot).
+    Returns (grams, the run lengths present, the fold), so the lengths are computed once."""
     spec = importlib.util.spec_from_file_location("lesson_content", str(ROOT / "scripts/lessons/check-lesson-content.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     grams = set()
     for verses in mod.verified_surahs().values():
         for v in verses:
-            ws = mod.fold(v).split()
+            ws = rasm(v).split()
             if len(ws) < 2:
                 continue
             k = min(mod.RUN, len(ws))
             grams.update(tuple(ws[i:i + k]) for i in range(len(ws) - k + 1))
-    return grams, mod.fold
+    return grams, frozenset(len(g) for g in grams), rasm
 
 
 def typed_quran(text, index):
     """Whether a string carries Quran: Quran recitation is never TTS, so such a string is never voiced."""
-    grams, fold = index
+    grams, sizes, fold = index
     ws = fold(text).split()
-    return any(tuple(ws[i:i + k]) in grams for k in {len(g) for g in grams} for i in range(len(ws) - k + 1))
+    return any(tuple(ws[i:i + k]) in grams for k in sizes for i in range(len(ws) - k + 1))
 
 
 def sha(text):
@@ -171,7 +197,7 @@ def selftest():
     except ValueError:
         pass
     # A synthetic Quran index: the run "a b c d" is "Quran" here.
-    IDX = ({("a", "b", "c", "d"), ("e", "f")}, lambda t: t)
+    IDX = ({("a", "b", "c", "d"), ("e", "f")}, frozenset({4, 2}), lambda t: t)
     assert typed_quran("x a b c d y", IDX) and typed_quran("e f", IDX) and not typed_quran("a b c", IDX) and not typed_quran("e", IDX)
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
@@ -195,6 +221,25 @@ def selftest():
         quranic["units"][1]["note"]["text"] = "x a b c d"
         (root / "apps/lessons/src/arabic/lesson-001.json").write_text(json.dumps(quranic), encoding="utf-8")
         assert any("carry Quran text" in f for f in check(root, index=IDX)), "typed Quran was not refused"
+    # The real Quran, typed in STANDARD spelling (review of #254): the Basmala, Al-Ikhlas, and a
+    # two-word ayah (Al-Ikhlas 2) inside a note -- each must be refused. Code points, not typed Arabic.
+    real = quran_index()
+    u = lambda *cps: "".join(chr(c) for c in cps)
+    basmala = " ".join([u(0x628, 0x650, 0x633, 0x652, 0x645, 0x650), u(0x627, 0x644, 0x644, 0x651, 0x64E, 0x647, 0x650),
+                        u(0x627, 0x644, 0x631, 0x651, 0x64E, 0x62D, 0x652, 0x645, 0x64E, 0x646, 0x650),
+                        u(0x627, 0x644, 0x631, 0x651, 0x64E, 0x62D, 0x650, 0x64A, 0x645, 0x650)])
+    allah = u(0x627, 0x644, 0x644, 0x651, 0x64E, 0x647, 0x64F)
+    ikhlas_1 = " ".join([u(0x642, 0x64F, 0x644, 0x652), u(0x647, 0x64F, 0x648, 0x64E), allah, u(0x623, 0x64E, 0x62D, 0x64E, 0x62F, 0x64C)])
+    samad = u(0x627, 0x644, 0x635, 0x651, 0x64E, 0x645, 0x64E, 0x62F, 0x64F)
+    note = " ".join([u(0x642, 0x64E, 0x627, 0x644, 0x64E), u(0x62A, 0x64E, 0x639, 0x64E, 0x627, 0x644, 0x64E, 0x649) + ":", allah, samad])
+    salah = " ".join([u(0x648, 0x64E, 0x623, 0x64E, 0x642, 0x650, 0x64A, 0x645, 0x64F, 0x648, 0x627), u(0x627, 0x644, 0x635, 0x651, 0x64E, 0x644, 0x64E, 0x627, 0x629, 0x64E),
+                      u(0x648, 0x64E, 0x622, 0x62A, 0x64F, 0x648, 0x627), u(0x627, 0x644, 0x632, 0x651, 0x64E, 0x643, 0x64E, 0x627, 0x629, 0x64E)])
+    for name, t in (("the standard Basmala", basmala), ("Al-Ikhlas 1 in standard spelling", ikhlas_1),
+                    ("a two-word ayah inside a note", note), ("aqimu al-salah wa-atu al-zakah in standard spelling", salah)):
+        assert typed_quran(t, real), "%s was not recognised as Quran" % name
+    # And ordinary lesson words are not: a word alone, and two words that are no ayah.
+    for t in (u(0x628, 0x64E, 0x627, 0x628, 0x652), u(0x643, 0x650, 0x62A, 0x64E, 0x627, 0x628, 0x652) + " " + u(0x628, 0x64E, 0x627, 0x628, 0x652)):
+        assert not typed_quran(t, real), "an ordinary lesson string was taken for Quran"
     print("lesson-audio-texts selftest: ok")
 
 

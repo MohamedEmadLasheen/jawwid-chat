@@ -69,6 +69,8 @@ export function parseRecipe(raw: unknown): RenderRecipe | string {
   const factor = rateFactor(r.rate as string);
   if (factor === null || factor < RATE_RANGE.min || factor > RATE_RANGE.max) return `rate: between ${RATE_RANGE.min} and ${RATE_RANGE.max} of normal`;
   if (typeof r.input !== 'string' || !r.input.length || r.input.length > 4000) return 'input';
+  // The rate the vendor is SENT is the recipe's rate: no <prosody rate> in the input says otherwise.
+  if ([...r.input.matchAll(/\brate\s*=\s*["']([^"']*)["']/g)].some((m) => m[1] !== r.rate)) return 'input: a prosody rate other than the recipe\'s rate';
   if (typeof r.lexicon !== 'string' || !(r.lexicon === '' || /^[0-9a-f]{64}$/.test(r.lexicon))) return 'lexicon';
   if (typeof r.take !== 'number' || !Number.isInteger(r.take) || r.take < 1 || r.take > 100) return 'take';
   return r as unknown as RenderRecipe;

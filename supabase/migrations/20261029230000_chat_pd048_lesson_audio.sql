@@ -224,6 +224,10 @@ begin
     raise exception 'string % of % failed % clips: a reviewer decides (no audio, or one more round) before another is ingested',
       new.string_id, new.lesson_key, v_r.failed using errcode = 'check_violation';
   end if;
+  -- The attempt is counted here, under the string's lock, never taken from the caller.
+  new.attempt := 1 + (select count(*) from chat.lesson_audio_clip c
+                       where c.organization_id = new.organization_id and c.lesson_key = new.lesson_key
+                         and c.string_id = new.string_id and c.text_sha256 = v_text_sha256);
   new.created_at := now();
   return new;
 end;

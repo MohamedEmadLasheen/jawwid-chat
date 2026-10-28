@@ -83,8 +83,9 @@ def inner_ssml(text, entry):
     if entry is None:
         return escape(text)
     ssml = entry.get("ssml")
-    if not isinstance(ssml, str) or not ssml.strip() or "<speak" in ssml or "<voice" in ssml or "<audio" in ssml:
-        raise Refused("a lexicon entry is inner SSML only (no speak, voice or audio element)")
+    if not isinstance(ssml, str) or not ssml.strip() or any(tag in ssml for tag in ("<speak", "<voice", "<audio", "<prosody")):
+        # No prosody either: the lesson's one rate (owner Q6) is the recipe's, never a fix's.
+        raise Refused("a lexicon entry is inner SSML only (no speak, voice, audio or prosody element)")
     if not isinstance(entry.get("why"), str) or not entry["why"].strip():
         raise Refused("a lexicon entry says why (the rejection it answers)")
     return ssml
@@ -343,7 +344,8 @@ def selftest():
     p = plan("arabic-001", "azure-hamed", export, texts=texts, lexicon=fix, pin=None, quran=NOQ)
     w = p["work"][0]
     assert w["recipe"]["take"] == 1 and "<phoneme" in w["recipe"]["input"] and w["recipe"]["lexicon"] == sha(canonical(fix["arabic-001/ba-001"]))
-    for bad in ({"ssml": "<speak>x</speak>", "why": "w"}, {"ssml": "x", "why": ""}, {"ssml": '<audio src="u"/>', "why": "w"}):
+    for bad in ({"ssml": "<speak>x</speak>", "why": "w"}, {"ssml": "x", "why": ""}, {"ssml": '<audio src="u"/>', "why": "w"},
+                {"ssml": '<prosody rate="150%">x</prosody>', "why": "w"}):
         try:
             plan("arabic-001", "azure-hamed", export, texts=texts, lexicon={"arabic-001/ba-001": bad}, pin=None, quran=NOQ)
             raise AssertionError("a bad lexicon entry was accepted")

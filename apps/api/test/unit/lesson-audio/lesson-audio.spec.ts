@@ -483,6 +483,9 @@ describe('review of #254: "no audio" is final, one voice per lesson, the rate, t
     const base: RenderRecipe = { v: 1, norm: 'exact-v1', vendor: 'azure', voice: 'ar-SA-HamedNeural', locale: 'ar-SA', format: 'mp3', rate: '-10%', input: '<speak/>', lexicon: '', take: 1 };
     expect(parseRecipe(base)).toEqual(base);
     for (const rate of ['+10%', '110%', '-20%', '80%', 'fast', '0.9']) expect(typeof parseRecipe({ ...base, rate })).toBe('string');
+    // The rate SENT must be the recipe's: a <prosody rate> in the input that differs is refused.
+    expect(parseRecipe({ ...base, input: '<speak><prosody rate="-10%">x</prosody></speak>' })).toMatchObject({ rate: '-10%' });
+    expect(parseRecipe({ ...base, input: '<speak><prosody rate="-30%">x</prosody></speak>' })).toMatch(/prosody rate/);
   });
 
   it('only arabic-NNN lessons: a quran- or surah- manifest is refused before anything is read', () => {
