@@ -219,9 +219,14 @@ describe('authentication against Postgres', () => {
       code: AuthErrorCode.ACCOUNT_DISABLED,
     });
 
-    await prisma.$executeRawUnsafe(
-      `update chat.account set status = 'active', is_active = true where id = '${ids.staffAccount}'::uuid`,
-    );
+    // PD-40: a staff account is reactivated only by a named administrator
+    // (chat.guard_staff_account_status), never by a bare write. Nothing after
+    // this test signs the staff member in, so it stays suspended.
+    await expect(
+      prisma.$executeRawUnsafe(
+        `update chat.account set status = 'active', is_active = true where id = '${ids.staffAccount}'::uuid`,
+      ),
+    ).rejects.toThrow(/a staff account is reactivated by a named administrator/);
   });
 
   it('an offboarded teacher loses a live session at once', async () => {

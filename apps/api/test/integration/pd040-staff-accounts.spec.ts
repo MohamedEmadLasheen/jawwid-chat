@@ -212,7 +212,7 @@ describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
     expect(signedIn.status).toBe(200);
     const me = await call(signedIn.token, 'GET', '/me');
     expect(me.json).toMatchObject({ staffRole: 'specialist', permissions: ['certificates.design', 'certificates.view'] });
-    for (const path of ['/admin/staff-accounts', '/admin/accounts', '/conversations', '/parent-profiles']) {
+    for (const path of ['/admin/staff-accounts', '/admin/accounts', '/conversations', '/admin/access-roles']) {
       const r = await call(signedIn.token, 'GET', path);
       expect({ path, status: r.status, code: r.code }).toEqual({ path, status: 403, code: CommErrorCode.PERMISSION_DENIED });
     }
@@ -331,9 +331,9 @@ describe('PD-40 S1/S2: a department manager', () => {
     await expect(
       g.prisma.$queryRaw`SELECT chat.grant_access_role(${ownSpecialist.staffId}::uuid, ${supervisory}::uuid, 'direct', ${m.operationsManager.id}::uuid)`,
     ).rejects.toThrow(/only the super admin grants a role above a specialist/);
-    // And never to a supervisor of their department, whatever the role (C1).
+    // And never to a supervisor of their department, even a role made for supervisors (C1).
     await expect(
-      g.prisma.$queryRaw`SELECT chat.grant_access_role(${m.supervisors[0]!.id}::uuid, ${readOnlyRole}::uuid, 'direct', ${m.operationsManager.id}::uuid)`,
+      g.prisma.$queryRaw`SELECT chat.grant_access_role(${m.supervisors[0]!.id}::uuid, ${supervisory}::uuid, 'direct', ${m.operationsManager.id}::uuid)`,
     ).rejects.toThrow(/a manager changes the access of the specialists of their own department only/);
   });
 
