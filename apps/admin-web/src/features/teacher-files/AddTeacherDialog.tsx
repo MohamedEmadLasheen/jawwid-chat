@@ -6,7 +6,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { AddedTeacher, FirstLogin, TeacherOnboardingOffer } from './api'
 import { T, describeError, useCopy } from './copy'
 import { Field } from './TeacherFileDialogs'
-import { useAddTeacher } from './hooks'
+import { useAddTeacher, useGiveSignIn } from './hooks'
 
 /**
  * PD-43: add a teacher. The supervisor choice is the server's (GET
@@ -116,7 +116,7 @@ export function AddTeacherDialog({
 }
 
 /** The server's answer; when it names a teacher the caller reaches, a link to their file. */
-function AddRefusal({ error, basePath }: { error: unknown; basePath: string }) {
+export function AddRefusal({ error, basePath }: { error: unknown; basePath: string }) {
   const { locale } = useI18n()
   if (!error) return null
   const teacher =
@@ -168,6 +168,51 @@ export function FirstLoginCodeDialog({ signIn, firstLogin, onClose }: { signIn: 
       ) : (
         <p>{tx(firstLogin.emailed ? T.codeEmailed : T.codeNotEmailedAskManager)}</p>
       )}
+    </Dialog>
+  )
+}
+
+/**
+ * PD-43 Give sign-in: a login for a teacher who exists but has none, in place.
+ * Like adding a teacher, the first code is shown once to whoever gives it; the
+ * dialog cannot close while the server is answering.
+ */
+export function GiveSignInDialog({ teacherId, basePath, onClose }: { teacherId: string; basePath: string; onClose: () => void }) {
+  const tx = useCopy()
+  const give = useGiveSignIn(teacherId)
+  const [email, setEmail] = useState('')
+  const [touched, setTouched] = useState(false)
+  const { isPending, reset } = give
+  const close = useCallback(() => {
+    if (isPending) return
+    reset()
+    onClose()
+  }, [isPending, reset, onClose])
+
+  if (give.data) return <FirstLoginCodeDialog signIn={give.data.signIn} firstLogin={give.data.firstLogin} onClose={close} />
+
+  const submit = () => {
+    setTouched(true)
+    if (!email.trim()) return
+    give.mutate(email.trim())
+  }
+  return (
+    <Dialog
+      title={tx(T.giveSignIn)}
+      onClose={close}
+      footer={
+        <>
+          <DialogCancelButton onClick={close} disabled={isPending} />
+          <button type="button" className="btn btn--primary" disabled={isPending} onClick={submit}>
+            {isPending ? tx(T.adding) : tx(T.giveSignIn)}
+          </button>
+        </>
+      }
+    >
+      <p className="field__hint">{tx(T.giveSignInHint)}</p>
+      <Field label={tx(T.signInEmail)} type="email" value={email} onChange={setEmail} error={touched && !email.trim() ? tx(T.required) : null} />
+      <p className="field__hint">{tx(T.signInHint)}</p>
+      <AddRefusal error={give.error} basePath={basePath} />
     </Dialog>
   )
 }

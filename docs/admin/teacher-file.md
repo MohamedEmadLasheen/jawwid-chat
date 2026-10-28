@@ -257,3 +257,19 @@ After the commit, the code is e-mailed to the sign-in address when the e-mail ch
 | `COMM.TEACHER_ALREADY_ADDED` | the e-mail signs in a teacher the caller reaches; `error.detail.teacher` names them |
 | `COMM.TEACHER_EMAIL_UNAVAILABLE` | the e-mail, or the phone, belongs to anyone else: another organization's account, a parent, staff, or a teacher out of the caller's reach. It is one identical answer, so it tells nobody what exists. There is no e-mail-check endpoint. |
 | `COMM.TEACHER_CONTACT_TAKEN` | the phone or e-mail is on the file of a teacher the caller reaches, named in `error.detail.teacher` |
+
+### Give sign-in: a teacher who exists but has no login
+
+Teachers inserted before PD-43, and the Core-migration intake, have a teacher row and no login. On their Teacher File, **Give sign-in** gives them one in place: the same teacher, students and history. The Teacher Files list marks them "No sign-in"; that list is the intake's work list.
+
+**`POST /teachers/:id/sign-in`** (`teachers.create`) takes `{ email, reason? }`.
+- **Who:** the super admin, the Teachers Manager, or a teacher supervisor who reaches the teacher. That means every teacher while strict scope is off, and their own teachers while it is on. The rule is `chat.may_give_teacher_sign_in`.
+- **In one transaction:** `chat.give_teacher_sign_in` (migration `20261028160000`) and the first sign-in code. The code is shown once to whoever gives the login, as when a teacher is added, and is e-mailed after the commit.
+- **The Teacher File's e-mail** is filled only when it has none.
+
+| Refusal | Answer |
+|---|---|
+| The teacher already has a login | 409 `COMM.TEACHER_HAS_SIGN_IN`; send a new first sign-in code, or reset the password |
+| The teacher is inactive | 409 `COMM.TEACHER_FILE_CONFLICT` |
+| The teacher is out of the caller's reach, or unknown | 404 |
+| A sign-in already in use | the same scoped answers as when adding a teacher |

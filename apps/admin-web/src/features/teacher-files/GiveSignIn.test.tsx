@@ -116,7 +116,7 @@ describe('Give sign-in', () => {
   })
 
   it('a teacher with a login, or no right to give one: no Give sign-in', async () => {
-    on('GET', /\/teacher-files\/t-1$/, () => json(withSignIn('active')))
+    on('GET', /\/teacher-files\/t-1$/, () => json(withSignIn('active', false)))
     const { unmount } = renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1' })
     await screen.findByRole('heading', { level: 1, name: /^Teacher One/ })
     expect(screen.queryByRole('button', { name: 'Give sign-in' })).not.toBeInTheDocument()

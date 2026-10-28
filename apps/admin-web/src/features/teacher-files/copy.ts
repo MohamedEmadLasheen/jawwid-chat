@@ -228,6 +228,11 @@ export const T = {
   signInSuspended: { en: 'Sign-in suspended', ar: 'الدخول موقوف' },
   noSignIn: { en: 'No sign-in', ar: 'بلا حساب دخول' },
   sendNewCode: { en: 'Send a new first sign-in code', ar: 'إرسال رمز دخول أول جديد' },
+  giveSignIn: { en: 'Give sign-in', ar: 'منح حساب دخول' },
+  giveSignInHint: {
+    en: 'This teacher has no sign-in yet. Their students and history stay as they are.',
+    ar: 'ليس لهذا المعلم حساب دخول بعد. يبقى طلابه وسجله كما هم.',
+  },
   sending: { en: 'Sending…', ar: 'جارٍ الإرسال…' },
   codeEmailed: { en: 'A new code was e-mailed to the teacher.', ar: 'أُرسل رمز جديد إلى بريد المعلم.' },
   codeNotEmailedAskManager: {
@@ -261,6 +266,10 @@ const BY_CODE: Record<string, Pair> = {
   'COMM.TEACHER_ALREADY_SIGNED_IN': {
     en: 'This teacher has already signed in. Reset their password instead.',
     ar: 'سجّل هذا المعلم الدخول من قبل. أعد تعيين كلمة مروره بدلًا من ذلك.',
+  },
+  'COMM.TEACHER_HAS_SIGN_IN': {
+    en: 'This teacher already has a sign-in. Send a new first sign-in code, or reset their password.',
+    ar: 'لهذا المعلم حساب دخول بالفعل. أرسل رمز دخول أول جديدًا أو أعد تعيين كلمة المرور.',
   },
   'COMM.TEACHER_SIGN_IN_SUSPENDED': {
     en: 'This teacher’s sign-in is suspended. Reactivate it first.',
