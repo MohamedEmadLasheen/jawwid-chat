@@ -65,7 +65,7 @@ const profile = async (staffId: string) =>
   (
     await g.prisma.$queryRaw<Array<{ tier: string | null; department_kind: string | null; placement: string | null; permissions: string[] }>>`
       SELECT tier, department_kind, placement, permissions FROM chat.staff_access_profile(${staffId}::uuid)`
-  )[0]!;
+  ).map((r) => ({ ...r, permissions: [...r.permissions].sort() }))[0]!;
 
 const define = (actor: string, key: string, permissions: string[], maxTier = 'specialist') =>
   g.prisma.$queryRaw<Array<{ id: string }>>`
@@ -146,15 +146,16 @@ afterAll(async () => {
 describe('PD-40: the catalogue and the bundles in the database', () => {
   it('chat.permission is the TypeScript catalogue, row for row', async () => {
     const rows = await g.prisma.$queryRaw<Array<{ key: string; risk: string; delegable: boolean }>>`
-      SELECT key, risk, delegable FROM chat.permission ORDER BY key`;
-    expect(rows).toEqual(
-      PERMISSIONS.map((p) => ({ key: p.key, risk: p.risk, delegable: p.delegable })).sort((a, b) => a.key.localeCompare(b.key)),
-    );
+      SELECT key, risk, delegable FROM chat.permission`;
+    // One ordering for both sides: the database's collation and localeCompare
+    // disagree on '_' against a letter (teacher_supervision.* vs teachers.*).
+    const byKey = (a: { key: string }, b: { key: string }) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+    expect(rows.sort(byKey)).toEqual(PERMISSIONS.map((p) => ({ key: p.key, risk: p.risk, delegable: p.delegable })).sort(byKey));
   });
 
   it('chat.legacy_permission_bundle is legacy-bundles.ts, row for row', async () => {
     const rows = await g.prisma.$queryRaw<Array<{ b: string }>>`
-      SELECT tier || ':' || department_kind || ':' || permission_key AS b FROM chat.legacy_permission_bundle ORDER BY 1`;
+      SELECT tier || ':' || department_kind || ':' || permission_key AS b FROM chat.legacy_permission_bundle`;
     const want: string[] = [];
     for (const name of legacyBundleNames()) {
       if (name === 'super_admin') continue;
@@ -162,7 +163,7 @@ describe('PD-40: the catalogue and the bundles in the database', () => {
       const placement: StaffPlacement = kind === 'none' ? { kind: null, position: null } : { kind: kind as StaffPlacement['kind'], position: tier === 'manager' ? 'manager' : 'member' };
       for (const key of legacyBundle(tier, placement)) want.push(`${name}:${key}`);
     }
-    expect(rows.map((r) => r.b)).toEqual(want.sort());
+    expect(rows.map((r) => r.b).sort()).toEqual(want.sort());
   });
 
   it('staff_access_profile answers the legacy bundle of each seeded account', async () => {

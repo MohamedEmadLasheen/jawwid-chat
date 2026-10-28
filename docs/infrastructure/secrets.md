@@ -70,6 +70,7 @@ Rotate on a schedule, on staff departure, and immediately on any suspicion.
 | `REDIS_URL` | Provider rotates the password → update → deploy. | Brief queue pause; jobs are durable and resume. |
 | `JWT_ACCESS_SECRET` | Deploy accepting **both** old and new for one refresh-token lifetime, then remove the old. | None if dual-accept is implemented; otherwise every session drops. AI #1 owns the verification path. |
 | `JWT_REFRESH_SECRET` | Same, over `JWT_REFRESH_TTL` (30 days) — or accept a forced re-login. | Full re-login if rotated abruptly. |
+| `RESET_CODE_HASH_SECRET` (PD-43) | Generate (`openssl rand -base64 48`) → update the `staging` / `production` environment secret → deploy. Required there: a deploy without it is refused, and the API issues and accepts no one-time code. | Every live one-time code (a 10-minute reset, a 72-hour first sign-in code) stops working; the person asks for, or is issued, a new one. |
 | `STORAGE_*` | Issue a new key pair → update → deploy → verify uploads and signed reads → revoke the old pair. | Signed URLs already issued keep working until they expire. |
 | `FCM_SERVICE_ACCOUNT_JSON` | New service-account key in Firebase → update → deploy → verify → delete the old key. | None. |
 | `APNS_PRIVATE_KEY` | New APNs auth key → update `APNS_KEY_ID` **and** the key together → deploy → verify on a real device → revoke the old. | iOS push fails if the ID and key are updated separately. |

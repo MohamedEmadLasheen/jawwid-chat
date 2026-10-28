@@ -19,10 +19,10 @@ arrive with PD-9 through their own routes, never through this one.
 | Schedule: working hours and the next 14 days' lessons | `GET /teachers/:id/availability`, `GET /lessons?teacherId=` (PD-11) | built (2026-10-21), read-only; edits stay on the Schedules tab |
 | Monthly performance: the month's KPIs beside the supervisor's comment | `GET /stats/teachers/:id?month=` (PD-11 T5) | built (2026-10-21) |
 | Teaching market, current students | `chat.teacher_file.teaching_market`, `chat.learner.teacher_id` | built (PD-18, 2026-10-21) |
-| Salary type, currency, monthly salary or hourly rate | `chat.teacher_pay_terms`, versioned by effective month | built (PD-18), super admin only |
-| Salary payment method and account details | `chat.teacher_payout_account`, details sealed with AES-256-GCM | built (PD-18), super admin only |
-| Bonus and deduction history | PD-11 bonus entries, PD-12 deduction decisions, plus `chat.teacher_pay_adjustment` for the amounts | built (PD-18); the amounts are for the super admin only |
-| Financial summary | computed on every read: salary + bonuses − deductions | built (PD-18), super admin only |
+| Salary type, currency, monthly salary or hourly rate | `chat.teacher_pay_terms`, versioned by effective month | built (PD-18); super admin and Teachers manager (PD-43) |
+| Salary payment method and account details | `chat.teacher_payout_account`, details sealed with AES-256-GCM | built (PD-18); super admin and Teachers manager (PD-43) |
+| Bonus and deduction history | PD-11 bonus entries, PD-12 deduction decisions, plus `chat.teacher_pay_adjustment` for the amounts | built (PD-18); the amounts are for the super admin and the Teachers manager (PD-43) |
+| Financial summary | computed on every read: salary + bonuses − deductions | built (PD-18); super admin and Teachers manager (PD-43) |
 | Specializations | open: Core or Chat | not decided |
 
 The page never shows a zero for something it does not know. A rate or amount
@@ -121,8 +121,12 @@ or for another teacher.
 
 ## Payroll (PD-18)
 
-- **Who.** Only the super admin, which is PD-10's finance tier. The Teachers
-  department sees the recorded bonuses and deductions, never an amount.
+- **Who.** The super admin and, since PD-43 (owner N2, "Full teacher
+  finance"), the Teachers manager. Teacher supervisors and Operations see the
+  recorded bonuses and deductions, never an amount. The database names the same
+  two for pay terms, the payout account and the default deduction amounts
+  (`chat.is_teacher_payroll_author`); every reveal of payout details stays
+  audited with its reason.
 - **Append-only.** `chat.teacher_pay_terms` and `chat.teacher_pay_adjustment`
   refuse `UPDATE` and `DELETE` by trigger. A change of terms is a new version.
   A corrected amount is a new row that `replaces` the old one, and zero cancels.

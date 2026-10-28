@@ -8,7 +8,7 @@ import type { Actor } from './types';
  *   personal info, assigned students           read                  read          never
  *   personal info: edit                        manager only          yes           never
  *   supervision timeline                       read + write          read + write  never
- *   payroll (PD-18): read + write              --                    yes           never
+ *   payroll (PD-18): read + write              manager only (PD-43)  yes           never
  *
  * "Teachers-dept staff" is the manager of the organization's Teachers
  * department and that department's members (PD-8 §1). Operations supervisors
@@ -26,7 +26,12 @@ export interface TeacherFileAccess {
   canView: boolean;
   canEditPersonal: boolean;
   canWriteSupervision: boolean;
-  /** PD-18: payroll -- pay terms, payout account, amounts, financial summary. Read and written in Chat; super admin only. */
+  /**
+   * PD-18: payroll -- pay terms, payout account, amounts, financial summary. Read
+   * and written in Chat by the super admin and, since PD-43 (owner N2, "Full
+   * teacher finance"), the Teachers manager. The database names the same two
+   * (chat.is_teacher_payroll_author).
+   */
   canViewFinance: boolean;
 }
 
@@ -50,7 +55,7 @@ export function decideTeacherFileAccess(
   // The role is re-checked, not inferred from the relation: the department
   // tables' triggers guarantee it today, and this keeps a stale row harmless.
   if (target.teachersDepartmentRole === 'manager' && actor.staffRole === StaffRole.MANAGER) {
-    return { canView: true, canEditPersonal: true, canWriteSupervision: true, canViewFinance: false };
+    return { canView: true, canEditPersonal: true, canWriteSupervision: true, canViewFinance: true };
   }
   if (
     target.teachersDepartmentRole === 'member' &&

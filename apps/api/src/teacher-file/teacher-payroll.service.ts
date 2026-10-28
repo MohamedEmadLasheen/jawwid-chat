@@ -10,9 +10,10 @@ import { SupervisionService } from '../lessons/supervision.service';
 import { openPayout, parsePayoutKeys, sealPayout, type PayoutKeyring } from './payout-seal';
 
 /**
- * PD-18 (closed 2026-10-21): teacher payroll lives in Chat. The super admin
- * only -- PD-10's finance tier -- so every route here passes
- * `canViewFinance` before the teacher is even looked up.
+ * PD-18 (closed 2026-10-21): teacher payroll lives in Chat. PD-10's finance
+ * tier -- the super admin and, since PD-43 (owner N2), the Teachers manager --
+ * so every route here passes `canViewFinance` before the teacher is even
+ * looked up.
  *
  *   pay terms        salary type, currency, amount; one version per effective
  *                    month, append-only

@@ -99,6 +99,7 @@ credentials, the LiveKit API secret, or Core credentials.
 | `JWT_REFRESH_SECRET` | **yes** | req | req | req |
 | `JWT_ACCESS_TTL` | no | opt | req | req |
 | `JWT_REFRESH_TTL` | no | opt | req | req |
+| `RESET_CODE_HASH_SECRET` (PD-43: the HMAC key for one-time codes; locally derived from `JWT_REFRESH_SECRET`) | **yes** | opt | req | req |
 
 ### Storage
 

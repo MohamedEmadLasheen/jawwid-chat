@@ -148,6 +148,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${JWT_REFRESH_TTL}
+      - key: RESET_CODE_HASH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${RESET_CODE_HASH_SECRET}
       - key: STORAGE_ENDPOINT
         scope: RUN_TIME
         type: GENERAL
@@ -501,6 +505,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${JWT_REFRESH_TTL}
+      - key: RESET_CODE_HASH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${RESET_CODE_HASH_SECRET}
       - key: STORAGE_ENDPOINT
         scope: RUN_TIME
         type: GENERAL

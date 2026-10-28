@@ -105,7 +105,7 @@ function FileSections({
       <Complaints file={file} onAdd={onAdd} />
       {/* PD-35: evaluations and improvement plans; the teacher sees them once shared. */}
       <EvaluationsSection teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} canEditCriteria={file.access.canEditPersonal} />
-      {/* PD-18: the super admin only; the server re-checks every route. */}
+      {/* PD-18: the super admin and the Teachers manager (PD-43); the server re-checks every route. */}
       <FinancialSummarySection payroll={payroll} />
       <HistorySection kind="bonus" file={file} payroll={payroll} />
       <HistorySection kind="deduction" file={file} payroll={payroll} />

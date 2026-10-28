@@ -85,7 +85,8 @@ The three limits recorded at closing were fixed by the owner's request,
 without a new PD number.
 
 - **A reward with its amount is one act.** `POST /teacher-files/:id/rewards
-  {reason, amount}` (the super admin, PD-18's finance tier) writes PD-11's bonus
+  {reason, amount}` (PD-18's finance tier: the super admin and, since PD-43, the
+  Teachers manager) writes PD-11's bonus
   entry, its card and its Core/HR note together with the payroll row that prices
   it, in ONE transaction (`SupervisionService.bonusInTx` +
   `TeacherPayrollService.recordReward`). The month is the one the reward is
@@ -179,9 +180,9 @@ timeline and supervision chat.
 
 **Money.** Nothing about money changes. An Operations supervisor records a
 reward without an amount, and decides a deduction without naming one. A
-decided deduction is priced from the super admin's default (PD-26), exactly as
-when the Teachers department decides it. Amounts are shown to the super admin
-only.
+decided deduction is priced from the default (PD-26; set by the super admin or,
+since PD-43, the Teachers manager), exactly as when the Teachers department
+decides it. Amounts are shown to the super admin and the Teachers manager only.
 
 **Database.** `chat.may_supervise_teacher(staff, teacher, org)` is
 `chat.is_lesson_manager` OR the teacher is in `chat.operations_teacher_ids`. It

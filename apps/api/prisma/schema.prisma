@@ -2180,6 +2180,8 @@ model PasswordResetCode {
   supersededAt   DateTime? @map("superseded_at") @db.Timestamptz
   /// PD-25: the forgot-e-mail flow confirmed the code; it stays live for a reset.
   verifiedAt     DateTime? @map("verified_at") @db.Timestamptz
+  /// PD-43: reset | first_login. A first_login code activates a provisioned account when completed.
+  purpose        String    @default("reset")
 
   @@map("password_reset_code")
   @@schema("chat")
