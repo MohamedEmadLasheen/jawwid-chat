@@ -382,6 +382,13 @@ describe('3b. changing the supervisor (PD-24)', () => {
 });
 
 describe('4. the parent signs up', () => {
+  /** The parent's acknowledgements (PD-48), found by the sign-in e-mail. */
+  const noticeAcks = () =>
+    g.prisma.$queryRaw<Array<{ notice_key: string; notice_version: number }>>`
+      SELECT n.notice_key, n.notice_version FROM chat.parent_notice_ack n
+        JOIN chat.contact c ON c.id = n.contact_id JOIN chat.account a ON a.id = c.account_id
+       WHERE a.subject = ${LOWER}`;
+
   it('asks for a code, the supervisor relays it, the parent sets a password and is signed in', async () => {
     await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
     expect(await signup.request(` ${EMAIL.toUpperCase()} `)).toEqual({ ok: true, delivery: 'relay' });
@@ -403,6 +410,24 @@ describe('4. the parent signs up', () => {
     expect(await signup.request(EMAIL)).toEqual({ ok: true, delivery: 'relay' });
     expect(await g.prisma.parentSignupCode.count({ where: { usedAt: null, supersededAt: null } })).toBe(0);
     expect(await g.prisma.auditLog.count({ where: { action: 'parent.signed_up' } })).toBe(1);
+    // PD-48: no box ticked (an older app), no acknowledgement: the next sign-in asks once.
+    expect(await noticeAcks()).toEqual([]);
+  });
+
+  it('PD-48: ticking the lesson-audio notice at sign-up records the same acknowledgement the next sign-in looks for', async () => {
+    await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    await signup.request(EMAIL);
+    const relayed = (await g.prisma.parentSignupCode.findFirstOrThrow({ where: { usedAt: null, supersededAt: null } })).relayCode as string;
+    expect(await signup.verify(EMAIL, relayed, PASSWORD, 1)).toEqual({ ok: true });
+    expect(await noticeAcks()).toEqual([{ notice_key: 'lesson_audio', notice_version: 1 }]);
+  });
+
+  it('PD-48: an older notice version ticked at sign-up records nothing', async () => {
+    await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    await signup.request(EMAIL);
+    const relayed = (await g.prisma.parentSignupCode.findFirstOrThrow({ where: { usedAt: null, supersededAt: null } })).relayCode as string;
+    expect(await signup.verify(EMAIL, relayed, PASSWORD, 0)).toEqual({ ok: true });
+    expect(await noticeAcks()).toEqual([]);
   });
 
   it('five wrong tries spend the code; a code from before PD-32 keeps its expiry; a new request supersedes the old', async () => {

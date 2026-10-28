@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-513 routes.
+515 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -369,6 +369,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/parent-feedback` | teacher_supervision.view | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.list` |
 | POST | `/api/v1/parent-feedback/:id/reply` | teacher_supervision.record | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.reply` |
 | POST | `/api/v1/parent-feedback/:id/take` | teacher_supervision.record | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.take` |
+| GET | `/api/v1/parent-notices` | not for staff | `lesson-audio/parent-notice.controller.ts#ParentNoticeController.list` |
+| POST | `/api/v1/parent-notices/:key/acknowledge` | not for staff | `lesson-audio/parent-notice.controller.ts#ParentNoticeController.acknowledge` |
 | GET | `/api/v1/parent-profiles` | parents.view | `parent-profile/parent-record.controller.ts#ParentRecordController.list` |
 | GET | `/api/v1/parent-profiles/:contactId` | parents.view | `parent-profile/parent-record.controller.ts#ParentRecordController.detail` |
 | POST | `/api/v1/parent-profiles/:contactId` | parents.edit | `parent-profile/parent-record.controller.ts#ParentRecordController.update` |

@@ -1,3 +1,4 @@
+import { PARENT_NOTICES, acknowledgeParentNotice } from '../../lesson-audio/parent-notices';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
@@ -105,7 +106,7 @@ export class ParentSignupService {
    * rest are refused as locked. Nothing is checked outside the lock and acted
    * on inside it.
    */
-  async verify(rawEmail: string, rawCode: string, password: string): Promise<{ ok: true }> {
+  async verify(rawEmail: string, rawCode: string, password: string, lessonAudioNotice: number | null = null): Promise<{ ok: true }> {
     const email = normalizeEmail(rawEmail);
     const code = rawCode.trim();
     if (!isPasswordLengthAcceptable(password)) {
@@ -147,6 +148,12 @@ export class ParentSignupService {
       });
       if (spent.count !== 1) return 'invalid' as const;
       await tx.accountCredential.create({ data: { accountId: account.id, passwordHash } });
+      // PD-48: the sign-up acknowledgement of the lesson-audio notice is the SAME
+      // record the next-sign-in prompt looks for, so a new parent is never asked again.
+      // Only the current version counts; an older app's tick records nothing.
+      if (lessonAudioNotice === PARENT_NOTICES.lesson_audio) {
+        await acknowledgeParentNotice(tx, account.contactId, 'lesson_audio', PARENT_NOTICES.lesson_audio);
+      }
       // The parent is not staff (audit_log.actor_id names staff): no actor, the account as entity.
       await this.audit.audit(tx, {
         actorId: null,
