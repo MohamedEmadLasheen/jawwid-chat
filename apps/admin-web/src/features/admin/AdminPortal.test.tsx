@@ -144,8 +144,8 @@ describe('Admin Portal registry and navigation', () => {
     // Escalations. Below desktop width the drawer lists every one of them, none
     // behind a toggle. (The desktop rail's menus are covered in
     // app/Navigation.test.tsx.)
-    // PD-41: plus Certificates under People.
-    expect(within(nav).getAllByRole('link')).toHaveLength(29)
+    // PD-41: plus Certificates under People; PD-48: Lesson audio under More.
+    expect(within(nav).getAllByRole('link')).toHaveLength(30)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })

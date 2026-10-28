@@ -489,6 +489,16 @@ export enum CommErrorCode {
   /** A Quran range that does not exist or is too long (at most 50 ayat). 422. */
   QURAN_INVALID = 'COMM.QURAN_INVALID',
 
+  // --- PD-48: lesson voice-over (computer voice, two teacher approvals per clip) ---
+  /** No such lesson, string or clip (or not one this lesson's text knows). 404. */
+  LESSON_AUDIO_NOT_FOUND = 'COMM.LESSON_AUDIO_NOT_FOUND',
+  /** A malformed review: an unknown action, a missing reason or category, a hash that is not one. 422. */
+  LESSON_AUDIO_INVALID = 'COMM.LESSON_AUDIO_INVALID',
+  /** What was heard is not this clip, or the clip is no longer pending/approved, or a decision comes too early. 409. */
+  LESSON_AUDIO_STATE = 'COMM.LESSON_AUDIO_STATE',
+  /** The reviewer does not hold lesson_audio.review, or has already approved this clip. 403. */
+  LESSON_AUDIO_DENIED = 'COMM.LESSON_AUDIO_DENIED',
+
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */
   SEAT_REASON_UNKNOWN = 'COMM.SEAT_REASON_UNKNOWN',

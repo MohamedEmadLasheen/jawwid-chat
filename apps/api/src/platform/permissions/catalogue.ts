@@ -158,6 +158,12 @@ const ENTRIES = {
   'tasks.team': { label: { en: 'See the team\'s tasks', ar: 'عرض مهام الفريق' }, risk: 'pii', introducedBy: 'PD-47' },
   'tasks.create': { label: { en: 'Give tasks', ar: 'إسناد المهام' }, risk: 'pii', introducedBy: 'PD-47' },
   'tasks.manage': { label: { en: 'Remove, return and reassign tasks', ar: 'حذف المهام وإعادتها وإعادة إسنادها' }, risk: 'pii', introducedBy: 'PD-47' },
+
+  // PD-48: the lessons' computer-voice clips. Listening is harmless; approving
+  // is a deliberate grant ("qualified" is a judgement about a person), so the
+  // Teachers manager holds both and delegates review through the template.
+  'lesson_audio.view': { label: { en: 'Listen to lesson voice-over clips', ar: 'الاستماع إلى تسجيلات نطق الدروس' }, risk: 'none', introducedBy: 'PD-48', delegable: true },
+  'lesson_audio.review': { label: { en: 'Approve or reject lesson voice-over clips', ar: 'اعتماد تسجيلات نطق الدروس أو رفضها' }, risk: 'none', introducedBy: 'PD-48', delegable: true },
 } as const satisfies Record<string, Entry>;
 
 export type PermissionKey = keyof typeof ENTRIES;
