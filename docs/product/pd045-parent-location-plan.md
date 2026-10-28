@@ -143,13 +143,13 @@ No other path writes a parent's details. Billing, avatar, login stamp and deacti
 
 | Option | Licence | Verdict |
 |---|---|---|
-| **Unicode CLDR** (`common/subdivisions/{ar,en}.xml`, `common/supplemental/subdivisions.xml`, `common/validity/subdivision.xml`, territory names in `common/main/{ar,en}.xml`) | **Unicode License v3**: permissive (MIT-like). It requires the copyright and permission notice to ship with copies of the data. | **Chosen.** CLDR's subdivision ids are ISO 3166-2 codes with the hyphen removed and lower-cased (`eggz` ↔ `EG-GZ`). CLDR keeps retired codes as aliases, so an upgrade never loses a stored value. |
+| **Unicode CLDR** (`common/subdivisions/{ar,en}.xml`, `common/supplemental/subdivisions.xml`, `common/validity/subdivision.xml`, territory names in `common/main/{ar,en}.xml`) | **Unicode License v3**: permissive (MIT-like). It requires the copyright and permission notice to ship with copies of the data. CLDR 49's notice also restricts the LDML specification document (UTS #35), which is not shipped. The data is "all other content", which is Unicode-3.0. | **Chosen.** CLDR's subdivision ids are ISO 3166-2 codes with the hyphen removed and lower-cased (`eggz` ↔ `EG-GZ`). CLDR keeps retired codes as aliases, so an upgrade never loses a stored value. |
 | Debian `iso-codes` | LGPL-2.1-or-later | Rejected. It has the ISO type names (governorate, emirate) we want, but it is copyleft, and we would ship its data inside the Admin Web bundle and the app. |
 | ISO's own Online Browsing Platform | Commercial; no redistribution | Rejected |
 | Wikidata | CC0 | Not needed. It could fill a gap later. |
 
 **What CLDR 49 actually contains** (measured on the downloaded files, 2026-10-28):
-- 200 countries have subdivisions, with **3,590 first-level rows** in all.
+- 200 countries have subdivisions, with **3,590 first-level rows** in all. Of those, **3,571** are regular codes. PR-1 ships those 3,571, for 250 countries.
 - Every first-level subdivision of the core markets has both an English and an Arabic name:
 
 | Country | First-level rows | en | ar | ar marked draft | ar with a type prefix ("محافظة …", "منطقة …", "إمارة …") |
@@ -162,7 +162,7 @@ No other path writes a parent's details. Billing, avatar, login stamp and deacti
 | Bahrain | 4 | 4 | 4 | 4 | 2 |
 | Oman | 11 | 11 | 11 | 11 | 11 |
 | Jordan | 12 | 12 | 12 | 12 | 1 |
-| United States | 57 | 51 | 51 | 51 | 0 |
+| United States | 57 (51 regular: the 50 states and DC; the six territories are countries in their own right) | 51 | 51 | 51 | 0 |
 
 **Two consequences:**
 1. **All CLDR Arabic subdivision names are draft**, and they are prefixed inconsistently: "محافظة القاهرة" but "الإسكندرية".
@@ -191,7 +191,7 @@ CLDR has no type names, so the label is a short hand-written table in the overla
 | Saudi Arabia | Province | المنطقة | ISO 3166-2:SA says "province". In Arabic they are مناطق (منطقة الرياض), so the Arabic label is المنطقة, not "المقاطعة". |
 | Kuwait, Bahrain, Oman, Jordan | Governorate | المحافظة | |
 | Qatar | Municipality | البلدية | |
-| United States | State | الولاية | includes DC and outlying areas, sorted last |
+| United States | State | الولاية | the 50 states and DC |
 | Canada | Province / territory | المقاطعة / الإقليم | |
 | *everything else* | Region | المنطقة | the fallback |
 
