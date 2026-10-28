@@ -45,7 +45,9 @@ The owner's earlier decisions (2026-10-28) stand:
   - For a manual task, a manager may tick "financial" when creating it (Q-F3).
   - It never changes after creation; the guard keeps it immutable.
 - **`chat.work_task.source_floor`** is `text null` with `check in ('high', 'medium')`. A source that is not driven by a date sets it, for example the package balance in §6. It is written by the source's trigger in the same transaction as the change it follows, and recorded as an event (§2.3).
-- **The effective level is never stored.** One SQL function computes it at read time: `chat.work_task_effective(priority, category, floor_rule, due_at, source_floor, state, as_of) → (rank, level, reason)`. A TypeScript mirror exists for the clients and the unit spec, and a spec proves the two agree on a boundary grid.
+- **The effective level is never stored.** One SQL function computes it at read time: `chat.work_task_effective(priority, floor_rule, due_at, source_floor, state, as_of, zone) → (rank, level, reason, overdue)`.
+  - `overdue` is true when the floor rule says the task is past its deadline, whether or not that raised the level. It is what the overdue filter and the Dashboard's overdue tiles count.
+  - **Deviation (PR-1b, accepted by the department head 2026-10-28):** there is **no TypeScript mirror**. The clients draw the level the server sends and never compute it, so the SQL function itself is tested on a boundary grid in `apps/api/test/integration/tasks-priority-pd047.spec.ts`.
 
 ---
 
