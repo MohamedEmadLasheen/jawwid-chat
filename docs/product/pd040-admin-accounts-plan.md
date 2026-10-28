@@ -635,6 +635,8 @@ Not covered: parameterised and write routes, and the Flutter staff app. Those co
   - `chat.guard_staff_session_revocation` checks a session ended by another account.
 - **P2: defence in depth.** `chat.staff_access_profile` ignores a role's barred keys, and the migration stops if any role holds one. `accounts.administer` is barred too. The `in_roles` generator is append-only: each migration bars its own keys.
 
+**Known limit (accepted by the department head, 2026-10-28):** the database does not check a staff account's suspension when the suspension names no actor. That is how the operator command-line tool suspends: `deactivate-principal --suspend` passes no requester. So a server-side writer that calls `chat.deactivate_principal` without a requester can still suspend any staff account. Suspension only takes access away, never grants it. A reactivation, a sign-out by another account, and any suspension that does name an actor are always checked.
+
 **Still to come:**
 - PR-4: the Designer template role, seeded with PD-41's keys.
 - PR-5: the Admin Web Staff accounts and Roles UI.
