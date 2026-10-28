@@ -191,7 +191,7 @@ describe('1. the preview', () => {
     expect(r.status).toBe(200);
     expect(r.json.students.length).toBeGreaterThan(0);
     expect(r.json.students[0]).toEqual({ id: expect.any(String), name: expect.any(String) });
-    expect(r.json).toMatchObject({ teacherId: withStudents, openLessons: expect.any(Number), canOffboard: false });
+    expect(r.json).toMatchObject({ teacherId: withStudents, openLessons: expect.any(Array), canOffboard: false });
     const ops = await http(m.supervisors[0]!.subject, 'GET', `/teachers/${withStudents}/offboard-preview`);
     expect([ops.status, ops.code]).toEqual([403, 'COMM.TEACHER_ONBOARDING_DENIED']);
   });
@@ -218,12 +218,20 @@ describe('2. offboarding', () => {
   it('open lessons: refused unless cancelled with it; then cancelled', async () => {
     const { id } = await signedInTeacher('b');
     const lesson = await bookTrial(id);
+    // The lessons that belong to no student (a trial) are listed, each one, before anything is cancelled.
+    const preview = await http(m.teachersManager.subject, 'GET', `/teachers/${id}/offboard-preview`);
+    expect(preview.json).toMatchObject({ students: [], canOffboard: true });
+    expect(preview.json.openLessons).toEqual([{ id: lesson, kind: 'trial', startsAt: expect.any(String), endsAt: expect.any(String) }]);
     const refused = await offboard(m.teachersManager.subject, id);
     expect([refused.status, refused.code]).toEqual([409, 'COMM.TEACHER_HAS_OPEN_LESSONS']);
     const r = await offboard(m.teachersManager.subject, id, { cancelOpenLessons: true });
     expect(r.status).toBe(201);
     expect(r.json).toMatchObject({ teacherId: id, cancelledLessons: [lesson], notCancelled: [] });
     expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: lesson } })).outcome).not.toBeNull();
+    // The confirmation and the lessons it covered are on the offboarding's own record.
+    const [audit] = await g.prisma.auditLog.findMany({ where: { entityId: id, action: 'teacher.offboarded' } });
+    expect(audit?.after).toMatchObject({ cancelOpenLessons: true, openLessons: [lesson] });
+    expect(await g.prisma.auditLog.count({ where: { entityId: lesson, action: 'trial.cancelled', actorId: m.teachersManager.id } })).toBe(1);
   });
 
   it('closes the teacher and the login, ends the sessions and the supervisor link, keeps the file and history', async () => {
