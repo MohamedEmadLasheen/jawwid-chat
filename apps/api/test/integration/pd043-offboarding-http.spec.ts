@@ -100,7 +100,9 @@ const strict = (on: boolean) =>
 
 let seq = 0;
 const email = (label: string) => `${label}-${++seq}@${DOMAIN}`;
-const add = (subject: string, body: Record<string, unknown>) => http(subject, 'POST', '/teachers', { id: randomUUID(), name: 'QA Added Teacher', ...body });
+// Every case adds 'QA Added Teacher' again: past the same-name warning.
+const add = (subject: string, body: Record<string, unknown>) =>
+  http(subject, 'POST', '/teachers', { id: randomUUID(), name: 'QA Added Teacher', confirmSimilarName: true, ...body });
 
 beforeAll(async () => {
   await g.prisma.$connect();
