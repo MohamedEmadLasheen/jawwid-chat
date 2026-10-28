@@ -1,0 +1,4 @@
+{
+  "about": "PD-49: the public keys that sign lesson-content approvals (the API's LESSON_APPROVALS_SIGNING_KEY; plan F.3). An approvals file is accepted only when signed by one of these keys -- CI verifies every signature (scripts/lessons/verify-approvals.mjs) and the lessons engine refuses an unknown key id. A key is ADDED here when the owner creates it, and RETIRED (retiredAt) but never removed when rotated, so approvals it signed stay verifiable. Each publicKey is the base64 SPKI DER of an Ed25519 key; its id is the first 16 hex of the SHA-256 of that DER. Empty until the owner generates the first key.",
+  "keys": []
+}

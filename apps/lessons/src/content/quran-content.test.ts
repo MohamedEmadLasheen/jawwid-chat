@@ -13,6 +13,7 @@ import {
   passesAsbabRule,
   requiredSteps,
   resolveQuranContent,
+  type ApprovalKey,
   type Approvals,
   type Step,
   type Work,
@@ -54,11 +55,27 @@ function applyCase(c: Content, k: (typeof shared.cases)[number]): Content {
   return c;
 }
 
+// A key the test registry knows. The engine checks the envelope's shape and key id; CI verifies the Ed25519 signature.
+const KEYS: ApprovalKey[] = [{ id: '0123456789abcdef', publicKey: 'test' }];
+const SIG = 'A'.repeat(86) + '==';
+
 async function approve(c: Content, steps: Step[] = ['check', 'teacher', 'scholar'], items = c.items): Promise<Approvals> {
   return {
-    surah: 112,
-    lessonKey: 'quran-112',
-    approvals: await Promise.all(items.map(async (i) => ({ id: i.id, approvalSha256: await approvalSha256(pin.datasetId, 'quran-112', i), steps }))),
+    payload: {
+      v: 1,
+      datasetId: pin.datasetId,
+      lessonKey: 'quran-112',
+      approvals: await Promise.all(
+        items.map(async (i) => ({
+          id: i.id,
+          approvalSha256: await approvalSha256(pin.datasetId, 'quran-112', i),
+          steps,
+          signers: steps.map((step, n) => ({ step, staffId: `staff-${n}`, at: '2026-10-29T10:00:00Z' })),
+        })),
+      ),
+    },
+    keyId: KEYS[0]!.id,
+    signature: SIG,
   };
 }
 
@@ -144,7 +161,7 @@ describe('resolveQuranContent', () => {
 
   it('shows approved items, with quotations as structured runs of verified words', async () => {
     const c = content();
-    const r = await resolveQuranContent(c, await surah(), await approve(c), WORKS);
+    const r = await resolveQuranContent(c, await surah(), await approve(c), WORKS, KEYS);
     expect(r?.held).toBe(0);
     const byId = new Map(r!.items.map((i) => [i.id, i]));
     expect(byId.get('tafsir-001')?.text).toEqual([
@@ -167,11 +184,12 @@ describe('resolveQuranContent', () => {
   it('holds an item whose approval is stale, lacks a step, or cites an unpinned (or malformed) edition', async () => {
     const c = content();
     const a = await approve(c);
-    const at = (id: string) => a.approvals.find((x) => x.id === id)!;
+    const at = (id: string) => a.payload.approvals.find((x) => x.id === id)!;
     at('tafsir-001').approvalSha256 = '0'.repeat(64); // changed after approval
     at('word-001').steps = ['check']; // the teacher has not signed
+    at('word-001').signers = at('word-001').signers.filter((g) => g.step === 'check');
     const works = WORKS.map((w) => (w.id === 'muzaini-muharrar' ? { ...w, edition: { printer: 'p' } } : w));
-    const shown = (await resolveQuranContent(c, await surah(), a, works))!.items.map((i) => i.id);
+    const shown = (await resolveQuranContent(c, await surah(), a, works, KEYS))!.items.map((i) => i.id);
     expect(shown).not.toContain('tafsir-001');
     expect(shown).not.toContain('word-001');
     expect(shown).not.toContain('asbab-001'); // its verdict work's edition is not a full pin
@@ -183,29 +201,54 @@ describe('resolveQuranContent', () => {
   it('holds an asbab item that fails the display rule, even fully approved', async () => {
     const c = content();
     (item(c, 'asbab-001').verdicts as unknown[]).push({ work: 'wadii-sahih-musnad', ref: '3', chain: 'mursal' });
-    const r = await resolveQuranContent(c, await surah(), await approve(c), WORKS);
+    const r = await resolveQuranContent(c, await surah(), await approve(c), WORKS, KEYS);
     expect(r!.items.map((i) => i.id)).not.toContain('asbab-001');
   });
 
   it('with the real registry (no edition pinned yet), nothing that cites a source can show', async () => {
     const c = content();
-    const r = await resolveQuranContent(c, await surah(), await approve(c), realSources.works as Work[]);
+    const r = await resolveQuranContent(c, await surah(), await approve(c), realSources.works as Work[], KEYS);
     // Only the hifz quiz: a fixed question over verified positions cites no work.
     expect(r!.items.map((i) => i.id)).toEqual(['quiz-002']);
   });
 
-  it('refuses the whole file, never rejecting, on malformed approvals', async () => {
+  it('refuses the whole file, never rejecting, on a malformed, unsigned or unknown-key approvals file', async () => {
     const c = content();
     const s = await surah();
     const good = await approve(c);
+    const p = good.payload;
+    const first = p.approvals[0]!;
     for (const bad of [
-      { ...good, approvals: [null] },
-      { ...good, approvals: [{ id: 'word-001' }] },
-      { ...good, approvals: [good.approvals[0], good.approvals[0]] },
-      { ...good, lessonKey: 'quran-113' },
-      { ...good, approvals: 'x' },
+      { ...good, payload: { ...p, approvals: [null] } },
+      { ...good, payload: { ...p, approvals: [{ id: 'word-001' }] } },
+      { ...good, payload: { ...p, approvals: [first, first] } },
+      { ...good, payload: { ...p, lessonKey: 'quran-113' } },
+      { ...good, payload: { ...p, datasetId: 'other' } },
+      { ...good, payload: { ...p, v: 2 } },
+      { ...good, payload: { ...p, approvals: 'x' } },
+      // Unsigned, unknown key, a malformed signature.
+      { ...good, keyId: null, signature: null },
+      { ...good, keyId: 'ffffffffffffffff' },
+      { ...good, signature: 'not-a-signature' },
+      // The steps claimed must be exactly the steps signed, each by a different person.
+      { ...good, payload: { ...p, approvals: [{ ...first, signers: first.signers.slice(1) }] } },
+      { ...good, payload: { ...p, approvals: [{ ...first, signers: first.signers.map((g) => ({ ...g, staffId: 'one' })) }] } },
+      // The pre-signature format.
+      { surah: 112, lessonKey: 'quran-112', approvals: p.approvals },
     ]) {
-      await expect(resolveQuranContent(c, s, bad as unknown as Approvals, WORKS)).resolves.toBeNull();
+      await expect(resolveQuranContent(c, s, bad as unknown as Approvals, WORKS, KEYS)).resolves.toBeNull();
     }
+  });
+
+  it('an empty, unsigned file approves nothing and refuses nothing', async () => {
+    const c = content();
+    const empty: Approvals = { payload: { v: 1, datasetId: pin.datasetId, lessonKey: 'quran-112', approvals: [] }, keyId: null, signature: null };
+    const r = await resolveQuranContent(c, await surah(), empty, WORKS, KEYS);
+    expect(r?.items).toEqual([]);
+  });
+
+  it('with the real key list (no key yet), a signed file is refused: nothing shows before the owner creates the key', async () => {
+    const c = content();
+    expect(await resolveQuranContent(c, await surah(), await approve(c), WORKS)).toBeNull();
   });
 });

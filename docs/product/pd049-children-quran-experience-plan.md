@@ -555,8 +555,15 @@ The scholar key is a deliberate grant to named people, never a bundle default.
 
 ### F.3 From the database to the child
 
-- **Approvals export.** `scripts/lessons/export-approvals.py` writes `apps/lessons/src/content/approvals/surah-NNN.json` from an export the API prints: `[{ id, textSha256, steps: [...], approvedAt }]`. It goes in by an ordinary reviewed PR.
-- **A CI guard, `lesson-content-approvals`**, fails when an approval's hash does not match the item's current text.
+- **Approvals export, SIGNED** (department head, 2026-10-29). The API answers `GET /lesson-content/approvals/:scope` with `{payload, keyId, signature}`:
+  - `payload` is `{v: 1, datasetId, lessonKey, approvals: [{id, approvalSha256, steps, signers: [{step, staffId, at}]}]}`;
+  - it is signed with Ed25519 over its canonical JSON, with `LESSON_APPROVALS_SIGNING_KEY`, which lives only in the API's environment and is an owner action (`docs/infrastructure/secrets.md`);
+  - unset key: the API exports nothing (503).
+  `scripts/lessons/export-approvals.py` writes it to `apps/lessons/src/content/approvals/surah-NNN.json` (or `play.json`), and it goes in by an ordinary reviewed PR.
+- **CI is the trust anchor.**
+  - `scripts/lessons/verify-approvals.mjs` (Node's crypto, in the `lessons-supply-chain` gate) verifies every approvals file under a public key of `apps/lessons/src/content/approvals-keys.json`. Keys have ids; a rotated key is retired, never removed, so old approvals stay verifiable.
+  - A hand-edited, unsigned or unknown-key file fails the build. `check-quran-content.py` fails when an approval's hash does not match the item's current text, or its steps are not exactly the steps signed by different people.
+  - The engine refuses an unsigned or unknown-key file structurally. It does not re-run Ed25519 in the browser, because older WebViews lack it.
 - **The build ships approved text only.** The snapshot step drops every item without a complete approval for its current hash. **Held, draft and rejected text never reaches the browser bundle.** Today held lines ship and are hidden at runtime; PD-49 closes that.
 - **The engine checks again.** At load, an item is shown only if its `sha256(text)` equals the approval's `textSha256`, the same second check PD-48 does for clips.
 

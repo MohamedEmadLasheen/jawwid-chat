@@ -388,6 +388,15 @@ gate_lessons_supply_chain() {
   # resting on pinned editions.
   "$PYTHON" -I scripts/lessons/check-quran-content.py selftest || return 1
   "$PYTHON" -I scripts/lessons/check-quran-content.py || return 1
+  # PD-49: every approvals file is the API's signed export, verified under a key
+  # of approvals-keys.json (Ed25519, Node's built-in crypto): CI is the trust
+  # anchor, so a hand-edited or forged approval fails here.
+  if ! command -v node >/dev/null 2>&1; then
+    echo "guards: node not found -- the approvals signatures cannot be verified, so the gate FAILS"
+    return 2
+  fi
+  node scripts/lessons/verify-approvals.mjs selftest || return 1
+  node scripts/lessons/verify-approvals.mjs || return 1
   # PD-49: the API reviews exactly what apps/lessons holds -- its generated map of
   # items and mechanics (with their hashes and required steps) is never stale.
   "$PYTHON" -I scripts/lessons/lesson-content-subjects.py selftest || return 1

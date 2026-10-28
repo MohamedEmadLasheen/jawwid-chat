@@ -1,6 +1,7 @@
 import pin from '../../quran-pin.json';
 import type { Surah } from '../quran/dataset';
 import { sha256Hex } from '../quran/sha256';
+import approvalKeys from './approvals-keys.json';
 import { wordsOf } from './lesson-content';
 
 /**
@@ -22,9 +23,15 @@ import { wordsOf } from './lesson-content';
  * A child sees an item only when ALL of these hold (otherwise it is held):
  *   - the file resolves completely against the verified surah (one bad position
  *     or malformed item refuses the whole file, as in schema 1);
+ *   - the approvals file is the API's SIGNED export (plan F.3): an envelope
+ *     {payload, keyId, signature} whose key id is one of approvals-keys.json.
+ *     CI verifies every Ed25519 signature (scripts/lessons/verify-approvals.mjs)
+ *     and the production bundle comes only from CI, so CI is the cryptographic
+ *     trust anchor; here an unsigned or unknown-key file refuses everything;
  *   - an approval names the item's id and approvalSha256: the SHA-256 of the
  *     canonical JSON of {datasetId, lessonKey, item}, so any change to the item,
  *     a re-pinned dataset or an approval copied to another lesson is stale;
+ *     and it names who signed each step (signers), as the database recorded it;
  *   - the approval carries every review step the item's kind requires
  *     (requiredSteps; the scholar for everything but plain word meanings and
  *     hifz/meaning quizzes);
@@ -144,16 +151,76 @@ export function approvalSha256(datasetId: string, lessonKey: string, item: unkno
   return canonicalSha256({ datasetId, item, lessonKey });
 }
 
+export interface Signer {
+  step: Step;
+  staffId: string;
+  at: string;
+}
+
 export interface Approval {
   id: string;
   approvalSha256: string;
   steps: Step[];
+  /** Who signed each step, when -- the database's record, signed with the export. */
+  signers: Signer[];
 }
 
-export interface Approvals {
-  surah: number;
+export interface ApprovalsPayload {
+  v: 1;
+  datasetId: string;
   lessonKey: string;
   approvals: Approval[];
+}
+
+/** The API's signed export (GET /lesson-content/approvals/:scope). An empty, unsigned file approves nothing. */
+export interface Approvals {
+  payload: ApprovalsPayload;
+  keyId: string | null;
+  signature: string | null;
+}
+
+export interface ApprovalKey {
+  id: string;
+  publicKey: string;
+  addedAt?: string;
+  retiredAt?: string;
+  note?: string;
+}
+
+export const APPROVAL_KEYS: readonly ApprovalKey[] = (approvalKeys as { keys: ApprovalKey[] }).keys;
+
+const SIGNATURE = /^[A-Za-z0-9+/]{86}==$/; // 64 bytes, base64
+const STEPS: readonly Step[] = ['check', 'teacher', 'scholar'];
+
+/** The envelope's shape, its key and its lesson -- refused whole on any mismatch. Returns the approvals by id, or null. */
+function readApprovals(x: unknown, datasetId: string, lessonKey: string, keys: readonly ApprovalKey[]): Map<string, Approval> | null {
+  if (!isObj(x) || Object.keys(x).sort().join() !== 'keyId,payload,signature') return null;
+  const p = x.payload;
+  if (!isObj(p) || Object.keys(p).sort().join() !== 'approvals,datasetId,lessonKey,v' || p.v !== 1) return null;
+  if (p.datasetId !== datasetId || p.lessonKey !== lessonKey || !Array.isArray(p.approvals)) return null;
+  if (x.keyId === null) {
+    // Nothing signed: an unsigned file may only approve nothing.
+    if (x.signature !== null || p.approvals.length > 0) return null;
+  } else if (typeof x.keyId !== 'string' || !keys.some((k) => k.id === x.keyId) || typeof x.signature !== 'string' || !SIGNATURE.test(x.signature)) {
+    return null;
+  }
+  const out = new Map<string, Approval>();
+  for (const a of p.approvals as unknown[]) {
+    if (!isObj(a) || Object.keys(a).sort().join() !== 'approvalSha256,id,signers,steps') return null;
+    if (typeof a.id !== 'string' || typeof a.approvalSha256 !== 'string' || out.has(a.id)) return null;
+    if (!Array.isArray(a.steps) || !Array.isArray(a.signers)) return null;
+    const signed: string[] = [];
+    for (const g of a.signers as unknown[]) {
+      if (!isObj(g) || Object.keys(g).sort().join() !== 'at,staffId,step' || !STEPS.includes(g.step as Step)) return null;
+      if (typeof g.staffId !== 'string' || !g.staffId || typeof g.at !== 'string' || !g.at) return null;
+      signed.push(g.step as string);
+    }
+    // The steps claimed are exactly the steps someone signed, each by a different person.
+    const staff = (a.signers as Signer[]).map((g) => g.staffId);
+    if ([...a.steps].sort().join() !== [...signed].sort().join() || new Set(signed).size !== signed.length || new Set(staff).size !== staff.length) return null;
+    out.set(a.id, a as unknown as Approval);
+  }
+  return out;
 }
 
 /** A piece of shown text: our prose, or verified words of the surah (the lesson marks these as Quran). */
@@ -437,18 +504,17 @@ export async function resolveQuranContent(
   surah: Surah,
   approvals: Approvals | null,
   works: readonly Work[],
+  keys: readonly ApprovalKey[] = APPROVAL_KEYS,
 ): Promise<ResolvedQuranContent | null> {
   try {
     const byId = new Map(works.map((w) => [w.id, w]));
     const parsed = parse(raw, surah, byId);
     const { lessonKey, datasetId } = raw as { lessonKey: string; datasetId: string };
-    const approved = new Map<string, Approval>();
+    let approved = new Map<string, Approval>();
     if (approvals !== null) {
-      if (!isObj(approvals) || approvals.surah !== surah.info.number || approvals.lessonKey !== lessonKey || !Array.isArray(approvals.approvals)) return null;
-      for (const a of approvals.approvals as unknown[]) {
-        if (!isObj(a) || typeof a.id !== 'string' || typeof a.approvalSha256 !== 'string' || !Array.isArray(a.steps) || approved.has(a.id)) return null;
-        approved.set(a.id, a as unknown as Approval);
-      }
+      const read = readApprovals(approvals, datasetId, lessonKey, keys);
+      if (!read) return null;
+      approved = read;
     }
     let candidates: typeof parsed.items = [];
     for (const i of parsed.items) {

@@ -7,12 +7,14 @@
  * text it is for. Pure: a fake store and fake permissions (the database rules
  * are in test/integration/pd049-lesson-content.spec.ts).
  */
+import { createPublicKey, generateKeyPairSync, verify } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommError } from '@platform/errors';
 import { legacyLessonContentKeys, lessonContentAccess } from '@platform/lesson-content-policy';
 import { LessonContentService, itemStatus, refusal } from '../../../src/lesson-content/lesson-content.service';
 import type { LessonContentStore, ReviewRow } from '../../../src/lesson-content/lesson-content.store';
+import { ApprovalsSigner, keyIdOf, readSigningKey } from '../../../src/lesson-content/approvals-signer';
 import { PINNED_QURAN_DATASETS } from '../../../src/quran/pinned';
 import { approvalSha256, canonicalJson, canonicalSha256, parseScope, parseSubjects, reviewScope, type Scope } from '../../../src/lesson-content/review-subjects';
 import { Prisma } from '@prisma/client';
@@ -77,9 +79,13 @@ class FakeStore implements LessonContentStore {
 
 const permissions = (keys: string[]) => ({ profileOf: async () => ({ tier: 'x', departmentKind: null, placement: null, permissions: new Set(keys) }) });
 
-function service(keys: string[], store = new FakeStore()) {
+// A throwaway Ed25519 key, as the owner would generate one (never a real key in the repo).
+const PEM = generateKeyPairSync('ed25519').privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
+const SIGNER = new ApprovalsSigner(PEM);
+
+function service(keys: string[], store = new FakeStore(), signer: ApprovalsSigner = SIGNER) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { store, svc: new LessonContentService(store, permissions(keys) as any, (s) => (s === 'quran-112' ? scope() : null)) };
+  return { store, svc: new LessonContentService(store, permissions(keys) as any, (s) => (s === 'quran-112' ? scope() : null), signer) };
 }
 
 const refused = async (p: Promise<unknown>, code: string, status?: number) => {
@@ -209,7 +215,7 @@ describe('LessonContentService', () => {
     expect(store.reviewed).toEqual([['quran-112', 'tafsir-001', sha(TAFSIR), 'scholar', 'reject', 'aqeedah', 'not as the source says', 'scholar-1']]);
   });
 
-  it('exports only items whose current text has every step it needs, in the lessons approvals format', async () => {
+  it('exports only items whose current text has every step it needs, with their signers, SIGNED', async () => {
     const store = new FakeStore();
     store.rows = [
       // tafsir: all three steps, current text.
@@ -220,13 +226,42 @@ describe('LessonContentService', () => {
       row({ itemId: 'word-001', approvalSha256: sha(WORD), step: 'check' }),
     ];
     const { svc } = service(['lesson_content.view'], store);
-    expect(await svc.export('quran-112', admin())).toEqual({
-      surah: 112,
+    const at = '2026-10-29T10:00:00.000Z';
+    const out = await svc.export('quran-112', admin());
+    expect(out.payload).toEqual({
+      v: 1,
+      datasetId: DS,
       lessonKey: 'quran-112',
-      approvals: [{ id: 'tafsir-001', approvalSha256: sha(TAFSIR), steps: ['check', 'teacher', 'scholar'] }],
+      approvals: [
+        {
+          id: 'tafsir-001',
+          approvalSha256: sha(TAFSIR),
+          steps: ['check', 'teacher', 'scholar'],
+          signers: [
+            { step: 'check', staffId: 'staff-1', at },
+            { step: 'teacher', staffId: 's2', at },
+            { step: 'scholar', staffId: 's3', at },
+          ],
+        },
+      ],
     });
+    // The signature verifies over the canonical payload under the key the id names.
+    expect(out.keyId).toBe(SIGNER.keyId);
+    const pub = createPublicKey(readSigningKey(PEM)!);
+    expect(keyIdOf(pub)).toBe(out.keyId);
+    expect(verify(null, Buffer.from(canonicalJson(out.payload), 'utf8'), pub, Buffer.from(out.signature, 'base64'))).toBe(true);
+    expect(verify(null, Buffer.from(canonicalJson({ ...out.payload, approvals: [] }), 'utf8'), pub, Buffer.from(out.signature, 'base64'))).toBe(false);
     store.rows.push(row({ step: 'teacher', action: 'withdraw', staffId: 's2', category: 'wrong_meaning', reason: 'x' }));
-    expect((await svc.export('quran-112', admin())).approvals).toEqual([]);
+    expect((await svc.export('quran-112', admin())).payload.approvals).toEqual([]);
+  });
+
+  it('exports nothing unsigned: no signing key is a 503', async () => {
+    const { svc } = service(['lesson_content.view'], new FakeStore(), new ApprovalsSigner(undefined));
+    await refused(svc.export('quran-112', admin()), 'COMM.LESSON_CONTENT_SIGNING_UNAVAILABLE', 503);
+    expect(new ApprovalsSigner('not a key').available).toBe(false);
+    // Only an Ed25519 key signs.
+    const rsa = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
+    expect(new ApprovalsSigner(rsa).available).toBe(false);
   });
 });
 

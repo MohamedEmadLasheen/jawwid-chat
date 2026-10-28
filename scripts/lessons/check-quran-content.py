@@ -56,6 +56,7 @@ CONTENT = os.path.join(ROOT, 'apps', 'lessons', 'src', 'content')
 QURAN = os.path.join(CONTENT, 'quran')
 APPROVALS = os.path.join(CONTENT, 'approvals')
 SOURCES = os.path.join(CONTENT, 'sources.json')
+APPROVAL_KEYS = os.path.join(CONTENT, 'approvals-keys.json')
 VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
 RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
@@ -528,20 +529,39 @@ def calibration_selftest(surahs):
     return failed
 
 
-def check_approvals(appr, content, works):
+def check_approvals(appr, content, works, keys):
+    """The API's signed export (plan F.3): {payload, keyId, signature}. The signature itself is verified
+    by scripts/lessons/verify-approvals.mjs (Node's crypto); here: its shape, its key, and what it approves."""
     errors = []
     err = errors.append
-    if not isinstance(appr, dict) or set(appr) != {'surah', 'lessonKey', 'approvals'}:
-        return ['approvals: keys must be exactly surah, lessonKey, approvals']
-    if appr['surah'] != content.get('surah') or appr['lessonKey'] != content.get('lessonKey'):
-        err('approvals: surah and lessonKey must match the content file')
+    if not isinstance(appr, dict) or set(appr) != {'payload', 'keyId', 'signature'}:
+        return ['approvals: must be the signed export {payload, keyId, signature}']
+    p = appr['payload']
+    if not isinstance(p, dict) or set(p) != {'v', 'datasetId', 'lessonKey', 'approvals'} or p['v'] != 1 or not isinstance(p['approvals'], list):
+        return ['approvals: payload must be exactly {v: 1, datasetId, lessonKey, approvals}']
+    if p['datasetId'] != content.get('datasetId') or p['lessonKey'] != content.get('lessonKey'):
+        err('approvals: datasetId and lessonKey must match the content file')
+    if appr['keyId'] is None:
+        if appr['signature'] is not None or p['approvals']:
+            err('approvals: an unsigned file may only approve nothing')
+    elif appr['keyId'] not in keys or not isinstance(appr['signature'], str) or not appr['signature']:
+        err(f'approvals: signed by an unknown key {appr["keyId"]!r} (not in approvals-keys.json), or carries no signature')
     items = {it.get('id'): it for it in content.get('items', []) if isinstance(it, dict)}
     seen = set()
-    for a in appr['approvals'] if isinstance(appr['approvals'], list) else []:
+    for a in p['approvals']:
         aid = a.get('id') if isinstance(a, dict) else None
-        if not isinstance(a, dict) or set(a) != {'id', 'approvalSha256', 'steps'} or not isinstance(aid, str) or aid in seen:
-            err(f'approvals: {aid!r}: must be exactly id, approvalSha256, steps, once per item')
+        if not isinstance(a, dict) or set(a) != {'id', 'approvalSha256', 'steps', 'signers'} or not isinstance(aid, str) or aid in seen:
+            err(f'approvals: {aid!r}: must be exactly id, approvalSha256, steps, signers, once per item')
             continue
+        signers = a['signers'] if isinstance(a['signers'], list) else None
+        if signers is None or not all(isinstance(g, dict) and set(g) == {'step', 'staffId', 'at'} and g['step'] in STEPS
+                                      and isinstance(g['staffId'], str) and g['staffId'] and isinstance(g['at'], str) and g['at'] for g in signers):
+            err(f'approvals: {aid}: signers must be {{step, staffId, at}} entries')
+            continue
+        signed = [g['step'] for g in signers]
+        if not isinstance(a['steps'], list) or sorted(map(str, a['steps'])) != sorted(signed) or len(set(signed)) != len(signed) \
+                or len({g['staffId'] for g in signers}) != len(signers):
+            err(f'approvals: {aid}: the steps must be exactly the steps signed, each by a different person')
         seen.add(aid)
         it = items.get(aid)
         if it is None:
@@ -625,11 +645,15 @@ def selftest():
     c = base()
     items = {it['id']: it for it in c['items']}
 
-    def appr(*entries):
-        return {'surah': 112, 'lessonKey': 'quran-112', 'approvals': list(entries)}
+    keys = {'0123456789abcdef'}
+
+    def appr(*entries, key='0123456789abcdef', lesson='quran-112'):
+        return {'payload': {'v': 1, 'datasetId': 'test-1', 'lessonKey': lesson, 'approvals': list(entries)},
+                'keyId': key, 'signature': 'A' * 86 + '=='}
 
     def a(iid, steps=('check', 'teacher', 'scholar'), sha=None):
-        return {'id': iid, 'approvalSha256': sha or approval_sha256('test-1', 'quran-112', items[iid]), 'steps': list(steps)}
+        return {'id': iid, 'approvalSha256': sha or approval_sha256('test-1', 'quran-112', items[iid]), 'steps': list(steps),
+                'signers': [{'step': st, 'staffId': f'staff-{n}', 'at': '2026-10-29T10:00:00Z'} for n, st in enumerate(steps)]}
 
     appr_cases = {
         'asbab-pinned-full': (appr(a('asbab-001')), None),
@@ -640,14 +664,20 @@ def selftest():
         'copied-from-another-lesson': (appr(a('asbab-001', sha=approval_sha256('test-1', 'quran-113', items['asbab-001']))), 'stale'),
         'other-dataset': (appr(a('asbab-001', sha=approval_sha256('test-2', 'quran-112', items['asbab-001']))), 'stale'),
         'missing-scholar': (appr(a('asbab-001', ('check', 'teacher'))), 'missing review step'),
-        'no-such-item': (appr({'id': 'tafsir-404', 'approvalSha256': '0' * 64, 'steps': ['check']}), 'no such item'),
+        'no-such-item': (appr(dict(a('asbab-001'), id='tafsir-404')), 'no such item'),
         'twice': (appr(a('asbab-001'), a('asbab-001')), 'once per item'),
         'null-entry': (appr(None), 'once per item'),
-        'bad-step': (appr(a('quiz-002', ('check', 'teacher', 'owner'))), 'steps must be'),
-        'wrong-surah': ({'surah': 113, 'lessonKey': 'quran-112', 'approvals': []}, 'must match'),
+        'bad-step': (appr(a('quiz-002', ('check', 'teacher', 'owner'))), 'signers must be'),
+        'wrong-lesson': (appr(lesson='quran-113'), 'must match'),
+        'unknown-key': (appr(a('asbab-001'), key='ffffffffffffffff'), 'unknown key'),
+        'unsigned-with-approvals': (dict(appr(a('asbab-001')), keyId=None, signature=None), 'unsigned file'),
+        'unsigned-empty': (dict(appr(), keyId=None, signature=None), None),
+        'signers-not-steps': (appr(dict(a('asbab-001'), signers=a('asbab-001')['signers'][1:])), 'exactly the steps signed'),
+        'one-person-two-steps': (appr(dict(a('asbab-001'), signers=[dict(g, staffId='one') for g in a('asbab-001')['signers']])), 'different person'),
+        'pre-signature-format': ({'surah': 112, 'lessonKey': 'quran-112', 'approvals': []}, 'signed export'),
     }
     for name, (ap, expected) in appr_cases.items():
-        errors = check_approvals(ap, c, works)
+        errors = check_approvals(ap, c, works, keys)
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'approvals {name}: expected {expected or "no errors"}, got {errors}')
@@ -687,6 +717,7 @@ def main(argv):
         return selftest()
     dataset_id = json.load(open(PIN, encoding='utf-8'))['datasetId']
     reg_errors, works = check_sources(json.load(open(SOURCES, encoding='utf-8')))
+    approval_keys = {k.get('id') for k in json.load(open(APPROVAL_KEYS, encoding='utf-8')).get('keys', []) if isinstance(k, dict)}
     for e in reg_errors:
         print(f'quran-content: {e}')
     failed = 1 if reg_errors else 0
@@ -708,14 +739,14 @@ def main(argv):
         appr = None
         if f in approvals:
             appr = json.load(open(os.path.join(APPROVALS, f), encoding='utf-8'))
-            errors += check_approvals(appr, content, works)
+            errors += check_approvals(appr, content, works, approval_keys)
         for e in errors:
             print(f'quran-content: {f}: {e}')
         if errors:
             failed += 1
         else:
             total = len(content['items'])
-            ok = len(appr['approvals']) if appr else 0
+            ok = len(appr['payload']['approvals']) if appr else 0
             print(f'quran-content: {f}: every position resolves, no typed Quran, every citation in its role; {ok}/{total} item(s) approved')
     if not files:
         print('quran-content: no schema-2 content yet; the sources registry is well formed')
