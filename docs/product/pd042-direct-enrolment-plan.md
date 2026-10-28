@@ -1,6 +1,6 @@
 # PD-42: entering families by hand, without a trial (review and plan, v3)
 
-**State:** revision 3.1. The owner has decided Q1–Q5 and added five safeguards (§13, §15). Of the points the safeguard-5 check of PD-30 raised (§16), the department head decided F1, F2, F3 and F5 on 2026-10-28. **F4 is with the owner.** No feature code has been written; code waits for the F4 answer and the head's GO.
+**State:** revision 3.2, **design complete**. The owner decided Q1–Q5, with five safeguards (§13, §15). Every point from the safeguard-5 check of PD-30 is DECIDED (§16): F1–F3 and F5 by the department head, and F4 by the owner, recorded as `PD-30-amendment-carried-over`. No feature code has been written. Code waits for the head's GO (machine-load cap).
 **Claim:** `docs/product/pd-registry/PD-42.md`. Migration slot `20261028110000` (`chat_pd042_direct_enrolment`), renumbered from `20261027140000`, which now sorts before `main`'s `20261027190000`.
 **Base:** `main` @ `a547b0e2` (merged in). PD-40 is on `main`: its catalogue is `catalogue.ts` plus the tables `chat.permission` and `chat.legacy_permission_bundle` (`20261027190000_chat_pd040_access_roles.sql`).
 
@@ -287,7 +287,7 @@ The e-mail is optional at intake, because Core is incomplete.
 | at most one standing per child | partial unique index `(learner_id) where source = 'carried_over' and voided_at is null`. **Refused if the child has any other standing row** (§16 F2). |
 | `starts_on` = **the child's intake day** (academy date), even when the package is entered later | Lessons held in Chat since intake count against it; nothing is counted twice or given free (§16 F5) |
 | `plan_months` optional; 1–24 for this source | as entered, never rounded to PD-30's set (§16 F3) |
-| guard | `created_by` holds `subscriptions.carry_over` (`chat.staff_has_permission`), may handle the family (`chat.staff_may_handle_family`), the child's enrolment has origin `intake`, and today is within 14 days of it. Otherwise, one of PD-30's three roles (`can_grant_subscription_exception`). This is the PD-30 amendment in §16 F4. |
+| guard | The five conditions of `PD-30-amendment-carried-over` (§16 F4): origin `intake`; `created_by` = the child's `entered_by`; within 14 days; no other standing row; may handle the family **and** holds `subscriptions.carry_over`. Otherwise, one of PD-30's three roles (`can_grant_subscription_exception`). |
 
 ### 5.2 Counting
 
@@ -325,7 +325,7 @@ These are server-computed and never entered:
 
 ### 5.5 Who enters it, correction, and audit
 
-- **Entering:** at intake, or afterwards from the Student Profile, by the §4.3 editors of the family. This uses a new key, **`subscriptions.carry_over`** (§8).
+- **Entering:** at intake, or afterwards from the Student Profile within 14 days, **by the supervisor who entered the child**, for their own family (`PD-30-amendment-carried-over`, §16 F4). This uses a new key, **`subscriptions.carry_over`** (§8). Anyone else needs one of the three managers.
 - **Correcting:** void and re-add, with a reason. **Raising the entitlement** (a larger total or a smaller completed) after the child has held any lesson in Chat needs PD-30's three roles, whatever the window (§15 S1).
   - **Within 14 days of the child's intake:** the same editors.
   - **After 14 days:** only PD-30's three roles (`subscriptions.manage`). Changing an opening balance late is then the same as granting free lessons.
@@ -371,7 +371,7 @@ The form saves with this minimum. The rest is completed later, on the screens th
 |---|---|---|---|
 | `new_students.view` | exists (#174) | as #174 | enrolments in scope (§4.3) |
 | `new_students.manage` | exists | `supervisor:operations`, `supervisor:sales`, `manager:operations`, `manager:sales` (+ super admin) | enter a family; add a child; set a sign-in e-mail. Own families (§4.3). |
-| **`subscriptions.carry_over`** | **new** | the same four bundles | own families. Corrections within 14 days of intake. |
+| **`subscriptions.carry_over`** | **new** | the same four bundles | only the supervisor who entered the child, for their own family, within 14 days, with no other standing row (`PD-30-amendment-carried-over`) |
 | `subscriptions.manage` | exists (managers) | unchanged | late corrections (PD-30's three roles) |
 | `parents.edit` | exists | **add to `supervisor:sales`** | Sales: owned families only. PD-17's `canEditParent` gains a "Sales owner of this family" basis. |
 | `org.manage` | exists (managers) | unchanged | the Operations manager sets an Operations supervisor (§4.2); the Sales manager changes a Sales owner |
@@ -458,7 +458,7 @@ The form saves with this minimum. The rest is completed later, on the screens th
 
 | PR | Contents | Depends on |
 |---|---|---|
-| **PR-1, data** (waits for F4 and the GO) | Migration `20261028110000`, plus the Prisma model. No behaviour change. It contains: `student_enrolment` with `id` as primary key, `origin`, `kind`, a nullable `lesson_id` and `account_id`, `entered_*`, and the new guards; `enrol_learner` widened (intake authority, optional teacher); `chat.family_sales_owner` and its backfill; `chat.family_contact_key` (S1); `chat.staff_may_handle_family` and `chat.sales_family_scope()` (S3; the setting stays `all`); `learner_subscription` with `carried_over`, `lessons_used_before`, the 1–24 plan length and the new compute (F1–F5); the `subscriptions.carry_over` key and bundle rows (§8); the PD-30 amendment record; the PD-30 equivalence spec. | — |
+| **PR-1, data** (waits for the GO) | Migration `20261028110000`, plus the Prisma model. No behaviour change. It contains: `student_enrolment` with `id` as primary key, `origin`, `kind`, a nullable `lesson_id` and `account_id`, `entered_*`, and the new guards; `enrol_learner` widened (intake authority, optional teacher); `chat.family_sales_owner` and its backfill; `chat.family_contact_key` (S1); `chat.staff_may_handle_family` and `chat.sales_family_scope()` (S3; the setting stays `all`); `learner_subscription` with `carried_over`, `lessons_used_before`, the 1–24 plan length and the new compute (F1–F5); the `subscriptions.carry_over` key and bundle rows (§8); the PD-30 amendment record; the PD-30 equivalence spec. | — |
 | **PR-2, intake** | `FamilyIntakeService` (shared PD-16 body); enter family; add child; set sign-in e-mail; carried-over package; duplicates and locks; "Needs an Operations supervisor"; the Admin Web form, New Students filters and profile actions. **This answers the owner.** | PR-1 |
 | **PR-3, family group and trial sibling** | `addLearnersToFamilyGroup`; Assign's `PARENT_EXISTS` → added children | PR-2 |
 | **PR-4, Sales scope enforcement** | `SALES_FAMILY_SCOPE` in the API (PD-17, PD-27, PD-30, New Students) and in the DB write guards (S3); the verification CLI; the Sales owner change by the Sales manager; the `family-contact-keys:backfill` CLI (S1) | PR-1. The CLIs run before intake opens; the switch goes on only after verification and a GO (D2) |
@@ -604,7 +604,7 @@ Done; see §16. The conflicts it found are **flagged** there, each with a recomm
 | F1 | **DECIDED** by the department head, under the owner's safeguard 2: completed is stored exactly as entered, the form shows "Over by N", a manager confirms, and PD-30 counts the grace once. |
 | F2 | **DECIDED**: carry-over only for a child with **no** standing ledger row, enforced in the DB. QA sizes it on systest with the read-only count below. A production count, if needed, is an owner-run query relayed by the head. |
 | F3 | **DECIDED**: `plan_months` 1–24 for `source = 'carried_over'` only. |
-| F4 | **OPEN, with the owner.** It overrides PD-30's owner decision of 2026-10-26. The head has put the bounded wording below to the owner. Nothing that depends on it is built until the answer is relayed. |
+| F4 | **DECIDED by the owner**, verbatim: "Allow, tightly limited (Recommended)". Supervisors may carry over a package **only** for a child they entered through the new form, **only** within 14 days of entering them, **only** if the child has no other package, and **only** for their own families. Everything else stays with the three managers. It is recorded as `docs/product/pd-registry/PD-30-amendment-carried-over.md`, and all five conditions are enforced in the DB (below). |
 | F5 | **DECIDED** (agreed): `starts_on` is the child's intake day. |
 
 The original analysis of each flag follows, unchanged.
@@ -629,7 +629,7 @@ The original analysis of each flag follows, unchanged.
 - **Recommendation:** for `source = 'carried_over'` only, allow 1–24 months. That is a single CHECK change (`plan_months in (1,3,6,12) or (source = 'carried_over' and plan_months between 1 and 24)`). **Readers checked:** Admin Web's `planLabel` (`features/profiles/copy.ts:185-191`) and Flutter's `billingPlanMonths` and `subscriptionMonthCount` (ICU plurals, `app_ar.arb:1168`, used by `payment_sections.dart:17-33`) already render any number of months. The CHECK is the only change.
 - **Alternative:** keep the set, and store a length outside it in the note with `plan_months` null. This loses the structured value.
 
-**F4. Supervisors recording lessons with no payment conflicts with PD-30's owner decision of 2026-10-26.** *(OPEN: with the owner.)*
+**F4. Supervisors recording lessons with no payment conflicts with PD-30's owner decision of 2026-10-26.** *(DECIDED by the owner: allowed, tightly limited. See the decided wording at the end of this item.)*
 - **The issue.** PD-30 says only the super admin, the Operations manager and the Sales manager may add lessons with no payment behind them. The DB enforces this (`can_grant_subscription_exception`). The approved PD-42 design lets **every Sales and Operations supervisor** record a carried-over package, which is also lessons with no Chat payment. The owner approved it on 2026-10-28, but it is an exception to a standing decision.
 - **Recommendation:** record it as a **PD-30 amendment** (`PD-30-amendment-carried-over`) and bound it narrowly, all DB-enforced:
   - source `carried_over` only;
@@ -638,7 +638,15 @@ The original analysis of each flag follows, unchanged.
   - only when the child has no other standing row (F2);
   - only by someone who may handle the family (`staff_may_handle_family`) and holds `subscriptions.carry_over`.
   - Anything else stays with the three roles.
-- **Confirm:** the head confirms the amendment wording, or asks the owner.
+- **Decided wording (owner, 2026-10-28; `PD-30-amendment-carried-over`).** `guard_learner_subscription` refuses a supervisor's `carried_over` row unless **all** of these hold:
+  1. the child's `student_enrolment` has origin `intake`, so the child was entered through the new form;
+  2. **`created_by` = that enrolment's `entered_by`**. This is narrower than v3's proposal: the supervisor who entered the child, not anyone who handles the family;
+  3. `now()` is within 14 days of `entered_at`;
+  4. the child has **no other standing ledger row**;
+  5. `chat.staff_may_handle_family(created_by, family)` **and** `chat.staff_has_permission(created_by, 'subscriptions.carry_over')`.
+  
+  Anything else that adds lessons with no payment needs `can_grant_subscription_exception` (the three managers), as PD-30 decided. That includes a manager who entered a family on behalf of a supervisor (D5): they are one of the three anyway.
+- **Tests:** one refusal per condition (wrong origin, another supervisor, day 15, an existing row, a family out of scope, a missing key); one success; and success for each of the three managers outside all five conditions.
 
 **F5. Lessons held in Chat before the package is entered.** *(DECIDED: agreed.)*
 - **The issue.** If a child is entered without a package and the package is added days later, the lessons held in between would not count, because the counting starts at the row's `starts_on`. That would be free lessons.
