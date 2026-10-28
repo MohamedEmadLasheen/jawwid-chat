@@ -170,6 +170,7 @@ class HttpNotificationsRepository implements NotificationsRepository {
           conversationId: text(action['conversationId']),
           lessonId: text(action['lessonId']),
           learnerId: text(action['learnerId']),
+          taskId: text(action['taskId']),
         );
       }
     }

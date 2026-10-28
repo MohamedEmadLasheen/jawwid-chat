@@ -413,7 +413,19 @@ export interface CommEventPayloads {
 export interface TaskChangedPayload {
   taskId: string;
   revision: number;
-  change: 'created' | 'commented' | 'out_of_scope' | 'returned' | 'reassigned' | 'completed' | 'removed' | 'due_changed' | 'priority_changed' | 'source_withdrawn' | 'source_restored' | 'source_raised';
+  change: 'created' | 'commented' | 'out_of_scope' | 'returned' | 'reassigned' | 'completed' | 'removed' | 'due_changed' | 'priority_changed' | 'source_withdrawn' | 'source_restored' | 'source_raised'
+    /** PD-47 PR-4: not a change of the row -- it passed its due date (TaskService.sweepOverdue, once per due date). */
+    | 'overdue';
+  /**
+   * PD-47 PR-4, written WITH the change (never read back later, when the task
+   * may have moved on): who did it (null: the system), and for a hand-on whom
+   * it left and whom it reached. Ids only.
+   */
+  actorId?: string | null;
+  fromAssignee?: string | null;
+  toAssignee?: string | null;
+  /** 'overdue': the due date it is overdue for (a task re-dated since is not). */
+  dueAt?: string | null;
 }
 
 /** PD-35 B5. Ids only: PD-34 reads the case through its own authorized path. */

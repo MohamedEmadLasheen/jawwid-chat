@@ -33,7 +33,10 @@ enum InboxActionKind {
   viewLesson('view_lesson'),
   viewPayments('view_payments'),
   openStories('open_stories'),
-  openCalls('open_calls');
+  openCalls('open_calls'),
+
+  /// PD-47 PR-4: a task -- for a teacher, the Schedule's To do.
+  openTask('open_task');
 
   const InboxActionKind(this.wire);
 
@@ -48,12 +51,13 @@ enum InboxActionKind {
 }
 
 class InboxAction {
-  const InboxAction(this.kind, {this.conversationId, this.lessonId, this.learnerId});
+  const InboxAction(this.kind, {this.conversationId, this.lessonId, this.learnerId, this.taskId});
 
   final InboxActionKind kind;
   final String? conversationId;
   final String? lessonId;
   final String? learnerId;
+  final String? taskId;
 }
 
 class InboxEntry {

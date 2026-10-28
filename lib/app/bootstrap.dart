@@ -53,6 +53,7 @@ import '../features/profile/data/profile_photo_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
 import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
+import '../features/tasks/application/task_signal_channel.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
 import 'providers.dart';
@@ -289,6 +290,12 @@ List<Override> _httpOverrides() {
     // PD-37: typing, decoded from the session's one socket (listen only).
     chatTypingChannelProvider.overrideWith((ref) {
       final channel = ChatTypingChannel(ref.watch(realtimeSocketProvider));
+      ref.onDispose(channel.dispose);
+      return channel;
+    }),
+    // PD-47 PR-4: task.changed, decoded from the same socket (listen only).
+    taskSignalChannelProvider.overrideWith((ref) {
+      final channel = TaskSignalChannel(ref.watch(realtimeSocketProvider));
       ref.onDispose(channel.dispose);
       return channel;
     }),

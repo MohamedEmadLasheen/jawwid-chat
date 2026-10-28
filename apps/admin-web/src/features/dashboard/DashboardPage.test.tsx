@@ -149,10 +149,34 @@ describe('the manager Dashboard', () => {
     expect(screen.queryByRole('region', { name: 'Escalation cases' })).not.toBeInTheDocument()
   })
 
-  it('says so when no section applies to the account', async () => {
+  it('an account no section key opens still has its own Tasks (PD-47: self-service), and nothing else is asked for', async () => {
     open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['org.view'] }))
-    expect(await screen.findByText('No figures are available for your account yet')).toBeInTheDocument()
-    expect(requested().filter((p) => p.startsWith('/dashboard/'))).toEqual([])
+    await waitFor(() => expect(requested().filter((p) => p.startsWith('/dashboard/'))).toEqual(['/dashboard/tasks']))
+  })
+
+  it('shows the Tasks section: each tile opens the Tasks view it counts (PD-47 PR-4)', async () => {
+    routes['/dashboard/tasks'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [
+          tile('tasks.mine_open', 3, { oldestAt: '2026-10-27T07:00:00.000Z' }),
+          tile('tasks.mine_overdue', 1),
+          tile('tasks.mine_urgent', 2),
+          tile('tasks.mine_financial', 1),
+          tile('tasks.team_open', 9),
+          tile('tasks.team_overdue', 4),
+          tile('tasks.awaiting_decision', 1),
+          tile('tasks.needs_reassignment', 2),
+        ],
+      })
+    open()
+    expect(await screen.findByRole('link', { name: /Open tasks \(mine\)/ })).toHaveAttribute('href', '/tasks')
+    expect(screen.getByRole('link', { name: /Overdue tasks \(mine\)/ })).toHaveAttribute('href', '/tasks?overdue=true')
+    expect(screen.getByRole('link', { name: /High-level tasks \(mine\)/ })).toHaveAttribute('href', '/tasks?level=high')
+    expect(screen.getByRole('link', { name: /Financial tasks \(mine\)/ })).toHaveAttribute('href', '/tasks?category=financial')
+    expect(screen.getByRole('link', { name: /Overdue tasks \(my team\)/ })).toHaveAttribute('href', '/tasks?tab=team&overdue=true')
+    expect(screen.getByRole('link', { name: /waiting for my decision/ })).toHaveAttribute('href', '/tasks?tab=decisions')
+    expect(screen.getByRole('link', { name: /assignee left/ })).toHaveAttribute('href', '/tasks?tab=team&gone=true')
   })
 
   it('shows the Lessons section: today by outcome, and the outcome queue where the server sends it (PR-3)', async () => {

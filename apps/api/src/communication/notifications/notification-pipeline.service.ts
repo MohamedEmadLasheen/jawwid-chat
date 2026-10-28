@@ -40,6 +40,12 @@ export interface EmitInput {
   variables?: Record<string, unknown>;
   /** The intended moment. The Center shows it then; quiet hours may push it later. */
   scheduledAt: Date;
+  /**
+   * PD-47 PR-4: the entry asks its recipient to act on a task (the Center's
+   * Action tab): who must act, by when, and where it stands. The Center mirrors
+   * the task; the Tasks page is the truth.
+   */
+  task?: { ownerId: string; dueAt: Date | null; status: 'open' | 'escalated' } | null;
   basis?: string | null;
   /**
    * A delivery a lifecycle change cancelled (a teacher transfer clears a
@@ -124,6 +130,9 @@ export class NotificationPipeline {
       variables: input.variables ?? {},
       pushState,
       visibleAt: input.scheduledAt,
+      ...(input.task
+        ? { requiresAction: true, ownerId: input.task.ownerId, dueAt: input.task.dueAt, taskStatus: input.task.status }
+        : {}),
     }, input.reviveCancelled ?? false);
     if (!item) return null;
 
@@ -434,6 +443,26 @@ export class NotificationPipeline {
     const result = await db.notificationItem.updateMany({
       where: { subjectId, cancelledAt: null, visibleAt: { gt: new Date() } },
       data: { cancelledAt: new Date(), cancelReason: reason },
+    });
+    return result.count;
+  }
+
+  /**
+   * PD-47 PR-4: a task left these people (done, removed, or handed to someone
+   * else): their entries about it no longer ask anything of them. Marked acted,
+   * with where the task went; the entries stay as history. `keep` is the person
+   * it is still with, whose entries stand; `only` narrows it to some kinds of
+   * entry (a decision taken settles the deciders' "decision waiting"; a new due
+   * date settles the old "overdue").
+   */
+  async taskLeft(taskId: string, status: 'done' | 'cancelled', keep: string | null = null, only?: readonly string[]): Promise<number> {
+    const result = await this.prisma.notificationItem.updateMany({
+      where: {
+        subjectType: 'task', subjectId: taskId, actedAt: null,
+        ...(keep ? { recipientId: { not: keep } } : {}),
+        ...(only ? { eventType: { in: [...only] } } : {}),
+      },
+      data: { actedAt: new Date(), taskStatus: status },
     });
     return result.count;
   }
@@ -1010,6 +1039,10 @@ export class NotificationPipeline {
       variables: Record<string, unknown>;
       pushState: string;
       visibleAt: Date;
+      requiresAction?: boolean;
+      ownerId?: string;
+      dueAt?: Date | null;
+      taskStatus?: string;
     },
     revive: boolean,
   ): Promise<NotificationItem | null> {

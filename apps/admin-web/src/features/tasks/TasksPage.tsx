@@ -83,6 +83,9 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const askedCategory = params.get('category') as Category | null
   const [category, setCategory] = useState<Category | ''>(askedCategory === 'financial' || askedCategory === 'operational' ? askedCategory : '')
   const [overdue, setOverdue] = useState(params.get('overdue') === 'true')
+  // The Dashboard's tiles open these lists (tile == list); shown as removable filters.
+  const [gone, setGone] = useState(params.get('gone') === 'true')
+  const [unmanaged, setUnmanaged] = useState(params.get('unmanaged') === 'true')
   const [openId, setOpenId] = useState<string | null>(params.get('task'))
   const [creating, setCreating] = useState(false)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -96,9 +99,11 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
     if (level) next.set('level', level)
     if (category) next.set('category', category)
     if (overdue && tab !== 'closed') next.set('overdue', 'true')
+    if (gone) next.set('gone', 'true')
+    if (unmanaged) next.set('unmanaged', 'true')
     if (openId) next.set('task', openId)
     if (next.toString() !== params.toString()) setParams(next, { replace: true })
-  }, [tab, level, category, overdue, openId, params, setParams])
+  }, [tab, level, category, overdue, gone, unmanaged, openId, params, setParams])
 
   const pick = (t: Tab) => {
     setTab(t)
@@ -122,8 +127,10 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
       level: level || undefined,
       category: category || undefined,
       overdue: tab === 'closed' ? undefined : overdue || undefined,
+      gone: gone || undefined,
+      unmanaged: unmanaged || undefined,
     }),
-    [tab, closedView, level, category, overdue],
+    [tab, closedView, level, category, overdue, gone, unmanaged],
   )
   const list = useInfiniteQuery({
     queryKey: keys.list(query),
@@ -194,6 +201,16 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
             <label className="tasks__check">
               <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> {tx(C.overdueOnly)}
             </label>
+          )}
+          {gone && (
+            <button type="button" className="btn btn--ghost" onClick={() => setGone(false)}>
+              {tx(C.clearFilter, { filter: tx(C.goneOnly) })}
+            </button>
+          )}
+          {unmanaged && (
+            <button type="button" className="btn btn--ghost" onClick={() => setUnmanaged(false)}>
+              {tx(C.clearFilter, { filter: tx(C.unmanagedOnly) })}
+            </button>
           )}
         </div>
       </div>
