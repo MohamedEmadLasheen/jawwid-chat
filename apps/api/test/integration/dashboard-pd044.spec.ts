@@ -219,8 +219,9 @@ describe('GET /dashboard/chats -- chats.waiting', () => {
     expect(await g.conversations.dashboardWaiting(finance)).toEqual([]);
     expect(await code(g.conversations.dashboardWaiting(s.parentId))).toBe(CommErrorCode.PERMISSION_DENIED);
     expect(await code(g.conversations.dashboardWaiting(s.teacherId))).toBe(CommErrorCode.PERMISSION_DENIED);
-    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.ownerId}::uuid`;
-    expect(await code(g.conversations.dashboardWaiting(s.ownerId))).toBe(CommErrorCode.ACTOR_INACTIVE);
+    // admin_b owns no family (a family's primary owner cannot be deactivated before offboarding).
+    await g.prisma.$executeRaw`UPDATE chat.staff SET is_active = false WHERE id = ${s.otherAdminId}::uuid`;
+    expect(await code(g.conversations.dashboardWaiting(s.otherAdminId))).toBe(CommErrorCode.ACTOR_INACTIVE);
   });
 
   it('runs the same number of statements for 2 conversations as for 30 (no N+1)', async () => {
