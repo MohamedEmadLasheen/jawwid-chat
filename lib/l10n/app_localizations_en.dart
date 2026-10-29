@@ -4737,4 +4737,12 @@ class L10nEn extends L10n {
 
   @override
   String get materialsAgeLabel => 'Age';
+
+  @override
+  String get photoLabel => 'Photo';
+
+  @override
+  String photoPositionLabel(String position, String count) {
+    return 'Photo $position of $count';
+  }
 }
