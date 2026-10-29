@@ -98,6 +98,8 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   task_overdue_decision: { version: 1, category: 'task', inbox: 'inbox.task_overdue_decision', action: 'open_task' },
   // PD-43 §3.4, §3.7: for the Teachers manager (the super admin when there is none).
   teacher_added_unsupervised: { version: 1, category: 'task', inbox: 'inbox.teacher_added_unsupervised' },
+  // PD-39 §10 4c: a departed teacher's boards end their 12 months in 30 days.
+  whiteboard_retention_expiring: { version: 1, category: 'task', inbox: 'inbox.whiteboard_retention_expiring' },
   teacher_duplicate_hidden: { version: 1, category: 'task', inbox: 'inbox.teacher_duplicate_hidden' },
   teacher_supervisor_left: { version: 1, category: 'task', inbox: 'inbox.teacher_supervisor_left' },
   // PD-41: the Certificates page's work items.

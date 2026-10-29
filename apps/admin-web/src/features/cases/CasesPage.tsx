@@ -8,6 +8,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { casesApi, type CaseDetail, type CaseStatus, type CaseSummary, type CaseTab } from './api'
 import { C, EVENT_LABEL, STATUS_LABEL, SUBJECT_LABEL, TAB_LABEL, TARGET_LABEL, useCopy } from './copy'
+import '../teachers/teachers.css'
 import './cases.css'
 
 const TABS: CaseTab[] = ['mine', 'opened', 'department']
@@ -54,7 +55,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
         <p className="page__subtitle">{tx(C.subtitle)}</p>
       </header>
       <div className="cases__bar">
-        <div role="tablist" className="cases__tabs" aria-label={tx(C.title)}>
+        <div role="tablist" className="ts-tabs" aria-label={tx(C.title)}>
           {TABS.map((t) => (
             <button
               key={t}

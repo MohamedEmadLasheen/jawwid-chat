@@ -31,7 +31,7 @@
 .sp-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-block-start: var(--space-1); }
 .sp-about { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; line-height: 1.6; }
 
-.sp-avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; object-fit: cover; flex: none; background: var(--accent-soft); color: var(--accent); font-weight: 700; border: 1px solid var(--border); }
+.sp-avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; object-fit: cover; flex: none; background: var(--accent-soft); color: var(--text-link); font-weight: 700; border: 1px solid var(--border); }
 .sp-photo { display: flex; gap: var(--space-3); align-items: flex-start; flex-wrap: wrap; }
 .sp-photo__controls { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; max-inline-size: 260px; }
 .sp-file-input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; overflow: hidden; }
@@ -86,7 +86,7 @@
 .sp-row--compact { grid-template-columns: minmax(200px, 1fr) minmax(220px, 2fr); }
 .sp-row__who { display: flex; gap: var(--space-2); align-items: flex-start; min-inline-size: 0; }
 .sp-row__names { min-inline-size: 0; overflow-wrap: anywhere; }
-.sp-row__link { font-weight: 600; color: var(--accent); text-decoration: none; }
+.sp-row__link { font-weight: 600; color: var(--text-link); text-decoration: none; }
 .sp-row__link:hover { text-decoration: underline; }
 .sp-row__resp { display: flex; flex-wrap: wrap; gap: var(--space-1); align-content: flex-start; min-inline-size: 0; }
 .sp-row__nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: var(--space-1); margin: 0; }
@@ -96,7 +96,7 @@
 
 .sp-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-start: var(--space-3); }
 .sp-tab { font: inherit; background: transparent; border: none; border-block-end: 2px solid transparent; padding: var(--space-2) var(--space-3); color: var(--text-muted); cursor: pointer; }
-.sp-tab[aria-selected='true'] { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
+.sp-tab[aria-selected='true'] { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
 .sp-tabpanel { padding-block-start: var(--space-3); min-inline-size: 0; }
 .sp-quick { margin-block-start: var(--space-4); border-block-start: 1px solid var(--border); padding-block-start: var(--space-2); }
 

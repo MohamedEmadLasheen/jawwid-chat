@@ -173,6 +173,13 @@ const ENTRIES = {
   'lesson_content.check': { label: { en: 'Check lesson content against its source', ar: 'مطابقة محتوى الدروس بمصدره' }, risk: 'none', introducedBy: 'PD-49', delegable: true },
   'lesson_content.review_teacher': { label: { en: 'Approve lesson content as a teacher', ar: 'اعتماد محتوى الدروس تربويًّا' }, risk: 'none', introducedBy: 'PD-49', delegable: true },
   'lesson_content.review_scholar': { label: { en: 'Approve lesson content as the scholar', ar: 'اعتماد محتوى الدروس شرعيًّا' }, risk: 'none', introducedBy: 'PD-49' },
+
+  // PD-39: teachers' boards, read-only. The key opens the door; the service then
+  // narrows to the teacher's assigned supervisor, active backup, the Teachers
+  // Manager and the super admin (chat.staff_supervised_teacher_ids). Not
+  // delegable (owner 2026-10-28: exactly those four roles).
+  'whiteboards.view': { label: { en: "View teachers' boards (read-only)", ar: 'عرض سبورات المعلمين (للقراءة فقط)' }, risk: 'pii', introducedBy: 'PD-39' },
+  'whiteboards.retention': { label: { en: "Manage departed teachers' boards and read board access history", ar: 'إدارة سبورات المعلمين المغادرين والاطلاع على سجل الوصول' }, risk: 'pii', introducedBy: 'PD-39' },
 } as const satisfies Record<string, Entry>;
 
 export type PermissionKey = keyof typeof ENTRIES;
