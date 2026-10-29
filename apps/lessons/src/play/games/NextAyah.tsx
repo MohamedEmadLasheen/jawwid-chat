@@ -110,7 +110,7 @@ export function NextAyah({ surah, ayahs, pool, audio, band, seed, onComplete }: 
       </div>
       {tries > 0 && !answered ? (
         <p className="play__again" role="status">
-          حاول مرة أخرى
+          لنحاول مرة أخرى
         </p>
       ) : null}
       {answered ? (

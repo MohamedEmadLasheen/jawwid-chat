@@ -251,19 +251,19 @@ export function PlayLesson({
           {live ? (
             <>
               <button type="button" onClick={() => (audio?.stop(), setAttempt(attempt + 1))}>
-                ↻ أعد اللعبة
+                ↻ إعادة اللعبة
               </button>
               <button type="button" onClick={advance}>
-                ⏭ تخطَّ اللعبة
+                ⏭ تخطّي اللعبة
               </button>
               <button type="button" onClick={() => (audio?.stop(), setStopped(true))}>
-                ■ أوقف
+                ■ إيقاف
               </button>
             </>
           ) : null}
           {surahAudio ? (
             <button type="button" aria-pressed={muted} onClick={() => (audio?.stop(), setMuted(!muted), setStep(0), setAttempt(0))}>
-              {muted ? '🔊 شغّل التلاوة' : '🔇 بلا تلاوة'}
+              {muted ? '🔊 تشغيل التلاوة' : '🔇 بلا تلاوة'}
             </button>
           ) : null}
           <button type="button" disabled={scale === 0} onClick={() => setScale(scale - 1)}>
@@ -293,7 +293,7 @@ export function PlayLesson({
             توقّفت الألعاب.
           </p>
           <button type="button" className="primary play__big" onClick={() => setStopped(false)}>
-            تابع
+            متابعة
           </button>
         </>
       ) : activity && Game ? (

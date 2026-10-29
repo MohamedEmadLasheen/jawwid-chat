@@ -116,7 +116,7 @@ export function OrderAyat({ surah, ayahs, pool, audio, band, seed, onComplete }:
   return (
     <section className="play" aria-label="رتّب الآيات">
       <p className="play__ask">
-        {band === '3-5' ? 'أيّ الآيتين تأتي أولًا؟' : done ? 'أحسنت! هذا ترتيبها' : placed === 0 ? 'المس الآية التي تأتي أولًا' : 'المس الآية التي تأتي بعدها'}
+        {band === '3-5' ? 'أيّ الآيتين تأتي أولًا؟' : done ? 'أحسنت! هذا ترتيبها' : placed === 0 ? 'لنلمس الآية التي تأتي أولًا' : 'لنلمس الآية التي تليها'}
       </p>
       {band === '3-5' ? (
         <div className="play-cards">
@@ -125,7 +125,7 @@ export function OrderAyat({ surah, ayahs, pool, audio, band, seed, onComplete }:
               <VerseCard ayah={a} shape={i} numbered={false} mark={a === current.ayat[0] && done ? (placed >= 1 ? 'right' : 'shown') : null} onPress={() => touch(a)} />
               {audio ? (
                 <button type="button" className="play__big" onClick={() => audio.play(surah, a.ayah)}>
-                  🔊 استمع<span className="sr-only">{` إلى آية ${SHAPE_NAMES[i % SHAPE_NAMES.length]}`}</span>
+                  🔊 لنستمع<span className="sr-only">{` إلى آية ${SHAPE_NAMES[i % SHAPE_NAMES.length]}`}</span>
                 </button>
               ) : null}
             </div>
@@ -153,7 +153,7 @@ export function OrderAyat({ surah, ayahs, pool, audio, band, seed, onComplete }:
       )}
       {tries > 0 && !done ? (
         <p className="play__again" role="status">
-          {shownAnswer ? 'هذه هي التي تأتي الآن' : 'حاول مرة أخرى'}
+          {shownAnswer ? 'هذه هي الآية التالية' : 'لنحاول مرة أخرى'}
         </p>
       ) : null}
       {done ? (

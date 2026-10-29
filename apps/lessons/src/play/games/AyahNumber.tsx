@@ -100,7 +100,7 @@ export function AyahNumber({ ayahs, pool, band, seed, onComplete }: GameProps) {
       )}
       {tries > 0 && !answered ? (
         <p className="play__again" role="status">
-          حاول مرة أخرى
+          لنحاول مرة أخرى
         </p>
       ) : null}
       {answered ? (

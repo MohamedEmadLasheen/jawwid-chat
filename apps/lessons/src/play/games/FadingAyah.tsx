@@ -71,7 +71,7 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
   return (
     <section className="play" aria-label="المحو التدريجي">
       <p className="play__ask">
-        {revealed ? 'هذه هي الآية كاملة' : step === 0 ? `اقرأ الآية ${arabic(current.ayah.ayah)} بصوتك` : 'اقرأها بصوتك مرة أخرى، ولو بلا الكلمات المخفية'}
+        {revealed ? 'هذه هي الآية كاملة' : step === 0 ? `لنقرأ الآية ${arabic(current.ayah.ayah)} بصوت مسموع` : 'لنقرأها مرة أخرى، ولو خفيت بعض كلماتها'}
       </p>
       {revealed ? (
         <div className="play-cards">
@@ -111,7 +111,7 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
                       </span>
                     )
                   ) : (
-                    <span className="sr-only">كلمة مخفية، المسها لتراها</span>
+                    <span className="sr-only">كلمة مخفية، تظهر عند لمسها</span>
                   )}
                 </button>
                 {mark ? ` ${mark}` : null}
@@ -123,7 +123,7 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
       )}
       {audio && !revealed ? (
         <button type="button" className="play__big" onClick={() => audio.play(surah, current.ayah.ayah)}>
-          🔊 استمع إليها
+          🔊 لنستمع إليها
         </button>
       ) : null}
       {revealed ? (
@@ -132,11 +132,11 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
         </button>
       ) : step < steps ? (
         <button type="button" className="primary play__big" onClick={() => (setStep(step + 1), setPeeked(new Set()))}>
-          {band === '9-12' && step + 1 === steps ? 'أبقِ أوائل الحروف فقط' : 'أخفِ كلمات أكثر'}
+          {band === '9-12' && step + 1 === steps ? 'نبقي الحرف الأول من كل كلمة' : 'نخفي كلمات أخرى'}
         </button>
       ) : (
         <button type="button" className="primary play__big" onClick={() => setRevealed(true)}>
-          اكشف الآية
+          نكشف الآية
         </button>
       )}
       <p className="note">

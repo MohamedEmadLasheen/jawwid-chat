@@ -183,10 +183,10 @@ describe('the games: a whole verse, still, on a big card', () => {
     const onComplete = vi.fn();
     render(<Echo {...props({ audio: controller, ayahs: AYAHS.slice(0, 1), onComplete })} />);
     for (let i = 0; i < 3; i++) {
-      fireEvent.click(screen.getByRole('button', { name: /استمع/ }));
-      expect(screen.queryByText('دورك! ردّد الآية')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: /لنستمع/ }));
+      expect(screen.queryByText('والآن دورنا: نردّد الآية معًا')).toBeNull();
       end();
-      fireEvent.click(screen.getByRole('button', { name: /ردّدها/ }));
+      fireEvent.click(screen.getByRole('button', { name: /ردّدناها/ }));
     }
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
@@ -207,7 +207,7 @@ describe('the games: a whole verse, still, on a big card', () => {
       return screen.getAllByRole('button').find((b) => b.dataset.ayah && Number(b.dataset.ayah) !== target)!;
     };
     fireEvent.click(wrong());
-    expect(screen.getByText('حاول مرة أخرى')).toBeTruthy();
+    expect(screen.getByText('لنحاول مرة أخرى')).toBeTruthy();
     fireEvent.click(wrong());
     expect(screen.getByText('✓ هذه هي')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /التالي/ }));
@@ -239,13 +239,13 @@ describe('the games: a whole verse, still, on a big card', () => {
   it('Count the ayat, without recitation: a grown-up reads, the child counts in order; another touch does nothing', () => {
     const onComplete = vi.fn();
     render(<CountAyat {...props({ ayahs: AYAHS, onComplete })} />);
-    expect(screen.getByText(/يقرأ لك الكبير/)).toBeTruthy();
+    expect(screen.getByText(/يقرأ الكبير الآية المضيئة/)).toBeTruthy();
     const cards = screen.getAllByRole('button');
     fireEvent.click(cards[3]!);
     expect(cards[0]!.className).toContain('play-card--glow');
     for (const c of cards) fireEvent.click(c);
     expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/عددتَ ٥ آيات/)).toBeTruthy();
+    expect(screen.getByText(/عددنا ٥ آيات/)).toBeTruthy();
   });
 });
 
@@ -349,7 +349,7 @@ describe('the games page', () => {
     await page({ approvals: await sign('listen_glow', 'count_ayat'), audioSource: r.audioSource, audioFactory: r.audioFactory });
     expect(await screen.findByRole('region', { name: 'عُدّ الآيات' })).toBeTruthy();
     // Without recitation for the segment, the counting game is read by a grown-up.
-    expect(screen.getByText(/يقرأ لك الكبير/)).toBeTruthy();
+    expect(screen.getByText(/يقرأ الكبير الآية المضيئة/)).toBeTruthy();
   });
 
   it('an audio game across segments: each segment plays its own ayat', async () => {
@@ -372,18 +372,18 @@ describe('the games page', () => {
     await page({ approvals: await sign('listen_glow', 'echo'), audioSource: r.audioSource, audioFactory: r.audioFactory });
     expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
     // Folded away from the child until a grown-up opens them.
-    expect(screen.queryByRole('button', { name: /أوقف/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /إيقاف/ })).toBeNull();
     expect(screen.getByRole('button', { name: /للكبار/ }).getAttribute('aria-expanded')).toBe('false');
     // Folded means not there at all (not merely hidden, which a stylesheet's display rule could undo).
     expect(document.getElementById('play-grownup')).toBeNull();
     grownUp();
-    fireEvent.click(screen.getByRole('button', { name: /أوقف/ }));
+    fireEvent.click(screen.getByRole('button', { name: /إيقاف/ }));
     expect(screen.getByText('توقّفت الألعاب.')).toBeTruthy();
     expect(document.querySelectorAll('.play-card')).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: 'تابع' }));
-    fireEvent.click(screen.getByRole('button', { name: /تخطَّ اللعبة/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'متابعة' }));
+    fireEvent.click(screen.getByRole('button', { name: /تخطّي اللعبة/ }));
     expect(await screen.findByRole('region', { name: 'ردّد معي' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /تخطَّ اللعبة/ }));
+    fireEvent.click(screen.getByRole('button', { name: /تخطّي اللعبة/ }));
     expect(await screen.findByText('أحسنت! انتهت ألعاب هذه الآيات')).toBeTruthy();
   });
 
@@ -394,7 +394,7 @@ describe('the games page', () => {
     grownUp();
     fireEvent.click(screen.getByRole('button', { name: /بلا تلاوة/ }));
     expect(await screen.findByRole('region', { name: 'عُدّ الآيات' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /شغّل التلاوة/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: /تشغيل التلاوة/ }).getAttribute('aria-pressed')).toBe('true');
     const main = document.querySelector('main')!;
     expect(main.style.getPropertyValue('--verse-scale')).toBe('1');
     fireEvent.click(screen.getByRole('button', { name: /تكبير الآيات/ }));

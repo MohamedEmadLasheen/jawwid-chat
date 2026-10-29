@@ -26,14 +26,14 @@ export function CountAyat({ surah, ayahs, audio, onComplete }: GameProps) {
 
   return (
     <section className="play" aria-label="عُدّ الآيات">
-      <p className="play__ask">{audio ? 'المس الآية المضيئة لتسمعها وتعدّها' : 'يقرأ لك الكبير الآية المضيئة، ثم المسها لتعدّها'}</p>
+      <p className="play__ask">{audio ? 'لنلمس الآية المضيئة: نسمعها ونعدّها' : 'يقرأ الكبير الآية المضيئة، ثم نلمسها لنعدّها'}</p>
       <div className="play-cards">
         {ayahs.map((a, i) => (
           <VerseCard key={a.ayah} ayah={a} shape={i} glow={i === count} onPress={() => touch(i)} />
         ))}
       </div>
       <Beads done={count} total={ayahs.length} label="الآيات التي عددتها" />
-      {done ? <Praise text={`أحسنت! عددتَ ${ayatCount(ayahs.length)}`} /> : null}
+      {done ? <Praise text={`أحسنت! عددنا ${ayatCount(ayahs.length)}`} /> : null}
     </section>
   );
 }
