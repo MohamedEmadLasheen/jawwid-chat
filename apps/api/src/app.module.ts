@@ -23,6 +23,7 @@ import { MaterialsModule } from './materials/materials.module';
 import { QuranModule } from './quran/quran.module';
 import { LessonAudioModule } from './lesson-audio/lesson-audio.module';
 import { LessonContentModule } from './lesson-content/lesson-content.module';
+import { WhiteboardModule } from './whiteboards/whiteboard.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
 import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
 import { CalendarModule } from './calendar/calendar.module';
@@ -80,6 +81,8 @@ import { TaskModule } from './tasks/task.module';
     LessonAudioModule,
     // PD-49: the review of children's Quran content and game mechanics (teacher + scholar steps).
     LessonContentModule,
+    // PD-39: the teacher whiteboard (boards, pages, the access log; staff read-only).
+    WhiteboardModule,
     // PD-30: subscription locks -- cards, pushes, lesson holds, renewal requests.
     SubscriptionModule,
     // PD-35: teacher supervisors (assignment, the 'supervision' seat).
