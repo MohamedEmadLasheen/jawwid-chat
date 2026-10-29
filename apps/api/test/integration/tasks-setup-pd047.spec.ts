@@ -33,7 +33,7 @@ import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.ser
 import { OrgStructureService } from '../../src/org/org-structure.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { TaskService } from '../../src/tasks/task.service';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, seed, supervise, truncate, Scenario } from './harness';
 
 jest.setTimeout(120_000);
 
@@ -230,14 +230,8 @@ describe('a family waiting for its Operations supervisor', () => {
     const child = await waitingChild();
     await tasks.sweep();
     const id = (await taskFor(`family_unsupervised:${s.familyId}`)) as string;
-    await g.prisma.$transaction([
-      exec(`select set_config('chat.syncing_supervision', 'on', true)`),
-      exec(`select set_config('chat.syncing_supervision_source', 'PD-47 spec import', true)`),
-      exec(
-        `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by)
-         values ($1::uuid, chat.default_organization_id(), $2::uuid, null)`, child, s.ownerId,
-      ),
-    ]);
+    // The harness's supervise() is the academy's import gate: it names nobody.
+    await supervise(g.prisma, s.ownerId, [child]);
     expect(await tasks.get(s.managerId, id)).toMatchObject({ state: 'completed', outcome: 'done' });
     expect((await completion(id))?.actor ?? null).toBeNull();
   });
