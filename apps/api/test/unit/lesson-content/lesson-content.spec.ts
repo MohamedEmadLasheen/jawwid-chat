@@ -266,6 +266,9 @@ describe('LessonContentService', () => {
     expect(signer.keyId).toBe(golden.key.id);
     expect(signer.sign(golden.envelope.payload)).toEqual(golden.envelope);
     expect(createPublicKey(createPrivateKey({ key: der, format: 'der', type: 'pkcs8' })).export({ format: 'der', type: 'spki' }).toString('base64')).toBe(golden.key.publicKey);
+    // Non-ASCII: the API's canonical bytes of an Arabic value, and its signature, are the vector's.
+    expect(canonicalJson(golden.arabic.value)).toBe(golden.arabic.canonical);
+    expect(signer.sign(golden.arabic.value)!.signature).toBe(golden.arabic.signature);
   });
 
   it('exports nothing unsigned: no signing key is a 503', async () => {

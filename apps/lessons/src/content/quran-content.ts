@@ -200,6 +200,9 @@ export const APPROVAL_KEYS: readonly ApprovalKey[] = (approvalKeys as { keys: Ap
 const SIGNATURE = /^[A-Za-z0-9+/]{86}==$/; // 64 bytes, base64
 const STEPS: readonly Step[] = ['check', 'teacher', 'scholar'];
 
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+const isoTime = (t: unknown): number => (typeof t === 'string' && ISO_TIME.test(t) ? Date.parse(t) : NaN);
+
 /** The envelope's shape, its key and its lesson -- refused whole on any mismatch. Returns the approvals by id, or null. */
 function readApprovals(x: unknown, datasetId: string, lessonKey: string, keys: readonly ApprovalKey[]): Map<string, Approval> | null {
   if (!isObj(x) || Object.keys(x).sort().join() !== 'keyId,payload,signature') return null;
@@ -212,7 +215,9 @@ function readApprovals(x: unknown, datasetId: string, lessonKey: string, keys: r
   } else {
     const key = keys.find((k) => k.id === x.keyId);
     if (!key || key.env !== 'production' || key.revokedAt || typeof x.signature !== 'string' || !SIGNATURE.test(x.signature)) return null;
-    if (typeof p.issuedAt !== 'string' || (key.retiredAt && !(p.issuedAt < key.retiredAt))) return null;
+    // Times compare as instants (with or without milliseconds), never as strings.
+    const issued = isoTime(p.issuedAt);
+    if (Number.isNaN(issued) || (key.retiredAt && !(issued < isoTime(key.retiredAt)))) return null;
   }
   const out = new Map<string, Approval>();
   for (const a of p.approvals as unknown[]) {

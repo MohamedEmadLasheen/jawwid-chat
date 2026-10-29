@@ -573,6 +573,13 @@ The scholar key is a deliberate grant to named people, never a bundle default.
     - against the PR's base branch, a changed approvals file must be strictly newer than the copy it replaces, so an old export re-committed by a revert or a stale branch fails;
     - a retired key signs no changed file, and a revoked key verifies nothing;
     - a PR may not change `approvals-keys.json` and any approvals file together (plus a CODEOWNERS entry on the key file).
+  - **No replay through deletion, and no PR checks itself** (second review of #265):
+    - `approvals-ledger.json` keeps each signed lesson's high-water `issuedAt`. It only grows, and every signed file must match its entry. A changed file must be newer than its entry, and a brand-new one must be recent (30 days).
+    - A file that is signed on the base branch is never deleted or unsigned.
+    - A PR that changes approvals (or the ledger) may not change the code that checks them: the verifier, the content check, the guards, the CI workflows, CODEOWNERS, or the engine's readers.
+    - CODEOWNERS covers all of these. The owner turns on "Require review from Code Owners" before the first key is added.
+    - Times compare as instants, so a timestamp with or without milliseconds is the same time. An `issuedAt` more than 5 minutes in the future is refused.
+    - The key registry is validated field by field, and the golden vector's test key can never be listed in it. The golden vectors include an Arabic value.
   - **The loader rule:** any engine loader reads exactly the set `verify-approvals.mjs` checks, `apps/lessons/src/content/approvals/*.json`, and nothing else.
   - **Future option:** verify the signature at runtime in the engine too (WebCrypto Ed25519), once the WebViews families use support it widely: Safari/iOS 17+, Chrome 137+, Firefox 129+.
 - **The build ships approved text only.** The snapshot step drops every item without a complete approval for its current hash. **Held, draft and rejected text never reaches the browser bundle.** Today held lines ship and are hidden at runtime; PD-49 closes that.

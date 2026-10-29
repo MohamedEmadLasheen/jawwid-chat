@@ -530,6 +530,18 @@ def calibration_selftest(surahs):
     return failed
 
 
+ISO_TIME = re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z')
+
+
+def iso_ms(t):
+    """An ISO time as epoch milliseconds, with or without milliseconds (one form to compare), or None."""
+    if not isinstance(t, str) or not ISO_TIME.fullmatch(t):
+        return None
+    import datetime
+    d = datetime.datetime.strptime(t[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=datetime.timezone.utc)
+    return int(d.timestamp()) * 1000 + (int(t[20:23]) if len(t) == 24 else 0)
+
+
 def envelope_errors(appr, keys):
     """The signed export's shape and key (keys: {id: key entry}). The Ed25519 signature is verify-approvals.mjs's."""
     if not isinstance(appr, dict) or set(appr) != {'payload', 'keyId', 'signature'}:
@@ -549,7 +561,7 @@ def envelope_errors(appr, keys):
         errors.append(f'approvals: signed by an unknown key {appr["keyId"]!r} (not in approvals-keys.json), or carries no signature')
     elif key.get('env') != 'production' or key.get('revokedAt'):
         errors.append(f'approvals: key {appr["keyId"]} is a {key.get("env")} key or revoked: it never approves for children')
-    elif not isinstance(p['issuedAt'], str) or (key.get('retiredAt') and not p['issuedAt'] < key['retiredAt']):
+    elif iso_ms(p['issuedAt']) is None or (key.get('retiredAt') and not iso_ms(p['issuedAt']) < (iso_ms(key['retiredAt']) or 0)):
         errors.append(f'approvals: issued {p["issuedAt"]!r}, after its key was retired ({key.get("retiredAt")})')
     return errors
 
@@ -711,6 +723,15 @@ def selftest():
             failed.append(f'approvals {name}: accepted')
     # The golden vector (the API's signer made it; verify-approvals.mjs verifies its signature) is a well-formed envelope.
     golden = json.load(open(GOLDEN, encoding='utf-8'))
+    # Non-ASCII: the canonical bytes of the Arabic vector are the API's and verify-approvals.mjs's.
+    if canonical_json(golden['arabic']['value']) != golden['arabic']['canonical']:
+        failed.append('the Arabic golden vector: canonical JSON differs from the API and verify-approvals.mjs')
+    # Times compare as instants: 12:00:00Z is 12:00:00.000Z (a string compare says otherwise).
+    if iso_ms('2026-10-29T12:00:00Z') != iso_ms('2026-10-29T12:00:00.000Z') or iso_ms('2026-10-29T12:00:00.001Z') <= iso_ms('2026-10-29T12:00:00Z'):
+        failed.append('iso_ms: one instant in two forms')
+    retired_same = dict(golden['key'], retiredAt='2026-10-29T12:00:00Z')
+    if not envelope_errors(golden['envelope'], {golden['key']['id']: retired_same}):
+        failed.append('a key retired at the very instant it signed (written without ms) was accepted')
     g_errors = envelope_errors(golden['envelope'], {golden['key']['id']: golden['key']})
     if g_errors:
         failed.append(f'the golden vector: {g_errors}')

@@ -243,10 +243,12 @@ describe('resolveQuranContent', () => {
       await expect(resolveQuranContent(c, s, bad as unknown as Approvals, WORKS, KEYS)).resolves.toBeNull();
     }
     // A staging, revoked or (before signing) retired key refuses everything.
-    for (const k of [{ env: 'staging' }, { revokedAt: '2026-01-01T00:00:00Z' }, { retiredAt: '2000-01-01T00:00:00Z' }]) {
+    // 12:00:00Z is the very instant it was issued (12:00:00.000Z): compared as times, not strings, it is refused.
+    for (const k of [{ env: 'staging' }, { revokedAt: '2026-01-01T00:00:00Z' }, { retiredAt: '2000-01-01T00:00:00Z' }, { retiredAt: '2026-10-29T12:00:00Z' }]) {
       await expect(resolveQuranContent(c, s, good, WORKS, [{ ...KEYS[0]!, ...k }])).resolves.toBeNull();
     }
     await expect(resolveQuranContent(c, s, good, WORKS, [{ ...KEYS[0]!, retiredAt: '2999-01-01T00:00:00Z' }])).resolves.not.toBeNull();
+    await expect(resolveQuranContent(c, s, good, WORKS, [{ ...KEYS[0]!, retiredAt: '2026-10-29T12:00:01Z' }])).resolves.not.toBeNull();
   });
 
   it('an empty, unsigned file approves nothing and refuses nothing', async () => {

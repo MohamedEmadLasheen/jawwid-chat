@@ -45,5 +45,20 @@
   },
   "keyId": "c6b06761883963a7",
   "signature": "QlKMnUpILJUkxn4KToDbT1xIvtTHvJQtvw8m1odAjZ8w02eBHyRg0XECkJVsd1seIGFS3zGvX44RD18deUr+CA=="
+ },
+ "arabic": {
+  "about": "Non-ASCII: the canonical JSON of this value (raw UTF-8, no \\u escapes) and its Ed25519 signature under the TEST-ONLY key are the same in the API signer, verify-approvals.mjs and check-quran-content.py.",
+  "value": {
+   "text": "اعتُمِدَ للأطفال: المعلّم والمراجع الشرعي",
+   "letters": [
+    "أ",
+    "ب",
+    "ﷲ"
+   ],
+   "n": 1,
+   "quote": "قال \"نعم\"\n"
+  },
+  "canonical": "{\"letters\":[\"أ\",\"ب\",\"ﷲ\"],\"n\":1,\"quote\":\"قال \\\"نعم\\\"\\n\",\"text\":\"اعتُمِدَ للأطفال: المعلّم والمراجع الشرعي\"}",
+  "signature": "8ikJ7UNdRKAozNd8KNC72C+R9W9CrR5Y0xyb42C9Ari7/lbiXwPQAgCav4tl5DfzAeSW85Qo9GZKQveVUQk5AQ=="
  }
 }
