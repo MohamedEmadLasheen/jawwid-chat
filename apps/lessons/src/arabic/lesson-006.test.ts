@@ -26,10 +26,11 @@ describe('Arabic lesson 6 (the sukun), the real file', () => {
 
   it('holds every word (the tanween read as the pausal sukun), and left out the syllables', () => {
     const words = raw.units[0]!.words;
-    expect(words).toHaveLength(23);
+    expect(words).toHaveLength(24);
     expect(words.every((w) => !!w.review)).toBe(true);
     expect(words.map((w) => w.text)).toContain('نَجْمْ');
     expect(words.map((w) => w.text)).not.toContain('أبْ');
+    expect(words.map((w) => w.text)).toContain('أَرْضْ'); // held with the hamza's fatha added, not dropped
     expect(r.quiz).toHaveLength(0); // every question shows a held word until review
   });
 });
