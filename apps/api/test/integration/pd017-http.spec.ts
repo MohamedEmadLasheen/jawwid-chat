@@ -209,7 +209,9 @@ describe('PD-17 over HTTP', () => {
     expect(list.status).toBe(200);
     const item = (list.json.items as Array<Record<string, unknown>>).find((p) => p.id === f.parent.id)!;
     // The list carries no contact channel: the app never asks for the detail route.
-    expect(Object.keys(item).sort()).toEqual(['avatarUrl', 'childrenCount', 'family', 'id', 'name']);
+    // PD-45: a family's location is not one (plan §4); Sales read it, as PD-17 allows.
+    expect(Object.keys(item).sort()).toEqual(['avatarUrl', 'childrenCount', 'family', 'id', 'location', 'name']);
+    expect(Object.keys(item.location as object).sort()).toEqual(['countryCode', 'subdivisionCode']);
 
     const created = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/instalments`, {
       label: 'Sales app fees', amountMinor: 70000, currency: 'AED', firstDueDate: '2026-10-01',
