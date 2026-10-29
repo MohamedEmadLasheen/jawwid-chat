@@ -118,6 +118,8 @@ export function sourceLink(t: Pick<TaskSummary, 'source' | 'titleParams'>): stri
       return typeof t.titleParams?.certificateId === 'string'
         ? `/certificates?id=${encodeURIComponent(t.titleParams.certificateId)}`
         : '/certificates'
+    case 'complaint':
+      return '/teachers/supervision?section=complaints'
     case 'teacher_unsupervised':
       // The source is the spell; its teacher comes with the title.
       return typeof t.titleParams?.teacherId === 'string' ? `/teachers/files/${encodeURIComponent(t.titleParams.teacherId)}` : null

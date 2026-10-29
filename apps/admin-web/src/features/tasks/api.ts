@@ -33,6 +33,7 @@ export type SourceType =
   | 'certificate_resubmit'
   | 'certificate_review'
   | 'certificate_send'
+  | 'complaint'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 
 export interface Principal {

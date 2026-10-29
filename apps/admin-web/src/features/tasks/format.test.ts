@@ -71,3 +71,18 @@ describe('PD-47 PR-6b: work handed between people', () => {
     }
   })
 })
+
+describe('PD-47 PR-6c: the Teachers department\'s decisions', () => {
+  it('a complaint names the teacher only, and leads to the complaints', () => {
+    const t = task('complaint', 'e1', { teacherName: 'teacher_c', teacherId: 't1' })
+    expect(titleOf(t, en, fmt)).toBe('Resolve a complaint about teacher_c')
+    expect(sourceLink(t)).toBe('/teachers/supervision?section=complaints')
+  })
+
+  it('every one has its label and title in both languages, with no placeholder left unfilled', () => {
+    for (const type of ['complaint'] as const) {
+      expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
+      expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
+    }
+  })
+})
