@@ -1,0 +1,640 @@
+{
+  "lesson": 9,
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 arabic/lesson-9/components/ExamplesSection.tsx, read as text from the quarantined copy, never built or run). A STARTER: only the real fa''a verbs, one unit per letter carrying the shadda; the missing first vowel added and held; non-words left out and listed. The Teachers department supplies the full word lists, with the shadda in the middle of the word too."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/arabic/lesson-9 (read as text, never built or run)",
+    "sha256": {
+      "components/ExamplesSection.tsx": "ab446ebcb1aa8830f1c6e28b57bfa2f722833f74414c322e2ff2583e421d5d54"
+    }
+  },
+  "finalMark": "sukun",
+  "retiredIds": [],
+  "units": [
+    {
+      "id": "mim_shadda",
+      "letters": [
+        "م"
+      ],
+      "mark": "shadda",
+      "name": "مّ",
+      "forms": [
+        "مّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "mim_shadda-001",
+          "text": "أَمّْ",
+          "was": "أمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer أَمَّ)"
+        },
+        {
+          "id": "mim_shadda-002",
+          "text": "لَمّْ",
+          "was": "لمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer لَمَّ)"
+        },
+        {
+          "id": "mim_shadda-003",
+          "text": "ضَمّْ",
+          "was": "ضمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer ضَمَّ)"
+        },
+        {
+          "id": "mim_shadda-004",
+          "text": "تَمّْ",
+          "was": "تمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer تَمَّ)"
+        },
+        {
+          "id": "mim_shadda-005",
+          "text": "غَمّْ",
+          "was": "غمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer غَمَّ)"
+        },
+        {
+          "id": "mim_shadda-006",
+          "text": "سَمّْ",
+          "was": "سمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer سَمَّ); WORD: means \"poisoned\": doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "mim_shadda-007",
+          "text": "دَمّْ",
+          "was": "دمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer دَمَّ); WORD: rare; a teacher decides"
+        },
+        {
+          "id": "mim_shadda-008",
+          "text": "نَمّْ",
+          "was": "نمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer نَمَّ)"
+        },
+        {
+          "id": "mim_shadda-009",
+          "text": "كَمّْ",
+          "was": "كمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer كَمَّ); WORD: rare; a teacher decides"
+        },
+        {
+          "id": "mim_shadda-010",
+          "text": "جَمّْ",
+          "was": "جمَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer جَمَّ); WORD: rare; a teacher decides"
+        },
+        {
+          "id": "mim_shadda-011",
+          "text": "هَمّْ",
+          "was": "همَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer هَمَّ)"
+        }
+      ]
+    },
+    {
+      "id": "dal_shadda",
+      "letters": [
+        "د"
+      ],
+      "mark": "shadda",
+      "name": "دّ",
+      "forms": [
+        "دّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dal_shadda-001",
+          "text": "مَدّْ",
+          "was": "مدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer مَدَّ)"
+        },
+        {
+          "id": "dal_shadda-002",
+          "text": "شَدّْ",
+          "was": "شدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer شَدَّ)"
+        },
+        {
+          "id": "dal_shadda-003",
+          "text": "رَدّْ",
+          "was": "ردَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer رَدَّ)"
+        },
+        {
+          "id": "dal_shadda-004",
+          "text": "صَدّْ",
+          "was": "صدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer صَدَّ)"
+        },
+        {
+          "id": "dal_shadda-005",
+          "text": "بَدّْ",
+          "was": "بدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer بَدَّ); WORD: rare; a teacher decides"
+        },
+        {
+          "id": "dal_shadda-006",
+          "text": "جَدّْ",
+          "was": "جدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer جَدَّ)"
+        },
+        {
+          "id": "dal_shadda-007",
+          "text": "عَدّْ",
+          "was": "عدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer عَدَّ)"
+        },
+        {
+          "id": "dal_shadda-008",
+          "text": "هَدّْ",
+          "was": "هدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer هَدَّ)"
+        },
+        {
+          "id": "dal_shadda-009",
+          "text": "قَدّْ",
+          "was": "قدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer قَدَّ)"
+        },
+        {
+          "id": "dal_shadda-010",
+          "text": "لَدّْ",
+          "was": "لدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer لَدَّ); WORD: rare; a teacher decides"
+        },
+        {
+          "id": "dal_shadda-011",
+          "text": "سَدّْ",
+          "was": "سدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer سَدَّ)"
+        },
+        {
+          "id": "dal_shadda-012",
+          "text": "وَدّْ",
+          "was": "ودَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer وَدَّ)"
+        },
+        {
+          "id": "dal_shadda-013",
+          "text": "كَدّْ",
+          "was": "كدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer كَدَّ)"
+        },
+        {
+          "id": "dal_shadda-014",
+          "text": "حَدّْ",
+          "was": "حدَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer حَدَّ)"
+        }
+      ]
+    },
+    {
+      "id": "ra_shadda",
+      "letters": [
+        "ر"
+      ],
+      "mark": "shadda",
+      "name": "رّ",
+      "forms": [
+        "رّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ra_shadda-001",
+          "text": "مَرّْ",
+          "was": "مرَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer مَرَّ)"
+        },
+        {
+          "id": "ra_shadda-002",
+          "text": "فَرّْ",
+          "was": "فرَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer فَرَّ)"
+        },
+        {
+          "id": "ra_shadda-003",
+          "text": "دَرّْ",
+          "was": "درَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer دَرَّ); WORD: rare; a teacher decides"
+        },
+        {
+          "id": "ra_shadda-004",
+          "text": "سَرّْ",
+          "was": "سرَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer سَرَّ)"
+        },
+        {
+          "id": "ra_shadda-005",
+          "text": "كَرّْ",
+          "was": "كرَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer كَرَّ)"
+        },
+        {
+          "id": "ra_shadda-006",
+          "text": "جَرّْ",
+          "was": "جرَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer جَرَّ)"
+        },
+        {
+          "id": "ra_shadda-007",
+          "text": "حَرّْ",
+          "was": "حرَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer حَرَّ); WORD: rare; a teacher decides"
+        },
+        {
+          "id": "ra_shadda-008",
+          "text": "بَرّْ",
+          "was": "برَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer بَرَّ)"
+        }
+      ]
+    },
+    {
+      "id": "ba_shadda",
+      "letters": [
+        "ب"
+      ],
+      "mark": "shadda",
+      "name": "بّ",
+      "forms": [
+        "بّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ba_shadda-001",
+          "text": "حَبّْ",
+          "was": "حبَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer حَبَّ)"
+        },
+        {
+          "id": "ba_shadda-002",
+          "text": "صَبّْ",
+          "was": "صبَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer صَبَّ)"
+        },
+        {
+          "id": "ba_shadda-003",
+          "text": "لَبّْ",
+          "was": "لبَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer لَبَّ); WORD: rare; a teacher decides"
+        },
+        {
+          "id": "ba_shadda-004",
+          "text": "دَبّْ",
+          "was": "دبَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer دَبَّ)"
+        }
+      ]
+    },
+    {
+      "id": "qaf_shadda",
+      "letters": [
+        "ق"
+      ],
+      "mark": "shadda",
+      "name": "قّ",
+      "forms": [
+        "قّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "qaf_shadda-001",
+          "text": "حَقّْ",
+          "was": "حقَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer حَقَّ)"
+        },
+        {
+          "id": "qaf_shadda-002",
+          "text": "شَقّْ",
+          "was": "شقَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer شَقَّ)"
+        },
+        {
+          "id": "qaf_shadda-003",
+          "text": "دَقّْ",
+          "was": "دقَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer دَقَّ)"
+        },
+        {
+          "id": "qaf_shadda-004",
+          "text": "رَقّْ",
+          "was": "رقَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer رَقَّ)"
+        }
+      ]
+    },
+    {
+      "id": "lam_shadda",
+      "letters": [
+        "ل"
+      ],
+      "mark": "shadda",
+      "name": "لّ",
+      "forms": [
+        "لّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "lam_shadda-001",
+          "text": "حَلّْ",
+          "was": "حلَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer حَلَّ)"
+        },
+        {
+          "id": "lam_shadda-002",
+          "text": "ضَلّْ",
+          "was": "ضلَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer ضَلَّ)"
+        },
+        {
+          "id": "lam_shadda-003",
+          "text": "دَلّْ",
+          "was": "دلَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer دَلَّ)"
+        },
+        {
+          "id": "lam_shadda-004",
+          "text": "مَلّْ",
+          "was": "ملَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer مَلَّ)"
+        }
+      ]
+    },
+    {
+      "id": "nun_shadda",
+      "letters": [
+        "ن"
+      ],
+      "mark": "shadda",
+      "name": "نّ",
+      "forms": [
+        "نّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "nun_shadda-001",
+          "text": "ظَنّْ",
+          "was": "ظنَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer ظَنَّ)"
+        },
+        {
+          "id": "nun_shadda-002",
+          "text": "جَنّْ",
+          "was": "جنَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer جَنَّ)"
+        },
+        {
+          "id": "nun_shadda-003",
+          "text": "مَنّْ",
+          "was": "منَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer مَنَّ)"
+        }
+      ]
+    },
+    {
+      "id": "sin_shadda",
+      "letters": [
+        "س"
+      ],
+      "mark": "shadda",
+      "name": "سّ",
+      "forms": [
+        "سّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sin_shadda-001",
+          "text": "مَسّْ",
+          "was": "مسَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer مَسَّ)"
+        },
+        {
+          "id": "sin_shadda-002",
+          "text": "حَسّْ",
+          "was": "حسَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer حَسَّ)"
+        }
+      ]
+    },
+    {
+      "id": "zay_shadda",
+      "letters": [
+        "ز"
+      ],
+      "mark": "shadda",
+      "name": "زّ",
+      "forms": [
+        "زّ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zay_shadda-001",
+          "text": "هَزّْ",
+          "was": "هزَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer هَزَّ)"
+        },
+        {
+          "id": "zay_shadda-002",
+          "text": "عَزّْ",
+          "was": "عزَّ",
+          "review": "ADDED TASHKEEL: fatha on the first letter; in pause the final fatha gives way to the sukun over the shadda (a teacher may prefer عَزَّ)"
+        }
+      ]
+    }
+  ],
+  "distractors": [
+    {
+      "id": "distractor-001",
+      "text": "أَسَدْ",
+      "was": "أَسَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-001), a wrong option only"
+    },
+    {
+      "id": "distractor-002",
+      "text": "أَرْنَبْ",
+      "was": "أَرْنَب",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-002), a wrong option only"
+    },
+    {
+      "id": "distractor-003",
+      "text": "أَكَلْ",
+      "was": "أَكَلَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-003), a wrong option only"
+    },
+    {
+      "id": "distractor-004",
+      "text": "سَأَلْ",
+      "was": "سَأَلَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-004), a wrong option only"
+    },
+    {
+      "id": "distractor-005",
+      "text": "أَمَلْ",
+      "was": "أَمَل",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-006), a wrong option only"
+    },
+    {
+      "id": "distractor-006",
+      "text": "أَخَذْ",
+      "was": "أَخَذَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-007), a wrong option only"
+    },
+    {
+      "id": "distractor-007",
+      "text": "أَحَدْ",
+      "was": "أَحَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-009), a wrong option only"
+    },
+    {
+      "id": "distractor-008",
+      "text": "أَبَدْ",
+      "was": "أَبَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-010), a wrong option only"
+    },
+    {
+      "id": "distractor-009",
+      "text": "إِبْرَةْ",
+      "was": "إِبْرَة",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-001), a wrong option only"
+    },
+    {
+      "id": "distractor-010",
+      "text": "سُئِلْ",
+      "was": "سُئِلَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_kasra-002), a wrong option only"
+    },
+    {
+      "id": "distractor-011",
+      "text": "إِسْلَامْ",
+      "was": "إِسْلَام",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-003), a wrong option only"
+    },
+    {
+      "id": "distractor-012",
+      "text": "إِيمَانْ",
+      "was": "إِيمَان",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-004), a wrong option only"
+    }
+  ],
+  "quiz": [
+    {
+      "id": "mim_shadda-q1",
+      "kind": "contains",
+      "unit": "mim_shadda",
+      "options": [
+        "أَمَلْ",
+        "سُئِلْ",
+        "أَمّْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "dal_shadda-q1",
+      "kind": "contains",
+      "unit": "dal_shadda",
+      "options": [
+        "أَمَلْ",
+        "سُئِلْ",
+        "مَدّْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "ra_shadda-q1",
+      "kind": "contains",
+      "unit": "ra_shadda",
+      "options": [
+        "مَرّْ",
+        "إِسْلَامْ",
+        "أَخَذْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ba_shadda-q1",
+      "kind": "contains",
+      "unit": "ba_shadda",
+      "options": [
+        "إِبْرَةْ",
+        "حَبّْ",
+        "سَأَلْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "qaf_shadda-q1",
+      "kind": "contains",
+      "unit": "qaf_shadda",
+      "options": [
+        "حَقّْ",
+        "إِسْلَامْ",
+        "أَخَذْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "lam_shadda-q1",
+      "kind": "contains",
+      "unit": "lam_shadda",
+      "options": [
+        "أَرْنَبْ",
+        "أَحَدْ",
+        "حَلّْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "nun_shadda-q1",
+      "kind": "contains",
+      "unit": "nun_shadda",
+      "options": [
+        "ظَنّْ",
+        "أَبَدْ",
+        "أَكَلْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "sin_shadda-q1",
+      "kind": "contains",
+      "unit": "sin_shadda",
+      "options": [
+        "أَخَذْ",
+        "مَسّْ",
+        "أَسَدْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "zay_shadda-q1",
+      "kind": "contains",
+      "unit": "zay_shadda",
+      "options": [
+        "أَكَلْ",
+        "هَزّْ",
+        "سُئِلْ"
+      ],
+      "answer": 1,
+      "review": null
+    }
+  ]
+}
