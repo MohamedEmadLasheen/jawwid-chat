@@ -17,12 +17,26 @@ const KIND_LABEL = { syllables: 'مَقَاطِعُ', word: 'كَلِمَةٌ', 
  * never a stored order, so the two cannot disagree.
  */
 export function OrderWords({ sentences, seed, onComplete }: { sentences: string[]; seed?: number; onComplete: () => void }) {
+  return <OrderGame rounds={sentences.map((s) => wordsOf(s) ?? [])} label="رتّب الكلمات" roundName="الجملة" seed={seed} onComplete={onComplete} />;
+}
+
+/** Lesson 10: put a passage's sentences in order -- the answer is the passage itself. */
+export function OrderSentences({ passages, seed, onComplete }: { passages: string[][]; seed?: number; onComplete: () => void }) {
+  return <OrderGame rounds={passages} label="رتّب الجمل" roundName="القطعة" seed={seed} onComplete={onComplete} />;
+}
+
+/**
+ * One order game: each round's pieces shuffled ONCE (from the visit's seed) into state; the answer
+ * is the round as given, checked by text, so a repeated piece cannot fail a correct order.
+ */
+function OrderGame({ rounds, label, roundName, seed, onComplete }: { rounds: string[][]; label: string; roundName: string; seed?: number; onComplete: () => void }) {
+  const sentences = rounds;
   const [visit] = useState(() => seed ?? visitSeed());
   const [round, setRound] = useState(0);
-  const target = useMemo(() => (wordsOf(sentences[round] ?? '') ?? []).map((w, i) => ({ w, i })), [sentences, round]);
+  const target = useMemo(() => (sentences[round] ?? []).map((w, i) => ({ w, i })), [sentences, round]);
   const [order, setOrder] = useState(() => scrambled(target, visit));
   const [verdict, setVerdict] = useState<'right' | 'wrong' | null>(null);
-  if (sentences.length === 0) return <p className="note">لَا جُمَلَ فِي هَذَا الدَّرْسِ.</p>;
+  if (sentences.length === 0) return <p className="note">لَا شَيْءَ لِلتَّرْتِيبِ فِي هَذَا الدَّرْسِ.</p>;
   const move = (index: number, by: -1 | 1) => {
     const to = index + by;
     if (to < 0 || to >= order.length) return;
@@ -40,13 +54,13 @@ export function OrderWords({ sentences, seed, onComplete }: { sentences: string[
   const nextRound = () => {
     const r = round + 1;
     setRound(r);
-    setOrder(scrambled((wordsOf(sentences[r] ?? '') ?? []).map((w, i) => ({ w, i })), visit + r));
+    setOrder(scrambled((sentences[r] ?? []).map((w, i) => ({ w, i })), visit + r));
     setVerdict(null);
   };
   return (
-    <section className="game" aria-label="رتّب الكلمات">
+    <section className="game" aria-label={label}>
       <p className="game__round">
-        الجملة {(round + 1).toLocaleString('ar-EG')} من {sentences.length.toLocaleString('ar-EG')}
+        {roundName} {(round + 1).toLocaleString('ar-EG')} من {sentences.length.toLocaleString('ar-EG')}
       </p>
       <ol className="cards">
         {order.map((x, i) => (
@@ -74,7 +88,7 @@ export function OrderWords({ sentences, seed, onComplete }: { sentences: string[
         </button>
         {verdict === 'right' && round < sentences.length - 1 ? (
           <button type="button" onClick={nextRound}>
-            الجملة التالية
+            التالي
           </button>
         ) : null}
       </div>
@@ -133,27 +147,37 @@ export function ReadingLesson({ lesson, content, shuffleSeed }: { lesson: number
         </nav>
       ) : null}
 
-      {section === 'read' && stage ? (
-        <section aria-label={stage.name}>
-          <ul className="reading-items">
-            {stage.items.map((it) => (
-              <li key={it.id} data-kind={it.kind}>
-                <span className="reading-items__kind">{KIND_LABEL[it.kind]}</span> <span className="reading-items__text">{it.text}</span>
-              </li>
-            ))}
-          </ul>
-          {resolved.passages.map((p) => (
-            <article key={p.id} className="reading-passage">
-              <h2>{p.title}</h2>
-              <p>{p.sentences.join(' ')}</p>
-            </article>
-          ))}
+      {section === 'read' ? (
+        <section aria-label={stage?.name ?? 'القراءة'}>
+          {stage ? (
+            <ul className="reading-items">
+              {stage.items.map((it) => (
+                <li key={it.id} data-kind={it.kind}>
+                  <span className="reading-items__kind">{KIND_LABEL[it.kind]}</span> <span className="reading-items__text">{it.text}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <button type="button" className="primary" onClick={() => earn('read')}>
             قَرَأْتُ
           </button>
         </section>
       ) : null}
-      {section === 'order' ? <OrderWords key={stage?.id} sentences={sentences} seed={shuffleSeed} onComplete={() => earn('order')} /> : null}
+      {section === 'read'
+        ? resolved.passages.map((p) => (
+            // The passages once, whatever stage is picked (and even when every stage is held).
+            <article key={p.id} className="reading-passage">
+              <h2>{p.title}</h2>
+              <p>{p.sentences.join(' ')}</p>
+            </article>
+          ))
+        : null}
+      {section === 'order' ? (
+        <>
+          <OrderWords key={stage?.id} sentences={sentences} seed={shuffleSeed} onComplete={() => earn('order')} />
+          {resolved.passages.length ? <OrderSentences passages={resolved.passages.map((p) => p.sentences)} seed={shuffleSeed} onComplete={() => earn('order')} /> : null}
+        </>
+      ) : null}
       {section === 'quiz' ? (
         resolved.quiz.length ? <Quiz quiz={resolved.quiz} seed={shuffleSeed} onComplete={() => earn('quiz')} /> : <p className="note">لَا أَسْئِلَةَ بَعْدُ.</p>
       ) : null}

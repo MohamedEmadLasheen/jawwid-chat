@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-521 routes.
+538 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -458,6 +458,10 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/tasks/:id/remove` | tasks.manage | `tasks/task.controller.ts#TaskController.remove` |
 | POST | `/api/v1/tasks/:id/return` | tasks.manage | `tasks/task.controller.ts#TaskController.returnTask` |
 | GET | `/api/v1/tasks/assignees` | tasks.create | tasks.manage | `tasks/task.controller.ts#TaskController.assignees` |
+| GET | `/api/v1/teacher-boards` | whiteboards.view | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.list` |
+| GET | `/api/v1/teacher-boards/:id` | whiteboards.view | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.review` |
+| GET | `/api/v1/teacher-boards/:id/access-log` | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.accessLog` |
+| POST | `/api/v1/teacher-boards/:id/copy` | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.copy` |
 | GET | `/api/v1/teacher-files` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.list` |
 | GET | `/api/v1/teacher-files/:teacherId` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.detail` |
 | POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_supervision.record | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |
@@ -535,3 +539,16 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/trials/slots` | trials.view | `lessons/trial.controller.ts#TrialController.slots` |
 | GET | `/api/v1/trials/teachers` | trials.view | `lessons/trial.controller.ts#TrialController.teachers` |
 | POST | `/api/v1/trials/teachers/:teacherId/group` | trials.manage | `lessons/trial.controller.ts#TrialController.openGroup` |
+| GET | `/api/v1/whiteboards` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.list` |
+| POST | `/api/v1/whiteboards` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.create` |
+| GET | `/api/v1/whiteboards/:id` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.open` |
+| POST | `/api/v1/whiteboards/:id/duplicate` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.duplicate` |
+| POST | `/api/v1/whiteboards/:id/pages` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.addPage` |
+| POST | `/api/v1/whiteboards/:id/pages/:pageId` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.savePage` |
+| POST | `/api/v1/whiteboards/:id/pages/:pageId/delete` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.deletePage` |
+| POST | `/api/v1/whiteboards/:id/pages/:pageId/duplicate` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.duplicatePage` |
+| POST | `/api/v1/whiteboards/:id/pages/order` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.reorderPages` |
+| POST | `/api/v1/whiteboards/:id/rename` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.rename` |
+| POST | `/api/v1/whiteboards/:id/restore` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.restore` |
+| POST | `/api/v1/whiteboards/:id/trash` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.moveToTrash` |
+| GET | `/api/v1/whiteboards/trash` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.trash` |
