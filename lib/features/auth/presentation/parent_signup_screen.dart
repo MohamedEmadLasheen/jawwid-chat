@@ -5,6 +5,8 @@ import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../settings/data/parent_notice_repository.dart';
+import '../../settings/presentation/lesson_audio_about_screen.dart';
 import '../password_policy.dart';
 
 /// What a finished sign-up hands back to the sign-in screen, which then signs in normally.
@@ -40,6 +42,8 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
   bool _codeAsked = false;
   bool _busy = false;
   bool _tried = false;
+  // PD-48: the lesson-audio notice, ticked before the account is finished (required).
+  bool _noticeTicked = false;
   String? _error;
 
   @override
@@ -94,6 +98,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
     if (!RegExp(r'^[0-9]{6}$').hasMatch(_code.text.trim()) || _password.text.length < kPasswordMinLength || _password.text != _confirm.text) {
       return;
     }
+    if (!_noticeTicked) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -103,6 +108,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
             email: _email.text.trim(),
             code: _code.text.trim(),
             password: _password.text,
+            lessonAudioNotice: kLessonAudioNoticeVersion,
           );
       if (!mounted) return;
       Navigator.of(context).pop<ParentSignupResult>((email: _email.text.trim(), password: _password.text));
@@ -188,6 +194,26 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                       decoration: InputDecoration(
                         labelText: l10n.signupPasswordConfirmLabel,
                         errorText: passwordsDiffer ? l10n.signupPasswordsDiffer : null,
+                      ),
+                    ),
+                    // PD-48: the owner's approved line, ticked to finish; the notice is one tap away.
+                    const SizedBox(height: Spacing.spacing4),
+                    CheckboxListTile(
+                      key: const ValueKey('signup-lesson-audio'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: _noticeTicked,
+                      // Finishing without the tick is refused; the box itself shows it.
+                      isError: _tried && !_noticeTicked,
+                      onChanged: _busy ? null : (v) => setState(() => _noticeTicked = v ?? false),
+                      title: Text(l10n.lessonAudioNoticeAccept),
+                    ),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: TextButton(
+                        key: const ValueKey('signup-lesson-audio-about'),
+                        onPressed: () => LessonAudioAboutScreen.open(context),
+                        child: Text(l10n.lessonAudioAboutTitle),
                       ),
                     ),
                   ],

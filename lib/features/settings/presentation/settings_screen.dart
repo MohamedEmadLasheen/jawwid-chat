@@ -21,6 +21,7 @@ import '../../app_lock/presentation/unlock_platform.dart';
 import '../../profile/presentation/profile_photos_section.dart';
 import '../application/theme_mode_controller.dart';
 import 'date_time_screen.dart';
+import 'lesson_audio_about_screen.dart';
 
 /// Profile and settings.
 ///
@@ -179,6 +180,17 @@ class SettingsScreen extends ConsumerWidget {
               title: Text(l10n.myLeaveTitle),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push(Routes.myLeave),
+            ),
+            const Divider(),
+          ],
+          // PD-48: the lesson-audio notice and its terms -- the parents' only.
+          if (user?.role == UserRole.parent) ...[
+            ListTile(
+              key: const ValueKey('settings-lesson-audio'),
+              leading: const Icon(Icons.record_voice_over_outlined),
+              title: Text(l10n.lessonAudioAboutTitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => LessonAudioAboutScreen.open(context),
             ),
             const Divider(),
           ],
