@@ -71,7 +71,7 @@
       "id": "build_ayah",
       "version": 1,
       "code": "BuildAyah.tsx",
-      "codeSha256": "db9e023e04e7b84b3d0db0eed9850c445e81f4072b1b6b8c9b6cabfc8a1aff95",
+      "codeSha256": "e5e8f8ddb7fb39e95626c8967a0223992fd0e11694975f44987b7e50dc619eec",
       "nameAr": "ركّب الآية",
       "skill": "order",
       "bands": ["6-8", "9-12"],

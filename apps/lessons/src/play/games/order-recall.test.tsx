@@ -52,6 +52,8 @@ describe('Build the ayah (ركّب الآية)', () => {
       for (let k = 1; k < tiles.length; k++) {
         const line = () => [...document.querySelectorAll('.play__slot:not(.play__slot--empty)')].map((x) => x.textContent);
         expect(line()).toEqual(tiles.slice(0, k));
+        // The line reads as words, with spaces between them (for a screen reader and a copy).
+        expect(document.querySelector('.play__line')!.textContent!.trim()).toBe(tiles.slice(0, k).join(' '));
         // Blanks for what is not built yet.
         expect(document.querySelectorAll('.play__slot--empty')).toHaveLength(tiles.length - k);
         const group = screen.getByRole('group', { name: 'الكلمات' });

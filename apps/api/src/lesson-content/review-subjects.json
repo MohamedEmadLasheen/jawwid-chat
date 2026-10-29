@@ -6,7 +6,7 @@
    "scope": "play",
    "subjects": [
     {
-     "approvalSha256": "3f737bff45f46223ffb6dc1414c5308f49cac49d70a6fa3df2593f68e3f43da7",
+     "approvalSha256": "405c341ca030f9260f3200e920b3a1a7c8f32e67749454a9fef50002a40fa4e2",
      "id": "build_ayah",
      "item": {
       "bands": [
@@ -14,7 +14,7 @@
        "9-12"
       ],
       "code": "BuildAyah.tsx",
-      "codeSha256": "db9e023e04e7b84b3d0db0eed9850c445e81f4072b1b6b8c9b6cabfc8a1aff95",
+      "codeSha256": "e5e8f8ddb7fb39e95626c8967a0223992fd0e11694975f44987b7e50dc619eec",
       "id": "build_ayah",
       "nameAr": "\u0631\u0643\u0651\u0628 \u0627\u0644\u0622\u064a\u0629",
       "needsAudio": false,

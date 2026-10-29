@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { scrambled } from '../../games/shuffle';
 import type { Band } from '../../content/quran-content';
 import type { Ayah } from '../../quran/dataset';
@@ -102,15 +102,13 @@ export function BuildAyah({ ayahs, band, seed, onComplete }: GameProps) {
       ) : (
         <>
           <p className="play__line" aria-label={`الكلمات المرتّبة: ${arabic(placed.length)} من ${arabic(current.tiles.length)}`}>
-            {current.tiles.map((t, i) =>
-              i < placed.length ? (
-                <span key={i} className="play__slot">
-                  {t}
-                </span>
-              ) : (
-                <span key={i} className="play__slot play__slot--empty" aria-hidden="true" />
-              ),
-            )}
+            {current.tiles.map((t, i) => (
+              // A space between words, so the line reads as words (the flex gap lays them out).
+              <Fragment key={i}>
+                {i > 0 ? ' ' : null}
+                {i < placed.length ? <span className="play__slot">{t}</span> : <span className="play__slot play__slot--empty" aria-hidden="true" />}
+              </Fragment>
+            ))}
           </p>
           <div className="play__tiles" role="group" aria-label="الكلمات">
             {current.tray
