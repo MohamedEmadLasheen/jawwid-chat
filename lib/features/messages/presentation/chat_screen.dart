@@ -1404,38 +1404,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
                   enabled: canActOn(message) && !_selecting && !widget.isReadOnly,
                   onReply: () => setState(() => _replyingTo = _previewOf(message)),
                   child: MessageBubble(
-                  key: _messageKeys.putIfAbsent(key, GlobalKey.new),
-                  message: message,
-                  showAuthor: showAuthor,
-                  reserveSenderColumn: fromSomeoneElse,
-                  replyTo: reply,
-                  highlight: _highlightTerm,
-                  isHighlighted: _highlightedKey == key ||
-                      (message.id != null && _selected.contains(message.id)),
-                  onRetry: message.canRetry
-                      ? () => controller.retry(message.clientMessageId)
-                      : null,
-                  onDiscard: message.canRetry
-                      ? () => controller.discard(message.clientMessageId)
-                      : null,
-                  // Absent rather than inert on a message nothing can be done
-                  // to, so a long press there is a no-op the user feels once
-                  // instead of an empty sheet they have to dismiss.
-                  onLongPress: !canActOn(message)
-                      ? null
-                      : _selecting
-                          ? () => _toggleSelected(message)
-                          : () => _onLongPress(message),
-                  onTap: _selecting ? () => _toggleSelected(message) : null,
-                  onTapReply: reply == null
-                      ? null
-                      : () => _jumpToMessage(reply.messageId, state),
-                  onToggleReaction: message.id == null
-                      ? null
-                      : (emoji) =>
-                          _guard(() => controller.toggleReaction(message, emoji)),
-                  onOpenAttachment: (attachment) =>
-                      _openAttachment(message, attachment),
+                    key: _messageKeys.putIfAbsent(key, GlobalKey.new),
+                    message: message,
+                    showAuthor: showAuthor,
+                    reserveSenderColumn: fromSomeoneElse,
+                    replyTo: reply,
+                    highlight: _highlightTerm,
+                    isHighlighted: _highlightedKey == key ||
+                        (message.id != null && _selected.contains(message.id)),
+                    onRetry: message.canRetry
+                        ? () => controller.retry(message.clientMessageId)
+                        : null,
+                    onDiscard: message.canRetry
+                        ? () => controller.discard(message.clientMessageId)
+                        : null,
+                    // Absent rather than inert on a message nothing can be done
+                    // to, so a long press there is a no-op the user feels once
+                    // instead of an empty sheet they have to dismiss.
+                    onLongPress: !canActOn(message)
+                        ? null
+                        : _selecting
+                            ? () => _toggleSelected(message)
+                            : () => _onLongPress(message),
+                    onTap: _selecting ? () => _toggleSelected(message) : null,
+                    onTapReply: reply == null
+                        ? null
+                        : () => _jumpToMessage(reply.messageId, state),
+                    onToggleReaction: message.id == null
+                        ? null
+                        : (emoji) =>
+                            _guard(() => controller.toggleReaction(message, emoji)),
+                    onOpenAttachment: (attachment) =>
+                        _openAttachment(message, attachment),
                   ),
                 ),
               ],
