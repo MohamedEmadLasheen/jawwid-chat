@@ -13,6 +13,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const SRC = join(__dirname, '..', '..', '..', 'src');
+const MIGRATIONS = join(__dirname, '..', '..', '..', '..', '..', 'supabase', 'migrations');
+
+/** Each migration allowed to name them (a view, a function or an outbox payload built in SQL), and why. */
+const MIGRATIONS_ALLOWED: Readonly<Record<string, string>> = {
+  '20261030030000_chat_pd045_parent_location.sql': 'defines the columns, their keys, the Sales scope and the grants',
+};
 
 /** Each directory (trailing slash) or file allowed to name them, and why. */
 const ALLOWED: Readonly<Record<string, string>> = {
@@ -60,6 +66,20 @@ describe('a family\'s location is read only where PD-45 §4 puts it', () => {
       expect({ text, hit: offenders([{ rel, text }]).length }).toEqual({ text, hit: 1 });
     }
     expect(offenders([{ rel: 'communication/stories/story.service.ts', text: 'select: { countryCode: true },' }])).toEqual([]);
+  });
+
+  it('no migration names them but PD-45\'s own: no view, function or payload built in SQL exposes them', () => {
+    const offending = readdirSync(MIGRATIONS)
+      .filter((name) => name.endsWith('.sql') && !(name in MIGRATIONS_ALLOWED))
+      .flatMap((name) =>
+        readFileSync(join(MIGRATIONS, name), 'utf8')
+          .split('\n')
+          .map((line, i) => ({ line, i }))
+          .filter(({ line }) => NAMES.test(line))
+          .map(({ line, i }) => `${name}:${i + 1}: ${line.trim()}`),
+      );
+    expect(offending).toEqual([]);
+    for (const name of Object.keys(MIGRATIONS_ALLOWED)) expect(statSync(join(MIGRATIONS, name)).isFile()).toBe(true);
   });
 
   it('allows only places that exist, each with its reason', () => {

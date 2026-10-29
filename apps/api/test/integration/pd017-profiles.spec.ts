@@ -547,28 +547,89 @@ describe('PD-45: a family\'s location on the Parent Profile', () => {
     expect(await code(parents.list(m.operationsManager.id, undefined, 'everything'))).toBe(CommErrorCode.VALIDATION);
   });
 
-  it('re-keys the phone when a new country reads it as another number, and refuses a number another family already holds (PD-42 S1)', async () => {
+  // ---- the contact keys (PD-42 S1, plan §9; review of #294) ---------------
+  const keysOf = (familyId: string) =>
+    g.prisma.$queryRawUnsafe<Array<{ key_hash: string; source: string }>>(
+      `select key_hash, source from chat.family_contact_key where family_id = $1::uuid and kind = 'phone' order by key_hash`, familyId,
+    );
+  const holder = async (e164: string) =>
+    (await g.prisma.$queryRawUnsafe<Array<{ family_id: string }>>(
+      `select family_id::text from chat.family_contact_key where organization_id = $1::uuid and key_hash = $2`, orgId, contactKeyHash('phone', e164),
+    ))[0]?.family_id ?? null;
+  const holdFor = (familyId: string, e164: string) =>
+    g.prisma.$executeRawUnsafe(
+      `insert into chat.family_contact_key (organization_id, key_hash, family_id, kind) values ($1::uuid, $2, $3::uuid, 'phone')`,
+      orgId, contactKeyHash('phone', e164), familyId,
+    );
+
+  it('re-keys a stored local number when a new country reads it as another one, and refuses a number another family already holds', async () => {
     // A local Gulf number, entered while the family had no country: unreadable, so not keyed.
     await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: null, phone: '050 765 0000' });
-    // Another family already holds that number as read in the UAE.
-    await g.prisma.$executeRawUnsafe(
-      `insert into chat.family_contact_key (organization_id, key_hash, family_id, kind) values ($1::uuid, $2, $3::uuid, 'phone')`,
-      orgId, contactKeyHash('phone', '+971507650000'), famB().id,
-    );
+    await holdFor(famB().id, '+971507650000');
     const refused = await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE' }).catch((e: unknown) => e);
     expect(refused).toMatchObject({ code: CommErrorCode.PARENT_EXISTS, status: 409 });
-    expect(JSON.stringify(refused)).not.toMatch(new RegExp(famB().id));
+    // The answer names no family: not in the message, not in any detail.
+    expect(JSON.stringify({ message: (refused as CommError).message, details: (refused as { details?: unknown }).details ?? null }))
+      .not.toMatch(new RegExp(`${famB().id}|${famB().displayName}`));
     expect((await family(famA().id)).countryCode).toBeNull();
-    // A number nobody holds: the country is saved and the family keyed by the number as it now reads.
-    await parents.update(m.operationsManager.id, famA().parent.id, { phone: '050 765 1111' });
+  });
+
+  it('a country chosen by mistake leaves no key behind: Egypt, then the UAE, keeps only the UAE reading', async () => {
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: null, phone: '050 765 3333' });
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'EG' });
+    expect(await holder('+20507653333')).toBe(famA().id);
     await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE' });
-    const key = await g.prisma.$queryRawUnsafe<Array<{ family_id: string }>>(
-      `select family_id::text from chat.family_contact_key where organization_id = $1::uuid and key_hash = $2`,
-      orgId, contactKeyHash('phone', '+971507651111'),
-    );
-    expect(key).toEqual([{ family_id: famA().id }]);
-    // Saving the same country again adds nothing.
-    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE', subdivisionCode: 'AE-SH' });
-    expect((await family(famA().id)).subdivisionCode).toBe('AE-SH');
+    expect(await holder('+20507653333')).toBeNull();
+    expect(await holder('+971507653333')).toBe(famA().id);
+    expect((await keysOf(famA().id)).filter((k) => k.source === 'rekey')).toEqual([
+      { key_hash: contactKeyHash('phone', '+971507653333'), source: 'rekey' },
+    ]);
+    // A recorded key is not a re-key: it is never removed while the family exists.
+    await expect(g.prisma.$executeRawUnsafe(
+      `delete from chat.family_contact_key where family_id = $1::uuid and source = 'rekey'`, famA().id,
+    )).rejects.toThrow(/never removed while its family exists/);
+  });
+
+  it('two country changes at once are serialised: one wins, and the family is keyed by that one reading only', async () => {
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE' });
+    const outcomes = await Promise.allSettled([
+      parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'EG' }),
+      parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'SA' }),
+    ]);
+    expect(outcomes.every((o) => o.status === 'fulfilled')).toBe(true);
+    const final = (await family(famA().id)).countryCode;
+    expect(['EG', 'SA']).toContain(final);
+    const reading = final === 'EG' ? '+20507653333' : '+966507653333';
+    expect((await keysOf(famA().id)).filter((k) => k.source === 'rekey')).toEqual([{ key_hash: contactKeyHash('phone', reading), source: 'rekey' }]);
+  });
+
+  it('keys every changed number as recorded, read in the family\'s country -- alone or with a new country -- and refuses one another family holds', async () => {
+    await parents.update(m.operationsManager.id, famA().parent.id, { phone: '+20 100 765 5555' });
+    expect((await keysOf(famA().id)).find((k) => k.key_hash === contactKeyHash('phone', '+201007655555'))).toEqual({
+      key_hash: contactKeyHash('phone', '+201007655555'), source: 'record',
+    });
+    // A new number and a new country in one edit: the number is read in the new country.
+    await parents.update(m.operationsManager.id, famA().parent.id, { phone: '050 765 4444', countryCode: 'AE' });
+    expect((await keysOf(famA().id)).find((k) => k.key_hash === contactKeyHash('phone', '+971507654444'))).toEqual({
+      key_hash: contactKeyHash('phone', '+971507654444'), source: 'record',
+    });
+    // Another family's number is refused, and nothing of the edit is kept.
+    await holdFor(famB().id, '+971507659999');
+    expect(await code(parents.update(m.operationsManager.id, famA().parent.id, { phone: '050 765 9999' }))).toBe(CommErrorCode.PARENT_EXISTS);
+    expect((await g.prisma.parentFile.findUniqueOrThrow({ where: { contactId: famA().parent.id } })).adminOnlyParentPhone).toBe('050 765 4444');
+  });
+
+  it('lists as missing a family whose old country is not a country of the list, and only what the caller reaches', async () => {
+    const legacy = m.families.find((f) => f.id !== famA().id && f.id !== famB().id)!;
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+      await tx.$executeRawUnsafe(`update chat.family set country_code = 'UK', subdivision_code = null where id = $1::uuid`, legacy.id);
+    });
+    expect((await parents.list(m.operationsManager.id, undefined, 'missing')).items.map((i) => i.id)).toContain(legacy.parent.id);
+    for (const sup of m.supervisors) {
+      const reach = reachableFamilies(sup.id);
+      const listed = (await parents.list(sup.id, undefined, 'missing')).items;
+      for (const item of listed) expect(reach.has(item.family.id)).toBe(true);
+    }
   });
 });

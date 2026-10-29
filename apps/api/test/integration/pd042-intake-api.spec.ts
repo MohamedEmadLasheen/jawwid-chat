@@ -571,6 +571,15 @@ describe('6. review of #202', () => {
     expect(await code(parents.update(salesB, r.contactId, { name: 'x' }))).toBe(CommErrorCode.PARENT_PROFILE_NOT_FOUND);
   });
 
+  it('P1-3 "own" (PD-45): the "Missing location" list shows a Sales member only the families they own', async () => {
+    const mine = await intake.enter(salesA, form());
+    const theirs = await intake.enter(salesB, form());
+    await scope('own');
+    const listed = (await parents.list(salesA, undefined, 'missing')).items.map((i) => i.family.id);
+    expect(listed).toContain(mine.familyId);
+    expect(listed).not.toContain(theirs.familyId);
+  });
+
   it('P1-3 "own" (PD-45): the rest of a family\'s location -- its subdivision and who set it -- is guarded like its country', async () => {
     const r = await intake.enter(salesA, form());
     await scope('own');
