@@ -4,6 +4,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { TransferResult } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useStructure } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-24: move children -- a group, or a new student's family -- to another
@@ -76,11 +77,11 @@ export function ChangeSupervisorDialog({
       {childNames && childNames.length > 0 && <p dir="auto">{tx(T.movesChildren, { names: childNames.join(' · ') })}</p>}
       <div className="field">
         <label className="field__label" htmlFor={`${id}-sup`}>{tx(T.assignTo)}</label>
-        <select
+        <SearchableSelect
           id={`${id}-sup`}
           className="select"
           value={supervisorId}
-          onChange={(e) => setSupervisorId(e.target.value)}
+          onValueChange={(v) => setSupervisorId(v)}
           aria-invalid={touched && !supervisorId}
         >
           <option value="">{tx(T.choose)}</option>
@@ -89,7 +90,7 @@ export function ChangeSupervisorDialog({
               {s.name} ({s.learnerCount})
             </option>
           ))}
-        </select>
+        </SearchableSelect>
         {touched && !supervisorId && <span className="field__error">{tx(T.required)}</span>}
       </div>
       <div className="field">

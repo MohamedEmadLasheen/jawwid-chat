@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { ActionLogSection } from './ActionLogSection'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-35 B7: a staff member's action log on their profile, with `fetch`
@@ -100,7 +101,7 @@ describe('going further back', () => {
     expect(await screen.findByRole('link', { name: 'Assigned a child to a supervisor' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
 
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Period' }), '365')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Period' }), '365')
     await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => /from=/.test(String(u)))).toBe(true))
   })
 })

@@ -4,6 +4,7 @@ import { wallClock12 } from '@/core/time/academyTime'
 import type { CalendarOptions, CalendarStatus, Category, LessonKind } from './api'
 import { CATEGORY_LABEL, KIND_LABEL, S, STATUS_LABEL, WEEKDAYS, useScheduleText, type Pair } from './copy'
 import { activeFilterCount, clearFilters, type ListFilter, type ScalarFilter, type ViewState } from './viewState'
+import { SearchableSelect, belongsToOpenPicker } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-38 filters (the owner's top priority). Every chip is a multi-select that
@@ -45,11 +46,14 @@ function Menu({
     if (!isOpen) return
     // Into the panel, so the keyboard lands where the choices are.
     panel.current?.querySelector<HTMLElement>('input, select, button')?.focus()
+    // A picker's list is portalled to the body: a pointer on it is inside, and
+    // while it is open its Escape closes only the list.
     const outside = (e: PointerEvent) => {
+      if (belongsToOpenPicker(e.target)) return
       if (box.current && !box.current.contains(e.target as Node)) setOpen(null)
     }
     const escape = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      if (e.key !== 'Escape' || belongsToOpenPicker(e.target)) return
       e.stopPropagation()
       setOpen(null)
       trigger.current?.focus()
@@ -217,17 +221,17 @@ export function FilterBar({
         <div className="sc-hours">
           <label className="field">
             <span className="field__label">{tx(S.from)}</span>
-            <select className="select select--sm" value={state.scalars.timeFrom ?? ''} onChange={(e) => setScalar('timeFrom', e.target.value)}>
+            <SearchableSelect className="select select--sm" value={state.scalars.timeFrom ?? ''} onValueChange={(v) => setScalar('timeFrom', v)}>
               <option value="">{tx(S.any)}</option>
               {HOURS.slice(0, 24).map((h) => <option key={h} value={h}>{wallClock12(h, locale)}</option>)}
-            </select>
+            </SearchableSelect>
           </label>
           <label className="field">
             <span className="field__label">{tx(S.to)}</span>
-            <select className="select select--sm" value={state.scalars.timeTo ?? ''} onChange={(e) => setScalar('timeTo', e.target.value)}>
+            <SearchableSelect className="select select--sm" value={state.scalars.timeTo ?? ''} onValueChange={(v) => setScalar('timeTo', v)}>
               <option value="">{tx(S.any)}</option>
               {HOURS.slice(1).map((h) => <option key={h} value={h}>{wallClock12(h, locale)}</option>)}
-            </select>
+            </SearchableSelect>
           </label>
         </div>
       </Menu>
@@ -246,12 +250,12 @@ export function FilterBar({
       <Menu label={tx(S.fEmpty)} count={state.scalars.emptyMinutesGte ? 1 : 0}>
         <label className="field">
           <span className="field__label">{tx(S.fEmpty)}</span>
-          <select className="select select--sm" value={state.scalars.emptyMinutesGte ?? ''} onChange={(e) => setScalar('emptyMinutesGte', e.target.value)}>
+          <SearchableSelect className="select select--sm" value={state.scalars.emptyMinutesGte ?? ''} onValueChange={(v) => setScalar('emptyMinutesGte', v)}>
             <option value="">{tx(S.any)}</option>
             {[1, 2, 4, 8, 16, 40].map((h) => (
               <option key={h} value={String(h * 60)}>{tx(S.emptyAtLeast, { h })}</option>
             ))}
-          </select>
+          </SearchableSelect>
         </label>
       </Menu>
       <label className="sc-check sc-check--inline">

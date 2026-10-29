@@ -3,6 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { Pair } from './copy'
 import { O, describeOpsError } from './opsCopy'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 export type FieldValue = (key: string) => string
 
@@ -79,11 +80,11 @@ export function ActionDialog({
           <div className="field" key={f.key}>
             <label className="field__label" htmlFor={id}>{tx(f.label)}</label>
             {f.type === 'select' ? (
-              <select id={id} className="select" value={values[f.key] ?? ''} onChange={(e) => set(e.target.value)}>
+              <SearchableSelect id={id} className="select" value={values[f.key] ?? ''} onValueChange={(v) => set(v)}>
                 {f.options.map((o) => (
                   <option key={o.value} value={o.value}>{tx(o.label)}</option>
                 ))}
-              </select>
+              </SearchableSelect>
             ) : f.type === 'textarea' ? (
               <textarea id={id} className="input" rows={3} dir="auto" value={values[f.key] ?? ''} onChange={(e) => set(e.target.value)} aria-invalid={invalid} />
             ) : (

@@ -8,6 +8,7 @@ import type { AccessState, ExceptionKind, LedgerRow, Standing, SubscriptionExcep
 import { KIND_LABEL, REASON_LABEL, S, SOURCE_LABEL, STATE_LABEL, describeError, isRefusal, lessonsLabel, monthsLabel, packageLabel, useCopy } from './copy'
 import './subscriptions.css'
 import { useAddSubscription, useGrantException, useRevokeException, useSubscription, useVoidSubscription } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const STATE_TONE: Record<AccessState, Tone> = { open: 'ok', grace: 'warn', locked: 'danger' }
 
@@ -261,14 +262,14 @@ function AddSubscriptionDialog({ learnerId, onClose }: { learnerId: string; onCl
       </Field>
       <Field label={tx(S.plan)}>
         {(id) => (
-          <select id={id} className="select" value={planMonths} onChange={(e) => setPlanMonths(e.target.value)}>
+          <SearchableSelect id={id} className="select" value={planMonths} onValueChange={(v) => setPlanMonths(v)}>
             <option value="">{tx(S.noPlan)}</option>
             {[1, 3, 6, 12].map((m) => (
               <option key={m} value={m}>
                 {monthsLabel(m, locale)}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       <Field label={tx(S.startsOn)}>
@@ -302,13 +303,13 @@ function GrantExceptionDialog({ learnerId, onClose }: { learnerId: string; onClo
       <p className="field__hint">{tx(S.exceptionsHint)}</p>
       <Field label={tx(S.kind)}>
         {(id) => (
-          <select id={id} className="select" value={kind} onChange={(e) => setKind(e.target.value as ExceptionKind)}>
+          <SearchableSelect id={id} className="select" value={kind} onValueChange={(v) => setKind(v as ExceptionKind)}>
             {(['balance', 'overdue', 'both'] as const).map((k) => (
               <option key={k} value={k}>
                 {tx(KIND_LABEL[k])}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       <Field label={tx(S.reason)} error={errors.reason}>

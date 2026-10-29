@@ -9,6 +9,7 @@ import { parentPath } from '@/features/profiles/api'
 import type { IntakeChildInput, IntakeOptions, IntakeResult, ParentExistsDetail } from './api'
 import { I, describeIntakeError, useCopy } from './copy'
 import { useAddChildren, useEnterFamily } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import '@/features/trials/trials.css'
 
 interface ChildDraft {
@@ -255,20 +256,20 @@ export function IntakeDialog({ options, initial, onClose }: { options: IntakeOpt
                   <input id={id} className="input" type="tel" inputMode="tel" dir="ltr" value={phone} aria-invalid={bad('channel')} onChange={(e) => setPhone(e.target.value)} />
                 ), { required: true, hint: tx(I.phoneHint) })}
                 {field('country', tx(I.country), (id) => (
-                  <select id={id} className="input" value={country} onChange={(e) => setCountry(e.target.value)}>
+                  <SearchableSelect id={id} className="input" value={country} onValueChange={(v) => setCountry(v)}>
                     <option value="">{tx(I.choose)}</option>
                     {['EG', 'AE', 'SA', 'KW', 'QA', 'BH', 'OM', 'JO', 'GB', 'US', 'CA', 'AU', 'DE', 'FR'].map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  </SearchableSelect>
                 ), { hint: tx(I.countryHint) })}
               </div>
               {field('email', tx(I.email), (id) => (
                 <input id={id} className="input" type="email" inputMode="email" dir="ltr" value={email} aria-invalid={bad('channel')} onChange={(e) => setEmail(e.target.value)} />
               ), { required: true, error: bad('channel') ? tx(I.oneChannel) : undefined })}
               {needsOnBehalf && field('onBehalf', tx(I.onBehalf), (id) => (
-                <select id={id} className="input" value={onBehalfOf} aria-invalid={bad('onBehalf')} onChange={(e) => setOnBehalfOf(e.target.value)}>
+                <SearchableSelect id={id} className="input" value={onBehalfOf} aria-invalid={bad('onBehalf')} onValueChange={(v) => setOnBehalfOf(v)}>
                   <option value="">{tx(I.choose)}</option>
                   {options.onBehalfOf.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                </SearchableSelect>
               ), { required: true, hint: tx(I.onBehalfHint), error: bad('onBehalf') ? tx(I.required) : undefined })}
             </fieldset>
           )}
@@ -290,10 +291,10 @@ export function IntakeDialog({ options, initial, onClose }: { options: IntakeOpt
                       <input id={id} className="input" dir="auto" value={c.name} aria-invalid={bad(`c${i}.name`)} onChange={(e) => setChild(i, { name: e.target.value })} />
                     ), { required: true, error: bad(`c${i}.name`) ? tx(I.required) : undefined })}
                     {field(`c${i}.teacher`, tx(I.teacher), (id) => (
-                      <select id={id} className="input" value={c.teacherId} onChange={(e) => setChild(i, { teacherId: e.target.value })}>
+                      <SearchableSelect id={id} className="input" value={c.teacherId} onValueChange={(v) => setChild(i, { teacherId: v })}>
                         <option value="">{tx(I.noTeacher)}</option>
                         {options.teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
+                      </SearchableSelect>
                     ))}
                   </div>
                   <div className="tj-row">
@@ -305,10 +306,10 @@ export function IntakeDialog({ options, initial, onClose }: { options: IntakeOpt
                     <span className="field__label">{tx(I.times)}</span>
                     {c.schedule.map((s, j) => (
                       <div className="tj-row" key={j}>
-                        <select className="input" aria-label={`${tx(I.times)} ${j + 1}`} value={s.weekday} onChange={(e) => setChild(i, { schedule: c.schedule.map((x, k) => (k === j ? { ...x, weekday: e.target.value } : x)) })}>
+                        <SearchableSelect className="input" aria-label={`${tx(I.times)} ${j + 1}`} value={s.weekday} onValueChange={(v) => setChild(i, { schedule: c.schedule.map((x, k) => (k === j ? { ...x, weekday: v } : x)) })}>
                           <option value="">{tx(I.choose)}</option>
                           {[1, 2, 3, 4, 5, 6, 7].map((d) => <option key={d} value={d}>{locale === 'ar' ? WEEKDAY[d]!.ar : WEEKDAY[d]!.en}</option>)}
-                        </select>
+                        </SearchableSelect>
                         <input className="input" type="time" dir="ltr" aria-label={`${tx(I.times)} ${j + 1}`} value={s.time} onChange={(e) => setChild(i, { schedule: c.schedule.map((x, k) => (k === j ? { ...x, time: e.target.value } : x)) })} />
                         <button type="button" className="btn btn--sm btn--ghost" onClick={() => setChild(i, { schedule: c.schedule.filter((_, k) => k !== j) })}>{tx(I.remove)}</button>
                       </div>

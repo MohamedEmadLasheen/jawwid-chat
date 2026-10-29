@@ -7,6 +7,7 @@ import { chatKeys } from '@/features/chat/chatApi'
 import { journeyApi, journeyKeys, type LessonTicket } from './api'
 import { J, formatLessonWhen, useJourneyCopy } from './copy'
 import { academyWallClockToIso, isoToAcademyWallClock } from '@/core/time/academyTime'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 export type CardKind = 'student_excuse' | 'teacher_excuse' | 'makeup'
 
@@ -142,13 +143,13 @@ export function LessonCardDialog({
         <>
           <div className="field">
             <label className="field__label" htmlFor={`${base}-lesson`}>{tx(J.lesson)}</label>
-            <select
+            <SearchableSelect
               id={`${base}-lesson`}
               className="select"
               value={lessonId}
               aria-invalid={touched && !lessonId}
-              onChange={(e) => {
-                setLessonId(e.target.value)
+              onValueChange={(v) => {
+                setLessonId(v)
                 setTiming('')
               }}
             >
@@ -158,7 +159,7 @@ export function LessonCardDialog({
                   {c.first.learner.name} — {c.first.startsAt ? formatLessonWhen(c.first.startsAt, locale) : ''}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
             {touched && !lessonId && <span className="field__error">{tx(J.required)}</span>}
           </div>
 

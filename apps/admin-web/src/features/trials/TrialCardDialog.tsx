@@ -8,6 +8,7 @@ import { trialsApi, type NotSubscribedReason, type OutcomeInput, type RecordedRe
 import { NOT_SUBSCRIBED_REASON, OUTCOME, TR, formatWhen } from './copy'
 import { useTrialGroup, useTrialOp } from './hooks'
 import { SubscriptionForm, emptyChild, emptyDraft, formErrors, toInput, type SubscriptionDraft } from './SubscriptionForm'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './trials.css'
 
 export interface TrialPowers {
@@ -198,12 +199,12 @@ export function TrialCardDialog(
               <>
                 <div className="field">
                   <label className="field__label" htmlFor="tj-reason">{tx(TR.reasonRequired)}</label>
-                  <select id="tj-reason" className="select" value={reason} aria-invalid={tried && reason === ''} onChange={(e) => setReason(e.target.value as NotSubscribedReason)}>
+                  <SearchableSelect id="tj-reason" className="select" value={reason} aria-invalid={tried && reason === ''} onValueChange={(v) => setReason(v as NotSubscribedReason)}>
                     <option value="">—</option>
                     {Object.entries(NOT_SUBSCRIBED_REASON).map(([value, l]) => (
                       <option key={value} value={value}>{tx(l)}</option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
                 <div className="field">
                   <label className="field__label" htmlFor="tj-note">{tx(TR.detailsOptional)}</label>

@@ -7,6 +7,7 @@ import { LessonCardDialog } from './LessonCardDialogs'
 import { LessonRecordDialog } from './LessonRecordDialog'
 import { GroupChildren } from './GroupChildren'
 import type { GroupLearner, LessonRecord, LessonTicket } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-15's Admin Web side, with `fetch` answered at the network boundary: the
@@ -78,7 +79,7 @@ describe('the supervisor\'s Student excuse card', () => {
     const tickets = [ticket('apology', 'l-1', 'Child Alpha', '2026-10-22T15:00:00Z'), ticket('late_excuse', 'l-2', 'Child Beta')]
     const { unmount } = renderWithProviders(<LessonCardDialog conversationId="c-1" kind="student_excuse" tickets={tickets} onClose={() => {}} />, { staff })
     const dialog = await screen.findByRole('dialog', { name: 'Student excuse' })
-    await userEvent.selectOptions(within(dialog).getByLabelText('Lesson'), 'l-2')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Lesson'), 'l-2')
     expect(within(dialog).getByRole('radio', { name: /Excuse before the lesson starts/ })).toBeDisabled()
     await userEvent.click(within(dialog).getByRole('radio', { name: /Excuse after the lesson started/ }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send' }))
@@ -91,7 +92,7 @@ describe('the supervisor\'s Student excuse card', () => {
 
     renderWithProviders(<LessonCardDialog conversationId="c-1" kind="student_excuse" tickets={tickets} onClose={() => {}} />, { staff })
     const again = await screen.findByRole('dialog', { name: 'Student excuse' })
-    await userEvent.selectOptions(within(again).getByLabelText('Lesson'), 'l-1')
+    await chooseOption(userEvent, within(again).getByLabelText('Lesson'), 'l-1')
     await userEvent.click(within(again).getByRole('radio', { name: /Excuse before the lesson starts/ }))
     expect(within(again).queryByLabelText('Reason (staff only)')).not.toBeInTheDocument()
     await userEvent.click(within(again).getByRole('button', { name: 'Send' }))
@@ -180,11 +181,11 @@ describe('the lesson record', () => {
     expect(within(view).queryByRole('button', { name: 'Delete report' })).not.toBeInTheDocument()
     await userEvent.click(within(view).getByRole('button', { name: 'Correct outcome' }))
     const form = await screen.findByRole('dialog', { name: /Correct outcome/ })
-    await userEvent.selectOptions(within(form).getByLabelText('Correct to'), 'student_apology')
+    await chooseOption(userEvent, within(form).getByLabelText('Correct to'), 'student_apology')
     await userEvent.type(within(form).getByLabelText('Reason (staff only)'), 'parent called the supervisor')
     await userEvent.click(within(form).getByRole('button', { name: 'Save' }))
     expect(sent('POST', /correction$/)).toEqual([])
-    await userEvent.selectOptions(within(form).getByLabelText('When was the student excused?'), 'after_start')
+    await chooseOption(userEvent, within(form).getByLabelText('When was the student excused?'), 'after_start')
     await userEvent.click(within(form).getByRole('button', { name: 'Save' }))
     await waitFor(() =>
       expect(sent('POST', /\/lessons\/l-9\/correction$/)).toEqual([

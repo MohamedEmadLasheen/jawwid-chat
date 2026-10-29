@@ -44,13 +44,14 @@ Every abuse case this product has is an *authorized* action:
 
 | Key | Default | Routes |
 |---|---|---|
-| `abuse.throttle.window_seconds` | 60 | the window for all six budgets |
+| `abuse.throttle.window_seconds` | 60 | the window for all nine budgets |
 | `abuse.throttle.message_send_actor` | 60 | `POST /conversations/:id/messages`, `POST …/messages/forward` |
 | `abuse.throttle.attachment_upload_actor` | 30 | `POST …/messages/attachments/authorize`, `POST /stories/media` |
 | `abuse.throttle.story_publish_actor` | 20 | `POST /stories/:id/publish` |
 | `abuse.throttle.call_start_actor` | 20 | `POST /calls`, `POST /scheduled-calls/:id/join` |
 | `abuse.throttle.receipt_cursor_actor` | 240 | `POST …/messages/read`, `POST …/messages/delivered`, WS `message.delivered { conversationId, upToSeq }` (PD-37) |
 | `abuse.throttle.presence_read_actor` | 60 | `GET /presence` (PD-37) |
+| `abuse.throttle.typing_actor` | 40 | `POST /conversations/:id/typing` (PD-37; no seeded row — the compiled default applies until one is added) |
 | `abuse.throttle.quran_read_actor` | 120 | `GET /quran/ayahs`, `GET /quran/tajweed` (PD-29 materials quality: up to 50 ayat a question) |
 | `abuse.throttle.lesson_audio_read_actor` | 60 | `GET /lesson-audio/:lesson` (PD-48: a lesson's signed voice-over URLs, one question per lesson opened) |
 | `abuse.throttle.whiteboard_write_actor` | 240 | every PD-39 board write: `POST /whiteboards`, `POST /whiteboards/:id/…` (an autosave every ~2 s while a teacher draws, plus page actions), and `POST /teacher-boards/:id/copy` |

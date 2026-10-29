@@ -4,7 +4,7 @@
 .mt-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; margin-block-end: var(--space-2); }
 .mt-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-3); }
 .mt-filters .input { flex: 2 1 16rem; min-inline-size: 0; inline-size: auto; }
-.mt-filters .select { flex: 1 1 11rem; min-inline-size: 0; inline-size: auto; }
+.mt-filters .ss { flex: 1 1 11rem; min-inline-size: 0; inline-size: auto; }
 .mt-items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
 .mt-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; }
 .mt-item__body { display: grid; gap: var(--space-1); min-inline-size: 0; }
@@ -34,7 +34,7 @@
 .mt-tracks li { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .mt-override { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .mt-override .input { flex: 1 1 12rem; min-inline-size: 0; inline-size: auto; }
-.mt-override .select { flex: 1 1 14rem; min-inline-size: 0; inline-size: auto; }
+.mt-override .ss { flex: 1 1 14rem; min-inline-size: 0; inline-size: auto; }
 .mt-add-source { display: grid; gap: var(--space-2); max-inline-size: 40rem; }
 .dialog--sheet .mt-form { min-inline-size: 0; }
 /* A framed lesson in the full-window preview: the frame takes every pixel left. */

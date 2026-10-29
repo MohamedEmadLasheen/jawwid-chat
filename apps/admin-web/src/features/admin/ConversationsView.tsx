@@ -35,6 +35,7 @@ import {
 } from './copy'
 import type { AdminSection } from './sections'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * The inbox's views by kind. Groups gathers both group types; there is no
@@ -254,16 +255,16 @@ export function ConversationsView({ section }: { section: AdminSection }) {
               formatCount={number}
             />
             <div className="workspace__controls">
-              <select
+              <SearchableSelect
                 className="select select--inline select--sm"
                 value={sort}
-                onChange={(e) => setParam('sort', e.target.value, 'recent')}
+                onValueChange={(v) => setParam('sort', v, 'recent')}
                 aria-label={tx(TEXT.sortBy)}
               >
                 <option value="recent">{tx(TEXT.sortRecent)}</option>
                 <option value="oldest">{tx(TEXT.sortOldest)}</option>
                 <option value="name">{tx(TEXT.sortName)}</option>
-              </select>
+              </SearchableSelect>
             </div>
           </div>
         )}
