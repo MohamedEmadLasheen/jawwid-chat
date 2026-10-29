@@ -2245,6 +2245,24 @@ abstract class L10n {
   /// **'Reason'**
   String get cardReason;
 
+  /// Lesson card row label: the booked make-up lesson's day, date and time follow (on the make-up card and on the excuse card it replaces).
+  ///
+  /// In en, this message translates to:
+  /// **'Make-up lesson'**
+  String get cardMakeupLesson;
+
+  /// Make-up card row label: the day, date and time of the missed lesson the make-up replaces follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Instead of the lesson on'**
+  String get cardMakeupInsteadOf;
+
+  /// PD-15: lesson card row label for the internal excuse/apology reason, shown to staff and the teacher only, never to a family.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (staff only)'**
+  String get cardStaffReason;
+
   /// No description provided for @ticketBookMakeup.
   ///
   /// In en, this message translates to:

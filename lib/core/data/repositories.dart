@@ -797,6 +797,12 @@ abstract interface class LessonRepository {
   /// PD-15: `GET /lessons/:id` -- the lesson's live report, to edit it (null when none).
   Future<LessonReportDraft?> reportFor(String lessonId);
 
+  /// PD-15: `GET /lessons/:id` -- the lesson's internal outcome reason (`outcomeNote`):
+  /// a supervisor's excuse, a teacher's apology. The server returns it to staff and the
+  /// teacher only (and to a family for its own apology); null when withheld or empty.
+  /// A parent's client never asks -- the card payload deliberately does not carry it.
+  Future<String?> outcomeNote(String lessonId);
+
   /// PD-15: `POST /lessons/:id/report/edit` -- the whole report again; its card is
   /// rewritten in place and the previous version is kept.
   Future<void> editReport(String lessonId, LessonReportDraft draft);
@@ -914,6 +920,9 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<List<LessonTicket>> lessonTickets(String lessonId) async => const [];
+
+  @override
+  Future<String?> outcomeNote(String lessonId) async => null;
 
   @override
   Future<ChildProgress> progress(String learnerId) =>

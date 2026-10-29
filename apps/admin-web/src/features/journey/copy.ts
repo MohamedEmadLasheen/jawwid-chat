@@ -22,8 +22,8 @@ export const J = {
   choose: { en: 'Choose…', ar: 'اختر…' },
   excuseBefore: { en: 'Excuse before the lesson starts', ar: 'عذر قبل بداية الحصة' },
   excuseBeforeHint: {
-    en: 'The group is told the student has an excuse and will not attend. No reason is needed.',
-    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى الطالب عذرًا ولن يحضر الحصة. لا حاجة لذكر السبب.',
+    en: 'The group is told the student has an excuse and will not attend. A reason is optional; it stays with staff and is never shown in the group.',
+    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى الطالب عذرًا ولن يحضر الحصة. ذكر السبب اختياري، ويبقى لدى الإدارة ولا يظهر في المجموعة.',
   },
   excuseAfter: { en: 'Excuse after the lesson started', ar: 'عذر بعد بداية الحصة' },
   excuseAfterHint: {
@@ -33,6 +33,7 @@ export const J = {
   notAvailable: { en: 'Not available for this lesson now', ar: 'غير متاح لهذه الحصة الآن' },
   reason: { en: 'Reason', ar: 'السبب' },
   reasonInternal: { en: 'Reason (staff only)', ar: 'السبب (للإدارة فقط)' },
+  reasonInternalOptional: { en: 'Reason (staff only, optional)', ar: 'السبب (للإدارة فقط، اختياري)' },
   teacherExcuseHint: {
     en: 'The group is told the teacher has an excuse and a make-up follows. The reason is kept for staff. Schedules are not changed.',
     ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى المعلم عذرًا وأن حصة تعويضية ستُرتَّب. يبقى السبب لدى الإدارة، ولا تتغيّر المواعيد.',
