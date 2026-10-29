@@ -41,7 +41,17 @@
 --   advisory lock and batches, as PR-2b's): each is a state that settles in
 --   the same request that creates it as often as not (a family entered with
 --   its supervisor, an enrolment that joins an existing group), so a raise at
---   once would announce a task already done. COMPLETED at once by triggers on
+--   once would announce a task already done. For the same reason the sweep
+--   leaves an occurrence alone until it is older than the SETTLE WINDOW
+--   (chat.work_task_settle_window(), 2 minutes; config
+--   tasks.raise_after_seconds): a sweep that read the source just before a
+--   concurrent request settled it would otherwise raise and announce a task
+--   that request's trigger could not see. (Department head review of #269.)
+--
+--   OWNERS who leave: the sweep moves an open task whose assignee is no
+--   longer live to the source's owner now (work_task_setup_owner); with
+--   nobody live to follow, it records an `orphaned:` issue, as PR-2b does.
+--   A live assignee keeps the task: a person's hand-on is respected. COMPLETED at once by triggers on
 --   chat.learner_supervision, chat.student_enrolment and
 --   chat.trial_subscription (one function per table), never blocking the
 --   source's write; the sweep re-reads the evidence as a safety net.
@@ -120,6 +130,32 @@ stable
 set search_path = chat, pg_temp
 as $$
   select count(*)::int from jsonb_each(chat.teacher_setup_state(p_teacher)) e where e.value = 'false'::jsonb;
+$$;
+
+-- How long an occurrence settles before the sweep raises its task.
+create or replace function chat.work_task_settle_window()
+returns interval
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select make_interval(secs => coalesce(
+    (select (c.value #>> '{}')::int from chat.config c where c.key = 'tasks.raise_after_seconds'), 120));
+$$;
+
+-- Who a set-up task belongs to now, by its source (as its raise names it).
+create or replace function chat.work_task_setup_owner(p_type text, p_source uuid)
+returns uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select case p_type
+    when 'family_unsupervised' then (select chat.work_task_operations_manager(f.organization_id) from chat.family f where f.id = p_source)
+    when 'teacher_setup' then chat.work_task_teacher_owner(p_source)
+    when 'new_student_assign' then (select chat.work_task_operations_manager(l.organization_id) from chat.lesson l where l.id = p_source)
+    when 'new_student_group' then chat.work_task_group_owner(p_source)
+  end;
 $$;
 
 -- What a source says of its work now: 'done' (with who did it, or nobody),
@@ -305,8 +341,11 @@ declare
   v_restored  integer := 0;
   v_failed    integer := 0;
   v_declined  integer := 0;
+  v_rerouted  integer := 0;
+  v_orphaned  integer := 0;
   v_more      boolean := false;
   r           record;
+  v_settle    interval := chat.work_task_settle_window();
   s_family    timestamptz;
   s_setup     timestamptz;
   s_assign    timestamptz;
@@ -329,7 +368,14 @@ begin
                      and t.state in ('completed', 'removed'))
           or (select v.verdict from chat.work_task_setup_verdict(split_part(i.source_key, ':', 1),
                                                                   split_part(i.source_key, ':', 2)::uuid) v)
-             is distinct from 'back');
+             is distinct from 'back'
+          -- An orphan given an owner again (so the owner loop moves it this
+          -- sweep), or whose assignee is live after all.
+          or i.reason like 'orphaned:%'
+             and exists (select 1 from chat.work_task t
+                          where t.organization_id = i.organization_id and t.source_key = i.source_key
+                            and (chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is not null
+                                 or chat.work_task_setup_owner(t.source_type, t.source_id) is not null)));
 
   -- Create.
   for r in
@@ -355,7 +401,8 @@ begin
         from chat.student_enrolment e
        where e.kind = 'new_family' and e.group_conversation_id is null and e.assigned_at >= s_group
     ) x
-     where not exists (select 1 from chat.work_task t where t.organization_id = x.org and t.source_key = x.src || ':' || x.id)
+     where x.at <= now() - v_settle
+       and not exists (select 1 from chat.work_task t where t.organization_id = x.org and t.source_key = x.src || ':' || x.id)
        and not exists (select 1 from chat.work_task_source_issue i
                         where i.organization_id = x.org and i.source_key = x.src || ':' || x.id and i.next_try_at > now())
      order by x.at
@@ -414,8 +461,52 @@ begin
     end;
   end loop;
 
+  -- Owners: an open task whose assignee left moves to its source's owner
+  -- now. A live assignee keeps it (a person's hand-on stands).
+  for r in
+    select t.organization_id as org, t.source_key as key, chat.work_task_setup_owner(t.source_type, t.source_id) as owner
+      from chat.work_task t
+     where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
+       and t.source_type in ('family_unsupervised', 'teacher_setup', 'new_student_assign', 'new_student_group')
+       and chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is null
+       and chat.work_task_setup_owner(t.source_type, t.source_id) is not null
+       and not exists (select 1 from chat.work_task_source_issue i
+                        where i.organization_id = t.organization_id and i.source_key = t.source_key and i.next_try_at > now())
+     limit v_left + 1
+  loop
+    if v_left = 0 then v_more := true; exit; end if;
+    v_left := v_left - 1;
+    begin
+      v_rerouted := v_rerouted + chat.work_task_reroute(r.org, r.key, r.owner, null, null);
+    exception when others then
+      v_failed := v_failed + 1;
+      perform chat.work_task_note_issue(r.org, r.key, sqlerrm);
+    end;
+  end loop;
+
+  -- An assignee who left with nobody live to follow: recorded (with its
+  -- back-off) for whoever may reassign it.
+  for r in
+    select t.organization_id as org, t.source_key as key
+      from chat.work_task t
+     where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
+       and t.source_type in ('family_unsupervised', 'teacher_setup', 'new_student_assign', 'new_student_group')
+       and chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is null
+       and chat.work_task_setup_owner(t.source_type, t.source_id) is null
+       and not exists (select 1 from chat.work_task_source_issue i
+                        where i.organization_id = t.organization_id and i.source_key = t.source_key and i.next_try_at > now())
+     limit v_left + 1
+  loop
+    if v_left = 0 then v_more := true; exit; end if;
+    v_left := v_left - 1;
+    perform chat.work_task_note_issue(r.org, r.key,
+      'orphaned: its assignee left and nobody live follows (the Operations manager, the teacher''s supervisor or Teachers manager, the super admin): reassign it');
+    v_orphaned := v_orphaned + 1;
+  end loop;
+
   return jsonb_build_object('skipped', false, 'raised', v_raised, 'settled', v_settled, 'withdrawn', v_withdrawn,
-                            'restored', v_restored, 'failed', v_failed, 'declined', v_declined, 'more', v_more,
+                            'restored', v_restored, 'rerouted', v_rerouted, 'orphaned', v_orphaned,
+                            'failed', v_failed, 'declined', v_declined, 'more', v_more,
                             'issues', (select count(*) from chat.work_task_source_issue));
 end;
 $$;
@@ -727,6 +818,8 @@ revoke all on function chat.work_task_group_owner(uuid) from public;
 revoke all on function chat.work_task_family_waiting_since(uuid) from public;
 revoke all on function chat.work_task_setup_missing(uuid) from public;
 revoke all on function chat.work_task_setup_verdict(text, uuid) from public;
+revoke all on function chat.work_task_settle_window() from public;
+revoke all on function chat.work_task_setup_owner(text, uuid) from public;
 revoke all on function chat.work_task_raise_family_unsupervised(uuid) from public;
 revoke all on function chat.work_task_raise_teacher_setup(uuid) from public;
 revoke all on function chat.work_task_raise_new_student_assign(uuid) from public;
