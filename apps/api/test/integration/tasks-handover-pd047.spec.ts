@@ -481,9 +481,10 @@ describe('a certificate step (PD-41)', () => {
     const c = await certificateRequest();
     const [step] = await steps(c);
     expect(step).toMatchObject({ type: 'certificate_design', assignee: s.managerId });
-    // The picker offers live Designers only, and no department.
+    // The picker offers live holders of certificates.design only (the super
+    // admin holds every key), and no department.
     const offered = await tasks.assignees(s.managerId, { task: step!.id });
-    expect(offered.people.map((p) => p.id).sort()).toEqual([d1, d2].sort());
+    expect(offered.people.map((p) => p.id).sort()).toEqual([d1, d2, sa].sort());
     expect(offered.departments).toEqual([]);
     expect(await code(tasks.reassign(s.managerId, step!.id, { to: staff(s.otherAdminId) }))).toBe(CommErrorCode.TASK_INVALID);
     await tasks.reassign(s.managerId, step!.id, { to: staff(d2) });
