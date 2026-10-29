@@ -56,6 +56,8 @@ CONTENT = os.path.join(ROOT, 'apps', 'lessons', 'src', 'content')
 QURAN = os.path.join(CONTENT, 'quran')
 APPROVALS = os.path.join(CONTENT, 'approvals')
 SOURCES = os.path.join(CONTENT, 'sources.json')
+APPROVAL_KEYS = os.path.join(CONTENT, 'approvals-keys.json')
+GOLDEN = os.path.join(CONTENT, 'approvals.golden.json')
 VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
 MECHANICS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'play', 'mechanics.json')
@@ -536,20 +538,79 @@ def calibration_selftest(surahs):
     return failed
 
 
-def check_approvals(appr, content, works):
+ISO_TIME = re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z')
+
+
+def iso_ms(t):
+    """An ISO time as epoch milliseconds, with or without milliseconds (one form to compare), or None."""
+    if not isinstance(t, str) or not ISO_TIME.fullmatch(t):
+        return None
+    import datetime
+    d = datetime.datetime.strptime(t[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=datetime.timezone.utc)
+    return int(d.timestamp()) * 1000 + (int(t[20:23]) if len(t) == 24 else 0)
+
+
+def envelope_errors(appr, keys):
+    """The signed export's shape and key (keys: {id: key entry}). The Ed25519 signature is verify-approvals.mjs's."""
+    if not isinstance(appr, dict) or set(appr) != {'payload', 'keyId', 'signature'}:
+        return ['approvals: must be the signed export {payload, keyId, signature}']
+    p = appr['payload']
+    if not isinstance(p, dict) or set(p) != {'v', 'env', 'issuedAt', 'datasetId', 'lessonKey', 'approvals'} or p['v'] != 1 or not isinstance(p['approvals'], list):
+        return ['approvals: payload must be exactly {v: 1, env, issuedAt, datasetId, lessonKey, approvals}']
+    errors = []
+    if p['env'] != 'production':
+        errors.append(f'approvals: env {p["env"]!r}: only production approvals reach children')
+    if appr['keyId'] is None:
+        if appr['signature'] is not None or p['approvals']:
+            errors.append('approvals: an unsigned file may only approve nothing')
+        return errors
+    key = keys.get(appr['keyId'])
+    if key is None or not isinstance(appr['signature'], str) or not appr['signature']:
+        errors.append(f'approvals: signed by an unknown key {appr["keyId"]!r} (not in approvals-keys.json), or carries no signature')
+    elif key.get('env') != 'production' or key.get('revokedAt'):
+        errors.append(f'approvals: key {appr["keyId"]} is a {key.get("env")} key or revoked: it never approves for children')
+    elif iso_ms(p['issuedAt']) is None or (key.get('retiredAt') and not iso_ms(p['issuedAt']) < (iso_ms(key['retiredAt']) or 0)):
+        errors.append(f'approvals: issued {p["issuedAt"]!r}, after its key was retired ({key.get("retiredAt")})')
+    return errors
+
+
+def retired_errors(appr, keys):
+    """An approvals file whose content was removed: a retired lesson. Its export (signed or not) approves nothing."""
+    errors = envelope_errors(appr, keys)
+    if not errors and appr['payload']['approvals']:
+        errors.append('no content file for it, yet it approves something: retire a lesson with a newer export that approves nothing')
+    return errors
+
+
+def check_approvals(appr, content, works, keys):
+    """The API's signed export (plan F.3): {payload, keyId, signature}. The signature itself is verified
+    by scripts/lessons/verify-approvals.mjs (Node's crypto); here: its shape, its key, and what it approves."""
     errors = []
     err = errors.append
-    if not isinstance(appr, dict) or set(appr) != {'surah', 'lessonKey', 'approvals'}:
-        return ['approvals: keys must be exactly surah, lessonKey, approvals']
-    if appr['surah'] != content.get('surah') or appr['lessonKey'] != content.get('lessonKey'):
-        err('approvals: surah and lessonKey must match the content file')
+    if not isinstance(appr, dict) or set(appr) != {'payload', 'keyId', 'signature'}:
+        return ['approvals: must be the signed export {payload, keyId, signature}']
+    errors += envelope_errors(appr, keys)
+    if errors:
+        return errors
+    p = appr['payload']
+    if p['datasetId'] != content.get('datasetId') or p['lessonKey'] != content.get('lessonKey'):
+        err('approvals: datasetId and lessonKey must match the content file')
     items = {it.get('id'): it for it in content.get('items', []) if isinstance(it, dict)}
     seen = set()
-    for a in appr['approvals'] if isinstance(appr['approvals'], list) else []:
+    for a in p['approvals']:
         aid = a.get('id') if isinstance(a, dict) else None
-        if not isinstance(a, dict) or set(a) != {'id', 'approvalSha256', 'steps'} or not isinstance(aid, str) or aid in seen:
-            err(f'approvals: {aid!r}: must be exactly id, approvalSha256, steps, once per item')
+        if not isinstance(a, dict) or set(a) != {'id', 'approvalSha256', 'steps', 'signers'} or not isinstance(aid, str) or aid in seen:
+            err(f'approvals: {aid!r}: must be exactly id, approvalSha256, steps, signers, once per item')
             continue
+        signers = a['signers'] if isinstance(a['signers'], list) else None
+        if signers is None or not all(isinstance(g, dict) and set(g) == {'step', 'staffId', 'at'} and g['step'] in STEPS
+                                      and isinstance(g['staffId'], str) and g['staffId'] and isinstance(g['at'], str) and g['at'] for g in signers):
+            err(f'approvals: {aid}: signers must be {{step, staffId, at}} entries')
+            continue
+        signed = [g['step'] for g in signers]
+        if not isinstance(a['steps'], list) or sorted(map(str, a['steps'])) != sorted(signed) or len(set(signed)) != len(signed) \
+                or len({g['staffId'] for g in signers}) != len(signers):
+            err(f'approvals: {aid}: the steps must be exactly the steps signed, each by a different person')
         seen.add(aid)
         it = items.get(aid)
         if it is None:
@@ -704,11 +765,16 @@ def selftest():
     c = base()
     items = {it['id']: it for it in c['items']}
 
-    def appr(*entries):
-        return {'surah': 112, 'lessonKey': 'quran-112', 'approvals': list(entries)}
+    keys = {'0123456789abcdef': {'id': '0123456789abcdef', 'publicKey': 'test', 'env': 'production'}}
+
+    def appr(*entries, key='0123456789abcdef', lesson='quran-112', env='production'):
+        return {'payload': {'v': 1, 'env': env, 'issuedAt': '2026-10-29T12:00:00.000Z', 'datasetId': 'test-1', 'lessonKey': lesson,
+                            'approvals': list(entries)},
+                'keyId': key, 'signature': 'A' * 86 + '=='}
 
     def a(iid, steps=('check', 'teacher', 'scholar'), sha=None):
-        return {'id': iid, 'approvalSha256': sha or approval_sha256('test-1', 'quran-112', items[iid]), 'steps': list(steps)}
+        return {'id': iid, 'approvalSha256': sha or approval_sha256('test-1', 'quran-112', items[iid]), 'steps': list(steps),
+                'signers': [{'step': st, 'staffId': f'staff-{n}', 'at': '2026-10-29T10:00:00Z'} for n, st in enumerate(steps)]}
 
     appr_cases = {
         'asbab-pinned-full': (appr(a('asbab-001')), None),
@@ -719,17 +785,49 @@ def selftest():
         'copied-from-another-lesson': (appr(a('asbab-001', sha=approval_sha256('test-1', 'quran-113', items['asbab-001']))), 'stale'),
         'other-dataset': (appr(a('asbab-001', sha=approval_sha256('test-2', 'quran-112', items['asbab-001']))), 'stale'),
         'missing-scholar': (appr(a('asbab-001', ('check', 'teacher'))), 'missing review step'),
-        'no-such-item': (appr({'id': 'tafsir-404', 'approvalSha256': '0' * 64, 'steps': ['check']}), 'no such item'),
+        'no-such-item': (appr(dict(a('asbab-001'), id='tafsir-404')), 'no such item'),
         'twice': (appr(a('asbab-001'), a('asbab-001')), 'once per item'),
         'null-entry': (appr(None), 'once per item'),
-        'bad-step': (appr(a('quiz-002', ('check', 'teacher', 'owner'))), 'steps must be'),
-        'wrong-surah': ({'surah': 113, 'lessonKey': 'quran-112', 'approvals': []}, 'must match'),
+        'bad-step': (appr(a('quiz-002', ('check', 'teacher', 'owner'))), 'signers must be'),
+        'wrong-lesson': (appr(lesson='quran-113'), 'must match'),
+        'unknown-key': (appr(a('asbab-001'), key='ffffffffffffffff'), 'unknown key'),
+        'unsigned-with-approvals': (dict(appr(a('asbab-001')), keyId=None, signature=None), 'unsigned file'),
+        'unsigned-empty': (dict(appr(), keyId=None, signature=None), None),
+        'signers-not-steps': (appr(dict(a('asbab-001'), signers=a('asbab-001')['signers'][1:])), 'exactly the steps signed'),
+        'one-person-two-steps': (appr(dict(a('asbab-001'), signers=[dict(g, staffId='one') for g in a('asbab-001')['signers']])), 'different person'),
+        'pre-signature-format': ({'surah': 112, 'lessonKey': 'quran-112', 'approvals': []}, 'signed export'),
+        'staging-payload': (appr(a('asbab-001'), env='staging'), 'only production'),
     }
     for name, (ap, expected) in appr_cases.items():
-        errors = check_approvals(ap, c, works)
+        errors = check_approvals(ap, c, works, keys)
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'approvals {name}: expected {expected or "no errors"}, got {errors}')
+    for name, key in (('staging-key', dict(keys['0123456789abcdef'], env='staging')),
+                      ('revoked-key', dict(keys['0123456789abcdef'], revokedAt='2026-01-01T00:00:00Z')),
+                      ('retired-before-signing', dict(keys['0123456789abcdef'], retiredAt='2000-01-01T00:00:00Z'))):
+        if not check_approvals(appr(a('asbab-001')), c, works, {'0123456789abcdef': key}):
+            failed.append(f'approvals {name}: accepted')
+    # The golden vector (the API's signer made it; verify-approvals.mjs verifies its signature) is a well-formed envelope.
+    golden = json.load(open(GOLDEN, encoding='utf-8'))
+    # Non-ASCII: the canonical bytes of the Arabic vector are the API's and verify-approvals.mjs's.
+    if canonical_json(golden['arabic']['value']) != golden['arabic']['canonical']:
+        failed.append('the Arabic golden vector: canonical JSON differs from the API and verify-approvals.mjs')
+    # Times compare as instants: 12:00:00Z is 12:00:00.000Z (a string compare says otherwise).
+    if iso_ms('2026-10-29T12:00:00Z') != iso_ms('2026-10-29T12:00:00.000Z') or iso_ms('2026-10-29T12:00:00.001Z') <= iso_ms('2026-10-29T12:00:00Z'):
+        failed.append('iso_ms: one instant in two forms')
+    # A retired lesson: its signed export approves nothing; one that still approves something is refused.
+    gkeys = {golden['key']['id']: golden['key']}
+    if retired_errors(dict(golden['envelope'], payload=dict(golden['envelope']['payload'], approvals=[])), gkeys) != []:
+        failed.append('a retired lesson (a signed export approving nothing) was refused')
+    if not retired_errors(golden['envelope'], gkeys):
+        failed.append('an approvals file approving something with no content file was accepted')
+    retired_same = dict(golden['key'], retiredAt='2026-10-29T12:00:00Z')
+    if not envelope_errors(golden['envelope'], {golden['key']['id']: retired_same}):
+        failed.append('a key retired at the very instant it signed (written without ms) was accepted')
+    g_errors = envelope_errors(golden['envelope'], {golden['key']['id']: golden['key']})
+    if g_errors:
+        failed.append(f'the golden vector: {g_errors}')
 
     # The registry.
     for name, bad, expected in (
@@ -810,6 +908,7 @@ def main(argv):
         return selftest()
     dataset_id = json.load(open(PIN, encoding='utf-8'))['datasetId']
     reg_errors, works = check_sources(json.load(open(SOURCES, encoding='utf-8')))
+    approval_keys = {k.get('id'): k for k in json.load(open(APPROVAL_KEYS, encoding='utf-8')).get('keys', []) if isinstance(k, dict)}
     for e in reg_errors:
         print(f'quran-content: {e}')
     failed = 1 if reg_errors else 0
@@ -827,8 +926,14 @@ def main(argv):
               f'{len(json.load(open(PLAY_APPROVALS, encoding="utf-8"))["approvals"]) if os.path.exists(PLAY_APPROVALS) else 0} signed')
     for f in approvals:
         if f not in files:
-            print(f'quran-content: approvals/{f}: no content file for it')
-            failed += 1
+            # A removed lesson is retired, never deleted: its signed export approves nothing and stays.
+            errors = retired_errors(json.load(open(os.path.join(APPROVALS, f), encoding='utf-8')), approval_keys)
+            for e in errors:
+                print(f'quran-content: approvals/{f}: {e}')
+            if errors:
+                failed += 1
+            else:
+                print(f'quran-content: approvals/{f}: a retired lesson (no content; approves nothing)')
     surahs = v1.verified_surahs() if files else {}
     every = [v for s in sorted(surahs) for v in surahs[s]]
     for f in files:
@@ -841,14 +946,14 @@ def main(argv):
         appr = None
         if f in approvals:
             appr = json.load(open(os.path.join(APPROVALS, f), encoding='utf-8'))
-            errors += check_approvals(appr, content, works)
+            errors += check_approvals(appr, content, works, approval_keys)
         for e in errors:
             print(f'quran-content: {f}: {e}')
         if errors:
             failed += 1
         else:
             total = len(content['items'])
-            ok = len(appr['approvals']) if appr else 0
+            ok = len(appr['payload']['approvals']) if appr else 0
             print(f'quran-content: {f}: every position resolves, no typed Quran, every citation in its role; {ok}/{total} item(s) approved')
     if not files:
         print('quran-content: no schema-2 content yet; the sources registry is well formed')

@@ -107,6 +107,14 @@ ATTACHMENT_MAX_VOICE_DURATION_MS	storage	no	opt	opt	opt
 # own MATERIALS_FRAME_ORIGINS.
 MATERIALS_SITE_BASE_URL	materials	no	opt	opt	opt
 MATERIALS_FRAME_ORIGINS	materials	no	opt	opt	opt
+# LESSON_APPROVALS_SIGNING_KEY is CONSUMED by apps/api/src/lesson-content/approvals-signer.ts
+# (PD-49): the Ed25519 private key that signs the export of children's Quran
+# content approvals. Its PUBLIC key is committed with its id in
+# apps/lessons/src/content/approvals-keys.json, and CI refuses any approvals file
+# it does not verify. Optional: unset, the API exports nothing (503) and no
+# content reaches a child. An owner action (docs/infrastructure/secrets.md).
+# PEM PKCS#8, or its base64 DER. Generate with: openssl genpkey -algorithm ed25519
+LESSON_APPROVALS_SIGNING_KEY	materials	yes	opt	opt	opt
 FCM_PROJECT_ID	push	no	opt	opt	req
 FCM_SERVICE_ACCOUNT_JSON	push	yes	opt	opt	req
 APNS_KEY_ID	push	no	opt	opt	req

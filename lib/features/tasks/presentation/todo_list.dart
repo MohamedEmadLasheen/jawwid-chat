@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +14,10 @@ import '../../lessons/presentation/teacher_schedule_screen.dart';
 
 /// PD-47: the person's own open tasks, most urgent first, in the server's order.
 final myTasksProvider = FutureProvider.autoDispose<TaskList>((ref) {
+  // PD-47 PR-4: a task of mine changed somewhere -- read the list again.
+  final signals = ref.watch(taskSignalChannelProvider)?.signals.listen((_) => ref.invalidateSelf());
+  // Never awaited: on a broadcast stream a cancel can wait for the stream to close.
+  if (signals != null) ref.onDispose(() => unawaited(signals.cancel()));
   return ref.watch(taskRepositoryProvider).myTasks();
 });
 

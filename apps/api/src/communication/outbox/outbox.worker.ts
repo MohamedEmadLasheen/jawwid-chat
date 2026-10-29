@@ -119,6 +119,16 @@ export class OutboxWorker {
         return;
       }
 
+      /**
+       * PD-47 PR-4: a task changed. No conversation: to the people whose lists
+       * change, by actor room (ids only), and to the one who must act now
+       * through the PD-34 pipeline. See deliverTask.
+       */
+      case CommEvent.TASK_CHANGED: {
+        await this.deliverTask(payload);
+        return;
+      }
+
       /** PD-36: a summons answered or closed -- Group Info re-reads; so does the target's list. */
       case CommEvent.MENTION_UPDATED: {
         const target = payload.targetActorId as string | undefined;
@@ -720,6 +730,180 @@ export class OutboxWorker {
         subject: { type: 'supervision_case', id: caseId },
         refs: { caseId },
         scheduledAt: new Date(),
+      });
+    }
+  }
+
+  /**
+   * PD-47 PR-4 (plan §3.10-§3.11). The task's STATE is read now; WHO did the
+   * change, and for a hand-on whom it left and reached, come from the payload,
+   * written with the change -- the task may have moved on since, and its
+   * newest event is not this one.
+   *
+   *   signalled  every list that changed: the assignee, the person it left (a
+   *              hand-on), the responsible managers, a teacher's supervisors
+   *              (who read their tasks), and the super admin while it waits on
+   *              a decision -- `task.changed`, ids only
+   *   told       the one who must act now, a PD-34 'task' entry (action
+   *              open_task) with a generic push:
+   *                created, reassigned  the person it reached, if it is still
+   *                                     theirs (a lesson report is not
+   *                                     announced when raised: the teacher
+   *                                     just taught it; it is when overdue)
+   *                returned             the assignee
+   *                out_of_scope         the responsible managers, else the
+   *                                     super admin
+   *                overdue              the assignee, once per due date; the
+   *                                     decider while it waits on a decision
+   *   settled    entries stop asking anything of whoever no longer must act:
+   *              the person it left, the deciders once decided, everyone once
+   *              closed, the old "overdue" once re-dated
+   *
+   * Never told: the person who did it. Never in any text: the task's title, an
+   * amount, a card, a family or a child (a lock screen is not behind sign-in).
+   */
+  private async deliverTask(payload: Record<string, unknown>): Promise<void> {
+    const taskId = payload.taskId as string | undefined;
+    const change = payload.change as string | undefined;
+    const revision = Number(payload.revision ?? 0);
+    if (!taskId || !change) return;
+    const actor = typeof payload.actorId === 'string' ? payload.actorId : null;
+    const left = typeof payload.fromAssignee === 'string' ? payload.fromAssignee : null;
+    const reached = typeof payload.toAssignee === 'string' ? payload.toAssignee : null;
+    // An overdue signal names the due date it was for; a task re-dated since is not overdue for it.
+    const dueFor = typeof payload.dueAt === 'string' ? new Date(payload.dueAt).getTime() : null;
+    const [t] = await this.prisma.$queryRaw<Array<{
+      state: string; source_type: string | null; assignee: string; due_at: Date | null; overdue: boolean;
+      unmanaged: boolean; managers: string[]; readers: string[]; admins: string[]; left_watchers: string[];
+    }>>`
+      SELECT t.state, t.source_type, t.due_at,
+             (SELECT e.overdue FROM chat.work_task_effective(t.priority, t.floor_rule, t.due_at, t.source_floor, t.state,
+                                                             now(), chat.work_task_academy_zone()) e) AS overdue,
+             coalesce(t.assignee_staff_id, t.assignee_teacher_id)::text AS assignee,
+             chat.work_task_unmanaged(t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by) AS unmanaged,
+             ARRAY(SELECT s.id::text FROM chat.staff s
+                    WHERE s.organization_id = t.organization_id AND s.is_active AND s.left_at IS NULL
+                      AND chat.work_task_standing(s.id, t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by) = 'manager'
+                    ORDER BY s.id) AS managers,
+             -- A teacher's supervisors read their tasks (owner Q3): their lists change too.
+             ARRAY(SELECT s.id::text FROM chat.staff s
+                    WHERE s.organization_id = t.organization_id AND s.is_active AND s.left_at IS NULL
+                      AND chat.work_task_standing(s.id, t.organization_id, t.assignee_staff_id, t.assignee_teacher_id, t.created_by) = 'supervisor'
+                    ORDER BY s.id) AS readers,
+             ARRAY(SELECT s.id::text FROM chat.staff s
+                    WHERE s.organization_id = t.organization_id AND s.role = 'super_admin' AND s.is_active AND s.left_at IS NULL
+                    ORDER BY s.id) AS admins,
+             -- A hand-on changes the lists of whoever watched the person it LEFT too
+             -- (their managers, a teacher's supervisors): ids only.
+             ARRAY(SELECT s.id::text FROM chat.staff s
+                    WHERE ${left}::uuid IS NOT NULL
+                      AND s.organization_id = t.organization_id AND s.is_active AND s.left_at IS NULL
+                      AND chat.work_task_standing(s.id, t.organization_id,
+                            (SELECT x.id FROM chat.staff x WHERE x.id = ${left}::uuid),
+                            (SELECT x.id FROM chat.teacher x WHERE x.id = ${left}::uuid), t.created_by) IN ('manager', 'supervisor')
+                    ORDER BY s.id) AS left_watchers
+        FROM chat.work_task t
+       WHERE t.id = ${taskId}::uuid`;
+    if (!t) return;
+    const pending = t.state === 'open' || t.state === 'awaiting_decision';
+    const deciding = t.state === 'awaiting_decision' || t.unmanaged;
+    const signalled = [...new Set([t.assignee, left, ...t.managers, ...t.readers, ...t.left_watchers, ...(deciding ? t.admins : [])]
+      .filter((x): x is string => !!x))];
+    if (signalled.length > 0) {
+      await this.realtime.toUsers(signalled, CommEvent.TASK_CHANGED, { taskId, revision, change } as never);
+    }
+    if (!this.pipeline) return;
+
+    // Settled first.
+    if (t.state === 'completed') await this.pipeline.taskLeft(taskId, 'done');
+    else if (t.state === 'removed') await this.pipeline.taskLeft(taskId, 'cancelled');
+    else if (change === 'reassigned') await this.pipeline.taskLeft(taskId, 'cancelled', t.assignee);
+    // Decided: the deciders' "decision waiting" and "decision overdue" stop asking.
+    else if (change === 'returned') await this.pipeline.taskLeft(taskId, 'done', t.assignee, ['task_out_of_scope', 'task_overdue_decision']);
+    else if (change === 'due_changed') await this.pipeline.taskLeft(taskId, 'done', null, ['task_overdue', 'task_overdue_decision']);
+    if (!pending) return;
+    // A case's task is the owner's pointer; the case announces itself
+    // (PD-35 case_opened / case_assigned / case_due_soon) -- never twice.
+    if (t.source_type === 'case') return;
+
+    const notFor = (ids: Array<string | null>) => [...new Set(ids.filter((x): x is string => !!x && x !== actor))];
+    // The deciders: the responsible managers, else the super admin.
+    const deciders = (() => {
+      const pool = notFor(t.managers);
+      return pool.length > 0 ? pool : notFor(t.admins);
+    })();
+    let told: string[] = [];
+    let ruleKey: 'task_assigned' | 'task_returned' | 'task_out_of_scope' | 'task_overdue' | 'task_overdue_decision' | null = null;
+    let key = String(revision);
+    let status: 'open' | 'escalated' = 'open';
+    let alsoOverdue = false;
+    if ((change === 'created' && t.source_type !== 'lesson_report') || change === 'reassigned') {
+      // Only if it is still theirs: a later hand-on tells whoever it reached then.
+      const to = reached ?? t.assignee;
+      ruleKey = 'task_assigned';
+      told = to === t.assignee ? notFor([to]) : [];
+    } else if (change === 'returned') {
+      ruleKey = 'task_returned';
+      told = notFor([t.assignee]);
+      // Returned past its due date: the assignee also hears it is overdue, once
+      // per due date (the deciders heard it while it waited on them) -- after
+      // "returned", below.
+      alsoOverdue = t.overdue && !!t.due_at;
+    } else if (change === 'out_of_scope' && t.state === 'awaiting_decision') {
+      ruleKey = 'task_out_of_scope';
+      status = 'escalated';
+      told = deciders;
+    } else if (change === 'overdue' && t.due_at && (dueFor === null || dueFor === t.due_at.getTime())) {
+      // Once per due date: re-dated and overdue again is a new notice. While it
+      // waits on a decision, it is the decision that is overdue.
+      key = String(t.due_at.getTime());
+      if (t.state === 'awaiting_decision') {
+        ruleKey = 'task_overdue_decision';
+        status = 'escalated';
+        told = deciders;
+      } else {
+        ruleKey = 'task_overdue';
+        told = [t.assignee];
+      }
+    }
+    if (!ruleKey) return;
+    await this.tellTask(taskId, ruleKey, key, told, t.due_at, status);
+    if (alsoOverdue && t.due_at) await this.tellTask(taskId, 'task_overdue', String(t.due_at.getTime()), [t.assignee], t.due_at, 'open');
+  }
+
+  /** One PD-47 task entry and its push per person; a "given" that still asks is not repeated. */
+  private async tellTask(
+    taskId: string,
+    ruleKey: 'task_assigned' | 'task_returned' | 'task_out_of_scope' | 'task_overdue' | 'task_overdue_decision',
+    key: string,
+    told: readonly string[],
+    dueAt: Date | null,
+    status: 'open' | 'escalated',
+  ): Promise<void> {
+    if (!this.pipeline) return;
+    for (const recipientId of told) {
+      const recipient = await this.identity.resolveActor(recipientId);
+      if (!recipient || !recipient.isActive) continue;
+      // Handed away and back before reading it: one "given" that still asks is enough.
+      if (ruleKey === 'task_assigned') {
+        const asking = await this.prisma.notificationItem.findFirst({
+          where: { subjectType: 'task', subjectId: taskId, recipientId, eventType: 'task_assigned', actedAt: null },
+          select: { id: true },
+        });
+        if (asking) continue;
+      }
+      await this.pipeline.emit({
+        dedupeKey: `${ruleKey}:${taskId}:${key}:${recipientId}`,
+        ruleKey,
+        eventType: ruleKey,
+        templateKey: ruleKey,
+        recipientId,
+        locale: recipient.locale,
+        priority: 'normal',
+        subject: { type: 'task', id: taskId },
+        refs: { taskId },
+        scheduledAt: new Date(),
+        task: { ownerId: recipientId, dueAt, status },
       });
     }
   }

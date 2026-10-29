@@ -388,6 +388,42 @@ gate_lessons_supply_chain() {
   # resting on pinned editions.
   "$PYTHON" -I scripts/lessons/check-quran-content.py selftest || return 1
   "$PYTHON" -I scripts/lessons/check-quran-content.py || return 1
+  # PD-49: every approvals file is the API's signed export, verified under a key
+  # of approvals-keys.json (Ed25519, Node's built-in crypto): CI is the trust
+  # anchor, so a hand-edited or forged approval fails here.
+  if ! command -v node >/dev/null 2>&1; then
+    echo "guards: node not found -- the approvals signatures cannot be verified, so the gate FAILS"
+    return 2
+  fi
+  node scripts/lessons/verify-approvals.mjs selftest || return 1
+  node scripts/lessons/verify-approvals.mjs || return 1
+  # ...a change never adds a key together with what it signs, never re-commits an
+  # older export (a replay of something since withdrawn), never signs with a
+  # retired key (against the PR's base branch; GITHUB_BASE_REF in CI).
+  node scripts/lessons/verify-approvals.mjs diff || return 1
+  # ...and the job that builds the production lessons bundle verifies them
+  # before it builds; no other workflow builds that bundle (a hand-built or
+  # elsewhere-built bundle cannot skip the check).
+  "$PYTHON" -I - <<'PY' || return 1
+import glob, re, sys
+ci = open('.github/workflows/ci.yml', encoding='utf-8').read()
+job = re.search(r'\n  lessons:\n(.*?)(?=\n  [a-z0-9_-]+:\n|\Z)', ci, re.S)
+if not job:
+    sys.exit('guards: ci.yml has no lessons job')
+body = job.group(1)
+v, b = body.find('verify-approvals.mjs'), body.find('npm run build')
+if v < 0 or b < 0 or v > b:
+    sys.exit('guards: the ci.yml lessons job must run scripts/lessons/verify-approvals.mjs before npm run build')
+others = [f for f in glob.glob('.github/workflows/*.yml') if f != '.github/workflows/ci.yml'
+          and re.search(r'apps/lessons[^\n]*\n?[^\n]*npm run build|working-directory: apps/lessons', open(f, encoding='utf-8').read())]
+if others:
+    sys.exit(f'guards: only ci.yml builds the lessons bundle; also built in: {others}')
+print('lessons bundle: built only by the ci.yml lessons job, after its approvals verify')
+PY
+  # PD-49: the API reviews exactly what apps/lessons holds -- its generated map of
+  # items and mechanics (with their hashes and required steps) is never stale.
+  "$PYTHON" -I scripts/lessons/lesson-content-subjects.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/lesson-content-subjects.py check || return 1
   # P0-5: the Arabic letters lessons -- every word holds its unit's letter by the
   # one rule (no folding), full tashkeel with the pausal sukun, and every quiz
   # question has exactly one right answer.

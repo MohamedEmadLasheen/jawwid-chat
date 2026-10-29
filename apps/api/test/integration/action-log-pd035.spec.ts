@@ -22,6 +22,7 @@ import { TeacherFileService } from '../../src/teacher-file/teacher-file.service'
 import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
 import { SupervisionCaseService } from '../../src/cases/supervision-case.service';
 import { ActionLogService } from '../../src/action-log/action-log.service';
+import { TaskService } from '../../src/tasks/task.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -32,6 +33,7 @@ const files = new TeacherFileService(g.prisma, g.authz, g.conversations, audit, 
 const feedback = new ParentFeedbackService(g.prisma, g.conversations, files, audit);
 const cases = new SupervisionCaseService(g.prisma, g.conversations, lessons, g.authz, g.outbox, audit, feedback);
 const log = new ActionLogService(g.prisma, g.conversations);
+const tasks = new TaskService(g.prisma, g.outbox);
 
 jest.setTimeout(120_000);
 
@@ -113,6 +115,32 @@ describe('what the log holds', () => {
       expect.objectContaining({ action: 'teacher.lateness_recorded', entity: 'teacher', entityId: s.teacherId, reason: 'ten minutes late' }),
     ]);
     expect(await code(log.list(tsupA, tsupA, { from: 'yesterday' }))).toBe(CommErrorCode.VALIDATION);
+  });
+});
+
+describe('their tasks (PD-47 PR-7)', () => {
+  it('what they did to a task themselves -- the task\'s id only, never its title, a comment or a reason', async () => {
+    const t = await tasks.create(tmgr, { assignee: { kind: 'staff', id: tsupA }, title: 'secret title', body: 'secret body' });
+    await tasks.comment(tsupA, t.id, { body: 'secret comment' });
+    await tasks.outOfScope(tsupA, t.id, { comment: 'secret reason' });
+    await tasks.returnTask(tmgr, t.id, { instructions: 'secret instructions' });
+    await tasks.complete(tsupA, t.id, {});
+    const mine = (await log.list(tsupA, tsupA, {})).entries;
+    expect(mine.map((e) => e.action)).toEqual(['task.completed', 'task.out_of_scope', 'task.commented']);
+    expect((await log.list(tmgr, tmgr, {})).entries.map((e) => e.action)).toEqual(['task.returned', 'task.created']);
+    for (const e of mine) {
+      expect(e).toMatchObject({ entity: 'work_task', entityId: t.id, reason: null });
+      expect(e.id).toMatch(/^task:/);
+    }
+    expect(JSON.stringify(mine)).not.toMatch(/secret/);
+  });
+
+  it('a source\'s own moves are the source\'s record, not twice: a case\'s task adds nothing to the case\'s lines', async () => {
+    const caseId = await someWork();
+    const lines = (await log.list(tsupA, tsupA, {})).entries;
+    expect(lines.map((e) => e.entity)).toEqual(['supervision_case', 'supervision_case', 'supervision_case']);
+    expect(lines.every((e) => e.entityId === caseId)).toBe(true);
+    expect((await log.list(tmgr, tmgr, {})).entries.map((e) => e.action)).toEqual(['supervision_case.assigned']);
   });
 });
 

@@ -162,6 +162,14 @@ describe('the list', () => {
     await waitFor(() => expect(sent('GET', /\/me\/tasks/).some((r) => /state=closed/.test(r.url))).toBe(true))
   })
 
+  it('a Dashboard tile\'s list is asked for with its filter, which can be cleared', async () => {
+    renderWithProviders(<TasksPage />, { staff: manager, route: '/tasks?tab=team&gone=true' })
+    await screen.findAllByRole('listitem')
+    expect(sent('GET', /\/tasks\?view=team/)[0]!.url).toMatch(/gone=true/)
+    await userEvent.click(screen.getByRole('button', { name: 'Clear "Assignee left"' }))
+    await waitFor(() => expect(sent('GET', /\/tasks\?view=team/).some((r) => !/gone=true/.test(r.url))).toBe(true))
+  })
+
   it('pages with the server\'s cursor', async () => {
     on('GET', /\/me\/tasks\?(?!.*cursor)/, () => json(page([BASE], 'cur-2')))
     on('GET', /\/me\/tasks\?.*cursor=cur-2/, () => json(page([INSTALMENT])))

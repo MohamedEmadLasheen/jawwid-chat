@@ -60,6 +60,11 @@ ADMIN_WEB_REPOSITORY = "jawwid-chat/admin-web"
 # reader at all.
 EXCLUDED_GROUPS = ("backup",)
 
+# Rows only the API reads; the worker never gets them. LESSON_APPROVALS_SIGNING_KEY
+# (PD-49) signs the approvals export, an HTTP route the worker does not serve:
+# handing the signing key to the worker would widen its exposure for no reader.
+API_ONLY = ("LESSON_APPROVALS_SIGNING_KEY",)
+
 # Admin Web's runtime environment: the nginx template's CSP origins
 # (apps/admin-web/infra-nginx/default.conf.template). Not secrets, not in the
 # manifest (the manifest is the API process), always required: an empty origin
@@ -143,8 +148,11 @@ def render(env: str, manifest_path: str = MANIFEST) -> str:
     rows = app_env_rows(read_manifest(manifest_path), env)
     size = SIZES[env]
     app_env = []
+    worker_env = []
     for r in rows:
         app_env += env_block("      ", r["name"], r["secret"])
+        if r["name"] not in API_ONLY:
+            worker_env += env_block("      ", r["name"], r["secret"])
     web_env = []
     for key in ADMIN_WEB_ENV:
         web_env += env_block("      ", key, False)
@@ -248,7 +256,7 @@ def render(env: str, manifest_path: str = MANIFEST) -> str:
         "    termination:",
         "      grace_period_seconds: 20",
         "    envs:",
-        *app_env,
+        *worker_env,
     ]
     return "\n".join(out) + "\n"
 
@@ -415,11 +423,12 @@ def invariants(env: str, text: str, manifest_path: str = MANIFEST) -> list[str]:
             errs.append(f"{component}: {key} is not a secret but has type {typ}")
     for component in ("api", "worker"):
         have = seen.get(component, set())
-        for missing in sorted(want - have):
+        need = want if component == "api" else want - set(API_ONLY)
+        for missing in sorted(need - have):
             errs.append(f"{component}: manifest variable {missing} is absent")
-        for extra in sorted(have - want):
+        for extra in sorted(have - need):
             if extra in by_name:
-                errs.append(f"{component}: {extra} must not be in the app environment")
+                errs.append(f"{component}: {extra} must not be in the {component}'s environment")
     if seen.get("admin-web", set()) != set(ADMIN_WEB_ENV):
         errs.append("admin-web: its env must be exactly " + ", ".join(ADMIN_WEB_ENV))
     return errs
