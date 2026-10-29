@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import pin from '../../quran-pin.json';
 import { AudioController, type AudioFactory, type AudioSource, type Playable } from '../audio/audio-controller';
-import { approvalSha256 } from '../content/quran-content';
+import { approvalSha256, type ApprovalKey } from '../content/quran-content';
 import type { Ayah } from '../quran/dataset';
 import { route } from '../route';
 import { snapshot } from '../test/fixtures';
@@ -20,6 +20,26 @@ import { GAMES, PlayLesson } from './PlayLesson';
 const TEXTS = ['ألف باء تاء', 'جيم حاء', 'دال ذال راء', 'شين صاد', 'قاف لام'];
 const AYAHS: Ayah[] = TEXTS.map((text, i) => ({ ayah: i + 1, basmala: null, text, sha256: '' }));
 const ALL = new Set(MECHANICS.map((m) => m.id));
+
+// A test key: the engine checks the envelope's shape and key; CI (verify-approvals.mjs) verifies signatures.
+const KEYS: ApprovalKey[] = [{ id: '0123456789abcdef', publicKey: 'test', env: 'production' }];
+const SIG = 'A'.repeat(86) + '==';
+/** The API's signed export for scope 'play', as approvals/play.json holds it. */
+function envelope(approvals: { id: string; approvalSha256: string; steps: string[] }[], over: Record<string, unknown> = {}) {
+  return {
+    payload: {
+      v: 1,
+      env: 'production',
+      issuedAt: '2026-10-29T12:00:00.000Z',
+      datasetId: pin.datasetId,
+      lessonKey: 'play',
+      approvals: approvals.map((a) => ({ ...a, signers: a.steps.map((step, n) => ({ step, staffId: `staff-${n}`, at: '2026-10-29T10:00:00Z' })) })),
+      ...over,
+    },
+    keyId: KEYS[0]!.id,
+    signature: SIG,
+  };
+}
 
 /** A recitation whose files end when the test says so. */
 function fakeAudio() {
@@ -65,13 +85,22 @@ describe('the mechanics and who signs them (plan §C.4)', () => {
   it('a mechanic plays only when a teacher AND the scholar signed exactly its record', async () => {
     const m = MECHANICS.find((x) => x.id === 'count_ayat')!;
     const sha = await approvalSha256(pin.datasetId, 'play', m);
-    const with_ = (steps: string[], approvalSha = sha) => ({ scope: 'play', approvals: [{ id: 'count_ayat', approvalSha256: approvalSha, steps }] });
-    expect([...(await approvedMechanics(MECHANICS, with_(['teacher', 'scholar'])))]).toEqual(['count_ayat']);
-    expect([...(await approvedMechanics(MECHANICS, with_(['teacher'])))]).toEqual([]);
-    expect([...(await approvedMechanics(MECHANICS, with_(['teacher', 'scholar'], '0'.repeat(64))))]).toEqual([]);
+    const with_ = (steps: string[], approvalSha = sha) => envelope([{ id: 'count_ayat', approvalSha256: approvalSha, steps }]);
+    const approved = async (a: unknown, mechanics = MECHANICS, keys = KEYS) => [...(await approvedMechanics(mechanics, a, pin.datasetId, keys))];
+    expect(await approved(with_(['teacher', 'scholar']))).toEqual(['count_ayat']);
+    expect(await approved(with_(['teacher']))).toEqual([]);
+    expect(await approved(with_(['teacher', 'scholar'], '0'.repeat(64)))).toEqual([]);
     // A changed record (another version) is a new hash: unsigned.
-    expect([...(await approvedMechanics([{ ...m, version: 2 }], with_(['teacher', 'scholar'])))]).toEqual([]);
-    expect([...(await approvedMechanics(MECHANICS, { scope: 'play', approvals: [null] }))]).toEqual([]);
+    expect(await approved(with_(['teacher', 'scholar']), [{ ...m, version: 2 }])).toEqual([]);
+    // The envelope is read like content's: an unknown key, a staging export, another lesson, the old unsigned shape -- nothing.
+    expect(await approved(with_(['teacher', 'scholar']), MECHANICS, [])).toEqual([]);
+    expect(await approved(envelope([{ id: 'count_ayat', approvalSha256: sha, steps: ['teacher', 'scholar'] }], { env: 'staging' }))).toEqual([]);
+    expect(await approved(envelope([{ id: 'count_ayat', approvalSha256: sha, steps: ['teacher', 'scholar'] }], { lessonKey: 'quran-112' }))).toEqual([]);
+    expect(await approved({ scope: 'play', approvals: [{ id: 'count_ayat', approvalSha256: sha, steps: ['teacher', 'scholar'] }] })).toEqual([]);
+    // Steps someone did not sign approve nothing.
+    const e = with_(['teacher', 'scholar']);
+    e.payload.approvals[0]!.signers.pop();
+    expect(await approved(e)).toEqual([]);
   });
 });
 
@@ -204,12 +233,12 @@ describe('the games: a whole verse, still, on a big card', () => {
 });
 
 describe('the games page', () => {
-  const sign = async (...ids: string[]) => ({
-    scope: 'play',
-    approvals: await Promise.all(
-      ids.map(async (id) => ({ id, approvalSha256: await approvalSha256(pin.datasetId, 'play', MECHANICS.find((m) => m.id === id)!), steps: ['teacher', 'scholar'] })),
-    ),
-  });
+  const sign = async (...ids: string[]) =>
+    envelope(
+      await Promise.all(
+        ids.map(async (id) => ({ id, approvalSha256: await approvalSha256(pin.datasetId, 'play', MECHANICS.find((m) => m.id === id)!), steps: ['teacher', 'scholar'] })),
+      ),
+    );
   /** A recitation list as the opener hands it over: `missing` ayat have no file. */
   function recitation(missing: number[] = []) {
     const files: Array<Playable & { url: string }> = [];
@@ -225,7 +254,7 @@ describe('the games page', () => {
   async function page(over: Partial<Parameters<typeof PlayLesson>[0]> = {}) {
     const s = await snapshot(112, 5, { texts: TEXTS, basmala: true });
     const el = (o: Partial<Parameters<typeof PlayLesson>[0]>) => (
-      <PlayLesson surah={112} fetcher={s.fetcher} anchor={s.anchor} date="2026-10-29" audioWaitMs={0} {...over} {...o} />
+      <PlayLesson surah={112} fetcher={s.fetcher} anchor={s.anchor} date="2026-10-29" audioWaitMs={0} approvalKeys={KEYS} {...over} {...o} />
     );
     const r = render(el({}));
     return { rerender: (o: Partial<Parameters<typeof PlayLesson>[0]>) => r.rerender(el(o)) };
@@ -323,7 +352,7 @@ describe('the games page', () => {
   it('a signed mechanic with no game here is never offered, and no praise is shown for it', async () => {
     const ghost = { ...MECHANICS.find((m) => m.id === 'count_ayat')!, id: 'ghost_game' };
     expect(GAMES.ghost_game).toBeUndefined();
-    const approvals = { scope: 'play', approvals: [{ id: 'ghost_game', approvalSha256: await approvalSha256(pin.datasetId, 'play', ghost), steps: ['teacher', 'scholar'] }] };
+    const approvals = envelope([{ id: 'ghost_game', approvalSha256: await approvalSha256(pin.datasetId, 'play', ghost), steps: ['teacher', 'scholar'] }]);
     await page({ mechanics: [...MECHANICS, ghost], approvals });
     expect(await screen.findByText('لا توجد لعبة لهذه الآيات بعد.')).toBeTruthy();
     expect(screen.queryByText(/أحسنت/)).toBeNull();

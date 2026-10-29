@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AudioController, NO_AUDIO, htmlAudio, type AudioFactory, type AudioSource } from '../audio/audio-controller';
-import type { Band } from '../content/quran-content';
+import { APPROVAL_KEYS, type ApprovalKey, type Band } from '../content/quran-content';
 import { BUILD_ANCHOR, loadSurah, type Fetcher, type QuranAnchor, type Surah } from '../quran/dataset';
 import { segmentsFor } from './adapt';
 import { MECHANICS, approvedMechanics, type Mechanic } from './mechanics';
@@ -56,6 +56,7 @@ export function PlayLesson({
   audioSource = NO_AUDIO,
   audioFactory = htmlAudio,
   approvals,
+  approvalKeys = APPROVAL_KEYS,
   mechanics = MECHANICS,
   date,
   audioWaitMs = AUDIO_WAIT_MS,
@@ -66,8 +67,9 @@ export function PlayLesson({
   anchor?: QuranAnchor | null;
   audioSource?: AudioSource;
   audioFactory?: AudioFactory;
-  /** The signed mechanics (approvals/play.json by default). */
+  /** The signed mechanics (approvals/play.json by default), and the keys that may sign them. */
   approvals?: unknown;
+  approvalKeys?: readonly ApprovalKey[];
   mechanics?: readonly Mechanic[];
   /** The day the sitting is for (YYYY-MM-DD); today by default. */
   date?: string;
@@ -92,11 +94,11 @@ export function PlayLesson({
       (s) => live && setLoaded(s),
       () => live && setLoaded('refused'),
     );
-    approvedMechanics(mechanics, approvals).then((a) => live && setApproved(a));
+    approvedMechanics(mechanics, approvals, undefined, approvalKeys).then((a) => live && setApproved(a));
     return () => {
       live = false;
     };
-  }, [surah, fetcher, anchor, mechanics, approvals]);
+  }, [surah, fetcher, anchor, mechanics, approvals, approvalKeys]);
 
   useEffect(() => {
     const controller = new AudioController(audioSource, audioFactory);

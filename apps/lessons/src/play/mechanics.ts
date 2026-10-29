@@ -1,5 +1,5 @@
 import pin from '../../quran-pin.json';
-import { approvalSha256, BANDS, type Band } from '../content/quran-content';
+import { APPROVAL_KEYS, approvalSha256, BANDS, readApprovals, type ApprovalKey, type Band } from '../content/quran-content';
 import registry from './mechanics.json';
 import playApprovals from '../content/approvals/play.json';
 import { TIERS, type Tier } from './adapt';
@@ -59,29 +59,21 @@ export function parseMechanics(raw: unknown): Mechanic[] | null {
 
 export const MECHANICS: readonly Mechanic[] = parseMechanics(registry) ?? [];
 
-export interface PlayApprovals {
-  scope: 'play';
-  approvals: { id: string; approvalSha256: string; steps: string[] }[];
-}
-
 /**
  * The mechanics a child may play: signed by a teacher AND the scholar, for the
- * record as it is now. Anything malformed approves nothing.
+ * record as it is now. approvals/play.json is the API's signed export (scope
+ * 'play'), read by the same readApprovals as content (key, env, steps = signers);
+ * CI verifies its signature. Anything malformed approves nothing.
  */
 export async function approvedMechanics(
   mechanics: readonly Mechanic[],
   approvals: unknown = playApprovals,
   datasetId: string = pin.datasetId,
+  keys: readonly ApprovalKey[] = APPROVAL_KEYS,
 ): Promise<Set<string>> {
   const out = new Set<string>();
-  const a = approvals as Partial<PlayApprovals> | null;
-  if (!a || a.scope !== 'play' || !Array.isArray(a.approvals)) return out;
-  const byId = new Map<string, { approvalSha256: string; steps: string[] }>();
-  for (const e of a.approvals as unknown[]) {
-    const x = e as { id?: unknown; approvalSha256?: unknown; steps?: unknown } | null;
-    if (!x || typeof x.id !== 'string' || typeof x.approvalSha256 !== 'string' || !Array.isArray(x.steps) || byId.has(x.id)) return new Set();
-    byId.set(x.id, { approvalSha256: x.approvalSha256, steps: x.steps as string[] });
-  }
+  const byId = readApprovals(approvals, datasetId, 'play', keys);
+  if (!byId) return out;
   for (const m of mechanics) {
     const x = byId.get(m.id);
     if (!x || !x.steps.includes('teacher') || !x.steps.includes('scholar')) continue;

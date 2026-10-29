@@ -680,28 +680,38 @@ def check_mechanics(reg, src_dir=LESSONS_SRC):
     return errors, out
 
 
-def check_play_approvals(appr, mechanics, dataset_id):
-    """A mechanic is signed by a teacher and the scholar, for its record as it is now."""
-    errors = []
-    if not isinstance(appr, dict) or set(appr) != {'scope', 'approvals'} or appr['scope'] != 'play' or not isinstance(appr['approvals'], list):
-        return ['play approvals: exactly {"scope": "play", "approvals": [...]}']
+def check_play_approvals(appr, mechanics, dataset_id, keys):
+    """approvals/play.json: the API's signed export for scope 'play' (the envelope, read as content's is; the
+    signature is verify-approvals.mjs's). A mechanic is signed by a teacher and the scholar, for its record as it is now."""
+    errors = envelope_errors(appr, keys)
+    if errors:
+        return [f'play approvals: {e}' for e in errors]
+    p = appr['payload']
+    if p['lessonKey'] != 'play' or p['datasetId'] != dataset_id:
+        return [f'play approvals: lessonKey must be "play" and datasetId the pinned {dataset_id}']
     seen = set()
-    for a in appr['approvals']:
+    for a in p['approvals']:
         aid = a.get('id') if isinstance(a, dict) else None
-        if not isinstance(a, dict) or set(a) != {'id', 'approvalSha256', 'steps'} or not isinstance(aid, str) or aid in seen:
-            errors.append(f'play approvals: {aid!r}: exactly id, approvalSha256, steps, once per mechanic')
+        if not isinstance(a, dict) or set(a) != {'id', 'approvalSha256', 'steps', 'signers'} or not isinstance(aid, str) or aid in seen:
+            errors.append(f'play approvals: {aid!r}: exactly id, approvalSha256, steps, signers, once per mechanic')
             continue
         seen.add(aid)
+        signers = a['signers'] if isinstance(a['signers'], list) else []
+        signed = [g.get('step') for g in signers if isinstance(g, dict)]
+        if not all(isinstance(g, dict) and set(g) == {'step', 'staffId', 'at'} and g['step'] in STEPS and isinstance(g['staffId'], str)
+                   and g['staffId'] for g in signers) or not isinstance(a['steps'], list) or sorted(map(str, a['steps'])) != sorted(map(str, signed)) \
+                or len(set(signed)) != len(signed) or len({g['staffId'] for g in signers}) != len(signers):
+            errors.append(f'play approvals: {aid}: the steps must be exactly the steps signed, each by a different person')
+            continue
         m = mechanics.get(aid)
         if m is None:
             errors.append(f'play approvals: {aid}: no such mechanic')
             continue
         if a['approvalSha256'] != approval_sha256(dataset_id, 'play', m):
             errors.append(f'play approvals: {aid}: stale -- the mechanic changed after it was signed')
-        if not isinstance(a['steps'], list) or 'teacher' not in a['steps'] or 'scholar' not in a['steps']:
+        if 'teacher' not in a['steps'] or 'scholar' not in a['steps']:
             errors.append(f'play approvals: {aid}: a mechanic needs the teacher and the scholar')
     return errors
-
 
 def check_vectors(vectors):
     errors = []
@@ -842,14 +852,31 @@ def selftest():
     mech_errors, mechanics = check_mechanics(json.load(open(MECHANICS, encoding='utf-8')))
     failed += mech_errors
     m0 = next(iter(mechanics.values()))
+    play_keys = {'0123456789abcdef': {'id': '0123456789abcdef', 'publicKey': 'test', 'env': 'production', 'addedAt': '2026-10-29T00:00:00Z'}}
+
+    def play(approvals, **over):
+        return {'payload': dict({'v': 1, 'env': 'production', 'issuedAt': '2026-10-29T12:00:00.000Z', 'datasetId': 'test-1', 'lessonKey': 'play',
+                                 'approvals': [dict(a, signers=[{'step': st, 'staffId': f'staff-{n}', 'at': '2026-10-29T10:00:00Z'}
+                                                                for n, st in enumerate(a['steps'])]) for a in approvals]}, **over),
+                'keyId': '0123456789abcdef', 'signature': 'A' * 86 + '=='}
+    sha0 = approval_sha256('test-1', 'play', m0)
+    unsigned = {'payload': {'v': 1, 'env': 'production', 'issuedAt': None, 'datasetId': 'test-1', 'lessonKey': 'play', 'approvals': []},
+                'keyId': None, 'signature': None}
     play_cases = {
-        'signed': ({'scope': 'play', 'approvals': [{'id': m0['id'], 'approvalSha256': approval_sha256('test-1', 'play', m0), 'steps': ['teacher', 'scholar']}]}, None),
-        'teacher-only': ({'scope': 'play', 'approvals': [{'id': m0['id'], 'approvalSha256': approval_sha256('test-1', 'play', m0), 'steps': ['teacher']}]}, 'the scholar'),
-        'stale': ({'scope': 'play', 'approvals': [{'id': m0['id'], 'approvalSha256': approval_sha256('test-1', 'play', dict(m0, version=9)), 'steps': ['teacher', 'scholar']}]}, 'stale'),
-        'unknown': ({'scope': 'play', 'approvals': [{'id': 'nope_game', 'approvalSha256': '0' * 64, 'steps': ['teacher', 'scholar']}]}, 'no such mechanic'),
+        'signed': (play([{'id': m0['id'], 'approvalSha256': sha0, 'steps': ['teacher', 'scholar']}]), None),
+        'unsigned and empty': (unsigned, None),
+        'teacher-only': (play([{'id': m0['id'], 'approvalSha256': sha0, 'steps': ['teacher']}]), 'the scholar'),
+        'stale': (play([{'id': m0['id'], 'approvalSha256': approval_sha256('test-1', 'play', dict(m0, version=9)), 'steps': ['teacher', 'scholar']}]), 'stale'),
+        'unknown': (play([{'id': 'nope_game', 'approvalSha256': '0' * 64, 'steps': ['teacher', 'scholar']}]), 'no such mechanic'),
+        'the old unsigned shape': ({'scope': 'play', 'approvals': []}, 'signed export'),
+        'unsigned with approvals': (dict(unsigned, payload=dict(unsigned['payload'], approvals=play([{'id': m0['id'], 'approvalSha256': sha0, 'steps': ['teacher', 'scholar']}])['payload']['approvals'])), 'approve nothing'),
+        'a staging export': (play([], env='staging'), 'production'),
+        'another lesson': (play([], lessonKey='quran-112'), 'lessonKey'),
+        'an unknown key': (dict(play([]), keyId='ffffffffffffffff'), 'unknown key'),
+        'steps not signed': (dict(play([]), payload=dict(play([])['payload'], approvals=[{'id': m0['id'], 'approvalSha256': sha0, 'steps': ['teacher', 'scholar'], 'signers': []}])), 'steps signed'),
     }
     for name, (ap, expected) in play_cases.items():
-        errors = check_play_approvals(ap, mechanics, 'test-1')
+        errors = check_play_approvals(ap, mechanics, 'test-1', play_keys)
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'play approvals {name}: expected {expected or "no errors"}, got {errors}')
@@ -915,7 +942,7 @@ def main(argv):
     files = sorted(f for f in os.listdir(QURAN) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(QURAN) else []
     approvals = sorted(f for f in os.listdir(APPROVALS) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(APPROVALS) else []
     mech_errors, mechanics = check_mechanics(json.load(open(MECHANICS, encoding='utf-8'))) if os.path.exists(MECHANICS) else ([], {})
-    play_errors = mech_errors + (check_play_approvals(json.load(open(PLAY_APPROVALS, encoding='utf-8')), mechanics, dataset_id)
+    play_errors = mech_errors + (check_play_approvals(json.load(open(PLAY_APPROVALS, encoding='utf-8')), mechanics, dataset_id, approval_keys)
                                  if os.path.exists(PLAY_APPROVALS) else [])
     for e in play_errors:
         print(f'quran-content: {e}')
@@ -923,7 +950,7 @@ def main(argv):
         failed += 1
     elif mechanics:
         print(f'quran-content: {len(mechanics)} game mechanic(s) well formed; '
-              f'{len(json.load(open(PLAY_APPROVALS, encoding="utf-8"))["approvals"]) if os.path.exists(PLAY_APPROVALS) else 0} signed')
+              f'{len(json.load(open(PLAY_APPROVALS, encoding="utf-8"))["payload"]["approvals"]) if os.path.exists(PLAY_APPROVALS) else 0} signed')
     for f in approvals:
         if f not in files:
             # A removed lesson is retired, never deleted: its signed export approves nothing and stays.
