@@ -414,6 +414,18 @@ void main() {
           final l10n = L10n.of(tester.element(find.byType(LessonTicketForm)));
           final noteLabel = kind == LessonTicketKind.teacherApology ? l10n.cardStaffNote : l10n.ticketFamilyDetails;
           expect(find.text(noteLabel), findsOneWidget, reason: 'the note says who reads it');
+          // The category says who reads it too: a teacher's reason never reaches the family.
+          if (kind == LessonTicketKind.teacherApology) {
+            expect(find.text(l10n.ticketCategoryStaffLabel), findsOneWidget);
+            expect(find.text(l10n.ticketCategoryLabel), findsNothing);
+            if (lang == 'en') expect(find.text('Reason (staff and the teacher only)'), findsOneWidget);
+            if (lang == 'ar') expect(find.text('السبب (للإدارة والمعلم فقط)'), findsOneWidget);
+          } else {
+            expect(find.text(l10n.ticketCategoryLabel), findsOneWidget);
+            expect(find.text(l10n.ticketCategoryStaffLabel), findsNothing);
+            if (lang == 'en') expect(find.text('Reason (shown in the group)'), findsOneWidget);
+            if (lang == 'ar') expect(find.text('السبب (يظهر في المجموعة)'), findsOneWidget);
+          }
           if (lang == 'en' && kind == LessonTicketKind.teacherApology) {
             expect(find.text('Note (staff and the teacher only)'), findsOneWidget);
           }

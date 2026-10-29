@@ -2251,6 +2251,12 @@ abstract class L10n {
   /// **'Reason (shown in the group)'**
   String get ticketCategoryLabel;
 
+  /// PD-50: label above the reason category chips on the teacher's own apology; a teacher's reason, its category included, is never shown to the family.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (staff and the teacher only)'**
+  String get ticketCategoryStaffLabel;
+
   /// Lesson card row label: the booked make-up lesson's day, date and time follow (on the make-up card and on the excuse card it replaces).
   ///
   /// In en, this message translates to:
@@ -2274,6 +2280,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Note (staff and the teacher only)'**
   String get cardStaffNote;
+
+  /// PD-50: lesson card row label for the family's own words on a late apology, fetched from the lesson; shown to staff and the teacher only, never to a family.
+  ///
+  /// In en, this message translates to:
+  /// **'Details from the family (staff and the teacher only)'**
+  String get cardFamilyDetails;
 
   /// PD-50: an excuse category, shown on the apology forms and to the family on the lesson card.
   ///

@@ -198,7 +198,12 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
               ],
               if (_isApology) ...[
                 const SizedBox(height: Spacing.spacing4),
-                Text(l10n.ticketCategoryLabel, style: theme.textTheme.labelLarge),
+                // PD-50: the label says who reads the category -- the family group for a
+                // family's apology; staff and the teacher only for a teacher's own.
+                Text(
+                  _kind == LessonTicketKind.teacherApology ? l10n.ticketCategoryStaffLabel : l10n.ticketCategoryLabel,
+                  style: theme.textTheme.labelLarge,
+                ),
                 const SizedBox(height: Spacing.spacing2),
                 Wrap(
                   spacing: Spacing.spacing2,

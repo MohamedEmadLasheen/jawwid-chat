@@ -1262,6 +1262,9 @@ class L10nEn extends L10n {
   String get ticketCategoryLabel => 'Reason (shown in the group)';
 
   @override
+  String get ticketCategoryStaffLabel => 'Reason (staff and the teacher only)';
+
+  @override
   String get cardMakeupLesson => 'Make-up lesson';
 
   @override
@@ -1272,6 +1275,10 @@ class L10nEn extends L10n {
 
   @override
   String get cardStaffNote => 'Note (staff and the teacher only)';
+
+  @override
+  String get cardFamilyDetails =>
+      'Details from the family (staff and the teacher only)';
 
   @override
   String get excuseCategoryTravel => 'Travel';

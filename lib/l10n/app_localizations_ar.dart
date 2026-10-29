@@ -1303,6 +1303,9 @@ class L10nAr extends L10n {
   String get ticketCategoryLabel => 'السبب (يظهر في المجموعة)';
 
   @override
+  String get ticketCategoryStaffLabel => 'السبب (للإدارة والمعلم فقط)';
+
+  @override
   String get cardMakeupLesson => 'الحصة التعويضية';
 
   @override
@@ -1313,6 +1316,9 @@ class L10nAr extends L10n {
 
   @override
   String get cardStaffNote => 'ملاحظة (للإدارة والمعلم فقط)';
+
+  @override
+  String get cardFamilyDetails => 'تفاصيل من الأسرة (للإدارة والمعلم فقط)';
 
   @override
   String get excuseCategoryTravel => 'سفر';
