@@ -1,8 +1,8 @@
 {
   "gate": "R-45a",
   "scope": "The 88 Arabic subdivision names of data/geo/overlay.json (Egypt 27, Saudi Arabia 13, UAE 7, Kuwait 6, Qatar 8, Bahrain 4, Oman 11, Jordan 12), its subdivision labels, and its country-name overrides",
-  "status": "pending",
-  "reviewerRole": null,
-  "reviewedOn": null,
+  "status": "approved",
+  "reviewerRole": "owner",
+  "reviewedOn": "2026-10-29",
   "overlaySha256": "beb7623a878ac7fa78ae09719b8fc25219a88fd14d128f11d1ad96c9e301b08d"
 }

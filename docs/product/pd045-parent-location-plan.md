@@ -566,6 +566,7 @@ PR-3 and PR-4 are independent of each other once PR-2 is merged. Under the two-s
 |---|---|---|
 | O1 | "At booking too" | Optional country and subdivision on the trial booking. They are stored beside the prospect and pre-fill Sales' subscription form, where they are confirmed (§1.1 C5, §4, §5.2, §5.5). The table is in PR-1's migration (department head, 2026-10-29); the form and the pre-fill are built in PR-3. |
 | O2 | "I'll review them" (R-45a) | **The owner is the reviewer** of the 88 Arabic names, the labels and the country overrides. They review from a sheet the department head passes on (not committed). The sign-off is recorded in `data/geo/overlay-review.json` as role `owner`, with the date and the overlay's SHA-256, never a name. #204 stays draft until then. |
+| O3 | "all correct" (2026-10-29, R-45a) | The owner approved the overlay unchanged: the 88 names, the labels and the country overrides. Recorded in `data/geo/overlay-review.json` as role `owner`, 2026-10-29, overlay SHA-256 `beb7623a878ac7fa78ae09719b8fc25219a88fd14d128f11d1ad96c9e301b08d`. **R-45a is closed.** |
 
 ## 13. Out of scope
 
