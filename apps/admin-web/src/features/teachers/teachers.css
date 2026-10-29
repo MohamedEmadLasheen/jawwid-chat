@@ -42,8 +42,11 @@
 
 /* The Teachers area's tab strip (area.tsx). Same look as the Organization tabs. */
 .ts-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-end: var(--space-3); }
-.ts-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; border-block-end: 2px solid transparent; }
-.ts-tab--active { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
+/* Also used on <button role="tab"> (Escalations), so the button's own box is reset.
+   Active text is --text-link: the dark --accent is 3.7:1 as text; only the underline uses it. */
+.ts-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; background: transparent; border: 0; border-block-end: 2px solid transparent; }
+.ts-tab:hover { color: var(--text); }
+.ts-tab--active { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
 
 /* Supervisors' operations (Needs action, Schedules, Students). */
 .ts-section { margin-block-end: var(--space-4); }

@@ -65,7 +65,8 @@ class _ActivityFrameState extends State<_ActivityFrame> {
       _onReady = ((web.MessageEvent e) {
         final data = e.data.dartify();
         final fromFrame = e.source != null && e.source!.strictEquals(_frame?.contentWindow).toDart;
-        if (fromFrame && e.origin == Uri.parse(widget.url).origin && data is Map && data['type'] == 'jawwid:lesson-ready' && data['surah'] == lessonSurahOf(widget.url)) _post();
+        // A Quran lesson says ready with its surah, a letters lesson (PD-48) with its lesson key.
+        if (fromFrame && e.origin == Uri.parse(widget.url).origin && readyFor(data, widget.url)) _post();
       }).toJS;
       web.window.addEventListener('message', _onReady);
     }

@@ -511,6 +511,20 @@ export enum CommErrorCode {
   /** The API has no approvals signing key (LESSON_APPROVALS_SIGNING_KEY): nothing is exported unsigned. 503. */
   LESSON_CONTENT_SIGNING_UNAVAILABLE = 'COMM.LESSON_CONTENT_SIGNING_UNAVAILABLE',
 
+  // --- PD-39: the teacher whiteboard ---
+  /** No such board or page, or not one the caller may see (outside scope reads as missing). 404. */
+  WHITEBOARD_NOT_FOUND = 'COMM.WHITEBOARD_NOT_FOUND',
+  /** Only the owning teacher edits a board: staff, another teacher, a support session are refused. 403. */
+  WHITEBOARD_DENIED = 'COMM.WHITEBOARD_DENIED',
+  /** A malformed request or document: an unknown element, a verse carrying text, a page over 512 KB. 422. */
+  WHITEBOARD_INVALID = 'COMM.WHITEBOARD_INVALID',
+  /** The board changed since the revision the write names (another tab): reload or save a copy. 409. */
+  WHITEBOARD_CONFLICT = 'COMM.WHITEBOARD_CONFLICT',
+  /** The board is not in a state for this (trashed, retained, not trashed for a restore). 409. */
+  WHITEBOARD_STATE = 'COMM.WHITEBOARD_STATE',
+  /** A limit: boards, pages, or the teacher's document storage; `detail` names which. 409. */
+  WHITEBOARD_LIMIT = 'COMM.WHITEBOARD_LIMIT',
+
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */
   SEAT_REASON_UNKNOWN = 'COMM.SEAT_REASON_UNKNOWN',

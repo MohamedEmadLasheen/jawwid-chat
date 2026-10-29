@@ -111,10 +111,33 @@ void main() {
       expect(await activity.audios.last, message);
     });
 
+    testWidgets('PD-48: an Arabic letters lesson of the lessons site is handed its voice-over list, never recitation', (tester) async {
+      final message = {'type': 'jawwid:lesson-audio', 'lesson': 'arabic-001', 'clips': <Object?>[]};
+      final materials = _Materials()
+        ..items = [game]
+        ..voiceAnswer = message
+        ..openAs = const OpenedMaterial(
+            kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/arabic/lesson-1', audioEligible: true);
+      final activity = _Activity();
+      await tester.pumpWidget(app(const ChildMaterialsScreen(learnerId: 'k1'), materials: materials, activity: activity));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('An-Naba game'));
+      await tester.pumpAndSettle();
+      // Asked once, under its lesson key; the Quran route is never asked for a letters lesson.
+      expect(materials.voiceAsked, ['arabic-001']);
+      expect(materials.lessonAudioAsked, isEmpty);
+      // Even an EMPTY list is handed over: it clears what the lesson held.
+      expect(await activity.audios.last, message);
+    });
+
     testWidgets('no audio for: a package, a non-surah page, an allowlisted third-party frame, another origin, or a build without a lessons origin', (tester) async {
       for (final (opened, origin) in const [
         (OpenedMaterial(kind: 'activity_package', mode: 'package', presentation: MaterialPresentation.frameIsolated, url: _Materials.playUrl), 'https://lessons.example.test'),
-        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/arabic/lesson-1', audioEligible: true), 'https://lessons.example.test'),
+        // A lessons-site page that is neither a surah nor a letters lesson.
+        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/islamic/lesson-1', audioEligible: true), 'https://lessons.example.test'),
+        // PD-48: a letters lesson the server did not mark eligible, or on another origin.
+        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/arabic/lesson-1'), 'https://lessons.example.test'),
+        (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://activities.example.test/lessons/arabic/lesson-1', audioEligible: true), 'https://lessons.example.test'),
         // A lessons-site URL the server did not mark eligible.
         (OpenedMaterial(kind: 'activity_link', mode: 'link', presentation: MaterialPresentation.frameSite, url: 'https://lessons.example.test/lessons/quran/surah-78'), 'https://lessons.example.test'),
         // An allowlisted third-party frame: the server does not mark it eligible.
@@ -133,6 +156,7 @@ void main() {
         await tester.tap(find.text('An-Naba game'));
         await tester.pumpAndSettle();
         expect(materials.lessonAudioAsked, isEmpty);
+        expect(materials.voiceAsked, isEmpty);
         expect(activity.audios, isNotEmpty);
         expect(activity.audios, everyElement(isNull));
       }
@@ -415,6 +439,15 @@ class _Materials implements MaterialsRepository {
   Future<Map<String, Object?>?> lessonAudio(int surah) async {
     lessonAudioAsked.add(surah);
     return lessonAudioAnswer;
+  }
+
+  final voiceAsked = <String>[];
+  Map<String, Object?>? voiceAnswer;
+
+  @override
+  Future<Map<String, Object?>?> voiceOver(String lesson) async {
+    voiceAsked.add(lesson);
+    return voiceAnswer;
   }
 
   @override

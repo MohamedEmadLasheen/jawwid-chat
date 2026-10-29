@@ -226,8 +226,8 @@ export const PAY = {
   subscriptionLabel: { en: 'Subscription', ar: 'الاشتراك' },
   trialPayments: { en: 'Payments received', ar: 'الدفعات المستلمة' },
   trialAssigned: {
-    en: 'This student has been assigned. Requests and payments now live on the family’s Parent Profile.',
-    ar: 'تم إسناد هذا الطالب. الطلبات والمدفوعات أصبحت في ملف ولي الأمر للأسرة.',
+    en: 'This student has been assigned. The requests below stay here for reference; new requests, cancellations and payments are made on the family’s Parent Profile.',
+    ar: 'تم إسناد هذا الطالب. تبقى الطلبات أدناه هنا للاطلاع، أما الطلبات الجديدة والإلغاء والدفعات فتتم من ملف ولي الأمر للأسرة.',
   },
   openParentProfile: { en: 'Find {name} in Parents', ar: 'ابحث عن {name} في أولياء الأمور' },
 
