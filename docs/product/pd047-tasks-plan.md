@@ -349,6 +349,20 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
   - Admin Web routes `open_task` to `/tasks?task=`.
   - Flutter listens for `task.changed` on the session socket (`TaskSignalChannel`, listen only; the frozen call client is untouched) and refreshes the To do. A task entry opens the teacher's Schedule on its To do.
 
+**As built in PR-7.** The B7 action log (`ActionLogService`) gains a third source, `chat.work_task_event`, holding what the person did to a task themselves.
+- **Every act on a task a person gave.**
+- **On a task a source raised, only what no source writes:**
+  - said it was not theirs;
+  - returned it;
+  - removed it;
+  - commented;
+  - changed its level;
+  - acknowledged it.
+- **A source's own moves stay out.** A report filed, or a case reassigned or re-dated, is that source's record, so it would otherwise show twice. PD-35's case lines are unchanged.
+- **Ids only:** a line carries the task's id, with action `task.<kind>` and entity `work_task`. Never a title, a comment or a reason.
+- **Admin Web** names each line and opens it in Tasks, which says plainly when the reader may not see it.
+- **No migration:** the actor index exists since PR-1.
+
 ### 3.12 Clients
 
 **Admin Web: `features/tasks` rebuilt.**

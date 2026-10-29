@@ -382,6 +382,12 @@ gate_lessons_supply_chain() {
   # carries no typed Quran.
   "$PYTHON" -I scripts/lessons/check-lesson-content.py selftest || return 1
   "$PYTHON" -I scripts/lessons/check-lesson-content.py || return 1
+  # PD-49: the children's Quran content (schema 2) -- positions and tokens
+  # resolve, no typed Quran, every citation a public-domain work in its role,
+  # asbab only under the display rule, and every approval fresh, complete and
+  # resting on pinned editions.
+  "$PYTHON" -I scripts/lessons/check-quran-content.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/check-quran-content.py || return 1
   # P0-5: the Arabic letters lessons -- every word holds its unit's letter by the
   # one rule (no folding), full tashkeel with the pausal sukun, and every quiz
   # question has exactly one right answer.

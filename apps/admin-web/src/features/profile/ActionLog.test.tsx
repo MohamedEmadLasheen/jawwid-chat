@@ -72,6 +72,17 @@ describe('PD-42: entering families by hand, in words', () => {
     expect(screen.getByRole('link', { name: 'Carried over a package from Jawwid Core' })).toHaveAttribute('href', '/students/k-1')
     expect(screen.getByRole('link', { name: 'Set a parent\'s sign-in e-mail' })).toHaveAttribute('href', '/parents/p-1')
   })
+
+  it('a task line is named and opens the task in Tasks (PD-47 PR-7)', async () => {
+    const pd47 = [
+      { id: 'task:21', action: 'task.out_of_scope', entity: 'work_task', entityId: 'w 1', reason: null, at: '2026-10-28T09:00:00Z', duringSupport: false },
+      { id: 'task:22', action: 'task.acknowledged', entity: 'work_task', entityId: 'w-2', reason: null, at: '2026-10-28T08:00:00Z', duringSupport: false },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => json({ entries: pd47 })))
+    renderWithProviders(<ActionLogSection staffId="s-1" />, { staff: makeStaff({ role: 'manager' }) })
+    expect(await screen.findByRole('link', { name: 'Said a task was not theirs' })).toHaveAttribute('href', '/tasks?task=w%201')
+    expect(screen.getByRole('link', { name: 'Acknowledged a task no longer needed' })).toHaveAttribute('href', '/tasks?task=w-2')
+  })
 })
 
 describe('going further back', () => {
