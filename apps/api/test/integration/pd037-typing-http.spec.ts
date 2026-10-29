@@ -87,8 +87,16 @@ async function listener(token: string, conversationId: string) {
     socket.on('connect', () => resolve());
     socket.on('connect_error', (e) => reject(e));
   });
-  const answer = await new Promise<{ ok: boolean }>((r) => socket.emit('conversation.subscribe', { conversationId }, r));
-  if (!answer.ok) throw new Error('the listener could not subscribe');
+  // Retried on COMM.UNKNOWN_ACTOR, as both clients do: until the handshake
+  // binds the identity before `connect` (#276), a subscribe sent at once can
+  // arrive before the socket knows who it is.
+  let answer: { ok: boolean; code?: string } = { ok: false };
+  for (let attempt = 0; attempt < 10; attempt++) {
+    answer = await new Promise((r) => socket.emit('conversation.subscribe', { conversationId }, r));
+    if (answer.ok || answer.code !== 'COMM.UNKNOWN_ACTOR') break;
+    await sleep(100);
+  }
+  if (!answer.ok) throw new Error(`the listener could not subscribe: ${answer.code}`);
   return inbox;
 }
 
