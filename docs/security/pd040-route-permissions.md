@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-540 routes.
+541 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -524,6 +524,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/trials/:id/outcome` | trials.manage | `lessons/trial.controller.ts#TrialController.outcome` |
 | POST | `/api/v1/trials/:id/reschedule` | trials.manage | `lessons/trial.controller.ts#TrialController.reschedule` |
 | POST | `/api/v1/trials/:id/subscription` | trials.manage | `lessons/trial.controller.ts#TrialController.updateSubscription` |
+| GET | `/api/v1/trials/:id/subscription-prefill` | trials.manage | `lessons/trial.controller.ts#TrialController.subscriptionPrefill` |
 | GET | `/api/v1/trials/groups/:conversationId` | trials.view | `lessons/trial.controller.ts#TrialController.groupContext` |
 | POST | `/api/v1/trials/groups/:conversationId/join` | trials.manage | `lessons/trial.controller.ts#TrialController.joinGroup` |
 | POST | `/api/v1/trials/groups/:conversationId/leave` | trials.manage | `lessons/trial.controller.ts#TrialController.leaveGroup` |

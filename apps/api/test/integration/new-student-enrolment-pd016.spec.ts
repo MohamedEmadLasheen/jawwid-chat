@@ -92,7 +92,7 @@ async function department(kind: string, staffIds: string[]) {
 }
 
 /** A trial that took place an hour ago, for which Sales recorded "subscribed" with a form. */
-async function subscribedTrial(email: string | null = EMAIL): Promise<string> {
+async function subscribedTrial(email: string | null = EMAIL, location?: unknown): Promise<string> {
   trialsMade += 1;
   const prospectId = (await trials.createProspect(salesId, { displayName: `prospect_${randomUUID().slice(0, 6)}` })).id;
   // A different hour for each trial of a test: one teacher, never two at once.
@@ -107,7 +107,7 @@ async function subscribedTrial(email: string | null = EMAIL): Promise<string> {
   await trials.outcome(salesId, lesson.id, {
     result: 'subscribed',
     subscription: {
-      parent: { name: 'parent_p', email, phone: '+99 000 333 444' },
+      parent: { name: 'parent_p', email, phone: '+99 000 333 444', ...(location === undefined ? {} : { location }) },
       children: [
         { name: 'child_p1', age: 8, course: 'course_p', teacherId: s.teacherId, packagePrice: 1000, lessonPrice: 125,
           schedule: [{ weekday: 1, time: '17:00' }] },
@@ -609,5 +609,51 @@ describe('5. PD-32: valid until used or invalidated; ten wrong codes a day lock 
     const [{ n }] = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(`select chat.purge_parent_signup_failures() as n`);
     expect(n).toBe(1);
     expect(await g.prisma.parentSignupFailure.count()).toBe(1);
+  });
+});
+
+describe('PD-45: the family\'s location, from Sales\' form to the family', () => {
+  const forms = new NewStudentsService(g.prisma);
+  const org = async () => (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId;
+
+  it('Sales\' form carries it, the New Students page names it, and Assign gives it to the new family', async () => {
+    const id = await subscribedTrial(`p45.${randomUUID().slice(0, 6)}@example.test`, { countryCode: 'ae', subdivisionCode: 'ae-du' });
+    const form = await forms.get(await org(), id);
+    expect(form!.parent.location).toEqual({
+      countryCode: 'AE', subdivisionCode: 'AE-DU',
+      names: { country: { code: 'AE', en: 'United Arab Emirates', ar: 'الإمارات العربية المتحدة' }, subdivision: { code: 'AE-DU', en: 'Dubai', ar: 'دبي' }, label: { en: 'Emirate', ar: 'الإمارة' } },
+    });
+    const done = await enrolment.assign(s.managerId, id, { supervisorId: s.ownerId });
+    expect(await g.prisma.family.findUniqueOrThrow({ where: { id: done.familyId } })).toMatchObject({
+      countryCode: 'AE', subdivisionCode: 'AE-DU', locationSource: 'staff', locationUpdatedBy: s.managerId,
+    });
+  });
+
+  it('refuses a subdivision of another country or a country that is not one, and keeps the form when a change leaves the location out', async () => {
+    const prospectId = (await trials.createProspect(salesId, { displayName: 'prospect_x' })).id;
+    const startsAt = new Date(Date.now() - 30 * 60 * MIN);
+    const lesson = await g.prisma.lesson.create({
+      data: { organizationId: await org(), kind: 'trial', prospectId, teacherId: s.teacherId, startsAt, endsAt: new Date(startsAt.getTime() + 45 * MIN), createdByKind: 'staff', createdBy: salesId },
+    });
+    const subscription = (location: unknown) => ({
+      parent: { name: 'parent_x', email: null, phone: '+99 000 333 555', location },
+      children: [{ name: 'child_x', age: 8, course: 'course_x', teacherId: s.teacherId, packagePrice: 100, lessonPrice: 10, schedule: [{ weekday: 2, time: '17:00' }] }],
+      payment: { currency: 'EGP', method: 'invoice' },
+    });
+    for (const bad of [{ countryCode: 'EG', subdivisionCode: 'AE-DU' }, { countryCode: 'UK' }, { subdivisionCode: 'EG-GZ' }, 'Egypt']) {
+      expect(await code(trials.outcome(salesId, lesson.id, { result: 'subscribed', subscription: subscription(bad) }))).toBe(CommErrorCode.VALIDATION);
+    }
+    await trials.outcome(salesId, lesson.id, { result: 'subscribed', subscription: subscription({ countryCode: 'EG', subdivisionCode: 'EG-GZ' }) });
+    const { parent, ...rest } = subscription(undefined);
+    const { location: _drop, ...parentWithout } = parent;
+    await trials.updateSubscription(salesId, lesson.id, { subscription: { ...rest, parent: parentWithout } });
+    expect((await forms.get(await org(), lesson.id))!.parent.location).toMatchObject({ countryCode: 'EG', subdivisionCode: 'EG-GZ' });
+    await trials.updateSubscription(salesId, lesson.id, { subscription: subscription(null) });
+    expect((await forms.get(await org(), lesson.id))!.parent.location).toBeNull();
+  });
+
+  it('a form without a location is still recorded and assigned (it becomes required with the new form, PR-3b)', async () => {
+    const done = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+    expect(await g.prisma.family.findUniqueOrThrow({ where: { id: done.familyId } })).toMatchObject({ countryCode: null, subdivisionCode: null, locationSource: null });
   });
 });

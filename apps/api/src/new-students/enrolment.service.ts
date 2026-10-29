@@ -196,7 +196,21 @@ export class NewStudentEnrolmentService {
       this.prisma.$transaction(async (tx) => {
         await this.conversations.assertActorLive(tx, actor);
         const family = await tx.family.create({
-          data: { organizationId: org, displayName: form.parent.name, ownerId: supervisorId, language: 'ar' },
+          data: {
+            organizationId: org, displayName: form.parent.name, ownerId: supervisorId, language: 'ar',
+            // PD-45: the location Sales confirmed on the form becomes the family's.
+            ...(form.parent.location
+              ? {
+                  countryCode: form.parent.location.countryCode,
+                  subdivisionCode: form.parent.location.subdivisionCode,
+                  locationSource: 'staff',
+                  locationUpdatedBy: actor.actorId,
+                  locationUpdatedAt: new Date(),
+                  segmentSource: 'admin',
+                  segmentUpdatedAt: new Date(),
+                }
+              : {}),
+          },
         });
         const account = await tx.account.create({
           data: { organizationId: org, subject: email, kind: 'family', status: 'active', isActive: true },
