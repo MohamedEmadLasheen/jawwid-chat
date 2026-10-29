@@ -5,7 +5,6 @@
 // no clip and its highest inked row is compared with the clip's top.
 // The words are plain Arabic, not verse text; the marks are the real U+06DB.
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
