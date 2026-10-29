@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-541 routes.
+542 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
