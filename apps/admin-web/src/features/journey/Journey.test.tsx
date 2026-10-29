@@ -112,7 +112,7 @@ describe('the supervisor\'s Student excuse card', () => {
     const tickets = [ticket('apology', 'l-1', 'Child Alpha', '2026-10-22T15:00:00Z')]
     renderWithProviders(<LessonCardDialog conversationId="c-1" kind="student_excuse" tickets={tickets} onClose={() => {}} />, { staff })
     const dialog = await screen.findByRole('dialog', { name: 'Student excuse' })
-    await userEvent.selectOptions(within(dialog).getByLabelText('Lesson'), 'l-1')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Lesson'), 'l-1')
     await userEvent.click(within(dialog).getByRole('radio', { name: /Excuse before the lesson starts/ }))
     await userEvent.click(within(dialog).getByRole('radio', { name: 'Exams' }))
     await userEvent.type(within(dialog).getByLabelText('Note (staff and the teacher only, optional)'), 'school exams')
