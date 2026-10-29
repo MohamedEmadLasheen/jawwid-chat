@@ -6,6 +6,7 @@ import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { Invoice, Payment, PaymentRequest, Receipt } from '@/features/payments/api'
 import type { FamilyBilling, ParentProfile, TimelineInstalment } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-27 on the Parent Profile, through the real routes and the real API
@@ -287,8 +288,8 @@ describe('PD-27 on the Parent Profile', () => {
 
     await userEvent.type(within(dialog).getByLabelText('Label'), 'Winter package')
     await userEvent.type(within(dialog).getByLabelText('Amount'), '1,500')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Child'), 'k-2')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Package'), '6')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Child'), 'k-2')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Package'), '6')
     await userEvent.type(within(dialog).getByLabelText('Period from'), '2026-11-01')
     await userEvent.type(within(dialog).getByLabelText('Period to'), '2027-04-30')
     const days = within(dialog).getByLabelText('Link valid for (days)')
@@ -387,8 +388,8 @@ describe('PD-27 on the Parent Profile', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
     const dialog = screen.getByRole('dialog', { name: 'Record a payment' })
-    expect(within(dialog).getByLabelText('Method')).toHaveValue('cash')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Towards'), 'r:r-1')
+    expect(within(dialog).getByLabelText('Method')).toHaveAttribute('data-value', 'cash')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Towards'), 'r:r-1')
     expect(within(dialog).getByLabelText('Amount')).toHaveValue('1200.00')
     await userEvent.type(within(dialog).getByLabelText('Reference'), 'RB-77')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Record' }))
@@ -409,8 +410,8 @@ describe('PD-27 on the Parent Profile', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
     const dialog = screen.getByRole('dialog', { name: 'Record a payment' })
-    await userEvent.selectOptions(within(dialog).getByLabelText('Method'), 'bank_transfer')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Towards'), 'i:i-1')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Method'), 'bank_transfer')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Towards'), 'i:i-1')
     const amount = within(dialog).getByLabelText('Amount')
     await userEvent.clear(amount)
     await userEvent.type(amount, '250')
@@ -509,7 +510,7 @@ describe('PD-27 on the Parent Profile', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add a row' }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove row 3' }))
     expect(within(dialog).getByText(/^Total: .*1,250\.25$/)).toBeInTheDocument()
-    await userEvent.selectOptions(within(dialog).getByLabelText('For'), 'k-1')
+    await chooseOption(userEvent, within(dialog).getByLabelText('For'), 'k-1')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
     await waitFor(() => expect(calls('POST', /\/families\/f-1\/instalments$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/families\/f-1\/instalments$/)[0])).toEqual({

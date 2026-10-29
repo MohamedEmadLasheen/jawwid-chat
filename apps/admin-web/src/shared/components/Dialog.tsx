@@ -39,6 +39,12 @@ export function Dialog({
   const sheet = variant === 'sheet'
   const full = variant === 'full'
 
+  // The latest onClose, read at Escape time: callers pass inline functions, and
+  // re-running the effect below on each render pulled focus back to the dialog,
+  // out of whatever field was being typed in (and shut an open picker list).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     previouslyFocused.current = document.activeElement
     ref.current?.focus()
@@ -46,7 +52,7 @@ export function Dialog({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -56,7 +62,7 @@ export function Dialog({
         previouslyFocused.current.focus()
       }
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div

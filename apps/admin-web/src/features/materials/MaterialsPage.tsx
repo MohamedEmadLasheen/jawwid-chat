@@ -43,6 +43,7 @@ import {
 } from './copy'
 import { useItems, useRecitationMutations, useRecitations, useSaveItem, useSurahs } from './hooks'
 import { useLessonAudio } from './lessonAudio'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './materials.css'
 
 type Tab = 'library' | 'import' | 'recitations'
@@ -115,14 +116,14 @@ function SurahSelect({ id, value, onChange, allowNone = true }: { id?: string; v
   const { locale } = useI18n()
   const surahs = useSurahs()
   return (
-    <select id={id} className="select" value={value ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
+    <SearchableSelect id={id} className="select" value={value ?? ''} onValueChange={(v) => onChange(v ? Number(v) : null)}>
       {allowNone && <option value="">{tx(M.noSurah)}</option>}
       {surahs.data?.surahs.map((s) => (
         <option key={s.number} value={s.number}>
           {s.number}. {locale === 'ar' ? s.nameAr : s.nameEn}
         </option>
       ))}
-    </select>
+    </SearchableSelect>
   )
 }
 
@@ -160,22 +161,22 @@ function LibraryTab() {
       </div>
       <div className="mt-filters">
         <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tx(M.search)} aria-label={tx(M.search)} />
-        <select className="select" value={status} onChange={(e) => setStatus(e.target.value as ItemStatus | '')} aria-label={tx(M.status)}>
+        <SearchableSelect className="select" value={status} onValueChange={(v) => setStatus(v as ItemStatus | '')} aria-label={tx(M.status)}>
           <option value="">{tx(M.status)}: {tx(M.all)}</option>
           {(['draft', 'published', 'retired'] as const).map((s) => (
             <option key={s} value={s}>
               {tx(STATUS_LABEL[s])}
             </option>
           ))}
-        </select>
-        <select className="select" value={ageGroup} onChange={(e) => setAgeGroup(e.target.value as AgeGroup | '')} aria-label={tx(M.ageGroup)}>
+        </SearchableSelect>
+        <SearchableSelect className="select" value={ageGroup} onValueChange={(v) => setAgeGroup(v as AgeGroup | '')} aria-label={tx(M.ageGroup)}>
           <option value="">{tx(M.ageGroup)}: {tx(M.all)}</option>
           {AGE_GROUPS.map((a) => (
             <option key={a} value={a}>
               {tx(AGE_LABEL[a])}
             </option>
           ))}
-        </select>
+        </SearchableSelect>
       </div>
       {save.error ? <ServerError error={save.error} /> : null}
       {items.error ? (
@@ -355,26 +356,26 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
         <Field label={tx(M.titleEn)}>{(id) => <input id={id} className="input" dir="ltr" value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />}</Field>
         <Field label={tx(M.subject)}>
           {(id) => (
-            <select id={id} className="select" value={subject} onChange={(e) => setSubject(e.target.value as Subject)}>
+            <SearchableSelect id={id} className="select" value={subject} onValueChange={(v) => setSubject(v as Subject)}>
               {SUBJECTS.map((s) => (
                 <option key={s} value={s}>
                   {tx(SUBJECT_LABEL[s])}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           )}
         </Field>
         {subject === 'quran' && (
           <Field label={tx(M.strand)}>
             {(id) => (
-              <select id={id} className="select" value={strand} onChange={(e) => setStrand(e.target.value as Strand | '')}>
+              <SearchableSelect id={id} className="select" value={strand} onValueChange={(v) => setStrand(v as Strand | '')}>
                 <option value="">—</option>
                 {STRANDS.map((s) => (
                   <option key={s} value={s}>
                     {tx(STRAND_LABEL[s])}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             )}
           </Field>
         )}
@@ -426,13 +427,13 @@ function ItemDialog({ item, onClose }: { item: MaterialItem | null; onClose: () 
             </Field>
             <Field label={tx(M.kind)}>
               {(id) => (
-                <select id={id} className="select" value={kind} onChange={(e) => setKind(e.target.value as Kind | '')}>
+                <SearchableSelect id={id} className="select" value={kind} onValueChange={(v) => setKind(v as Kind | '')}>
                   {KINDS.filter((k) => k !== 'activity_package').map((k) => (
                     <option key={k} value={k}>
                       {tx(KIND_LABEL[k])}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               )}
             </Field>
           </>

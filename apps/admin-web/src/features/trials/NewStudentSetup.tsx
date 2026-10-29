@@ -16,6 +16,7 @@ import { NS } from './newStudentsCopy'
 import { ApiError } from '@/core/api/errors'
 import { OP } from '@/features/intake/opsCopy'
 import { groupNotice } from '@/features/intake/OpsDialogs'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const S: Record<string, Pair> = {
   setup: { en: 'Setup', ar: 'التجهيز' },
@@ -315,12 +316,12 @@ function AssignDialog({ s, onClose, onAssigned }: { s: NewStudentDto; onClose: (
       <p className="ts-muted">{tx(S.assignHint)}</p>
       <div className="field">
         <label className="field__label" htmlFor={`${id}-sup`}>{tx(S.supervisor)}</label>
-        <select id={`${id}-sup`} className="select" value={supervisorId} onChange={(ev) => setSupervisorId(ev.target.value)} aria-invalid={touched && !supervisorId}>
+        <SearchableSelect id={`${id}-sup`} className="select" value={supervisorId} onValueChange={(v) => setSupervisorId(v)} aria-invalid={touched && !supervisorId}>
           <option value="">{tx(S.choose)}</option>
           {supervisors.map((m) => (
             <option key={m.id} value={m.id}>{m.name} ({m.learnerCount})</option>
           ))}
-        </select>
+        </SearchableSelect>
         {touched && !supervisorId && <span className="field__error">{tx(S.required)}</span>}
       </div>
       <div className="field">

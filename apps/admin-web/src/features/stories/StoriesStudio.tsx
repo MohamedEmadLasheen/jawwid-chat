@@ -13,6 +13,7 @@ import { AudienceDataPanel } from './AudienceDataPanel'
 import { CHILDREN_LABEL, COUNT, CTA_LABEL, KIND_LABEL, PLAN_LABEL, S, STATE_LABEL, useCountryName } from './copy'
 import { useCanManageAudienceData, usePublishStory, useStudioStories } from './hooks'
 import { StoryPreview } from './StoryPreview'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './stories.css'
 
 const STATE_TONE: Record<string, Tone> = { published: 'ok', draft: 'neutral', expired: 'outline', deleted: 'danger' }
@@ -274,16 +275,16 @@ function StoryList({
       <div className="toolbar">
         <SearchField value={search} onChange={setSearch} label={tx(S.searchStories)} clearLabel={tx(S.clearSearch)} />
         <div className="toolbar__end">
-          <select
+          <SearchableSelect
             className="select select--inline"
             value={sort}
-            onChange={(e) => setParams(withParam('sort', e.target.value === 'newest' ? null : e.target.value), { replace: true })}
+            onValueChange={(v) => setParams(withParam('sort', v === 'newest' ? null : v), { replace: true })}
             aria-label="Sort"
           >
             {SORTS.map((k) => (
               <option key={k} value={k}>{tx(SORT_LABEL[k])}</option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
       </div>
 

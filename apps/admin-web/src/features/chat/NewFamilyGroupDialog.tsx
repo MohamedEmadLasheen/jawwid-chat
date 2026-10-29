@@ -5,6 +5,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/organization/copy'
 import { useCreateFamilyGroup, useGroupCandidates } from '@/features/organization/hooks'
 import { chatCopyFor } from './copy'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './family-group.css'
 
 /**
@@ -87,12 +88,12 @@ export function NewFamilyGroupDialog({ onClose, onCreated }: { onClose: () => vo
       >
         <div className="field">
           <label className="field__label" htmlFor={ids.family}>{copy.groupFamily}</label>
-          <select
+          <SearchableSelect
             id={ids.family}
             className="select"
             value={familyId}
-            onChange={(e) => {
-              setFamilyId(e.target.value)
+            onValueChange={(v) => {
+              setFamilyId(v)
               setChildren([])
               setParents(null)
               setTeachers(null)
@@ -102,7 +103,7 @@ export function NewFamilyGroupDialog({ onClose, onCreated }: { onClose: () => vo
             {families.map((f) => (
               <option key={f.familyId} value={f.familyId}>{f.displayName}</option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
 
         {family && (

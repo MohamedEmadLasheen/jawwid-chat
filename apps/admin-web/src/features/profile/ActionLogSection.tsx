@@ -8,6 +8,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import { useCopy, type Pair } from '@/features/organization/copy'
 import { ACTION_LOG } from '@/features/intake/historyCopy'
 import { parentPath } from '@/features/profiles/api'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /** One line of GET /staff/:id/action-log (apps/api ActionLogService). */
 export interface ActionLogEntry {
@@ -138,11 +139,11 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
       <p className="sp-footnote">{tx(L.hint)}</p>
       <label className="field">
         <span className="field__label">{tx(L.period)}</span>
-        <select className="select" aria-label={tx(L.period)} value={days} onChange={(e) => setDays(Number(e.target.value))}>
+        <SearchableSelect className="select" aria-label={tx(L.period)} value={days} onValueChange={(v) => setDays(Number(v))}>
           {PERIODS.map((p) => (
             <option key={p.days} value={p.days}>{tx(p.label)}</option>
           ))}
-        </select>
+        </SearchableSelect>
       </label>
       <QueryBoundary isLoading={false} error={query.error} onRetry={() => void query.refetch()}>
         {entries.length === 0 ? (
