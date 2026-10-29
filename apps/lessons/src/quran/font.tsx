@@ -32,8 +32,14 @@ export async function loadQuranFont(fonts: Fonts | undefined = typeof document =
   }
 }
 
-/** Shows its children only once the Quran font has loaded; until then a note, and if it fails, a refusal with no verse. */
-export function QuranFontGate({ children, load = loadQuranFont }: { children: ReactNode; load?: () => Promise<boolean> }) {
+/** A fresh page: a face that failed to load stays failed in the font set, so a retry loads the page again. */
+const reload = () => window.location.reload();
+
+/**
+ * Shows its children only once the Quran font has loaded; until then a note. If it fails, never a
+ * blank screen and never a verse: a calm message and a retry.
+ */
+export function QuranFontGate({ children, load = loadQuranFont, retry = reload }: { children: ReactNode; load?: () => Promise<boolean>; retry?: () => void }) {
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
   useEffect(() => {
     let live = true;
@@ -49,9 +55,14 @@ export function QuranFontGate({ children, load = loadQuranFont }: { children: Re
   return (
     <main className="lesson">
       {state === 'failed' ? (
-        <p className="refused" role="alert">
-          تعذّر تحميل خطّ المصحف، فلم تُعرض الآيات.
-        </p>
+        <>
+          <p className="note" role="alert">
+            تعذّر تحميل خطّ المصحف.
+          </p>
+          <button type="button" className="primary" onClick={retry}>
+            إعادة المحاولة
+          </button>
+        </>
       ) : (
         <p className="note" role="status">
           جارٍ تحميل خطّ المصحف…
