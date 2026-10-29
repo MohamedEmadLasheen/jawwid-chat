@@ -15,7 +15,7 @@ This file is generated from `apps/lessons/src/arabic/lesson-005.json` and the re
 | Kept with a final tanween fath (held) | 11 |
 | Old duplicates removed (the old test sentences repeat the lesson) | 5 |
 | Dropped | 0 |
-| Quiz questions ("which word is missing") | 8 |
+| Quiz questions ("which word is missing") | 9 |
 
 **Why sentences are held:**
 
@@ -34,18 +34,19 @@ This file is generated from `apps/lessons/src/arabic/lesson-005.json` and the re
 
 ## The quiz
 
-Each question blanks the sentence's VERB; the wrong options are nouns from other sentences, which can never fill a verb's place, so only one option fits.
+Each question blanks the sentence's VERB. The wrong options are prepositions from other sentences (إِلَى عَلَى فِي مِنَ): a preposition does not open a sentence, end one, or stand beside its subject, so for a child only the verb completes it. A teacher checks each question.
 
 | Id | Sentence | Options | Right answer |
 |---|---|---|---|
-| sentences-q1 | … الْوَلَدُ تُفَّاحًا | أَكَلَ، الطِّفْلُ، الْمُعَلِّمُ | أَكَلَ |
-| sentences-q2 | … الطِّفْلُ حَلِيبًا | الْمُعَلِّمُ، الْعُصْفُورُ، شَرِبَ | شَرِبَ |
-| sentences-q4 | … الْوَلَدُ بِالْكُرَةْ | الْحَمْدُ، الطِّفْلُ، لَعِبَ | لَعِبَ |
-| sentences-q5 | … أَحْمَدُ إِلَى الْمَسْجِدْ | الْعُصْفُورُ، الْحَمْدُ، ذَهَبَ | ذَهَبَ |
-| sentences-q6 | … الطِّفْلُ صُورَةْ | الْعُصْفُورُ، رَسَمَ، الْحَمْدُ | رَسَمَ |
-| sentences-q7 | … الْوَلَدُ إِلَى السَّمَاءْ | نَظَرَ، الْحَمْدُ، الْعُصْفُورُ | نَظَرَ |
-| sentences-q9 | … الْوَلَدُ الْبَابْ | الْحَمْدُ، الطِّفْلُ، فَتَحَ | فَتَحَ |
-| sentences-q10 | … الطِّفْلُ يَدَيْهْ | الْوَلَدُ، غَسَلَ، الْمُعَلِّمُ | غَسَلَ |
+| sentences-q1 | … الْوَلَدُ تُفَّاحًا | أَكَلَ، إِلَى، مِنَ | أَكَلَ |
+| sentences-q2 | … الطِّفْلُ حَلِيبًا | فِي، عَلَى، شَرِبَ | شَرِبَ |
+| sentences-q3 | … مُحَمَّدٌ كِتَابًا | قَرَأَ، إِلَى، مِنَ | قَرَأَ |
+| sentences-q4 | … الْوَلَدُ بِالْكُرَةْ | عَلَى، إِلَى، لَعِبَ | لَعِبَ |
+| sentences-q5 | … أَحْمَدُ إِلَى الْمَسْجِدْ | فِي، مِنَ، ذَهَبَ | ذَهَبَ |
+| sentences-q6 | … الطِّفْلُ صُورَةْ | عَلَى، رَسَمَ، إِلَى | رَسَمَ |
+| sentences-q7 | … الْوَلَدُ إِلَى السَّمَاءْ | نَظَرَ، عَلَى، مِنَ | نَظَرَ |
+| sentences-q9 | … الْوَلَدُ الْبَابْ | عَلَى، إِلَى، فَتَحَ | فَتَحَ |
+| sentences-q10 | … الطِّفْلُ يَدَيْهْ | مِنَ، غَسَلَ، فِي | غَسَلَ |
 
 ## Old repeats removed
 

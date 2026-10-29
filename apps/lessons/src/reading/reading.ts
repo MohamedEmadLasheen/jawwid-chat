@@ -71,6 +71,13 @@ export interface ResolvedReading {
 }
 
 export const STAGE_ID = /^[a-z][a-z0-9_]*$/;
+
+const FATHATAN = String.fromCodePoint(0x64b);
+/** A word's bare letters, with a tanween fath's carrier alif or alif maqsura dropped (كِتَابًا = كِتَابْ). */
+export function bare(word: string): string {
+  const w = word.endsWith(FATHATAN + 'ا') || word.endsWith(FATHATAN + 'ى') ? word.slice(0, -1) : word;
+  return lettersOf(w).join('');
+}
 const PUNCTUATION = new Set(['.', '،', '؟', '!', '؛']);
 
 /** A sentence's words, in order: single spaces only, one optional closing punctuation mark. */
@@ -185,11 +192,23 @@ export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedRead
           i === q.answer ? [s.text] : [...byId.values()].filter((it) => it.kind === 'sentence' && it.id !== s.id && wordsOf(it.text)!.includes(o)).map((it) => it.text),
         );
         check(q.options.every((o, i) => sources[i]!.length > 0 && (i === q.answer || !drills.has(o))));
-        // A wrong option must not be the answer in another form (الْوَلَدْ / الْوَلَدُ), nor another name
-        // where the blank is a name: either could also complete the sentence (review of #292).
-        const names = new Set(raw.names ?? []);
-        const bare = (w: string) => lettersOf(w).join('');
-        check(q.options.every((o, i) => i === q.answer || (bare(o) !== bare(ws[q.blank]!) && !(names.has(ws[q.blank]!) && names.has(o)))));
+        // A wrong option must not be able to complete the sentence too (reviews of #292): it is never
+        //  - a word of the blank's own sentence;
+        //  - a word that sits in the blank's place in another sentence (the subject for a subject);
+        //  - a sentence's last word (its pausal form);
+        //  - the answer in another form (الْوَلَدْ / الْوَلَدُ, كِتَابًا / كِتَابْ);
+        //  - another name where the blank is a name (compared by letters, so أَحْمَدْ is أَحْمَدُ).
+        const sentences = [...byId.values()].filter((it) => it.kind === 'sentence').map((it) => wordsOf(it.text)!);
+        const names = new Set((raw.names ?? []).map(bare));
+        const answer = ws[q.blank]!;
+        check(q.options.every((o, i) =>
+          i === q.answer || (
+            !ws.includes(o) &&
+            !sentences.some((x) => x[q.blank] === o || x[x.length - 1] === o) &&
+            bare(o) !== bare(answer) &&
+            !(names.has(bare(answer)) && names.has(bare(o)))
+          ),
+        ));
         const shownText = ws.map((w, i) => (i === q.blank ? '…' : w)).join(' ');
         item = { id: q.id, question: 'أَيُّ كَلِمَةٍ تُكْمِلُ الْجُمْلَةَ؟', prompt: shownText, word: null, options: q.options, answer: q.answer };
         words = [s.text, ...sources.slice(0).filter((_, i) => i !== q.answer).map((src) => src.find((t) => !flagged.has(t)) ?? src[0]!)];

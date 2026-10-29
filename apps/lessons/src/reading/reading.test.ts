@@ -21,22 +21,29 @@ describe('reading lessons (P0-5c)', () => {
     expect(r.stages.map((s) => s.items.length)).toEqual([2, 1, 2]);
     expect(r.passages).toEqual([{ id: 'passage-001', title: 'الْقِطَّةُ', sentences: ['نَامَتِ الْقِطَّةُ الصَّغِيرَةْ.'] }]);
     expect(r.quiz.map((q) => q.id)).toEqual(['q1', 'q2']);
-    expect(r.quiz[1]!.prompt).toBe('أَكَلَ … تُفَّاحًا');
+    expect(r.quiz[1]!.prompt).toBe('… الْوَلَدُ تُفَّاحًا');
     const bad: ((c: ReadingLesson) => void)[] = [
       (c) => { c.stages[0]!.items[0]!.text = 'بَتِ'; }, // breaks the stage's vowel
       (c) => { c.stages[2]!.items[0]!.text = 'أَكَلَ  الْوَلَدُ'; }, // a double space
       (c) => { c.stages[2]!.items[0]!.kind = 'word'; }, // a sentence is not one word
       (c) => { c.quiz[0] = { ...c.quiz[0]!, options: ['بَتَ', 'كَتَبَ'] } as never; }, // two right answers
-      (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['الْوَلَدُ', 'الْوَلَدُ'] } as never; }, // not distinct
+      (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['أَكَلَ', 'أَكَلَ'] } as never; }, // not distinct
       (c) => { c.quiz[1] = { ...c.quiz[1]!, answer: 1 } as never; }, // the wrong answer
       (c) => { c.passages![0]!.sentences = ['fatha-001']; }, // a passage holds sentences only
       (c) => { c.stages[0]!.items[0]!.id = 'kasra-009'; }, // an id outside its stage
       (c) => { c.stages[0]!.items[0]!.was = 'بتَ'; }, // changed but not held
-      (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['الْوَلَدُ', 'الْبَيْتُ'] } as never; }, // a wrong option from no other sentence
-      (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['الْوَلَدُ', 'أَكَلَ'] } as never; }, // a wrong option from its own sentence
+      (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['أَكَلَ', 'الْبَيْتُ'] } as never; }, // a wrong option from no other sentence
+      (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['أَكَلَ', 'الْوَلَدُ'] } as never; }, // a wrong option from its own sentence
+      // The real #292 regression: the SUBJECT blanked, and another sentence's subject offered -- it fits too.
+      (c) => { c.quiz[1] = { ...c.quiz[1]!, blank: 1, options: ['الْوَلَدُ', 'الْقِطَّةُ'], answer: 0 } as never; },
+      // A word of the blank's own sentence, even one that also occurs elsewhere.
+      (c) => { c.stages[2]!.items[1]!.text = 'نَامَتِ الْقِطَّةُ الْوَلَدُ الصَّغِيرَةْ.'; c.quiz[1] = { ...c.quiz[1]!, options: ['أَكَلَ', 'الْوَلَدُ'] } as never; },
+      (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['أَكَلَ', 'الصَّغِيرَةْ'] } as never; }, // another sentence's last word: a pausal form
       (c) => { c.stages[1]!.items.push({ id: 'kasra-002', kind: 'word', text: 'كِتِبِ', was: null, review: null }); c.quiz[0] = { ...c.quiz[0]!, options: ['كِتِبِ', 'بَتَ'] } as never; }, // mixed kinds
-      (c) => { c.names = ['الْوَلَدُ', 'الْقِطَّةُ']; }, // another name where the blank is a name
-      (c) => { c.stages[2]!.items[1]!.text = 'نَامَتِ الْوَلَدْ الصَّغِيرَةْ.'; c.quiz[1] = { ...c.quiz[1]!, options: ['الْوَلَدُ', 'الْوَلَدْ'] } as never; }, // the answer in another form
+      // Another name where the blank is a name, compared by letters (أَكَلْ is أَكَلَ's letters).
+      (c) => { c.names = ['أَكَلَ', 'الْقِطَّةْ']; c.stages[2]!.items[1]!.text = 'نَامَتِ الْقِطَّةْ أَيْضًا الصَّغِيرَةْ.'; c.quiz[1] = { ...c.quiz[1]!, options: ['أَكَلَ', 'الْقِطَّةْ'] } as never; },
+      // The answer in another form: كِتَابًا / كِتَابْ (the tanween fath's alif is no letter of its own).
+      (c) => { c.stages[2]!.items[0]!.text = 'أَكَلَ الْوَلَدُ كِتَابًا'; c.stages[2]!.items[1]!.text = 'نَامَتِ كِتَابْ الْقِطَّةُ.'; c.quiz[1] = { ...c.quiz[1]!, blank: 2, options: ['كِتَابًا', 'كِتَابْ'], answer: 0 } as never; },
     ];
     for (const change of bad) {
       const c = readingStandIn();

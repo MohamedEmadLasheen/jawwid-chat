@@ -478,8 +478,8 @@
       "blank": 0,
       "options": [
         "أَكَلَ",
-        "الطِّفْلُ",
-        "الْمُعَلِّمُ"
+        "إِلَى",
+        "مِنَ"
       ],
       "answer": 0,
       "review": null
@@ -490,11 +490,24 @@
       "sentence": "sentences-002",
       "blank": 0,
       "options": [
-        "الْمُعَلِّمُ",
-        "الْعُصْفُورُ",
+        "فِي",
+        "عَلَى",
         "شَرِبَ"
       ],
       "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sentences-q3",
+      "kind": "missing",
+      "sentence": "sentences-003",
+      "blank": 0,
+      "options": [
+        "قَرَأَ",
+        "إِلَى",
+        "مِنَ"
+      ],
+      "answer": 0,
       "review": null
     },
     {
@@ -503,8 +516,8 @@
       "sentence": "sentences-004",
       "blank": 0,
       "options": [
-        "الْحَمْدُ",
-        "الطِّفْلُ",
+        "عَلَى",
+        "إِلَى",
         "لَعِبَ"
       ],
       "answer": 2,
@@ -516,8 +529,8 @@
       "sentence": "sentences-005",
       "blank": 0,
       "options": [
-        "الْعُصْفُورُ",
-        "الْحَمْدُ",
+        "فِي",
+        "مِنَ",
         "ذَهَبَ"
       ],
       "answer": 2,
@@ -529,9 +542,9 @@
       "sentence": "sentences-006",
       "blank": 0,
       "options": [
-        "الْعُصْفُورُ",
+        "عَلَى",
         "رَسَمَ",
-        "الْحَمْدُ"
+        "إِلَى"
       ],
       "answer": 1,
       "review": null
@@ -543,8 +556,8 @@
       "blank": 0,
       "options": [
         "نَظَرَ",
-        "الْحَمْدُ",
-        "الْعُصْفُورُ"
+        "عَلَى",
+        "مِنَ"
       ],
       "answer": 0,
       "review": null
@@ -555,8 +568,8 @@
       "sentence": "sentences-009",
       "blank": 0,
       "options": [
-        "الْحَمْدُ",
-        "الطِّفْلُ",
+        "عَلَى",
+        "إِلَى",
         "فَتَحَ"
       ],
       "answer": 2,
@@ -568,9 +581,9 @@
       "sentence": "sentences-010",
       "blank": 0,
       "options": [
-        "الْوَلَدُ",
+        "مِنَ",
         "غَسَلَ",
-        "الْمُعَلِّمُ"
+        "فِي"
       ],
       "answer": 1,
       "review": null
