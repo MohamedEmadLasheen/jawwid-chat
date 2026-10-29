@@ -95,10 +95,18 @@ async function pastTrial(): Promise<string> {
 const leaves = (staffId: string) =>
   g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${staffId}::uuid, 'left the academy', null, 'deactivated')::text`;
 
+/** PR-6a's settle window as this suite found it (restored after): 0 here, so a sweep sees what a test just wrote. */
+let windowBefore: unknown;
+const issueFor = async (key: string) =>
+  (await g.prisma.$queryRaw<Array<{ reason: string }>>`SELECT reason FROM chat.work_task_source_issue WHERE source_key = ${key}`)[0]?.reason;
+
 beforeAll(async () => {
   await g.prisma.$connect();
+  windowBefore = (await g.prisma.$queryRaw<Array<{ value: unknown }>>`SELECT value FROM chat.config WHERE key = 'tasks.raise_after_seconds'`)[0]?.value;
 });
 afterAll(async () => {
+  if (windowBefore === undefined) await exec(`delete from chat.config where key = 'tasks.raise_after_seconds'`);
+  else await exec(`update chat.config set value = $1::jsonb where key = 'tasks.raise_after_seconds'`, JSON.stringify(windowBefore));
   await truncate(g.prisma);
   await g.prisma.$disconnect();
 });
@@ -137,6 +145,8 @@ beforeEach(async () => {
     await exec(`insert into chat.config (key, value) values ($1, to_jsonb('2000-01-01T00:00:00Z'::text))
                 on conflict (key) do update set value = excluded.value`, `tasks.since.${src}`);
   }
+  await exec(`insert into chat.config (key, value) values ('tasks.raise_after_seconds', to_jsonb(0))
+              on conflict (key) do update set value = excluded.value`);
 });
 
 // ---------------------------------------------------------------------------
@@ -197,6 +207,17 @@ describe('a teacher without a supervisor', () => {
     await exec(`update chat.teacher set is_active = true, left_at = null where id = $1::uuid`, s.teacherId);
     await tasks.sweep();
     expect(await tasks.get(tmgr, first!.id)).toMatchObject({ state: 'open', sourceState: 'pending' });
+  });
+
+  it('a Teachers manager who leaves: the task moves to whoever follows (the super admin)', async () => {
+    await tasks.sweep();
+    const [first] = await spellTasks(s.teacherId);
+    const key = `teacher_unsupervised:${first!.spell}`;
+    await exec(`update chat.department set manager_id = null where id = $1::uuid`, tdept);
+    await exec(`update chat.staff set is_active = false, left_at = now() where id = $1::uuid`, tmgr);
+    await tasks.sweep();
+    expect(await tasks.get(sa, first!.id)).toMatchObject({ state: 'open', assignee: { kind: 'staff', id: sa } });
+    expect(await issueFor(key)).toBeUndefined();
   });
 
   it('with no Teachers manager, the super admin holds it', async () => {

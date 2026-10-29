@@ -69,9 +69,15 @@
 --
 --   RAISED by chat.work_task_sweep_handover() (the worker, every minute, its
 --   own advisory lock and batches, as PR-6a's): a teacher is often added and
---   given a supervisor in one sitting. COMPLETED at once by triggers on the
---   sources, never blocking the source's write; the sweep re-reads the
---   evidence as a safety net.
+--   given a supervisor in one sitting. The sweep leaves an occurrence alone
+--   for PR-6a's settle window (chat.work_task_settle_window()), so it never
+--   announces what a concurrent request is settling. COMPLETED at once by
+--   triggers on the sources, never blocking the source's write; the sweep
+--   re-reads the evidence as a safety net.
+--
+--   OWNERS who leave (as PR-6a): an open task whose assignee is no longer
+--   live moves to its source's owner now (work_task_handover_owner); with
+--   nobody live to follow, an `orphaned:` issue. A live assignee keeps it.
 --
 --   Cut-offs (owner 2026-10-29, the last 14 days at switch-on): a stretch by
 --   when it began, as the records show it; a trial by its end (attendance)
@@ -225,6 +231,7 @@ as $$
 $$;
 
 -- One stretch of a teacher without a supervisor: the task's source.
+-- (Its owner function is below, once the table exists.)
 create table chat.work_task_teacher_spell (
   id              uuid primary key default gen_random_uuid(),
   organization_id uuid not null references chat.organization (id),
@@ -237,6 +244,25 @@ comment on table chat.work_task_teacher_spell is
   'PD-47 PR-6b: one stretch of a teacher without a supervisor -- the source of a teacher_unsupervised task. Closed when a supervisor is assigned.';
 
 create unique index work_task_teacher_spell_one_open on chat.work_task_teacher_spell (teacher_id) where closed_at is null;
+
+-- Who a hand-over task belongs to now, by its source (as its raise names it).
+create or replace function chat.work_task_handover_owner(p_type text, p_source uuid)
+returns uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select case
+    when p_type = 'teacher_unsupervised' then
+      (select chat.work_task_teachers_manager(sp.organization_id) from chat.work_task_teacher_spell sp where sp.id = p_source)
+    when p_type = 'trial_attendance' then
+      (select l.teacher_id from chat.lesson l
+        where l.id = p_source and chat.task_principal_kind(l.teacher_id, l.organization_id) = 'teacher')
+    when p_type = 'trial_outcome' then chat.work_task_trial_sales_owner(p_source)
+    when p_type like 'certificate\_%' then
+      (select chat.work_task_certificate_assignee(e.certificate_id) from chat.appreciation_certificate_event e where e.id = p_source)
+  end;
+$$;
 
 -- What a source says of its work now: 'done' (with who did it, or nobody),
 -- 'gone' (the work no longer exists), or 'back' (it is still owed).
@@ -449,8 +475,10 @@ declare
   v_rerouted  integer := 0;
   v_failed    integer := 0;
   v_declined  integer := 0;
+  v_orphaned  integer := 0;
   v_more      boolean := false;
   r           record;
+  v_settle    interval := chat.work_task_settle_window();
   s_teacher   timestamptz;
   s_attend    timestamptz;
   s_outcome   timestamptz;
@@ -478,7 +506,13 @@ begin
                      and t.state in ('completed', 'removed'))
           or (select v.verdict from chat.work_task_handover_verdict(split_part(i.source_key, ':', 1),
                                                                      split_part(i.source_key, ':', 2)::uuid) v)
-             is distinct from 'back');
+             is distinct from 'back'
+          -- An orphan given an owner again, or whose assignee is live after all.
+          or i.reason like 'orphaned:%'
+             and exists (select 1 from chat.work_task t
+                          where t.organization_id = i.organization_id and t.source_key = i.source_key
+                            and (chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is not null
+                                 or chat.work_task_handover_owner(t.source_type, t.source_id) is not null)));
   -- A spell whose teacher is supervised again, its task never raised, closes.
   update chat.work_task_teacher_spell sp set closed_at = clock_timestamp()
    where sp.closed_at is null and chat.work_task_teacher_supervisor(sp.teacher_id) is not null
@@ -514,7 +548,8 @@ begin
        where c.state in ('proposed', 'requested', 'in_design', 'changes_requested', 'uploaded', 'approved')
          and e.at >= s_cert
     ) x
-     where not exists (select 1 from chat.work_task t where t.organization_id = x.org and t.source_key = x.key)
+     where x.at <= now() - v_settle
+       and not exists (select 1 from chat.work_task t where t.organization_id = x.org and t.source_key = x.key)
        and not exists (select 1 from chat.work_task_source_issue i
                         where i.organization_id = x.org and i.source_key = x.key and i.next_try_at > now())
      order by x.at
@@ -602,8 +637,58 @@ begin
     end;
   end loop;
 
+  -- Owners: an open task whose assignee left moves to its source's owner now
+  -- (certificate steps already follow theirs, above). A live assignee keeps it.
+  for r in
+    select t.organization_id as org, t.source_key as key, t.source_type as src,
+           chat.work_task_handover_owner(t.source_type, t.source_id) as owner
+      from chat.work_task t
+     where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
+       and t.source_type in ('teacher_unsupervised', 'trial_attendance', 'trial_outcome')
+       and chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is null
+       and chat.work_task_handover_owner(t.source_type, t.source_id) is not null
+       and not exists (select 1 from chat.work_task_source_issue i
+                        where i.organization_id = t.organization_id and i.source_key = t.source_key and i.next_try_at > now())
+     limit v_left + 1
+  loop
+    if v_left = 0 then v_more := true; exit; end if;
+    v_left := v_left - 1;
+    begin
+      if r.src = 'trial_attendance' then
+        v_rerouted := v_rerouted + chat.work_task_reroute(r.org, r.key, null, r.owner, null);
+      else
+        v_rerouted := v_rerouted + chat.work_task_reroute(r.org, r.key, r.owner, null, null);
+      end if;
+    exception when others then
+      v_failed := v_failed + 1;
+      perform chat.work_task_note_issue(r.org, r.key, sqlerrm);
+    end;
+  end loop;
+
+  -- An assignee who left with nobody live to follow: recorded (with its
+  -- back-off) for whoever may reassign it, or change its source.
+  for r in
+    select t.organization_id as org, t.source_key as key
+      from chat.work_task t
+     where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
+       and t.source_type in ('teacher_unsupervised', 'trial_attendance', 'trial_outcome',
+                               'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send')
+       and chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is null
+       and chat.work_task_handover_owner(t.source_type, t.source_id) is null
+       and not exists (select 1 from chat.work_task_source_issue i
+                        where i.organization_id = t.organization_id and i.source_key = t.source_key and i.next_try_at > now())
+     limit v_left + 1
+  loop
+    if v_left = 0 then v_more := true; exit; end if;
+    v_left := v_left - 1;
+    perform chat.work_task_note_issue(r.org, r.key,
+      'orphaned: its assignee left and nobody live follows (the Teachers or Sales manager, the trial''s teacher, the certificate''s person, the super admin)');
+    v_orphaned := v_orphaned + 1;
+  end loop;
+
   return jsonb_build_object('skipped', false, 'raised', v_raised, 'settled', v_settled, 'withdrawn', v_withdrawn,
-                            'restored', v_restored, 'rerouted', v_rerouted, 'failed', v_failed, 'declined', v_declined,
+                            'restored', v_restored, 'rerouted', v_rerouted, 'orphaned', v_orphaned,
+                            'failed', v_failed, 'declined', v_declined,
                             'more', v_more, 'issues', (select count(*) from chat.work_task_source_issue));
 end;
 $$;
@@ -975,6 +1060,7 @@ revoke all on function chat.work_task_teacher_supervisor(uuid) from public;
 revoke all on function chat.work_task_unsupervised_since(uuid) from public;
 revoke all on function chat.work_task_teachers_manager(uuid) from public;
 revoke all on function chat.work_task_handover_verdict(text, uuid) from public;
+revoke all on function chat.work_task_handover_owner(text, uuid) from public;
 revoke all on function chat.work_task_raise_teacher_unsupervised(uuid) from public;
 revoke all on function chat.work_task_trial_sales_owner(uuid) from public;
 revoke all on function chat.work_task_raise_trial_attendance(uuid) from public;
