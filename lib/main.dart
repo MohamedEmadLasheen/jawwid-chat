@@ -25,6 +25,13 @@ Future<void> main() async {
       await rootBundle.loadString('assets/fonts/OFL.txt'),
     );
   });
+  // PD-39: Amiri Quran (the verses on a board), SIL OFL 1.1 as well.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      const ['Amiri Quran'],
+      await rootBundle.loadString('assets/fonts/OFL-Amiri.txt'),
+    );
+  });
 
   final overrides = await bootstrap();
 

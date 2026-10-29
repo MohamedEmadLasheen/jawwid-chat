@@ -16,11 +16,21 @@ import { Requires } from '../platform/permissions/route-access';
 export class ParentRecordController {
   constructor(private readonly parents: ParentRecordService) {}
 
-  /** ?q= &access=locked|grace (PD-44) -- the parents this staff member may open. */
+  /**
+   * ?q= -- the parents this staff member may open. PD-45: ?location=missing --
+   * those whose location is not complete; ?with=location -- each row's location.
+   * PD-44: ?access=locked|grace -- those with a child in that subscription state.
+   */
   @Requires('parents.view')
   @Get()
-  list(@ActorId() actorId: string, @Query('q') q?: string, @Query('access') access?: string) {
-    return this.parents.list(actorId, q, access);
+  list(
+    @ActorId() actorId: string,
+    @Query('q') q?: string,
+    @Query('location') location?: string,
+    @Query('with') withFields?: string,
+    @Query('access') access?: string,
+  ) {
+    return this.parents.list(actorId, q, location, withFields, access);
   }
 
   @Requires('parents.view')
@@ -29,7 +39,7 @@ export class ParentRecordController {
     return this.parents.detail(actorId, contactId);
   }
 
-  /** { name?, phone?, email?, countryCode?, region?, adminNote? } -- partial; null clears. */
+  /** { name?, phone?, email?, countryCode?, subdivisionCode?, region?, adminNote? } -- partial; null clears. */
   @Requires('parents.edit')
   @Post(':contactId')
   update(@ActorId() actorId: string, @Param('contactId') contactId: string, @Body() body: Record<string, unknown>) {

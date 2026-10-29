@@ -212,8 +212,8 @@ async function pages(actorId: string, billingPage: boolean, parentsPage: boolean
     out['receipts.pending'] = (await payments.receipts(actorId, 'pending')).counts.pending;
   }
   if (parentsPage) {
-    out['parents.locked'] = (await parents.list(actorId, undefined, 'locked')).items.length;
-    out['parents.grace'] = (await parents.list(actorId, undefined, 'grace')).items.length;
+    out['parents.locked'] = (await parents.list(actorId, undefined, undefined, undefined, 'locked')).items.length;
+    out['parents.grace'] = (await parents.list(actorId, undefined, undefined, undefined, 'grace')).items.length;
   }
   return out;
 }

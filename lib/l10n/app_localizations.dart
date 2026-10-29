@@ -8029,12 +8029,6 @@ abstract class L10n {
   /// **'Write here'**
   String get boardTextHint;
 
-  /// PD-39 whiteboard. A verse element before the verses update.
-  ///
-  /// In en, this message translates to:
-  /// **'Quran verse'**
-  String get boardVersePlaceholder;
-
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -8058,6 +8052,66 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'More'**
   String get boardMore;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'Quran verse'**
+  String get boardToolVerse;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'Surah'**
+  String get boardVerseSurah;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'From ayah'**
+  String get boardVerseFrom;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'To ayah'**
+  String get boardVerseTo;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'At most {count} ayat at a time.'**
+  String boardVerseMax(String count);
+
+  /// PD-39 whiteboard, Quran verses. The dataset attribution (CC BY 3.0 requires it).
+  ///
+  /// In en, this message translates to:
+  /// **'Quran text: {source}'**
+  String boardVerseSource(String source);
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert'**
+  String get boardVerseInsert;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the verse…'**
+  String get boardVerseLoading;
+
+  /// PD-39 whiteboard, Quran verses. Never a fallback text (503 COMM.QURAN_UNAVAILABLE).
+  ///
+  /// In en, this message translates to:
+  /// **'Quran text unavailable'**
+  String get boardVerseUnavailable;
+
+  /// PD-39 whiteboard, Quran verses. The served range no longer matches the stored rangeSha256.
+  ///
+  /// In en, this message translates to:
+  /// **'Verse text updated, re-insert'**
+  String get boardVerseChanged;
 
   /// PD-39 whiteboard. Review of #293: never dropped, never silently written over.
   ///
@@ -8112,6 +8166,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Age'**
   String get materialsAgeLabel;
+
+  /// PD-37: a photo in the full-screen viewer, read by a screen reader when it is the only one.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get photoLabel;
+
+  /// PD-37: which photo of the message is on screen, read by a screen reader. Positions, not counts: no noun follows either number, so there is no plural agreement to make.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo {position} of {count}'**
+  String photoPositionLabel(String position, String count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
