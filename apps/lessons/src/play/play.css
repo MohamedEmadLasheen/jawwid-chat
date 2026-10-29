@@ -99,7 +99,11 @@ ol.play-cards { list-style: none; margin: 0; padding: 0; }
   .play-page .primary { transition: none; }
 }
 
-/* The grown-up's corner: small and quiet, so a child is not drawn to it. */
-.play__grownup-toggle { float: inline-end; min-block-size: 44px; padding: 0.25rem 0.75rem; border-radius: 999px; background: transparent; border: 2px solid var(--border); color: var(--muted); cursor: pointer; }
+/* The grown-up's corner: small and quiet, in the picture's top corner, so a child is not drawn to it. */
+.play-page { position: relative; }
+.play__grownup-toggle { position: absolute; inset-block-start: 1.5rem; inset-inline-end: 1.5rem; min-block-size: 44px; padding: 0.25rem 0.75rem; border-radius: 999px; background: var(--surface); border: 2px solid var(--border); color: var(--muted); cursor: pointer; }
 .play__grownup-toggle[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
-.play__grownup { clear: both; padding: 0.5rem; border-radius: 1rem; background: var(--surface); border: 2px dashed var(--border); }
+.play__grownup { padding: 0.5rem; margin-block-end: 0.5rem; border-radius: 1rem; background: var(--surface); border: 2px dashed var(--border); }
+.play__grownup button { padding: 0.25rem 0.9rem; border-radius: 999px; background: var(--surface); border: 2px solid var(--border); color: var(--ink); cursor: pointer; }
+.play__grownup button:disabled { color: var(--muted); cursor: default; }
+.play__grownup button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }

@@ -37,9 +37,9 @@ function Garden() {
 function Sea() {
   return (
     <>
-      <circle cx="64" cy="34" r="18" className="skf-3" />
+      <circle cx="300" cy="34" r="18" className="skf-3" />
       {[24, 40, 56].map((r, i) => (
-        <circle key={r} cx={250 + i * 30} cy={30 + i * 12} r={3 + i} className="sks-line" strokeWidth="2" />
+        <circle key={r} cx={160 + i * 30} cy={30 + i * 12} r={3 + i} className="sks-line" strokeWidth="2" />
       ))}
       <path d="M0 78 Q30 66 60 78 T120 78 T180 78 T240 78 T300 78 T360 78 V120 H0 Z" className="skf-2" />
       <path d="M0 92 Q30 80 60 92 T120 92 T180 92 T240 92 T300 92 T360 92 V120 H0 Z" className="skf-1" />
@@ -85,7 +85,7 @@ function Caravan() {
       <circle cx="290" cy="40" r="20" className="skf-3" />
       <path d="M0 92 Q70 62 150 90 T300 84 T360 90 V120 H0 Z" className="skf-2" />
       <path d="M0 104 Q110 80 220 102 T360 98 V120 H0 Z" className="skf-1" />
-      <g transform="translate(70 96)">
+      <g transform="translate(200 96)">
         <path d="M0 0 Q4 -28 2 -52" className="sks-5" strokeWidth="5" />
         {[-150, -110, -70, -30, 10].map((a) => (
           <ellipse key={a} cx="16" cy="0" rx="18" ry="5" className="skf-4" transform={`translate(2 -52) rotate(${a})`} />
