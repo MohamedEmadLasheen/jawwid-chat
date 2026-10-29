@@ -576,6 +576,28 @@ class MessagesController extends Notifier<MessagesState> {
     }
   }
 
+  /// PD-50: one EXISTING message changed that may sit far above the newest page -- a
+  /// lesson card whose make-up was booked, moved or cancelled -- so [refreshLatest]
+  /// alone would leave this log's copy stale. Re-read exactly that message through the
+  /// ordinary history read (`before=seq+1&limit=1`), which answers only what the reader
+  /// may see, and let the server's copy win. Only a message this log already holds is
+  /// re-read: one not loaded yet arrives fresh with its page.
+  Future<void> refreshMessage(int seq) async {
+    if (!state.log.messages.any((m) => m.sequence == seq)) return;
+    try {
+      final page = await _messages.history(conversationId, beforeCursor: '${seq + 1}', limit: 1);
+      if (!_alive) return;
+      final changed = page.items.where((m) => m.sequence == seq).toList();
+      if (changed.isEmpty) return;
+      state = state.copyWith(log: state.log.merge(changed), isOffline: false);
+    } catch (error) {
+      if (!_alive) return;
+      state = state.copyWith(
+        isOffline: ErrorMapper.map(error).kind == AppErrorKind.network,
+      );
+    }
+  }
+
   /// Delete a temp recording the outbox no longer needs.
   ///
   /// Failure is ignored on purpose: an undeleted file in the OS cache directory
