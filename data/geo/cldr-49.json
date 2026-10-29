@@ -1,0 +1,17 @@
+{
+  "version": "49",
+  "tag": "release-49",
+  "source": "https://github.com/unicode-org/cldr/tree/release-49",
+  "licence": "Unicode License v3 (LICENSE below; shipped as apps/api/src/geo/LICENSE-CLDR.txt)",
+  "downloaded": "2026-10-28",
+  "files": {
+    "LICENSE": "65eb33419e22a297550a811b5b535f5e532f9a7e0114b516c0ea18afd53c3804",
+    "common/main/ar.xml": "68258620324e96ce3c219598c7676db3f1e97cd45a8dbf21250c8df8822be94c",
+    "common/main/en.xml": "f8cbf26964d0e349fc96d9e5a56292edcbaab25c8e64177ca4f111773dfb79cf",
+    "common/subdivisions/ar.xml": "4315e41b969f4636a09a3deede46847d5a797f063eb5a9b80428e20d4ce9f451",
+    "common/subdivisions/en.xml": "637705773cb923d63bf71abaf05e6246fd853ef98f143bd9796b11d2c5ac10c0",
+    "common/supplemental/subdivisions.xml": "63095a3b5bd4e0a00d9e1cf96853808cacd0ec7c826dbcbfd31755c6cb9b6c55",
+    "common/validity/region.xml": "e751e0eedd46b52c38f3cdb72b0fab61ac8b48e052e8b28ba74b6ac26c4c8cb1",
+    "common/validity/subdivision.xml": "93b12c9d55938266c96d44a7ccbb66800afeef4f9dd48b0dc16edfab89833d95"
+  }
+}
