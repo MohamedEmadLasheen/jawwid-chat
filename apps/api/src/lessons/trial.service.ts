@@ -13,9 +13,13 @@ import { LessonService, cancelReminders, dateField, invalid, stateError, textFie
 import { SchedulingService } from './scheduling.service';
 import { TrialGroupService } from './trial-group.service';
 import { NewStudentsService } from '../new-students/new-students.service';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 
 const NOT_SUBSCRIBED_REASONS: ReadonlySet<string> = new Set(['price', 'schedule', 'not_ready', 'chose_other', 'no_response', 'other']);
 const MAX_RANGE_DAYS = 93;
+/** GET /trials without from/to: this many days either side of now, at most this many trials (PD-44 counts the same). */
+const LIST_WINDOW_DAYS = 31;
+const LIST_LIMIT = 1000;
 /** How far back the trial group's card looks for trials to record or correct. */
 const GROUP_WINDOW_DAYS = 60;
 /** How far ahead the trial group's card lists booked trials that have not started yet. */
@@ -210,8 +214,8 @@ export class TrialService {
     // PD-35: the Teachers department lists the trials of the teachers in its scope.
     const scope = standing === 'manager' ? await this.lessons.teacherScope.scopeOf(actor) : ALL_TEACHERS;
     const now = Date.now();
-    const from = query.from ? parse(query.from, 'from') : new Date(now - 31 * 86_400_000);
-    const to = query.to ? parse(query.to, 'to') : new Date(now + 31 * 86_400_000);
+    const from = query.from ? parse(query.from, 'from') : new Date(now - LIST_WINDOW_DAYS * 86_400_000);
+    const to = query.to ? parse(query.to, 'to') : new Date(now + LIST_WINDOW_DAYS * 86_400_000);
     if (to <= from || to.getTime() - from.getTime() > MAX_RANGE_DAYS * 86_400_000) throw invalid(`from/to: at most ${MAX_RANGE_DAYS} days`);
     if (query.teacherId !== undefined && !isUuid(query.teacherId)) throw invalid('teacherId: must be a uuid');
     const rows = await this.prisma.lesson.findMany({
@@ -225,10 +229,63 @@ export class TrialService {
         ...(scope.all ? {} : { AND: [{ teacherId: { in: [...scope.teacherIds] } }] }),
       },
       include: TRIAL_INCLUDE,
-      orderBy: { startsAt: 'asc' },
-      take: 1000,
+      // The id breaks ties, so the page and its Dashboard count (PD-44) take the same LIST_LIMIT.
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+      take: LIST_LIMIT,
     });
     return { trials: rows.map((r) => this.dto(r, standing)) };
+  }
+
+  /**
+   * PD-44: the Dashboard's trial tiles -- the Trials page's two working tabs,
+   * counted over its default window (LIST_WINDOW_DAYS either side of now) with
+   * `list`'s own predicates and scope, and trialOutcomeOf's rule in SQL:
+   *
+   *   trials.awaiting   no decision recorded, and started with nothing
+   *                     recorded or attended ("Needs an outcome")
+   *   trials.upcoming   no decision, nothing recorded, not started yet
+   *
+   * The trial desk (Sales, Operations, the super admin) counts every trial,
+   * the Teachers department those of its PD-35 scope; anyone else gets no tile.
+   * Only the trials the page lists are counted -- the first LIST_LIMIT by
+   * start, the id breaking ties, as `list` orders them -- and `capped` says
+   * the window holds more ("N+"). One statement after the standing.
+   */
+  async dashboardCounts(actorId: string, now: Date = new Date()): Promise<DashboardTile[]> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) throw new CommError(CommErrorCode.LESSON_DENIED, 'trials belong to Sales and the Teachers department');
+    const standing = await this.standing(actor, '');
+    if (standing !== 'sales' && standing !== 'manager') return [];
+    const scope = standing === 'manager' ? await this.lessons.teacherScope.scopeOf(actor) : ALL_TEACHERS;
+    const all = scope.all;
+    const ids = scope.all ? [] : [...scope.teacherIds];
+    const from = new Date(now.getTime() - LIST_WINDOW_DAYS * 86_400_000);
+    const to = new Date(now.getTime() + LIST_WINDOW_DAYS * 86_400_000);
+    const [r] = await this.prisma.$queryRaw<Array<{ awaiting: number; awaiting_oldest: Date | null; upcoming: number; seen: number }>>`
+      WITH listed AS (
+        SELECT l.id, l.starts_at, l.outcome, o.lesson_id IS NOT NULL AS decided
+          FROM chat.lesson l
+          LEFT JOIN chat.trial_outcome o ON o.lesson_id = l.id
+         WHERE l.organization_id = ${actor.organizationId}::uuid
+           AND l.kind = 'trial'
+           AND l.starts_at >= ${from}::timestamptz AND l.starts_at < ${to}::timestamptz
+           AND (l.outcome IS NULL OR l.outcome <> 'rescheduled')
+           AND (${all}::boolean OR l.teacher_id = ANY (${ids}::uuid[]))
+         ORDER BY l.starts_at, l.id
+         LIMIT ${LIST_LIMIT + 1}
+      ),
+      page AS (SELECT * FROM listed ORDER BY starts_at, id LIMIT ${LIST_LIMIT})
+      SELECT (SELECT count(*)::int FROM page
+               WHERE NOT decided AND ((outcome IS NULL AND starts_at <= ${now}::timestamptz) OR outcome = 'held')) AS awaiting,
+             (SELECT min(starts_at) FROM page
+               WHERE NOT decided AND ((outcome IS NULL AND starts_at <= ${now}::timestamptz) OR outcome = 'held')) AS awaiting_oldest,
+             (SELECT count(*)::int FROM page WHERE NOT decided AND outcome IS NULL AND starts_at > ${now}::timestamptz) AS upcoming,
+             (SELECT count(*)::int FROM listed) AS seen`;
+    const capped = (r?.seen ?? 0) > LIST_LIMIT;
+    return [
+      dashboardTile('trials.awaiting', r?.awaiting ?? 0, r?.awaiting_oldest ?? null, capped),
+      dashboardTile('trials.upcoming', r?.upcoming ?? 0, null, capped),
+    ];
   }
 
   // ------------------------------------------------------------------
