@@ -53,7 +53,7 @@ FIXTURE = os.path.join(ARABIC, FIXTURE_NAME)
 LESSON_FILE = re.compile(r'lesson-\d{3}\.json')
 KEYS = {'lesson', 'review', 'provenance', 'finalMark', 'retiredIds', 'units', 'quiz'}
 UNIT_KEYS = {'id', 'letters', 'name', 'forms', 'note', 'words'}
-UNIT_OPTIONAL = {'mark', 'group'}  # lesson 3, the harakat: the letter carrying one mark; the picker's group
+UNIT_OPTIONAL = {'mark', 'group', 'madd', 'tanween', 'phraseName'}  # lesson 3: the letter carrying one mark; the picker's group; lesson 7: a madd letter; lesson 8: a tanween
 WORD_KEYS = {'id', 'text', 'was', 'review'}
 POSITIONS = ['start', 'middle', 'end']
 UNIT_ID = re.compile(r'^[a-z][a-z0-9_]*$')
@@ -99,30 +99,68 @@ def letters_of(w):
     return [c for c in w if is_letter(c)]
 
 
-HARAKA = {'fatha': chr(0x64E), 'kasra': chr(0x650), 'damma': chr(0x64F)}
+HARAKA = {'fatha': chr(0x64E), 'kasra': chr(0x650), 'damma': chr(0x64F), 'sukun': chr(0x652), 'shadda': chr(0x651)}
+# Lesson 7 (the madd): each madd letter and the vowel it lengthens.
+MADD = {'alif': ('ا', chr(0x64E)), 'ya': ('ي', chr(0x650)), 'waw': ('و', chr(0x64F))}
+# Lesson 8: the three tanween.
+TANWEEN_OF = {'fath': chr(0x64B), 'damm': chr(0x64C), 'kasr': chr(0x64D)}
 
 
-def occurrences(w, unit_letters, mark=None):
-    """With a mark (one haraka's code point), a letter counts only where it CARRIES it (lesson 3)."""
+def silent_waw(ls, i):
+    """The silent waw of أُولَئِكَ / أُولُو / أُولَاتُ: أ, then و, then ل -- written, never read."""
+    return i == 1 and ls[:3] == ['أ', 'و', 'ل']
+
+
+def occurrences(w, unit_letters, mark=None, after=None, tanween=None):
+    """With a mark (one haraka's code point), a letter counts only where it CARRIES it (lesson 3);
+    the sukun never on the word's last letter, where it is the pausal sukun (lesson 6). With after
+    (a vowel), only where the letter is BARE and the letter before carries that vowel, never the
+    silent waw (lesson 7). With tanween, the word's end carrying it: the last letter, or for the
+    fath the letter before a bare final ا / ى (lesson 8)."""
     ls = letters_of(w)
-    marks = [mk for _, mk in letters_marks(w)] if mark else []
+    if tanween:
+        marks = [mk for _, mk in letters_marks(w)]
+        k = len(ls) - 1
+        if k > 0 and tanween == TANWEEN_OF['fath'] and ls[k] in ('ا', 'ى') and not marks[k]:
+            k -= 1
+        return [(k, 1)] if k >= 0 and tanween in marks[k] else []
+    marks = [mk for _, mk in letters_marks(w)] if mark or after else []
     out = []
     for entry in unit_letters:
         seq = list(entry)
         for i in range(len(ls) - len(seq) + 1):
-            if ls[i:i + len(seq)] == seq and (not mark or mark in marks[i]):
-                out.append((i, len(seq)))
+            if ls[i:i + len(seq)] != seq or (mark and mark not in marks[i]):
+                continue
+            if mark == HARAKA['sukun'] and i + len(seq) == len(ls):
+                continue
+            if after and (i == 0 or marks[i] or after not in marks[i - 1] or silent_waw(ls, i)):
+                continue
+            out.append((i, len(seq)))
     return sorted(out)
 
 
-def has(w, unit_letters, mark=None):
-    return bool(occurrences(w, unit_letters, mark))
+def has(w, unit_letters, mark=None, after=None, tanween=None):
+    return bool(occurrences(w, unit_letters, mark, after, tanween))
 
 
-def positions(w, unit_letters, mark=None):
+def positions(w, unit_letters, mark=None, after=None, tanween=None):
     n = len(letters_of(w))
-    found = {'start' if at == 0 else 'end' if at + length == n else 'middle' for at, length in occurrences(w, unit_letters, mark)}
+    found = {'start' if at == 0 else 'end' if at + length == n else 'middle' for at, length in occurrences(w, unit_letters, mark, after, tanween)}
     return [p for p in POSITIONS if p in found]
+
+
+def uncounted_madd(w):
+    """A madd the rule does not count, though read long: a dagger alif, ى after a fatha, or آ. A madd
+    unit's quiz refuses an option carrying one."""
+    ls = letters_marks(w)
+    return chr(0x670) in w or any(c == 'آ' for c, _ in ls) or any(c == 'ى' and i > 0 and chr(0x64E) in ls[i - 1][1] for i, (c, _) in enumerate(ls))
+
+
+def sukun_on_madd(w):
+    """A sukun written on a madd letter (فِيْلْ): a content error, since a madd letter is written bare.
+    With a shadda the letter is a consonant (غَنِيّْ), not a madd."""
+    ls = letters_marks(w)
+    return any(i > 0 and chr(0x652) in mk and chr(0x651) not in mk and any(c == l and v in ls[i - 1][1] for l, v in MADD.values()) for i, (c, mk) in enumerate(ls))
 
 
 # --- Full tashkeel (the audit's STRICT rule, tashkeel_coverage.py) and the one final mark.
@@ -184,7 +222,7 @@ def tashkeel(where, w, err, exception=None):
 def check(lesson, number):
     errors = []
     err = errors.append
-    if not isinstance(lesson, dict) or set(lesson) != KEYS:
+    if not isinstance(lesson, dict) or not KEYS <= set(lesson) or set(lesson) - KEYS - {'distractors'}:
         err(f'keys must be {sorted(KEYS)}, not {sorted(lesson) if isinstance(lesson, dict) else type(lesson).__name__}')
         return errors
     if not is_int(lesson['lesson']) or lesson['lesson'] != number:
@@ -213,6 +251,50 @@ def check(lesson, number):
             flagged.append(where)
 
     units, vocabulary, word_ids = {}, set(), set()
+
+    def word_checks(where, w, u, seen):
+        """One word: of unit u, or a lesson-level distractor (u is None)."""
+        t = w.get('text') if isinstance(w, dict) else None
+        ww = f'{where} word {t!r}'
+        if not isinstance(w, dict) or set(w) - (WORD_KEYS | {'finalMarkException'}) or not WORD_KEYS <= set(w):
+            err(f'{ww}: keys are id, text, was, review (and finalMarkException)')
+            return
+        wid = w['id']
+        owner = u['id'] if u else 'distractor'
+        if not is_str(wid) or not WORD_ID.match(wid) or wid[:-4] != owner:
+            err(f'{ww}: id {wid!r} must be {owner}-NNN (PD-48 voice-over binds a clip to it)')
+        elif wid in word_ids:
+            err(f'{ww}: id {wid!r} is used twice (ids are never reused)')
+        elif wid in retired:
+            err(f'{ww}: id {wid!r} is retired (a removed word\'s id is never reused)')
+        word_ids.add(wid)
+        if not is_word(t):
+            err(f'{ww}: not one written word (letters and marks, in NFC)')
+            return
+        if t in seen:
+            err(f'{ww}: listed twice')
+        seen.add(t)
+        vocabulary.add(t)
+        if u and not has(t, u['letters'], u['_mark'], u['_after'], u['_tanween']):
+            err(f'{ww}: does not contain the unit\'s letter {"/".join(u["letters"])}{" carrying its " + u["mark"] if u["_mark"] else ""}{" as a madd" if u["_after"] else ""}{" ending in its tanween" if u["_tanween"] else ""} (by the one rule: only marks are removed)')
+        if sukun_on_madd(t):
+            err(f'{ww}: a sukun on a madd letter ({t!r}): a madd letter is written bare')
+        exc = w.get('finalMarkException')
+        if 'finalMarkException' in w:
+            if not is_str(exc) or not exc.strip():
+                err(f'{ww}: finalMarkException needs a reason')
+            elif not w['review'] and not approved:
+                err(f'{ww}: a finalMarkException stays held (review set) until the file is approved')
+        tashkeel(ww, t, err, exc)
+        note_ok(ww, w['review'])
+        if w['was'] is not None:
+            if not is_str(w['was']):
+                err(f'{ww}: was is the old spelling, or null')
+            elif w['was'] == t:
+                err(f'{ww}: was equals text (clearing a word sets was to null)')
+            if not w['review']:
+                err(f'{ww}: changed from {w["was"]!r} but not held (a teacher clears it: review and was to null)')
+
     for i, u in enumerate(lesson['units']):
         where = f'unit {u.get("id", i)!r}' if isinstance(u, dict) else f'unit {i}'
         if not isinstance(u, dict) or not UNIT_KEYS <= set(u) or set(u) - UNIT_KEYS - UNIT_OPTIONAL:
@@ -223,21 +305,37 @@ def check(lesson, number):
             continue
         if u['id'] in units:
             err(f'{where}: unit ids are unique')
-        if not isinstance(u['letters'], list) or not u['letters'] or not all(is_str(l) and l and all(is_letter(c) for c in l) for l in u['letters']):
+        tanween = None
+        if 'tanween' in u:
+            # A tanween unit counts the word's END, whatever its letter: no letters, no mark, no madd.
+            if not is_str(u['tanween']) or u['tanween'] not in TANWEEN_OF or u['letters'] != [] or 'mark' in u or 'madd' in u:
+                err(f'{where}: tanween must be fath, damm or kasr, with no letters, mark or madd')
+                continue
+            tanween = TANWEEN_OF[u['tanween']]
+        elif not isinstance(u['letters'], list) or not u['letters'] or not all(is_str(l) and l and all(is_letter(c) for c in l) for l in u['letters']):
             err(f'{where}: letters must be a list of letters (one, or a pair such as لا)')
             continue
         mark = None
         if 'mark' in u:
-            if u['mark'] not in HARAKA or not all(len(l) == 1 for l in u['letters']):
-                err(f'{where}: mark must be fatha, kasra or damma, on single letters')
+            if not is_str(u['mark']) or u['mark'] not in HARAKA or not all(len(l) == 1 for l in u['letters']):
+                err(f'{where}: mark must be fatha, kasra, damma, sukun or shadda, on single letters')
                 continue
             mark = HARAKA[u['mark']]
+        after = None
+        if 'madd' in u:
+            if not is_str(u['madd']) or u['madd'] not in MADD or 'mark' in u or u['letters'] != [MADD[u['madd']][0]]:
+                err(f'{where}: madd must be alif, ya or waw, the unit\'s one letter, and never with a mark')
+                continue
+            after = MADD[u['madd']][1]
         if 'group' in u and (not is_str(u['group']) or not 0 < len(u['group']) <= 8):
             err(f'{where}: group must be a short non-empty name (the letter)')
-        u = {**u, '_mark': mark}
+        u = {**u, '_mark': mark, '_after': after, '_tanween': tanween}
         units[u['id']] = u
-        if mark:
+        if 'phraseName' in u and (u['phraseName'] is not True or not mark):
+            err(f'{where}: phraseName is true, on a marked unit only (lesson 6\'s one sukun unit)')
+        if mark and u.get('phraseName') is not True:
             # A marked unit's name is its syllable: one of its letters with that mark (بَ), not a word.
+            # (A unit flagged phraseName -- lesson 6's one sukun unit -- is named like any unit.)
             if u['name'] not in [l + mark for l in u['letters']]:
                 err(f'{where}: name {u["name"]!r} must be the syllable, one of its letters with its {u["mark"]}')
         elif not is_phrase(u['name']):
@@ -251,7 +349,7 @@ def check(lesson, number):
                 if gaps:
                     err(f'{where} name: {w!r} is not fully vowelled ({", ".join(gaps)} unmarked)')
             tashkeel(f'{where} name', last, err)
-        if not isinstance(u['forms'], list) or not u['forms'] or not all(is_str(f) and f and all(c == chr(0x640) or c == mark or any(c in l for l in u['letters']) for c in f) for f in u['forms']):
+        if not isinstance(u['forms'], list) or not u['forms'] or not all(is_str(f) and f and all(c == chr(0x640) or c == mark or c == after or c == tanween or any(c in l for l in u['letters']) for c in f) for f in u['forms']):
             err(f'{where}: each form is the unit\'s letter, with tatweel only')
         if u['note'] is not None:
             if not isinstance(u['note'], dict) or set(u['note']) != {'text', 'review'}:
@@ -270,43 +368,24 @@ def check(lesson, number):
             continue
         seen = set()
         for w in u['words']:
-            t = w.get('text') if isinstance(w, dict) else None
-            ww = f'{where} word {t!r}'
-            if not isinstance(w, dict) or set(w) - (WORD_KEYS | {'finalMarkException'}) or not WORD_KEYS <= set(w):
-                err(f'{ww}: keys are id, text, was, review (and finalMarkException)')
-                continue
-            wid = w['id']
-            if not is_str(wid) or not WORD_ID.match(wid) or wid[:-4] != u['id']:
-                err(f'{ww}: id {wid!r} must be {u["id"]}-NNN (PD-48 voice-over binds a clip to it)')
-            elif wid in word_ids:
-                err(f'{ww}: id {wid!r} is used twice (ids are never reused)')
-            elif wid in retired:
-                err(f'{ww}: id {wid!r} is retired (a removed word\'s id is never reused)')
-            word_ids.add(wid)
-            if not is_word(t):
-                err(f'{ww}: not one written word (letters and marks, in NFC)')
-                continue
-            if t in seen:
-                err(f'{ww}: listed twice')
-            seen.add(t)
-            vocabulary.add(t)
-            if not has(t, u['letters'], u['_mark']):
-                err(f'{ww}: does not contain the unit\'s letter {"/".join(u["letters"])}{" carrying its " + u["mark"] if u["_mark"] else ""} (by the one rule: only marks are removed)')
-            exc = w.get('finalMarkException')
-            if 'finalMarkException' in w:
-                if not is_str(exc) or not exc.strip():
-                    err(f'{ww}: finalMarkException needs a reason')
-                elif not w['review'] and not approved:
-                    err(f'{ww}: a finalMarkException stays held (review set) until the file is approved')
-            tashkeel(ww, t, err, exc)
-            note_ok(ww, w['review'])
-            if w['was'] is not None:
-                if not is_str(w['was']):
-                    err(f'{ww}: was is the old spelling, or null')
-                elif w['was'] == t:
-                    err(f'{ww}: was equals text (clearing a word sets was to null)')
-                if not w['review']:
-                    err(f'{ww}: changed from {w["was"]!r} but not held (a teacher clears it: review and was to null)')
+            word_checks(where, w, u, seen)
+
+    # Lesson-level distractors (lesson 6, one unit): words that are only ever WRONG quiz options. They are
+    # checked as words (tashkeel, ids, review) and join the vocabulary, but belong to no unit.
+    distractors = lesson.get('distractors', [])
+    if not isinstance(distractors, list):
+        err('distractors must be a list')
+        distractors = []
+    unit_words = set(vocabulary)  # every word that belongs to a unit
+    seen = set()
+    for w in distractors:
+        t = w.get('text') if isinstance(w, dict) else None
+        if t in unit_words:
+            err(f'distractors word {t!r}: is also a unit word (a distractor is only ever a wrong option)')
+        for uu in units.values():
+            if is_str(t) and has(t, uu['letters'], uu['_mark'], uu['_after'], uu['_tanween']):
+                err(f'distractors word {t!r}: carries unit {uu["id"]!r}\'s feature, so it could be a right answer')
+        word_checks('distractors', w, None, seen)
 
     ids = set()
     for q in lesson['quiz']:
@@ -330,15 +409,22 @@ def check(lesson, number):
             for o in opts:
                 if o not in vocabulary:
                     err(f'{where}: option {o!r} is not a word of this lesson')
-            right = [i for i, o in enumerate(opts) if has(o, unit['letters'], unit['_mark'])]
+            right = [i for i, o in enumerate(opts) if has(o, unit['letters'], unit['_mark'], unit['_after'], unit['_tanween'])]
             if not is_int(q.get('answer')) or right != [q['answer']]:
                 err(f'{where}: must have exactly one right answer, the answer (an index); by the one rule the right ones are {right}')
+            elif opts[q['answer']] not in unit_words:
+                err(f'{where}: the answer {opts[q["answer"]]!r} must be a unit\'s word, never a distractor')
+            if unit['_after']:
+                # A wrong option must not secretly have a madd the rule cannot see (هٰذَا، عَلَى، آ).
+                for o in opts:
+                    if uncounted_madd(o):
+                        err(f'{where}: option {o!r} has a madd the madd rule does not count (dagger alif, ى after a fatha, or آ)')
         elif q.get('kind') == 'position':
             word = q.get('word')
-            if not is_str(word) or word not in vocabulary:
-                err(f'{where}: {word!r} is not a word of this lesson')
+            if not is_str(word) or word not in unit_words:
+                err(f'{where}: {word!r} is not a unit\'s word of this lesson (never a distractor)')
                 continue
-            at = positions(word, unit['letters'], unit['_mark'])
+            at = positions(word, unit['letters'], unit['_mark'], unit['_after'], unit['_tanween'])
             if not is_str(q.get('answer')) or at != [q['answer']]:
                 err(f'{where}: the letter must be in exactly one place, the answer; by the one rule it is {at}')
         else:
@@ -363,6 +449,17 @@ def fixture_failures():
         mark = HARAKA[c['mark']]
         if has(c['word'], c['letters'], mark) != c['has'] or positions(c['word'], c['letters'], mark) != c['positions']:
             out.append(f'fixture {c["word"]} / {"".join(c["letters"])} with {c["mark"]}: got {has(c["word"], c["letters"], mark)}, {positions(c["word"], c["letters"], mark)}')
+    for c in fx['tanweenCases']:
+        t = TANWEEN_OF[c['tanween']]
+        if has(c['word'], [], None, None, t) != c['has'] or positions(c['word'], [], None, None, t) != c['positions']:
+            out.append(f'fixture {c["word"]} / tanween {c["tanween"]}: got {has(c["word"], [], None, None, t)}, {positions(c["word"], [], None, None, t)}')
+    for c in fx['maddChecks']:
+        if sukun_on_madd(c['word']) != c['sukunOnMadd'] or uncounted_madd(c['word']) != c['uncountedMadd']:
+            out.append(f'fixture {c["word"]}: sukun_on_madd {sukun_on_madd(c["word"])}, uncounted_madd {uncounted_madd(c["word"])}')
+    for c in fx['maddCases']:
+        letter, after = MADD[c['madd']]
+        if has(c['word'], [letter], None, after) != c['has'] or positions(c['word'], [letter], None, after) != c['positions']:
+            out.append(f'fixture {c["word"]} / madd {c["madd"]}: got {has(c["word"], [letter], None, after)}, {positions(c["word"], [letter], None, after)}')
     for m in fx['marks']:
         if is_mark(chr(m['cp'])) != m['isMark']:
             out.append(f'fixture mark U+{m["cp"]:04X} ({m["note"]}): is_mark disagrees')
@@ -373,7 +470,7 @@ def fixture_failures():
         t = ''.join(map(chr, w['cps'])) if 'cps' in w else w['text']
         if is_word(t) != w['isWord']:
             out.append(f'fixture word {t!r} ({w.get("note", "")}): is_word disagrees')
-    return out, len(fx['cases']) + len(fx['markedCases']) + len(fx['marks']) + len(fx['letters']) + len(fx['words'])
+    return out, len(fx['cases']) + len(fx['markedCases']) + len(fx['maddCases']) + len(fx['tanweenCases']) + len(fx['maddChecks']) + len(fx['marks']) + len(fx['letters']) + len(fx['words'])
 
 
 def selftest():
@@ -492,7 +589,7 @@ def selftest():
         'harakat-clean': (lambda c: None, None),
         'harakat-word-without-the-mark': (lambda c: c['units'][0]['words'].append({'id': 'ba_fatha-003', 'text': 'بِنْتْ', 'was': None, 'review': None}), 'carrying its fatha'),
         'harakat-name-not-the-syllable': (lambda c: c['units'][0].update(name='بِ'), 'must be the syllable'),
-        'harakat-bad-mark': (lambda c: c['units'][0].update(mark='sukun'), 'mark must be'),
+        'harakat-bad-mark': (lambda c: c['units'][0].update(mark='hamza'), 'mark must be'),
         'harakat-mark-on-a-pair': (lambda c: c['units'][0].update(letters=['لا']), 'mark must be'),
         'harakat-two-right-answers': (lambda c: c['quiz'][0].update(options=['بَابْ', 'كَتَبَ']), 'exactly one right answer'),
         'harakat-empty-group': (lambda c: c['units'][0].update(group=''), 'group must be'),
@@ -505,6 +602,63 @@ def selftest():
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
+    # Lessons 6 and 7: a sukun unit (never the last letter) and a madd unit (bare after its vowel).
+    def sukun_madd():
+        return {
+            'lesson': 6, 'review': {'status': 'pending', 'by': None, 'note': ''}, 'provenance': {}, 'finalMark': 'sukun', 'retiredIds': [],
+            'units': [
+                {'id': 'jim_sukun', 'letters': ['ج'], 'mark': 'sukun', 'group': 'ج', 'name': 'جْ', 'forms': ['جْ'], 'note': None,
+                 'words': [{'id': 'jim_sukun-001', 'text': 'نَجْمْ', 'was': None, 'review': None}]},
+                {'id': 'madd_alif', 'letters': ['ا'], 'madd': 'alif', 'name': 'أَلِفْ', 'forms': ['ـَا'], 'note': None,
+                 'words': [{'id': 'madd_alif-001', 'text': 'بَابْ', 'was': None, 'review': None}]},
+            ],
+            'quiz': [{'id': 'q1', 'kind': 'contains', 'unit': 'jim_sukun', 'options': ['نَجْمْ', 'بَابْ'], 'answer': 0, 'review': None},
+                     {'id': 'q2', 'kind': 'contains', 'unit': 'madd_alif', 'options': ['نَجْمْ', 'بَابْ'], 'answer': 1, 'review': None}],
+        }
+    scases = {
+        'sukun-madd-clean': (lambda c: None, None),
+        'sukun-only-on-the-last-letter': (lambda c: c['units'][0]['words'].append({'id': 'jim_sukun-002', 'text': 'مَوْجْ', 'was': None, 'review': None}), 'carrying its sukun'),
+        'madd-ya-under-sukun-is-no-madd': (lambda c: c['units'][1].update(letters=['ي'], madd='ya', forms=['ـِي'], words=[{'id': 'madd_alif-001', 'text': 'بَيْتْ', 'was': None, 'review': None}]), 'as a madd'),
+        'madd-wrong-letter': (lambda c: c['units'][1].update(madd='waw'), 'madd must be'),
+        'madd-with-a-mark': (lambda c: c['units'][1].update(mark='fatha'), 'madd must be'),
+        'madd-unknown': (lambda c: c['units'][1].update(madd='hamza'), 'madd must be'),
+        'madd-not-a-string': (lambda c: c['units'][1].update(madd=['alif']), 'madd must be'),
+        'mark-not-a-string': (lambda c: c['units'][0].update(mark=['sukun']), 'mark must be'),
+        'madd-option-with-an-uncounted-madd': (lambda c: (c['units'][0]['words'].append({'id': 'jim_sukun-002', 'text': 'عَلَى', 'was': None, 'review': None}),
+                                                          c['quiz'][1].update(options=['عَلَى', 'بَابْ'])), 'does not count'),
+        'sukun-on-a-madd-letter': (lambda c: c['units'][1]['words'].append({'id': 'madd_alif-002', 'text': 'فَاْسْ', 'was': None, 'review': None}), 'written bare'),
+        'silent-waw-is-no-madd': (lambda c: c['units'][1].update(letters=['و'], madd='waw', forms=['ـُو'], words=[{'id': 'madd_alif-001', 'text': 'أُولَئِكَ', 'was': None, 'review': None}]), 'as a madd'),
+        'shadda-unit-clean': (lambda c: c['units'][0].update(id='dal_shadda', letters=['د'], mark='shadda', group='د', name='دّ', forms=['دّ'],
+                                                             words=[{'id': 'dal_shadda-001', 'text': 'جَدَّةْ', 'was': None, 'review': None}]) or c['quiz'][0].update(unit='dal_shadda', options=['جَدَّةْ', 'بَابْ']) or c['quiz'][1].update(options=['جَدَّةْ', 'بَابْ']), None),
+        'tanween-unit-clean': (lambda c: c['units'].append({'id': 'tanween_damm', 'letters': [], 'tanween': 'damm', 'name': 'تَنْوِينْ', 'forms': ['ـٌ'], 'note': None,
+                                                            'words': [{'id': 'tanween_damm-001', 'text': 'كِتَابٌ', 'was': None, 'review': 'FINAL MARK EXCEPTION', 'finalMarkException': "the lesson's tanween"}]}), None),
+        'one-sukun-unit-with-distractors': (lambda c: c.update(
+            units=[{'id': 'sukun', 'phraseName': True, 'letters': ['ء', 'أ', 'إ', 'ؤ', 'ئ', 'ا', 'ب', 'ت', 'ة', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي', 'ى'], 'mark': 'sukun', 'name': 'سُكُونْ', 'forms': ['ـْ'], 'note': None,
+                    'words': [{'id': 'sukun-001', 'text': 'نَجْمْ', 'was': None, 'review': None}, {'id': 'sukun-002', 'text': 'بَحْرْ', 'was': None, 'review': None}]}],
+            distractors=[{'id': 'distractor-001', 'text': 'كَتَبَ', 'was': None, 'review': 'FINAL MARK EXCEPTION', 'finalMarkException': "the lesson's vowel on the last letter"},
+                         {'id': 'distractor-002', 'text': 'قَلَمْ', 'was': None, 'review': None}],
+            quiz=[{'id': 'q1', 'kind': 'contains', 'unit': 'sukun', 'options': ['قَلَمْ', 'نَجْمْ', 'كَتَبَ'], 'answer': 1, 'review': None}]), None),
+        'distractor-wrong-id': (lambda c: c.update(distractors=[{'id': 'jim_sukun-009', 'text': 'قَلَمْ', 'was': None, 'review': None}]), 'must be distractor-NNN'),
+        'distractor-carrying-the-mark': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'حَجْمْ', 'was': None, 'review': None}])
+                                         or c['quiz'][0].update(options=['نَجْمْ', 'حَجْمْ']), 'exactly one right answer'),
+        'unknown-lesson-key': (lambda c: c.update(extras=[]), 'keys must be'),
+        'distractor-is-a-unit-word': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'نَجْمْ', 'was': None, 'review': None}]), 'also a unit word'),
+        'distractor-carrying-a-feature': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'حَجْمْ', 'was': None, 'review': None}]), 'feature'),
+        'distractor-as-a-wrong-option-is-fine': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'قَلَمْ', 'was': None, 'review': None}])
+                                   or c['quiz'][1].update(options=['قَلَمْ', 'نَجْمْ'], answer=1, unit='jim_sukun') or c['quiz'][0].update(options=['بَابْ', 'قَلَمْ'], answer=0, unit='madd_alif'), None),
+        'phrase-name-without-the-flag': (lambda c: c['units'][0].update(name='جِيمٌ سَاكِنَةْ'), 'must be the syllable'),
+        'phrase-name-flag-not-true': (lambda c: c['units'][0].update(phraseName='yes'), 'phraseName is true'),
+        'phrase-name-flag-unmarked': (lambda c: c['units'][1].update(phraseName=True), 'phraseName is true'),
+        'tanween-with-letters': (lambda c: c['units'].append({'id': 'tanween_damm', 'letters': ['ب'], 'tanween': 'damm', 'name': 'تَنْوِينْ', 'forms': ['ـٌ'], 'note': None,
+                                                              'words': []}), 'tanween must be'),
+    }
+    for name, (mutate, expected) in scases.items():
+        c = sukun_madd()
+        mutate(c)
+        errors = check(c, 6)
+        ok = (not errors) if expected is None else any(expected in e for e in errors)
+        if not ok:
+            failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
     # A misnamed lesson file is refused, not skipped.
     if not stray_files(['lesson-001.json', FIXTURE_NAME, 'lesson-1.json', 'notes.json', 'index.ts']) == ['lesson-1.json', 'notes.json']:
         failed.append('stray-json: a misnamed .json is not refused')
@@ -513,7 +667,7 @@ def selftest():
     for f in failed:
         print(f'arabic-lesson selftest: FAIL {f}')
     if not failed:
-        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + 1} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
+        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + len(scases) + 1} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
     return 1 if failed else 0
 
 
