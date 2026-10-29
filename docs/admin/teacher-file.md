@@ -349,9 +349,9 @@ PD-34 notifications, under Tasks, to the Teachers Manager (the super admin when 
 
 | Key | When | Written by |
 |---|---|---|
-| `teacher_added_unsupervised` | a teacher is added with no supervisor, by anyone but the manager | `TeacherOnboardingService.add` |
 | `teacher_duplicate_hidden` | a sign-in or contact is refused because it is on a teacher out of the adder's reach; the adder's answer is unchanged | the same, after the answer (its timing must not leak) |
-| `teacher_supervisor_left` | a teacher supervisor is deactivated, on any path, while teachers are still assigned to them | `chat.notify_teacher_supervisor_left`, a trigger on `chat.staff` (migration `20261029150000`): SECURITY DEFINER, never blocks the deactivation, one per deactivation |
+
+**A teacher without a supervisor is a task now** (PD-47 PR-6b, owner 2026-10-29, "Replace it"). The notices `teacher_added_unsupervised` and `teacher_supervisor_left` are no longer sent. Instead the Teachers Manager (else the super admin) gets one `teacher_unsupervised` task per stretch a teacher spends without a live supervisor: a teacher added with none, or whose supervisor left. It is announced once with `task_assigned`, and it is done when a supervisor is assigned. See `docs/product/pd047-tasks-plan.md` §3.6.
 
 ### Teacher history (PD-43 §4)
 

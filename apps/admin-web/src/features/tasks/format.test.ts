@@ -37,3 +37,37 @@ describe('PD-47 PR-6a: the set-up sources', () => {
     }
   })
 })
+
+describe('PD-47 PR-6b: work handed between people', () => {
+  it('a teacher without a supervisor names the teacher and leads to their file, not to the spell', () => {
+    const t = task('teacher_unsupervised', 'spell1', { teacherName: 'teacher_u', teacherId: 't9' })
+    expect(titleOf(t, en, fmt)).toBe('Choose a supervisor for teacher_u')
+    expect(sourceLink(t)).toBe('/teachers/files/t9')
+    expect(sourceLink(task('teacher_unsupervised', 'spell1', {}))).toBeNull()
+  })
+
+  it('a trial\'s two steps name the prospect only, and lead to the trials', () => {
+    const at = '2026-10-29T10:00:00Z'
+    expect(titleOf(task('trial_attendance', 'l1', { prospectName: 'prospect_p', startsAt: at }), en, fmt))
+      .toBe('Record attendance: prospect_p, trial at 2026-10-29T10:00:00Z')
+    expect(titleOf(task('trial_outcome', 'l1', { prospectName: 'prospect_p', startsAt: at }), en, fmt))
+      .toBe('Record the trial outcome: prospect_p, trial at 2026-10-29T10:00:00Z')
+    expect(sourceLink(task('trial_attendance', 'l1', {}))).toBe('/trials')
+    expect(sourceLink(task('trial_outcome', 'l1', {}))).toBe('/trials')
+  })
+
+  it('a certificate step names the printed name and opens its certificate, not the event', () => {
+    const t = task('certificate_review', 'event1', { printedName: 'learner_l', certificateId: 'c7' })
+    expect(titleOf(t, en, fmt)).toBe('Review the certificate design: learner_l')
+    expect(sourceLink(t)).toBe('/certificates?id=c7')
+    expect(sourceLink(task('certificate_send', 'event1', {}))).toBe('/certificates')
+  })
+
+  it('every one has its label and title in both languages, with no placeholder left unfilled', () => {
+    for (const type of ['teacher_unsupervised', 'trial_attendance', 'trial_outcome', 'certificate_accept', 'certificate_design',
+      'certificate_resubmit', 'certificate_review', 'certificate_send'] as const) {
+      expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
+      expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
+    }
+  })
+})

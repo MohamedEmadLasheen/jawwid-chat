@@ -242,13 +242,15 @@ The **Needs action** page and the other source pages stay as they are. A task is
 **Phase B decisions (department head, 2026-10-29).**
 - **Already built:** `instalment_overdue`, `receipt_review` and `renewal_request` became PR-2b's financial sources (`instalment`, `receipt_review`, `renewal_request`; §5.1 of the priority amendment).
 - **PR-6a** (slot `20261029235800`): `family_unsupervised`, `teacher_setup`, `new_student_assign` / `new_student_group`.
-- **Complaints and parent feedback** (next, slot to come) use the records that already exist; no new state.
+- **PR-6b** (slot `20261029235900`): `teacher_unsupervised`, `trial_attendance` / `trial_outcome`, `certificate` (the owner's answers below).
+- **PR-6c** (slot `20261030000000`): `complaint`, `parent_feedback`, `schedule_change`, `makeup_owed`. Both branch off `main` after PR-6a, one commit per source.
+- **Complaints and parent feedback** use the records that already exist; no new state.
   - `complaint:<entryId>`: a Teacher File entry (`chat.teacher_supervision_entry`, kind `complaint`). Its task is **done when a `complaint_resolution` entry refers to it** (`refers_to`, unique per complaint). It goes to the teacher's supervisor, else the Teachers manager.
   - `parent_feedback:<feedbackId>`: PD-32's `chat.parent_feedback`. Its task is **done when that record reaches its closed state, `status = 'resolved'`**. It goes to the teacher's supervisor, else the Teachers manager.
   - `schedule_change:<requestId>` (PD-11's `chat.schedule_change_request`) goes with these.
-- **`makeup_owed`** waits for its design note (below). No code until it is agreed.
+- **`makeup_owed`** follows its design note below, as decided by the department head on 2026-10-29.
 
-**`makeup_owed` -- design note (for agreement; no code yet).**
+**`makeup_owed` -- design note (agreed by the department head, 2026-10-29).**
 - **What record means "a make-up is owed".** No new record is needed: the **original lesson** owes one, exactly by the rule `LessonService.owedMakeups` already applies (`apps/api/src/lessons/lesson.service.ts`, repeated by the database in `guard_lesson`). A lesson owes a make-up when all of these hold:
   - it is not a trial;
   - its outcome is a make-up cause: `teacher_apology` or `teacher_no_show`, and `student_apology` only where the academy's policy owes one for it;
@@ -262,14 +264,46 @@ The **Needs action** page and the other source pages stay as they are. A task is
   - **Done** when a live make-up is booked (`SchedulingService.bookMakeup`; actor = whoever booked it), or when a `makeup_followup` ruling settles it (`resolveMakeup`: substitute teacher, family credit, package extension or waived; actor = whoever decided).
   - **Withdrawn** when the lesson's outcome is corrected away from a cause.
   - **If a booked make-up is itself cancelled** (`teacher_apology`, `teacher_no_show`, `admin_cancelled`, `rescheduled`), the original lesson owes again. That should be a **fresh** task, because the first one was completed by the booking. One way is an episode per booked make-up, as PR-2b did for packages.
-- **Questions for agreement:**
-  1. Completed at **booking** (as above), or only once the make-up is **held**? Held is stricter, but then the task stays open for days after the work is arranged.
-  2. Should `student_apology` owe a make-up task at all, or only the teacher causes?
-  3. A `makeup_followup` ruling also raises PR-2's `lesson_ruling` task for the supervisor. Settling `makeup_owed` by the same decision is right, but confirm the two do not need to be one task.
-**Owner's answers, 2026-10-29** (relayed verbatim by the department head). These three are **PR-6b**, each source in its own commit; its slot is asked for after PR-6a.
+- **Department-head decisions, 2026-10-29** (the three questions this note asked):
+  1. **Done at booking.** The work is arranged then. A booked make-up that is itself cancelled re-owes as a **fresh episode** task, as above.
+  2. **`student_apology` follows exactly the rule `LessonService.owedMakeups` / `guard_lesson` already applies.** No new policy: the task source calls the same rule and never re-implements it. A spec proves that the set of lessons with an open `makeup_owed` task equals `owedMakeups`' set.
+  3. **Two tasks.** `lesson_ruling` is "decide"; `makeup_owed` is "make sure it is made up". The one `makeup_followup` decision completes **both**, with the same actor. A spec proves it.
+
+**Owner's answers, 2026-10-29** (relayed verbatim by the department head). These three are **PR-6b** (slot `20261029235900`), each source in its own commit.
 - **`teacher_unsupervised`: "Replace it".** The task replaces PD-43's two notices to the Teachers manager, `teacher_added_unsupervised` (the API, `teacher-onboarding.service.ts`) and `teacher_supervisor_left` (the trigger on `chat.staff`, `mig/20261029150000`), the way Q-F6 replaced the renewal push. The manager hears of it once, through the task's own `task_assigned`. `teacher_duplicate_hidden` is not a task and stays a notice.
 - **`trial_outcome`: "Two tasks".** The **teacher** gets an attendance task (`trial_attendance:<lessonId>`), done when attendance is recorded. Only **then** does the family's **Sales owner** get an outcome task (`trial_outcome:<lessonId>`), done when the outcome is recorded. Each sees only their own step: the teacher never sees the outcome task, and Sales never sees the attendance task.
 - **`certificate`: "Yes, replace them".** Each PD-41 step that needs someone to act becomes a task for that person, and the four `task` notifications (`certificate_requested`, `certificate_returned`, `certificate_uploaded`, `certificate_suggestion_decided`) stop. PD-47 owns the change in PD-41's emitters (`certificate.service.ts`). **PD-41's state machine and its tests stay intact**: only who is told, and how, changes.
+
+**PR-6b -- design note (approved by the department head, 2026-10-29).**
+- **`teacher_unsupervised:<teacherId>`.** An active teacher with no live PD-35 supervisor of the Teachers department (the same test as `work_task_teacher_owner`'s first branch). Goes to the Teachers manager, else the super admin. Raised by the sweep (a teacher added unsupervised; a supervisor who leaves leaves each of their teachers unsupervised). Done when a supervisor is assigned (trigger on `chat.teacher_supervisor_assignment`, actor = `assigned_by`). Withdrawn when the teacher leaves. A supervisor who leaves again later starts a **fresh** task (one key per unsupervised spell, as PR-2b's episodes). The two PD-43 notices are removed: the API call in `teacher-onboarding.service.ts` and the `chat.staff` trigger (dropped in this migration; its text rows stay for history).
+- **`trial_attendance:<lessonId>`.** The trial's teacher, due at the trial's end + 24 h. Done when the lesson's attendance is recorded (`held` or `student_no_show`, by whoever recorded it, the teacher or Sales' `no_show`). Withdrawn when the trial is rescheduled or cancelled.
+- **`trial_outcome:<lessonId>`.** Raised only when attendance is `held`, due + 48 h. Done when `chat.trial_outcome` is written (actor = `recorded_by`). Withdrawn if Sales corrects the attendance to `student_no_show`; restored if corrected back. Neither task carries prospect or form data (G-07): ids only, as all tasks.
+  - **(A) Who is the "family's Sales owner" for a trial?** A prospect has no family until it subscribes, so `chat.family_sales_owner` has no row. **Recommended:** the prospect's creator (`trial_prospect.created_by`, always a Sales member or manager) while live, else the live Sales manager, else the super admin. **Approved by the department head, 2026-10-29.** Prospects record no Sales owner of their own; only families do (`chat.family_sales_owner`).
+- **`certificate`: one task per step that waits on a person**, keyed on the PD-41 event that opened the step (`chat.appreciation_certificate_event.id`), so a certificate that loops back gets a fresh task each round:
+
+  | Step (state) | Task type | Who | Done by |
+  |---|---|---|---|
+  | `proposed` | `certificate_accept` | the learner's Operations supervisor or cover (safeguard 5) | accept / decline |
+  | `requested` (unclaimed) | `certificate_design` | **(B)** | moves to the Designer at `start` |
+  | `in_design` | `certificate_design` | the assigned Designer (reassign moves it) | upload |
+  | `changes_requested` | `certificate_resubmit` | the requester of record (`certificate_responsible`) | resubmit |
+  | `uploaded` | `certificate_review` | the requester of record | approve / redesign |
+  | `approved` | `certificate_send` | the requester of record | send |
+
+  Cancel withdraws the open step's task. `certificate_suggestion_decided` is information, not an action: its push stops and PD-12's card in the teacher's supervision chat remains their notice.
+  - **(B), approved by the department head 2026-10-29. Who holds an unclaimed request?** Every `certificates.design` holder may claim it, but a task has one assignee. **Recommended:** the category's overseer (the Operations manager for `student`, the Teachers manager for `teacher`, else the super admin): the one person who may already reassign the Designer. A claim (`start`) completes that step, by the Designer, and opens the Designer's own `in_design` step.
+  - **As built:** every state change completes the open step by whoever made it, except a cancel, which withdraws it. Each step is raised at once by a trigger on `chat.appreciation_certificate_event`, with the sweep as the backstop. The sweep also moves a pending step to its person when that person changes, for example a learner's new supervisor or a Designer who left. Certificate steps follow their source: PD-41 safeguard 1 means a manual hand-on would give someone work they may not do. Due: the step's start + 48 h.
+  - **(B) REVISED by the department head, 2026-10-29** (review of #271). The overseer may not start or assign a request under PD-41, so the first rule gave its holder work they could not do.
+    - If the organization has exactly one live staff member given `certificates.design` by an explicit PD-40 access-role grant (for example the `designer` template), the unclaimed request goes straight to them. Two kinds of holder are not counted: PD-40's legacy bundle gives the key to the Teachers department's manager and supervisors, and the super admin holds every key (department head, 2026-10-29). They may all still design, so the hand-on picker lists every live holder.
+    - Otherwise it goes to the overseer. The overseer, or the super admin, may hand that step by hand to a live `certificates.design` holder only (`chat.work_task_certificate_hand_on`; the guard allows exactly that). The sweep leaves a step handed to a Designer where it is.
+    - When a Designer starts, the step closes and their own design step opens, as before.
+  - **The review step when the requester uploaded the design.** PD-41 forbids the uploader approving (`guard_appreciation_certificate`: "the person who uploaded a design does not approve it"). Approval is the requester of record's or their active PD-33 cover's (`chat.certificate_acts_as`). So the review task goes to that cover. With no cover, PD-41 leaves only a redesign or a cancel. **Open PD-41 question (department head, 2026-10-29; to the owner):** who approves when the requester of record uploaded the design and has no cover? PD-41 is unchanged in this PR, and the task stays with the requester.
+  - **The picker.** For a design hand-on, the Tasks page offers live Designers only and no department. For an orphan, the super admin is offered anyone live (`TaskService.assignees`, the same `rulesFor`).
+  - **Spells begin when the supervisor is lost.** PD-43's `assign(null)` deletes the assignment row, so the records alone would date the spell from the teacher's creation. Triggers on the assignment (DELETE, and an UPDATE that leaves them unsupervised) and on `chat.staff` (a supervisor deactivated) open the spell at that moment. A supervisor cannot leave the Teachers department while holding teachers (PD-35), so that path needs no trigger.
+  - **Orphans.** While the sweep has recorded a task as `orphaned:`, the super admin may hand it to anyone live, even a task that follows its source. The issue says so.
+  - **The race accepted.** An assignment that commits while the sweep raises its task is accepted: the settle window makes it rare, and the next reconcile completes it.
+  - **As PR-6a, after its review:** the sweep raises nothing younger than the settle window. A task whose assignee left moves to its source's owner now (`chat.work_task_handover_owner`); with nobody live to follow, it gets an `orphaned:` issue.
+  - **Known noise:** a Designer who claims a request is told of the `in_design` step they just took, because a raise has no actor to leave out (`work_task_raise` signals with `actorId` null).
 
 #### 3.6.1 As built in PR-2 (#241)
 

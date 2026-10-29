@@ -31,6 +31,8 @@ String taskTitle(BuildContext context, WorkTask t) {
   return switch (t.sourceType) {
     'lesson_report' => l10n.taskTitleLessonReport(learner, when),
     'report_correction' => l10n.taskTitleReportCorrection(learner, when),
+    'trial_attendance' => l10n.taskTitleTrialAttendance(
+        t.titleParams['prospectName'] is String ? t.titleParams['prospectName'] as String : '', when),
     _ => t.title.isNotEmpty ? t.title : l10n.taskTitleFromAcademy,
   };
 }

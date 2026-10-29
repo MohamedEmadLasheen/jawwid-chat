@@ -40,6 +40,7 @@ export function titleOf(t: Pick<TaskSummary, 'title' | 'source' | 'titleParams'>
     balance: str(p.balance),
     count: str(p.count),
     prospect: str(p.prospectName),
+    name: str(p.printedName),
     when: typeof p.startsAt === 'string' ? fmt.dateTime(p.startsAt) : '',
     first: day(p.firstDay, fmt),
     last: day(p.lastDay, fmt),
@@ -105,6 +106,21 @@ export function sourceLink(t: Pick<TaskSummary, 'source' | 'titleParams'>): stri
       return '/trials/new-students'
     case 'teacher_setup':
       return `/teachers/files/${encodeURIComponent(t.source.id)}`
+    case 'trial_attendance':
+    case 'trial_outcome':
+      return '/trials'
+    case 'certificate_accept':
+    case 'certificate_design':
+    case 'certificate_resubmit':
+    case 'certificate_review':
+    case 'certificate_send':
+      // The source is the step's event; its certificate comes with the title.
+      return typeof t.titleParams?.certificateId === 'string'
+        ? `/certificates?id=${encodeURIComponent(t.titleParams.certificateId)}`
+        : '/certificates'
+    case 'teacher_unsupervised':
+      // The source is the spell; its teacher comes with the title.
+      return typeof t.titleParams?.teacherId === 'string' ? `/teachers/files/${encodeURIComponent(t.titleParams.teacherId)}` : null
     default:
       return null
   }

@@ -4334,6 +4334,11 @@ class L10nAr extends L10n {
   }
 
   @override
+  String taskTitleTrialAttendance(String prospect, String when) {
+    return 'سجّل الحضور: $prospect، تجربة $when';
+  }
+
+  @override
   String get taskTitleFromAcademy => 'مهمة من الأكاديمية';
 
   @override

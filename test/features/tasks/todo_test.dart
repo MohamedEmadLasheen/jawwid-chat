@@ -150,6 +150,21 @@ void main() {
     expect(lessons.ticketsAskedFor, ['lesson-1']);
   });
 
+  testWidgets('a trial\'s attendance task names the prospect, in both languages (PD-47 PR-6b)', (tester) async {
+    tasks = _Tasks({
+      't-trial': wire('t-trial', kind: 'system', source: 'trial_attendance', params: {'prospectName': 'prospect_p', 'startsAt': '2026-10-27T15:00:00Z'},
+          actions: ['out_of_scope']),
+    });
+    await pump(tester);
+    await tester.tap(find.byKey(const ValueKey('schedule-filter-todo')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Record attendance: prospect_p'), findsOneWidget);
+    await pump(tester, locale: 'ar');
+    await tester.tap(find.byKey(const ValueKey('schedule-filter-todo')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('سجّل الحضور: prospect_p'), findsOneWidget);
+  });
+
   testWidgets('a task whose work went away says so and is acknowledged', (tester) async {
     tasks = _Tasks({
       't-gone': wire('t-gone', kind: 'system', source: 'lesson_report', params: {'learnerName': 'learner_k', 'startsAt': '2026-10-27T15:00:00Z', 'lessonId': 'lesson-1'},
