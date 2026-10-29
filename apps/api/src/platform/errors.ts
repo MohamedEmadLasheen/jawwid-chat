@@ -499,6 +499,16 @@ export enum CommErrorCode {
   /** The reviewer does not hold lesson_audio.review, or has already approved this clip. 403. */
   LESSON_AUDIO_DENIED = 'COMM.LESSON_AUDIO_DENIED',
 
+  // --- PD-49: the review of children's Quran content and of game mechanics ---
+  /** No such scope or item (or not one the API was built with). 404. */
+  LESSON_CONTENT_NOT_FOUND = 'COMM.LESSON_CONTENT_NOT_FOUND',
+  /** A malformed review: an unknown step or action, a missing category or reason, a hash that is not one. 422. */
+  LESSON_CONTENT_INVALID = 'COMM.LESSON_CONTENT_INVALID',
+  /** The text changed, is already rejected or withdrawn, a step is out of order or already signed. 409. */
+  LESSON_CONTENT_STATE = 'COMM.LESSON_CONTENT_STATE',
+  /** The reviewer does not hold the step's key, or already signed another step of this text. 403. */
+  LESSON_CONTENT_DENIED = 'COMM.LESSON_CONTENT_DENIED',
+
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */
   SEAT_REASON_UNKNOWN = 'COMM.SEAT_REASON_UNKNOWN',
