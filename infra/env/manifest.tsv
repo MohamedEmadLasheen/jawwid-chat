@@ -107,6 +107,14 @@ ATTACHMENT_MAX_VOICE_DURATION_MS	storage	no	opt	opt	opt
 # own MATERIALS_FRAME_ORIGINS.
 MATERIALS_SITE_BASE_URL	materials	no	opt	opt	opt
 MATERIALS_FRAME_ORIGINS	materials	no	opt	opt	opt
+# LESSON_APPROVALS_SIGNING_KEY is CONSUMED by apps/api/src/lesson-content/approvals-signer.ts
+# (PD-49): the Ed25519 private key that signs the export of children's Quran
+# content approvals. Its PUBLIC key is committed with its id in
+# apps/lessons/src/content/approvals-keys.json, and CI refuses any approvals file
+# it does not verify. Optional: unset, the API exports nothing (503) and no
+# content reaches a child. An owner action (docs/infrastructure/secrets.md).
+# PEM PKCS#8, or its base64 DER. Generate with: openssl genpkey -algorithm ed25519
+LESSON_APPROVALS_SIGNING_KEY	materials	yes	opt	opt	opt
 FCM_PROJECT_ID	push	no	opt	opt	req
 FCM_SERVICE_ACCOUNT_JSON	push	yes	opt	opt	req
 APNS_KEY_ID	push	no	opt	opt	req
@@ -189,6 +197,16 @@ SUBSCRIPTION_LOCK_ENFORCED	payments	no	opt	opt	opt
 # a boot that changes it logs a warning. Runbook: docs/admin/pd035-teacher-supervisors.md. Department head decision 2026-10-26: off everywhere until the
 # owner turns it on (the deploy workflows default it so).
 TEACHER_SUPERVISOR_STRICT_SCOPE	application	no	opt	opt	opt
+# SALES_FAMILY_SCOPE is CONSUMED by apps/api/src/platform/sales-scope.ts (PD-42)
+# in the API, which writes it into chat.config at boot so the database's write
+# guards read the same value: 'own' = a Sales member reads and writes only the
+# families they own (the Sales manager keeps every family); 'all' = every
+# Sales member reads every family, as before PD-42. Any other value REFUSES TO
+# BOOT (fail closed). UNSET writes nothing: the stored value stands ('all'
+# until written); a boot that changes it logs a warning. The deploy workflows
+# do NOT default it. Owner decision 2026-10-28: 'own' only after the intake
+# from Jawwid Core is complete and verified.
+SALES_FAMILY_SCOPE	application	no	opt	opt	opt
 # SENTRY_DSN is CONSUMED: when set, the API and the worker report 5xx responses,
 # swallowed worker-subsystem failures and process-level faults to Sentry
 # (apps/api/src/infra/observability/sentry-error-tracker.ts); when unset or

@@ -12,7 +12,7 @@ import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole }
 import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
 import { decideTeacherOnboarding, type TeacherOnboardingAccess } from '../platform/teacher-onboarding-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
-import { ActorKind, ConversationType } from '../communication/contracts/vocab';
+import { ActorKind, ConversationType, StaffRole } from '../communication/contracts/vocab';
 import { staffComplaintSource } from '../supervision/complaint-source';
 
 /**
@@ -102,6 +102,7 @@ export class TeacherFileService {
     const studentCount = new Map(students.map((r) => [r.teacherId, r._count._all]));
     const open = await this.openComplaintCounts(ids);
     const away = await this.awayToday(ids);
+    const setup = await this.setupOf(ids);
 
     return {
       access: publicAccess(access),
@@ -114,6 +115,10 @@ export class TeacherFileService {
         away: away.get(t.id) ?? null,
         // PD-43: `none` marks a teacher Give sign-in is for (the migration intake's work list).
         signIn: t.account?.status ?? 'none',
+        // PD-43: how many set-up steps are still open (the file says which).
+        setupMissing: setup.get(t.id)?.missing ?? 0,
+        // PD-43 §3.7: no live primary supervisor holds them -- the Teachers Manager covers them.
+        unsupervised: t.isActive && t.leftAt === null && setup.get(t.id)?.supervisor === false,
       })),
       // PD-26: who may be named as a complaint's handler.
       supervisors: await this.supervisors(org),
@@ -171,6 +176,10 @@ export class TeacherFileService {
       access: publicAccess(access),
       // PD-43: the sign-in's state, and whether this reader may send a new first sign-in code.
       signIn: await this.signInOf(actor, teacher),
+      // PD-43 PR-1b: which of Offboard / Reactivate the page offers (decideTeacherOnboarding; the routes re-check).
+      onboarding: await this.offboardingOffer(actor),
+      // PD-43: what is set up for this teacher, read from the real rows. Done / not done: never an amount.
+      setup: (await this.setupOf([teacher.id])).get(teacher.id) ?? null,
       teacher: {
         id: teacher.id,
         name: teacher.name,
@@ -517,12 +526,14 @@ export class TeacherFileService {
    * PD-43: the add-a-teacher decision (decideTeacherOnboarding) for this actor.
    * Refuses with TEACHER_ONBOARDING_DENIED before anything is looked up.
    */
-  async onboardingGate(actorId: string, needs: (o: TeacherOnboardingAccess) => boolean = (o) => o.canCreate) {
+  async onboardingGate(
+    actorId: string,
+    needs: (o: TeacherOnboardingAccess) => boolean = (o) => o.canCreate,
+    refusal = 'only the Teachers department or the super admin adds a teacher',
+  ) {
     const actor = await this.conversations.requireActor(actorId);
     const onboarding = decideTeacherOnboarding(actor, await this.teachersDepartmentRole(actor));
-    if (!needs(onboarding)) {
-      throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, 'only the Teachers department or the super admin adds a teacher');
-    }
+    if (!needs(onboarding)) throw new CommError(CommErrorCode.TEACHER_ONBOARDING_DENIED, refusal);
     return { actor, onboarding };
   }
 
@@ -533,21 +544,45 @@ export class TeacherFileService {
    * Teachers manager, the CURRENT supervisor).
    */
   private async signInOf(actor: Actor, teacher: { id: string; accountId: string | null; isActive: boolean; leftAt: Date | null }) {
+    const live = teacher.isActive && teacher.leftAt === null;
     if (!teacher.accountId) {
       // Give sign-in (chat.may_give_teacher_sign_in), for an active teacher only.
-      const live = teacher.isActive && teacher.leftAt === null;
       const [row] = live
         ? await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
             SELECT chat.may_give_teacher_sign_in(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok`
         : [];
-      return { status: 'none', canSendCode: false, canGive: row?.ok === true };
+      return { status: 'none', canSendCode: false, canGive: row?.ok === true, canChange: false };
     }
     const account = await this.prisma.account.findUnique({ where: { id: teacher.accountId }, select: { status: true } });
     const status = account?.status ?? 'none';
-    if (status !== 'provisioned') return { status, canSendCode: false, canGive: false };
-    const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
-      SELECT chat.may_issue_teacher_first_login(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok`;
-    return { status, canSendCode: row?.ok === true, canGive: false };
+    // Change sign-in e-mail (chat.change_teacher_sign_in): once used, the super admin only.
+    if (status === 'active') {
+      return { status, canSendCode: false, canGive: false, canChange: live && actor.staffRole === StaffRole.SUPER_ADMIN };
+    }
+    if (status !== 'provisioned') return { status, canSendCode: false, canGive: false, canChange: false };
+    // While it waits: the reissue rule, for sending a code and for changing the address alike.
+    const [row] = await this.prisma.$queryRaw<Array<{ ok: boolean; change: boolean }>>`
+      SELECT chat.may_issue_teacher_first_login(${actor.actorId}::uuid, ${teacher.id}::uuid) AS ok,
+             chat.may_give_teacher_sign_in(${actor.actorId}::uuid, ${teacher.id}::uuid) AS change`;
+    return { status, canSendCode: row?.ok === true, canGive: false, canChange: live && row?.change === true };
+  }
+
+
+  /** chat.teacher_setup_state for each teacher, with `missing`: how many of its steps are not done. */
+  private async setupOf(teacherIds: string[]): Promise<Map<string, TeacherSetup>> {
+    if (teacherIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; state: Omit<TeacherSetup, 'missing'> }>>`
+      SELECT t.id::text AS id, chat.teacher_setup_state(t.id) AS state
+        FROM unnest(${teacherIds}::uuid[]) AS t(id)`;
+    return new Map(
+      rows.map((r) => [r.id, { ...r.state, missing: Object.values(r.state).filter((done) => done === false).length }]),
+    );
+  }
+
+  /** What GET /teacher-files/:id tells the page about offboarding and reactivating. */
+  private async offboardingOffer(actor: Actor) {
+    const o = decideTeacherOnboarding(actor, await this.teachersDepartmentRole(actor));
+    return { canOffboard: o.canOffboard, canReactivate: o.canReactivate };
   }
 
   /** What GET /teacher-files tells the page about adding a teacher. */
@@ -710,6 +745,55 @@ export class TeacherFileService {
    * page's routes -- that scope and, for Operations, the teachers of their
    * families (PD-26 amendment).
    */
+  /**
+   * PD-43 (plan §4): the teacher's lifecycle and their login's, newest first --
+   * who did what and why. Read as the Teacher File is (gate + scope). Only the
+   * actions below, and never a raw before/after: an audit row may hold an
+   * e-mail, a phone flag or a code id; this answer holds names only.
+   */
+  async history(actorId: string, teacherId: string) {
+    const { actor } = await this.gate(actorId, (a) => a.canView);
+    const teacher = await this.requireTeacher(actor, teacherId);
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { entity: 'teacher', entityId: teacher.id, action: { in: [...HISTORY_TEACHER_ACTIONS] } },
+          ...(teacher.accountId ? [{ entity: 'account', entityId: teacher.accountId, action: { in: [...HISTORY_ACCOUNT_ACTIONS] } }] : []),
+        ],
+      },
+      orderBy: [{ at: 'desc' }, { id: 'desc' }],
+      take: HISTORY_LIMIT,
+    });
+    const supervisorOf = (json: unknown) => {
+      const v = (json as { supervisorId?: unknown } | null)?.supervisorId;
+      return typeof v === 'string' ? v : null;
+    };
+    const staffIds = new Set<string>();
+    for (const r of rows) {
+      if (r.actorId) staffIds.add(r.actorId);
+      if (r.action.startsWith('teacher_supervisor.')) {
+        for (const id of [supervisorOf(r.before), supervisorOf(r.after)]) if (id) staffIds.add(id);
+      }
+    }
+    const staff = staffIds.size
+      ? await this.prisma.staff.findMany({ where: { id: { in: [...staffIds] } }, select: { id: true, name: true } })
+      : [];
+    const nameOf = new Map(staff.map((x) => [x.id, x.name]));
+    const person = (id: string | null) => (id ? { id, name: nameOf.get(id) ?? '' } : null);
+    return {
+      teacherId: teacher.id,
+      events: rows.map((r) => ({
+        at: r.at.toISOString(),
+        action: r.action,
+        actor: person(r.actorId),
+        reason: r.reason || null,
+        detail: r.action.startsWith('teacher_supervisor.')
+          ? { from: person(supervisorOf(r.before)), to: person(supervisorOf(r.after)) }
+          : {},
+      })),
+    };
+  }
+
   async requireTeacher(actor: Actor, teacherId: string, scope: 'file' | 'page' = 'file') {
     const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
     if (!isUuid(teacherId)) throw notFound;
@@ -996,3 +1080,42 @@ function requireDate(field: string, value: unknown): Date {
   if (Number.isNaN(d.getTime()) || isoDate(d) !== value) throw invalid(field, 'is not a calendar date');
   return d;
 }
+
+/** PD-43: the set-up checklist. Each step is done or not; `missing` counts the ones that are not. */
+interface TeacherSetup {
+  signedIn: boolean;
+  supervisor: boolean;
+  contact: boolean;
+  payTerms: boolean;
+  payoutAccount: boolean;
+  leaveAllowance: boolean;
+  shift: boolean;
+  availability: boolean;
+  profile: boolean;
+  /** PD-38's category and PD-18's salary type agree (hourly with hourly). */
+  payMatchesShift: boolean;
+  missing: number;
+}
+
+/** PD-43 teacher history: the teacher's lifecycle (entity 'teacher')... */
+const HISTORY_TEACHER_ACTIONS = [
+  'teacher.created',
+  'teacher.sign_in_given',
+  'teacher.sign_in_changed',
+  'teacher_supervisor.assigned',
+  'teacher_supervisor.unassigned',
+  'teacher.offboarded',
+  'teacher.reactivated',
+] as const;
+
+/** ...and their login's (entity 'account'). Session bookkeeping is not history. */
+const HISTORY_ACCOUNT_ACTIONS = [
+  'account.first_login_code_issued',
+  'account.activated',
+  'account.password_reset_issued',
+  'account.password_reset_completed',
+  'account.suspended',
+  'account.reactivated',
+] as const;
+
+const HISTORY_LIMIT = 200;

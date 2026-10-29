@@ -1849,6 +1849,18 @@ abstract class L10n {
   /// **'A child of this group moved to another supervisor'**
   String get systemGroupLearnerDetached;
 
+  /// PD-42: a child added to the family joined its group.
+  ///
+  /// In en, this message translates to:
+  /// **'{learner} joined this group'**
+  String systemGroupLearnerAdded(String learner);
+
+  /// No description provided for @systemGroupLearnerAddedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'A child joined this group'**
+  String get systemGroupLearnerAddedNoName;
+
   /// No description provided for @systemCoverStarted.
   ///
   /// In en, this message translates to:
@@ -6091,6 +6103,12 @@ abstract class L10n {
   /// **'Materials'**
   String get materialsTitle;
 
+  /// PD-29: an activity (a lesson page in the app) failed to load -- TLS, the network or a 404 -- instead of a blank page; Try again reloads it.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson couldn\'t load.'**
+  String get activityLoadFailed;
+
   /// PD-29: the entry to a child's Materials page.
   ///
   /// In en, this message translates to:
@@ -7158,6 +7176,270 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Couldn\'t load message info'**
   String get messageInfoFailed;
+
+  /// PD-40: a department specialist without chat access signed in on the app.
+  ///
+  /// In en, this message translates to:
+  /// **'This account uses Admin Web'**
+  String get adminWebOnlyTitle;
+
+  /// PD-40: why a department specialist cannot use the app, and where to go.
+  ///
+  /// In en, this message translates to:
+  /// **'Department staff accounts work in Admin Web, in a browser. Sign in there with the same e-mail and password.'**
+  String get adminWebOnlyBody;
+
+  /// PD-40: dismisses the Admin Web notice and shows the sign-in form again.
+  ///
+  /// In en, this message translates to:
+  /// **'Use another account'**
+  String get adminWebOnlyAnotherAccount;
+
+  /// PD-47: the Schedule's To do segment, with how many tasks are open.
+  ///
+  /// In en, this message translates to:
+  /// **'To do ({count})'**
+  String scheduleFilterTodo(int count);
+
+  /// PD-47: the To do list is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to do.'**
+  String get todoEmpty;
+
+  /// No description provided for @todoLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your tasks. Try again.'**
+  String get todoLoadFailed;
+
+  /// PD-47: a task's level (red).
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get taskLevelHigh;
+
+  /// No description provided for @taskLevelMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get taskLevelMedium;
+
+  /// No description provided for @taskLevelLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get taskLevelLow;
+
+  /// PD-47: why a task's level was raised.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get taskReasonOverdue;
+
+  /// No description provided for @taskReasonDueSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Due soon'**
+  String get taskReasonDueSoon;
+
+  /// No description provided for @taskReasonSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised by its source'**
+  String get taskReasonSource;
+
+  /// PD-47: the tag on a financial task.
+  ///
+  /// In en, this message translates to:
+  /// **'Finance'**
+  String get taskFinance;
+
+  /// No description provided for @taskTitleLessonReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Write the lesson report: {learner}, {when}'**
+  String taskTitleLessonReport(String learner, String when);
+
+  /// No description provided for @taskTitleReportCorrection.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct the lesson report: {learner}, {when}'**
+  String taskTitleReportCorrection(String learner, String when);
+
+  /// PD-47 PR-6b: the teacher's step of a trial.
+  ///
+  /// In en, this message translates to:
+  /// **'Record attendance: {prospect}, trial {when}'**
+  String taskTitleTrialAttendance(String prospect, String when);
+
+  /// PD-47: a system task this build has no words for.
+  ///
+  /// In en, this message translates to:
+  /// **'A task from the academy'**
+  String get taskTitleFromAcademy;
+
+  /// No description provided for @taskDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {when}'**
+  String taskDue(String when);
+
+  /// No description provided for @taskNoDue.
+  ///
+  /// In en, this message translates to:
+  /// **'No due date'**
+  String get taskNoDue;
+
+  /// No description provided for @taskStateReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'Returned with instructions'**
+  String get taskStateReturned;
+
+  /// No description provided for @taskStateAwaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your manager'**
+  String get taskStateAwaiting;
+
+  /// No description provided for @taskStateWithdrawn.
+  ///
+  /// In en, this message translates to:
+  /// **'No longer needed'**
+  String get taskStateWithdrawn;
+
+  /// No description provided for @taskGivenBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Given by {name}'**
+  String taskGivenBy(String name);
+
+  /// No description provided for @taskInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Instructions'**
+  String get taskInstructions;
+
+  /// No description provided for @taskWithdrawnNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'The work behind this task no longer exists. Acknowledge it to clear it.'**
+  String get taskWithdrawnNotice;
+
+  /// No description provided for @taskOpenLesson.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the lesson'**
+  String get taskOpenLesson;
+
+  /// No description provided for @taskMarkDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark done'**
+  String get taskMarkDone;
+
+  /// No description provided for @taskAcknowledge.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get taskAcknowledge;
+
+  /// PD-47: the assignee says a task is outside their responsibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Not mine'**
+  String get taskNotMine;
+
+  /// No description provided for @taskNotMineHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Say why. Your manager decides what happens next.'**
+  String get taskNotMineHint;
+
+  /// No description provided for @taskComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a comment'**
+  String get taskComment;
+
+  /// No description provided for @taskSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get taskSend;
+
+  /// No description provided for @taskActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t do that. Try again.'**
+  String get taskActionFailed;
+
+  /// No description provided for @taskDoneSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Done.'**
+  String get taskDoneSnack;
+
+  /// No description provided for @taskNotMineSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to your manager.'**
+  String get taskNotMineSent;
+
+  /// No description provided for @taskCommentSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment added.'**
+  String get taskCommentSent;
+
+  /// PD-47: the To do count when the list stopped before the end.
+  ///
+  /// In en, this message translates to:
+  /// **'To do ({count}+)'**
+  String scheduleFilterTodoMore(int count);
+
+  /// PD-47 PR-4: a task entry's button in the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Open my To do'**
+  String get notificationsActionOpenTask;
+
+  /// PD-48: owner-approved 2026-10-29, word for word (design §17 Q7). Parent Settings row and page title.
+  ///
+  /// In en, this message translates to:
+  /// **'About lesson audio'**
+  String get lessonAudioAboutTitle;
+
+  /// PD-48: owner-approved 2026-10-29, word for word. The About lesson audio text.
+  ///
+  /// In en, this message translates to:
+  /// **'Pronunciation in the lessons is spoken by a computer voice. Every recording is checked and approved by two of our teachers before your child hears it. If the computer voice cannot say a word correctly, that word has no audio. Quran recitation is never computer-generated.'**
+  String get lessonAudioAboutBody;
+
+  /// PD-48: owner-approved 2026-10-29, word for word. The terms/privacy paragraph's bold opening.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson pronunciation audio.'**
+  String get lessonAudioTermsHeading;
+
+  /// PD-48: owner-approved 2026-10-29, word for word. The terms/privacy paragraph after its opening.
+  ///
+  /// In en, this message translates to:
+  /// **'Some lessons play the pronunciation of letters, words and sentences. This audio is generated by a computer voice. Before any child hears a recording, two of our teachers listen to it and approve it. A word the computer voice cannot say correctly has no audio. The Quran is never read by a computer voice. The text of our lessons is sent to our speech provider to produce the audio. No information about you or your child is sent.'**
+  String get lessonAudioTermsBody;
+
+  /// PD-48: owner-approved 2026-10-29, word for word. The line a parent ticks at sign-up and acknowledges once at the next sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand that lesson pronunciation audio is computer-generated and checked by the academy\'s teachers before use.'**
+  String get lessonAudioNoticeAccept;
+
+  /// PD-48: the section header above the terms/privacy paragraph (a UI label, not part of the approved text).
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and privacy'**
+  String get lessonAudioTermsTitle;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -15,16 +15,10 @@ export const qk = {
   teacherProfileReview: (profileId: string) =>
     ['teacher-profile-reviews', profileId] as const,
 
-  tasks: (filters: Record<string, unknown>) => ['tasks', filters] as const,
+  // PD-47: everything under ['tasks'] (features/tasks), so one invalidation refreshes the page.
   tasksAll: ['tasks'] as const,
 
   coverageAll: ['coverage'] as const,
-
-  dashboardHeader: ['dashboard', 'header'] as const,
-  teamNow: ['dashboard', 'team-now'] as const,
-  needsAction: ['dashboard', 'needs-action'] as const,
-  thisWeek: ['dashboard', 'this-week'] as const,
-  dashboardAll: ['dashboard'] as const,
 
   // Stories studio: everything under ['stories'], so one invalidation of
   // studioAll refreshes the list, a story, its numbers and its viewers.

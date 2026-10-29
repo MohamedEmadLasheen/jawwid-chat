@@ -51,10 +51,16 @@ const KIND_FILTERS = {
  *                          card, `teacher.suspended` to Core/HR; open lessons in
  *                          the window are cancelled for the families
  *   permanent suspension   refused while the teacher still has students (move
- *                          them first, PD-11 transfer); then the card,
- *                          `teacher.suspended`, the teacher deactivated through
+ *                          them first, PD-11 transfer); their open lessons are
+ *                          cancelled FIRST, while the teacher is still live (a
+ *                          trial's card goes to the teacher's trial group, which
+ *                          needs one) -- if any cannot be, nothing is decided;
+ *                          then, in one transaction that refuses over any lesson
+ *                          still open, the card, `teacher.suspended`, the login
+ *                          closed and its waiting codes superseded (as PD-43's
+ *                          offboarding), and the teacher deactivated through
  *                          chat.deactivate_principal (RT-032: signed out
- *                          everywhere), and their open lessons cancelled
+ *                          everywhere)
  *   excused                kept on record, no longer counted
  *
  * The suggested step is computed on every read (ladder.ts); choosing anything
@@ -342,6 +348,25 @@ export class DisciplineService {
 
     const teacher = await this.conversations.requireActor(violation.teacherId);
     const context = await this.cardContext(violation);
+    const cancelReason = teacher.locale === 'en' ? 'The teacher is suspended' : 'المعلم موقوف';
+    const permanent = decision === Decision.PERMANENT_SUSPENSION;
+
+    // A permanent suspension deactivates the teacher, so their lessons are
+    // cancelled before it, while they are still live (as PD-43's offboarding).
+    // One that cannot be cancelled stops the decision: nothing is deactivated.
+    const cancelled: string[] = [];
+    if (permanent) {
+      const notCancelled = await this.cancelLessons(actorId, violation.teacherId, colliding, cancelReason, cancelled);
+      if (notCancelled.length > 0) {
+        throw new CommError(
+          CommErrorCode.DISCIPLINE_NOT_CANCELLED,
+          `${notCancelled.length} lesson(s) could not be cancelled; the teacher is not suspended`,
+          409,
+          { cancelledLessons: cancelled, notCancelled },
+        );
+      }
+    }
+
     await this.write(() =>
       this.prisma.$transaction(async (tx) => {
         let suspensionId: string | null = null;
@@ -424,41 +449,79 @@ export class DisciplineService {
             endsOn: window.endsOn,
           });
         }
+        let login: ClosedLogin | null = null;
+        if (permanent) {
+          // Nothing open may outlive the teacher: a lesson booked since the
+          // cancellations above refuses the whole decision.
+          const [{ open }] = await tx.$queryRaw<Array<{ open: number }>>`
+            SELECT count(*)::int AS open FROM chat.lesson l
+             WHERE l.teacher_id = ${violation.teacherId}::uuid AND l.outcome IS NULL
+               AND (l.starts_at AT TIME ZONE ${tz})::date >= ${today}::date`;
+          if (open > 0) {
+            throw new CommError(
+              CommErrorCode.DISCIPLINE_LESSONS_COLLIDE,
+              `${open} open lesson(s) remain; the teacher is not suspended -- decide again to cancel them`,
+              409,
+            );
+          }
+          const why = `permanent suspension: ${note ?? `ladder step ${step}`}`;
+          // The login closes with the teacher, as PD-43's offboarding closes it
+          // (chat.offboard_teacher): a waiting first sign-in or reset code can
+          // no longer activate it.
+          login = await closeLoginInTx(tx, violation.teacherId, why, actor.actorId);
+          // RT-032: the teacher's sessions are revoked through the journal, and a
+          // node's completion barrier confirms it after this commit.
+          await tx.$queryRaw`
+            SELECT chat.deactivate_principal('teacher', ${violation.teacherId}::uuid, ${why},
+                                             ${actor.actorId}::uuid, 'deactivated')::text`;
+        }
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: `teacher.discipline_${decision}`,
           entity: 'teacher',
           entityId: violation.teacherId,
-          after: { violationId: violation.id, suggestedStep: step, suspensionId, collidingLessons: colliding.map((l) => l.id) },
+          after: {
+            violationId: violation.id,
+            suggestedStep: step,
+            suspensionId,
+            collidingLessons: colliding.map((l) => l.id),
+            ...(login ? { login } : {}),
+          },
           reason: note ?? `ladder step ${step}`,
         });
-        if (decision === Decision.PERMANENT_SUSPENSION) {
-          // RT-032: the teacher's sessions are revoked through the journal, and a
-          // node's completion barrier confirms it after this commit.
-          await tx.$queryRaw`
-            SELECT chat.deactivate_principal('teacher', ${violation.teacherId}::uuid,
-                                             ${`permanent suspension: ${note ?? `ladder step ${step}`}`},
-                                             ${actor.actorId}::uuid, 'deactivated')::text`;
-        }
       }),
     );
 
-    // The families are told through each lesson's own cancellation card.
+    // A temporary suspension: the teacher stays live, so the lessons are
+    // cancelled after it is recorded. The families are told through each
+    // lesson's own cancellation card.
+    const notCancelled = permanent ? [] : await this.cancelLessons(actorId, violation.teacherId, colliding, cancelReason, cancelled);
+    const fresh = await this.prisma.teacherViolation.findUniqueOrThrow({ where: { id: violation.id } });
+    return { violation: (await this.dtos([fresh]))[0], cancelledLessons: cancelled.length, notCancelled };
+  }
+
+  /** Cancels each lesson (a trial as a trial); `cancelled` collects the ids that were. Returns those that were not. */
+  private async cancelLessons(
+    actorId: string,
+    teacherId: string,
+    lessons: ReadonlyArray<{ id: string; kind: string }>,
+    reason: string,
+    cancelled: string[],
+  ): Promise<Array<{ lessonId: string; reason: string }>> {
     const notCancelled: Array<{ lessonId: string; reason: string }> = [];
-    for (const lesson of colliding) {
+    for (const lesson of lessons) {
       try {
-        const reason = teacher.locale === 'en' ? 'The teacher is suspended' : 'المعلم موقوف';
         // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
         if (lesson.kind === 'trial') await this.trials.cancel(actorId, lesson.id, { reason });
         else await this.lessons.cancel(actorId, lesson.id, { reason });
+        cancelled.push(lesson.id);
       } catch (e) {
-        const reason = e instanceof Error ? e.message : String(e);
-        this.logger.warn(`lesson ${lesson.id} inside suspension of ${violation.teacherId} was not cancelled: ${reason}`);
-        notCancelled.push({ lessonId: lesson.id, reason });
+        const why = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`lesson ${lesson.id} inside suspension of ${teacherId} was not cancelled: ${why}`);
+        notCancelled.push({ lessonId: lesson.id, reason: why });
       }
     }
-    const fresh = await this.prisma.teacherViolation.findUniqueOrThrow({ where: { id: violation.id } });
-    return { violation: (await this.dtos([fresh]))[0], cancelledLessons: colliding.length - notCancelled.length, notCancelled };
+    return notCancelled;
   }
 
   // ------------------------------------------------------------------
@@ -714,4 +777,41 @@ function addDays(day: string, n: number): string {
 
 function langOf(actor: Actor): CardLanguage {
   return actor.locale === 'en' ? 'en' : 'ar';
+}
+
+/** What closing a permanently suspended teacher's login did, for the audit row. */
+interface ClosedLogin {
+  accountId: string;
+  /** The account's status before: `active`, `provisioned`, `suspended` or already `deactivated`. */
+  statusBefore: string;
+  /** Waiting first sign-in and reset codes superseded. */
+  supersededCodes: number;
+}
+
+/**
+ * The teacher's login, closed whatever state it was in, and every waiting code
+ * superseded -- chat.offboard_teacher's own steps (PD-43), so a first sign-in
+ * code issued before the suspension cannot activate the account after it.
+ * An active login goes through chat.deactivate_principal (RT-032); one never
+ * used (provisioned) or suspended is simply deactivated. Null: no login.
+ */
+async function closeLoginInTx(tx: Tx, teacherId: string, reason: string, actorId: string): Promise<ClosedLogin | null> {
+  const [account] = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+    SELECT a.id::text AS id, a.status
+      FROM chat.teacher t JOIN chat.account a ON a.id = t.account_id
+     WHERE t.id = ${teacherId}::uuid
+       FOR UPDATE OF a`;
+  if (!account) return null;
+  if (account.status === 'active') {
+    await tx.$queryRaw`
+      SELECT chat.deactivate_principal('account', ${account.id}::uuid, ${reason}, ${actorId}::uuid, 'deactivated')::text`;
+  } else if (account.status === 'provisioned' || account.status === 'suspended') {
+    await tx.$executeRaw`
+      UPDATE chat.account SET status = 'deactivated', is_active = false, deactivated_at = coalesce(deactivated_at, now())
+       WHERE id = ${account.id}::uuid`;
+  }
+  const supersededCodes = await tx.$executeRaw`
+    UPDATE chat.password_reset_code SET superseded_at = now()
+     WHERE account_id = ${account.id}::uuid AND used_at IS NULL AND superseded_at IS NULL`;
+  return { accountId: account.id, statusBefore: account.status, supersededCodes };
 }

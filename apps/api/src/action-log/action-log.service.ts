@@ -14,12 +14,12 @@ const notFound = () => new CommError(CommErrorCode.ACTION_LOG_NOT_FOUND, 'not fo
 const invalid = (why: string) => new CommError(CommErrorCode.VALIDATION, why, 400);
 
 export interface ActionLogEntry {
-  /** `audit:<id>` or `case:<id>`: stable, and says where the line came from. */
+  /** `audit:<id>`, `case:<id>` or `task:<id>`: stable, and says where the line came from. */
   id: string;
   action: string;
   entity: string;
   entityId: string;
-  /** The audited reason; null for a case entry (B5 shows a case only to those who may see it). */
+  /** The audited reason; null for a case or a task entry (each shows itself only to those who may see it). */
   reason: string | null;
   at: string;
   /** Written while an administrator acted as someone (PD-21 support session). */
@@ -34,6 +34,15 @@ export interface ActionLogEntry {
  *                           the case history that is not audited: a due date
  *                           set, a note added (the rest of a case's history is
  *                           audited, and would show twice)
+ *   chat.work_task_event    PD-47 PR-7: what they did to a task themselves --
+ *                           every act on a task a person gave; on a task a
+ *                           source raised, only what no source writes (said it
+ *                           was not theirs, returned it, removed it, commented,
+ *                           changed its level, acknowledged it). A source's own
+ *                           moves (a report filed, a case reassigned or
+ *                           re-dated) are that source's record, and would show
+ *                           twice. The task's id only: never a title, a comment
+ *                           or a reason.
  *
  * newest first, with the entity each was about -- never the before/after
  * payloads (pay terms, the Teacher File's personal facts). A case line shows
@@ -85,6 +94,18 @@ export class ActionLogService {
                NULL, e.at, false
           FROM chat.supervision_case_event e
          WHERE e.actor_id = ${staffId}::uuid AND e.kind IN ('due', 'note') AND e.at >= ${from} AND e.at < ${to}
+        UNION ALL
+        SELECT 'task', e.id::text, e.id::text,
+               'task.' || CASE WHEN e.kind = 'completed' AND e.after ->> 'outcome' = 'acknowledged' THEN 'acknowledged' ELSE e.kind END,
+               'work_task', e.task_id::text, NULL, e.at, false
+          FROM chat.work_task_event e
+          JOIN chat.work_task t ON t.id = e.task_id
+         WHERE e.actor_kind = 'staff' AND e.actor_id = ${staffId}::uuid AND e.at >= ${from} AND e.at < ${to}
+           AND (t.kind = 'manual'
+                AND e.kind IN ('created', 'reassigned', 'out_of_scope', 'returned', 'completed', 'removed', 'commented', 'due_changed', 'priority_changed')
+                OR t.kind = 'system'
+                AND (e.kind IN ('out_of_scope', 'returned', 'removed', 'commented', 'priority_changed')
+                     OR e.kind = 'completed' AND e.after ->> 'outcome' = 'acknowledged'))
       ) x
       CROSS JOIN LATERAL (SELECT to_char(x.at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at_text) t
       WHERE ${cursor?.at ?? null}::timestamptz IS NULL

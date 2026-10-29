@@ -3546,6 +3546,114 @@ Mentioned row, Join / Step in / Not for me banner, Group Info rows; app @ picker
 
 ---
 
+### PD-42 · Entering families by hand (the intake from Jawwid Core), without a trial
+
+**Closed 2026-10-28** by the product owner. The original request (2026-10-27): "We need a way to add parents and students to the system without going through the trial lesson process, since not all students attend trial lessons." The design questions Q1–Q5 were answered "Approve all 5 recommendations", with five safeguards. F4 was answered "Allow, tightly limited", recorded as `PD-30-amendment-carried-over`. Plan: `pd042-direct-enrolment-plan.md`.
+
+**Decision.** Sales supervisors and Operations supervisors enter the families they already handle in Jawwid Core, by hand, in Chat. Nothing in Core is read or changed (D6).
+
+- **Who enters:**
+  - an **Operations supervisor**, for children placed on themself;
+  - a **Sales member**, for a family they own;
+  - the Operations manager, the Sales manager or the super admin, **for** one of their department's supervisors (D5). The supervisor owns the family. The manager is recorded as the one who entered it, and never owns it themself.
+- **Required fields:** the parent's name, a phone or an e-mail, and each child's name.
+- **The child's current package:** total, completed and plan length, exactly as typed. The remaining lessons are computed, never stored, and no payment is created.
+- **"Add child":** adds a child to a family the caller owns. If the family has a live group, the child joins it.
+- **The trial sibling:** Assign on a trial whose parent is already in Chat answers `PARENT_EXISTS` naming the family. Assigning with that family adds the children there.
+- **A Sales-entered family:** it waits for its Operations supervisor. The Operations manager places it, and its Sales owner may suggest a name (D1).
+- **The Sales owner:** set and changed only by the Sales manager or the super admin, with a reason.
+
+**Canonical rule.** One family per parent.
+
+- **Contact keys:** the parent's e-mail and E.164 number are keyed (HMAC, `chat.family_contact_key`) and locked for the transaction. A second family for the same parent is impossible.
+- **Replays:** a replayed intake id writes nothing.
+- **Family history:** who entered each family and child, who owns it, and who placed it are durable columns plus one audit row per act, shown on the Parent Profile's Family history.
+- **Opening the intake:** `/family-intake` is closed (`INTAKE_NOT_READY`) until the contact-key backfill has keyed every existing family.
+
+**The Sales scope (D2).** `SALES_FAMILY_SCOPE=all|own` is written to `chat.config` at boot.
+
+- **`all` (the default):** changes nothing.
+- **`own`:** narrows a Sales member to the families they own, at the API and at the database. The Sales manager keeps every family.
+- **Switching on:** only after the read-only `pd042-ownership-report` is clean, both managers have signed it off, and the owner gives a GO.
+- **PD-42's own actions:** owner-scoped from day one.
+
+**Implementation phase.**
+- PR-1 #194: data.
+- PR-2 #202: intake, the Sales switch and the backfill.
+- PR-3 #214: the Operations side, the group join, the trial sibling and the report.
+- The follow-up: the Family history, the Action log lines and these docs.
+- Migrations: `20261028110000`, `20261028210000`, `20261029120000`.
+
+**Consequences.**
+- **Permission keys:** `subscriptions.carry_over` (new, in the Operations and Sales bundles), and `parents.edit` for the Sales bundles, limited to the families a Sales account owns.
+- **The PD-30 ledger:** gains the `carried_over` source.
+- **PD-16 Assign:** keys its parents.
+
+**Not changed.** The PD-16 trial flow, PD-24's transfer (a later move of an Operations supervisor), and PD-30's lock and grace rules (a carried-over package is counted by them; D3).
+
+**Deferred.** The second guardian (Q4).
+
+**Closed.** 2026-10-28.
+
+---
+
+### PD-44 · A real manager Dashboard on data the API already computes
+
+**Closed 2026-10-28** by the product owner: "Remove Inbox, rebuild Dashboard",
+then on the plan's nine questions "Approve all (Recommended)", with Q6
+corrected to "(6) The Operations manager sees Teacher Supervision figures
+(their access is now merged)". Plan: `pd044-manager-dashboard-plan.md`.
+
+**Decision.** The dead Dashboard, which called four `/dashboard/*` routes that
+never existed and measured the retired on-duty model, is rebuilt as counts of
+what is waiting. There are seven sections: chats, cases, lessons, enrolment,
+billing, teachers and structure.
+
+- **Who:** the super admin, inside the Admin Portal's Dashboard section, and
+  the three managers. Supervisors come later.
+- **Navigation:** Chat stays the landing page. The Dashboard moves from More to
+  the main navigation.
+- **What a tile shows:** a count, plus "oldest since" where it helps. Never a
+  name. Every tile links to the page that resolves it.
+
+**Canonical rule.** One read-only `GET /dashboard/<section>` per section.
+
+- **Permission:** each section `@Requires` the PD-40 key of the page its tiles
+  link to. There is no dashboard key of its own.
+- **Counting:** the count is a method of the service that owns that page, with
+  the page's own scope helper (PD-8, PD-26, PD-35), so the tile equals the list
+  it opens.
+- **Absent is not zero:** a tile outside the caller's basis is left out, never
+  sent as 0.
+- **Cost:** each request runs a fixed number of statements whatever the number
+  of rows.
+- **Freshness:** polling every 60 s; no realtime.
+- **Specific rules:** "today" is the calendar's zone; a chat waits from the
+  parent's first unanswered message; a family "without a supervisor" has any
+  child without one.
+
+**Implementation phase.** Eight PRs (plan §7). PR-1 serves `/dashboard/chats`
+and `/dashboard/cases`.
+
+**Consequences.**
+- The Admin Web's `/dashboard/header`, `/team-now`, `/needs-action` and
+  `/this-week` calls are removed (PR-2).
+- A "Locked / grace" filter is added to the Parents page (PR-5).
+- No migration and no new permission key.
+
+**Deprecated behaviour.**
+- The on-duty / unattended counts, "team now", workload scores and response
+  targets.
+- `chat.staff_workload.awaiting_reply` as a scope: it groups by
+  `family.owner_id`, not PD-8.
+
+**Not changed.** `/tasks` is kept, to be rebuilt later as its own feature
+(owner, 2026-10-28: "Keep and rebuild later").
+
+**Closed.** 2026-10-28.
+
+---
+
 ### Decisions still open after PD-1 to PD-36
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.

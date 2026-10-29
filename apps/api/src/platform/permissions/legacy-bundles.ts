@@ -63,7 +63,23 @@ const k = (...keys: PermissionKey[]): readonly PermissionKey[] => keys;
 const CONVERSATION_STAFF = k('chat.use', 'chat.manage', 'chat.moderate', 'calls.use', 'stories.view', 'stories.publish', 'teacher_profiles.review');
 
 /** Running a department: the structure view, backups and covers, the team's profiles. */
-const DEPARTMENT_MANAGER = k('org.view', 'org.manage', 'org.covers', 'staff_profiles.team', 'staff_profiles.manage', 'reports.view');
+const DEPARTMENT_MANAGER = k(
+  'org.view',
+  'org.manage',
+  'org.covers',
+  'staff_profiles.team',
+  'staff_profiles.manage',
+  'reports.view',
+  // PD-40 PR-3 (owner 2026-10-28, S1): a department manager creates and manages
+  // the specialists of their department (decideStaffAccountCreate / Manage).
+  'staff_accounts.view',
+  'staff_accounts.create',
+  'staff_accounts.manage',
+  // PD-47: their team's tasks -- watch, give, decide (TaskService narrows to the team).
+  'tasks.team',
+  'tasks.create',
+  'tasks.manage',
+);
 
 /** Operations supervisors: their families' money, contact record, lessons and journey (PD-8, PD-15, PD-17). */
 const OPERATIONS_MEMBER = k(
@@ -95,6 +111,12 @@ const OPERATIONS_MEMBER = k(
   // the Teacher File itself: no teacher_files.* key.
   'teacher_supervision.view',
   'teacher_supervision.record',
+  // PD-41: an Operations supervisor requests their students' certificates,
+  // approves the design, sends it and publishes its Story (owner 2026-10-28).
+  'certificates.view',
+  'certificates.request.student',
+  'certificates.deliver',
+  'certificates.story',
 );
 
 /** The Teachers department: certificates, leave, discipline, supervision, the Teacher File (PD-10, PD-12, PD-35). */
@@ -103,8 +125,12 @@ const TEACHERS_MEMBER = k(
   'accounts.administer',
   'accounts.support_session',
   'certificates.view',
+  // PD-12's issuers keep designing until a Designer exists (PD-41 design §6.2).
   'certificates.design',
   'certificates.deliver',
+  // PD-41: Teacher Supervision requests teachers' certificates.
+  'certificates.request.teacher',
+  'certificates.story',
   'teacher_supervision.view',
   'teacher_supervision.record',
   'supervision.chats',
@@ -128,6 +154,10 @@ const TEACHERS_MEMBER = k(
   // PD-43 (owner Q1): teacher supervisors add teachers too, for themselves or
   // with no supervisor (decideTeacherOnboarding narrows them).
   'teachers.create',
+  // PD-47: a teacher supervisor sees their own teachers' tasks, read-only
+  // (owner Q3), and gives them tasks (Q5). TaskService narrows to their teachers.
+  'tasks.team',
+  'tasks.create',
 );
 
 /** Sales: enrolment, trials, payments (PD-16, PD-20). */
@@ -135,6 +165,8 @@ const SALES_MEMBER = k(
   'org.covers',
   'accounts.administer',
   'parents.view',
+  // PD-42: the contact record of the families they own (BillingAccess.editOwnedOnly).
+  'parents.edit',
   'billing.view',
   'billing.record',
   'subscriptions.view',
@@ -162,6 +194,8 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     'subscriptions.manage',
     'materials.manage',
     'lessons.courses',
+    // PD-41: the department's certificate requests, whoever filed them.
+    'certificates.oversee',
   ],
   'manager:teachers': [
     ...CONVERSATION_STAFF,
@@ -174,11 +208,23 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     'teachers.offboard',
     'materials.manage',
     'lessons.courses',
+    // PD-41: the department's certificate requests, whoever filed them.
+    'certificates.oversee',
+    // PD-48 (owner Q4): the Teachers Manager approves lesson voice-over, and grants it.
+    'lesson_audio.view',
+    'lesson_audio.review',
+    // PD-49: the Teachers Manager checks and signs children's Quran content as a
+    // teacher, and delegates both. Never the scholar's step (super admin only).
+    'lesson_content.view',
+    'lesson_content.check',
+    'lesson_content.review_teacher',
   ],
   'manager:sales': [...CONVERSATION_STAFF, ...DEPARTMENT_MANAGER, ...SALES_MEMBER, 'subscriptions.manage'],
   'manager:none': [...CONVERSATION_STAFF, 'org.view', 'staff_profiles.team', 'staff_profiles.manage'],
   'supervisor:operations': [...CONVERSATION_STAFF, ...OPERATIONS_MEMBER],
-  'supervisor:teachers': [...CONVERSATION_STAFF, ...TEACHERS_MEMBER],
+  // PD-48: a Teachers supervisor listens; approving needs the Pronunciation reviewer role.
+  // PD-49: a Teachers supervisor sees content under review; signing needs a granted role.
+  'supervisor:teachers': [...CONVERSATION_STAFF, ...TEACHERS_MEMBER, 'lesson_audio.view', 'lesson_content.view'],
   'supervisor:sales': [...CONVERSATION_STAFF, ...SALES_MEMBER],
   'supervisor:none': [...CONVERSATION_STAFF],
   'legacy_department:none': [],

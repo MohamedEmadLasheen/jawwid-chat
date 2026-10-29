@@ -1,0 +1,546 @@
+{
+  "surah": 83,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. The old lesson had no data file: the ayat and tafsir came from components/VerseByVerseSection.tsx, the word meanings and completion games from GamesSection.tsx, the quiz from FinalQuizSection.tsx, the intro from IntroSection.tsx, and the lessons, reflection and did-you-know from TajweedAndLessonsSection.tsx. NUMBERING: the old lesson has all 36 ayat, one entry each, in order (it does not stop early). Dropped: the four Tajweed rules, the three-question Tajweed quiz and the Tajweed question of the final quiz (Tajweed comes only from the reviewed dataset), the full-surah and per-ayah audio URLs, the reciter line and the typed basmala, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the complete-the-ayah and missing-word games (de-duplicated: lil-mutaffifin and na'im are in both); their hand-typed distractors are gone, as the game draws its options from these words. The old quiz had difficulty levels, not categories; the categories were assigned by question type. The two completion questions of the final quiz had hand-typed distractors; they are now words of this surah (CHANGED). The intro is the three paragraphs of the old intro card joined with a space, its emoji and <strong> markup removed and its line breaks read as single spaces (as the page rendered them). The reflection idea is the line the old page showed after a child submitted an answer. Emoji were stripped from the ends of the lessons and did-you-know lines. The old lesson makes no Makki or Madani claim (none was carried; the surah's status is disputed). Not carried (no field or no such game in the engine): the welcome card, the surah name and ayah-count card, the intro quiz (surah name, ayah count, what the surah teaches), the ayah-ordering game (first six ayat), the word-meaning match game (same words and meanings as the list), the motivational messages and the quiz's difficulty levels. Matching aids, for alignment only and never stored: the old text writes adraka (8:2, 19:2) with a plain alif where the Uthmani text has alif maqsura + dagger alif, and la-salu (16:3) without the plural's silent alif; the word card al-mutaffifin was typed without the li- the verse word carries, so it points at lil-mutaffifin (1:2)."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-83 (read as text, never built or run)",
+    "sha256": {
+      "components/WelcomeSection.tsx": "389110f5faee4d9e9551eb743adccc2409a8c8a6af8dc7e64b9905b386e22e94",
+      "components/IntroSection.tsx": "7afcb3c64ac83d774287827b0916428b5f2f0da1170aebbbb190dafb1671e30a",
+      "components/ListenSection.tsx": "9503a84752057a09bd9d0671ec21b1df38e84450028fbc5f45cfbabd1012d169",
+      "components/VerseByVerseSection.tsx": "8813ae1cdf43917b8bb6c2a076547cadab32b6d2216555e10ec24eae5b68556a",
+      "components/GamesSection.tsx": "444e25aa75f75004b935b67f0ed0e77f657e5a9b42aef68c523fa9088986322b",
+      "components/TajweedAndLessonsSection.tsx": "8cacbc87fdda3880e2deaf55cd49b7e40c8d6ec8e367641891b050606f5b1301",
+      "components/FinalQuizSection.tsx": "ae235f3e80e092935de09eff7192a47a438a727e7da21ce83de2c50ed447ccfe",
+      "pages/Index.tsx": "e839d60f0e00801c5dc60da32a76ef52636a56452e4f43202fc420694bc1d0a8"
+    }
+  },
+  "intro": {
+    "text": "سورة المطففين تعلمنا أن المسلم يجب أن يكون صادقًا وأمينًا في تعامله مع الناس. المسلم لا يغش في البيع والشراء، ويعطي الناس حقوقهم كاملة. الله سبحانه وتعالى يجازي الصادقين بالجنة والنعيم.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "عذاب شديد للذين يغشون في الميزان والكيل",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "إذا اشتروا من الناس يأخذون حقهم كاملًا",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "لكن إذا باعوا للناس ينقصون الكيل والوزن",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "ألا يعلم هؤلاء أن الله سيحاسبهم يوم القيامة؟",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "يوم القيامة العظيم",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "يوم يقف الناس جميعًا أمام الله",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "كتاب أعمال الأشرار في مكان سفلي",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "وما أعلمك ما هو سجين؟ مكان ضيق ومخيف",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "كتاب مكتوب فيه كل أعمالهم",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "عذاب شديد للذين كذبوا بيوم القيامة",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "text": "الذين لا يصدقون أن يوم الحساب قادم",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "لا يكذب بيوم القيامة إلا الظالم المذنب",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "عندما يسمع القرآن يقول: هذه قصص قديمة",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "لا! بل ذنوبهم غطت قلوبهم",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "سيكونون محرومين من رؤية الله يوم القيامة",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "ثم سيدخلون النار",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "ويقال لهم: هذا العذاب الذي كنتم تكذبون به",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "كتاب أعمال الصالحين في أعلى مكان في الجنة",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "وما أعلمك ما هو عليون؟ مكان عالٍ وجميل",
+      "review": null
+    },
+    {
+      "ayah": 20,
+      "text": "كتاب مكتوب فيه أعمالهم الطيبة",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "text": "يشهد عليه الملائكة المقربون من الله",
+      "review": null
+    },
+    {
+      "ayah": 22,
+      "text": "الصالحون يعيشون في نعيم الجنة",
+      "review": null
+    },
+    {
+      "ayah": 23,
+      "text": "يجلسون على أسرّة جميلة وينظرون لنعم الله",
+      "review": null
+    },
+    {
+      "ayah": 24,
+      "text": "ترى في وجوههم الفرح والسعادة",
+      "review": null
+    },
+    {
+      "ayah": 25,
+      "text": "يشربون شرابًا طيبًا مختومًا",
+      "review": null
+    },
+    {
+      "ayah": 26,
+      "text": "آخر طعمه مسك، وعلى هذا النعيم يجب أن يتسابق الناس",
+      "review": null
+    },
+    {
+      "ayah": 27,
+      "text": "ممزوج بماء عين تسنيم في الجنة",
+      "review": null
+    },
+    {
+      "ayah": 28,
+      "text": "عين ماء يشرب منها المقربون من الله",
+      "review": null
+    },
+    {
+      "ayah": 29,
+      "text": "المجرمون كانوا يسخرون من المؤمنين في الدنيا",
+      "review": null
+    },
+    {
+      "ayah": 30,
+      "text": "وإذا مروا بالمؤمنين يغمزون ويستهزئون",
+      "review": null
+    },
+    {
+      "ayah": 31,
+      "text": "وإذا رجعوا لبيوتهم يفرحون بسخريتهم",
+      "review": null
+    },
+    {
+      "ayah": 32,
+      "text": "وإذا رأوا المؤمنين قالوا: هؤلاء ضائعون",
+      "review": "Gives la-dallun as \"da'i'un\" (lost, gone to waste). Common tafsir: dallun is \"astray\" (dallun 'an al-haqq, having strayed from the truth), which is what the mockers claimed of the believers. Teacher to choose the wording."
+    },
+    {
+      "ayah": 33,
+      "text": "وما أرسلهم الله ليراقبوا المؤمنين",
+      "review": null
+    },
+    {
+      "ayah": 34,
+      "text": "يوم القيامة المؤمنون هم من يفرحون",
+      "review": null
+    },
+    {
+      "ayah": 35,
+      "text": "يجلسون على أسرّة الجنة وينظرون بسعادة",
+      "review": null
+    },
+    {
+      "ayah": 36,
+      "text": "هل جوزي الكفار على ما كانوا يفعلون؟ نعم!",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "الذين يغشون في الكيل والميزان",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 5,
+      "meaning": "ينقصون الوزن والكيل",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 6,
+      "meaning": "مكان سفلي لكتاب الأشرار",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "word": 6,
+      "meaning": "مكان عالٍ لكتاب الصالحين",
+      "review": null
+    },
+    {
+      "ayah": 24,
+      "word": 5,
+      "meaning": "السعادة والراحة في الجنة",
+      "review": null
+    },
+    {
+      "ayah": 25,
+      "word": 3,
+      "meaning": "شراب طيب في الجنة",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 5,
+      "word": 2
+    },
+    {
+      "ayah": 22,
+      "word": 4
+    },
+    {
+      "ayah": 7,
+      "word": 6
+    },
+    {
+      "ayah": 26,
+      "word": 2
+    },
+    {
+      "ayah": 6,
+      "word": 5
+    },
+    {
+      "ayah": 25,
+      "word": 4
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "سورة الفلق"
+        },
+        {
+          "text": "سورة المطففين"
+        },
+        {
+          "text": "سورة الناس"
+        },
+        {
+          "text": "سورة الإخلاص"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة المطففين؟",
+      "options": [
+        {
+          "text": "25 آية"
+        },
+        {
+          "text": "36 آية"
+        },
+        {
+          "text": "40 آية"
+        },
+        {
+          "text": "30 آية"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا تعلمنا من السورة؟",
+      "options": [
+        {
+          "text": "الكذب"
+        },
+        {
+          "text": "الغش"
+        },
+        {
+          "text": "الصدق والأمانة"
+        },
+        {
+          "text": "الكسل"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الصادقون"
+        },
+        {
+          "text": "الذين يغشون في الكيل والميزان"
+        },
+        {
+          "text": "المصلون"
+        },
+        {
+          "text": "الأطفال"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 2
+      },
+      "id": "q4"
+    },
+    {
+      "category": "lessons",
+      "question": "أين يكون كتاب الأبرار؟",
+      "options": [
+        {
+          "text": "في سجين"
+        },
+        {
+          "text": "في الأرض"
+        },
+        {
+          "text": "في عليين"
+        },
+        {
+          "text": "في البحر"
+        }
+      ],
+      "answer": 2,
+      "review": "TYPED: the question types \"kitab al-abrar\" (18:3-4) and two options type sijjin (7:6) and 'illiyyin (18:6), words of this surah, as prose. Under the checker's limit, but Quran typed by hand. Teacher to rephrase, or the options to become positions.",
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما هو",
+      "options": [
+        {
+          "text": "ماء عادي"
+        },
+        {
+          "text": "شراب طيب في الجنة"
+        },
+        {
+          "text": "عصير فواكه"
+        },
+        {
+          "text": "حليب"
+        }
+      ],
+      "answer": 1,
+      "review": "PHRASE: the old question asks about the two words \"al-rahiq al-makhtum\" (25:3-4; the verse words are rahiqin makhtumin, without al-); the engine shows one word, so it points at rahiq (25:3) and the options cover the phrase (a good drink of Paradise). Teacher to confirm it reads right.",
+      "word": {
+        "ayah": 25,
+        "word": 3
+      },
+      "id": "q6"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 26,
+        "words": 1
+      },
+      "options": [
+        {
+          "ayah": 25,
+          "word": 3
+        },
+        {
+          "ayah": 27,
+          "word": 3
+        },
+        {
+          "ayah": 26,
+          "word": 2
+        },
+        {
+          "ayah": 25,
+          "word": 4
+        }
+      ],
+      "answer": 2,
+      "review": "CHANGED: the old distractors ('asal, ma', laban) were hand-typed, not words of this surah; they are now rahiq (25:3), tasnim (27:3) and makhtum (25:4). The prompt shows khitamuhu (26:1); the answer is misk (26:2).",
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا يحدث للمؤمنين يوم القيامة حسب السورة؟",
+      "options": [
+        {
+          "text": "يحزنون"
+        },
+        {
+          "text": "يضحكون من الكفار وهم على الأرائك"
+        },
+        {
+          "text": "يبكون"
+        },
+        {
+          "text": "ينامون"
+        }
+      ],
+      "answer": 1,
+      "review": "TYPED: the right option \"yadhakun min al-kuffar ... 'ala al-ara'ik\" types words of ayat 34 and 35 as prose. Under the checker's limit, but Quran typed by hand. Teacher to rephrase it in prose.",
+      "id": "q8"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 1,
+        "words": 1
+      },
+      "options": [
+        {
+          "ayah": 21,
+          "word": 2
+        },
+        {
+          "ayah": 10,
+          "word": 3
+        },
+        {
+          "ayah": 1,
+          "word": 2
+        },
+        {
+          "ayah": 34,
+          "word": 5
+        }
+      ],
+      "answer": 2,
+      "review": "CHANGED: the old question blanked the word after \"wayl lil-\" and offered stems typed without lil- (mu'minin, salihin, 'abidin), not words of this surah; the prompt now shows wayl (1:1), the answer is the whole verse word lil-mutaffifin (1:2), and the distractors are al-muqarrabun (21:2), lil-mukadhdhibin (10:3) and al-kuffar (34:5). Note lil-mukadhdhibin also follows \"wayl\" in ayah 10, after yawma'idhin. Teacher to confirm.",
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الصدق والأمانة في التعامل مع الناس",
+      "review": null
+    },
+    {
+      "text": "عدم الغش في البيع والشراء",
+      "review": null
+    },
+    {
+      "text": "إعطاء الناس حقوقهم كاملة",
+      "review": null
+    },
+    {
+      "text": "الله يرى كل أعمالنا ويحاسبنا عليها",
+      "review": null
+    },
+    {
+      "text": "الصالحون يفوزون بالجنة والنعيم",
+      "review": null
+    },
+    {
+      "text": "احترام الآخرين وعدم السخرية منهم",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نكون صادقين وأمناء في تعاملنا مع الآخرين؟",
+    "ideas": [
+      "تذكر دائمًا أن تكون صادقًا وأمينًا في كل تعاملاتك"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الصدق من صفات المؤمن؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الله يحب الأمانة والعدل؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن النبي ﷺ كان يُلقب بالصادق الأمين؟",
+      "review": "Not something this surah teaches. The reports (Ibn Ishaq and the sira) say Quraysh called him al-Amin before the prophethood, and called him truthful; \"al-Sadiq al-Amin\" as one title is popular usage. Teacher to keep or drop."
+    },
+    {
+      "text": "هل تعلم أن الغش حرام في الإسلام؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الجنة فيها نعيم لا يخطر على بال؟",
+      "review": null
+    }
+  ]
+}

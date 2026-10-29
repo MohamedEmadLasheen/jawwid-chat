@@ -17,14 +17,19 @@ import { ParentRecordModule } from './parent-profile/parent-record.module';
 import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
 import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
 import { AccountAdminModule } from './account-admin/account-admin.module';
+import { StaffAccountsModule } from './staff-accounts/staff-accounts.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 import { MaterialsModule } from './materials/materials.module';
 import { QuranModule } from './quran/quran.module';
+import { LessonAudioModule } from './lesson-audio/lesson-audio.module';
+import { LessonContentModule } from './lesson-content/lesson-content.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
 import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { SupervisionCaseModule } from './cases/supervision-case.module';
 import { ActionLogModule } from './action-log/action-log.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { TaskModule } from './tasks/task.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -65,11 +70,16 @@ import { ActionLogModule } from './action-log/action-log.module';
     CoreBoundaryModule,
     ScheduledCallModule,
     AccountAdminModule,
+    StaffAccountsModule,
     // PD-25: parents recover their own account from the sign-in screen.
     AccountRecoveryModule,
     // PD-29: the Materials library, practice this week and the memorization map.
     MaterialsModule,
     QuranModule,
+    // PD-48: lesson voice-over (computer voice, two teacher approvals per clip). Never Quran audio.
+    LessonAudioModule,
+    // PD-49: the review of children's Quran content and game mechanics (teacher + scholar steps).
+    LessonContentModule,
     // PD-30: subscription locks -- cards, pushes, lesson holds, renewal requests.
     SubscriptionModule,
     // PD-35: teacher supervisors (assignment, the 'supervision' seat).
@@ -80,6 +90,10 @@ import { ActionLogModule } from './action-log/action-log.module';
     SupervisionCaseModule,
     // PD-35 B7: a staff member's action log.
     ActionLogModule,
+    // PD-44: the manager Dashboard (counts from each page's own service).
+    DashboardModule,
+    // PD-47: tasks -- every person's responsibilities, with the four exits.
+    TaskModule,
   ],
 })
 export class AppModule {}

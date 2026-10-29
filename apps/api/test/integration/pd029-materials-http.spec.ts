@@ -329,7 +329,10 @@ describe('3. open: the access decision', () => {
       expect(r.json.url).toMatch(/^https:\/\/storage\.pd29\.example\.test\/.+\?ttl=3600&sig=/);
     }
     const link = await linkItem(manager);
-    expect((await http(parent, 'POST', `/materials/items/${link.id}/open`)).json).toMatchObject({ mode: 'link', presentation: 'frame-site', url: 'https://activities.example.test/a' });
+    const openedLink = (await http(parent, 'POST', `/materials/items/${link.id}/open`)).json;
+    expect(openedLink).toMatchObject({ mode: 'link', presentation: 'frame-site', url: 'https://activities.example.test/a' });
+    // An allowlisted third-party frame is never handed Quran audio: only the lessons site is.
+    expect(openedLink.audioEligible).toBeUndefined();
   });
 
   it('a draft is the managers\' preview only; another organization gets the same 404 as an unknown id', async () => {
@@ -442,7 +445,7 @@ describe('4b. pinning and presentation', () => {
     const row = await g.prisma.materialItem.findFirstOrThrow({ where: { organizationId: orgId, externalRef: '/lessons/quran/surah-78' } });
     expect(row).toMatchObject({ source: 'site', sitePath: '/lessons/quran/surah-78', url: null, kind: 'activity_link' });
     const open = await http(parent, 'POST', `/materials/items/${row.id}/open`);
-    expect(open.json).toMatchObject({ mode: 'link', presentation: 'frame-site', url: `${SITE}/lessons/quran/surah-78` });
+    expect(open.json).toMatchObject({ mode: 'link', presentation: 'frame-site', url: `${SITE}/lessons/quran/surah-78`, audioEligible: true });
     // Re-importing the same path updates, never duplicates.
     await http(manager, 'POST', '/materials/admin/import', {
       manifest: 'ref,title_ar,subject,path\r\n/lessons/quran/surah-78,سورة النبأ (محدّثة),quran,/lessons/quran/surah-78\r\n', dryRun: false,

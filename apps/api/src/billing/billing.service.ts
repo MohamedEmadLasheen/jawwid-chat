@@ -803,6 +803,7 @@ export class BillingService {
   /** The families the viewer may see. */
   private familiesInScope(actor: Actor, access: BillingAccess, org: string): Promise<FamilyRow[]> {
     const reach = access.scope === 'reach';
+    const owned = access.scope === 'owned';
     return this.prisma.$queryRaw<FamilyRow[]>`
       SELECT f.id, f.display_name AS family_name, pc.id AS parent_id,
              pc.name AS account_name, b.supervisor_id AS billing_supervisor_id
@@ -810,17 +811,19 @@ export class BillingService {
         LEFT JOIN chat.contact pc ON pc.id = f.primary_contact_id AND pc.family_id = f.id
         LEFT JOIN chat.family_billing_supervision b ON b.family_id = f.id
        WHERE f.organization_id = ${org}::uuid
-         AND (${!reach} OR chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL)`;
+         AND (${!reach} OR chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL)
+         AND (${!owned} OR chat.staff_owns_family(${actor.actorId}::uuid, f.id))`;
   }
 
   async requireFamily(actor: Actor, access: BillingAccess, familyId: string) {
     if (!isUuid(familyId)) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'family not found');
-    const rows = await this.prisma.$queryRaw<{ id: string; reach: string | null }[]>`
-      SELECT f.id, chat.staff_reaches_family(${actor.actorId}::uuid, f.id) AS reach
+    const rows = await this.prisma.$queryRaw<{ id: string; reach: string | null; owns: boolean }[]>`
+      SELECT f.id, chat.staff_reaches_family(${actor.actorId}::uuid, f.id) AS reach,
+             chat.staff_owns_family(${actor.actorId}::uuid, f.id) AS owns
         FROM chat.family f
        WHERE f.id = ${familyId.toLowerCase()}::uuid AND f.organization_id = ${actor.organizationId as string}::uuid`;
     const f = rows[0];
-    if (!f || (access.scope === 'reach' && f.reach === null)) {
+    if (!f || (access.scope === 'reach' && f.reach === null) || (access.scope === 'owned' && !f.owns)) {
       throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'family not found');
     }
     return f;

@@ -19,6 +19,7 @@ import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { ConversationSeatService } from './communication/seats/conversation-seat.service';
 import { TeacherSupervisorService } from './teacher-supervisors/teacher-supervisor.service';
 import { SupervisionCaseService } from './cases/supervision-case.service';
+import { TaskService } from './tasks/task.service';
 import { DepartmentRoomService } from './org/department-room.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
@@ -133,6 +134,14 @@ const SEAT_SWEEP_MS = 60_000;
 const CASE_DUE_SWEEP_MS = 10 * 60_000;
 
 /**
+ * PD-47: how often the task sources are swept -- missing tasks raised, done
+ * ones completed on re-read evidence (chat.work_task_sweep). The source
+ * triggers already do both in the source's own transaction; this is the
+ * guarantee, and what raises lesson reports when a lesson ends.
+ */
+const TASK_SWEEP_MS = 60_000;
+
+/**
  * PD-35 B6: how often the department rooms are healed against the structure
  * (a member deactivated, anything changed outside OrgStructureService). Access
  * never waits for it: chat.department_room_party is read live.
@@ -193,6 +202,7 @@ async function bootstrap(): Promise<void> {
   const subscriptions = app.get(SubscriptionEffects);
   const seats = app.get(ConversationSeatService);
   const cases = app.get(SupervisionCaseService);
+  const tasks = app.get(TaskService);
   const departmentRooms = app.get(DepartmentRoomService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
   // and trial groups seat each teacher's own supervisor; off, the department.
@@ -250,6 +260,8 @@ async function bootstrap(): Promise<void> {
   let nextHeldReevaluation = 0;
   let nextSeatSweep = 0;
   let nextCaseDueSweep = 0;
+  let nextTaskSweep = 0;
+  let lastTaskIssues = 0;
   let nextRoomSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
@@ -448,6 +460,33 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextCaseDueSweep = Date.now() + CASE_DUE_SWEEP_MS;
+      }
+    }
+
+    // PD-47: raise and reconcile the tasks of their sources.
+    if (Date.now() >= nextTaskSweep) {
+      draining = true;
+      try {
+        const swept = await tasks.sweep();
+        if (!swept.skipped && (swept.failed > 0 || swept.issues !== lastTaskIssues)) {
+          log.warn(
+            `task sweep: ${swept.failed} failed, ${swept.declined} declined, ${swept.orphaned} orphaned this run; ` +
+              `source issues ${lastTaskIssues} -> ${swept.issues} (chat.work_task_source_issue)`,
+          );
+        }
+        if (!swept.skipped) lastTaskIssues = swept.issues;
+      } catch (e) {
+        report(log, 'task source sweep', 'tasks.sweep', e);
+      }
+      // PR-4: what passed its due date, announced once per due date -- even
+      // when the source sweep above failed.
+      try {
+        await tasks.sweepOverdue();
+      } catch (e) {
+        report(log, 'task overdue sweep', 'tasks.overdue', e);
+      } finally {
+        draining = false;
+        nextTaskSweep = Date.now() + TASK_SWEEP_MS;
       }
     }
 

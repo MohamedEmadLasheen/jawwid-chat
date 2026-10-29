@@ -293,6 +293,12 @@ function QuickActions({ onTab }: { onTab: (t: Tab) => void }) {
         <li className="sp-list__item">
           <Link to={adminSectionPath('users')} className="btn btn--sm">{tx(T.qaUsers)}</Link>
         </li>
+        <li className="sp-list__item">
+          <Link to="/accounts/staff" className="btn btn--sm">{tx(T.qaStaffAccounts)}</Link>
+        </li>
+        <li className="sp-list__item">
+          <Link to="/accounts/roles" className="btn btn--sm">{tx(T.qaRoles)}</Link>
+        </li>
         <li className="sp-list__item sp-muted sp-small">{tx(T.qaPermissions)}</li>
       </ul>
     </div>

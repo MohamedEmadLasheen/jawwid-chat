@@ -19,7 +19,7 @@ import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } f
 import { useConversationPreferences } from './useChatActions'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
-type View = 'all' | 'unread' | 'favorites' | 'groups' | 'joined' | 'archived'
+export type View = 'all' | 'unread' | 'favorites' | 'groups' | 'joined' | 'archived' | 'waiting'
 
 /**
  * The conversation list. What is in it is exactly what the server returned
@@ -33,6 +33,7 @@ export function ConversationList({
   onSelect,
   onOpenMessage,
   actions,
+  initialView = 'all',
 }: {
   conversations: ChatConversation[]
   selectedId: string | null
@@ -41,12 +42,14 @@ export function ConversationList({
   onOpenMessage?: (conversationId: string, messageId: string) => void
   /** The header's buttons (New chat / New family group). */
   actions?: ReactNode
+  /** PD-44: the view to open on (the Dashboard's tile opens Waiting for a reply). */
+  initialView?: View
 }) {
   const { locale, number } = useI18n()
   const copy = chatCopyFor(locale)
   const { staff } = useSession()
   const [search, setSearch] = useState('')
-  const [view, setView] = useState<View>('all')
+  const [view, setView] = useState<View>(initialView)
   const [labelId, setLabelId] = useState<string | null>(null)
   const [labelling, setLabelling] = useState<string | null>(null)
 
@@ -90,8 +93,13 @@ export function ConversationList({
   // filter, so they never crowd the main list.
   const joined = named.filter((c) => !c.viewerState?.archived && c.viewerState?.seat?.reason === SUPERVISION_SEAT)
   const active = named.filter((c) => !c.viewerState?.archived && c.viewerState?.seat?.reason !== SUPERVISION_SEAT)
+  // PD-44: exactly what the Dashboard's waiting tile counts -- the server's
+  // waiting_on_jawwid, not closed -- across the whole list, this viewer's own
+  // archive and joined groups included, so the tile and this view agree.
+  const waiting = named.filter((c) => c.state === 'waiting_on_jawwid' && c.archivedAt === null)
   const inView = (v: View) =>
-    v === 'archived' ? archived
+    v === 'waiting' ? waiting
+    : v === 'archived' ? archived
     : v === 'joined' ? joined
     : v === 'unread' ? active.filter((c) => (c.unreadCount ?? 0) > 0)
     : v === 'favorites' ? active.filter((c) => c.viewerState?.favorite)
@@ -107,6 +115,9 @@ export function ConversationList({
     { value: 'unread' as const, label: copy.filterUnread, count: inView('unread').length },
     { value: 'favorites' as const, label: copy.filterFavorites, count: inView('favorites').length },
     { value: 'groups' as const, label: copy.filterGroups, count: inView('groups').length },
+    ...(waiting.length > 0 || view === 'waiting'
+      ? [{ value: 'waiting' as const, label: copy.filterWaiting, count: waiting.length }]
+      : []),
     ...(joined.length > 0 || view === 'joined'
       ? [{ value: 'joined' as const, label: copy.filterJoined, count: joined.length }]
       : []),

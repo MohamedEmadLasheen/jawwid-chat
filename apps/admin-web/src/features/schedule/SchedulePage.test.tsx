@@ -130,14 +130,14 @@ describe('the academy schedule', () => {
     expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-26')
     expect(lastQuery(/\/calendar\?/).get('to')).toBe('2026-10-27')
 
-    const active = within(row).getByRole('button', { name: /Child Alpha · 13:00–14:00 · Active/ })
+    const active = within(row).getByRole('button', { name: /Child Alpha · 1:00 PM – 2:00 PM · Active/ })
     expect(active).toHaveClass('sc-c-sky', 'sc-lesson--active')
     expect(within(row).getByRole('button', { name: /Prospect P .* Trial/ })).toHaveClass('sc-lesson--trial')
     // Two empty stretches, drawn as red outlines; the shift band behind them.
     expect(row.querySelectorAll('.sc-empty')).toHaveLength(2)
     expect(row.querySelectorAll('.sc-band--shift')).toHaveLength(1)
     // Another supervisor's child: "Booked", time and color only.
-    const other = within(screen.getByRole('row', { name: 'Teacher Two' })).getByRole('button', { name: /^Booked · 17:00–18:00 · Temporarily paused/ })
+    const other = within(screen.getByRole('row', { name: 'Teacher Two' })).getByRole('button', { name: /^Booked · 5:00 PM – 6:00 PM · Temporarily paused/ })
     expect(other).toHaveClass('sc-c-red', 'sc-lesson--paused')
   })
 
@@ -158,7 +158,7 @@ describe('the academy schedule', () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
     await screen.findByRole('row', { name: 'Teacher One' })
     const filters = screen.getByRole('group', { name: 'Filters' })
-    await userEvent.click(within(filters).getByLabelText('Category', { selector: 'summary' }))
+    await userEvent.click(within(filters).getByRole('button', { name: 'Category' }))
     await userEvent.click(within(filters).getByRole('checkbox', { name: 'Full shift' }))
     await userEvent.click(within(screen.getByRole('region', { name: 'Legend' })).getByRole('button', { name: 'Supervisor One' }))
     await waitFor(() => expect(lastQuery(/\/calendar\?/).get('supervisorIds')).toBe('sup-1'))
@@ -185,7 +185,7 @@ describe('the academy schedule', () => {
 
   it('a lesson opens its details, with the student\'s profile one click away', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
-    await userEvent.click(await screen.findByRole('button', { name: /Child Alpha · 13:00–14:00/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Child Alpha · 1:00 PM – 2:00 PM/ }))
     const dialog = await screen.findByRole('dialog', { name: 'Child Alpha' })
     expect(within(dialog).getByRole('link', { name: 'Open student profile' })).toHaveAttribute('href', '/students/k-1')
     expect(dialog).toHaveTextContent('Supervisor One')
@@ -210,6 +210,128 @@ describe('the academy schedule', () => {
   })
 })
 
+describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
+  it('one filter is open at a time; outside and Escape close it, and focus goes back to its button', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    await screen.findByRole('row', { name: 'Teacher One' })
+    const filters = screen.getByRole('group', { name: 'Filters' })
+    const category = within(filters).getByRole('button', { name: 'Category' })
+    const supervisor = within(filters).getByRole('button', { name: 'Supervisor' })
+
+    await userEvent.click(category)
+    expect(category).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    // The keyboard lands in the panel.
+    expect(screen.getByRole('dialog', { name: 'Category' })).toContainElement(document.activeElement as HTMLElement)
+
+    await userEvent.click(supervisor)
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByRole('dialog', { name: 'Supervisor' })).toBeInTheDocument()
+    expect(category).toHaveAttribute('aria-expanded', 'false')
+
+    // A choice inside the panel keeps it open...
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Supervisor' })).getByRole('checkbox', { name: 'Supervisor One' }))
+    expect(screen.getByRole('dialog', { name: 'Supervisor' })).toBeInTheDocument()
+    // ...anywhere outside closes it.
+    await userEvent.click(screen.getByRole('heading', { level: 1 }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    await userEvent.click(category)
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(category).toHaveFocus()
+  })
+
+  it('the day is on the 12-hour clock, an hour wide enough that labels never collide and a lesson shows its time', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    const row = await screen.findByRole('row', { name: 'Teacher One' })
+    const grid = screen.getByRole('table', { name: 'Schedule' })
+    // 10 AM to 10 PM: twelve hours at a fixed 120 px each, scrolled rather than squeezed.
+    expect(grid.style.getPropertyValue('--sc-day-w')).toBe('1440px')
+    const axis = grid.querySelector('.sc-axis')!
+    const labels = [...axis.querySelectorAll('.sc-axis__tick')].map((t) => t.textContent)
+    expect(labels[0]).toBe('10 AM')
+    expect(labels).toContain('12 PM')
+    expect(labels.every((l) => !/\d{2}:\d{2}/.test(l ?? ''))).toBe(true)
+    // A one-hour lesson has room for its name and its time.
+    const block = within(row).getByRole('button', { name: /Child Alpha/ })
+    expect(block).toHaveTextContent('Child Alpha')
+    expect(block).toHaveTextContent('1:00 PM – 2:00 PM')
+    // The hours filter speaks the same clock; its values stay HH:MM for the API.
+    await userEvent.click(within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'Hours' }))
+    const from = within(screen.getByRole('dialog', { name: 'Hours' })).getByRole('combobox', { name: 'From' })
+    expect(within(from).getByRole('option', { name: '1:00 PM' })).toHaveValue('13:00')
+  })
+
+  it('the lesson details say when on the same clock', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    await userEvent.click(await screen.findByRole('button', { name: /Child Alpha · 1:00 PM/ }))
+    expect(await screen.findByRole('dialog', { name: 'Child Alpha' })).toHaveTextContent('1:00 PM – 2:00 PM')
+  })
+})
+
+describe('on a phone', () => {
+  beforeEach(() => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: /max-width:\s*720px/.test(query),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+  })
+
+  it('a day is an agenda: a date bar, each teacher\'s lessons and free shift time in order, as large rows', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    const day = await screen.findByRole('region', { name: 'Monday 26 October' })
+    expect(screen.queryByRole('table', { name: 'Schedule' })).toBeNull()
+    const items = within(day).getAllByRole('listitem')
+    // Teacher One: empty 12-1, the 1 PM lesson, the 2 PM trial, empty 2:30-7 -- in time order.
+    expect(items.map((i) => i.textContent)).toEqual(expect.arrayContaining([
+      expect.stringContaining('12:00 PM – 1:00 PM'),
+      expect.stringContaining('1:00 PM – 2:00 PM'),
+    ]))
+    const lesson = within(day).getByRole('button', { name: /Child Alpha · 1:00 PM – 2:00 PM · Active/ })
+    expect(lesson).toHaveClass('sc-agenda__item', 'sc-c-sky')
+    expect(within(day).getAllByText('Available, no student').length).toBeGreaterThan(0)
+    await userEvent.click(lesson)
+    expect(await screen.findByRole('dialog', { name: 'Child Alpha' })).toBeInTheDocument()
+  })
+
+  it('the filters are in a bottom sheet, one open at a time there too', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    await screen.findByRole('region', { name: 'Monday 26 October' })
+    expect(screen.queryByRole('group', { name: 'Filters' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Filters' })
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Category' }))
+    await userEvent.click(within(sheet).getByRole('checkbox', { name: 'Full shift' }))
+    await waitFor(() => expect(lastQuery(/\/calendar\?/).get('categories')).toBe('full_shift'))
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Supervisor' }))
+    expect(within(sheet).queryByRole('dialog', { name: 'Category' })).toBeNull()
+    // Escape closes the open filter, not the sheet.
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: 'Filters' })).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Filters' })).getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull()
+    expect(screen.getByRole('button', { name: /Filters/ })).toHaveTextContent('1')
+  })
+
+  it('a month is a list of days with their totals; a day opens its agenda', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=month&date=2026-10-26' })
+    const day = await screen.findByRole('button', { name: /Mon 26 Oct/ })
+    expect(day).toHaveTextContent('Lessons: 2 · Empty: 5.5 h')
+    await userEvent.click(day)
+    await waitFor(() => expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-26'))
+  })
+
+  it('in Arabic the agenda reads right to left on the 12-hour clock', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26', locale: 'ar' })
+    const lesson = await screen.findByRole('button', { name: /Child Alpha · ١:٠٠ م – ٢:٠٠ م/ })
+    expect(document.documentElement.dir).toBe('rtl')
+    expect(lesson).toHaveTextContent('١:٠٠ م – ٢:٠٠ م')
+  })
+})
+
 describe('the shift, in the Teacher File', () => {
   const PATTERNS: WorkPatterns = {
     teacherId: 't-1',
@@ -230,6 +352,7 @@ describe('the shift, in the Teacher File', () => {
     renderWithProviders(<ShiftSection teacherId="t-1" />, { staff: manager })
     expect(await screen.findByText('Full shift')).toBeInTheDocument()
     expect(screen.getByText('Friday').nextElementSibling).toHaveTextContent('Off')
+    expect(screen.getByText('Saturday').nextElementSibling).toHaveTextContent('12:00 PM – 7:00 PM')
     await userEvent.click(screen.getByRole('button', { name: 'Change shift' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('radio', { name: 'Part shift' }))

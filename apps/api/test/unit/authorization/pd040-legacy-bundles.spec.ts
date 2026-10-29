@@ -17,10 +17,14 @@
 import { StaffRole } from '@communication/contracts/vocab';
 import { decideBillingAccess, decidePd012PageAccess, decidePd012StaffAccess, type OperationsDepartmentRole } from '@platform/pd012-policy';
 import { decideTeacherFileAccess, teacherFilePageAccess } from '@platform/teacher-file-policy';
+import { decideStaffAccountCreate } from '@platform/staff-account-policy';
 import { decidePageBasis } from '@platform/teacher-scope';
 import { canCarryOverPackage, canGrantSubscriptionException } from '@platform/subscription-policy';
 import { accountAdminActs } from '@platform/account-admin-policy';
 import { decideTeacherOnboarding } from '@platform/teacher-onboarding-policy';
+import { CERTIFICATE_KEYS, legacyCertificateKeys } from '@platform/pd041-policy';
+import { LESSON_AUDIO_KEYS, legacyLessonAudioKeys } from '@platform/lesson-audio-policy';
+import { LESSON_CONTENT_BUNDLED_KEYS, legacyLessonContentKeys } from '@platform/lesson-content-policy';
 import { StaffProfilePermission, profilePermissionsFor } from '@platform/staff-profile-policy';
 import { PERMISSIONS, PERMISSION_KEYS } from '@platform/permissions/catalogue';
 import {
@@ -81,6 +85,11 @@ function rules(): Record<string, Rule> {
   const supervises: Rule = (a) => pd012(a).canSupervise;
   const writesSupervision: Rule = (a) => file(a).canWriteSupervision;
   const readsMoney: Rule = (a) => billing(a).scope !== null;
+  const runsStaff: Rule = (a) =>
+    decideStaffAccountCreate(a.actor, { managedDepartmentId: a.placement.position === 'manager' ? a.placement.kind : null, permissions: new Set(['staff_accounts.create']) }, {
+      tier: 'specialist',
+      departmentId: a.placement.position === 'manager' ? a.placement.kind : null,
+    }).allowed;
   // PD-26 amendment: the Teacher Supervision page, Teachers department or Operations.
   const basis = (a: Account) => decidePageBasis(a.actor, role(a, 'teachers'), role(a, 'operations'));
   const onPage: Rule = (a) => decidePd012PageAccess(pd012(a), basis(a)).canSupervise;
@@ -96,9 +105,20 @@ function rules(): Record<string, Rule> {
     'parents.edit': (a) => billing(a).canEditParent,
     'subscriptions.manage': (a) => canGrantSubscriptionException(a.actor, role(a, 'operations'), role(a, 'sales')),
     'subscriptions.carry_over': (a) => canCarryOverPackage(a.actor, role(a, 'operations'), role(a, 'sales')),
-    'certificates.view': supervises,
-    'certificates.design': supervises,
-    'certificates.deliver': supervises,
+    // PD-41: the certificate keys, from Operations' placement and PD-12's canSupervise.
+    ...Object.fromEntries(
+      CERTIFICATE_KEYS.map((key) => [key, (a: Account) => legacyCertificateKeys(a.actor, role(a, 'operations'), role(a, 'teachers')).has(key)]),
+    ),
+    // PD-48: lesson voice-over, from the Teachers placement.
+    ...Object.fromEntries(LESSON_AUDIO_KEYS.map((key) => [key, (a: Account) => legacyLessonAudioKeys(a.actor, role(a, 'teachers')).has(key)])),
+    // PD-49: children's Quran content review, from the Teachers placement. The
+    // scholar's key is the super admin's alone by bundle (the role grants it).
+    ...Object.fromEntries(
+      [...LESSON_CONTENT_BUNDLED_KEYS, 'lesson_content.review_scholar' as const].map((key) => [
+        key,
+        (a: Account) => legacyLessonContentKeys(a.actor, role(a, 'teachers')).has(key),
+      ]),
+    ),
     'teacher_supervision.view': onPage,
     'teacher_supervision.record': recordsOnPage,
     'supervision.chats': supervises,
@@ -121,6 +141,11 @@ function rules(): Record<string, Rule> {
     'staff_profiles.manage': (a) =>
       profile(a).has(StaffProfilePermission.TEAM_RESPONSIBILITIES_MANAGE) || profile(a).has(StaffProfilePermission.ORG_RESPONSIBILITIES_MANAGE),
     'staff_profiles.reporting_lines': (a) => profile(a).has(StaffProfilePermission.REPORTING_LINES_MANAGE),
+    // PD-40 PR-3: the super admin, or a department manager (role and relation both).
+    'staff_accounts.view': runsStaff,
+    'staff_accounts.create': runsStaff,
+    'staff_accounts.manage': runsStaff,
+    'access_roles.manage': (a) => a.actor.staffRole === StaffRole.SUPER_ADMIN,
   };
 }
 
@@ -157,7 +182,25 @@ describe('PD-40: legacy bundles agree with the service rules', () => {
     }
   });
 
-  it('no key is delegable yet: delegation (PD-40 PR-3) waits for every bundle to be verified', () => {
-    expect(PERMISSIONS.filter((p) => p.delegable).map((p) => p.key)).toEqual([]);
+  it('a key is delegable only once its bundles are verified here, and never if a role may not hold it (PD-40 C3)', () => {
+    const delegable = PERMISSIONS.filter((p) => p.delegable).map((p) => p.key);
+    expect(delegable.filter((k) => !(k in RULES))).toEqual([]);
+    expect(PERMISSIONS.filter((p) => p.delegable && !p.inRoles).map((p) => p.key)).toEqual([]);
+    // The minimal, read-only set PR-3 opens (plan §13 C3).
+    // PD-48 adds the two lesson voice-over keys (legacyLessonAudioKeys); PD-49 the three lesson_content keys the
+    // Teachers department delegates (legacyLessonContentKeys). Both verified above.
+    expect(delegable.sort()).toEqual([
+      'billing.view',
+      'certificates.design',
+      'certificates.view',
+      'lesson_audio.review',
+      'lesson_audio.view',
+      'lesson_content.check',
+      'lesson_content.review_teacher',
+      'lesson_content.view',
+      'subscriptions.view',
+    ]);
+    // ...and never the scholar's step: the super admin alone grants it (owner, 2026-10-29).
+    expect(delegable).not.toContain('lesson_content.review_scholar');
   });
 });

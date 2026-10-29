@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   canOpenArea,
+  holdsAny,
   isDepartment,
   isManager,
   isSuperAdmin,
   isOperator,
   managerOnly,
   navAreas,
-  taskScopeFor,
   visibleAreas,
 } from './capabilities'
 import { ROLES } from '@/test/utils'
@@ -73,14 +73,6 @@ describe('role → navigation', () => {
       }
     }
   })
-
-  it('requests the task scope that matches the role', () => {
-    expect(taskScopeFor('admin')).toBe('mine')
-    expect(taskScopeFor('coverage')).toBe('mine')
-    expect(taskScopeFor('manager')).toBe('team')
-    expect(taskScopeFor('finance')).toBe('department')
-    expect(taskScopeFor('super_admin')).toBe('team')
-  })
 })
 
 describe('navigation lists what a role may open', () => {
@@ -95,14 +87,19 @@ describe('navigation lists what a role may open', () => {
   it('nothing else is hidden: navigation is the openable areas minus Teacher statistics, Instalments, Parents, Payments, Materials and the Schedule until the server confirms the department', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
+      // PD-41: Certificates waits for GET /certificates/access.
+      // PD-48: Lesson audio waits for GET /lesson-audio/access.
+      const certs = (a: string) => a === 'certificates' || a === 'lesson-audio'
       expect(navAreas(role)).toEqual(
-        visibleAreas(role).filter((a) => a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a)),
+        visibleAreas(role).filter((a) => a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)),
       )
-      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !money(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'schedule'))
+      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'schedule' && !certs(a)))
       // PD-38: the Schedule on GET /lessons/access's `calendar`.
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role).filter((a) => !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true })).toEqual(visibleAreas(role).filter((a) => a !== 'lesson-audio'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true, lessonAudio: true })).toEqual(visibleAreas(role))
     }
   })
 
@@ -123,5 +120,28 @@ describe('navigation lists what a role may open', () => {
       }
     }
     expect(navAreas('finance', { sales: true })).not.toContain('trials')
+  })
+})
+
+/** PD-40 PR-5: the smallest key gate -- the keys /me reports; UX only. */
+describe('permission keys → pages', () => {
+  const staff = (role: 'manager' | 'super_admin' | 'specialist', permissions?: string[]) => ({ role, ...(permissions ? { permissions } : {}) })
+
+  it('opens a page only for a held key', () => {
+    expect(holdsAny(staff('manager', ['staff_accounts.view']), ['staff_accounts.view'])).toBe(true)
+    expect(holdsAny(staff('manager', ['org.view']), ['staff_accounts.view', 'access_roles.manage'])).toBe(false)
+    expect(holdsAny(staff('manager', ['access_roles.manage']), ['staff_accounts.view', 'access_roles.manage'])).toBe(true)
+  })
+
+  it('fails closed when /me sent no keys, except for the super admin, who holds every key', () => {
+    expect(holdsAny(staff('manager'), ['staff_accounts.view'])).toBe(false)
+    expect(holdsAny(staff('super_admin'), ['access_roles.manage'])).toBe(true)
+    expect(holdsAny(null, ['staff_accounts.view'])).toBe(false)
+  })
+
+  it("gives a specialist PD-41's Certificates area, their Tasks and PD-48's Lesson audio -- never Accounts, so no staff-account tabs", () => {
+    // PD-47 plan §3.12: Tasks is in every staff role's navigation -- a Designer
+    // may be given a task too. PD-48: Lesson audio, on the server's word. Still never Accounts.
+    expect(visibleAreas('specialist')).toEqual(['certificates', 'tasks', 'lesson-audio'])
   })
 })

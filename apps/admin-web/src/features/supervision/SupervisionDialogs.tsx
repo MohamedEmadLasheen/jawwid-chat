@@ -1,15 +1,13 @@
-import { useId, useMemo, useState, type ReactNode } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { useCalendarDate } from '@/features/teacher-files/calendar'
-import { CERTIFICATE_ACCEPT, MAX_CERTIFICATE_BYTES, type Certificate, type LeaveRequest } from './api'
+import type { LeaveRequest } from './api'
 import { S, describeError, useCopy } from './copy'
 import {
   useApproveLeave,
   useCancelLeave,
-  useDeclineCertificate,
   useDeclineLeave,
-  useIssueCertificate,
   useSetAllowance,
 } from './hooks'
 
@@ -71,117 +69,6 @@ function TextArea({ label, value, onChange, error }: { label: string; value: str
         </span>
       )}
     </div>
-  )
-}
-
-function Summary({ children }: { children: ReactNode }) {
-  return <dl className="tf-kv">{children}</dl>
-}
-
-// ---------------------------------------------------------------------------
-// Certificates
-// ---------------------------------------------------------------------------
-
-/** Pick the finished file, upload it on its signed URL, issue. */
-export function IssueCertificateDialog({ certificate, onClose }: { certificate: Certificate; onClose: () => void }) {
-  const tx = useCopy()
-  const cal = useCalendarDate()
-  const issue = useIssueCertificate()
-  const fileId = useId()
-  const [file, setFile] = useState<File | null>(null)
-  const [touched, setTouched] = useState(false)
-  const problem = !file
-    ? tx(S.required)
-    : !CERTIFICATE_ACCEPT.split(',').includes(file.type)
-      ? tx(S.fileWrongType)
-      : file.size > MAX_CERTIFICATE_BYTES
-        ? tx(S.fileTooLarge)
-        : null
-
-  return (
-    <Dialog
-      title={tx(S.issueTitle, { name: certificate.learner.name })}
-      onClose={onClose}
-      footer={
-        <Footer
-          onCancel={onClose}
-          pending={issue.isPending}
-          label={tx(S.issue)}
-          onSave={() => {
-            setTouched(true)
-            if (problem || !file) return
-            issue.mutate({ certificateId: certificate.id, file }, { onSuccess: onClose })
-          }}
-        />
-      }
-    >
-      <Summary>
-        <dt>{tx(S.certificate)}</dt>
-        <dd dir="auto">{certificate.title}</dd>
-        <dt>{tx(S.printedName)}</dt>
-        <dd dir="auto">{certificate.printedName}</dd>
-        <dt>{tx(S.achievedOn)}</dt>
-        <dd>{cal.day(certificate.achievedOn)}</dd>
-        {certificate.grade && (
-          <>
-            <dt>{tx(S.grade)}</dt>
-            <dd dir="auto">{certificate.grade}</dd>
-          </>
-        )}
-      </Summary>
-      <p className="field__hint">{tx(S.issueHint)}</p>
-      <div className="field">
-        <label className="field__label" htmlFor={fileId}>
-          {tx(S.file)}
-        </label>
-        <input
-          id={fileId}
-          className="input"
-          type="file"
-          accept={CERTIFICATE_ACCEPT}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          aria-invalid={touched && Boolean(problem)}
-          aria-describedby={touched && problem ? `${fileId}-err` : undefined}
-        />
-        {touched && problem && (
-          <span id={`${fileId}-err`} className="field__error">
-            {problem}
-          </span>
-        )}
-      </div>
-      {issue.isPending && <p className="sv-muted">{tx(S.uploading)}</p>}
-      <ServerError error={issue.error} />
-    </Dialog>
-  )
-}
-
-export function DeclineCertificateDialog({ certificate, onClose }: { certificate: Certificate; onClose: () => void }) {
-  const tx = useCopy()
-  const decline = useDeclineCertificate()
-  const [reason, setReason] = useState('')
-  const [touched, setTouched] = useState(false)
-  return (
-    <Dialog
-      title={tx(S.declineTitle, { name: certificate.learner.name })}
-      onClose={onClose}
-      footer={
-        <Footer
-          onCancel={onClose}
-          pending={decline.isPending}
-          label={tx(S.decline)}
-          danger
-          onSave={() => {
-            setTouched(true)
-            if (!reason.trim()) return
-            decline.mutate({ certificateId: certificate.id, reason: reason.trim() }, { onSuccess: onClose })
-          }}
-        />
-      }
-    >
-      <p className="field__hint">{tx(S.declineHint)}</p>
-      <TextArea label={tx(S.whyRequired)} value={reason} onChange={setReason} error={touched && !reason.trim() ? tx(S.required) : null} />
-      <ServerError error={decline.error} />
-    </Dialog>
   )
 }
 

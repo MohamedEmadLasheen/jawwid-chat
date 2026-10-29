@@ -6,6 +6,8 @@ import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { QueryBoundary } from '@/shared/components/States'
 import { useCopy, type Pair } from '@/features/organization/copy'
+import { ACTION_LOG } from '@/features/intake/historyCopy'
+import { parentPath } from '@/features/profiles/api'
 
 /** One line of GET /staff/:id/action-log (apps/api ActionLogService). */
 export interface ActionLogEntry {
@@ -53,6 +55,19 @@ const ACTION: Record<string, Pair> = {
   'learner.supervisor_assigned': { en: 'Assigned a child to a supervisor', ar: 'أسند طفلًا إلى مشرف' },
   'seat.joined': { en: 'Joined a group', ar: 'انضم إلى مجموعة' },
   'seat.left': { en: 'Left a group', ar: 'غادر مجموعة' },
+  // PD-47 PR-7: what they did to a task themselves (the task's id only).
+  'task.created': { en: 'Gave a task', ar: 'أسند مهمة' },
+  'task.reassigned': { en: 'Handed a task on', ar: 'أسند مهمة لغيره' },
+  'task.out_of_scope': { en: 'Said a task was not theirs', ar: 'قال إن مهمة ليست من مسؤوليته' },
+  'task.returned': { en: 'Returned a task with instructions', ar: 'أعاد مهمة بتعليمات' },
+  'task.completed': { en: 'Completed a task', ar: 'أنجز مهمة' },
+  'task.acknowledged': { en: 'Acknowledged a task no longer needed', ar: 'أقرّ بمهمة لم تعد مطلوبة' },
+  'task.removed': { en: 'Removed a task', ar: 'أزال مهمة' },
+  'task.commented': { en: 'Commented on a task', ar: 'علّق على مهمة' },
+  'task.due_changed': { en: 'Changed a task\'s due date', ar: 'غيّر موعد مهمة' },
+  'task.priority_changed': { en: 'Changed a task\'s level', ar: 'غيّر مستوى مهمة' },
+  // PD-42: entering families by hand.
+  ...ACTION_LOG,
 }
 
 /** Where a line's subject is opened -- each page decides for itself whether the viewer may see it. */
@@ -61,6 +76,9 @@ function linkFor(e: ActionLogEntry): string | null {
   switch (e.entity) {
     case 'supervision_case':
       return `/cases?case=${id}`
+    // PD-47: Tasks says plainly when the reader may not see it.
+    case 'work_task':
+      return `/tasks?task=${id}`
     case 'teacher':
       return `/teachers/files/${id}`
     case 'learner':
@@ -69,6 +87,8 @@ function linkFor(e: ActionLogEntry): string | null {
       return `/chat/${id}`
     case 'staff':
       return `/profile/${id}`
+    case 'contact':
+      return parentPath(e.entityId)
     default:
       return null
   }

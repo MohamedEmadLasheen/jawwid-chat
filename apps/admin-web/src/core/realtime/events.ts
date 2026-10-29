@@ -1,5 +1,3 @@
-import type { Presence, Task } from '@/shared/types/domain'
-
 /**
  * Realtime events are SIGNALS, NOT STATE.
  *
@@ -10,12 +8,9 @@ import type { Presence, Task } from '@/shared/types/domain'
  * reconcile to the server rather than to whichever tab wrote last.
  */
 export interface ServerEvents {
-  'task.updated': { task: Task }
+  /** PD-47: a task changed. Ids only: the page refetches what the viewer may see. */
+  'task.changed': { taskId: string; revision: number; change: string }
   'coverage.changed': { family_ids?: string[]; effective_at: string }
-  'ownership.changed': { family_id: string; from: string; to: string }
-  'unattended.changed': { count: number }
-  'escalation.created': { family_id: string; case_id: string; reason: string }
-  'presence.changed': { staff_id: string; presence: Presence }
 }
 
 export type ServerEventName = keyof ServerEvents

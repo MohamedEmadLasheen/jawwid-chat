@@ -16,7 +16,12 @@ export function rng(seed: number): () => number {
   };
 }
 
-/** A shuffled copy (Fisher-Yates); never the original order when the items allow another. */
+/**
+ * A shuffled copy (Fisher-Yates), uniform: every order is equally likely, the
+ * original one included. For choices (a quiz, which-is-it), where any place
+ * must be as likely for the answer as any other. With two options, forcing
+ * "not the original order" would always put them in reverse (review of #261).
+ */
 export function shuffled<T>(items: readonly T[], seed: number): T[] {
   const out = [...items];
   const next = rng(seed);
@@ -24,6 +29,15 @@ export function shuffled<T>(items: readonly T[], seed: number): T[] {
     const j = Math.floor(next() * (i + 1));
     [out[i], out[j]] = [out[j]!, out[i]!];
   }
+  return out;
+}
+
+/**
+ * A scrambled copy: shuffled, but never the original order when the items allow
+ * another. For ordering games only, where the original order IS the answer.
+ */
+export function scrambled<T>(items: readonly T[], seed: number): T[] {
+  const out = shuffled(items, seed);
   if (out.length > 1 && out.every((x, i) => x === items[i])) [out[0], out[1]] = [out[1]!, out[0]!];
   return out;
 }

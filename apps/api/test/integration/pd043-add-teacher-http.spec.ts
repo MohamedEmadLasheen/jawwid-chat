@@ -104,7 +104,9 @@ const strict = (on: boolean) =>
 
 let seq = 0;
 const email = (label: string) => `${label}-${++seq}@${DOMAIN}`;
-const add = (subject: string, body: Record<string, unknown>) => http(subject, 'POST', '/teachers', { id: randomUUID(), name: 'QA Added Teacher', ...body });
+// Every case adds 'QA Added Teacher' again; the same-name warning (section 7) has its own cases.
+const add = (subject: string, body: Record<string, unknown>) =>
+  http(subject, 'POST', '/teachers', { id: randomUUID(), name: 'QA Added Teacher', confirmSimilarName: true, ...body });
 
 beforeAll(async () => {
   await g.prisma.$connect();
@@ -194,14 +196,14 @@ describe('1. POST /teachers', () => {
   it('a malformed request is 400 and writes nothing', async () => {
     const before = await g.prisma.teacher.count({ where: { organizationId: orgId } });
     for (const body of [{ email: 'not-an-email' }, { email: email('g'), name: ' ' }, { email: email('h'), id: 'nope' }, { email: email('i'), phone: 'x' }]) {
-      const r = await http(m.teachersManager.subject, 'POST', '/teachers', { id: randomUUID(), name: 'QA Added Teacher', ...body });
+      const r = await http(m.teachersManager.subject, 'POST', '/teachers', { id: randomUUID(), name: 'QA Added Teacher', confirmSimilarName: true, ...body });
       expect([JSON.stringify(body), r.status, r.code]).toEqual([JSON.stringify(body), 400, 'COMMON.VALIDATION']);
     }
     expect(await g.prisma.teacher.count({ where: { organizationId: orgId } })).toBe(before);
   });
 
   it('the same request twice is the same teacher, with a fresh code that kills the first', async () => {
-    const body = { id: randomUUID(), name: 'QA Added Teacher', email: email('j') };
+    const body = { id: randomUUID(), name: 'QA Added Teacher', email: email('j'), confirmSimilarName: true };
     const first = await http(m.teachersManager.subject, 'POST', '/teachers', body);
     const again = await http(m.teachersManager.subject, 'POST', '/teachers', body);
     expect([first.status, again.status]).toEqual([201, 201]);
@@ -413,10 +415,53 @@ describe('5. GET /teacher-files offers the form', () => {
     const r = await add(m.teachersManager.subject, { email: email('x'), supervisorId: m.teacherSupervisors[0]!.id });
     const id = r.json.teacher.id as string;
     const as = async (subject: string) => (await http(subject, 'GET', `/teacher-files/${id}`)).json.signIn;
-    expect(await as(m.teachersManager.subject)).toEqual({ status: 'provisioned', canSendCode: true, canGive: false });
-    expect(await as(m.teacherSupervisors[0]!.subject)).toEqual({ status: 'provisioned', canSendCode: true, canGive: false });
+    expect(await as(m.teachersManager.subject)).toEqual({ status: 'provisioned', canSendCode: true, canGive: false, canChange: true });
+    expect(await as(m.teacherSupervisors[0]!.subject)).toEqual({ status: 'provisioned', canSendCode: true, canGive: false, canChange: true });
     // Strict scope off, the other supervisor reads the file but is not the current supervisor.
-    expect(await as(m.teacherSupervisors[1]!.subject)).toEqual({ status: 'provisioned', canSendCode: false, canGive: false });
-    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${m.teachers[0]!.id}`)).json.signIn).toEqual({ status: 'active', canSendCode: false, canGive: false });
+    expect(await as(m.teacherSupervisors[1]!.subject)).toEqual({ status: 'provisioned', canSendCode: false, canGive: false, canChange: false });
+    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${m.teachers[0]!.id}`)).json.signIn).toEqual({ status: 'active', canSendCode: false, canGive: false, canChange: false });
+  });
+});
+
+describe('7. the same name as an active teacher (plan §3.4): a warning the adder may pass', () => {
+  it('warns, naming the teacher, with names folded the PD-42 way; nothing is written until confirmed', async () => {
+    const first = await add(m.teachersManager.subject, { name: 'معلمة الاختبار المشابه', email: email('sn'), confirmSimilarName: undefined });
+    expect(first.status).toBe(201);
+    const second = email('sn');
+    // Teh marbuta, hamza on alef, case and spacing: the same name.
+    const warned = await add(m.teachersManager.subject, { name: '  معلمه   الإختبار المشابه ', email: second, confirmSimilarName: undefined });
+    expect([warned.status, warned.code]).toEqual([409, 'COMM.TEACHER_SIMILAR_NAME']);
+    expect(warned.json.error?.detail).toEqual({ teachers: [{ id: first.json.teacher.id, name: 'معلمة الاختبار المشابه' }] });
+    expect(await g.prisma.account.count({ where: { subject: second } })).toBe(0);
+    const anyway = await add(m.teachersManager.subject, { name: '  معلمه   الإختبار المشابه ', email: second, confirmSimilarName: true });
+    expect(anyway.status).toBe(201);
+
+    const latin = await add(m.teachersManager.subject, { name: 'QA Similar Latin', email: email('sn'), confirmSimilarName: undefined });
+    expect(latin.status).toBe(201);
+    const latinAgain = await add(m.teachersManager.subject, { name: 'qa  SIMILAR latin', email: email('sn'), confirmSimilarName: undefined });
+    expect(latinAgain.code).toBe('COMM.TEACHER_SIMILAR_NAME');
+  });
+
+  it('a teacher who has left is not a match', async () => {
+    const gone = await add(m.teachersManager.subject, { name: 'QA Departed Name', email: email('sn'), confirmSimilarName: undefined });
+    await g.prisma.$executeRaw`UPDATE chat.teacher SET is_active = false, left_at = now() WHERE id = ${gone.json.teacher.id as string}::uuid`;
+    const again = await add(m.teachersManager.subject, { name: 'QA Departed Name', email: email('sn'), confirmSimilarName: undefined });
+    expect(again.status).toBe(201);
+  });
+
+  it('a teacher out of the adder\'s reach is never named, and no warning hints at one', async () => {
+    await strict(true);
+    try {
+      const theirs = await add(m.teacherSupervisors[0]!.subject, { name: 'QA Scoped Name', email: email('sn'), supervisorId: 'self', confirmSimilarName: undefined });
+      expect(theirs.status).toBe(201);
+      const mine = await add(m.teacherSupervisors[1]!.subject, { name: 'QA Scoped Name', email: email('sn'), supervisorId: 'self', confirmSimilarName: undefined });
+      expect(mine.status).toBe(201);
+      // The Teachers manager sees both.
+      const manager = await add(m.teachersManager.subject, { name: 'QA Scoped Name', email: email('sn'), confirmSimilarName: undefined });
+      expect(manager.code).toBe('COMM.TEACHER_SIMILAR_NAME');
+      expect((manager.json.error?.detail as { teachers: unknown[] }).teachers).toHaveLength(2);
+    } finally {
+      await strict(false);
+    }
   });
 });

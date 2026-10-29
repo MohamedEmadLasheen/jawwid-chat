@@ -257,6 +257,7 @@ After the commit, the code is e-mailed to the sign-in address when the e-mail ch
 | `COMM.TEACHER_ALREADY_ADDED` | the e-mail signs in a teacher the caller reaches; `error.detail.teacher` names them |
 | `COMM.TEACHER_EMAIL_UNAVAILABLE` | the e-mail, or the phone, belongs to anyone else: another organization's account, a parent, staff, or a teacher out of the caller's reach. It is one identical answer, so it tells nobody what exists. There is no e-mail-check endpoint. |
 | `COMM.TEACHER_CONTACT_TAKEN` | the phone or e-mail is on the file of a teacher the caller reaches, named in `error.detail.teacher` |
+| `COMM.TEACHER_SIMILAR_NAME` | a **warning**, not a refusal (plan §3.4): an **active** teacher the caller reaches has the same name, folded the PD-42 way (`chat.search_fold`: case, diacritics, tatweel, alef/yeh/heh variants; spaces collapsed). `error.detail.teachers` names them; send the same request again with `confirmSimilarName: true` to add anyway. A match out of the caller's reach gives no warning, so nothing is disclosed. The form shows "Possibly already added: «name»" and **Add anyway**. |
 
 ### Give sign-in: a teacher who exists but has no login
 
@@ -274,3 +275,89 @@ Teachers inserted before PD-43, and the Core-migration intake, have a teacher ro
 | The teacher is inactive | 409 `COMM.TEACHER_FILE_CONFLICT` |
 | The teacher is out of the caller's reach, or unknown | 404 |
 | A sign-in already in use | the same scoped answers as when adding a teacher |
+
+## Offboarding and reactivating a teacher (PD-43 PR-1b)
+
+Migration `20261028200000_chat_pd043_offboarding_and_setup.sql`. Nothing is deleted: the Teacher File and its history stay readable.
+
+| Route | Who | What |
+|---|---|---|
+| `GET /teachers/:id/offboard-preview` | Teachers manager, super admin | `{ teacherId, isActive, students: [{id, name}], openLessons: [{id, kind, startsAt, endsAt}], canOffboard }` |
+| `POST /teachers/:id/offboard` `{ reason, cancelOpenLessons? }` | Teachers manager, super admin | 201 `{ teacherId, cancelledLessons, notCancelled }` |
+| `POST /teachers/:id/reactivate` `{ reason }` | super admin only (owner Q6) | 201 `{ teacherId, signIn, firstLogin: { code, expiresAt, emailed } }`, `Cache-Control: no-store` |
+
+All three carry PD-40 key `teachers.offboard`; reactivation is narrowed to the super admin in the service and in `chat.reactivate_teacher`.
+
+The lessons ahead come first. With no student left they are trials and the like: the preview lists each one, and they are cancelled only when the actor confirms it (`cancelOpenLessons: true`), while the teacher is still live, each with the family's card and its own audit row (`trial.cancelled`, `lesson.admin_cancelled`). The card never carries the offboarding reason. If any cannot be cancelled, nothing is offboarded (409 `TEACHER_HAS_OPEN_LESSONS`, `error.detail.notCancelled`).
+
+Then one transaction: `chat.offboard_teacher` refuses over any lesson still open, closes the teacher (`is_active = false`, `left_at`) and the login (`deactivated`, whether it had signed in or not), retires any waiting first sign-in code, ends the supervisor assignment and audits `teacher.offboarded` with the cancelled lesson ids; every session is revoked in the same transaction and the realtime barrier runs after it.
+
+Reactivation brings back the same teacher with no supervisor: the login waits again (`provisioned`) and a new first sign-in code is issued in the same transaction, shown to the super admin and e-mailed. The old password never comes back.
+
+| Error | When |
+|---|---|
+| `COMM.TEACHER_HAS_STUDENTS` | a student is still assigned; `error.detail.students` lists them. Refused in SQL too. |
+| `COMM.TEACHER_HAS_OPEN_LESSONS` | lessons ahead and `cancelOpenLessons` not set (`error.detail.openLessons`), or one could not be cancelled (`error.detail.notCancelled`; nothing offboarded). Refused in SQL too. |
+| `COMM.TEACHER_FILE_CONFLICT` | offboarding a teacher who has left; reactivating one who is active |
+| `COMM.TEACHER_ONBOARDING_DENIED` | anyone else |
+
+There is no `is_active`/`left_at` check on `chat.teacher`: PD-38 reads an inactive teacher with no leaving date as never listed, so a date made up by a trigger or a backfill would rewrite the calendar's history. The writers here set both.
+
+### The set-up checklist
+
+`GET /teacher-files/:id` carries `setup`: `signedIn`, `supervisor`, `contact`, `payTerms`, `payoutAccount`, `leaveAllowance` (this academy year), `shift` (a current PD-38 pattern), `availability` (hourly teachers count as having it), `profile`, `payMatchesShift` (an hourly pattern with hourly pay, and the reverse), and `missing` (how many are not done). `GET /teacher-files` carries `setupMissing` per teacher. Read live from `chat.teacher_setup_state`, never stored, and never an amount.
+
+### On the Admin Web
+
+`GET /teacher-files/:id` carries `onboarding: { canOffboard, canReactivate }` (from `decideTeacherOnboarding`; the routes re-check), and the Teacher File offers:
+
+- **Offboard** (Teachers manager, super admin; active teachers). The dialog loads the preview: the students still assigned are listed and block it; otherwise each lesson ahead is listed and the teacher is offboarded only once the actor ticks "Cancel this lesson / these lessons" and gives a reason.
+- **Reactivate** (super admin; teachers who left). A reason, then the new first sign-in code is shown once, in the same dialog as when adding a teacher.
+- **Set-up checklist**, a card at the top of an active teacher's file while any step is open (or the pay type and the shift category disagree). The list shows a **Setup incomplete** badge and a **Setup incomplete only** filter.
+
+A dialog that shows a first sign-in code (Give sign-in, Reactivate) stays mounted when the reloaded file no longer offers its button, so the code survives the reload.
+
+### Where a teacher is picked, and unsupervised teachers (PD-43 §3.5-§3.7)
+
+Warnings only: every teacher stays pickable (owner Q5, "students allowed").
+
+- `GET /teachers/candidates` (Change teacher) and `GET /trials/teachers` (trial booking, the Sales subscription form) carry `readiness: { setupIncomplete, notSignedIn, noSupervisor, loginSuspended }` per teacher, from `apps/api/src/platform/teacher-readiness.ts` (`chat.teacher_setup_state` and the login's status). `loginSuspended` is a login suspended through Accounts (G8).
+- Change teacher shows the notes beside the name ("Setup incomplete · Not signed in yet · No supervisor", or "Login suspended"); the radio stays enabled. The subscription form puts them in the option's label, and once such a teacher is chosen says "This teacher's set-up is not finished. Students are allowed; this is a warning." -- and, for a teacher with no supervisor, "The Teachers Manager covers this teacher until a supervisor is set."
+- `GET /teacher-files` rows carry `unsupervised` (active, no live primary supervisor). Every reader sees a **No supervisor** badge; the Teachers Manager and the super admin also get an "{n} unsupervised" count, an **Unsupervised only** filter and an **Assign supervisor** link to Organization's Teachers & supervisors tab (`/organization?tab=teachers`, or `/admin/teams?tab=teachers` in the Admin Portal).
+- The offboard preview's students link to their page, where Change teacher is.
+
+### Change sign-in e-mail (PD-43 §3.3)
+
+**`PATCH /teachers/:id/sign-in`** (`teachers.create`) takes `{ email, reason? }`; `Cache-Control: no-store`. The SQL writer is `chat.change_teacher_sign_in`.
+
+- **While the login waits** (`provisioned`): the reissue rule (`chat.may_give_teacher_sign_in`: the super admin, the Teachers Manager, the teacher's **current** supervisor, strict scope on or off). Every live code of the login is retired, and a new first sign-in code is issued in the same transaction and e-mailed to the **new** address after the commit. Only the Manager and the super admin see it in the answer.
+- **Once signed in** (`active`): the super admin only. Every session ends; the teacher signs in again with the new address and the same password. The answer's `firstLogin` is `null`.
+- The Teacher File's e-mail follows only when it was the sign-in. Audited as `teacher.sign_in_changed`, with no address in it.
+- The Teacher File's `signIn.canChange` says whether to offer **Change sign-in e-mail**; the code, when shown, stays on screen through the file's reload.
+
+| Refusal | Answer |
+|---|---|
+| Out of the caller's reach, or unknown | 404 |
+| A used login, by anyone but the super admin | 403 `COMM.TEACHER_ONBOARDING_DENIED` |
+| No login (Give sign-in is for that), a closed login, an inactive teacher, the same address | 409 `COMM.TEACHER_FILE_CONFLICT` |
+| A suspended login | 409 `COMM.TEACHER_SIGN_IN_SUSPENDED` |
+| An address in use | the same scoped answers as when adding a teacher (gate P2-5) |
+
+### What the Teachers Manager is told (PD-43 §3.4, §3.7)
+
+PD-34 notifications, under Tasks, to the Teachers Manager (the super admin when the department has none), never to whoever acted; names only.
+
+| Key | When | Written by |
+|---|---|---|
+| `teacher_duplicate_hidden` | a sign-in or contact is refused because it is on a teacher out of the adder's reach; the adder's answer is unchanged | the same, after the answer (its timing must not leak) |
+
+**A teacher without a supervisor is a task now** (PD-47 PR-6b, owner 2026-10-29, "Replace it"). The notices `teacher_added_unsupervised` and `teacher_supervisor_left` are no longer sent. Instead the Teachers Manager (else the super admin) gets one `teacher_unsupervised` task per stretch a teacher spends without a live supervisor: a teacher added with none, or whose supervisor left. It is announced once with `task_assigned`, and it is done when a supervisor is assigned. See `docs/product/pd047-tasks-plan.md` §3.6.
+
+### Teacher history (PD-43 §4)
+
+**`GET /teachers/:id/history`** (`teacher_files.view`) returns `{ teacherId, events: [{ at, action, actor: {id, name} | null, reason, detail }] }`, newest first (at most 200). It is read exactly as the Teacher File is: the department gate, then the PD-35 scope (404 out of a strict supervisor's scope).
+
+- **The teacher** (`entity 'teacher'`): `teacher.created`, `teacher.sign_in_given`, `teacher.sign_in_changed`, `teacher_supervisor.assigned` / `.unassigned` (`detail.from` / `detail.to` name the supervisors), `teacher.offboarded`, `teacher.reactivated`.
+- **Their login** (`entity 'account'`): `account.first_login_code_issued`, `account.activated`, `account.password_reset_issued`, `account.password_reset_completed`, `account.suspended`, `account.reactivated`. Session bookkeeping is left out.
+- Never a raw before/after: an audit row may hold an e-mail, a phone flag or a code id; the answer holds names only. `actor` is null when no staff member acted (the teacher's own first sign-in reads "By the teacher").
+- The Teacher File shows it as **Sign-in and status history**.

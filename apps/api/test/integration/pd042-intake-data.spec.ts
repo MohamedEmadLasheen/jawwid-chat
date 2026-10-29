@@ -176,6 +176,24 @@ async function enteredDaysAgo(enrolmentId: string, days: number) {
 }
 
 /**
+ * The academy's zone (chat.config 'schedule.timezone', read by
+ * chat.pd030_zone()) pinned for this file to one where it is about noon right
+ * now, so "a lesson today" never depends on the hour CI runs at: with Cairo it
+ * failed G-19 whenever a run fell in the first minutes after Cairo's midnight
+ * (2026-10-28, ~21:00 UTC, on #251 and #252). Restored after the file.
+ */
+let zoneBefore: unknown = undefined;
+async function pinAcademyNoon() {
+  const offset = 12 - new Date().getUTCHours(); // -11 .. +12: local time is 12:00-12:59 there
+  // Etc/GMT names count the other way: Etc/GMT-3 is UTC+3.
+  const zone = offset === 0 ? 'Etc/GMT' : `Etc/GMT${offset > 0 ? '-' : '+'}${Math.abs(offset)}`;
+  await sql(
+    `insert into chat.config (key, value) values ('schedule.timezone', to_jsonb($1::text))
+     on conflict (key) do update set value = excluded.value`, zone,
+  );
+}
+
+/**
  * A lesson of the child that took place today (academy date) and was used:
  * the teacher recorded that the student did not attend (PD-30 counts it).
  */
@@ -187,7 +205,8 @@ async function usedLesson(learnerId: string) {
   );
   // Inside today, never two lessons of one teacher at once.
   const back = Math.min(since - 60, 40 * 60) - lessonsMade * 4 * 60;
-  if (back < 60) throw new Error('too close to the academy\'s midnight to place a lesson today; rerun');
+  // The zone is pinned to about noon (pinAcademyNoon): there is always room today.
+  if (back < 60) throw new Error(`no room left today for lesson ${lessonsMade} (since midnight: ${since}s); the zone pin did not hold`);
   const startsAt = new Date(Date.now() - back * 1000);
   const dto = await lessons.schedule(tsupId, { learnerId, startsAt: startsAt.toISOString(), endsAt: new Date(startsAt.getTime() + 3 * MIN).toISOString() });
   await lessons.absence(s.teacherId, dto.id, {});
@@ -195,15 +214,23 @@ async function usedLesson(learnerId: string) {
 
 beforeAll(async () => {
   await g.prisma.$connect();
+  const row = await g.prisma.config.findUnique({ where: { key: 'schedule.timezone' } });
+  zoneBefore = row ? row.value : null;
 });
 afterAll(async () => {
   await sql(`delete from chat.config where key = 'sales.family_scope'`);
+  if (zoneBefore === null) {
+    await sql(`delete from chat.config where key = 'schedule.timezone'`);
+  } else if (zoneBefore !== undefined) {
+    await sql(`update chat.config set value = $1::jsonb where key = 'schedule.timezone'`, JSON.stringify(zoneBefore));
+  }
   await truncate(g.prisma);
   await g.prisma.$disconnect();
 });
 beforeEach(async () => {
   await sql(`delete from chat.config where key = 'sales.family_scope'`);
   await truncate(g.prisma);
+  await pinAcademyNoon();
   s = await seed(g.prisma);
   salesId = randomUUID();
   otherSalesId = randomUUID();
@@ -460,6 +487,46 @@ describe('5. their own family, and the Sales switch', () => {
     expect(await handles(salesId)).toBe(true);
     expect(await handles(salesManagerId)).toBe(true);
     expect(await handles(tsupId)).toBe(false);
+  });
+
+  it('the request role keeps every write: the guards run as their owner, and chat_app executes none of them (G-19 on #202)', async () => {
+    const guards = await g.prisma.$queryRawUnsafe<Array<{ fn: string; definer: boolean; pinned: boolean; app: boolean }>>(`
+      select p.proname::text as fn, p.prosecdef as definer,
+             exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%') as pinned,
+             has_function_privilege('chat_app', p.oid, 'EXECUTE') as app
+        from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+       where t.tgname = 'zz_pd042_sales_scope'
+       order by 1`);
+    expect(guards).toHaveLength(8);
+    expect(guards.filter((x) => !x.definer || !x.pinned || x.app)).toEqual([]);
+    const helpers = await g.prisma.$queryRawUnsafe<Array<{ app: boolean }>>(`
+      select has_function_privilege('chat_app', f, 'EXECUTE') as app
+        from unnest(array['chat.sales_scope_refuses(uuid, uuid)', 'chat.pd042_acting_staff()']) f`);
+    expect(helpers.map((x) => x.app)).toEqual([false, false]);
+
+    // An ordinary staff write on the request role, with the switch at 'own'
+    // and nobody named as the acting Sales member: as before PD-42.
+    await sql(`insert into chat.config (key, value) values ('sales.family_scope', to_jsonb('own'::text))`);
+    const account = randomUUID();
+    const subject = `pd042_app_${account.slice(0, 8)}@example.test`;
+    await sql(`insert into chat.account (id, subject, kind) values ($1::uuid, $2, 'staff')`, account, subject);
+    await sql(`update chat.staff set account_id = $1::uuid where id = $2::uuid`, account, s.ownerId);
+    const ROLLBACK = new Error('rollback');
+    let updated: number | string = 'not run';
+    await g.prisma
+      .$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`set local role chat_app`);
+        await tx.$executeRawUnsafe(`select set_config('chat.actor_subject', $1, true)`, subject);
+        await tx.$executeRawUnsafe(`select set_config('chat.actor_organization', chat.default_organization_id()::text, true)`);
+        updated = await tx
+          .$executeRawUnsafe(`update chat.family set language = 'en' where id = $1::uuid`, s.familyId)
+          .catch((e: Error) => e.message);
+        throw ROLLBACK;
+      })
+      .catch((e: unknown) => {
+        if (e !== ROLLBACK) throw e;
+      });
+    expect(updated).toBe(1);
   });
 
   it('a covering backup reaches the family but does not own it (review P2)', async () => {

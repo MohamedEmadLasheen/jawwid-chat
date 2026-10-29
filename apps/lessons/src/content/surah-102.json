@@ -1,0 +1,335 @@
+{
+  "surah": 102,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the four Tajweed rules and the two Tajweed quiz questions (Tajweed comes only from the reviewed dataset; the old Tajweed was also wrong in places: \"sawfa ta'lamun\" and \"'ayna al-yaqin\" were given as idgham, and the qaf of al-maqabir, which carries a fatha, as qalqalah; one Tajweed option, al-qamar, was typed Quran not of this surah), the audio URLs and the reciter line, the Quran quote at the end of the second did-you-know line (Ibrahim 14:7, typed), and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old \"complete the ayah\" game. The old quiz had no categories; they were assigned here. The \"choose the meaning\" game is carried into the quiz (q7-q8), with its screen's prompt \"ma ma'na kalimah\" as the question; its alhakum and an-na'im questions repeat the final test's (q6, q2) and are skipped. Each word meaning is the old card's meaning and its simple explanation joined with \": \"; al-yaqin, which occurs twice, is placed at 5:5 ('ilm al-yaqin). Each lesson learned is its old title, description and example joined. The reflection's ideas are its old examples. Emoji were stripped from the ends of lines. Not carried (no field or no such game in the engine): the \"Makki\" surah type, the ayah-ordering and choose-the-ayah games, the word-to-meaning matching game, the intro quiz (surah name, ayah count), the reflection's lead-in line, the encouragements and the closing line of the final test."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-102 (read as text, never built or run)",
+    "sha256": {
+      "lib/lessonData.ts": "b2575da7c0e3495ca6e16d70c7b83bcffeb56499ace95a7bf9786d5745973bf9",
+      "components/LessonIntro.tsx": "026595aef3765901cf385605e252d0e0d6acd5813355e02bf2f478c3e7257d14",
+      "components/VerseByVerse.tsx": "97fcf8099e47a57069f72f006614315247d278c3fa2441c22c1e520c03c58781",
+      "components/MemorizationGames.tsx": "a56c6c6d4071af574630f1db668422986178f743fbf74a631cee336a770500a4",
+      "components/MeaningsSection.tsx": "112124bb620831aafe8c45c25841249e7e613523ef28e048d5dca52b96713393",
+      "components/TajweedAndLessons.tsx": "d14ff1c221c8da39ad22a16be702d149c398c21af66aed1c35ce9eb83d81e0ab",
+      "components/FinalAssessment.tsx": "704091e3f07a1e9e51cd3f02a2565796aa44ea46d23784db899311b92c9c653f"
+    }
+  },
+  "intro": {
+    "text": "سورة التكاثر تعلمنا ألا ننشغل بجمع الأشياء والتفاخر بها، بل نتذكر الله ونفعل الخير ونشكره على نعمه.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "شغلكم التفاخر والتباهي بكثرة الأموال والأولاد عن طاعة الله.",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "استمر انشغالكم بالدنيا حتى متم ودُفنتم في القبور.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "لا! سوف تعرفون الحقيقة عندما تقابلون الله.",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "ثم لا! سوف تعرفون الحقيقة مرة أخرى - تأكيد وتحذير شديد.",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "لو كنتم تعلمون علمًا أكيدًا لما انشغلتم بالدنيا عن الآخرة.",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "سوف ترون النار يوم القيامة.",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "ثم سوف ترونها رؤية أكيدة بأعينكم.",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "ثم سوف يسألكم الله يوم القيامة عن كل النعم التي أعطاكم إياها.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "شَغَلَكُم: يعني خلّاكم تنسون الأشياء المهمة",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "التفاخر بالكثرة: يعني التباهي بكثرة الأشياء مثل الألعاب والأموال",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 2,
+      "meaning": "متم ودُفنتم: يعني انتهت حياتكم في الدنيا",
+      "review": "PHRASE: the old entry is the two words \"zurtumu al-maqabir\" (2:2-3); the engine shows one word, so this points at zurtum (2:2) and the meaning (\"you died and were buried\") covers both. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 5,
+      "word": 5,
+      "meaning": "العلم الأكيد: يعني الشيء المؤكد الذي لا شك فيه",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 2,
+      "meaning": "النار: يعني نار جهنم التي يعاقب فيها الله من لا يطيعه",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 5,
+      "meaning": "النعم والخيرات: يعني كل الأشياء الجميلة التي أعطانا الله مثل الطعام والماء والعائلة",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 3,
+      "word": 3
+    },
+    {
+      "ayah": 8,
+      "word": 5
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول آية في سورة التكاثر؟",
+      "options": [
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 3
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "العقاب"
+        },
+        {
+          "text": "النعم والخيرات"
+        },
+        {
+          "text": "الحزن"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 8,
+        "word": 5
+      },
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة التكاثر؟",
+      "options": [
+        {
+          "text": "6"
+        },
+        {
+          "text": "8"
+        },
+        {
+          "text": "10"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "ما آخر آية في سورة التكاثر؟",
+      "options": [
+        {
+          "ayah": 6
+        },
+        {
+          "ayah": 3
+        },
+        {
+          "ayah": 8
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q4"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا تعلمنا سورة التكاثر؟",
+      "options": [
+        {
+          "text": "نجمع أشياء كثيرة"
+        },
+        {
+          "text": "نشكر الله على نعمه ولا نتفاخر"
+        },
+        {
+          "text": "نلعب كثيرًا"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "ساعدكم"
+        },
+        {
+          "text": "شَغَلَكُم"
+        },
+        {
+          "text": "أفرحكم"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 1
+      },
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "word": {
+        "ayah": 1,
+        "word": 2
+      },
+      "options": [
+        {
+          "text": "الصلاة"
+        },
+        {
+          "text": "التفاخر بالكثرة"
+        },
+        {
+          "text": "النوم"
+        },
+        {
+          "text": "الأكل"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "word": {
+        "ayah": 6,
+        "word": 2
+      },
+      "options": [
+        {
+          "text": "الجنة"
+        },
+        {
+          "text": "النار"
+        },
+        {
+          "text": "البحر"
+        },
+        {
+          "text": "السماء"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q8"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "شكر الله على النعم: الله أعطانا نعمًا كثيرة مثل الطعام والماء والعائلة، يجب أن نشكره دائمًا. عندما تأكل طعامًا لذيذًا، قل: الحمد لله!",
+      "review": null
+    },
+    {
+      "text": "عدم التفاخر بالأشياء: لا نتباهى بألعابنا أو ملابسنا أمام أصدقائنا. بدل أن تقول 'عندي ألعاب أكثر منك'، شارك ألعابك مع أصدقائك!",
+      "review": null
+    },
+    {
+      "text": "تذكر الله دائمًا: نتذكر الله في كل وقت ونصلي ونقرأ القرآن. قبل النوم، اقرأ سورة التكاثر وادعُ الله.",
+      "review": "The example tells the child to recite At-Takathur before sleeping. There is no established sunnah of reciting this surah at bedtime (the known bedtime surahs are others, e.g. Al-Kafirun, Al-Ikhlas and the Mu'awwidhatan), so a child may take it as one. Teacher to confirm or reword the example."
+    }
+  ],
+  "reflection": {
+    "question": "ما هي بعض النعم التي أعطانا الله إياها ويجب أن نشكره عليها؟",
+    "ideas": [
+      "الطعام والماء",
+      "العائلة والأصدقاء",
+      "الصحة والعافية",
+      "البصر والسمع",
+      "المدرسة والتعلم",
+      "الألعاب والمرح"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله سيسألنا يوم القيامة عن كل النعم التي أعطانا إياها؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن شكر الله يجعل النعم تزيد؟",
+      "review": "CUT: the old line went on \"qala Allahu ta'ala: la-in shakartum la-azidannakum\", which is Ibrahim 14:7 typed in full, not an ayah of this surah. The Quran never goes in prose, so the line stops before the quote. Teacher to keep it as is or add the ayah as a reference."
+    },
+    {
+      "text": "هل تعلم أن سورة التكاثر نزلت في مكة المكرمة؟",
+      "review": "Makki is the majority view, but it is disputed: some scholars hold At-Takathur is Madani (reports link it to two Ansari clans boasting of their numbers, and Ubayy ibn Ka'b's report of when it was revealed is read as Madani). Teacher to decide whether to keep this."
+    },
+    {
+      "text": "هل تعلم أن أبسط طريقة لشكر الله هي قول 'الحمد لله'؟",
+      "review": null
+    }
+  ]
+}

@@ -121,6 +121,8 @@ export enum CommErrorCode {
    * story route into an existence oracle.
    */
   STORY_NOT_FOUND = 'COMM.STORY_NOT_FOUND',
+  /** PD-41: story media is a stories/ key Stories issued to this publisher (POST /stories/media), used once. 403. */
+  STORY_MEDIA_NOT_GRANTED = 'COMM.STORY_MEDIA_NOT_GRANTED',
   STORY_EMPTY = 'COMM.STORY_EMPTY',
   STORY_TOO_LONG = 'COMM.STORY_TOO_LONG',
   STORY_ALREADY_PUBLISHED = 'COMM.STORY_ALREADY_PUBLISHED',
@@ -264,12 +266,41 @@ export enum CommErrorCode {
   TEACHER_HAS_SIGN_IN = 'COMM.TEACHER_HAS_SIGN_IN',
   /** PD-43: the database was too busy to finish adding the teacher; nothing was written. 503. */
   TEACHER_ONBOARDING_BUSY = 'COMM.TEACHER_ONBOARDING_BUSY',
+  /** PD-43: a teacher still has students; move them to other teachers before offboarding. 409. */
+  TEACHER_HAS_STUDENTS = 'COMM.TEACHER_HAS_STUDENTS',
+  /** PD-43: a teacher has lessons ahead; offboard with cancelOpenLessons to cancel them. 409. */
+  TEACHER_HAS_OPEN_LESSONS = 'COMM.TEACHER_HAS_OPEN_LESSONS',
+  /**
+   * PD-43 §3.4: an active teacher the caller reaches has the same name;
+   * `detail.teachers` names them. A warning: confirmSimilarName continues. 409.
+   */
+  TEACHER_SIMILAR_NAME = 'COMM.TEACHER_SIMILAR_NAME',
   /** PD-12: no such certificate, or none this caller may see. 404. */
   CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
   /** PD-12: this caller may not request, issue or decline this certificate. 403. */
   CERTIFICATE_DENIED = 'COMM.CERTIFICATE_DENIED',
   /** PD-12: the certificate is not in a state that allows this (already decided, no group to deliver into). 409. */
   CERTIFICATE_STATE = 'COMM.CERTIFICATE_STATE',
+  /** PD-41: the same certificate (recipient, type, Juz' or period) is already open or sent; detail names it. 409. */
+  CERTIFICATE_DUPLICATE = 'COMM.CERTIFICATE_DUPLICATE',
+  /** PD-41: a similar certificate exists for this recipient in the last 30 days; resend with confirmDuplicate. 409. */
+  CERTIFICATE_DUPLICATE_SUSPECTED = 'COMM.CERTIFICATE_DUPLICATE_SUSPECTED',
+  /** PD-41: send and Story need the requester's approval of the current design first. 409. */
+  CERTIFICATE_NOT_APPROVED = 'COMM.CERTIFICATE_NOT_APPROVED',
+  /** PD-41: the design changed since the reviewer looked at it; review the current revision. 409. */
+  CERTIFICATE_REVISION_CHANGED = 'COMM.CERTIFICATE_REVISION_CHANGED',
+  /** PD-41: the person who uploaded a design does not approve it. 403. */
+  CERTIFICATE_SELF_APPROVAL = 'COMM.CERTIFICATE_SELF_APPROVAL',
+  /** PD-41: the group the server would send into changed since it was shown; check it and send again. 409. */
+  CERTIFICATE_TARGET_CHANGED = 'COMM.CERTIFICATE_TARGET_CHANGED',
+  /** PD-41: the request did not opt in to a Story. 409. */
+  CERTIFICATE_STORY_NOT_OPTED_IN = 'COMM.CERTIFICATE_STORY_NOT_OPTED_IN',
+  /** PD-41: a student certificate's Story needs the family's recorded consent; none, or it was withdrawn. 409. */
+  CERTIFICATE_STORY_CONSENT_MISSING = 'COMM.CERTIFICATE_STORY_CONSENT_MISSING',
+  /** PD-41: a Story shows an image; this certificate's file is a PDF. 409. */
+  CERTIFICATE_STORY_NEEDS_IMAGE = 'COMM.CERTIFICATE_STORY_NEEDS_IMAGE',
+  /** PD-41: this certificate type is disabled; pick an active one. 409. */
+  CERTIFICATE_TYPE_DISABLED = 'COMM.CERTIFICATE_TYPE_DISABLED',
   /** PD-12: no such leave request or teacher, or none this caller may see. 404. */
   LEAVE_NOT_FOUND = 'COMM.LEAVE_NOT_FOUND',
   /** PD-12: this caller may not request, decide or cancel this leave, or set this allowance. 403. */
@@ -298,6 +329,12 @@ export enum CommErrorCode {
   DISCIPLINE_STATE = 'COMM.DISCIPLINE_STATE',
   /** PD-12 S2: open lessons fall inside the suspension; decide again with cancelCollidingLessons. 409. */
   DISCIPLINE_LESSONS_COLLIDE = 'COMM.DISCIPLINE_LESSONS_COLLIDE',
+  /**
+   * PD-12 S2: a permanent suspension's lessons are cancelled first; some could not
+   * be, so nothing was decided and the teacher is still active. `detail` names
+   * the cancelled and the not-cancelled lessons. 409.
+   */
+  DISCIPLINE_NOT_CANCELLED = 'COMM.DISCIPLINE_NOT_CANCELLED',
   /** PD-12 S3: only Operations (in scope), the Operations Manager and the super admin read instalments. 403. */
   BILLING_DENIED = 'COMM.BILLING_DENIED',
   /** PD-12 S3: no such family in the caller's organization, or none this caller may see. 404. */
@@ -335,6 +372,26 @@ export enum CommErrorCode {
    * Never retry: it changes only when the account's roles change.
    */
   PERMISSION_DENIED = 'COMM.PERMISSION_DENIED',
+  /**
+   * PD-40 PR-3: this caller may not create or manage this staff account, or
+   * grant this role (plan §13 S1/S2: only the super admin creates supervisors
+   * and managers; a department manager acts on the specialists of their own
+   * department, with roles whose every key they hold and may delegate). 403.
+   */
+  STAFF_ACCOUNT_DENIED = 'COMM.STAFF_ACCOUNT_DENIED',
+  /** PD-40 PR-3: no such staff account in the caller's reach. 404. */
+  STAFF_ACCOUNT_NOT_FOUND = 'COMM.STAFF_ACCOUNT_NOT_FOUND',
+  /** PD-40 PR-3: a malformed request -- name, e-mail, tier, department, role list or reason. 400. */
+  STAFF_ACCOUNT_INVALID = 'COMM.STAFF_ACCOUNT_INVALID',
+  /** PD-40 PR-3: the sign-in e-mail already signs in to Chat. 409. */
+  STAFF_ACCOUNT_CONFLICT = 'COMM.STAFF_ACCOUNT_CONFLICT',
+  /** PD-40 PR-3: an access role that cannot be defined -- an unknown or super-admin-only key, a bad tier, a taken key. 400. */
+  ACCESS_ROLE_INVALID = 'COMM.ACCESS_ROLE_INVALID',
+  /**
+   * PD-40 PR-3: the edit adds a key that a manager who granted this role may not
+   * grant; the message names those grants -- revoke them first (H5). 409.
+   */
+  ACCESS_ROLE_CONFLICT = 'COMM.ACCESS_ROLE_CONFLICT',
   /** PD-21: no such account in the caller's organization. 404. */
   ACCOUNT_ADMIN_NOT_FOUND = 'COMM.ACCOUNT_ADMIN_NOT_FOUND',
   /** PD-21: not in a state for this (suspend an inactive account, reactivate one that is not suspended, impersonate an inactive one). 409. */
@@ -432,6 +489,28 @@ export enum CommErrorCode {
   /** A Quran range that does not exist or is too long (at most 50 ayat). 422. */
   QURAN_INVALID = 'COMM.QURAN_INVALID',
 
+  // --- PD-48: lesson voice-over (computer voice, two teacher approvals per clip) ---
+  /** No such lesson, string or clip (or not one this lesson's text knows). 404. */
+  LESSON_AUDIO_NOT_FOUND = 'COMM.LESSON_AUDIO_NOT_FOUND',
+  /** A malformed review: an unknown action, a missing reason or category, a hash that is not one. 422. */
+  LESSON_AUDIO_INVALID = 'COMM.LESSON_AUDIO_INVALID',
+  /** What was heard is not this clip, or the clip is no longer pending/approved, or a decision comes too early. 409. */
+  LESSON_AUDIO_STATE = 'COMM.LESSON_AUDIO_STATE',
+  /** The reviewer does not hold lesson_audio.review, or has already approved this clip. 403. */
+  LESSON_AUDIO_DENIED = 'COMM.LESSON_AUDIO_DENIED',
+
+  // --- PD-49: the review of children's Quran content and of game mechanics ---
+  /** No such scope or item (or not one the API was built with). 404. */
+  LESSON_CONTENT_NOT_FOUND = 'COMM.LESSON_CONTENT_NOT_FOUND',
+  /** A malformed review: an unknown step or action, a missing category or reason, a hash that is not one. 422. */
+  LESSON_CONTENT_INVALID = 'COMM.LESSON_CONTENT_INVALID',
+  /** The text changed, is already rejected or withdrawn, a step is out of order or already signed. 409. */
+  LESSON_CONTENT_STATE = 'COMM.LESSON_CONTENT_STATE',
+  /** The reviewer does not hold the step's key, or already signed another step of this text. 403. */
+  LESSON_CONTENT_DENIED = 'COMM.LESSON_CONTENT_DENIED',
+  /** The API has no approvals signing key (LESSON_APPROVALS_SIGNING_KEY): nothing is exported unsigned. 503. */
+  LESSON_CONTENT_SIGNING_UNAVAILABLE = 'COMM.LESSON_CONTENT_SIGNING_UNAVAILABLE',
+
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */
   SEAT_REASON_UNKNOWN = 'COMM.SEAT_REASON_UNKNOWN',
@@ -456,6 +535,16 @@ export enum CommErrorCode {
   /** A field failed validation. 400. */
   CASE_INVALID = 'COMM.CASE_INVALID',
 
+  // --- PD-47: tasks ---
+  /** No such task, or not one the caller may see (assignee, responsible manager, teacher supervisor, super admin). 404. */
+  TASK_NOT_FOUND = 'COMM.TASK_NOT_FOUND',
+  /** The caller may see the task but not do this (only the assignee completes or disputes; only the responsible manager or the super admin decides). 403. */
+  TASK_DENIED = 'COMM.TASK_DENIED',
+  /** The task is closed, or the action is not one of its exits from where it stands. 409. */
+  TASK_STATE = 'COMM.TASK_STATE',
+  /** A field failed validation, or the new assignee is not a live person of the organization. 400. */
+  TASK_INVALID = 'COMM.TASK_INVALID',
+
   // --- PD-35 B6: department rooms ---
   /** Calls are not available in a department room (a later PD-19 decision). 403. */
   CALL_NOT_IN_ROOM = 'COMM.CALL_NOT_IN_ROOM',
@@ -463,6 +552,30 @@ export enum CommErrorCode {
   // --- PD-35 B7: the action log ---
   /** No such staff member, or not one whose log the caller may read (self, their department's manager, the super admin). 404. */
   ACTION_LOG_NOT_FOUND = 'COMM.ACTION_LOG_NOT_FOUND',
+
+  // --- PD-42: entering families by hand ---
+  /** Families are entered by Sales and Operations supervisors (for their own families) and their managers. 403, before any lookup. */
+  INTAKE_DENIED = 'COMM.INTAKE_DENIED',
+  /** No such family or child, or not one of the caller's own families. 404. */
+  INTAKE_NOT_FOUND = 'COMM.INTAKE_NOT_FOUND',
+  /** A field failed validation (the message names it). 400. */
+  INTAKE_INVALID = 'COMM.INTAKE_INVALID',
+  /** The intake id was used by someone else or for another body, or the change does not apply any more. 409. */
+  INTAKE_STATE = 'COMM.INTAKE_STATE',
+  /**
+   * Entering families waits for the contact-key backfill (every existing
+   * family's parents keyed), so that no parent is entered twice. 409; the
+   * operator runs family-contact-keys-backfill --apply.
+   */
+  INTAKE_NOT_READY = 'COMM.INTAKE_NOT_READY',
+  /**
+   * This parent is already in Chat (the e-mail or the number). `detail` names
+   * the family only when the caller may handle it; otherwise it says nothing
+   * more. 409. Add the children to that family instead.
+   */
+  PARENT_EXISTS = 'COMM.PARENT_EXISTS',
+  /** A child with this name (and date of birth) is already in the family; resend with confirmDuplicate for twins. 409. */
+  CHILD_EXISTS = 'COMM.CHILD_EXISTS',
 }
 
 export class CommError extends Error {

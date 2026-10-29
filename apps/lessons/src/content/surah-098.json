@@ -1,0 +1,598 @@
+{
+  "surah": 98,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson (which has no lib/ data file; its content lives in components/SurahData.ts and the components), then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the six Tajweed rules, the Tajweed quiz and find-the-madd games, and the two Tajweed questions of the final quiz (Tajweed comes only from the reviewed dataset); the audio URLs and the reciter line; the intro hadith of Anas (Ubayy ibn Ka'b), which has no field here and quotes the opening of ayah 1 typed, and its simple retelling (no field); the did-you-know line giving the surah's other name \"lam yakun\", the first two words of ayah 1 typed; and every hand-typed Quran string (replaced by positions). Cut: tafsir of ayah 1 stops before its quote of four words of ayah 1. The complete-the-ayah words are the answers of the old missing-word game; its hand-typed distractors (al-salah, a word of ayah 5; and al-jannah, qadimah, kabirah, kha'ifin, farihin, al-dunya, al-nas, not of this surah) are gone, as the game draws its options from these words. The old complete-the-ayah game's answers were multi-word endings and are not carried. Nine word cards are phrases of two or three words; each points at its first word and is held. The old quiz categories were mapped (hifz, ma'ani, and \"fahm\" to lessons); its difficulty levels are not carried. Each lesson learned is its old title and description joined with \": \". The reflection question is the old two reflection prompts joined with a space; the old page had no reflection ideas. Emoji were stripped from the ends of lines. Matching-only aids, never stored: yatlu (2:4, Uthmani silent alif), al-salah and al-zakah (5:11, 5:13, waw + dagger alif), and wa- on al-mushrikin (1:8, the old card drops it). Not carried (no field or no such game in the engine): the \"Madani\" surah type and meaning, the intro quiz (name, ayah count), the ayah-ordering, start-end memory and build-the-ayah games, the word-meaning games, the encouragement lines, and the reflection's feedback lines."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-98 (read as text, never built or run)",
+    "sha256": {
+      "components/SurahData.ts": "a08a962a54a3b2c40e70ac137b7352794ca5818d061fe0d216ecea24fc1e1745",
+      "components/IntroSection.tsx": "f76526bb61ff50c16529c6dfab207dab2de85369c7f8896348288717a64e8fb0",
+      "components/LearnVerses.tsx": "c886f61d82e73edddad0af2e6000764afea74daec5c4813dd89aef6d971c53dd",
+      "components/MeaningsSection.tsx": "f3767252e0999efdaad2b59d38f619d1f58f2db6e67309a286f56079033f45f2",
+      "components/MemorizationGames.tsx": "7f7a923acec1ec93acbc99fc3c4fc9a96a623894d8d15a597e9f8615b3d19139",
+      "components/TajweedSection.tsx": "d638e9aa1f04f28637545952c478dddc714b0fb49cd2fc41328ec6cbcdb31da4",
+      "components/FinalQuiz.tsx": "ed3e5d3bd14448ca734df2e42eca769f8a1324bf539cdd58560d7facaad4aff8"
+    }
+  },
+  "intro": {
+    "text": "سورة البينة نزلت في المدينة المنورة، وعدد آياتها 8 آيات. تتحدث عن أهمية الإيمان بالله وعبادته وحده، وأن القرآن الكريم هو الدليل الواضح من الله.",
+    "review": "Whether Al-Bayyinah is Madani or Makki is disputed: the Madinah mushaf heads it Madani (the view of the majority, and its address to the People of the Book fits Madinah), but others (a report from Ibn Abbas, and Yahya ibn Sallam) hold it is Makki. Teacher to decide whether to keep this. Also: it says the clear proof (al-bayyinah) is the Quran; ayah 2 names it \"a Messenger from Allah reciting purified pages\", and common tafsir takes al-bayyinah to be the Prophet (with the Quran he recites). Teacher to choose the wording."
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "الذين لم يؤمنوا بالله",
+      "review": "CUT: the old line went on \"min ahl al-kitab wa-al-mushrikin\" (four words of ayah 1 typed) and then \"were waiting for a clear proof from Allah to come to them\"; the Quran never goes in prose, so the text stops before the quote and is now only \"those who did not believe in Allah\". Also doubtful: common tafsir (al-Tabari, Ibn Kathir) is that the disbelievers among the People of the Book and the polytheists were not going to leave their disbelief until the clear proof (the Messenger, ayah 2) came to them; \"they were waiting for it\" is a minority reading. Teacher to write the line."
+    },
+    {
+      "ayah": 2,
+      "text": "هذا الدليل هو رسول من الله (محمد ﷺ) يقرأ صفحات نظيفة وطاهرة من القرآن الكريم",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "في هذه الصفحات أحكام عظيمة وصحيحة ومستقيمة من الله",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "أهل الكتاب اختلفوا فيما بينهم بعد أن جاءهم الدليل الواضح من الله",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "الله طلب منهم شيئاً بسيطاً: أن يعبدوا الله وحده بإخلاص، ويصلّوا، ويعطوا الزكاة. وهذا هو الدين الصحيح!",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "الذين رفضوا الإيمان بالله سيُعاقَبون يوم القيامة لأنهم اختاروا الطريق الخطأ",
+      "review": "Softens the ayah: it says only that those who refused to believe \"will be punished on the Day of Resurrection because they chose the wrong path\". The ayah names the disbelievers among the People of the Book and the polytheists, says they abide in the fire of Jahannam forever, and calls them the worst of creation. Teacher to decide whether the softening is acceptable for children."
+    },
+    {
+      "ayah": 7,
+      "text": "أما الذين آمنوا بالله وعملوا أعمالاً طيبة فهم أفضل الناس عند الله!",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "جائزتهم عند الله هي الجنة الجميلة! فيها أنهار تجري وسيعيشون فيها للأبد. الله راضٍ عنهم وهم سعداء! وهذا لمن يحب الله ويخاف من عقابه",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "لم يكونوا",
+      "review": "PHRASE: the old card is the 2-word phrase at 1:1-2; the engine shows one word, so it points at the first word (1:1) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "لم يؤمنوا بالله",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 6,
+      "meaning": "اليهود والنصارى",
+      "review": "PHRASE: the old card is the 2-word phrase at 1:6-7; the engine shows one word, so it points at the first word (1:6) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 1,
+      "word": 8,
+      "meaning": "الذين يعبدون غير الله",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 9,
+      "meaning": "تاركين ما هم عليه",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 12,
+      "meaning": "الدليل الواضح",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 1,
+      "meaning": "نبي مُرسَل من الله",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 4,
+      "meaning": "يقرأ",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 5,
+      "meaning": "صفحات",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 6,
+      "meaning": "نظيفة وطاهرة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 2,
+      "meaning": "أحكام وشرائع",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 3,
+      "meaning": "مستقيمة وصحيحة",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 2,
+      "meaning": "اختلفوا",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 4,
+      "meaning": "أُعطوا",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 2,
+      "meaning": "طُلب منهم",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 4,
+      "meaning": "ليطيعوا الله",
+      "review": "Gives li-ya'budu as \"to obey Allah\". The word means \"to worship\" (common tafsir: to worship Allah alone); obedience is part of worship but narrower. Teacher to choose the wording."
+    },
+    {
+      "ayah": 5,
+      "word": 6,
+      "meaning": "بصدق وإخلاص",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 9,
+      "meaning": "مائلين عن الباطل إلى الحق",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 11,
+      "meaning": "الصلوات الخمس",
+      "review": "Gives al-salah as \"the five daily prayers\". The ayah is about what the People of the Book were commanded; common tafsir reads it as establishing prayer, not specifically the five prayers of this ummah. Teacher to choose the wording."
+    },
+    {
+      "ayah": 5,
+      "word": 13,
+      "meaning": "إعطاء المال للفقراء",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 15,
+      "meaning": "الدين الصحيح المستقيم",
+      "review": "PHRASE: the old card is the 2-word phrase at 5:15-16; the engine shows one word, so it points at the first word (5:15) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 6,
+      "word": 9,
+      "meaning": "النار يوم القيامة",
+      "review": "PHRASE: the old card is the 2-word phrase at 6:9-10; the engine shows one word, so it points at the first word (6:9) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 6,
+      "word": 11,
+      "meaning": "باقين فيها دائماً",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 15,
+      "meaning": "أسوأ المخلوقات",
+      "review": "PHRASE: the old card is the 2-word phrase at 6:15-16; the engine shows one word, so it points at the first word (6:15) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 7,
+      "word": 3,
+      "meaning": "صدّقوا بالله",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 5,
+      "meaning": "الأعمال الطيبة",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 8,
+      "meaning": "أفضل المخلوقات",
+      "review": "PHRASE: the old card is the 2-word phrase at 7:8-9; the engine shows one word, so it points at the first word (7:8) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 8,
+      "word": 1,
+      "meaning": "مكافأتهم",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 4,
+      "meaning": "حدائق جميلة في الجنة",
+      "review": "PHRASE: the old card is the 2-word phrase at 8:4-5; the engine shows one word, so it points at the first word (8:4) and the meaning covers the whole phrase. Teacher to confirm it reads right. Also: the meaning \"beautiful gardens in Paradise\" leaves out 'adn; common tafsir: gardens of permanent residence (everlasting abode)."
+    },
+    {
+      "ayah": 8,
+      "word": 9,
+      "meaning": "مياه تجري",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 12,
+      "meaning": "للأبد، دائماً",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 13,
+      "meaning": "الله سعيد بهم",
+      "review": "PHRASE: the old card is the 3-word phrase at 8:13-15; the engine shows one word, so it points at the first word (8:13) and the meaning covers the whole phrase. Teacher to confirm it reads right. Also: \"Allah is happy with them\" -- common tafsir: Allah is pleased with them (rida); teacher to choose the wording."
+    },
+    {
+      "ayah": 8,
+      "word": 20,
+      "meaning": "خاف من الله وأطاعه",
+      "review": "PHRASE: the old card is the 2-word phrase at 8:20-21; the engine shows one word, so it points at the first word (8:20) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 7
+    },
+    {
+      "ayah": 2,
+      "word": 6
+    },
+    {
+      "ayah": 5,
+      "word": 6
+    },
+    {
+      "ayah": 7,
+      "word": 9
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "سورة البقرة"
+        },
+        {
+          "text": "سورة البينة"
+        },
+        {
+          "text": "سورة الفلق"
+        },
+        {
+          "text": "سورة الناس"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة البينة؟",
+      "options": [
+        {
+          "text": "5 آيات"
+        },
+        {
+          "text": "7 آيات"
+        },
+        {
+          "text": "8 آيات"
+        },
+        {
+          "text": "10 آيات"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 2,
+        "words": 5
+      },
+      "options": [
+        {
+          "ayah": 3,
+          "word": 3
+        },
+        {
+          "ayah": 2,
+          "word": 6
+        },
+        {
+          "ayah": 1,
+          "word": 12
+        },
+        {
+          "ayah": 8,
+          "word": 12
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors (kabirah, jamilah, qadimah) were hand-typed, not of this surah; they are replaced by qayyimah (3:3), al-bayyinah (1:12) and abadan (8:12), words of this surah.",
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 3,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 2,
+          "word": 6
+        },
+        {
+          "ayah": 2,
+          "word": 5
+        },
+        {
+          "ayah": 3,
+          "word": 3
+        },
+        {
+          "ayah": 1,
+          "word": 12
+        }
+      ],
+      "answer": 2,
+      "review": "CHANGED: the old distractors ('azimah, kathirah, jadidah) were hand-typed, not of this surah; they are replaced by mutahharah (2:6), suhufan (2:5) and al-bayyinah (1:12), words of this surah.",
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الصلاة"
+        },
+        {
+          "text": "الدليل الواضح"
+        },
+        {
+          "text": "الكتاب"
+        },
+        {
+          "text": "الجنة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 12
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "خائفين"
+        },
+        {
+          "text": "فرحين"
+        },
+        {
+          "text": "بصدق وإخلاص"
+        },
+        {
+          "text": "حزينين"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "word": {
+        "ayah": 5,
+        "word": 6
+      },
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "أسوأ الناس"
+        },
+        {
+          "text": "أفضل المخلوقات"
+        },
+        {
+          "text": "أغنى الناس"
+        },
+        {
+          "text": "أكبر الناس"
+        }
+      ],
+      "answer": 1,
+      "review": "PHRASE: the old question asks about the 2-word phrase at 7:8-9; the engine shows one word, so it points at the first word (7:8) and the options mean the whole phrase. Teacher to confirm it reads right.",
+      "word": {
+        "ayah": 7,
+        "word": 8
+      },
+      "id": "q7"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "بيوت كبيرة"
+        },
+        {
+          "text": "حدائق جميلة في الجنة"
+        },
+        {
+          "text": "أنهار واسعة"
+        },
+        {
+          "text": "جبال عالية"
+        }
+      ],
+      "answer": 1,
+      "review": "PHRASE: the old question asks about the 2-word phrase at 8:4-5; the engine shows one word, so it points at the first word (8:4) and the options mean the whole phrase. Teacher to confirm it reads right. Also: the meaning \"beautiful gardens in Paradise\" leaves out 'adn; common tafsir: gardens of permanent residence (everlasting abode).",
+      "word": {
+        "ayah": 8,
+        "word": 4
+      },
+      "id": "q8"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا طلب الله من الناس في سورة البينة؟",
+      "options": [
+        {
+          "text": "أن يعبدوه بإخلاص ويصلوا ويزكوا"
+        },
+        {
+          "text": "أن يسافروا كثيراً"
+        },
+        {
+          "text": "أن يبنوا بيوتاً كبيرة"
+        },
+        {
+          "text": "أن يأكلوا كثيراً"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q9"
+    },
+    {
+      "category": "lessons",
+      "question": "ما جزاء المؤمنين الذين عملوا الصالحات؟",
+      "options": [
+        {
+          "text": "مال كثير في الدنيا"
+        },
+        {
+          "text": "الجنة والأنهار ورضا الله"
+        },
+        {
+          "text": "شهرة بين الناس"
+        },
+        {
+          "text": "قصور في الدنيا"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q10"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الإخلاص لله: نعبد الله وحده ونكون صادقين في كل أعمالنا. مثلاً: عندما نصلي نفكر في الله فقط!",
+      "review": null
+    },
+    {
+      "text": "الصلاة: نحافظ على الصلاة لأنها أهم شيء بعد الإيمان بالله. هيا نصلي مع ماما وبابا!",
+      "review": null
+    },
+    {
+      "text": "مساعدة الفقراء: نعطي من مالنا وألعابنا للفقراء والمحتاجين. الزكاة تجعلنا أفضل!",
+      "review": "Ties giving \"from our money and our toys\" to zakah (ayah 5). Zakah is the obligatory alms on wealth; giving toys to the poor is voluntary charity (sadaqah). Teacher to check the wording."
+    },
+    {
+      "text": "العمل الصالح: نعمل أعمالاً طيبة كل يوم: نساعد ماما، نكون لطفاء مع أصدقائنا، نقول الصدق دائماً",
+      "review": null
+    },
+    {
+      "text": "حب القرآن: نقرأ القرآن كل يوم ونحفظه لأنه كلام الله الجميل الذي يه\u062f\u064a\u0646\u0627 للخير",
+      "review": null
+    },
+    {
+      "text": "الجنة هي الجائزة: إذا أطعنا الله وعملنا الخير، سندخل الجنة الجميلة التي فيها كل ما نحب!",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "ما أجمل شيء تعلمته من سورة البينة؟ كيف يمكن أن نطبق هذه السورة في حياتنا؟",
+    "ideas": [],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "عدد كلمات سورة البينة 94 كلمة",
+      "review": null
+    },
+    {
+      "text": "سورة البينة هي السورة رقم 98 في القرآن",
+      "review": null
+    },
+    {
+      "text": "البينة تعني: الدليل الواضح",
+      "review": null
+    },
+    {
+      "text": "قراءة القرآن كل يوم تجعلنا أقرب إلى الله",
+      "review": "A good line, but not a fact about this surah. Teacher to keep or drop."
+    },
+    {
+      "text": "من يحفظ القرآن يلبس تاجاً يوم القيامة",
+      "review": "Hadith claim to verify: \"whoever memorises the Quran wears a crown on the Day of Resurrection\". The report of the crown of honour for the companion of the Quran is in al-Tirmidhi (2915, graded hasan); the better-known \"crown\" report (Abu Dawud 1453, Sahl ibn Mu'adh) gives the crown to the PARENTS of the one who reads and acts on the Quran, and is graded weak. Teacher to check the wording and source."
+    },
+    {
+      "text": "سورة البينة نزلت في المدينة المنورة",
+      "review": "Whether Al-Bayyinah is Madani or Makki is disputed: the Madinah mushaf heads it Madani (the view of the majority, and its address to the People of the Book fits Madinah), but others (a report from Ibn Abbas, and Yahya ibn Sallam) hold it is Makki. Teacher to decide whether to keep this."
+    },
+    {
+      "text": "الصحابي أُبَيّ بن كعب بكى فرحاً بهذه السورة",
+      "review": null
+    },
+    {
+      "text": "كلمة 'البرية' تعني جميع المخلوقات",
+      "review": null
+    },
+    {
+      "text": "الإخلاص يعني أن نعمل لله وحده",
+      "review": null
+    }
+  ]
+}

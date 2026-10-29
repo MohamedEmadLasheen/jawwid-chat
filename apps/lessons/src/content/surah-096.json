@@ -1,0 +1,426 @@
+{
+  "surah": 96,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson (which has no data file; its content lives in the components), then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. The old lesson covers all 19 ayat. Dropped: the five Tajweed rules, the Tajweed game and quiz, and the two Tajweed questions of the final quiz (Tajweed comes only from the reviewed dataset; the old Tajweed was also wrong in places: al-akramu called madd lazim \"because of the hamza\", inna ila called izhar), the audio URLs and the reciter line, the typed basmala, and every hand-typed Quran string (replaced by positions). The tafsir lines are the ListenSection TAFSEER array. The complete-the-ayah words are the answers of the old \"complete the ayah\" game (the last word of each answer phrase) and the \"missing word\" game. In the final quiz, the hand-typed options not of this surah were replaced by words of this surah (q1, q2, q3, each flagged CHANGED), and the two meaning questions were cut before the quoted word, which is now a position. The old quiz categories were mapped (hifz, ma'ani, and \"fahm\" to lessons; the ayah-count question was \"fahm\" and stays under lessons). The intro is the intro card's \"important fact\" line and its last line, their highlight markup and the label removed, joined with \". \". The reflection question's ideas are its first three answer choices; the fourth (\"all the answers are right\") and the closing line are not carried. Emoji were stripped from the ends of lines. Not carried (no field or no such game in the engine): the intro quiz and facts (name, ayah count), the ayah-ordering and build-the-ayah games, the two word-meaning games, and the quiz's difficulty levels."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-96 (read as text, never built or run)",
+    "sha256": {
+      "components/WelcomeSection.tsx": "fca991b4e43e9796c50f3ef06eafa1726f5f77beacf3d1854f469a120f6eb535",
+      "components/ListenSection.tsx": "4da973883e1c6e9b6d857970af4e115f1c510bbf5e4f63312c30c51c23da696a",
+      "components/MemorizationGames.tsx": "9d8f907d0fa99ad3449817049fc74dcffd78e2e7eafbb6dde45327b4c49eb3a3",
+      "components/MeaningsSection.tsx": "ad1d468acbc7f77d38805c755af527ef9e445e8bb219972aaffa23be97bf18dd",
+      "components/TajweedSection.tsx": "f5fb2e4a6004be782c31ae0d67e6a56004bd0432cd887f56b173178b66c9fa1a",
+      "components/LessonsAndReflection.tsx": "8f49194be33842aa28759ac34ee864f0ed92986fef69d52d110dcedfcd3e5be3",
+      "components/FinalAssessment.tsx": "6cf6af2e3e9112615acef2ebb940fa07a0aa43d5bd212db91594b9914d8472b8"
+    }
+  },
+  "intro": {
+    "text": "سورة العلق هي أول سورة نزلت من القرآن الكريم على النبي محمد ﷺ. فيها أمر الله سبحانه وتعالى بـالقراءة والتعلم",
+    "review": "Says Al-'Alaq is \"the first surah revealed\". Common view (the hadith of A'ishah, al-Bukhari): its first five ayat were the first Quran revealed, in the cave of Hira; the rest of the surah (ayat 6-19, on the one who forbade the Prophet's prayer) came later. Teacher to confirm the wording."
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "اقرأ يا محمد بذكر اسم ربك الذي خلق كل شيء",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "خلق الإنسان من قطعة دم صغيرة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "اقرأ وربك هو الأكرم الذي يعطي بلا حدود",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "الذي علّم الناس الكتابة بالقلم",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "علّم الإنسان أشياء كثيرة لم يكن يعرفها",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "لكن الإنسان يتكبر وينسى الله",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "لأنه يرى نفسه غنيًا ولا يحتاج أحدًا",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "لكن الجميع سيرجع إلى الله يوم القيامة",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "أرأيت الذي يمنع الناس من الخير",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "يمنع عبدًا من أن يصلي لله",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "text": "أرأيت إن كان هذا العبد على الطريق الصحيح",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "أو كان يأمر الناس بطاعة الله",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "أرأيت إن كذّب هذا الشخص وابتعد عن الحق",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "ألا يعلم أن الله يرى كل شيء",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "إن لم يتوقف عن ظلمه سيعاقبه الله",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "مقدمة رأسه كاذبة مليئة بالأخطاء",
+      "review": "Renders \"khati'ah\" as \"full of mistakes\". Common tafsir: sinning, i.e. doing wrong knowingly (khati' is the one who sins deliberately, unlike mukhti', the one who errs); the forelock stands for its owner (Abu Jahl), lying in his words and sinful in his deeds. Teacher to choose the wording."
+    },
+    {
+      "ayah": 17,
+      "text": "فليطلب المساعدة من أصحابه",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "وسندعو ملائكة العذاب",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "لا تطع من يمنعك عن الصلاة واسجد لله واقترب منه",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "اقرأ وتعلّم",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 4,
+      "meaning": "قطعة دم صغيرة جدًا",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "الأداة التي نكتب بها",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 4,
+      "meaning": "يتكبر ويظلم",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 4,
+      "meaning": "الرجوع إلى الله",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "word": 6,
+      "meaning": "مقدمة الرأس",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "word": 2,
+      "meaning": "ملائكة العذاب",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "word": 4,
+      "meaning": "ضع جبهتك على الأرض لله",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 1,
+      "word": 5
+    },
+    {
+      "ayah": 2,
+      "word": 4
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 5,
+      "word": 5
+    },
+    {
+      "ayah": 6,
+      "word": 4
+    },
+    {
+      "ayah": 19,
+      "word": 5
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول كلمة في سورة العلق؟",
+      "options": [
+        {
+          "ayah": 2,
+          "word": 1
+        },
+        {
+          "ayah": 1,
+          "word": 1
+        },
+        {
+          "ayah": 1,
+          "word": 2
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: two of the old options were hand-typed words not of this surah (\"qul\", and \"bismi\" as in the basmala); they are now khalaqa (2:1) and bi-ismi (1:2), words of this surah. Teacher to confirm.",
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 2,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 6,
+          "word": 4
+        },
+        {
+          "ayah": 2,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors \"turab\" and \"ma'\" are not words of this surah; they are replaced by la-yatgha (6:4) and bi-l-qalam (4:3), the distractors the old complete-the-ayah game used for this ayah.",
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 4,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 8,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 3
+        },
+        {
+          "ayah": 17,
+          "word": 2
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors \"bi-l-'ilm\" and \"bi-l-kitab\" are not words of this surah; they are replaced by al-ruj'a (8:4) and nadiyah (17:2), the distractors the old complete-the-ayah game used for this ayah.",
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "يتعلم"
+        },
+        {
+          "text": "يتكبر ويظلم"
+        },
+        {
+          "text": "يصلي"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 6,
+        "word": 4
+      },
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "الرجوع إلى الله"
+        },
+        {
+          "text": "القراءة"
+        },
+        {
+          "text": "الكتابة"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "word": {
+        "ayah": 8,
+        "word": 4
+      },
+      "id": "q5"
+    },
+    {
+      "category": "lessons",
+      "question": "سورة العلق تأمرنا بـ:",
+      "options": [
+        {
+          "text": "النوم"
+        },
+        {
+          "text": "القراءة والتعلم"
+        },
+        {
+          "text": "اللعب فقط"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q6"
+    },
+    {
+      "category": "lessons",
+      "question": "كم عدد آيات سورة العلق؟",
+      "options": [
+        {
+          "text": "15"
+        },
+        {
+          "text": "19"
+        },
+        {
+          "text": "20"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "آخر آية في السورة تأمرنا بـ:",
+      "options": [
+        {
+          "text": "السجود والاقتراب من الله"
+        },
+        {
+          "text": "الابتعاد"
+        },
+        {
+          "text": "النوم"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q8"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "أهمية القراءة والتعلم — الله أمرنا أن نقرأ ونتعلم",
+      "review": null
+    },
+    {
+      "text": "الله يعلم كل شيء — يرى كل ما نفعله",
+      "review": null
+    },
+    {
+      "text": "المسلم يجب أن يطيع الله ويصلي",
+      "review": null
+    },
+    {
+      "text": "لا نتكبر — التكبر صفة سيئة",
+      "review": null
+    },
+    {
+      "text": "العلم نور — الله علّم الإنسان بالقلم",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "لماذا أمرنا الله بالقراءة والتعلم؟",
+    "ideas": [
+      "لأن العلم ينفعنا في حياتنا ويجعلنا أفضل",
+      "لأن القراءة تجعلنا نعرف الله أكثر",
+      "لأن الله يحب من يتعلم ويعمل بعلمه"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن أول كلمة نزلت من القرآن هي \"اقرأ\"؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الله يحب من يتعلم العلم؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة العلق نزلت في غار حراء؟",
+      "review": "Only the first five ayat were revealed in the cave of Hira (the hadith of A'ishah, al-Bukhari); the rest of the surah came later, in Makkah. Teacher to confirm the wording."
+    },
+    {
+      "text": "هل تعلم أن الله ذكر القلم في القرآن لأهمية الكتابة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن النبي ﷺ كان يحب العلم والتعلم؟",
+      "review": null
+    }
+  ]
+}

@@ -18,6 +18,46 @@ All six questions in §E are answered, and every answer took the recommendation.
 | 5 | Difficulty levels (#6) | "Recommended set": three levels, set by the child's teacher. |
 | 6 | Rewards and competitions (#8, #9) | "Recommended set": points and levels are visible only to the family and the teacher. Competition is opt-in, within one teacher's group, with no public leaderboard. |
 
+## Owner decisions (2026-10-29): Arabic lessons 2–10 and Islamic studies
+
+The owner answered the two plan proposals (the department head's notes, `pd29-arabic-islamic-proposals.md`). The owner's words are quoted.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | The two plans | "Approve both". **Arabic lessons 2–10**, one lesson per PR, in the order 3, 6, 7, 8, 9, 2, 4, 5, 10, on the P0-5 engine. Then **Islamic studies** in batches of about 5, the Prophet ﷺ lessons first. Everything is held for teacher review. Both start **after** the 114-surah work. |
+| 2 | Hadith | "Research a hadith dataset". Before any Islamic lesson that cites hadith is built, research the published hadith collections and datasets (for example sunnah.com's API terms and open hadith corpora): their licence for commercial and educational redistribution, provenance, grading data, and Arabic text quality. The result is a short recommendation with sources for the owner. **Nothing is loaded until the owner approves it.** Until then, every hadith line stays held as teacher-verified text. |
+| 3 | Wudu and salah | "These lessons are designed for young children, who should not be expected to understand the differences between the four schools of fiqh. We need one simple, consistent, child-friendly teaching method for wudu and salah. The Teachers department, in consultation with a qualified Islamic scholar, should approve the method and verify every step before publication. Do not display school names or differences of opinion to children. Where legitimate scholarly differences exist, the content team should choose an appropriate teaching approach and keep the lessons simple, accurate, and age-appropriate." So: **no madhhab names or differences in child-facing content; every fiqh step is held; the review doc of each such lesson carries a "method sign-off by the Teachers department and a qualified scholar" gate**, which must be passed before publication. |
+
+### Hadith source: HadeethEnc.com, with written confirmation (owner, 2026-10-29)
+
+The research (decision 2) compared HadeethEnc.com, sunnah.com, and the open hadith corpora on GitHub and Kaggle. The owner chose **"HadeethEnc + written OK"**.
+
+- **The source is HadeethEnc.com** (موسوعة الأحاديث النبوية), under the IslamHouse content usage policy, which is published in the IslamHouse-API hub README and reached via `r.islamhouse.com/h/en/g`. It is the only candidate whose rights holder grants commercial use and offline storage in writing, and every hadith carries a grade and a takhrij.
+- **Written confirmation first.** The owner e-mails IslamHouse (`admin@islamhouse.com`) for written confirmation, because Jawwid is a paid app. The draft letter, in English and Arabic, is in the department head's notes. The owner sends all outbound letters.
+- **Nothing is downloaded or loaded** until the confirmation arrives, or until the owner says to proceed without it. Until then, every hadith line stays held as teacher-verified text.
+
+**Rules for every hadith shown (binding):**
+
+1. The matn is shown **unchanged**, always with its **grade** and its **source** (HadeethEnc.com and the takhrij). Nothing is added to it, cut from it or changed in it.
+2. Any child-friendly wording is **clearly labelled as Jawwid's own prose**, using the policy's wording: «أُعدّ هذا الشرح المبسّط بالاستفادة من مواد منشورة على HadeethEnc.com، وهو من إعداد جوّد بشكل مستقل.» / "This simplified explanation was prepared using material published on HadeethEnc.com. It was prepared independently by Jawwid." It is never presented as HadeethEnc's text.
+3. **A teacher picks** which hadith suit children. Nothing is listed by default, and a picked hadith is held until the Teachers department approves the lesson.
+4. **The cached copy is refreshed** when the source updates, and errors found are sent back to the publisher.
+5. **No ads** near hadith content.
+
+**Import plan (not started; it waits for the confirmation):**
+
+- **Pinning, as for the Quran dataset** (`quran-dataset-contract.md`):
+  - one snapshot file per import, with a dataset id such as `hadeethenc-ar-<date>`;
+  - a manifest holding `fileSha256`, the attribution, the source URL, the fetch date and the per-hadith `sha256` (over the matn in UTF-8);
+  - the pin repeated in code, with a guard that fails if the pins disagree.
+- **Scope:** Arabic only, and only the hadith a teacher picked (by HadeethEnc id), not the whole encyclopedia. A translation is a separate decision.
+- **Fetch:** once, from the documented API (`hadeethenc.com/api/v1/…`), server-side by an operator, never live from the client. The rate limits are not published, so fetch slowly.
+- **Provenance:** a dated archive copy of the policy text and of IslamHouse's reply is kept beside the snapshot.
+- **Refresh:** a scheduled diff against the source.
+  - A changed matn or grade flags the hadith and holds every lesson that cites it until a teacher re-checks it.
+  - The new snapshot gets new pins; nothing is overwritten in place.
+- **In the lesson file:** a lesson cites a hadith by `{ dataset, id, sha256 }`, as Quran content cites positions. The browser resolves it against the pinned snapshot and fails closed on any mismatch. Jawwid's own explanation is a separate, labelled, held field.
+
 ## 0. How this was audited (safety)
 
 - The lesson content lives in `MohamedEmadLasheen/jawwid-lessons`. Its history was infected
@@ -322,8 +362,8 @@ the lessons are built only by CI.
 | P0-1 | Chat **#166** (open) | Full-window lesson preview with a back button and full screen | #1 |
 | P0-2 | Chat, API + migration (**#176**, owner-approved 2026-10-27) | **Quran dataset**: `chat.quran_ayah` (Tanzil Uthmani, SHA-256 pinned, count checks) shared with PD-39, an ayah audio manifest (`SSSAAA` + SHA-256), and the Tajweed annotation table with reviewer and date. The text is served read-only to the lessons engine as a static JSON snapshot built by CI. | foundation for #2, #12, #13, #17 |
 | P0-3 | Chat `apps/lessons` | **Engine skeleton** on its own origin (CSP, no third-party hosts, fonts and audio self-hosted). Fixes the systemic patterns once:<br>• ayat, order and audio from the dataset (P1, P1b, P6);<br>• one audio controller that stops on change and unmount and never replays a stale object (P2–P5, P8);<br>• ayah-by-ayah playback, no timing tables (P7);<br>• options shuffled once per question, kept in state and answered by id (#16);<br>• games draw from every ayah;<br>• one section header in every lesson (#14);<br>• one star model with no farming (#15). | #2, #12, #14, #15, #16, #17 |
-| P0-4 | `apps/lessons` content | **Al-Buruj (85) rebuilt** on the engine as the reference (#18, PR #192), then the other 37 surahs in batches of about 8, each one extracted as text from c231532 and reviewed.<br>• **Check every old surah for the split-and-stop numbering pattern** found in Al-Buruj: the old lesson split real ayat 9–11 into 9 entries and so stopped at real ayah 16, and ayat 17–22 were never taught. Map each old entry to the verified ayat; merge the split pieces and flag missing ayat, as in 85.<br>• Content reaches children only after the Teachers department approves the file (`review.status`); until then the lesson shows the verified Quran only. | #18 → all |
-| P0-5 | `apps/lessons` content | **Arabic lesson 1 Alif/Hamza** rewritten as data: real bare-ا words, a hamza unit, and one comparison rule (no folding) used by games and quizzes alike; full tashkeel on the strict rule for lessons 1–10 | #4, #11 tashkeel |
+| P0-4 | `apps/lessons` content | **Al-Buruj (85) rebuilt** on the engine as the reference (#18, PR #192), then the other 37 surahs in batches of about 8, each one extracted as text from c231532 and reviewed.<br>• **Batch 1 (Juz' Amma 107–114):** rebuilt, every numbering matches the verified text, 43 lines held (`pd029-p04-batch1-review.md`).<br>• **Batch 2 (Juz' Amma 99–106):** rebuilt, every numbering matches (Al-Qari'ah's error was its audio only), 53 lines held (`pd029-p04-batch2-review.md`).<br>• **Batch 3 (Juz' Amma 89–98):** rebuilt; nine numberings match, and Al-Fajr splits ayah 23 (merged and renumbered, not stopped); 97 lines held (`pd029-p04-batch3-review.md`).<br>• **Batch 4 (Juz' Amma 78–84, 86–88):** rebuilt; nine numberings match, and **An-Nazi'at is split-and-stop** (ayah 40 split, ayah 46 never taught: merged, renumbered, missing); 81 lines held (`pd029-p04-batch4-review.md`). **Juz' Amma (78–114) is complete.**<br>• **Batch 5 (Al-Fatihah):** rebuilt; the Basmala is ayah 1 of 7 in the old lesson and the verified text alike, so the numbering matches; 3 lines held (`pd029-p04-batch5-review.md`). **Every old Quran lesson (1, 78–114) is rebuilt.**<br>• **All 114 surahs (owner, 2026-10-28: "make it the whole Quran"):** surahs 2–77 are text-and-recitation lessons -- the verified text with Listen, Verses and Order, no content file, nothing authored; the review gate is unchanged. A surah over 50 ayat shows 20 ayat a page, and its ordering game plays the page shown. 76 Materials rows added to the seed (no migration).<br>• **Check every old surah for the split-and-stop numbering pattern** found in Al-Buruj: the old lesson split real ayat 9–11 into 9 entries and so stopped at real ayah 16, and ayat 17–22 were never taught. Map each old entry to the verified ayat; merge the split pieces and flag missing ayat, as in 85.<br>• Content reaches children only after the Teachers department approves the file (`review.status`); until then the lesson shows the verified Quran only. | #18 → all |
+| P0-5 | `apps/lessons` content | **Arabic lesson 1 Alif/Hamza** rewritten as data: real bare-ا words, a hamza unit, and one comparison rule (no folding) used by games and quizzes alike; full tashkeel on the strict rule for lessons 1–10. Design `pd029-p05-arabic-letters-design.md`, approved 2026-10-28: pausal sukun as the one final mark, enforced by the checker.<br>• **Engine (PR-1, #234) and lesson 1 (PR-2):** 32 units (ة its own unit after ت; one hamza unit with five seats after the 28 letters), 1,521 words, every changed word held (1,416, almost all the added final sukun); 4 words left out and listed; review doc `pd029-p05-lesson1-review.md`.<br>• **P0-5b (later PR):** writing practice (real strokes for every letter) and the memory, speed, bubble and catch games, left out of lesson 1 by the owner's decision of 2026-10-28. | #4, #11 tashkeel |
 | P0-6 | Chat config | Point `MATERIALS_SITE_BASE_URL` at the new origin (no migration, same paths); re-publish the retired surahs | — |
 
 **P1: progress, parents, rewards** (#7, #8, #10, #11 progress).

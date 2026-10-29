@@ -401,7 +401,7 @@ class _DayView extends ConsumerWidget {
                           top: y(minute) - 7,
                           start: 0,
                           child: Text(
-                            formatClockTime(context, TimeOfDay(hour: minute ~/ 60, minute: 0), alwaysUse24HourFormat: true),
+                            formatClockHour(context, minute ~/ 60),
                             style: Theme.of(context).textTheme.labelSmall,
                           ),
                         ),

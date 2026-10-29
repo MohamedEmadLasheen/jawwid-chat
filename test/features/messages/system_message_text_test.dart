@@ -57,6 +57,13 @@ void main() {
     expect(systemMessageText('{"kind":"group.learner_detached"}', en), 'A child of this group moved to another supervisor');
   });
 
+  test('PD-42: a child added to the family joins its group', () {
+    expect(systemMessageText('{"kind":"group.learner_added","learner":"QA Learner B"}', en), 'QA Learner B joined this group');
+    expect(systemMessageText('{"kind":"group.learner_added","learner":"QA Learner B"}', ar), 'انضم QA Learner B إلى هذه المجموعة');
+    expect(systemMessageText('{"kind":"group.learner_added"}', en), 'A child joined this group');
+    expect(systemMessageText('{"kind":"group.learner_added"}', ar), 'انضم طفل إلى هذه المجموعة');
+  });
+
   test('an unknown kind, non-object JSON or non-JSON reads as a generic update, never raw', () {
     for (final body in ['{"kind":"some.future.kind"}', '[1,2]', 'not json', '']) {
       final text = systemMessageText(body, en);

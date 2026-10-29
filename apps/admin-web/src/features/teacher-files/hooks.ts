@@ -47,9 +47,59 @@ export function useGiveSignIn(teacherId: string) {
   })
 }
 
+/** PD-43: a new sign-in e-mail; while the login waits, the answer carries a new code (for the Manager and the super admin). */
+export function useChangeSignIn(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { email: string; reason: string }) => teacherFileApi.changeSignIn(teacherId, body),
+    gcTime: 0,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.detail(teacherId) })
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.list })
+    },
+  })
+}
+
 /** PD-43: a new first sign-in code; the answer carries the code only for the Manager and the super admin. */
 export function useReissueFirstLogin(teacherId: string) {
   return useMutation({ mutationFn: () => teacherFileApi.reissueFirstLogin(teacherId), gcTime: 0 })
+}
+
+/** PD-43: what offboarding would meet. Read fresh each time the dialog opens. */
+export function useOffboardPreview(teacherId: string) {
+  return useQuery({
+    queryKey: [...teacherFileKeys.detail(teacherId), 'offboard-preview'],
+    queryFn: () => teacherFileApi.offboardPreview(teacherId),
+    staleTime: 0,
+    gcTime: 0,
+  })
+}
+
+export function useOffboard(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { reason: string; cancelOpenLessons?: boolean }) => teacherFileApi.offboard(teacherId, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.all }),
+  })
+}
+
+/** PD-43: the super admin brings a teacher back; the answer holds a new first sign-in code. */
+export function useReactivate(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (reason: string) => teacherFileApi.reactivate(teacherId, reason),
+    gcTime: 0,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.all }),
+  })
+}
+
+/** PD-43: the history card. Under the file's key, so a change that refreshes the file refreshes it too. */
+export function useTeacherHistory(teacherId: string) {
+  return useQuery({
+    queryKey: [...teacherFileKeys.detail(teacherId), 'history'],
+    queryFn: () => teacherFileApi.history(teacherId),
+    staleTime: 15_000,
+  })
 }
 
 export function useTeacherFile(teacherId: string) {

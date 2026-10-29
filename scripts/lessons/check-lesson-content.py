@@ -14,7 +14,9 @@ learned) is prose plus POSITIONS into the verified dataset: {ayah} or
   * a prose string carries Uthmani-only marks, four or more consecutive words
     of the surah, or a whole (shorter) ayah -- i.e. Quran typed or pasted into prose. (Three is too
     tight: tafsir paraphrase legitimately repeats short runs such as
-    "السماوات والأرض والله".)
+    "السماوات والأرض والله".) Typed Quran is matched on the rasm skeleton, so
+    standard spelling (الرحمن, الصلاة) is caught as well as the Uthmani; the
+    Basmala counts in every surah's lesson, since the verses carry it apart.
   * a quiz's answer or options are malformed, or a game has too few distinct words;
   * the file says "approved" while any line is still flagged, or names no reviewer.
 Standard library only; reads files.
@@ -50,6 +52,19 @@ def fold(t):
     return re.sub('[^' + chr(0x621) + '-' + chr(0x64A) + ' ]', ' ', t)
 
 
+def _load(name):
+    spec = importlib.util.spec_from_file_location(name[:-3], os.path.join(HERE, name))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# The ONE typed-Quran fold, shared with PD-48 (scripts/lessons/rasm.py): no alef or hamza of any
+# form, no marks, the Uthmani waw-for-alef dropped. Positions keep fold() above.
+RASM = _load('rasm.py')
+rasm = RASM.rasm
+
+
 def verified_surahs():
     spec = importlib.util.spec_from_file_location('snapshot', os.path.join(HERE, 'build-quran-snapshot.py'))
     snap = importlib.util.module_from_spec(spec)
@@ -62,8 +77,9 @@ def verified_surahs():
         return out
 
 
-def check(content, verses, dataset_id):
-    """verses: the surah's verse texts, ayah 1 first."""
+def check(content, verses, dataset_id, also=()):
+    """verses: the surah's verse texts, ayah 1 first. also: more Quran text that
+    prose must not type (the Basmala, which the verses carry apart)."""
     errors = []
     err = errors.append
     n = len(verses)
@@ -175,17 +191,21 @@ def check(content, verses, dataset_id):
         text(f'reflection.ideas[{i}]', idea)
     note('reflection', refl)
 
-    # Runs of RUN words, or a whole ayah when it is shorter than that.
+    # Runs of RUN words, or a whole ayah when it is shorter than that -- but never a
+    # ONE-word ayah: a single word in prose cannot be told from the surah's name
+    # (al-Qari'ah, al-Haqqah and al-'Asr are each their surah's whole first ayah).
     grams = set()
-    for v in verses:
-        ws = fold(v).split()
+    for v in [*verses, *also]:
+        ws = rasm(v).split()
+        if len(ws) < 2:
+            continue
         k = min(RUN, len(ws))
         grams.update(tuple(ws[i:i + k]) for i in range(len(ws) - k + 1))
     sizes = {len(g) for g in grams}
     for where, t in prose:
         if UTHMANI_ONLY.search(t):
             err(f'{where}: carries Uthmani-only marks (Quran text belongs in positions, never in prose)')
-        ws = fold(t).split()
+        ws = rasm(t).split()
         if any(tuple(ws[i:i + k]) in grams for k in sizes for i in range(len(ws) - k + 1)):
             err(f'{where}: contains {RUN} consecutive words of the surah, or a whole ayah (use a position, not typed Quran)')
 
@@ -198,13 +218,14 @@ def check(content, verses, dataset_id):
 
 
 def selftest():
-    verses = ['ألف باء تاء ثاء', 'جيم حاء خاء', 'دال ذال راء زاي سين', 'شين صاد']
+    BASMALA_TEST = ['بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ']
+    verses = ['ألف باء تاء ثاء', 'جيم حاء خاء', 'دال ذال راء زاي سين', 'شين صاد', 'قاف']
 
     def base():
         return {
             'surah': 999, 'datasetId': 'test-1', 'review': {'status': 'pending', 'by': None, 'note': 'x'},
             'provenance': {}, 'intro': {'text': 'مقدمة', 'review': None},
-            'tafsir': [{'ayah': i, 'text': f'شرح {i}', 'review': None} for i in range(1, 5)],
+            'tafsir': [{'ayah': i, 'text': f'شرح {i}', 'review': None} for i in range(1, 6)],
             'words': [{'ayah': 1, 'word': 2, 'meaning': 'معنى', 'review': None}],
             'complete': [{'ayah': 1, 'word': 4}, {'ayah': 2, 'word': 3}, {'ayah': 3, 'word': 5}],
             'quiz': [{'id': 'q1', 'category': 'hifz', 'question': 'أكمل', 'prompt': {'ayah': 2, 'words': 2},
@@ -237,7 +258,12 @@ def selftest():
         'prompt-whole-ayah': (set_(['quiz', 0, 'prompt'], {'ayah': 2, 'words': 3}), 'prompt must show'),
         'typed-quran': (set_(['tafsir', 0, 'text'], 'كما قال دال ذال راء زاي'), 'consecutive words'),
         'typed-quran-diacritics': (set_(['lessons', 0, 'text'], 'دَالٌ ذَالٍ رَاءٌ زَايٌ'), 'consecutive words'),
+        'typed-quran-standard-spelling': (set_(['tafsir', 0, 'text'], 'كما قال دال ذال رآء زاى'), 'consecutive words'),
+        'typed-quran-uthmani-spelling': (set_(['lessons', 0, 'text'], 'قَالَ دَٰلْ ذَٱلْ رَـٰٓءْ زَاىْ'), 'consecutive words'),
+        'typed-basmala': (set_(['intro', 'text'], 'نبدأ بقول بسم الله الرحمن الرحيم'), 'consecutive words'),
+        'basmala-in-part-is-prose': (set_(['intro', 'text'], 'نبدأ ببسم الله'), None),
         'whole-short-ayah': (set_(['didYouKnow', 0, 'text'], 'شين صاد'), 'whole ayah'),
+        'one-word-ayah-is-a-name': (set_(['intro', 'text'], 'سورة قاف تعلمنا'), None),
         'three-words-is-paraphrase': (set_(['tafsir', 0, 'text'], 'كما قال دال ذال راء'), None),
         'uthmani-marks': (set_(['intro', 'text'], 'نص ' + chr(0x671) + 'لله'), 'Uthmani-only'),
         'too-few-game-words': (set_(['complete'], [{'ayah': 1, 'word': 4}, {'ayah': 1, 'word': 4}, {'ayah': 2, 'word': 3}]), 'three distinct'),
@@ -254,7 +280,7 @@ def selftest():
     for name, (mutate, expected) in cases.items():
         c = base()
         mutate(c)
-        errors = check(c, verses, 'test-1')
+        errors = check(c, verses, 'test-1', also=BASMALA_TEST)
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
@@ -271,11 +297,11 @@ def main(argv):
     dataset_id = json.load(open(PIN, encoding='utf-8'))['datasetId']
     files = sorted(f for f in os.listdir(CONTENT) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(CONTENT) else []
     surahs = verified_surahs() if files else {}
-    failed = 0
+    failed = RASM.selftest(surahs) if files else 0  # the shared fixtures, on the real verified text
     for f in files:
         content = json.load(open(os.path.join(CONTENT, f), encoding='utf-8'))
         number = int(f[6:9])
-        errors = check(content, surahs[number], dataset_id) if content.get('surah') == number else [f'surah is {content.get("surah")!r}, not {number}']
+        errors = check(content, surahs[number], dataset_id, also=surahs[1][:1]) if content.get('surah') == number else [f'surah is {content.get("surah")!r}, not {number}']
         for e in errors:
             print(f'lesson-content: {f}: {e}')
         if errors:

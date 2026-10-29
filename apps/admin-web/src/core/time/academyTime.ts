@@ -140,3 +140,30 @@ export function academyDayRange(days: number, now: Date = new Date(), zone = ACA
     to: academyWallClockToIso(end.toISOString().slice(0, 10), '00:00', zone) as string,
   }
 }
+
+/*
+ * The 12-hour clock (owner, 2026-10-28: every Schedule time with AM/PM). One
+ * formatter for instants, hours and wall-clock strings, so no screen writes a
+ * time its own way. English uses en-US for "PM" (en-GB writes "pm"); Arabic
+ * ar-EG, which writes "م" / "ص" with Arabic-Indic digits like every other number
+ * on the page.
+ */
+const tag12 = (locale: TimeLocale) => (locale === 'ar' ? 'ar-EG' : 'en-US')
+
+/** "6:00 PM" / "٦:٠٠ م" -- the 12-hour clock of an instant in a zone. */
+export function clock12In(iso: string, zone: string, locale: TimeLocale): string {
+  return new Intl.DateTimeFormat(tag12(locale), { timeZone: zone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso))
+}
+
+/** "1 PM" / "١ م" -- an hour of the day for an axis; 24 is the next midnight. */
+export function hour12Label(hour: number, locale: TimeLocale): string {
+  return new Intl.DateTimeFormat(tag12(locale), { timeZone: 'UTC', hour: 'numeric', hour12: true }).format(new Date(Date.UTC(2000, 0, 1, hour % 24)))
+}
+
+/** "17:00" -> "5:00 PM": a wall-clock time (a shift window, a filter). Anything else is returned as it is. */
+export function wallClock12(hhmm: string, locale: TimeLocale): string {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm)
+  if (!m) return hhmm
+  return new Intl.DateTimeFormat(tag12(locale), { timeZone: 'UTC', hour: 'numeric', minute: '2-digit', hour12: true })
+    .format(new Date(Date.UTC(2000, 0, 1, Number(m[1]) % 24, Number(m[2]))))
+}

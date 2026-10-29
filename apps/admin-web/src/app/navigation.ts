@@ -17,7 +17,7 @@ import type { IconName } from '@/shared/components/Icon'
  * answer "forbidden". (Listing is UX, not security: the server decides.)
  */
 
-export type DestinationKey = 'conversations' | 'calls' | 'people' | 'stories' | 'more'
+export type DestinationKey = 'conversations' | 'dashboard' | 'calls' | 'people' | 'stories' | 'more'
 
 type OperatorArea = Exclude<NavArea, 'settings'>
 
@@ -49,6 +49,8 @@ export interface Destination {
 
 export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label: Bilingual }[] = [
   { key: 'conversations', icon: 'conversations', label: { en: 'Conversations', ar: 'المحادثات' } },
+  // PD-44: a manager's Dashboard is one click from anywhere, beside the chats it counts.
+  { key: 'dashboard', icon: 'dashboard', label: { en: 'Dashboard', ar: 'لوحة المتابعة' } },
   { key: 'calls', icon: 'calls', label: { en: 'Calls', ar: 'المكالمات' } },
   { key: 'people', icon: 'users', label: { en: 'People & teams', ar: 'الأشخاص والفرق' } },
   { key: 'stories', icon: 'stories', label: { en: 'Stories', ar: 'الحالات' } },
@@ -104,7 +106,13 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   tasks: 'more',
   // PD-35 B5: escalation cases, for every operator who may open or own one.
   cases: 'people',
-  dashboard: 'more',
+  // PD-41: the Certificates page.
+  certificates: 'people',
+  // PD-48: lesson voice-over review.
+  'lesson-audio': 'more',
+  // PD-44: out of More, its own destination (the super admin's stays in the
+  // Admin Portal's More until PD-44 PR-8).
+  dashboard: 'dashboard',
   settings: null,
 }
 
@@ -125,6 +133,8 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   materials: '/materials',
   schedule: '/schedule',
   cases: '/cases',
+  certificates: '/certificates',
+  'lesson-audio': '/lesson-audio',
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
@@ -144,6 +154,8 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   materials: 'book',
   schedule: 'calendar',
   cases: 'tasks',
+  certificates: 'star',
+  'lesson-audio': 'approvals',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
@@ -253,6 +265,22 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     path: AREA_PATH.cases,
     icon: AREA_ICON.cases,
     label: { text: ADMIN_CASES_LABEL },
+    inDevelopment: false,
+  })
+  // PD-41: the Certificates page, with its types, at /certificates.
+  out.get('people')?.[0]?.entries.push({
+    key: 'certificates',
+    path: AREA_PATH.certificates,
+    icon: AREA_ICON.certificates,
+    label: { message: 'nav.certificates' },
+    inDevelopment: false,
+  })
+  // PD-48: the super admin holds every key, so reviews lesson voice-over too.
+  out.get('more')?.[0]?.entries.push({
+    key: 'lesson-audio',
+    path: AREA_PATH['lesson-audio'],
+    icon: AREA_ICON['lesson-audio'],
+    label: { message: 'nav.lesson-audio' },
     inDevelopment: false,
   })
   // One registry group inside a destination needs no heading.

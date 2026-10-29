@@ -10,10 +10,14 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-435 routes.
+521 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
+| GET | `/api/v1/admin/access-roles` | staff_accounts.view | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.roles` |
+| POST | `/api/v1/admin/access-roles` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.define` |
+| POST | `/api/v1/admin/access-roles/:roleId` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.update` |
+| POST | `/api/v1/admin/access-roles/:roleId/archive` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.archive` |
 | GET | `/api/v1/admin/accounts` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.list` |
 | GET | `/api/v1/admin/accounts/:accountId` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.get` |
 | POST | `/api/v1/admin/accounts/:accountId/password-reset` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.passwordReset` |
@@ -30,6 +34,13 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/admin/impersonations/:id/end` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.end` |
 | POST | `/api/v1/admin/impersonations/:id/token` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.token` |
 | GET | `/api/v1/admin/overview` | admin.inspect | `admin/admin.controller.ts#AdminController.overview` |
+| GET | `/api/v1/admin/permissions` | staff_accounts.view | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.permissions` |
+| GET | `/api/v1/admin/staff-accounts` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.list` |
+| POST | `/api/v1/admin/staff-accounts` | staff_accounts.create | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.create` |
+| GET | `/api/v1/admin/staff-accounts/:staffId` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.get` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/roles` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.grant` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/roles/:roleId/revoke` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.revoke` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/setup-code` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.setupCode` |
 | GET | `/api/v1/admin/stories` | admin.inspect | `admin/admin.controller.ts#AdminController.stories` |
 | GET | `/api/v1/admin/users` | admin.inspect | `admin/admin.controller.ts#AdminController.users` |
 | POST | `/api/v1/approvals/:id/approve` | chat.moderate | `communication/api/approval.controller.ts#ApprovalController.approve` |
@@ -68,6 +79,32 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/cases/:id/notes` | cases.manage | `cases/supervision-case.controller.ts#SupervisionCaseController.note` |
 | GET | `/api/v1/cases/:id/owners` | cases.view | `cases/supervision-case.controller.ts#SupervisionCaseController.owners` |
 | POST | `/api/v1/cases/:id/status` | cases.manage | `cases/supervision-case.controller.ts#SupervisionCaseController.status` |
+| GET | `/api/v1/certificates` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.list` |
+| POST | `/api/v1/certificates` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.create` |
+| GET | `/api/v1/certificates/:id` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.get` |
+| POST | `/api/v1/certificates/:id/accept` | certificates.request.student | `certificates/certificates.controller.ts#CertificatesController.accept` |
+| POST | `/api/v1/certificates/:id/approve` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.approve` |
+| POST | `/api/v1/certificates/:id/cancel` | certificates.request.student | certificates.request.teacher | certificates.oversee | `certificates/certificates.controller.ts#CertificatesController.cancel` |
+| POST | `/api/v1/certificates/:id/consent` | certificates.story | `certificates/certificates.controller.ts#CertificatesController.consent` |
+| POST | `/api/v1/certificates/:id/decline` | certificates.request.student | `certificates/certificates.controller.ts#CertificatesController.decline` |
+| GET | `/api/v1/certificates/:id/delivery` | certificates.deliver | `certificates/certificates.controller.ts#CertificatesController.delivery` |
+| POST | `/api/v1/certificates/:id/edit` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.edit` |
+| POST | `/api/v1/certificates/:id/files` | certificates.design | `certificates/certificates.controller.ts#CertificatesController.confirmUpload` |
+| GET | `/api/v1/certificates/:id/files/:fileId` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.file` |
+| POST | `/api/v1/certificates/:id/files/upload` | certificates.design | `certificates/certificates.controller.ts#CertificatesController.authorizeUpload` |
+| POST | `/api/v1/certificates/:id/redesign` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.redesign` |
+| POST | `/api/v1/certificates/:id/release` | certificates.design | certificates.oversee | `certificates/certificates.controller.ts#CertificatesController.release` |
+| POST | `/api/v1/certificates/:id/resubmit` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.resubmit` |
+| POST | `/api/v1/certificates/:id/return` | certificates.design | `certificates/certificates.controller.ts#CertificatesController.returnForChanges` |
+| POST | `/api/v1/certificates/:id/send` | certificates.deliver | `certificates/certificates.controller.ts#CertificatesController.send` |
+| POST | `/api/v1/certificates/:id/start` | certificates.design | `certificates/certificates.controller.ts#CertificatesController.start` |
+| POST | `/api/v1/certificates/:id/story` | certificates.story | `certificates/certificates.controller.ts#CertificatesController.story` |
+| POST | `/api/v1/certificates/:id/withdraw-approval` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.withdrawApproval` |
+| GET | `/api/v1/certificates/access` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.access` |
+| GET | `/api/v1/certificates/recipients` | certificates.request.student | certificates.request.teacher | `certificates/certificates.controller.ts#CertificatesController.recipients` |
+| GET | `/api/v1/certificates/types` | certificates.view | `certificates/certificates.controller.ts#CertificatesController.listTypes` |
+| POST | `/api/v1/certificates/types` | certificates.types | `certificates/certificates.controller.ts#CertificatesController.createType` |
+| POST | `/api/v1/certificates/types/:id` | certificates.types | `certificates/certificates.controller.ts#CertificatesController.updateType` |
 | GET | `/api/v1/conversations` | chat.use | `communication/api/conversation.controller.ts#ConversationController.list` |
 | GET | `/api/v1/conversations/:conversationId/export` | chat.export | `communication/api/export.controller.ts#ExportController.export` |
 | GET | `/api/v1/conversations/:conversationId/messages` | chat.use | `communication/api/message.controller.ts#MessageController.list` |
@@ -118,6 +155,10 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/courses` | lessons.view | `lessons/journey.controller.ts#JourneyController.courses` |
 | POST | `/api/v1/courses` | lessons.courses | `lessons/journey.controller.ts#JourneyController.createCourse` |
 | POST | `/api/v1/courses/:id` | lessons.courses | `lessons/journey.controller.ts#JourneyController.updateCourse` |
+| GET | `/api/v1/dashboard/cases` | cases.view | `dashboard/dashboard.controller.ts#DashboardController.casesSection` |
+| GET | `/api/v1/dashboard/chats` | chat.use | `dashboard/dashboard.controller.ts#DashboardController.chats` |
+| GET | `/api/v1/dashboard/lessons` | lessons.view | schedule.view | `dashboard/dashboard.controller.ts#DashboardController.lessons` |
+| GET | `/api/v1/dashboard/tasks` | self-service | `dashboard/dashboard.controller.ts#DashboardController.tasksSection` |
 | POST | `/api/v1/discipline/complaints/:id/uphold` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.uphold` |
 | GET | `/api/v1/discipline/violations` | teacher_supervision.view | `discipline/discipline.controller.ts#DisciplineController.list` |
 | POST | `/api/v1/discipline/violations/:id/decide` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.decide` |
@@ -133,6 +174,19 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/families/:id/instalments` | billing.record | `billing/billing.controller.ts#BillingController.createInstalments` |
 | POST | `/api/v1/families/:id/payment-requests` | billing.record | `billing/payments.controller.ts#PaymentsController.createRequest` |
 | POST | `/api/v1/families/:id/payments` | billing.record | `billing/payments.controller.ts#PaymentsController.recordManual` |
+| POST | `/api/v1/family-intake` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.enter` |
+| GET | `/api/v1/family-intake/entered` | new_students.view | `new-students/intake.controller.ts#FamilyIntakeController.entered` |
+| GET | `/api/v1/family-intake/families/:familyId` | new_students.view | `new-students/intake.controller.ts#FamilyIntakeController.family` |
+| POST | `/api/v1/family-intake/families/:familyId/children` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.addChildren` |
+| GET | `/api/v1/family-intake/families/:familyId/history` | new_students.view | `new-students/intake.controller.ts#FamilyIntakeController.history` |
+| POST | `/api/v1/family-intake/families/:familyId/operations-supervisor` | org.manage | `new-students/intake.controller.ts#FamilyIntakeController.assignOperationsSupervisor` |
+| POST | `/api/v1/family-intake/families/:familyId/sales-owner` | org.manage | `new-students/intake.controller.ts#FamilyIntakeController.changeSalesOwner` |
+| POST | `/api/v1/family-intake/families/:familyId/sign-in-email` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.setSignInEmail` |
+| POST | `/api/v1/family-intake/families/:familyId/supervisor-suggestion` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.suggestSupervisor` |
+| GET | `/api/v1/family-intake/learners/:learnerId/carried-over` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.carriedOverOf` |
+| POST | `/api/v1/family-intake/learners/:learnerId/carried-over` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.carryOver` |
+| POST | `/api/v1/family-intake/learners/:learnerId/carried-over/void` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.voidCarryOver` |
+| GET | `/api/v1/family-intake/options` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.options` |
 | GET | `/api/v1/health` | public | `infra/health/health.controller.ts#HealthController.detail` |
 | GET | `/api/v1/health/live` | public | `infra/health/health.controller.ts#HealthController.live` |
 | GET | `/api/v1/health/ready` | public | `infra/health/health.controller.ts#HealthController.ready` |
@@ -144,11 +198,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/instalments/access` | self-service | `billing/billing.controller.ts#BillingController.access` |
 | POST | `/api/v1/integration/core/events` | public | `core-boundary/core-webhook.controller.ts#CoreWebhookController.receive` |
 | GET | `/api/v1/invoices/:id/link` | billing.view | `billing/payments.controller.ts#PaymentsController.invoiceLink` |
-| GET | `/api/v1/learner-certificates` | certificates.view | `certificates/certificate.controller.ts#CertificateController.list` |
+| GET | `/api/v1/learner-certificates` | not for staff | `certificates/certificate.controller.ts#CertificateController.list` |
 | POST | `/api/v1/learner-certificates` | not for staff | `certificates/certificate.controller.ts#CertificateController.request` |
-| POST | `/api/v1/learner-certificates/:id/decline` | certificates.deliver | `certificates/certificate.controller.ts#CertificateController.decline` |
-| POST | `/api/v1/learner-certificates/:id/issue` | certificates.deliver | `certificates/certificate.controller.ts#CertificateController.issue` |
-| POST | `/api/v1/learner-certificates/:id/upload` | certificates.design | `certificates/certificate.controller.ts#CertificateController.authorizeUpload` |
 | POST | `/api/v1/learners/:id/enrollment` | students.manage | `lessons/journey.controller.ts#JourneyController.setEnrollment` |
 | GET | `/api/v1/learners/:id/free-slots` | schedule.view | `lessons/scheduling.controller.ts#SchedulingController.learnerFreeSlots` |
 | GET | `/api/v1/learners/:id/materials/library` | materials.view | `materials/materials.controller.ts#MaterialsController.library` |
@@ -170,6 +221,20 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/learners/:id/transfer` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.transfer` |
 | GET | `/api/v1/learners/:id/transfer-preview` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transferPreview` |
 | GET | `/api/v1/learners/:id/transfers` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transfers` |
+| GET | `/api/v1/lesson-audio/:lesson` | self-service | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.learner` |
+| GET | `/api/v1/lesson-audio/access` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.access` |
+| POST | `/api/v1/lesson-audio/clips/:clipId/approve` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.approve` |
+| POST | `/api/v1/lesson-audio/clips/:clipId/reject` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.reject` |
+| POST | `/api/v1/lesson-audio/clips/:clipId/withdraw` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.withdraw` |
+| GET | `/api/v1/lesson-audio/review/:lesson` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.summary` |
+| GET | `/api/v1/lesson-audio/review/:lesson/units/:unit` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.unit` |
+| POST | `/api/v1/lesson-audio/strings/:lesson/:stringId/decision` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.decide` |
+| GET | `/api/v1/lesson-content/access` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.access` |
+| GET | `/api/v1/lesson-content/approvals/:scope` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.export` |
+| GET | `/api/v1/lesson-content/review/:scope` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.list` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/approve` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.approve` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/reject` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.reject` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/withdraw` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.withdraw` |
 | POST | `/api/v1/lesson-rulings/:id/decide` | lessons.manage | `lessons/lesson.controller.ts#LessonController.decide` |
 | GET | `/api/v1/lessons` | lessons.view | `lessons/lesson.controller.ts#LessonController.list` |
 | POST | `/api/v1/lessons` | lessons.manage | `lessons/lesson.controller.ts#LessonController.schedule` |
@@ -263,6 +328,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/me/starred` | chat.use | `communication/api/starred.controller.ts#StarredController.starred` |
 | POST | `/api/v1/me/subscriptions/:learnerId/renewal-request` | not for staff | `subscriptions/subscription-effects.controller.ts#SubscriptionRenewalController.request` |
 | POST | `/api/v1/me/supervision-conversation` | not for staff | `supervision/supervision.controller.ts#SupervisionController.ensureOwn` |
+| GET | `/api/v1/me/tasks` | self-service | `tasks/task.controller.ts#TaskController.mine` |
 | GET | `/api/v1/me/teacher-profile` | not for staff | `communication/api/teacher-profile.controller.ts#TeacherProfileController.mine` |
 | POST | `/api/v1/me/teacher-profile` | not for staff | `communication/api/teacher-profile.controller.ts#TeacherProfileController.save` |
 | POST | `/api/v1/me/teacher-profile/certificates` | not for staff | `communication/api/teacher-profile.controller.ts#TeacherProfileController.addCertificate` |
@@ -309,6 +375,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/parent-feedback` | teacher_supervision.view | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.list` |
 | POST | `/api/v1/parent-feedback/:id/reply` | teacher_supervision.record | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.reply` |
 | POST | `/api/v1/parent-feedback/:id/take` | teacher_supervision.record | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.take` |
+| GET | `/api/v1/parent-notices` | not for staff | `lesson-audio/parent-notice.controller.ts#ParentNoticeController.list` |
+| POST | `/api/v1/parent-notices/:key/acknowledge` | not for staff | `lesson-audio/parent-notice.controller.ts#ParentNoticeController.acknowledge` |
 | GET | `/api/v1/parent-profiles` | parents.view | `parent-profile/parent-record.controller.ts#ParentRecordController.list` |
 | GET | `/api/v1/parent-profiles/:contactId` | parents.view | `parent-profile/parent-record.controller.ts#ParentRecordController.detail` |
 | POST | `/api/v1/parent-profiles/:contactId` | parents.edit | `parent-profile/parent-record.controller.ts#ParentRecordController.update` |
@@ -377,6 +445,19 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/suspensions` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.suspensions` |
 | POST | `/api/v1/suspensions/:id/end` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.end` |
 | POST | `/api/v1/suspensions/:id/extend` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.extend` |
+| GET | `/api/v1/tasks` | tasks.team | tasks.manage | `tasks/task.controller.ts#TaskController.list` |
+| POST | `/api/v1/tasks` | tasks.create | `tasks/task.controller.ts#TaskController.create` |
+| GET | `/api/v1/tasks/:id` | self-service | `tasks/task.controller.ts#TaskController.get` |
+| POST | `/api/v1/tasks/:id/acknowledge` | self-service | `tasks/task.controller.ts#TaskController.acknowledge` |
+| POST | `/api/v1/tasks/:id/comments` | self-service | `tasks/task.controller.ts#TaskController.comment` |
+| POST | `/api/v1/tasks/:id/complete` | self-service | `tasks/task.controller.ts#TaskController.complete` |
+| POST | `/api/v1/tasks/:id/due` | tasks.manage | `tasks/task.controller.ts#TaskController.due` |
+| POST | `/api/v1/tasks/:id/out-of-scope` | self-service | `tasks/task.controller.ts#TaskController.outOfScope` |
+| POST | `/api/v1/tasks/:id/priority` | tasks.manage | `tasks/task.controller.ts#TaskController.priority` |
+| POST | `/api/v1/tasks/:id/reassign` | tasks.manage | `tasks/task.controller.ts#TaskController.reassign` |
+| POST | `/api/v1/tasks/:id/remove` | tasks.manage | `tasks/task.controller.ts#TaskController.remove` |
+| POST | `/api/v1/tasks/:id/return` | tasks.manage | `tasks/task.controller.ts#TaskController.returnTask` |
+| GET | `/api/v1/tasks/assignees` | tasks.create | tasks.manage | `tasks/task.controller.ts#TaskController.assignees` |
 | GET | `/api/v1/teacher-files` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.list` |
 | GET | `/api/v1/teacher-files/:teacherId` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.detail` |
 | POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_supervision.record | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |
@@ -419,7 +500,12 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/teachers/:teacherId/evaluations` | teacher_files.view | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.forTeacher` |
 | POST | `/api/v1/teachers/:teacherId/evaluations` | teacher_files.evaluate | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.evaluate` |
 | POST | `/api/v1/teachers/:teacherId/first-login-code` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.reissue` |
+| GET | `/api/v1/teachers/:teacherId/history` | teacher_files.view | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.history` |
 | POST | `/api/v1/teachers/:teacherId/improvement-plans` | teacher_files.evaluate | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.plan` |
+| POST | `/api/v1/teachers/:teacherId/offboard` | teachers.offboard | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.offboard` |
+| GET | `/api/v1/teachers/:teacherId/offboard-preview` | teachers.offboard | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.offboardPreview` |
+| POST | `/api/v1/teachers/:teacherId/reactivate` | teachers.offboard | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.reactivate` |
+| PATCH | `/api/v1/teachers/:teacherId/sign-in` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.changeSignIn` |
 | POST | `/api/v1/teachers/:teacherId/sign-in` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.giveSignIn` |
 | POST | `/api/v1/teachers/:teacherId/supervision-conversation` | supervision.chats | `supervision/supervision.controller.ts#SupervisionController.ensureForTeacher` |
 | GET | `/api/v1/teachers/candidates` | lessons.view | `lessons/lifecycle.controller.ts#LifecycleController.candidates` |

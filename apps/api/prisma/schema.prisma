@@ -1775,31 +1775,187 @@ model TeacherPayDefault {
 // =====================================================================
 
 /// A STUDENT certificate: requested by the learner's teacher, issued or declined once.
-model LearnerCertificate {
-  id               String    @id @default(uuid()) @db.Uuid
-  organizationId   String    @map("organization_id") @db.Uuid
-  learnerId        String    @map("learner_id") @db.Uuid
-  requestedBy      String    @map("requested_by") @db.Uuid
-  title            String
-  achievement      String
-  achievedOn       DateTime  @map("achieved_on") @db.Date
-  grade            String?
-  printedName      String    @map("printed_name")
-  note             String?
-  state            String    @default("requested")
-  requestedAt      DateTime  @default(now()) @map("requested_at") @db.Timestamptz
-  requestMessageId String?   @unique @map("request_message_id") @db.Uuid
-  decidedBy        String?   @map("decided_by") @db.Uuid
-  decidedAt        DateTime? @map("decided_at") @db.Timestamptz
-  declineReason    String?   @map("decline_reason")
-  conversationId   String?   @map("conversation_id") @db.Uuid
-  objectKey        String?   @unique @map("object_key")
-  mimeType         String?   @map("mime_type")
-  byteSize         Int?      @map("byte_size")
-  fileName         String?   @map("file_name")
-  issuedMessageId  String?   @unique @map("issued_message_id") @db.Uuid
+model AppreciationCertificate {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  category           String    @default("student")
+  typeId             String?   @map("type_id") @db.Uuid
+  learnerId          String?   @map("learner_id") @db.Uuid
+  recipientTeacherId String?   @map("recipient_teacher_id") @db.Uuid
+  signatoryTeacherId String?   @map("signatory_teacher_id") @db.Uuid
+  suggestedByTeacher String?   @map("suggested_by_teacher") @db.Uuid
+  requestedByStaff   String?   @map("requested_by_staff") @db.Uuid
+  requestKey         String?   @map("request_key") @db.Uuid
+  title              String
+  achievement        String
+  achievedOn         DateTime? @map("achieved_on") @db.Date
+  grade              String?
+  printedName        String    @map("printed_name")
+  internalNote       String?   @map("internal_note")
+  designerNote       String?   @map("designer_note")
+  juz                Int?      @db.SmallInt
+  periodStart        DateTime? @map("period_start") @db.Date
+  periodEnd          DateTime? @map("period_end") @db.Date
+  publishStory       Boolean   @default(false) @map("publish_story")
+  state              String
+  requestedAt        DateTime  @default(now()) @map("requested_at") @db.Timestamptz
+  requestMessageId   String?   @unique @map("request_message_id") @db.Uuid
+  decidedBy          String?   @map("decided_by") @db.Uuid
+  decidedAt          DateTime? @map("decided_at") @db.Timestamptz
+  declineReason      String?   @map("decline_reason")
+  assignedDesignerId String?   @map("assigned_designer_id") @db.Uuid
+  designStartedAt    DateTime? @map("design_started_at") @db.Timestamptz
+  currentFileId      String?   @map("current_file_id") @db.Uuid
+  approvedFileId     String?   @map("approved_file_id") @db.Uuid
+  approvedBy         String?   @map("approved_by") @db.Uuid
+  approvedAt         DateTime? @map("approved_at") @db.Timestamptz
+  returnMessage      String?   @map("return_message")
+  conversationId     String?   @map("conversation_id") @db.Uuid
+  sentMessageId      String?   @unique @map("sent_message_id") @db.Uuid
+  sentAt             DateTime? @map("sent_at") @db.Timestamptz
+  sentBy             String?   @map("sent_by") @db.Uuid
+  typeLabelEn        String?   @map("type_label_en")
+  typeLabelAr        String?   @map("type_label_ar")
+  storyId            String?   @unique @map("story_id") @db.Uuid
+  storyPublishedAt   DateTime? @map("story_published_at") @db.Timestamptz
+  storyPublishedBy   String?   @map("story_published_by") @db.Uuid
+  storyWithdrawnAt   DateTime? @map("story_withdrawn_at") @db.Timestamptz
+  cancelledBy        String?   @map("cancelled_by") @db.Uuid
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelReason       String?   @map("cancel_reason")
+  actionSeq          Int       @default(1) @map("action_seq")
+  lastAction         String    @map("last_action")
+  lastNote           String?   @map("last_note")
+  lastActorStaff     String?   @map("last_actor_staff") @db.Uuid
+  lastActorTeacher   String?   @map("last_actor_teacher") @db.Uuid
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz
 
-  @@map("learner_certificate")
+  @@unique([organizationId, requestKey])
+  @@map("appreciation_certificate")
+  @@schema("chat")
+}
+
+/// PD-41: a story media key Stories itself issued to one staff member; used once.
+model StoryMediaGrant {
+  objectKey      String   @id @map("object_key")
+  organizationId String   @map("organization_id") @db.Uuid
+  issuedTo       String   @map("issued_to") @db.Uuid
+  mimeType       String   @map("mime_type")
+  byteSize       Int      @map("byte_size")
+  source         String   @default("upload")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  storyId        String?  @unique @map("story_id") @db.Uuid
+
+  @@map("story_media_grant")
+  @@schema("chat")
+}
+
+/// PD-41: who a certificate is for. Fixed rows; code owns the rules.
+model CertificateCategory {
+  key               String  @id
+  recipientKind     String  @map("recipient_kind")
+  deliveryRule      String  @map("delivery_rule")
+  storyAudience     String  @map("story_audience")
+  storyNeedsConsent Boolean @map("story_needs_consent")
+  labelEn           String  @map("label_en")
+  labelAr           String  @map("label_ar")
+  sort              Int     @db.SmallInt
+
+  @@map("certificate_category")
+  @@schema("chat")
+}
+
+/// PD-41: a kind of recognition, per organization; disabled, never deleted.
+model CertificateType {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  category       String
+  key            String
+  labelEn        String    @map("label_en")
+  labelAr        String    @map("label_ar")
+  needsJuz       Boolean   @default(false) @map("needs_juz")
+  needsPeriod    String?   @map("needs_period")
+  isActive       Boolean   @default(true) @map("is_active")
+  sort           Int       @default(0) @db.SmallInt
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  disabledAt     DateTime? @map("disabled_at") @db.Timestamptz
+  disabledBy     String?   @map("disabled_by") @db.Uuid
+
+  @@unique([organizationId, category, key])
+  @@map("certificate_type")
+  @@schema("chat")
+}
+
+/// PD-41: a design revision, pinned where no upload grant can name it.
+model AppreciationCertificateFile {
+  id                 String   @id @default(uuid()) @db.Uuid
+  certificateId      String   @map("certificate_id") @db.Uuid
+  revision           Int
+  objectKey          String   @unique @map("object_key")
+  mimeType           String   @map("mime_type")
+  byteSize           Int      @map("byte_size")
+  fileName           String   @map("file_name")
+  uploadedBy         String?  @map("uploaded_by") @db.Uuid
+  uploadedAt         DateTime @default(now()) @map("uploaded_at") @db.Timestamptz
+  deliveredObjectKey String?  @unique @map("delivered_object_key")
+
+  @@unique([certificateId, revision])
+  @@map("appreciation_certificate_file")
+  @@schema("chat")
+}
+
+/// PD-41: an upload grant issued to a Designer; its key is never served.
+model CertificateUpload {
+  objectKey     String    @id @map("object_key")
+  certificateId String    @map("certificate_id") @db.Uuid
+  mimeType      String    @map("mime_type")
+  byteSize      Int       @map("byte_size")
+  issuedTo      String    @map("issued_to") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+  consumedAt    DateTime? @map("consumed_at") @db.Timestamptz
+  fileId        String?   @map("file_id") @db.Uuid
+
+  @@map("certificate_upload")
+  @@schema("chat")
+}
+
+/// PD-41: a family's consent to a student certificate's Story, as recorded acts.
+model CertificateStoryConsent {
+  id                String   @id @default(uuid()) @db.Uuid
+  certificateId     String   @map("certificate_id") @db.Uuid
+  kind              String
+  givenByContactId  String?  @map("given_by_contact_id") @db.Uuid
+  method            String?
+  evidenceMessageId String?  @map("evidence_message_id") @db.Uuid
+  note              String?
+  recordedBy        String   @map("recorded_by") @db.Uuid
+  recordedAt        DateTime @default(now()) @map("recorded_at") @db.Timestamptz
+  actionSeq         Int      @map("action_seq")
+
+  @@unique([certificateId, actionSeq])
+  @@map("certificate_story_consent")
+  @@schema("chat")
+}
+
+/// PD-41: the append-only history of a certificate, one row per act.
+model AppreciationCertificateEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  certificateId  String   @map("certificate_id") @db.Uuid
+  seq            Int
+  kind           String
+  fromState      String?  @map("from_state")
+  toState        String   @map("to_state")
+  actorStaffId   String?  @map("actor_staff_id") @db.Uuid
+  actorTeacherId String?  @map("actor_teacher_id") @db.Uuid
+  before         Json?
+  after          Json?
+  note           String?
+  at             DateTime @default(now()) @db.Timestamptz
+
+  @@unique([certificateId, seq])
+  @@map("appreciation_certificate_event")
   @@schema("chat")
 }
 
@@ -2104,6 +2260,8 @@ model StudentEnrolment {
   origin              String    @default("trial")
   /// new_family | added_children (PD-42).
   kind                String    @default("new_family")
+  /// PD-42: sha-256 of what an intake asked for; a replay with another body is refused.
+  intakePayloadHash   String?   @map("intake_payload_hash")
   /// Who entered the family or children (assigned the trial form), and when. Immutable.
   assignedBy          String    @map("assigned_by") @db.Uuid
   assignedAt          DateTime  @default(now()) @map("assigned_at") @db.Timestamptz
@@ -2125,6 +2283,19 @@ model FamilySalesOwner {
   reason         String?
 
   @@map("family_sales_owner")
+  @@schema("chat")
+}
+
+/// PD-42 D1 (20261029120000 owns the DDL): the Operations supervisor a Sales
+/// owner suggests while the family waits for one. Advisory only.
+model FamilySupervisorSuggestion {
+  familyId       String   @id @map("family_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  supervisorId   String   @map("supervisor_id") @db.Uuid
+  suggestedBy    String   @map("suggested_by") @db.Uuid
+  suggestedAt    DateTime @default(now()) @map("suggested_at") @db.Timestamptz
+
+  @@map("family_supervisor_suggestion")
   @@schema("chat")
 }
 

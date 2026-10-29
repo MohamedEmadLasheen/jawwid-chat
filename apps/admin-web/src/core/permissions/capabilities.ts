@@ -16,7 +16,7 @@
  * This file therefore only answers coarse, role-level questions used for
  * navigation and page-level routing.
  */
-import type { StaffRole } from '@/shared/types/domain'
+import type { Staff, StaffRole } from '@/shared/types/domain'
 
 export type NavArea =
   | 'chat'
@@ -35,6 +35,8 @@ export type NavArea =
   | 'materials'
   | 'schedule'
   | 'cases'
+  | 'certificates'
+  | 'lesson-audio'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -86,7 +88,9 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `payments` (PD-27) likewise: offered as the Admin Portal's Payments section.
     // `materials` (PD-29) is offered under More beside the Admin Portal's sections.
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
-    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'settings']
+    // `certificates` (PD-41) is offered under People: the page and its types.
+    // `lesson-audio` (PD-48): the voice-over review page, under More.
+    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'lesson-audio', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -98,7 +102,9 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-29: the Materials library -- offered only when the server confirms
     // the Teachers manager (see SERVER_CONFIRMED_AREAS).
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
-    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'settings']
+    // PD-41: the Certificates page -- offered when GET /certificates/access opens it.
+    // PD-48: Lesson audio -- offered when GET /lesson-audio/access opens it (the Teachers manager).
+    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -115,7 +121,14 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // teacher-profiles is here for the same reason stories is: admin and
     // coverage hold the reviewer role server-side
     // (AuthorizationService.canReviewTeacherProfile).
-    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases']
+    // PD-48: Lesson audio, for a Teachers supervisor (listens) -- on the server's word.
+    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio']
+  }
+  if (role === 'specialist') {
+    // PD-40/PD-41: the Designer -- the Certificates page, and (PD-47) the
+    // tasks given to them, as every staff member has; PD-48: the Pronunciation
+    // reviewer -- the Lesson audio page, on the server's word.
+    return ['certificates', 'tasks', 'lesson-audio']
   }
   if (isDepartment(role)) {
     // Departments get tasks — they may not open family records — and, PD-21
@@ -123,6 +136,18 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     return ['tasks', 'accounts']
   }
   return []
+}
+
+/**
+ * PD-40: does GET /me report one of these permission keys? The page-level gate
+ * for pages that are a permission's, not a role's (Staff accounts, Roles). It
+ * fails closed: no keys reported (an API older than PD-40) is no page. The
+ * super admin holds every key (chat.staff_access_profile). UX only.
+ */
+export function holdsAny(staff: Pick<Staff, 'role' | 'permissions'> | null | undefined, keys: readonly string[]): boolean {
+  if (!staff) return false
+  if (isSuperAdmin(staff.role)) return true
+  return keys.some((key) => staff.permissions?.includes(key) === true)
 }
 
 export function canOpenArea(role: StaffRole, area: NavArea): boolean {
@@ -157,6 +182,10 @@ export interface DepartmentAccess {
    * Operations supervisor (the teachers of their families).
    */
   supervisionPage?: boolean
+  /** PD-41: GET /certificates/access -- the account holds a certificates key. */
+  certificates?: boolean
+  /** PD-48: GET /lesson-audio/access -- the account holds lesson_audio.view or .review. */
+  lessonAudio?: boolean
 }
 
 /**
@@ -177,6 +206,10 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   materials: (a) => a.materialsManager === true,
   // PD-38: the scheduling calendar.
   schedule: (a) => a.calendar === true,
+  // PD-41: the Certificates page, for whoever holds a certificates key.
+  certificates: (a) => a.certificates === true,
+  // PD-48: the Lesson audio review page, for whoever may listen.
+  'lesson-audio': (a) => a.lessonAudio === true,
 }
 
 /** What navigation shows: the areas this role may open, minus those the server has not confirmed. */
@@ -193,9 +226,3 @@ export const managerOnly = {
   viewUnattended: isManager,
 } as const
 
-/** The task scope a role should request from the API. */
-export function taskScopeFor(role: StaffRole): 'mine' | 'team' | 'department' {
-  if (isManager(role) || isSuperAdmin(role)) return 'team'
-  if (isDepartment(role)) return 'department'
-  return 'mine'
-}

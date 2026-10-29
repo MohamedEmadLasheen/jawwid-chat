@@ -109,6 +109,9 @@ jobs:
         env:
           API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
           REALTIME_URL: ${{ vars.STAGING_REALTIME_URL }}
+          # PD-29 audio: the lessons site's origin, compiled into Admin Web and the
+          # teacher web portal. Unset = no lesson is handed Quran audio.
+          LESSONS_ORIGIN: ${{ vars.STAGING_LESSONS_ORIGIN }}
         run: |
           test -n "$API_BASE_URL" || { echo "::error::vars.STAGING_API_BASE_URL is not set"; exit 1; }
           # The variable is the API ORIGIN: the smoke test probes
@@ -137,6 +140,7 @@ jobs:
             --build-arg VITE_REALTIME_URL="$REALTIME_URL" \
             --build-arg VITE_APP_ENV=staging \
             --build-arg VITE_GIT_COMMIT="${GITHUB_SHA}" \
+            --build-arg VITE_LESSONS_ORIGIN="$LESSONS_ORIGIN" \
             -t "$IMAGE:staging-${GITHUB_SHA}" -t "$IMAGE:staging" \
             apps/admin-web
           docker push "$IMAGE:staging-${GITHUB_SHA}"
@@ -223,6 +227,7 @@ jobs:
           MEDIA_PUBLIC_BASE_URL: ${{ vars.MEDIA_PUBLIC_BASE_URL }}
           MATERIALS_SITE_BASE_URL: ${{ vars.MATERIALS_SITE_BASE_URL }}
           MATERIALS_FRAME_ORIGINS: ${{ vars.MATERIALS_FRAME_ORIGINS }}
+          LESSON_APPROVALS_SIGNING_KEY: ${{ secrets.LESSON_APPROVALS_SIGNING_KEY }}
           STORAGE_LOCAL_ROOT: ${{ vars.STORAGE_LOCAL_ROOT }}
           STORAGE_PUBLIC_BASE_URL: ${{ vars.STORAGE_PUBLIC_BASE_URL }}
           OUTBOX_POLL_MS: ${{ vars.OUTBOX_POLL_MS }}
@@ -272,6 +277,8 @@ jobs:
           # PD-35: strict teacher-supervisor scope is off everywhere until the owner sets
           # the variable to 'true' (department head, 2026-10-26).
           TEACHER_SUPERVISOR_STRICT_SCOPE: ${{ vars.TEACHER_SUPERVISOR_STRICT_SCOPE || 'false' }}
+          # PD-42: NOT defaulted -- unset keeps the value stored in chat.config.
+          SALES_FAMILY_SCOPE: ${{ vars.SALES_FAMILY_SCOPE }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           OTEL_SERVICE_NAME: jawwid-chat-api
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}

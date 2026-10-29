@@ -201,8 +201,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'الموظفون والمعلمون وجهات اتصال العائلات.',
     },
     note: {
-      en: 'Creating, suspending and resetting accounts is not built yet.',
-      ar: 'إنشاء الحسابات وإيقافها وإعادة تعيينها لم يُبنَ بعد.',
+      en: 'Read-only here. Resetting and suspending accounts, staff accounts and their roles are on the Accounts page.',
+      ar: 'للعرض فقط هنا. إعادة تعيين الحسابات وإيقافها، وحسابات الموظفين وأدوارها في صفحة الحسابات.',
     },
   },
   {
@@ -317,17 +317,17 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     key: 'tasks',
     group: 'operations',
     icon: 'tasks',
-    status: 'in_development',
-    label: { en: 'Tasks & follow-ups', ar: 'المهام والمتابعات' },
+    // PD-47: one Tasks page for everyone; the super admin sees every task and decides.
+    status: 'managed',
+    label: { en: 'Tasks', ar: 'المهام' },
     purpose: {
-      en: 'Track follow-ups and tasks across teams.',
-      ar: 'متابعة المهام والمتابعات عبر الفرق.',
+      en: 'Every task in the academy, most urgent first: decide what waits on a decision, and move what no manager can.',
+      ar: 'كل مهام الأكاديمية، الأكثر إلحاحًا أولًا: قرّر ما ينتظر قرارًا، وانقل ما لا يستطيع أي مدير نقله.',
     },
     note: {
-      en: 'A prototype screen exists, but its backend was never built.',
-      ar: 'توجد شاشة تجريبية، لكن واجهتها الخلفية لم تُبنَ.',
+      en: 'A task leaves a list only when it is completed, removed or handed on, and keeps its whole history.',
+      ar: 'لا تغادر المهمة القائمة إلا إذا أُنجزت أو أُزيلت أو أُسندت لغيره، وتحتفظ بسجلها كاملًا.',
     },
-    legacy: [{ path: '/tasks' }],
   },
   {
     key: 'forms',

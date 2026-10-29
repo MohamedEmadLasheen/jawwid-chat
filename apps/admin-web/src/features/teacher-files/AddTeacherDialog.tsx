@@ -5,7 +5,7 @@ import { ApiError } from '@/core/api/errors'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { AddedTeacher, FirstLogin, TeacherOnboardingOffer } from './api'
 import { T, describeError, useCopy } from './copy'
-import { Field } from './TeacherFileDialogs'
+import { Field } from '@/shared/components/Field'
 import { useAddTeacher, useGiveSignIn } from './hooks'
 
 /**
@@ -47,7 +47,8 @@ export function AddTeacherDialog({
 
   if (added) return <FirstLoginCodeDialog signIn={added.signIn} firstLogin={added.firstLogin} onClose={close} />
 
-  const submit = () => {
+  // The same teacher id either way: "Add anyway" after a warning is still one teacher.
+  const submit = (confirmSimilarName = false) => {
     setTouched(true)
     if (!form.name.trim() || !form.email.trim()) return
     add.mutate(
@@ -58,6 +59,7 @@ export function AddTeacherDialog({
         ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
         ...(form.joinedOn ? { joinedOn: form.joinedOn } : {}),
         supervisorId: supervisor === '' ? null : supervisor,
+        ...(confirmSimilarName ? { confirmSimilarName: true } : {}),
       },
       { onSuccess: setAdded },
     )
@@ -70,7 +72,7 @@ export function AddTeacherDialog({
       footer={
         <>
           <DialogCancelButton onClick={close} disabled={add.isPending} />
-          <button type="button" className="btn btn--primary" disabled={add.isPending} onClick={submit}>
+          <button type="button" className="btn btn--primary" disabled={add.isPending} onClick={() => submit()}>
             {add.isPending ? tx(T.adding) : tx(T.add)}
           </button>
         </>
@@ -110,8 +112,47 @@ export function AddTeacherDialog({
         </fieldset>
       )}
 
-      <AddRefusal error={add.error} basePath={basePath} />
+      {isSimilarName(add.error) ? (
+        <SimilarNameWarning error={add.error} basePath={basePath} pending={add.isPending} onAddAnyway={() => submit(true)} />
+      ) : (
+        <AddRefusal error={add.error} basePath={basePath} />
+      )}
     </Dialog>
+  )
+}
+
+const isSimilarName = (error: unknown): error is ApiError => error instanceof ApiError && error.code === 'COMM.TEACHER_SIMILAR_NAME'
+
+/** Plan §3.4: an active teacher the adder can see has this name. A warning: the adder may go on. */
+function SimilarNameWarning({
+  error,
+  basePath,
+  pending,
+  onAddAnyway,
+}: {
+  error: ApiError
+  basePath: string
+  pending: boolean
+  onAddAnyway: () => void
+}) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const teachers = (error.detail as { teachers?: Array<{ id: string; name: string }> } | null)?.teachers ?? []
+  return (
+    <div className="banner banner--warn" role="alert">
+      {tx(T.similarName)}{' '}
+      {teachers.map((t, i) => (
+        <span key={t.id}>
+          {i > 0 && (locale === 'ar' ? '، ' : ', ')}
+          <Link to={`${basePath}/${encodeURIComponent(t.id)}`} dir="auto">
+            {t.name}
+          </Link>
+        </span>
+      ))}{' '}
+      <button type="button" className="btn btn--sm" disabled={pending} onClick={onAddAnyway}>
+        {tx(T.addAnyway)}
+      </button>
+    </div>
   )
 }
 

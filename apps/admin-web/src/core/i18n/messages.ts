@@ -22,6 +22,8 @@ export const messages = {
     'nav.trials': 'Trials & new students',
     'nav.tasks': 'Tasks',
     'nav.cases': 'Escalations',
+    'nav.certificates': 'Certificates',
+    'nav.lesson-audio': 'Lesson audio',
     'nav.dashboard': 'Dashboard',
     'nav.stories': 'Stories',
     'nav.settings': 'Settings',
@@ -60,17 +62,7 @@ export const messages = {
 
     'coverage.activateBackup': 'Activate backup',
 
-    'dashboard.unattended': 'Unattended',
-    'dashboard.escalations': 'Open escalations',
-    'dashboard.teamNow': 'Team now',
-    'dashboard.needsAction': 'Needs your action',
-    'dashboard.thisWeek': 'This week',
-    'dashboard.workload': 'Workload',
-    'dashboard.unattendedZero': 'No unattended families. That is the target.',
 
-    'workload.low': 'Low',
-    'workload.medium': 'Medium',
-    'workload.high': 'High',
 
     'ownership.reasonRequired': 'A reason is required and is recorded in the audit log.',
 
@@ -159,6 +151,8 @@ export const messages = {
     'nav.trials': 'التجريبية والطلاب الجدد',
     'nav.tasks': 'المهام',
     'nav.cases': 'التصعيدات',
+    'nav.certificates': 'الشهادات',
+    'nav.lesson-audio': 'تسجيلات الدروس',
     'nav.dashboard': 'لوحة المتابعة',
     'nav.stories': 'الحالات',
     'nav.settings': 'الإعدادات',
@@ -197,17 +191,7 @@ export const messages = {
 
     'coverage.activateBackup': 'تفعيل البديلة',
 
-    'dashboard.unattended': 'بلا متابعة',
-    'dashboard.escalations': 'تصعيدات مفتوحة',
-    'dashboard.teamNow': 'الفريق الآن',
-    'dashboard.needsAction': 'يحتاج تدخلك',
-    'dashboard.thisWeek': 'هذا الأسبوع',
-    'dashboard.workload': 'حجم العمل',
-    'dashboard.unattendedZero': 'لا توجد عائلات بلا متابعة. هذا هو الهدف.',
 
-    'workload.low': 'منخفض',
-    'workload.medium': 'متوسط',
-    'workload.high': 'مرتفع',
 
     'ownership.reasonRequired': 'السبب مطلوب ويُسجَّل في سجل التدقيق.',
 

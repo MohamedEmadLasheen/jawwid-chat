@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { hashFile, listExtracted, manifestOf, planIngest, verifyArchive, type IngestPlan } from '../../../src/quran/audio-archive';
 import { runIngest, type IngestDeps } from '../../../src/quran/audio-ingest-run';
 import { audioKey } from '../../../src/quran/audio-key';
-import type { AudioSourceSpec } from '../../../src/quran/audio-sources';
+import { KFGQPC_HUDHAIFY, type AudioSourceSpec } from '../../../src/quran/audio-sources';
 import { buildObjectKey } from '../../../src/communication/attachments/object-key';
 import { SURAHS } from '../../../src/materials/quran-surahs';
 
@@ -46,7 +46,8 @@ function archiveFile(bytes: Buffer): string {
 
 function spec(archive: Buffer, extractedManifestSha256: string | null = null): AudioSourceSpec {
   return { reciter: RECITER, name: 'Test', attribution: 'test', licence: null,
-    archives: [{ file: 'h.rar', url: 'https://example.test/h.rar', sha256: sha(archive), bytes: archive.length, extractedManifestSha256 }] };
+    archives: [{ file: 'h.rar', url: 'https://example.test/h.rar', sha256: sha(archive), bytes: archive.length, extractedManifestSha256 }],
+    naming: { ayah: /^(\d{3})(\d{3})\.mp3$/, extras: [{ pattern: /^\d{3}000\.mp3$/, reason: 'a Basmala file' }] } };
 }
 
 async function plan(files: Record<string, Buffer>, pin: 'pin' | 'unpinned' | 'other' = 'pin'): Promise<IngestPlan> {
@@ -82,6 +83,9 @@ describe('the extracted folder', () => {
     expect((await plan(files, 'unpinned')).manifest).toBe('unpinned');
     expect((await plan(files, 'other')).manifest).toBe('mismatch');
     expect((await plan(files, 'pin')).manifest).toBe('match');
+    // Names are compared in NFC, so the same folder hashes the same whatever the filesystem's Unicode form.
+    const nfd = manifestOf([{ name: 'a\u0301.mp3', path: '', bytes: 1, sha256: 'x' }]);
+    expect(nfd).toBe(manifestOf([{ name: '\u00e1.mp3', path: '', bytes: 1, sha256: 'x' }]));
     // The manifest covers every file's name, size and hash: changing one byte changes it.
     const a = manifestOf(await listExtracted(folder(files)));
     const b = manifestOf(await listExtracted(folder({ '085001.mp3': mp3('2') })));
@@ -90,6 +94,28 @@ describe('the extracted folder', () => {
 });
 
 describe('planning', () => {
+  it('KFGQPC\'s own naming, from the real listing: 10-SSSAAA-A01 (and -001 in Al-Baqarah); C00 Basmala, B00 Isti\'adha and the editor\'s .sfk are extras', async () => {
+    const p = await planIngest(
+      { name: 'huthify-ayat.rar', sha256: 'x', bytes: 1, listed: null, refused: null },
+      await listExtracted(folder({
+        'H/085 Al-Buruj/10-085001-A01.mp3': mp3('1'),
+        'H/002 Al-Baqarah/10-002282-001.mp3': mp3('282'),
+        'H/085 Al-Buruj/10-085C00-A01.mp3': mp3('b'),
+        'H/00B Al-Istiazah/10-000B00-A01.mp3': mp3('i'),
+        'H/00B Al-Istiazah/10-000B00-A01.mp3.sfk': Buffer.from('peaks'),
+        'H/085 Al-Buruj/10-085002-B01.mp3': mp3('2'),
+        'H/086 At-Tariq/10-085003-A01.mp3': mp3('3'),
+      })),
+      KFGQPC_HUDHAIFY,
+    );
+    expect(p.accepted.map((f) => `${f.surah}:${f.ayah}`)).toEqual(['2:282', '85:1']);
+    expect(p.extras.map((e) => e.name.split('/').pop())).toEqual(['10-000B00-A01.mp3', '10-000B00-A01.mp3.sfk', '10-085C00-A01.mp3']);
+    expect(Object.fromEntries(p.rejected.map((r) => [r.name.split('/').pop(), r.reason]))).toEqual({
+      '10-085002-B01.mp3': expect.stringMatching(/not an ayah file/),
+      '10-085003-A01.mp3': expect.stringMatching(/folder-mismatch/),
+    });
+  });
+
   it('maps each file by name to one real ayah, hashes it, and reports every reject and extra', async () => {
     const p = await plan({
       'Hudhaify/085001.mp3': mp3('1'),

@@ -8,7 +8,8 @@ import { useCopy, type Pair } from './copy'
 import { useCalendarDate } from './calendar'
 import { useAddAdjustment, useRevealPayoutAccount, useSetPayoutAccount, useSetTerms, useTeacherFinance } from './hooks'
 import { P, describePayrollError } from './payrollCopy'
-import { Field, Footer } from './TeacherFileDialogs'
+import { Field } from '@/shared/components/Field'
+import { Footer } from './TeacherFileDialogs'
 
 /**
  * PD-18 on the Teacher File: employment for every reader; salary terms, the

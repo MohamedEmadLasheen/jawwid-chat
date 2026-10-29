@@ -12,6 +12,13 @@ import { useTeacherList } from './hooks'
 import './teacher-files.css'
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
 import { AddTeacherDialog } from './AddTeacherDialog'
+import type { TeacherSummary } from './api'
+
+/** PD-43: an active teacher with set-up steps still open (a teacher who left is not being set up). */
+const setupIncomplete = (t: TeacherSummary) => t.isActive && (t.setupMissing ?? 0) > 0
+
+/** PD-43 §3.7: Organization's Teachers & supervisors tab, in the area this list was opened from. */
+const assignSupervisorPath = (basePath: string) => `${basePath.startsWith('/admin/') ? '/admin/teams' : '/organization'}?tab=teachers`
 
 /**
  * PD-10: every teacher of the organization, for the Teachers department and
@@ -23,13 +30,23 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
   const list = useTeacherList()
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
+  // PD-43: the active teachers still being set up.
+  const [incompleteOnly, setIncompleteOnly] = useState(false)
+  // PD-43 §3.7: the Teachers Manager's work list -- teachers no supervisor holds.
+  const [unsupervisedOnly, setUnsupervisedOnly] = useState(false)
   // PD-43: offered only when the server says so.
   const offer = list.data?.onboarding
+  // The filter, the count and the shortcut are the Manager's and the super admin's (they assign supervisors).
+  const assigns = offer?.supervisorChoice === 'any'
+  const unsupervised = (list.data?.teachers ?? []).filter((x) => x.unsupervised).length
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (list.data?.teachers ?? []).filter((x) => !q || x.name.toLowerCase().includes(q))
-  }, [list.data, query])
+    return (list.data?.teachers ?? [])
+      .filter((x) => !q || x.name.toLowerCase().includes(q))
+      .filter((x) => !incompleteOnly || setupIncomplete(x))
+      .filter((x) => !unsupervisedOnly || x.unsupervised)
+  }, [list.data, query, incompleteOnly, unsupervisedOnly])
 
   return (
     <div className="page">
@@ -43,7 +60,27 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
           <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
             <div className="toolbar">
               <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
+              <label className="tf-radio">
+                <input type="checkbox" checked={incompleteOnly} onChange={(e) => setIncompleteOnly(e.target.checked)} />
+                {tx(T.setupIncompleteOnly)}
+              </label>
+              {assigns && (
+                <label className="tf-radio">
+                  <input type="checkbox" checked={unsupervisedOnly} onChange={(e) => setUnsupervisedOnly(e.target.checked)} />
+                  {tx(T.unsupervisedOnly)}
+                </label>
+              )}
               <span className="toolbar__count">{tx(T.count, { n: number(rows.length) })}</span>
+              {assigns && unsupervised > 0 && (
+                <>
+                  <Badge tone="warn" dot>
+                    {tx(T.unsupervisedCount, { n: number(unsupervised) })}
+                  </Badge>
+                  <Link className="btn btn--sm" to={assignSupervisorPath(basePath)}>
+                    {tx(T.assignSupervisor)}
+                  </Link>
+                </>
+              )}
               {offer?.canAdd && (
                 <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
                   {tx(T.addTeacher)}
@@ -86,6 +123,8 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                             </Badge>
                             <AwayBadge away={row.away} />
                             {row.signIn === 'none' && <Badge tone="outline">{tx(T.noSignIn)}</Badge>}
+                            {setupIncomplete(row) && <Badge tone="warn">{tx(T.setupIncomplete)}</Badge>}
+                            {row.unsupervised && <Badge tone="warn">{tx(T.noSupervisorBadge)}</Badge>}
                           </span>
                         </td>
                       </tr>

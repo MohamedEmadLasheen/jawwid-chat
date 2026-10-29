@@ -1,6 +1,4 @@
 import type { ReactNode } from 'react'
-import { useI18n } from '@/core/i18n/I18nProvider'
-import type { WorkloadLevel } from '@/shared/types/domain'
 
 export type Tone =
   | 'now'
@@ -31,16 +29,5 @@ export function Badge({
       {dot && <span className="badge__dot" aria-hidden="true" />}
       {children}
     </span>
-  )
-}
-
-export function WorkloadBadge({ level, score }: { level: WorkloadLevel; score?: number }) {
-  const { t, number } = useI18n()
-  const tone: Tone = level === 'high' ? 'danger' : level === 'medium' ? 'today' : 'ok'
-  return (
-    <Badge tone={tone}>
-      {t(`workload.${level}` as const)}
-      {score !== undefined && ` · ${number(score)}`}
-    </Badge>
   )
 }

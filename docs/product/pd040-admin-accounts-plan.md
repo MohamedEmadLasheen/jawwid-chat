@@ -602,3 +602,61 @@ The bundle rows are in migration `20261028120000_chat_pd040_shadow_qa_bundles` (
 
 Not covered: parameterised and write routes, and the Flutter staff app. Those come with the PR-6 QA pass.
 
+---
+
+## 15. PR-3 as built (2026-10-28)
+
+**Migration `20261029100000_chat_pd040_staff_accounts`:**
+- `chat.permission.in_roles` (S4/C2).
+- The `staff_accounts.view` / `.create` / `.manage` and `access_roles.manage` keys, none of which goes in a role. The department managers' bundles hold the `staff_accounts.*` keys.
+- The minimal delegable set (C3): `certificates.view`, `certificates.design`, `billing.view` and `subscriptions.view`. Each is verified both ways in `pd040-legacy-bundles`.
+- `chat.department_account` (C5).
+- `chat.create_staff_account` and `chat.may_administer_staff_account`.
+- `chat.require_access_grantor` narrowed (C1). `chat.set_access_role_permissions` refuses barred keys. PD-43's `chat.guard_password_reset_code` is widened in its staff branch only (C4).
+
+**API:**
+
+| Route | Key | Rule |
+|---|---|---|
+| `GET /admin/staff-accounts`, `GET /:staffId` | `staff_accounts.view` | The super admin: every staff account but their own and the super admin's. A department manager: the specialists of their department. Anything else is not found. |
+| `POST /admin/staff-accounts` | `staff_accounts.create` | `decideStaffAccountCreate` and `chat.create_staff_account`. The roles are granted, and the first sign-in code (PD-43, HMAC-keyed, 72 h) is issued, in the same transaction. The code is e-mailed after the commit and shown once (`emailed`). |
+| `POST /:staffId/roles`, `/:staffId/roles/:roleId/revoke` | `staff_accounts.manage` | `chat.grant_access_role` / `revoke_access_role` (H1, H3, H5, H8, C1). |
+| `POST /:staffId/setup-code` | `staff_accounts.manage` | A reissue for a provisioned account. It supersedes every live code, and the audit names them. |
+| `GET /admin/access-roles`, `GET /admin/permissions` | `staff_accounts.view` or `access_roles.manage` | The roles, each with `grantable` for this caller, and the checklist they're made from. |
+| `POST /admin/access-roles`, `/:roleId`, `/:roleId/archive` | `access_roles.manage` | The super admin only (H7, S4). |
+| PD-21 `/admin/accounts/:id/{password-reset,suspend,reactivate,sessions/*}` | `accounts.administer` | Also open to a department manager for their own specialists while the subset rule below holds (`managedByActor`, decided by `chat.may_administer_staff_account`). A manager's reset code is e-mailed, never returned. Never impersonation. |
+
+**After the department head's review (2026-10-28):**
+- **P1: a reset code is impersonation.** Administering an account includes resetting its password, which is as good as holding the account. So a manager administers a specialist only while every key the specialist holds is one the manager holds and may delegate. `chat.may_administer_staff_account` applies that rule, and so do `decideStaffAccountManage`, the grantor rule, the reset-code guard and the list. Otherwise only the super admin administers that account.
+- **P1: manager-issued codes are e-mailed only.** When a manager issues a code for a staff account (a PD-21 reset or a setup-code reissue), it goes to the sign-in address and is never returned. With e-mail off, the manager issues none (409). Only the super admin sees a staff member's code. Creation keeps the owner's rule (shown once and e-mailed): a new account holds only what its creator granted.
+- **P2: role edits.** `chat.update_access_role` refuses an edit that adds a key a granting manager may not grant. The refusal names those grants (`COMM.ACCESS_ROLE_CONFLICT`, 409). `chat.grant_access_role` reads the role `FOR SHARE`, so a grant and an edit never interleave.
+- **P2: suspend, reactivate and sign-out.** The database refuses them for a staff account too, using the same predicate:
+  - `chat.guard_staff_account_status` takes the actor from `chat.account_admin_actor` (set by the PD-21 service) or from `deactivate_principal`'s requester. A suspension that names nobody is an operator's (the CLI). A reactivation always names someone.
+  - `chat.guard_staff_session_revocation` checks a session ended by another account.
+- **P2: defence in depth.** `chat.staff_access_profile` ignores a role's barred keys, and the migration stops if any role holds one. `accounts.administer` is barred too. The `in_roles` generator is append-only: each migration bars its own keys.
+
+**Known limit (accepted by the department head, 2026-10-28):** the database does not check a staff account's suspension when the suspension names no actor. That is how the operator command-line tool suspends: `deactivate-principal --suspend` passes no requester. So a server-side writer that calls `chat.deactivate_principal` without a requester can still suspend any staff account. Suspension only takes access away, never grants it. A reactivation, a sign-out by another account, and any suspension that does name an actor are always checked.
+
+**Still to come:**
+- PR-5: the Admin Web Staff accounts and Roles UI.
+- Repeatable `general` departments and moving a specialist between departments.
+- The `access_changed` journal: today, HTTP picks up a role change on the next request and sockets within 15 s.
+
+## 16. PR-4 as built (2026-10-28)
+
+- **Migration `20261029190000_chat_pd040_designer_template`.** `chat.seed_access_role_templates(org)` adds the template roles an organization lacks:
+  - It is idempotent and returns how many roles it added.
+  - It skips a key the organization already uses.
+  - It audits each role it adds as `access_role.created`, with no actor and `template: true`.
+  - The migration runs it for every organization that exists at that point. An organization created later gets the templates by running the same function.
+- **The template list.** It lives in `apps/api/src/platform/permissions/role-templates.ts`, and the migration seeds it from a generated block. `pd040-role-templates.spec.ts` keeps the two in step, as the catalogue seed spec does. The catalogue, the legacy bundles and the earlier seed blocks are unchanged.
+- **The Designer.** It is a specialist role holding `certificates.view` and `certificates.design`, never `certificates.deliver`. Both keys are delegable and held by the Teachers manager only. So the super admin and the Teachers manager can grant it, the latter to a specialist of the Teachers department.
+  - Its exact routes are pinned by PD-41 in `pd040-route-permissions.spec.ts`.
+  - This PR adds a check that everything its keys open is a `/certificates` or `/learner-certificates` route.
+- **Once seeded, a template is ordinary data.** The super admin edits or archives it like any other role. `GET /admin/access-roles` now marks it with `template: true`.
+
+**PR-4b, the review of #231 (migration `20261029220000_chat_pd040_template_followups`):**
+- **The seed no longer skips silently.** If an organization already has a non-template role with a template's key, the seed raises a notice and audits `access_role.template_skipped` (the key and the existing role's id). So a manager's later H5 refusal of "designer" has a trail. A template that is already seeded is still skipped quietly: that is what makes the seed idempotent.
+- **`is_template` is provenance only.** `chat.update_access_role` clears it when the super admin changes a template's keys. From then on it is the organization's own role. Its audit row records `template`.
+- **New organizations.** The super-admin bootstrap seeds the templates for its organization (`templatesSeeded` in its output). The runbook (`docs/admin/super-admin-bootstrap.md`) says how to seed an organization provisioned another way.
+

@@ -19,7 +19,11 @@ export type StaffRole =
   | 'technical'
   | 'academic'
   | 'super_admin'
+  /** PD-40: a department account (the Designer) with no implicit powers; it opens only what it was granted. */
+  | 'specialist'
   | 'system'
+  /** PD-40: a department account with no implicit powers -- only what its access roles open. */
+  | 'specialist'
 
 export type Presence = 'online' | 'away' | 'offline'
 
@@ -30,44 +34,11 @@ export interface Staff {
   presence: Presence
   is_active: boolean
   last_activity_at?: string | null
+  /**
+   * PD-40: the permission keys /me reports. UX only -- a page or a Dashboard
+   * section is offered when the key is held; the server decides every request.
+   * Absent from an API that predates PD-40.
+   */
+  permissions?: string[]
 }
 
-export type TaskType = 'finance' | 'technical' | 'academic' | 'other'
-export type TaskStatus = 'open' | 'in_progress' | 'done' | 'cancelled'
-
-export interface Task {
-  id: string
-  case_id: string | null
-  family_id: string
-  family_name?: string
-  type: TaskType
-  title: string
-  details: string | null
-  owner_id: string
-  owner_name?: string
-  status: TaskStatus
-  due_at: string | null
-  result: string | null
-  created_at: string
-  done_at: string | null
-}
-
-/** Brief §7. LOW / MEDIUM / HIGH — there is no CRITICAL. */
-export type WorkloadLevel = 'low' | 'medium' | 'high'
-
-export interface TeamNowRow {
-  staff_id: string
-  name: string
-  presence: Presence
-  now_count: number
-  today_count: number
-  late_replies: number
-  workload_score: number
-  workload_level: WorkloadLevel
-  inactivity_warning: boolean
-}
-
-export interface Paginated<T> {
-  items: T[]
-  next_cursor: string | null
-}

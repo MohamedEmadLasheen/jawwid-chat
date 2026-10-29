@@ -66,6 +66,11 @@ export class AudioController {
     return this.source(surah, 1) !== null;
   }
 
+  /** Whether this one ayah has a source (a manifest may cover only part of a surah). */
+  has(surah: number, ayah: number): boolean {
+    return this.source(surah, ayah) !== null;
+  }
+
   get playing(): string | null {
     return this.current?.key ?? null;
   }

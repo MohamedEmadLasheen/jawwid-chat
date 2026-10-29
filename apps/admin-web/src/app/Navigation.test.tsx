@@ -49,6 +49,20 @@ const staff = (role: StaffRole) => makeStaff({ id: `staff_${role}`, name: `Synth
 const superAdmin = staff('super_admin')
 const OPERATOR_ROLES: StaffRole[] = ['manager', 'admin', 'coverage', 'finance', 'technical', 'academic']
 
+/** PD-44: what GET /dashboard/chats and /dashboard/cases answer a manager here. */
+const DASHBOARD_ROUTES = {
+  '/dashboard/chats': { generatedAt: '2026-10-28T09:00:00.000Z', tiles: [{ key: 'chats.waiting', count: 2, oldestAt: null, capped: false }] },
+  '/dashboard/cases': {
+    generatedAt: '2026-10-28T09:00:00.000Z',
+    tiles: [
+      { key: 'cases.mine_open', count: 0, oldestAt: null, capped: false },
+      { key: 'cases.department_open', count: 1, oldestAt: null, capped: false },
+      { key: 'cases.overdue', count: 0, oldestAt: null, capped: false },
+    ],
+  },
+}
+const dashboardManager = makeStaff({ id: 'staff_manager', role: 'manager', permissions: ['chat.use', 'cases.view'] })
+
 beforeEach(() => {
   localStorage.clear()
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
@@ -67,9 +81,10 @@ describe('The navigation registry', () => {
     // Accounts (PD-21: where every staff role administers accounts),
     // Materials (PD-29: the library the super admin manages), the Schedule
     // (PD-38: the academy's calendar), Trials & new students (PD-11 T4,
-    // PD-16), Teacher credentials review and Escalations (PD-35 B5).
-    expect(keys).toHaveLength(28)
-    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases'].sort())
+    // PD-16), Teacher credentials review, Escalations (PD-35 B5) and
+    // Certificates (PD-41) and Lesson audio (PD-48, under More).
+    expect(keys).toHaveLength(30)
+    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
     const more = destinations.find((d) => d.key === 'more')!
@@ -101,6 +116,10 @@ describe('The navigation registry', () => {
           ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
           // PD-29: Materials waits for the Teachers manager (GET /materials/admin/access).
           ...(visibleAreas(role).includes('materials') ? ['materials'] : []),
+          // PD-41: Certificates waits for GET /certificates/access.
+          ...(visibleAreas(role).includes('certificates') ? ['certificates'] : []),
+          // PD-48: Lesson audio waits for GET /lesson-audio/access.
+          ...(visibleAreas(role).includes('lesson-audio') ? ['lesson-audio'] : []),
         ]
         expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager, billingReader }).includes(a)), role).toEqual(withheld)
         expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
@@ -113,9 +132,9 @@ describe('The navigation registry', () => {
     // which it shares with Sales and Operations (PD-11 T4, PD-16), Teacher
     // credentials review (the queue it reviews with operators), Escalations
     // (PD-35 B5) and Materials, the library it manages with the Teachers
-    // manager (PD-29).
+    // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/materials'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/certificates', '/materials', '/lesson-audio'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -255,21 +274,13 @@ describe('The retired Families page', () => {
   })
 
   it('is no longer where the Dashboard sends the manager', async () => {
-    const fetchMock = routeFetch({
-      '/dashboard/header': { unattended_count: 3, open_escalations: 0 },
-      '/dashboard/team-now': [{
-        staff_id: 'staff_owner', name: 'Synthetic owner', presence: 'online', now_count: 2, today_count: 1,
-        late_replies: 0, workload_score: 1, workload_level: 'normal', inactivity_warning: false,
-      }],
-      '/dashboard/needs-action': [],
-    })
+    const fetchMock = routeFetch(DASHBOARD_ROUTES)
     vi.stubGlobal('fetch', fetchMock)
-    renderWithProviders(<AppRoutes />, { staff: staff('manager'), route: '/dashboard' })
-    // The count stays; it no longer opens a page.
-    expect(await screen.findByRole('button', { name: /Unattended/ })).toBeDisabled()
-    const row = (await screen.findByText('Synthetic owner')).closest('tr')!
-    expect(within(row).queryByRole('button')).not.toBeInTheDocument()
-    expect(within(row).getByText('2')).toBeInTheDocument()
+    renderWithProviders(<AppRoutes />, { staff: dashboardManager, route: '/dashboard' })
+    // PD-44: every tile opens a working page; none opens the retired families list.
+    await screen.findByRole('link', { name: /Chats waiting for our reply/ })
+    const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href') ?? '')
+    expect(hrefs.filter((h) => /^\/families(\/|\?|$)/.test(h))).toEqual([])
     expect(fetchMock.mock.calls.some(([url]) => /\/families(\?|$)/.test(String(url)))).toBe(false)
   })
 })
@@ -310,8 +321,8 @@ describe('The desktop rail', () => {
 
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
     // 13 + Payments (PD-27, beside Instalments under Operations & performance)
-    // + Materials (PD-29, under Overview).
-    expect(within(menu).getAllByRole('link')).toHaveLength(15)
+    // + Materials (PD-29, under Overview) + Lesson audio (PD-48).
+    expect(within(menu).getAllByRole('link')).toHaveLength(16)
     expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'Overview', 'Communication', 'Operations & performance', 'Administration',
     ])
@@ -348,8 +359,11 @@ describe('The desktop rail', () => {
     // then Teacher credentials review,
     expect(document.activeElement).toHaveAccessibleName('Teacher credentials review')
     await userEvent.keyboard('{ArrowDown}')
-    // PD-35 B5: then Escalations, closing the first People group,
+    // PD-35 B5: then Escalations,
     expect(document.activeElement).toHaveAccessibleName('Escalations')
+    await userEvent.keyboard('{ArrowDown}')
+    // PD-41: then Certificates, closing the first People group,
+    expect(document.activeElement).toHaveAccessibleName('Certificates')
     await userEvent.keyboard('{ArrowDown}')
     // PD-17: then Parents (an Operations section under People), then the menu wraps.
     expect(document.activeElement).toHaveAccessibleName('Parents')
@@ -377,7 +391,9 @@ describe('The desktop rail', () => {
       // PD-13: Calls is its own destination for every operating role.
       // Teacher Profile V2: the certificate review queue sits under People beside
       // the other people pages, so for admin and coverage People is a menu.
-      ['manager', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories'], ['People & teams', 'More']],
+      // PD-44: the Dashboard is its own destination for a manager, beside
+      // Conversations, which leaves More holding Tasks alone: a direct link.
+      ['manager', ['conversations', 'dashboard', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Dashboard', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       // PD-21: Accounts is every role's, so a department has two one-page destinations.
@@ -447,19 +463,13 @@ describe('The retired Inbox', () => {
     }
   })
 
-  it("is no longer where the Dashboard's needs-action list sends the manager", async () => {
-    vi.stubGlobal('fetch', routeFetch({
-      '/dashboard/header': { unattended_count: 0, open_escalations: 1 },
-      '/dashboard/team-now': [],
-      '/dashboard/needs-action': [{
-        kind: 'escalation', family_id: 'fam_1', family_name: 'Synthetic family', staff_id: null, staff_name: null,
-        absence_id: null, description: 'Escalated by a synthetic operator', at: '2026-10-28T08:00:00Z',
-      }],
-    }))
-    renderWithProviders(<AppRoutes />, { staff: staff('manager'), route: '/dashboard' })
-    // The item is still listed; it no longer opens the retired Inbox.
-    expect(await screen.findByText('Escalated by a synthetic operator')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Synthetic family' })).not.toBeInTheDocument()
+  it("is no longer where the Dashboard's cases send the manager", async () => {
+    vi.stubGlobal('fetch', routeFetch(DASHBOARD_ROUTES))
+    renderWithProviders(<AppRoutes />, { staff: dashboardManager, route: '/dashboard' })
+    // PD-44: an escalation is counted and opens the Cases page, never the retired Inbox.
+    expect(await screen.findByRole('link', { name: /Open cases in the department/ })).toHaveAttribute('href', '/cases?tab=department')
+    const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href') ?? '')
+    expect(hrefs.filter((h) => h.startsWith('/inbox'))).toEqual([])
   })
 })
 
@@ -480,7 +490,7 @@ describe('The drawer, below desktop width', () => {
     const people = within(nav).getByRole('group', { name: 'الأشخاص والفرق' })
     expect(within(people).getByRole('link', { name: 'الحصص التجريبية والطلاب الجدد' })).toHaveAttribute('href', '/trials')
     expect(within(people).getByRole('link', { name: 'مراجعة مؤهلات المعلمين' })).toHaveAttribute('href', '/teacher-profiles')
-    expect(within(nav).getAllByRole('link')).toHaveLength(28)
+    expect(within(nav).getAllByRole('link')).toHaveLength(30)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {
