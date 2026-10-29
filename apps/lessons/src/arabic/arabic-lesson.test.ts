@@ -133,7 +133,7 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
   it('lesson 6: one sukun unit over the whole alphabet, with distractors as its quiz\'s wrong options', () => {
     const c = sukunMaddStandIn();
     c.units = [{
-      id: 'sukun', letters: [...'ءأإؤئابتةثجحخدذرزسشصضطظعغفقكلمنهوىي'], mark: 'sukun', name: 'سُكُونْ', forms: ['ـْ'], note: null,
+      id: 'sukun', letters: [...'ءأإؤئابتةثجحخدذرزسشصضطظعغفقكلمنهوىي'], mark: 'sukun', phraseName: true, name: 'سُكُونْ', forms: ['ـْ'], note: null,
       words: [{ id: 'sukun-001', text: 'نَجْمْ', was: null, review: null }, { id: 'sukun-002', text: 'بَحْرْ', was: null, review: null }],
     }];
     c.distractors = [{ id: 'distractor-001', text: 'قَلَمْ', was: null, review: null }];
@@ -145,6 +145,11 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
     const bad: ((x: ArabicLesson) => void)[] = [
       (x) => { x.distractors![0]!.id = 'sukun-009'; }, // a distractor's id is distractor-NNN
       (x) => { x.distractors![0]!.text = 'حَجْمْ'; x.quiz[0] = { ...x.quiz[0]!, options: ['حَجْمْ', 'نَجْمْ'] } as never; }, // it has a sukun too: two right answers
+      (x) => { x.distractors![0]!.text = 'حَجْمْ'; }, // carries the unit's feature, even unused
+      (x) => { x.distractors![0]!.text = 'نَجْمْ'; }, // a unit word
+      (x) => { x.distractors!.push({ id: 'distractor-002', text: 'قَلَمْ', was: null, review: null }); }, // listed twice
+      (x) => { x.distractors![0]!.finalMarkException = ' '; x.distractors![0]!.review = 'held'; }, // a blank exception
+      (x) => { delete (x.units[0] as { phraseName?: true }).phraseName; }, // a phrase name needs the flag
     ];
     for (const change of bad) {
       const x = structuredClone(c);
