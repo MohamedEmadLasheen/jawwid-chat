@@ -204,7 +204,7 @@ const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
 const isoTime = (t: unknown): number => (typeof t === 'string' && ISO_TIME.test(t) ? Date.parse(t) : NaN);
 
 /** The envelope's shape, its key and its lesson -- refused whole on any mismatch. Returns the approvals by id, or null. */
-function readApprovals(x: unknown, datasetId: string, lessonKey: string, keys: readonly ApprovalKey[]): Map<string, Approval> | null {
+export function readApprovals(x: unknown, datasetId: string, lessonKey: string, keys: readonly ApprovalKey[]): Map<string, Approval> | null {
   if (!isObj(x) || Object.keys(x).sort().join() !== 'keyId,payload,signature') return null;
   const p = x.payload;
   if (!isObj(p) || Object.keys(p).sort().join() !== 'approvals,datasetId,env,issuedAt,lessonKey,v' || p.v !== 1) return null;

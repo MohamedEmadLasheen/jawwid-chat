@@ -388,6 +388,13 @@ The **Data** column says what each type needs:
 
 Count by skill: listening and recitation 2; recognition and structure 4; order and recall 7; meaning 2; comprehension and values 7; context 1; meta 1. That is at least 15 distinct types per band in 6–8 and 9–12, and 11 that a 3–5 child can use. Activities 1–4, 7–15 (V) are live for all 114 surahs from PR-1.
 
+**Deviation, as built in the first game PR (#261): 3–5 distractors come from the same surah, not another one.**
+- They are drawn far ones first: the ayat furthest from the target, never one with the same text.
+- **Why:** a pre-reader matches what was heard against what is shown. A far ayah of the surah being learnt is already easy to tell apart, and every card the child touches is still an ayah of that surah.
+- Another surah's ayah would also need a second verified surah loaded for each game.
+- **Revisit** when levels exist: "another surah" may be the easiest level 1.
+- The teacher and the scholar see this choice in the mechanic's record when they sign it.
+
 **Game "skins"** (garden, sea, stars, desert caravan) change only the decoration and the reward animation, never the mechanic. They rotate per surah, so two surahs feel different even with the same mechanic. Skins carry no text and no Quran.
 
 ### C.3 The session generator (how variety is guaranteed)
@@ -402,6 +409,17 @@ For one child on one surah (or segment), the engine builds a playlist. It is det
    - at least one "understand" activity whenever approved content exists;
    - the skin rotates.
 4. **Length:** by band (§B.3). A child can always replay, skip forward or stop.
+
+**As built (#261):**
+- **The seed** is FNV-1a over `(surah, segment, band, levels, date)`. `levels` is `''` until the teacher's per-skill levels exist. Each game's seed derives from the sitting's seed.
+- **Variety:** the previous segment's last mechanic does not open the next one. "Least recently played" waits for the progress store (§B.5).
+- **Recitation:**
+  - a sitting waits up to 2 s for the recitation list, then is built and frozen for its segment;
+  - a list that arrives later is used from the next segment on;
+  - a segment gets the mechanics that need recitation only when every one of its ayat has a file.
+- **The grown-up's controls:** replay, skip and stop are always there.
+- **Counting** counts the segment, like every game, not the whole surah again in each segment.
+- **Only mechanics with a game in the engine are offered**, so a signed mechanic with no game never shows praise.
 
 ### C.4 Rules every game obeys
 
@@ -419,6 +437,18 @@ For one child on one surah (or segment), the engine builds a playlist. It is det
 - **The PD-29 engine rules still apply:** options shuffled once per question and answered by id, every ayah drawable, no star farming, one audio controller.
 - **No ads, no external links, no data beyond progress** (§B.5).
 - **No music with instruments** in the default (§H Q7): voice and simple sound effects, plus a mute control.
+- **As built (#261):**
+  - there are no sound effects; the only sound is the recitation. So the mute control is "no recitation", which restarts the sitting with the mechanics that work without it.
+  - The verse size control has four steps.
+  - A verse card's accessible name is what it shows: the ayah number, then the verse. Progress beads are read as text.
+  - **Signing a mechanic signs its code:** the record carries `code` (its file in `play/games/`) and `codeSha256`. That is the SHA-256 of that file plus the shared play code:
+    - `common.tsx`, the card;
+    - `adapt.ts`, the band's knobs such as tries before the answer is shown;
+    - `session.ts` and `PlayLesson.tsx`;
+    - `games/shuffle.ts`, which places the answer.
+
+    Each file is hashed with its path, and CRLF is read as LF. `check-quran-content.py` refuses a hash that does not match. Changing any of these changes the record, so every mechanic must be signed again.
+  - **Progress, v1:** stopping, or turning the recitation off or on, restarts the current game; the recitation toggle restarts the whole sitting. Nothing done so far is kept. That is accepted for v1, and it is safe: no star or progress is recorded yet (§B.5).
 
 ---
 

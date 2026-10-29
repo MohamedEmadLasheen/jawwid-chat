@@ -60,6 +60,14 @@ APPROVAL_KEYS = os.path.join(CONTENT, 'approvals-keys.json')
 GOLDEN = os.path.join(CONTENT, 'approvals.golden.json')
 VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
+MECHANICS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'play', 'mechanics.json')
+LESSONS_SRC = os.path.join(ROOT, 'apps', 'lessons', 'src')
+# What every mechanic's signature covers besides its own game (src-relative): the card and
+# respect rules, the band's knobs (tries before the answer is shown, rounds, options), the
+# session, the page that runs it, and the shuffle that places the answer. Change one and
+# every mechanic waits for review again.
+SHARED_CODE = ('play/games/common.tsx', 'play/adapt.ts', 'play/session.ts', 'play/PlayLesson.tsx', 'games/shuffle.ts')
+PLAY_APPROVALS = os.path.join(APPROVALS, 'play.json')
 RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
 PIN = os.path.join(ROOT, 'apps', 'lessons', 'quran-pin.json')
 
@@ -624,6 +632,87 @@ def check_approvals(appr, content, works, keys):
     return errors
 
 
+MECHANIC_KEYS = {'id', 'version', 'nameAr', 'skill', 'bands', 'tiers', 'needsAudio', 'respect', 'code', 'codeSha256'}
+SKILLS = ('listening', 'recitation', 'recognition', 'structure')
+TIERS = ('L1', 'L2', 'L3', 'L4', 'L5')
+
+
+def code_sha256(code, src_dir=LESSONS_SRC):
+    """SHA-256 over the game's file then SHARED_CODE, each as its src-relative path, a NUL, its text with
+    CRLF read as LF (so a Windows checkout hashes the same), and a NUL: the code a mechanic's signature covers."""
+    h = hashlib.sha256()
+    for rel in ('play/games/' + code,) + SHARED_CODE:
+        with open(os.path.join(src_dir, *rel.split('/')), 'rb') as f:
+            h.update(rel.encode('utf-8') + b'\0' + f.read().replace(b'\r\n', b'\n') + b'\0')
+    return h.hexdigest()
+
+
+def check_mechanics(reg, src_dir=LESSONS_SRC):
+    """The game mechanics registry (apps/lessons/src/play/mechanics.json; mechanics.ts applies the same).
+    Each record names its game's file and carries the code's hash, so signing a mechanic signs its code:
+    change the game (or common.tsx) and the hash, the record and so the approval no longer match."""
+    errors = []
+    items = reg.get('mechanics') if isinstance(reg, dict) else None
+    if not isinstance(items, list):
+        return ['mechanics: must be a list'], {}
+    out = {}
+    for m in items:
+        mid = m.get('id') if isinstance(m, dict) else None
+        if not isinstance(m, dict) or set(m) != MECHANIC_KEYS or not isinstance(mid, str) or not re.fullmatch(r'[a-z][a-z0-9_]{1,62}', mid) or mid in out:
+            errors.append(f'mechanics: {mid!r}: exactly {sorted(MECHANIC_KEYS)}, a unique snake_case id')
+            continue
+        if not is_int(m['version']) or m['version'] < 1 or not isinstance(m['nameAr'], str) or not m['nameAr'].strip():
+            errors.append(f'mechanics: {mid}: version and nameAr')
+        if m['skill'] not in SKILLS or not isinstance(m['needsAudio'], bool):
+            errors.append(f'mechanics: {mid}: skill one of {SKILLS}, needsAudio true or false')
+        if not isinstance(m['bands'], list) or not m['bands'] or not all(b in BANDS for b in m['bands']):
+            errors.append(f'mechanics: {mid}: bands')
+        if not isinstance(m['tiers'], list) or not m['tiers'] or not all(t in TIERS for t in m['tiers']):
+            errors.append(f'mechanics: {mid}: tiers')
+        if not isinstance(m['respect'], list) or not m['respect'] or not all(isinstance(r, str) and r.strip() for r in m['respect']):
+            errors.append(f'mechanics: {mid}: the respect rules (plan C.4) the scholar signs')
+        code = m['code']
+        if not isinstance(code, str) or not re.fullmatch(r'[A-Z][A-Za-z0-9]*\.tsx', code) or not os.path.isfile(os.path.join(src_dir, 'play', 'games', code)):
+            errors.append(f'mechanics: {mid}: code must name its game file in play/games/')
+        elif m['codeSha256'] != code_sha256(code, src_dir):
+            errors.append(f'mechanics: {mid}: codeSha256 is not the code of {code} + the shared play code (it changed: re-hash, and it is re-signed)')
+        out[mid] = m
+    return errors, out
+
+
+def check_play_approvals(appr, mechanics, dataset_id, keys):
+    """approvals/play.json: the API's signed export for scope 'play' (the envelope, read as content's is; the
+    signature is verify-approvals.mjs's). A mechanic is signed by a teacher and the scholar, for its record as it is now."""
+    errors = envelope_errors(appr, keys)
+    if errors:
+        return [f'play approvals: {e}' for e in errors]
+    p = appr['payload']
+    if p['lessonKey'] != 'play' or p['datasetId'] != dataset_id:
+        return [f'play approvals: lessonKey must be "play" and datasetId the pinned {dataset_id}']
+    seen = set()
+    for a in p['approvals']:
+        aid = a.get('id') if isinstance(a, dict) else None
+        if not isinstance(a, dict) or set(a) != {'id', 'approvalSha256', 'steps', 'signers'} or not isinstance(aid, str) or aid in seen:
+            errors.append(f'play approvals: {aid!r}: exactly id, approvalSha256, steps, signers, once per mechanic')
+            continue
+        seen.add(aid)
+        signers = a['signers'] if isinstance(a['signers'], list) else []
+        signed = [g.get('step') for g in signers if isinstance(g, dict)]
+        if not all(isinstance(g, dict) and set(g) == {'step', 'staffId', 'at'} and g['step'] in STEPS and isinstance(g['staffId'], str)
+                   and g['staffId'] for g in signers) or not isinstance(a['steps'], list) or sorted(map(str, a['steps'])) != sorted(map(str, signed)) \
+                or len(set(signed)) != len(signed) or len({g['staffId'] for g in signers}) != len(signers):
+            errors.append(f'play approvals: {aid}: the steps must be exactly the steps signed, each by a different person')
+            continue
+        m = mechanics.get(aid)
+        if m is None:
+            errors.append(f'play approvals: {aid}: no such mechanic')
+            continue
+        if a['approvalSha256'] != approval_sha256(dataset_id, 'play', m):
+            errors.append(f'play approvals: {aid}: stale -- the mechanic changed after it was signed')
+        if 'teacher' not in a['steps'] or 'scholar' not in a['steps']:
+            errors.append(f'play approvals: {aid}: a mechanic needs the teacher and the scholar')
+    return errors
+
 def check_vectors(vectors):
     errors = []
     for i, v in enumerate(vectors):
@@ -759,6 +848,67 @@ def selftest():
         if not any(expected in e for e in check_sources(bad)[0]):
             failed.append(f'sources: {name} was accepted')
 
+    # The game mechanics and their signatures.
+    mech_errors, mechanics = check_mechanics(json.load(open(MECHANICS, encoding='utf-8')))
+    failed += mech_errors
+    m0 = next(iter(mechanics.values()))
+    play_keys = {'0123456789abcdef': {'id': '0123456789abcdef', 'publicKey': 'test', 'env': 'production', 'addedAt': '2026-10-29T00:00:00Z'}}
+
+    def play(approvals, **over):
+        return {'payload': dict({'v': 1, 'env': 'production', 'issuedAt': '2026-10-29T12:00:00.000Z', 'datasetId': 'test-1', 'lessonKey': 'play',
+                                 'approvals': [dict(a, signers=[{'step': st, 'staffId': f'staff-{n}', 'at': '2026-10-29T10:00:00Z'}
+                                                                for n, st in enumerate(a['steps'])]) for a in approvals]}, **over),
+                'keyId': '0123456789abcdef', 'signature': 'A' * 86 + '=='}
+    sha0 = approval_sha256('test-1', 'play', m0)
+    unsigned = {'payload': {'v': 1, 'env': 'production', 'issuedAt': None, 'datasetId': 'test-1', 'lessonKey': 'play', 'approvals': []},
+                'keyId': None, 'signature': None}
+    play_cases = {
+        'signed': (play([{'id': m0['id'], 'approvalSha256': sha0, 'steps': ['teacher', 'scholar']}]), None),
+        'unsigned and empty': (unsigned, None),
+        'teacher-only': (play([{'id': m0['id'], 'approvalSha256': sha0, 'steps': ['teacher']}]), 'the scholar'),
+        'stale': (play([{'id': m0['id'], 'approvalSha256': approval_sha256('test-1', 'play', dict(m0, version=9)), 'steps': ['teacher', 'scholar']}]), 'stale'),
+        'unknown': (play([{'id': 'nope_game', 'approvalSha256': '0' * 64, 'steps': ['teacher', 'scholar']}]), 'no such mechanic'),
+        'the old unsigned shape': ({'scope': 'play', 'approvals': []}, 'signed export'),
+        'unsigned with approvals': (dict(unsigned, payload=dict(unsigned['payload'], approvals=play([{'id': m0['id'], 'approvalSha256': sha0, 'steps': ['teacher', 'scholar']}])['payload']['approvals'])), 'approve nothing'),
+        'a staging export': (play([], env='staging'), 'production'),
+        'another lesson': (play([], lessonKey='quran-112'), 'lessonKey'),
+        'an unknown key': (dict(play([]), keyId='ffffffffffffffff'), 'unknown key'),
+        'steps not signed': (dict(play([]), payload=dict(play([])['payload'], approvals=[{'id': m0['id'], 'approvalSha256': sha0, 'steps': ['teacher', 'scholar'], 'signers': []}])), 'steps signed'),
+    }
+    for name, (ap, expected) in play_cases.items():
+        errors = check_play_approvals(ap, mechanics, 'test-1', play_keys)
+        ok = (not errors) if expected is None else any(expected in e for e in errors)
+        if not ok:
+            failed.append(f'play approvals {name}: expected {expected or "no errors"}, got {errors}')
+    if check_mechanics({'mechanics': [dict(m0, extra=1)]})[0] == []:
+        failed.append('mechanics: an extra field was accepted')
+    for name, bad, expected in (
+        ('duplicate id', [m0, dict(m0)], 'unique'),
+        ('changed code', [dict(m0, codeSha256='0' * 64)], 'codeSha256'),
+        ('no such file', [dict(m0, code='Nope.tsx')], 'code must name'),
+        ('common.tsx', [dict(m0, code='common.tsx')], 'code must name'),
+    ):
+        if not any(expected in e for e in check_mechanics({'mechanics': bad})[0]):
+            failed.append(f'mechanics: {name} was accepted')
+    # The hash covers the shared code, and reads a CRLF checkout as the same code.
+    import shutil
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        for rel in ('play/games/' + m0['code'],) + SHARED_CODE:
+            dst = os.path.join(d, *rel.split('/'))
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(os.path.join(LESSONS_SRC, *rel.split('/')), dst)
+        if code_sha256(m0['code'], d) != m0['codeSha256']:
+            failed.append('mechanics: a copy of the code hashes differently')
+        crlf = os.path.join(d, 'play', 'adapt.ts')
+        data = open(crlf, 'rb').read()
+        open(crlf, 'wb').write(data.replace(b'\n', b'\r\n'))
+        if code_sha256(m0['code'], d) != m0['codeSha256']:
+            failed.append('mechanics: a CRLF checkout hashes differently')
+        open(crlf, 'wb').write(data.replace(b'triesBeforeShown: 2', b'triesBeforeShown: 9'))
+        if code_sha256(m0['code'], d) == m0['codeSha256']:
+            failed.append('mechanics: changing the knobs (adapt.ts) kept the signature')
+
     # The shared hash vectors (quran-content.test.ts checks the same file).
     failed += check_vectors(json.load(open(VECTORS, encoding='utf-8')))
 
@@ -791,6 +941,16 @@ def main(argv):
     failed = 1 if reg_errors else 0
     files = sorted(f for f in os.listdir(QURAN) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(QURAN) else []
     approvals = sorted(f for f in os.listdir(APPROVALS) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(APPROVALS) else []
+    mech_errors, mechanics = check_mechanics(json.load(open(MECHANICS, encoding='utf-8'))) if os.path.exists(MECHANICS) else ([], {})
+    play_errors = mech_errors + (check_play_approvals(json.load(open(PLAY_APPROVALS, encoding='utf-8')), mechanics, dataset_id, approval_keys)
+                                 if os.path.exists(PLAY_APPROVALS) else [])
+    for e in play_errors:
+        print(f'quran-content: {e}')
+    if play_errors:
+        failed += 1
+    elif mechanics:
+        print(f'quran-content: {len(mechanics)} game mechanic(s) well formed; '
+              f'{len(json.load(open(PLAY_APPROVALS, encoding="utf-8"))["payload"]["approvals"]) if os.path.exists(PLAY_APPROVALS) else 0} signed')
     for f in approvals:
         if f not in files:
             # A removed lesson is retired, never deleted: its signed export approves nothing and stays.

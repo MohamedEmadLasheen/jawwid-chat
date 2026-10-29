@@ -129,9 +129,11 @@ describe('the review subjects (generated from apps/lessons)', () => {
     expect(parseSubjects(committed).size).toBe(committed.scopes.length);
   });
 
-  it('the committed map holds no content yet: nothing can be reviewed before content exists', () => {
+  it('the committed map holds no content yet, and the four game mechanics, each for the teacher and the scholar', () => {
     expect(reviewScope('quran-112')).toBeNull();
-    expect(reviewScope('play')).toBeNull();
+    const play = reviewScope('play')!;
+    expect([...play.subjects.keys()].sort()).toEqual(['count_ayat', 'echo', 'listen_glow', 'which_heard']);
+    for (const subject of play.subjects.values()) expect({ id: subject.id, kind: subject.kind, steps: subject.requiredSteps }).toEqual({ id: subject.id, kind: 'mechanic', steps: ['teacher', 'scholar'] });
   });
 });
 
