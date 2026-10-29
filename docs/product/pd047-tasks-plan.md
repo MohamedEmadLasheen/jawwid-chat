@@ -274,6 +274,25 @@ The **Needs action** page and the other source pages stay as they are. A task is
 - **`trial_outcome`: "Two tasks".** The **teacher** gets an attendance task (`trial_attendance:<lessonId>`), done when attendance is recorded. Only **then** does the family's **Sales owner** get an outcome task (`trial_outcome:<lessonId>`), done when the outcome is recorded. Each sees only their own step: the teacher never sees the outcome task, and Sales never sees the attendance task.
 - **`certificate`: "Yes, replace them".** Each PD-41 step that needs someone to act becomes a task for that person, and the four `task` notifications (`certificate_requested`, `certificate_returned`, `certificate_uploaded`, `certificate_suggestion_decided`) stop. PD-47 owns the change in PD-41's emitters (`certificate.service.ts`). **PD-41's state machine and its tests stay intact**: only who is told, and how, changes.
 
+**PR-6b -- design note (for the department head's agreement on the two marked points).**
+- **`teacher_unsupervised:<teacherId>`.** An active teacher with no live PD-35 supervisor of the Teachers department (the same test as `work_task_teacher_owner`'s first branch). Goes to the Teachers manager, else the super admin. Raised by the sweep (a teacher added unsupervised; a supervisor who leaves leaves each of their teachers unsupervised). Done when a supervisor is assigned (trigger on `chat.teacher_supervisor_assignment`, actor = `assigned_by`). Withdrawn when the teacher leaves. A supervisor who leaves again later starts a **fresh** task (one key per unsupervised spell, as PR-2b's episodes). The two PD-43 notices are removed: the API call in `teacher-onboarding.service.ts` and the `chat.staff` trigger (dropped in this migration; its text rows stay for history).
+- **`trial_attendance:<lessonId>`.** The trial's teacher, due at the trial's end + 24 h. Done when the lesson's attendance is recorded (`held` or `student_no_show`, by whoever recorded it, the teacher or Sales' `no_show`). Withdrawn when the trial is rescheduled or cancelled.
+- **`trial_outcome:<lessonId>`.** Raised only when attendance is `held`, due + 48 h. Done when `chat.trial_outcome` is written (actor = `recorded_by`). Withdrawn if Sales corrects the attendance to `student_no_show`; restored if corrected back. Neither task carries prospect or form data (G-07): ids only, as all tasks.
+  - **(A) Who is the "family's Sales owner" for a trial?** A prospect has no family until it subscribes, so `chat.family_sales_owner` has no row. **Recommended:** the prospect's creator (`trial_prospect.created_by`, always a Sales member or manager) while live, else the live Sales manager, else the super admin.
+- **`certificate`: one task per step that waits on a person**, keyed on the PD-41 event that opened the step (`chat.appreciation_certificate_event.id`), so a certificate that loops back gets a fresh task each round:
+
+  | Step (state) | Task type | Who | Done by |
+  |---|---|---|---|
+  | `proposed` | `certificate_accept` | the learner's Operations supervisor or cover (safeguard 5) | accept / decline |
+  | `requested` (unclaimed) | `certificate_design` | **(B)** | moves to the Designer at `start` |
+  | `in_design` | `certificate_design` | the assigned Designer (reassign moves it) | upload |
+  | `changes_requested` | `certificate_resubmit` | the requester of record (`certificate_responsible`) | resubmit |
+  | `uploaded` | `certificate_review` | the requester of record | approve / redesign |
+  | `approved` | `certificate_send` | the requester of record | send |
+
+  Cancel withdraws the open step's task. `certificate_suggestion_decided` is information, not an action: its push stops and PD-12's card in the teacher's supervision chat remains their notice.
+  - **(B) Who holds an unclaimed request?** Every `certificates.design` holder may claim it, but a task has one assignee. **Recommended:** the category's overseer (the Operations manager for `student`, the Teachers manager for `teacher`, else the super admin): the one person who may already reassign the Designer. The task moves to the Designer when one claims it.
+
 #### 3.6.1 As built in PR-2 (#241)
 
 - **Day-one backfill.** Owner, 2026-10-29: "Yes, but only recent ones". At switch-on, only source items from the **last 14 days** become tasks, and older open items are left as they are.
