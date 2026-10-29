@@ -4345,4 +4345,12 @@ class L10nEn extends L10n {
 
   @override
   String get lessonAudioTermsTitle => 'Terms and privacy';
+
+  @override
+  String get photoLabel => 'Photo';
+
+  @override
+  String photoPositionLabel(int position, int count) {
+    return 'Photo $position of $count';
+  }
 }

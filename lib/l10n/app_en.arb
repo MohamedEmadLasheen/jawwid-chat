@@ -2966,5 +2966,9 @@
   "lessonAudioNoticeAccept": "I understand that lesson pronunciation audio is computer-generated and checked by the academy's teachers before use.",
   "@lessonAudioNoticeAccept": {"description": "PD-48: owner-approved 2026-10-29, word for word. The line a parent ticks at sign-up and acknowledges once at the next sign-in."},
   "lessonAudioTermsTitle": "Terms and privacy",
-  "@lessonAudioTermsTitle": {"description": "PD-48: the section header above the terms/privacy paragraph (a UI label, not part of the approved text)."}
+  "@lessonAudioTermsTitle": {"description": "PD-48: the section header above the terms/privacy paragraph (a UI label, not part of the approved text)."},
+  "photoLabel": "Photo",
+  "@photoLabel": {"description": "PD-37: a photo in the full-screen viewer, read by a screen reader when it is the only one."},
+  "photoPositionLabel": "Photo {position} of {count}",
+  "@photoPositionLabel": {"description": "PD-37: which photo of the message is on screen, read by a screen reader.", "placeholders": {"position": {"type": "int"}, "count": {"type": "int"}}}
 }

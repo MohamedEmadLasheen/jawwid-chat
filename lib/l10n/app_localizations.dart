@@ -7440,6 +7440,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Terms and privacy'**
   String get lessonAudioTermsTitle;
+
+  /// PD-37: a photo in the full-screen viewer, read by a screen reader when it is the only one.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get photoLabel;
+
+  /// PD-37: which photo of the message is on screen, read by a screen reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo {position} of {count}'**
+  String photoPositionLabel(int position, int count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

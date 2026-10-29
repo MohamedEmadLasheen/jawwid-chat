@@ -4441,4 +4441,12 @@ class L10nAr extends L10n {
 
   @override
   String get lessonAudioTermsTitle => 'الشروط والخصوصية';
+
+  @override
+  String get photoLabel => 'صورة';
+
+  @override
+  String photoPositionLabel(int position, int count) {
+    return 'الصورة $position من $count';
+  }
 }
