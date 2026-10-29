@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -366,6 +367,40 @@ describe('Trial lessons, as Sales', () => {
   })
 })
 
+describe('Trial lessons, opened from the Dashboard (PD-44)', () => {
+  it('opens on the tab the URL names: Needs a decision shows only the trials awaiting one', async () => {
+    access({ sales: true })
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials?filter=decision' })
+    expect(await screen.findByText('Prospect Alpha')).toBeInTheDocument()
+    expect(screen.queryByText('Prospect Gamma')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')?.textContent).not.toBe(
+      screen.getAllByRole('tab')[0]!.textContent,
+    )
+  })
+
+  it('follows the URL when it changes while the page is open', async () => {
+    access({ sales: true })
+    renderWithProviders(
+      <>
+        <AppRoutes />
+        <Link to="/trials?filter=decision">to decision</Link>
+      </>,
+      { staff, route: '/trials' },
+    )
+    expect(await screen.findByText('Prospect Gamma')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'to decision' }))
+    await waitFor(() => expect(screen.queryByText('Prospect Gamma')).not.toBeInTheDocument())
+    expect(screen.getByText('Prospect Alpha')).toBeInTheDocument()
+  })
+
+  it('falls back to all trials for a filter the URL names wrongly', async () => {
+    access({ sales: true })
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials?filter=everything' })
+    expect(await screen.findByText('Prospect Gamma')).toBeInTheDocument()
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
 describe('Trial lessons, as Operations (the trial desk)', () => {
   it('books, records and corrects like Sales', async () => {
     access({ operations: true })
@@ -551,6 +586,24 @@ describe('New students', () => {
     expect(within(card).getByText(/Sales One/)).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: 'Edit subscription' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Core/)).not.toBeInTheDocument()
+  })
+
+  it('opens on the filter the URL names (PD-44): Not assigned', async () => {
+    access({ operations: true })
+    const assigned: NewStudentDto = {
+      ...STUDENT,
+      trialId: 'tr-assigned',
+      parent: { ...STUDENT.parent, name: 'Parent Delta' },
+      enrolment: {
+        familyId: 'f-1', learnerIds: ['l-1'], supervisor: { id: 's-2', name: 'Supervisor Two' }, assignedAt: '2026-10-12T10:00:00Z',
+        groupConversationId: null, canCreateGroup: false, parentSignup: { state: 'not_started' },
+      },
+    } as NewStudentDto
+    on('GET', /\/trials\/new-students$/, () => json({ students: [{ ...STUDENT, enrolment: null }, assigned] }))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students?filter=unassigned' })
+    expect(await screen.findByRole('heading', { name: 'Parent Gamma' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Parent Delta' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Not assigned/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('Sales edits a form in place', async () => {

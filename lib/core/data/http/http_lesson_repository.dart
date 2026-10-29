@@ -78,10 +78,15 @@ class HttpLessonRepository implements LessonRepository {
   }
 
   @override
-  Future<String?> outcomeNote(String lessonId) async {
+  Future<LessonStaffDetails> staffDetails(String lessonId) async {
     final d = (await _client.get<Map<String, Object?>>('/lessons/$lessonId')).data ?? const {};
-    final note = d['outcomeNote'];
-    return note is String && note.trim().isNotEmpty ? note : null;
+    String? text(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
+    final ruling = d['ruling'];
+    return LessonStaffDetails(
+      note: text(d['outcomeNote']),
+      category: text(d['excuseCategory']),
+      familyWords: ruling is Map ? text(ruling['reason']) : null,
+    );
   }
 
   @override
@@ -153,14 +158,17 @@ class HttpLessonRepository implements LessonRepository {
   }
 
   @override
-  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) async {
+  Future<void> apologise(String lessonId, LessonTicketKind kind, {String? reason, String? category}) async {
     final path = switch (kind) {
       LessonTicketKind.apology => 'apology',
       LessonTicketKind.teacherApology => 'teacher-apology',
       LessonTicketKind.lateApology => 'late-apology',
       _ => throw ArgumentError.value(kind, 'kind', 'not an apology'),
     };
-    await _client.post<Object?>('/lessons/$lessonId/$path', data: {'reason': reason});
+    await _client.post<Object?>('/lessons/$lessonId/$path', data: {
+      'reason': ?reason,
+      'reasonCategory': ?category,
+    });
   }
 
   @override

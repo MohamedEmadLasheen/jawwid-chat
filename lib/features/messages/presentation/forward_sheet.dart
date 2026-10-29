@@ -8,6 +8,7 @@ import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
+import '../../../shared/utils/search_text.dart';
 import '../../../shared/utils/text_direction.dart';
 
 /// At most this many destinations per forward (owner decision 2026-10-19).
@@ -40,6 +41,13 @@ class _ForwardSheet extends ConsumerStatefulWidget {
 class _ForwardSheetState extends ConsumerState<_ForwardSheet> {
   late final Future<List<Conversation>> _conversations;
   final _selected = <String>[];
+  final _query = TextEditingController();
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -77,6 +85,24 @@ class _ForwardSheetState extends ConsumerState<_ForwardSheet> {
             padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing5, vertical: Spacing.spacing1),
             child: Text(l10n.forwardMax, style: Theme.of(context).textTheme.bodySmall),
           ),
+        // Owner 2026-10-29: every list can be typed into. Filters the chat
+        // names the same way the chat list's search does (SearchText).
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing2, Spacing.spacing5, Spacing.spacing3),
+          child: TextField(
+            key: const ValueKey('forward-search'),
+            controller: _query,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: l10n.pickerSearchHint,
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _query.text.isEmpty
+                  ? null
+                  : IconButton(tooltip: l10n.searchClear, icon: const Icon(Icons.close), onPressed: () => setState(_query.clear)),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
         const Divider(height: 1),
         Expanded(
           child: FutureBuilder<List<Conversation>>(
@@ -87,9 +113,14 @@ class _ForwardSheetState extends ConsumerState<_ForwardSheet> {
                 final message = ErrorPresenter.present(asAppErrorOf(snapshot.error!), l10n);
                 return JawwidErrorView(title: message.title, body: message.body);
               }
-              final conversations = snapshot.data ?? const <Conversation>[];
-              if (conversations.isEmpty) {
+              final all = snapshot.data ?? const <Conversation>[];
+              if (all.isEmpty) {
                 return JawwidEmptyView(title: l10n.forwardEmpty, body: '', icon: Icons.forward);
+              }
+              // A chosen chat stays chosen while it is filtered out of view.
+              final conversations = [for (final c in all) if (SearchText.matchesAllWords(_query.text, [c.title])) c];
+              if (conversations.isEmpty) {
+                return JawwidEmptyView(title: l10n.pickerNoMatches, body: '', icon: Icons.search_off);
               }
               return ListView.builder(
                 itemCount: conversations.length,

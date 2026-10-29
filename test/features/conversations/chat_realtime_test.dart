@@ -102,11 +102,21 @@ class _GatedMessages extends FakeMessageRepository {
   final held = <String>{};
   final sinceAfter = <int>[];
 
+  /// PD-50: every history read, as (before, limit); messages that sit above the newest
+  /// page (so a newest-page read never returns them); and the server's changed copies.
+  final historyCalls = <(String?, int)>[];
+  final farUp = <String>{};
+  final changed = <String, Message>{};
+
   @override
   Future<Page<Message>> history(String conversationId, {String? beforeCursor, int limit = 30}) async {
+    historyCalls.add((beforeCursor, limit));
     final page = await super.history(conversationId, beforeCursor: beforeCursor, limit: limit);
     return Page(
-      items: page.items.where((m) => !held.contains(m.id)).toList(),
+      items: [
+        for (final m in page.items)
+          if (!held.contains(m.id) && !(beforeCursor == null && farUp.contains(m.id))) changed[m.id] ?? m,
+      ],
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
     );
@@ -287,6 +297,61 @@ void main() {
     expect(has(held.id!), isTrue);
     expect(messages.sinceAfter, [held.sequence! - 1],
         reason: 'fetched from just below its own seq, not after the watermark');
+  });
+
+  group('PD-50: message.updated naming a seq', () {
+    Future<(String, Message)> openThreadWithCardFarUp() async {
+      container.read(coordinatorProvider);
+      await container.read(conversationsControllerProvider.future);
+      final id = listedIds().first;
+      final sub = container.listen(messagesControllerProvider(id), (_, _) {});
+      addTearDown(sub.close);
+      await settle();
+      // The oldest message held: by now outside the newest page, and changed on the server.
+      final card = container.read(messagesControllerProvider(id)).log.messages.firstWhere((m) => m.sequence != null);
+      messages.farUp.add(card.id!);
+      messages.changed[card.id!] = card.copyWith(isPinned: !card.isPinned);
+      messages.historyCalls.clear();
+      return (id, card);
+    }
+
+    Message held(String id, Message card) =>
+        container.read(messagesControllerProvider(id)).log.messages.singleWhere((m) => m.id == card.id);
+
+    test('re-reads exactly that message (before=seq+1, limit=1) and merges it, besides the newest page', () async {
+      final (id, card) = await openThreadWithCardFarUp();
+
+      socket.emit('message.updated', {
+        'conversationId': id,
+        'messageId': card.id,
+        'visibility': 'customer',
+        'editedAt': '2026-10-29T12:00:00.000Z',
+        'seq': '${card.sequence}',
+      });
+      await settle();
+
+      expect(messages.historyCalls, containsAll([('${card.sequence! + 1}', 1), (null, 30)]));
+      expect(held(id, card).isPinned, !card.isPinned, reason: "the server's copy of the far-up card won");
+    });
+
+    test('without a seq only the newest page is re-read, so a far-up card stays as it was', () async {
+      final (id, card) = await openThreadWithCardFarUp();
+
+      socket.emit('message.updated', {'conversationId': id, 'messageId': card.id, 'visibility': 'customer', 'editedAt': 'x'});
+      await settle();
+
+      expect(messages.historyCalls, [(null, 30)]);
+      expect(held(id, card).isPinned, card.isPinned);
+    });
+
+    test('a seq for a message this thread does not hold reads nothing extra', () async {
+      final (id, _) = await openThreadWithCardFarUp();
+
+      socket.emit('message.updated', {'conversationId': id, 'messageId': 'nope', 'visibility': 'customer', 'editedAt': 'x', 'seq': '999999'});
+      await settle();
+
+      expect(messages.historyCalls, [(null, 30)]);
+    });
   });
 
   test('a reconnect catches open threads up and re-reads the list', () async {

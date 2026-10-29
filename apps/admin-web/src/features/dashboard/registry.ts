@@ -21,6 +21,7 @@ export const SECTIONS: readonly SectionSpec[] = [
   { key: 'chats', title: { en: 'Chats', ar: 'المحادثات' }, requires: ['chat.use'] },
   { key: 'cases', title: { en: 'Escalation cases', ar: 'حالات التصعيد' }, requires: ['cases.view'] },
   { key: 'lessons', title: { en: 'Lessons', ar: 'الحصص' }, requires: ['lessons.view', 'schedule.view'] },
+  { key: 'enrolment', title: { en: 'Trials and new students', ar: 'الحصص التجريبية والطلاب الجدد' }, requires: ['trials.view', 'new_students.view'] },
   // PD-47 PR-4: everyone's own tasks are self-service, so no key is needed;
   // the team, decision and super-admin tiles come only to whom they apply.
   { key: 'tasks', title: { en: 'Tasks', ar: 'المهام' }, requires: [] },
@@ -165,6 +166,31 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     icon: 'approvals',
     backlog: true,
     href: NEEDS_ACTION,
+  },
+  // PD-44 PR-4: the Trials page's tabs and the New Students page's filters.
+  'trials.awaiting': {
+    label: { en: 'Trial lessons awaiting a decision', ar: 'حصص تجريبية تنتظر القرار' },
+    icon: 'clock',
+    backlog: true,
+    href: () => '/trials?filter=decision',
+  },
+  'trials.upcoming': {
+    label: { en: 'Trial lessons to come', ar: 'حصص تجريبية قادمة' },
+    icon: 'calendar',
+    backlog: false,
+    href: () => '/trials?filter=upcoming',
+  },
+  'new_students.unassigned': {
+    label: { en: 'New students not yet assigned', ar: 'طلاب جدد لم يُعيَّنوا بعد' },
+    icon: 'users',
+    backlog: true,
+    href: () => '/trials/new-students?filter=unassigned',
+  },
+  'new_students.waiting': {
+    label: { en: 'New students waiting for the parent', ar: 'طلاب جدد بانتظار ولي الأمر' },
+    icon: 'clock',
+    backlog: false,
+    href: () => '/trials/new-students?filter=waiting',
   },
 }
 

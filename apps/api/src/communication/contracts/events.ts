@@ -198,6 +198,8 @@ export interface MessageUpdatedPayload {
   messageId: string;
   visibility: string;
   editedAt: string;
+  /** The message's seq, when a client may hold it outside its newest page and should re-read just it. */
+  seq?: string;
 }
 
 export interface MessageReceiptUpdatedPayload {
