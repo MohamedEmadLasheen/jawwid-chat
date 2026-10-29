@@ -53,7 +53,7 @@ FIXTURE = os.path.join(ARABIC, FIXTURE_NAME)
 LESSON_FILE = re.compile(r'lesson-\d{3}\.json')
 KEYS = {'lesson', 'review', 'provenance', 'finalMark', 'retiredIds', 'units', 'quiz'}
 UNIT_KEYS = {'id', 'letters', 'name', 'forms', 'note', 'words'}
-UNIT_OPTIONAL = {'mark', 'group', 'madd', 'tanween'}  # lesson 3: the letter carrying one mark; the picker's group; lesson 7: a madd letter; lesson 8: a tanween
+UNIT_OPTIONAL = {'mark', 'group', 'madd', 'tanween', 'phraseName'}  # lesson 3: the letter carrying one mark; the picker's group; lesson 7: a madd letter; lesson 8: a tanween
 WORD_KEYS = {'id', 'text', 'was', 'review'}
 POSITIONS = ['start', 'middle', 'end']
 UNIT_ID = re.compile(r'^[a-z][a-z0-9_]*$')
@@ -331,9 +331,11 @@ def check(lesson, number):
             err(f'{where}: group must be a short non-empty name (the letter)')
         u = {**u, '_mark': mark, '_after': after, '_tanween': tanween}
         units[u['id']] = u
-        if mark and len(u['letters']) <= 5:
+        if 'phraseName' in u and (u['phraseName'] is not True or not mark):
+            err(f'{where}: phraseName is true, on a marked unit only (lesson 6\'s one sukun unit)')
+        if mark and u.get('phraseName') is not True:
             # A marked unit's name is its syllable: one of its letters with that mark (بَ), not a word.
-            # (A unit over the whole alphabet, lesson 6's one sukun unit, is named like any unit.)
+            # (A unit flagged phraseName -- lesson 6's one sukun unit -- is named like any unit.)
             if u['name'] not in [l + mark for l in u['letters']]:
                 err(f'{where}: name {u["name"]!r} must be the syllable, one of its letters with its {u["mark"]}')
         elif not is_phrase(u['name']):
@@ -374,8 +376,15 @@ def check(lesson, number):
     if not isinstance(distractors, list):
         err('distractors must be a list')
         distractors = []
+    unit_words = set(vocabulary)  # every word that belongs to a unit
     seen = set()
     for w in distractors:
+        t = w.get('text') if isinstance(w, dict) else None
+        if t in unit_words:
+            err(f'distractors word {t!r}: is also a unit word (a distractor is only ever a wrong option)')
+        for uu in units.values():
+            if is_str(t) and has(t, uu['letters'], uu['_mark'], uu['_after'], uu['_tanween']):
+                err(f'distractors word {t!r}: carries unit {uu["id"]!r}\'s feature, so it could be a right answer')
         word_checks('distractors', w, None, seen)
 
     ids = set()
@@ -403,6 +412,8 @@ def check(lesson, number):
             right = [i for i, o in enumerate(opts) if has(o, unit['letters'], unit['_mark'], unit['_after'], unit['_tanween'])]
             if not is_int(q.get('answer')) or right != [q['answer']]:
                 err(f'{where}: must have exactly one right answer, the answer (an index); by the one rule the right ones are {right}')
+            elif opts[q['answer']] not in unit_words:
+                err(f'{where}: the answer {opts[q["answer"]]!r} must be a unit\'s word, never a distractor')
             if unit['_after']:
                 # A wrong option must not secretly have a madd the rule cannot see (هٰذَا، عَلَى، آ).
                 for o in opts:
@@ -410,8 +421,8 @@ def check(lesson, number):
                         err(f'{where}: option {o!r} has a madd the madd rule does not count (dagger alif, ى after a fatha, or آ)')
         elif q.get('kind') == 'position':
             word = q.get('word')
-            if not is_str(word) or word not in vocabulary:
-                err(f'{where}: {word!r} is not a word of this lesson')
+            if not is_str(word) or word not in unit_words:
+                err(f'{where}: {word!r} is not a unit\'s word of this lesson (never a distractor)')
                 continue
             at = positions(word, unit['letters'], unit['_mark'], unit['_after'], unit['_tanween'])
             if not is_str(q.get('answer')) or at != [q['answer']]:
@@ -622,7 +633,7 @@ def selftest():
         'tanween-unit-clean': (lambda c: c['units'].append({'id': 'tanween_damm', 'letters': [], 'tanween': 'damm', 'name': 'تَنْوِينْ', 'forms': ['ـٌ'], 'note': None,
                                                             'words': [{'id': 'tanween_damm-001', 'text': 'كِتَابٌ', 'was': None, 'review': 'FINAL MARK EXCEPTION', 'finalMarkException': "the lesson's tanween"}]}), None),
         'one-sukun-unit-with-distractors': (lambda c: c.update(
-            units=[{'id': 'sukun', 'letters': ['ء', 'أ', 'إ', 'ؤ', 'ئ', 'ا', 'ب', 'ت', 'ة', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي', 'ى'], 'mark': 'sukun', 'name': 'سُكُونْ', 'forms': ['ـْ'], 'note': None,
+            units=[{'id': 'sukun', 'phraseName': True, 'letters': ['ء', 'أ', 'إ', 'ؤ', 'ئ', 'ا', 'ب', 'ت', 'ة', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي', 'ى'], 'mark': 'sukun', 'name': 'سُكُونْ', 'forms': ['ـْ'], 'note': None,
                     'words': [{'id': 'sukun-001', 'text': 'نَجْمْ', 'was': None, 'review': None}, {'id': 'sukun-002', 'text': 'بَحْرْ', 'was': None, 'review': None}]}],
             distractors=[{'id': 'distractor-001', 'text': 'كَتَبَ', 'was': None, 'review': 'FINAL MARK EXCEPTION', 'finalMarkException': "the lesson's vowel on the last letter"},
                          {'id': 'distractor-002', 'text': 'قَلَمْ', 'was': None, 'review': None}],
@@ -631,6 +642,13 @@ def selftest():
         'distractor-carrying-the-mark': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'حَجْمْ', 'was': None, 'review': None}])
                                          or c['quiz'][0].update(options=['نَجْمْ', 'حَجْمْ']), 'exactly one right answer'),
         'unknown-lesson-key': (lambda c: c.update(extras=[]), 'keys must be'),
+        'distractor-is-a-unit-word': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'نَجْمْ', 'was': None, 'review': None}]), 'also a unit word'),
+        'distractor-carrying-a-feature': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'حَجْمْ', 'was': None, 'review': None}]), 'feature'),
+        'distractor-as-a-wrong-option-is-fine': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'قَلَمْ', 'was': None, 'review': None}])
+                                   or c['quiz'][1].update(options=['قَلَمْ', 'نَجْمْ'], answer=1, unit='jim_sukun') or c['quiz'][0].update(options=['بَابْ', 'قَلَمْ'], answer=0, unit='madd_alif'), None),
+        'phrase-name-without-the-flag': (lambda c: c['units'][0].update(name='جِيمٌ سَاكِنَةْ'), 'must be the syllable'),
+        'phrase-name-flag-not-true': (lambda c: c['units'][0].update(phraseName='yes'), 'phraseName is true'),
+        'phrase-name-flag-unmarked': (lambda c: c['units'][1].update(phraseName=True), 'phraseName is true'),
         'tanween-with-letters': (lambda c: c['units'].append({'id': 'tanween_damm', 'letters': ['ب'], 'tanween': 'damm', 'name': 'تَنْوِينْ', 'forms': ['ـٌ'], 'note': None,
                                                               'words': []}), 'tanween must be'),
     }
