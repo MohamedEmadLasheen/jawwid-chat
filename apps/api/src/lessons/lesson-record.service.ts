@@ -13,6 +13,7 @@ import { renderCardBody } from './lesson-card';
 import { parseReportMaterials } from '../materials/report-materials';
 import {
   LessonService,
+  categoryAfterCorrection,
   invalid,
   reportFields,
   stateError,
@@ -135,6 +136,7 @@ export class LessonRecordService {
             // admin_cancelled must name its reason; every other correction's
             // reason is internal and lives on the correction row.
             outcomeNote: to === LessonOutcome.ADMIN_CANCELLED ? reason : null,
+            excuseCategory: categoryAfterCorrection(lesson.outcome, to, lesson.excuseCategory),
             outcomeByKind: ActorKind.STAFF,
             outcomeBy: actor.actorId,
             outcomeAt: new Date(),
