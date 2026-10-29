@@ -10,13 +10,15 @@ import { PLAN_MONTHS, planLabel } from '@/features/profiles/copy'
 import type { PaymentRequest, PlanMonths, TrialPayments } from './api'
 import { PAY, fromMinor, formatMoney, toMinor, useCopy } from './copy'
 import { useCancelTrialRequest, useCreateTrialRequest, useTrialPayments } from './hooks'
-import { Field, LinkPanel, PaymentList, ReasonDialog, RequestList, ServerError } from './PaymentParts'
+import { Field, LinkPanel, PaymentList, ReasonDialog, RequestList, RequestStatusBadge, ServerError } from './PaymentParts'
 
 /**
- * PD-27 on the New Students page, before Assign: the trial's subscription
- * payment requests (and what was paid). The amount starts from the
- * subscription form's package prices. Assign later attaches every request,
- * payment and invoice to the new family.
+ * PD-27 on the New Students page: the trial's subscription payment requests
+ * (and what was paid). Before Assign they are asked for here, the amount
+ * starting from the subscription form's package prices. Assign attaches every
+ * request, payment and invoice to the new family; they still show here, read
+ * only, and anything new happens on the family's Parent Profile (the server
+ * refuses a trial request once the student is enrolled).
  */
 export function TrialPaymentsDialog({ trialId, name, onClose }: { trialId: string; name: string; onClose: () => void }) {
   const tx = useCopy()
@@ -51,31 +53,59 @@ export function TrialPaymentsDialog({ trialId, name, onClose }: { trialId: strin
         </button>
       }
     >
-      <p className="field__hint">{tx(PAY.trialHint)}</p>
       <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} compact>
-        {q.data?.enrolledFamilyId ? (
-          // Assigned meanwhile: the money moved to the family; nothing is asked for here any more.
-          <div className="banner" role="status">
-            <p>{tx(PAY.trialAssigned)}</p>
-            <Link className="btn btn--sm" to={`${parentsList}?q=${encodeURIComponent(name)}`} onClick={onClose}>
-              {tx(PAY.openParentProfile, { name })}
-            </Link>
-          </div>
-        ) : q.data && (
+        {q.data && (
           <>
-            {created ? (
-              <LinkPanel request={created} />
+            {q.data.enrolledFamilyId ? (
+              // Assigned: the money moved to the family. Its requests stay visible here; nothing is asked for or cancelled.
+              <div className="banner" role="status">
+                <p>{tx(PAY.trialAssigned)}</p>
+                <Link className="btn btn--sm" to={`${parentsList}?q=${encodeURIComponent(name)}`} onClick={onClose}>
+                  {tx(PAY.openParentProfile, { name })}
+                </Link>
+              </div>
             ) : (
-              <NewTrialRequestForm trialId={trialId} data={q.data} onCreated={setCreated} />
+              <>
+                <p className="field__hint">{tx(PAY.trialHint)}</p>
+                {created ? (
+                  <LinkPanel request={created} />
+                ) : (
+                  <NewTrialRequestForm trialId={trialId} data={q.data} onCreated={setCreated} />
+                )}
+              </>
             )}
             <h3 className="tf-subtitle">{tx(PAY.requests)}</h3>
-            <RequestList requests={q.data.items} canCancel onCancel={setCancelling} />
+            <RequestList requests={q.data.items} canCancel={!q.data.enrolledFamilyId} onCancel={setCancelling} />
             <h3 className="tf-subtitle">{tx(PAY.trialPayments)}</h3>
             <PaymentList payments={q.data.payments} canVoid={false} canRefund={false} />
           </>
         )}
       </QueryBoundary>
     </Dialog>
+  )
+}
+
+/**
+ * The trial's requests at a glance on its New Students card, before and after
+ * Assign: each one's status, label and amount. Rendered only for whoever may
+ * open the dialog (it shares the dialog's query); quiet when the read fails.
+ */
+export function TrialRequestsSummary({ trialId }: { trialId: string }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const q = useTrialPayments(trialId)
+  if (!q.data) return null
+  if (q.data.items.length === 0) return <p className="tf-muted ns-requests__empty">{tx(PAY.noRequests)}</p>
+  return (
+    <ul className="ns-requests" aria-label={tx(PAY.requests)}>
+      {q.data.items.map((r) => (
+        <li key={r.id} className="ns-requests__item">
+          <RequestStatusBadge status={r.status} />
+          <span dir="auto" className="ns-requests__label">{r.label}</span>
+          <span className="ns-requests__amount">{formatMoney(r.amountMinor, r.currency, locale)}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 
