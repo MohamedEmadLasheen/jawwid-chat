@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/bootstrap.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
+import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/conversations/presentation/conversation_tile.dart';
 import 'package:jawwid_chat/features/messages/application/drafts_controller.dart';
@@ -33,61 +33,20 @@ class _Who extends Notifier<String?> {
 final _who = NotifierProvider<_Who, String?>(_Who.new);
 
 /// The phone's keychain, in memory: every key, so a test can see what else is in it.
-class _Keychain extends FlutterSecureStorage {
+class _Keychain implements DeviceKeychain {
   final Map<String, String> values = {};
 
   @override
-  Future<void> write({
-    required String key,
-    required String? value,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    if (value == null) {
-      values.remove(key);
-    } else {
-      values[key] = value;
-    }
-  }
+  Future<String?> read(String key) async => values[key];
 
   @override
-  Future<String?> read({
-    required String key,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async =>
-      values[key];
+  Future<void> write(String key, String value) async => values[key] = value;
 
   @override
-  Future<void> delete({
-    required String key,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async =>
-      values.remove(key);
+  Future<void> delete(String key) async => values.remove(key);
 
   @override
-  Future<Map<String, String>> readAll({
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async =>
-      Map.of(values);
+  Future<Iterable<String>> keys() async => List.of(values.keys);
 }
 
 Widget _app(Widget home, {Locale locale = const Locale('en')}) => MaterialApp(
@@ -192,7 +151,7 @@ void main() {
   group('PD-37 SecureDraftStore', () {
     test('one entry per account in the secure store; sign-out deletes every draft and nothing else', () async {
       final keychain = _Keychain()..values['jawwid.refresh_token'] = 'stays';
-      final store = SecureDraftStore(storage: keychain);
+      final store = SecureDraftStore(keychain: keychain);
       final g = store.generation;
       await store.save('a', {'c1': _d('one'), 'c2': _d('اثنان')}, generation: g);
       await store.save('b', {'c3': _d('three')}, generation: g);
@@ -211,13 +170,13 @@ void main() {
       final keychain = _Keychain()
         ..values['jawwid.drafts.a'] = '{not json'
         ..values['jawwid.drafts.b'] = '{"c1": 3, "c2": {"text": "ok"}, "c3": {"nope": 1}}';
-      final store = SecureDraftStore(storage: keychain);
+      final store = SecureDraftStore(keychain: keychain);
       expect(await store.load('a'), isEmpty);
       expect(await store.load('b'), {'c2': _d('ok')});
     });
 
     test('a draft keeps its picked mentions', () async {
-      final store = SecureDraftStore(storage: _Keychain());
+      final store = SecureDraftStore(keychain: _Keychain());
       const draft = Draft('@Omar and @Teachers, hi', mentions: [
         PickedMention.person('Omar', 'actor-1'),
         PickedMention.role('Teachers', 'teacher'),

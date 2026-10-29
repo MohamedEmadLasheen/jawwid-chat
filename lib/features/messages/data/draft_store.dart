@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/storage/browser_storage.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../domain/mentions.dart';
 
 /// PD-37: one conversation's unsent message -- its text, and the people or
@@ -117,39 +117,35 @@ String _encode(Map<String, Draft> drafts) => jsonEncode({for (final e in drafts.
 
 /// The phone's secure storage: the Keychain (this device only, never in a
 /// backup) and Android's Keystore-backed storage -- where the session tokens
-/// already live. A child's unsent words are kept no less carefully.
+/// already live, and through the same one door (DeviceKeychain). A child's
+/// unsent words are kept no less carefully.
 class SecureDraftStore with _ClearGenerations implements DraftStore {
-  SecureDraftStore({FlutterSecureStorage? storage})
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(),
-              iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
-            );
+  SecureDraftStore({DeviceKeychain keychain = const SecureDeviceKeychain()}) : _keychain = keychain;
 
   static const _prefix = 'jawwid.drafts.';
   static String _key(String principalId) => '$_prefix$principalId';
 
-  final FlutterSecureStorage _storage;
+  final DeviceKeychain _keychain;
 
   @override
-  Future<Map<String, Draft>> load(String principalId) async => _decode(await _storage.read(key: _key(principalId)));
+  Future<Map<String, Draft>> load(String principalId) async => _decode(await _keychain.read(_key(principalId)));
 
   @override
   Future<void> save(String principalId, Map<String, Draft> drafts, {required int generation}) async {
     if (generation != _generation) return;
     if (drafts.isEmpty) {
-      await _storage.delete(key: _key(principalId));
+      await _keychain.delete(_key(principalId));
     } else {
-      await _storage.write(key: _key(principalId), value: _encode(drafts));
+      await _keychain.write(_key(principalId), _encode(drafts));
     }
   }
 
   @override
   Future<void> clearAll() async {
     _markCleared();
-    final keys = (await _storage.readAll()).keys.where((k) => k.startsWith(_prefix)).toList();
+    final keys = (await _keychain.keys()).where((k) => k.startsWith(_prefix)).toList();
     for (final key in keys) {
-      await _storage.delete(key: key);
+      await _keychain.delete(key);
     }
   }
 }
