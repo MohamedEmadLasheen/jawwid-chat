@@ -650,7 +650,9 @@ export class RealtimeGateway
     const [fresh] = await this.auth.revalidateRealtime([
       {
         accountId: authenticated.accountId,
-        sessionIds: sessionIdsOf(client),
+        // Only the session it connected with: no rotation can have rebound a
+        // socket that is not connected yet.
+        sessionIds: [authenticated.sessionId],
         actorId: authenticated.actor.actorId,
         kind: authenticated.actor.kind,
       },
