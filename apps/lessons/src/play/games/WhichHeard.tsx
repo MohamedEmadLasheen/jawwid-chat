@@ -70,11 +70,11 @@ export function WhichHeard({ surah, ayahs, pool, audio, band, seed, onComplete }
   };
 
   return (
-    <section className="play" aria-label="أيّ آية سمعت؟">
+    <section className="play" aria-label="أيّ آية سمعنا؟">
       <button type="button" className="primary play__big" onClick={() => audio?.play(surah, current.target.ayah)}>
-        🔊 استمع
+        🔊 لنستمع
       </button>
-      <p className="play__ask">أيّ آية سمعت؟</p>
+      <p className="play__ask">أيّ آية سمعنا؟</p>
       <div className="play-cards">
         {current.options.map((a, i) => (
           <VerseCard
@@ -88,7 +88,7 @@ export function WhichHeard({ surah, ayahs, pool, audio, band, seed, onComplete }
       </div>
       {result === 'again' ? (
         <p className="play__again" role="status">
-          حاول مرة أخرى
+          لنحاول مرة أخرى
         </p>
       ) : null}
       {result === 'right' || result === 'shown' ? (

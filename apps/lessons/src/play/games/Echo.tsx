@@ -46,21 +46,21 @@ export function Echo({ surah, ayahs, audio, band, onComplete }: GameProps) {
   };
 
   return (
-    <section className="play" aria-label="ردّد معي">
+    <section className="play" aria-label="نردّد معًا">
       <p className="play__ask">
         الآية {arabic(index + 1)} من {arabic(ayahs.length)}
       </p>
       <VerseCard ayah={ayah} shape={index} glow={playing === `${surah}:${ayah.ayah}`} onPress={listen} />
       {turn ? (
         <div className="play__turn">
-          <p className="play__ask">دورك! ردّد الآية</p>
+          <p className="play__ask">والآن دورنا: نردّد الآية معًا</p>
           <button type="button" className="primary play__big" onClick={repeated}>
-            ✓ ردّدها
+            ✓ ردّدناها
           </button>
         </div>
       ) : (
         <button type="button" className="primary play__big" onClick={listen}>
-          🔊 استمع
+          🔊 لنستمع
         </button>
       )}
       <Beads done={reps} total={echoes} label="مرات الترديد" />

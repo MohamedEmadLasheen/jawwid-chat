@@ -102,8 +102,8 @@ export function StartEnd({ ayahs, pool, band, seed, onComplete }: GameProps) {
   };
 
   return (
-    <section className="play" aria-label="بداية ونهاية">
-      <p className="play__ask">المس بداية آية، ثم نهايتها</p>
+    <section className="play" aria-label="نصل البداية بالنهاية">
+      <p className="play__ask">لنختر بداية آية، ثم نهايتها</p>
       {matched.length > 0 ? (
         <div className="play-cards" role="group" aria-label="آيات اكتملت">
           {[...matched]
@@ -154,7 +154,7 @@ export function StartEnd({ ayahs, pool, band, seed, onComplete }: GameProps) {
           </div>
           {note ? (
             <p className="play__again" role="status">
-              {note === 'start' ? 'اختر بداية أولًا' : shown ? 'هذه هي نهايتها' : 'حاول مرة أخرى'}
+              {note === 'start' ? 'لنختر بداية أولًا' : shown ? 'هذه هي نهايتها' : 'لنحاول مرة أخرى'}
             </p>
           ) : null}
         </div>

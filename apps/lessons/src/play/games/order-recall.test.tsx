@@ -88,7 +88,7 @@ describe('Build the ayah (ركّب الآية)', () => {
     fireEvent.click(within(group).getAllByRole('button').find((b) => b.textContent !== tiles[0])!);
     for (const t of tiles) fireEvent.click(within(group).getAllByRole('button').find((b) => b.textContent!.startsWith(t))!);
     fireEvent.click(screen.getByRole('button', { name: /التالي/ }));
-    expect(screen.getByRole('region', { name: 'راجع هذه الآيات' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'لنراجع هذه الآيات' })).toBeTruthy();
     expect(verses()).toEqual([AYAHS[0]!.text]);
     expect(onComplete).not.toHaveBeenCalled();
     const ready = screen.getByRole('button', { name: /التالي/ });
@@ -120,7 +120,7 @@ describe('Order the ayat (رتّب الآيات)', () => {
     render(<OrderAyat {...props({ band: '3-5', ayahs: AYAHS.slice(0, 1), onComplete })} />);
     const second = screen.getByRole('button', { name: TEXTS[1] });
     fireEvent.click(second);
-    expect(screen.getByText('حاول مرة أخرى')).toBeTruthy();
+    expect(screen.getByText('لنحاول مرة أخرى')).toBeTruthy();
     fireEvent.click(second);
     expect(screen.getByText('✓ هذه هي')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /التالي/ }));
@@ -138,6 +138,8 @@ describe('Order the ayat (رتّب الآيات)', () => {
       const wrong = within(tray).getAllByRole('button').find((b) => Number(b.dataset.ayah) !== k + 1)!;
       fireEvent.click(wrong);
       expect(ordered()).toEqual(TEXTS.slice(0, k));
+      // The answer shown is named for what it is: the first ayah, then the next one.
+      expect(screen.getByText(k === 0 ? 'هذه هي الآية الأولى' : 'هذه هي الآية التالية')).toBeTruthy();
       fireEvent.click(within(tray).getAllByRole('button').find((b) => Number(b.dataset.ayah) === k + 1)!);
     }
     // The last card has nowhere else to go.
@@ -165,8 +167,8 @@ describe('Order the ayat (رتّب الآيات)', () => {
   it('3-5: each listen button names its card by its shape, in words', () => {
     const { controller } = { controller: { play: vi.fn(), stop: vi.fn() } };
     render(<OrderAyat {...props({ band: '3-5', ayahs: AYAHS.slice(0, 1), audio: controller })} />);
-    expect(screen.getByRole('button', { name: /استمع إلى آية الدائرة/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /استمع إلى آية المثلث/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /لنستمع إلى الآية التي في الدائرة/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /لنستمع إلى الآية التي في المثلث/ })).toBeTruthy();
   });
 
   it('two ayat with the same words are never asked to be told apart', () => {
@@ -214,7 +216,7 @@ describe('Start and end (بداية ونهاية)', () => {
     const starts = () => screen.getByRole('group', { name: 'البدايات' });
     const ends = () => screen.getByRole('group', { name: 'النهايات' });
     fireEvent.click(within(ends()).getAllByRole('button')[0]!);
-    expect(screen.getByText('اختر بداية أولًا')).toBeTruthy();
+    expect(screen.getByText('لنختر بداية أولًا')).toBeTruthy();
     for (const [n, p] of pairs.entries()) {
       fireEvent.click(within(starts()).getByRole('button', { name: `بداية آية: ${p.start}` }));
       const other = pairs.find((q) => q !== p && within(ends()).queryByRole('button', { name: `نهاية آية: ${q.end}` }));

@@ -114,9 +114,9 @@ export function CompleteAyah({ ayahs, pool, band, seed, onComplete }: GameProps)
   };
 
   return (
-    <section className="play" aria-label="أكمل الآية">
+    <section className="play" aria-label="نكمل الآية">
       <p className="play__ask">
-        أكمل الآية {arabic(current.ayah.ayah)}
+        لنكمل الآية {arabic(current.ayah.ayah)}
       </p>
       {done ? (
         <div className="play-cards">
@@ -162,7 +162,7 @@ export function CompleteAyah({ ayahs, pool, band, seed, onComplete }: GameProps)
           </div>
           {refused ? (
             <p className="play__again" role="status">
-              {shown ? 'هذه هي الكلمة' : 'حاول مرة أخرى'}
+              {shown ? 'هذه هي الكلمة' : 'لنحاول مرة أخرى'}
             </p>
           ) : null}
         </>

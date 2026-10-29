@@ -6,16 +6,16 @@
    "scope": "play",
    "subjects": [
     {
-     "approvalSha256": "f966142c91143f77829e80627b1aed0ee13830d6ace4b5f3a2475c68856ad4ca",
+     "approvalSha256": "7c4b3cdcb8ca5266826ef3ae3fb55e440531de2bc9ccb96b8f9f1694c79e9c30",
      "id": "ayah_number",
      "item": {
       "bands": [
        "9-12"
       ],
       "code": "AyahNumber.tsx",
-      "codeSha256": "20c7945db6af13e3414774fcc033b0e67d12358965f34c1a40eadd3935d5d2f3",
+      "codeSha256": "61c17eff94a79d0636db7446d0e7f26811111e0ca38ab5ee44222d74f23c5df8",
       "id": "ayah_number",
-      "nameAr": "\u0631\u0642\u0645 \u0627\u0644\u0622\u064a\u0629",
+      "nameAr": "\u0646\u0639\u0631\u0641 \u0631\u0642\u0645 \u0627\u0644\u0622\u064a\u0629",
       "needsAudio": false,
       "respect": [
        "Every ayah shown is a whole, real ayah of the verified text, without its number until answered.",
@@ -39,7 +39,7 @@
      ]
     },
     {
-     "approvalSha256": "af36937eba311a52f0641346bf1a5145b35343879bdc6f0715eb8855c97e468f",
+     "approvalSha256": "52688a3a387d1a4420920c074e030adc9d4f61aab2fc8447f1d559ced23f6a41",
      "id": "build_ayah",
      "item": {
       "bands": [
@@ -47,9 +47,9 @@
        "9-12"
       ],
       "code": "BuildAyah.tsx",
-      "codeSha256": "c5e868bc07b65a75945f3decd165a9d246a32953a042fd273bbc0e6adaae2b8e",
+      "codeSha256": "75195a694065b81acd837e57868c2662c7cf8e93132c48a3d8bb1ad13b03bf88",
       "id": "build_ayah",
-      "nameAr": "\u0631\u0643\u0651\u0628 \u0627\u0644\u0622\u064a\u0629",
+      "nameAr": "\u0646\u0631\u062a\u0651\u0628 \u0643\u0644\u0645\u0627\u062a \u0627\u0644\u0622\u064a\u0629",
       "needsAudio": false,
       "respect": [
        "The tiles are the words of one ayah of the verified text, each whole with its pause mark; no word from anywhere else is ever offered.",
@@ -76,7 +76,7 @@
      ]
     },
     {
-     "approvalSha256": "531618f85dd4b95c3c0376df927f2495e296f8fa7a80e4fe69e9b956e10558f7",
+     "approvalSha256": "4f9b439a36b5355befd1539cc00b4aff3e2b437ffb41601b6325f5f029a46300",
      "id": "complete_ayah",
      "item": {
       "bands": [
@@ -84,9 +84,9 @@
        "9-12"
       ],
       "code": "CompleteAyah.tsx",
-      "codeSha256": "e5b044525cd9a3a06b3fd4411f698b5a3f2e4a46521a2119846aa5d72993a05f",
+      "codeSha256": "ce73c4b02a8ad3b2f9f0ff95b7fb84eb72c462d186405971b90bff46c7ec89ff",
       "id": "complete_ayah",
-      "nameAr": "\u0623\u0643\u0645\u0644 \u0627\u0644\u0622\u064a\u0629",
+      "nameAr": "\u0646\u0643\u0645\u0644 \u0627\u0644\u0622\u064a\u0629",
       "needsAudio": false,
       "respect": [
        "The ayah is the verified text with one word hidden (two for 9-12), and each hidden word is shown as a blank, never as a guess; its pause mark stays in its place.",
@@ -112,16 +112,16 @@
      ]
     },
     {
-     "approvalSha256": "4da7a96b2db9c01e641d776c3839aa6cdf0e2b93ec6b2f3901a0be0e51262c95",
+     "approvalSha256": "bcca13b66624e9a83275c5f6dc733cd9c49c0d7925d9aa53794955cfc3525b04",
      "id": "count_ayat",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "CountAyat.tsx",
-      "codeSha256": "0d966cd97c092f9aa77edcee7fb3e0f9e12918dabdec5d0f9a69dc66364f0f88",
+      "codeSha256": "1c7d3526bc8a4eb24326fbe9ebbdec594ad8d82b758a8e55ff20647afebd9001",
       "id": "count_ayat",
-      "nameAr": "\u0639\u064f\u062f\u0651 \u0627\u0644\u0622\u064a\u0627\u062a",
+      "nameAr": "\u0646\u0639\u062f\u0651 \u0627\u0644\u0622\u064a\u0627\u062a",
       "needsAudio": false,
       "respect": [
        "The segment's ayat are shown whole and in order; the next one to count is lit by its frame only.",
@@ -141,16 +141,16 @@
      ]
     },
     {
-     "approvalSha256": "e9a2eb100727c4c87b1f86fdff9cb1c0efa909554add690b206710f83292fdce",
+     "approvalSha256": "6aef187d39aaa21e64220b33fd3eba9cc6d6914ab9bb37dd18e0f19b52dfcf56",
      "id": "echo",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "Echo.tsx",
-      "codeSha256": "208a3fff11d72f79f7e198445caaf23a3a9e709925d6fb173d92857db5e1f431",
+      "codeSha256": "cdaa5b1e45f0844756c5a2ef720512ee8899bec687cbc51f5fa388bccdd4e7cf",
       "id": "echo",
-      "nameAr": "\u0631\u062f\u0651\u062f \u0645\u0639\u064a",
+      "nameAr": "\u0646\u0631\u062f\u0651\u062f \u0645\u0639\u064b\u0627",
       "needsAudio": true,
       "respect": [
        "One ayah at a time, shown whole and unaltered while it is recited.",
@@ -174,7 +174,7 @@
      ]
     },
     {
-     "approvalSha256": "e58cb2c434fe8145419c6cb933f1549ce7b711fa4ecb96c13b8fb99d978c3ade",
+     "approvalSha256": "7b9d70273de3f1a6ec7eed160da75acc144024c13c03ee5aedce757ea2bcd0ad",
      "id": "fading_ayah",
      "item": {
       "bands": [
@@ -182,9 +182,9 @@
        "9-12"
       ],
       "code": "FadingAyah.tsx",
-      "codeSha256": "21871916c7ecb3770604a39ad4c7cc91f305970975c5dab1ae16bdcd48528d9c",
+      "codeSha256": "ccac82d233b90d9930ae5df184332b142929148e85a533f748766611c79a0570",
       "id": "fading_ayah",
-      "nameAr": "\u0627\u0644\u0645\u062d\u0648 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a",
+      "nameAr": "\u0646\u062e\u0641\u064a \u0648\u0646\u062a\u0630\u0643\u0651\u0631",
       "needsAudio": false,
       "respect": [
        "The ayah is shown whole first; at each step more of its words are hidden, never changed, moved or replaced.",
@@ -210,16 +210,16 @@
      ]
     },
     {
-     "approvalSha256": "d2b377d82af7161406557eb098efd4e5d06c3276434cbc7ffc0919a387ff41ec",
+     "approvalSha256": "7b8bf942cfafd0cef109b6d7c38573ee4d16df3a302ad7047bd0d3b8d7cae5af",
      "id": "listen_glow",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "ListenGlow.tsx",
-      "codeSha256": "03941c3af3939161adee1d46b09985bd25a962c2de414a69638b8c0273bea00b",
+      "codeSha256": "0deb372c0a0b0c7876c4179da166b3d0cb5df9ec8efb6e4d44687bf84861a613",
       "id": "listen_glow",
-      "nameAr": "\u0627\u0633\u0645\u0639 \u0648\u0627\u0644\u0645\u0633",
+      "nameAr": "\u0646\u0633\u0645\u0639 \u0648\u0646\u0644\u0645\u0633",
       "needsAudio": true,
       "respect": [
        "Each ayah is shown whole, still and unaltered, as the verified text gives it.",
@@ -241,7 +241,7 @@
      ]
     },
     {
-     "approvalSha256": "d4dc39a275d40c083ff9816e28c64399e306c8953309b9464e92c548304b9164",
+     "approvalSha256": "a5dadd6450fb1aff16acd8a70bd89a358abab2e1a82c8721a5d2cf9c79299a41",
      "id": "next_ayah",
      "item": {
       "bands": [
@@ -249,9 +249,9 @@
        "9-12"
       ],
       "code": "NextAyah.tsx",
-      "codeSha256": "e8080792859bf3c228b40d588496be785f72f15f1744879e16433655e33d0a6a",
+      "codeSha256": "68a86bf82818fd87a9ffd1118de483d61b871c3e6fda91e516ec1ed459e19d3e",
       "id": "next_ayah",
-      "nameAr": "\u0645\u0627 \u0627\u0644\u0622\u064a\u0629 \u0627\u0644\u062a\u0627\u0644\u064a\u0629\u061f",
+      "nameAr": "\u0646\u062a\u0630\u0643\u0651\u0631 \u0627\u0644\u0622\u064a\u0629 \u0627\u0644\u062a\u0627\u0644\u064a\u0629",
       "needsAudio": false,
       "respect": [
        "The ayah asked about and every choice are whole, real ayat of the same surah, from the verified text, shown as they are; a choice is never an altered or made-up ayah.",
@@ -275,7 +275,7 @@
      ]
     },
     {
-     "approvalSha256": "352bff5fafd21cb0bf84e28946ae456383375627711f7cd34845e371f475e41a",
+     "approvalSha256": "a4d5e5a25533875c853244bb18ee108b59346659ad2d9c5d527af2dd9768d0de",
      "id": "order_ayat",
      "item": {
       "bands": [
@@ -284,9 +284,9 @@
        "9-12"
       ],
       "code": "OrderAyat.tsx",
-      "codeSha256": "88620744a5c0a4f4b2e1418bf3ffdeb3e942092e73baa2e53f24bac6d506e605",
+      "codeSha256": "b3597bc3a8ff9e666a9b670ab3d1d13b36edd7e66cd417ee23275a7edfcf5080",
       "id": "order_ayat",
-      "nameAr": "\u0631\u062a\u0651\u0628 \u0627\u0644\u0622\u064a\u0627\u062a",
+      "nameAr": "\u0646\u0631\u062a\u0651\u0628 \u0627\u0644\u0622\u064a\u0627\u062a",
       "needsAudio": false,
       "respect": [
        "Every card is a whole, real ayah of the verified text; only whole ayat are reordered, and no ayah is ever changed.",
@@ -312,7 +312,7 @@
      ]
     },
     {
-     "approvalSha256": "bb4f7c6af1860fe8d2320695ab910930f19e8e39f8fc3a4a25d4863a4cdf47d2",
+     "approvalSha256": "babd6d0e86a1df6cc4f84bd50c4ccf3f5cff4655a7568bbd70130dcaeef3bcac",
      "id": "start_end",
      "item": {
       "bands": [
@@ -320,9 +320,9 @@
        "9-12"
       ],
       "code": "StartEnd.tsx",
-      "codeSha256": "44c99bdfac7241e4cd03cbaa8bd618d055fa6c9be9ae66567304d2de7d32bcaf",
+      "codeSha256": "77d25e7ca701f62ee5e5811812c16616f53b5a9cabae6cfc1ff1d04438d3e6bd",
       "id": "start_end",
-      "nameAr": "\u0628\u062f\u0627\u064a\u0629 \u0648\u0646\u0647\u0627\u064a\u0629",
+      "nameAr": "\u0646\u0635\u0644 \u0627\u0644\u0628\u062f\u0627\u064a\u0629 \u0628\u0627\u0644\u0646\u0647\u0627\u064a\u0629",
       "needsAudio": false,
       "respect": [
        "Each half is a real ayah of the verified text cut at a word boundary, shown as a half: marked with an ellipsis where it was cut and named as the start or the end of an ayah, so it never reads as an ayah.",
@@ -346,16 +346,16 @@
      ]
     },
     {
-     "approvalSha256": "7b32ce2e0880af80176703c5a135aa9c4aab633f6c73bef8975958334b721d59",
+     "approvalSha256": "d9d1f3523661d1cc8667ea36b2924705dbb2371542b738a88b867c6b1ba66305",
      "id": "which_heard",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "WhichHeard.tsx",
-      "codeSha256": "6af82ce418177e09532164909a8482f0fd5eb459d4daa9af844f1c6c63f3fa3d",
+      "codeSha256": "4324a634a31478e29e125a62af1a71fecbfe9e74c19b2c234efe8c884b50f318",
       "id": "which_heard",
-      "nameAr": "\u0623\u064a\u0651 \u0622\u064a\u0629 \u0633\u0645\u0639\u062a\u061f",
+      "nameAr": "\u0623\u064a\u0651 \u0622\u064a\u0629 \u0633\u0645\u0639\u0646\u0627\u061f",
       "needsAudio": true,
       "respect": [
        "Every card is a whole, real ayah of the verified text; no card is ever an altered or made-up ayah.",

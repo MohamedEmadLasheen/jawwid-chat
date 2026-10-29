@@ -183,9 +183,9 @@ export function GameEnd({ band, missed, onComplete }: { band: GameProps['band'];
   if (!review) return <Praise />;
   const unique = missed.filter((a, i) => missed.findIndex((b) => b.ayah === a.ayah) === i).sort((x, y) => x.ayah - y.ayah);
   return (
-    <section className="play__review" aria-label="راجع هذه الآيات">
+    <section className="play__review" aria-label="لنراجع هذه الآيات">
       <Praise text="أحسنت! انتهت اللعبة" />
-      <h2>راجع هذه الآيات</h2>
+      <h2>لنراجع هذه الآيات</h2>
       <div className="play-cards">
         {unique.map((a, i) => (
           <VerseCard key={a.ayah} ayah={a} shape={i} disabled />
