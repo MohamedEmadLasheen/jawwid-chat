@@ -1,6 +1,6 @@
 # PD-51: Quran, Arabic Language and Islamic Studies materials in Arabic and English (plan)
 
-**State:** **Plan, docs only.** Waiting for the department head's review and the owner's answers (§9). No product code, no translation and no dataset is downloaded until the owner chooses (§2.3).
+**State:** **Plan, docs only. Reviewed by the department head (2026-10-29, CHANGES, addressed in this revision).** The head decided Q4, Q5, Q11, Q12 and Q13 as recommended. Q6 and Q14 go to the scholar. Q1, Q2, Q3, Q7, Q8, Q9 and Q10 go to the owner (§9). No product code, no translation and no dataset is downloaded until the owner chooses (§2.3).
 **Claim:** `docs/product/pd-registry/PD-51.md`. **Migration slot:** none for this plan. Each PR in §8 that needs one asks the department head first.
 **Base:** `main` @ `8997364f`. Paths are relative to the repository root.
 
@@ -13,19 +13,25 @@ The owner's request (2026-10-29), verbatim:
 - PD-48: voice-over, with clips bound to (lesson, id, sha256 of the exact text), two reviewers, fail-closed, and never Quran (`docs/product/pd048-lesson-voice-over-design.md`).
 - PD-49: "Only public-domain sources"; the per-item review in `chat.lesson_content_review` (#258); the signed approvals export (#265); and the scholar reviewer role (`docs/product/pd049-children-quran-experience-plan.md` §A, §F).
 
-**What this plan supersedes once the owner adopts it:** PD-49 §H Q13 ("Arabic only for v1. Translations of the children's text are a later item, each translation reviewed as its own text."). The second sentence becomes this plan. The first stays true until PR-1 (§8) lands.
+**What this plan supersedes once the owner adopts it:** PD-49 §H Q13 ("Arabic only for v1. Translations of the children's text are a later item, each translation reviewed as its own text."). The second sentence becomes this plan. The first stays true until PR-1b (§8) is signed.
 
 ---
 
 ## 0. Summary
 
-1. **The Arabic Quran is never translated, replaced, transliterated or hidden.** In English mode it is still shown, from the same verified text and in the same font. English adds a **translation of the meanings** beside it. That translation is labelled as such, attributed, pinned like the Tanzil text, and comes from a source we may use. The recommendation is **Pickthall (1930)**, the only candidate that is public domain in every market today (§2).
-2. **English is a layer, not a second copy.** In Arabic lessons the subject stays Arabic. English adds the instructions, the explanations and the meanings of words. In Quran and Islamic Studies content, every English item is a translation of an **already approved Arabic item**, and it is bound to that item's hash. If the Arabic changes, the English goes stale by itself (§5.2).
+1. **The Arabic Quran is never translated, replaced, transliterated or hidden.** In English mode it is still shown, from the same verified text and in the same font. English adds a **translation of the meanings** beside it. That translation is labelled as such, attributed, pinned like the Tanzil text, and comes from a source we may use. The recommendation is **Pickthall (1930)**, the only candidate that is public domain in the main markets today, the US included (§2).
+2. **English is a layer, not a second copy.** In Arabic lessons the subject stays Arabic. English adds the instructions, the explanations and the meanings of words. In Quran and Islamic Studies content, every English item is a translation of an **already approved Arabic item**, and it is bound to that item's hash. If the Arabic changes, that one English item drops out by itself and a review task is raised. The build stays green (§5.2).
 3. **Fail-closed per language.** An English version that is not approved is not shown. Nothing is machine-translated at runtime, ever. A learner in English mode sees the approved Arabic item without English, and no placeholder (§5.4).
-4. **The review system is extended, not duplicated.** It is the same `chat.lesson_content_review` table and the same signed export, with a `lang` column and a `translation` step signed by a qualified bilingual reviewer. The scholar signs English religious meaning, as they sign the Arabic (§5).
-5. **The engine has no English today, and no way to know the reader's language** (§1). PR-1 adds both, with no content change.
-6. **Review is the bottleneck again** (§7). For Juz' Amma plus Al-Fatihah, the English layer is about 2,000 PD-49 items, 571 verses of translation, and about 4,000 word glosses for the Arabic lessons. That is about 150–220 bilingual-reviewer hours and about 20–30 scholar hours on top of PD-49's Arabic estimate.
-7. **Fourteen owner questions** (§9), each with a recommendation.
+4. **The review system is extended, not duplicated.** It is the same `chat.lesson_content_review` table and the same signed export, plus:
+   - a `lang` column;
+   - **two English steps by two different people**: `translation` (fidelity to the Arabic) and `english` (the English itself), neither of them the recorded author;
+   - the scholar signing English religious meaning, as they sign the Arabic (§5).
+5. **The engine has no English today, and no way to know the reader's language** (§1). PR-1a and PR-1b add both, with no content change.
+6. **Review is the bottleneck again** (§8.1). For Juz' Amma plus Al-Fatihah, the English layer is about 2,000 PD-49 items, 571 verses of translation, and about 4,000 word glosses for the Arabic lessons. On top of PD-49's Arabic estimate, that is about:
+   - **150–220 bilingual author hours**;
+   - **110–125 bilingual reviewer hours** (both English steps);
+   - **20–25 scholar hours**.
+7. **Fourteen questions** (§9). The department head decided five; two go to the scholar and seven to the owner.
 
 ---
 
@@ -43,7 +49,7 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
 
 ### 1.2 The lessons engine is Arabic only, with no i18n mechanism
 
-- **No string tables, locale files, `Intl` or `lang` parameter.** The page is fixed as `<html lang="ar" dir="rtl">` (`apps/lessons/index.html:2`), with the Arabic title at `:11`.
+- **No string tables, locale files, `Intl` or `lang` parameter.** The page is fixed as `<html lang="ar" dir="rtl">` (`apps/lessons/index.html:2`), with the Arabic title at `:12`.
 - **Digits are hard-coded `toLocaleString('ar-EG')`** in seven places: `apps/lessons/src/lesson/SurahLesson.tsx:28`, `lesson/Verses.tsx:3`, `games/Quiz.tsx:5`, `play/games/common.tsx:25`, `games/OrderAyat.tsx:52`, `games/CompleteAyah.tsx:58`, `reading/ReadingLesson.tsx:63`.
 - **The Arabic-only constant maps** (none is keyed by language): `arabic/ui-text.ts:10-29`, `lesson/SectionHeader.tsx:5-11`, `arabic/ArabicLesson.tsx:15`, `reading/ReadingLesson.tsx:11-12`, `content/quran-content.ts:63-64` (HIFZ_QUESTIONS).
 - **No component sets `lang` or `dir`.** No element marks Quran text as Arabic inside the page. `styles.css` already uses logical properties (`margin-inline-start`, `padding-inline`), so most of the layout flips correctly once `dir` changes.
@@ -52,7 +58,7 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
 
 | Area | Files | Strings (approx.) |
 |---|---|---|
-| Shell | `App.tsx:28,29,36`; `index.html:11` | 4 |
+| Shell | `App.tsx:28,29,36`; `index.html:12` | 4 |
 | Quran lesson player | `lesson/SurahLesson.tsx` (incl. `:156` «محتوى الدرس قيد المراجعة…», `:164`, `:191`), `SectionHeader.tsx`, `Benefits.tsx`, `Verses.tsx` | ~35 |
 | Older in-lesson games | `games/CompleteAyah.tsx`, `OrderAyat.tsx`, `Quiz.tsx` | ~23 |
 | Arabic letter lessons | `arabic/ui-text.ts` (fully vowelled: «أَحْسَنْتَ!», «تَحَقَّقْ»…), `ArabicLesson.tsx` (incl. `:69`), `FindLetter.tsx`, `PickWords.tsx` | ~26 |
@@ -66,8 +72,8 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
 
 | Step | Today | Evidence |
 |---|---|---|
-| **Who has a language** | Only a **family** does: `family.language`, `check (language in ('ar','en'))`, default `'ar'`. Enrolment always writes `'ar'`, and **no endpoint updates it**. Staff and teachers are hard-coded `'ar'`. | `apps/api/prisma/schema.prisma:76`; `supabase/migrations/20260905090300_chat_family_domain.sql:30`; `apps/api/src/new-students/enrolment.service.ts:253`; `apps/api/src/platform/identity.service.ts:236,258,279` |
-| **Where it is used** | `/me` returns `locale`. Cards, certificates and notifications pick their language from it. | `apps/api/src/platform/auth/auth.dto.ts:17,95`; `apps/api/src/scheduled-calls/scheduled-call.service.ts:110`; `apps/api/src/certificates/certificate.service.ts:1189,1373` |
+| **Who has a language** | Only a **family** does: `family.language`, `check (language in ('ar','en'))`, default `'ar'`. Chat's own enrolment paths write `'ar'`: Sales enrolment, and PD-42 direct enrolment. The Core boundary copies Core's language when Core sends one, else `'ar'`. **No Chat endpoint lets a parent or staff member change it.** Staff and teachers are hard-coded `'ar'`. | `apps/api/prisma/schema.prisma:76`; `supabase/migrations/20260905090300_chat_family_domain.sql:30`; `apps/api/src/new-students/enrolment.service.ts:253`; `supabase/migrations/20261028110000_chat_pd042_direct_enrolment.sql:159`; `supabase/migrations/20261019200000_chat_core_boundary.sql:91,112,238-240`; `apps/api/src/platform/identity.service.ts:236,258,279` |
+| **Where it is used** | `/me` returns `locale`. It also decides the language of cards, certificates, notifications, **payment reminders, the parents' payment pages and the Stripe Checkout locale**. | `apps/api/src/platform/auth/auth.dto.ts:17,95`; `apps/api/src/scheduled-calls/scheduled-call.service.ts:110`; `apps/api/src/certificates/certificate.service.ts:1189,1373`; `apps/api/src/billing/payment-ledger.service.ts:369-370`; `apps/api/src/billing/payment-reminders.service.ts:43-44`; `apps/api/src/billing/parent-payments.service.ts:49-51`; `apps/api/src/billing/stripe.gateway.ts:31,155` |
 | **The Flutter UI language** | Device locale, or a device-only override that is "never sent to the server". `AuthUser.locale` is parsed but drives nothing. | `lib/features/settings/application/locale_preference.dart:9-15,72`; `lib/core/data/http/http_auth_repository.dart:274` |
 | **The launch URL** | `${siteBase}${item.sitePath}`, with no language. | `apps/api/src/materials/materials-reader.service.ts:278` |
 | **The openers** | Admin Web: `<iframe src={opened.url}>` unchanged (`apps/admin-web/src/features/materials/MaterialsPage.tsx:529-537`). Flutter: `material_player.dart:135,140` → `activity_view.dart:23`, unchanged. | as cited |
@@ -82,7 +88,7 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
 - **English cannot simply be added to an item:**
   - Schema 2 refuses unknown fields (`apps/lessons/src/content/quran-content.ts:289,300`).
   - `play/mechanics.ts:48` requires an exact key set (`nameAr` and no `nameEn`).
-  - The approval hash covers the **whole item**: `approvalSha256 = sha256(canonical{datasetId, item, lessonKey})` (`quran-content.ts:150-152`; `apps/api/src/lesson-content/review-subjects.ts:52`). So adding English to an item would invalidate its Arabic signatures. This is why §5.2 puts English in sibling records.
+  - The approval hash covers the **whole item**: `approvalSha256 = sha256(canonical{datasetId, item, lessonKey})` (`quran-content.ts:150-152`; `apps/api/src/lesson-content/review-subjects.ts:55`). So adding English to an item would invalidate its Arabic signatures. This is why §5.2 puts English in sibling records.
 - **`chat.lesson_content_review`** (`supabase/migrations/20261029235000_chat_pd049_lesson_content_review.sql:47-66`):
   - `scope` is `quran-NNN | play`;
   - `step` is `check | teacher | scholar`;
@@ -93,7 +99,7 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
 
 ### 1.5 Fonts
 
-- The engine asks for `'Amiri Quran', 'Amiri', serif` (`apps/lessons/src/styles.css:25,27,40,50,88`), but **bundles no font file and has no `@font-face`**. Its CSP is `font-src 'self'` (`apps/lessons/index.html:8`). So Amiri Quran renders only where the device happens to have it installed. This is a gap against the dataset contract ("`apps/lessons` self-hosts it", `docs/product/quran-dataset-contract.md` §Fonts), whatever language is shown. PR-1 closes it.
+- The engine asks for `'Amiri Quran', 'Amiri', serif` (`apps/lessons/src/styles.css:25,27,40,50,88`), but **bundles no font file and has no `@font-face`**. Its CSP is `font-src 'self'` (`apps/lessons/index.html:8`). So Amiri Quran renders only where the device happens to have it installed. This is a gap against the dataset contract ("`apps/lessons` self-hosts it", `docs/product/quran-dataset-contract.md` §Fonts), whatever language is shown. **PD-49's #313 (draft, `claude/pd49-quran-font`) closes it**: `apps/lessons/src/fonts/AmiriQuran.ttf` plus `quran/font.tsx`. PD-51 relies on #313 and does not touch fonts for the Quran.
 - The UI font is `system-ui, 'Segoe UI', Tahoma, sans-serif` (`styles.css:11`).
 - Flutter gets `assets/fonts/AmiriQuran.ttf` (OFL) in #295 (PD-39 PR-3, open).
 
@@ -110,9 +116,15 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
    - the reader-facing sentence: "A translation of the meanings cannot replace the Arabic Quran." The owner approves the final wording; it is the same idea as Tanzil's own disclaimer.
 3. **Placed beside, never inside.** The Arabic verse comes first. The English is a separate block below it in LTR, smaller, marked `lang="en"`. It is never interleaved word by word, and never used as an answer, option or tile in a game. **Games stay Arabic Quran only**; English appears there only as instructions and praise.
 4. **Verbatim and pinned, as the Tanzil text is.** The translation file is vendored once, with `fileSha256`, a per-verse SHA-256, the attribution and the source scan. It is pinned in code and in a manifest, guarded in CI, and append-only in the database. A verse's English is shown only if its hash matches the pin.
+   - **The pin is not envelope-signed**, unlike the approvals, so **CODEOWNERS is its only gate** (§5.7). Its files, its code pin and its guard are CODEOWNERS entries from the PR that adds them.
 5. **Aligned by Hafs numbering.** The loader proves exactly 6,236 verses, and each surah's count equals `quran_surah.ayah_count`. A surah whose printed numbering differs gets a reviewed alignment map, or no English at all.
 6. **Never voiced in v1.** The translation of the meanings is not read by TTS (§9 Q12). Recitation stays human and licensed (PD-48 §12).
-7. **Gated like recitation.** `quran.translation.enabled_for` = `none | staff_test | all`. Each surah's English is shown to families only after the scholar's sign-off for that surah (§5.3).
+7. **Gated like recitation.** `quran.translation.enabled_for` = `none | staff_test | all`. Each surah's English is shown to families only after the sign-off for that surah.
+   - The sign-off is one review item per surah: scope `quran-NNN`, `lang = 'en'`, item id `translation-001`, kind `verse_translation`.
+   - The item is `{ id, kind, translationId: "pickthall-1930-1", surah, versesDigest }`, where `versesDigest` is the SHA-256 of the surah's per-verse SHA-256s joined with "\n" in verse order. Its approval hash binds exactly those verses.
+   - Its steps: `check` (a bilingual reviewer compares the transcription with the pinned scan, verse by verse), then `scholar`.
+   - Any re-transcribed verse changes the digest, so the surah needs a new sign-off.
+   - Jawwid notes under a verse (§2.3) are ordinary items of kind `note`, with an `ayah` and no `of`.
 
 ### 2.2 Candidates under "public domain only"
 
@@ -121,15 +133,16 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
 | | **Pickthall**, *The Meaning of the Glorious Koran* | **Yusuf Ali**, *The Holy Qur'an: Text, Translation and Commentary* |
 |---|---|---|
 | **First publication** | 1930, Alfred A. Knopf, New York and London ([Wikipedia](https://en.wikipedia.org/wiki/The_Meaning_of_the_Glorious_Koran); [Wikisource index of the 1930 print](https://en.wikisource.org/wiki/Index:The_Meaning_of_the_Glorious_Koran_(1930).pdf)) | 1934–1937 in 30 parts, Shaik Muhammad Ashraf, Lahore; 3rd edition 1938 ([Wikipedia](https://en.wikipedia.org/wiki/The_Holy_Qur%27an:_Text,_Translation_and_Commentary)) |
-| **Translator's death** | 1936 (general reference: 19 May 1936) | 1953 ([Wikipedia](https://en.wikipedia.org/wiki/The_Holy_Qur%27an:_Text,_Translation_and_Commentary): 1872–1953) |
+| **Translator's death** | **19 May 1936**, St Ives, Cornwall ([Wikipedia, Marmaduke Pickthall](https://en.wikipedia.org/wiki/Marmaduke_Pickthall)) | 1953 ([Wikipedia](https://en.wikipedia.org/wiki/The_Holy_Qur%27an:_Text,_Translation_and_Commentary): 1872–1953) |
 | **Life + 50** (Saudi Arabia, Egypt, Qatar) | Free since 1987 | Free since 2004 |
 | **Life + 70** (EU, UK) | Free since 2007 | Free since 1 January 2024 |
-| **United States** | **Free since 1 January 2026** (a 1930 publication; 95-year term) | **Probably protected until about 2030–2033.** Its US copyright was restored under the URAA (1996), and the term runs 95 years from each part's publication. sacred-texts.com reads it as protected until 2033 ([sacred-texts](https://sacred-texts.com/isl/quran/index.htm)). |
+| **United States** | **Free since 1 January 2026** (a 1930 publication; 95-year term) | **Probably protected until about 2030–2034.** Its US copyright was restored under the URAA (1996), and the term runs 95 years from each part's publication: the 1934–37 parts to the end of 2029–2032, and the **1938 3rd edition's new matter to the end of 2033 (free in 2034)**. sacred-texts.com reads it as protected until 2033 ([sacred-texts](https://sacred-texts.com/isl/quran/index.htm)). |
+| **Longer terms** | Mexico (life + 100): protected there until the end of 2036. Not a Jawwid market today; to re-check if one opens. | Mexico: until the end of 2053 |
 | **Revised editions (NOT usable)** | Modern re-editions, e.g. IDCI "New Modern English Edition" (2011) and the Fahmy edition (2022) ([Wikipedia](https://en.wikipedia.org/wiki/The_Meaning_of_the_Glorious_Koran)) | KFGQPC revision (1985); Amana/IIIT "New Revised" (1989 onward), with changes to the translation and the commentary ([Wikipedia](https://en.wikipedia.org/wiki/The_Holy_Qur%27an:_Text,_Translation_and_Commentary)). **Most digital "Yusuf Ali" copies are of unclear edition.** |
 | **Style** | Literal, close to the Arabic's structure. Keeps "Allah". Little interpolation in the verse text. **Archaic English** (thee, thou, ye, -eth) and long sentences. | Freer and more explanatory. Adds words in parentheses, with poetic diction. More of the translator's interpretation is in the verse text. Archaic too. **About 6,000 footnotes**, whose content drew criticism (Wikipedia, above). We would never use them. |
 | **Readability for children** | Poor below 9. Workable for 9–12 with a parent, and for parents and staff. | Poor below 9. Similar for 9–12; the parentheses help some readers and confuse others. |
 | **Clean digital text with verse alignment** | **Not ready-made from a source we may use.** The 1930 scan is on Wikimedia Commons. Wikisource's transcription is incomplete, and its pages are "To be proofread" (index above). Tanzil's digital copy is offered **"for non-commercial purposes only"** ([tanzil.net/trans](https://tanzil.net/trans/)), so it is **not** used, not even as an import. | Same problem, plus the edition question: a copy must be proved to be the 1934–38 text, not a later revision. |
-| **Verdict** | **Recommended** | Not usable for US accounts before about 2033, and edition provenance is hard to prove |
+| **Verdict** | **Recommended** | Not usable for US accounts before about 2034, and edition provenance is hard to prove |
 
 **Not public domain, so excluded by the owner's rule unless the owner makes an exception (§9 Q2):**
 
@@ -139,9 +152,18 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
 | **QuranEnc.com** English translations (Saheeh, "Rowwad Translation Center", Waleed Bleyhesh and others) | In copyright, but published under the **same IslamHouse-family policy as HadeethEnc**: unaltered, credited to QuranEnc.com with the version number, notes reported back, kept up to date, no unsuitable ads. It has a per-surah JSON API keyed by translation ([english_rwwad](https://quranenc.com/en/browse/english_rwwad), [english_saheeh](https://quranenc.com/en/browse/english_saheeh)). Modern, verse-aligned and scholar-reviewed. |
 | Hilali & Khan; Arberry (1955; died 1969, so protected under life + 70 until 2039); Ahmed Ali; Itani; and every other modern translation | In copyright |
 
+**Public domain, but rejected on accuracy and religious grounds.** The scholar may confirm, but none is proposed:
+
+| Work | Why it is rejected ([overview](https://en.wikipedia.org/wiki/English_translations_of_the_Quran)) |
+|---|---|
+| **Muhammad Ali** (1917, Lahore Ahmadiyya; revised 1951) | The translator led the Lahori Ahmadis. The rendering and notes carry Ahmadiyya doctrinal readings that the academy's scholar would not sign for children. |
+| **George Sale** (1734) | A non-Muslim translation made from Marracci's Latin (1698), with a polemical "Preliminary Discourse". The English is two hundred years older than Pickthall's. |
+| **J. M. Rodwell** (1861) | A non-Muslim translation that **reorders the surahs** into a supposed chronology, so it does not follow the mushaf order. |
+| **E. H. Palmer** (1880) | A non-Muslim, Orientalist translation for the *Sacred Books of the East*. It is not a translation of meanings by a Muslim, and it has no edition reviewed by Muslim scholars. |
+
 ### 2.3 Recommendation, and what happens next
 
-- **Recommend Pickthall (1930)** as the English translation of the meanings (§9 Q1). It is public domain in every main market today, including the US since 2026. It is the more literal of the two, it keeps "Allah", and it puts the least of the translator's own interpretation into the verse text.
+- **Recommend Pickthall (1930)** as the English translation of the meanings (§9 Q1). It is public domain in the main markets today: Saudi Arabia, Egypt, Qatar, the EU, the UK, and the US since 2026 (Mexico is the exception, §2.2). It is the more literal of the two, it keeps "Allah", and it puts the least of the translator's own interpretation into the verse text.
 - **Its weakness is register.** Its English is archaic, so it is shown to the 9–12 band, parents and staff. Ages 3–8 get the meaning through PD-49's child tafsir in English (§2.5), written in our own reviewed words, not through a verse translation (§9 Q3).
 - **The text is never modernised.** It is shown verbatim, with the attribution. Where the scholar finds a rendering misleading, we never edit Pickthall. Instead (§9 Q4):
   - **recommended:** a short note, clearly labelled as Jawwid's own and reviewed like any item, shown under that verse;
@@ -186,7 +208,7 @@ Two read-only passes on 2026-10-29 covered `main` and the open lesson branches: 
   - verbs as in "he wrote" (كَتَبَ), not the dictionary infinitive;
   - proper names are marked "(a name)" and not translated;
   - a syllable drill (`syllables`, reading design §3 Q1) has **no** gloss, because it is not a word.
-- **Every English gloss is reviewed by a bilingual Arabic teacher** (§5.3). Machine translation may draft glosses and instructions, recorded as `drafted: "machine"`. **Nothing machine-drafted ships without that review** (§9 Q10).
+- **Every English gloss is signed by two bilingual reviewers, neither of them its author** (`translation` and `english`, §5.3). Machine translation may draft glosses and instructions, recorded as `drafted: "machine"`. **Nothing machine-drafted ships without that review** (§9 Q10).
 - **The 3-word Quran refusal applies to English too**, in its own form. An English item may not contain Arabic script at all, so Quran can reach an English text only through a position placeholder.
 - **G-20.** English glosses of names in reading sentences (e.g. a child's name in lesson 5) can trip the staff-name guard, which matches Latin spellings. The guard runs on the English files like any other. A tripped gloss uses "(a name)" instead of a transliteration.
 
@@ -220,7 +242,7 @@ The 35 `islamic/` lessons are not built yet; they follow the 114-surah work (PD-
 
 - **Arabic first.** For Quran and Islamic content, an English item can be reviewed only after its Arabic item is approved, and it binds that approval (§5.2).
 - **Per item, per language, per text hash.** These are the same patterns as PD-48 and PD-49.
-- **Fail-closed.** An English item that is draft, rejected, withdrawn or stale is not in the bundle, and is not shown.
+- **Fail-closed per item, never per build.** An English item that is draft, rejected, withdrawn or stale is dropped, **on its own**, at export (the snapshot) and again at load. It is not in the bundle and is not shown. The build stays green, so an urgent Arabic correction never waits on its English. The `/lesson-content` queue shows the dropped item as a **"stale English"** task for its author and reviewers (§5.2).
 - **No runtime machine translation, ever.** A guard fails the build on any translation API, `Intl`-based translation shim or browser translation hook in `apps/lessons`. That is the same idea as PD-48's `speechSynthesis` guard. The engine page also sets `translate="no"`, so a browser's own "translate this page" never rewrites the Quran or the lessons.
 - **People are named in the database, never in the repo** (G-20, PD-49 §F.2).
 
@@ -237,43 +259,51 @@ English goes in **sibling files**, so it never changes an Arabic item's hash:
   "items": [
     { "id": "tafsir-001",                 // the SAME id as the Arabic item
       "of": "<approvalSha256 of the Arabic item it translates>",
-      "text": "Say: Allah is One {{w:1:4}} …",   // positions render the Arabic word
+      "text": "This surah teaches us that Allah is One, and nobody is like Him. The word {{w:1:4}} means \"One\".",
+                                            // our own child prose (§2.5); a position renders the Arabic word
+      "author": "<staff id of the person who wrote this English>",   // an id, never a name (G-20)
       "drafted": "human" }                  // or "machine" (§9 Q10); recorded, never shown
   ] }
 ```
 
-- **The English approval hash** = `sha256(canonical{datasetId, lessonKey, lang: "en", item})`. Because `of` is inside the item, an edit to the Arabic item makes its English stale automatically. Nobody has to remember to pull it.
-- **The checker refuses:**
-  - an English item whose `id` has no Arabic item;
-  - an `of` that is not the Arabic item's current approval hash;
+- **The English approval hash** = `sha256(canonical{datasetId, lessonKey, lang: "en", item})`. Because `of` and `author` are inside the item, an edit to the Arabic item makes its English stale automatically. Nobody has to remember to pull it.
+- **The checker fails the build only on what the English file itself gets wrong:**
+  - malformed JSON or schema, or text not in NFC;
   - Arabic script anywhere in the English text (Quran arrives only through positions);
   - a `{{w}}` placeholder that is not a valid span;
+  - an `author` that is not a staff-id shape;
   - a term spelled against the glossary (§5.5).
-- **The engine shows an English item only if:** its Arabic item is shown, its own signed approval matches its hash, and `of` equals the Arabic item's hash. That is the same second check PD-49 §F.3 does.
+- **It never fails on drift from the Arabic.** An English item whose `id` is not, or is no longer, an Arabic item, or whose `of` is not the Arabic item's current approval hash, is **reported** (a warning in CI, the "stale English" queue task) and **dropped from the snapshot, per item**. So a PR that changes or retires an Arabic item never has to touch the English file to stay green.
+- **The engine shows an English item only if:** its Arabic item is shown, its own signed approval matches its hash, and `of` equals the Arabic item's hash. It drops any other item, one by one. That is the same second check PD-49 §F.3 does.
 
 ### 5.3 Review steps per language
 
 | Kind (PD-49 `requiredSteps`, `quran-content.ts:69-78`) | Arabic (unchanged) | English |
 |---|---|---|
-| word | check, teacher (+ scholar if `aqeedah`) | **translation** (+ scholar if `aqeedah`) |
-| quiz (category tafsir, asbab, lessons, or aqeedah) | check, teacher, scholar | **translation**, scholar |
-| other quiz | check, teacher | **translation** |
-| tafsir, tafsir_extra, theme, lesson, story, asbab, intro | check, teacher, scholar | **translation**, scholar |
-| game mechanic (names, instructions) | teacher, scholar | **translation** |
-| Arabic-lesson gloss, note, instruction | Teachers dept (file review today) | **translation** |
-| Islamic lesson item; fiqh step | per PD-29 (teacher, method sign-off) | **translation**, scholar |
-| Pickthall, per surah | n/a | **scholar** sign-off of the surah's translation as shown, plus any Jawwid notes (§2.3) |
-| Glossary entry | n/a | **translation**, scholar (religious terms) |
+| word | check, teacher (+ scholar if `aqeedah`) | **translation, english** (+ scholar if `aqeedah`) |
+| quiz (category tafsir, asbab, lessons, or aqeedah) | check, teacher, scholar | **translation, english**, scholar |
+| other quiz | check, teacher | **translation, english** |
+| tafsir, tafsir_extra, theme, lesson, story, asbab, intro | check, teacher, scholar | **translation, english**, scholar |
+| game mechanic (names, instructions) | teacher, scholar | **translation, english** |
+| Arabic-lesson gloss, note, instruction | Teachers dept (file review today) | **translation, english** |
+| Islamic lesson item; fiqh step | per PD-29 (teacher, method sign-off) | **translation, english**, scholar |
+| Jawwid note under a Pickthall verse (kind `note`, English only) | n/a | **translation** (checked against the Arabic verse and its approved Arabic tafsir), **english**, scholar |
+| Pickthall, per surah (kind `verse_translation`, §2.1 rule 7) | n/a | **check** (transcription against the scan), **scholar** |
+| Glossary entry | n/a | **translation, english**, scholar (religious terms) |
+| Engine UI strings (scope `ui`, §6) | code review (today) | **translation, english** |
 
-- **The `translation` step** is signed by a **qualified English-Arabic reviewer** holding a new PD-40 key, `lesson_content.review_translation`. They check:
-  - fidelity to the approved Arabic: meaning, nothing added, nothing dropped;
-  - correct, natural English in the band's register;
-  - the glossary.
+- **Two English steps, two people, and neither is the author.** This mirrors the Arabic's check and teacher steps:
+  - **`translation`**: fidelity to the approved Arabic. Meaning, nothing added, nothing dropped, and the glossary.
+  - **`english`**: correct, natural English in the band's register, and the style guide (§5.5).
+  - Both are signed by **qualified English-Arabic reviewers** holding a new PD-40 key, `lesson_content.review_translation`.
+  - The existing "one person, one step" trigger makes them two different people.
+  - **The author is recorded** (`author`, a staff id, inside the hashed item, §5.2). The review function receives it from the API's review subjects, and **the trigger refuses any English step signed by the item's author**. Recording a false author still leaves two other people signing, and the queue shows the author on every review.
 - **Reviewers per subject** (§9 Q7):
-  - Quran and Islamic Studies: a bilingual reviewer with Islamic-studies training;
-  - Arabic Language: a bilingual Arabic teacher.
-  - The same "one person, one step" trigger applies, and the **author never reviews their own translation**.
-- **The scholar's English step** checks the **religious meaning** of the English. If the scholar does not read English well enough to sign it, a **second** bilingual reviewer prepares a written back-translation, and the scholar signs against that. The back-translation is stored with the review row's reason (§9 Q6).
+  - Quran and Islamic Studies: bilingual reviewers with Islamic-studies training;
+  - Arabic Language: bilingual Arabic teachers.
+- **The scholar's English step** checks the **religious meaning** of the English. If the scholar does not read English well enough to sign it (§9 Q6), a bilingual reviewer who is neither the author nor the `translation` signer writes a **back-translation** into Arabic, and the scholar signs against that.
+  - The back-translation has its **own append-only table** (§5.6), because an approve row carries no reason (`supabase/migrations/20261029235000_chat_pd049_lesson_content_review.sql:66-68`) and a reason is capped at 500 characters.
+  - The scholar's approve row then names the back-translation it relied on.
 - **Rejection categories** add `translation_meaning`, `translation_omission`, `english_language`, `register` and `glossary` to the existing list (which already has `language`).
 
 ### 5.4 What a learner sees in each mode
@@ -295,27 +325,53 @@ English goes in **sibling files**, so it never changes an Arabic item's hash:
   - the transliteration must match the glossary.
 - A **style guide** per band (PR-4) mirrors PD-49's Arabic authoring guide:
   - vocabulary and sentence-length limits;
-  - British or American spelling, one throughout (§9 Q12 picks the voice; spelling follows it);
+  - British spelling throughout (Q12, decided);
   - no idioms that do not translate;
   - plain present tense for tafsir.
 
 ### 5.6 What changes in the review system (#258, #265)
 
-**One migration** (PR-3; slot from the head):
+**One migration** (PR-3a; slot from the head):
 - `chat.lesson_content_review` gains `lang text not null default 'ar' check (lang in ('ar','en'))`, and `lang` joins the unique index and the item index.
-- `step` gains `translation`; `chat.lesson_content_step_key` maps it to `lesson_content.review_translation`.
-- `scope` widens to `quran-NNN | play | arabic-NNN | islamic-NNN | glossary`. The Arabic lessons and Islamic lessons then move their review into the database, as PD-49 did for surahs.
+- `step` gains `translation` and `english`. `chat.lesson_content_step_key` maps both to `lesson_content.review_translation`. Both are allowed only when `lang = 'en'`, and `check`/`teacher` only when `lang = 'ar'`, except `check` on a `verse_translation` item.
+- The review function gains `p_author uuid`, passed from the API's review subjects for English items. The trigger refuses an English step whose signer equals it.
+- **`chat.lesson_content_back_translation`**: append-only, `(id, scope, item_id, approval_sha256, lang, text check (length between 1 and 8000), staff_id, at)`.
+  - Its trigger refuses a writer without `lesson_content.review_translation`, and refuses the item's author or its `translation` signer.
+  - The review table gains a nullable `back_translation_id`, allowed **only** on a scholar `approve` row with `lang = 'en'`, and checked to be for the same scope, item and hash.
+  - The rule that an approve row carries no category or reason is unchanged.
+- `scope` widens to `quran-NNN | play | arabic-NNN | islamic-NNN | glossary | ui`. The Arabic lessons and Islamic lessons then move their review into the database, as PD-49 did for surahs.
 - Existing rows are Arabic, through the default. No row is edited.
 
-**The signed export** goes to payload `v: 2` with `lang`, written to `approvals/surah-NNN.en.json` and the like. The ledger, the replay rules and "no PR checks itself" (#265) are unchanged. Two cautions:
-- The verifier and the engine's readers are protected code, so their change goes in a PR that changes no approvals file.
+**The signed export** goes to payload `v: 2` with `lang`, written to `approvals/surah-NNN.en.json` and the like.
+- A `v: 1` file stays valid forever and means Arabic.
+- The ledger, the replay rules and "no PR checks itself" (#265) are unchanged.
+- The verifier and the engine's readers are protected code, so their change goes in a PR that changes no approvals file (§5.7).
 - The loader rule "reads exactly what `verify-approvals.mjs` checks" still holds.
 
-**The `/lesson-content` queue in Admin Web** (PD-49 PR-3, not built yet) should be built bilingual from the start:
-- a language filter;
-- the Arabic approved text and its English side by side;
-- "needs my step: translation".
-Coordinate with whoever builds PD-49 PR-3, so the page is not built twice.
+**The order with PD-49** (named, so nothing is built twice):
+1. **#258 (review table and API) and #265 (signed export v1) are on main.** Nothing in them changes before PD-51 PR-3a.
+2. **PD-51 PR-3a**: the migration above, plus verify-approvals v2 and the content check (protected code, no approvals file). It lands **before PD-49 PR-3's Admin Web `/lesson-content` queue is started**, and before the first signed export of any `.en` file. It changes no Arabic behaviour: `lang` defaults to `'ar'`, and v1 files still verify.
+3. **PD-49 PR-3 (the queue)** is then built once, reading `lang` from day one. It has:
+   - a language filter, which shows only Arabic until English items exist;
+   - the Arabic approved text and its English side by side;
+   - "needs my step: translation / english", "stale English", and the back-translation panel.
+4. If PD-49's queue is already under way when PD-51 PR-3a is ready, the queue ships Arabic-only. **PD-51 PR-3b** then adds the filter and the English panels to that page. It is not rebuilt.
+5. The **first signed `play.json`** stays PD-49's own PR (v1). PD-51 adds `play.en.json` only after PR-3a.
+
+### 5.7 New PROTECTED and CODEOWNERS entries
+
+Each is added by the PR that creates the file. The list in `scripts/lessons/verify-approvals.mjs:71` (`PROTECTED`) and `.github/CODEOWNERS` grow together, so a PR that changes approvals can never change these. Paths are proposed and are fixed in the PR that adds them.
+
+| Path (proposed) | What it guards | Gate | Added in |
+|---|---|---|---|
+| `data/quran-translations/pickthall-1930-1.txt`, `.json` (manifest), `.sha256` | the vendored translation and its pins | **CODEOWNERS only: the pin is not envelope-signed** | PR-5 |
+| `apps/api/src/quran/pinned-translation.ts` | the code copy of the pin | CODEOWNERS + PROTECTED | PR-5 |
+| `scripts/qa/check-quran-translation.py` (the `quran-translation` guard) | that pins, manifest and file agree; 6,236 verses; the per-surah counts | CODEOWNERS + PROTECTED (`guards.sh` is already both) | PR-5 |
+| `apps/lessons/src/content/translation-content.ts` (the `.en` loader and its per-item drop) | what English reaches a child | CODEOWNERS + PROTECTED | PR-6 |
+| `apps/lessons/src/content/glossary.json` and its lint | fixed religious and grammar terms | CODEOWNERS + PROTECTED | PR-4 |
+| `scripts/lessons/verify-approvals.mjs` (v2) and `scripts/lessons/check-quran-content.py` (the `.en` rules) | already both; v2 changes go in a PR with no approvals change | unchanged | PR-3a |
+| `apps/lessons/src/i18n/en.ts`, `ar.ts`, and the `ui` approvals reader | which UI strings are approved | CODEOWNERS + PROTECTED | PR-1b |
+| `scripts/lessons/tts/generate.py` (the English-input refusals, §7) | that neither Quran, Arabic nor Pickthall reaches the English voice | CODEOWNERS | PR-8 |
 
 ---
 
@@ -324,11 +380,13 @@ Coordinate with whoever builds PD-49 PR-3, so the page is not built twice.
 - **String tables:** `apps/lessons/src/i18n/{ar,en}.ts`, typed. A test fails unless both have the same keys and the same placeholders.
   - Arabic keeps its full tashkeel and its plural logic (`CountAyat.tsx:13`). English gets its own plural rule (`Intl.PluralRules('en')`).
   - A lint fails on any Arabic or Latin literal in `.tsx` outside the tables. Verified-text rendering and the content files are exempt.
+  - **The English table is reviewed like content** (scope `ui`, `translation` + `english`, §5.3). Each string is one item.
+  - **English mode is all or nothing for the UI.** If the signed `ui` approvals do not cover every key of `en.ts` at its current hash, the engine treats `?lang=en` as `ar`. A child never sees half-English controls.
 - **The reader's language:**
   - The engine reads `?lang=ar|en` once at boot, from an allowlist; anything else means `ar`.
   - It sets `<html lang dir>` before the first render, and never reads it again.
   - It carries no personal data, so it is safe in a URL.
-  - The API appends it in `materials-reader.service.ts:278`, from the **family's language** for a family account (§9 Q8). Staff preview in the Admin Web UI language: the opener may set `lang` to its own locale, from the same allowlist.
+  - The API appends it in `materials-reader.service.ts:278`, from the **lesson language** chosen in §9 Q8 for a family account. Staff preview in the Admin Web UI language: the opener may set `lang` to its own locale, from the same allowlist.
 - **Mixed direction:**
   - In English mode every Arabic block (verse, letter, word, sentence) is wrapped `lang="ar" dir="rtl"`.
   - Inline Arabic inside English uses `<bdi lang="ar">`, so «ب» never reorders the sentence.
@@ -336,13 +394,13 @@ Coordinate with whoever builds PD-49 PR-3, so the page is not built twice.
   - The layout already uses logical properties (§1.2).
 - **Digits:** a `formatNumber(lang)` replaces the seven hard-coded `ar-EG` calls. Arabic-Indic digits in Arabic mode, Western digits in English mode. The verse-end marks stay inside the Quran text as Tanzil writes them.
 - **Fonts:**
-  - **Bundle Amiri Quran in `apps/lessons`** (OFL 1.1, the same file version as #295) with `@font-face` under `font-src 'self'`. This closes the §1.5 gap. It is used for the Quran in **both** modes and for nothing else.
+  - **The Quran font is PD-49's #313**, not PD-51 (§1.5). PD-51 only requires that the Quran is drawn in Amiri Quran in **both** modes, and that Amiri Quran is used for nothing else.
   - The Arabic UI keeps its font.
   - For English, recommend **Andika** (SIL, OFL), which is designed for beginning readers (single-storey a, clear l/I/1); or keep `system-ui`.
 - **Hosts:**
   - Admin Web Materials and Flutter Materials are already bilingual (§1.1).
   - Remaining: one `description` column. Add `description_ar`/`description_en`, or rename, in PR-2.
-  - The engine's `<title>` and the "open from the app" message (`App.tsx:28-36`) are translated in PR-1.
+  - The engine's `<title>` and the "open from the app" message (`App.tsx:28-36`) are translated in PR-1b.
 - **Accessibility:**
   - `aria-label` per language;
   - English screen-reader text for ﷺ (§4);
@@ -362,6 +420,10 @@ Coordinate with whoever builds PD-49 PR-3, so the page is not built twice.
   - the `^arabic-[0-9]{3}$` key rule stays: English instructions belong to the same Arabic lessons;
   - the render recipe already records the `locale`; English uses an Azure English neural voice (§9 Q12) under the same vendor terms;
   - **`generate.py` refuses any `en` input that contains Arabic script**, so neither Quran nor Arabic can reach the English voice;
+  - **it also refuses Pickthall's text**, in two ways:
+    - an input whose normalised text hashes to any pinned per-verse SHA-256 of the translation;
+    - an input that shares a run of **6 or more consecutive words** with any verse of it (an index built from the pinned file, normalised for case, punctuation and archaic forms).
+    So the translation of the meanings cannot be voiced whole or in part, even by a Jawwid note quoting it;
   - an English lexicon (`lexicon/azure-en.json`) fixes transliterated terms ("wudu", "Al-Ikhlas", "fatha");
   - the reviewers for English clips hold `lesson_audio.review` **and** are English-qualified. Recommend a separate key, `lesson_audio.review_en`, so an Arabic-only reviewer cannot approve an English clip.
 - **The disclosure notice** already exists in approved English and Arabic (PD-48 §17). No new wording is needed.
@@ -372,56 +434,79 @@ Coordinate with whoever builds PD-49 PR-3, so the page is not built twice.
 
 | PR | Content | Needs |
 |---|---|---|
-| **PR-0** (this) | Plan and the PD-51 claim | Head's review; owner's answers (§9) |
-| **PR-1** engine i18n | String tables ar/en for every existing engine string (lessons, games, reading, shell), `?lang`, `dir`/`lang` attributes, `<bdi>`, `formatNumber`, `translate="no"`, the no-MT guard, **Amiri Quran self-hosted**, English font. Openers pass `lang`; the API appends the family language. **No content changes.** | After #306, #307 and #312 merge (they add ~75 strings), to avoid a three-way conflict. The English UI strings get one bilingual review pass (§7 volume). |
-| **PR-2** the family's language | An endpoint for a parent or staff member to set `family.language` (Flutter Settings "Lessons language", Admin Web Parent Profile, the enrolment form). `material_item` description per language. | A migration slot only for the description column |
-| **PR-3** review per language | The migration of §5.6; the PD-40 keys `lesson_content.review_translation` (and `lesson_audio.review_en` for PR-8) in a LATER seed block; the `translation` step in `requiredSteps` (TS and SQL); export v2; the bilingual `/lesson-content` queue | Slot; PD-40 seed block; coordinate with PD-49 PR-3 |
-| **PR-4** glossary and style guide | `glossary.json`, the checker's lints, and the English authoring guide per band | Teachers dept and scholar approve the guide (as PD-49 §A.6 step 2) |
-| **PR-5** Pickthall | Pinned scan, double transcription, alignment proof, vendored file and pins, a guard, the API field (`/quran/ayahs` gains `translation`), the engine display, and the `quran.translation.enabled_for` gate | **Owner's Q1.** Then the download. Scholar sign-off per surah before families see it. |
-| **PR-6** Arabic lessons in English | `lesson-NNN.en.json` for 1, 3, 6, 7 (on main), then each lesson as it lands: instructions, notes, letter names, glosses, sentence meanings | PR-1, PR-3, PR-4 |
+| **PR-0** (this) | Plan and the PD-51 claim | Head's review (done); the scholar's and the owner's answers (§9) |
+| **PR-1a** language plumbing | The engine reads `?lang` (allowlist) and sets `<html lang dir>`. `lang`/`dir` on Arabic blocks, `<bdi>`, `formatNumber` for the seven `ar-EG` calls, `translate="no"`, the no-MT guard. The openers pass `lang`, and the API appends the lesson language (§9 Q8). **English stays off**: with no approved `ui` table, `lang=en` means `ar` (§6). No strings and no content change. | Can start now; small |
+| **PR-1b** string tables | `apps/lessons/src/i18n/{ar,en}.ts` for every existing engine string (lessons, games, reading, shell), the key-parity test, the literal lint, and the `ui` scope review subjects | After #306, #307 and #312 merge (they add ~75 strings), to avoid a three-way conflict; the English table is signed through PR-3a (§5.3) |
+| **PR-2** the lesson language | The field §9 Q8 picks, and where it is set: Flutter Settings "Lessons language", the Admin Web Parent Profile, the enrolment forms. `material_item` description per language. | Q8; a migration slot from the head |
+| **PR-3a** review per language (API, SQL, verifier) | The migration of §5.6 (lang, the `translation` and `english` steps, the author check, the back-translation table, the scopes); the PD-40 key `lesson_content.review_translation` (and `lesson_audio.review_en` for PR-8) in a LATER seed block; `requiredSteps` per language (TS and SQL); verify-approvals v2 (protected, no approvals file) | Slot; PD-40 seed block; **lands before PD-49 PR-3's queue starts** (§5.6 "The order with PD-49") |
+| **PR-3b** queue panels | Only if PD-49's queue was already under way: the language filter, the side-by-side English, "stale English" and the back-translation panel added to that page | PD-49 PR-3 |
+| **PR-4** glossary and style guide | `glossary.json`, the checker's lints, and the English authoring guide per band | Teachers dept and scholar approve the guide (as PD-49 §A.6 step 2); the scholar's Q14 |
+| **PR-5** Pickthall | Pinned scan, double transcription, alignment proof, vendored file and pins with their CODEOWNERS entries (§5.7), a guard, the API field (`/quran/ayahs` gains `translation`), the engine display, the per-surah `verse_translation` review items, and the `quran.translation.enabled_for` gate | **Owner's Q1.** Then the download. Scholar sign-off per surah before families see it. |
+| **PR-6** Arabic lessons in English | The `.en` loader with its per-item drop; `lesson-NNN.en.json` for 1, 3, 6, 7 (on main), then each lesson as it lands: instructions, notes, letter names, glosses, sentence meanings | PR-1b, PR-3a, PR-4 |
 | **PR-7** PD-49 content in English | `surah-NNN.en.json` for the pilot (1, 112, 105, 111), after its Arabic is approved; then Juz' Amma in PD-49's batches | PD-49 PR-5 (Arabic pilot approved) |
-| **PR-8** English voice-over | The migration of §7, the English voice, the lexicon, the generation guard | PR-1, PR-3, an English reviewer; the vendor account is already the owner's PD-48 action |
+| **PR-8** English voice-over | The migration of §7, the English voice, the lexicon, the generation guard (Arabic script and Pickthall refused) | PR-1b, PR-3a, English reviewers; the vendor account is already the owner's PD-48 action |
 | **PR-9** Islamic Studies, bilingual | With PD-29's Islamic batches (Prophet ﷺ lessons first), Arabic and English together; English hadith after IslamHouse's reply | PD-29 sequencing; Q2 |
 
-**Order:** PR-1 → PR-3 → PR-4 → PR-6 (smallest content, proves the pipeline) → PR-5 (Pickthall, staff_test first) → PR-7 → PR-8 → PR-9. PR-2 can run any time after PR-1.
+**Order:** PR-1a → PR-3a → PR-1b → PR-4 → PR-6 (the smallest content; it proves the pipeline) → PR-5 (Pickthall, staff_test first) → PR-7 → PR-8 → PR-9. PR-2 follows the owner's Q8 answer, at any point after PR-1a.
 
 ### 8.1 Review volume
 
-These are estimates, to be re-measured in the first English batch, as PD-49 §G.4 does.
+These are estimates, to be re-measured in the first English batch, as PD-49 §G.4 does. The reviewer column counts **both** English steps: `translation` at the stated rate, and `english` at about half of it.
 
-| Work | Items | Author (bilingual) | `translation` review | Scholar |
+| Work | Items | Author (bilingual) | Reviewers (`translation` + `english`) | Scholar |
 |---|---|---|---|---|
-| Engine UI strings (main + open PRs + new) | ~270 | ~6 h | ~4 h (one pass) | — |
-| Surah-name meanings | 114 | ~2 h | ~1.5 h | ~1 h |
-| Glossary | ~150 terms | ~5 h | ~2 h | ~2 h (religious terms) |
-| **Pickthall, transcription** | 6,236 verses | double keying, then resolving diffs against the scan (assume 5–10% differ: ~300–600 verses at ~1 min) | ~5–10 h | — |
+| Engine UI strings (main + open PRs + new) | ~270 | ~6 h | ~7 h | — |
+| Surah-name meanings | 114 | ~2 h | ~2.5 h | ~1 h |
+| Glossary | ~150 terms | ~5 h | ~3.5 h | ~2 h (religious terms) |
+| **Pickthall, transcription** (`check`) | 6,236 verses | double keying, then resolving diffs against the scan (assume 5–10% differ: ~300–600 verses at ~1 min) | ~5–10 h | — |
 | **Pickthall, scholar reading** | Juz' Amma + Al-Fatihah: 571 verses at ~30 s | — | — | **~5 h** (whole Quran ~52 h, by demand) |
-| PD-49 Juz' Amma content in English | ≈ 1,900–2,000 (PD-49 §G.4) at 2–4 min to author | ~65–130 h | ~25–33 h at 45–60 s | ~11–15 h (≈ 900 scholar-kind items at ~45 s) |
-| Arabic lessons 1, 3, 6, 7 on main | 2,455 words + 2 notes + 249 quiz items (counted from the JSON) | ~45 h (1 min a gloss) | ~20 h (30 s) | — |
-| Arabic lessons 2, 4, 5, 8, 9, 10 | ≈ 1,500 words, ~60 sentences, 11 passages (assumed) | ~30 h | ~13 h | — |
-| Islamic Studies, 35 lessons | ≈ 1,400 items (assumed ~40 per lesson) | ~70 h | ~20 h | ~15 h |
-| **Juz' Amma scope** (everything except Islamic Studies and the rest of the Quran) | | **~150–220 h** | **~70–90 h** | **~20–25 h** |
+| PD-49 Juz' Amma content in English | ≈ 1,900–2,000 (PD-49 §G.4) at 2–4 min to author | ~65–130 h | ~41–49 h | ~11–15 h (≈ 900 scholar-kind items at ~45 s) |
+| Arabic lessons 1, 3, 6, 7 on main | 2,455 words + 2 notes + 249 quiz items (counted from the JSON) | ~45 h (1 min a gloss) | ~30 h | — |
+| Arabic lessons 2, 4, 5, 8, 9, 10 | ≈ 1,500 words, ~60 sentences, 11 passages (assumed) | ~30 h | ~20 h | — |
+| **Juz' Amma scope** (everything above) | | **~150–220 h** | **~110–125 h** | **~20–25 h** |
+| *Later:* Islamic Studies, 35 lessons | ≈ 1,400 items (assumed ~40 per lesson) | ~70 h | ~32 h | ~15 h |
 
-**To shorten it** (§9 Q13): word glosses for letter lessons can come **on demand**. Gloss the reading lessons (5, 10) and the words used in quizzes first (~600), and the rest of the ~2,500 later. That cuts the first Arabic-lesson batch to about a quarter.
+If the scholar signs English through back-translations (§9 Q6), add a back-translation for each scholar-kind item: about 900 in Juz' Amma, roughly +20–30 bilingual hours.
+
+**To shorten it** (Q13, decided): word glosses for letter lessons come **on demand**. Gloss the reading lessons (5, 10) and the words used in quizzes first (~600), and the rest of the ~2,500 later. That cuts the first Arabic-lesson batch to about a quarter.
 
 ---
 
-## 9. Owner decisions (numbered, each with a recommendation)
+## 9. Decisions
 
-1. **The English translation of the meanings.** *Recommend **Pickthall (1930)**: public domain everywhere today (US since 2026), literal, keeps "Allah". Yusuf Ali is probably protected in the US until about 2033, and its clean original text is hard to prove. Saheeh and the other modern translations are in copyright.*
-2. **Ask IslamHouse about English too.** *Recommend adding one line to the HadeethEnc letter (or a follow-up if it has gone): HadeethEnc's English translations, and **QuranEnc's English translations of the meanings**, under the same conditions. It commits to nothing. If the owner later prefers a modern, scholar-reviewed English (e.g. QuranEnc's Rowwad or Saheeh) to Pickthall's archaic one, that would be an exception to "public domain only", on the same footing as the HadeethEnc exception. Pickthall stays the plan unless the owner decides otherwise.*
-3. **Who sees the verse translation.** *Recommend the 9–12 band, parents and staff. Ages 3–8 in English mode get our reviewed English child tafsir instead (§2.5).*
-4. **Pickthall's archaic or misleading renderings.** *Recommend verbatim always, plus a short, labelled, reviewed Jawwid note under any verse the scholar flags. No "modernised Pickthall": that would be our own derivative and would need all 6,236 verses re-signed.*
-5. **The scholar's sign-off of Pickthall.** *Recommend a full reading per surah before that surah's English reaches families (about 5 h for Juz' Amma plus Al-Fatihah), with surahs unlocked by demand. A sampled check is not enough for a text shown beside the Quran.*
-6. **Does the scholar read English well enough to sign English meaning?** *A question, not a recommendation: if not, §5.3's back-translation route by a second bilingual reviewer applies, which adds ~30% to the bilingual hours.*
-7. **The bilingual reviewers.** *Recommend contracting two qualified English-Arabic reviewers: one with Islamic-studies training (Quran content, Islamic Studies, glossary) and one Arabic teacher (Arabic lessons, UI). Each is granted `lesson_content.review_translation` by the super admin. Authors and reviewers are always different people.*
-8. **Whose language decides.** *Recommend the **family's language** (`family.language`, which exists and already drives cards and notifications), set by the parent in Settings or by staff at enrolment. The device's UI locale stays a device preference and does not change lesson content. Staff preview in their Admin Web language.*
-9. **What English mode shows.** *Recommend: Arabic is always shown and English is added beneath. An item with no approved English shows in Arabic only, with no placeholder. Never English-only content for the Quran or Islamic texts.*
-10. **Machine translation for drafts.** *Recommend allowing it only to draft UI strings, Arabic-lesson instructions and word glosses, recorded as `drafted: "machine"`, with full human review. **Never** for religious meaning (tafsir, lessons, stories, asbab, fiqh steps, Jawwid notes, hadith explanations): those are written by a bilingual human author from the approved Arabic, as PD-49 Q9 requires for the Arabic.*
-11. **Transliteration.** *Recommend none for Quran verses, ever. One plain-ASCII scheme for surah names and religious terms (§2.4, §5.5). Add a reviewed English meaning to each surah name.*
-12. **English voice and spelling.** *Recommend an Azure **en-GB** neural voice (Admin Web already formats English as `en-GB`), with British spelling throughout; or en-US with American spelling. The translation of the meanings is not voiced in v1.*
-13. **Scope of the first content batch.** *Recommend: UI (PR-1) first. Then Arabic lessons 1, 3, 6, 7 with instructions, notes and quiz-word glosses only (other glosses on demand). Then Pickthall for Juz' Amma plus Al-Fatihah on staff_test. Then PD-49's pilot surahs in English once their Arabic is approved.*
-14. **Fixed English forms.** *Recommend "Allah" (never "God"), "the Prophet Muhammad ﷺ" with "(peace and blessings be upon him)" on first use, "Quran" (not "Koran") in our wording, and transliterated terms with a gloss on first use ("wudu (ablution)"). The scholar confirms the list.*
+**Status (2026-10-29):**
+- The department head **decided Q4, Q5, Q11, Q12 and Q13**, as recommended.
+- **Q6 and Q14 go to the scholar.**
+- **Q1, Q2, Q3, Q7, Q8, Q9 and Q10 go to the owner.**
+
+1. **The English translation of the meanings.** *(Owner.)* *Recommend **Pickthall (1930)**: public domain in the main markets today (US since 2026), literal, keeps "Allah". Yusuf Ali is probably protected in the US until about 2034, and its clean original text is hard to prove. Saheeh and the other modern translations are in copyright. Muhammad Ali, Sale, Rodwell and Palmer are rejected (§2.2).*
+2. **Ask IslamHouse about English too.** *(Owner.)* *Recommend adding one line to the HadeethEnc letter (or a follow-up if it has gone): HadeethEnc's English translations, and **QuranEnc's English translations of the meanings**, under the same conditions. It commits to nothing. If the owner later prefers a modern, scholar-reviewed English (e.g. QuranEnc's Rowwad or Saheeh) to Pickthall's archaic one, that would be an exception to "public domain only", on the same footing as the HadeethEnc exception. Pickthall stays the plan unless the owner decides otherwise.*
+3. **Who sees the verse translation.** *(Owner.)* *Recommend the 9–12 band, parents and staff. Ages 3–8 in English mode get our reviewed English child tafsir instead (§2.5).*
+4. **Pickthall's archaic or misleading renderings.** **DECIDED by the department head, 2026-10-29:** *verbatim always, plus a short, labelled, reviewed Jawwid note under any verse the scholar flags. No "modernised Pickthall": that would be our own derivative and would need all 6,236 verses re-signed.*
+5. **The scholar's sign-off of Pickthall.** **DECIDED by the department head, 2026-10-29:** *a full reading per surah before that surah's English reaches families (about 5 h for Juz' Amma plus Al-Fatihah), with surahs unlocked by demand. A sampled check is not enough for a text shown beside the Quran. The review shape is §2.1 rule 7.*
+6. **Does the scholar read English well enough to sign English meaning?** *(To the scholar.)* *If not, the back-translation route of §5.3 and §5.6 applies (see §8.1 for the hours).*
+7. **The bilingual reviewers.** *(Owner.)* *Recommend contracting **at least two** qualified English-Arabic reviewers for each subject's two English steps (§5.3):*
+   - *Islamic-studies-trained, for Quran content, Islamic Studies and the glossary;*
+   - *Arabic teachers, for the Arabic lessons and the UI;*
+   - *plus at least one bilingual author.*
+   *Each reviewer is granted `lesson_content.review_translation` by the super admin. An author never signs their own item (enforced, §5.3).*
+8. **Whose language decides.** *(Owner.)* There are two ways:
+   - **(a) Reuse `family.language`.** It exists, but it also switches the family's cards, certificates, notifications, **payment reminders, payment pages and the Stripe Checkout locale** (§1.3).
+   - **(b) A separate lesson language.** A new field, `lesson_language` (ar | en, default ar), used only to open lessons.
+   *Recommend **(b)**. The language a child learns in is a teaching choice, and it should not change how the family is billed or messaged. An Arabic-speaking family abroad may want English support for the child, with Arabic everything else. A family that wants English everywhere sets both.*
+   - *It is set at the family level by the parent in Settings, or by staff at enrolment. Per child can come later if asked.*
+   - *The device's UI locale stays a device preference and does not change lesson content.*
+   - *Staff preview in their Admin Web language.*
+9. **What English mode shows.** *(Owner.)* *Recommend: Arabic is always shown and English is added beneath. An item with no approved English shows in Arabic only, with no placeholder. Never English-only content for the Quran or Islamic texts.*
+10. **Machine translation for drafts.** *(Owner.)* *Recommend allowing it only to draft UI strings, Arabic-lesson instructions and word glosses, recorded as `drafted: "machine"`, with the full two-step human review. **Never** for religious meaning (tafsir, lessons, stories, asbab, fiqh steps, Jawwid notes, hadith explanations): those are written by a bilingual human author from the approved Arabic, as PD-49 Q9 requires for the Arabic.*
+11. **Transliteration.** **DECIDED by the department head, 2026-10-29:** *none for Quran verses, ever. One plain-ASCII scheme for surah names and religious terms (§2.4, §5.5). A reviewed English meaning is added to each surah name.*
+12. **English voice and spelling.** **DECIDED by the department head, 2026-10-29:** *an Azure **en-GB** neural voice (Admin Web already formats English as `en-GB`), with British spelling throughout. The translation of the meanings is not voiced in v1, and the generator refuses it (§7).*
+13. **Scope of the first content batch.** **DECIDED by the department head, 2026-10-29:**
+    - *UI first: PR-1a, then PR-1b.*
+    - *Then Arabic lessons 1, 3, 6, 7, with instructions, notes and quiz-word glosses only; other glosses on demand.*
+    - *Then Pickthall for Juz' Amma plus Al-Fatihah, on staff_test.*
+    - *Then PD-49's pilot surahs in English, once their Arabic is approved.*
+14. **Fixed English forms.** *(To the scholar.)* *Recommend "Allah" (never "God"), "the Prophet Muhammad ﷺ" with "(peace and blessings be upon him)" on first use, "Quran" (not "Koran") in our wording, and transliterated terms with a gloss on first use ("wudu (ablution)").*
 
 ---
 
@@ -431,7 +516,9 @@ These are estimates, to be re-measured in the first English batch, as PD-49 §G.
 |---|---|---|---|
 | Pickthall, *The Meaning of the Glorious Koran* (1930), scan of the Knopf print | Q1 candidate (recommended) | Public domain (§2.2) | https://en.wikisource.org/wiki/Index:The_Meaning_of_the_Glorious_Koran_(1930).pdf |
 | Pickthall, background and editions | | | https://en.wikipedia.org/wiki/The_Meaning_of_the_Glorious_Koran · https://quran-archive.org/marmaduke-pickthall |
-| Yusuf Ali, *The Holy Qur'an* (1934–38) | Q1 alternative | PD outside the US; US probably to ~2033 | https://en.wikipedia.org/wiki/The_Holy_Qur%27an:_Text,_Translation_and_Commentary · https://sacred-texts.com/isl/quran/index.htm |
+| Pickthall's death (19 May 1936) | the public-domain dates | | https://en.wikipedia.org/wiki/Marmaduke_Pickthall |
+| Muhammad Ali (1917), Sale (1734), Rodwell (1861), Palmer (1880) | **Rejected** (§2.2) | Public domain | https://en.wikipedia.org/wiki/English_translations_of_the_Quran |
+| Yusuf Ali, *The Holy Qur'an* (1934–38) | Q1 alternative | PD outside the US (and Mexico); US probably to ~2034 | https://en.wikipedia.org/wiki/The_Holy_Qur%27an:_Text,_Translation_and_Commentary · https://sacred-texts.com/isl/quran/index.htm |
 | Tanzil translations | **Not used** | "for non-commercial purposes only" | https://tanzil.net/trans/ |
 | Saheeh International | Excluded (in copyright) | No reuse licence found | https://en.wikipedia.org/wiki/Sahih_International · https://islamhouse.com/en/books/78592/ |
 | QuranEnc.com English translations | Q2 option, needs an exception | IslamHouse-family policy: unaltered, credited, versioned, kept updated | https://quranenc.com/en/browse/english_rwwad · https://quranenc.com/en/browse/english_saheeh |
