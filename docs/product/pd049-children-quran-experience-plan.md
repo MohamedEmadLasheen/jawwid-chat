@@ -414,6 +414,22 @@ Count by skill: listening and recitation 2; recognition and structure 4; order a
 - **The grown-up's controls are folded behind "⚙ للكبار"**: the child sees the game, not the settings.
 - **Deviation: the grown-up moves the age band one step up or down** (§B.1, §H Q4) from the page's starting band, and the sitting restarts for it. The page has no profile yet (§B.5 item 5), so it starts at 3–5; the opener's profile will set the starting band once it exists.
 
+**As built (PR-B: games 8, 12, 13, recall).**
+- **Complete the ayah (8).** One word hidden (6–8) or two (9–12), never the first word. A hidden word shows as a blank, and its pause mark stays in its place.
+  - The choices are real words of the same surah: 3 for 6–8; 4 for 9–12, from the nearest ayat.
+  - **No choice looks like any word of this ayah**: not the answer, not its other hidden word, not one on its line. Letters a child reads alike are folded before comparing: all alef forms, ؤ→و, ئ/ى→ي, ة→ه, no tatweel. So إِنَّ/أَنَّ and مِنْ/مَنْ are never offered together.
+  - A wrong choice is refused and never put into the blank. Once complete, the whole verified ayah is shown.
+  - **One answer only.** No wrong choice completes another ayah of the surah, i.e. a near copy that differs only in the hidden word. Checked over all 114 surahs.
+- **The fading ayah (12).** The ayah is shown whole, and the child recites it aloud. At each step more words are hidden, never changed.
+  - 6–8: 3 steps, to all hidden. 9–12: 5 steps, and a hidden word leaves its first letter, in a box named as a cue, so the last step is first letters only. A one-letter word (as نٓ) is its own cue, with its marks.
+  - A hidden word's box is at least 52 px (§B.3). There are never more steps than words, so each step hides at least one more.
+  - A hidden word can be touched to see it again. At the end, the whole ayah is shown. Nothing is scored or recorded.
+- **The ayah number (13), 9–12, L2–L5.** Questions alternate between two kinds:
+  - "what number is this ayah?": consecutive numbers, with the answer anywhere among them;
+  - "which comes first?": two ayat at least two apart.
+  - An ayah whose words appear again in the surah is never asked.
+- **Every word line has spaces between its words** (flex items, so the layout is unchanged), so a screen reader or a copy reads words, not one run.
+
 **Game "skins"** (garden, sea, stars, desert caravan) change only the decoration and the reward animation, never the mechanic. They rotate per surah, so two surahs feel different even with the same mechanic. Skins carry no text and no Quran.
 
 ### C.3 The session generator (how variety is guaranteed)

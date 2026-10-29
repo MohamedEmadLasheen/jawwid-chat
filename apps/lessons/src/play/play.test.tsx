@@ -77,7 +77,7 @@ describe('adaptation (plan §B)', () => {
 
 describe('the mechanics and who signs them (plan §C.4)', () => {
   it('the registry is valid, and every mechanic states its respect rules', () => {
-    expect(MECHANICS.map((m) => m.id)).toEqual(['listen_glow', 'echo', 'which_heard', 'count_ayat', 'build_ayah', 'order_ayat', 'start_end', 'next_ayah']);
+    expect(MECHANICS.map((m) => m.id)).toEqual(['listen_glow', 'echo', 'which_heard', 'count_ayat', 'build_ayah', 'order_ayat', 'start_end', 'next_ayah', 'complete_ayah', 'fading_ayah', 'ayah_number']);
     // Every mechanic in the registry has its game here.
     for (const m of MECHANICS) expect(GAMES[m.id]).toBeDefined();
     for (const m of MECHANICS) expect(m.respect.length).toBeGreaterThan(0);
@@ -134,11 +134,15 @@ describe('the session (plan §C.3)', () => {
   it('only signed mechanics, and only for their band: order before recall', () => {
     expect(session({ approved: new Set(['echo']) })).toEqual(['echo']);
     const older = session({ band: '9-12' });
-    expect([...older].sort()).toEqual(['build_ayah', 'order_ayat', 'start_end']);
-    expect(older[2]).toBe('start_end');
+    expect([...older].sort()).toEqual(['build_ayah', 'complete_ayah', 'fading_ayah', 'order_ayat', 'start_end']);
+    // Order first, then recall.
+    expect(older.slice(0, 2).sort()).toEqual(['build_ayah', 'order_ayat']);
+    // The ayah number is for longer surahs (L2 and up), and only 9-12.
+    expect(session({ band: '9-12', ayahCount: 12 })).toContain('ayah_number');
+    expect(session({ band: '6-8', ayahCount: 12 })).not.toContain('ayah_number');
     // "What comes next" is for longer surahs (L2 and up).
-    expect(session({ band: '6-8', ayahCount: 12 })).toContain('next_ayah');
-    expect(session({ band: '6-8' })).not.toContain('next_ayah');
+    expect(session({ band: '6-8', ayahCount: 12, approved: new Set(['next_ayah']) })).toEqual(['next_ayah']);
+    expect(session({ band: '6-8', approved: new Set(['next_ayah']) })).toEqual([]);
   });
 
   it("does not open with the last sitting's mechanic", () => {

@@ -42,9 +42,43 @@ export function tilesOf(verse: string): string[] {
   return out;
 }
 
-/** A word's letters only, without its vowel and recitation marks: two words that look alike to a child share it. */
+/** A tile as its word and the pause mark after it ('' if none): a game hides the word, the mark stays where it is. */
+export function splitMark(tile: string): { word: string; mark: string } {
+  const at = tile.indexOf(' ');
+  return at < 0 ? { word: tile, mark: '' } : { word: tile.slice(0, at), mark: tile.slice(at + 1) };
+}
+
+// Letters a child reads alike are one: every alef form as alef, a hamza's seat as its letter, alef
+// maqsura as ya, ta marbuta as ha; and the tatweel stretch is no letter.
+const FOLD = new Map(
+  [
+    [0x623, 0x627],
+    [0x625, 0x627],
+    [0x622, 0x627],
+    [0x671, 0x627],
+    [0x624, 0x648],
+    [0x626, 0x64a],
+    [0x649, 0x64a],
+    [0x629, 0x647],
+  ].map(([from, to]) => [String.fromCodePoint(from!), String.fromCodePoint(to!)]),
+);
+const TATWEEL = String.fromCodePoint(0x640);
+
+/**
+ * A word's letters only, without its vowel and recitation marks, and with the letters a child
+ * reads alike folded together (إِنَّ and أَنَّ, مِنْ and مَنْ share one): two words that look alike
+ * to a child share it.
+ */
 export function skeleton(word: string): string {
-  return [...word].filter((c) => LETTER.test(c)).join('');
+  return [...word]
+    .filter((c) => LETTER.test(c) && c !== TATWEEL)
+    .map((c) => FOLD.get(c) ?? c)
+    .join('');
+}
+
+/** A word's first letter, bare: the cue a reciter is given, shown as a cue and never as the word. */
+export function firstLetter(word: string): string {
+  return [...word].find((c) => LETTER.test(c)) ?? '';
 }
 
 /** Shapes, so a card is never told apart by colour alone. */
