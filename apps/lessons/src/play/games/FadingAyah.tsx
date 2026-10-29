@@ -7,14 +7,15 @@ import { GameEnd, VerseCard, arabic, firstLetter, splitMark, tilesOf, type GameP
 /**
  * The fading ayah (المحو التدريجي), 6-8 and 9-12: the ayah is shown whole; the child
  * recites it aloud, and at each step more of its words are HIDDEN -- never changed --
- * until none is left (6-8, three steps) or, for 9-12, the fifth step leaves only each
- * word's first letter, shown as a cue in a box, never as the word. A hidden
+ * until none is left (6-8, three steps). For 9-12 a hidden word leaves its first letter,
+ * shown as a cue in a box and never as the word, so the fifth step is first letters
+ * only (each step harder than the last, whatever the ayah's length). A hidden
  * word can be touched to see it again (the child checks themself), and at the end the
  * whole verified ayah is shown. Nothing is scored and nothing is recorded; with
  * recitation, the ayah can be heard.
  */
 
-/** Steps from the whole ayah to the last cue (plan §C.2: 3 for 6-8; 5 for 9-12, the last first letters only). */
+/** Steps from the whole ayah to the last one (plan §C.2: 3 for 6-8; 5 for 9-12, ending in first letters only), never more than the ayah has words. */
 export const STEPS: Readonly<Record<Band, number>> = { '3-5': 0, '6-8': 3, '9-12': 5 };
 /** Ayat faded in one game. */
 export const FADES = 3;
@@ -44,9 +45,8 @@ export const fitsFading = (ayahs: readonly Ayah[]) => planFades(ayahs, 0).length
 
 export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: GameProps) {
   const fades = useMemo(() => planFades(ayahs, seed), [ayahs, seed]);
-  const steps = STEPS[band];
   const [round, setRound] = useState(0);
-  // 0 is the whole ayah; each step hides more; for 9-12 the last step is "first letters only"; then the reveal.
+  // 0 is the whole ayah; each step hides more; then the reveal.
   const [step, setStep] = useState(0);
   const [peeked, setPeeked] = useState<ReadonlySet<number>>(new Set());
   const [revealed, setRevealed] = useState(false);
@@ -54,8 +54,12 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
   const current = fades[round];
   if (!current) return <GameEnd band={band} missed={[]} onComplete={onComplete} />;
 
-  const letters = band === '9-12' && step === steps;
-  const hidden = new Set(letters ? current.order : current.order.slice(0, hiddenAt(current.tiles.length, step, steps)));
+  // No more steps than words, so every step hides at least one more.
+  const steps = Math.min(STEPS[band], current.tiles.length);
+
+  // 9-12 keeps a hidden word's first letter as its cue.
+  const letters = band === '9-12';
+  const hidden = new Set(current.order.slice(0, hiddenAt(current.tiles.length, step, steps)));
   const nextRound = () => {
     audio?.stop();
     setRound(round + 1);

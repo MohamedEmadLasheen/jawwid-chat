@@ -174,7 +174,7 @@
      ]
     },
     {
-     "approvalSha256": "0850b0e33b58e9d51726a91bd764444f1ba01bd8d2891ea1385626e59b11c98b",
+     "approvalSha256": "9d8c1aebbc0072a00d749fe886850792e3ab7e339b2cc442ef6206568bbac4e0",
      "id": "fading_ayah",
      "item": {
       "bands": [
@@ -182,13 +182,13 @@
        "9-12"
       ],
       "code": "FadingAyah.tsx",
-      "codeSha256": "22250d8c8c89108c383599fb7034da338e9533a3604293b09e665eb02d92c24e",
+      "codeSha256": "e1a66415abb7b7e425f50bc7a01bb63249dd607c79029ea02290089a214043c5",
       "id": "fading_ayah",
       "nameAr": "\u0627\u0644\u0645\u062d\u0648 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a",
       "needsAudio": false,
       "respect": [
        "The ayah is shown whole first; at each step more of its words are hidden, never changed, moved or replaced.",
-       "For 9-12 the last step shows only each word's first letter, in a box and named as a cue, never as the word or as an ayah.",
+       "For 9-12 a hidden word leaves only its first letter, in a box and named as a cue, never as the word or as an ayah; the last step is first letters only.",
        "The child recites aloud and can touch a hidden word to see it again; nothing is recorded, scored or stored.",
        "At the end the whole verified ayah is shown.",
        "No timer, no music."

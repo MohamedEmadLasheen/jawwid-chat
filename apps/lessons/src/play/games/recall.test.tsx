@@ -117,10 +117,14 @@ describe('The fading ayah (المحو التدريجي)', () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it('9-12: five steps, the last leaves only each first letter, as a cue', () => {
+  it('9-12: up to five steps, one more word each; a hidden word leaves its first letter as a cue, so the last is first letters only', () => {
     render(<FadingAyah {...props({ ayahs: [AYAHS[0]!], band: '9-12' })} />);
-    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByRole('button', { name: 'أخفِ كلمات أكثر' }));
-    expect(screen.queryByText(/أول حرف/)).toBeNull();
+    // A four-word ayah: four steps, not five, so no step repeats the one before.
+    expect(screen.getByText(/الخطوة ٠ من ٤/)).toBeTruthy();
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'أخفِ كلمات أكثر' }));
+      expect(document.querySelectorAll('.play__cue')).toHaveLength(i + 1);
+    }
     fireEvent.click(screen.getByRole('button', { name: 'أبقِ أوائل الحروف فقط' }));
     const cues = [...document.querySelectorAll('.play__cue')].map((c) => c.textContent!.replace('أول حرف: ', ''));
     expect(cues.sort()).toEqual(tilesOf(TEXTS[0]!).map(firstLetter).sort());

@@ -161,7 +161,7 @@
       "id": "fading_ayah",
       "version": 1,
       "code": "FadingAyah.tsx",
-      "codeSha256": "22250d8c8c89108c383599fb7034da338e9533a3604293b09e665eb02d92c24e",
+      "codeSha256": "e1a66415abb7b7e425f50bc7a01bb63249dd607c79029ea02290089a214043c5",
       "nameAr": "المحو التدريجي",
       "skill": "recall",
       "bands": ["6-8", "9-12"],
@@ -169,7 +169,7 @@
       "needsAudio": false,
       "respect": [
         "The ayah is shown whole first; at each step more of its words are hidden, never changed, moved or replaced.",
-        "For 9-12 the last step shows only each word's first letter, in a box and named as a cue, never as the word or as an ayah.",
+        "For 9-12 a hidden word leaves only its first letter, in a box and named as a cue, never as the word or as an ayah; the last step is first letters only.",
         "The child recites aloud and can touch a hidden word to see it again; nothing is recorded, scored or stored.",
         "At the end the whole verified ayah is shown.",
         "No timer, no music."
