@@ -214,6 +214,32 @@ describe('the manager Dashboard', () => {
     expect(within(section).queryByRole('link', { name: /Lessons waiting for an outcome/ })).not.toBeInTheDocument()
   })
 
+  it('shows the Enrolment section: the Trials tabs and the New Students filters (PR-4)', async () => {
+    routes['/dashboard/enrolment'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [
+          tile('trials.awaiting', 2),
+          tile('trials.upcoming', 3),
+          tile('new_students.unassigned', 1),
+          tile('new_students.waiting', 4),
+        ],
+      })
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['trials.view', 'new_students.view'] }))
+    const section = await screen.findByRole('region', { name: 'Trials and new students' })
+    const awaiting = await within(section).findByRole('link', { name: /Trial lessons awaiting a decision/ })
+    expect(awaiting).toHaveAttribute('href', '/trials?filter=decision')
+    expect(awaiting).toHaveClass('dash-tile--alert')
+    expect(within(section).getByRole('link', { name: /Trial lessons to come/ })).toHaveAttribute('href', '/trials?filter=upcoming')
+    const unassigned = within(section).getByRole('link', { name: /New students not yet assigned/ })
+    expect(unassigned).toHaveAttribute('href', '/trials/new-students?filter=unassigned')
+    expect(unassigned).toHaveClass('dash-tile--alert')
+    expect(within(section).getByRole('link', { name: /New students waiting for the parent/ })).toHaveAttribute(
+      'href',
+      '/trials/new-students?filter=waiting',
+    )
+  })
+
   it('is Arabic first: Arabic labels and digits, right to left', async () => {
     open(MANAGER, 'ar')
     expect(await screen.findByRole('heading', { level: 1, name: 'لوحة المتابعة' })).toBeInTheDocument()
