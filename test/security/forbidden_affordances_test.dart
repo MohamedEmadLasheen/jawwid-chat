@@ -183,8 +183,9 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // PD-30: every role has four tabs now -- a parent's fourth is Subscriptions.
-        expect(find.byType(NavigationDestination), findsNWidgets(4));
+        // PD-30: every role has four tabs -- a parent's fourth is Subscriptions. PD-39
+        // (2026-10-29) gave a teacher a fifth: Boards, the whiteboard.
+        expect(find.byType(NavigationDestination), findsNWidgets(role == UserRole.teacher ? 5 : 4));
       }
 
       expect(
@@ -193,7 +194,7 @@ void main() {
       );
       expect(
         Shells.forRole(UserRole.teacher).map((d) => d.route),
-        ['/chats', '/schedule', '/calls', '/settings'],
+        ['/chats', '/schedule', '/boards', '/calls', '/settings'],
       );
       // PD-20 (2026-10-22): Sales gets Chats, Calls, Payments and Settings -- no Schedule.
       expect(

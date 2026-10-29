@@ -9,6 +9,7 @@ import type { ChatConversation } from '@/features/chat/chatApi'
 import type { Cover, CoverPreview, Department } from './api'
 import { MyCoverBanner } from './CoverBanner'
 import { OrganizationPage } from './OrganizationPage'
+import { optionsOf } from '@/test/select'
 
 /**
  * PD-33 "Hand over to backup" in Admin Web, with `fetch` answered at the
@@ -89,9 +90,9 @@ describe('"I\'m away": the supervisor hands over in one step', () => {
     await userEvent.click(await screen.findByRole('button', { name: "I'm away" }))
     const dialog = await screen.findByRole('dialog', { name: 'Hand over Supervisor Noor to a backup' })
     const select = await within(dialog).findByLabelText('Backup')
-    expect((select as HTMLSelectElement).value).toBe('bk-1')
-    const options = within(select).getAllByRole('option') as HTMLOptionElement[]
-    expect(options.map((o) => [o.textContent, o.disabled])).toEqual([
+    expect(select).toHaveAttribute('data-value', 'bk-1')
+    const options = await optionsOf(userEvent, select)
+    expect(options.map((o) => [o.label, o.disabled])).toEqual([
       ['Backup Amira · linked backup', false],
       ['Backup Dalia — already covers 2 supervisors', true],
       // "I'm away" offers only a backup a manager linked (PD-8 canConfigureBackup).

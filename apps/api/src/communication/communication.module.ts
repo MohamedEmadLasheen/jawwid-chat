@@ -2,6 +2,7 @@ import { StaffToolsController } from './api/staff-tools.controller';
 import { StaffToolsService } from './staff-tools/staff-tools.service';
 import { StarredController } from './api/starred.controller';
 import { PresenceController } from './api/presence.controller';
+import { TypingController } from './api/typing.controller';
 import { PresencePolicy } from './realtime/presence-policy';
 import { ExportController } from './api/export.controller';
 import { ChatThemeController } from './api/chat-theme.controller';
@@ -101,6 +102,7 @@ import { SeatController } from './seats/seat.controller';
     ParentProfileController,
     SeatController,
     PresenceController,
+    TypingController,
   ],
   providers: [
     redisProvider,

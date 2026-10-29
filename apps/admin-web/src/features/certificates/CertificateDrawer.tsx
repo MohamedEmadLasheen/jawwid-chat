@@ -8,6 +8,7 @@ import { CERTIFICATE_ACCEPT, MAX_CERTIFICATE_BYTES, certificatesApi, type Certif
 import { C, actLabel, describeError, isCode, stateLabel, stateTone, useCopy, type Pair } from './copy'
 import { useCertificate, useCertificateAct, useConsent, useDeliveryTarget, useUploadDesign } from './hooks'
 import { RequestDialog } from './RequestDialog'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /** Acts that must say why (owner safeguard 2), and the route each one posts to. */
 const WITH_REASON: Partial<Record<CertificateAct, { path: string; field: 'reason' | 'message' }>> = {
@@ -322,7 +323,7 @@ function ConsentDialog({ certificate, contacts, onClose }: { certificate: Certif
         <>
           <label className="field">
             <span className="field__label">{tx(C.consentParent)}</span>
-            <select className="select" value={contactId} onChange={(e) => setContactId(e.target.value)}>
+            <SearchableSelect className="select" value={contactId} onValueChange={(v) => setContactId(v)}>
               <option value="" />
               {contacts.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -330,16 +331,16 @@ function ConsentDialog({ certificate, contacts, onClose }: { certificate: Certif
                   {p.relationship ? ` (${p.relationship})` : ''}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           </label>
           <label className="field">
             <span className="field__label">{tx(C.consentMethod)}</span>
-            <select className="select" value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
+            <SearchableSelect className="select" value={method} onValueChange={(v) => setMethod(v as typeof method)}>
               <option value="in_chat">{tx(C.m_in_chat)}</option>
               <option value="phone">{tx(C.m_phone)}</option>
               <option value="in_person">{tx(C.m_in_person)}</option>
               <option value="written">{tx(C.m_written)}</option>
-            </select>
+            </SearchableSelect>
           </label>
           {method === 'in_chat' && (
             <label className="field">

@@ -9,6 +9,7 @@ import { lessonLetters } from '@/features/materials/lessonAudio'
 import { LessonAudioPage } from './LessonAudioPage'
 import type { ClipPlayer } from './player'
 import type { UnitView } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-48: the Lesson audio review page. What these prove is the page's side of
@@ -157,10 +158,10 @@ describe('the Lesson audio page', () => {
     const confirm = within(clip).getByRole('button', { name: 'Confirm' }) as HTMLButtonElement
     expect(confirm.disabled).toBe(true)
     // Nothing is preselected: a reason alone does not confirm.
-    expect((within(clip).getByRole('combobox') as HTMLSelectElement).value).toBe('')
+    expect(within(clip).getByRole('combobox')).toHaveAttribute('data-value', '')
     await userEvent.type(within(clip).getByRole('textbox'), 'the last letter has a vowel')
     expect(confirm.disabled).toBe(true)
-    await userEvent.selectOptions(within(clip).getByRole('combobox'), 'final_sukun')
+    await chooseOption(userEvent, within(clip).getByRole('combobox'), 'final_sukun')
     await userEvent.click(confirm)
     await waitFor(() => expect(calls('POST', /\/reject$/)).toHaveLength(1))
     expect(JSON.parse(String((calls('POST', /\/reject$/)[0]![1] as RequestInit).body))).toEqual({

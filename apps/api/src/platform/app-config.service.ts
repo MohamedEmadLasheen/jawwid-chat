@@ -155,6 +155,12 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.receipt_cursor_actor': 240,
   /** initial hypothesis - PD-37 presence questions (GET /presence) per actor per window. */
   'abuse.throttle.presence_read_actor': 60,
+  /**
+   * initial hypothesis - PD-37 typing pings over HTTP per actor per window. A
+   * client pings every 3 s while typing (20 a minute) plus its stops. No seeded
+   * row: the compiled default applies until an operator adds one to tune it.
+   */
+  'abuse.throttle.typing_actor': 40,
   /** initial hypothesis - PD-29 Quran text reads (GET /quran/*) per actor per window. */
   'abuse.throttle.quran_read_actor': 120,
   /** initial hypothesis - PD-48 lesson voice-over lists (GET /lesson-audio/:lesson) per actor per window. */

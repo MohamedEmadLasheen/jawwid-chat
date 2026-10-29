@@ -1,6 +1,6 @@
 # PD-47: one Tasks page for everyone (plan)
 
-**State:** **APPROVED.** On 2026-10-28 the owner answered Q1–Q13 "Approve all 13 (Recommended)", relayed verbatim by the department head (§8). No feature code is written. PR-1 waits for the department head's GO (machine load).
+**State:** **DONE (2026-10-29).** Every PR in §7 and every source in §3.6 is on `main`, with the last one, PR-6c #275, merged at `f3e7f027`. One item is deferred: a Tasks screen on mobile for staff (Sales). §9 lists what shipped and what did not. Approved 2026-10-28: the owner answered Q1–Q13 "Approve all 13 (Recommended)", relayed verbatim by the department head (§8).
 **Claim:** `docs/product/pd-registry/PD-47.md`. **Migration slots, assigned by the department head:** PR-1 `20261029160000` (`chat_pd047_work_tasks`), PR-2 `20261029210000` (`chat_pd047_task_sources`; moved from `20261029170000`, released, so it runs after the priority amendment's PR-1b `20261029200000`), claimed in `docs/product/migration-slots/`. PR-4 asks for its own slot if it needs one.
 **Base:** `main` @ `08bfd9dd`. Paths are relative to the repository root. `mig/` is `supabase/migrations/`.
 **Frozen, not touched:** the call workstreams W1–W8; legacy `chat.task` (§1.1); Jawwid Core.
@@ -297,7 +297,7 @@ The **Needs action** page and the other source pages stay as they are. A task is
     - If the organization has exactly one live staff member given `certificates.design` by an explicit PD-40 access-role grant (for example the `designer` template), the unclaimed request goes straight to them. Two kinds of holder are not counted: PD-40's legacy bundle gives the key to the Teachers department's manager and supervisors, and the super admin holds every key (department head, 2026-10-29). They may all still design, so the hand-on picker lists every live holder.
     - Otherwise it goes to the overseer. The overseer, or the super admin, may hand that step by hand to a live `certificates.design` holder only (`chat.work_task_certificate_hand_on`; the guard allows exactly that). The sweep leaves a step handed to a Designer where it is.
     - When a Designer starts, the step closes and their own design step opens, as before.
-  - **The review step when the requester uploaded the design.** PD-41 forbids the uploader approving (`guard_appreciation_certificate`: "the person who uploaded a design does not approve it"). Approval is the requester of record's or their active PD-33 cover's (`chat.certificate_acts_as`). So the review task goes to that cover. With no cover, PD-41 leaves only a redesign or a cancel. **Open PD-41 question (department head, 2026-10-29; to the owner):** who approves when the requester of record uploaded the design and has no cover? PD-41 is unchanged in this PR, and the task stays with the requester.
+  - **The review step when the requester uploaded the design.** PD-41 forbids the uploader approving (`guard_appreciation_certificate`: "the person who uploaded a design does not approve it"). Approval is the requester of record's or their active PD-33 cover's (`chat.certificate_acts_as`). So the review task goes to that cover. With no cover, PD-41 leaves only a redesign or a cancel. **Decided by the owner on 2026-10-29 ("Their manager", PD-41 §15.3):** the category's overseer approves, so the review task goes to them, or to the super admin when the overseer uploaded it themself. The sweep reroutes review tasks that are already open. Migration `20261030010000`.
   - **The picker.** For a design hand-on, the Tasks page offers live Designers only and no department. For an orphan, the super admin is offered anyone live (`TaskService.assignees`, the same `rulesFor`).
   - **Spells begin when the supervisor is lost.** PD-43's `assign(null)` deletes the assignment row, so the records alone would date the spell from the teacher's creation. Triggers on the assignment (DELETE, and an UPDATE that leaves them unsupervised) and on `chat.staff` (a supervisor deactivated) open the spell at that moment. A supervisor cannot leave the Teachers department while holding teachers (PD-35), so that path needs no trigger.
   - **Orphans.** While the sweep has recorded a task as `orphaned:`, the super admin may hand it to anyone live, even a task that follows its source. The issue says so.
@@ -353,6 +353,24 @@ Migration `20261029235800_chat_pd047_phase_b_sources.sql`. The four set-up sourc
 - **Privacy (G-07):** the form's contents never reach a task. The title names the trial's prospect, read behind sign-in. `src/` still names `trial_subscription` only in `new-students/`.
 - **Spec:** `tasks-setup-pd047.spec.ts`.
 - **Admin Web:** each source links to where its work is done: New Students, or the teacher's file.
+
+#### 3.6.3 As built in PR-6c (slot `20261030000000`)
+
+Migration `20261030000000_chat_pd047_phase_b_decisions.sql`, with a fifth sweep, `chat.work_task_sweep_decisions()`. It follows the same review rules as PR-6a and PR-6b: the settle window, owners who leave, orphans for the super admin, and triggers that never block their source. All four sources are operational and Medium, and a person may reassign them.
+
+| Source | Key | Assignee | Due | Done (actor) | Withdrawn |
+|---|---|---|---|---|---|
+| `complaint` | the Teacher File entry | `work_task_teacher_owner` | filed + 48 h | a `complaint_resolution` refers to it (its author) | -- |
+| `feedback` | the parent's feedback | as above | filed + 48 h | `status = 'resolved'` (`responded_by`) | -- |
+| `schedule_change` | the request | the child's teacher's owner | asked + 48 h | approved / rejected (`decided_by`) | the family withdraws it |
+| `makeup_owed` | the episode: the lesson, or its chain's last dead make-up | the lesson's teacher's owner | its end + `lesson.makeup_window_days` | a make-up booked anywhere in its chain (its booker; the system for a family), or a `makeup_followup` ruling DECIDED (`decided_by`); a pending ruling keeps it owed | the outcome corrected away |
+
+- **`feedback`, not `parent_feedback`.** PD-32 confines every reader of a parent's feedback in `src/` to `teacher-file` (`parent-feedback-confinement.spec.ts`), because the teacher must never see it. So Tasks reads one only through two SQL helpers: `chat.work_task_feedback_teacher` (the teacher it is about) and `chat.work_task_feedback_title` (the names its title shows). It never reads the words or who filed it. The key is `feedback:<id>`.
+- **A parent's complaint raises one task:** its PD-26 complaint entry's. The feedback source covers praise and suggestions only.
+- **One rule for owed make-ups: the supervisor follow-up's.** `chat.lesson_owes_makeup(lesson, causes)` is the rule, and `LessonService.owedMakeups` now calls it too.
+  - **Revised by the department head, 2026-10-29** (correcting answer 2). This is a supervisor task, so its causes, `chat.work_task_makeup_causes()`, are `owedMakeups`' default, `TEACHER_MAKEUP_CAUSES`. A family's own apology owes a make-up but is never escalated, so it raises no task. A unit spec holds the SQL list to the constant. An integration spec proves the set of lessons with an open task equals `owedMakeups()`' set.
+  - **Make-up chains** (department head review of #275). A missed make-up may itself be made up (`makeup_for` = that make-up). The task finds its original lesson up the chain (`chat.work_task_makeup_original`), and a booking anywhere in the chain after its episode began completes it. Without this, the missed make-up's task could never close. `assertOwed` is unchanged.
+- **A family's booking names nobody the task log can.** The system completes the task, so the guard adds `makeup_owed` to the sources that may complete without an actor.
 
 ### 3.7 Manual tasks, and who is responsible
 
@@ -594,3 +612,40 @@ Every recommendation below is therefore the decision. The table keeps each quest
 | **Q11** | The assignee is deactivated (staff) or offboarded (teacher). | **Tasks stay assigned**, flagged "Needs reassignment" for the responsible manager and on the Dashboard. PD-43's offboarding preview lists open tasks as a **warning, not a block**. |
 | **Q12** | Does a completed manual task need the manager's confirmation? | **No.** The assignee completes it, with an optional note (your exit 1). The manager sees it in the history and can create a follow-up. |
 | **Q13** | How long are closed tasks kept? | **For ever, never deleted.** The Closed tab shows the last 90 days by default; the super admin can search all of them. |
+
+---
+
+## 9. Close-out (2026-10-29)
+
+**Shipped, all on `main`:**
+
+| PR | What | Migration | Merged |
+|---|---|---|---|
+| #220 | This plan | -- | `fd8422dd` |
+| #228 | PR-1: the task model, the four exits, append-only history | `20261029160000` | `b1436968` |
+| #233 | The priority amendment (plan rev 2) | -- | `7700237e` |
+| #238 | PR-1b: priority, effective level at read time, urgency sort, financial tier | `20261029200000` | `ff614d11` |
+| #241 | PR-2: Phase A sources (lesson report, correction, ruling, leave, violation, case) | `20261029210000` | `54a7ad54` |
+| #244 | PR-2b: financial sources (instalment, package low, renewal, receipt, card payment) | `20261029233000` | `d53bb848` |
+| #246 | PR-3: the Admin Web Tasks page | -- | `64f427fc` |
+| #248 | PR-5: the teacher's To do on the Schedule tab (app and teacher web) | -- | `400b056b` |
+| #257 | PR-4: delivery, PD-34 notifications, `/dashboard/tasks` | `20261029234000` | `9094dcb7` |
+| #267 | PR-7: the action log gains task events | -- | `4067ce64` |
+| #269 | PR-6a: set-up sources (family without supervisor, teacher set-up, new family to assign and to group) | `20261029235800` | `a50c6da8` |
+| #271 | PR-6b: hand-over sources (teacher without supervisor, trial attendance and outcome, certificate steps) | `20261029235900` | `4f2d33fa` |
+| #275 | PR-6c: decision sources (complaint, parent feedback, schedule change, make-up owed) | `20261030000000` | `f3e7f027` |
+
+- **Every signal in §1.2 that needs a person** is now a task with one assignee and the four exits. Its source completes it, attributed to whoever did the work.
+- **Replaced, as the owner decided:**
+  - the renewal push to every Sales member (Q-F6);
+  - PD-43's two notices to the Teachers manager;
+  - PD-41's four certificate notifications.
+- **Related, outside PD-47:** PD-41's #274 (`b2d35428`) decided who reviews a design its requester uploaded: the overseer, or the super admin when the overseer uploaded it. Its migration redefines `chat.work_task_certificate_assignee`.
+
+**Deferred, not built:**
+- **A Tasks screen on mobile for staff (Sales).** §3.12: "Staff on mobile (Sales) come later." Staff use the Admin Web Tasks page; only teachers have the mobile To do. It needs its own plan and the department head's GO.
+
+**Left as they were, by decision:**
+- Legacy `chat.task` stays frozen and untouched (§2); removing it is a separate decision.
+- A teacher reactivated after their withdrawn set-up task was acknowledged gets no second task (§3.6.2). The PD-43 set-up list shows them.
+- A Designer who claims a request is told of the step they just took (§3.6, known noise).

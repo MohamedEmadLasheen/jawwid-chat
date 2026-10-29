@@ -28,6 +28,8 @@ import '../features/stories/presentation/story_viewer_screen.dart';
 import '../features/student_profile/presentation/student_profile_screen.dart';
 import '../features/supervision/presentation/my_leave_screen.dart';
 import '../features/teacher_profile/presentation/teacher_profile_screen.dart';
+import '../features/whiteboards/presentation/board_editor_screen.dart';
+import '../features/whiteboards/presentation/boards_screen.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
@@ -77,6 +79,10 @@ abstract final class Routes {
 
   /// PD-12: a teacher's own leave balance and requests.
   static const myLeave = '/settings/leave';
+
+  /// PD-39: the teacher's Boards tab, and one board full screen.
+  static const boards = '/boards';
+  static String board(String boardId) => '$boards/$boardId';
 
   /// The viewer's starred messages (their private bookmarks).
   static const starred = '/settings/starred';
@@ -221,6 +227,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) => _still(state, const SalesPaymentsScreen()),
           ),
           GoRoute(
+            path: Routes.boards,
+            pageBuilder: (context, state) => _still(state, const BoardsScreen()),
+          ),
+          GoRoute(
             path: Routes.subscriptions,
             pageBuilder: (context, state) => _still(state, MyPaymentsScreen(
               // A fresh key per child asked for, so following the banner again
@@ -230,6 +240,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             )),
           ),
         ],
+      ),
+      // PD-39: a board opens full screen, above the tab bar: the page needs the room.
+      GoRoute(
+        path: '${Routes.boards}/:boardId',
+        pageBuilder: (context, state) => _page(state, BoardEditorScreen(boardId: state.pathParameters['boardId']!)),
       ),
       // Conversations open full-screen, above the tab bar, so the thread gets the whole
       // viewport — the composer and keyboard already claim a large share of a small screen.
@@ -444,6 +459,12 @@ String? _redirect(Ref ref, String location) {
   // The Schedule is a teacher's (PD-10). A parent following a stale or shared link lands
   // on their chats, where their children's lessons already arrive as cards.
   if (location == Routes.schedule && ref.read(currentRoleProvider) != UserRole.teacher) {
+    return Routes.chats;
+  }
+
+  // PD-39: Boards are a teacher's. Anyone else following a link lands on their chats;
+  // the server refuses them regardless.
+  if ((location == Routes.boards || location.startsWith('${Routes.boards}/')) && ref.read(currentRoleProvider) != UserRole.teacher) {
     return Routes.chats;
   }
 

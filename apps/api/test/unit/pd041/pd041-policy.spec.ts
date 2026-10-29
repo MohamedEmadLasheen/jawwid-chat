@@ -137,6 +137,24 @@ describe('PD-41: the acts on one certificate', () => {
     expect(allowedActs(both, { ...r, uploadedCurrent: false })).toContain(CertificateAct.APPROVE);
   });
 
+  it('"Their manager": the overseer approves when the requester uploaded it and has no cover (owner, 2026-10-29)', () => {
+    const uploaded = rel({ state: CertificateState.UPLOADED, overseerApproves: true });
+    // Only the approval: the overseer still never sends, publishes or asks for a redesign of someone else's request.
+    expect(allowedActs(manager, uploaded).sort()).toEqual([CertificateAct.APPROVE, CertificateAct.CANCEL].sort());
+    expect(allowedActs(manager, { ...uploaded, state: CertificateState.APPROVED })).toEqual([CertificateAct.CANCEL]);
+    // A supervisor without oversight, and the other category's overseer, do not.
+    expect(allowedActs(ops, uploaded)).not.toContain(CertificateAct.APPROVE);
+    expect(allowedActs(manager, { ...uploaded, category: 'teacher' })).not.toContain(CertificateAct.APPROVE);
+    const teachersManager = certificateAccessFrom(keys(...TEACHERS_MEMBER, 'certificates.oversee'));
+    expect(allowedActs(teachersManager, { ...uploaded, category: 'teacher' })).toContain(CertificateAct.APPROVE);
+    // With a cover the case does not hold: the cover approves, the overseer does not.
+    expect(allowedActs(manager, { ...uploaded, overseerApproves: false })).not.toContain(CertificateAct.APPROVE);
+    expect(allowedActs(ops, rel({ state: CertificateState.UPLOADED, actsAsRequester: true }))).toContain(CertificateAct.APPROVE);
+    // The uploader never approves, overseer or not.
+    expect(allowedActs(manager, { ...uploaded, uploadedCurrent: true })).not.toContain(CertificateAct.APPROVE);
+    expect(allowedActs(manager, { ...uploaded, actsAsRequester: true, uploadedCurrent: true })).not.toContain(CertificateAct.APPROVE);
+  });
+
   it('a Story is offered only after approval, only when the request opted in, and only once (safeguards 3 and 4)', () => {
     expect(allowedActs(ops, rel({ state: CertificateState.UPLOADED, actsAsRequester: true, publishStory: true }))).not.toContain(CertificateAct.STORY);
     expect(allowedActs(ops, rel({ state: CertificateState.APPROVED, actsAsRequester: true, publishStory: false }))).not.toContain(CertificateAct.STORY);

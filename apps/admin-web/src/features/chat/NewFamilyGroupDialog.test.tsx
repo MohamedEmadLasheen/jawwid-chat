@@ -5,6 +5,7 @@ import { Route, Routes } from 'react-router-dom'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { CandidateFamily } from '@/features/organization/api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-8 family-group creation from the chat workspace. The picker shows what
@@ -81,7 +82,7 @@ async function openDialog() {
   await userEvent.click(await screen.findByRole('button', { name: 'New chat or group' }))
   await userEvent.click(await screen.findByRole('menuitem', { name: 'New family group' }))
   const dialog = await screen.findByRole('dialog')
-  await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: 'Family' }), 'f-1')
+  await chooseOption(userEvent, await within(dialog).findByRole('combobox', { name: 'Family' }), 'f-1')
   return dialog
 }
 
