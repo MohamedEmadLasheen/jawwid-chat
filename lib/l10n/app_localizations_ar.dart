@@ -1300,6 +1300,12 @@ class L10nAr extends L10n {
   String get cardReason => 'السبب';
 
   @override
+  String get ticketCategoryLabel => 'السبب (يظهر في المجموعة)';
+
+  @override
+  String get ticketCategoryStaffLabel => 'السبب (للإدارة والمعلم فقط)';
+
+  @override
   String get cardMakeupLesson => 'الحصة التعويضية';
 
   @override
@@ -1307,6 +1313,33 @@ class L10nAr extends L10n {
 
   @override
   String get cardStaffReason => 'السبب (للإدارة والمعلم فقط)';
+
+  @override
+  String get cardStaffNote => 'ملاحظة (للإدارة والمعلم فقط)';
+
+  @override
+  String get cardFamilyDetails => 'تفاصيل من الأسرة (للإدارة والمعلم فقط)';
+
+  @override
+  String get excuseCategoryTravel => 'سفر';
+
+  @override
+  String get excuseCategoryIllness => 'مرض';
+
+  @override
+  String get excuseCategoryExams => 'امتحانات';
+
+  @override
+  String get excuseCategoryEmergency => 'ظرف طارئ';
+
+  @override
+  String get excuseCategoryOther => 'أخرى';
+
+  @override
+  String get ticketFamilyNoteOptional => 'ملاحظة للمعلم والإدارة (اختياري)';
+
+  @override
+  String get ticketFamilyDetails => 'تفاصيل للمعلم والإدارة';
 
   @override
   String get ticketBookMakeup => 'حجز حصة التعويض';
@@ -4758,4 +4791,13 @@ class L10nAr extends L10n {
   @override
   String get boardSaveFirst =>
       'يجب حفظ تغييراتك أولًا. حاول مرة أخرى عندما تظهر عبارة «محفوظ».';
+
+  @override
+  String get pickerSearchHint => 'اكتب للبحث';
+
+  @override
+  String get pickerNoMatches => 'لا توجد نتائج مطابقة';
+
+  @override
+  String get materialsAgeLabel => 'العمر';
 }

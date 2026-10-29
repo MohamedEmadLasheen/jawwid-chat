@@ -47,7 +47,7 @@ ol.play-cards { list-style: none; margin: 0; padding: 0; }
 /* Recall (PR-B): the blank being asked is marked by its line and its name, a hidden word is a box to touch, a first letter is a cue. */
 .play__slot--now { border-block-end-color: var(--accent); border-block-end-width: 4px; }
 .play__slot .play__slot--empty { display: inline-block; min-inline-size: 3.5rem; border-block-end: 3px solid var(--muted); }
-.play__hidden { display: inline-flex; align-items: center; justify-content: center; min-inline-size: 3rem; min-block-size: 44px; vertical-align: middle; background: var(--page); border: 2px dashed var(--muted); border-radius: 0.5rem; cursor: pointer; color: inherit; }
+.play__hidden { display: inline-flex; align-items: center; justify-content: center; min-inline-size: 52px; min-block-size: 52px; vertical-align: middle; background: var(--page); border: 2px dashed var(--muted); border-radius: 0.5rem; cursor: pointer; color: inherit; }
 .play__hidden:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .play__cue { font-size: 1.2rem; font-weight: 600; color: var(--muted); }
 .play-number { min-inline-size: 64px; font-family: inherit; font-size: 1.5rem; }

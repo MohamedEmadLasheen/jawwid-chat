@@ -34,6 +34,13 @@ describe('word helpers', () => {
     expect(splitMark('حاء ۚ')).toEqual({ word: 'حاء', mark: 'ۚ' });
     expect(splitMark('حاء')).toEqual({ word: 'حاء', mark: '' });
     expect(skeleton('كَاف')).toBe(skeleton('كاف'));
+    // Letters a child reads alike are one.
+    expect(skeleton('إِنَّ')).toBe(skeleton('أَنَّ'));
+    expect(skeleton('مِنْ')).toBe(skeleton('مَنْ'));
+    expect(skeleton('ٱلْهُدَىٰ')).toBe(skeleton('الهدي'));
+    expect(skeleton('رَحْمَةً')).toBe(skeleton('رحمه'));
+    expect(skeleton('سُؤَال')).toBe(skeleton('سوال'));
+    expect(skeleton('شَىْـًٔا')).toBe(skeleton('شيا'));
     expect(firstLetter('ٱللَّهُ')).toBe('ٱ');
   });
 });
@@ -76,6 +83,63 @@ describe('Complete the ayah (أكمل الآية)', () => {
       }
     }
     expect(asked).toBeGreaterThan(0);
+  });
+
+  it('never offers a word that looks like the answer: إِنَّ and أَنَّ are never choices together', () => {
+    const alike = ['قاف إِنَّ لام ميم', 'باء أَنَّ تاء ثاء', 'جيم حاء خاء دال', 'راء زاي سين شين', 'صاد ضاد طاء ظاء']
+      .map((text, i) => ({ ayah: i + 1, text, basmala: null, sha256: '' }));
+    let asked = 0;
+    for (let seed = 0; seed < 60; seed++) {
+      for (const g of planGaps(alike.slice(0, 2), alike, '6-8', seed)) {
+        for (const b of g.blanks) {
+          if (b.at !== 1) continue;
+          asked++;
+          expect(b.options.filter((o) => skeleton(o) === skeleton('إن'))).toEqual([b.word]);
+        }
+      }
+    }
+    expect(asked).toBeGreaterThan(0);
+  });
+
+  it("9-12: no word of the ayah is a wrong choice -- not its other hidden word, not one on its line", () => {
+    // Ayah 2 has ayah 1's words in another order, and is its nearest neighbour (stand-ins).
+    const shuffledWords = [{ ayah: 1, text: 'ألف باء تاء ثاء' }, { ayah: 2, text: 'ثاء تاء باء ألف' }, ...TEXTS.slice(2).map((text, i) => ({ ayah: i + 3, text }))]
+      .map((a) => ({ ...a, basmala: null, sha256: '' }));
+    for (let seed = 0; seed < 40; seed++) {
+      for (const g of [...planGaps(AYAHS, AYAHS, '9-12', seed), ...planGaps([shuffledWords[0]!], shuffledWords, '9-12', seed)]) {
+        const own = new Set(g.tiles.map((t) => skeleton(splitMark(t).word)));
+        for (const b of g.blanks) for (const o of b.options.filter((o) => o !== b.word)) expect(own.has(skeleton(o))).toBe(false);
+      }
+    }
+  });
+
+  it('the same word twice in one ayah: it is the answer once, and never a wrong choice', () => {
+    const twice = [{ ayah: 1, text: 'باء تاء باء ثاء' }, ...TEXTS.slice(1).map((text, i) => ({ ayah: i + 2, text }))].map((a) => ({ ...a, basmala: null, sha256: '' }));
+    for (let seed = 0; seed < 40; seed++) {
+      for (const g of planGaps([twice[0]!], twice, '6-8', seed)) {
+        const b = g.blanks[0]!;
+        expect(b.options.filter((o) => skeleton(o) === skeleton('باء')).length).toBeLessThanOrEqual(1);
+        if (b.word === 'باء') expect(b.options.filter((o) => o === 'باء')).toHaveLength(1);
+      }
+    }
+  });
+
+  it('a long surah (L5): blanks and choices in its later segments, all from the surah', () => {
+    const letters = ['باء', 'تاء', 'ثاء', 'جيم', 'حاء', 'خاء', 'دال', 'ذال', 'راء', 'زاي', 'سين', 'شين', 'صاد', 'ضاد', 'طاء', 'ظاء'];
+    const long = Array.from({ length: 140 }, (_, i) => ({
+      ayah: i + 1,
+      text: Array.from({ length: 4 + (i % 3) }, (_, k) => letters[(i * 7 + k * 5) % letters.length]).join(' '),
+      basmala: null,
+      sha256: '',
+    }));
+    const words = new Set(long.flatMap((a) => tilesOf(a.text)));
+    const seg = long.slice(120, 128);
+    const gaps = planGaps(seg, long, '9-12', 9);
+    expect(gaps.length).toBeGreaterThan(0);
+    for (const g of gaps) {
+      expect(g.ayah.ayah).toBeGreaterThan(120);
+      for (const b of g.blanks) for (const o of b.options) expect(words).toContain(o);
+    }
   });
 
   it('9-12: two blanks, filled in reading order, four choices each', () => {
@@ -155,6 +219,16 @@ describe('The fading ayah (المحو التدريجي)', () => {
     expect(cues.sort()).toEqual(tilesOf(TEXTS[0]!).map(firstLetter).sort());
     // No word of the ayah is on the line any more.
     for (const w of tilesOf(TEXTS[0]!)) expect(line()).not.toContain(w);
+  });
+
+  it('a one-letter word (as نٓ) is its own cue, with its marks', () => {
+    const nun = { ayah: 1, basmala: null, text: 'نٓ باء تاء', sha256: '' };
+    render(<FadingAyah {...props({ ayahs: [nun], pool: [nun], band: '9-12' })} />);
+    for (let i = 0; i < 2; i++) fireEvent.click(screen.getByRole('button', { name: 'أخفِ كلمات أكثر' }));
+    fireEvent.click(screen.getByRole('button', { name: 'أبقِ أوائل الحروف فقط' }));
+    const cues = [...document.querySelectorAll('.play__cue')].map((c) => c.textContent);
+    expect(cues).toContain('الكلمة: نٓ');
+    expect(cues.filter((c) => c!.startsWith('أول حرف'))).toHaveLength(2);
   });
 });
 

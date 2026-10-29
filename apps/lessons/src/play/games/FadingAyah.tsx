@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { shuffled } from '../../games/shuffle';
 import type { Band } from '../../content/quran-content';
 import type { Ayah } from '../../quran/dataset';
-import { GameEnd, VerseCard, arabic, firstLetter, splitMark, tilesOf, type GameProps } from './common';
+import { GameEnd, VerseCard, arabic, firstLetter, skeleton, splitMark, tilesOf, type GameProps } from './common';
 
 /**
  * The fading ayah (المحو التدريجي), 6-8 and 9-12: the ayah is shown whole; the child
@@ -98,10 +98,18 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
                 <span className="play__slot">
                 <button type="button" className="play__hidden" onClick={() => setPeeked(new Set([...peeked, i]))}>
                   {letters ? (
-                    <span className="play__cue">
-                      <span className="sr-only">أول حرف: </span>
-                      {firstLetter(word)}
-                    </span>
+                    // A one-letter word (as نٓ) is its own cue: a bare letter would drop its marks.
+                    skeleton(word).length <= 1 ? (
+                      <span className="play__cue">
+                        <span className="sr-only">الكلمة: </span>
+                        {word}
+                      </span>
+                    ) : (
+                      <span className="play__cue">
+                        <span className="sr-only">أول حرف: </span>
+                        {firstLetter(word)}
+                      </span>
+                    )
                   ) : (
                     <span className="sr-only">كلمة مخفية، المسها لتراها</span>
                   )}

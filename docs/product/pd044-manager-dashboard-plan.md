@@ -194,6 +194,10 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
 
 ### 3.4 `GET /dashboard/enrolment` · `@Requires('trials.view', 'new_students.view')`
 
+> **As built (PR-4):** the tiles are `trials.awaiting`, `trials.upcoming`, `new_students.unassigned` and `new_students.waiting`. They mirror the Trials page's "Needs an outcome" and "Upcoming" tabs, over its default ±31-day window, and the New Students page's "Not assigned" and "Waiting for the parent" filters. Two tiles below were not built, because no page lists them (§9.1):
+> - `trials.today`: the Trials page has no "today" tab, so "Upcoming" replaces it;
+> - `prospects.unbooked`: prospects appear only in the booking dialog's picker.
+
 | Tile | Predicate | Who |
 |---|---|---|
 | `trials.today` | trial lessons starting today, not cancelled | trial scope (`trial.service.ts:201`) |
@@ -476,4 +480,6 @@ PR-3 to PR-7 are independent of each other once PR-2 is in. The order above is a
 
 - **The Cases page's "Opened by me" tab has no tile.** That list re-checks every row with `canSee` (whether the opener still stands to the subject, `supervision-case.service.ts`), and that check cannot be bounded to a fixed number of statements. `cases.mine_open`, `cases.department_open` and `cases.overdue` count the other two tabs exactly (PR-1, #211).
 - **The Chat list's "Waiting for a reply" shows at most the list's 200 most recent conversations, plus open mentions.** The tile's count is exact, so above 200 the two can differ. At today's scale no manager's scope reaches 200.
+- **No tile counts prospects without a booked trial** (PR-4). No page lists prospects; they appear only in the booking dialog's picker. A tile would link nowhere, so it waits for a prospects list.
+- **The trial and New Students tiles count what their pages list.** That is the Trials page's ±31-day default window (an awaiting trial older than 31 days is on neither) and the New Students page's 500 newest live forms. `capped` says when either limit is passed.
 - **The super admin still opens `/dashboard` as a page of its own** (the same sections) until PR-8 moves them into the Admin Portal's Dashboard section and redirects.
