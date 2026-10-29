@@ -12,9 +12,12 @@
  *                        withdrawn (and back) with the outcome's corrections
  *   new_student_group    a new family without its group: the children's
  *                        supervisor's; done when the group is opened
- *   every one            raised by the sweep, announced once (task_assigned,
- *                        ids only), and never raised for what is settled in
- *                        the same request
+ *   every one            raised by the sweep once the occurrence is past the
+ *                        settle window, announced once (task_assigned, ids
+ *                        only), never raised for what is settled in the same
+ *                        request; a source's write stands even when its task
+ *                        cannot be settled; a task whose assignee left moves
+ *                        to the owner now, or is recorded as orphaned
  *
  * Synthetic fixtures only (G-16).
  */
@@ -30,7 +33,7 @@ import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.ser
 import { OrgStructureService } from '../../src/org/org-structure.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { TaskService } from '../../src/tasks/task.service';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, seed, supervise, truncate, Scenario } from './harness';
 
 jest.setTimeout(120_000);
 
@@ -70,7 +73,7 @@ const pushes = (taskId: string) =>
   g.prisma.notification.findMany({ where: { templateKey: 'task_assigned', dedupeKey: { startsWith: `task_assigned:${taskId}:` } } });
 
 /** A trial an hour or more ago, for which Sales recorded "subscribed" with a form (as PD-16's spec). */
-async function subscribedTrial(): Promise<string> {
+async function subscribedTrial(parentEmail?: string): Promise<string> {
   trialsMade += 1;
   const prospectId = (await trials.createProspect(salesId, { displayName: `prospect_${randomUUID().slice(0, 6)}` })).id;
   const startsAt = new Date(Date.now() - (60 + 60 * trialsMade) * MIN);
@@ -81,13 +84,14 @@ async function subscribedTrial(): Promise<string> {
       createdByKind: 'staff', createdBy: salesId,
     },
   });
-  await trials.outcome(salesId, lesson.id, { result: 'subscribed', subscription: form() });
+  await trials.outcome(salesId, lesson.id, { result: 'subscribed', subscription: form(parentEmail) });
   return lesson.id;
 }
 
-function form() {
+/** A subscription form; the same parent e-mail makes a sibling of that parent's family (PD-42 PR-3). */
+function form(parentEmail = `parent.${randomUUID().slice(0, 8)}@example.test`) {
   return {
-    parent: { name: 'parent_t', email: `parent.${randomUUID().slice(0, 8)}@example.test`, phone: '+99 000 555 666' },
+    parent: { name: 'parent_t', email: parentEmail, phone: '+99 000 555 666' },
     children: [
       { name: 'child_t1', age: 9, course: 'course_t', teacherId: s.teacherId, packagePrice: 1000, lessonPrice: 125,
         schedule: [{ weekday: 2, time: '17:00' }] },
@@ -139,10 +143,33 @@ async function finishSetup(teacherId: string) {
   await exec(`insert into chat.teacher_professional_profile (teacher_id) values ($1::uuid)`, teacherId);
 }
 
+/** The settle window as this suite found it (restored after): 0 here, so a sweep sees what a test just wrote. */
+let windowBefore: unknown;
+const settleWindow = (seconds: number) =>
+  exec(`insert into chat.config (key, value) values ('tasks.raise_after_seconds', to_jsonb($1::int))
+        on conflict (key) do update set value = excluded.value`, seconds);
+/** Runs fn while every change to a task is refused: a trigger's settle fails as a guard rejection would. */
+async function refusingTaskChanges(fn: () => Promise<unknown>) {
+  await exec(`alter table chat.work_task add constraint pd047_spec_refuses_changes check (revision < 0) not valid`);
+  try {
+    await fn();
+  } finally {
+    await exec(`alter table chat.work_task drop constraint pd047_spec_refuses_changes`);
+  }
+}
+const issueFor = async (key: string) =>
+  (await g.prisma.$queryRaw<Array<{ reason: string }>>`SELECT reason FROM chat.work_task_source_issue WHERE source_key = ${key}`)[0]?.reason;
+const sourceStateOf = async (id: string) =>
+  (await g.prisma.$queryRaw<Array<{ state: string; source_state: string }>>`
+    SELECT state, source_state FROM chat.work_task WHERE id = ${id}::uuid`)[0];
+
 beforeAll(async () => {
   await g.prisma.$connect();
+  windowBefore = (await g.prisma.$queryRaw<Array<{ value: unknown }>>`SELECT value FROM chat.config WHERE key = 'tasks.raise_after_seconds'`)[0]?.value;
 });
 afterAll(async () => {
+  if (windowBefore === undefined) await exec(`delete from chat.config where key = 'tasks.raise_after_seconds'`);
+  else await exec(`update chat.config set value = $1::jsonb where key = 'tasks.raise_after_seconds'`, JSON.stringify(windowBefore));
   await truncate(g.prisma);
   await g.prisma.$disconnect();
 });
@@ -176,6 +203,7 @@ beforeEach(async () => {
     await exec(`insert into chat.config (key, value) values ($1, to_jsonb('2000-01-01T00:00:00Z'::text))
                 on conflict (key) do update set value = excluded.value`, `tasks.since.${src}`);
   }
+  await settleWindow(0);
 });
 
 // ---------------------------------------------------------------------------
@@ -197,6 +225,33 @@ describe('a family waiting for its Operations supervisor', () => {
     );
     expect(await tasks.get(s.managerId, id)).toMatchObject({ state: 'completed', outcome: 'done' });
     expect((await completion(id))?.actor).toMatchObject({ kind: 'staff', id: s.managerId });
+  });
+
+  it('an academy import places the child naming nobody: the system completes it', async () => {
+    const child = await waitingChild();
+    await tasks.sweep();
+    const id = (await taskFor(`family_unsupervised:${s.familyId}`)) as string;
+    // The harness's supervise() is the academy's import gate: it names nobody.
+    await supervise(g.prisma, s.ownerId, [child]);
+    expect(await tasks.get(s.managerId, id)).toMatchObject({ state: 'completed', outcome: 'done' });
+    expect((await completion(id))?.actor ?? null).toBeNull();
+  });
+
+  it('a placement stands even when its task cannot be settled; the sweep settles it after', async () => {
+    const child = await waitingChild();
+    await tasks.sweep();
+    const key = `family_unsupervised:${s.familyId}`;
+    const id = (await taskFor(key)) as string;
+    await refusingTaskChanges(() => exec(
+      `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`, child, s.ownerId, s.managerId,
+    ));
+    expect(await g.prisma.learnerSupervision.findUnique({ where: { learnerId: child } })).toMatchObject({ supervisorId: s.ownerId });
+    expect(await sourceStateOf(id)).toEqual({ state: 'open', source_state: 'pending' });
+    expect(await issueFor(key)).toEqual(expect.any(String));
+    await exec(`delete from chat.work_task_source_issue where source_key = $1`, key);
+    await tasks.sweep();
+    expect(await tasks.get(s.managerId, id)).toMatchObject({ state: 'completed', outcome: 'done' });
   });
 
   it('a family entered with its supervisor in one go raises nothing', async () => {
@@ -247,6 +302,36 @@ describe('a teacher still being set up', () => {
     await tasks.acknowledge(tmgr, id);
     expect(await tasks.get(tmgr, id)).toMatchObject({ state: 'completed', outcome: 'acknowledged' });
   });
+
+  it('a teacher reactivated with the set-up unfinished is owed again, while the withdrawn task is open', async () => {
+    const t = await newTeacher();
+    await tasks.sweep();
+    const id = (await taskFor(`teacher_setup:${t}`)) as string;
+    await exec(`update chat.teacher set is_active = false, left_at = now() where id = $1::uuid`, t);
+    await tasks.sweep();
+    expect(await tasks.get(tmgr, id)).toMatchObject({ state: 'open', sourceState: 'withdrawn' });
+    await exec(`update chat.teacher set is_active = true, left_at = null where id = $1::uuid`, t);
+    await tasks.sweep();
+    expect(await tasks.get(tmgr, id)).toMatchObject({ state: 'open', sourceState: 'pending' });
+  });
+
+  it('an owner who leaves: orphaned while nobody live follows, then moved to the new owner', async () => {
+    const t = await newTeacher();
+    await tasks.sweep();
+    const key = `teacher_setup:${t}`;
+    const id = (await taskFor(key)) as string;
+    await exec(`update chat.department set manager_id = null where kind = 'teachers'`);
+    await exec(`update chat.staff set is_active = false, left_at = now() where id = $1::uuid`, tmgr);
+    await tasks.sweep();
+    expect(await issueFor(key)).toMatch(/^orphaned:/);
+
+    const tmgr2 = randomUUID();
+    await exec(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'tmgr2_s', 'manager', true)`, tmgr2);
+    await exec(`update chat.department set manager_id = $1::uuid where kind = 'teachers'`, tmgr2);
+    await tasks.sweep();
+    expect(await tasks.get(tmgr2, id)).toMatchObject({ state: 'open', assignee: { kind: 'staff', id: tmgr2 } });
+    expect(await issueFor(key)).toBeUndefined();
+  });
 });
 
 describe('a new family from a trial', () => {
@@ -262,6 +347,58 @@ describe('a new family from a trial', () => {
     await enrolment.assign(s.managerId, trial, { supervisorId: s.ownerId });
     expect(await tasks.get(s.managerId, id)).toMatchObject({ state: 'completed', outcome: 'done' });
     expect((await completion(id))?.actor).toMatchObject({ kind: 'staff', id: s.managerId });
+  });
+
+  it('an assignment and a correction stand even when their task cannot be moved', async () => {
+    const trial = await subscribedTrial();
+    const other = await subscribedTrial();
+    await tasks.sweep();
+    const [assignId, otherId] = [(await taskFor(`new_student_assign:${trial}`)) as string, (await taskFor(`new_student_assign:${other}`)) as string];
+    await refusingTaskChanges(async () => {
+      await enrolment.assign(s.managerId, trial, { supervisorId: s.ownerId });
+      await trials.correct(salesId, other, { result: 'not_subscribed', reason: 'chose_other', why: 'the family cancelled' });
+    });
+    expect(await g.prisma.studentEnrolment.findFirst({ where: { lessonId: trial } })).not.toBeNull();
+    expect(await sourceStateOf(assignId)).toEqual({ state: 'open', source_state: 'pending' });
+    expect(await sourceStateOf(otherId)).toEqual({ state: 'open', source_state: 'pending' });
+    expect(await issueFor(`new_student_assign:${trial}`)).toEqual(expect.any(String));
+    expect(await issueFor(`new_student_assign:${other}`)).toEqual(expect.any(String));
+    await exec(`delete from chat.work_task_source_issue where source_key like 'new_student_assign:%'`);
+    await tasks.sweep();
+    expect(await sourceStateOf(assignId)).toMatchObject({ state: 'completed' });
+    expect(await sourceStateOf(otherId)).toEqual({ state: 'open', source_state: 'withdrawn' });
+  });
+
+  it('a group opened while its task cannot be settled still opens', async () => {
+    const trial = await subscribedTrial();
+    await enrolment.assign(s.managerId, trial, { supervisorId: s.ownerId });
+    await tasks.sweep();
+    const [{ id: enrolmentId }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.student_enrolment WHERE lesson_id = ${trial}::uuid`;
+    const id = (await taskFor(`new_student_group:${enrolmentId}`)) as string;
+    await refusingTaskChanges(() => enrolment.createGroup(s.ownerId, trial));
+    expect((await g.prisma.studentEnrolment.findUniqueOrThrow({ where: { id: enrolmentId } })).groupConversationId).not.toBeNull();
+    expect(await sourceStateOf(id)).toEqual({ state: 'open', source_state: 'pending' });
+    await exec(`delete from chat.work_task_source_issue where source_key = $1`, `new_student_group:${enrolmentId}`);
+    await tasks.sweep();
+    expect(await sourceStateOf(id)).toMatchObject({ state: 'completed' });
+  });
+
+  it('children added to an existing family raise no group task: only a new family opens one', async () => {
+    const parentEmail = `parent.${randomUUID().slice(0, 8)}@example.test`;
+    const first = await subscribedTrial(parentEmail);
+    await enrolment.assign(s.managerId, first, { supervisorId: s.ownerId });
+    const [{ family }] = await g.prisma.$queryRaw<Array<{ family: string }>>`
+      SELECT family_id::text AS family FROM chat.student_enrolment WHERE lesson_id = ${first}::uuid`;
+    // The same parent: the second trial's children join their family.
+    const second = await subscribedTrial(parentEmail);
+    await enrolment.assign(s.managerId, second, { familyId: family });
+    const rows = await g.prisma.$queryRaw<Array<{ id: string; kind: string }>>`
+      SELECT id::text AS id, kind FROM chat.student_enrolment WHERE lesson_id IN (${first}::uuid, ${second}::uuid) ORDER BY kind`;
+    expect(rows.map((r) => r.kind)).toEqual(['added_children', 'new_family']);
+    await tasks.sweep();
+    expect(await taskFor(`new_student_group:${rows[0]!.id}`)).toBeUndefined();
+    expect(await taskFor(`new_student_group:${rows[1]!.id}`)).toEqual(expect.any(String));
   });
 
   it('a form corrected away is withdrawn; corrected back, it is owed again', async () => {
@@ -289,6 +426,33 @@ describe('a new family from a trial', () => {
     await enrolment.createGroup(s.ownerId, trial);
     expect(await tasks.get(s.ownerId, id)).toMatchObject({ state: 'completed', outcome: 'done' });
     expect((await completion(id))?.actor).toMatchObject({ kind: 'staff', id: s.ownerId });
+  });
+});
+
+describe('the sweep', () => {
+  it('leaves an occurrence alone for the settle window, then raises it', async () => {
+    await settleWindow(120);
+    const t = await newTeacher();
+    await tasks.sweep();
+    expect(await taskFor(`teacher_setup:${t}`)).toBeUndefined();
+    await settleWindow(1);
+    await new Promise((r) => setTimeout(r, 1500));
+    await tasks.sweep();
+    expect(await taskFor(`teacher_setup:${t}`)).toEqual(expect.any(String));
+  });
+
+  it('two at once raise each task once, and announce it once', async () => {
+    await waitingChild();
+    const t = await newTeacher();
+    const trial = await subscribedTrial();
+    await Promise.all([tasks.sweep(), tasks.sweep()]);
+    await tasks.sweep();
+    await worker.drain(500);
+    for (const key of [`family_unsupervised:${s.familyId}`, `teacher_setup:${t}`, `new_student_assign:${trial}`]) {
+      const [{ n }] = await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM chat.work_task WHERE source_key = ${key}`;
+      expect({ key, n: Number(n) }).toEqual({ key, n: 1 });
+      expect({ key, pushes: (await pushes((await taskFor(key)) as string)).length }).toEqual({ key, pushes: 1 });
+    }
   });
 });
 

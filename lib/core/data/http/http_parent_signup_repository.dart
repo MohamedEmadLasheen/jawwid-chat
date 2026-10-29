@@ -16,11 +16,12 @@ class HttpParentSignupRepository implements ParentSignupRepository {
   }
 
   @override
-  Future<void> verify({required String email, required String code, required String password}) async {
+  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice}) async {
     await _transport.post<Object?>('/auth/signup/verify', data: {
       'email': email.trim(),
       'code': code.trim(),
       'password': password,
+      'lessonAudioNotice': ?lessonAudioNotice,
     });
   }
 }

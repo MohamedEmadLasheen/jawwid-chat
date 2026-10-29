@@ -334,6 +334,9 @@ Migration `20261029235800_chat_pd047_phase_b_sources.sql`. The four set-up sourc
 
 - **Raised by `chat.work_task_sweep_setup()`**, the third sweep that `TaskService.sweep` runs, with its own lock and batches. These sources are not raised at once by a trigger. Each one is a state that is often settled in the same request that creates it: a family entered together with its supervisor, or an enrolment that joins an existing group. A raise at once would announce work that is already done.
 - **Completed at once** by triggers on `learner_supervision`, `student_enrolment` and `trial_subscription`, in the source's own transaction and never blocking it. The sweep re-reads the evidence as a safety net.
+- **The settle window** (department head review, 2026-10-29). The sweep leaves an occurrence alone until it is 2 minutes old (`chat.work_task_settle_window()`; config `tasks.raise_after_seconds`). Without it, a sweep that read the source just before a concurrent request settled it would raise and announce a task that request's trigger could not see. The reconcile would complete it a minute later, but the push would already be out.
+- **An assignee who leaves.** The sweep moves an open task whose assignee is no longer live to its source's owner now (`chat.work_task_setup_owner`). With nobody live to follow, it records an `orphaned:` issue, as PR-2b does. A live assignee keeps the task, so a person's hand-on stands.
+- **"Back if reactivated" has a limit.** It works only while the withdrawn task is still open. Once the assignee has acknowledged it, a teacher who comes back with the set-up unfinished gets no second task, because the key is spent. The Teachers manager sees them on the PD-43 set-up list. Keying per episode was weighed and not chosen: a returning teacher is rare, and the list already shows them.
 - **The guard** now lets the system complete two more source types without an actor: `teacher_setup` and `family_unsupervised`. Every other source still names its actor.
 - **One task per family, ever.** A child added later and left unsupervised shows on New Students only.
 - **Delivery:** no new rule key. Each task is announced once with the generic `task_assigned` (ids only).
@@ -424,6 +427,20 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
 - **Clients:**
   - Admin Web routes `open_task` to `/tasks?task=`.
   - Flutter listens for `task.changed` on the session socket (`TaskSignalChannel`, listen only; the frozen call client is untouched) and refreshes the To do. A task entry opens the teacher's Schedule on its To do.
+
+**As built in PR-7.** The B7 action log (`ActionLogService`) gains a third source, `chat.work_task_event`, holding what the person did to a task themselves.
+- **Every act on a task a person gave.**
+- **On a task a source raised, only what no source writes:**
+  - said it was not theirs;
+  - returned it;
+  - removed it;
+  - commented;
+  - changed its level;
+  - acknowledged it.
+- **A source's own moves stay out.** A report filed, or a case reassigned or re-dated, is that source's record, so it would otherwise show twice. PD-35's case lines are unchanged.
+- **Ids only:** a line carries the task's id, with action `task.<kind>` and entity `work_task`. Never a title, a comment or a reason.
+- **Admin Web** names each line and opens it in Tasks, which says plainly when the reader may not see it.
+- **No migration:** the actor index exists since PR-1.
 
 ### 3.12 Clients
 

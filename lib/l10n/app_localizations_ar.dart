@@ -4420,4 +4420,25 @@ class L10nAr extends L10n {
 
   @override
   String get notificationsActionOpenTask => 'فتح قائمة الإنجاز';
+
+  @override
+  String get lessonAudioAboutTitle => 'عن صوت الدروس';
+
+  @override
+  String get lessonAudioAboutBody =>
+      'النطق في الدروس بصوت حاسوبي، وكلُّ تسجيل يراجعه ويعتمده اثنان من معلمينا قبل أن يسمعه طفلك. وإذا لم يُحسن الصوت الحاسوبي نطق كلمة، فلا يكون لها صوت. ولا تُتلى آيات القرآن الكريم بصوت حاسوبي أبدًا.';
+
+  @override
+  String get lessonAudioTermsHeading => 'صوت النطق في الدروس.';
+
+  @override
+  String get lessonAudioTermsBody =>
+      'تُشغِّل بعض الدروس نطق الحروف والكلمات والجمل، وهذا الصوت مولَّد بصوت حاسوبي. وقبل أن يسمع أيُّ طفل تسجيلًا، يستمع إليه اثنان من معلمينا ويعتمدانه. والكلمة التي لا يُحسن الصوت الحاسوبي نطقها لا يكون لها صوت. ولا يُقرأ القرآن الكريم بصوت حاسوبي أبدًا. ويُرسَل نصُّ دروسنا إلى مزوّد خدمة النطق لإنتاج الصوت، ولا تُرسَل أيُّ معلومات عنك أو عن طفلك.';
+
+  @override
+  String get lessonAudioNoticeAccept =>
+      'أُدرك أن صوت النطق في الدروس مولَّد حاسوبيًا، وأن معلمي الأكاديمية يراجعونه قبل استخدامه.';
+
+  @override
+  String get lessonAudioTermsTitle => 'الشروط والخصوصية';
 }

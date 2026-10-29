@@ -1,0 +1,63 @@
+[
+ {
+  "item": {
+   "id": "tafsir-001",
+   "kind": "tafsir",
+   "bands": [
+    "6-8",
+    "9-12"
+   ],
+   "ayah": 1,
+   "text": "قُلْ: اللهُ واحدٌ {{w:1:4}}",
+   "source": {
+    "work": "saadi",
+    "ref": "112:1"
+   }
+  },
+  "sha256": "bb583009cd909efb3f5b281d6f50435fd65134e2007ccfea07914566d15cb13c"
+ },
+ {
+  "item": {
+   "z": 1,
+   "a": {
+    "y": [
+     3,
+     2,
+     1
+    ],
+    "b": true,
+    "c": null
+   },
+   "m": "\"quoted\" \\ back/slash"
+  },
+  "sha256": "392d1e48573e77b4f4c49524863f789a01e2ad9ec7e8dd57187292e3f483f9b1"
+ },
+ {
+  "item": {
+   "text": "emoji 🌙 and ﷺ, alef wasla ٱ, U+2028   here",
+   "n": -7,
+   "list": []
+  },
+  "sha256": "55aa696300984148381aeaafa69afe4f0b6ee279c5241cd00526b7946ec764f1"
+ },
+ {
+  "item": {
+   "nested": [
+    {
+     "b": 2,
+     "a": 1
+    },
+    {
+     "d": [
+      {
+       "f": "x",
+       "e": "y"
+      }
+     ]
+    }
+   ],
+   "empty": {}
+  },
+  "sha256": "9a7f28fafbc7cab40527747e05ec66a642eb4abb3f6563266502d2098d656c0d"
+ }
+]
