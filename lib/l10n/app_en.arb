@@ -2966,5 +2966,11 @@
   "lessonAudioNoticeAccept": "I understand that lesson pronunciation audio is computer-generated and checked by the academy's teachers before use.",
   "@lessonAudioNoticeAccept": {"description": "PD-48: owner-approved 2026-10-29, word for word. The line a parent ticks at sign-up and acknowledges once at the next sign-in."},
   "lessonAudioTermsTitle": "Terms and privacy",
-  "@lessonAudioTermsTitle": {"description": "PD-48: the section header above the terms/privacy paragraph (a UI label, not part of the approved text)."}
+  "@lessonAudioTermsTitle": {"description": "PD-48: the section header above the terms/privacy paragraph (a UI label, not part of the approved text)."},
+  "pickerSearchHint": "Type to search",
+  "@pickerSearchHint": {"description": "The search field at the top of every list picker (owner 2026-10-29: every list can be typed into)."},
+  "pickerNoMatches": "No matches",
+  "@pickerNoMatches": {"description": "A list picker whose search matched nothing."},
+  "materialsAgeLabel": "Age",
+  "@materialsAgeLabel": {"description": "The age filter on the child materials library; names the picker and its sheet."}
 }

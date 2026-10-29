@@ -4441,4 +4441,13 @@ class L10nAr extends L10n {
 
   @override
   String get lessonAudioTermsTitle => 'الشروط والخصوصية';
+
+  @override
+  String get pickerSearchHint => 'اكتب للبحث';
+
+  @override
+  String get pickerNoMatches => 'لا توجد نتائج مطابقة';
+
+  @override
+  String get materialsAgeLabel => 'العمر';
 }
