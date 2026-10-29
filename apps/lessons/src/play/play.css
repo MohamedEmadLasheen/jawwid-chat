@@ -51,3 +51,55 @@ ol.play-cards { list-style: none; margin: 0; padding: 0; }
 .play__hidden:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .play__cue { font-size: 1.2rem; font-weight: 600; color: var(--muted); }
 .play-number { min-inline-size: 64px; font-family: inherit; font-size: 1.5rem; }
+/*
+ * The child's theme (PR-B0): warm and playful AROUND the Quran, never on it. Verse cards, tiles and
+ * lines keep the plain surface and Amiri Quran; the skin colours the page, the header picture, the
+ * game panel, the beads and the praise. Skin colours are for shapes and fills only: text stays
+ * --ink or --accent on light fills (at least 4.5:1).
+ */
+.play-skin--garden { --skin-sky: #e4f3e7; --skin-1: #4f9a5f; --skin-2: #f2b544; --skin-3: #f6c86a; --skin-4: #e98a9b; --skin-5: #3c7a4a; --skin-line: #9cc9a3; --skin-tint: #f2f9f1; }
+.play-skin--sea { --skin-sky: #e2f1f8; --skin-1: #2c86b0; --skin-2: #8fcde6; --skin-3: #f3c44f; --skin-4: #1f6e93; --skin-5: #1f6e93; --skin-line: #7fb9d3; --skin-tint: #eef7fb; }
+.play-skin--stars { --skin-sky: #24395c; --skin-1: #f4d35e; --skin-2: #fdf3cf; --skin-3: #f4d35e; --skin-4: #3b5a86; --skin-5: #3b5a86; --skin-line: #a8b6d6; --skin-tint: #f1f3fa; }
+.play-skin--caravan { --skin-sky: #fbeed5; --skin-1: #dfa253; --skin-2: #edc78f; --skin-3: #f2b544; --skin-4: #4f8a5b; --skin-5: #8a5a2b; --skin-line: #e2c49a; --skin-tint: #fbf5ea; }
+.skf-1 { fill: var(--skin-1); } .skf-2 { fill: var(--skin-2); } .skf-3 { fill: var(--skin-3); } .skf-4 { fill: var(--skin-4); }
+.skf-line { fill: var(--skin-line); } .skf-sky { fill: var(--skin-sky); }
+.sks-1, .sks-5, .sks-line { fill: none; stroke-linecap: round; }
+.sks-1 { stroke: var(--skin-1); } .sks-5 { stroke: var(--skin-5); } .sks-line { stroke: var(--skin-line); }
+
+.play-page { background: linear-gradient(var(--skin-tint), var(--page) 18rem); border-radius: 1.5rem; }
+.play-hero { display: grid; gap: 0.25rem; margin-block-end: 0.5rem; }
+.play-hero__art { display: block; inline-size: 100%; block-size: 96px; border-radius: 1.25rem; box-shadow: 0 2px 0 var(--skin-line); }
+.play-page .play__title { font-size: 1.6rem; margin: 0.25rem 0 0; color: var(--ink); }
+.play-page > .note { display: inline-block; margin: 0 0 0.5rem; padding: 0.2rem 0.75rem; border-radius: 999px; background: var(--surface); border: 2px solid var(--skin-line); color: var(--ink); }
+
+/* The game panel: a soft, rounded play mat in the skin's colours; the verse cards inside stay plain. */
+.play-page .play, .play-page .play__review { background: var(--skin-tint); border: 3px solid var(--skin-line); border-radius: 1.5rem; padding: 1rem; }
+.play-page .play__ask { font-weight: 600; color: var(--ink); }
+.play-page .play-card { border-radius: 1.25rem; box-shadow: 0 3px 0 var(--border); }
+.play-page .play-card:not(:disabled):hover { border-color: var(--skin-line); }
+.play-page .play-tile { border-radius: 1rem; box-shadow: 0 3px 0 var(--border); }
+.play-page .play__line { border-color: var(--skin-line); }
+
+/* Friendly buttons: round, big, a soft "press". */
+.play-page .primary { border-radius: 999px; padding: 0.75rem 1.5rem; box-shadow: 0 4px 0 #0a4a44; transition: transform 0.08s ease, box-shadow 0.08s ease; }
+.play-page .primary:active { transform: translateY(3px); box-shadow: 0 1px 0 #0a4a44; }
+.play-page .play__big:not(.primary) { border-radius: 999px; background: var(--surface); border: 3px solid var(--skin-line); color: var(--ink); cursor: pointer; }
+.play-page .beads { color: var(--skin-5); }
+
+/* Praise: calm and warm -- a gentle rise and a few sparkles beside the words, never on the verse. */
+.play-page .praise { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 1rem; border-radius: 999px; background: var(--surface); border: 3px solid var(--skin-line); animation: play-praise 0.45s ease-out both; }
+/* The sparkles are drawn by CSS, with empty alt text: decoration a screen reader does not read. */
+.play-page .praise::before, .play-page .praise::after { content: '✦' / ''; color: var(--skin-5); font-size: 1.1rem; }
+.play-page .play-card__mark, .play-page .play-tile__mark { animation: play-praise 0.35s ease-out both; }
+.play-page .play__again { animation: play-fade 0.3s ease-out both; }
+@keyframes play-praise { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes play-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .play-page .praise, .play-page .play-card__mark, .play-page .play-tile__mark, .play-page .play__again { animation: none; }
+  .play-page .primary { transition: none; }
+}
+
+/* The grown-up's corner: small and quiet, so a child is not drawn to it. */
+.play__grownup-toggle { float: inline-end; min-block-size: 44px; padding: 0.25rem 0.75rem; border-radius: 999px; background: transparent; border: 2px solid var(--border); color: var(--muted); cursor: pointer; }
+.play__grownup-toggle[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
+.play__grownup { clear: both; padding: 0.5rem; border-radius: 1rem; background: var(--surface); border: 2px dashed var(--border); }

@@ -18,6 +18,7 @@ import { OrderAyat, fitsOrder } from './games/OrderAyat';
 import { StartEnd, fitsStartEnd } from './games/StartEnd';
 import { WhichHeard } from './games/WhichHeard';
 import { Praise, arabic, type GameProps } from './games/common';
+import { SkinHeader, skinFor } from './skins';
 import './play.css';
 
 export const GAMES: Readonly<Record<string, (p: GameProps) => JSX.Element>> = {
@@ -180,10 +181,13 @@ export function PlayLesson({
   }
   if (!s || approved === null) return <p className="note" role="status">جارٍ التحميل…</p>;
 
-  const header = <h1 className="play__title">ألعاب سورة {s.info.nameAr}</h1>;
+  // The skin is decoration only (skins.tsx): the header's picture and the colours around the game.
+  const skin = skinFor(s.info.number);
+  const header = <SkinHeader skin={skin} title={`ألعاب سورة ${s.info.nameAr}`} />;
+  const page = `lesson play-page play-skin--${skin}`;
   if (approved.size === 0) {
     return (
-      <main className="lesson">
+      <main className={page}>
         {header}
         <p className="note">الألعاب قيد المراجعة: لا تظهر لعبة قبل أن يعتمدها المعلم والمراجع الشرعي.</p>
       </main>
@@ -191,7 +195,7 @@ export function PlayLesson({
   }
   if (!sitting || sitting.key !== key) {
     return (
-      <main className="lesson">
+      <main className={page}>
         {header}
         <p className="note" role="status">
           جارٍ تجهيز الألعاب…
@@ -215,7 +219,7 @@ export function PlayLesson({
 
   if (session.length === 0) {
     return (
-      <main className="lesson">
+      <main className={page}>
         {header}
         <p className="note">لا توجد لعبة لهذه الآيات بعد.</p>
         {nextButton}
@@ -234,7 +238,7 @@ export function PlayLesson({
   };
 
   return (
-    <main className="lesson" style={{ ['--verse-scale' as string]: SCALES[scale] }}>
+    <main className={page} style={{ ['--verse-scale' as string]: SCALES[scale] }}>
       {header}
       <p className="note">
         الآيات {arabic(seg![0])}–{arabic(seg![1])} · اللعبة {arabic(Math.min(step + 1, session.length))} من {arabic(session.length)}

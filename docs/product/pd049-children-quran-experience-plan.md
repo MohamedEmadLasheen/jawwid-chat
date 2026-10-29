@@ -430,6 +430,17 @@ Count by skill: listening and recitation 2; recognition and structure 4; order a
 
 **Game "skins"** (garden, sea, stars, desert caravan) change only the decoration and the reward animation, never the mechanic. They rotate per surah, so two surahs feel different even with the same mechanic. Skins carry no text and no Quran.
 
+**As built (PR-B0: the child's theme).**
+- **Warm and playful around the Quran, never on it.** Each skin brings a header picture: flowers and leaves; waves; a crescent and stars; dunes and a palm.
+  - The pictures are drawn in our own SVG (`play/skins.tsx`), with no third-party art and no living figure. They carry no text and are hidden from screen readers.
+  - The skin also colours the page, the rounded game panel, the beads and the praise.
+- **The Quran stays sober.** Verse cards, word tiles and lines keep the plain surface and Amiri Quran. Only a card's frame may glow or be marked.
+- **Feedback is celebratory but calm.**
+  - Praise rises gently, with two sparkles drawn by CSS (empty alt text). A "try again" fades in.
+  - Nothing ever moves or shakes the Quran text. `prefers-reduced-motion` turns every animation off.
+- **Colour rules.** Skin colours are for shapes and fills; text stays `--ink` or `--accent` on light fills (at least 4.5:1).
+- **The grown-up's corner.** "⚙ للكبار" is small and quiet; the controls open beneath it.
+
 ### C.3 The session generator (how variety is guaranteed)
 
 For one child on one surah (or segment), the engine builds a playlist. It is deterministic from `(surah, segment, band, levels, date)`, so it can be tested and reproduced:
@@ -482,7 +493,8 @@ For one child on one surah (or segment), the engine builds a playlist. It is det
     - `games/shuffle.ts`, which places the answer;
     - `audio/audio-controller.ts` and `audio/audio-manifest.ts`, the recitation and its verified list;
     - `quran/dataset.ts`, the loader of the verified text;
-    - `play/play.css`, the games' stylesheet (how a verse, a tile or a blank is shown), and `styles.css`, the engine's base styles, whose buttons, notes and page the games also use. A lesson style change therefore re-opens every mechanic's review.
+    - `play/play.css`, the games' stylesheet (how a verse, a tile or a blank is shown), and `styles.css`, the engine's base styles, whose buttons, notes and page the games also use. A lesson style change therefore re-opens every mechanic's review;
+    - `play/skins.tsx`, the skins' pictures (PR-B0).
 
     `route.ts` only maps a path to a surah number, and `App.tsx` only renders `PlayRoute`, so neither is covered. Which games may be played (the registry, `play.json`, the keys) is fixed at build time in `signed.ts`: no page passes them to `PlayLesson`.
 
