@@ -73,7 +73,7 @@ const pushes = (taskId: string) =>
   g.prisma.notification.findMany({ where: { templateKey: 'task_assigned', dedupeKey: { startsWith: `task_assigned:${taskId}:` } } });
 
 /** A trial an hour or more ago, for which Sales recorded "subscribed" with a form (as PD-16's spec). */
-async function subscribedTrial(): Promise<string> {
+async function subscribedTrial(parentEmail?: string): Promise<string> {
   trialsMade += 1;
   const prospectId = (await trials.createProspect(salesId, { displayName: `prospect_${randomUUID().slice(0, 6)}` })).id;
   const startsAt = new Date(Date.now() - (60 + 60 * trialsMade) * MIN);
@@ -84,13 +84,14 @@ async function subscribedTrial(): Promise<string> {
       createdByKind: 'staff', createdBy: salesId,
     },
   });
-  await trials.outcome(salesId, lesson.id, { result: 'subscribed', subscription: form() });
+  await trials.outcome(salesId, lesson.id, { result: 'subscribed', subscription: form(parentEmail) });
   return lesson.id;
 }
 
-function form() {
+/** A subscription form; the same parent e-mail makes a sibling of that parent's family (PD-42 PR-3). */
+function form(parentEmail = `parent.${randomUUID().slice(0, 8)}@example.test`) {
   return {
-    parent: { name: 'parent_t', email: `parent.${randomUUID().slice(0, 8)}@example.test`, phone: '+99 000 555 666' },
+    parent: { name: 'parent_t', email: parentEmail, phone: '+99 000 555 666' },
     children: [
       { name: 'child_t1', age: 9, course: 'course_t', teacherId: s.teacherId, packagePrice: 1000, lessonPrice: 125,
         schedule: [{ weekday: 2, time: '17:00' }] },
@@ -384,11 +385,13 @@ describe('a new family from a trial', () => {
   });
 
   it('children added to an existing family raise no group task: only a new family opens one', async () => {
-    const first = await subscribedTrial();
+    const parentEmail = `parent.${randomUUID().slice(0, 8)}@example.test`;
+    const first = await subscribedTrial(parentEmail);
     await enrolment.assign(s.managerId, first, { supervisorId: s.ownerId });
     const [{ family }] = await g.prisma.$queryRaw<Array<{ family: string }>>`
       SELECT family_id::text AS family FROM chat.student_enrolment WHERE lesson_id = ${first}::uuid`;
-    const second = await subscribedTrial();
+    // The same parent: the second trial's children join their family.
+    const second = await subscribedTrial(parentEmail);
     await enrolment.assign(s.managerId, second, { familyId: family });
     const rows = await g.prisma.$queryRaw<Array<{ id: string; kind: string }>>`
       SELECT id::text AS id, kind FROM chat.student_enrolment WHERE lesson_id IN (${first}::uuid, ${second}::uuid) ORDER BY kind`;
