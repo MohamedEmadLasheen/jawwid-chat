@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../design/tokens.dart';
+import '../../../design/widgets/searchable_picker.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/supervision.dart';
 
@@ -248,13 +249,12 @@ class _CertificateRequestFormState extends ConsumerState<CertificateRequestForm>
       submitKey: const ValueKey('certificate-submit'),
       onSend: _complete && !_sending ? _submit : null,
       children: [
-        DropdownButtonFormField<String>(
+        SearchablePickerField<String>(
           key: const ValueKey('certificate-learner'),
-          initialValue: _learnerId,
+          value: _learnerId,
+          label: l10n.certificateStudent,
           decoration: deco(l10n.certificateStudent),
-          items: [
-            for (final l in widget.learners) DropdownMenuItem(value: l.id, child: Text(l.name)),
-          ],
+          options: [for (final l in widget.learners) PickerOption(value: l.id, label: l.name)],
           onChanged: (id) => setState(() => _selectLearner(id)),
         ),
         const SizedBox(height: Spacing.spacing3),
