@@ -245,7 +245,28 @@ def all_carry(text, vowel):
     return bool(ls) and all(vowel in mk for _, mk in ls)
 
 
+# Words that end in a sukun INSIDE a sentence by nature (not a pausal sukun): particles.
+SUKUN_PARTICLES = {unicodedata.normalize('NFC', w) for w in ['مِنْ', 'عَنْ', 'لَمْ', 'قَدْ', 'هَلْ', 'بَلْ', 'أَنْ', 'إِنْ', 'لَنْ', 'كَمْ', 'مَنْ', 'إِذْ', 'لَكِنْ', 'مُنْذْ']}
+
+
+def phrase_tashkeel(where, text, err, exception=None):
+    """A sentence, title or stage name: every word fully vowelled; the case endings stay INSIDE (a word there
+    never ends in the pausal sukun, unless it is a sukun particle); only the LAST word takes the pausal sukun."""
+    ws = words_of(text) or []
+    for w in ws[:-1]:
+        if unmarked(w):
+            err(f'{where}: {w!r} is not fully vowelled ({", ".join(unmarked(w))} unmarked)')
+        else:
+            _, mk = letters_marks(w)[-1]
+            if mk == {SUKUN} and w not in SUKUN_PARTICLES:
+                err(f'{where}: {w!r} ends in a pausal sukun inside the sentence (case endings stay inside; only the last word pauses)')
+    if ws:
+        tashkeel(where, ws[-1], err, exception)
+
+
 def check_reading(lesson, number, quran_grams=None):
+    if quran_grams is None:
+        raise ValueError('a reading lesson is checked against the verified Quran (quran_grams()); refusing to skip that check')
     errors = []
     err = errors.append
     if not READING_KEYS <= set(lesson) or set(lesson) - READING_KEYS - {'passages'}:
@@ -268,10 +289,7 @@ def check_reading(lesson, number, quran_grams=None):
             flagged.append(where)
 
     def no_quran(where, text):
-        if quran_grams is None:
-            return
-        ws = RASM.rasm(text).split()
-        if any(tuple(ws[i:i + READING_RUN]) in quran_grams for i in range(len(ws) - READING_RUN + 1)):
+        if quran_runs(text, quran_grams):
             err(f'{where}: carries {READING_RUN} or more consecutive Quran words: refused (a child\'s reading text never carries altered Quran)')
 
     for s in lesson['stages'] if isinstance(lesson['stages'], list) else []:
@@ -291,6 +309,8 @@ def check_reading(lesson, number, quran_grams=None):
         stages[s['id']] = {**s, '_vowel': vowel}
         if words_of(s['name']) is None:
             err(f'{where}: name {s["name"]!r} is not words')
+        else:
+            phrase_tashkeel(f'{where} name', s['name'], err)
         for it in s['items'] if isinstance(s['items'], list) else []:
             iw = f'{where} item {it.get("id") if isinstance(it, dict) else it!r}'
             if not isinstance(it, dict) or set(it) - {'id', 'kind', 'text', 'was', 'review', 'finalMarkException'} or not {'id', 'kind', 'text', 'was', 'review'} <= set(it):
@@ -319,11 +339,8 @@ def check_reading(lesson, number, quran_grams=None):
                 if not ws or len(ws) < 2:
                     err(f'{iw}: a sentence is two or more single-spaced words (one closing mark allowed)')
                     continue
-                for w in ws[:-1]:
-                    if unmarked(w):
-                        err(f'{iw}: {w!r} is not fully vowelled ({", ".join(unmarked(w))} unmarked)')
                 # Case endings stay inside the sentence; only its LAST word takes the pausal sukun.
-                tashkeel(iw, ws[-1], err, it.get('finalMarkException'))
+                phrase_tashkeel(iw, t, err, it.get('finalMarkException'))
                 if 'finalMarkException' in it and not it['review'] and not approved:
                     err(f'{iw}: a finalMarkException stays held until the file is approved')
             else:
@@ -347,6 +364,7 @@ def check_reading(lesson, number, quran_grams=None):
             err(f'{pw}: title is {{text, review}}, words')
         else:
             held(f'{pw} title', title['review'])
+            phrase_tashkeel(f'{pw} title', title['text'], err)
             no_quran(f'{pw} title', title['text'])
         sl = p['sentences']
         if not isinstance(sl, list) or not sl or len(set(sl)) != len(sl) or not all(items.get(x, {}).get('kind') == 'sentence' for x in sl):
@@ -371,9 +389,11 @@ def check_reading(lesson, number, quran_grams=None):
             if not st or not st['_vowel']:
                 err(f'{qw}: stage must be a vowel stage')
                 continue
-            drill_texts = {i['text'] for i in items.values() if i['kind'] != 'sentence'}
+            drill_texts = {i['text']: i['kind'] for i in items.values() if i['kind'] != 'sentence'}
             if any(o not in drill_texts for o in opts):
                 err(f'{qw}: options must be drills or words of this lesson')
+            elif len({drill_texts[o] for o in opts}) != 1:
+                err(f'{qw}: options are all drills or all words, never mixed')
             right = [i for i, o in enumerate(opts) if all_carry(o, st['_vowel'])]
             if right != [q['answer']]:
                 err(f'{qw}: must have exactly one right answer, the answer; by the stage vowel the right ones are {right}')
@@ -388,6 +408,16 @@ def check_reading(lesson, number, quran_grams=None):
             right = [i for i, o in enumerate(opts) if o == ws[q['blank']]]
             if right != [q['answer']] or not all(is_word(o) for o in opts):
                 err(f'{qw}: exactly one option must complete the sentence verbatim; the right ones are {right}')
+            drills = {i['text'] for i in items.values() if i['kind'] == 'syllables'}
+            for k, o in enumerate(opts):
+                if k == q['answer']:
+                    continue
+                # A wrong option is a word of ANOTHER sentence of this lesson, fully vowelled, never a drill.
+                src = [i for i in items.values() if i['kind'] == 'sentence' and i['id'] != q['sentence'] and o in (words_of(i['text']) or [])]
+                if not src or o in drills:
+                    err(f'{qw}: option {o!r} must be a word of another sentence of this lesson (never a drill)')
+                elif unmarked(o):
+                    err(f'{qw}: option {o!r} is not fully vowelled')
         else:
             err(f'{qw}: kind must be vowel or missing')
 
@@ -399,17 +429,34 @@ def check_reading(lesson, number, quran_grams=None):
     return errors
 
 
+def runs_of(ws):
+    """Every READING_RUN-word run of a word list, its edge words with and without a prefix letter."""
+    out = set()
+    for i in range(len(ws) - READING_RUN + 1):
+        run = ws[i:i + READING_RUN]
+        for first in RASM.edge_forms(run[0]):
+            for last in RASM.edge_forms(run[-1]):
+                out.add((first, *run[1:-1], last))
+    return out
+
+
+def quran_runs(text, grams):
+    """Whether a reading text carries READING_RUN or more consecutive Quran words (rasm, vocative joined,
+    edge prefixes stripped on both sides). grams must be given: a check without them is no check."""
+    if grams is None:
+        raise ValueError('the typed-Quran check needs the verified Quran (quran_grams()); refusing to skip it')
+    return bool(runs_of(RASM.words(text)) & grams)
+
+
 def quran_grams():
-    """Every READING_RUN-word run of the whole verified Quran, as rasm skeletons."""
+    """Every READING_RUN-word run of the whole verified Quran, across verse boundaries too (112:1-2)."""
     spec = importlib.util.spec_from_file_location('lesson_content', os.path.join(HERE, 'check-lesson-content.py'))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     grams = set()
     for verses in mod.verified_surahs().values():
-        for v in verses:
-            ws = RASM.rasm(v).split()
-            grams.update(tuple(ws[i:i + READING_RUN]) for i in range(len(ws) - READING_RUN + 1))
-    return grams
+        grams |= runs_of([w for v in verses for w in RASM.words(v)])
+    return frozenset(grams)
 
 
 def check(lesson, number, quran=None):
@@ -829,11 +876,19 @@ def selftest():
         'reading-exception-not-held': (lambda c: c['stages'][2]['items'][0].update(review=None), 'stays held', None),
         'reading-typed-quran': (lambda c: None, 'consecutive Quran words', toy_quran),
         'reading-unknown-kind': (lambda c: c['stages'][0]['items'][0].update(kind='letter'), 'kind must be', None),
+        'reading-missing-option-not-in-another-sentence': (lambda c: c['quiz'][1].update(options=['الْقِطَّةُ', 'الْبَيْتُ']), 'another sentence', None),
+        'reading-missing-option-from-its-own-sentence': (lambda c: c['quiz'][1].update(options=['الْقِطَّةُ', 'نَامَتِ']), 'another sentence', None),
+        'reading-vowel-options-mixed': (lambda c: c['stages'][1]['items'].append({'id': 'kasra-002', 'kind': 'word', 'text': 'كِتِبِ', 'was': None, 'review': None})
+                                        or c['quiz'][0].update(options=['كِتِبِ', 'بَتَ']), 'never mixed', None),
+        'reading-pausal-sukun-inside': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتْ الْقِطَّةُ الصَّغِيرَةْ.'), 'inside the sentence', None),
+        'reading-sukun-particle-inside-is-fine': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتِ الْقِطَّةُ مِنْ تَعَبْ.'), None, None),
+        'reading-title-not-vowelled': (lambda c: c['passages'][0]['title'].update(text='القطة'), 'not fully vowelled', None),
+        'reading-stage-name-not-pausal': (lambda c: c['stages'][2].update(name='جُمَلٌ'), 'not the pausal sukun', None),
     }
     for name, (mutate, expected, grams) in rcases.items():
         c = reading()
         mutate(c)
-        errors = check(c, 5, grams)
+        errors = check(c, 5, frozenset() if grams is None else grams)
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
@@ -894,6 +949,28 @@ def selftest():
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
+    # Real Quran, typed in standard spelling (review of #290), as code points: each must be REFUSED by the
+    # reading check against the verified text; an ordinary sentence must pass.
+    U = lambda *c: ''.join(map(chr, c))
+    real = [
+        ('the vocative, 31:17', U(0x64a, 0x64e, 0x627, 0x20, 0x628, 0x64f, 0x646, 0x64e, 0x64a, 0x64e, 0x651, 0x20, 0x623, 0x64e, 0x642, 0x650, 0x645, 0x650, 0x20, 0x627, 0x644, 0x635, 0x64e, 0x651, 0x644, 0x64e, 0x627, 0x629, 0x64e)),
+        ('the vocative, 2:21', U(0x64a, 0x64e, 0x627, 0x20, 0x623, 0x64e, 0x64a, 0x64f, 0x651, 0x647, 0x64e, 0x627, 0x20, 0x627, 0x644, 0x64e, 0x651, 0x630, 0x650, 0x64a, 0x646, 0x64e, 0x20, 0x622, 0x645, 0x64e, 0x646, 0x64f, 0x648, 0x627)),
+        ('the vocative, 7:59', U(0x64a, 0x64e, 0x627, 0x20, 0x642, 0x64e, 0x648, 0x652, 0x645, 0x650, 0x20, 0x627, 0x639, 0x652, 0x628, 0x64f, 0x62f, 0x64f, 0x648, 0x627, 0x20, 0x627, 0x644, 0x644, 0x64e, 0x651, 0x647, 0x64e)),
+        ('a prefix on the edge, 20:114', U(0x648, 0x64e, 0x631, 0x64e, 0x628, 0x650, 0x651, 0x20, 0x632, 0x650, 0x62f, 0x652, 0x646, 0x650, 0x64a, 0x20, 0x639, 0x650, 0x644, 0x652, 0x645, 0x64b, 0x627)),
+        ('across 112:1-2', U(0x623, 0x64e, 0x62d, 0x64e, 0x62f, 0x64c, 0x20, 0x627, 0x644, 0x644, 0x64e, 0x651, 0x647, 0x64f, 0x20, 0x627, 0x644, 0x635, 0x64e, 0x651, 0x645, 0x64e, 0x62f, 0x64f)),
+    ]
+    ordinary = U(0x623, 0x64e, 0x643, 0x64e, 0x644, 0x64e, 0x20, 0x627, 0x644, 0x652, 0x648, 0x64e, 0x644, 0x64e, 0x62f, 0x64f, 0x20, 0x62a, 0x64f, 0x641, 0x64e, 0x651, 0x627, 0x62d, 0x64b, 0x627)
+    grams = quran_grams()
+    for name, t in real:
+        if not quran_runs(t, grams):
+            failed.append(f'quran-{name}: typed Quran in standard spelling was not refused')
+    if quran_runs(ordinary, grams):
+        failed.append('quran-ordinary: an ordinary sentence was taken for Quran')
+    try:
+        check({'kind': 'reading'}, 5)
+        failed.append('quran-no-grams: a reading check without the Quran did not refuse to run')
+    except ValueError:
+        pass
     # A misnamed lesson file is refused, not skipped.
     if not stray_files(['lesson-001.json', FIXTURE_NAME, 'lesson-1.json', 'notes.json', 'index.ts']) == ['lesson-1.json', 'notes.json']:
         failed.append('stray-json: a misnamed .json is not refused')
@@ -902,7 +979,7 @@ def selftest():
     for f in failed:
         print(f'arabic-lesson selftest: FAIL {f}')
     if not failed:
-        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + len(scases) + len(rcases) + 1} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
+        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + len(scases) + len(rcases) + len(real) + 3} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
     return 1 if failed else 0
 
 

@@ -18,6 +18,18 @@ describe('ReadingLesson (P0-5c)', () => {
     expect(screen.getByRole('heading', { name: 'الْقِطَّةُ' })).toBeTruthy();
   });
 
+  it('shows each passage once, whatever the stage, and even when every stage is held', () => {
+    render(<ReadingLesson lesson={5} content={readingStandIn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'الْكَسْرَةْ' }));
+    expect(screen.getAllByRole('heading', { name: 'الْقِطَّةُ' })).toHaveLength(1);
+  });
+
+  it('lesson 10: the passage\'s sentences are put in order too', () => {
+    render(<ReadingLesson lesson={5} content={readingStandIn()} shuffleSeed={1} />);
+    fireEvent.click(screen.getByRole('button', { name: 'رَتِّبِ الْكَلِمَاتِ' }));
+    expect(screen.getByRole('region', { name: 'رتّب الجمل' })).toBeTruthy();
+  });
+
   it('the order game is answered by the sentence itself', () => {
     render(<ReadingLesson lesson={5} content={readingStandIn()} shuffleSeed={1} />);
     fireEvent.click(screen.getByRole('button', { name: 'جُمَلْ' }));

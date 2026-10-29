@@ -159,8 +159,9 @@ export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedRead
       if (q.kind === 'vowel') {
         const stage = raw.stages.find((s) => s.id === q.stage);
         check(!!stage && stage.vowel !== undefined);
-        const texts = new Set([...byId.values()].filter((it) => it.kind !== 'sentence').map((it) => it.text));
-        check(q.options.every((o) => texts.has(o)));
+        const kinds = new Map([...byId.values()].filter((it) => it.kind !== 'sentence').map((it) => [it.text, it.kind]));
+        check(q.options.every((o) => kinds.has(o)));
+        check(new Set(q.options.map((o) => kinds.get(o))).size === 1); // all drills or all words, never mixed
         const right = q.options.flatMap((o, i) => (allCarry(o, stage.vowel!) ? [i] : []));
         check(right.length === 1 && right[0] === q.answer);
         check([...byId.values()].some((it) => it.stage === stage && it.text === q.options[q.answer])); // the answer is the stage's own
@@ -174,9 +175,16 @@ export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedRead
         check(q.options.every(isWord));
         const right = q.options.flatMap((o, i) => (o === ws[q.blank] ? [i] : []));
         check(right.length === 1 && right[0] === q.answer); // exactly one option completes the sentence verbatim
+        // A wrong option is a word of ANOTHER sentence of this lesson (never a drill), and it is held with it:
+        // the question shows only if each wrong option has a sentence that is not held.
+        const drills = new Set([...byId.values()].filter((it) => it.kind === 'syllables').map((it) => it.text));
+        const sources = q.options.map((o, i) =>
+          i === q.answer ? [s.text] : [...byId.values()].filter((it) => it.kind === 'sentence' && it.id !== s.id && wordsOf(it.text)!.includes(o)).map((it) => it.text),
+        );
+        check(q.options.every((o, i) => sources[i]!.length > 0 && (i === q.answer || !drills.has(o))));
         const shownText = ws.map((w, i) => (i === q.blank ? '…' : w)).join(' ');
         item = { id: q.id, question: 'أَيُّ كَلِمَةٍ تُكْمِلُ الْجُمْلَةَ؟', prompt: shownText, word: null, options: q.options, answer: q.answer };
-        words = [s.text];
+        words = [s.text, ...sources.slice(0).filter((_, i) => i !== q.answer).map((src) => src.find((t) => !flagged.has(t)) ?? src[0]!)];
       } else {
         throw new Refused();
       }
