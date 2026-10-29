@@ -2,9 +2,12 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { ObjectStorage } from '../communication/attachments/object-storage';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
+import { NotificationService } from '../communication/notifications/notification.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { PrismaService } from '../platform/prisma.service';
 import { currentImpersonationId } from '../platform/request-context';
+import { ACADEMY_ZONE, canonicalZone, dayIn } from '../platform/time-zone';
+import { zonesOf } from '../platform/time-zone.service';
 import { OBJECT_STORAGE } from '../platform/tokens';
 import type { Actor } from '../platform/types';
 import { BACKGROUNDS, LAYOUTS, checkDocument } from './whiteboard-document';
@@ -16,10 +19,19 @@ export const PAGES_PER_BOARD = 50;
 export const DOCUMENT_BYTES_PER_TEACHER = 25 * 1024 * 1024;
 /** How many due boards one sweep purges; the next sweep takes the rest. */
 const PURGE_BATCH = 50;
+/** A board whose objects could not be deleted waits 1 h, 2 h, 4 h ... up to 7 days behind the rest. */
+const PURGE_RETRY_MAX_HOURS = 7 * 24;
 
 type Tx = Prisma.TransactionClient;
 type Basis = 'owner' | 'supervisor' | 'backup' | 'teachers_manager' | 'super_admin' | 'support_session';
-type Action = 'open' | 'trash' | 'restore' | 'copy';
+type Action = 'open' | 'list' | 'read_log' | 'trash' | 'restore' | 'copy';
+interface Viewer {
+  id: string;
+  kind: 'teacher' | 'staff' | 'support_session';
+  basis: Basis;
+  /** A support session: which one (the viewer is its operator). */
+  detail?: Record<string, string>;
+}
 
 interface BoardRow {
   id: string;
@@ -90,21 +102,29 @@ function summary(b: BoardRow): BoardSummary {
 
 const notFound = () => new CommError(CommErrorCode.WHITEBOARD_NOT_FOUND, 'no such board');
 const invalid = (detail: string) => new CommError(CommErrorCode.WHITEBOARD_INVALID, detail, 422);
-const limit = (detail: string) => new CommError(CommErrorCode.WHITEBOARD_LIMIT, detail, 409);
+/** `which` is named in `detail.limit` so a client can say which limit was hit. */
+const limit = (which: 'boards' | 'pages' | 'storage', message: string) => new CommError(CommErrorCode.WHITEBOARD_LIMIT, message, 409, { limit: which });
 const state = (detail: string) => new CommError(CommErrorCode.WHITEBOARD_STATE, detail, 409);
 
-/** A refusal raised by the database becomes an answer; anything else is rethrown. */
+/**
+ * A refusal raised by the database becomes an answer in our own words: never
+ * the database's or Prisma's text, which names tables and constraints
+ * (review of #279, P2-8). Anything that is not a refusal is rethrown (500).
+ */
 export function refusal(e: unknown): unknown {
   if (e instanceof CommError) return e;
   if (!(e instanceof Prisma.PrismaClientKnownRequestError) && !(e instanceof Prisma.PrismaClientUnknownRequestError)) return e;
   const meta = (e as { meta?: { code?: string; message?: string } }).meta;
   const raw = String(meta?.message ?? e.message);
-  const sqlstate = meta?.code ?? (/\b(23514|23505|23503)\b/.exec(raw)?.[1] ?? '');
-  const words = (/ERROR:\s*([^\n`]+)/.exec(raw)?.[1] ?? raw).trim();
-  if (sqlstate === '23514' || /check_violation/.test(raw)) return invalid(words);
-  if (sqlstate === '23503') return invalid('a board names a lesson or teacher that does not exist');
+  const sqlstate = meta?.code ?? (/\b(23514|23503)\b/.exec(raw)?.[1] ?? '');
+  if (/whiteboard_page_size/.test(raw)) return pageTooLarge();
+  if (sqlstate === '23514' || /check_violation/.test(raw)) return invalid('the board refused this change');
+  if (sqlstate === '23503') return invalid('the board names a lesson or teacher that does not exist');
   return e;
 }
+
+/** The one size measure is the database's (chat.whiteboard_page.document_bytes); 413 like an oversized body. */
+const pageTooLarge = () => new CommError(CommErrorCode.WHITEBOARD_LIMIT, 'page: a page holds at most 512 KB; add a page', 413, { limit: 'page' });
 
 /**
  * PD-39: the teacher whiteboard (docs/product/pd039-whiteboard-design.md §6, §10).
@@ -133,6 +153,7 @@ export class WhiteboardService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    private readonly notifications: NotificationService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -159,10 +180,11 @@ export class WhiteboardService {
   async open(boardId: string, actor: Actor): Promise<BoardDetail> {
     const { teacherId, organizationId } = this.teacher(actor);
     const support = currentImpersonationId();
-    return this.prisma.$transaction(async (tx) => {
+    return this.read(async (tx) => {
       const board = await this.ownBoard(tx, boardId, teacherId, organizationId);
       if (board.state !== 'active') throw state('a board in Deleted boards opens only after it is restored');
-      await this.record(tx, board, support ? { id: support, kind: 'support_session', basis: 'support_session' } : { id: teacherId, kind: 'teacher', basis: 'owner' }, 'open');
+      await this.record(tx, board, support ? await this.operatorOf(tx, support) : { id: teacherId, kind: 'teacher', basis: 'owner' }, 'open');
+      await this.readOnly(tx);
       return this.detail(tx, board, !support);
     });
   }
@@ -200,8 +222,8 @@ export class WhiteboardService {
       const source = await this.ownBoard(tx, boardId, teacherId, organizationId);
       if (source.state !== 'active') throw state('only a board in use can be duplicated');
       await this.assertBoardRoom(tx, teacherId);
-      await this.assertDocumentRoom(tx, teacherId, await this.boardBytes(tx, source.id), null);
       const copy = await this.copyBoard(tx, source, teacherId, organizationId, this.copyTitle(source.title));
+      await this.assertQuota(tx, teacherId);
       return this.detail(tx, await this.ownBoard(tx, copy, teacherId, organizationId), true);
     });
   }
@@ -226,15 +248,16 @@ export class WhiteboardService {
     const { teacherId, organizationId } = this.writer(actor);
     return this.write(async (tx) => {
       await this.lockTeacher(tx, teacherId);
-      const board = await this.ownBoard(tx, boardId, teacherId, organizationId, true);
+      const board = await this.ownBoard(tx, boardId, teacherId, organizationId);
       if (board.state !== 'trashed') throw state('only a board in Deleted boards can be restored');
-      // Past its 30 days the purge owns it: restoring now could race the deletion.
-      if (!board.purge_after || board.purge_after.getTime() <= Date.now()) throw notFound();
       await this.assertBoardRoom(tx, teacherId);
-      await tx.$executeRaw`
+      // Past its 30 days the purge owns it (the database's clock decides, as the purge's does).
+      const [restoredRow] = await tx.$queryRaw<Array<{ id: string }>>`
         UPDATE chat.whiteboard
-           SET state = 'active', trashed_at = NULL, purge_after = NULL, updated_at = now()
-         WHERE id = ${board.id}::uuid AND state = 'trashed'`;
+           SET state = 'active', trashed_at = NULL, purge_after = NULL, purge_attempts = 0, purge_retry_at = NULL, updated_at = now()
+         WHERE id = ${board.id}::uuid AND state = 'trashed' AND purge_after > now()
+        RETURNING id::text AS id`;
+      if (!restoredRow) throw notFound();
       const restored = await this.ownBoard(tx, board.id, teacherId, organizationId);
       await this.record(tx, restored, { id: teacherId, kind: 'teacher', basis: 'owner' }, 'restore');
       return this.detail(tx, restored, true);
@@ -252,7 +275,7 @@ export class WhiteboardService {
     return this.write(async (tx) => {
       const board = await this.bump(tx, boardId, teacherId, organizationId, body.revision);
       const count = Number(board.page_count);
-      if (count >= PAGES_PER_BOARD) throw limit(`pages: a board holds at most ${PAGES_PER_BOARD}`);
+      if (count >= PAGES_PER_BOARD) throw limit('pages', `pages: a board holds at most ${PAGES_PER_BOARD}`);
       const position = this.position(body.position, count);
       await this.openGap(tx, board.id, position);
       await tx.$executeRaw`
@@ -267,7 +290,7 @@ export class WhiteboardService {
     const { teacherId, organizationId } = this.writer(actor);
     const page = this.uuid(pageId, 'pageId');
     const checked = checkDocument(body.document);
-    if (!checked.ok) throw invalid(checked.reason);
+    if (!checked.ok) throw checked.tooLarge ? pageTooLarge() : invalid(checked.reason);
     const layout = body.layout === undefined ? null : this.choice(body.layout, LAYOUTS, 'layout', 'plain');
     const background = body.background === undefined ? null : this.choice(body.background, BACKGROUNDS, 'background', 'white');
     return this.write(async (tx) => {
@@ -275,7 +298,6 @@ export class WhiteboardService {
       const board = await this.bump(tx, boardId, teacherId, organizationId, body.revision);
       await this.assertPage(tx, board.id, page);
       await this.assertAssets(tx, board.id, checked.value.assetIds);
-      await this.assertDocumentRoom(tx, teacherId, checked.value.bytes, page);
       const [row] = await tx.$queryRaw<Array<{ updated_at: Date }>>`
         UPDATE chat.whiteboard_page
            SET document = ${JSON.stringify(checked.value.document)}::jsonb,
@@ -284,6 +306,7 @@ export class WhiteboardService {
                updated_at = now()
          WHERE id = ${page}::uuid AND board_id = ${board.id}::uuid
         RETURNING updated_at`;
+      await this.assertQuota(tx, teacherId);
       return { revision: board.revision, pageId: page, updatedAt: row.updated_at.toISOString() };
     });
   }
@@ -294,16 +317,14 @@ export class WhiteboardService {
     return this.write(async (tx) => {
       await this.lockTeacher(tx, teacherId);
       const board = await this.bump(tx, boardId, teacherId, organizationId, body.revision);
-      if (Number(board.page_count) >= PAGES_PER_BOARD) throw limit(`pages: a board holds at most ${PAGES_PER_BOARD}`);
+      if (Number(board.page_count) >= PAGES_PER_BOARD) throw limit('pages', `pages: a board holds at most ${PAGES_PER_BOARD}`);
       const source = await this.assertPage(tx, board.id, page);
-      const [{ bytes }] = await tx.$queryRaw<Array<{ bytes: number }>>`
-        SELECT document_bytes AS bytes FROM chat.whiteboard_page WHERE id = ${page}::uuid`;
-      await this.assertDocumentRoom(tx, teacherId, Number(bytes), null);
       await this.openGap(tx, board.id, source.position + 1);
       await tx.$executeRaw`
         INSERT INTO chat.whiteboard_page (board_id, position, layout, background, document)
         SELECT board_id, ${source.position + 1}, layout, background, document
           FROM chat.whiteboard_page WHERE id = ${page}::uuid`;
+      await this.assertQuota(tx, teacherId);
       return this.detail(tx, await this.ownBoard(tx, board.id, teacherId, organizationId), true);
     });
   }
@@ -349,47 +370,73 @@ export class WhiteboardService {
   // Staff: read-only (§10 1b), and a departed teacher's boards (4a)
   // ---------------------------------------------------------------------------
 
-  /** A teacher's boards in use and kept, for a reader of that teacher. Opening one is logged; listing is not. */
+  /**
+   * A teacher's boards in use and kept, for a reader of that teacher. A listing
+   * names the boards, so each one named is logged ('list'), as an open is.
+   */
   async teacherBoards(teacherId: string, actor: Actor): Promise<BoardSummary[]> {
     const teacher = this.uuid(teacherId, 'teacherId');
-    await this.readerBasis(this.prisma, actor, teacher);
-    const rows = await this.prisma.$queryRaw<BoardRow[]>`${BOARD_SELECT}
-      WHERE w.teacher_id = ${teacher}::uuid AND w.organization_id = ${actor.organizationId}::uuid
-        AND w.state IN ('active', 'retained')
-      ORDER BY w.updated_at DESC`;
-    return rows.map(summary);
+    return this.read(async (tx) => {
+      const basis = await this.readerBasis(tx, actor, teacher);
+      const rows = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT}
+        WHERE w.teacher_id = ${teacher}::uuid AND w.organization_id = ${actor.organizationId}::uuid
+          AND w.state IN ('active', 'retained')
+        ORDER BY w.updated_at DESC`;
+      for (const board of rows) await this.record(tx, board, { id: actor.actorId, kind: 'staff', basis }, 'list');
+      await this.readOnly(tx);
+      return rows.map(summary);
+    });
   }
 
   async review(boardId: string, actor: Actor): Promise<BoardDetail> {
-    return this.prisma.$transaction(async (tx) => {
+    return this.read(async (tx) => {
       const board = await this.readableBoard(tx, boardId, actor);
       const basis = await this.readerBasis(tx, actor, board.teacher_id);
       await this.record(tx, board, { id: actor.actorId, kind: 'staff', basis }, 'open');
+      await this.readOnly(tx);
       return this.detail(tx, board, false);
     });
   }
 
-  /** §10 1c, 4b: who opened or acted on the board, oldest first. Whiteboards.retention holders. */
+  /**
+   * §10 1c, 4b: who opened or acted on the board, oldest first -- read from the
+   * log itself, so it stays readable for a board in trash and after its purge.
+   * The reader must still reach the board's teacher (a departed teacher's are
+   * reached by the Teachers Manager and the super admin). Reading it is logged.
+   */
   async accessLog(boardId: string, actor: Actor) {
-    const board = await this.readableBoard(this.prisma, boardId, actor);
-    await this.readerBasis(this.prisma, actor, board.teacher_id);
-    const rows = await this.prisma.$queryRaw<Array<{ viewer_id: string | null; viewer_kind: string; viewer_name: string | null; basis: string; action: string; detail: unknown; at: Date }>>`
-      SELECT l.viewer_id::text AS viewer_id, l.viewer_kind, COALESCE(s.name, t.name) AS viewer_name,
-             l.basis, l.action, l.detail, l.at
-        FROM chat.whiteboard_access_log l
-        LEFT JOIN chat.staff s ON s.id = l.viewer_id AND l.viewer_kind = 'staff'
-        LEFT JOIN chat.teacher t ON t.id = l.viewer_id AND l.viewer_kind = 'teacher'
-       WHERE l.board_id = ${board.id}::uuid AND l.organization_id = ${board.organization_id}::uuid
-       ORDER BY l.at, l.id`;
-    return rows.map((r) => ({
-      viewerId: r.viewer_id,
-      viewerKind: r.viewer_kind,
-      viewerName: r.viewer_name,
-      basis: r.basis,
-      action: r.action,
-      detail: r.detail ?? null,
-      at: r.at.toISOString(),
-    }));
+    const id = this.boardId(boardId);
+    if (!actor.organizationId) throw notFound();
+    return this.read(async (tx) => {
+      const [owner] = await tx.$queryRaw<Array<{ teacher_id: string }>>`
+        SELECT teacher_id::text AS teacher_id FROM chat.whiteboard_access_log
+         WHERE board_id = ${id}::uuid AND organization_id = ${actor.organizationId}::uuid
+         LIMIT 1`;
+      if (!owner) throw notFound();
+      const basis = await this.readerBasis(tx, actor, owner.teacher_id);
+      await tx.$executeRaw`
+        INSERT INTO chat.whiteboard_access_log (organization_id, board_id, teacher_id, viewer_id, viewer_kind, basis, action)
+        VALUES (${actor.organizationId}::uuid, ${id}::uuid, ${owner.teacher_id}::uuid, ${actor.actorId}::uuid, 'staff', ${basis}, 'read_log')`;
+      await this.readOnly(tx);
+      const rows = await tx.$queryRaw<Array<{ viewer_id: string | null; viewer_kind: string; viewer_name: string | null; basis: string; action: string; detail: unknown; at: Date }>>`
+        SELECT l.viewer_id::text AS viewer_id, l.viewer_kind, COALESCE(s.name, t.name) AS viewer_name,
+               l.basis, l.action, l.detail, l.at
+          FROM chat.whiteboard_access_log l
+          LEFT JOIN chat.staff s ON s.id = l.viewer_id AND l.viewer_kind IN ('staff', 'support_session')
+          LEFT JOIN chat.teacher t ON t.id = l.viewer_id AND l.viewer_kind = 'teacher'
+         WHERE l.board_id = ${id}::uuid AND l.organization_id = ${actor.organizationId}::uuid
+         ORDER BY l.at, l.id`;
+      return rows.map((r) => ({
+        viewerId: r.viewer_id,
+        // A support session is shown as "support session by <viewerName>", the operator.
+        viewerKind: r.viewer_kind,
+        viewerName: r.viewer_name,
+        basis: r.basis,
+        action: r.action,
+        detail: r.detail ?? null,
+        at: r.at.toISOString(),
+      }));
+    });
   }
 
   /**
@@ -409,8 +456,8 @@ export class WhiteboardService {
       if (!teacher) throw invalid('teacherId: an active teacher of this organization');
       await this.lockTeacher(tx, target);
       await this.assertBoardRoom(tx, target);
-      await this.assertDocumentRoom(tx, target, await this.boardBytes(tx, source.id), null);
       const copy = await this.copyBoard(tx, source, target, source.organization_id, source.title);
+      await this.assertQuota(tx, target);
       await this.record(tx, source, { id: actor.actorId, kind: 'staff', basis }, 'copy', { toBoardId: copy, toTeacherId: target });
       const [row] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${copy}::uuid`;
       return summary(row);
@@ -422,43 +469,54 @@ export class WhiteboardService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Boards past their 30 days in trash or 12 months kept: storage objects
-   * first, then the rows (with a 'purge' log row that outlives them). A board
-   * whose objects could not all be deleted stays for the next sweep.
-   * Idempotent and safe on every replica (each board is claimed with SKIP LOCKED).
+   * Boards past their 30 days in trash or 12 months kept. Each board is locked
+   * and re-checked FIRST (SKIP LOCKED: safe on every replica, and a restore in
+   * flight wins), then its storage objects are deleted, then its rows, with a
+   * 'purge' log row that outlives them -- all in that one transaction. A board
+   * whose objects cannot be deleted is rolled back and waits behind the rest
+   * (purge_retry_at, doubling to 7 days), so it never stalls a sweep. The
+   * database's clock decides what is due, as it does for a restore.
    */
-  async purgeDue(now: Date = new Date()): Promise<{ purged: number; failed: number }> {
+  async purgeDue(): Promise<{ purged: number; failed: number }> {
     const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id::text AS id FROM chat.whiteboard
-       WHERE (state = 'trashed' AND purge_after <= ${now})
-          OR (state = 'retained' AND retained_until <= ${now})
-       ORDER BY COALESCE(purge_after, retained_until)
+       WHERE ((state = 'trashed' AND purge_after <= now()) OR (state = 'retained' AND retained_until <= now()))
+         AND (purge_retry_at IS NULL OR purge_retry_at <= now())
+       ORDER BY purge_attempts, COALESCE(purge_after, retained_until)
        LIMIT ${PURGE_BATCH}`;
     let purged = 0;
     let failed = 0;
     for (const { id } of due) {
       try {
-        const keys = await this.prisma.$queryRaw<Array<{ object_key: string }>>`
-          SELECT object_key FROM chat.whiteboard_asset WHERE board_id = ${id}::uuid`;
-        for (const { object_key } of keys) await this.storage.delete(object_key);
-        const done = await this.prisma.$transaction(async (tx) => {
-          const [board] = await tx.$queryRaw<Array<{ organization_id: string; teacher_id: string; state: string }>>`
-            SELECT organization_id::text AS organization_id, teacher_id::text AS teacher_id, state FROM chat.whiteboard
-             WHERE id = ${id}::uuid
-               AND ((state = 'trashed' AND purge_after <= ${now}) OR (state = 'retained' AND retained_until <= ${now}))
-             FOR UPDATE SKIP LOCKED`;
-          if (!board) return false;
-          await tx.$executeRaw`DELETE FROM chat.whiteboard WHERE id = ${id}::uuid`;
-          await tx.$executeRaw`
-            INSERT INTO chat.whiteboard_access_log (organization_id, board_id, teacher_id, viewer_id, viewer_kind, basis, action, detail)
-            VALUES (${board.organization_id}::uuid, ${id}::uuid, ${board.teacher_id}::uuid, NULL, 'system', 'system', 'purge',
-                    jsonb_build_object('from', ${board.state}::text))`;
-          return true;
-        });
+        const done = await this.prisma.$transaction(
+          async (tx) => {
+            const [board] = await tx.$queryRaw<Array<{ organization_id: string; teacher_id: string; state: string }>>`
+              SELECT organization_id::text AS organization_id, teacher_id::text AS teacher_id, state FROM chat.whiteboard
+               WHERE id = ${id}::uuid
+                 AND ((state = 'trashed' AND purge_after <= now()) OR (state = 'retained' AND retained_until <= now()))
+               FOR UPDATE SKIP LOCKED`;
+            if (!board) return false;
+            const keys = await tx.$queryRaw<Array<{ object_key: string }>>`
+              SELECT object_key FROM chat.whiteboard_asset WHERE board_id = ${id}::uuid`;
+            for (const { object_key } of keys) await this.storage.delete(object_key);
+            await tx.$executeRaw`DELETE FROM chat.whiteboard WHERE id = ${id}::uuid`;
+            await tx.$executeRaw`
+              INSERT INTO chat.whiteboard_access_log (organization_id, board_id, teacher_id, viewer_id, viewer_kind, basis, action, detail)
+              VALUES (${board.organization_id}::uuid, ${id}::uuid, ${board.teacher_id}::uuid, NULL, 'system', 'system', 'purge',
+                      jsonb_build_object('from', ${board.state}::text))`;
+            return true;
+          },
+          { timeout: 60_000 },
+        );
         if (done) purged += 1;
       } catch (e) {
         failed += 1;
         this.log.warn(`board ${id} not purged this sweep: ${e instanceof Error ? e.message : String(e)}`);
+        await this.prisma.$executeRaw`
+          UPDATE chat.whiteboard
+             SET purge_attempts = purge_attempts + 1,
+                 purge_retry_at = now() + make_interval(hours => LEAST(${PURGE_RETRY_MAX_HOURS}::int, power(2, purge_attempts)::int))
+           WHERE id = ${id}::uuid`;
       }
     }
     return { purged, failed };
@@ -466,44 +524,54 @@ export class WhiteboardService {
 
   /**
    * §10 4c: once per departed teacher, 30 days before their boards' 12 months
-   * end, the Teachers Manager and the super admin are told (PD-34 Center and
-   * push). A name, a count and a date: never a board's content.
+   * end, the Teachers Manager and the super admin are told -- through
+   * NotificationService.schedule, so the recipient's organization is checked
+   * (RT-031) and their quiet hours kept; in the language of their latest
+   * device, with the date in their own time zone (PD-22). A name, a count and
+   * a date: never a board's content.
    */
-  async retentionNotices(now: Date = new Date()): Promise<number> {
+  async retentionNotices(): Promise<number> {
     const due = await this.prisma.$queryRaw<Array<{ organization_id: string; teacher_id: string; name: string; boards: number; until: Date }>>`
       SELECT w.organization_id::text AS organization_id, w.teacher_id::text AS teacher_id, t.name,
              count(*)::int AS boards, min(w.retained_until) AS until
         FROM chat.whiteboard w JOIN chat.teacher t ON t.id = w.teacher_id
        WHERE w.state = 'retained' AND w.retention_notified_at IS NULL
-         AND w.retained_until <= ${now}::timestamptz + interval '30 days'
+         AND w.retained_until <= now() + interval '30 days'
        GROUP BY w.organization_id, w.teacher_id, t.name`;
+    if (due.length === 0) return 0;
+    const academy = await this.academyZone();
     let sent = 0;
     for (const d of due) {
-      const date = d.until.toISOString().slice(0, 10);
-      await this.prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`
-          INSERT INTO chat.notification
-            (organization_id, dedupe_key, template_key, event_type, recipient_id, locale, channel, priority, variables, status, scheduled_at)
-          SELECT ${d.organization_id}::uuid,
-                 'whiteboard_retention_expiring:' || ${d.teacher_id} || ':' || ${date} || ':' || r.id,
-                 'whiteboard_retention_expiring', 'whiteboard_retention_expiring', r.id, 'ar', 'push', 'normal',
-                 jsonb_build_object('teacher', ${d.name}::text, 'boards', ${d.boards}::int, 'date', ${date}::text),
-                 'scheduled', ${now}::timestamptz
-            FROM (
-              SELECT s.id FROM chat.department dep JOIN chat.staff s ON s.id = dep.manager_id
-               WHERE dep.organization_id = ${d.organization_id}::uuid AND dep.kind = 'teachers'
-                 AND s.is_active AND s.left_at IS NULL
-              UNION
-              SELECT s.id FROM chat.staff s
-               WHERE s.organization_id = ${d.organization_id}::uuid AND s.role = 'super_admin'
-                 AND s.is_active AND s.left_at IS NULL
-            ) r
-          ON CONFLICT (dedupe_key) DO NOTHING`;
-        await tx.$executeRaw`
-          UPDATE chat.whiteboard SET retention_notified_at = ${now}::timestamptz
-           WHERE teacher_id = ${d.teacher_id}::uuid AND state = 'retained' AND retention_notified_at IS NULL
-             AND retained_until <= ${now}::timestamptz + interval '30 days'`;
-      });
+      const recipients = await this.prisma.$queryRaw<Array<{ id: string; locale: string | null }>>`
+        SELECT r.id::text AS id,
+               (SELECT dt.locale FROM chat.device_token dt WHERE dt.actor_id = r.id AND dt.is_active
+                 ORDER BY dt.last_seen_at DESC LIMIT 1) AS locale
+          FROM (
+            SELECT s.id FROM chat.department dep JOIN chat.staff s ON s.id = dep.manager_id
+             WHERE dep.organization_id = ${d.organization_id}::uuid AND dep.kind = 'teachers'
+               AND s.is_active AND s.left_at IS NULL
+            UNION
+            SELECT s.id FROM chat.staff s
+             WHERE s.organization_id = ${d.organization_id}::uuid AND s.role = 'super_admin'
+               AND s.is_active AND s.left_at IS NULL
+          ) r`;
+      const zones = await zonesOf(this.prisma, recipients.map((r) => r.id));
+      for (const r of recipients) {
+        const lang = r.locale === 'en' ? 'en' : 'ar';
+        await this.notifications.schedule({
+          dedupeKey: `whiteboard_retention_expiring:${d.teacher_id}:${d.until.toISOString().slice(0, 10)}:${r.id}`,
+          templateKey: 'whiteboard_retention_expiring',
+          eventType: 'whiteboard_retention_expiring',
+          recipientId: r.id,
+          locale: lang,
+          variables: { teacher: d.name, boards: d.boards, date: dayIn(d.until, zones.get(r.id) ?? academy, lang) },
+          scheduledAt: new Date(),
+        });
+      }
+      await this.prisma.$executeRaw`
+        UPDATE chat.whiteboard SET retention_notified_at = now()
+         WHERE teacher_id = ${d.teacher_id}::uuid AND state = 'retained' AND retention_notified_at IS NULL
+           AND retained_until <= now() + interval '30 days'`;
       sent += 1;
     }
     return sent;
@@ -607,24 +675,22 @@ export class WhiteboardService {
   private async assertBoardRoom(tx: Tx, teacherId: string): Promise<void> {
     const [{ n }] = await tx.$queryRaw<Array<{ n: number }>>`
       SELECT count(*)::int AS n FROM chat.whiteboard WHERE teacher_id = ${teacherId}::uuid AND state = 'active'`;
-    if (Number(n) >= BOARDS_PER_TEACHER) throw limit(`boards: at most ${BOARDS_PER_TEACHER} in use; move some to Deleted boards`);
+    if (Number(n) >= BOARDS_PER_TEACHER) throw limit('boards', `boards: at most ${BOARDS_PER_TEACHER} in use; move some to Deleted boards`);
   }
 
-  /** The teacher's documents, without `exceptPage`, plus `adding`, within the quota. */
-  private async assertDocumentRoom(tx: Tx, teacherId: string, adding: number, exceptPage: string | null): Promise<void> {
+  /**
+   * The teacher's drawings, AFTER the write, within the quota: the database's
+   * own measure (document_bytes), the same one the page limit uses (review of
+   * #279, P2-2). Over it, the transaction rolls back and nothing is written.
+   */
+  private async assertQuota(tx: Tx, teacherId: string): Promise<void> {
     const [{ used }] = await tx.$queryRaw<Array<{ used: bigint }>>`
       SELECT COALESCE(sum(p.document_bytes), 0)::bigint AS used
         FROM chat.whiteboard_page p JOIN chat.whiteboard w ON w.id = p.board_id
-       WHERE w.teacher_id = ${teacherId}::uuid AND (${exceptPage}::uuid IS NULL OR p.id <> ${exceptPage}::uuid)`;
-    if (Number(used) + adding > DOCUMENT_BYTES_PER_TEACHER) {
-      throw limit(`storage: a teacher's boards hold at most ${DOCUMENT_BYTES_PER_TEACHER / (1024 * 1024)} MB of drawings; delete boards you no longer need`);
+       WHERE w.teacher_id = ${teacherId}::uuid`;
+    if (Number(used) > DOCUMENT_BYTES_PER_TEACHER) {
+      throw limit('storage', `storage: a teacher's boards hold at most ${DOCUMENT_BYTES_PER_TEACHER / (1024 * 1024)} MB of drawings; delete boards you no longer need`);
     }
-  }
-
-  private async boardBytes(tx: Tx, boardId: string): Promise<number> {
-    const [{ bytes }] = await tx.$queryRaw<Array<{ bytes: bigint }>>`
-      SELECT COALESCE(sum(document_bytes), 0)::bigint AS bytes FROM chat.whiteboard_page WHERE board_id = ${boardId}::uuid`;
-    return Number(bytes);
   }
 
   /**
@@ -676,11 +742,42 @@ export class WhiteboardService {
   }
 
   /** §10 1c: written in the caller's transaction, so a read never outruns its row. */
-  private async record(tx: Tx, board: BoardRow, viewer: { id: string; kind: 'teacher' | 'staff' | 'support_session'; basis: Basis }, action: Action, detail?: Record<string, string>): Promise<void> {
+  private async record(tx: Tx, board: BoardRow, viewer: Viewer, action: Action, detail?: Record<string, string>): Promise<void> {
+    const extra = viewer.detail || detail ? { ...viewer.detail, ...detail } : null;
     await tx.$executeRaw`
       INSERT INTO chat.whiteboard_access_log (organization_id, board_id, teacher_id, viewer_id, viewer_kind, basis, action, detail)
       VALUES (${board.organization_id}::uuid, ${board.id}::uuid, ${board.teacher_id}::uuid, ${viewer.id}::uuid,
-              ${viewer.kind}, ${viewer.basis}, ${action}, ${detail ? JSON.stringify(detail) : null}::jsonb)`;
+              ${viewer.kind}, ${viewer.basis}, ${action}, ${extra ? JSON.stringify(extra) : null}::jsonb)`;
+  }
+
+  /**
+   * A support session's viewer is its OPERATOR, the staff member behind it
+   * (review of #279, P2-4): the access history shows who really looked.
+   */
+  private async operatorOf(tx: Tx, supportSessionId: string): Promise<Viewer> {
+    const [row] = await tx.$queryRaw<Array<{ staff_id: string }>>`
+      SELECT staff_id::text AS staff_id FROM chat.impersonation_session WHERE id = ${supportSessionId}::uuid`;
+    if (!row) throw new CommError(CommErrorCode.WHITEBOARD_DENIED, 'no such support session');
+    return { id: row.staff_id, kind: 'support_session', basis: 'support_session', detail: { supportSessionId } };
+  }
+
+  /** A read: its log row first, then nothing more may be written (§10 1d). */
+  private async read<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+    try {
+      return await this.prisma.$transaction(fn);
+    } catch (e) {
+      throw refusal(e);
+    }
+  }
+
+  /** After the access-log row: the rest of this transaction can only read. */
+  private async readOnly(tx: Tx): Promise<void> {
+    await tx.$executeRaw`SET TRANSACTION READ ONLY`;
+  }
+
+  private async academyZone(): Promise<string> {
+    const [row] = await this.prisma.$queryRaw<Array<{ value: unknown }>>`SELECT value FROM chat.config WHERE key = 'schedule.timezone'`;
+    return canonicalZone(row?.value) ?? ACADEMY_ZONE;
   }
 
   private async lockTeacher(tx: Tx, teacherId: string): Promise<void> {

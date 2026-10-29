@@ -63,6 +63,20 @@ describe('a board page document', () => {
     expect(reason([])).toMatch(/must be an object/);
   });
 
+  it('bounds how deep, wide and long an element\'s own fields are, and refuses non-finite numbers', () => {
+    expect(reason(doc({ id: 'x', kind: 'line', style: { a: { b: { c: { d: 1 } } } } }))).toMatch(/nested deeper than 4/);
+    expect(reason(doc({ id: 'x', kind: 'line', pts: Array.from({ length: 1025 }, () => 0) }))).toMatch(/array of more than 1024/);
+    expect(reason(doc({ id: 'x', kind: 'line', ...Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`f${i}`, i])) }))).toMatch(/more than 32 fields/);
+    expect(reason(doc({ id: 'x', kind: 'line', w: Number.POSITIVE_INFINITY }))).toMatch(/finite/);
+    expect(reason(doc({ id: 'x', kind: 'line', style: { color: '#123456', dash: [4, 2] } }))).toBeNull();
+  });
+
+  it('marks an oversized page as too large (the service answers 413), and caps its element count', () => {
+    const big = 'x'.repeat(1900);
+    const r = checkDocument(doc(...Array.from({ length: 300 }, (_, i) => ({ id: `t${i}`, kind: 'text', text: big }))));
+    expect(r.ok === false && r.tooLarge).toBe(true);
+  });
+
   it('caps a page at 512 KB and at its element count', () => {
     const big = 'x'.repeat(1900);
     const elements = Array.from({ length: 300 }, (_, i) => ({ id: `t${i}`, kind: 'text', text: big }));

@@ -159,6 +159,7 @@ export class TeacherBoardsController {
   }
 
   @Requires('whiteboards.retention')
+  @RateLimited(ActionScope.WHITEBOARD_WRITE)
   @Post(':id/copy')
   @HttpCode(201)
   copy(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {

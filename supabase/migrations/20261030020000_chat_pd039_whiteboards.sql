@@ -47,6 +47,11 @@ create table chat.whiteboard (
   purge_after            timestamptz,
   retained_until         timestamptz,
   retention_notified_at  timestamptz,
+  -- The purge's back-off: a board whose storage objects could not be deleted
+  -- waits (1 h, 2 h, 4 h ... up to 7 days) behind the rest instead of
+  -- stalling every sweep.
+  purge_attempts         integer not null default 0 check (purge_attempts >= 0),
+  purge_retry_at         timestamptz,
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now(),
   constraint whiteboard_trash_dates check (
@@ -58,6 +63,7 @@ create table chat.whiteboard (
 create index whiteboard_teacher_idx on chat.whiteboard (teacher_id, state, updated_at desc);
 create index whiteboard_purge_idx on chat.whiteboard (purge_after) where state = 'trashed';
 create index whiteboard_retention_idx on chat.whiteboard (retained_until) where state = 'retained';
+create index whiteboard_purge_retry_idx on chat.whiteboard (purge_retry_at) where purge_retry_at is not null;
 
 comment on table chat.whiteboard is
   'PD-39: a teacher''s board. active / trashed (restorable 30 days, then purged) / retained (the teacher left: kept 12 months for the Teachers department, then purged). Owner and organization never change. Written by the API only.';
@@ -115,10 +121,11 @@ create table chat.whiteboard_page (
                     check (background in ('white', 'cream', 'grey', 'green', 'dark')),
   document        jsonb not null default '{"v": 1, "elements": []}'::jsonb
                     check (jsonb_typeof(document) = 'object'),
-  -- Kept by the trigger below, for the per-teacher quota. The API enforces the
-  -- 512 KB page limit on compact JSON; jsonb's text form spaces its separators,
-  -- so this backstop leaves room for that (640 KB).
-  document_bytes  integer not null default 0 check (document_bytes between 0 and 655360),
+  -- THE size of a page, kept by the trigger below: the bytes of the stored
+  -- document's text. The 512 KB page limit and the per-teacher quota both use
+  -- this one measure (review of #279, P2-2); the API's own count of compact
+  -- JSON is only an early refusal, never the decision.
+  document_bytes  integer not null default 0 constraint whiteboard_page_size check (document_bytes between 0 and 524288),
   updated_at      timestamptz not null default now(),
   constraint whiteboard_page_position unique (board_id, position) deferrable initially immediate
 );
@@ -178,7 +185,9 @@ create table chat.whiteboard_access_log (
   viewer_id        uuid,
   viewer_kind      text not null check (viewer_kind in ('teacher', 'staff', 'support_session', 'system')),
   basis            text not null check (basis in ('owner', 'supervisor', 'backup', 'teachers_manager', 'super_admin', 'support_session', 'system')),
-  action           text not null check (action in ('open', 'export', 'trash', 'restore', 'copy', 'purge', 'retain', 'unretain')),
+  -- open: a board's pages read; list: a board named in a staff listing;
+  -- read_log: this history read; the rest: what was done to the board.
+  action           text not null check (action in ('open', 'list', 'read_log', 'export', 'trash', 'restore', 'copy', 'purge', 'retain', 'unretain')),
   detail           jsonb,
   at               timestamptz not null default now(),
   constraint whiteboard_access_log_viewer check ((viewer_kind = 'system') = (viewer_id is null))
@@ -252,10 +261,17 @@ begin
     insert into chat.whiteboard_access_log (organization_id, board_id, teacher_id, viewer_id, viewer_kind, basis, action)
     select m.organization_id, m.id, m.teacher_id, null, 'system', 'system', 'retain' from moved m;
   elsif is_active and not was_active then
+    -- Back within their 12 months, and within the 200 boards a teacher keeps
+    -- in use (the newest first); any beyond stay retained on their deadline.
     with back as (
       update chat.whiteboard w
          set state = 'active', retained_until = null, retention_notified_at = null, updated_at = now()
-       where w.teacher_id = new.id and w.state = 'retained' and w.retained_until > now()
+       where w.id in (
+               select r.id from chat.whiteboard r
+                where r.teacher_id = new.id and r.state = 'retained' and r.retained_until > now()
+                order by r.updated_at desc
+                limit greatest(0, 200 - (select count(*) from chat.whiteboard a
+                                          where a.teacher_id = new.id and a.state = 'active')))
       returning w.id, w.organization_id, w.teacher_id)
     insert into chat.whiteboard_access_log (organization_id, board_id, teacher_id, viewer_id, viewer_kind, basis, action)
     select b.organization_id, b.id, b.teacher_id, null, 'system', 'system', 'unretain' from back b;

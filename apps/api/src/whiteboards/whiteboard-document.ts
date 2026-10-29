@@ -22,6 +22,16 @@ export const DOCUMENT_VERSION = 1;
 /** A verse element spans at most this many ayat (the picker's limit, §4.3). */
 export const VERSE_MAX_AYAT = 20;
 const TEXT_MAX_CHARS = 2000;
+/**
+ * The shape of an element's own fields (review of #279, P2-8): nested at most
+ * this deep below the element, arrays and objects this wide, strings this
+ * long (a stroke's packed points are its longest), and only finite numbers.
+ * The 512 KB limit bounds the total; these bound what parsing it can cost.
+ */
+export const ELEMENT_MAX_DEPTH = 4;
+const ARRAY_MAX_ITEMS = 1024;
+const OBJECT_MAX_KEYS = 32;
+const STRING_MAX_CHARS = 400_000;
 
 export const ELEMENT_KINDS = ['stroke', 'highlight', 'shape', 'line', 'arrow', 'text', 'stamp', 'image', 'verse'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
@@ -54,7 +64,7 @@ export interface CheckedDocument {
 }
 
 /** Why a document is refused, in words the client can show; null when it is accepted. */
-export type DocumentCheck = { ok: true; value: CheckedDocument } | { ok: false; reason: string };
+export type DocumentCheck = { ok: true; value: CheckedDocument } | { ok: false; reason: string; tooLarge?: true };
 
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 
@@ -74,6 +84,8 @@ export function checkDocument(input: unknown): DocumentCheck {
     const at = `document.elements[${i}]`;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, reason: `${at}: must be an object` };
     const el = raw as Record<string, unknown>;
+    const shape = checkShape(el, 0);
+    if (shape) return { ok: false, reason: `${at}${shape}` };
     if (typeof el.id !== 'string' || !ELEMENT_ID.test(el.id)) return { ok: false, reason: `${at}.id: 1-64 letters, digits, _ or -` };
     if (ids.has(el.id)) return { ok: false, reason: `${at}.id: ${el.id} is used twice` };
     ids.add(el.id);
@@ -104,6 +116,32 @@ export function checkDocument(input: unknown): DocumentCheck {
 
   const document = { v: DOCUMENT_VERSION, elements: doc.elements as Record<string, unknown>[] };
   const bytes = Buffer.byteLength(JSON.stringify(document), 'utf8');
-  if (bytes > PAGE_MAX_BYTES) return { ok: false, reason: `document: ${bytes} bytes; a page holds at most ${PAGE_MAX_BYTES}. Add a page` };
+  if (bytes > PAGE_MAX_BYTES) return { ok: false, reason: `document: ${bytes} bytes; a page holds at most ${PAGE_MAX_BYTES}. Add a page`, tooLarge: true };
   return { ok: true, value: { document, bytes, assetIds: [...new Set(assetIds)], verses } };
+}
+
+/** Why a value is too deep, too wide, too long or not a finite number; null when it fits. */
+function checkShape(value: unknown, depth: number): string | null {
+  if (value === null || typeof value === 'boolean') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? null : ': numbers must be finite';
+  if (typeof value === 'string') return value.length <= STRING_MAX_CHARS ? null : `: a string over ${STRING_MAX_CHARS} characters`;
+  if (depth >= ELEMENT_MAX_DEPTH) return `: nested deeper than ${ELEMENT_MAX_DEPTH}`;
+  if (Array.isArray(value)) {
+    if (value.length > ARRAY_MAX_ITEMS) return `: an array of more than ${ARRAY_MAX_ITEMS}`;
+    for (const [i, v] of value.entries()) {
+      const r = checkShape(v, depth + 1);
+      if (r) return `[${i}]${r}`;
+    }
+    return null;
+  }
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as object);
+    if (keys.length > OBJECT_MAX_KEYS) return `: more than ${OBJECT_MAX_KEYS} fields`;
+    for (const k of keys) {
+      const r = checkShape((value as Record<string, unknown>)[k], depth + 1);
+      if (r) return `.${k}${r}`;
+    }
+    return null;
+  }
+  return ': not a JSON value';
 }
