@@ -3,6 +3,7 @@ import { isUuid } from '../communication/conversations/conversation.service';
 import { DEFAULT_PHONE_REGION, toE164 } from '../parent-profile/parent-phone-directory';
 import { PAYMENT_METHODS, type ScheduleSlot } from './new-students.service';
 import { normaliseEmailForKey } from './contact-key';
+import { parseLocation, type LocationValue } from '../geo/location';
 
 /**
  * PD-42: what a supervisor types to enter a family by hand, validated. Jawwid
@@ -46,6 +47,8 @@ export interface IntakeParent {
   phone: string | null;
   /** E.164, for the contact key; null when no phone. */
   phoneE164: string | null;
+  /** PD-45: where the family lives -- optional at intake (owner Q2). */
+  location: LocationValue | null;
 }
 
 export interface IntakeInput {
@@ -92,7 +95,7 @@ export function parseIntake(raw: unknown): IntakeInput {
   if (currency !== null && !/^[A-Z]{3}$/.test(currency)) throw invalid('payment.currency: a three-letter currency code');
   return {
     intakeId: uuid(body.intakeId, 'intakeId'),
-    parent: { name, email, phone, phoneE164 },
+    parent: { name, email, phone, phoneE164, location: parseLocation(parentRaw.location, 'parent.location') },
     children: children(body.children),
     payment: { method: method as 'bank_transfer' | 'invoice' | null, currency },
     onBehalfOf: body.onBehalfOf === undefined || body.onBehalfOf === null ? null : uuid(body.onBehalfOf, 'onBehalfOf'),

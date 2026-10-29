@@ -149,6 +149,23 @@ export class FamilyIntakeService {
       for (const k of keys) {
         await tx.familyContactKey.create({ data: { organizationId: s.org, keyHash: k.hash, familyId, kind: k.kind, createdBy: s.actor.actorId } });
       }
+      // PD-45: where the family lives, when given (optional at intake, owner Q2). After
+      // the Sales owner exists, so PD-42's "own" scope sees the family as theirs.
+      if (input.parent.location) {
+        const now = new Date();
+        await tx.family.update({
+          where: { id: familyId },
+          data: {
+            countryCode: input.parent.location.countryCode,
+            subdivisionCode: input.parent.location.subdivisionCode,
+            locationSource: 'staff',
+            locationUpdatedBy: s.actor.actorId,
+            locationUpdatedAt: now,
+            segmentSource: 'admin',
+            segmentUpdatedAt: now,
+          },
+        });
+      }
       await seedFromEnrolment(tx, {
         contactId: contact.id, familyId, organizationId: s.org, actorId: s.actor.actorId,
         phone: input.parent.phone, email: input.parent.email,

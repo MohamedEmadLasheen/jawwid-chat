@@ -161,6 +161,51 @@ describe('2. booking', () => {
     await trials.book(tsupId, { prospectId, teacherId: s.teacherId, startsAt: slots[9] });
   });
 
+  it('PD-45: a booking may carry the family\'s location; it is kept beside the prospect and read back only by Sales, to pre-fill the form', async () => {
+    await openAllWeek();
+    const { slots } = await trials.slots(salesId, s.teacherId, '30');
+    expect(await code(trials.book(salesId, {
+      prospectId, teacherId: s.teacherId, startsAt: slots[3], location: { countryCode: 'EG', subdivisionCode: 'AE-DU' },
+    }))).toBe(CommErrorCode.VALIDATION);
+    expect(await code(trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[3], location: { countryCode: 'UK' } }))).toBe(CommErrorCode.VALIDATION);
+    const t = await trials.book(salesId, {
+      prospectId, teacherId: s.teacherId, startsAt: slots[3], location: { countryCode: 'eg', subdivisionCode: 'eg-gz' },
+    });
+    // BR-2: the trial, its card and its events never carry it.
+    expect(JSON.stringify(t)).not.toMatch(/EG-GZ|Giza|الجيزة|subdivision/);
+    expect(JSON.stringify(await trials.get(s.teacherId, t.id))).not.toMatch(/EG-GZ|subdivision/);
+    const leaked = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(
+      `select ((select count(*) from chat.message where body like '%EG-GZ%') + (select count(*) from chat.outbox_event where payload::text like '%EG-GZ%'))::int as n`,
+    );
+    expect(leaked[0]!.n).toBe(0);
+
+    expect(await trials.subscriptionPrefill(salesId, t.id)).toEqual({
+      location: {
+        country: { code: 'EG', en: 'Egypt', ar: 'مصر' },
+        subdivision: { code: 'EG-GZ', en: 'Giza', ar: 'الجيزة' },
+        label: { en: 'Governorate', ar: 'المحافظة' },
+      },
+    });
+    // A Teachers-department manager (tsupId: the 'manager' standing) may book, and so write
+    // it, but never reads it back; the trial's own teacher never does.
+    expect(await code(trials.subscriptionPrefill(tsupId, t.id))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(trials.subscriptionPrefill(s.teacherId, t.id))).toBe(CommErrorCode.LESSON_DENIED);
+
+    // Re-booking the SAME prospect with a location overwrites the one it had (by anyone who may book) ...
+    await trials.book(tsupId, { prospectId, teacherId: s.teacherId, startsAt: slots[7], location: { countryCode: 'AE' } });
+    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'AE' }, subdivision: null });
+    await trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[9], location: { countryCode: 'SA', subdivisionCode: 'SA-01' } });
+    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'SA' }, subdivision: { code: 'SA-01' } });
+    expect(await g.prisma.trialProspectLocation.count({ where: { prospectId } })).toBe(1);
+    // ... and one without a location leaves it.
+    await trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[11] });
+    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'SA' } });
+
+    const other = (await trials.createProspect(salesId, { displayName: 'prospect_r' })).id;
+    const bare = await trials.book(salesId, { prospectId: other, teacherId: s.teacherId, startsAt: slots[13] });
+    expect(await trials.subscriptionPrefill(salesId, bare.id)).toEqual({ location: null });
+  });
+
   it('the lesson pages never see a trial', async () => {
     const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
     expect(await code(lessons.get(tsupId, id))).toBe(CommErrorCode.LESSON_NOT_FOUND);

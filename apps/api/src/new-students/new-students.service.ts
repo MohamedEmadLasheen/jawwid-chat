@@ -4,6 +4,7 @@ import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { awayRefusal } from '../leave/away';
 import { isUuid } from '../communication/conversations/conversation.service';
+import { locationOf, parseLocation, type LocationValue } from '../geo/location';
 
 type Tx = Prisma.TransactionClient;
 
@@ -43,7 +44,8 @@ export interface TrialFormPayer {
 
 /** Sales' subscription form, validated. */
 export interface SubscriptionForm {
-  parent: { name: string; email: string | null; phone: string };
+  /** PD-45 `location`: undefined when the form leaves it out (a change keeps the stored one), null to clear it. */
+  parent: { name: string; email: string | null; phone: string; location?: LocationValue | null };
   children: ChildForm[];
   payment: { currency: string; method: 'bank_transfer' | 'invoice' };
 }
@@ -74,6 +76,8 @@ export class NewStudentsService {
       name: text(parentRaw.name, 'parent.name', 120, true) as string,
       email: email(parentRaw.email),
       phone: phone(parentRaw.phone),
+      // PD-45: optional until the new form (PR-3b) makes it required (owner Q1).
+      ...('location' in parentRaw ? { location: parseLocation(parentRaw.location, 'parent.location') } : {}),
     };
 
     if (!Array.isArray(body.children) || body.children.length < 1 || body.children.length > MAX_CHILDREN) {
@@ -202,7 +206,14 @@ export class NewStudentsService {
         recordedAt: f.recordedAt.toISOString(),
         recordedBy: { id: f.recordedBy, name: staffName.get(f.recordedBy) ?? '' },
         updatedAt: f.updatedAt?.toISOString() ?? null,
-        parent: { name: f.parentName, email: f.confinedEmail, phone: f.confinedParentPhone },
+        parent: {
+          name: f.parentName,
+          email: f.confinedEmail,
+          phone: f.confinedParentPhone,
+          location: f.countryCode
+            ? { countryCode: f.countryCode, subdivisionCode: f.subdivisionCode, names: locationOf(f.countryCode, f.subdivisionCode) }
+            : null,
+        },
         children: (f.children as unknown as ChildForm[]).map((c) => ({
           name: c.name,
           age: c.age,
@@ -226,6 +237,9 @@ function columns(form: SubscriptionForm) {
     children: form.children as unknown as Prisma.InputJsonValue,
     currency: form.payment.currency,
     paymentMethod: form.payment.method,
+    ...(form.parent.location === undefined
+      ? {}
+      : { countryCode: form.parent.location?.countryCode ?? null, subdivisionCode: form.parent.location?.subdivisionCode ?? null }),
   };
 }
 
