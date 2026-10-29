@@ -8095,6 +8095,24 @@ abstract class L10n {
   /// **'Your changes have to be saved first. Try again once the board says Saved.'**
   String get boardSaveFirst;
 
+  /// The search field at the top of every list picker (owner 2026-10-29: every list can be typed into).
+  ///
+  /// In en, this message translates to:
+  /// **'Type to search'**
+  String get pickerSearchHint;
+
+  /// A list picker whose search matched nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get pickerNoMatches;
+
+  /// The age filter on the child materials library; names the picker and its sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Age'**
+  String get materialsAgeLabel;
+
   /// PD-37: a photo in the full-screen viewer, read by a screen reader when it is the only one.
   ///
   /// In en, this message translates to:
