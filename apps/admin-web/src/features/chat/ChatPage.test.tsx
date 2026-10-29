@@ -1838,3 +1838,54 @@ describe('PD-37: ticks, Message info, typing and presence', () => {
     expect(calls.some((c) => c.path === '/presence')).toBe(true)
   })
 })
+
+describe('A card far up the thread (owner report 2026-10-29)', () => {
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('re-reads just that message when message.updated names its seq', async () => {
+    const card = (extra: Record<string, unknown> = {}) =>
+      msg('m5', 5, {
+        type: 'card',
+        authorKind: 'system',
+        body: 'An excuse',
+        card: {
+          kind: 'lesson_apology',
+          lessonId: 'l-9',
+          payload: { lessonId: 'l-9', learnerName: 'Child Alpha', startsAt: '2026-11-02T15:00:00Z', timing: 'before_start', makeupOwed: true, reasonCategory: 'travel', ...extra },
+        },
+      } as Partial<ChatMessage>)
+    const all: ChatMessage[] = Array.from({ length: 60 }, (_, i) => (i + 1 === 5 ? card() : msg(`m${i + 1}`, i + 1)))
+    const gets: string[] = []
+    const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = new URL(String(input), 'http://localhost')
+        const path = url.pathname.replace(/^\/api\/v1/, '')
+        if (path === '/me') return json(ADMIN)
+        if (path === '/conversations') return json({ conversations: [conv('c1', { lastSeq: '60' })] })
+        if (path === '/conversations/c1') return json(conv('c1', { lastSeq: '60' }))
+        if (path === '/conversations/c1/messages') {
+          gets.push(url.search)
+          const before = Number(url.searchParams.get('before') ?? '61')
+          const limit = Number(url.searchParams.get('limit') ?? '50')
+          const page = all.filter((m) => Number(m.seq) < before).sort((a, b) => Number(b.seq) - Number(a.seq)).slice(0, limit)
+          const last = page[page.length - 1]
+          return json({ messages: page, nextBefore: page.length === limit && last && last.seq !== '1' ? last.seq : null })
+        }
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    renderChat('/chat/c1')
+    fireEvent.click(await screen.findByRole('button', { name: 'Show older messages' }))
+    const group = await screen.findByRole('group', { name: '🙏 Child Alpha has an excuse and will not attend the lesson' })
+    expect(group).not.toHaveTextContent('Make-up lesson')
+
+    // The make-up is booked: the server now joins it onto the card, and names the card's seq.
+    all[4] = card({ makeupStartsAt: '2026-11-04T16:30:00Z' })
+    act(() => fakeSocket.serverEmits('message.updated', { conversationId: 'c1', messageId: 'm5', seq: '5' }))
+    await waitFor(() => expect(screen.getByRole('group', { name: /Child Alpha has an excuse/ })).toHaveTextContent('Make-up lessonWed 4 Nov 18:30'))
+    expect(gets).toContain('?before=6&limit=1')
+  })
+})

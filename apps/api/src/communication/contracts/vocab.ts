@@ -442,6 +442,10 @@ export type RulingDecision = (typeof RulingDecision)[keyof typeof RulingDecision
 export const TRANSFER_REASONS: ReadonlySet<string> = new Set([
   'family_request', 'teacher_request', 'schedule_fit', 'level_fit', 'quality', 'teacher_leaving', 'other',
 ]);
+// PD-50: an excuse's reason category (20261030040000), which the family sees;
+// the free-text reason stays with staff and the lesson's teacher (PD-15).
+export const EXCUSE_CATEGORIES = ['travel', 'illness', 'exams', 'emergency', 'other'] as const;
+export type ExcuseCategory = (typeof EXCUSE_CATEGORIES)[number];
 export const SUSPENSION_REASONS: ReadonlySet<string> = new Set([
   'travel', 'exams', 'health', 'holiday', 'financial', 'schedule', 'quality', 'finished', 'moved_elsewhere', 'other',
 ]);

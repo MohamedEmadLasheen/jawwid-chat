@@ -18,6 +18,8 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
   const line = (label: string, value: unknown) =>
     value === null || value === undefined || value === '' ? null : `${label}: ${String(value)}`;
   const join = (...parts: Array<string | null>) => parts.filter((x): x is string => x !== null).join('\n');
+  // PD-50: an excuse's category is the family's to read; the free text is not (PD-15).
+  const category = line(ar ? 'السبب' : 'Reason', excuseCategoryLabel(String(p.reasonCategory ?? ''), ar));
 
   switch (kind) {
     case CardKind.LESSON_REPORT:
@@ -40,10 +42,12 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
       return p.timing === 'after_start'
         ? join(
             ar ? `🙏 سُجّل اعتذار ${learner} عن حصة اليوم بعد بدايتها` : `🙏 ${learner}'s absence from today's lesson is excused`,
+            category,
             ar ? 'يمكن ترتيب حصة تعويضية بالاتفاق مع المعلم.' : 'A make-up lesson can be arranged with the teacher.',
           )
         : join(
             ar ? `🙏 لدى ${learner} عذر ولن يتمكن من حضور الحصة` : `🙏 ${learner} has an excuse and will not attend the lesson`,
+            category,
             line(ar ? 'السبب' : 'Reason', p.reason),
             ar ? 'يمكن ترتيب حصة تعويضية بالاتفاق مع المعلم.' : 'A make-up lesson can be arranged with the teacher.',
           );
@@ -66,6 +70,7 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
     case CardKind.LESSON_LATE_APOLOGY:
       return join(
         ar ? `🕊️ اعتذار متأخر عن حصة ${learner}` : `🕊️ Late apology for ${learner}'s lesson`,
+        category,
         line(ar ? 'السبب' : 'Reason', p.reason),
         ar ? 'ستراجعه الإدارة.' : 'The supervision team will review it.',
       );
@@ -74,6 +79,7 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
         p.decision === RulingDecision.EXCUSED
           ? ar ? `✅ قُبل الاعتذار عن حصة ${learner}` : `✅ The apology for ${learner}'s lesson was accepted`
           : ar ? `ℹ️ سُجّلت حصة ${learner} غيابًا` : `ℹ️ ${learner}'s lesson is recorded as an absence`,
+        p.decision === RulingDecision.EXCUSED ? category : null,
         line(ar ? 'ملاحظة' : 'Note', p.note),
       );
     case CardKind.LESSON_MOVED:
@@ -144,6 +150,18 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
       return ar ? `🔁 طلب ولي الأمر تجديد اشتراك ${learner}.` : `🔁 The parent asked to renew ${learner}'s subscription.`;
     default:
       return ar ? 'تحديث على الحصة' : 'Lesson update';
+  }
+}
+
+/** PD-50: an excuse's reason category as the family reads it; null for none or an unknown code. */
+export function excuseCategoryLabel(code: string, ar: boolean): string | null {
+  switch (code) {
+    case 'travel': return ar ? 'سفر' : 'Travel';
+    case 'illness': return ar ? 'مرض' : 'Illness';
+    case 'exams': return ar ? 'امتحانات' : 'Exams';
+    case 'emergency': return ar ? 'ظرف طارئ' : 'An emergency';
+    case 'other': return ar ? 'أخرى' : 'Other';
+    default: return null;
   }
 }
 
