@@ -253,13 +253,20 @@ def phrase_tashkeel(where, text, err, exception=None):
     """A sentence, title or stage name: every word fully vowelled; the case endings stay INSIDE (a word there
     never ends in the pausal sukun, unless it is a sukun particle); only the LAST word takes the pausal sukun."""
     ws = words_of(text) or []
-    for w in ws[:-1]:
+    for k, w in enumerate(ws[:-1]):
         if unmarked(w):
             err(f'{where}: {w!r} is not fully vowelled ({", ".join(unmarked(w))} unmarked)')
-        else:
-            _, mk = letters_marks(w)[-1]
-            if mk == {SUKUN} and w not in SUKUN_PARTICLES:
-                err(f'{where}: {w!r} ends in a pausal sukun inside the sentence (case endings stay inside; only the last word pauses)')
+            continue
+        c, mk = letters_marks(w)[-1]
+        if mk != {SUKUN}:
+            continue
+        # A sukun inside a sentence is right only on a sukun particle (مِنْ لَمْ قَدْ ...) or the feminine
+        # تْ of a past verb (طَبَخَتْ أُمِّي) -- and never before a hamzat wasl, where it must take a vowel
+        # (طَبَخَتِ الْأُمُّ، مِنَ الْبَيْتِ).
+        if w not in SUKUN_PARTICLES and c != chr(0x62A):
+            err(f'{where}: {w!r} ends in a pausal sukun inside the sentence (case endings stay inside; only the last word pauses)')
+        elif ws[k + 1][0] == chr(0x627):
+            err(f'{where}: {w!r} keeps its sukun before the hamzat wasl of {ws[k + 1]!r}; it takes a vowel there')
     if ws:
         tashkeel(where, ws[-1], err, exception)
 
@@ -880,8 +887,10 @@ def selftest():
         'reading-missing-option-from-its-own-sentence': (lambda c: c['quiz'][1].update(options=['الْقِطَّةُ', 'نَامَتِ']), 'another sentence', None),
         'reading-vowel-options-mixed': (lambda c: c['stages'][1]['items'].append({'id': 'kasra-002', 'kind': 'word', 'text': 'كِتِبِ', 'was': None, 'review': None})
                                         or c['quiz'][0].update(options=['كِتِبِ', 'بَتَ']), 'never mixed', None),
-        'reading-pausal-sukun-inside': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتْ الْقِطَّةُ الصَّغِيرَةْ.'), 'inside the sentence', None),
+        'reading-pausal-sukun-inside': (lambda c: c['stages'][2]['items'][1].update(text='نَامَ الْوَلَدْ مُبَكِّرًا.'), 'inside the sentence', None),
         'reading-sukun-particle-inside-is-fine': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتِ الْقِطَّةُ مِنْ تَعَبْ.'), None, None),
+        'reading-feminine-ta-sakina-is-fine': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتْ قِطَّتِي الصَّغِيرَةْ.') or c['quiz'].pop(), None, None),
+        'reading-sukun-before-a-wasl': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتْ الْقِطَّةُ الصَّغِيرَةْ.'), 'hamzat wasl', None),
         'reading-title-not-vowelled': (lambda c: c['passages'][0]['title'].update(text='القطة'), 'not fully vowelled', None),
         'reading-stage-name-not-pausal': (lambda c: c['stages'][2].update(name='جُمَلٌ'), 'not the pausal sukun', None),
     }
