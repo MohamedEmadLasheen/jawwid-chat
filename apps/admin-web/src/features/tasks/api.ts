@@ -21,6 +21,10 @@ export type SourceType =
   | 'renewal_request'
   | 'receipt_review'
   | 'checkout_failed'
+  | 'family_unsupervised'
+  | 'teacher_setup'
+  | 'new_student_assign'
+  | 'new_student_group'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 
 export interface Principal {
