@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE, whenIn, zoneLabel } from '@/core/time/academyTime'
 import { journeyApi, journeyKeys } from './api'
-import { J } from './copy'
+import { J, excuseCategoryLabel } from './copy'
 import './journey.css'
 
 /**
@@ -16,7 +16,7 @@ import './journey.css'
  * - `lesson_makeup_booked` carries the make-up's `startsAt` and the lesson it
  *   replaces, `missedStartsAt`.
  */
-export type ExcuseCardKind = 'student_before' | 'student_after' | 'teacher' | 'teacher_absent' | 'accepted' | 'makeup'
+export type ExcuseCardKind = 'student_before' | 'student_after' | 'teacher' | 'teacher_absent' | 'accepted' | 'late' | 'makeup'
 
 export interface LessonExcusePayload {
   kind: ExcuseCardKind
@@ -27,6 +27,8 @@ export interface LessonExcusePayload {
   durationMinutes: number | null
   /** The family's own reason; a staff reason is never on the card (PD-15). */
   reason: string | null
+  /** PD-50: a student excuse's reason category (EXCUSE_CATEGORIES), which the family reads. Never a teacher's. */
+  category: string | null
   /** An accepted late apology's decision note, which the family reads. */
   note: string | null
   makeupStartsAt: string | null
@@ -42,6 +44,7 @@ function excuseKindOf(cardKind: string, p: Record<string, unknown>): ExcuseCardK
     case 'lesson_teacher_apology': return 'teacher'
     case 'lesson_cancelled': return p.outcome === 'teacher_no_show' ? 'teacher_absent' : null
     case 'lesson_ruling': return p.decision === 'excused' ? 'accepted' : null
+    case 'lesson_late_apology': return 'late'
     case 'lesson_makeup_booked': return 'makeup'
     default: return null
   }
@@ -61,10 +64,12 @@ export function readLessonExcuseCard(cardKind: string, payload: Record<string, u
     startsAt,
     durationMinutes: typeof p.durationMinutes === 'number' ? p.durationMinutes : null,
     reason: str(p.reason),
+    // A teacher's category is staff data (PD-50): never drawn from a card, even an odd one.
+    category: kind !== 'teacher' && excuseCategoryLabel(p.reasonCategory) ? (p.reasonCategory as string) : null,
     note: str(p.note),
     makeupStartsAt: str(p.makeupStartsAt),
     missedStartsAt: str(p.missedStartsAt),
-    makeupOwed: p.makeupOwed === true || kind === 'accepted',
+    makeupOwed: kind !== 'late' && (p.makeupOwed === true || kind === 'accepted'),
   }
 }
 
@@ -75,6 +80,7 @@ const COPY = {
     teacher: { en: "🙏 The teacher cannot teach {learner}'s lesson", ar: '🙏 اعتذر المعلم عن حصة {learner}' },
     teacher_absent: { en: "⚠️ {learner}'s lesson did not take place: the teacher was absent", ar: '⚠️ لم تُعقد حصة {learner} لغياب المعلم' },
     accepted: { en: "✅ The apology for {learner}'s lesson was accepted", ar: '✅ قُبل الاعتذار عن حصة {learner}' },
+    late: { en: "🕊️ Late apology for {learner}'s lesson", ar: '🕊️ اعتذار متأخر عن حصة {learner}' },
     makeup: { en: '📅 A make-up lesson is scheduled for {learner}', ar: '📅 تم تحديد موعد حصة تعويضية لـ {learner}' },
   },
   lesson: { en: 'Lesson', ar: 'الحصة' },
@@ -84,11 +90,18 @@ const COPY = {
   minutes: { en: '{n} min', ar: '{n} دقيقة' },
   owedStudent: { en: 'A make-up lesson can be arranged with the teacher.', ar: 'يمكن ترتيب حصة تعويضية بالاتفاق مع المعلم.' },
   owedTeacher: { en: 'A make-up lesson will be arranged.', ar: 'سيتم ترتيب حصة تعويضية.' },
+  underReview: { en: 'The supervision team will review it.', ar: 'ستراجعه الإدارة.' },
 }
 
-/** Whose reason the card cannot carry: a staff member's or the teacher's (PD-15). */
-function mayHaveStaffReason(card: LessonExcusePayload): boolean {
-  return !card.reason && (card.kind === 'student_before' || card.kind === 'student_after' || card.kind === 'teacher' || card.kind === 'teacher_absent')
+/**
+ * What the card cannot carry, read from the lesson record (which the server
+ * gives to staff and the lesson's teacher): a staff member's or the teacher's
+ * reason (PD-15), a teacher apology's category (PD-50), and -- once a late
+ * apology names a category -- the family's own words, kept on its ruling.
+ */
+function needsRecord(card: LessonExcusePayload): boolean {
+  if (card.reason) return false
+  return card.kind === 'student_before' || card.kind === 'student_after' || card.kind === 'teacher' || card.kind === 'teacher_absent' || card.kind === 'late'
 }
 
 /**
@@ -104,20 +117,29 @@ export function LessonExcuseCard({ card }: { card: LessonExcusePayload }) {
   const { locale, number } = useI18n()
   const tx = (p: { en: string; ar: string }) => (locale === 'ar' ? p.ar : p.en)
   const when = (iso: string) => `${whenIn(iso, ACADEMY_ZONE, locale)} · ${zoneLabel(ACADEMY_ZONE, locale)}`
-  const staffReason = useQuery({
+  const record = useQuery({
     queryKey: journeyKeys.lesson(card.lessonId),
     queryFn: () => journeyApi.lesson(card.lessonId),
-    enabled: mayHaveStaffReason(card),
+    enabled: needsRecord(card),
     retry: false,
     staleTime: 60_000,
-    select: (r) => str(r.outcomeNote),
+    select: (r) => ({
+      note: card.kind === 'late' ? null : str(r.outcomeNote),
+      // A teacher apology's category, staff-only; a student excuse's is on the card.
+      teacherCategory: card.kind === 'teacher' && excuseCategoryLabel(r.excuseCategory) ? (r.excuseCategory as string) : null,
+      familyWords: card.kind === 'late' ? str(r.ruling?.reason) : null,
+    }),
   }).data
+  const staffReason = record?.note ?? null
+  const teacherCategory = record?.teacherCategory ?? null
   const title = tx(COPY.title[card.kind]).replace('{learner}', card.learnerName)
   const isMakeup = card.kind === 'makeup'
   const footnote =
-    !isMakeup && card.makeupOwed && !card.makeupStartsAt
-      ? tx(card.kind === 'teacher' || card.kind === 'teacher_absent' ? COPY.owedTeacher : COPY.owedStudent)
-      : null
+    card.kind === 'late'
+      ? tx(COPY.underReview)
+      : !isMakeup && card.makeupOwed && !card.makeupStartsAt
+        ? tx(card.kind === 'teacher' || card.kind === 'teacher_absent' ? COPY.owedTeacher : COPY.owedStudent)
+        : null
   const rows: Array<[string, string, string]> = isMakeup
     ? [
         ['makeup', tx(COPY.makeup), when(card.startsAt)],
@@ -125,8 +147,18 @@ export function LessonExcuseCard({ card }: { card: LessonExcusePayload }) {
       ]
     : [
         ['lesson', tx(COPY.lesson), when(card.startsAt)],
+        ...(card.category ? [['category', tx(J.reason), tx(excuseCategoryLabel(card.category)!)] as [string, string, string]] : []),
+        ...(teacherCategory
+          ? [['staff-category', tx(J.reasonStaffTeacher), tx(excuseCategoryLabel(teacherCategory)!)] as [string, string, string]]
+          : []),
         ...(card.reason ? [['reason', tx(J.reason), card.reason] as [string, string, string]] : []),
-        ...(staffReason ? [['staff-reason', tx(J.reasonStaffTeacher), staffReason] as [string, string, string]] : []),
+        ...(record?.familyWords
+          ? [['family-words', tx(J.familyWordsStaffTeacher), record.familyWords] as [string, string, string]]
+          : []),
+        // With a category the free text is a note beside it; without one it is the reason itself.
+        ...(staffReason
+          ? [['staff-reason', tx(card.category || teacherCategory ? J.noteStaffTeacher : J.reasonStaffTeacher), staffReason] as [string, string, string]]
+          : []),
         ...(card.note ? [['note', tx(COPY.note), card.note] as [string, string, string]] : []),
         ...(card.makeupStartsAt ? [['makeup', tx(COPY.makeup), when(card.makeupStartsAt)] as [string, string, string]] : []),
       ]

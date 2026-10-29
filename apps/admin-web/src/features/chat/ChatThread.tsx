@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
+import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { ApiError } from '@/core/api/errors'
 import { dayLabel } from '@/features/admin/copy'
 import { Avatar } from '@/shared/components/Avatar'
@@ -76,6 +77,10 @@ type Side = 'in' | 'out' | 'internal' | 'system'
  */
 function sideOf(m: ChatMessage, selfId: string | undefined): Side {
   if (m.visibility === 'internal') return 'internal'
+  // A lesson card Jawwid posted itself (a teacher's absence, an accepted late
+  // apology, a card recorded by staff outside the group) is still a card to
+  // draw -- the reason, the make-up's time -- not a one-line system note.
+  if (m.authorKind === 'system' && m.type === 'card' && m.card && readLessonExcuseCard(m.card.kind, m.card.payload)) return 'in'
   if (m.authorKind === 'system' || m.type === 'system') return 'system'
   return m.authorId === selfId ? 'out' : 'in'
 }
@@ -224,6 +229,32 @@ export function ChatThread({
     return [...byId.values()].sort(bySeq)
   }, [older, latest.data])
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages])
+
+  // A card far up the thread changed (its make-up was booked, moved or
+  // cancelled): the event names its seq and only that message is re-read --
+  // the newest page re-reads itself on every event already.
+  const { socket } = useRealtime()
+  const olderIds = useRef(new Set<string>())
+  olderIds.current = new Set(older.map((m) => m.id))
+  useEffect(() => {
+    if (!socket) return
+    const onUpdated = (p: { conversationId?: unknown; messageId?: unknown; seq?: unknown } | undefined) => {
+      if (p?.conversationId !== conversationId || typeof p.messageId !== 'string' || typeof p.seq !== 'string') return
+      const id = p.messageId
+      if (!olderIds.current.has(id) || !/^\d+$/.test(p.seq)) return
+      chatApi
+        .messages(conversationId, String(BigInt(p.seq) + BigInt(1)), 1)
+        .then((page) => {
+          const fresh = page.messages.find((m) => m.id === id)
+          if (fresh) setOlder((all) => all.map((m) => (m.id === id ? fresh : m)))
+        })
+        .catch(() => {})
+    }
+    socket.on('message.updated', onUpdated)
+    return () => {
+      socket.off('message.updated', onUpdated)
+    }
+  }, [socket, conversationId])
 
   // A pending send disappears once the server's copy (same clientMessageId) is
   // in the thread: one message, never an echo plus a copy.
