@@ -70,6 +70,15 @@ abstract final class Shells {
     label: _scheduleLabel,
   );
 
+  /// PD-39 (2026-10-29): the teacher's Boards -- the whiteboard they teach on and
+  /// prepare lessons with. Teachers only; third, after Schedule.
+  static const boards = ShellDestination(
+    route: '/boards',
+    icon: Icons.draw_outlined,
+    selectedIcon: Icons.draw,
+    label: _boardsLabel,
+  );
+
   /// PD-20 (2026-10-22): Sales' Payments -- find a family, read its instalments, record
   /// a payment. Sales only; third, before Settings.
   static const salesPayments = ShellDestination(
@@ -90,11 +99,12 @@ abstract final class Shells {
   );
 
   /// The destinations for a role: a parent's add [subscriptions] before Settings; a
-  /// teacher's add [schedule] after Chats; Sales' add [salesPayments] before Settings.
+  /// teacher's add [schedule] after Chats and [boards] after it; Sales' add
+  /// [salesPayments] before Settings.
   /// This is where a role difference belongs, not in a widget.
   static List<ShellDestination> forRole(UserRole role) => switch (role) {
         UserRole.parent => [chats, destinations[1], subscriptions, destinations[2]],
-        UserRole.teacher => [chats, schedule, ...destinations.skip(1)],
+        UserRole.teacher => [chats, schedule, boards, ...destinations.skip(1)],
         UserRole.sales => [chats, destinations[1], salesPayments, destinations[2]],
       };
 
@@ -102,6 +112,7 @@ abstract final class Shells {
   static String _callsLabel(L10n l10n) => l10n.callHistoryTitle;
   static String _settingsLabel(L10n l10n) => l10n.settingsTitle;
   static String _scheduleLabel(L10n l10n) => l10n.tabSchedule;
+  static String _boardsLabel(L10n l10n) => l10n.tabBoards;
   static String _paymentsLabel(L10n l10n) => l10n.tabPayments;
   static String _subscriptionsLabel(L10n l10n) => l10n.tabSubscriptions;
 }

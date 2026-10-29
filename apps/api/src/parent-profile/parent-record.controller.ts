@@ -16,11 +16,14 @@ import { Requires } from '../platform/permissions/route-access';
 export class ParentRecordController {
   constructor(private readonly parents: ParentRecordService) {}
 
-  /** ?q= -- the parents this staff member may open; PD-45 ?location=missing -- those whose location is not complete. */
+  /**
+   * ?q= -- the parents this staff member may open. PD-45: ?location=missing --
+   * those whose location is not complete; ?with=location -- each row's location.
+   */
   @Requires('parents.view')
   @Get()
-  list(@ActorId() actorId: string, @Query('q') q?: string, @Query('location') location?: string) {
-    return this.parents.list(actorId, q, location);
+  list(@ActorId() actorId: string, @Query('q') q?: string, @Query('location') location?: string, @Query('with') withFields?: string) {
+    return this.parents.list(actorId, q, location, withFields);
   }
 
   @Requires('parents.view')

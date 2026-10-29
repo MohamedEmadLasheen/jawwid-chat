@@ -598,6 +598,7 @@ export class SchedulingService {
           { ...this.lessons.cardBase(created), makeupFor: lesson.id, missedStartsAt: lesson.startsAt.toISOString(), missedOutcome: lesson.outcome },
           lang,
         );
+        await this.lessons.announceOwedCard(tx, lesson.id);
         await this.audit.audit(tx, {
           actorId: actor.actorId, action: 'lesson.makeup_booked', entity: 'lesson', entityId: created.id,
           after: { makeupFor: lesson.id, startsAt: startsAt.toISOString() }, reason: 'make-up booked',
@@ -755,6 +756,8 @@ export class SchedulingService {
           { ...this.lessons.cardBase(created), previousStartsAt: lesson.startsAt.toISOString(), movedBy: movedByOf(by) },
           lang,
         );
+        // A moved make-up: the card that owed it now reads the new time.
+        if (created.kind === LessonKind.MAKEUP && created.makeupFor) await this.lessons.announceOwedCard(tx, created.makeupFor);
         await this.audit.audit(tx, {
           actorId: actor.actorId, action: 'lesson.moved', entity: 'lesson', entityId: created.id,
           before: { lessonId: lesson.id, startsAt: lesson.startsAt.toISOString() },

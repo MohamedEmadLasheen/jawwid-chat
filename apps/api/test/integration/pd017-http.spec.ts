@@ -210,6 +210,10 @@ describe('PD-17 over HTTP', () => {
     const item = (list.json.items as Array<Record<string, unknown>>).find((p) => p.id === f.parent.id)!;
     // The list carries no contact channel: the app never asks for the detail route.
     expect(Object.keys(item).sort()).toEqual(['avatarUrl', 'childrenCount', 'family', 'id', 'name']);
+    // PD-45: nor a location unless asked for (data minimisation); the Admin Web's Parents page asks.
+    const located = await http(sales, 'GET', `/parent-profiles?with=location&q=${encodeURIComponent(f.parent.name.split(' ')[0]!)}`);
+    const row = (located.json.items as Array<Record<string, unknown>>).find((p) => p.id === f.parent.id)!;
+    expect(Object.keys(row.location as object).sort()).toEqual(['countryCode', 'subdivisionCode']);
 
     const created = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/instalments`, {
       label: 'Sales app fees', amountMinor: 70000, currency: 'AED', firstDueDate: '2026-10-01',

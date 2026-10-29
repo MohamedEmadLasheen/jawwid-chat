@@ -73,7 +73,7 @@ afterEach(() => {
 })
 
 describe('the supervisor\'s Student excuse card', () => {
-  it('after the start: the reason is required and is sent to late-excuse; before the start: no reason', async () => {
+  it('after the start: a category and the note are required and sent to late-excuse; before the start: the category only', async () => {
     on('POST', /\/lessons\/l-2\/late-excuse$/, () => json(record({ id: 'l-2', outcome: 'student_apology', apologyTiming: 'after_start' })))
     on('POST', /\/lessons\/l-1\/apology$/, () => json(record({ id: 'l-1', outcome: 'student_apology', apologyTiming: 'before_start' })))
     const tickets = [ticket('apology', 'l-1', 'Child Alpha', '2026-10-22T15:00:00Z'), ticket('late_excuse', 'l-2', 'Child Beta')]
@@ -83,20 +83,53 @@ describe('the supervisor\'s Student excuse card', () => {
     expect(within(dialog).getByRole('radio', { name: /Excuse before the lesson starts/ })).toBeDisabled()
     await userEvent.click(within(dialog).getByRole('radio', { name: /Excuse after the lesson started/ }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send' }))
-    expect(within(dialog).getByText('Required')).toBeInTheDocument()
+    // PD-50: the category (which the family reads) and the note (which it does not) are both required.
+    expect(within(dialog).getAllByText('Required')).toHaveLength(2)
     expect(sent('POST', /late-excuse$/)).toEqual([])
-    await userEvent.type(within(dialog).getByLabelText('Reason (staff only)'), 'family emergency')
+    expect(within(dialog).getByRole('radiogroup', { name: 'Reason (the family sees this)' })).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'An emergency' }))
+    await userEvent.type(within(dialog).getByLabelText('Note (staff and the teacher only)'), 'family emergency')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send' }))
-    await waitFor(() => expect(sent('POST', /\/lessons\/l-2\/late-excuse$/)).toEqual([{ reason: 'family emergency' }]))
+    await waitFor(() => expect(sent('POST', /\/lessons\/l-2\/late-excuse$/)).toEqual([{ reason: 'family emergency', reasonCategory: 'emergency' }]))
     unmount()
 
     renderWithProviders(<LessonCardDialog conversationId="c-1" kind="student_excuse" tickets={tickets} onClose={() => {}} />, { staff })
     const again = await screen.findByRole('dialog', { name: 'Student excuse' })
     await chooseOption(userEvent, within(again).getByLabelText('Lesson'), 'l-1')
     await userEvent.click(within(again).getByRole('radio', { name: /Excuse before the lesson starts/ }))
-    expect(within(again).queryByLabelText('Reason (staff only)')).not.toBeInTheDocument()
+    expect(within(again).queryByLabelText('Note (staff and the teacher only)')).not.toBeInTheDocument()
+    // Before the start the note is optional (staff and the teacher read it, never the family).
+    expect(within(again).getByLabelText('Note (staff and the teacher only, optional)')).toBeInTheDocument()
     await userEvent.click(within(again).getByRole('button', { name: 'Send' }))
-    await waitFor(() => expect(sent('POST', /\/lessons\/l-1\/apology$/)).toEqual([{}]))
+    expect(sent('POST', /\/lessons\/l-1\/apology$/)).toEqual([])
+    await userEvent.click(within(again).getByRole('radio', { name: 'Travel' }))
+    await userEvent.click(within(again).getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(sent('POST', /\/lessons\/l-1\/apology$/)).toEqual([{ reasonCategory: 'travel' }]))
+  })
+
+  it('before the start: an optional note, when typed, is sent with the category', async () => {
+    on('POST', /\/lessons\/l-1\/apology$/, () => json(record({ id: 'l-1', outcome: 'student_apology', apologyTiming: 'before_start' })))
+    const tickets = [ticket('apology', 'l-1', 'Child Alpha', '2026-10-22T15:00:00Z')]
+    renderWithProviders(<LessonCardDialog conversationId="c-1" kind="student_excuse" tickets={tickets} onClose={() => {}} />, { staff })
+    const dialog = await screen.findByRole('dialog', { name: 'Student excuse' })
+    await chooseOption(userEvent, within(dialog).getByLabelText('Lesson'), 'l-1')
+    await userEvent.click(within(dialog).getByRole('radio', { name: /Excuse before the lesson starts/ }))
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Exams' }))
+    await userEvent.type(within(dialog).getByLabelText('Note (staff and the teacher only, optional)'), 'school exams')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(sent('POST', /\/lessons\/l-1\/apology$/)).toEqual([{ reason: 'school exams', reasonCategory: 'exams' }]))
+  })
+
+  it('the teacher excuse names its category too', async () => {
+    on('POST', /\/lessons\/l-5\/teacher-apology$/, () => json(record({ id: 'l-5', outcome: 'teacher_apology' })))
+    renderWithProviders(<LessonCardDialog conversationId="c-1" kind="teacher_excuse" tickets={[ticket('teacher_apology', 'l-5')]} onClose={() => {}} />, { staff, locale: 'ar' })
+    const dialog = await screen.findByRole('dialog', { name: 'عذر المعلم' })
+    // A teacher's reason is staff data: the picker says so (PD-50, head review).
+    expect(within(dialog).getByRole('radiogroup', { name: 'السبب (للإدارة والمعلم فقط)' })).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'مرض' }))
+    await userEvent.type(within(dialog).getByLabelText('ملاحظة (للإدارة والمعلم فقط)'), 'موعد طبيب')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'إرسال' }))
+    await waitFor(() => expect(sent('POST', /\/lessons\/l-5\/teacher-apology$/)).toEqual([{ reason: 'موعد طبيب', reasonCategory: 'illness' }]))
   })
 
   it('says so when no lesson can take the card', async () => {
