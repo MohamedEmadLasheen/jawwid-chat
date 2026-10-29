@@ -83,3 +83,39 @@ export function harakatStandIn(): ArabicLesson {
     ],
   };
 }
+
+/** Lessons 6 and 7 (the sukun, the madd): a sukun unit and a madd unit. */
+export function sukunMaddStandIn(): ArabicLesson {
+  return {
+    lesson: 6,
+    review: { status: 'approved', by: 'test', note: '' },
+    provenance: {},
+    finalMark: 'sukun',
+    retiredIds: [],
+    units: [
+      {
+        id: 'jim_sukun',
+        letters: ['ج'],
+        mark: 'sukun',
+        group: 'ج',
+        name: 'جْ',
+        forms: ['جْ'],
+        note: null,
+        words: [{ id: 'jim_sukun-001', text: 'نَجْمْ', was: null, review: null }],
+      },
+      {
+        id: 'madd_alif',
+        letters: ['ا'],
+        madd: 'alif',
+        name: 'أَلِفْ',
+        forms: ['ـَا'],
+        note: null,
+        words: [{ id: 'madd_alif-001', text: 'بَابْ', was: null, review: null }],
+      },
+    ],
+    quiz: [
+      { id: 'q1', kind: 'contains', unit: 'jim_sukun', options: ['نَجْمْ', 'بَابْ'], answer: 0, review: null },
+      { id: 'q2', kind: 'contains', unit: 'madd_alif', options: ['نَجْمْ', 'بَابْ'], answer: 1, review: null },
+    ],
+  };
+}

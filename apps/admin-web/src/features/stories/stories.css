@@ -245,7 +245,7 @@
   transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .type-card:hover { border-color: var(--border-strong); color: var(--text); }
-.type-card.is-selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.type-card.is-selected { border-color: var(--accent); background: var(--accent-soft); color: var(--text-link); }
 .type-card:has(:focus-visible),
 .who-card:has(:focus-visible),
 .cta-choice:has(:focus-visible),
@@ -272,7 +272,7 @@
   text-align: center; cursor: pointer;
 }
 .dropzone:hover, .dropzone.is-over { border-color: var(--accent); background: var(--accent-soft); }
-.dropzone__icon { color: var(--accent); }
+.dropzone__icon { color: var(--text-link); }
 .dropzone__title { font-weight: var(--fw-semibold); }
 .dropzone__hint { font-size: var(--fs-xs); color: var(--text-subtle); }
 
@@ -309,7 +309,7 @@
   color: var(--text-muted); font-weight: var(--fw-medium); cursor: pointer;
 }
 .cta-choice:hover { border-color: var(--border-strong); color: var(--text); }
-.cta-choice.is-selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.cta-choice.is-selected { border-color: var(--accent); background: var(--accent-soft); color: var(--text-link); }
 
 /* Audience */
 .audience { display: grid; gap: var(--space-4); }

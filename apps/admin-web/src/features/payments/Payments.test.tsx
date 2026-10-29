@@ -364,8 +364,6 @@ describe('New Students > Payment request (before Assign)', () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/trials/new-students' })
 
     const card = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
-    const assigned = screen.getByRole('heading', { name: 'Parent Delta' }).closest('article')!
-    expect(within(assigned).queryByRole('button', { name: 'Payment request' })).not.toBeInTheDocument()
     await userEvent.click(within(card).getByRole('button', { name: 'Payment request' }))
     const dialog = screen.getByRole('dialog', { name: 'Payments: Parent Gamma' })
     const amount = await within(dialog).findByLabelText('Amount (USD)')
@@ -376,6 +374,7 @@ describe('New Students > Payment request (before Assign)', () => {
     await userEvent.clear(label)
     await userEvent.type(label, 'Subscription, 3 months')
     await chooseOption(userEvent, within(dialog).getByLabelText('Package'), '3')
+    const readsBefore = calls('GET', /\/trials\/new-students\/tr-1\/payment-requests$/).length
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create link' }))
 
     await waitFor(() => expect(calls('POST', /\/trials\/new-students\/tr-1\/payment-requests$/)).toHaveLength(1))
@@ -391,7 +390,7 @@ describe('New Students > Payment request (before Assign)', () => {
     expect(within(panel).getByRole('textbox', { name: 'Payment link' })).toHaveValue('https://api.example.test/api/v1/pay/tok_new')
     expect(within(panel).getByRole('link', { name: 'Send on WhatsApp' }).getAttribute('href')).toContain(encodeURIComponent('https://api.example.test/api/v1/pay/tok_new'))
     // The trial's list is re-read.
-    await waitFor(() => expect(calls('GET', /\/trials\/new-students\/tr-1\/payment-requests$/).length).toBeGreaterThan(1))
+    await waitFor(() => expect(calls('GET', /\/trials\/new-students\/tr-1\/payment-requests$/).length).toBeGreaterThan(readsBefore))
   })
 
   it('lists the trial’s requests and payments, and cancels an open request with a reason', async () => {
@@ -434,7 +433,7 @@ describe('New Students > Payment request (before Assign)', () => {
     expect(await screen.findByRole('dialog', { name: 'Payments: Parent Gamma' })).toBeInTheDocument()
   })
 
-  it('a trial assigned meanwhile sends staff to the family’s Parent Profile, and asks for nothing', async () => {
+  it('a trial assigned meanwhile still lists its requests, read only, and sends staff to the family’s Parent Profile', async () => {
     serveStudents()
     on('GET', /\/trials\/new-students\/tr-1\/payment-requests$/, () =>
       json({ enrolledFamilyId: 'f-9', items: [OPEN], payments: [], suggestedAmountMinor: 120000, currency: 'USD' }),
@@ -444,12 +443,52 @@ describe('New Students > Payment request (before Assign)', () => {
     const card = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
     await userEvent.click(within(card).getByRole('button', { name: 'Payment request' }))
     const dialog = screen.getByRole('dialog', { name: 'Payments: Parent Gamma' })
-    expect(await within(dialog).findByText(/now live on the family’s Parent Profile/)).toBeInTheDocument()
+    expect(await within(dialog).findByText(/made on the family’s Parent Profile/)).toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: 'Create link' })).not.toBeInTheDocument()
+    const requests = within(dialog).getByRole('list', { name: 'Payment requests' })
+    expect(within(requests).getByText('Subscription', { selector: 'strong' })).toBeInTheDocument()
+    expect(within(requests).queryByRole('button', { name: /Cancel the request/ })).not.toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('link', { name: 'Find Parent Gamma in Parents' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Parents' })).toBeInTheDocument()
     expect(screen.getByRole('searchbox')).toHaveValue('Parent Gamma')
     await waitFor(() => expect(calls('GET', /\/parent-profiles\?q=Parent(%20|\+)Gamma$/).length).toBeGreaterThan(0))
+  })
+
+  it('stays on a placed student’s card: the button and each request’s status, before and after Assign', async () => {
+    serveStudents()
+    const PAID: PaymentRequest = { ...OPEN, id: 'r-t2', label: 'Subscription, 3 months', status: 'paid', paidMinor: 120000, remainingMinor: 0, trialId: null }
+    const CANCELLED: PaymentRequest = {
+      ...OPEN, id: 'r-t3', label: 'First link', status: 'cancelled', trialId: null,
+      cancelled: { at: '2026-10-12T09:00:00Z', by: { id: 's-1', name: 'Sales One' }, reason: 'wrong amount' },
+    }
+    on('GET', /\/trials\/new-students\/tr-1\/payment-requests$/, () => json({ enrolledFamilyId: null, items: [], payments: [], suggestedAmountMinor: 120000, currency: 'USD' }))
+    on('GET', /\/trials\/new-students\/tr-2\/payment-requests$/, () =>
+      json({ enrolledFamilyId: 'f-9', items: [PAID, CANCELLED], payments: [], suggestedAmountMinor: 120000, currency: 'USD' }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/trials/new-students' })
+
+    const before = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
+    expect(within(before).getByRole('button', { name: 'Payment request' })).toBeInTheDocument()
+    expect(await within(before).findByText('No payment requests yet.')).toBeInTheDocument()
+
+    const placed = screen.getByRole('heading', { name: 'Parent Delta' }).closest('article')!
+    expect(within(placed).getByRole('button', { name: 'Payment request' })).toBeInTheDocument()
+    const summary = await within(placed).findByRole('list', { name: 'Payment requests' })
+    const rows = within(summary).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]!).getByText('Paid')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('Subscription, 3 months')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText(/1,200\.00/)).toBeInTheDocument()
+    expect(within(rows[1]!).getByText('Cancelled')).toBeInTheDocument()
+
+    await userEvent.click(within(placed).getByRole('button', { name: 'Payment request' }))
+    const dialog = screen.getByRole('dialog', { name: 'Payments: Parent Delta' })
+    const requests = await within(dialog).findByRole('list', { name: 'Payment requests' })
+    expect(within(requests).getByText('Subscription, 3 months', { selector: 'strong' })).toBeInTheDocument()
+    expect(within(requests).getByText(/wrong amount/)).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Create link' })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: 'Find Parent Delta in Parents' })).toBeInTheDocument()
+    expect(calls('POST', /\/payment-requests/)).toHaveLength(0)
   })
 
   it('is not offered to Operations staff who neither sell nor assign', async () => {
