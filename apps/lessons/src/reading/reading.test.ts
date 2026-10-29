@@ -35,6 +35,8 @@ describe('reading lessons (P0-5c)', () => {
       (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['الْوَلَدُ', 'الْبَيْتُ'] } as never; }, // a wrong option from no other sentence
       (c) => { c.quiz[1] = { ...c.quiz[1]!, options: ['الْوَلَدُ', 'أَكَلَ'] } as never; }, // a wrong option from its own sentence
       (c) => { c.stages[1]!.items.push({ id: 'kasra-002', kind: 'word', text: 'كِتِبِ', was: null, review: null }); c.quiz[0] = { ...c.quiz[0]!, options: ['كِتِبِ', 'بَتَ'] } as never; }, // mixed kinds
+      (c) => { c.names = ['الْوَلَدُ', 'الْقِطَّةُ']; }, // another name where the blank is a name
+      (c) => { c.stages[2]!.items[1]!.text = 'نَامَتِ الْوَلَدْ الصَّغِيرَةْ.'; c.quiz[1] = { ...c.quiz[1]!, options: ['الْوَلَدُ', 'الْوَلَدْ'] } as never; }, // the answer in another form
     ];
     for (const change of bad) {
       const c = readingStandIn();

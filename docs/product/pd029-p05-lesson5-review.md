@@ -15,7 +15,7 @@ This file is generated from `apps/lessons/src/arabic/lesson-005.json` and the re
 | Kept with a final tanween fath (held) | 11 |
 | Old duplicates removed (the old test sentences repeat the lesson) | 5 |
 | Dropped | 0 |
-| Quiz questions ("which word is missing") | 7 |
+| Quiz questions ("which word is missing") | 8 |
 
 **Why sentences are held:**
 
@@ -34,15 +34,28 @@ This file is generated from `apps/lessons/src/arabic/lesson-005.json` and the re
 
 ## The quiz
 
+Each question blanks the sentence's VERB; the wrong options are nouns from other sentences, which can never fill a verb's place, so only one option fits.
+
 | Id | Sentence | Options | Right answer |
 |---|---|---|---|
-| sentences-q1 | أَكَلَ … تُفَّاحًا | الْوَلَدُ، الطِّفْلْ، الْعُصْفُورُ | الْوَلَدُ |
-| sentences-q3 | قَرَأَ … كِتَابًا | مُحَمَّدٌ، أَحْمَدُ، الْعُصْفُورُ | مُحَمَّدٌ |
-| sentences-q4 | لَعِبَ … بِالْكُرَةْ | الْعُصْفُورُ، أُمِّي، الْوَلَدُ | الْوَلَدُ |
-| sentences-q8 | كَتَبَ … دَرْسَهْ | أَحْمَدُ، مُحَمَّدٌ، الطِّفْلُ | الطِّفْلُ |
-| sentences-q9 | فَتَحَ … الْبَابْ | مُحَمَّدْ، أَحْمَدُ، الْوَلَدُ | الْوَلَدُ |
-| sentences-q10 | غَسَلَ … يَدَيْهْ | أَحْمَدْ، الطِّفْلُ، مُحَمَّدْ | الطِّفْلُ |
-| sentences-q12 | جَلَسَ … عَلَى الْكُرْسِيّْ | الْوَلَدْ، الْوَلَدُ، الْمُعَلِّمُ | الْوَلَدُ |
+| sentences-q1 | … الْوَلَدُ تُفَّاحًا | أَكَلَ، الطِّفْلُ، الْمُعَلِّمُ | أَكَلَ |
+| sentences-q2 | … الطِّفْلُ حَلِيبًا | الْمُعَلِّمُ، الْعُصْفُورُ، شَرِبَ | شَرِبَ |
+| sentences-q4 | … الْوَلَدُ بِالْكُرَةْ | الْحَمْدُ، الطِّفْلُ، لَعِبَ | لَعِبَ |
+| sentences-q5 | … أَحْمَدُ إِلَى الْمَسْجِدْ | الْعُصْفُورُ، الْحَمْدُ، ذَهَبَ | ذَهَبَ |
+| sentences-q6 | … الطِّفْلُ صُورَةْ | الْعُصْفُورُ، رَسَمَ، الْحَمْدُ | رَسَمَ |
+| sentences-q7 | … الْوَلَدُ إِلَى السَّمَاءْ | نَظَرَ، الْحَمْدُ، الْعُصْفُورُ | نَظَرَ |
+| sentences-q9 | … الْوَلَدُ الْبَابْ | الْحَمْدُ، الطِّفْلُ، فَتَحَ | فَتَحَ |
+| sentences-q10 | … الطِّفْلُ يَدَيْهْ | الْوَلَدُ، غَسَلَ، الْمُعَلِّمُ | غَسَلَ |
+
+## Old repeats removed
+
+The old lesson's test sentences repeated these lesson sentences word for word; each is kept once.
+
+- فَتَحَ الوَلَدُ البَابَ
+- كَتَبَ الطِّفْلُ دَرْسَهُ
+- قَرَأَ مُحَمَّدٌ كِتَابًا
+- طَارَ العُصْفُورُ فِي السَّمَاءِ
+- سَلَّمَ الوَلَدُ عَلَى جَدِّهِ
 
 ## Every sentence
 

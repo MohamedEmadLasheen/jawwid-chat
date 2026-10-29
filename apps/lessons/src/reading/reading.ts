@@ -1,5 +1,5 @@
 import type { ResolvedQuiz } from '../content/lesson-content';
-import { HARAKA, isLetter, isMark, isWord } from '../arabic/letters';
+import { HARAKA, isLetter, isMark, isWord, lettersOf } from '../arabic/letters';
 import { WORD_ID } from '../arabic/arabic-lesson';
 
 /**
@@ -57,6 +57,8 @@ export interface ReadingLesson {
   retiredIds: string[];
   stages: ReadingStage[];
   passages?: ReadingPassage[];
+  /** The proper names the sentences use: a "missing" question that blanks one never offers another. */
+  names?: string[];
   quiz: ReadingQuizItem[];
 }
 
@@ -136,6 +138,7 @@ export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedRead
     const passages: ResolvedReading['passages'] = [];
     const passageIds = new Set<string>();
     check(raw.passages === undefined || Array.isArray(raw.passages));
+    check(raw.names === undefined || (Array.isArray(raw.names) && raw.names.every(isWord)));
     for (const p of raw.passages ?? []) {
       check(typeof p.id === 'string' && WORD_ID.test(p.id) && p.id.slice(0, -4) === 'passage' && !passageIds.has(p.id) && !ids.has(p.id));
       passageIds.add(p.id);
@@ -182,6 +185,11 @@ export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedRead
           i === q.answer ? [s.text] : [...byId.values()].filter((it) => it.kind === 'sentence' && it.id !== s.id && wordsOf(it.text)!.includes(o)).map((it) => it.text),
         );
         check(q.options.every((o, i) => sources[i]!.length > 0 && (i === q.answer || !drills.has(o))));
+        // A wrong option must not be the answer in another form (الْوَلَدْ / الْوَلَدُ), nor another name
+        // where the blank is a name: either could also complete the sentence (review of #292).
+        const names = new Set(raw.names ?? []);
+        const bare = (w: string) => lettersOf(w).join('');
+        check(q.options.every((o, i) => i === q.answer || (bare(o) !== bare(ws[q.blank]!) && !(names.has(ws[q.blank]!) && names.has(o)))));
         const shownText = ws.map((w, i) => (i === q.blank ? '…' : w)).join(' ');
         item = { id: q.id, question: 'أَيُّ كَلِمَةٍ تُكْمِلُ الْجُمْلَةَ؟', prompt: shownText, word: null, options: q.options, answer: q.answer };
         words = [s.text, ...sources.slice(0).filter((_, i) => i !== q.answer).map((src) => src.find((t) => !flagged.has(t)) ?? src[0]!)];

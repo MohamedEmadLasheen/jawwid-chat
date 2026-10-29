@@ -466,68 +466,98 @@
       ]
     }
   ],
+  "names": [
+    "مُحَمَّدٌ",
+    "أَحْمَدُ"
+  ],
   "quiz": [
     {
       "id": "sentences-q1",
       "kind": "missing",
       "sentence": "sentences-001",
-      "blank": 1,
+      "blank": 0,
       "options": [
-        "الْوَلَدُ",
-        "الطِّفْلْ",
-        "الْعُصْفُورُ"
+        "أَكَلَ",
+        "الطِّفْلُ",
+        "الْمُعَلِّمُ"
       ],
       "answer": 0,
       "review": null
     },
     {
-      "id": "sentences-q3",
+      "id": "sentences-q2",
       "kind": "missing",
-      "sentence": "sentences-003",
-      "blank": 1,
+      "sentence": "sentences-002",
+      "blank": 0,
       "options": [
-        "مُحَمَّدٌ",
-        "أَحْمَدُ",
-        "الْعُصْفُورُ"
+        "الْمُعَلِّمُ",
+        "الْعُصْفُورُ",
+        "شَرِبَ"
       ],
-      "answer": 0,
+      "answer": 2,
       "review": null
     },
     {
       "id": "sentences-q4",
       "kind": "missing",
       "sentence": "sentences-004",
-      "blank": 1,
+      "blank": 0,
       "options": [
-        "الْعُصْفُورُ",
-        "أُمِّي",
-        "الْوَلَدُ"
+        "الْحَمْدُ",
+        "الطِّفْلُ",
+        "لَعِبَ"
       ],
       "answer": 2,
       "review": null
     },
     {
-      "id": "sentences-q8",
+      "id": "sentences-q5",
       "kind": "missing",
-      "sentence": "sentences-008",
-      "blank": 1,
+      "sentence": "sentences-005",
+      "blank": 0,
       "options": [
-        "أَحْمَدُ",
-        "مُحَمَّدٌ",
-        "الطِّفْلُ"
+        "الْعُصْفُورُ",
+        "الْحَمْدُ",
+        "ذَهَبَ"
       ],
       "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sentences-q6",
+      "kind": "missing",
+      "sentence": "sentences-006",
+      "blank": 0,
+      "options": [
+        "الْعُصْفُورُ",
+        "رَسَمَ",
+        "الْحَمْدُ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "sentences-q7",
+      "kind": "missing",
+      "sentence": "sentences-007",
+      "blank": 0,
+      "options": [
+        "نَظَرَ",
+        "الْحَمْدُ",
+        "الْعُصْفُورُ"
+      ],
+      "answer": 0,
       "review": null
     },
     {
       "id": "sentences-q9",
       "kind": "missing",
       "sentence": "sentences-009",
-      "blank": 1,
+      "blank": 0,
       "options": [
-        "مُحَمَّدْ",
-        "أَحْمَدُ",
-        "الْوَلَدُ"
+        "الْحَمْدُ",
+        "الطِّفْلُ",
+        "فَتَحَ"
       ],
       "answer": 2,
       "review": null
@@ -536,23 +566,10 @@
       "id": "sentences-q10",
       "kind": "missing",
       "sentence": "sentences-010",
-      "blank": 1,
+      "blank": 0,
       "options": [
-        "أَحْمَدْ",
-        "الطِّفْلُ",
-        "مُحَمَّدْ"
-      ],
-      "answer": 1,
-      "review": null
-    },
-    {
-      "id": "sentences-q12",
-      "kind": "missing",
-      "sentence": "sentences-012",
-      "blank": 1,
-      "options": [
-        "الْوَلَدْ",
         "الْوَلَدُ",
+        "غَسَلَ",
         "الْمُعَلِّمُ"
       ],
       "answer": 1,

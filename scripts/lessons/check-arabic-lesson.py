@@ -276,8 +276,12 @@ def check_reading(lesson, number, quran_grams=None):
         raise ValueError('a reading lesson is checked against the verified Quran (quran_grams()); refusing to skip that check')
     errors = []
     err = errors.append
-    if not READING_KEYS <= set(lesson) or set(lesson) - READING_KEYS - {'passages'}:
-        return [f'keys must be {sorted(READING_KEYS)} (and passages), not {sorted(lesson)}']
+    if not READING_KEYS <= set(lesson) or set(lesson) - READING_KEYS - {'passages', 'names'}:
+        return [f'keys must be {sorted(READING_KEYS)} (and passages, names), not {sorted(lesson)}']
+    names = lesson.get('names', [])
+    if not isinstance(names, list) or not all(is_word(n) for n in names):
+        err('names must be a list of the proper names the lesson\'s sentences use (one written word each)')
+        names = []
     if not is_int(lesson['lesson']) or lesson['lesson'] != number:
         err(f'lesson is {lesson["lesson"]!r}, not {number}')
     review = lesson['review']
@@ -425,6 +429,12 @@ def check_reading(lesson, number, quran_grams=None):
                     err(f'{qw}: option {o!r} must be a word of another sentence of this lesson (never a drill)')
                 elif unmarked(o):
                     err(f'{qw}: option {o!r} is not fully vowelled')
+                # Review of #292: a wrong option must not be the answer in another form (الْوَلَدْ / الْوَلَدُ),
+                # nor another name where the blank is a name -- either could also complete the sentence.
+                if letters_of(o) == letters_of(ws[q['blank']]):
+                    err(f'{qw}: option {o!r} is the answer\'s word in another form')
+                if ws[q['blank']] in names and o in names:
+                    err(f'{qw}: option {o!r} is another name where the blank is a name: it could complete the sentence too')
         else:
             err(f'{qw}: kind must be vowel or missing')
 
@@ -891,6 +901,8 @@ def selftest():
         'reading-sukun-particle-inside-is-fine': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتِ الْقِطَّةُ مِنْ تَعَبْ.'), None, None),
         'reading-feminine-ta-sakina-is-fine': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتْ قِطَّتِي الصَّغِيرَةْ.') or c['quiz'].pop(), None, None),
         'reading-sukun-before-a-wasl': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتْ الْقِطَّةُ الصَّغِيرَةْ.'), 'hamzat wasl', None),
+        'reading-missing-option-same-word': (lambda c: c['stages'][2]['items'][0].update(text='أَكَلَ الْقِطَّةْ تُفَّاحًا') or c['quiz'][1].update(options=['الْقِطَّةُ', 'الْقِطَّةْ']), 'another form', None),
+        'reading-missing-option-another-name': (lambda c: c.update(names=['الْقِطَّةُ', 'الْوَلَدُ']), 'another name', None),
         'reading-title-not-vowelled': (lambda c: c['passages'][0]['title'].update(text='القطة'), 'not fully vowelled', None),
         'reading-stage-name-not-pausal': (lambda c: c['stages'][2].update(name='جُمَلٌ'), 'not the pausal sukun', None),
     }
