@@ -46,6 +46,7 @@ import {
 import { currentImpersonationId } from '../../platform/request-context';
 import { MentionService } from '../mentions/mention.service';
 import { buildReceiptView, isCountableReader, isDirectTeacherParent } from './receipt-view';
+import { withOwedMakeups } from './owed-makeup';
 
 export interface AttachmentInput {
   kind: string;
@@ -546,12 +547,13 @@ export class MessageService {
     const limit = Math.min(input.limit ?? defaultLimit, maxLimit);
 
     const ascending = input.after !== undefined;
-    const rows = await this.prisma.message.findMany({
+    // A card that owes a make-up reads its live make-up's time (owed-makeup.ts).
+    const rows = await withOwedMakeups(this.prisma, await this.prisma.message.findMany({
       where: this.visibilityFilter(actor, conv.id, input),
       include: MESSAGE_INCLUDE,
       orderBy: { seq: ascending ? 'asc' : 'desc' },
       take: limit,
-    });
+    }));
 
     // Signed URLs are minted per read, scoped to messages this actor is already
     // permitted to see, and they expire.
@@ -1211,7 +1213,8 @@ export class MessageService {
   }
 
   /** Message rows to DTOs for one viewer in one conversation: signed media, names, photos. */
-  private async dtosFor(rows: MessageWithRelations[], conversationId: string, actor: Actor): Promise<MessageDto[]> {
+  private async dtosFor(page: MessageWithRelations[], conversationId: string, actor: Actor): Promise<MessageDto[]> {
+    const rows = await withOwedMakeups(this.prisma, page);
     const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id), actor.actorId);
     const authors = await this.authorsFor(rows);
     const receiptView = await this.receiptViewFor(actor.actorId, rows);

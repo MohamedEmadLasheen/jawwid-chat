@@ -42,6 +42,7 @@ import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import '../data/message_search_repository.dart';
+import '../domain/typing_sender.dart';
 import 'attachment_preview.dart';
 import 'chat_theme_sheet.dart';
 import 'forward_sheet.dart';
@@ -165,6 +166,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   // seated members; an indicator not renewed within [_typingShowFor] lapses,
   // so a lost "stopped" cannot leave it up.
   StreamSubscription<TypingSignal>? _typingSub;
+  // And what this person says: "typing" while the draft changes (HTTP).
+  TypingSender? _typingSender;
   final Map<String, ({String name, DateTime until})> _typers = {};
   Timer? _typersLapse;
   static const _typingShowFor = Duration(seconds: 8);
@@ -230,6 +233,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     _typingSub = ref.read(chatTypingChannelProvider)?.signals.listen(_onTyping);
+    final typingOut = ref.read(typingRepositoryProvider);
+    if (typingOut.isAvailable && !widget.isReadOnly) {
+      _typingSender = TypingSender(
+        send: (typing) => unawaited(typingOut.typing(widget.conversationId, typing).catchError((Object _) {})),
+      );
+    }
     // PD-36: opening the chat is seeing its mention; the "@" on the list row goes.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -322,6 +331,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _typingSender?.dispose();
     // Not awaited: on a broadcast stream a cancel can wait for the stream to close.
     final typingSub = _typingSub;
     if (typingSub != null) unawaited(typingSub.cancel());
@@ -1245,6 +1255,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             },
             replyingTo: _replyingTo,
             onCancelReply: () => setState(() => _replyingTo = null),
+            // PD-37: "typing…" -- a read-only chat says nothing.
+            onDraftChanged: _typingSender?.typed,
             conversationId: widget.conversationId,
             voice: voice,
             onStartRecording: voiceController.start,

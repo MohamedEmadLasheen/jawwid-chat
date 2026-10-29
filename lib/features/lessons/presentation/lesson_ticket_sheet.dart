@@ -8,6 +8,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/utils/clock_time.dart';
+import '../domain/excuse_category.dart';
 import 'change_lesson_time_sheet.dart';
 import 'lesson_report_sheet.dart';
 import 'makeup_sheet.dart';
@@ -95,7 +96,14 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
   bool _sending = false;
   String? _error;
 
+  /// PD-50: the excuse category an apology is sent under (excuse_category.dart).
+  String? _category;
+
   LessonTicketKind get _kind => widget.ticket.kind;
+
+  /// PD-50: every apology names a category, which the family reads on the card.
+  bool get _isApology =>
+      _kind == LessonTicketKind.apology || _kind == LessonTicketKind.teacherApology || _kind == LessonTicketKind.lateApology;
 
   @override
   void initState() {
@@ -109,8 +117,15 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
     super.dispose();
   }
 
-  /// The one field a ticket cannot be sent without -- none for an absence.
-  bool get _canSend => !_sending && (_kind == LessonTicketKind.absence || _main.text.trim().isNotEmpty);
+  /// What a ticket cannot be sent without: nothing for an absence; a category for every
+  /// apology (PD-50); and the note too, except on a family's apology before the start.
+  bool get _canSend =>
+      !_sending &&
+      switch (_kind) {
+        LessonTicketKind.absence => true,
+        LessonTicketKind.apology => _category != null,
+        _ => _category != null && _main.text.trim().isNotEmpty,
+      };
 
   String? _optional(TextEditingController c) {
     final t = c.text.trim();
@@ -132,7 +147,7 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
         case LessonTicketKind.absence:
           await repo.absence(id, note: _optional(_main));
         case LessonTicketKind.apology || LessonTicketKind.teacherApology || LessonTicketKind.lateApology:
-          await repo.apologise(id, _kind, _main.text.trim());
+          await repo.apologise(id, _kind, reason: _optional(_main), category: _category);
         case LessonTicketKind.bookMakeup || LessonTicketKind.changeLessonTime:
           return; // their own sheets (openLessonTicket)
       }
@@ -181,18 +196,46 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
                 const SizedBox(height: Spacing.spacing3),
                 Text(hint, style: theme.textTheme.bodySmall),
               ],
+              if (_isApology) ...[
+                const SizedBox(height: Spacing.spacing4),
+                // PD-50: the label says who reads the category -- the family group for a
+                // family's apology; staff and the teacher only for a teacher's own.
+                Text(
+                  _kind == LessonTicketKind.teacherApology ? l10n.ticketCategoryStaffLabel : l10n.ticketCategoryLabel,
+                  style: theme.textTheme.labelLarge,
+                ),
+                const SizedBox(height: Spacing.spacing2),
+                Wrap(
+                  spacing: Spacing.spacing2,
+                  runSpacing: Spacing.spacing2,
+                  children: [
+                    for (final code in excuseCategoryCodes)
+                      ChoiceChip(
+                        key: ValueKey('excuse-category-$code'),
+                        label: Text(excuseCategoryLabel(l10n, code)!),
+                        selected: _category == code,
+                        onSelected: _sending ? null : (_) => setState(() => _category = code),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: Spacing.spacing4),
               TextField(
                 key: const ValueKey('lesson-ticket-main'),
                 controller: _main,
-                autofocus: _kind != LessonTicketKind.absence,
+                // The category comes first; the note opens the keyboard only where it is required.
+                autofocus: _kind == LessonTicketKind.teacherApology || _kind == LessonTicketKind.lateApology,
                 minLines: 2,
                 maxLines: 5,
                 maxLength: 1000,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
+                  // PD-50: the note says who reads it -- never the family group card.
                   labelText: switch (_kind) {
                     LessonTicketKind.absence => l10n.reportNoteLabel,
+                    LessonTicketKind.apology => l10n.ticketFamilyNoteOptional,
+                    LessonTicketKind.lateApology => l10n.ticketFamilyDetails,
+                    LessonTicketKind.teacherApology => l10n.cardStaffNote,
                     _ => l10n.ticketReasonLabel,
                   },
                   border: const OutlineInputBorder(),

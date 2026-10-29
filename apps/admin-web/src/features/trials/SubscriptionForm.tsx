@@ -5,6 +5,7 @@ import type { NewStudentDto, PaymentMethod, ScheduleSlot, SubscriptionFormInput 
 import { CURRENCIES, TR, WEEKDAY } from './copy'
 import { useTrialTeachers } from './hooks'
 import { readinessNote } from '@/features/teacher-files/readiness'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './trials.css'
 
 /**
@@ -170,12 +171,12 @@ export function SubscriptionForm({
               {text(`c${i}.course`, TR.course, c.course, (v) => setChild(i, { course: v }))}
               <div className="field">
                 <label className="field__label" htmlFor={`${uid}-c${i}.teacherId`}>{tx(TR.assignedTeacher)}</label>
-                <select
+                <SearchableSelect
                   id={`${uid}-c${i}.teacherId`}
                   className="select"
                   value={c.teacherId}
                   aria-invalid={errors.has(`c${i}.teacherId`)}
-                  onChange={(e) => setChild(i, { teacherId: e.target.value })}
+                  onValueChange={(v) => setChild(i, { teacherId: v })}
                 >
                   <option value="">—</option>
                   {(teachers.data?.teachers ?? []).map((t) => {
@@ -185,7 +186,7 @@ export function SubscriptionForm({
                       <option key={t.id} value={t.id}>{note ? `${t.name} — ${note}` : t.name}</option>
                     )
                   })}
-                </select>
+                </SearchableSelect>
                 {(() => {
                   const readiness = teachers.data?.teachers.find((t) => t.id === c.teacherId)?.readiness
                   if (!readinessNote(readiness, locale)) return null
@@ -207,18 +208,18 @@ export function SubscriptionForm({
               <span className="field__label">{tx(TR.schedule)}</span>
               {c.schedule.map((x, j) => (
                 <div className="tj-slot" key={j}>
-                  <select
+                  <SearchableSelect
                     className="select"
                     aria-label={tx(TR.weekday)}
                     value={x.weekday}
                     aria-invalid={errors.has(`c${i}.s${j}.weekday`)}
-                    onChange={(e) => setChild(i, { schedule: c.schedule.map((y, k) => (k === j ? { ...y, weekday: e.target.value } : y)) })}
+                    onValueChange={(v) => setChild(i, { schedule: c.schedule.map((y, k) => (k === j ? { ...y, weekday: v } : y)) })}
                   >
                     <option value="">{tx(TR.weekday)}</option>
                     {[6, 7, 1, 2, 3, 4, 5].map((d) => (
                       <option key={d} value={d}>{tx(WEEKDAY[d]!)}</option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                   <input
                     className="input"
                     type="time"
@@ -255,12 +256,12 @@ export function SubscriptionForm({
         <div className="tj-row">
           <div className="field">
             <label className="field__label" htmlFor={`${uid}-currency`}>{tx(TR.currency)}</label>
-            <select id={`${uid}-currency`} className="select" value={value.currency} aria-invalid={errors.has('currency')} onChange={(e) => set({ currency: e.target.value })}>
+            <SearchableSelect id={`${uid}-currency`} className="select" value={value.currency} aria-invalid={errors.has('currency')} onValueChange={(v) => set({ currency: v })}>
               {(CURRENCIES as readonly string[]).includes(value.currency) ? null : <option value={value.currency}>{value.currency}</option>}
               {CURRENCIES.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
-            </select>
+            </SearchableSelect>
           </div>
           <div className="field" role="radiogroup" aria-label={tx(TR.paymentMethod)} aria-invalid={errors.has('method')}>
             <span className="field__label">{tx(TR.paymentMethod)}</span>

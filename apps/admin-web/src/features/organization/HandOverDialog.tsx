@@ -6,6 +6,7 @@ import { LoadingState } from '@/shared/components/States'
 import type { Cover, EligibleBackup } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useCoverPreview, useStartCover } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const DAY = 86_400_000
 
@@ -138,11 +139,11 @@ export function HandOverDialog({
           ) : null}
           <div className="field">
             <label className="field__label" htmlFor={`${id}-backup`}>{tx(T.backupField)}</label>
-            <select
+            <SearchableSelect
               id={`${id}-backup`}
               className="select"
               value={chosen?.id ?? ''}
-              onChange={(e) => setBackupId(e.target.value)}
+              onValueChange={(v) => setBackupId(v)}
               aria-invalid={touched && (!chosen || !!chosen.blocked)}
             >
               {data.eligibleBackups.map((b) => (
@@ -152,7 +153,7 @@ export function HandOverDialog({
                   {b.blocked ? ` — ${blockedText(b)}` : ''}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           </div>
           <div className="field">
             <span className="field__label" id={`${id}-from-l`}>{tx(T.fromField)}</span>

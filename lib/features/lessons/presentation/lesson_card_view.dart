@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
@@ -10,6 +11,7 @@ import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/clock_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../materials/data/materials_repository.dart';
+import '../domain/excuse_category.dart';
 import '../domain/report_vocab.dart';
 import 'lesson_report_sheet.dart' show showEditReportSheet;
 import 'lesson_ticket_sheet.dart' show lessonWhen, weeklyLabel;
@@ -68,6 +70,29 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
   );
 }
 
+/// PD-15 / PD-50: what a staff or teacher reader sees of an excuse beyond its card --
+/// the internal reason, a teacher apology's category, a family's late-apology words.
+/// The card payload never carries them; the server's `GET /lessons/:id` decides who
+/// reads each. Null on any failure: missing details are never an error on a chat card.
+/// Bound to the principal so one account's details are never served to the next.
+/// NEVER watched for a parent (see [_LessonCard]).
+final lessonStaffDetailsProvider = FutureProvider.autoDispose.family<LessonStaffDetails?, String>((ref, lessonId) async {
+  ref.watch(principalIdProvider);
+  try {
+    return await ref.watch(lessonRepositoryProvider).staffDetails(lessonId);
+  } catch (_) {
+    return null;
+  }
+});
+
+/// A lesson's weekday, date and time -- "Sat, Oct 31, 2026 · 6:30 PM" / "السبت، ٣١
+/// أكتوبر ٢٠٢٦ · ٦:٣٠ م" -- in the reader's locale; [t] is already in the reader's zone
+/// ([MessageCard.time]).
+String _dayWhen(BuildContext context, DateTime t) {
+  final locale = Localizations.localeOf(context).toLanguageTag();
+  return '${DateFormat.yMMMEd(locale).format(t)} · ${formatClockTime(context, TimeOfDay.fromDateTime(t))}';
+}
+
 /// A corrected lesson's outcome, as a family reads it (PD-15).
 String? _outcomeLabel(L10n l10n, String? outcome, String? timing) => switch (outcome) {
       'held' => l10n.cardOutcomeHeld,
@@ -108,7 +133,42 @@ class _LessonCard extends ConsumerWidget {
     final level = performanceLabel(l10n, card.integer('rating'));
     final corrected = card.kind == 'lesson_corrected' ? _outcomeLabel(l10n, card.text('outcome'), card.text('apologyTiming')) : null;
     final learner = card.text('learnerName');
-    final starts = card.time('startsAt');
+    final makeupCard = card.kind == 'lesson_makeup_booked';
+    // A make-up card's own time is its main line ("Make-up lesson"), with the lesson it
+    // replaces beneath; the header then names the child only.
+    final starts = makeupCard ? null : card.time('startsAt');
+    final makeupStarts = makeupCard ? card.time('startsAt') : card.time('makeupStartsAt');
+    final missedStarts = makeupCard ? card.time('missedStartsAt') : null;
+    final teacherApology = card.kind == 'lesson_teacher_apology';
+    // PD-50: a family's excuse category, which everyone reading the card sees -- the family
+    // included. With one, the family's free text is not on the card; staff fetch it. A
+    // teacher's apology is never categorised on the card: its reason, category included,
+    // is staff data (an old payload's category is ignored).
+    final categoryCode = switch (card.kind) {
+      'lesson_apology' || 'lesson_late_apology' || 'lesson_ruling' => card.text('reasonCategory'),
+      _ => null,
+    };
+    final category = excuseCategoryLabel(l10n, categoryCode);
+    // PD-15: what the card leaves out, for staff and the teacher -- never fetched, never
+    // shown for a parent (or an unknown role). An older card carries the family's own
+    // reason; a PD-50 card carries its category instead, and the rest is fetched here.
+    // The role is read only for a card that could leave such details out.
+    final staffNoteCard = lessonId != null &&
+        switch (card.kind) {
+          'lesson_apology' || 'lesson_late_apology' => card.text('reason') == null,
+          'lesson_teacher_apology' => true,
+          'lesson_cancelled' => card.text('outcome') == 'teacher_no_show',
+          _ => false,
+        };
+    final role = staffNoteCard ? ref.watch(currentRoleProvider) : null;
+    final wantsStaffNote = staffNoteCard && role != null && role != UserRole.parent;
+    final staff = wantsStaffNote ? ref.watch(lessonStaffDetailsProvider(lessonId)).value : null;
+    // A late apology's fetched details are the family's words; its outcome note (set by
+    // a ruling, from those same words) is not repeated.
+    final lateApology = card.kind == 'lesson_late_apology';
+    final staffNote = lateApology ? null : staff?.note;
+    final familyWords = lateApology ? staff?.familyWords : null;
+    final staffCategory = teacherApology ? excuseCategoryLabel(l10n, staff?.category) : null;
     final rating = card.integer('rating');
     // PD-31: a moved lesson reads "previous -> new", both in the reader's own clock.
     final previous = card.kind == 'lesson_moved' ? card.time('previousStartsAt') : null;
@@ -159,6 +219,8 @@ class _LessonCard extends ConsumerWidget {
           }(),
     ];
     final rows = <(String, String)>[
+      if (makeupStarts != null) (l10n.cardMakeupLesson, _dayWhen(context, makeupStarts)),
+      if (missedStarts != null) (l10n.cardMakeupInsteadOf, _dayWhen(context, missedStarts)),
       if (previous != null && starts != null)
         ('', l10n.changeTimeSummary(lessonWhen(context, previous), lessonWhen(context, starts))),
       ?action == null ? null : (l10n.cardMakeupResolvedTitle, action),
@@ -188,7 +250,12 @@ class _LessonCard extends ConsumerWidget {
       if (tasks.isNotEmpty) (l10n.cardNextLesson, tasks.join('، ')),
       if (card.text('homework') case final v?) (l10n.cardHomework, v),
       if (practice.isNotEmpty) (l10n.materialsTabPractice, practice.join('، ')),
+      ?category == null ? null : (l10n.cardReason, category),
       if (card.text('reason') case final v?) (l10n.cardReason, v),
+      ?staffCategory == null ? null : (l10n.cardStaffReason, staffCategory),
+      ?familyWords == null ? null : (l10n.cardFamilyDetails, familyWords),
+      if (staffNote != null)
+        (categoryCode != null || staffCategory != null ? l10n.cardStaffNote : l10n.cardStaffReason, staffNote),
       if (card.text('note') case final v?) (l10n.cardNote, v),
     ];
 
@@ -256,7 +323,8 @@ class _LessonCard extends ConsumerWidget {
           if (card.kind == 'lesson_late_apology' || card.kind == 'schedule_change_requested')
             _Footnote(text: l10n.cardUnderReview, color: muted),
           if (movedBy != null) _Footnote(text: movedBy, color: muted),
-          if (card.flag('makeupOwed'))
+          // Owed until booked: every read of the card carries its live make-up (makeupStartsAt).
+          if (card.flag('makeupOwed') && makeupStarts == null)
             _Footnote(text: l10n.cardMakeupOwed, color: muted),
           if (card.flag('corrected'))
             _Footnote(text: l10n.cardReportCorrected, color: muted),

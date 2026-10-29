@@ -7,6 +7,7 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { CalendarOptions, CalendarStats, CalendarSummary, CalendarTeacher, CalendarWindow, Totals, WorkPatterns } from './api'
 import { ShiftSection } from './ShiftSection'
 import { SupervisorColors } from './SupervisorColors'
+import { chooseOption, optionsOf } from '@/test/select'
 
 /**
  * PD-38 Admin Web: the page's side of the contract, through the real routes and
@@ -260,7 +261,30 @@ describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
     // The hours filter speaks the same clock; its values stay HH:MM for the API.
     await userEvent.click(within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'Hours' }))
     const from = within(screen.getByRole('dialog', { name: 'Hours' })).getByRole('combobox', { name: 'From' })
-    expect(within(from).getByRole('option', { name: '1:00 PM' })).toHaveValue('13:00')
+    expect(await optionsOf(userEvent, from)).toContainEqual({ value: '13:00', label: '1:00 PM', disabled: false })
+  })
+
+  it('a time in the Hours filter is picked with the mouse, and Escape closes the list before the filter', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    await screen.findByRole('row', { name: 'Teacher One' })
+    const hours = within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'Hours' })
+    await userEvent.click(hours)
+    const panel = screen.getByRole('dialog', { name: 'Hours' })
+    // The list is portalled out of the panel; a pointer on it is still "inside".
+    await chooseOption(userEvent, within(panel).getByRole('combobox', { name: 'From' }), '1:00 PM')
+    expect(screen.getByRole('dialog', { name: 'Hours' })).toBeInTheDocument()
+    expect(within(panel).getByRole('combobox', { name: 'From' })).toHaveAttribute('data-value', '13:00')
+    await waitFor(() => expect(lastQuery(/\/calendar\?/).get('timeFrom')).toBe('13:00'))
+
+    const to = within(panel).getByRole('combobox', { name: 'To' })
+    await userEvent.click(to)
+    expect(to).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.keyboard('{Escape}')
+    expect(to).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('dialog', { name: 'Hours' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Hours' })).toBeNull()
+    expect(hours).toHaveFocus()
   })
 
   it('the lesson details say when on the same clock', async () => {

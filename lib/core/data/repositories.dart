@@ -749,7 +749,11 @@ abstract interface class LessonRepository {
   Future<void> absence(String lessonId, {String? note});
 
   /// `POST /lessons/:id/apology`, `/teacher-apology` or `/late-apology`, by [kind].
-  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason);
+  /// PD-50: [category] is the fixed reason the family sees on the card
+  /// (`reasonCategory`, see excuse_category.dart); [reason] is the free-text note only
+  /// staff and the lesson's teacher read. A family's apology before the start may omit
+  /// [reason] when it names a [category]; the server decides.
+  Future<void> apologise(String lessonId, LessonTicketKind kind, {String? reason, String? category});
 
   /// `GET /lessons/:id/makeup-slots`
   Future<MakeupOffer> makeupSlots(String lessonId);
@@ -796,6 +800,13 @@ abstract interface class LessonRepository {
 
   /// PD-15: `GET /lessons/:id` -- the lesson's live report, to edit it (null when none).
   Future<LessonReportDraft?> reportFor(String lessonId);
+
+  /// PD-15 / PD-50: `GET /lessons/:id` -- what the card payload deliberately leaves out:
+  /// the internal reason (`outcomeNote`), the excuse's category (`excuseCategory`, staff
+  /// data for a teacher's apology) and a family's late-apology words (`ruling.reason`).
+  /// The server decides who reads each; a withheld or blank field is null. A parent's
+  /// client never asks.
+  Future<LessonStaffDetails> staffDetails(String lessonId);
 
   /// PD-15: `POST /lessons/:id/report/edit` -- the whole report again; its card is
   /// rewritten in place and the previous version is kept.
@@ -877,7 +888,7 @@ class NoLessonRepository implements LessonRepository {
       throw UnsupportedError('no lesson server in this build');
 
   @override
-  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) =>
+  Future<void> apologise(String lessonId, LessonTicketKind kind, {String? reason, String? category}) =>
       throw UnsupportedError('no lesson server in this build');
 
   @override
@@ -914,6 +925,9 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<List<LessonTicket>> lessonTickets(String lessonId) async => const [];
+
+  @override
+  Future<LessonStaffDetails> staffDetails(String lessonId) async => const LessonStaffDetails();
 
   @override
   Future<ChildProgress> progress(String learnerId) =>

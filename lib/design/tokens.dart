@@ -496,3 +496,53 @@ abstract final class ChatThemePalette {
   static const photoScrimLight = Color(0x8CFFFFFF);
   static const photoScrimDark = Color(0x8C000000);
 }
+
+/// PD-39: the teacher whiteboard's colours (docs/product/pd039-whiteboard-design.md
+/// §4.1, §4.2). A board is a page of paper, not app chrome, so it keeps these in
+/// both app themes. The pens are eight clear inks that read on every page colour;
+/// the Tajweed swatches are the four rules the highlighter offers by name, for
+/// the academy's Quran teacher to confirm (design §4.1).
+abstract final class BoardPalette {
+  static const pens = <Color>[
+    Color(0xFF1B1B1B), // ink
+    Color(0xFFC62828), // red
+    Color(0xFF1565C0), // blue
+    Color(0xFF2E7D32), // green
+    Color(0xFFEF6C00), // orange
+    Color(0xFF6A1B9A), // purple
+    Color(0xFF8D6E63), // brown
+    Color(0xFFFFFFFF), // chalk (for the dark pages)
+  ];
+
+  /// The default ink, and what an element with a missing colour is drawn in.
+  static const ink = Color(0xFF1B1B1B);
+
+  /// Highlighter: madd, ghunnah, ikhfa', izhar.
+  static const tajweedMadd = Color(0xFFE53935);
+  static const tajweedGhunnah = Color(0xFF43A047);
+  static const tajweedIkhfa = Color(0xFFFB8C00);
+  static const tajweedIzhar = Color(0xFF1E88E5);
+
+  /// Plain highlighter yellow.
+  static const highlighter = Color(0xFFFDD835);
+
+  /// Page colours: white, cream, grey, blackboard green, dark.
+  static const pageWhite = Color(0xFFFFFFFF);
+  static const pageCream = Color(0xFFFBF6E9);
+  static const pageGrey = Color(0xFFEFF1F3);
+  static const pageGreen = Color(0xFF1F4A3A);
+  static const pageDark = Color(0xFF1D232A);
+
+  /// Rulings, and the frame of an element this build does not draw.
+  static const ruleOnLight = Color(0x475B7083);
+  static const ruleOnDark = Color(0x38FFFFFF);
+  static const placeholderOnLight = Color(0xFF5B7083);
+  static const placeholderOnDark = Color(0xB3FFFFFF);
+
+  /// Stamps: the reward gold and the praise green.
+  static const stampGold = Color(0xFFF9A825);
+  static const stampGreen = Color(0xFF2E7D32);
+
+  /// Selection outline and handles.
+  static const selection = Color(0xFF0E7C86);
+}

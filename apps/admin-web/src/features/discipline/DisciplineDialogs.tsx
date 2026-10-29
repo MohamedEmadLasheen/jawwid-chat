@@ -6,6 +6,7 @@ import { useHeldLessons, useSupervisionDirectory } from '@/features/teacher-file
 import { LADDER, type Decision, type Violation } from './api'
 import { D, DECISION_LABEL, describeError, useCopy } from './copy'
 import { useDecide, useRecordAbsence, useRecordLateness } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const localDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -205,12 +206,12 @@ export function LatenessDialog({ onClose, lessonType = 'regular' }: { onClose: (
         <label className="field__label" htmlFor={teacherId}>
           {tx(D.teacher)}
         </label>
-        <select
+        <SearchableSelect
           id={teacherId}
           className="input"
           value={teacher}
-          onChange={(e) => {
-            setTeacher(e.target.value)
+          onValueChange={(v) => {
+            setTeacher(v)
             setLesson('')
           }}
         >
@@ -222,7 +223,7 @@ export function LatenessDialog({ onClose, lessonType = 'regular' }: { onClose: (
                 {t.name}
               </option>
             ))}
-        </select>
+        </SearchableSelect>
       </div>
       {teacher && (
         <div className="field">
@@ -232,14 +233,14 @@ export function LatenessDialog({ onClose, lessonType = 'regular' }: { onClose: (
           {held.length === 0 && !loading ? (
             <p className="dc-muted">{tx(lessonType === 'trial' ? D.noHeldTrials : D.noHeld)}</p>
           ) : (
-            <select id={lessonId} className="input" value={lesson} onChange={(e) => setLesson(e.target.value)}>
+            <SearchableSelect id={lessonId} className="input" value={lesson} onValueChange={(v) => setLesson(v)}>
               <option value="">{tx(lessonType === 'trial' ? D.chooseTrial : D.chooseLesson)}</option>
               {held.map((l) => (
                 <option key={l.id} value={l.id}>
                   {`${l.label} — ${dateTime(l.startsAt)}`}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           )}
           {touched && !lesson && <span className="field__error">{tx(D.required)}</span>}
         </div>
@@ -308,7 +309,7 @@ export function AbsenceDialog({ onClose }: { onClose: () => void }) {
         <label className="field__label" htmlFor={teacherId}>
           {tx(D.teacher)}
         </label>
-        <select id={teacherId} className="input" value={teacher} onChange={(e) => setTeacher(e.target.value)}>
+        <SearchableSelect id={teacherId} className="input" value={teacher} onValueChange={(v) => setTeacher(v)}>
           <option value="">{tx(D.chooseTeacher)}</option>
           {(roster.data?.teachers ?? [])
             .filter((t) => t.isActive)
@@ -317,7 +318,7 @@ export function AbsenceDialog({ onClose }: { onClose: () => void }) {
                 {t.name}
               </option>
             ))}
-        </select>
+        </SearchableSelect>
         {touched && missing.teacher && <span className="field__error">{tx(D.required)}</span>}
       </div>
       <div className="field">

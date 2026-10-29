@@ -18,6 +18,7 @@ import { useAccessRoles, useGrantRole, useRevokeRole, useSetupCode, useStaffAcco
 import { AccountsTabs } from './AccountsTabs'
 import { NewStaffAccountDialog } from './NewStaffAccountDialog'
 import { StaffCodeSheet } from './StaffCodeSheet'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import '@/features/accounts/accounts.css'
 import './staff-accounts.css'
 
@@ -109,14 +110,14 @@ export function StaffAccountsPage() {
               <label className="field__label" htmlFor={roleFilterId}>
                 {tx(SA.filterRole)}
               </label>
-              <select id={roleFilterId} className="input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+              <SearchableSelect id={roleFilterId} className="input" value={roleFilter} onValueChange={(v) => setRoleFilter(v)}>
                 <option value="">{tx(SA.anyRole)}</option>
                 {roles.data!.roles.map((r) => (
                   <option key={r.id} value={r.id}>
                     {roleName(r)}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             </div>
           )}
           {staff && isSuperAdmin(staff.role) && departments.length > 1 && (
@@ -124,14 +125,14 @@ export function StaffAccountsPage() {
               <label className="field__label" htmlFor={departmentFilterId}>
                 {tx(SA.filterDepartment)}
               </label>
-              <select id={departmentFilterId} className="input" value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+              <SearchableSelect id={departmentFilterId} className="input" value={departmentFilter} onValueChange={(v) => setDepartmentFilter(v)}>
                 <option value="">{tx(SA.anyDepartment)}</option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.displayName}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             </div>
           )}
         </div>
@@ -334,14 +335,14 @@ function StaffAccountSheet({
                 <label className="field__label" htmlFor={pickerId}>
                   {tx(SA.addRole)}
                 </label>
-                <select id={pickerId} className="input" value={choice} onChange={(e) => setChoice(e.target.value)}>
+                <SearchableSelect id={pickerId} className="input" value={choice} onValueChange={(v) => setChoice(v)}>
                   <option value="">{tx(SA.chooseRole)}</option>
                   {offered.map((r) => (
                     <option key={r.id} value={r.id}>
                       {roleName(r)}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
               <button type="button" className="btn" disabled={!chosen} onClick={() => chosen && onGrant(account, chosen)}>
                 {tx(SA.grant)}

@@ -11,6 +11,7 @@ import { roleFitsTier, type AccessRole, type CreatableTier, type CreatedStaffAcc
 import { RISK, SA, TIER, describeError, pageLabel, useCopy } from './copy'
 import { useAccessRoles, useCreateStaffAccount, usePermissionCatalogue } from './hooks'
 import { StaffCodeSheet } from './StaffCodeSheet'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const CREATABLE: CreatableTier[] = ['specialist', 'admin', 'coverage', 'manager']
 
@@ -143,13 +144,13 @@ export function NewStaffAccountDialog({ onClose }: { onClose: () => void }) {
                 <label className="field__label" htmlFor={tierId}>
                   {tx(SA.tier)}
                 </label>
-                <select id={tierId} className="input" value={tier} onChange={(e) => setTier(e.target.value as CreatableTier)}>
+                <SearchableSelect id={tierId} className="input" value={tier} onValueChange={(v) => setTier(v as CreatableTier)}>
                   {CREATABLE.map((t) => (
                     <option key={t} value={t}>
                       {tx(TIER[t]!)}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
               {tier !== 'specialist' ? (
                 <p className="field__hint">{tx(SA.departmentOnlySpecialist)}</p>
@@ -158,14 +159,14 @@ export function NewStaffAccountDialog({ onClose }: { onClose: () => void }) {
                   <label className="field__label" htmlFor={departmentId}>
                     {tx(SA.department)}
                   </label>
-                  <select id={departmentId} className="input" value={department} onChange={(e) => setDepartment(e.target.value)}>
+                  <SearchableSelect id={departmentId} className="input" value={department} onValueChange={(v) => setDepartment(v)}>
                     <option value="">{tx(SA.noDepartment)}</option>
                     {departments.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.displayName}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
               ) : structure.error ? (
                 <StructureRefusal error={structure.error} />
