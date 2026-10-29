@@ -35,8 +35,12 @@
 -- "other" box and Stories accepted any two letters, so an old row may hold a
 -- code that is not a country. New and changed values are checked now; PR-5's
 -- backfill lists the old ones for staff to fix, then PR-5's own migration validates.
--- A row whose country is not changed is not re-checked, so an old value never
--- blocks an unrelated edit.
+-- An UPDATE that leaves country_code as it was is not re-checked -- UNLESS the
+-- old row version was written by the same transaction: Postgres then checks the
+-- key whatever changed. So on a family whose old code is not a country, the
+-- second write to that row inside one transaction is refused until PR-5 cleans
+-- it (test/integration/pd045-parent-location.spec.ts, section 3). The API now
+-- refuses such codes before they are written (src/geo/countries.ts).
 --
 -- The seed is GENERATED from the pinned CLDR files and the overlay by
 -- scripts/geo/build-dataset.py; test/unit/migrations/pd045-parent-location-
@@ -3918,6 +3922,10 @@ create trigger geo_subdivision_is_fixed before insert or update or delete or tru
 -- 3. The family's location
 -- ===========================================================================
 
+-- chat.family is busy: wait at most five seconds for its lock, then fail the
+-- migration rather than queue every family read behind it.
+set local lock_timeout = '5s';
+
 alter table chat.family add column subdivision_code text;
 alter table chat.family add column location_source text;
 alter table chat.family add column location_updated_at timestamptz;
@@ -3935,6 +3943,57 @@ alter table chat.family add constraint family_subdivision_in_country
   foreign key (country_code, subdivision_code) references chat.geo_subdivision (country_code, code);
 alter table chat.family add constraint family_country_listed
   foreign key (country_code) references chat.geo_country (code) not valid;
+
+-- PD-42's Sales scope (20261028210000) guards the family's country; the rest
+-- of its location is the same kind of data, so it is guarded the same way.
+create or replace function chat.pd042_sales_scope_family()
+returns trigger
+language plpgsql
+security definer
+set search_path = chat, pg_temp
+as $$
+begin
+  if (new.country_code is distinct from old.country_code
+      or new.subdivision_code is distinct from old.subdivision_code
+      or new.location_source is distinct from old.location_source
+      or new.location_updated_at is distinct from old.location_updated_at
+      or new.location_updated_by is distinct from old.location_updated_by)
+     and chat.sales_scope_refuses(chat.pd042_acting_staff(), new.id) then
+    raise exception 'a Sales supervisor handles only their own families' using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+-- Request roles had table-level SELECT and INSERT on chat.family
+-- (20260905091200), which every new column inherits. Replace them with the
+-- same privileges on every OTHER column, as 20261014090000 did for UPDATE, so
+-- no request role reads the location or writes who set it. Columns are listed
+-- from the catalogue, so a column added later is not silently granted.
+do $family_columns$
+declare
+  v_had_select boolean := has_table_privilege('authenticated', 'chat.family', 'SELECT');
+  v_had_insert boolean := has_table_privilege('authenticated', 'chat.family', 'INSERT');
+  v_cols text;
+begin
+  select string_agg(quote_ident(attname), ', ' order by attnum) into v_cols
+    from pg_attribute
+   where attrelid = 'chat.family'::regclass and attnum > 0 and not attisdropped
+     and attname not in ('subdivision_code', 'location_source', 'location_updated_at', 'location_updated_by');
+  if v_had_select or v_had_insert then
+    revoke select, insert on chat.family from authenticated;
+  end if;
+  if v_had_select then
+    execute format('grant select (%s) on chat.family to authenticated', v_cols);
+  end if;
+  if v_had_insert then
+    execute format('grant insert (%s) on chat.family to authenticated', v_cols);
+  end if;
+end
+$family_columns$;
+revoke select (subdivision_code, location_source, location_updated_at, location_updated_by),
+       insert (subdivision_code, location_source, location_updated_at, location_updated_by)
+  on chat.family from public, anon, authenticated, chat_app;
 
 comment on column chat.family.country_code is
   'ISO 3166-1 alpha-2 country the family lives in (PD-45; chat.geo_country). Read by Stories targeting and to parse a stored local-format phone (PD-25, PD-42).';
@@ -3995,13 +4054,40 @@ create table chat.trial_prospect_location (
 comment on table chat.trial_prospect_location is
   'PD-45 (owner 2026-10-29): the country and subdivision given when a trial was booked. Beside chat.trial_prospect, never on it (BR-2: a prospect is a display name only). Read only to pre-fill Sales'' subscription form; never in a trial card, event or teacher view (trial-prospect-location-confinement.spec.ts). No request-role grant.';
 
+-- Retention (department head, 2026-10-29; the owner may change it): a booking's
+-- location is forgotten 90 days after its trial ends without a subscription
+-- (no-show or not subscribed), or 90 days after the booking when no outcome was
+-- ever recorded. The clock is the LATEST of: when it was recorded, the end of
+-- any trial with an outcome, and the booking of any trial still without one. A
+-- prospect that subscribed keeps it, as it keeps the prospect.
+create or replace function chat.trial_prospect_location_expired(p_prospect uuid, p_recorded_at timestamptz)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select not exists (select 1 from chat.lesson l join chat.trial_outcome o on o.lesson_id = l.id
+                      where l.prospect_id = p_prospect and o.result = 'subscribed')
+     and greatest(p_recorded_at,
+                  (select max(l.ends_at) from chat.lesson l join chat.trial_outcome o on o.lesson_id = l.id
+                    where l.prospect_id = p_prospect),
+                  (select max(l.created_at) from chat.lesson l
+                    where l.prospect_id = p_prospect
+                      and not exists (select 1 from chat.trial_outcome o where o.lesson_id = l.id)))
+         < now() - interval '90 days';
+$$;
+
 create or replace function chat.guard_trial_prospect_location()
 returns trigger
 language plpgsql
 as $$
 begin
   if tg_op = 'DELETE' then
-    raise exception 'a booking''s location is kept with its prospect and never deleted' using errcode = 'check_violation';
+    if chat.trial_prospect_location_expired(old.prospect_id, old.recorded_at) then
+      return old;
+    end if;
+    raise exception 'a booking''s location is kept until 90 days after its trial ends without a subscription (PD-45)'
+      using errcode = 'check_violation';
   end if;
   if not exists (select 1 from chat.trial_prospect p where p.id = new.prospect_id and p.organization_id = new.organization_id) then
     raise exception 'a booking''s location belongs to its prospect''s organization' using errcode = 'insufficient_privilege';
@@ -4020,6 +4106,23 @@ $$;
 create trigger trial_prospect_location_is_coherent before insert or update or delete on chat.trial_prospect_location
   for each row execute function chat.guard_trial_prospect_location();
 
+-- Run by the worker in the PD-32 privacy purge (apps/api/src/worker.ts). The
+-- guard re-checks every row it deletes.
+create or replace function chat.purge_trial_prospect_locations()
+returns integer
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  v_count integer;
+begin
+  delete from chat.trial_prospect_location l
+   where chat.trial_prospect_location_expired(l.prospect_id, l.recorded_at);
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
 -- ===========================================================================
 -- 7. Access: only the API's service
 -- ===========================================================================
@@ -4031,6 +4134,8 @@ alter table chat.trial_prospect_location enable row level security;
 revoke all on chat.geo_country, chat.geo_subdivision, chat.contact_location_prompt, chat.trial_prospect_location from public, anon, authenticated, chat_app;
 revoke all on function chat.forbid_geo_change() from public;
 revoke all on function chat.guard_trial_prospect_location() from public;
+revoke all on function chat.trial_prospect_location_expired(uuid, timestamptz) from public, anon, authenticated, chat_app;
+revoke all on function chat.purge_trial_prospect_locations() from public, anon, authenticated, chat_app;
 
 -- ===========================================================================
 -- 8. Prove it
@@ -4039,13 +4144,20 @@ revoke all on function chat.guard_trial_prospect_location() from public;
 do $assert$
 begin
   if exists (select 1 from information_schema.column_privileges
+              where table_schema = 'chat' and table_name = 'family' and column_name = 'country_code'
+                and grantee in ('anon', 'authenticated', 'chat_app', 'PUBLIC')
+                and privilege_type = 'UPDATE')
+     or exists (select 1 from information_schema.column_privileges
               where table_schema = 'chat'
                 and ((table_name = 'family'
-                      and column_name in ('country_code', 'subdivision_code', 'location_source', 'location_updated_at', 'location_updated_by'))
+                      and column_name in ('subdivision_code', 'location_source', 'location_updated_at', 'location_updated_by'))
                   or (table_name = 'trial_subscription' and column_name in ('country_code', 'subdivision_code')))
                 and grantee in ('anon', 'authenticated', 'chat_app', 'PUBLIC')
-                and privilege_type = 'UPDATE') then
+                and privilege_type in ('SELECT', 'INSERT', 'UPDATE')) then
     raise exception 'PD-45: a location column is writable by a request role';
+  end if;
+  if has_table_privilege('authenticated', 'chat.family', 'SELECT') or has_table_privilege('authenticated', 'chat.family', 'INSERT') then
+    raise exception 'PD-45: a request role still holds table-level SELECT or INSERT on chat.family';
   end if;
   if (select count(*) from pg_constraint
        where conname in ('family_subdivision_in_country', 'trial_subscription_subdivision_in_country',

@@ -372,7 +372,11 @@ chat.trial_prospect_location (prospect_id uuid primary key references chat.trial
 - **Reading:** only the subscription form's pre-fill, in `src/new-students`, for Sales. When Sales open the form for that trial, the location block is pre-filled and marked "من الحجز / From the booking". Sales confirm or change it, and only the form's submission saves it, to `trial_subscription` and then, at Assign, to the family. The booking's location takes precedence over the phone suggestion (§6.2), which fills the block only when it is still empty.
 - **Never read** by the trial card, `TrialGroupService`, any trial event or the outbox, the teacher's trial views, or the trial list's DTO. A **confinement spec** (like `new-students-confinement.spec.ts`) lists the only two files allowed to name `trial_prospect_location`: the booking write and the pre-fill read.
 - **No phone, no e-mail** at booking: G-07 is unchanged. A location is not a contact channel, and the prospect stays a display name.
-- **Retention:** the row stays with its prospect, as the prospect does. Assign copies the *confirmed* form value, not this row.
+- **Retention** (department head, 2026-10-29; **the owner may change it**): the row is forgotten 90 days after its trial ends without a subscription (no-show or not subscribed), or 90 days after the booking when no outcome was ever recorded.
+  - The clock is the latest of: when it was recorded, the end of any trial with an outcome, and the booking of any trial still without one.
+  - A prospect that subscribed keeps it, as it keeps the prospect. Assign copies the *confirmed* form value, never this row.
+  - The rule is in the database (`chat.trial_prospect_location_expired`): the row's guard refuses any other delete.
+  - The worker's existing PD-32 privacy purge runs `chat.purge_trial_prospect_locations()`.
 
 **The table is in PR-1's migration `20261030030000`** (department head, 2026-10-29: one migration while #204 is unmerged). Its guard keeps the row in its prospect's organization, never moves it to another prospect, and never deletes it. PR-3 builds the booking field, the write and the pre-fill.
 
@@ -557,6 +561,7 @@ PR-3 and PR-4 are independent of each other once PR-2 is merged. Under the two-s
 | H2 | Order with PD-42 PR-2 (§9) | **Agreed.** PD-45 does not block PD-42. Whichever lands second adds the location block to the shared `SubscriptionForm`. |
 | H3 | Migration slots | PR-1 `20261028180000`, **renumbered to `20261030030000`** on 2026-10-29 (a slot must sort after every migration on main); PR-5 (`VALIDATE`) `20261028190000`, to be re-slotted by the head when PR-5 comes |
 | H4 | The Arabic overlay | The 88 names need a human reviewer (by role) before PR-1 merges. This is release gate **R-45a** (§11). |
+| H5 | Review of #204 (2026-10-29) | PR-1 is no longer free of behaviour change. It also:<ul><li>validates the country against the list in the Parent Profile and in Stories' audience data: 400 with a clear message, and the database's refusal (P2003) mapped to 400 as a safety net;</li><li>widens PD-42's Sales-scope trigger on `chat.family` to the subdivision and the `location_*` columns;</li><li>replaces request roles' table-level SELECT and INSERT on `chat.family` with column grants that leave out the new columns;</li><li>sets `lock_timeout = '5s'` before the family ALTERs;</li><li>adds the booking location's 90-day retention (§5.5, the head's decision; the owner may change it);</li><li>adds the `geo-dataset` CI gate (`build-dataset.py --check` on freshly fetched pinned files);</li><li>widens the confinement spec to the Admin Web and the migrations.</li></ul>The NOT VALID key is re-checked when the old row version is the same transaction's own, so a second write to a legacy row in one transaction is refused until PR-5. |
 
 ---
 

@@ -124,8 +124,57 @@ describe('PD-45 migration: the rules', () => {
     for (const t of ['geo_country', 'geo_subdivision', 'contact_location_prompt', 'trial_prospect_location']) {
       expect(flat).toContain(`alter table chat.${t} enable row level security`);
     }
-    expect(flat).not.toMatch(/grant [^;]* to (authenticated|chat_app|anon|public)/);
+    expect(flat).not.toMatch(/grant [^;]* on chat\.(geo_country|geo_subdivision|contact_location_prompt|trial_prospect_location)\b[^;]* to /);
+    expect(flat).not.toMatch(/grant [^;]*\b(subdivision_code|location_source|location_updated_at|location_updated_by)\b[^;]* to /);
     expect(flat).toMatch(/a location column is writable by a request role/);
+  });
+});
+
+describe('PD-45 migration: review of #204', () => {
+  it('waits at most five seconds for chat.family\'s lock, before its first ALTER', () => {
+    const lock = flat.indexOf("set local lock_timeout = '5s'");
+    expect(lock).toBeGreaterThan(-1);
+    expect(lock).toBeLessThan(flat.indexOf('alter table chat.family'));
+  });
+
+  it('says the NOT VALID key IS re-checked when the old row version is this transaction\'s own', () => {
+    expect(sql).toMatch(/written by the same transaction/);
+    expect(sql).not.toMatch(/an old value never\s+--\s*blocks an unrelated edit/);
+  });
+
+  it('widens PD-42\'s Sales scope on chat.family to the subdivision and every location column', () => {
+    const fn = flat.slice(flat.indexOf('create or replace function chat.pd042_sales_scope_family()'));
+    const body = fn.slice(0, fn.indexOf('$$;'));
+    for (const col of ['country_code', 'subdivision_code', 'location_source', 'location_updated_at', 'location_updated_by']) {
+      expect(body).toContain(`new.${col} is distinct from old.${col}`);
+    }
+    expect(body).toContain('security definer');
+    expect(body).toContain('chat.sales_scope_refuses(chat.pd042_acting_staff(), new.id)');
+  });
+
+  it('grants request roles the family\'s OTHER columns only: the location can be neither read nor forged by them', () => {
+    expect(flat).toMatch(/revoke select, insert on chat\.family from authenticated/);
+    expect(flat).toMatch(/grant select \(%s\) on chat\.family to authenticated/);
+    expect(flat).toMatch(/grant insert \(%s\) on chat\.family to authenticated/);
+    expect(flat).toMatch(
+      /revoke select \(subdivision_code, location_source, location_updated_at, location_updated_by\), insert \(subdivision_code, location_source, location_updated_at, location_updated_by\) on chat\.family from public, anon, authenticated, chat_app/,
+    );
+    expect(flat).toMatch(/privilege_type in \('select', 'insert', 'update'\)/);
+  });
+
+  it('forgets a booking\'s location 90 days after its trial ends without a subscription, or after a booking that never had an outcome', () => {
+    expect(flat).toMatch(/create or replace function chat\.trial_prospect_location_expired\(p_prospect uuid, p_recorded_at timestamptz\)/);
+    expect(flat).toMatch(/interval '90 days'/);
+    expect(flat).toMatch(/o\.result = 'subscribed'/);
+    expect(flat).toMatch(/create or replace function chat\.purge_trial_prospect_locations\(\) returns integer/);
+    expect(flat).toMatch(/if tg_op = 'delete' then if chat\.trial_prospect_location_expired\(old\.prospect_id, old\.recorded_at\) then return old;/);
+    expect(flat).toMatch(/revoke all on function chat\.purge_trial_prospect_locations\(\) from public, anon, authenticated, chat_app/);
+  });
+
+  it('runs the purge in the worker\'s existing PD-32 privacy purge', () => {
+    const worker = read('apps/api/src/worker.ts');
+    const block = worker.slice(worker.indexOf('chat.purge_parent_signup_failures()'), worker.indexOf('nextSignupFailurePurge = Date.now()'));
+    expect(block).toContain('SELECT chat.purge_trial_prospect_locations()');
   });
 });
 

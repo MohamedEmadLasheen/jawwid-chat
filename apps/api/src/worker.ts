@@ -119,7 +119,9 @@ const SUBSCRIPTION_SWEEP_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS ?? 60_000
 /**
  * PD-32: how often wrong parent sign-up codes older than a week are purged
  * (chat.purge_parent_signup_failures). Unauthenticated requests insert them, so
- * they must not pile up; one delete statement, safe on every replica.
+ * they must not pile up; one delete statement, safe on every replica. The same
+ * pass forgets a booking's location 90 days after a trial that led to no
+ * subscription (PD-45, chat.purge_trial_prospect_locations).
  */
 const SIGNUP_FAILURE_PURGE_MS = 6 * 60 * 60_000;
 
@@ -406,13 +408,19 @@ async function bootstrap(): Promise<void> {
       }
     }
 
-    // PD-32: the week-old wrong sign-up codes go.
+    // PD-32: the week-old wrong sign-up codes go. PD-45: so does a booking's
+    // location, 90 days after a trial that did not lead to a subscription.
     if (Date.now() >= nextSignupFailurePurge) {
       draining = true;
       try {
         await prisma.$queryRaw`SELECT chat.purge_parent_signup_failures()`;
       } catch (e) {
         report(log, 'sign-up failure purge', 'signup.purge', e);
+      }
+      try {
+        await prisma.$queryRaw`SELECT chat.purge_trial_prospect_locations()`;
+      } catch (e) {
+        report(log, 'booking location purge', 'trials.location_purge', e);
       } finally {
         draining = false;
         nextSignupFailurePurge = Date.now() + SIGNUP_FAILURE_PURGE_MS;
