@@ -34,7 +34,7 @@
 -- The country column gains its own foreign key NOT VALID: the Parent Profile's
 -- "other" box and Stories accepted any two letters, so an old row may hold a
 -- code that is not a country. New and changed values are checked now; PR-5's
--- backfill lists the old ones for staff to fix, then 20261028190000 validates.
+-- backfill lists the old ones for staff to fix, then PR-5's own migration validates.
 -- A row whose country is not changed is not re-checked, so an old value never
 -- blocks an unrelated edit.
 --

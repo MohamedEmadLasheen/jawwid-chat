@@ -2,8 +2,8 @@
 
 **State:** **APPROVED**, revision 3. Revision 3 adds the owner's two decisions of 2026-10-29 (§12.3): the location at trial booking, and the owner reviewing the Arabic names (R-45a). Revision 2: The owner approved Q1–Q7 as recommended on 2026-10-28, relayed verbatim by the department head, who also decided the two coordination points (§12). No feature code has been written. Code waits for the department head's GO (builder slots are full).
 **Claim:** `docs/product/pd-registry/PD-45.md`. Migration slots, assigned by the department head on 2026-10-28:
-- `20261028180000` (`chat_pd045_parent_location`) for PR-1;
-- `20261028190000` (`chat_pd045_validate_country_fk`) for PR-5.
+- `20261030030000` (`chat_pd045_parent_location`) for PR-1, renumbered on 2026-10-29 from `20261028180000`, which main's migrations had passed;
+- `20261028190000` (`chat_pd045_validate_country_fk`) for PR-5. It now sorts before main too, and the head re-slots it when PR-5 comes.
 
 The claims are in `docs/product/migration-slots/`.
 **Base:** `main` @ `bba7770c9e935b6361f70443deed16e11c3a8483`. PD-42 is read from its merged plan (`docs/product/pd042-direct-enrolment-plan.md`, v3.2) and its open data PR #194 (`claude/pd42-pr1-data`). PD-40's catalogue is on `main`.
@@ -374,7 +374,7 @@ chat.trial_prospect_location (prospect_id uuid primary key references chat.trial
 - **No phone, no e-mail** at booking: G-07 is unchanged. A location is not a contact channel, and the prospect stays a display name.
 - **Retention:** the row stays with its prospect, as the prospect does. Assign copies the *confirmed* form value, not this row.
 
-**The table is in PR-1's migration `20261028180000`** (department head, 2026-10-29: one migration while #204 is unmerged). Its guard keeps the row in its prospect's organization, never moves it to another prospect, and never deletes it. PR-3 builds the booking field, the write and the pre-fill.
+**The table is in PR-1's migration `20261030030000`** (department head, 2026-10-29: one migration while #204 is unmerged). Its guard keeps the row in its prospect's organization, never moves it to another prospect, and never deletes it. PR-3 builds the booking field, the write and the pre-fill.
 
 ---
 
@@ -522,11 +522,11 @@ Elsewhere:
 
 | PR | Contents | Depends on |
 |---|---|---|
-| **PR-1, data** (waits for the GO; slot `20261028180000`) | <ul><li>`scripts/geo/build-dataset.py` + `data/geo/overlay.json` (reviewed Arabic names, labels, pinned order, aliases)</li><li>the generated `apps/api/src/geo/dataset.json` + `LICENSE-CLDR.txt`</li><li>the migration: `chat.geo_country`, `chat.geo_subdivision` (seeded); `family.subdivision_code` and `location_*`; the composite FK and CHECK; the country FK `NOT VALID`; `trial_subscription.country_code/subdivision_code` with the same FKs; no grants to request roles (as `country_code`)</li><li>`chat.trial_prospect_location` (§5.5), with its guard and the confinement spec (empty allow-list)</li><li>Prisma fields</li><li>the parity spec</li></ul>No behaviour change.<br>**Release gate R-45a (head, 2026-10-28):** before PR-1 merges, a human reviewer, recorded by role and never by name (G-20), signs off the 88 Arabic names in `data/geo/overlay.json` (Egypt, the six Gulf states, Jordan). The PR records the sign-off as the reviewer's role, the date and the overlay's SHA-256. The PR stays draft until then. | the GO |
+| **PR-1, data** (waits for the GO; slot `20261030030000`) | <ul><li>`scripts/geo/build-dataset.py` + `data/geo/overlay.json` (reviewed Arabic names, labels, pinned order, aliases)</li><li>the generated `apps/api/src/geo/dataset.json` + `LICENSE-CLDR.txt`</li><li>the migration: `chat.geo_country`, `chat.geo_subdivision` (seeded); `family.subdivision_code` and `location_*`; the composite FK and CHECK; the country FK `NOT VALID`; `trial_subscription.country_code/subdivision_code` with the same FKs; no grants to request roles (as `country_code`)</li><li>`chat.trial_prospect_location` (§5.5), with its guard and the confinement spec (empty allow-list)</li><li>Prisma fields</li><li>the parity spec</li></ul>No behaviour change.<br>**Release gate R-45a (head, 2026-10-28):** before PR-1 merges, a human reviewer, recorded by role and never by name (G-20), signs off the 88 Arabic names in `data/geo/overlay.json` (Egypt, the six Gulf states, Jordan). The PR records the sign-off as the reviewer's role, the date and the overlay's SHA-256. The PR stays draft until then. | the GO |
 | **PR-2, staff edit: option (a)** | <ul><li>`src/geo` (dataset service, `parseLocation`, `GET /geo/...`)</li><li>Parent Profile: `subdivisionCode`, stop writing `region`, the "Old note" display, `suggestedCountryCode`, the re-key on country change (§9)</li><li>Parents list: column and `?location=missing`</li><li>Stories validation</li><li>Admin Web `LocationPicker`, `EditContactDialog`, Parents filter, Stories panel</li><li>the confinement guard</li><li>the route table</li><li>the time-zone estimate and the hint (§7)</li><li>`GET /geo/countries` also serves the phone-country picker (PR-3)</li></ul> | PR-1, #194 |
 | **PR-3, new parents** | <ul><li>Sales' subscription form and its API (`new-students`)</li><li>Assign copies the codes</li><li>the suggestion chip</li><li>Q1's required rule</li><li>the intake: the location block, and the phone-country picker labelled from the dataset and validated by it (§5.2)</li><li>both forms: the location's empty country pre-filled from the phone's country, visible and editable, never saved without the form (§6.2)</li><li>**the booking** (§5.5): the optional location block in `BookTrialDialog`, the write to `chat.trial_prospect_location` (the table is PR-1's), the pre-fill of Sales' form "From the booking", and the two files added to the confinement spec's allow-list</li></ul> | PR-2 |
 | **PR-4, the app: option (b)** | <ul><li>`GET/PUT /me/location` and the server-side "answered" stamp (a small table, `chat.contact_location_prompt(contact_id, answered_at, outcome)`, in PR-1's migration)</li><li>the Flutter picker, profile row and one-time prompt</li><li>the arb strings</li></ul> | PR-2 |
-| **PR-5, backfill** | <ul><li>`geo:backfill` CLI (§6.3)</li><li>the report</li><li>after a clean report, the `VALIDATE CONSTRAINT` migration (slot `20261028190000`)</li></ul> | PR-2 |
+| **PR-5, backfill** | <ul><li>`geo:backfill` CLI (§6.3)</li><li>the report</li><li>after a clean report, the `VALIDATE CONSTRAINT` migration (a slot after main at the time: the head re-slots `20261028190000`)</li></ul> | PR-2 |
 | **PR-6, docs** | <ul><li>PD-45 in the boundary doc §4</li><li>the PD-17 doc (region → subdivision)</li><li>the STORIES.md ownership note</li><li>a `docs/admin/` page for supervisors on completing locations</li><li>the PD-44 hand-off for the aggregate counts</li></ul> | PR-3, PR-4 |
 
 PR-3 and PR-4 are independent of each other once PR-2 is merged. Under the two-session cap they run one after the other.
@@ -555,7 +555,7 @@ PR-3 and PR-4 are independent of each other once PR-2 is merged. Under the two-s
 |---|---|---|
 | H1 | PR-2 and PD-42 #194 (§9) | **Agreed.** PR-2 depends on #194, and re-keys the contact in the same transaction as a country change. A collision refuses with `PARENT_EXISTS`. |
 | H2 | Order with PD-42 PR-2 (§9) | **Agreed.** PD-45 does not block PD-42. Whichever lands second adds the location block to the shared `SubscriptionForm`. |
-| H3 | Migration slots | PR-1 `20261028180000`; PR-5 (`VALIDATE`) `20261028190000` |
+| H3 | Migration slots | PR-1 `20261028180000`, **renumbered to `20261030030000`** on 2026-10-29 (a slot must sort after every migration on main); PR-5 (`VALIDATE`) `20261028190000`, to be re-slotted by the head when PR-5 comes |
 | H4 | The Arabic overlay | The 88 names need a human reviewer (by role) before PR-1 merges. This is release gate **R-45a** (§11). |
 
 ---

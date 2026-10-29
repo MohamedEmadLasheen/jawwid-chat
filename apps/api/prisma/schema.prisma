@@ -2945,7 +2945,7 @@ model RenewalRequest {
 }
 
 // =====================================================================
-// PD-45 -- 20261028180000_chat_pd045_parent_location.sql owns the DDL and
+// PD-45 -- 20261030030000_chat_pd045_parent_location.sql owns the DDL and
 // the seed. Codes only; the names are apps/api/src/geo/dataset.json.
 // =====================================================================
 

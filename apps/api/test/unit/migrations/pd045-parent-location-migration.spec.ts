@@ -19,7 +19,7 @@ import { join } from 'node:path';
 
 const REPO = join(__dirname, '..', '..', '..', '..', '..');
 const read = (p: string) => readFileSync(join(REPO, p), 'utf8');
-const MIGRATION = 'supabase/migrations/20261028180000_chat_pd045_parent_location.sql';
+const MIGRATION = 'supabase/migrations/20261030030000_chat_pd045_parent_location.sql';
 
 const sql = read(MIGRATION);
 const flat = sql.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ').toLowerCase();
@@ -36,8 +36,8 @@ function generatedBlock(): string {
 }
 
 describe('PD-45 migration: the slot', () => {
-  it('is the slot the department head assigned', () => {
-    const claim = read('docs/product/migration-slots/20261028180000.md');
+  it('is the slot the department head assigned, sorting after every migration it was written beside', () => {
+    const claim = read('docs/product/migration-slots/20261030030000.md');
     expect(claim).toMatch(/^pd: PD-45$/m);
     expect(claim).toMatch(/^migration: chat_pd045_parent_location$/m);
   });

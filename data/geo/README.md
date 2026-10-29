@@ -11,7 +11,7 @@ The list of countries and of first-level subdivisions (governorates, emirates, p
 **Generated from these** by `scripts/geo/build-dataset.py`, and never edited by hand:
 - `apps/api/src/geo/dataset.json`: codes, Arabic and English names, labels, order, and every name that fell back to the other language;
 - `apps/api/src/geo/LICENSE-CLDR.txt`: CLDR's notice, verbatim;
-- the GENERATED block of `supabase/migrations/20261028180000_chat_pd045_parent_location.sql`: the reference tables' seed, codes only.
+- the GENERATED block of `supabase/migrations/20261030030000_chat_pd045_parent_location.sql`: the reference tables' seed, codes only.
 
 ## Rebuild or verify
 
