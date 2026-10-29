@@ -31,6 +31,16 @@ describe('the quiz', () => {
     expect(done).toHaveBeenCalledTimes(1);
   });
 
+  it('a two-option question shows the answer in either place across visits', () => {
+    const places = new Set<number>();
+    for (let seed = 0; seed < 40; seed++) {
+      const { unmount } = render(<Quiz quiz={[quiz[0]!]} seed={seed} onComplete={() => {}} />);
+      places.add(options().findIndex((b) => b.textContent === 'أحد اثنان'));
+      unmount();
+    }
+    expect([...places].sort()).toEqual([0, 1]);
+  });
+
   it('shuffles the options per visit, from its seed', () => {
     const orders = new Set<string>();
     for (const seed of [1, 2, 3, 4, 5, 6]) {

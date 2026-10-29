@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma, type AppreciationCertificate, type AppreciationCertificateFile, type Conversation } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -21,7 +21,6 @@ import { PermissionService } from '../platform/permissions/permission.service';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import type { ObjectStorage } from '../communication/attachments/object-storage';
 import { buildObjectKey, conversationPrefix } from '../communication/attachments/object-key';
-import { NotificationService } from '../communication/notifications/notification.service';
 import { StoryService } from '../communication/stories/story.service';
 import { ActorKind, CardKind, CertificateCategory, CertificateState, ConversationType } from '../communication/contracts/vocab';
 import { CardPoster } from '../supervision/card-poster';
@@ -93,8 +92,6 @@ interface Loaded extends Ctx {
  */
 @Injectable()
 export class CertificateService {
-  private readonly log = new Logger(CertificateService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly conversations: ConversationService,
@@ -103,7 +100,6 @@ export class CertificateService {
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     private readonly permissions: PermissionService,
-    private readonly notifications: NotificationService,
     private readonly stories: StoryService,
   ) {}
 
@@ -392,7 +388,6 @@ export class CertificateService {
         return created;
       }),
     );
-    await this.notifyDesigners(cert);
     return { certificate: await this.dtoOf(ctx, cert.id), replayed: false };
   }
 
@@ -405,12 +400,10 @@ export class CertificateService {
   }
 
   async resubmit(actorId: string, id: string) {
-    const out = await this.act(actorId, id, CertificateAct.RESUBMIT, async (tx, l) => {
+    return this.act(actorId, id, CertificateAct.RESUBMIT, async (tx, l) => {
       await tx.appreciationCertificate.update({ where: { id: l.row.id }, data: { state: CertificateState.REQUESTED, ...stamp(l, 'resubmitted', null) } });
       await this.auditAct(tx, l, 'resubmitted', {});
     });
-    await this.notifyDesigners(await this.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id } }));
-    return out;
   }
 
   async cancel(actorId: string, id: string, body: Record<string, unknown>) {
@@ -483,8 +476,7 @@ export class CertificateService {
   // ------------------------------------------------------------------
 
   async accept(actorId: string, id: string, body: Record<string, unknown>) {
-    let teacherToTell: string | null = null;
-    const out = await this.act(actorId, id, CertificateAct.ACCEPT, async (tx, l) => {
+    return this.act(actorId, id, CertificateAct.ACCEPT, async (tx, l) => {
       const fields = await this.requestFields(l.row.organizationId, CertificateCategory.STUDENT, body, false, l.row);
       if (!fields.typeId && !l.row.typeId) throw invalid('typeId: pick the certificate type');
       const now = new Date();
@@ -494,29 +486,20 @@ export class CertificateService {
       });
       await this.answerTeacher(tx, l, CardKind.CERTIFICATE_ACCEPTED, {});
       await this.auditAct(tx, l, 'accepted', {});
-      teacherToTell = l.row.suggestedByTeacher;
     });
-    const row = await this.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id } });
-    await this.notifySuggestionDecided(row, teacherToTell);
-    await this.notifyDesigners(row);
-    return out;
   }
 
   async decline(actorId: string, id: string, body: Record<string, unknown>) {
     await this.authorize(actorId, id, CertificateAct.DECLINE);
     const reason = reasonOf(body, 'reason');
-    let teacherToTell: string | null = null;
-    const out = await this.act(actorId, id, CertificateAct.DECLINE, async (tx, l) => {
+    return this.act(actorId, id, CertificateAct.DECLINE, async (tx, l) => {
       await tx.appreciationCertificate.update({
         where: { id: l.row.id },
         data: { state: CertificateState.DECLINED, decidedBy: l.actor.actorId, decidedAt: new Date(), declineReason: reason, ...stamp(l, 'declined', reason) },
       });
       await this.answerTeacher(tx, l, CardKind.CERTIFICATE_DECLINED, { reason });
       await this.auditAct(tx, l, 'declined', {}, reason);
-      teacherToTell = l.row.suggestedByTeacher;
     });
-    await this.notifySuggestionDecided(await this.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id } }), teacherToTell);
-    return out;
   }
 
   // ==================================================================
@@ -537,15 +520,13 @@ export class CertificateService {
   async returnForChanges(actorId: string, id: string, body: Record<string, unknown>) {
     await this.authorize(actorId, id, CertificateAct.RETURN);
     const message = reasonOf(body, 'message');
-    const out = await this.act(actorId, id, CertificateAct.RETURN, async (tx, l) => {
+    return this.act(actorId, id, CertificateAct.RETURN, async (tx, l) => {
       await tx.appreciationCertificate.update({
         where: { id: l.row.id },
         data: { state: CertificateState.CHANGES_REQUESTED, returnMessage: message, ...stamp(l, 'returned', message) },
       });
       await this.auditAct(tx, l, 'returned', {}, message);
     });
-    await this.notifyRequester(await this.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id } }), 'certificate_returned');
-    return out;
   }
 
   async release(actorId: string, id: string) {
@@ -616,7 +597,6 @@ export class CertificateService {
         await this.auditAct(tx, l, 'file_uploaded', { fileId: file.id, revision: file.revision, mimeType: file.mimeType, byteSize: file.byteSize });
       });
       await this.storage.delete(objectKey).catch(() => undefined);
-      await this.notifyRequester(await this.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id } }), 'certificate_uploaded');
       return out;
     } catch (e) {
       await this.storage.delete(pinned).catch(() => undefined);
@@ -1232,74 +1212,12 @@ export class CertificateService {
   }
 
   // ------------------------------------------------------------------
-  // Notifications (PD-34): after commit, deduplicated, never undoing the act
+  // Who is told: nobody, by this service. PD-47 PR-6b (owner 2026-10-29,
+  // "Yes, replace them"): each step that waits on a person is that person's
+  // task (chat.work_task_from_certificate_event), announced once with
+  // task_assigned; the teacher's answer is PD-12's card in their supervision
+  // conversation.
   // ------------------------------------------------------------------
-
-  private async variables(row: AppreciationCertificate) {
-    const type = row.typeId ? await this.prisma.certificateType.findUnique({ where: { id: row.typeId }, select: { labelAr: true } }) : null;
-    return { type: type?.labelAr ?? row.title, printed_name: row.printedName };
-  }
-
-  private async notifyDesigners(row: AppreciationCertificate) {
-    try {
-      const designers = await this.prisma.$queryRaw<Array<{ id: string }>>`
-        SELECT s.id::text AS id FROM chat.staff s
-         WHERE s.organization_id = ${row.organizationId}::uuid AND s.is_active AND s.left_at IS NULL
-           AND chat.staff_has_permission(s.id, 'certificates.design')`;
-      const variables = await this.variables(row);
-      for (const d of designers) {
-        if (d.id === row.requestedByStaff) continue;
-        await this.notifications.schedule({
-          dedupeKey: `certificate_requested:${row.id}:${row.actionSeq}:${d.id}`,
-          templateKey: 'certificate_requested',
-          eventType: 'certificate_requested',
-          recipientId: d.id,
-          locale: 'ar',
-          variables,
-          scheduledAt: new Date(),
-          respectQuietHours: false,
-        });
-      }
-    } catch (e) {
-      this.log.warn(`certificate ${row.id}: designer notifications failed: ${(e as Error).message}`);
-    }
-  }
-
-  private async notifyRequester(row: AppreciationCertificate, template: 'certificate_returned' | 'certificate_uploaded') {
-    if (!row.requestedByStaff) return;
-    try {
-      await this.notifications.schedule({
-        dedupeKey: `${template}:${row.id}:${row.actionSeq}:${row.requestedByStaff}`,
-        templateKey: template,
-        eventType: template,
-        recipientId: row.requestedByStaff,
-        locale: 'ar',
-        variables: await this.variables(row),
-        scheduledAt: new Date(),
-        respectQuietHours: false,
-      });
-    } catch (e) {
-      this.log.warn(`certificate ${row.id}: requester notification failed: ${(e as Error).message}`);
-    }
-  }
-
-  private async notifySuggestionDecided(row: AppreciationCertificate, teacherId: string | null) {
-    if (!teacherId) return;
-    try {
-      const teacher = await this.conversations.requireActor(teacherId);
-      await this.notifications.schedule({
-        dedupeKey: `certificate_suggestion_decided:${row.id}:${teacherId}`,
-        templateKey: 'certificate_suggestion_decided',
-        eventType: 'certificate_suggestion_decided',
-        recipientId: teacherId,
-        locale: teacher.locale === 'en' ? 'en' : 'ar',
-        variables: { printed_name: row.printedName, state: row.state },
-        scheduledAt: new Date(),
-      });
-    } catch (e) {
-      this.log.warn(`certificate ${row.id}: teacher notification failed: ${(e as Error).message}`);
-    }
-  }
 
   private teacherDto(r: AppreciationCertificate) {
     return {

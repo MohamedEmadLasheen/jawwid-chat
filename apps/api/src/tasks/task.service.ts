@@ -35,6 +35,8 @@ interface TaskRules {
   outOfScope: boolean;
   comment: boolean;
   reassign: 'yes' | 'not_responsible' | 'follows_source';
+  /** PD-47 PR-6b: the reassign is an unclaimed certificate request's hand-on to a Designer. */
+  designHandOn: boolean;
 }
 /** What a viewer may do with a task now (TaskService.get `actions`). */
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority';
@@ -61,11 +63,20 @@ const SWEEP_BATCHES = 20;
 /** GET /tasks/assignees: at most this many people, and `truncated` beyond it. */
 const ASSIGNEES_MAX = 500;
 
+/** PD-47 PR-6b: a certificate step's title params, from the event that opened it. */
+const CERTIFICATE_PARAMS = Prisma.sql`(SELECT jsonb_build_object('printedName', c.printed_name, 'certificateId', c.id)
+  FROM chat.appreciation_certificate_event e JOIN chat.appreciation_certificate c ON c.id = e.certificate_id WHERE e.id = t.source_id)`;
+
 /** PD-47 PR-2: the sources of system tasks (chat.work_task_sweep). */
 export const SOURCE_TYPES = [
   'lesson_report', 'report_correction', 'lesson_ruling', 'leave_decision', 'violation_decision', 'case',
   // PD-47 PR-2b: the financial sources (priority amendment §5).
   'instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed',
+  // PD-47 PR-6a: the set-up sources (chat.work_task_sweep_setup).
+  'family_unsupervised', 'teacher_setup', 'new_student_assign', 'new_student_group',
+  // PD-47 PR-6b: work handed between people (chat.work_task_sweep_handover).
+  'teacher_unsupervised', 'trial_attendance', 'trial_outcome',
+  'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -75,7 +86,11 @@ export type SourceType = (typeof SOURCE_TYPES)[number];
  * correction are the lesson's teacher's (change the lesson's teacher on the
  * Schedule); a case follows its owner (assign it on the Cases page).
  */
-const NOT_REASSIGNABLE: ReadonlySet<SourceType> = new Set(['lesson_report', 'report_correction', 'case', ...FINANCIAL]);
+const NOT_REASSIGNABLE: ReadonlySet<SourceType> = new Set([
+  'lesson_report', 'report_correction', 'case', ...FINANCIAL,
+  // PD-47 PR-6b: a trial's attendance is its teacher's; a certificate step its person's (PD-41 safeguard 1).
+  'trial_attendance', 'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send',
+]);
 /** The reference time and zone every effective level of one response is computed at. */
 interface Clock {
   asOf: string;
@@ -222,7 +237,7 @@ export class TaskService {
                 ${assignee.kind === 'staff' ? assignee.id : null}::uuid, ${assignee.kind === 'teacher' ? assignee.id : null}::uuid,
                 ${title}, ${detail}, ${dueAt}::timestamptz, ${viewer.id}::uuid, ${priority}, ${category})
         RETURNING id::text AS id, revision`;
-      await this.signal(tx, row.id, row.revision, 'created');
+      await this.signal(tx, row.id, row.revision, 'created', { actorId: viewer.id, toAssignee: assignee.id });
       return row.id;
     });
     return this.summary(await this.load(viewer, id));
@@ -239,7 +254,13 @@ export class TaskService {
    * crossing a boundary while someone pages never moves between pages. Closed
    * tasks come newest first.
    */
-  async list(actorId: string, query: { view: string; state?: string; cursor?: string; level?: string; category?: string; overdue?: string; limit?: string }) {
+  async list(actorId: string, query: {
+    view: string; state?: string; cursor?: string; level?: string; category?: string; overdue?: string; limit?: string;
+    /** PR-4: only tasks whose assignee left (the Dashboard's needs_reassignment). */
+    gone?: string;
+    /** PR-4: only tasks no live manager stands to (the super admin's unmanaged). */
+    unmanaged?: string;
+  }) {
     const viewer = await this.requireViewer(actorId);
     const view = query.view as TaskView;
     if (!(TASK_VIEWS as readonly string[]).includes(view)) throw invalid('view: mine, team, decisions or all');
@@ -279,7 +300,13 @@ export class TaskService {
     const filters = category ? Prisma.sql`t.category = ${category}` : Prisma.sql`true`;
     const overdue =
       query.overdue === 'true' ? Prisma.sql`r.eff_overdue` : query.overdue === 'false' ? Prisma.sql`NOT r.eff_overdue` : Prisma.sql`true`;
-    const outer = Prisma.sql`${level ? Prisma.sql`r.eff_level = ${level}` : Prisma.sql`true`} AND ${overdue} AND ${afterSql(cursor)}`;
+    for (const [name, v] of [['gone', query.gone], ['unmanaged', query.unmanaged]] as const) {
+      if (v !== undefined && v !== '' && v !== 'true') throw invalid(`${name}: true`);
+    }
+    // Each Dashboard tile is one of these lists, counted (tile == list).
+    const gone = query.gone === 'true' ? Prisma.sql`NOT r.assignee_live` : Prisma.sql`true`;
+    const unmanagedOnly = query.unmanaged === 'true' ? Prisma.sql`r.unmanaged` : Prisma.sql`true`;
+    const outer = Prisma.sql`${level ? Prisma.sql`r.eff_level = ${level}` : Prisma.sql`true`} AND ${overdue} AND ${gone} AND ${unmanagedOnly} AND ${afterSql(cursor)}`;
     const limit = query.limit === undefined || query.limit === '' ? PAGE : Number(query.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > PAGE) throw invalid(`limit: 1 to ${PAGE}`);
     const rows = await this.rows(
@@ -344,15 +371,19 @@ export class TaskService {
     if (viewer.kind !== 'staff') throw denied('teachers neither give nor hand on tasks');
     const row = query.task ? await this.visible(viewer, query.task) : null;
     // Handing on: only for whoever may (rulesFor); nobody to offer otherwise.
-    if (row && (await this.rulesFor(viewer, row)).reassign !== 'yes') return { people: [], departments: [], truncated: false };
+    const rules = row ? await this.rulesFor(viewer, row) : null;
+    if (rules && rules.reassign !== 'yes') return { people: [], departments: [], truncated: false };
     const standing = Prisma.sql`chat.work_task_standing(${viewer.id}::uuid, ${viewer.organizationId}::uuid, p.sid, p.tid, NULL)`;
     // Creating: the assignee's manager, or a teacher's supervisor. Handing on:
-    // a manager within their team, or to themselves.
-    const may = viewer.superAdmin
-      ? Prisma.sql`true`
-      : row
-        ? Prisma.sql`(p.sid = ${viewer.id}::uuid OR ${standing} = 'manager')`
-        : Prisma.sql`(${standing} = 'manager' OR (${standing} = 'supervisor' AND p.tid IS NOT NULL))`;
+    // a manager within their team, or to themselves. PD-47 PR-6b: an
+    // unclaimed certificate request, to a live Designer only (no department).
+    const may = rules?.designHandOn
+      ? Prisma.sql`(p.sid IS NOT NULL AND chat.staff_has_permission(p.sid, 'certificates.design'))`
+      : viewer.superAdmin
+        ? Prisma.sql`true`
+        : row
+          ? Prisma.sql`(p.sid = ${viewer.id}::uuid OR ${standing} = 'manager')`
+          : Prisma.sql`(${standing} = 'manager' OR (${standing} = 'supervisor' AND p.tid IS NOT NULL))`;
     // A teacher's decision goes to someone who supervises that teacher.
     const stands = row?.source_teacher_id
       ? Prisma.sql`p.sid IS NOT NULL AND chat.staff_teacher_scope(p.sid, ${row.source_teacher_id}::uuid) IS NOT NULL`
@@ -372,7 +403,7 @@ export class TaskService {
     // A department is a handing-on target (it lands with its manager), not a
     // creating one. A teacher's decision goes only to a department whose
     // manager supervises that teacher (the route's own check).
-    const departments = row
+    const departments = row && !rules?.designHandOn
       ? await this.prisma.$queryRaw<Array<{ kind: string; managerName: string }>>`
           SELECT DISTINCT ON (d.kind) d.kind, m.name AS "managerName" FROM chat.department d
             JOIN chat.staff m ON m.id = d.manager_id AND m.is_active AND m.left_at IS NULL
@@ -415,9 +446,14 @@ export class TaskService {
       skipped: false, raised: 0, settled: 0, withdrawn: 0, restored: 0, rerouted: 0, floored: 0, orphaned: 0,
       failed: 0, declined: 0, issues: 0, batches: 0,
     };
-    // PR-2's sources, then PR-2b's financial ones: each sweep its own lock and batches.
+    // PR-2's sources, PR-2b's financial ones, PR-6a's set-up ones, then PR-6b's
+    // hand-overs: each sweep its own lock and batches.
+    const sweeps = [
+      Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`,
+      Prisma.sql`chat.work_task_sweep_setup(50)`, Prisma.sql`chat.work_task_sweep_handover(50)`,
+    ];
     let skipped = 0;
-    for (const sweep of [Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`]) {
+    for (const sweep of sweeps) {
       for (let i = 0; i < SWEEP_BATCHES; i++) {
         const [row] = await this.prisma.$queryRaw<Array<{ r: Record<string, unknown> }>>`SELECT ${sweep} AS r`;
         const r = row?.r ?? {};
@@ -431,8 +467,56 @@ export class TaskService {
         if (r.more !== true) break;
       }
     }
-    total.skipped = skipped === 2;
+    total.skipped = skipped === sweeps.length;
     return total;
+  }
+
+  /**
+   * PD-47 PR-4: tasks that passed their due date since the last pass, each
+   * announced once per due date (chat.work_task_overdue_notice, PD-35 B5's
+   * notice pattern): a `task.changed` signal with change 'overdue', which the
+   * outbox worker turns into a notice (the assignee's; the decider's while it
+   * waits on a decision). A re-dated task that goes overdue again is announced
+   * again. A task whose work went away (withdrawn) is not announced: nobody
+   * must do it any more. Batch after batch until none is left (at most
+   * `rounds`). Returns how many were announced.
+   */
+  async sweepOverdue(batch = 200, rounds = 25): Promise<number> {
+    let total = 0;
+    for (let i = 0; i < rounds; i++) {
+      const n = await this.sweepOverdueOnce(batch);
+      total += n;
+      if (n < batch) break;
+    }
+    return total;
+  }
+
+  private async sweepOverdueOnce(batch: number): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const due = await tx.$queryRaw<Array<{ id: string; revision: number; due_at: Date }>>`
+        WITH overdue AS (
+          SELECT t.id, t.revision, t.due_at
+            FROM chat.work_task t
+            CROSS JOIN LATERAL chat.work_task_effective(t.priority, t.floor_rule, t.due_at, t.source_floor, t.state,
+                                                         now(), chat.work_task_academy_zone()) e
+           WHERE t.state IN ('open', 'awaiting_decision') AND t.due_at IS NOT NULL AND e.overdue
+             AND t.source_state IS DISTINCT FROM 'withdrawn'
+             AND NOT EXISTS (SELECT 1 FROM chat.work_task_overdue_notice n WHERE n.task_id = t.id AND n.due_at = t.due_at)
+           ORDER BY t.due_at, t.id
+           LIMIT ${batch}
+        ), fresh AS (
+          INSERT INTO chat.work_task_overdue_notice (task_id, due_at)
+          SELECT id, due_at FROM overdue
+          ON CONFLICT DO NOTHING
+          RETURNING task_id, due_at
+        )
+        SELECT o.id::text AS id, o.revision, o.due_at FROM overdue o JOIN fresh f ON f.task_id = o.id AND f.due_at = o.due_at
+         ORDER BY o.due_at, o.id`;
+      for (const t of due) {
+        await this.outbox.enqueue(tx, CommEvent.TASK_CHANGED, { taskId: t.id, revision: t.revision, change: 'overdue', dueAt: t.due_at.toISOString() });
+      }
+      return due.length;
+    });
   }
 
   /** Exit 2: the assignee says it is outside their responsibility. { comment } */
@@ -481,12 +565,29 @@ export class TaskService {
           ? 'a case\'s task follows its owner: assign the case on its page'
           : FINANCIAL.has(row.source_type)
             ? 'a financial task follows the family\'s billing supervisor or Sales owner: change them, and the task follows'
-            : 'only the lesson\'s teacher writes its report or correction: change the lesson\'s teacher on the Schedule, and the task follows',
+            : row.source_type.startsWith('certificate_')
+              ? 'a certificate step is its person\'s: only an unclaimed request is handed to a Designer'
+              : 'only the lesson\'s teacher does this: change the lesson\'s teacher on the Schedule, and the task follows',
       );
     }
     const instructions = text(body.instructions, 'instructions', NOTE_MAX, false);
     const to = await this.targetOf(viewer, body.to);
     await this.requireLive(viewer.organizationId, to.principal);
+    // PD-47 PR-6b: an unclaimed certificate request goes to a Designer, from
+    // its overseer or the super admin; the database decides it again.
+    if (rules.designHandOn) {
+      const [ok] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+        SELECT ${to.principal.kind === 'staff' && !to.department}::boolean
+               AND chat.staff_has_permission(${to.principal.id}::uuid, 'certificates.design') AS ok`;
+      if (!ok?.ok) throw invalid('to: a Designer (certificates.design)');
+      const current = assigneeOf(row);
+      if (current.kind === to.principal.kind && current.id === to.principal.id) throw invalid('to: the task is already theirs');
+      const set = Prisma.sql`assignee_staff_id = ${to.principal.id}::uuid, assignee_teacher_id = NULL::uuid,
+                             instructions = ${instructions}, state = 'open'`;
+      return this.move(viewer, row, 'reassign', instructions, set, 'reassigned',
+        Prisma.sql`chat.work_task_certificate_hand_on(t.id, ${viewer.id}::uuid)
+                   AND chat.staff_has_permission(${to.principal.id}::uuid, 'certificates.design')`);
+    }
     // A teacher's decision (leave, violation, ruling) goes to someone who stands to that teacher.
     if (row.source_teacher_id) {
       const [ok] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
@@ -572,7 +673,7 @@ export class TaskService {
                 ${assigneeOf(row).id}::uuid, ${note})`;
       const [after] = await tx.$queryRaw<Array<{ revision: number }>>`
         SELECT revision FROM chat.work_task WHERE id = ${row.id}::uuid`;
-      await this.signal(tx, row.id, after.revision, 'commented');
+      await this.signal(tx, row.id, after.revision, 'commented', { actorId: viewer.id });
     });
     return this.summary(await this.load(viewer, row.id));
   }
@@ -685,18 +786,28 @@ export class TaskService {
     await this.asActor(viewer.id, note, async (tx) => {
       // Guarded by the state it was read in -- a concurrent exit wins, this one
       // is refused -- and by the caller's standing, decided again now.
-      const [moved] = await tx.$queryRaw<Array<{ revision: number }>>`
+      const [moved] = await tx.$queryRaw<Array<{ revision: number; assignee: string }>>`
         UPDATE chat.work_task t SET ${set}
          WHERE t.id = ${row.id}::uuid AND t.state = ${row.state} AND t.revision = ${row.revision} AND ${auth}
-         RETURNING t.revision`;
+         RETURNING t.revision, coalesce(t.assignee_staff_id, t.assignee_teacher_id)::text AS assignee`;
       if (!moved) throw wrongState('the task changed meanwhile; reload it');
-      await this.signal(tx, row.id, moved.revision, change);
+      // Who did it and, for a hand-on, whom it left and reached -- as of THIS change.
+      await this.signal(tx, row.id, moved.revision, change, {
+        actorId: viewer.id,
+        ...(change === 'reassigned' ? { fromAssignee: assigneeOf(row).id, toAssignee: moved.assignee } : {}),
+      });
     });
     return this.summary(await this.load(viewer, row.id));
   }
 
-  private signal(tx: Prisma.TransactionClient, taskId: string, revision: number, change: TaskChangedPayload['change']) {
-    return this.outbox.enqueue(tx, CommEvent.TASK_CHANGED, { taskId, revision, change });
+  private signal(
+    tx: Prisma.TransactionClient,
+    taskId: string,
+    revision: number,
+    change: TaskChangedPayload['change'],
+    at: Pick<TaskChangedPayload, 'actorId' | 'fromAssignee' | 'toAssignee'> = {},
+  ) {
+    return this.outbox.enqueue(tx, CommEvent.TASK_CHANGED, { taskId, revision, change, ...at });
   }
 
   /** The live person behind `actorId`: staff or a teacher, of an organization. */
@@ -763,8 +874,15 @@ export class TaskService {
     const followsSource = !!row.source_type && NOT_REASSIGNABLE.has(row.source_type);
     // PR-2b: the super admin hands on a financial task whose assignee left with
     // nobody live to follow; the sweep moves it to its owner again later.
-    const orphaned = followsSource && viewer.superAdmin && FINANCIAL.has(row.source_type as SourceType)
-      && !(await this.isLive(viewer.organizationId, assigneeOf(row)));
+    // PR-6b: and any task the sweep recorded as orphaned.
+    const orphanIssue = followsSource && viewer.superAdmin && (await this.isOrphaned(row));
+    const orphaned = orphanIssue || (followsSource && viewer.superAdmin && FINANCIAL.has(row.source_type as SourceType)
+      && !(await this.isLive(viewer.organizationId, assigneeOf(row))));
+    // PR-6b: an unclaimed certificate request, handed to a Designer by its
+    // overseer or the super admin -- unless it is an orphan the super admin
+    // hands to anyone live.
+    const designHandOn = !orphanIssue && row.source_type === 'certificate_design' && viewer.kind === 'staff'
+      && (await this.mayHandOnDesign(viewer, row));
     return {
       mine,
       decide,
@@ -772,8 +890,24 @@ export class TaskService {
       acknowledge: mine && row.kind === 'system' && row.source_state === 'withdrawn',
       outOfScope: mine,
       comment: mine || decide,
-      reassign: !decide && !handsOwn ? 'not_responsible' : followsSource && !orphaned ? 'follows_source' : 'yes',
+      reassign: designHandOn ? 'yes' : !decide && !handsOwn ? 'not_responsible' : followsSource && !orphaned ? 'follows_source' : 'yes',
+      designHandOn,
     };
+  }
+
+  /** The sweep found nobody live to follow this task (an `orphaned:` issue). */
+  private async isOrphaned(row: Row): Promise<boolean> {
+    const [r] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT EXISTS (SELECT 1 FROM chat.work_task t JOIN chat.work_task_source_issue i
+                        ON i.organization_id = t.organization_id AND i.source_key = t.source_key
+                      WHERE t.id = ${row.id}::uuid AND i.reason LIKE 'orphaned:%') AS ok`;
+    return r?.ok === true;
+  }
+
+  private async mayHandOnDesign(viewer: Viewer, row: Row): Promise<boolean> {
+    const [r] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT chat.work_task_certificate_hand_on(${row.id}::uuid, ${viewer.id}::uuid) AS ok`;
+    return r?.ok === true;
   }
 
   /** `rulesFor`, as the actions this viewer may take now (TaskService.get). */
@@ -903,6 +1037,9 @@ export class TaskService {
                WHEN 'leave_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_leave_request q WHERE q.id = t.source_id)
                WHEN 'violation_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_violation q WHERE q.id = t.source_id)
                WHEN 'lesson_ruling' THEN (SELECT l.teacher_id::text FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id WHERE q.id = t.source_id)
+               WHEN 'teacher_setup' THEN t.source_id::text
+               WHEN 'teacher_unsupervised' THEN (SELECT sp.teacher_id::text FROM chat.work_task_teacher_spell sp WHERE sp.id = t.source_id)
+               WHEN 'trial_attendance' THEN (SELECT l.teacher_id::text FROM chat.lesson l WHERE l.id = t.source_id)
              END AS source_teacher_id,
              CASE t.source_type
                WHEN 'lesson_report' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
@@ -934,6 +1071,33 @@ export class TaskService {
                WHEN 'checkout_failed' THEN (SELECT jsonb_build_object('label', q.label, 'amountMinor', q.amount_minor, 'currency', q.currency,
                                                                       'familyName', f.display_name)
                                               FROM chat.payment_request q LEFT JOIN chat.family f ON f.id = q.family_id WHERE q.id = t.source_id)
+               -- PR-6a. A form is named by its trial's prospect, never by what the form holds (G-07).
+               WHEN 'family_unsupervised' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id,
+                                                                          'count', (SELECT count(*)::int FROM chat.learner l
+                                                                                     WHERE l.family_id = f.id
+                                                                                       AND NOT EXISTS (SELECT 1 FROM chat.learner_supervision ls WHERE ls.learner_id = l.id)))
+                                                  FROM chat.family f WHERE f.id = t.source_id)
+               WHEN 'teacher_setup' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id, 'count', chat.work_task_setup_missing(te.id))
+                                            FROM chat.teacher te WHERE te.id = t.source_id)
+               WHEN 'new_student_assign' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
+                                                 FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
+               WHEN 'new_student_group' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id)
+                                                FROM chat.student_enrolment e JOIN chat.family f ON f.id = e.family_id WHERE e.id = t.source_id)
+               -- PR-6b. A spell is named by its teacher.
+               WHEN 'teacher_unsupervised' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id)
+                                                   FROM chat.work_task_teacher_spell sp JOIN chat.teacher te ON te.id = sp.teacher_id
+                                                  WHERE sp.id = t.source_id)
+               -- A trial is named by its prospect, never by its form (G-07).
+               WHEN 'trial_attendance' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
+                                               FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
+               WHEN 'trial_outcome' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
+                                            FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
+               -- A certificate step is the event that opened it; named by the printed name, as PD-41's notices were.
+               WHEN 'certificate_accept' THEN ${CERTIFICATE_PARAMS}
+               WHEN 'certificate_design' THEN ${CERTIFICATE_PARAMS}
+               WHEN 'certificate_resubmit' THEN ${CERTIFICATE_PARAMS}
+               WHEN 'certificate_review' THEN ${CERTIFICATE_PARAMS}
+               WHEN 'certificate_send' THEN ${CERTIFICATE_PARAMS}
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,

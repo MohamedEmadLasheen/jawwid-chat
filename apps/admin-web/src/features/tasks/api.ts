@@ -21,6 +21,18 @@ export type SourceType =
   | 'renewal_request'
   | 'receipt_review'
   | 'checkout_failed'
+  | 'family_unsupervised'
+  | 'teacher_setup'
+  | 'new_student_assign'
+  | 'new_student_group'
+  | 'teacher_unsupervised'
+  | 'trial_attendance'
+  | 'trial_outcome'
+  | 'certificate_accept'
+  | 'certificate_design'
+  | 'certificate_resubmit'
+  | 'certificate_review'
+  | 'certificate_send'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 
 export interface Principal {
@@ -111,6 +123,10 @@ export interface ListQuery {
   level?: Level
   category?: Category
   overdue?: boolean
+  /** Only tasks whose assignee left (the Dashboard's "assignee left" tile). */
+  gone?: boolean
+  /** Only tasks no manager can move (the super admin's tile). */
+  unmanaged?: boolean
 }
 
 export interface Assignees {
@@ -135,7 +151,10 @@ const one = (id: string) => `/tasks/${encodeURIComponent(id)}`
 
 export const tasksApi = {
   list: (q: ListQuery, cursor?: string) => {
-    const query = { state: q.state, level: q.level, category: q.category, overdue: q.overdue ? 'true' : undefined, cursor }
+    const query = {
+      state: q.state, level: q.level, category: q.category, overdue: q.overdue ? 'true' : undefined,
+      gone: q.gone ? 'true' : undefined, unmanaged: q.unmanaged ? 'true' : undefined, cursor,
+    }
     return q.view === 'mine' ? api.get<TaskPage>('/me/tasks', query) : api.get<TaskPage>('/tasks', { view: q.view, ...query })
   },
   get: (id: string) => api.get<TaskDetail>(one(id)),

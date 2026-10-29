@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-513 routes.
+521 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -229,6 +229,12 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/lesson-audio/review/:lesson` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.summary` |
 | GET | `/api/v1/lesson-audio/review/:lesson/units/:unit` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.unit` |
 | POST | `/api/v1/lesson-audio/strings/:lesson/:stringId/decision` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.decide` |
+| GET | `/api/v1/lesson-content/access` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.access` |
+| GET | `/api/v1/lesson-content/approvals/:scope` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.export` |
+| GET | `/api/v1/lesson-content/review/:scope` | lesson_content.view | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.list` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/approve` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.approve` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/reject` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.reject` |
+| POST | `/api/v1/lesson-content/review/:scope/:itemId/withdraw` | lesson_content.check | lesson_content.review_teacher | lesson_content.review_scholar | `lesson-content/lesson-content.controller.ts#LessonContentController.withdraw` |
 | POST | `/api/v1/lesson-rulings/:id/decide` | lessons.manage | `lessons/lesson.controller.ts#LessonController.decide` |
 | GET | `/api/v1/lessons` | lessons.view | `lessons/lesson.controller.ts#LessonController.list` |
 | POST | `/api/v1/lessons` | lessons.manage | `lessons/lesson.controller.ts#LessonController.schedule` |
@@ -369,6 +375,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/parent-feedback` | teacher_supervision.view | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.list` |
 | POST | `/api/v1/parent-feedback/:id/reply` | teacher_supervision.record | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.reply` |
 | POST | `/api/v1/parent-feedback/:id/take` | teacher_supervision.record | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.take` |
+| GET | `/api/v1/parent-notices` | not for staff | `lesson-audio/parent-notice.controller.ts#ParentNoticeController.list` |
+| POST | `/api/v1/parent-notices/:key/acknowledge` | not for staff | `lesson-audio/parent-notice.controller.ts#ParentNoticeController.acknowledge` |
 | GET | `/api/v1/parent-profiles` | parents.view | `parent-profile/parent-record.controller.ts#ParentRecordController.list` |
 | GET | `/api/v1/parent-profiles/:contactId` | parents.view | `parent-profile/parent-record.controller.ts#ParentRecordController.detail` |
 | POST | `/api/v1/parent-profiles/:contactId` | parents.edit | `parent-profile/parent-record.controller.ts#ParentRecordController.update` |

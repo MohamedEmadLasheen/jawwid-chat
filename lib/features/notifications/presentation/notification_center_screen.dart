@@ -12,6 +12,7 @@ import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/user_role.dart';
+import '../../lessons/presentation/teacher_schedule_screen.dart';
 import '../application/notification_center_controller.dart';
 import '../domain/inbox.dart';
 
@@ -197,7 +198,11 @@ class _EntryTile extends ConsumerWidget {
               child: TextButton(
                 key: ValueKey('notification-action-${entry.id}'),
                 style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
-                onPressed: () => _open(context, ref, route),
+                onPressed: () {
+                  // A task opens the Schedule on its To do.
+                  if (action.kind == InboxActionKind.openTask) ref.read(scheduleFilterProvider.notifier).set(ScheduleFilter.todo);
+                  _open(context, ref, route);
+                },
                 child: Text(_actionLabel(l10n, action!.kind)),
               ),
             ),
@@ -244,6 +249,7 @@ class _EntryTile extends ConsumerWidget {
         InboxActionKind.viewPayments => l10n.notificationsActionViewPayments,
         InboxActionKind.openStories => l10n.notificationsActionOpenStories,
         InboxActionKind.openCalls => l10n.notificationsActionOpenCalls,
+        InboxActionKind.openTask => l10n.notificationsActionOpenTask,
       };
 }
 
@@ -264,4 +270,7 @@ String? routeFor(InboxAction action, UserRole? role) => switch (action.kind) {
         },
       InboxActionKind.openStories => Routes.chats,
       InboxActionKind.openCalls => Routes.calls,
+      // PD-47 PR-4: a teacher's tasks are the Schedule's To do; staff on the phone have
+      // no Tasks screen yet (plan §3.12), so no button rather than one that leads nowhere.
+      InboxActionKind.openTask => role == UserRole.teacher ? Routes.schedule : null,
     };

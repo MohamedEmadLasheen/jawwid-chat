@@ -79,7 +79,7 @@ If no such print can be identified for a work, the work is **not** a primary sou
 
 | Role | Work | Status | Notes |
 |---|---|---|---|
-| **Primary** | **Taysir al-Karim al-Rahman fi Tafsir Kalam al-Mannan**, 'Abd al-Rahman al-Sa'di | The author died 22 Jumada al-Akhira 1376 AH = **24 January 1957** (often misdated 1956). **Public domain under life + 50 (Saudi Arabia, Egypt, Qatar) since about 2007.** **EU (life + 70): protected until 31 December 2027**, free from 1 January 2028. | Clear, concise, lesson-oriented, and it largely avoids isra'iliyyat, which makes it the closest classical fit for children. **Edition:** NOT the al-Luwayhiq critical edition (Ula al-Nuha 2000 / al-Rushd 2008), whose apparatus is the editor's. Pin an early print with no modern editor's apparatus (§A.6, step 1). |
+| **Primary** | **Taysir al-Karim al-Rahman fi Tafsir Kalam al-Mannan**, 'Abd al-Rahman al-Sa'di | The author died 22 Jumada al-Akhira 1376 AH = **24 January 1957** (often misdated 1956). **Public domain under life + 50 (Saudi Arabia, Egypt, Qatar) since about 2007.** **EU (life + 70): protected until 31 December 2027**, free from 1 January 2028. **US: possibly protected until about 2051–2053** (URAA, 95 years from the 1955–58 first printing; for counsel). Our own cited wording is unaffected; only verbatim text would be. | Clear, concise, lesson-oriented, and it largely avoids isra'iliyyat, which makes it the closest classical fit for children. **Edition:** NOT the al-Luwayhiq critical edition (Ula al-Nuha 2000 / al-Rushd 2008), whose apparatus is the editor's. Pin an early print with no modern editor's apparatus (§A.6, step 1). |
 | **Cross-check 1** | **Ma'alim al-Tanzil**, al-Baghawi (d. 516 AH) | Public domain everywhere (author's text) | A concise, Sunni, narration-based tafsir widely regarded as sound in method (the scholar confirms). It is used to confirm the meaning of each ayah. |
 | **Cross-check 2** | **Tafsir al-Quran al-'Azim**, Ibn Kathir (d. 774 AH), the full original | Public domain everywhere (author's text). Its modern abridgements (al-Misbah al-Munir, al-'Adawi's Sahih, etc.) are in copyright and **not used**. | Used for narrations and for checking that a meaning is the established one. It includes weak reports, so **nothing is taken from a narration in it without the asbab/hadith rule** (§A.3). |
 | Reference only | Tafsir al-Jalalayn (al-Mahalli d. 864, al-Suyuti d. 911) | Public domain | Very short glosses, useful for word sense. **Caution:** it reinterprets some divine attributes (ta'wil). The scholar never accepts a line about Allah's attributes from it. |
@@ -94,11 +94,13 @@ If no such print can be identified for a work, the work is **not** a primary sou
 
 | Role | Work | Status | Notes |
 |---|---|---|---|
-| **Primary** | **al-Tibyan fi Tafsir Gharib al-Quran**, Ibn al-Ha'im (d. 815 AH) | Public domain (author's text) | Ordered by surah and ayah, so it maps to our positions. Glosses are short and accurate, but terse and in adult register (§A.5). **Edition:** to be pinned (§A.6, step 1); a modern edition may be read only for the author's words, never its notes. |
+| ~~Primary~~ cross-check (see the decision below the table) | **al-Tibyan fi Tafsir Gharib al-Quran**, Ibn al-Ha'im (d. 815 AH) | Public domain (author's text) | Ordered by surah and ayah, so it maps to our positions. Glosses are short and accurate, but terse and in adult register (§A.5). **Edition:** to be pinned (§A.6, step 1); a modern edition may be read only for the author's words, never its notes. |
 | Cross-check | **Tafsir Gharib al-Quran**, Ibn Qutaybah (d. 276 AH) | Public domain (author's text). The al-Sayyid Ahmad Saqr edition (1978) and others carry editors' apparatus. | The earliest standard gharib work. Ordered by surah. |
-| Cross-check | **Nuzhat al-Qulub (Gharib al-Quran)**, al-Sijistani (d. 330 AH) | Public domain; **a Bulaq print of 1295 AH (in a margin)** is reported, which itself has no modern apparatus | Alphabetical, so a reviewer's look-up, not a map |
+| **Primary** (decided 2026-10-29) | **Nuzhat al-Qulub (Gharib al-Quran)**, al-Sijistani (d. 330 AH) | Public domain; **a Bulaq print of 1295 AH (in a margin)** is reported, which itself has no modern apparatus | Alphabetical, so a reviewer's look-up, not a map |
 | Reference | **al-Mufradat fi Gharib al-Quran**, al-Raghib al-Isfahani (d. 502 AH) | Public domain | Ordered by root, deep. For the scholar's look-up on hard words. |
 | Reference | al-Sa'di and al-Baghawi (§A.1) | Public domain (§A.1) | They often explain the key word within the ayah's tafsir |
+
+**Edition research (2026-10-29): *al-Tibyan* has no public-domain printing.** Only the modern critical editions of 1992 and 2003 exist. By §A.0 it therefore cannot be the primary. **DECIDED 2026-10-29 (department head, Option A of `docs/product/pd049-edition-pinning-brief.md`):** the primary is **al-Sijistani's *Nuzhat al-Qulub*, Bulaq 1295** (the text *al-Tibyan* is built on), with al-Sa'di's tafsir of the ayah where al-Sijistani has no entry. Ibn al-Ha'im becomes a cross-check. The table above is superseded on this point.
 
 **Not used** (in copyright, so excluded by the owner's decision):
 - KFGQPC's al-Muyassar fi Gharib al-Quran;
@@ -166,7 +168,7 @@ Otherwise **there is no asbab section for that ayah: no placeholder, no "unknown
 
 ### A.6 Steps before the pilot is written
 
-1. **Pin the editions** (an engineer plus the scholar), for al-Sa'di, Ibn al-Ha'im, al-Baghawi, Ibn Kathir and al-Wahidi. Record each in `sources.json` (§A.0) in a reviewed commit. A work with no pinned edition can be a cross-check but not the primary.
+1. **Pin the editions** (an engineer plus the scholar), for al-Sa'di, the word-meaning primary, al-Baghawi, Ibn Kathir, al-Wahidi and the hadith collections. The candidates, and a form the scholar can tick, are in `docs/product/pd049-edition-pinning-brief.md`. Record each in `sources.json` (§A.0) in a reviewed commit. A work with no pinned edition can be a cross-check but not the primary.
 2. **Write the authoring guide** for the three bands, with three worked examples per kind, approved by the Teachers department and the scholar.
 3. **Approve the respect rules and the mechanics** (§C.4) with the scholar.
 4. Then write the pilot (§G.2).
@@ -386,6 +388,13 @@ The **Data** column says what each type needs:
 
 Count by skill: listening and recitation 2; recognition and structure 4; order and recall 7; meaning 2; comprehension and values 7; context 1; meta 1. That is at least 15 distinct types per band in 6–8 and 9–12, and 11 that a 3–5 child can use. Activities 1–4, 7–15 (V) are live for all 114 surahs from PR-1.
 
+**Deviation, as built in the first game PR (#261): 3–5 distractors come from the same surah, not another one.**
+- They are drawn far ones first: the ayat furthest from the target, never one with the same text.
+- **Why:** a pre-reader matches what was heard against what is shown. A far ayah of the surah being learnt is already easy to tell apart, and every card the child touches is still an ayah of that surah.
+- Another surah's ayah would also need a second verified surah loaded for each game.
+- **Revisit** when levels exist: "another surah" may be the easiest level 1.
+- The teacher and the scholar see this choice in the mechanic's record when they sign it.
+
 **Game "skins"** (garden, sea, stars, desert caravan) change only the decoration and the reward animation, never the mechanic. They rotate per surah, so two surahs feel different even with the same mechanic. Skins carry no text and no Quran.
 
 ### C.3 The session generator (how variety is guaranteed)
@@ -400,6 +409,17 @@ For one child on one surah (or segment), the engine builds a playlist. It is det
    - at least one "understand" activity whenever approved content exists;
    - the skin rotates.
 4. **Length:** by band (§B.3). A child can always replay, skip forward or stop.
+
+**As built (#261):**
+- **The seed** is FNV-1a over `(surah, segment, band, levels, date)`. `levels` is `''` until the teacher's per-skill levels exist. Each game's seed derives from the sitting's seed.
+- **Variety:** the previous segment's last mechanic does not open the next one. "Least recently played" waits for the progress store (§B.5).
+- **Recitation:**
+  - a sitting waits up to 2 s for the recitation list, then is built and frozen for its segment;
+  - a list that arrives later is used from the next segment on;
+  - a segment gets the mechanics that need recitation only when every one of its ayat has a file.
+- **The grown-up's controls:** replay, skip and stop are always there.
+- **Counting** counts the segment, like every game, not the whole surah again in each segment.
+- **Only mechanics with a game in the engine are offered**, so a signed mechanic with no game never shows praise.
 
 ### C.4 Rules every game obeys
 
@@ -417,6 +437,23 @@ For one child on one surah (or segment), the engine builds a playlist. It is det
 - **The PD-29 engine rules still apply:** options shuffled once per question and answered by id, every ayah drawable, no star farming, one audio controller.
 - **No ads, no external links, no data beyond progress** (§B.5).
 - **No music with instruments** in the default (§H Q7): voice and simple sound effects, plus a mute control.
+- **As built (#261):**
+  - there are no sound effects; the only sound is the recitation. So the mute control is "no recitation", which restarts the sitting with the mechanics that work without it.
+  - The verse size control has four steps.
+  - A verse card's accessible name is what it shows: the ayah number, then the verse. Progress beads are read as text.
+  - **Signing a mechanic signs its code:** the record carries `code` (its file in `play/games/`) and `codeSha256`. That is the SHA-256 of that file plus the shared play code:
+    - `common.tsx`, the card;
+    - `adapt.ts`, the band's knobs such as tries before the answer is shown;
+    - `session.ts`, `PlayLesson.tsx` and `PlayRoute.tsx`, which gives the page its band and recitation;
+    - `mechanics.ts` and `signed.ts`, the registry and what may sign it;
+    - `games/shuffle.ts`, which places the answer;
+    - `audio/audio-controller.ts` and `audio/audio-manifest.ts`, the recitation and its verified list;
+    - `quran/dataset.ts`, the loader of the verified text.
+
+    `route.ts` only maps a path to a surah number, and `App.tsx` only renders `PlayRoute`, so neither is covered. Which games may be played (the registry, `play.json`, the keys) is fixed at build time in `signed.ts`: no page passes them to `PlayLesson`.
+
+    Each file is hashed with its path, and CRLF is read as LF. `check-quran-content.py` refuses a hash that does not match. Changing any of these changes the record, so every mechanic must be signed again.
+  - **Progress, v1:** stopping, or turning the recitation off or on, restarts the current game; the recitation toggle restarts the whole sitting. Nothing done so far is kept. That is accepted for v1, and it is safe: no star or progress is recorded yet (§B.5).
 
 ---
 
@@ -555,8 +592,32 @@ The scholar key is a deliberate grant to named people, never a bundle default.
 
 ### F.3 From the database to the child
 
-- **Approvals export.** `scripts/lessons/export-approvals.py` writes `apps/lessons/src/content/approvals/surah-NNN.json` from an export the API prints: `[{ id, textSha256, steps: [...], approvedAt }]`. It goes in by an ordinary reviewed PR.
-- **A CI guard, `lesson-content-approvals`**, fails when an approval's hash does not match the item's current text.
+- **Approvals export, SIGNED** (department head, 2026-10-29). The API answers `GET /lesson-content/approvals/:scope` with `{payload, keyId, signature}`:
+  - `payload` is `{v: 1, datasetId, lessonKey, approvals: [{id, approvalSha256, steps, signers: [{step, staffId, at}]}]}`;
+  - it is signed with Ed25519 over its canonical JSON, with `LESSON_APPROVALS_SIGNING_KEY`, which lives only in the API's environment and is an owner action (`docs/infrastructure/secrets.md`);
+  - unset key: the API exports nothing (503).
+  `scripts/lessons/export-approvals.py` writes it to `apps/lessons/src/content/approvals/surah-NNN.json` (or `play.json`), and it goes in by an ordinary reviewed PR.
+- **CI is the trust anchor.**
+  - `scripts/lessons/verify-approvals.mjs` (Node's crypto, in the `lessons-supply-chain` gate) verifies every approvals file under a public key of `apps/lessons/src/content/approvals-keys.json`. Keys have ids; a rotated key is retired, never removed, so old approvals stay verifiable.
+  - A hand-edited, unsigned or unknown-key file fails the build. `check-quran-content.py` fails when an approval's hash does not match the item's current text, or its steps are not exactly the steps signed by different people.
+  - The engine refuses an unsigned or unknown-key file structurally. It does not re-run Ed25519 in the browser, because older WebViews lack it (department head, 2026-10-29: option B, consistent with the Quran snapshot).
+  - The production lessons bundle is built **only** by the `ci.yml` `lessons` job, which runs the verifier before it builds. The `lessons-supply-chain` gate fails if that step goes, or if another workflow builds the bundle.
+  - **No replay, no staging, no slipped key** (review of #265):
+    - the payload carries a signed `env` and `issuedAt`;
+    - CI accepts only `env: "production"` under a production key;
+    - against the PR's base branch, a changed approvals file must be strictly newer than the copy it replaces, so an old export re-committed by a revert or a stale branch fails;
+    - a retired key signs no changed file, and a revoked key verifies nothing;
+    - a PR may not change `approvals-keys.json` and any approvals file together (plus a CODEOWNERS entry on the key file).
+  - **No replay through deletion, and no PR checks itself** (second review of #265):
+    - `approvals-ledger.json` keeps each signed lesson's high-water `issuedAt`. It only grows, and every signed file must match its entry. A changed file must be newer than its entry, and a brand-new one must be recent (7 days). A rename counts as a delete plus an add.
+    - A file that is signed on the base branch is never deleted or unsigned. **A removed lesson is retired:** a newer signed export with zero approvals. Its file and ledger entry stay, and the content check accepts an approvals file with no content file only when it approves nothing.
+    - A PR that changes approvals (or the ledger) may not change the code that checks them: the verifier, the content check, the guards, the CI workflows, CODEOWNERS, or the engine's readers.
+    - CODEOWNERS covers all of these, and any future engine approvals loader joins `PROTECTED` and CODEOWNERS. The owner turns on "Require review from Code Owners" before the first key is added.
+    - Times compare as instants, so a timestamp with or without milliseconds is the same time. An `issuedAt` more than 5 minutes in the future is refused.
+    - The key registry is validated field by field, and the golden vector's test key can never be listed in it. The golden vectors include an Arabic value.
+  - **The first signed `play.json`** comes in a PR of its own: the export and its ledger entry, with no change to any protected file. The PR that widens the code the signature covers (SHARED_CODE: the audio, the loader, the route, `signed.ts`) lands before it.
+  - **The loader rule:** any engine loader reads exactly the set `verify-approvals.mjs` checks, `apps/lessons/src/content/approvals/*.json`, and nothing else.
+  - **Future option:** verify the signature at runtime in the engine too (WebCrypto Ed25519), once the WebViews families use support it widely: Safari/iOS 17+, Chrome 137+, Firefox 129+.
 - **The build ships approved text only.** The snapshot step drops every item without a complete approval for its current hash. **Held, draft and rejected text never reaches the browser bundle.** Today held lines ship and are hidden at runtime; PD-49 closes that.
 - **The engine checks again.** At load, an item is shown only if its `sha256(text)` equals the approval's `textSha256`, the same second check PD-48 does for clips.
 

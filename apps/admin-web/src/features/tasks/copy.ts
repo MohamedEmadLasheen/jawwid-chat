@@ -20,6 +20,9 @@ export const C = {
   anyKind: { en: 'Any kind', ar: 'كل الأنواع' },
   operational: { en: 'Operational', ar: 'تشغيلية' },
   overdueOnly: { en: 'Overdue only', ar: 'المتأخرة فقط' },
+  goneOnly: { en: 'Assignee left', ar: 'غادر المسند إليه' },
+  unmanagedOnly: { en: 'No manager can move it', ar: 'لا يستطيع أي مدير نقلها' },
+  clearFilter: { en: 'Clear "{filter}"', ar: 'إلغاء «{filter}»' },
   whose: { en: 'Whose', ar: 'لمن' },
   // A row
   assignedTo: { en: 'Assigned to {name}', ar: 'مسندة إلى {name}' },
@@ -133,6 +136,18 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   renewal_request: { en: 'Renewal', ar: 'تجديد' },
   receipt_review: { en: 'Transfer receipt', ar: 'إيصال تحويل' },
   checkout_failed: { en: 'Card payment', ar: 'دفع بالبطاقة' },
+  family_unsupervised: { en: 'Family without a supervisor', ar: 'عائلة بلا مشرف' },
+  teacher_setup: { en: 'Teacher set-up', ar: 'إعداد معلم' },
+  new_student_assign: { en: 'New student form', ar: 'استمارة طالب جديد' },
+  new_student_group: { en: 'Family group', ar: 'مجموعة العائلة' },
+  teacher_unsupervised: { en: 'Teacher without a supervisor', ar: 'معلم بلا مشرف' },
+  trial_attendance: { en: 'Trial attendance', ar: 'حضور الحصة التجريبية' },
+  trial_outcome: { en: 'Trial outcome', ar: 'نتيجة الحصة التجريبية' },
+  certificate_accept: { en: 'Suggested certificate', ar: 'شهادة مقترحة' },
+  certificate_design: { en: 'Certificate design', ar: 'تصميم شهادة' },
+  certificate_resubmit: { en: 'Certificate request', ar: 'طلب شهادة' },
+  certificate_review: { en: 'Certificate review', ar: 'مراجعة شهادة' },
+  certificate_send: { en: 'Certificate to send', ar: 'شهادة للإرسال' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -148,6 +163,21 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   renewal_request: { en: 'Renewal requested: {learner}', ar: 'طلب تجديد: {learner}' },
   receipt_review: { en: 'Review a transfer receipt: {family}, {amount}', ar: 'راجع إيصال تحويل: {family}، {amount}' },
   checkout_failed: { en: 'Card payment failed: {family}, {label}, {amount}', ar: 'فشل الدفع بالبطاقة: {family}، {label}، {amount}' },
+  family_unsupervised: {
+    en: 'Choose an Operations supervisor: {family}, {count} waiting',
+    ar: 'اختر مشرف عمليات: {family}، بانتظار {count}',
+  },
+  teacher_setup: { en: 'Finish setting up {teacher}: {count} left', ar: 'أكمل إعداد {teacher}: المتبقي {count}' },
+  new_student_assign: { en: 'Assign the new family: {prospect}, trial {when}', ar: 'أسند العائلة الجديدة: {prospect}، تجربة {when}' },
+  new_student_group: { en: 'Open the family group: {family}', ar: 'افتح مجموعة العائلة: {family}' },
+  teacher_unsupervised: { en: 'Choose a supervisor for {teacher}', ar: 'اختر مشرفًا لـ{teacher}' },
+  trial_attendance: { en: 'Record attendance: {prospect}, trial {when}', ar: 'سجّل الحضور: {prospect}، تجربة {when}' },
+  trial_outcome: { en: 'Record the trial outcome: {prospect}, trial {when}', ar: 'سجّل نتيجة التجربة: {prospect}، تجربة {when}' },
+  certificate_accept: { en: 'Decide on a suggested certificate: {name}', ar: 'قرّر بشأن شهادة مقترحة: {name}' },
+  certificate_design: { en: 'Design the certificate: {name}', ar: 'صمّم الشهادة: {name}' },
+  certificate_resubmit: { en: 'Revise the certificate request: {name}', ar: 'عدّل طلب الشهادة: {name}' },
+  certificate_review: { en: 'Review the certificate design: {name}', ar: 'راجع تصميم الشهادة: {name}' },
+  certificate_send: { en: 'Send the certificate: {name}', ar: 'أرسل الشهادة: {name}' },
 }
 
 export const EVENT_LABEL: Record<TaskEvent['kind'], Pair> = {
