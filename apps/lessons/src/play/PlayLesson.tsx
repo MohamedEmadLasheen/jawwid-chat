@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AudioController, NO_AUDIO, htmlAudio, type AudioFactory, type AudioSource } from '../audio/audio-controller';
-import { APPROVAL_KEYS, type ApprovalKey, type Band } from '../content/quran-content';
+import type { Band } from '../content/quran-content';
 import { BUILD_ANCHOR, loadSurah, type Fetcher, type QuranAnchor, type Surah } from '../quran/dataset';
 import { segmentsFor } from './adapt';
-import { MECHANICS, approvedMechanics, type Mechanic } from './mechanics';
+import { approvedMechanics } from './mechanics';
 import { buildSession, seedOf, sessionSeed, today, type Activity } from './session';
+import { SIGNED } from './signed';
 import { CountAyat } from './games/CountAyat';
 import { Echo } from './games/Echo';
 import { ListenGlow } from './games/ListenGlow';
@@ -55,9 +56,6 @@ export function PlayLesson({
   anchor = BUILD_ANCHOR,
   audioSource = NO_AUDIO,
   audioFactory = htmlAudio,
-  approvals,
-  approvalKeys = APPROVAL_KEYS,
-  mechanics = MECHANICS,
   date,
   audioWaitMs = AUDIO_WAIT_MS,
 }: {
@@ -67,10 +65,6 @@ export function PlayLesson({
   anchor?: QuranAnchor | null;
   audioSource?: AudioSource;
   audioFactory?: AudioFactory;
-  /** The signed mechanics (approvals/play.json by default), and the keys that may sign them. */
-  approvals?: unknown;
-  approvalKeys?: readonly ApprovalKey[];
-  mechanics?: readonly Mechanic[];
   /** The day the sitting is for (YYYY-MM-DD); today by default. */
   date?: string;
   audioWaitMs?: number;
@@ -87,6 +81,8 @@ export function PlayLesson({
   const [scale, setScale] = useState(0);
   const [sitting, setSitting] = useState<Sitting | null>(null);
   const [day] = useState(() => date ?? today());
+  // Which games may be played is fixed at build time (signed.ts), never a prop.
+  const { mechanics, approvals, keys } = SIGNED;
 
   useEffect(() => {
     let live = true;
@@ -94,11 +90,11 @@ export function PlayLesson({
       (s) => live && setLoaded(s),
       () => live && setLoaded('refused'),
     );
-    approvedMechanics(mechanics, approvals, undefined, approvalKeys).then((a) => live && setApproved(a));
+    approvedMechanics(mechanics, approvals, undefined, keys).then((a) => live && setApproved(a));
     return () => {
       live = false;
     };
-  }, [surah, fetcher, anchor, mechanics, approvals, approvalKeys]);
+  }, [surah, fetcher, anchor, mechanics, approvals, keys]);
 
   useEffect(() => {
     const controller = new AudioController(audioSource, audioFactory);

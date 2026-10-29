@@ -76,6 +76,7 @@ export const PROTECTED = [
   '.github/CODEOWNERS',
   'apps/lessons/src/content/quran-content.ts',
   'apps/lessons/src/play/mechanics.ts',
+  'apps/lessons/src/play/signed.ts',
 ];
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
 const KEY_ID = /^[0-9a-f]{16}$/;

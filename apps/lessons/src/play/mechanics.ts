@@ -24,9 +24,10 @@ export interface Mechanic {
   needsAudio: boolean;
   respect: string[];
   /**
-   * The game's file in play/games/, and the SHA-256 of it plus the shared play code (common.tsx,
-   * adapt.ts's knobs, session.ts, PlayLesson.tsx, games/shuffle.ts): what is signed includes the
-   * code. check-quran-content.py (SHARED_CODE) defines and verifies it.
+   * The game's file in play/games/, and the SHA-256 of it plus every file that changes what a
+   * game does (the card, the knobs, the session, the page and its route, this registry and
+   * signed.ts, the shuffle, the recitation player and list, the verified-text loader): what is
+   * signed includes the code. check-quran-content.py (SHARED_CODE) defines and verifies it.
    */
   code: string;
   codeSha256: string;
