@@ -10,6 +10,7 @@ import { useAddAdjustment, useRevealPayoutAccount, useSetPayoutAccount, useSetTe
 import { P, describePayrollError } from './payrollCopy'
 import { Field } from '@/shared/components/Field'
 import { Footer } from './TeacherFileDialogs'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-18 on the Teacher File: employment for every reader; salary terms, the
@@ -342,9 +343,9 @@ function Select<V extends string>({ label, value, options, onChange }: { label: 
   return (
     <label className="field">
       <span className="field__label">{label}</span>
-      <select className="select" value={value} onChange={(e) => onChange(e.target.value as V)}>
+      <SearchableSelect className="select" value={value} onValueChange={(v) => onChange(v as V)}>
         {options.map(([v, p]) => <option key={v} value={v}>{tx(p)}</option>)}
-      </select>
+      </SearchableSelect>
     </label>
   )
 }

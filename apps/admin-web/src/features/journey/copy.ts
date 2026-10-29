@@ -22,20 +22,29 @@ export const J = {
   choose: { en: 'Choose…', ar: 'اختر…' },
   excuseBefore: { en: 'Excuse before the lesson starts', ar: 'عذر قبل بداية الحصة' },
   excuseBeforeHint: {
-    en: 'The group is told the student has an excuse and will not attend. No reason is needed.',
-    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى الطالب عذرًا ولن يحضر الحصة. لا حاجة لذكر السبب.',
+    en: 'The group is told the student has an excuse and will not attend. The family sees the reason you pick; a note is optional, and only staff and the teacher read it.',
+    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى الطالب عذرًا ولن يحضر الحصة. ترى الأسرة السبب الذي تختاره؛ والملاحظة اختيارية ولا يطّلع عليها إلا فريق الإدارة والمعلم.',
   },
   excuseAfter: { en: 'Excuse after the lesson started', ar: 'عذر بعد بداية الحصة' },
   excuseAfterHint: {
-    en: 'The lesson is recorded as excused at once. The reason stays with staff and is never shown in the group.',
-    ar: 'تُسجَّل الحصة معذورة فورًا. يبقى السبب لدى الإدارة ولا يظهر في المجموعة.',
+    en: 'The lesson is recorded as excused at once. The family sees the reason you pick; only staff and the teacher read the note.',
+    ar: 'تُسجَّل الحصة معذورة فورًا. ترى الأسرة السبب الذي تختاره، ولا يطّلع على الملاحظة إلا فريق الإدارة والمعلم.',
   },
   notAvailable: { en: 'Not available for this lesson now', ar: 'غير متاح لهذه الحصة الآن' },
   reason: { en: 'Reason', ar: 'السبب' },
   reasonInternal: { en: 'Reason (staff only)', ar: 'السبب (للإدارة فقط)' },
+  // An excuse's reason (lesson.outcome_note): the server gives it to staff AND the
+  // lesson's teacher (PD-15), never to the family -- say so where it is written.
+  reasonStaffTeacher: { en: 'Reason (staff and the teacher only)', ar: 'السبب (للإدارة والمعلم فقط)' },
+  reasonStaffTeacherOptional: { en: 'Reason (staff and the teacher only, optional)', ar: 'السبب (للإدارة والمعلم فقط، اختياري)' },
+  // PD-50: the category the family reads, and the free text beside it, which it does not.
+  reasonCategory: { en: 'Reason (the family sees this)', ar: 'السبب (تراه الأسرة)' },
+  noteStaffTeacher: { en: 'Note (staff and the teacher only)', ar: 'ملاحظة (للإدارة والمعلم فقط)' },
+  familyWordsStaffTeacher: { en: 'Details from the family (staff and the teacher only)', ar: 'تفاصيل من الأسرة (للإدارة والمعلم فقط)' },
+  noteStaffTeacherOptional: { en: 'Note (staff and the teacher only, optional)', ar: 'ملاحظة (للإدارة والمعلم فقط، اختيارية)' },
   teacherExcuseHint: {
-    en: 'The group is told the teacher has an excuse and a make-up follows. The reason is kept for staff. Schedules are not changed.',
-    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى المعلم عذرًا وأن حصة تعويضية ستُرتَّب. يبقى السبب لدى الإدارة، ولا تتغيّر المواعيد.',
+    en: 'The group is told the teacher has an excuse and a make-up follows. The reason and the note stay with staff and the teacher; the family never sees them. Schedules are not changed.',
+    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى المعلم عذرًا وأن حصة تعويضية ستُرتَّب. يبقى السبب والملاحظة لدى فريق الإدارة والمعلم ولا يظهران للأسرة، ولا تتغيّر المواعيد.',
   },
   makeupHint: {
     en: 'Record the make-up once the family and the teacher have agreed on a time. The teacher\'s free times are suggested below.',
@@ -203,4 +212,18 @@ export function formatLessonWhen(iso: string, locale: 'ar' | 'en'): string {
     weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE,
   }).format(new Date(iso))
   return `${when} (${zoneLabel(ACADEMY_ZONE, locale)})`
+}
+
+/** PD-50: an excuse's reason category -- the same codes as EXCUSE_CATEGORIES (apps/api vocab.ts). */
+export const EXCUSE_CATEGORIES = ['travel', 'illness', 'exams', 'emergency', 'other'] as const
+export type ExcuseCategory = (typeof EXCUSE_CATEGORIES)[number]
+export const EXCUSE_CATEGORY_LABEL: Record<ExcuseCategory, Pair> = {
+  travel: { en: 'Travel', ar: 'سفر' },
+  illness: { en: 'Illness', ar: 'مرض' },
+  exams: { en: 'Exams', ar: 'امتحانات' },
+  emergency: { en: 'An emergency', ar: 'ظرف طارئ' },
+  other: { en: 'Other', ar: 'أخرى' },
+}
+export function excuseCategoryLabel(code: unknown): Pair | null {
+  return typeof code === 'string' && code in EXCUSE_CATEGORY_LABEL ? EXCUSE_CATEGORY_LABEL[code as ExcuseCategory] : null
 }

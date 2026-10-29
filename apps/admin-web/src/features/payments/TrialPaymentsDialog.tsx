@@ -11,6 +11,7 @@ import type { PaymentRequest, PlanMonths, TrialPayments } from './api'
 import { PAY, fromMinor, formatMoney, toMinor, useCopy } from './copy'
 import { useCancelTrialRequest, useCreateTrialRequest, useTrialPayments } from './hooks'
 import { Field, LinkPanel, PaymentList, ReasonDialog, RequestList, RequestStatusBadge, ServerError } from './PaymentParts'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-27 on the New Students page: the trial's subscription payment requests
@@ -163,14 +164,14 @@ function NewTrialRequestForm({ trialId, data, onCreated }: { trialId: string; da
       </Field>
       <Field label={tx(PAY.plan)}>
         {(id) => (
-          <select id={id} className="select" value={plan} onChange={(e) => setPlan(e.target.value)}>
+          <SearchableSelect id={id} className="select" value={plan} onValueChange={(v) => setPlan(v)}>
             <option value="">{tx(PAY.noPlan)}</option>
             {PLAN_MONTHS.map((n) => (
               <option key={n} value={n}>
                 {planLabel(n, locale)}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       <div className="pf-row">

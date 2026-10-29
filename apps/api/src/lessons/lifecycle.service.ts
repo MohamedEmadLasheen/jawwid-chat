@@ -16,6 +16,7 @@ import { CommEvent } from '../communication/contracts/events';
 import {
   ActorKind,
   CardKind,
+  LessonKind,
   LessonOutcome,
   SUSPENSION_REASONS,
   TRANSFER_REASONS,
@@ -700,6 +701,12 @@ export class LifecycleService {
       },
     });
     for (const r of ids) await cancelReminders(tx, r.id);
+    // A make-up paused with the rest: the card that owed it re-reads it.
+    const makeups = await tx.lesson.findMany({
+      where: { id: { in: ids.map((r) => r.id) }, kind: LessonKind.MAKEUP, makeupFor: { not: null } },
+      select: { makeupFor: true },
+    });
+    for (const m of makeups) await this.lessons.announceOwedCard(tx, m.makeupFor as string);
   }
 
   private async loadSuspension(actor: Actor, suspensionId: string) {

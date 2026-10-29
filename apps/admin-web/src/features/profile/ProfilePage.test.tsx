@@ -5,6 +5,7 @@ import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { OrganizationOverview, StaffProfile, StaffSummary, StaffWorkload, Team } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * The staff profile page, through the real routes and the real API client,
@@ -324,7 +325,7 @@ describe('a manager', () => {
     expect(within(section).getByRole('link', { name: 'Admin X' })).toBeInTheDocument()
 
     await userEvent.clear(within(section).getByPlaceholderText('Search by name or title'))
-    await userEvent.selectOptions(within(section).getByLabelText('Account status'), 'incomplete')
+    await chooseOption(userEvent, within(section).getByLabelText('Account status'), 'incomplete')
     expect(within(section).queryByRole('link', { name: 'Admin A' })).not.toBeInTheDocument()
     expect(within(section).getByRole('link', { name: 'Admin X' })).toBeInTheDocument()
   })
@@ -356,7 +357,7 @@ describe('a manager', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Assign responsibility' }))
     const dialog = screen.getByRole('dialog', { name: 'Assign responsibility' })
-    await userEvent.selectOptions(within(dialog).getByLabelText('Area'), 'customer_support')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Area'), 'customer_support')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Customer support')).toBeInTheDocument()
     expect(bodyOf(calls('POST', /responsibilities$/)[0]!)).toEqual({ category: 'customer_support', scopeNote: null })

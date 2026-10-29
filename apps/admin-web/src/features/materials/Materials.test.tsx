@@ -6,6 +6,7 @@ import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { ImportReport, MaterialItem } from './api'
 import { lessonAudioMessage } from './lessonAudio'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-29: the Materials page (Library, Import, Recitations), through the real
@@ -121,10 +122,10 @@ describe('Materials > Library', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Add item' }))
     const dialog = await screen.findByRole('dialog', { name: 'New item' })
     await userEvent.type(within(dialog).getByLabelText('Title (Arabic)'), 'قصة الوضوء')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Subject'), 'islamic_studies')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Subject'), 'islamic_studies')
     await userEvent.click(within(dialog).getByLabelText('7–9 years'))
     await userEvent.type(within(dialog).getByLabelText('Link'), 'https://stories.example.test/wudu')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Type'), 'video')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Type'), 'video')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(calls('POST', /\/materials\/admin\/items$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/materials\/admin\/items$/)[0])).toEqual({

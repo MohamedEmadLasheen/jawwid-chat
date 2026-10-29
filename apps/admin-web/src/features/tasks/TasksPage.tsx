@@ -27,6 +27,7 @@ import {
 import { C, DEPARTMENT_LABEL, EVENT_LABEL, LEVEL_LABEL, SOURCE_LABEL, STATE_LABEL, TAB_LABEL, useCopy } from './copy'
 import { sourceLink, stateOf, STATE_TONE, titleOf } from './format'
 import { FinanceTag, PriorityChip } from './PriorityChip'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './tasks.css'
 
 type Tab = TaskView | 'closed'
@@ -180,23 +181,23 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
         </div>
         <div className="tasks__filters">
           {tab === 'closed' && closedViews.length > 1 && (
-            <select className="select" aria-label={tx(C.whose)} value={closedView} onChange={(e) => setClosedView(e.target.value as TaskView)}>
+            <SearchableSelect className="select" aria-label={tx(C.whose)} value={closedView} onValueChange={(v) => setClosedView(v as TaskView)}>
               {closedViews.map((v) => (
                 <option key={v} value={v}>{tx(TAB_LABEL[v])}</option>
               ))}
-            </select>
+            </SearchableSelect>
           )}
-          <select className="select" aria-label={tx(C.level)} value={level} onChange={(e) => setLevel(e.target.value as Level | '')}>
+          <SearchableSelect className="select" aria-label={tx(C.level)} value={level} onValueChange={(v) => setLevel(v as Level | '')}>
             <option value="">{tx(C.anyLevel)}</option>
             {LEVELS.map((l) => (
               <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
             ))}
-          </select>
-          <select className="select" aria-label={tx(C.kind)} value={category} onChange={(e) => setCategory(e.target.value as Category | '')}>
+          </SearchableSelect>
+          <SearchableSelect className="select" aria-label={tx(C.kind)} value={category} onValueChange={(v) => setCategory(v as Category | '')}>
             <option value="">{tx(C.anyKind)}</option>
             <option value="financial">{tx({ en: 'Finance', ar: 'مالية' })}</option>
             <option value="operational">{tx(C.operational)}</option>
-          </select>
+          </SearchableSelect>
           {tab !== 'closed' && (
             <label className="tasks__check">
               <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> {tx(C.overdueOnly)}
@@ -385,19 +386,20 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                 {can.has('priority') && (
                   <label className="field">
                     <span className="field__label">{tx(C.manualLevel)}</span>
-                    <select
+                    <SearchableSelect
+                      clearable={false}
                       className="select"
                       value={t.manualPriority}
                       disabled={op.isPending}
-                      onChange={(e) => {
-                        const next = e.target.value as Level
+                      onValueChange={(v) => {
+                        const next = v as Level
                         op.mutate(() => tasksApi.setPriority(id, next))
                       }}
                     >
                       {LEVELS.map((l) => (
                         <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
                       ))}
-                    </select>
+                    </SearchableSelect>
                   </label>
                 )}
                 {can.has('due') && (
@@ -585,7 +587,7 @@ function ReassignDialog({
       <QueryBoundary isLoading={options.isLoading} error={options.error} onRetry={() => options.refetch()}>
         <label className="field">
           <span className="field__label">{tx(C.to)}</span>
-          <select className="select" value={to} onChange={(e) => setTo(e.target.value)}>
+          <SearchableSelect className="select" value={to} onValueChange={(v) => setTo(v)}>
             <option value="">{tx(C.choose)}</option>
             {(options.data?.departments ?? []).map((d) => (
               <option key={d.kind} value={`department:${d.kind}`}>
@@ -595,7 +597,7 @@ function ReassignDialog({
             {(options.data?.people ?? []).map((p) => (
               <option key={`${p.kind}:${p.id}`} value={`${p.kind}:${p.id}`}>{p.name}</option>
             ))}
-          </select>
+          </SearchableSelect>
         </label>
         {options.data?.truncated && <p className="field__hint" role="note">{tx(C.shortened)}</p>}
         <label className="field">
@@ -663,12 +665,12 @@ function NewTaskDialog({ onClose }: { onClose: () => void }) {
       <QueryBoundary isLoading={options.isLoading} error={options.error} onRetry={() => options.refetch()}>
         <label className="field">
           <span className="field__label">{tx(C.assignee)}</span>
-          <select className="select" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+          <SearchableSelect className="select" value={assignee} onValueChange={(v) => setAssignee(v)}>
             <option value="">{tx(C.choose)}</option>
             {(options.data?.people ?? []).map((p) => (
               <option key={`${p.kind}:${p.id}`} value={`${p.kind}:${p.id}`}>{p.name}</option>
             ))}
-          </select>
+          </SearchableSelect>
         </label>
         <label className="field">
           <span className="field__label">{tx(C.taskTitle)}</span>
@@ -689,11 +691,11 @@ function NewTaskDialog({ onClose }: { onClose: () => void }) {
           </label>
           <label className="field">
             <span className="field__label">{tx(C.level)}</span>
-            <select className="select" value={priority} onChange={(e) => setPriority(e.target.value as Level)}>
+            <SearchableSelect className="select" value={priority} onValueChange={(v) => setPriority(v as Level)}>
               {LEVELS.map((l) => (
                 <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
               ))}
-            </select>
+            </SearchableSelect>
           </label>
         </div>
         {mayMarkFinancial && (

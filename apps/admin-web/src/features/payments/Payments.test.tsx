@@ -8,6 +8,7 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { NewStudentDto } from '@/features/trials/api'
 import type { BillingSettings, PaymentRequest, Receipt, ReceiptStatus } from './api'
 import { reminderLabel } from './copy'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-27: the Payments area (Receipts, Settings) and the New Students payment
@@ -372,7 +373,7 @@ describe('New Students > Payment request (before Assign)', () => {
     expect(label).toHaveValue('Subscription')
     await userEvent.clear(label)
     await userEvent.type(label, 'Subscription, 3 months')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Package'), '3')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Package'), '3')
     const readsBefore = calls('GET', /\/trials\/new-students\/tr-1\/payment-requests$/).length
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create link' }))
 
