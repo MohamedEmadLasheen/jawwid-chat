@@ -5,7 +5,7 @@
       "id": "listen_glow",
       "version": 1,
       "code": "ListenGlow.tsx",
-      "codeSha256": "869e5278f34971fd8b5caa0eb4d7994668536227b7633e851296dfe610cf5d5d",
+      "codeSha256": "6e5bf9c9ccca5beb0e256b8e3d75998072eb20ee6a51ac8b7e518b165f5550ca",
       "nameAr": "اسمع والمس",
       "skill": "listening",
       "bands": ["3-5"],
@@ -22,7 +22,7 @@
       "id": "echo",
       "version": 1,
       "code": "Echo.tsx",
-      "codeSha256": "ab7552b81c4af9c2fccb981cd0f7a749f1e91ac8afa343c993aa29377b3a8972",
+      "codeSha256": "5683e084d43d571253d44576d1de3dad2eb34f34a78e5bf0d344422a1ce05a90",
       "nameAr": "ردّد معي",
       "skill": "recitation",
       "bands": ["3-5"],
@@ -38,7 +38,7 @@
       "id": "which_heard",
       "version": 1,
       "code": "WhichHeard.tsx",
-      "codeSha256": "6f3af046480a8e823cbfa9390c583f62c496ddfa70abb8725b7b3a1b0364a45d",
+      "codeSha256": "793b97ad401307d0f8958125ddd14378e4bc69ef0e4181b3c1f46908e332ad50",
       "nameAr": "أيّ آية سمعت؟",
       "skill": "recognition",
       "bands": ["3-5"],
@@ -55,7 +55,7 @@
       "id": "count_ayat",
       "version": 1,
       "code": "CountAyat.tsx",
-      "codeSha256": "9bad925e734f4a00305f8802c42984f08ee18d0d988d297067947712572326a3",
+      "codeSha256": "4acdc75be3f174fcc29af322c2018067fb4a728c033a72c742ea7b6d3e9edcc2",
       "nameAr": "عُدّ الآيات",
       "skill": "structure",
       "bands": ["3-5"],
@@ -65,6 +65,78 @@
         "The segment's ayat are shown whole and in order; the next one to count is lit by its frame only.",
         "A grown-up reads each ayah to the child (or the recitation plays, where it is allowed), then the child touches it to count.",
         "Nothing is moved, hidden or scored; no music."
+      ]
+    },
+    {
+      "id": "build_ayah",
+      "version": 1,
+      "code": "BuildAyah.tsx",
+      "codeSha256": "61126dc9b40b4e7aa61eac22bab3a3ad96a6b8a0fa8421a702964d71eb8a4a18",
+      "nameAr": "ركّب الآية",
+      "skill": "order",
+      "bands": ["6-8", "9-12"],
+      "tiers": ["L1", "L2", "L3", "L4", "L5"],
+      "needsAudio": false,
+      "respect": [
+        "The tiles are the words of one ayah of the verified text, each whole with its pause mark; no word from anywhere else is ever offered.",
+        "Words are tiles placed in a line, never objects to catch, stack, feed, throw or step on.",
+        "A tile out of turn is refused where it sits: the line only ever holds the ayah's own words in their order, and what is not yet built is shown as blanks, never as an ayah.",
+        "Once built, the whole verified ayah is shown as it is.",
+        "Only ayat of three to six words (6-8, which starts with the first word placed) or three to ten (9-12) are built; longer ayat are not cut.",
+        "No timer, no lost points, no music."
+      ]
+    },
+    {
+      "id": "order_ayat",
+      "version": 1,
+      "code": "OrderAyat.tsx",
+      "codeSha256": "1884b4c7a6d9e7e6046d2856b92208938226ac4247a00657dbb9723b62208226",
+      "nameAr": "رتّب الآيات",
+      "skill": "order",
+      "bands": ["3-5", "6-8", "9-12"],
+      "tiers": ["L1", "L2", "L3", "L4", "L5"],
+      "needsAudio": false,
+      "respect": [
+        "Every card is a whole, real ayah of the verified text; only whole ayat are reordered, and no ayah is ever changed.",
+        "A card's number is hidden until it is in place, so the order is found from the ayat themselves.",
+        "3-5: two neighbouring ayat, which comes first; after two tries the answer is shown and praised. 6-8 and 9-12: a card out of turn is refused where it sits, so the ordered list only ever holds ayat in their true order.",
+        "Two ayat with the same words are never asked to be told apart.",
+        "No timer, no lost points, no music."
+      ]
+    },
+    {
+      "id": "start_end",
+      "version": 1,
+      "code": "StartEnd.tsx",
+      "codeSha256": "36b197f14a84780acc7c9bbf84f7071fe9698bfae1d66f38bd9326bbed257014",
+      "nameAr": "بداية ونهاية",
+      "skill": "recall",
+      "bands": ["6-8", "9-12"],
+      "tiers": ["L1", "L2", "L3"],
+      "needsAudio": false,
+      "respect": [
+        "Each half is a real ayah of the verified text cut at a word boundary, shown as a half: marked with an ellipsis where it was cut and named as the start or the end of an ayah, so it never reads as an ayah.",
+        "A start is never joined to an end that is not its own: a wrong end is refused where it sits, and nothing assembled from two ayat is ever shown.",
+        "A matched pair is shown as the whole verified ayah.",
+        "No two starts and no two ends have the same words, so every match has one answer.",
+        "No timer, no lost points, no music."
+      ]
+    },
+    {
+      "id": "next_ayah",
+      "version": 1,
+      "code": "NextAyah.tsx",
+      "codeSha256": "1ecb2569c1b2705f4195f28bf335672082d69518542e66d89c3930145d670c4b",
+      "nameAr": "ما الآية التالية؟",
+      "skill": "recall",
+      "bands": ["6-8", "9-12"],
+      "tiers": ["L2", "L3", "L4", "L5"],
+      "needsAudio": false,
+      "respect": [
+        "The ayah asked about and every choice are whole, real ayat of the same surah, from the verified text, shown as they are; a choice is never an altered or made-up ayah.",
+        "The choices carry no number until answered. Wrong choices have other words than the answer: for 6-8 never a neighbour, for 9-12 the nearest ayat; 9-12 is also asked which comes before.",
+        "A wrong choice is refused where it sits, and then the right ayah is shown.",
+        "No timer, no lost points, no music."
       ]
     }
   ]

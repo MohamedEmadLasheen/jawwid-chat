@@ -6,14 +6,51 @@
    "scope": "play",
    "subjects": [
     {
-     "approvalSha256": "458130d36287abc4c160853002e4ac3d84bc093c0432d33ed0321139c055dd90",
+     "approvalSha256": "90f8822ab38fb382c710a62f9c08771003c3e0f8a64c73019bce874164e07c08",
+     "id": "build_ayah",
+     "item": {
+      "bands": [
+       "6-8",
+       "9-12"
+      ],
+      "code": "BuildAyah.tsx",
+      "codeSha256": "61126dc9b40b4e7aa61eac22bab3a3ad96a6b8a0fa8421a702964d71eb8a4a18",
+      "id": "build_ayah",
+      "nameAr": "\u0631\u0643\u0651\u0628 \u0627\u0644\u0622\u064a\u0629",
+      "needsAudio": false,
+      "respect": [
+       "The tiles are the words of one ayah of the verified text, each whole with its pause mark; no word from anywhere else is ever offered.",
+       "Words are tiles placed in a line, never objects to catch, stack, feed, throw or step on.",
+       "A tile out of turn is refused where it sits: the line only ever holds the ayah's own words in their order, and what is not yet built is shown as blanks, never as an ayah.",
+       "Once built, the whole verified ayah is shown as it is.",
+       "Only ayat of three to six words (6-8, which starts with the first word placed) or three to ten (9-12) are built; longer ayat are not cut.",
+       "No timer, no lost points, no music."
+      ],
+      "skill": "order",
+      "tiers": [
+       "L1",
+       "L2",
+       "L3",
+       "L4",
+       "L5"
+      ],
+      "version": 1
+     },
+     "kind": "mechanic",
+     "requiredSteps": [
+      "teacher",
+      "scholar"
+     ]
+    },
+    {
+     "approvalSha256": "c85ddec3ce17f2deda33399f5d574e21ac9750c0cda5a2647b7035cfc5998fbc",
      "id": "count_ayat",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "CountAyat.tsx",
-      "codeSha256": "9bad925e734f4a00305f8802c42984f08ee18d0d988d297067947712572326a3",
+      "codeSha256": "4acdc75be3f174fcc29af322c2018067fb4a728c033a72c742ea7b6d3e9edcc2",
       "id": "count_ayat",
       "nameAr": "\u0639\u064f\u062f\u0651 \u0627\u0644\u0622\u064a\u0627\u062a",
       "needsAudio": false,
@@ -35,14 +72,14 @@
      ]
     },
     {
-     "approvalSha256": "9d18fc04c93640e1d3a08ba40c5451bc91b92d180861da0dad6479750608ded9",
+     "approvalSha256": "21bcdf3dd9039f43b5f2f4cabd2f4e43393397da811bd97ec002ceb73c4b2968",
      "id": "echo",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "Echo.tsx",
-      "codeSha256": "ab7552b81c4af9c2fccb981cd0f7a749f1e91ac8afa343c993aa29377b3a8972",
+      "codeSha256": "5683e084d43d571253d44576d1de3dad2eb34f34a78e5bf0d344422a1ce05a90",
       "id": "echo",
       "nameAr": "\u0631\u062f\u0651\u062f \u0645\u0639\u064a",
       "needsAudio": true,
@@ -68,14 +105,14 @@
      ]
     },
     {
-     "approvalSha256": "da70fc26a6bad8af82e07f8173e49282082cf25bc8fd3ebbbbc7d71e1ae2af64",
+     "approvalSha256": "b154513749c0ef05a8792bf2280b56a1a8abc008847b3e54cf3db5a032a26cd8",
      "id": "listen_glow",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "ListenGlow.tsx",
-      "codeSha256": "869e5278f34971fd8b5caa0eb4d7994668536227b7633e851296dfe610cf5d5d",
+      "codeSha256": "6e5bf9c9ccca5beb0e256b8e3d75998072eb20ee6a51ac8b7e518b165f5550ca",
       "id": "listen_glow",
       "nameAr": "\u0627\u0633\u0645\u0639 \u0648\u0627\u0644\u0645\u0633",
       "needsAudio": true,
@@ -99,14 +136,119 @@
      ]
     },
     {
-     "approvalSha256": "6f99cea516c7e1be1aaeeb83929013a9e82674748291cd6b9da48a7f0b803f9d",
+     "approvalSha256": "723edd5e67ae37d4b75740fbac462000590b22588d00c29d4a442064e270e6fd",
+     "id": "next_ayah",
+     "item": {
+      "bands": [
+       "6-8",
+       "9-12"
+      ],
+      "code": "NextAyah.tsx",
+      "codeSha256": "1ecb2569c1b2705f4195f28bf335672082d69518542e66d89c3930145d670c4b",
+      "id": "next_ayah",
+      "nameAr": "\u0645\u0627 \u0627\u0644\u0622\u064a\u0629 \u0627\u0644\u062a\u0627\u0644\u064a\u0629\u061f",
+      "needsAudio": false,
+      "respect": [
+       "The ayah asked about and every choice are whole, real ayat of the same surah, from the verified text, shown as they are; a choice is never an altered or made-up ayah.",
+       "The choices carry no number until answered. Wrong choices have other words than the answer: for 6-8 never a neighbour, for 9-12 the nearest ayat; 9-12 is also asked which comes before.",
+       "A wrong choice is refused where it sits, and then the right ayah is shown.",
+       "No timer, no lost points, no music."
+      ],
+      "skill": "recall",
+      "tiers": [
+       "L2",
+       "L3",
+       "L4",
+       "L5"
+      ],
+      "version": 1
+     },
+     "kind": "mechanic",
+     "requiredSteps": [
+      "teacher",
+      "scholar"
+     ]
+    },
+    {
+     "approvalSha256": "a70df087d5ad5cb267b05b5a952004516b28f9d5eb33b9bd4b3e1a9c7930289e",
+     "id": "order_ayat",
+     "item": {
+      "bands": [
+       "3-5",
+       "6-8",
+       "9-12"
+      ],
+      "code": "OrderAyat.tsx",
+      "codeSha256": "1884b4c7a6d9e7e6046d2856b92208938226ac4247a00657dbb9723b62208226",
+      "id": "order_ayat",
+      "nameAr": "\u0631\u062a\u0651\u0628 \u0627\u0644\u0622\u064a\u0627\u062a",
+      "needsAudio": false,
+      "respect": [
+       "Every card is a whole, real ayah of the verified text; only whole ayat are reordered, and no ayah is ever changed.",
+       "A card's number is hidden until it is in place, so the order is found from the ayat themselves.",
+       "3-5: two neighbouring ayat, which comes first; after two tries the answer is shown and praised. 6-8 and 9-12: a card out of turn is refused where it sits, so the ordered list only ever holds ayat in their true order.",
+       "Two ayat with the same words are never asked to be told apart.",
+       "No timer, no lost points, no music."
+      ],
+      "skill": "order",
+      "tiers": [
+       "L1",
+       "L2",
+       "L3",
+       "L4",
+       "L5"
+      ],
+      "version": 1
+     },
+     "kind": "mechanic",
+     "requiredSteps": [
+      "teacher",
+      "scholar"
+     ]
+    },
+    {
+     "approvalSha256": "11bb3d665862983a9ca52b4ad70c2c3d5960eb7ce3a86db0207a27d1db25fdc1",
+     "id": "start_end",
+     "item": {
+      "bands": [
+       "6-8",
+       "9-12"
+      ],
+      "code": "StartEnd.tsx",
+      "codeSha256": "36b197f14a84780acc7c9bbf84f7071fe9698bfae1d66f38bd9326bbed257014",
+      "id": "start_end",
+      "nameAr": "\u0628\u062f\u0627\u064a\u0629 \u0648\u0646\u0647\u0627\u064a\u0629",
+      "needsAudio": false,
+      "respect": [
+       "Each half is a real ayah of the verified text cut at a word boundary, shown as a half: marked with an ellipsis where it was cut and named as the start or the end of an ayah, so it never reads as an ayah.",
+       "A start is never joined to an end that is not its own: a wrong end is refused where it sits, and nothing assembled from two ayat is ever shown.",
+       "A matched pair is shown as the whole verified ayah.",
+       "No two starts and no two ends have the same words, so every match has one answer.",
+       "No timer, no lost points, no music."
+      ],
+      "skill": "recall",
+      "tiers": [
+       "L1",
+       "L2",
+       "L3"
+      ],
+      "version": 1
+     },
+     "kind": "mechanic",
+     "requiredSteps": [
+      "teacher",
+      "scholar"
+     ]
+    },
+    {
+     "approvalSha256": "4005e4088b8f426a4ffe2019c8a276d73704a07b7c8f5fe82480c9525c29c250",
      "id": "which_heard",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "WhichHeard.tsx",
-      "codeSha256": "6f3af046480a8e823cbfa9390c583f62c496ddfa70abb8725b7b3a1b0364a45d",
+      "codeSha256": "793b97ad401307d0f8958125ddd14378e4bc69ef0e4181b3c1f46908e332ad50",
       "id": "which_heard",
       "nameAr": "\u0623\u064a\u0651 \u0622\u064a\u0629 \u0633\u0645\u0639\u062a\u061f",
       "needsAudio": true,

@@ -9,7 +9,7 @@ import type { Mechanic, Skill } from './mechanics';
  * surah's length tier, and can run (an audio mechanic needs recitation).
  * Deterministic from the seed, so it can be tested and reproduced.
  *
- *   - stages in order: listen, then repeat, then recognise, then count;
+ *   - stages in order: listen, repeat, recognise, count, then order, then recall;
  *   - never the same mechanic twice in a row;
  *   - as many activities as the band's sitting allows (3 for 3-5), fewer
  *     when fewer mechanics qualify -- never padding with a repeat.
@@ -45,7 +45,7 @@ export function today(now: Date = new Date()): string {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
 }
 
-const STAGE: Readonly<Record<Skill, number>> = { listening: 0, recitation: 1, recognition: 2, structure: 3 };
+const STAGE: Readonly<Record<Skill, number>> = { listening: 0, recitation: 1, recognition: 2, structure: 3, order: 4, recall: 5 };
 
 export function eligible(mechanics: readonly Mechanic[], o: { band: Band; ayahCount: number; audio: boolean; approved: ReadonlySet<string> }): Mechanic[] {
   const tier = tierOf(o.ayahCount);
