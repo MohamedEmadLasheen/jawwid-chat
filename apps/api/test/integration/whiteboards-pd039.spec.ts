@@ -611,21 +611,78 @@ describe('PR-4: images and export', () => {
     expect(await code(boards.composeExport(b.id, { pages: [{ assetId: grant.pages[0]!.assetId, objectKey: grant.pages[0]!.upload.objectKey }] }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
   });
 
-  it('two confirms of one image at once: one keeps it, the other answers the same ready image', async () => {
+  it('two confirms of one image at once: one claims and keeps it; the other is told to wait, and its retry answers the ready image', async () => {
     const t = teacher(s.teacherId);
     const b = await boards.create({ title: 'Twice' }, t);
     const bytes = png(40, 30);
     const { assetId, upload } = await boards.grantImage(b.id, { contentType: 'image/png', byteSize: bytes.length }, t);
     await blobs.put(upload.objectKey, 'image/png', bytes);
     const both = await Promise.all([
-      boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t),
-      boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t),
+      boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t).catch((e) => e),
+      boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t).catch((e) => e),
     ]);
-    expect(both.map((r) => r.asset.id)).toEqual([assetId, assetId]);
-    expect(both.filter((r) => r.replayed)).toHaveLength(1);
-    const [row] = await g.prisma.$queryRaw<Array<{ state: string; object_key: string }>>`SELECT state, object_key FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`;
-    expect(row!.state).toBe('ready');
+    const kept = both.filter((r) => !(r instanceof Error));
+    expect(kept.length).toBeGreaterThanOrEqual(1);
+    for (const r of both) if (r instanceof CommError) expect(r.code).toBe(CommErrorCode.WHITEBOARD_CONFLICT);
+    expect(await boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t)).toMatchObject({ replayed: true, asset: { id: assetId } });
+    const [row] = await g.prisma.$queryRaw<Array<{ state: string; object_key: string; claim_token: string | null }>>`
+      SELECT state, object_key, claim_token::text AS claim_token FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`;
+    expect(row).toMatchObject({ state: 'ready', claim_token: null });
     expect((await blobs.get(row!.object_key))?.bytes.equals(bytes)).toBe(true);
+  });
+
+  it('while its bytes are read and checked, a confirm holds a claim, not a transaction; a claim that ran out cannot finish', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Claims' }, t);
+    const bytes = png(40, 30);
+    const { assetId, upload } = await boards.grantImage(b.id, { contentType: 'image/png', byteSize: bytes.length }, t);
+    await blobs.put(upload.objectKey, 'image/png', bytes);
+    const assets = (boards as unknown as { assets: WhiteboardAssetService }).assets;
+    const real = assets.pin.bind(assets);
+    const seen: Array<{ state: string; locked: boolean }> = [];
+    const spy = jest.spyOn(assets, 'pin').mockImplementation(async (...args: Parameters<WhiteboardAssetService['pin']>) => {
+      const [row] = await g.prisma.$queryRaw<Array<{ state: string }>>`SELECT state FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`;
+      // NOWAIT fails at once if any transaction still holds the row.
+      const locked = await g.prisma.$transaction((tx) => tx.$queryRaw`SELECT 1 FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid FOR UPDATE NOWAIT`).then(() => false, () => true);
+      seen.push({ state: row!.state, locked });
+      // The lease runs out while the bytes are being checked.
+      await exec(`update chat.whiteboard_asset set claimed_until = now() - interval '1 second' where id = $1::uuid`, assetId);
+      return real(...args);
+    });
+    try {
+      expect(await code(boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t))).toBe(CommErrorCode.WHITEBOARD_STATE);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen).toEqual([{ state: 'claimed', locked: false }]);
+    const [after] = await g.prisma.$queryRaw<Array<{ state: string }>>`SELECT state FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`;
+    expect(after!.state).toBe('claimed');
+    // The lapsed claim is the sweep's: object and row both go.
+    expect(await boards.sweepAbandonedAssets()).toBe(1);
+    expect(await blobs.get(`whiteboards/${org}/${b.id}/${assetId}`)).toBeNull();
+  });
+
+  it('a row whose object cannot be deleted backs off on its own; the rest are swept', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Stuck' }, t);
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) ids.push((await boards.grantImage(b.id, { contentType: 'image/png', byteSize: 100 }, t)).assetId);
+    await exec(`update chat.whiteboard_asset set expires_at = now() - interval '1 minute' where board_id = $1::uuid`, b.id);
+    const stuck = `whiteboards/${org}/${b.id}/${ids[0]}`;
+    const real = g.storage.delete.bind(g.storage);
+    const spy = jest.spyOn(g.storage, 'delete').mockImplementation(async (key: string) => (key === stuck ? Promise.reject(new Error('storage says no')) : real(key)));
+    try {
+      expect(await boards.sweepAbandonedAssets()).toBe(2);
+      // Backed off: the next sweep does not even try it.
+      expect(await boards.sweepAbandonedAssets()).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+    const [row] = await g.prisma.$queryRaw<Array<{ sweep_attempts: number; later: boolean }>>`
+      SELECT sweep_attempts, sweep_retry_at > now() AS later FROM chat.whiteboard_asset WHERE id = ${ids[0]}::uuid`;
+    expect(row).toEqual({ sweep_attempts: 1, later: true });
+    await exec(`update chat.whiteboard_asset set sweep_retry_at = now() - interval '1 second' where id = $1::uuid`, ids[0]);
+    expect(await boards.sweepAbandonedAssets()).toBe(1);
   });
 
   it('the sweep and a confirm at once: never a ready image without its bytes, never bytes without a row', async () => {

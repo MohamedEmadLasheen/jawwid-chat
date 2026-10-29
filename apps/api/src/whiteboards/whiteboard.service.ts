@@ -28,9 +28,8 @@ export const ASSETS_PER_BOARD = 60;
 export const ASSET_BYTES_PER_TEACHER = 300 * 1024 * 1024;
 /** §6.4: exports a teacher may have under way at once. */
 export const EXPORTS_IN_FLIGHT = 5;
-/** Abandoned uploads are cleared in rounds of 50, at most 4 rounds a sweep. */
-const ASSET_SWEEP_BATCH = 50;
-const ASSET_SWEEP_ROUNDS = 4;
+/** How many abandoned uploads one sweep takes; the next sweep takes the rest. */
+const ASSET_SWEEP_LIMIT = 200;
 /** How many due boards one sweep purges; the next sweep takes the rest. */
 const PURGE_BATCH = 50;
 /** A board whose objects could not be deleted waits 1 h, 2 h, 4 h ... up to 7 days behind the rest. */
@@ -105,8 +104,12 @@ interface ImagePlan {
   keys: string[];
 }
 
-/** Confirm and compose hold their asset rows while they read and check storage: long enough for 10 MB, or a 50-page export. */
-const STORAGE_TX = { timeout: 120_000, maxWait: 10_000 } as const;
+/**
+ * How long a claim holds an asset row while its storage work runs outside any
+ * transaction (review of #305): longer than any confirm or export takes (an
+ * export's worker stops at 30 s), so only a holder that died loses it.
+ */
+const CLAIM_LEASE = Prisma.sql`interval '5 minutes'`;
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -562,31 +565,55 @@ export class WhiteboardService {
     await this.assetsOn();
     const { teacherId, organizationId } = this.writer(actor);
     const id = this.uuid(assetId, 'assetId');
-    // The row is held (FOR UPDATE) while its bytes are pinned and checked
-    // (review of #305): a second confirm waits and then answers the ready
-    // image; the sweep skips a held row and cannot delete what is being kept.
-    const out = await this.write(async (tx) => {
+    const token = randomUUID();
+    // 1. Claim the row in a short transaction (review of #305): no database
+    //    connection is held while storage is read.
+    const claimed = await this.write(async (tx) => {
       const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
-      const [row] = await tx.$queryRaw<Array<AssetRow & { state: string; expired: boolean }>>`
+      const [row] = await tx.$queryRaw<Array<AssetRow & { state: string; expired: boolean; held: boolean }>>`
         SELECT id::text AS id, kind, object_key, content_type, byte_size, width, height, state,
-               (expires_at IS NOT NULL AND expires_at <= now()) AS expired
+               (expires_at IS NOT NULL AND expires_at <= now()) AS expired,
+               (state = 'claimed' AND claimed_until > now()) AS held
           FROM chat.whiteboard_asset WHERE id = ${id}::uuid AND board_id = ${board.id}::uuid AND kind = 'image'
            FOR UPDATE`;
       if (!row) throw new CommError(CommErrorCode.WHITEBOARD_NOT_FOUND, 'no such image on this board');
-      if (row.state === 'ready') return { asset: (await this.assets.sign(board, [row]))[0] as AssetView, replayed: true as const };
-      if (row.expired) throw state('the upload expired; add the image again');
+      if (row.state === 'ready') return { board, row, ready: true };
+      if (row.held) throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'this image is being added; try again in a moment', 409);
+      if (row.state !== 'pending' || row.expired) throw state('the upload expired; add the image again');
       if (!this.assets.isUploadOf(body.objectKey, board.organization_id, board.id, row.id)) throw invalid('objectKey: the upload this image was granted');
-      const pinned = await this.assets.pin(body.objectKey, row.object_key, { contentType: row.content_type, byteSize: Number(row.byte_size) });
-      const [ready] = await tx.$queryRaw<AssetRow[]>`
-        UPDATE chat.whiteboard_asset
-           SET state = 'ready', sha256 = ${pinned.sha256}, width = ${pinned.width}, height = ${pinned.height}, expires_at = NULL
-         WHERE id = ${row.id}::uuid AND board_id = ${board.id}::uuid AND state = 'pending' AND expires_at > now()
-        RETURNING id::text AS id, kind, object_key, content_type, byte_size, width, height`;
-      if (!ready) throw state('the upload expired; add the image again');
-      return { asset: (await this.assets.sign(board, [ready]))[0] as AssetView };
-    }, STORAGE_TX);
-    if (!out.replayed && typeof body.objectKey === 'string') await this.assets.deleteQuietly([body.objectKey]);
-    return out;
+      await tx.$executeRaw`
+        UPDATE chat.whiteboard_asset SET state = 'claimed', claim_token = ${token}::uuid, claimed_until = now() + ${CLAIM_LEASE}
+         WHERE id = ${row.id}::uuid`;
+      return { board, row, ready: false };
+    });
+    const { board, row } = claimed;
+    if (claimed.ready) return { asset: (await this.assets.sign(board, [row]))[0] as AssetView, replayed: true };
+    // 2. The bytes copied to the kept key and checked there, outside any transaction.
+    let pinned: Awaited<ReturnType<WhiteboardAssetService['pin']>>;
+    try {
+      pinned = await this.assets.pin(body.objectKey as string, row.object_key, { contentType: row.content_type, byteSize: Number(row.byte_size) });
+    } catch (e) {
+      await this.releaseClaim(token);
+      throw e;
+    }
+    // 3. Finish in a short transaction: only while this claim still holds the row.
+    const [ready] = await this.prisma.$queryRaw<AssetRow[]>`
+      UPDATE chat.whiteboard_asset
+         SET state = 'ready', sha256 = ${pinned.sha256}, width = ${pinned.width}, height = ${pinned.height},
+             expires_at = NULL, claim_token = NULL, claimed_until = NULL
+       WHERE id = ${row.id}::uuid AND claim_token = ${token}::uuid AND claimed_until > now()
+      RETURNING id::text AS id, kind, object_key, content_type, byte_size, width, height`;
+    // A claim that ran out is the sweep's (or the next confirm's): its kept bytes are theirs to settle.
+    if (!ready) throw state('adding the image took too long; add it again');
+    await this.assets.deleteQuietly([body.objectKey as string]);
+    return { asset: (await this.assets.sign(board, [ready]))[0] as AssetView };
+  }
+
+  /** A claim given back: the row is pending again (and swept when it runs out). */
+  private async releaseClaim(token: string): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE chat.whiteboard_asset SET state = 'pending', claim_token = NULL, claimed_until = NULL
+       WHERE claim_token = ${token}::uuid`.catch((e) => this.log.warn(`claim ${token} not released: ${String(e)}`));
   }
 
   /**
@@ -632,7 +659,7 @@ export class WhiteboardService {
       const [{ n }] = await tx.$queryRaw<Array<{ n: number }>>`
         SELECT count(DISTINCT a.expires_at)::int AS n
           FROM chat.whiteboard_asset a JOIN chat.whiteboard w ON w.id = a.board_id
-         WHERE w.teacher_id = ${teacherId}::uuid AND a.kind = 'export_page' AND a.state = 'pending' AND a.expires_at > now()`;
+         WHERE w.teacher_id = ${teacherId}::uuid AND a.kind = 'export_page' AND a.state IN ('pending', 'claimed') AND a.expires_at > now()`;
       if (Number(n) >= EXPORTS_IN_FLIGHT) throw limit('exports', `exports: at most ${EXPORTS_IN_FLIGHT} at once; wait for one to finish`);
       const pages: Array<{ assetId: string; upload: Awaited<ReturnType<WhiteboardAssetService['grant']>> }> = [];
       for (const byteSize of sizes) {
@@ -665,92 +692,116 @@ export class WhiteboardService {
       return { id: this.uuid(item.assetId, `pages[${i}].assetId`), objectKey: item.objectKey };
     });
     if (new Set(asked.map((a) => a.id)).size !== asked.length) throw invalid('pages: each page once');
-    const kept: string[] = [];
-    const uploads: string[] = [];
-    try {
-      // The export's rows are held while it is made: a second compose waits
-      // and then finds them gone; the sweep skips them.
-      return await this.write(async (tx) => {
-        const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
-        if (board.state !== 'active') throw state('restore the board first');
-        const rows = await tx.$queryRaw<Array<AssetRow & { batch: Date; expired: boolean }>>`
-          SELECT a.id::text AS id, a.kind, a.object_key, a.content_type, a.byte_size, a.width, a.height,
-                 a.expires_at AS batch, a.expires_at <= now() AS expired
-            FROM chat.whiteboard_asset a
-           WHERE a.board_id = ${board.id}::uuid AND a.kind = 'export_page' AND a.state = 'pending'
-             AND a.id = ANY(${asked.map((a) => a.id)}::uuid[])
+    const ids = asked.map((a) => a.id);
+    const token = randomUUID();
+    // 1. Claim the whole export in a short transaction (review of #305).
+    const { board, rows, credit } = await this.write(async (tx) => {
+      const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
+      if (board.state !== 'active') throw state('restore the board first');
+      const rows = await tx.$queryRaw<Array<AssetRow & { batch: Date; expired: boolean; state: string; held: boolean }>>`
+        SELECT a.id::text AS id, a.kind, a.object_key, a.content_type, a.byte_size, a.width, a.height, a.state,
+               a.expires_at AS batch, a.expires_at <= now() AS expired, (a.state = 'claimed' AND a.claimed_until > now()) AS held
+          FROM chat.whiteboard_asset a
+         WHERE a.board_id = ${board.id}::uuid AND a.kind = 'export_page' AND a.id = ANY(${ids}::uuid[])
            FOR UPDATE`;
-        const first = rows[0];
-        const [{ n }] = first
-          ? await tx.$queryRaw<Array<{ n: number }>>`
-              SELECT count(*)::int AS n FROM chat.whiteboard_asset
-               WHERE board_id = ${board.id}::uuid AND kind = 'export_page' AND state = 'pending' AND expires_at = ${first.batch}`
-          : [{ n: 0 }];
-        if (rows.length !== asked.length || !first || rows.some((r) => r.batch.getTime() !== first.batch.getTime()) || Number(n) !== asked.length) {
-          throw invalid('pages: every page of one export, each once');
-        }
-        if (first.expired) throw state('the export expired; export again');
-        const byId = new Map(rows.map((r) => [r.id, r]));
-        const pngs: Buffer[] = [];
-        for (const a of asked) {
-          const row = byId.get(a.id) as AssetRow;
-          if (!this.assets.isUploadOf(a.objectKey, board.organization_id, board.id, row.id)) throw invalid('pages: an objectKey is not the upload its page was granted');
-          uploads.push(a.objectKey);
-          const pinned = await this.assets.pin(a.objectKey, row.object_key, { contentType: 'image/png', byteSize: Number(row.byte_size) }, EXPORT_PAGE_MAX);
-          kept.push(row.object_key);
-          pngs.push(pinned.bytes);
-        }
-        const credits = await tx.$queryRaw<Array<{ attribution: string }>>`
-          SELECT DISTINCT d.attribution
-            FROM chat.whiteboard_page p
-            CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.document -> 'elements', '[]'::jsonb)) e
-            JOIN chat.quran_dataset d ON d.id = e ->> 'datasetId'
-           WHERE p.board_id = ${board.id}::uuid AND e ->> 'kind' = 'verse'`;
-        const credit = credits.length ? `Quran text: ${credits.map((c) => c.attribution).join('; ')}` : null;
-        // Decoded, checked and laid out in a worker thread (review of #305, P0).
-        const pdf = await composeInWorker({ title: board.title, pages: pngs, credit });
+      const first = rows[0];
+      if (rows.some((r) => r.held)) throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'this export is being made; wait for it', 409);
+      const [{ n }] = first
+        ? await tx.$queryRaw<Array<{ n: number }>>`
+            SELECT count(*)::int AS n FROM chat.whiteboard_asset
+             WHERE board_id = ${board.id}::uuid AND kind = 'export_page' AND state = 'pending' AND expires_at = ${first.batch}`
+        : [{ n: 0 }];
+      if (rows.length !== asked.length || !first || rows.some((r) => r.state !== 'pending' || r.batch.getTime() !== first.batch.getTime()) || Number(n) !== asked.length) {
+        throw invalid('pages: every page of one export, each once');
+      }
+      if (first.expired) throw state('the export expired; export again');
+      for (const a of asked) {
+        if (!this.assets.isUploadOf(a.objectKey, board.organization_id, board.id, a.id)) throw invalid('pages: an objectKey is not the upload its page was granted');
+      }
+      await tx.$executeRaw`
+        UPDATE chat.whiteboard_asset SET state = 'claimed', claim_token = ${token}::uuid, claimed_until = now() + ${CLAIM_LEASE}
+         WHERE id = ANY(${ids}::uuid[])`;
+      const credits = await tx.$queryRaw<Array<{ attribution: string }>>`
+        SELECT DISTINCT d.attribution
+          FROM chat.whiteboard_page p
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.document -> 'elements', '[]'::jsonb)) e
+          JOIN chat.quran_dataset d ON d.id = e ->> 'datasetId'
+         WHERE p.board_id = ${board.id}::uuid AND e ->> 'kind' = 'verse'`;
+      return { board, rows, credit: credits.length ? `Quran text: ${credits.map((c) => c.attribution).join('; ')}` : null };
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const kept: string[] = [];
+    let finished = false;
+    try {
+      // 2. Pinned, checked, decoded and laid out with no transaction open.
+      const pngs: Buffer[] = [];
+      for (const a of asked) {
+        const row = byId.get(a.id) as AssetRow;
+        const pinned = await this.assets.pin(a.objectKey as string, row.object_key, { contentType: 'image/png', byteSize: Number(row.byte_size) }, EXPORT_PAGE_MAX);
+        kept.push(row.object_key);
+        pngs.push(pinned.bytes);
+      }
+      const pdf = await composeInWorker({ title: board.title, pages: pngs, credit });
+      // 3. Finish in a short transaction, only while this claim holds every page.
+      await this.write(async (tx) => {
+        const gone = await tx.$executeRaw`
+          DELETE FROM chat.whiteboard_asset WHERE id = ANY(${ids}::uuid[]) AND claim_token = ${token}::uuid AND claimed_until > now()`;
+        if (gone !== asked.length) throw state('making the export took too long; export again');
         await this.record(tx, board, { id: teacherId, kind: 'teacher', basis: 'owner' }, 'export', { pages: String(asked.length) });
-        await tx.$executeRaw`DELETE FROM chat.whiteboard_asset WHERE id = ANY(${asked.map((a) => a.id)}::uuid[]) AND board_id = ${board.id}::uuid`;
-        return { pdf, fileName: exportFileName(board.title) };
-      }, STORAGE_TX);
+      });
+      finished = true;
+      return { pdf, fileName: exportFileName(board.title) };
     } finally {
-      // Nothing of an export is kept: its pages, pinned or not, and its uploads.
-      await this.assets.deleteQuietly([...kept, ...uploads]);
+      // Nothing of an export is kept: its pages, pinned or not, and its uploads; and a
+      // failed export's rows go with them (the sweep takes any this misses).
+      await this.assets.deleteQuietly([...kept, ...asked.map((a) => a.objectKey as string)]);
+      if (!finished) {
+        await this.prisma.$executeRaw`DELETE FROM chat.whiteboard_asset WHERE claim_token = ${token}::uuid`.catch((e) => this.log.warn(`export claim ${token} not cleared: ${String(e)}`));
+      }
     }
   }
 
   /**
    * The worker: uploads granted but never confirmed (and export pages never
-   * composed) are removed an hour on -- their kept-key object if a confirm got
-   * that far, then the row. Their upload objects are the bucket lifecycle
-   * rule's (`whiteboard-uploads/`), as no grant's key is kept.
+   * composed) an hour on, and claims whose holder died, are removed -- the
+   * kept-key object if a confirm got that far, then the row. Each row is
+   * claimed first, so a confirm or an export in progress is never swept; its
+   * object is deleted outside any transaction; and a row whose object cannot
+   * be deleted backs off on its own (1 min, 2, 4 ... up to a day) instead of
+   * holding up the rest (review of #305). Upload objects are the bucket
+   * lifecycle rule's (`whiteboard-uploads/`), as no grant's key is kept.
    */
   async sweepAbandonedAssets(): Promise<number> {
+    const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.whiteboard_asset
+       WHERE ((state = 'pending' AND expires_at <= now()) OR (state = 'claimed' AND claimed_until <= now()))
+         AND (sweep_retry_at IS NULL OR sweep_retry_at <= now())
+       ORDER BY coalesce(claimed_until, expires_at) LIMIT ${ASSET_SWEEP_LIMIT}`;
     let swept = 0;
-    for (let round = 0; round < ASSET_SWEEP_ROUNDS; round++) {
+    for (const { id } of due) {
+      const token = randomUUID();
+      const [claimed] = await this.prisma.$queryRaw<Array<{ object_key: string }>>`
+        UPDATE chat.whiteboard_asset SET state = 'claimed', claim_token = ${token}::uuid, claimed_until = now() + ${CLAIM_LEASE}
+         WHERE id = ${id}::uuid
+           AND ((state = 'pending' AND expires_at <= now()) OR (state = 'claimed' AND claimed_until <= now()))
+           AND (sweep_retry_at IS NULL OR sweep_retry_at <= now())
+        RETURNING object_key`;
+      if (!claimed) continue; // confirmed, claimed or swept meanwhile
       try {
-        // Claimed with the row lock (review of #305): a row a confirm or a
-        // compose holds is skipped, and only a row still pending AND past
-        // its expiry is taken -- its object deleted, then the row.
-        const n = await this.prisma.$transaction(async (tx) => {
-          const due = await tx.$queryRaw<Array<{ id: string; object_key: string }>>`
-            SELECT id::text AS id, object_key FROM chat.whiteboard_asset
-             WHERE state = 'pending' AND expires_at <= now()
-             ORDER BY expires_at LIMIT ${ASSET_SWEEP_BATCH}
-               FOR UPDATE SKIP LOCKED`;
-          for (const a of due) await this.storage.delete(a.object_key);
-          if (due.length) await tx.$executeRaw`DELETE FROM chat.whiteboard_asset WHERE id = ANY(${due.map((a) => a.id)}::uuid[])`;
-          return due.length;
-        }, { timeout: 120_000 });
-        swept += n;
-        if (n < ASSET_SWEEP_BATCH) break;
+        await this.storage.delete(claimed.object_key);
+        swept += await this.prisma.$executeRaw`DELETE FROM chat.whiteboard_asset WHERE id = ${id}::uuid AND claim_token = ${token}::uuid`;
       } catch (e) {
-        this.log.warn(`abandoned board uploads not swept this round: ${e instanceof Error ? e.message : String(e)}`);
-        break;
+        this.log.warn(`abandoned board upload ${id} not swept; it waits: ${e instanceof Error ? e.message : String(e)}`);
+        await this.prisma.$executeRaw`
+          UPDATE chat.whiteboard_asset
+             SET claimed_until = now(), sweep_attempts = sweep_attempts + 1,
+                 sweep_retry_at = now() + make_interval(mins => LEAST(1440, power(2, sweep_attempts)::int))
+           WHERE id = ${id}::uuid AND claim_token = ${token}::uuid`.catch(() => undefined);
       }
     }
     return swept;
   }
+
 
 
   // ---------------------------------------------------------------------------
@@ -1185,9 +1236,9 @@ export class WhiteboardService {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'whiteboard:' + teacherId}))`;
   }
 
-  private async write<T>(fn: (tx: Tx) => Promise<T>, options?: { timeout: number; maxWait: number }): Promise<T> {
+  private async write<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     try {
-      return await this.prisma.$transaction(fn, options);
+      return await this.prisma.$transaction(fn);
     } catch (e) {
       throw refusal(e);
     }
