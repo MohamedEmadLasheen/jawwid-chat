@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { SlotPicker } from '@/shared/components/SlotPicker'
@@ -38,7 +38,18 @@ export function TrialsPage() {
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const access = useTrialsAccess()
   const q = useTrials()
-  const [filter, setFilter] = useState<Filter>('all')
+  // PD-44: the tab lives in the URL, so a Dashboard tile opens the tab it
+  // counted (/trials?filter=decision|upcoming) and a later link moves it too.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('filter')
+  const filter: Filter = asked === 'decision' || asked === 'upcoming' ? asked : 'all'
+  const setFilter = (next: Filter) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('filter')
+      else p.set('filter', next)
+      return p
+    }, { replace: true })
   const [booking, setBooking] = useState(false)
   const [dialog, setDialog] = useState<Pending>(null)
   const [card, setCard] = useState<TrialDto | null>(null)
