@@ -94,7 +94,7 @@ export class NewStudentEnrolmentService {
         SELECT f.lesson_id, f.recorded_at
           FROM chat.trial_subscription f
          WHERE f.organization_id = ${org}::uuid AND f.withdrawn_at IS NULL
-         ORDER BY f.recorded_at DESC
+         ORDER BY f.recorded_at DESC, f.lesson_id
          LIMIT ${NEW_STUDENTS_LIMIT}
       ),
       entry AS (

@@ -38,10 +38,18 @@ export function TrialsPage() {
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const access = useTrialsAccess()
   const q = useTrials()
-  // PD-44: a Dashboard tile opens the tab it counted (/trials?filter=decision|upcoming).
-  const [params] = useSearchParams()
+  // PD-44: the tab lives in the URL, so a Dashboard tile opens the tab it
+  // counted (/trials?filter=decision|upcoming) and a later link moves it too.
+  const [params, setParams] = useSearchParams()
   const asked = params.get('filter')
-  const [filter, setFilter] = useState<Filter>(asked === 'decision' || asked === 'upcoming' ? asked : 'all')
+  const filter: Filter = asked === 'decision' || asked === 'upcoming' ? asked : 'all'
+  const setFilter = (next: Filter) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('filter')
+      else p.set('filter', next)
+      return p
+    }, { replace: true })
   const [booking, setBooking] = useState(false)
   const [dialog, setDialog] = useState<Pending>(null)
   const [card, setCard] = useState<TrialDto | null>(null)

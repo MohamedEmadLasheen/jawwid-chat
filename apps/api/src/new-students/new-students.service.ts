@@ -140,7 +140,8 @@ export class NewStudentsService {
   async list(organizationId: string) {
     const forms = await this.prisma.trialSubscription.findMany({
       where: { organizationId, withdrawnAt: null },
-      orderBy: { recordedAt: 'desc' },
+      // The lesson id breaks ties, so the page and its Dashboard count (PD-44) take the same forms.
+      orderBy: [{ recordedAt: 'desc' }, { lessonId: 'asc' }],
       take: NEW_STUDENTS_LIMIT,
     });
     return this.present(organizationId, forms);

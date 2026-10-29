@@ -229,7 +229,8 @@ export class TrialService {
         ...(scope.all ? {} : { AND: [{ teacherId: { in: [...scope.teacherIds] } }] }),
       },
       include: TRIAL_INCLUDE,
-      orderBy: { startsAt: 'asc' },
+      // The id breaks ties, so the page and its Dashboard count (PD-44) take the same LIST_LIMIT.
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
       take: LIST_LIMIT,
     });
     return { trials: rows.map((r) => this.dto(r, standing)) };
@@ -246,8 +247,9 @@ export class TrialService {
    *
    * The trial desk (Sales, Operations, the super admin) counts every trial,
    * the Teachers department those of its PD-35 scope; anyone else gets no tile.
-   * `capped` when the window holds more trials than the page lists. One
-   * statement after the standing.
+   * Only the trials the page lists are counted -- the first LIST_LIMIT by
+   * start, the id breaking ties, as `list` orders them -- and `capped` says
+   * the window holds more ("N+"). One statement after the standing.
    */
   async dashboardCounts(actorId: string, now: Date = new Date()): Promise<DashboardTile[]> {
     const actor = await this.conversations.requireActor(actorId);
@@ -259,19 +261,27 @@ export class TrialService {
     const ids = scope.all ? [] : [...scope.teacherIds];
     const from = new Date(now.getTime() - LIST_WINDOW_DAYS * 86_400_000);
     const to = new Date(now.getTime() + LIST_WINDOW_DAYS * 86_400_000);
-    const [r] = await this.prisma.$queryRaw<Array<{ awaiting: number; awaiting_oldest: Date | null; upcoming: number; total: number }>>`
-      SELECT count(*) FILTER (WHERE o.lesson_id IS NULL AND ((l.outcome IS NULL AND l.starts_at <= ${now}::timestamptz) OR l.outcome = 'held'))::int AS awaiting,
-             min(l.starts_at) FILTER (WHERE o.lesson_id IS NULL AND ((l.outcome IS NULL AND l.starts_at <= ${now}::timestamptz) OR l.outcome = 'held')) AS awaiting_oldest,
-             count(*) FILTER (WHERE o.lesson_id IS NULL AND l.outcome IS NULL AND l.starts_at > ${now}::timestamptz)::int AS upcoming,
-             count(*)::int AS total
-        FROM chat.lesson l
-        LEFT JOIN chat.trial_outcome o ON o.lesson_id = l.id
-       WHERE l.organization_id = ${actor.organizationId}::uuid
-         AND l.kind = 'trial'
-         AND l.starts_at >= ${from}::timestamptz AND l.starts_at < ${to}::timestamptz
-         AND (l.outcome IS NULL OR l.outcome <> 'rescheduled')
-         AND (${all}::boolean OR l.teacher_id = ANY (${ids}::uuid[]))`;
-    const capped = (r?.total ?? 0) > LIST_LIMIT;
+    const [r] = await this.prisma.$queryRaw<Array<{ awaiting: number; awaiting_oldest: Date | null; upcoming: number; seen: number }>>`
+      WITH listed AS (
+        SELECT l.id, l.starts_at, l.outcome, o.lesson_id IS NOT NULL AS decided
+          FROM chat.lesson l
+          LEFT JOIN chat.trial_outcome o ON o.lesson_id = l.id
+         WHERE l.organization_id = ${actor.organizationId}::uuid
+           AND l.kind = 'trial'
+           AND l.starts_at >= ${from}::timestamptz AND l.starts_at < ${to}::timestamptz
+           AND (l.outcome IS NULL OR l.outcome <> 'rescheduled')
+           AND (${all}::boolean OR l.teacher_id = ANY (${ids}::uuid[]))
+         ORDER BY l.starts_at, l.id
+         LIMIT ${LIST_LIMIT + 1}
+      ),
+      page AS (SELECT * FROM listed ORDER BY starts_at, id LIMIT ${LIST_LIMIT})
+      SELECT (SELECT count(*)::int FROM page
+               WHERE NOT decided AND ((outcome IS NULL AND starts_at <= ${now}::timestamptz) OR outcome = 'held')) AS awaiting,
+             (SELECT min(starts_at) FROM page
+               WHERE NOT decided AND ((outcome IS NULL AND starts_at <= ${now}::timestamptz) OR outcome = 'held')) AS awaiting_oldest,
+             (SELECT count(*)::int FROM page WHERE NOT decided AND outcome IS NULL AND starts_at > ${now}::timestamptz) AS upcoming,
+             (SELECT count(*)::int FROM listed) AS seen`;
+    const capped = (r?.seen ?? 0) > LIST_LIMIT;
     return [
       dashboardTile('trials.awaiting', r?.awaiting ?? 0, r?.awaiting_oldest ?? null, capped),
       dashboardTile('trials.upcoming', r?.upcoming ?? 0, null, capped),

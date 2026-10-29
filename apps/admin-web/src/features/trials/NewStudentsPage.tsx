@@ -52,12 +52,18 @@ export function NewStudentsPage() {
   const [editing, setEditing] = useState<NewStudentDto | null>(null)
   const [paying, setPaying] = useState<NewStudentDto | null>(null)
   const [search, setSearch] = useState('')
-  // PD-44: a Dashboard tile opens the filter it counted (?filter=unassigned|waiting|signed_up).
-  const [params] = useSearchParams()
+  // PD-44: the filter lives in the URL, so a Dashboard tile opens the filter
+  // it counted (?filter=unassigned|waiting|signed_up) and a later link moves it too.
+  const [params, setParams] = useSearchParams()
   const asked = params.get('filter')
-  const [filter, setFilter] = useState<StatusFilter>(
-    asked === 'unassigned' || asked === 'waiting' || asked === 'signed_up' ? asked : 'all',
-  )
+  const filter: StatusFilter = asked === 'unassigned' || asked === 'waiting' || asked === 'signed_up' ? asked : 'all'
+  const setFilter = (next: StatusFilter) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('filter')
+      else p.set('filter', next)
+      return p
+    }, { replace: true })
   const { staff } = useSession()
   const students = q.data?.students ?? []
   // PD-27: Sales, the Operations Manager (who assigns) and the super admin ask
