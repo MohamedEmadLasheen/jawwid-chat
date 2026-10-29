@@ -371,15 +371,19 @@ export class TaskService {
     if (viewer.kind !== 'staff') throw denied('teachers neither give nor hand on tasks');
     const row = query.task ? await this.visible(viewer, query.task) : null;
     // Handing on: only for whoever may (rulesFor); nobody to offer otherwise.
-    if (row && (await this.rulesFor(viewer, row)).reassign !== 'yes') return { people: [], departments: [], truncated: false };
+    const rules = row ? await this.rulesFor(viewer, row) : null;
+    if (rules && rules.reassign !== 'yes') return { people: [], departments: [], truncated: false };
     const standing = Prisma.sql`chat.work_task_standing(${viewer.id}::uuid, ${viewer.organizationId}::uuid, p.sid, p.tid, NULL)`;
     // Creating: the assignee's manager, or a teacher's supervisor. Handing on:
-    // a manager within their team, or to themselves.
-    const may = viewer.superAdmin
-      ? Prisma.sql`true`
-      : row
-        ? Prisma.sql`(p.sid = ${viewer.id}::uuid OR ${standing} = 'manager')`
-        : Prisma.sql`(${standing} = 'manager' OR (${standing} = 'supervisor' AND p.tid IS NOT NULL))`;
+    // a manager within their team, or to themselves. PD-47 PR-6b: an
+    // unclaimed certificate request, to a live Designer only (no department).
+    const may = rules?.designHandOn
+      ? Prisma.sql`(p.sid IS NOT NULL AND chat.staff_has_permission(p.sid, 'certificates.design'))`
+      : viewer.superAdmin
+        ? Prisma.sql`true`
+        : row
+          ? Prisma.sql`(p.sid = ${viewer.id}::uuid OR ${standing} = 'manager')`
+          : Prisma.sql`(${standing} = 'manager' OR (${standing} = 'supervisor' AND p.tid IS NOT NULL))`;
     // A teacher's decision goes to someone who supervises that teacher.
     const stands = row?.source_teacher_id
       ? Prisma.sql`p.sid IS NOT NULL AND chat.staff_teacher_scope(p.sid, ${row.source_teacher_id}::uuid) IS NOT NULL`
@@ -399,7 +403,7 @@ export class TaskService {
     // A department is a handing-on target (it lands with its manager), not a
     // creating one. A teacher's decision goes only to a department whose
     // manager supervises that teacher (the route's own check).
-    const departments = row
+    const departments = row && !rules?.designHandOn
       ? await this.prisma.$queryRaw<Array<{ kind: string; managerName: string }>>`
           SELECT DISTINCT ON (d.kind) d.kind, m.name AS "managerName" FROM chat.department d
             JOIN chat.staff m ON m.id = d.manager_id AND m.is_active AND m.left_at IS NULL
@@ -871,11 +875,14 @@ export class TaskService {
     // PR-2b: the super admin hands on a financial task whose assignee left with
     // nobody live to follow; the sweep moves it to its owner again later.
     // PR-6b: and any task the sweep recorded as orphaned.
-    const orphaned = followsSource && viewer.superAdmin && (
-      (FINANCIAL.has(row.source_type as SourceType) && !(await this.isLive(viewer.organizationId, assigneeOf(row))))
-      || (await this.isOrphaned(row)));
-    // PR-6b: an unclaimed certificate request, handed to a Designer by its overseer or the super admin.
-    const designHandOn = row.source_type === 'certificate_design' && viewer.kind === 'staff' && (await this.mayHandOnDesign(viewer, row));
+    const orphanIssue = followsSource && viewer.superAdmin && (await this.isOrphaned(row));
+    const orphaned = orphanIssue || (followsSource && viewer.superAdmin && FINANCIAL.has(row.source_type as SourceType)
+      && !(await this.isLive(viewer.organizationId, assigneeOf(row))));
+    // PR-6b: an unclaimed certificate request, handed to a Designer by its
+    // overseer or the super admin -- unless it is an orphan the super admin
+    // hands to anyone live.
+    const designHandOn = !orphanIssue && row.source_type === 'certificate_design' && viewer.kind === 'staff'
+      && (await this.mayHandOnDesign(viewer, row));
     return {
       mine,
       decide,

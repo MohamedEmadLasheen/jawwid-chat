@@ -447,6 +447,10 @@ describe('a certificate step (PD-41)', () => {
     const c = await certificateRequest();
     const [step] = await steps(c);
     expect(step).toMatchObject({ type: 'certificate_design', assignee: s.managerId });
+    // The picker offers live Designers only, and no department.
+    const offered = await tasks.assignees(s.managerId, { task: step!.id });
+    expect(offered.people.map((p) => p.id).sort()).toEqual([d1, d2].sort());
+    expect(offered.departments).toEqual([]);
     expect(await code(tasks.reassign(s.managerId, step!.id, { to: staff(s.otherAdminId) }))).toBe(CommErrorCode.TASK_INVALID);
     await tasks.reassign(s.managerId, step!.id, { to: staff(d2) });
     expect(await stateOf(step!.id)).toMatchObject({ state: 'open', assignee: d2 });
@@ -495,6 +499,26 @@ describe('a certificate step (PD-41)', () => {
     ]);
     await tasks.reassign(sa2, designStep.id, { to: staff(s.otherAdminId) });
     expect(await stateOf(designStep.id)).toMatchObject({ state: 'open', assignee: s.otherAdminId });
+  });
+});
+
+describe('an orphaned unclaimed request', () => {
+  it('the super admin may hand it to anyone live, and the picker offers anyone', async () => {
+    const d1 = await designer('one');
+    const c = await certificateRequest();
+    const [step] = await steps(c);
+    expect(step).toMatchObject({ assignee: d1 });
+    await exec(`update chat.department set manager_id = null where kind = 'operations'`);
+    await exec(`update chat.staff set is_active = false, left_at = now() where id in ($1::uuid, $2::uuid)`, sa, d1);
+    await tasks.sweep();
+    const sa2 = randomUUID();
+    await g.prisma.$transaction([
+      exec(`select set_config('chat.provisioning_super_admin', 'on', true)`),
+      exec(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'sa2_h', 'super_admin', true)`, sa2),
+    ]);
+    expect((await tasks.assignees(sa2, { task: step!.id })).people.map((p) => p.id)).toContain(s.otherAdminId);
+    await tasks.reassign(sa2, step!.id, { to: staff(s.otherAdminId) });
+    expect(await stateOf(step!.id)).toMatchObject({ state: 'open', assignee: s.otherAdminId });
   });
 });
 
