@@ -96,7 +96,7 @@
 
 .sp-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-start: var(--space-3); }
 .sp-tab { font: inherit; background: transparent; border: none; border-block-end: 2px solid transparent; padding: var(--space-2) var(--space-3); color: var(--text-muted); cursor: pointer; }
-.sp-tab[aria-selected='true'] { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
+.sp-tab[aria-selected='true'] { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
 .sp-tabpanel { padding-block-start: var(--space-3); min-inline-size: 0; }
 .sp-quick { margin-block-start: var(--space-4); border-block-start: 1px solid var(--border); padding-block-start: var(--space-2); }
 
