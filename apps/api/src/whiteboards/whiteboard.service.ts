@@ -15,7 +15,7 @@ import type { Actor } from '../platform/types';
 import { WhiteboardAssetService, keptKey, type AssetRow, type AssetView } from './whiteboard-asset.service';
 import { BACKGROUNDS, LAYOUTS, checkDocument } from './whiteboard-document';
 import { EXPORT_PAGE_MAX, EXPORT_PAGE_MAX_BYTES, EXPORT_TOTAL_MAX_BYTES } from './whiteboard-export';
-import { composeInWorker } from './whiteboard-export-runner';
+import { acquireExportSlot, runExportWorker } from './whiteboard-export-runner';
 import { BOARD_IMAGE_MAX_BYTES, BOARD_IMAGE_TYPES } from './whiteboard-image';
 
 /** §6.4, sized for 200 teachers (owner 2026-10-28). */
@@ -579,7 +579,9 @@ export class WhiteboardService {
       if (!row) throw new CommError(CommErrorCode.WHITEBOARD_NOT_FOUND, 'no such image on this board');
       if (row.state === 'ready') return { board, row, ready: true };
       if (row.held) throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'this image is being added; try again in a moment', 409);
-      if (row.state !== 'pending' || row.expired) throw state('the upload expired; add the image again');
+      // Pending, or a claim whose lease ran out (a confirm that took too long, or
+      // whose caller went away): either may be claimed again by a retry.
+      if (row.expired) throw state('the upload expired; add the image again');
       if (!this.assets.isUploadOf(body.objectKey, board.organization_id, board.id, row.id)) throw invalid('objectKey: the upload this image was granted');
       await tx.$executeRaw`
         UPDATE chat.whiteboard_asset SET state = 'claimed', claim_token = ${token}::uuid, claimed_until = now() + ${CLAIM_LEASE}
@@ -694,6 +696,23 @@ export class WhiteboardService {
     if (new Set(asked.map((a) => a.id)).size !== asked.length) throw invalid('pages: each page once');
     const ids = asked.map((a) => a.id);
     const token = randomUUID();
+    // A worker slot first (review of #311): a burst is turned away (429) before
+    // any page is read, not after reading up to 64 MB each.
+    const releaseSlot = await acquireExportSlot();
+    try {
+      return await this.composeClaimed({ boardId, teacherId, organizationId }, asked, ids, token);
+    } finally {
+      releaseSlot();
+    }
+  }
+
+  private async composeClaimed(
+    where: { boardId: string; teacherId: string; organizationId: string },
+    asked: Array<{ id: string; objectKey: unknown }>,
+    ids: string[],
+    token: string,
+  ): Promise<{ pdf: Buffer; fileName: string }> {
+    const { boardId, teacherId, organizationId } = where;
     // 1. Claim the whole export in a short transaction (review of #305).
     const { board, rows, credit } = await this.write(async (tx) => {
       const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
@@ -741,7 +760,7 @@ export class WhiteboardService {
         kept.push(row.object_key);
         pngs.push(pinned.bytes);
       }
-      const pdf = await composeInWorker({ title: board.title, pages: pngs, credit });
+      const pdf = await runExportWorker({ title: board.title, pages: pngs, credit });
       // 3. Finish in a short transaction, only while this claim holds every page.
       await this.write(async (tx) => {
         const gone = await tx.$executeRaw`
@@ -795,7 +814,7 @@ export class WhiteboardService {
         await this.prisma.$executeRaw`
           UPDATE chat.whiteboard_asset
              SET claimed_until = now(), sweep_attempts = sweep_attempts + 1,
-                 sweep_retry_at = now() + make_interval(mins => LEAST(1440, power(2, sweep_attempts)::int))
+                 sweep_retry_at = now() + make_interval(mins => LEAST(1440, power(2, LEAST(sweep_attempts, 11)))::int)
            WHERE id = ${id}::uuid AND claim_token = ${token}::uuid`.catch(() => undefined);
       }
     }

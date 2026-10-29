@@ -25,6 +25,8 @@ import type { Actor } from '@platform/types';
 import { WhiteboardAssetService } from '../../src/whiteboards/whiteboard-asset.service';
 import { WhiteboardService } from '../../src/whiteboards/whiteboard.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { join } from 'node:path';
+import { EXPORT_QUEUE, EXPORT_WORKERS, composeInWorker } from '../../src/whiteboards/whiteboard-export-runner';
 import { corruptPng, png } from './pd039-png';
 
 jest.setTimeout(120_000);
@@ -631,7 +633,7 @@ describe('PR-4: images and export', () => {
     expect((await blobs.get(row!.object_key))?.bytes.equals(bytes)).toBe(true);
   });
 
-  it('while its bytes are read and checked, a confirm holds a claim, not a transaction; a claim that ran out cannot finish', async () => {
+  it('while its bytes are read and checked, a confirm holds a claim, not a transaction; a claim that ran out cannot finish, and a retry claims it again', async () => {
     const t = teacher(s.teacherId);
     const b = await boards.create({ title: 'Claims' }, t);
     const bytes = png(40, 30);
@@ -657,9 +659,17 @@ describe('PR-4: images and export', () => {
     expect(seen).toEqual([{ state: 'claimed', locked: false }]);
     const [after] = await g.prisma.$queryRaw<Array<{ state: string }>>`SELECT state FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`;
     expect(after!.state).toBe('claimed');
-    // The lapsed claim is the sweep's: object and row both go.
+    // The same caller's retry claims the lapsed row again and keeps the image.
+    expect((await boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t)).asset).toMatchObject({ id: assetId, width: 40 });
+
+    // A lapsed claim nobody retries is the sweep's: object and row both go.
+    const other = await boards.grantImage(b.id, { contentType: 'image/png', byteSize: 100 }, t);
+    await exec(
+      `update chat.whiteboard_asset set state = 'claimed', claim_token = gen_random_uuid(), claimed_until = now() - interval '1 second' where id = $1::uuid`,
+      other.assetId,
+    );
     expect(await boards.sweepAbandonedAssets()).toBe(1);
-    expect(await blobs.get(`whiteboards/${org}/${b.id}/${assetId}`)).toBeNull();
+    expect((await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM chat.whiteboard_asset WHERE id = ${other.assetId}::uuid`)[0]!.n).toBe(0);
   });
 
   it('a row whose object cannot be deleted backs off on its own; the rest are swept', async () => {
@@ -668,6 +678,8 @@ describe('PR-4: images and export', () => {
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) ids.push((await boards.grantImage(b.id, { contentType: 'image/png', byteSize: 100 }, t)).assetId);
     await exec(`update chat.whiteboard_asset set expires_at = now() - interval '1 minute' where board_id = $1::uuid`, b.id);
+    // Long past its 11th failure: the back-off stays a day, never an overflow (review of #311).
+    await exec(`update chat.whiteboard_asset set sweep_attempts = 40 where id = $1::uuid`, ids[0]);
     const stuck = `whiteboards/${org}/${b.id}/${ids[0]}`;
     const real = g.storage.delete.bind(g.storage);
     const spy = jest.spyOn(g.storage, 'delete').mockImplementation(async (key: string) => (key === stuck ? Promise.reject(new Error('storage says no')) : real(key)));
@@ -678,9 +690,10 @@ describe('PR-4: images and export', () => {
     } finally {
       spy.mockRestore();
     }
-    const [row] = await g.prisma.$queryRaw<Array<{ sweep_attempts: number; later: boolean }>>`
-      SELECT sweep_attempts, sweep_retry_at > now() AS later FROM chat.whiteboard_asset WHERE id = ${ids[0]}::uuid`;
-    expect(row).toEqual({ sweep_attempts: 1, later: true });
+    const [row] = await g.prisma.$queryRaw<Array<{ sweep_attempts: number; later: boolean; within_a_day: boolean }>>`
+      SELECT sweep_attempts, sweep_retry_at > now() AS later, sweep_retry_at <= now() + interval '1 day 1 minute' AS within_a_day
+        FROM chat.whiteboard_asset WHERE id = ${ids[0]}::uuid`;
+    expect(row).toEqual({ sweep_attempts: 41, later: true, within_a_day: true });
     await exec(`update chat.whiteboard_asset set sweep_retry_at = now() - interval '1 second' where id = $1::uuid`, ids[0]);
     expect(await boards.sweepAbandonedAssets()).toBe(1);
   });
@@ -763,5 +776,29 @@ describe('PR-4: images and export', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it('a burst of exports is turned away before a single page is read (review of #311)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Burst' }, t);
+    const page = png(64, 36);
+    const grant = await boards.grantExport(b.id, { pages: [{ byteSize: page.length }] }, t);
+    await blobs.put(grant.pages[0]!.upload.objectKey, 'image/png', page);
+    const slow = join(__dirname, '..', 'unit', 'whiteboards', 'fixtures', 'export-never-answers.js');
+    const job = { title: 'busy', pages: [page], credit: null };
+    const busy = Array.from({ length: EXPORT_WORKERS + EXPORT_QUEUE }, () => composeInWorker(job, { module: slow, timeoutMs: 1500 }).catch(() => null));
+    const assets = (boards as unknown as { assets: WhiteboardAssetService }).assets;
+    const pin = jest.spyOn(assets, 'pin');
+    try {
+      const refused = await boards.composeExport(b.id, { pages: [{ assetId: grant.pages[0]!.assetId, objectKey: grant.pages[0]!.upload.objectKey }] }, t).catch((e) => e);
+      expect([(refused as CommError).code, (refused as CommError).status]).toEqual([CommErrorCode.WHITEBOARD_LIMIT, 429]);
+      expect(pin).not.toHaveBeenCalled();
+    } finally {
+      pin.mockRestore();
+      await Promise.all(busy);
+    }
+    // Its page is untouched: the export can be made once the workers are free.
+    const { pdf } = await boards.composeExport(b.id, { pages: [{ assetId: grant.pages[0]!.assetId, objectKey: grant.pages[0]!.upload.objectKey }] }, t);
+    expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 });

@@ -43,6 +43,20 @@ export const EXPORT_QUEUE = 4;
 let running = 0;
 const waiting: Array<() => void> = [];
 
+/**
+ * A worker slot, taken (or waited for) BEFORE any page is read: the caller
+ * releases it when its export is done, made or not.
+ */
+export async function acquireExportSlot(): Promise<() => void> {
+  await acquire();
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    release();
+  };
+}
+
 async function acquire(): Promise<void> {
   if (running < EXPORT_WORKERS) {
     running += 1;
@@ -64,16 +78,18 @@ function release(): void {
 /** For tests: the slots in use and the exports waiting. */
 export const exportSlots = () => ({ running, waiting: waiting.length });
 
+/** A slot, then the worker: for a caller with nothing to read first. */
 export async function composeInWorker(job: ExportJob, opts: { timeoutMs?: number; module?: string } = {}): Promise<Buffer> {
-  await acquire();
+  const releaseSlot = await acquireExportSlot();
   try {
-    return await runWorker(job, opts);
+    return await runExportWorker(job, opts);
   } finally {
-    release();
+    releaseSlot();
   }
 }
 
-function runWorker(job: ExportJob, opts: { timeoutMs?: number; module?: string }): Promise<Buffer> {
+/** The worker itself; the caller holds a slot (acquireExportSlot). */
+export function runExportWorker(job: ExportJob, opts: { timeoutMs?: number; module?: string } = {}): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
     const unusable = () => new CommError(CommErrorCode.WHITEBOARD_LIMIT, 'this export could not be made; export fewer pages, or try again', 409, { limit: 'exports' });
     const worker = new Worker(SCRIPT, {
