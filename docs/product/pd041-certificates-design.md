@@ -887,3 +887,52 @@ The current Admin Web Certificates tab calls them, so that tab stops working unt
     `consentContacts` only for whoever may record consent.
 - **The request form** makes one `requestKey` when it opens, and leaves the Story box unticked.
 - **Types:** a tab for the super admin, with enable and disable but no delete.
+
+### 15.3 "Their manager": who approves a design its requester uploaded (owner, 2026-10-29)
+
+**The case.** The requester of record also holds `certificates.design`, takes the design and
+uploads it. Nobody else answers for the certificate: the requester has no active PD-33 cover,
+and for a student the learner has no other supervisor. Four eyes stops the uploader from
+approving, so nobody could approve. Only a redesign or a cancel was left.
+
+**The decision.** The owner picked "The overseer (Operations Manager for students, Teachers
+Manager for teachers) approves". The overseer is the category's manager, not the requester's
+PD-8 line manager. With neither manager, the super admin approves, since it holds every key.
+
+**The rule (migration `20261030010000`):**
+
+- **What `chat.certificate_overseer_approves(cert)` checks.** It is true when all of these hold:
+  - the requester of record uploaded the current revision;
+  - the requester still answers for the certificate (`chat.certificate_responsible`);
+  - nobody else who answers for it could approve it.
+- **Who counts as "somebody else".** Either the learner's supervisor, when that is not the
+  requester, or an active PD-33 cover of whoever answers (`chat.backup_is_active`). Either one
+  counts only while they are live and hold the category's request key. The trigger checks all
+  of this when the approval is made.
+- **Who may approve in that case.** Holding `certificates.oversee` together with the
+  category's request key now satisfies the guard's approval condition. That condition used to
+  be `chat.certificate_responsible` alone.
+- **What is unchanged:**
+  - The four-eyes refusal is untouched: the uploader is refused even when they are an
+    overseer.
+  - Every other act (edit, redesign, withdraw, send, Story) stays with whoever answers for the
+    certificate.
+- **The service and the page.** `CertificateService` asks the same SQL helper.
+  `pd041-policy.allowedActs` then offers Approve to the overseer only, so the page and the
+  database cannot disagree.
+- **Tasks (PD-47).** `chat.work_task_certificate_assignee` gives the review step to the
+  overseer. If the overseer uploaded the design themself, it goes to the super admin. The sweep
+  reroutes review steps that are already open, both ways: to the overseer, and back to a cover
+  once one is activated.
+- **The copies.** Both replaced functions are their earlier bodies word for word, apart from
+  that one branch. `test/unit/migrations/pd041-overseer-approval-guard.spec.ts` proves it.
+- **The specs.**
+  - Requester uploaded, no cover: the Operations Manager or the Teachers Manager approves.
+  - With an active cover: the cover approves, and the overseer is refused by the service and
+    by the database.
+  - A Designer's upload is still the requester's to approve.
+  - The uploader is never the approver.
+  - The other category's manager is refused.
+
+  They are in `test/integration/pd041-certificates.spec.ts` ("Their manager") and
+  `test/unit/pd041/pd041-policy.spec.ts`.
