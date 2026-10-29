@@ -6,9 +6,12 @@ import { segmentsFor } from './adapt';
 import { approvedMechanics } from './mechanics';
 import { buildSession, seedOf, sessionSeed, today, type Activity } from './session';
 import { SIGNED } from './signed';
+import { AyahNumber, fitsNumber } from './games/AyahNumber';
 import { BuildAyah, fitsBuild } from './games/BuildAyah';
+import { CompleteAyah, fitsComplete } from './games/CompleteAyah';
 import { CountAyat } from './games/CountAyat';
 import { Echo } from './games/Echo';
+import { FadingAyah, fitsFading } from './games/FadingAyah';
 import { ListenGlow } from './games/ListenGlow';
 import { NextAyah, fitsNext } from './games/NextAyah';
 import { OrderAyat, fitsOrder } from './games/OrderAyat';
@@ -26,6 +29,9 @@ export const GAMES: Readonly<Record<string, (p: GameProps) => JSX.Element>> = {
   order_ayat: OrderAyat,
   start_end: StartEnd,
   next_ayah: NextAyah,
+  complete_ayah: CompleteAyah,
+  fading_ayah: FadingAyah,
+  ayah_number: AyahNumber,
 };
 
 /**
@@ -38,6 +44,9 @@ export const FITS: Readonly<Record<string, (ayahs: readonly Ayah[], pool: readon
   order_ayat: fitsOrder,
   start_end: fitsStartEnd,
   next_ayah: fitsNext,
+  complete_ayah: fitsComplete,
+  fading_ayah: fitsFading,
+  ayah_number: fitsNumber,
 };
 
 /** The bands as the grown-up reads them. */

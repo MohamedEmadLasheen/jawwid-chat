@@ -6,7 +6,40 @@
    "scope": "play",
    "subjects": [
     {
-     "approvalSha256": "405c341ca030f9260f3200e920b3a1a7c8f32e67749454a9fef50002a40fa4e2",
+     "approvalSha256": "004ece3bb61050f089c249f84b106c49bcefbf3df1fcd63e88757f0629db46f5",
+     "id": "ayah_number",
+     "item": {
+      "bands": [
+       "9-12"
+      ],
+      "code": "AyahNumber.tsx",
+      "codeSha256": "67d8139aaa17cdfc6c946ef4c8f829b96f0d8f76119c339ba6fcccd3498b32e0",
+      "id": "ayah_number",
+      "nameAr": "\u0631\u0642\u0645 \u0627\u0644\u0622\u064a\u0629",
+      "needsAudio": false,
+      "respect": [
+       "Every ayah shown is a whole, real ayah of the verified text, without its number until answered.",
+       "An ayah whose words appear again in the surah is never asked, so every question has one answer.",
+       "A wrong choice is refused; then the answer is shown, with the numbers.",
+       "No timer, no lost points, no music."
+      ],
+      "skill": "structure",
+      "tiers": [
+       "L2",
+       "L3",
+       "L4",
+       "L5"
+      ],
+      "version": 1
+     },
+     "kind": "mechanic",
+     "requiredSteps": [
+      "teacher",
+      "scholar"
+     ]
+    },
+    {
+     "approvalSha256": "45b71e1e0c0de8f26f76a502b556fff48ab1eb9fb5e0d19a3c9768ebf702026a",
      "id": "build_ayah",
      "item": {
       "bands": [
@@ -14,7 +47,7 @@
        "9-12"
       ],
       "code": "BuildAyah.tsx",
-      "codeSha256": "e5e8f8ddb7fb39e95626c8967a0223992fd0e11694975f44987b7e50dc619eec",
+      "codeSha256": "2a117d31755d986812906034fd33991361584067a62f961fac4e5d8466924c6e",
       "id": "build_ayah",
       "nameAr": "\u0631\u0643\u0651\u0628 \u0627\u0644\u0622\u064a\u0629",
       "needsAudio": false,
@@ -43,14 +76,50 @@
      ]
     },
     {
-     "approvalSha256": "c3804fb47a116370d0d28db96811b73d0f70fe8f5fade90501d3db960299106c",
+     "approvalSha256": "b4b4872d7e46dcf6c5e1c8bfcef8cca30f5dd0782806d680901a4e1c0d85be24",
+     "id": "complete_ayah",
+     "item": {
+      "bands": [
+       "6-8",
+       "9-12"
+      ],
+      "code": "CompleteAyah.tsx",
+      "codeSha256": "d92bf0e19be9efc2616fc0f170fd7477d0594bad9470d1a638bb4ac650029248",
+      "id": "complete_ayah",
+      "nameAr": "\u0623\u0643\u0645\u0644 \u0627\u0644\u0622\u064a\u0629",
+      "needsAudio": false,
+      "respect": [
+       "The ayah is the verified text with one word hidden (two for 9-12), and each hidden word is shown as a blank, never as a guess; its pause mark stays in its place.",
+       "The choices are real words of the same surah, shown as words; none looks like the answer with other marks.",
+       "A wrong choice is refused where it is and never put into the blank, so no false ayah is ever on screen; a right one fills the blank with the ayah's own word.",
+       "Once complete, the whole verified ayah is shown.",
+       "No timer, no lost points, no music."
+      ],
+      "skill": "recall",
+      "tiers": [
+       "L1",
+       "L2",
+       "L3",
+       "L4",
+       "L5"
+      ],
+      "version": 1
+     },
+     "kind": "mechanic",
+     "requiredSteps": [
+      "teacher",
+      "scholar"
+     ]
+    },
+    {
+     "approvalSha256": "4626bb56cf3228a12644b4617ed99206ad10d86ee2ac53f7d9fce8ec160b8f9f",
      "id": "count_ayat",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "CountAyat.tsx",
-      "codeSha256": "c9700a236342e8fbcf856f6c987a6d057beb5c66768b9cf2065393cedb029737",
+      "codeSha256": "04872ccf2f9c29e94bacc967cafc73d6b1dfd5164c1add7f9205c25f9971d9c0",
       "id": "count_ayat",
       "nameAr": "\u0639\u064f\u062f\u0651 \u0627\u0644\u0622\u064a\u0627\u062a",
       "needsAudio": false,
@@ -72,14 +141,14 @@
      ]
     },
     {
-     "approvalSha256": "057c2dd28e253ef86abc4a0a0d473e5ff8ee95f8db36399144c2dd5cd864d26f",
+     "approvalSha256": "e2ab81ac05a885a4a7f64aeb2ab19978b3fecaf3d3bd20f6a9957976252560a7",
      "id": "echo",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "Echo.tsx",
-      "codeSha256": "17af248bc254d28ec30ff9189a950d6269dbd3ab95b1fe564137a7c02e6ef20e",
+      "codeSha256": "6eea8708d5d8863969c32b3c27d7f4bb7f51b80efe45ee358308f283df3e7c1b",
       "id": "echo",
       "nameAr": "\u0631\u062f\u0651\u062f \u0645\u0639\u064a",
       "needsAudio": true,
@@ -105,14 +174,50 @@
      ]
     },
     {
-     "approvalSha256": "d43a9833a9f33e71cf400e4dfc986c4bd3815eaca3a79eb58dfe99ffb2f2b038",
+     "approvalSha256": "0850b0e33b58e9d51726a91bd764444f1ba01bd8d2891ea1385626e59b11c98b",
+     "id": "fading_ayah",
+     "item": {
+      "bands": [
+       "6-8",
+       "9-12"
+      ],
+      "code": "FadingAyah.tsx",
+      "codeSha256": "22250d8c8c89108c383599fb7034da338e9533a3604293b09e665eb02d92c24e",
+      "id": "fading_ayah",
+      "nameAr": "\u0627\u0644\u0645\u062d\u0648 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a",
+      "needsAudio": false,
+      "respect": [
+       "The ayah is shown whole first; at each step more of its words are hidden, never changed, moved or replaced.",
+       "For 9-12 the last step shows only each word's first letter, in a box and named as a cue, never as the word or as an ayah.",
+       "The child recites aloud and can touch a hidden word to see it again; nothing is recorded, scored or stored.",
+       "At the end the whole verified ayah is shown.",
+       "No timer, no music."
+      ],
+      "skill": "recall",
+      "tiers": [
+       "L1",
+       "L2",
+       "L3",
+       "L4",
+       "L5"
+      ],
+      "version": 1
+     },
+     "kind": "mechanic",
+     "requiredSteps": [
+      "teacher",
+      "scholar"
+     ]
+    },
+    {
+     "approvalSha256": "370ccdae6d7582d315396bcba77705975b234ee315c5fa57b2367ffb84ecaccb",
      "id": "listen_glow",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "ListenGlow.tsx",
-      "codeSha256": "e815db7e3826952472264303be54f3f2dc814aafa651c0c18bd3b41c4f90bbc1",
+      "codeSha256": "6ab0931bbfe8ee61e4b176a58f4e9f43411dc9adb8bc3e0a8e85e15766eae3e5",
       "id": "listen_glow",
       "nameAr": "\u0627\u0633\u0645\u0639 \u0648\u0627\u0644\u0645\u0633",
       "needsAudio": true,
@@ -136,7 +241,7 @@
      ]
     },
     {
-     "approvalSha256": "be5b3b462703eb7843acdf7d26886afe6a6ba7c3d9da43f915ce86ee45afd2a7",
+     "approvalSha256": "3d670a1698699ab0d0b067155d445c0e93523c894416e0fee60d23cb86c318a2",
      "id": "next_ayah",
      "item": {
       "bands": [
@@ -144,7 +249,7 @@
        "9-12"
       ],
       "code": "NextAyah.tsx",
-      "codeSha256": "de5d30387269de3b49c66743060109376019a2768e2ca88727be7c577db467cb",
+      "codeSha256": "efa0fbceb10c5e0fc3f6048ff8cb8d4397256b24a9efb9707fb58044ac107fc6",
       "id": "next_ayah",
       "nameAr": "\u0645\u0627 \u0627\u0644\u0622\u064a\u0629 \u0627\u0644\u062a\u0627\u0644\u064a\u0629\u061f",
       "needsAudio": false,
@@ -170,7 +275,7 @@
      ]
     },
     {
-     "approvalSha256": "ce95ac0efe67ccc13763fb527e5efc532d89bad54801d92c598f25c0a8891b38",
+     "approvalSha256": "03e1c7ed84ff45f07528d8d12298b60f13b029ef19fbd93d6965fdd08d46eccd",
      "id": "order_ayat",
      "item": {
       "bands": [
@@ -179,7 +284,7 @@
        "9-12"
       ],
       "code": "OrderAyat.tsx",
-      "codeSha256": "0fa2dfb0386e26375c8d95efe0b57c0e1ae68132a9275d55a7cc9e0eac63b9f8",
+      "codeSha256": "0660baf08100532497991ef4124cab358b344522f86d90ad3a08e03db7450ca4",
       "id": "order_ayat",
       "nameAr": "\u0631\u062a\u0651\u0628 \u0627\u0644\u0622\u064a\u0627\u062a",
       "needsAudio": false,
@@ -207,7 +312,7 @@
      ]
     },
     {
-     "approvalSha256": "f4def457d07ac27a90692d363990357e20e8c7b9380e6f8c28100a469fbd17c6",
+     "approvalSha256": "fadd1c766b4d560ff822f1afcfe19ef5f9972c88b2ce9e726a1079d43c4d224b",
      "id": "start_end",
      "item": {
       "bands": [
@@ -215,7 +320,7 @@
        "9-12"
       ],
       "code": "StartEnd.tsx",
-      "codeSha256": "89abfa6d465bd5910cb8a0c9101c78bc3d92f8e1b1f04bf5082a54315546432a",
+      "codeSha256": "3cc40660a5bdccd404196042a523cbca539e11a67f38acd7121d68ac78244b24",
       "id": "start_end",
       "nameAr": "\u0628\u062f\u0627\u064a\u0629 \u0648\u0646\u0647\u0627\u064a\u0629",
       "needsAudio": false,
@@ -241,14 +346,14 @@
      ]
     },
     {
-     "approvalSha256": "ff28dc4b3cf623d52d8a909da69f06304cfdef4a8644f70fe590a46c57ead185",
+     "approvalSha256": "eddcfb45db3734ee6fc7d8586ef179362ce61d899cca2a065351dea4bbe2fd28",
      "id": "which_heard",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "WhichHeard.tsx",
-      "codeSha256": "5e47b9bd9d47eb372d0553bd74c9f8f655e83cc21458893126eb7bce906f9494",
+      "codeSha256": "aa3ec5a52e975904d33620891befa1963fe7f37c41bf5630235768c8a36cc619",
       "id": "which_heard",
       "nameAr": "\u0623\u064a\u0651 \u0622\u064a\u0629 \u0633\u0645\u0639\u062a\u061f",
       "needsAudio": true,

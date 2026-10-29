@@ -410,6 +410,19 @@ Count by skill: listening and recitation 2; recognition and structure 4; order a
   - Wrong choices: 6–8 never a neighbour of the prompt or the answer; 9–12 the nearest ayat. 9–12 is also asked "what comes before?" every other question.
 - **Mistakes follow §B.3.** 3–5 gets two tries, then the answer is shown and praised; 6–8 and 9–12 get one. **9–12 ends a game with a review list**: the whole ayat it missed, never the wrong choices. The child moves on when ready.
 - **A game that cannot be played on a segment is not offered** (`FITS` in `PlayLesson.tsx`), rather than shown and skipped. Examples: no ayah short enough to build, or fewer than two long enough to cut.
+**As built (PR-B: games 8, 12, 13, recall).**
+- **Complete the ayah (8).** One word hidden (6–8) or two (9–12), never the first word. A hidden word shows as a blank, and its pause mark stays in its place.
+  - The choices are real words of the same surah: 3 for 6–8; 4 for 9–12, from the nearest ayat. None has the same letters as the answer with other marks.
+  - A wrong choice is refused and never put into the blank. Once complete, the whole verified ayah is shown.
+- **The fading ayah (12).** The ayah is shown whole, and the child recites it aloud. At each step more words are hidden, never changed.
+  - 6–8: 3 steps, to all hidden. 9–12: 5 steps, the last showing only each word's first letter, in a box named as a cue.
+  - A hidden word can be touched to see it again. At the end, the whole ayah is shown. Nothing is scored or recorded.
+- **The ayah number (13), 9–12, L2–L5.** Questions alternate between two kinds:
+  - "what number is this ayah?": consecutive numbers, with the answer anywhere among them;
+  - "which comes first?": two ayat at least two apart.
+  - An ayah whose words appear again in the surah is never asked.
+- **Every word line has spaces between its words** (flex items, so the layout is unchanged), so a screen reader or a copy reads words, not one run.
+
 - **Deviation: the grown-up chooses the age band.** The page has no profile yet (§B.5 item 5), so the grown-up's controls choose 3–5, 6–8 or 9–12, and the sitting restarts for it. The opener's profile will set the starting band once it exists. The "one band up or down" limit (§H Q4) comes with it.
 
 **Game "skins"** (garden, sea, stars, desert caravan) change only the decoration and the reward animation, never the mechanic. They rotate per surah, so two surahs feel different even with the same mechanic. Skins carry no text and no Quran.

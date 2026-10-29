@@ -42,6 +42,22 @@ export function tilesOf(verse: string): string[] {
   return out;
 }
 
+/** A tile as its word and the pause mark after it ('' if none): a game hides the word, the mark stays where it is. */
+export function splitMark(tile: string): { word: string; mark: string } {
+  const at = tile.indexOf(' ');
+  return at < 0 ? { word: tile, mark: '' } : { word: tile.slice(0, at), mark: tile.slice(at + 1) };
+}
+
+/** A word's letters only, without its vowel and recitation marks: two words that look alike to a child share it. */
+export function skeleton(word: string): string {
+  return [...word].filter((c) => LETTER.test(c)).join('');
+}
+
+/** A word's first letter, bare: the cue a reciter is given, shown as a cue and never as the word. */
+export function firstLetter(word: string): string {
+  return [...word].find((c) => LETTER.test(c)) ?? '';
+}
+
 /** Shapes, so a card is never told apart by colour alone. */
 export const SHAPES = ['●', '▲', '■', '★', '◆'] as const;
 
