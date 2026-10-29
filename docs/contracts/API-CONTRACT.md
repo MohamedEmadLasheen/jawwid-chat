@@ -1394,7 +1394,7 @@ Act        edit | resubmit | cancel | accept | decline | start | return | releas
 | `POST /certificates/:id/files/upload {mimeType, byteSize}` | design | a signed PUT into `certificate-uploads/<org>/<id>/` (never served) |
 | `POST /certificates/:id/files {objectKey, fileName}` | design | sniffs the bytes, pins a copy, → `uploaded`. Idempotent per upload |
 | `GET /certificates/:id/files/:fileId` | view | `{ url, expiresInSeconds }`, a 5-minute signed read |
-| `POST /certificates/:id/approve {fileId}` | request.* | the requester approves THIS revision. `COMM.CERTIFICATE_REVISION_CHANGED` 409 · `COMM.CERTIFICATE_SELF_APPROVAL` 403 |
+| `POST /certificates/:id/approve {fileId}` | request.* | the requester approves THIS revision. When the requester uploaded it themself and nobody else answers for it (no active cover), the category's overseer (`oversee`) approves instead (PD-41 §15.3). The uploader never does. `COMM.CERTIFICATE_REVISION_CHANGED` 409 · `COMM.CERTIFICATE_SELF_APPROVAL` 403 |
 | `POST /certificates/:id/redesign {message}` · `/withdraw-approval {message}` | request.* | back to `in_design`, with the message |
 | `GET /certificates/:id/delivery` | deliver | `{ target: { conversationId, type, title, members } \| null }`: the group the server would choose. A read that creates nothing: a teacher with no supervision conversation yet gets `conversationId: null` |
 | `POST /certificates/:id/send {conversationId}` | deliver | `approved` only (`COMM.CERTIFICATE_NOT_APPROVED` 409), by whoever answers for it now (the learner's CURRENT supervisor, or their cover). Must echo the target, `null` included (`COMM.CERTIFICATE_TARGET_CHANGED` 409 with `detail.conversationId`). Keeps the type's labels as they read when sent. Repeat → `replayed: true` |

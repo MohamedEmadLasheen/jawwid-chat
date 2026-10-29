@@ -84,7 +84,11 @@ function fakeClient() {
 }
 
 const actor = { actorId: 'a1', kind: 'contact', isActive: true };
-const authOk = { authenticate: jest.fn(async () => ({ actor, accountId: 'acc', sessionId: 'ses' })) };
+const authOk = {
+  authenticate: jest.fn(async () => ({ actor, accountId: 'acc', sessionId: 'ses' })),
+  // The handshake re-checks the session last: still live, still this actor.
+  revalidateRealtime: jest.fn(async (asked: unknown[]) => asked.map(() => actor)),
+};
 const presence = { online: jest.fn(async () => undefined) };
 
 function gateway(auth: unknown, config?: unknown) {

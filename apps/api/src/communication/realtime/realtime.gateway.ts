@@ -48,6 +48,12 @@ import {
  */
 export const REALTIME_REVALIDATE_INTERVAL_MS = 15_000;
 
+/**
+ * How long a socket's handshake may take to verify who it is (the token check
+ * and the session re-check) before the connection is dropped and retried.
+ */
+export const REALTIME_HANDSHAKE_TIMEOUT_MS = 10_000;
+
 /** Server-to-server events: "deliver this to YOUR sockets, after YOUR check". */
 const NODE_THREAD = 'rt009:deliver-thread';
 const NODE_USERS = 'rt009:deliver-users';
@@ -576,12 +582,26 @@ export class RealtimeGateway
       | { use?(fn: (socket: AuthedSocket, next: (err?: Error) => void) => void): void }
       | undefined;
     server?.use?.((socket, next) => {
-      const bound = this.bindIdentity(socket);
+      const bound = within(this.bindIdentity(socket), this.handshakeTimeoutMs, 'realtime handshake');
       socket.identityBound = bound;
       // The rejection is handled where it is awaited (handleConnection).
       bound.then(() => next(), () => next());
     });
   }
+
+  /**
+   * How long the handshake may take to bind a socket's identity before it is
+   * given up -- the connection then proceeds unbound and handleConnection
+   * closes its transport, an ordinary drop the client retries. Without a bound,
+   * a hung database would hold the connection open with `next()` never called,
+   * and Socket.IO cleans up a socket whose client left only once it is. A test
+   * may shorten it.
+   *
+   * A binding that finishes after the timeout is harmless: by then the socket
+   * is closed, Socket.IO has made its joins no-ops, and presence is recorded
+   * only by handleConnection, which has already given up on it.
+   */
+  handshakeTimeoutMs = REALTIME_HANDSHAKE_TIMEOUT_MS;
 
   /**
    * Who this socket is, from its token and nothing else: true once the actor
@@ -615,7 +635,47 @@ export class RealtimeGateway
     // (refresh-token reuse revokes every session).
     await client.join(room.session(authenticated.sessionId));
     await client.join(room.account(authenticated.accountId));
+
+    // RT-009: re-checked LAST, after the joins. A socket in the middle of its
+    // handshake is not yet among the namespace's sockets, so a logout or a
+    // refresh rotation that commits while the token is being checked pushes
+    // its revocation past it, and it would connect under a session that has
+    // already ended -- until the periodic sweep. From the moment of this check
+    // it is in its session room, and connected a tick later.
+    //
+    // revalidateRealtime directly, not liveIdentities: that one fails closed
+    // to null, which here would be a refusal -- a client reads it as "signed
+    // out" -- where a database error is an ordinary drop (thrown, so
+    // handleConnection closes the transport).
+    const [fresh] = await this.auth.revalidateRealtime([
+      {
+        accountId: authenticated.accountId,
+        // Only the session it connected with: no rotation can have rebound a
+        // socket that is not connected yet.
+        sessionIds: [authenticated.sessionId],
+        actorId: authenticated.actor.actorId,
+        kind: authenticated.actor.kind,
+      },
+    ]);
+    if (!fresh) {
+      await this.unbindIdentity(client);
+      return false;
+    }
+    client.actor = fresh;
     return true;
+  }
+
+  /** Undoes bindIdentity, for a session that ended while the handshake ran. */
+  private async unbindIdentity(client: AuthedSocket): Promise<void> {
+    const rooms = [
+      client.actor && room.actor(client.actor.actorId),
+      client.sessionId && room.session(client.sessionId),
+      client.accountId && room.account(client.accountId),
+    ].filter((r): r is string => !!r);
+    client.actor = undefined;
+    client.accountId = undefined;
+    client.sessionId = undefined;
+    for (const r of rooms) await client.leave(r);
   }
 
   /** Presence, once the connection exists: a nicety that never refuses a socket. */
@@ -684,8 +744,9 @@ export class RealtimeGateway
    * Socket middleware rather than a check in each handler, because the thing
    * worth bounding is FRAMES -- including frames for events nothing subscribes
    * to, which reach no handler and would be free in a per-handler check.
-   * Installed only AFTER authentication, so an unauthenticated socket cannot
-   * spend anything: it has already been disconnected above.
+   * Installed only once the token is verified (bindIdentity), so a socket
+   * without identity cannot spend anything: it never gets a budget, and
+   * handleConnection disconnects it.
    *
    * Over budget, the frame is REFUSED (never passed on, so no handler runs) AND
    * the connection is ended. Refusing alone would leave a runaway client looping

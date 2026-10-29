@@ -220,6 +220,11 @@ describe('2. editing a Parent Profile', () => {
     expect(await code(parents.update(m.operationsManager.id, f.parent.id, { phone: 'call me' }))).toBe(CommErrorCode.VALIDATION);
     expect(await code(parents.update(m.operationsManager.id, f.parent.id, { email: 'nope' }))).toBe(CommErrorCode.VALIDATION);
     expect(await code(parents.update(m.operationsManager.id, f.parent.id, { countryCode: 'UAE' }))).toBe(CommErrorCode.VALIDATION);
+    // PD-45: two letters are not enough -- a code that is not a country of the
+    // list is a 400, never chat.family_country_listed's 500.
+    for (const countryCode of ['UK', 'ZZ', 'AC', 'DG', 'EA', 'IC']) {
+      expect(await code(parents.update(m.operationsManager.id, f.parent.id, { countryCode }))).toBe(CommErrorCode.VALIDATION);
+    }
   });
 
   it('a supervisor edits only the parents they reach', async () => {
