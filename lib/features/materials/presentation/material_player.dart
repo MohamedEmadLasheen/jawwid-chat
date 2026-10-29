@@ -69,11 +69,17 @@ class _MaterialPlayerScreenState extends ConsumerState<MaterialPlayerScreen> {
 
   /// What the release gate gives this account for the lesson's surah: only for a
   /// lessons-site item (the server's `audioEligible`) on this build's lessons origin.
+  /// PD-48: for an Arabic letters lesson of the lessons site, its voice-over list instead
+  /// (the separate lesson-audio gate decides; never Quran), under the same two conditions.
   Future<Map<String, Object?>?>? _audioFor(OpenedMaterial o) {
-    final surah = lessonSurahOf(o.url);
     final origin = ref.read(lessonsOriginProvider);
-    if (surah == null || !o.audioEligible || origin.isEmpty || lessonOriginOf(o.url) != origin) return null;
-    return _audio ??= ref.read(materialsRepositoryProvider).lessonAudio(surah).catchError((Object _) => null);
+    if (!o.audioEligible || origin.isEmpty || lessonOriginOf(o.url) != origin) return null;
+    final repo = ref.read(materialsRepositoryProvider);
+    final surah = lessonSurahOf(o.url);
+    if (surah != null) return _audio ??= repo.lessonAudio(surah).catchError((Object _) => null);
+    final lesson = lessonLettersOf(o.url);
+    if (lesson != null) return _audio ??= repo.voiceOver(lesson).catchError((Object _) => null);
+    return null;
   }
 
   Future<void> _open() async {

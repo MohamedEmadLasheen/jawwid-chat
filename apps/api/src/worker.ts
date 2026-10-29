@@ -21,6 +21,7 @@ import { TeacherSupervisorService } from './teacher-supervisors/teacher-supervis
 import { SupervisionCaseService } from './cases/supervision-case.service';
 import { TaskService } from './tasks/task.service';
 import { DepartmentRoomService } from './org/department-room.service';
+import { WhiteboardService } from './whiteboards/whiteboard.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -149,6 +150,13 @@ const TASK_SWEEP_MS = 60_000;
 const DEPARTMENT_ROOM_SWEEP_MS = 5 * 60_000;
 
 /**
+ * PD-39 §10 4c, 4d: purge the boards past their 30 days in trash or 12 months
+ * kept, and tell the Teachers Manager and the super admin 30 days before a
+ * departed teacher's boards go. Days-long deadlines: hourly is plenty.
+ */
+const WHITEBOARD_SWEEP_MS = 60 * 60_000;
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -204,6 +212,7 @@ async function bootstrap(): Promise<void> {
   const cases = app.get(SupervisionCaseService);
   const tasks = app.get(TaskService);
   const departmentRooms = app.get(DepartmentRoomService);
+  const whiteboards = app.get(WhiteboardService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
   // and trial groups seat each teacher's own supervisor; off, the department.
   // Re-seated at boot when the boot turned the switch over (onApplicationBootstrap),
@@ -263,6 +272,7 @@ async function bootstrap(): Promise<void> {
   let nextTaskSweep = 0;
   let lastTaskIssues = 0;
   let nextRoomSweep = 0;
+  let nextWhiteboardSweep = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
   log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
@@ -487,6 +497,25 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextTaskSweep = Date.now() + TASK_SWEEP_MS;
+      }
+    }
+
+    // PD-39: boards past their trash or retention time, and the retention notice.
+    if (Date.now() >= nextWhiteboardSweep) {
+      draining = true;
+      try {
+        const swept = await whiteboards.purgeDue();
+        if (swept.failed > 0) log.warn(`whiteboard purge: ${swept.purged} purged, ${swept.failed} left for the next sweep`);
+      } catch (e) {
+        report(log, 'whiteboard purge', 'whiteboards.purge', e);
+      }
+      try {
+        await whiteboards.retentionNotices();
+      } catch (e) {
+        report(log, 'whiteboard retention notice', 'whiteboards.retention', e);
+      } finally {
+        draining = false;
+        nextWhiteboardSweep = Date.now() + WHITEBOARD_SWEEP_MS;
       }
     }
 

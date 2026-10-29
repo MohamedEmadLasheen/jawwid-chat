@@ -462,7 +462,7 @@ html[lang='ar'] .rail__menu-heading { text-transform: none; letter-spacing: 0; f
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
-.state--forbidden.state[role='alert'] .state__icon { background: var(--accent-soft); color: var(--accent); }
+.state--forbidden.state[role='alert'] .state__icon { background: var(--accent-soft); color: var(--text-link); }
 .spinner { inline-size: 22px; block-size: 22px; border-width: 2.5px; border-block-start-color: var(--accent); }
 
 .notice { border-radius: var(--radius); padding: var(--space-3) var(--space-4); }

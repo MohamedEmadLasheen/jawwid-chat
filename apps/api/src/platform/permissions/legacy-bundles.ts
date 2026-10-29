@@ -218,13 +218,17 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     'lesson_content.view',
     'lesson_content.check',
     'lesson_content.review_teacher',
+    // PD-39: teachers' boards, read-only, and a departed teacher's boards.
+    'whiteboards.view',
+    'whiteboards.retention',
   ],
   'manager:sales': [...CONVERSATION_STAFF, ...DEPARTMENT_MANAGER, ...SALES_MEMBER, 'subscriptions.manage'],
   'manager:none': [...CONVERSATION_STAFF, 'org.view', 'staff_profiles.team', 'staff_profiles.manage'],
   'supervisor:operations': [...CONVERSATION_STAFF, ...OPERATIONS_MEMBER],
   // PD-48: a Teachers supervisor listens; approving needs the Pronunciation reviewer role.
   // PD-49: a Teachers supervisor sees content under review; signing needs a granted role.
-  'supervisor:teachers': [...CONVERSATION_STAFF, ...TEACHERS_MEMBER, 'lesson_audio.view', 'lesson_content.view'],
+  // PD-39: a Teachers supervisor reads the boards of the teachers assigned to them.
+  'supervisor:teachers': [...CONVERSATION_STAFF, ...TEACHERS_MEMBER, 'lesson_audio.view', 'lesson_content.view', 'whiteboards.view'],
   'supervisor:sales': [...CONVERSATION_STAFF, ...SALES_MEMBER],
   'supervisor:none': [...CONVERSATION_STAFF],
   'legacy_department:none': [],
