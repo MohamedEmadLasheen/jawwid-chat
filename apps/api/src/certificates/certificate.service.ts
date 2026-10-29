@@ -438,7 +438,7 @@ export class CertificateService {
         if (l.row.state === CertificateState.UPLOADED && l.row.currentFileId !== fileId) {
           throw new CommError(CommErrorCode.CERTIFICATE_REVISION_CHANGED, 'the design changed since you looked at it; review the current revision', 409, { currentFileId: l.row.currentFileId });
         }
-        if (l.row.state === CertificateState.UPLOADED && l.relation.actsAsRequester && l.relation.uploadedCurrent) {
+        if (l.row.state === CertificateState.UPLOADED && l.relation.uploadedCurrent && (l.relation.actsAsRequester || l.relation.overseerApproves)) {
           throw new CommError(CommErrorCode.CERTIFICATE_SELF_APPROVAL, 'the person who uploaded a design does not approve it');
         }
         return null;
@@ -883,6 +883,11 @@ export class CertificateService {
     // Who answers for each certificate NOW -- the database's own rule (chat.certificate_responsible).
     const responsible = await this.responsibleFor(db, staffId, rows.filter((r) => r.requestedByStaff).map((r) => r.id));
     const anyOversee = student.oversee || teacher.oversee;
+    // PD-41 "Their manager": the database's own rule, for the uploads an overseer of their category could approve.
+    const overseerApproves = await this.overseerApprovesFor(
+      db,
+      rows.filter((r) => r.state === CertificateState.UPLOADED && ctx.access.categories[r.category as CertificateCategory].oversee).map((r) => r.id),
+    );
     const fileIds = rows.map((r) => r.currentFileId).filter((x): x is string => !!x);
     const currentFiles = new Map((await db.appreciationCertificateFile.findMany({ where: { id: { in: fileIds } } })).map((f) => [f.id, f]));
 
@@ -913,6 +918,7 @@ export class CertificateService {
         decidesSuggestion: decides,
         isAssignedDesigner: row.assignedDesignerId === staffId,
         uploadedCurrent: current?.uploadedBy === staffId,
+        overseerApproves: overseerApproves.get(row.id) === true,
         publishStory: row.publishStory,
         storyPublished: !!row.storyId,
         storyWithdrawn: !!row.storyWithdrawnAt,
@@ -993,6 +999,13 @@ export class CertificateService {
     if (ids.length === 0) return new Map();
     const rows = await db.$queryRaw<Array<{ id: string; ok: boolean }>>`
       SELECT c::text AS id, chat.certificate_responsible(${staffId}::uuid, c) AS ok FROM unnest(${ids}::uuid[]) AS c`;
+    return new Map(rows.map((r) => [r.id, r.ok]));
+  }
+
+  private async overseerApprovesFor(db: Db, ids: string[]): Promise<Map<string, boolean>> {
+    if (ids.length === 0) return new Map();
+    const rows = await db.$queryRaw<Array<{ id: string; ok: boolean }>>`
+      SELECT c::text AS id, chat.certificate_overseer_approves(c) AS ok FROM unnest(${ids}::uuid[]) AS c`;
     return new Map(rows.map((r) => [r.id, r.ok]));
   }
 
@@ -1270,7 +1283,7 @@ function refusal(act: CertificateAct, l: Loaded): CommError {
     if ((act === CertificateAct.SEND || act === CertificateAct.STORY) && l.row.state === CertificateState.UPLOADED) return notApproved();
     return new CommError(CommErrorCode.CERTIFICATE_STATE, `a ${l.row.state} certificate cannot be ${act.replace(/_/g, ' ')}`, 409);
   }
-  if (act === CertificateAct.APPROVE && l.relation.actsAsRequester && l.relation.uploadedCurrent) {
+  if (act === CertificateAct.APPROVE && l.relation.uploadedCurrent && (l.relation.actsAsRequester || l.relation.overseerApproves)) {
     return new CommError(CommErrorCode.CERTIFICATE_SELF_APPROVAL, 'the person who uploaded a design does not approve it');
   }
   return denied();

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
+import { chooseOption } from '@/test/select'
 
 /**
  * The Stories studio's contract with the server and with the operator:
@@ -296,7 +297,7 @@ describe('audience data', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories?tab=audience' })
     const select = await screen.findByRole('combobox', { name: 'Country: family_w' })
-    await userEvent.selectOptions(select, 'SA')
+    await chooseOption(userEvent, select, 'SA')
     await waitFor(() => expect(posts).toEqual([{ countryCode: 'SA' }]))
     expect(await screen.findByText('Saved')).toBeInTheDocument()
   })

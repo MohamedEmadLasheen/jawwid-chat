@@ -6,6 +6,7 @@ import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { QueryBoundary } from '@/shared/components/States'
 import { describeError, useCopy, type Pair } from './copy'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-35: a teacher's evaluations and improvement plans, on the Teacher File.
@@ -171,15 +172,16 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
                     <span dir="auto">{g.body}</span>
                     {g.dueOn && <span className="muted"> · {tx(E.due)} {g.dueOn}</span>}{' '}
                     {canWrite ? (
-                      <select
+                      <SearchableSelect
+                        clearable={false}
                         className="select select--sm"
                         aria-label={tx(E.status, { n: g.position })}
                         value={g.status}
                         disabled={act.isPending}
-                        onChange={(ev) => act.mutate(() => evaluationsApi.goalStatus(g.id, ev.target.value as GoalStatus))}
+                        onValueChange={(v) => act.mutate(() => evaluationsApi.goalStatus(g.id, v as GoalStatus))}
                       >
                         {(Object.keys(STATUS) as GoalStatus[]).map((s) => <option key={s} value={s}>{tx(STATUS[s])}</option>)}
-                      </select>
+                      </SearchableSelect>
                     ) : (
                       <Badge tone="neutral">{tx(STATUS[g.status])}</Badge>
                     )}
@@ -267,13 +269,13 @@ function EvaluationDialog({
       {criteria.map((c) => (
         <label key={c.id} className="field">
           <span className="field__label" dir="auto">{locale === 'ar' ? c.labelAr : c.labelEn}</span>
-          <select
+          <SearchableSelect
             className="select"
             value={scores[c.id] ?? ''}
-            onChange={(e) =>
+            onValueChange={(v) =>
               setScores((s) => {
                 const next = { ...s }
-                if (e.target.value) next[c.id] = Number(e.target.value)
+                if (v) next[c.id] = Number(v)
                 else delete next[c.id]
                 return next
               })
@@ -281,7 +283,7 @@ function EvaluationDialog({
           >
             <option value="">{tx(E.noScore)}</option>
             {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          </SearchableSelect>
         </label>
       ))}
       <label className="field">

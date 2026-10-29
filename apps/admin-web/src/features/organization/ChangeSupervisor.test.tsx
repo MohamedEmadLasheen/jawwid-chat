@@ -6,6 +6,7 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import { ConversationInfo } from '@/features/chat/ConversationInfo'
 import type { ChatConversation } from '@/features/chat/chatApi'
 import type { Department } from './api'
+import { chooseOption, optionsOf } from '@/test/select'
 
 /**
  * PD-24 in the group's info panel, with `fetch` answered at the network
@@ -88,11 +89,11 @@ describe('changing a group\'s supervisor (PD-24)', () => {
     const dialog = await screen.findByRole('dialog', { name: /Change supervisor/ })
     expect(within(dialog).getByText('Supervisor One')).toBeInTheDocument()
     const select = within(dialog).getByLabelText('New supervisor')
-    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose…', 'Supervisor Two (2)'])
+    expect((await optionsOf(userEvent, select)).map((o) => o.label)).toEqual(['Choose…', 'Supervisor Two (2)'])
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change supervisor' }))
     expect(sent('POST', /supervisor$/)).toEqual([])
 
-    await userEvent.selectOptions(select, 'sup-2')
+    await chooseOption(userEvent, select, 'sup-2')
     await userEvent.type(within(dialog).getByLabelText('Reason (required)'), 'supervisor on leave')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change supervisor' }))
     await waitFor(() => expect(sent('POST', /\/org\/conversations\/c-1\/supervisor$/)).toEqual([{ supervisorId: 'sup-2', reason: 'supervisor on leave' }]))

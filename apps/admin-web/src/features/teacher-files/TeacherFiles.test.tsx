@@ -6,6 +6,7 @@ import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { isoToAcademyWallClock } from '@/core/time/academyTime'
 import type { TeacherFile, TeacherSummary } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-10 Teacher Files, through the real routes and the real API client, with
@@ -480,9 +481,9 @@ describe('payroll (PD-18), the super admin only', () => {
     const employment = await screen.findByRole('region', { name: 'Employment' })
     await userEvent.click(await within(employment).findByRole('button', { name: 'Set payment method' }))
     let dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Method'), 'bank_transfer')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Method'), 'bank_transfer')
     expect(within(dialog).getByLabelText('IBAN (optional)')).toBeInTheDocument()
-    await userEvent.selectOptions(within(dialog).getByLabelText('Method'), 'e_wallet')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Method'), 'e_wallet')
     expect(within(dialog).queryByLabelText('IBAN (optional)')).not.toBeInTheDocument()
     await userEvent.type(within(dialog).getByLabelText('Wallet provider'), 'QA Wallet')
     await userEvent.type(within(dialog).getByLabelText('Wallet number'), '01001234567')
@@ -495,7 +496,7 @@ describe('payroll (PD-18), the super admin only', () => {
 
     await userEvent.click(within(employment).getByRole('button', { name: 'Change salary terms' }))
     dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Salary type'), 'hourly')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Salary type'), 'hourly')
     const rate = within(dialog).getByLabelText('Hourly rate')
     await userEvent.clear(rate)
     await userEvent.type(rate, '120')

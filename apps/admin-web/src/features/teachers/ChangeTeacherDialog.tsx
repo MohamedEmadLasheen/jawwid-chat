@@ -12,6 +12,7 @@ import { O, TRANSFER_REASON, arrow, describeOpsError, fill, formatDay } from './
 import { useOp, useScheduleOptions, useTeacherCandidates } from './opsHooks'
 import { weeklyLabel } from './WeeklyChangeDialog'
 import { readinessNote } from '@/features/teacher-files/readiness'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './teachers.css'
 
 export type ChangeTeacherTarget =
@@ -222,11 +223,11 @@ export function ChangeTeacherDialog({
 
       <div className="field">
         <label className="field__label" htmlFor={`${base}-reason`}>{tx(O.reason)}</label>
-        <select id={`${base}-reason`} className="select" value={reason} onChange={(e) => setReason(e.target.value as TransferReason)}>
+        <SearchableSelect id={`${base}-reason`} className="select" value={reason} onValueChange={(v) => setReason(v as TransferReason)}>
           {Object.entries(TRANSFER_REASON).map(([value, label]) => (
             <option key={value} value={value}>{tx(label)}</option>
           ))}
-        </select>
+        </SearchableSelect>
       </div>
       <div className="field">
         <label className="field__label" htmlFor={`${base}-handover`}>{tx(O.handover)}</label>

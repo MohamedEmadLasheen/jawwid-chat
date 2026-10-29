@@ -7,6 +7,7 @@ import { useText } from '@/features/admin/copy'
 import { PLAN_MONTHS, type FamilyAudienceRow } from './api'
 import { allCountryCodes, flagOf, PLAN_LABEL, S, SUGGESTED_COUNTRIES, useCountryName } from './copy'
 import { useAudienceFacts, useFamilyAudienceData, useSetFamilyAudienceData } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * Each family's country and subscription plan -- the two facts targeting
@@ -139,12 +140,13 @@ function FamilyRow({ family: f, countries }: { family: FamilyAudienceRow; countr
         {save.error && <span className="field__error" role="alert">{(save.error as Error).message}</span>}
       </td>
       <td>
-        <select
+        <SearchableSelect
+          clearable={false}
           className="select select--sm"
           value={f.countryCode ?? ''}
           disabled={save.isPending}
           aria-label={`${tx(S.country)}: ${f.displayName}`}
-          onChange={(e) => commit({ countryCode: e.target.value || null })}
+          onValueChange={(v) => commit({ countryCode: v || null })}
         >
           <option value="">{tx(S.notSet)}</option>
           {countries.suggested.map(([c, name]) => (
@@ -154,21 +156,22 @@ function FamilyRow({ family: f, countries }: { family: FamilyAudienceRow; countr
           {countries.rest.map(([c, name]) => (
             <option key={c} value={c}>{`${flagOf(c)} ${name}`}</option>
           ))}
-        </select>
+        </SearchableSelect>
       </td>
       <td>
-        <select
+        <SearchableSelect
+          clearable={false}
           className="select select--sm"
           value={f.subscriptionPlanMonths ?? ''}
           disabled={save.isPending}
           aria-label={`${tx(S.plan)}: ${f.displayName}`}
-          onChange={(e) => commit({ subscriptionPlanMonths: e.target.value ? Number(e.target.value) : null })}
+          onValueChange={(v) => commit({ subscriptionPlanMonths: v ? Number(v) : null })}
         >
           <option value="">{tx(S.notSet)}</option>
           {PLAN_MONTHS.map((m) => (
             <option key={m} value={m}>{tx(PLAN_LABEL[m]!)}</option>
           ))}
-        </select>
+        </SearchableSelect>
       </td>
       <td className="col-num">{number(f.childCount)}</td>
     </tr>

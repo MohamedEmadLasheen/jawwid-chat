@@ -48,6 +48,12 @@ import {
  */
 export const REALTIME_REVALIDATE_INTERVAL_MS = 15_000;
 
+/**
+ * How long a socket's handshake may take to verify who it is (the token check
+ * and the session re-check) before the connection is dropped and retried.
+ */
+export const REALTIME_HANDSHAKE_TIMEOUT_MS = 10_000;
+
 /** Server-to-server events: "deliver this to YOUR sockets, after YOUR check". */
 const NODE_THREAD = 'rt009:deliver-thread';
 const NODE_USERS = 'rt009:deliver-users';
@@ -576,12 +582,26 @@ export class RealtimeGateway
       | { use?(fn: (socket: AuthedSocket, next: (err?: Error) => void) => void): void }
       | undefined;
     server?.use?.((socket, next) => {
-      const bound = this.bindIdentity(socket);
+      const bound = within(this.bindIdentity(socket), this.handshakeTimeoutMs, 'realtime handshake');
       socket.identityBound = bound;
       // The rejection is handled where it is awaited (handleConnection).
       bound.then(() => next(), () => next());
     });
   }
+
+  /**
+   * How long the handshake may take to bind a socket's identity before it is
+   * given up -- the connection then proceeds unbound and handleConnection
+   * closes its transport, an ordinary drop the client retries. Without a bound,
+   * a hung database would hold the connection open with `next()` never called,
+   * and Socket.IO cleans up a socket whose client left only once it is. A test
+   * may shorten it.
+   *
+   * A binding that finishes after the timeout is harmless: by then the socket
+   * is closed, Socket.IO has made its joins no-ops, and presence is recorded
+   * only by handleConnection, which has already given up on it.
+   */
+  handshakeTimeoutMs = REALTIME_HANDSHAKE_TIMEOUT_MS;
 
   /**
    * Who this socket is, from its token and nothing else: true once the actor
@@ -615,7 +635,47 @@ export class RealtimeGateway
     // (refresh-token reuse revokes every session).
     await client.join(room.session(authenticated.sessionId));
     await client.join(room.account(authenticated.accountId));
+
+    // RT-009: re-checked LAST, after the joins. A socket in the middle of its
+    // handshake is not yet among the namespace's sockets, so a logout or a
+    // refresh rotation that commits while the token is being checked pushes
+    // its revocation past it, and it would connect under a session that has
+    // already ended -- until the periodic sweep. From the moment of this check
+    // it is in its session room, and connected a tick later.
+    //
+    // revalidateRealtime directly, not liveIdentities: that one fails closed
+    // to null, which here would be a refusal -- a client reads it as "signed
+    // out" -- where a database error is an ordinary drop (thrown, so
+    // handleConnection closes the transport).
+    const [fresh] = await this.auth.revalidateRealtime([
+      {
+        accountId: authenticated.accountId,
+        // Only the session it connected with: no rotation can have rebound a
+        // socket that is not connected yet.
+        sessionIds: [authenticated.sessionId],
+        actorId: authenticated.actor.actorId,
+        kind: authenticated.actor.kind,
+      },
+    ]);
+    if (!fresh) {
+      await this.unbindIdentity(client);
+      return false;
+    }
+    client.actor = fresh;
     return true;
+  }
+
+  /** Undoes bindIdentity, for a session that ended while the handshake ran. */
+  private async unbindIdentity(client: AuthedSocket): Promise<void> {
+    const rooms = [
+      client.actor && room.actor(client.actor.actorId),
+      client.sessionId && room.session(client.sessionId),
+      client.accountId && room.account(client.accountId),
+    ].filter((r): r is string => !!r);
+    client.actor = undefined;
+    client.accountId = undefined;
+    client.sessionId = undefined;
+    for (const r of rooms) await client.leave(r);
   }
 
   /** Presence, once the connection exists: a nicety that never refuses a socket. */
@@ -684,8 +744,9 @@ export class RealtimeGateway
    * Socket middleware rather than a check in each handler, because the thing
    * worth bounding is FRAMES -- including frames for events nothing subscribes
    * to, which reach no handler and would be free in a per-handler check.
-   * Installed only AFTER authentication, so an unauthenticated socket cannot
-   * spend anything: it has already been disconnected above.
+   * Installed only once the token is verified (bindIdentity), so a socket
+   * without identity cannot spend anything: it never gets a budget, and
+   * handleConnection disconnects it.
    *
    * Over budget, the frame is REFUSED (never passed on, so no handler runs) AND
    * the connection is ended. Refusing alone would leave a runaway client looping
@@ -772,10 +833,6 @@ export class RealtimeGateway
    * PD-37: "is typing" comes only from a SEATED member and reaches only seated
    * members. Never stored, never sent to a PD-8 reader without a seat, never in
    * a direct teacher<->parent conversation (PD-7).
-   *
-   * Debounced BEFORE any database read: a repeat ping inside the TTL, or one
-   * inside the broadcast floor, is answered from Redis alone, so typing costs no
-   * query per keystroke. Only a ping that would announce is authorized.
    */
   @SubscribeMessage('typing.start')
   async typingStart(
@@ -784,23 +841,7 @@ export class RealtimeGateway
   ): Promise<{ ok: boolean }> {
     const conversationId = body?.conversationId;
     if (!conversationId || !isUuid(conversationId) || !client.actor) return { ok: false };
-    if (!(await this.typing.start(conversationId, client.actor.actorId))) return { ok: true };
-
-    const actor = await this.typingSeat(client, conversationId);
-    if (!actor) {
-      // Refused: forget the key, so nothing a refused ping set can look typed.
-      await this.typing.stop(conversationId, client.actor.actorId);
-      return { ok: false };
-    }
-    // RT-009: authorized per recipient at delivery; PD-37: seated recipients only.
-    await this.deliverToConversation(
-      conversationId,
-      CommEvent.TYPING_STARTED,
-      { conversationId, actorId: actor.actorId, displayName: actor.displayName },
-      client.id,
-      { countableOnly: true },
-    );
-    return { ok: true };
+    return this.startTyping(client.actor.actorId, () => this.currentActor(client), conversationId, client.id);
   }
 
   @SubscribeMessage('typing.stop')
@@ -810,42 +851,93 @@ export class RealtimeGateway
   ): Promise<{ ok: boolean }> {
     const conversationId = body?.conversationId;
     if (!conversationId || !isUuid(conversationId) || !client.actor) return { ok: false };
-    // Only a start that was announced has a key; nothing else needs a stop.
-    if (!(await this.typing.stop(conversationId, client.actor.actorId))) return { ok: true };
+    return this.stopTyping(client.actor.actorId, () => this.currentActor(client), conversationId, client.id);
+  }
 
-    // A stop needs no SEAT: someone silenced or made an observer mid-word can
-    // still clear "typing…" from everyone else's screen. It still needs READ
-    // access (RT-009): a member who was REMOVED broadcasts nothing into the
-    // room any more -- their indicator expires on the clients
-    // (realtime.typing_ttl_seconds) instead. Only seated members receive it.
-    const actor = await this.currentActor(client);
-    if (!actor) return { ok: false };
-    if (!(await this.authorize(actor, conversationId)).ok) return { ok: false };
+  /**
+   * PD-37: the HTTP form of typing (POST /conversations/:id/typing), for a
+   * client whose transport cannot send frames. The SAME rules as the socket
+   * frames, through the same two methods below. [actor] is the one the
+   * request's guard resolved moments ago (RT-009: as they are NOW), so it is
+   * not resolved a second time.
+   */
+  async typingFromHttp(actor: Actor, conversationId: string, typing: boolean): Promise<{ ok: boolean }> {
+    if (!isUuid(conversationId)) return { ok: false };
+    const resolve = async () => actor;
+    return typing
+      ? this.startTyping(actor.actorId, resolve, conversationId)
+      : this.stopTyping(actor.actorId, resolve, conversationId);
+  }
+
+  /**
+   * "Started": debounced in Redis BEFORE any database read -- a repeat ping
+   * inside the TTL, or one inside the broadcast floor, is answered from Redis
+   * alone, so a socket frame costs no query. (An HTTP ping has already paid
+   * for its request's authentication; see TypingController.) Only a ping that
+   * would announce resolves the actor (RT-009: as they are NOW) and is
+   * authorized.
+   */
+  private async startTyping(
+    actorId: string,
+    resolve: () => Promise<Actor | null>,
+    conversationId: string,
+    exceptSocketId?: string,
+  ): Promise<{ ok: boolean }> {
+    if (!(await this.typing.start(conversationId, actorId))) return { ok: true };
+    const actor = await resolve();
+    if (!actor || !(await this.seatedForTyping(actor, conversationId))) {
+      // Refused: forget the key, so nothing a refused ping set can look typed.
+      await this.typing.stop(conversationId, actorId);
+      return { ok: false };
+    }
+    // RT-009: authorized per recipient at delivery; PD-37: seated recipients only.
     await this.deliverToConversation(
       conversationId,
-      CommEvent.TYPING_STOPPED,
+      CommEvent.TYPING_STARTED,
       { conversationId, actorId: actor.actorId, displayName: actor.displayName },
-      client.id,
+      exceptSocketId,
       { countableOnly: true },
     );
     return { ok: true };
   }
 
   /**
-   * PD-37: the socket's identity NOW (RT-009), if it may read the conversation
-   * AND holds a countable seat in it (live, not silent, not observer), and the
-   * conversation is not a direct teacher<->parent one. Otherwise null.
+   * "Stopped": only a start that was announced has a key, so nothing else needs
+   * one. A stop needs no SEAT -- someone silenced or made an observer mid-word
+   * can still clear "typing…" from everyone else's screen -- but it still needs
+   * READ access (RT-009): a member who was REMOVED broadcasts nothing into the
+   * room any more, and their indicator expires on the clients instead.
    */
-  private async typingSeat(client: AuthedSocket, conversationId: string): Promise<Actor | null> {
-    const actor = await this.currentActor(client);
-    if (!actor) return null;
-    if (!(await this.authorize(actor, conversationId)).ok) return null;
+  private async stopTyping(
+    actorId: string,
+    resolve: () => Promise<Actor | null>,
+    conversationId: string,
+    exceptSocketId?: string,
+  ): Promise<{ ok: boolean }> {
+    if (!(await this.typing.stop(conversationId, actorId))) return { ok: true };
+    const actor = await resolve();
+    if (!actor) return { ok: false };
+    if (!(await this.authorize(actor, conversationId)).ok) return { ok: false };
+    await this.deliverToConversation(
+      conversationId,
+      CommEvent.TYPING_STOPPED,
+      { conversationId, actorId: actor.actorId, displayName: actor.displayName },
+      exceptSocketId,
+      { countableOnly: true },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * PD-37: may this actor type here? They may read it, hold a countable seat
+   * (live, not silent, not observer), and it is not a direct teacher<->parent
+   * conversation (PD-7: "is typing" is a signal too).
+   */
+  private async seatedForTyping(actor: Actor, conversationId: string): Promise<boolean> {
+    if (!(await this.authorize(actor, conversationId)).ok) return false;
     const membership = await this.conversations.membershipOf(conversationId, actor.actorId);
-    if (!membership || !isCountableReader(membership)) return null;
-    // PD-7: "is typing" is a signal too; a direct teacher<->parent
-    // conversation carries none.
-    if (await this.conversations.isDirectTeacherParent(conversationId)) return null;
-    return actor;
+    if (!membership || !isCountableReader(membership)) return false;
+    return !(await this.conversations.isDirectTeacherParent(conversationId));
   }
 
   @SubscribeMessage('presence.heartbeat')

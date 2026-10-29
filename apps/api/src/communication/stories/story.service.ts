@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { MediaUrlSigner } from '../../platform/media-url';
 import { PrismaService } from '../../platform/prisma.service';
+import { invalidCountryMessage, isGeoForeignKeyViolation, listedCountry } from '../../geo/countries';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
@@ -1124,11 +1125,12 @@ export class StoryService {
 
     const data: { countryCode?: string | null; subscriptionPlanMonths?: number | null } = {};
     if (input.countryCode !== undefined) {
-      const c = input.countryCode === null ? null : String(input.countryCode).trim().toUpperCase();
-      if (c !== null && !/^[A-Z]{2}$/.test(c)) {
-        throw new CommError(CommErrorCode.STORY_AUDIENCE_INVALID, 'countryCode must be ISO 3166-1 alpha-2', 400);
+      // PD-45: one of the list (chat.geo_country), never just two letters.
+      const c = input.countryCode === null ? null : listedCountry(input.countryCode);
+      if (c === null && input.countryCode !== null) {
+        throw new CommError(CommErrorCode.STORY_AUDIENCE_INVALID, invalidCountryMessage('countryCode'), 400);
       }
-      data.countryCode = c || null;
+      data.countryCode = c;
     }
     if (input.subscriptionPlanMonths !== undefined) {
       const m = input.subscriptionPlanMonths;
@@ -1148,6 +1150,9 @@ export class StoryService {
       await tx.family.update({
         where: { id: familyId },
         data: { ...data, segmentSource: 'admin', segmentUpdatedAt: new Date() },
+      }).catch((e: unknown) => {
+        // PD-45 safety net: the database's own list refused it.
+        throw isGeoForeignKeyViolation(e) ? new CommError(CommErrorCode.STORY_AUDIENCE_INVALID, invalidCountryMessage('countryCode'), 400) : e;
       });
       await this.audit.audit(tx, {
         actorId: actor.actorId,
