@@ -536,8 +536,11 @@ describe('PD-45: a family\'s location on the Parent Profile', () => {
   it('lists the parents whose location is missing (no country, or a country with subdivisions but none chosen), with each row\'s location', async () => {
     await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'EG', subdivisionCode: 'EG-C' });
     await parents.update(m.operationsManager.id, famB().parent.id, { countryCode: 'EG', subdivisionCode: null });
-    const all = await parents.list(m.operationsManager.id);
+    const all = await parents.list(m.operationsManager.id, undefined, undefined, 'location');
     expect(all.items.find((i) => i.id === famA().parent.id)!.location).toEqual({ countryCode: 'EG', subdivisionCode: 'EG-C' });
+    // Not asked for, not sent (data minimisation): the Sales app's Payments tab reads this list.
+    expect((await parents.list(m.operationsManager.id)).items.every((i) => !('location' in i))).toBe(true);
+    expect(await code(parents.list(m.operationsManager.id, undefined, undefined, 'phone'))).toBe(CommErrorCode.VALIDATION);
     const missing = (await parents.list(m.operationsManager.id, undefined, 'missing')).items.map((i) => i.id);
     expect(missing).toContain(famB().parent.id);
     expect(missing).not.toContain(famA().parent.id);
@@ -591,7 +594,8 @@ describe('PD-45: a family\'s location on the Parent Profile', () => {
   });
 
   it('two country changes at once are serialised: one wins, and the family is keyed by that one reading only', async () => {
-    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE' });
+    // The file's beforeEach empties chat.parent_file: this test records its own number.
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE', phone: '050 765 3333' });
     const outcomes = await Promise.allSettled([
       parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'EG' }),
       parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'SA' }),

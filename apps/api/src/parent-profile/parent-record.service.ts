@@ -74,12 +74,16 @@ export class ParentRecordService implements OnModuleInit {
    * The parents this staff member may open, by name. `q` narrows by name;
    * PD-45 `location=missing` to the families with no country, a code that is
    * not a country of the list, or a country with subdivisions and none chosen --
-   * the list staff complete (plan §6.1 a).
+   * the list staff complete (plan §6.1 a). Each row carries its location only
+   * when asked (`with=location`, or that filter): the Sales app's Payments tab
+   * reads this list and does not need it (data minimisation).
    */
-  async list(actorId: string, q?: string, location?: string) {
+  async list(actorId: string, q?: string, location?: string, withFields?: string) {
     const { actor, scope } = await this.requireAdmin(actorId);
     if (location !== undefined && location !== '' && location !== 'missing') throw invalid('location: missing, or leave it out');
+    if (withFields !== undefined && withFields !== '' && withFields !== 'location') throw invalid('with: location, or leave it out');
     const missing = location === 'missing';
+    const withLocation = missing || withFields === 'location';
     const search = typeof q === 'string' ? q.trim().slice(0, 80) : '';
     const reach = scope === 'reach';
     const owned = scope === 'owned';
@@ -114,7 +118,7 @@ export class ParentRecordService implements OnModuleInit {
         avatarUrl: signAvatar('contact', r.id, 'profile', actor.actorId, r.avatar_object_key),
         family: { id: r.family_id, name: r.family_name },
         childrenCount: r.children,
-        location: { countryCode: r.country_code, subdivisionCode: r.subdivision_code },
+        ...(withLocation ? { location: { countryCode: r.country_code, subdivisionCode: r.subdivision_code } } : {}),
       })),
       truncated: rows.length === SEARCH_LIMIT,
     };
