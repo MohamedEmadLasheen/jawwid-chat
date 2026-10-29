@@ -14,10 +14,30 @@ describe('the one letter rule (shared with the CI checker)', () => {
   }
 
   // Lesson 3 (the harakat): a unit with a mark counts a letter only where it carries that mark.
-  const HARAKA: Record<string, string> = { fatha: String.fromCodePoint(0x64e), kasra: String.fromCodePoint(0x650), damma: String.fromCodePoint(0x64f) };
+  // Lesson 6: the sukun, never on a word's last letter.
+  const HARAKA: Record<string, string> = {
+    fatha: String.fromCodePoint(0x64e),
+    kasra: String.fromCodePoint(0x650),
+    damma: String.fromCodePoint(0x64f),
+    sukun: String.fromCodePoint(0x652),
+  };
   for (const c of fixture.markedCases) {
     it(`${c.word} / ${c.letters.join('')} with ${c.mark}: ${c.has ? c.positions.join(', ') : 'not there'}`, () => {
       const unit = { letters: c.letters, mark: HARAKA[c.mark]! };
+      expect(has(c.word, unit)).toBe(c.has);
+      expect(positions(c.word, unit)).toEqual(c.positions);
+    });
+  }
+
+  // Lesson 7 (the madd): the letter bare, right after its own vowel.
+  const MADD: Record<string, { letter: string; after: string }> = {
+    alif: { letter: 'ا', after: HARAKA.fatha! },
+    ya: { letter: 'ي', after: HARAKA.kasra! },
+    waw: { letter: 'و', after: HARAKA.damma! },
+  };
+  for (const c of fixture.maddCases) {
+    it(`${c.word} / madd ${c.madd}: ${c.has ? c.positions.join(', ') : 'not there'}`, () => {
+      const unit = { letters: [MADD[c.madd]!.letter], after: MADD[c.madd]!.after };
       expect(has(c.word, unit)).toBe(c.has);
       expect(positions(c.word, unit)).toEqual(c.positions);
     });

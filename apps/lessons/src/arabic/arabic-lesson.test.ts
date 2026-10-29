@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveArabicLesson, type ArabicLesson } from './arabic-lesson';
-import { harakatStandIn, standIn } from '../test/arabic-stand-in';
+import { harakatStandIn, standIn, sukunMaddStandIn } from '../test/arabic-stand-in';
 
 describe('an Arabic letters lesson: words, positions and a quiz proved by the one rule', () => {
   it('resolves, computes each word\'s positions, and holds back flagged words and the questions that show them', () => {
@@ -90,7 +90,7 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
     const bad: ((c: ArabicLesson) => void)[] = [
       (c) => { c.units[0]!.words.push({ id: 'ba_fatha-003', text: 'بِنْتْ', was: null, review: null }); }, // ب, but with a kasra
       (c) => { c.units[0]!.name = 'بِ'; }, // the name is not its own syllable
-      (c) => { (c.units[0] as { mark: string }).mark = 'sukun'; },
+      (c) => { (c.units[0] as { mark: string }).mark = 'shadda'; }, // not a haraka
       (c) => { c.units[0]!.letters = ['لا']; }, // a marked unit is one letter
       (c) => { c.quiz[0] = { ...c.quiz[0]!, options: ['بَابْ', 'كَتَبَ'] } as never; }, // both carry بَ: two right answers
       (c) => { c.units[0]!.group = ''; },
@@ -99,6 +99,27 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
       const c = harakatStandIn();
       change(c);
       expect(resolveArabicLesson(c, 3)).toBeNull();
+    }
+  });
+
+  it('lessons 6 and 7: a sukun unit never counts the last letter; a madd unit is its letter bare after its vowel', () => {
+    const r = resolveArabicLesson(sukunMaddStandIn(), 6)!;
+    expect(r).not.toBeNull();
+    expect(r.units.map((u) => [u.id, u.words.map((w) => [w.text, w.positions])])).toEqual([
+      ['jim_sukun', [['نَجْمْ', ['middle']]]],
+      ['madd_alif', [['بَابْ', ['middle']]]],
+    ]);
+    const bad: ((c: ArabicLesson) => void)[] = [
+      (c) => { c.units[0]!.words.push({ id: 'jim_sukun-002', text: 'مَوْجْ', was: null, review: null }); }, // ج carries only the pausal sukun
+      (c) => { c.units[1]!.words.push({ id: 'madd_alif-002', text: 'قَلَمْ', was: null, review: null }); }, // no alif at all
+      (c) => { Object.assign(c.units[1]!, { letters: ['ي'], madd: 'ya', words: [{ id: 'madd_alif-001', text: 'بَيْتْ', was: null, review: null }] }); }, // ي under a sukun: no madd
+      (c) => { (c.units[1] as { madd: string }).madd = 'waw'; }, // the madd is not the unit's letter
+      (c) => { c.units[1]!.mark = 'fatha'; }, // a madd unit is never marked
+    ];
+    for (const change of bad) {
+      const c = sukunMaddStandIn();
+      change(c);
+      expect(resolveArabicLesson(c, 6)).toBeNull();
     }
   });
 });

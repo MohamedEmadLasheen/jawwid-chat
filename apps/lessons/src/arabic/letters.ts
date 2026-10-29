@@ -11,24 +11,39 @@
  */
 export type Position = 'start' | 'middle' | 'end';
 
-/** The three harakat of lesson 3, by name and code point. */
-export type Haraka = 'fatha' | 'kasra' | 'damma';
+/** The three harakat of lesson 3 and the sukun of lesson 6, by name and code point. */
+export type Haraka = 'fatha' | 'kasra' | 'damma' | 'sukun';
 export const HARAKA: Record<Haraka, string> = {
   fatha: String.fromCodePoint(0x64e),
   kasra: String.fromCodePoint(0x650),
   damma: String.fromCodePoint(0x64f),
+  sukun: String.fromCodePoint(0x652),
+};
+const SUKUN = HARAKA.sukun;
+
+/** Lesson 7 (the madd): each madd letter and the vowel it lengthens. */
+export type Madd = 'alif' | 'ya' | 'waw';
+export const MADD: Record<Madd, { letter: string; after: string }> = {
+  alif: { letter: 'ا', after: HARAKA.fatha },
+  ya: { letter: 'ي', after: HARAKA.kasra },
+  waw: { letter: 'و', after: HARAKA.damma },
 };
 export const POSITIONS: readonly Position[] = ['start', 'middle', 'end'];
 
 /**
  * A unit's letters. One entry is one letter, or a sequence matched as a pair (لا).
- * With a `mark` (one haraka: fatha, kasra or damma, as its code point), a letter
- * counts only where it CARRIES that mark (lesson 3, the harakat): بَ in كَتَبَ is
- * the last letter, not the first.
+ * With a `mark` (one haraka, as its code point), a letter counts only where it
+ * CARRIES that mark (lesson 3, the harakat): بَ in كَتَبَ is the last letter, not
+ * the first. The sukun never counts on a word's LAST letter (lesson 6): there it
+ * is the pausal sukun every word ends in, not the sukun the lesson teaches.
+ * With `after` (a vowel's code point), the letter counts only where it is BARE
+ * and the letter before carries that vowel (lesson 7, the madd): ا after a
+ * fatha, ي after a kasra, و after a damma; بَيْتْ and يَوْمْ have no madd.
  */
 export interface LetterUnit {
   letters: readonly string[];
   mark?: string;
+  after?: string;
 }
 
 const TATWEEL = 0x640;
@@ -75,13 +90,15 @@ function marksOf(word: string): string[][] {
 /** Where each of the unit's letters (or pairs) occurs in the word's letters (carrying the unit's mark, if it has one). */
 function occurrences(word: string, unit: LetterUnit): { at: number; length: number }[] {
   const ls = lettersOf(word);
-  const marks = unit.mark ? marksOf(word) : [];
+  const marks = unit.mark || unit.after ? marksOf(word) : [];
   const out: { at: number; length: number }[] = [];
   for (const entry of unit.letters) {
     const seq = [...entry];
     for (let i = 0; i + seq.length <= ls.length; i++) {
       if (!seq.every((ch, k) => ls[i + k] === ch)) continue;
       if (unit.mark && !marks[i]!.includes(unit.mark)) continue;
+      if (unit.mark === SUKUN && i + seq.length === ls.length) continue;
+      if (unit.after && (i === 0 || marks[i]!.length > 0 || !marks[i - 1]!.includes(unit.after))) continue;
       out.push({ at: i, length: seq.length });
     }
   }

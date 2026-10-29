@@ -1,5 +1,5 @@
 import type { ResolvedQuiz } from '../content/lesson-content';
-import { HARAKA, POSITIONS, has, isLetter, isPhrase, isWord, positions, type Haraka, type LetterUnit, type Position } from './letters';
+import { HARAKA, MADD, POSITIONS, has, isLetter, isPhrase, isWord, positions, type Haraka, type LetterUnit, type Madd, type Position } from './letters';
 import { POSITION_LABEL, askContains, askPosition } from './ui-text';
 
 /**
@@ -43,8 +43,11 @@ export interface ArabicUnit {
   /**
    * Lesson 3 (the harakat): the unit is the letter CARRYING this mark, and its name
    * is that syllable (بَ). Its words are the ones where the letter carries it.
+   * Lesson 6: `sukun`, which never counts on a word's last letter (the pausal sukun).
    */
   mark?: Haraka;
+  /** Lesson 7 (the madd): the unit is this madd letter, bare after its own vowel (ـَا ـِي ـُو). */
+  madd?: Madd;
   /** The picker's first row: units of one group (the letter) sit under it. */
   group?: string;
   name: string;
@@ -73,6 +76,8 @@ export interface ResolvedUnit extends LetterUnit {
   letters: string[];
   /** The mark's code point, so the unit IS the letter rule (letters.ts). */
   mark?: string;
+  /** A madd unit's vowel (its code point): the letter counts only bare after it. */
+  after?: string;
   group?: string;
   name: string;
   forms: string[];
@@ -97,6 +102,7 @@ class Refused extends Error {}
 
 /** The unit as the one letter rule sees it: its letters, and its mark if it has one. */
 function ruleOf(u: ArabicUnit): LetterUnit {
+  if (u.madd !== undefined) return { letters: u.letters, after: MADD[u.madd].after };
   return u.mark === undefined ? { letters: u.letters } : { letters: u.letters, mark: HARAKA[u.mark] };
 }
 
@@ -134,6 +140,10 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
       if (u.mark !== undefined) {
         // A marked unit is one letter with one haraka; its name is exactly that syllable.
         check(Object.hasOwn(HARAKA, u.mark) && u.letters.every((l) => [...l].length === 1) && u.letters.some((l) => u.name === l + HARAKA[u.mark!]));
+      }
+      if (u.madd !== undefined) {
+        // A madd unit is exactly its madd letter, and never also marked.
+        check(Object.hasOwn(MADD, u.madd) && u.mark === undefined && u.letters.length === 1 && u.letters[0] === MADD[u.madd].letter);
       }
       check(u.group === undefined || (typeof u.group === 'string' && u.group.length > 0 && u.group.length <= 8));
       check(Array.isArray(u.forms) && u.forms.every((f) => typeof f === 'string' && f.length > 0));
@@ -191,6 +201,7 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
       id: u.id,
       letters: u.letters,
       ...(u.mark === undefined ? {} : { mark: HARAKA[u.mark] }),
+      ...(u.madd === undefined ? {} : { after: MADD[u.madd].after }),
       ...(u.group === undefined ? {} : { group: u.group }),
       name: u.name,
       forms: u.forms,

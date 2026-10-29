@@ -618,6 +618,147 @@
       "mark": "damma",
       "has": false,
       "positions": []
+    },
+    {
+      "word": "نَجْمْ",
+      "letters": [
+        "ج"
+      ],
+      "mark": "sukun",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "an internal sukun counts"
+    },
+    {
+      "word": "نَجْمْ",
+      "letters": [
+        "م"
+      ],
+      "mark": "sukun",
+      "has": false,
+      "positions": [],
+      "note": "the pausal sukun on the last letter never counts"
+    },
+    {
+      "word": "بَيْتْ",
+      "letters": [
+        "ي"
+      ],
+      "mark": "sukun",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "بَيْتْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "sukun",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "أَبْ",
+      "letters": [
+        "ب"
+      ],
+      "mark": "sukun",
+      "has": false,
+      "positions": [],
+      "note": "a sukun only on the last letter: no lesson-6 sukun"
+    },
+    {
+      "word": "مَسْجِدْ",
+      "letters": [
+        "س"
+      ],
+      "mark": "sukun",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    }
+  ],
+  "maddCases": [
+    {
+      "word": "بَابْ",
+      "madd": "alif",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "كِتَابْ",
+      "madd": "alif",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "سَمَاءْ",
+      "madd": "alif",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "كَبِيرْ",
+      "madd": "ya",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "بَيْتْ",
+      "madd": "ya",
+      "has": false,
+      "positions": [],
+      "note": "ي under a sukun after a fatha is no madd"
+    },
+    {
+      "word": "نُورْ",
+      "madd": "waw",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "عُصْفُورْ",
+      "madd": "waw",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "يَوْمْ",
+      "madd": "waw",
+      "has": false,
+      "positions": [],
+      "note": "و under a sukun after a fatha is no madd"
+    },
+    {
+      "word": "وَلَدْ",
+      "madd": "waw",
+      "has": false,
+      "positions": [],
+      "note": "a first letter is never a madd"
+    },
+    {
+      "word": "قَلَمْ",
+      "madd": "alif",
+      "has": false,
+      "positions": [],
+      "note": "no alif at all"
     }
   ]
 }
