@@ -18,8 +18,8 @@ This file is generated from `apps/lessons/src/arabic/lesson-002.json` and the re
 | Pairs (groups) | 19 |
 | Units | 38 |
 | Words | 515 |
-| Held | 501 |
-| Clean (unchanged from the old lesson) | 14 |
+| Held | 513 |
+| Clean (unchanged from the old lesson) | 2 |
 | Dropped, for a teacher | 1 |
 | Old duplicates removed | 0 |
 | Quiz questions | 76 |
@@ -27,7 +27,13 @@ This file is generated from `apps/lessons/src/arabic/lesson-002.json` and the re
 **Why words are held:**
 
 - 499: ADDED TASHKEEL: final sukun
+- 3: NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ)
+- 3: NEEDS TASHKEEL: shadda (proposed ذَكِيّْ)
+- 2: NEEDS TASHKEEL: shadda (proposed جُنْدِيّْ)
+- 2: NEEDS TASHKEEL: shadda (proposed عَرَبِيّْ)
 - 2: ADDED TASHKEEL: final vowel replaced by the pausal sukun
+- 1: NEEDS TASHKEEL: shadda (proposed قَوِيّْ)
+- 1: NEEDS TASHKEEL: shadda (proposed غَنِيّْ)
 
 Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teachers check each word, not the convention. Clearing a word means setting its `review` and `was` to null, in a reviewed commit.
 
@@ -39,8 +45,60 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 2. **Each pair's difference or tip** (next section).
    - The old lesson wrote them without tashkeel, and a lesson note must be fully vowelled. The rebuild adds no marks inside words, so the notes are empty for now.
    - Please supply each text fully vowelled, or rewrite it. It becomes the note of both units of the pair.
-3. **The unit names** are lesson 1's letter names (بَاءْ, نُونْ …), so the same review applies.
-4. **The quiz**: up to two questions per unit.
+3. **Words with BOTH letters of their pair** (27, next section). They are kept, held with a reason, and never used in that pair's quiz. Decide for each one whether it stays.
+4. **Nisba words missing their final shadda** (12). They are held with the proposed spelling. Confirm or correct it.
+5. **The unit names are new here.** They take lesson 1's letter names (بَاءْ, نُونْ …) and need review in this lesson too.
+6. **129 spellings appear in more than one unit.** This is expected: a word can hold letters from several pairs, and 5 sit in both units of one pair. A spelling cleared in one place is cleared everywhere.
+7. **The quiz**: up to two questions per unit. It never uses a held both-letters or needs-tashkeel word.
+
+## Words with both letters of their pair (held)
+
+| Unit | Word |
+|---|---|
+| ba_vs_nun | بِنْتْ |
+| ba_vs_nun | بُسْتَانْ |
+| ba_vs_nun | أَرْنَبْ |
+| nun_vs_ba | نَبَاتْ |
+| nun_vs_ba | بَنَاتْ |
+| nun_vs_ba | بُسْتَانْ |
+| ta_vs_ya | تِينْ |
+| ta_vs_ya | تِلْمِيذْ |
+| ta_vs_ya | بَيْتْ |
+| ta_vs_ya | زَيْتْ |
+| ta_vs_ya | تَنِّينْ |
+| ya_vs_ta | بَيْتْ |
+| ya_vs_ta | زَيْتْ |
+| kha_vs_jim | خَلِيجْ |
+| sin_vs_shin | شَمْسْ |
+| shin_vs_sin | شَمْسْ |
+| qaf_vs_fa | قَفَصْ |
+| lam_vs_kaf | مَلِكْ |
+| kaf_vs_lam | كَلْبْ |
+| kaf_vs_lam | مَلِكْ |
+| zay_vs_ra | زَرَافَةْ |
+| zay_vs_ra | زَهْرَةْ |
+| zay_vs_ra | زِرّْ |
+| zay_vs_ra | أَرُزْ |
+| zay_vs_ra | زُرَافَةْ |
+| zay_vs_ra | رُمُوزْ |
+| dad_vs_dal | ضِفْدَعْ |
+
+## Nisba words missing their final shadda (held)
+
+| Unit | Word | Proposed |
+|---|---|---|
+| nun_vs_ba | جُنْدِي | جُنْدِيّْ |
+| ya_vs_ta | كُرْسِي | كُرْسِيّْ |
+| ya_vs_ta | عَرَبِي | عَرَبِيّْ |
+| ya_vs_ta | قَوِي | قَوِيّْ |
+| jim_vs_kha | جُنْدِي | جُنْدِيّْ |
+| ain_vs_ghain | عَرَبِي | عَرَبِيّْ |
+| ghain_vs_ain | غَنِي | غَنِيّْ |
+| kaf_vs_lam | كُرْسِي | كُرْسِيّْ |
+| dhal_vs_dal | ذَكِي | ذَكِيّْ |
+| kaf_vs_qaf | كُرْسِي | كُرْسِيّْ |
+| dhal_vs_zay | ذَكِي | ذَكِيّْ |
+| dhal_vs_zza | ذَكِي | ذَكِيّْ |
 
 ## Each pair's difference or tip (to be vowelled by a teacher)
 
@@ -76,26 +134,26 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 
 | Unit | Id | Kind | Question shows | Options | Right answer |
 |---|---|---|---|---|---|
-| ba_vs_nun | ba_vs_nun-q1 | which word has the letter | — | نَهْرْ، مَنْزِلْ، بَابْ | بَابْ |
+| ba_vs_nun | ba_vs_nun-q1 | which word has the letter | — | نَارْ، نَمْلَةْ، بَابْ | بَابْ |
 | ba_vs_nun | ba_vs_nun-q2 | where is the letter | بِحَارْ | start / middle / end | start |
-| nun_vs_ba | nun_vs_ba-q1 | which word has the letter | — | بَقَرَةْ، جُنْدِي، سَبُورَةْ | جُنْدِي |
-| nun_vs_ba | nun_vs_ba-q2 | where is the letter | جُنْدِي | start / middle / end | middle |
-| ta_vs_ya | ta_vs_ya-q1 | which word has the letter | — | عَرَبِي، تُفَّاحْ، يَاسَمِينْ | تُفَّاحْ |
+| nun_vs_ba | nun_vs_ba-q1 | which word has the letter | — | بَقَرَةْ، نَارْ، سَبُورَةْ | نَارْ |
+| nun_vs_ba | nun_vs_ba-q2 | where is the letter | نَحْلَةْ | start / middle / end | start |
+| ta_vs_ya | ta_vs_ya-q1 | which word has the letter | — | عَيْنْ، تُفَّاحْ، يَدْ | تُفَّاحْ |
 | ta_vs_ya | ta_vs_ya-q2 | where is the letter | تَمْرْ | start / middle / end | start |
-| ya_vs_ta | ya_vs_ta-q1 | which word has the letter | — | كُرْسِي، فَتَاةْ، تَمْرْ | كُرْسِي |
-| ya_vs_ta | ya_vs_ta-q2 | where is the letter | هَادِي | start / middle / end | end |
+| ya_vs_ta | ya_vs_ta-q1 | which word has the letter | — | هَادِي، فَتَاةْ، تَمْرْ | هَادِي |
+| ya_vs_ta | ya_vs_ta-q2 | where is the letter | رَاعِي | start / middle / end | end |
 | tha_vs_shin | tha_vs_shin-q1 | which word has the letter | — | شِتَاءْ، ثَعْلَبْ، شُبَّاكْ | ثَعْلَبْ |
 | tha_vs_shin | tha_vs_shin-q2 | where is the letter | ثَلْجْ | start / middle / end | start |
 | shin_vs_tha | shin_vs_tha-q1 | which word has the letter | — | ثَلْجْ، ثَرْوَةْ، شَمْسْ | شَمْسْ |
 | shin_vs_tha | shin_vs_tha-q2 | where is the letter | شَجَرَةْ | start / middle / end | start |
-| jim_vs_kha | jim_vs_kha-q1 | which word has the letter | — | جُنْدِي، خَاتَمْ، مَطْبَخْ | جُنْدِي |
-| jim_vs_kha | jim_vs_kha-q2 | where is the letter | جُنْدِي | start / middle / end | start |
-| kha_vs_jim | kha_vs_jim-q1 | which word has the letter | — | نَجْمْ، خَرُوفْ، حَجَرْ | خَرُوفْ |
+| jim_vs_kha | jim_vs_kha-q1 | which word has the letter | — | جَمَلْ، خَاتَمْ، مَطْبَخْ | جَمَلْ |
+| jim_vs_kha | jim_vs_kha-q2 | where is the letter | جَبَلْ | start / middle / end | start |
+| kha_vs_jim | kha_vs_jim-q1 | which word has the letter | — | حَجَرْ، خَرُوفْ، جَرَسْ | خَرُوفْ |
 | kha_vs_jim | kha_vs_jim-q2 | where is the letter | خُبْزْ | start / middle / end | start |
 | sin_vs_shin | sin_vs_shin-q1 | which word has the letter | — | شَاطِئْ، عُشْبْ، سَمَكْ | سَمَكْ |
 | sin_vs_shin | sin_vs_shin-q2 | where is the letter | سَيَّارَةْ | start / middle / end | start |
-| shin_vs_sin | shin_vs_sin-q1 | which word has the letter | — | سَمَكْ، فَانُوسْ، شَمْسْ | شَمْسْ |
-| shin_vs_sin | shin_vs_sin-q2 | where is the letter | شَجَرَةْ | start / middle / end | start |
+| shin_vs_sin | shin_vs_sin-q1 | which word has the letter | — | سَمَكْ، فَانُوسْ، شَجَرَةْ | شَجَرَةْ |
+| shin_vs_sin | shin_vs_sin-q2 | where is the letter | شُرْطَةْ | start / middle / end | start |
 | sad_vs_dad | sad_vs_dad-q1 | which word has the letter | — | ضَحِكْ، رَوْضَةْ، صَقْرْ | صَقْرْ |
 | sad_vs_dad | sad_vs_dad-q2 | where is the letter | صُنْدُوقْ | start / middle / end | start |
 | dad_vs_sad | dad_vs_sad-q1 | which word has the letter | — | صَابُونْ، ضِفْدَعْ، نَصْرْ | ضِفْدَعْ |
@@ -104,48 +162,48 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | tta_vs_zza | tta_vs_zza-q2 | where is the letter | طَبِيبْ | start / middle / end | start |
 | zza_vs_tta | zza_vs_tta-q1 | which word has the letter | — | مَطَرْ، ظَرْفْ، طَرِيقْ | ظَرْفْ |
 | zza_vs_tta | zza_vs_tta-q2 | where is the letter | ظِلّْ | start / middle / end | start |
-| ain_vs_ghain | ain_vs_ghain-q1 | which word has the letter | — | غَنِي، غَنَمْ، عَرَبِي | عَرَبِي |
-| ain_vs_ghain | ain_vs_ghain-q2 | where is the letter | عَرَبِي | start / middle / end | start |
-| ghain_vs_ain | ghain_vs_ain-q1 | which word has the letter | — | غَنِي، عَرُوسْ، عِنَبْ | غَنِي |
-| ghain_vs_ain | ghain_vs_ain-q2 | where is the letter | غَنِي | start / middle / end | start |
+| ain_vs_ghain | ain_vs_ghain-q1 | which word has the letter | — | مَغْرِبْ، غَنَمْ، عَيْنْ | عَيْنْ |
+| ain_vs_ghain | ain_vs_ghain-q2 | where is the letter | عُصْفُورْ | start / middle / end | start |
+| ghain_vs_ain | ghain_vs_ain-q1 | which word has the letter | — | غَزَالْ، شَمْعْ، عَلَمْ | غَزَالْ |
+| ghain_vs_ain | ghain_vs_ain-q2 | where is the letter | غَابَةْ | start / middle / end | start |
 | fa_vs_qaf | fa_vs_qaf-q1 | which word has the letter | — | فِيلْ، قَمَرْ، قُرْآنْ | فِيلْ |
 | fa_vs_qaf | fa_vs_qaf-q2 | where is the letter | فَرَاشَةْ | start / middle / end | start |
 | qaf_vs_fa | qaf_vs_fa-q1 | which word has the letter | — | قَمَرْ، فُرْنْ، مَفْتَاحْ | قَمَرْ |
 | qaf_vs_fa | qaf_vs_fa-q2 | where is the letter | قِطَّةْ | start / middle / end | start |
-| lam_vs_kaf | lam_vs_kaf-q1 | which word has the letter | — | حِكَايَةْ، لَيْمُونْ، كُرْسِي | لَيْمُونْ |
+| lam_vs_kaf | lam_vs_kaf-q1 | which word has the letter | — | بَنْكْ، لَيْمُونْ، كِتَابْ | لَيْمُونْ |
 | lam_vs_kaf | lam_vs_kaf-q2 | where is the letter | لَعِبَةْ | start / middle / end | start |
-| kaf_vs_lam | kaf_vs_lam-q1 | which word has the letter | — | عَلَمْ، كُرْسِي، جَبَلْ | كُرْسِي |
-| kaf_vs_lam | kaf_vs_lam-q2 | where is the letter | كُرْسِي | start / middle / end | start |
+| kaf_vs_lam | kaf_vs_lam-q1 | which word has the letter | — | عَلَمْ، كِتَابْ، جَبَلْ | كِتَابْ |
+| kaf_vs_lam | kaf_vs_lam-q2 | where is the letter | كُرَةْ | start / middle / end | start |
 | ra_vs_zay | ra_vs_zay-q1 | which word has the letter | — | رَجُلْ، كَنْزْ، مَنْزِلْ | رَجُلْ |
 | ra_vs_zay | ra_vs_zay-q2 | where is the letter | رُمَّانْ | start / middle / end | start |
-| zay_vs_ra | zay_vs_ra-q1 | which word has the letter | — | رِيشَةْ، زَرَافَةْ، بُرْتُقَالْ | زَرَافَةْ |
-| zay_vs_ra | zay_vs_ra-q2 | where is the letter | زَهْرَةْ | start / middle / end | start |
-| dal_vs_dhal | dal_vs_dhal-q1 | which word has the letter | — | دُبّْ، ذَكِي، مُنْذْ | دُبّْ |
+| zay_vs_ra | zay_vs_ra-q1 | which word has the letter | — | رِيشَةْ، زَيْتُونْ، بُرْتُقَالْ | زَيْتُونْ |
+| zay_vs_ra | zay_vs_ra-q2 | where is the letter | زُجَاجْ | start / middle / end | start |
+| dal_vs_dhal | dal_vs_dhal-q1 | which word has the letter | — | دُبّْ، مَلَاذْ، ذِرَاعْ | دُبّْ |
 | dal_vs_dhal | dal_vs_dhal-q2 | where is the letter | دَجَاجَةْ | start / middle / end | start |
-| dhal_vs_dal | dhal_vs_dal-q1 | which word has the letter | — | ذَكِي، دِينَارْ، بَلَدْ | ذَكِي |
-| dhal_vs_dal | dhal_vs_dal-q2 | where is the letter | ذَكِي | start / middle / end | start |
-| qaf_vs_kaf | qaf_vs_kaf-q1 | which word has the letter | — | قَمَرْ، كَعْكَةْ، كُرْسِي | قَمَرْ |
+| dhal_vs_dal | dhal_vs_dal-q1 | which word has the letter | — | ذِئْبْ، دِينَارْ، بَلَدْ | ذِئْبْ |
+| dhal_vs_dal | dhal_vs_dal-q2 | where is the letter | ذَهَبْ | start / middle / end | start |
+| qaf_vs_kaf | qaf_vs_kaf-q1 | which word has the letter | — | قَمَرْ، كَبِيرْ، كَلْبْ | قَمَرْ |
 | qaf_vs_kaf | qaf_vs_kaf-q2 | where is the letter | قَلَمْ | start / middle / end | start |
-| kaf_vs_qaf | kaf_vs_qaf-q1 | which word has the letter | — | قَلَمْ، قَمَرْ، كُرْسِي | كُرْسِي |
-| kaf_vs_qaf | kaf_vs_qaf-q2 | where is the letter | كُرْسِي | start / middle / end | start |
-| zay_vs_dhal | zay_vs_dhal-q1 | which word has the letter | — | ذُرَةْ، زَهْرَةْ، ذُبَابَةْ | زَهْرَةْ |
+| kaf_vs_qaf | kaf_vs_qaf-q1 | which word has the letter | — | قَلَمْ، قَمَرْ، كَلْبْ | كَلْبْ |
+| kaf_vs_qaf | kaf_vs_qaf-q2 | where is the letter | كِتَابْ | start / middle / end | start |
+| zay_vs_dhal | zay_vs_dhal-q1 | which word has the letter | — | ذَيْلْ، زَهْرَةْ، ذَهَبْ | زَهْرَةْ |
 | zay_vs_dhal | zay_vs_dhal-q2 | where is the letter | زَرَافَةْ | start / middle / end | start |
-| dhal_vs_zay | dhal_vs_zay-q1 | which word has the letter | — | ذَكِي، زَرَافَةْ، زَيْتُونْ | ذَكِي |
-| dhal_vs_zay | dhal_vs_zay-q2 | where is the letter | ذَكِي | start / middle / end | start |
+| dhal_vs_zay | dhal_vs_zay-q1 | which word has the letter | — | ذِئْبْ، زَرَافَةْ، زَيْتُونْ | ذِئْبْ |
+| dhal_vs_zay | dhal_vs_zay-q2 | where is the letter | ذَهَبْ | start / middle / end | start |
 | sin_vs_tha | sin_vs_tha-q1 | which word has the letter | — | ثُعْبَانْ، ثَمَرَةْ، سَمَكْ | سَمَكْ |
 | sin_vs_tha | sin_vs_tha-q2 | where is the letter | سَيَّارَةْ | start / middle / end | start |
 | tha_vs_sin | tha_vs_sin-q1 | which word has the letter | — | ثَعْلَبْ، سُوقْ، سَفِينَةْ | ثَعْلَبْ |
 | tha_vs_sin | tha_vs_sin-q2 | where is the letter | ثَلْجْ | start / middle / end | start |
-| zza_vs_dhal | zza_vs_dhal-q1 | which word has the letter | — | ذَيْلْ، ظَرْفْ، ذِئْبْ | ظَرْفْ |
+| zza_vs_dhal | zza_vs_dhal-q1 | which word has the letter | — | ذَهَبْ، ظَرْفْ، ذِرَاعْ | ظَرْفْ |
 | zza_vs_dhal | zza_vs_dhal-q2 | where is the letter | ظِلّْ | start / middle / end | start |
-| dhal_vs_zza | dhal_vs_zza-q1 | which word has the letter | — | ظُفْرْ، ذَكِي، ظَهْرْ | ذَكِي |
-| dhal_vs_zza | dhal_vs_zza-q2 | where is the letter | ذَكِي | start / middle / end | start |
+| dhal_vs_zza | dhal_vs_zza-q1 | which word has the letter | — | ظُفْرْ، ذِئْبْ، ظَهْرْ | ذِئْبْ |
+| dhal_vs_zza | dhal_vs_zza-q2 | where is the letter | ذَهَبْ | start / middle / end | start |
 | ha_vs_hha | ha_vs_hha-q1 | which word has the letter | — | حَقِيبَةْ، هِلَالْ، حُوتْ | هِلَالْ |
 | ha_vs_hha | ha_vs_hha-q2 | where is the letter | هَدِيَّةْ | start / middle / end | start |
 | hha_vs_ha | hha_vs_ha-q1 | which word has the letter | — | حُوتْ، هَدِيَّةْ، هَاتِفْ | حُوتْ |
 | hha_vs_ha | hha_vs_ha-q2 | where is the letter | حِصَانْ | start / middle / end | start |
-| dad_vs_dal | dad_vs_dal-q1 | which word has the letter | — | دَلْوْ، ضِفْدَعْ، دَوَاءْ | ضِفْدَعْ |
-| dad_vs_dal | dad_vs_dal-q2 | where is the letter | ضَوْءْ | start / middle / end | start |
+| dad_vs_dal | dad_vs_dal-q1 | which word has the letter | — | دَلْوْ، ضَوْءْ، دَوَاءْ | ضَوْءْ |
+| dad_vs_dal | dad_vs_dal-q2 | where is the letter | ضَيْفْ | start / middle / end | start |
 | dal_vs_dad | dal_vs_dad-q1 | which word has the letter | — | دُبّْ، ضَابِطْ، ضَيْفْ | دُبّْ |
 | dal_vs_dad | dal_vs_dad-q2 | where is the letter | دَجَاجَةْ | start / middle / end | start |
 | ghain_vs_kha | ghain_vs_kha-q1 | which word has the letter | — | خَشَبْ، خَاتَمْ، غَزَالْ | غَزَالْ |
@@ -168,9 +226,9 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | ba_vs_nun-005 | بُرْتُقَالْ | بُرْتُقَال | ADDED TASHKEEL: final sukun |
 | ba_vs_nun-006 | بَقَرَةْ | بَقَرَة | ADDED TASHKEEL: final sukun |
 | ba_vs_nun-007 | بَحْرْ | بَحْر | ADDED TASHKEEL: final sukun |
-| ba_vs_nun-008 | بِنْتْ | بِنْت | ADDED TASHKEEL: final sukun |
+| ba_vs_nun-008 | بِنْتْ | بِنْت | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ba_vs_nun-009 | بَلَدْ | بَلَد | ADDED TASHKEEL: final sukun |
-| ba_vs_nun-010 | بُسْتَانْ | بُسْتَان | ADDED TASHKEEL: final sukun |
+| ba_vs_nun-010 | بُسْتَانْ | بُسْتَان | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ba_vs_nun-011 | كِتَابْ | كِتَاب | ADDED TASHKEEL: final sukun |
 | ba_vs_nun-012 | لَعِبْ | لَعِب | ADDED TASHKEEL: final sukun |
 | ba_vs_nun-013 | حَبِيبْ | حَبِيب | ADDED TASHKEEL: final sukun |
@@ -178,7 +236,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | ba_vs_nun-015 | سَبُورَةْ | سَبُورَة | ADDED TASHKEEL: final sukun |
 | ba_vs_nun-016 | رَبِيعْ | رَبِيع | ADDED TASHKEEL: final sukun |
 | ba_vs_nun-017 | ذَهَبْ | ذَهَب | ADDED TASHKEEL: final sukun |
-| ba_vs_nun-018 | أَرْنَبْ | أَرْنَب | ADDED TASHKEEL: final sukun |
+| ba_vs_nun-018 | أَرْنَبْ | أَرْنَب | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 
 ### nun_vs_ba (ب ن): نُونْ (18 words)
 
@@ -193,15 +251,15 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | nun_vs_ba-007 | نَخْلَةْ | نَخْلَة | ADDED TASHKEEL: final sukun |
 | nun_vs_ba-008 | نَمْلَةْ | نَمْلَة | ADDED TASHKEEL: final sukun |
 | nun_vs_ba-009 | نَافِذَةْ | نَافِذَة | ADDED TASHKEEL: final sukun |
-| nun_vs_ba-010 | نَبَاتْ | نَبَات | ADDED TASHKEEL: final sukun |
+| nun_vs_ba-010 | نَبَاتْ | نَبَات | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | nun_vs_ba-011 | عَيْنْ | عَيْن | ADDED TASHKEEL: final sukun |
 | nun_vs_ba-012 | لَوْنْ | لَوْن | ADDED TASHKEEL: final sukun |
 | nun_vs_ba-013 | سِنّْ | سِنّ | ADDED TASHKEEL: final sukun |
 | nun_vs_ba-014 | مَنْزِلْ | مَنْزِل | ADDED TASHKEEL: final sukun |
-| nun_vs_ba-015 | بَنَاتْ | بَنَات | ADDED TASHKEEL: final sukun |
-| nun_vs_ba-016 | جُنْدِي | — | — |
+| nun_vs_ba-015 | بَنَاتْ | بَنَات | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
+| nun_vs_ba-016 | جُنْدِي | — | NEEDS TASHKEEL: shadda (proposed جُنْدِيّْ) |
 | nun_vs_ba-017 | حِصَانْ | حِصَان | ADDED TASHKEEL: final sukun |
-| nun_vs_ba-018 | بُسْتَانْ | بُسْتَان | ADDED TASHKEEL: final sukun |
+| nun_vs_ba-018 | بُسْتَانْ | بُسْتَان | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 
 ### ta_vs_ya (ت ي): تَاءْ (18 words)
 
@@ -209,20 +267,20 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 |---|---|---|---|
 | ta_vs_ya-001 | تُفَّاحْ | تُفَّاح | ADDED TASHKEEL: final sukun |
 | ta_vs_ya-002 | تَمْرْ | تَمْر | ADDED TASHKEEL: final sukun |
-| ta_vs_ya-003 | تِينْ | تِين | ADDED TASHKEEL: final sukun |
+| ta_vs_ya-003 | تِينْ | تِين | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ta_vs_ya-004 | تَاجْ | تَاج | ADDED TASHKEEL: final sukun |
-| ta_vs_ya-005 | تِلْمِيذْ | تِلْمِيذ | ADDED TASHKEEL: final sukun |
+| ta_vs_ya-005 | تِلْمِيذْ | تِلْمِيذ | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ta_vs_ya-006 | تُرَابْ | تُرَاب | ADDED TASHKEEL: final sukun |
 | ta_vs_ya-007 | تَمْسَاحْ | تَمْسَاح | ADDED TASHKEEL: final sukun |
 | ta_vs_ya-008 | تَوْتْ | تَوْت | ADDED TASHKEEL: final sukun |
 | ta_vs_ya-009 | كِتَابْ | كِتَاب | ADDED TASHKEEL: final sukun |
 | ta_vs_ya-010 | فَتَاةْ | فَتَاة | ADDED TASHKEEL: final sukun |
-| ta_vs_ya-011 | بَيْتْ | بَيْت | ADDED TASHKEEL: final sukun |
+| ta_vs_ya-011 | بَيْتْ | بَيْت | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ta_vs_ya-012 | وَقْتْ | وَقْت | ADDED TASHKEEL: final sukun |
-| ta_vs_ya-013 | زَيْتْ | زَيْت | ADDED TASHKEEL: final sukun |
+| ta_vs_ya-013 | زَيْتْ | زَيْت | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ta_vs_ya-014 | صَوْتْ | صَوْت | ADDED TASHKEEL: final sukun |
 | ta_vs_ya-015 | تُوتْ | تُوت | ADDED TASHKEEL: final sukun |
-| ta_vs_ya-016 | تَنِّينْ | تَنِّين | ADDED TASHKEEL: final sukun |
+| ta_vs_ya-016 | تَنِّينْ | تَنِّين | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ta_vs_ya-017 | مَكْتَبَةْ | مَكْتَبَة | ADDED TASHKEEL: final sukun |
 | ta_vs_ya-018 | سَاعَاتْ | سَاعَات | ADDED TASHKEEL: final sukun |
 
@@ -236,18 +294,18 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | ya_vs_ta-004 | يَقْطِينْ | يَقْطِين | ADDED TASHKEEL: final sukun |
 | ya_vs_ta-005 | يَوْمْ | يَوْم | ADDED TASHKEEL: final sukun |
 | ya_vs_ta-006 | يَنْبُوعْ | يَنْبُوع | ADDED TASHKEEL: final sukun |
-| ya_vs_ta-007 | بَيْتْ | بَيْت | ADDED TASHKEEL: final sukun |
+| ya_vs_ta-007 | بَيْتْ | بَيْت | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ya_vs_ta-008 | عَيْنْ | عَيْن | ADDED TASHKEEL: final sukun |
-| ya_vs_ta-009 | زَيْتْ | زَيْت | ADDED TASHKEEL: final sukun |
+| ya_vs_ta-009 | زَيْتْ | زَيْت | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | ya_vs_ta-010 | لَيْلْ | لَيْل | ADDED TASHKEEL: final sukun |
-| ya_vs_ta-011 | كُرْسِي | — | — |
+| ya_vs_ta-011 | كُرْسِي | — | NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ) |
 | ya_vs_ta-012 | هَادِي | — | — |
-| ya_vs_ta-013 | عَرَبِي | — | — |
+| ya_vs_ta-013 | عَرَبِي | — | NEEDS TASHKEEL: shadda (proposed عَرَبِيّْ) |
 | ya_vs_ta-014 | رَاعِي | — | — |
 | ya_vs_ta-015 | يَنَابِيعْ | يَنَابِيع | ADDED TASHKEEL: final sukun |
 | ya_vs_ta-016 | يَرْقَةْ | يَرْقَة | ADDED TASHKEEL: final sukun |
 | ya_vs_ta-017 | خَيْمَةْ | خَيْمَة | ADDED TASHKEEL: final sukun |
-| ya_vs_ta-018 | قَوِي | — | — |
+| ya_vs_ta-018 | قَوِي | — | NEEDS TASHKEEL: shadda (proposed قَوِيّْ) |
 
 ### tha_vs_shin (ث ش): ثَاءْ (18 words)
 
@@ -306,7 +364,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | jim_vs_kha-005 | جَرَسْ | جَرَس | ADDED TASHKEEL: final sukun |
 | jim_vs_kha-006 | جَنَّةْ | جَنَّة | ADDED TASHKEEL: final sukun |
 | jim_vs_kha-007 | جِدَارْ | جِدَار | ADDED TASHKEEL: final sukun |
-| jim_vs_kha-008 | جُنْدِي | — | — |
+| jim_vs_kha-008 | جُنْدِي | — | NEEDS TASHKEEL: shadda (proposed جُنْدِيّْ) |
 | jim_vs_kha-009 | نَجْمْ | نَجْم | ADDED TASHKEEL: final sukun |
 | jim_vs_kha-010 | رَجُلْ | رَجُل | ADDED TASHKEEL: final sukun |
 | jim_vs_kha-011 | دَجَاجْ | دَجَاج | ADDED TASHKEEL: final sukun |
@@ -328,7 +386,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | kha_vs_jim-004 | خَاتَمْ | خَاتَم | ADDED TASHKEEL: final sukun |
 | kha_vs_jim-005 | خَشَبْ | خَشَب | ADDED TASHKEEL: final sukun |
 | kha_vs_jim-006 | خَيْلْ | خَيْل | ADDED TASHKEEL: final sukun |
-| kha_vs_jim-007 | خَلِيجْ | خَلِيج | ADDED TASHKEEL: final sukun |
+| kha_vs_jim-007 | خَلِيجْ | خَلِيج | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | kha_vs_jim-008 | خَرِيطَةْ | خَرِيطَة | ADDED TASHKEEL: final sukun |
 | kha_vs_jim-009 | نَخْلَةْ | نَخْلَة | ADDED TASHKEEL: final sukun |
 | kha_vs_jim-010 | بُخَارْ | بُخَار | ADDED TASHKEEL: final sukun |
@@ -354,7 +412,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | sin_vs_shin-007 | سُوقْ | سُوق | ADDED TASHKEEL: final sukun |
 | sin_vs_shin-008 | سَفِينَةْ | سَفِينَة | ADDED TASHKEEL: final sukun |
 | sin_vs_shin-009 | مَدْرَسَةْ | مَدْرَسَة | ADDED TASHKEEL: final sukun |
-| sin_vs_shin-010 | شَمْسْ | شَمْس | ADDED TASHKEEL: final sukun |
+| sin_vs_shin-010 | شَمْسْ | شَمْس | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | sin_vs_shin-011 | فَانُوسْ | فَانُوس | ADDED TASHKEEL: final sukun |
 | sin_vs_shin-012 | سَحَابْ | سَحَاب | ADDED TASHKEEL: final sukun |
 | sin_vs_shin-013 | سِكِّينْ | سِكِّين | ADDED TASHKEEL: final sukun |
@@ -367,7 +425,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 
 | Id | Word | Was | Held because |
 |---|---|---|---|
-| shin_vs_sin-001 | شَمْسْ | شَمْس | ADDED TASHKEEL: final sukun |
+| shin_vs_sin-001 | شَمْسْ | شَمْس | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | shin_vs_sin-002 | شَجَرَةْ | شَجَرَة | ADDED TASHKEEL: final sukun |
 | shin_vs_sin-003 | شُرْطَةْ | شُرْطَة | ADDED TASHKEEL: final sukun |
 | shin_vs_sin-004 | شَايْ | شَاي | ADDED TASHKEEL: final sukun |
@@ -486,7 +544,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | ain_vs_ghain-002 | عُصْفُورْ | عُصْفُور | ADDED TASHKEEL: final sukun |
 | ain_vs_ghain-003 | عِنَبْ | عِنَب | ADDED TASHKEEL: final sukun |
 | ain_vs_ghain-004 | عَسَلْ | عَسَل | ADDED TASHKEEL: final sukun |
-| ain_vs_ghain-005 | عَرَبِي | — | — |
+| ain_vs_ghain-005 | عَرَبِي | — | NEEDS TASHKEEL: shadda (proposed عَرَبِيّْ) |
 | ain_vs_ghain-006 | عَلَمْ | عَلَم | ADDED TASHKEEL: final sukun |
 | ain_vs_ghain-007 | عَجَلَةْ | عَجَلَة | ADDED TASHKEEL: final sukun |
 | ain_vs_ghain-008 | عَقْرَبْ | عَقْرَب | ADDED TASHKEEL: final sukun |
@@ -518,7 +576,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | ghain_vs_ain-011 | دِمَاغْ | دِمَاغ | ADDED TASHKEEL: final sukun |
 | ghain_vs_ain-012 | فَرَاغْ | فَرَاغ | ADDED TASHKEEL: final sukun |
 | ghain_vs_ain-013 | غَرِيبْ | غَرِيب | ADDED TASHKEEL: final sukun |
-| ghain_vs_ain-014 | غَنِي | — | — |
+| ghain_vs_ain-014 | غَنِي | — | NEEDS TASHKEEL: shadda (proposed غَنِيّْ) |
 | ghain_vs_ain-015 | مَغْرِبْ | مَغْرِب | ADDED TASHKEEL: final sukun |
 | ghain_vs_ain-016 | صِبَاغْ | صِبَاغ | ADDED TASHKEEL: final sukun |
 | ghain_vs_ain-017 | بَلَاغْ | بَلَاغ | ADDED TASHKEEL: final sukun |
@@ -564,7 +622,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | qaf_vs_fa-011 | طَرِيقْ | طَرِيق | ADDED TASHKEEL: final sukun |
 | qaf_vs_fa-012 | سُوقْ | سُوق | ADDED TASHKEEL: final sukun |
 | qaf_vs_fa-013 | قِرْدْ | قِرْد | ADDED TASHKEEL: final sukun |
-| qaf_vs_fa-014 | قَفَصْ | قَفَص | ADDED TASHKEEL: final sukun |
+| qaf_vs_fa-014 | قَفَصْ | قَفَص | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | qaf_vs_fa-015 | مَقْبَرَةْ | مَقْبَرَة | ADDED TASHKEEL: final sukun |
 | qaf_vs_fa-016 | حَقِيبَةْ | حَقِيبَة | ADDED TASHKEEL: final sukun |
 | qaf_vs_fa-017 | بُرَاقْ | بُرَاق | ADDED TASHKEEL: final sukun |
@@ -590,24 +648,24 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | lam_vs_kaf-014 | لُؤْلُؤْ | لُؤْلُؤ | ADDED TASHKEEL: final sukun |
 | lam_vs_kaf-015 | سُلَّمْ | سُلَّم | ADDED TASHKEEL: final sukun |
 | lam_vs_kaf-016 | جَبَلْ | جَبَل | ADDED TASHKEEL: final sukun |
-| lam_vs_kaf-017 | مَلِكْ | مَلِك | ADDED TASHKEEL: final sukun |
+| lam_vs_kaf-017 | مَلِكْ | مَلِك | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | lam_vs_kaf-018 | هِلَالْ | هِلَال | ADDED TASHKEEL: final sukun |
 
 ### kaf_vs_lam (ل ك): كَافْ (18 words)
 
 | Id | Word | Was | Held because |
 |---|---|---|---|
-| kaf_vs_lam-001 | كَلْبْ | كَلْب | ADDED TASHKEEL: final sukun |
+| kaf_vs_lam-001 | كَلْبْ | كَلْب | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | kaf_vs_lam-002 | كِتَابْ | كِتَاب | ADDED TASHKEEL: final sukun |
 | kaf_vs_lam-003 | كُرَةْ | كُرَة | ADDED TASHKEEL: final sukun |
 | kaf_vs_lam-004 | كَنْزْ | كَنْز | ADDED TASHKEEL: final sukun |
 | kaf_vs_lam-005 | كَعْكَةْ | كَعْكَة | ADDED TASHKEEL: final sukun |
-| kaf_vs_lam-006 | كُرْسِي | — | — |
+| kaf_vs_lam-006 | كُرْسِي | — | NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ) |
 | kaf_vs_lam-007 | كَبِيرْ | كَبِير | ADDED TASHKEEL: final sukun |
 | kaf_vs_lam-008 | كَوْكَبْ | كَوْكَب | ADDED TASHKEEL: final sukun |
 | kaf_vs_lam-009 | سَمَكْ | سَمَك | ADDED TASHKEEL: final sukun |
 | kaf_vs_lam-010 | دِيكْ | دِيك | ADDED TASHKEEL: final sukun |
-| kaf_vs_lam-011 | مَلِكْ | مَلِك | ADDED TASHKEEL: final sukun |
+| kaf_vs_lam-011 | مَلِكْ | مَلِك | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | kaf_vs_lam-012 | بَنْكْ | بَنْك | ADDED TASHKEEL: final sukun |
 | kaf_vs_lam-013 | كَأْسْ | كَأْس | ADDED TASHKEEL: final sukun |
 | kaf_vs_lam-014 | كَرَزْ | كَرَز | ADDED TASHKEEL: final sukun |
@@ -643,24 +701,24 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 
 | Id | Word | Was | Held because |
 |---|---|---|---|
-| zay_vs_ra-001 | زَرَافَةْ | زَرَافَة | ADDED TASHKEEL: final sukun |
-| zay_vs_ra-002 | زَهْرَةْ | زَهْرَة | ADDED TASHKEEL: final sukun |
+| zay_vs_ra-001 | زَرَافَةْ | زَرَافَة | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
+| zay_vs_ra-002 | زَهْرَةْ | زَهْرَة | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | zay_vs_ra-003 | زَيْتُونْ | زَيْتُون | ADDED TASHKEEL: final sukun |
 | zay_vs_ra-004 | زُجَاجْ | زُجَاج | ADDED TASHKEEL: final sukun |
 | zay_vs_ra-005 | زَيْتْ | زَيْت | ADDED TASHKEEL: final sukun |
-| zay_vs_ra-006 | زِرّْ | زِرّ | ADDED TASHKEEL: final sukun |
+| zay_vs_ra-006 | زِرّْ | زِرّ | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | zay_vs_ra-007 | زَلَّاجَةْ | زَلَّاجَة | ADDED TASHKEEL: final sukun |
 | zay_vs_ra-008 | زِينَةْ | زِينَة | ADDED TASHKEEL: final sukun |
 | zay_vs_ra-009 | مَنْزِلْ | مَنْزِل | ADDED TASHKEEL: final sukun |
 | zay_vs_ra-010 | غَزَالْ | غَزَال | ADDED TASHKEEL: final sukun |
 | zay_vs_ra-011 | خُبْزْ | خُبْز | ADDED TASHKEEL: final sukun |
-| zay_vs_ra-012 | أَرُزْ | أَرُز | ADDED TASHKEEL: final sukun |
+| zay_vs_ra-012 | أَرُزْ | أَرُز | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | zay_vs_ra-013 | زَبِيبْ | زَبِيب | ADDED TASHKEEL: final sukun |
-| zay_vs_ra-014 | زُرَافَةْ | زُرَافَة | ADDED TASHKEEL: final sukun |
+| zay_vs_ra-014 | زُرَافَةْ | زُرَافَة | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | zay_vs_ra-015 | مِيزَانْ | مِيزَان | ADDED TASHKEEL: final sukun |
 | zay_vs_ra-016 | كَنْزْ | كَنْز | ADDED TASHKEEL: final sukun |
 | zay_vs_ra-017 | جَوْزْ | جَوْز | ADDED TASHKEEL: final sukun |
-| zay_vs_ra-018 | رُمُوزْ | رُمُوز | ADDED TASHKEEL: final sukun |
+| zay_vs_ra-018 | رُمُوزْ | رُمُوز | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 
 ### dal_vs_dhal (د ذ): دَالْ (18 words)
 
@@ -693,7 +751,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | dhal_vs_dal-002 | ذَهَبْ | ذَهَب | ADDED TASHKEEL: final sukun |
 | dhal_vs_dal-003 | ذُرَةْ | ذُرَة | ADDED TASHKEEL: final sukun |
 | dhal_vs_dal-004 | ذُبَابَةْ | ذُبَابَة | ADDED TASHKEEL: final sukun |
-| dhal_vs_dal-005 | ذَكِي | — | — |
+| dhal_vs_dal-005 | ذَكِي | — | NEEDS TASHKEEL: shadda (proposed ذَكِيّْ) |
 | dhal_vs_dal-006 | ذِرَاعْ | ذِرَاع | ADDED TASHKEEL: final sukun |
 | dhal_vs_dal-007 | ذَيْلْ | ذَيْل | ADDED TASHKEEL: final sukun |
 | dhal_vs_dal-008 | ذَاكِرَةْ | ذَاكِرَة | ADDED TASHKEEL: final sukun |
@@ -728,7 +786,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | kaf_vs_qaf-003 | كُرَةْ | كُرَة | ADDED TASHKEEL: final sukun |
 | kaf_vs_qaf-004 | كَبِيرْ | كَبِير | ADDED TASHKEEL: final sukun |
 | kaf_vs_qaf-005 | كَعْكَةْ | كَعْكَة | ADDED TASHKEEL: final sukun |
-| kaf_vs_qaf-006 | كُرْسِي | — | — |
+| kaf_vs_qaf-006 | كُرْسِي | — | NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ) |
 
 ### zay_vs_dhal (ز ذ): زَايْ (6 words)
 
@@ -749,7 +807,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | dhal_vs_zay-002 | ذَهَبْ | ذَهَب | ADDED TASHKEEL: final sukun |
 | dhal_vs_zay-003 | ذُرَةْ | ذُرَة | ADDED TASHKEEL: final sukun |
 | dhal_vs_zay-004 | ذُبَابَةْ | ذُبَابَة | ADDED TASHKEEL: final sukun |
-| dhal_vs_zay-005 | ذَكِي | — | — |
+| dhal_vs_zay-005 | ذَكِي | — | NEEDS TASHKEEL: shadda (proposed ذَكِيّْ) |
 | dhal_vs_zay-006 | ذَيْلْ | ذَيْل | ADDED TASHKEEL: final sukun |
 
 ### sin_vs_tha (س ث): سِينْ (6 words)
@@ -792,7 +850,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 | dhal_vs_zza-001 | ذِئْبْ | ذِئْب | ADDED TASHKEEL: final sukun |
 | dhal_vs_zza-002 | ذَهَبْ | ذَهَب | ADDED TASHKEEL: final sukun |
 | dhal_vs_zza-003 | ذُرَةْ | ذُرَة | ADDED TASHKEEL: final sukun |
-| dhal_vs_zza-004 | ذَكِي | — | — |
+| dhal_vs_zza-004 | ذَكِي | — | NEEDS TASHKEEL: shadda (proposed ذَكِيّْ) |
 | dhal_vs_zza-005 | ذِرَاعْ | ذِرَاع | ADDED TASHKEEL: final sukun |
 | dhal_vs_zza-006 | ذَيْلْ | ذَيْل | ADDED TASHKEEL: final sukun |
 
@@ -822,7 +880,7 @@ Almost every hold is the one final mark, the pausal sukun, as in lesson 1. Teach
 
 | Id | Word | Was | Held because |
 |---|---|---|---|
-| dad_vs_dal-001 | ضِفْدَعْ | ضِفْدَع | ADDED TASHKEEL: final sukun |
+| dad_vs_dal-001 | ضِفْدَعْ | ضِفْدَع | ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides |
 | dad_vs_dal-002 | ضَوْءْ | ضَوْء | ADDED TASHKEEL: final sukun |
 | dad_vs_dal-003 | ضَيْفْ | ضَيْف | ADDED TASHKEEL: final sukun |
 | dad_vs_dal-004 | ضَحِكْ | ضَحِك | ADDED TASHKEEL: final sukun |

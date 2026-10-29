@@ -39,7 +39,7 @@ describe('Arabic lesson 2 (letters that look or sound alike), the real file', ()
   it('holds every changed word: only the unchanged ones could ever show', () => {
     const words = raw.units.flatMap((u) => u.words);
     expect(words).toHaveLength(515);
-    expect(words.filter((w) => w.review)).toHaveLength(501);
+    expect(words.filter((w) => w.review)).toHaveLength(513);
     // حِصَان was listed under س: it is not in the file.
     expect(raw.units.find((u) => u.id === 'sin_vs_shin')!.words.map((w) => w.text).some((t) => t.startsWith('حِصَان'))).toBe(false);
   });

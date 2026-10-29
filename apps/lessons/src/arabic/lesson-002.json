@@ -75,7 +75,7 @@
           "id": "ba_vs_nun-008",
           "text": "بِنْتْ",
           "was": "بِنْت",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ba_vs_nun-009",
@@ -87,7 +87,7 @@
           "id": "ba_vs_nun-010",
           "text": "بُسْتَانْ",
           "was": "بُسْتَان",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ba_vs_nun-011",
@@ -135,7 +135,7 @@
           "id": "ba_vs_nun-018",
           "text": "أَرْنَبْ",
           "was": "أَرْنَب",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         }
       ]
     },
@@ -212,7 +212,7 @@
           "id": "nun_vs_ba-010",
           "text": "نَبَاتْ",
           "was": "نَبَات",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "nun_vs_ba-011",
@@ -242,13 +242,13 @@
           "id": "nun_vs_ba-015",
           "text": "بَنَاتْ",
           "was": "بَنَات",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "nun_vs_ba-016",
           "text": "جُنْدِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed جُنْدِيّْ)"
         },
         {
           "id": "nun_vs_ba-017",
@@ -260,7 +260,7 @@
           "id": "nun_vs_ba-018",
           "text": "بُسْتَانْ",
           "was": "بُسْتَان",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         }
       ]
     },
@@ -295,7 +295,7 @@
           "id": "ta_vs_ya-003",
           "text": "تِينْ",
           "was": "تِين",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ta_vs_ya-004",
@@ -307,7 +307,7 @@
           "id": "ta_vs_ya-005",
           "text": "تِلْمِيذْ",
           "was": "تِلْمِيذ",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ta_vs_ya-006",
@@ -343,7 +343,7 @@
           "id": "ta_vs_ya-011",
           "text": "بَيْتْ",
           "was": "بَيْت",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ta_vs_ya-012",
@@ -355,7 +355,7 @@
           "id": "ta_vs_ya-013",
           "text": "زَيْتْ",
           "was": "زَيْت",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ta_vs_ya-014",
@@ -373,7 +373,7 @@
           "id": "ta_vs_ya-016",
           "text": "تَنِّينْ",
           "was": "تَنِّين",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ta_vs_ya-017",
@@ -444,7 +444,7 @@
           "id": "ya_vs_ta-007",
           "text": "بَيْتْ",
           "was": "بَيْت",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ya_vs_ta-008",
@@ -456,7 +456,7 @@
           "id": "ya_vs_ta-009",
           "text": "زَيْتْ",
           "was": "زَيْت",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "ya_vs_ta-010",
@@ -468,7 +468,7 @@
           "id": "ya_vs_ta-011",
           "text": "كُرْسِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ)"
         },
         {
           "id": "ya_vs_ta-012",
@@ -480,7 +480,7 @@
           "id": "ya_vs_ta-013",
           "text": "عَرَبِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed عَرَبِيّْ)"
         },
         {
           "id": "ya_vs_ta-014",
@@ -510,7 +510,7 @@
           "id": "ya_vs_ta-018",
           "text": "قَوِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed قَوِيّْ)"
         }
       ]
     },
@@ -825,7 +825,7 @@
           "id": "jim_vs_kha-008",
           "text": "جُنْدِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed جُنْدِيّْ)"
         },
         {
           "id": "jim_vs_kha-009",
@@ -944,7 +944,7 @@
           "id": "kha_vs_jim-007",
           "text": "خَلِيجْ",
           "was": "خَلِيج",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "kha_vs_jim-008",
@@ -1087,7 +1087,7 @@
           "id": "sin_vs_shin-010",
           "text": "شَمْسْ",
           "was": "شَمْس",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "sin_vs_shin-011",
@@ -1152,7 +1152,7 @@
           "id": "shin_vs_sin-001",
           "text": "شَمْسْ",
           "was": "شَمْس",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "shin_vs_sin-002",
@@ -1801,7 +1801,7 @@
           "id": "ain_vs_ghain-005",
           "text": "عَرَبِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed عَرَبِيّْ)"
         },
         {
           "id": "ain_vs_ghain-006",
@@ -1980,7 +1980,7 @@
           "id": "ghain_vs_ain-014",
           "text": "غَنِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed غَنِيّْ)"
         },
         {
           "id": "ghain_vs_ain-015",
@@ -2230,7 +2230,7 @@
           "id": "qaf_vs_fa-014",
           "text": "قَفَصْ",
           "was": "قَفَص",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "qaf_vs_fa-015",
@@ -2373,7 +2373,7 @@
           "id": "lam_vs_kaf-017",
           "text": "مَلِكْ",
           "was": "مَلِك",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "lam_vs_kaf-018",
@@ -2402,7 +2402,7 @@
           "id": "kaf_vs_lam-001",
           "text": "كَلْبْ",
           "was": "كَلْب",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "kaf_vs_lam-002",
@@ -2432,7 +2432,7 @@
           "id": "kaf_vs_lam-006",
           "text": "كُرْسِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ)"
         },
         {
           "id": "kaf_vs_lam-007",
@@ -2462,7 +2462,7 @@
           "id": "kaf_vs_lam-011",
           "text": "مَلِكْ",
           "was": "مَلِك",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "kaf_vs_lam-012",
@@ -2648,13 +2648,13 @@
           "id": "zay_vs_ra-001",
           "text": "زَرَافَةْ",
           "was": "زَرَافَة",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "zay_vs_ra-002",
           "text": "زَهْرَةْ",
           "was": "زَهْرَة",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "zay_vs_ra-003",
@@ -2678,7 +2678,7 @@
           "id": "zay_vs_ra-006",
           "text": "زِرّْ",
           "was": "زِرّ",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "zay_vs_ra-007",
@@ -2714,7 +2714,7 @@
           "id": "zay_vs_ra-012",
           "text": "أَرُزْ",
           "was": "أَرُز",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "zay_vs_ra-013",
@@ -2726,7 +2726,7 @@
           "id": "zay_vs_ra-014",
           "text": "زُرَافَةْ",
           "was": "زُرَافَة",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "zay_vs_ra-015",
@@ -2750,7 +2750,7 @@
           "id": "zay_vs_ra-018",
           "text": "رُمُوزْ",
           "was": "رُمُوز",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         }
       ]
     },
@@ -2918,7 +2918,7 @@
           "id": "dhal_vs_dal-005",
           "text": "ذَكِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed ذَكِيّْ)"
         },
         {
           "id": "dhal_vs_dal-006",
@@ -3102,7 +3102,7 @@
           "id": "kaf_vs_qaf-006",
           "text": "كُرْسِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ)"
         }
       ]
     },
@@ -3198,7 +3198,7 @@
           "id": "dhal_vs_zay-005",
           "text": "ذَكِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed ذَكِيّْ)"
         },
         {
           "id": "dhal_vs_zay-006",
@@ -3402,7 +3402,7 @@
           "id": "dhal_vs_zza-004",
           "text": "ذَكِي",
           "was": null,
-          "review": null
+          "review": "NEEDS TASHKEEL: shadda (proposed ذَكِيّْ)"
         },
         {
           "id": "dhal_vs_zza-005",
@@ -3543,7 +3543,7 @@
           "id": "dad_vs_dal-001",
           "text": "ضِفْدَعْ",
           "was": "ضِفْدَع",
-          "review": "ADDED TASHKEEL: final sukun"
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
         },
         {
           "id": "dad_vs_dal-002",
@@ -3741,8 +3741,8 @@
       "kind": "contains",
       "unit": "ba_vs_nun",
       "options": [
-        "نَهْرْ",
-        "مَنْزِلْ",
+        "نَارْ",
+        "نَمْلَةْ",
         "بَابْ"
       ],
       "answer": 2,
@@ -3762,7 +3762,7 @@
       "unit": "nun_vs_ba",
       "options": [
         "بَقَرَةْ",
-        "جُنْدِي",
+        "نَارْ",
         "سَبُورَةْ"
       ],
       "answer": 1,
@@ -3772,8 +3772,8 @@
       "id": "nun_vs_ba-q2",
       "kind": "position",
       "unit": "nun_vs_ba",
-      "word": "جُنْدِي",
-      "answer": "middle",
+      "word": "نَحْلَةْ",
+      "answer": "start",
       "review": null
     },
     {
@@ -3781,9 +3781,9 @@
       "kind": "contains",
       "unit": "ta_vs_ya",
       "options": [
-        "عَرَبِي",
+        "عَيْنْ",
         "تُفَّاحْ",
-        "يَاسَمِينْ"
+        "يَدْ"
       ],
       "answer": 1,
       "review": null
@@ -3801,7 +3801,7 @@
       "kind": "contains",
       "unit": "ya_vs_ta",
       "options": [
-        "كُرْسِي",
+        "هَادِي",
         "فَتَاةْ",
         "تَمْرْ"
       ],
@@ -3812,7 +3812,7 @@
       "id": "ya_vs_ta-q2",
       "kind": "position",
       "unit": "ya_vs_ta",
-      "word": "هَادِي",
+      "word": "رَاعِي",
       "answer": "end",
       "review": null
     },
@@ -3861,7 +3861,7 @@
       "kind": "contains",
       "unit": "jim_vs_kha",
       "options": [
-        "جُنْدِي",
+        "جَمَلْ",
         "خَاتَمْ",
         "مَطْبَخْ"
       ],
@@ -3872,7 +3872,7 @@
       "id": "jim_vs_kha-q2",
       "kind": "position",
       "unit": "jim_vs_kha",
-      "word": "جُنْدِي",
+      "word": "جَبَلْ",
       "answer": "start",
       "review": null
     },
@@ -3881,9 +3881,9 @@
       "kind": "contains",
       "unit": "kha_vs_jim",
       "options": [
-        "نَجْمْ",
+        "حَجَرْ",
         "خَرُوفْ",
-        "حَجَرْ"
+        "جَرَسْ"
       ],
       "answer": 1,
       "review": null
@@ -3923,7 +3923,7 @@
       "options": [
         "سَمَكْ",
         "فَانُوسْ",
-        "شَمْسْ"
+        "شَجَرَةْ"
       ],
       "answer": 2,
       "review": null
@@ -3932,7 +3932,7 @@
       "id": "shin_vs_sin-q2",
       "kind": "position",
       "unit": "shin_vs_sin",
-      "word": "شَجَرَةْ",
+      "word": "شُرْطَةْ",
       "answer": "start",
       "review": null
     },
@@ -4021,9 +4021,9 @@
       "kind": "contains",
       "unit": "ain_vs_ghain",
       "options": [
-        "غَنِي",
+        "مَغْرِبْ",
         "غَنَمْ",
-        "عَرَبِي"
+        "عَيْنْ"
       ],
       "answer": 2,
       "review": null
@@ -4032,7 +4032,7 @@
       "id": "ain_vs_ghain-q2",
       "kind": "position",
       "unit": "ain_vs_ghain",
-      "word": "عَرَبِي",
+      "word": "عُصْفُورْ",
       "answer": "start",
       "review": null
     },
@@ -4041,9 +4041,9 @@
       "kind": "contains",
       "unit": "ghain_vs_ain",
       "options": [
-        "غَنِي",
-        "عَرُوسْ",
-        "عِنَبْ"
+        "غَزَالْ",
+        "شَمْعْ",
+        "عَلَمْ"
       ],
       "answer": 0,
       "review": null
@@ -4052,7 +4052,7 @@
       "id": "ghain_vs_ain-q2",
       "kind": "position",
       "unit": "ghain_vs_ain",
-      "word": "غَنِي",
+      "word": "غَابَةْ",
       "answer": "start",
       "review": null
     },
@@ -4101,9 +4101,9 @@
       "kind": "contains",
       "unit": "lam_vs_kaf",
       "options": [
-        "حِكَايَةْ",
+        "بَنْكْ",
         "لَيْمُونْ",
-        "كُرْسِي"
+        "كِتَابْ"
       ],
       "answer": 1,
       "review": null
@@ -4122,7 +4122,7 @@
       "unit": "kaf_vs_lam",
       "options": [
         "عَلَمْ",
-        "كُرْسِي",
+        "كِتَابْ",
         "جَبَلْ"
       ],
       "answer": 1,
@@ -4132,7 +4132,7 @@
       "id": "kaf_vs_lam-q2",
       "kind": "position",
       "unit": "kaf_vs_lam",
-      "word": "كُرْسِي",
+      "word": "كُرَةْ",
       "answer": "start",
       "review": null
     },
@@ -4162,7 +4162,7 @@
       "unit": "zay_vs_ra",
       "options": [
         "رِيشَةْ",
-        "زَرَافَةْ",
+        "زَيْتُونْ",
         "بُرْتُقَالْ"
       ],
       "answer": 1,
@@ -4172,7 +4172,7 @@
       "id": "zay_vs_ra-q2",
       "kind": "position",
       "unit": "zay_vs_ra",
-      "word": "زَهْرَةْ",
+      "word": "زُجَاجْ",
       "answer": "start",
       "review": null
     },
@@ -4182,8 +4182,8 @@
       "unit": "dal_vs_dhal",
       "options": [
         "دُبّْ",
-        "ذَكِي",
-        "مُنْذْ"
+        "مَلَاذْ",
+        "ذِرَاعْ"
       ],
       "answer": 0,
       "review": null
@@ -4201,7 +4201,7 @@
       "kind": "contains",
       "unit": "dhal_vs_dal",
       "options": [
-        "ذَكِي",
+        "ذِئْبْ",
         "دِينَارْ",
         "بَلَدْ"
       ],
@@ -4212,7 +4212,7 @@
       "id": "dhal_vs_dal-q2",
       "kind": "position",
       "unit": "dhal_vs_dal",
-      "word": "ذَكِي",
+      "word": "ذَهَبْ",
       "answer": "start",
       "review": null
     },
@@ -4222,8 +4222,8 @@
       "unit": "qaf_vs_kaf",
       "options": [
         "قَمَرْ",
-        "كَعْكَةْ",
-        "كُرْسِي"
+        "كَبِيرْ",
+        "كَلْبْ"
       ],
       "answer": 0,
       "review": null
@@ -4243,7 +4243,7 @@
       "options": [
         "قَلَمْ",
         "قَمَرْ",
-        "كُرْسِي"
+        "كَلْبْ"
       ],
       "answer": 2,
       "review": null
@@ -4252,7 +4252,7 @@
       "id": "kaf_vs_qaf-q2",
       "kind": "position",
       "unit": "kaf_vs_qaf",
-      "word": "كُرْسِي",
+      "word": "كِتَابْ",
       "answer": "start",
       "review": null
     },
@@ -4261,9 +4261,9 @@
       "kind": "contains",
       "unit": "zay_vs_dhal",
       "options": [
-        "ذُرَةْ",
+        "ذَيْلْ",
         "زَهْرَةْ",
-        "ذُبَابَةْ"
+        "ذَهَبْ"
       ],
       "answer": 1,
       "review": null
@@ -4281,7 +4281,7 @@
       "kind": "contains",
       "unit": "dhal_vs_zay",
       "options": [
-        "ذَكِي",
+        "ذِئْبْ",
         "زَرَافَةْ",
         "زَيْتُونْ"
       ],
@@ -4292,7 +4292,7 @@
       "id": "dhal_vs_zay-q2",
       "kind": "position",
       "unit": "dhal_vs_zay",
-      "word": "ذَكِي",
+      "word": "ذَهَبْ",
       "answer": "start",
       "review": null
     },
@@ -4341,9 +4341,9 @@
       "kind": "contains",
       "unit": "zza_vs_dhal",
       "options": [
-        "ذَيْلْ",
+        "ذَهَبْ",
         "ظَرْفْ",
-        "ذِئْبْ"
+        "ذِرَاعْ"
       ],
       "answer": 1,
       "review": null
@@ -4362,7 +4362,7 @@
       "unit": "dhal_vs_zza",
       "options": [
         "ظُفْرْ",
-        "ذَكِي",
+        "ذِئْبْ",
         "ظَهْرْ"
       ],
       "answer": 1,
@@ -4372,7 +4372,7 @@
       "id": "dhal_vs_zza-q2",
       "kind": "position",
       "unit": "dhal_vs_zza",
-      "word": "ذَكِي",
+      "word": "ذَهَبْ",
       "answer": "start",
       "review": null
     },
@@ -4422,7 +4422,7 @@
       "unit": "dad_vs_dal",
       "options": [
         "دَلْوْ",
-        "ضِفْدَعْ",
+        "ضَوْءْ",
         "دَوَاءْ"
       ],
       "answer": 1,
@@ -4432,7 +4432,7 @@
       "id": "dad_vs_dal-q2",
       "kind": "position",
       "unit": "dad_vs_dal",
-      "word": "ضَوْءْ",
+      "word": "ضَيْفْ",
       "answer": "start",
       "review": null
     },
