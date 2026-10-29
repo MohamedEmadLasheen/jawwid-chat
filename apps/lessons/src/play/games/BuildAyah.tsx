@@ -101,7 +101,8 @@ export function BuildAyah({ ayahs, band, seed, onComplete }: GameProps) {
         </div>
       ) : (
         <>
-          <p className="play__line" aria-label={`الكلمات المرتّبة: ${arabic(placed.length)} من ${arabic(current.tiles.length)}`}>
+          <p className="play__line">
+            <span className="sr-only">{`الكلمات المرتّبة: ${arabic(placed.length)} من ${arabic(current.tiles.length)}: `}</span>
             {current.tiles.map((t, i) => (
               // A space between words, so the line reads as words (the flex gap lays them out).
               <Fragment key={i}>

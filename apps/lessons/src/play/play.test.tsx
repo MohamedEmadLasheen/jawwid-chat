@@ -282,6 +282,11 @@ describe('the games page', () => {
     return { rerender: (o: Partial<Parameters<typeof PlayLesson>[0]>) => r.rerender(el(o)) };
   }
   const region = () => document.querySelector('section.play')?.getAttribute('aria-label') ?? null;
+  /** Opens the folded grown-up controls (the child does not see them). */
+  const grownUp = () => {
+    const t = screen.getByRole('button', { name: /للكبار/ });
+    if (t.getAttribute('aria-expanded') !== 'true') fireEvent.click(t);
+  };
 
   it('no page passes keys, approvals or mechanics: they are fixed at build time (signed.ts), frozen', async () => {
     const refused = [
@@ -366,6 +371,10 @@ describe('the games page', () => {
     const r = recitation();
     await page({ approvals: await sign('listen_glow', 'echo'), audioSource: r.audioSource, audioFactory: r.audioFactory });
     expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
+    // Folded away from the child until a grown-up opens them.
+    expect(screen.queryByRole('button', { name: /أوقف/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /للكبار/ }).getAttribute('aria-expanded')).toBe('false');
+    grownUp();
     fireEvent.click(screen.getByRole('button', { name: /أوقف/ }));
     expect(screen.getByText('توقّفت الألعاب.')).toBeTruthy();
     expect(document.querySelectorAll('.play-card')).toHaveLength(0);
@@ -380,6 +389,7 @@ describe('the games page', () => {
     const r = recitation();
     await page({ approvals: await sign('listen_glow', 'count_ayat'), audioSource: r.audioSource, audioFactory: r.audioFactory });
     expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
+    grownUp();
     fireEvent.click(screen.getByRole('button', { name: /بلا تلاوة/ }));
     expect(await screen.findByRole('region', { name: 'عُدّ الآيات' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /شغّل التلاوة/ }).getAttribute('aria-pressed')).toBe('true');
@@ -398,11 +408,14 @@ describe('the games page', () => {
     expect(screen.queryByText(/أحسنت/)).toBeNull();
   });
 
-  it('the grown-up chooses the age band: the sitting restarts for it, with that band\'s games and segments', async () => {
+  it('the grown-up moves the age band one step: the sitting restarts for it, with that band\'s games and segments', async () => {
     await page({ approvals: await sign('order_ayat', 'build_ayah') });
     // 3-5 by default: ordering pairs (building is not for 3-5), on 1-3.
     expect(await screen.findByRole('region', { name: 'رتّب الآيات' })).toBeTruthy();
     expect(screen.getByText(/الآيات ١–٣ · اللعبة ١ من ١/)).toBeTruthy();
+    grownUp();
+    // One band up or down only (plan §B.1): from 3-5, not 9-12.
+    expect(screen.queryByRole('button', { name: '٩–١٢' })).toBeNull();
     expect(screen.getByRole('button', { name: '٣–٥' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: '٦–٨' }));
     expect(screen.getByRole('button', { name: '٦–٨' }).getAttribute('aria-pressed')).toBe('true');

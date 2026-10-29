@@ -60,6 +60,8 @@ export function firstLetter(word: string): string {
 
 /** Shapes, so a card is never told apart by colour alone. */
 export const SHAPES = ['●', '▲', '■', '★', '◆'] as const;
+/** Their names, for a screen reader. */
+export const SHAPE_NAMES = ['الدائرة', 'المثلث', 'المربع', 'النجمة', 'المعيّن'] as const;
 
 /** Calls onComplete once, the first time `done` is true. */
 export function useCompleteOnce(done: boolean, onComplete: () => void): void {

@@ -22,7 +22,12 @@ const TEXTS = [
 const AYAHS: Ayah[] = TEXTS.map((text, i) => ({ ayah: i + 1, basmala: null, text, sha256: '' }));
 const props = (over: Record<string, unknown> = {}) => ({ surah: 1, ayahs: AYAHS.slice(0, 2), pool: AYAHS, audio: null, band: '6-8' as const, seed: 3, onComplete: vi.fn(), ...over });
 const verses = () => [...document.querySelectorAll('.play-card__verse')].map((v) => v.textContent);
-const line = () => document.querySelector('.play__line')!.textContent;
+/** The line as it is SHOWN (its screen-reader text aside). */
+const line = () => {
+  const l = document.querySelector('.play__line')!.cloneNode(true) as HTMLElement;
+  l.querySelectorAll('.sr-only').forEach((x) => x.remove());
+  return l.textContent;
+};
 
 describe('word helpers', () => {
   it('a word and its mark; its letters; its first letter', () => {
@@ -51,6 +56,26 @@ describe('Complete the ayah (أكمل الآية)', () => {
     // كاف and كَاف are the same letters: the one is never a wrong choice for the other.
     const g = planGaps([AYAHS[4]!], AYAHS, '6-8', 1);
     expect(g.length).toBe(1);
+  });
+
+  it('no wrong choice completes ANOTHER ayah: a near copy differing only in the hidden word', () => {
+    // Ayah 2 is ayah 1 with its third word changed (stand-ins): hiding the third word of ayah 1,
+    // ayah 2's word would complete ayah 2, so it is never a choice -- in any seed, either band.
+    const near = [{ ayah: 1, text: 'ألف باء تاء ثاء' }, { ayah: 2, text: 'ألف باء جيم ثاء' }, ...TEXTS.slice(2).map((text, i) => ({ ayah: i + 3, text }))]
+      .map((a) => ({ ...a, basmala: null, sha256: '' }));
+    let asked = 0;
+    for (const band of ['6-8', '9-12'] as const) {
+      for (let seed = 0; seed < 60; seed++) {
+        for (const g of planGaps(near.slice(0, 2), near, band, seed)) {
+          for (const b of g.blanks) {
+            if (b.at !== 2) continue;
+            asked++;
+            expect(b.options).not.toContain(g.ayah.ayah === 1 ? 'جيم' : 'تاء');
+          }
+        }
+      }
+    }
+    expect(asked).toBeGreaterThan(0);
   });
 
   it('9-12: two blanks, filled in reading order, four choices each', () => {

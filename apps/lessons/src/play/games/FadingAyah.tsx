@@ -78,7 +78,8 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
           <VerseCard ayah={current.ayah} shape={round} disabled={!audio} onPress={() => audio?.play(surah, current.ayah.ayah)} />
         </div>
       ) : (
-        <p className="play__line" aria-label={`الآية ${arabic(current.ayah.ayah)}، وفيها ${arabic(hidden.size)} من الكلمات مخفية`}>
+        <p className="play__line">
+          <span className="sr-only">{`الآية ${arabic(current.ayah.ayah)}، وفيها ${arabic(hidden.size)} من الكلمات مخفية: `}</span>
           {current.tiles.map((t, i) => {
             const { word, mark } = splitMark(t);
             // A space between words, so the line reads as words (the flex gap lays them out).

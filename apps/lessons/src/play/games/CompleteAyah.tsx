@@ -34,16 +34,23 @@ export interface Gap {
  * The questions. An ayah needs a word on each side of what is hidden (so three words, four for two
  * blanks). The wrong choices are other words of the surah that do not look like the answer (another
  * spelling of the same letters would be a trick): for 9-12 from the nearest ayat, else from anywhere.
+ *
+ * One answer only: no wrong choice may complete ANOTHER ayah of the surah -- a near copy that differs
+ * from this one only in the hidden word (the same letters, read as words).
  */
 export function planGaps(ayahs: readonly Ayah[], pool: readonly Ayah[], band: Band, seed: number): Gap[] {
   const knobs = KNOBS[band];
   const next = rng(seed);
   const need = BLANKS[band];
   const out: Gap[] = [];
+  // Each ayah as its words' letters: what a child reads, whatever the marks.
+  const form = (tiles: readonly string[]) => tiles.map((t) => skeleton(splitMark(t).word)).join(' ');
   for (const ayah of ayahs) {
     if (out.length >= knobs.rounds || need === 0) break;
     const tiles = tilesOf(ayah.text);
     if (tiles.length < need + 2) continue;
+    const others = new Set(pool.filter((a) => a.ayah !== ayah.ayah).map((a) => form(tilesOf(a.text))));
+    const completesAnother = (at: number, w: string) => others.has(form(tiles.map((t, i) => (i === at ? w : t))));
     // Positions in reading order; never the first word, so the ayah is recognised from its start.
     const places = shuffled(tiles.map((_, i) => i).slice(1), seed + ayah.ayah).slice(0, need).sort((a, b) => a - b);
     const blanks: Blank[] = [];
@@ -52,7 +59,7 @@ export function planGaps(ayahs: readonly Ayah[], pool: readonly Ayah[], band: Ba
       const words = pool
         .filter((a) => a.ayah !== ayah.ayah)
         .flatMap((a) => tilesOf(a.text).map((t) => ({ w: splitMark(t).word, d: Math.abs(a.ayah - ayah.ayah) })))
-        .filter((x) => skeleton(x.w) !== skeleton(word) && skeleton(x.w).length > 0)
+        .filter((x) => skeleton(x.w) !== skeleton(word) && skeleton(x.w).length > 0 && !completesAnother(at, x.w))
         .map((x) => ({ ...x, k: (knobs.distractors === 'near' ? x.d : 0) + next() }))
         .sort((x, y) => x.k - y.k);
       const picked: string[] = [];

@@ -401,19 +401,24 @@ Count by skill: listening and recitation 2; recognition and structure 4; order a
   - Only ayat of 3–6 words (6–8, first word placed) or 3–10 (9–12) are built. Longer ayat are not cut, so L4–L5 build their short ayat only.
 - **Order the ayat (9).**
   - 3–5: two neighbouring ayat, "which comes first?". With recitation, each card can be heard.
-  - 6–8 and 9–12: up to 5 (6–8) or 6 (9–12) ayat of the segment. The child touches the one that comes next, and a card out of turn is refused.
+  - 6–8 and 9–12: up to 5 (6–8) or 6 (9–12) ayat of the segment, cut as evenly as possible (7 by 6 is 4 and 3), never more than the band's size. The child touches the one that comes next, and a card out of turn is refused.
   - A card shows no number until it is in place. Two ayat with the same words are never asked to be told apart.
-- **Start ↔ end (10).** Real ayat of at least four words, cut in the middle at a word boundary.
+- **Start ↔ end (10).** Real ayat of at least four words, cut in the middle at a word boundary. The pairs are drawn from the seed. For 9–12, the pairs sharing the commonest rhyme (the ayah's last letter) come first, so the ends cannot be told apart by their sound.
   - A half is marked "…" where it was cut, and named "the start/end of an ayah" for a screen reader. A wrong end is refused, so no joined text is ever shown.
   - A match becomes the whole verified ayah. Pairs come from the segment first, then the nearest ayat (similar endings for 9–12).
 - **What comes next? (11).** The prompt is shown whole, with its number; the choices are whole ayat, unnumbered until answered.
   - Wrong choices: 6–8 never a neighbour of the prompt or the answer; 9–12 the nearest ayat. 9–12 is also asked "what comes before?" every other question.
+  - **One answer only.** A refrain (an ayah whose words recur, e.g. 55:13…, 77:15…, 54, 26) is never the prompt, and no wrong choice is itself next to an ayah with the prompt's words, in either direction.
 - **Mistakes follow §B.3.** 3–5 gets two tries, then the answer is shown and praised; 6–8 and 9–12 get one. **9–12 ends a game with a review list**: the whole ayat it missed, never the wrong choices. The child moves on when ready.
 - **A game that cannot be played on a segment is not offered** (`FITS` in `PlayLesson.tsx`), rather than shown and skipped. Examples: no ayah short enough to build, or fewer than two long enough to cut.
+- **The grown-up's controls are folded behind "⚙ للكبار"**: the child sees the game, not the settings.
+- **Deviation: the grown-up moves the age band one step up or down** (§B.1, §H Q4) from the page's starting band, and the sitting restarts for it. The page has no profile yet (§B.5 item 5), so it starts at 3–5; the opener's profile will set the starting band once it exists.
+
 **As built (PR-B: games 8, 12, 13, recall).**
 - **Complete the ayah (8).** One word hidden (6–8) or two (9–12), never the first word. A hidden word shows as a blank, and its pause mark stays in its place.
   - The choices are real words of the same surah: 3 for 6–8; 4 for 9–12, from the nearest ayat. None has the same letters as the answer with other marks.
   - A wrong choice is refused and never put into the blank. Once complete, the whole verified ayah is shown.
+  - **One answer only.** No wrong choice completes another ayah of the surah, i.e. a near copy that differs only in the hidden word. Checked over all 114 surahs.
 - **The fading ayah (12).** The ayah is shown whole, and the child recites it aloud. At each step more words are hidden, never changed.
   - 6–8: 3 steps, to all hidden. 9–12: 5 steps, and a hidden word leaves its first letter, in a box named as a cue, so the last step is first letters only. There are never more steps than words, so each step hides at least one more.
   - A hidden word can be touched to see it again. At the end, the whole ayah is shown. Nothing is scored or recorded.
@@ -422,8 +427,6 @@ Count by skill: listening and recitation 2; recognition and structure 4; order a
   - "which comes first?": two ayat at least two apart.
   - An ayah whose words appear again in the surah is never asked.
 - **Every word line has spaces between its words** (flex items, so the layout is unchanged), so a screen reader or a copy reads words, not one run.
-
-- **Deviation: the grown-up chooses the age band.** The page has no profile yet (§B.5 item 5), so the grown-up's controls choose 3–5, 6–8 or 9–12, and the sitting restarts for it. The opener's profile will set the starting band once it exists. The "one band up or down" limit (§H Q4) comes with it.
 
 **Game "skins"** (garden, sea, stars, desert caravan) change only the decoration and the reward animation, never the mechanic. They rotate per surah, so two surahs feel different even with the same mechanic. Skins carry no text and no Quran.
 
@@ -479,7 +482,7 @@ For one child on one surah (or segment), the engine builds a playlist. It is det
     - `games/shuffle.ts`, which places the answer;
     - `audio/audio-controller.ts` and `audio/audio-manifest.ts`, the recitation and its verified list;
     - `quran/dataset.ts`, the loader of the verified text;
-    - `play/play.css`, the games' stylesheet: how a verse, a tile or a blank is shown. It moved out of `styles.css` (PR-A), so a lesson style cannot change a signed game.
+    - `play/play.css`, the games' stylesheet (how a verse, a tile or a blank is shown), and `styles.css`, the engine's base styles, whose buttons, notes and page the games also use. A lesson style change therefore re-opens every mechanic's review.
 
     `route.ts` only maps a path to a surah number, and `App.tsx` only renders `PlayRoute`, so neither is covered. Which games may be played (the registry, `play.json`, the keys) is fixed at build time in `signed.ts`: no page passes them to `PlayLesson`.
 
