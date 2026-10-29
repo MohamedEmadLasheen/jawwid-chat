@@ -390,7 +390,7 @@ The old lesson listed these under a haraka their letter does not carry (for exam
 | hamza_kasra-002 | سُئِلْ | سُئِلَ | ADDED TASHKEEL: final vowel replaced by the pausal sukun |
 | hamza_kasra-003 | إِسْلَامْ | إِسْلَام | ADDED TASHKEEL: final sukun |
 | hamza_kasra-004 | إِيمَانْ | إِيمَان | ADDED TASHKEEL: final sukun |
-| hamza_kasra-005 | رُئِيْ | رُئِيَ | ADDED TASHKEEL: final vowel replaced by the pausal sukun |
+| hamza_kasra-005 | رُئِي | رُئِيَ | ADDED TASHKEEL: final vowel dropped in pause; a madd letter stays bare (no sukun) |
 | hamza_kasra-006 | إِمَامْ | إِمَام | ADDED TASHKEEL: final sukun |
 | hamza_kasra-007 | إِذَا | — | — |
 | hamza_kasra-008 | إِلَى | — | — |

@@ -584,6 +584,13 @@ describe('§7 audience data', () => {
     await expect(stories.setFamilyAudienceData(s.managerId, familyW, { countryCode: 'UAE' })).rejects.toMatchObject({
       code: CommErrorCode.STORY_AUDIENCE_INVALID,
     });
+    // PD-45: two letters are not enough -- a code that is not a country of the
+    // list is a 400 that names GB, never chat.family_country_listed's 500.
+    for (const countryCode of ['UK', 'ZZ', 'AC', 'DG', 'EA', 'IC']) {
+      await expect(stories.setFamilyAudienceData(s.managerId, familyW, { countryCode })).rejects.toMatchObject({
+        code: CommErrorCode.STORY_AUDIENCE_INVALID, status: 400, message: expect.stringMatching(/GB/),
+      });
+    }
     await expect(
       stories.setFamilyAudienceData(s.managerId, familyW, { subscriptionPlanMonths: 2 }),
     ).rejects.toMatchObject({ code: CommErrorCode.STORY_AUDIENCE_INVALID });
