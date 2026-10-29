@@ -124,7 +124,7 @@ function RecordView({ l, onClose, onMode }: { l: LessonRecord; onClose: () => vo
         <dd>{outcomeText(l, tx)}</dd>
         {l.outcomeNote && (
           <>
-            <dt>{tx(J.reasonInternal)}</dt>
+            <dt>{tx(J.reasonStaffTeacher)}</dt>
             <dd dir="auto">{l.outcomeNote}</dd>
           </>
         )}

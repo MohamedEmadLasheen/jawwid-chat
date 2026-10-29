@@ -86,7 +86,8 @@ export const journeyApi = {
   tickets: (conversationId: string) =>
     api.get<{ tickets: LessonTicket[] }>(`/conversations/${conversationId}/lesson-tickets`),
   /** A student excused before the start (the supervisor gives no reason). */
-  excuseBefore: (lessonId: string) => api.post<LessonRecord>(`/lessons/${lessonId}/apology`, {}),
+  excuseBefore: (lessonId: string, reason: string | null = null) =>
+    api.post<LessonRecord>(`/lessons/${lessonId}/apology`, reason ? { reason } : {}),
   /** A student excused after the start: excused at once; the reason is internal. */
   excuseAfter: (lessonId: string, reason: string) => api.post<LessonRecord>(`/lessons/${lessonId}/late-excuse`, { reason }),
   teacherExcuse: (lessonId: string, reason: string) => api.post<LessonRecord>(`/lessons/${lessonId}/teacher-apology`, { reason }),

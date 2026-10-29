@@ -92,6 +92,8 @@ export function LessonCardDialog({
 
   const title = tx(kind === 'student_excuse' ? J.menuStudentExcuse : kind === 'teacher_excuse' ? J.menuTeacherExcuse : J.menuMakeup)
   const needsReason = kind === 'teacher_excuse' || (kind === 'student_excuse' && timing === 'after')
+  // Before the start a reason is optional: kept with staff like the others, never in the group.
+  const showReason = needsReason || (kind === 'student_excuse' && timing === 'before')
   // PD-22: what is typed is the academy's (Cairo) clock, whatever the browser's zone.
   const typed = date && time ? academyWallClockToIso(date, time) : null
   const startsAt = typed ? new Date(typed) : date && time ? new Date(Number.NaN) : null
@@ -108,7 +110,7 @@ export function LessonCardDialog({
     setError(null)
     try {
       if (kind === 'student_excuse') {
-        if (timing === 'before') await journeyApi.excuseBefore(lessonId)
+        if (timing === 'before') await journeyApi.excuseBefore(lessonId, reason.trim() || null)
         else await journeyApi.excuseAfter(lessonId, reason.trim())
       } else if (kind === 'teacher_excuse') {
         await journeyApi.teacherExcuse(lessonId, reason.trim())
@@ -187,9 +189,9 @@ export function LessonCardDialog({
 
           {kind === 'teacher_excuse' && <p className="ts-muted">{tx(J.teacherExcuseHint)}</p>}
 
-          {needsReason && (
+          {showReason && (
             <div className="field">
-              <label className="field__label" htmlFor={`${base}-reason`}>{tx(J.reasonInternal)}</label>
+              <label className="field__label" htmlFor={`${base}-reason`}>{tx(needsReason ? J.reasonStaffTeacher : J.reasonStaffTeacherOptional)}</label>
               <textarea
                 id={`${base}-reason`}
                 className="input"
@@ -197,10 +199,10 @@ export function LessonCardDialog({
                 rows={3}
                 maxLength={1000}
                 value={reason}
-                aria-invalid={touched && !reason.trim()}
+                aria-invalid={needsReason && touched && !reason.trim()}
                 onChange={(e) => setReason(e.target.value)}
               />
-              {touched && !reason.trim() && <span className="field__error">{tx(J.required)}</span>}
+              {needsReason && touched && !reason.trim() && <span className="field__error">{tx(J.required)}</span>}
             </div>
           )}
 
