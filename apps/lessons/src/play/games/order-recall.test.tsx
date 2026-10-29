@@ -136,6 +136,7 @@ describe('Order the ayat (رتّب الآيات)', () => {
     }
     // The last card has nowhere else to go.
     expect(ordered()).toEqual(TEXTS.slice(0, 5));
+    expect(screen.getByText('أحسنت! هذا ترتيبها')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /التالي/ }));
     expect(onComplete).toHaveBeenCalledTimes(1);
   });

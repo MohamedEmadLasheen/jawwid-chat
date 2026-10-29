@@ -97,7 +97,9 @@ export function OrderAyat({ surah, ayahs, pool, audio, band, seed, onComplete }:
   const tray = current.shown.filter((a) => !current.ayat.slice(0, placed).includes(a));
   return (
     <section className="play" aria-label="رتّب الآيات">
-      <p className="play__ask">{band === '3-5' ? 'أيّ الآيتين تأتي أولًا؟' : placed === 0 ? 'المس الآية التي تأتي أولًا' : 'المس الآية التي تأتي بعدها'}</p>
+      <p className="play__ask">
+        {band === '3-5' ? 'أيّ الآيتين تأتي أولًا؟' : done ? 'أحسنت! هذا ترتيبها' : placed === 0 ? 'المس الآية التي تأتي أولًا' : 'المس الآية التي تأتي بعدها'}
+      </p>
       {band === '3-5' ? (
         <div className="play-cards">
           {current.shown.map((a, i) => (

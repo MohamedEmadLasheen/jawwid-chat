@@ -6,7 +6,7 @@
    "scope": "play",
    "subjects": [
     {
-     "approvalSha256": "90f8822ab38fb382c710a62f9c08771003c3e0f8a64c73019bce874164e07c08",
+     "approvalSha256": "3f737bff45f46223ffb6dc1414c5308f49cac49d70a6fa3df2593f68e3f43da7",
      "id": "build_ayah",
      "item": {
       "bands": [
@@ -14,7 +14,7 @@
        "9-12"
       ],
       "code": "BuildAyah.tsx",
-      "codeSha256": "61126dc9b40b4e7aa61eac22bab3a3ad96a6b8a0fa8421a702964d71eb8a4a18",
+      "codeSha256": "db9e023e04e7b84b3d0db0eed9850c445e81f4072b1b6b8c9b6cabfc8a1aff95",
       "id": "build_ayah",
       "nameAr": "\u0631\u0643\u0651\u0628 \u0627\u0644\u0622\u064a\u0629",
       "needsAudio": false,
@@ -43,14 +43,14 @@
      ]
     },
     {
-     "approvalSha256": "c85ddec3ce17f2deda33399f5d574e21ac9750c0cda5a2647b7035cfc5998fbc",
+     "approvalSha256": "c3804fb47a116370d0d28db96811b73d0f70fe8f5fade90501d3db960299106c",
      "id": "count_ayat",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "CountAyat.tsx",
-      "codeSha256": "4acdc75be3f174fcc29af322c2018067fb4a728c033a72c742ea7b6d3e9edcc2",
+      "codeSha256": "c9700a236342e8fbcf856f6c987a6d057beb5c66768b9cf2065393cedb029737",
       "id": "count_ayat",
       "nameAr": "\u0639\u064f\u062f\u0651 \u0627\u0644\u0622\u064a\u0627\u062a",
       "needsAudio": false,
@@ -72,14 +72,14 @@
      ]
     },
     {
-     "approvalSha256": "21bcdf3dd9039f43b5f2f4cabd2f4e43393397da811bd97ec002ceb73c4b2968",
+     "approvalSha256": "057c2dd28e253ef86abc4a0a0d473e5ff8ee95f8db36399144c2dd5cd864d26f",
      "id": "echo",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "Echo.tsx",
-      "codeSha256": "5683e084d43d571253d44576d1de3dad2eb34f34a78e5bf0d344422a1ce05a90",
+      "codeSha256": "17af248bc254d28ec30ff9189a950d6269dbd3ab95b1fe564137a7c02e6ef20e",
       "id": "echo",
       "nameAr": "\u0631\u062f\u0651\u062f \u0645\u0639\u064a",
       "needsAudio": true,
@@ -105,14 +105,14 @@
      ]
     },
     {
-     "approvalSha256": "b154513749c0ef05a8792bf2280b56a1a8abc008847b3e54cf3db5a032a26cd8",
+     "approvalSha256": "d43a9833a9f33e71cf400e4dfc986c4bd3815eaca3a79eb58dfe99ffb2f2b038",
      "id": "listen_glow",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "ListenGlow.tsx",
-      "codeSha256": "6e5bf9c9ccca5beb0e256b8e3d75998072eb20ee6a51ac8b7e518b165f5550ca",
+      "codeSha256": "e815db7e3826952472264303be54f3f2dc814aafa651c0c18bd3b41c4f90bbc1",
       "id": "listen_glow",
       "nameAr": "\u0627\u0633\u0645\u0639 \u0648\u0627\u0644\u0645\u0633",
       "needsAudio": true,
@@ -136,7 +136,7 @@
      ]
     },
     {
-     "approvalSha256": "723edd5e67ae37d4b75740fbac462000590b22588d00c29d4a442064e270e6fd",
+     "approvalSha256": "be5b3b462703eb7843acdf7d26886afe6a6ba7c3d9da43f915ce86ee45afd2a7",
      "id": "next_ayah",
      "item": {
       "bands": [
@@ -144,7 +144,7 @@
        "9-12"
       ],
       "code": "NextAyah.tsx",
-      "codeSha256": "1ecb2569c1b2705f4195f28bf335672082d69518542e66d89c3930145d670c4b",
+      "codeSha256": "de5d30387269de3b49c66743060109376019a2768e2ca88727be7c577db467cb",
       "id": "next_ayah",
       "nameAr": "\u0645\u0627 \u0627\u0644\u0622\u064a\u0629 \u0627\u0644\u062a\u0627\u0644\u064a\u0629\u061f",
       "needsAudio": false,
@@ -170,7 +170,7 @@
      ]
     },
     {
-     "approvalSha256": "a70df087d5ad5cb267b05b5a952004516b28f9d5eb33b9bd4b3e1a9c7930289e",
+     "approvalSha256": "ce95ac0efe67ccc13763fb527e5efc532d89bad54801d92c598f25c0a8891b38",
      "id": "order_ayat",
      "item": {
       "bands": [
@@ -179,7 +179,7 @@
        "9-12"
       ],
       "code": "OrderAyat.tsx",
-      "codeSha256": "1884b4c7a6d9e7e6046d2856b92208938226ac4247a00657dbb9723b62208226",
+      "codeSha256": "0fa2dfb0386e26375c8d95efe0b57c0e1ae68132a9275d55a7cc9e0eac63b9f8",
       "id": "order_ayat",
       "nameAr": "\u0631\u062a\u0651\u0628 \u0627\u0644\u0622\u064a\u0627\u062a",
       "needsAudio": false,
@@ -207,7 +207,7 @@
      ]
     },
     {
-     "approvalSha256": "11bb3d665862983a9ca52b4ad70c2c3d5960eb7ce3a86db0207a27d1db25fdc1",
+     "approvalSha256": "f4def457d07ac27a90692d363990357e20e8c7b9380e6f8c28100a469fbd17c6",
      "id": "start_end",
      "item": {
       "bands": [
@@ -215,7 +215,7 @@
        "9-12"
       ],
       "code": "StartEnd.tsx",
-      "codeSha256": "36b197f14a84780acc7c9bbf84f7071fe9698bfae1d66f38bd9326bbed257014",
+      "codeSha256": "89abfa6d465bd5910cb8a0c9101c78bc3d92f8e1b1f04bf5082a54315546432a",
       "id": "start_end",
       "nameAr": "\u0628\u062f\u0627\u064a\u0629 \u0648\u0646\u0647\u0627\u064a\u0629",
       "needsAudio": false,
@@ -241,14 +241,14 @@
      ]
     },
     {
-     "approvalSha256": "4005e4088b8f426a4ffe2019c8a276d73704a07b7c8f5fe82480c9525c29c250",
+     "approvalSha256": "ff28dc4b3cf623d52d8a909da69f06304cfdef4a8644f70fe590a46c57ead185",
      "id": "which_heard",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "WhichHeard.tsx",
-      "codeSha256": "793b97ad401307d0f8958125ddd14378e4bc69ef0e4181b3c1f46908e332ad50",
+      "codeSha256": "5e47b9bd9d47eb372d0553bd74c9f8f655e83cc21458893126eb7bce906f9494",
       "id": "which_heard",
       "nameAr": "\u0623\u064a\u0651 \u0622\u064a\u0629 \u0633\u0645\u0639\u062a\u061f",
       "needsAudio": true,
