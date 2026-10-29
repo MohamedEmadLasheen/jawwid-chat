@@ -7392,6 +7392,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'To do ({count}+)'**
   String scheduleFilterTodoMore(int count);
+
+  /// PD-47 PR-4: a task entry's button in the Notification Center.
+  ///
+  /// In en, this message translates to:
+  /// **'Open my To do'**
+  String get notificationsActionOpenTask;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -4316,4 +4316,7 @@ class L10nEn extends L10n {
   String scheduleFilterTodoMore(int count) {
     return 'To do ($count+)';
   }
+
+  @override
+  String get notificationsActionOpenTask => 'Open my To do';
 }

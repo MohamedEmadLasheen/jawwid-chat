@@ -125,5 +125,7 @@ describe('PD-34: the Notification Center', () => {
     expect(routeFor(null)).toBeNull()
     // PD-35 B5: a case notification opens the case in Escalations.
     expect(routeFor({ kind: 'open_case', caseId: 'k 1' })).toBe('/cases?case=k%201')
+    expect(routeFor({ kind: 'open_task', taskId: 't 1' })).toBe('/tasks?task=t%201')
+    expect(routeFor({ kind: 'open_task' })).toBeNull()
   })
 })

@@ -434,6 +434,19 @@ describe('packages and renewals', () => {
     expect((await tasks.get(sa, id)).state).toBe('removed');
   });
 
+  it('a renewal with no Sales owner or Sales manager reaches the super admin (PR-4: no push to Sales any more)', async () => {
+    await exec(`update chat.department set manager_id = null where kind = 'sales'`);
+    await packageOf(8);
+    await exec(`insert into chat.renewal_request (organization_id, learner_id, family_id, requested_by)
+                values (chat.default_organization_id(), $1::uuid, $2::uuid, $3::uuid)`, s.learnerId, s.familyId, s.parentId);
+    const [id] = await tasksOf('renewal_request');
+    expect((await tasks.get(sa, id)).assignee).toEqual({ kind: 'staff', id: sa });
+    // A Sales manager appointed later takes it over (the task follows its owner).
+    await exec(`update chat.department set manager_id = $1::uuid where kind = 'sales'`, smgr);
+    await tasks.sweep();
+    expect((await tasks.get(smgr, id)).assignee).toEqual({ kind: 'staff', id: smgr });
+  });
+
   it('a renewal the parent asks for is High at once, and a new package completes it', async () => {
     await packageOf(8);
     await exec(`insert into chat.renewal_request (organization_id, learner_id, family_id, requested_by)
