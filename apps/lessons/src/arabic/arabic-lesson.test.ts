@@ -90,7 +90,7 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
     const bad: ((c: ArabicLesson) => void)[] = [
       (c) => { c.units[0]!.words.push({ id: 'ba_fatha-003', text: 'بِنْتْ', was: null, review: null }); }, // ب, but with a kasra
       (c) => { c.units[0]!.name = 'بِ'; }, // the name is not its own syllable
-      (c) => { (c.units[0] as { mark: string }).mark = 'shadda'; }, // not a haraka
+      (c) => { (c.units[0] as { mark: string }).mark = 'hamza'; }, // not a mark a unit may teach
       (c) => { c.units[0]!.letters = ['لا']; }, // a marked unit is one letter
       (c) => { c.quiz[0] = { ...c.quiz[0]!, options: ['بَابْ', 'كَتَبَ'] } as never; }, // both carry بَ: two right answers
       (c) => { c.units[0]!.group = ''; },
@@ -115,11 +115,37 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
       (c) => { Object.assign(c.units[1]!, { letters: ['ي'], madd: 'ya', words: [{ id: 'madd_alif-001', text: 'بَيْتْ', was: null, review: null }] }); }, // ي under a sukun: no madd
       (c) => { (c.units[1] as { madd: string }).madd = 'waw'; }, // the madd is not the unit's letter
       (c) => { c.units[1]!.mark = 'fatha'; }, // a madd unit is never marked
+      (c) => { (c.units[1] as { madd: unknown }).madd = ['alif']; }, // not a string
+      (c) => { c.units[1]!.words.push({ id: 'madd_alif-002', text: 'فَاْسْ', was: null, review: null }); }, // a sukun on a madd letter
+      (c) => {
+        // A wrong option with a madd the rule cannot see (عَلَى) in a madd unit's quiz.
+        c.units[0]!.words.push({ id: 'jim_sukun-002', text: 'عَلَى', was: null, review: null });
+        c.quiz[1] = { ...c.quiz[1]!, options: ['عَلَى', 'بَابْ'] } as never;
+      },
     ];
     for (const change of bad) {
       const c = sukunMaddStandIn();
       change(c);
       expect(resolveArabicLesson(c, 6)).toBeNull();
     }
+  });
+
+  it('lessons 8 and 9: a tanween unit counts the word\'s end; a shadda unit, the letter carrying it', () => {
+    const c = sukunMaddStandIn();
+    c.units.push(
+      {
+        id: 'tanween_fath', letters: [], tanween: 'fath', name: 'تَنْوِينْ', forms: ['ـً'], note: null,
+        words: [{ id: 'tanween_fath-001', text: 'كِتَابًا', was: null, review: null, finalMarkException: "the lesson's tanween" }],
+      },
+      {
+        id: 'dal_shadda', letters: ['د'], mark: 'shadda', name: 'دّ', forms: ['دّ'], note: null,
+        words: [{ id: 'dal_shadda-001', text: 'جَدَّةْ', was: null, review: null }],
+      },
+    );
+    const r = resolveArabicLesson(c, 6)!;
+    expect(r).not.toBeNull();
+    expect(r.units.slice(2).map((u) => [u.id, u.words.map((w) => w.positions)])).toEqual([['tanween_fath', [['middle']]], ['dal_shadda', [['middle']]]]);
+    c.units[2]!.letters = ['ب']; // a tanween unit has no letters
+    expect(resolveArabicLesson(c, 6)).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './letters.fixture.json';
-import { clusters, has, isLetter, isMark, isPhrase, isWord, lettersOf, positions } from './letters';
+import { TANWEEN, clusters, has, isLetter, isMark, isPhrase, isWord, lettersOf, positions, sukunOnMadd, uncountedMadd } from './letters';
 
 const units = fixture.units as Record<string, string[]>;
 
@@ -20,6 +20,7 @@ describe('the one letter rule (shared with the CI checker)', () => {
     kasra: String.fromCodePoint(0x650),
     damma: String.fromCodePoint(0x64f),
     sukun: String.fromCodePoint(0x652),
+    shadda: String.fromCodePoint(0x651),
   };
   for (const c of fixture.markedCases) {
     it(`${c.word} / ${c.letters.join('')} with ${c.mark}: ${c.has ? c.positions.join(', ') : 'not there'}`, () => {
@@ -40,6 +41,21 @@ describe('the one letter rule (shared with the CI checker)', () => {
       const unit = { letters: [MADD[c.madd]!.letter], after: MADD[c.madd]!.after };
       expect(has(c.word, unit)).toBe(c.has);
       expect(positions(c.word, unit)).toEqual(c.positions);
+    });
+  }
+
+  // Lesson 8: the word's end carrying its tanween.
+  for (const c of fixture.tanweenCases) {
+    it(`${c.word} / tanween ${c.tanween}: ${c.has ? c.positions.join(', ') : 'not there'}`, () => {
+      const unit = { letters: [], tanween: TANWEEN[c.tanween as keyof typeof TANWEEN] };
+      expect(has(c.word, unit)).toBe(c.has);
+      expect(positions(c.word, unit)).toEqual(c.positions);
+    });
+  }
+  for (const c of fixture.maddChecks) {
+    it(`${c.word}: sukun on a madd ${c.sukunOnMadd}, an uncounted madd ${c.uncountedMadd}`, () => {
+      expect(sukunOnMadd(c.word)).toBe(c.sukunOnMadd);
+      expect(uncountedMadd(c.word)).toBe(c.uncountedMadd);
     });
   }
 

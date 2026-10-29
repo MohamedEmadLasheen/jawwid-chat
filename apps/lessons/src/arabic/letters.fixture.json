@@ -681,6 +681,61 @@
       "positions": [
         "middle"
       ]
+    },
+    {
+      "word": "قُوَّةْ",
+      "letters": [
+        "و"
+      ],
+      "mark": "sukun",
+      "has": false,
+      "positions": [],
+      "note": "a shadda letter carrying no sukun"
+    },
+    {
+      "word": "قُوَّةْ",
+      "letters": [
+        "و"
+      ],
+      "mark": "shadda",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "lesson 9: the letter carrying the shadda"
+    },
+    {
+      "word": "مُدِّي",
+      "letters": [
+        "د"
+      ],
+      "mark": "shadda",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "رَدَّ",
+      "letters": [
+        "د"
+      ],
+      "mark": "shadda",
+      "has": true,
+      "positions": [
+        "end"
+      ],
+      "note": "the shadda counts on the last letter, unlike the sukun"
+    },
+    {
+      "word": "بْ",
+      "letters": [
+        "ب"
+      ],
+      "mark": "sukun",
+      "has": false,
+      "positions": [],
+      "note": "a one-letter word: its only letter is the last"
     }
   ],
   "maddCases": [
@@ -759,6 +814,190 @@
       "has": false,
       "positions": [],
       "note": "no alif at all"
+    },
+    {
+      "word": "مُدِّي",
+      "madd": "ya",
+      "has": true,
+      "positions": [
+        "end"
+      ],
+      "note": "after a shadda with its kasra"
+    },
+    {
+      "word": "قُوَّةْ",
+      "madd": "waw",
+      "has": false,
+      "positions": [],
+      "note": "و with a shadda is a consonant"
+    },
+    {
+      "word": "هٰذَا",
+      "madd": "alif",
+      "has": true,
+      "positions": [
+        "end"
+      ],
+      "note": "the dagger alif is not counted; the final ا is"
+    },
+    {
+      "word": "عَلَى",
+      "madd": "alif",
+      "has": false,
+      "positions": [],
+      "note": "ى is not ا"
+    },
+    {
+      "word": "مَآبْ",
+      "madd": "alif",
+      "has": false,
+      "positions": [],
+      "note": "آ is not ا"
+    },
+    {
+      "word": "سَأَلَ",
+      "madd": "alif",
+      "has": false,
+      "positions": [],
+      "note": "أ is not ا"
+    },
+    {
+      "word": "كِتَابًا",
+      "madd": "alif",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "the final ا after a tanween is not a madd"
+    },
+    {
+      "word": "وَ",
+      "madd": "waw",
+      "has": false,
+      "positions": [],
+      "note": "a one-letter word"
+    },
+    {
+      "word": "أُولَئِكَ",
+      "madd": "waw",
+      "has": false,
+      "positions": [],
+      "note": "the silent waw"
+    }
+  ],
+  "tanweenCases": [
+    {
+      "word": "كِتَابٌ",
+      "tanween": "damm",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "كِتَابًا",
+      "tanween": "fath",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "the fath sits on the letter before a bare final ا"
+    },
+    {
+      "word": "كِتَابًا",
+      "tanween": "damm",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "مَاءً",
+      "tanween": "fath",
+      "has": true,
+      "positions": [
+        "end"
+      ],
+      "note": "on a final hamza, no alif after it"
+    },
+    {
+      "word": "هُدًى",
+      "tanween": "fath",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "before a bare final ى"
+    },
+    {
+      "word": "بَيْتٍ",
+      "tanween": "kasr",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "بَيْتْ",
+      "tanween": "kasr",
+      "has": false,
+      "positions": [],
+      "note": "the pausal sukun is no tanween"
+    },
+    {
+      "word": "بٌ",
+      "tanween": "damm",
+      "has": true,
+      "positions": [
+        "start"
+      ],
+      "note": "a one-letter word"
+    }
+  ],
+  "maddChecks": [
+    {
+      "word": "فِيْلْ",
+      "sukunOnMadd": true,
+      "uncountedMadd": false,
+      "note": "a sukun on a madd letter: written bare"
+    },
+    {
+      "word": "فِيلْ",
+      "sukunOnMadd": false,
+      "uncountedMadd": false
+    },
+    {
+      "word": "غَنِيّْ",
+      "sukunOnMadd": false,
+      "uncountedMadd": false,
+      "note": "with a shadda the ي is a consonant"
+    },
+    {
+      "word": "بَيْتْ",
+      "sukunOnMadd": false,
+      "uncountedMadd": false,
+      "note": "ي after a fatha is no madd letter"
+    },
+    {
+      "word": "هٰذَا",
+      "sukunOnMadd": false,
+      "uncountedMadd": true,
+      "note": "the dagger alif"
+    },
+    {
+      "word": "عَلَى",
+      "sukunOnMadd": false,
+      "uncountedMadd": true,
+      "note": "ى after a fatha"
+    },
+    {
+      "word": "مَآبْ",
+      "sukunOnMadd": false,
+      "uncountedMadd": true,
+      "note": "the alif madda"
+    },
+    {
+      "word": "بَابْ",
+      "sukunOnMadd": false,
+      "uncountedMadd": false
     }
   ]
 }

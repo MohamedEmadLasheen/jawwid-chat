@@ -11,15 +11,24 @@
  */
 export type Position = 'start' | 'middle' | 'end';
 
-/** The three harakat of lesson 3 and the sukun of lesson 6, by name and code point. */
-export type Haraka = 'fatha' | 'kasra' | 'damma' | 'sukun';
+/** The marks a unit may teach: the harakat (lesson 3), the sukun (lesson 6), the shadda (lesson 9). */
+export type Haraka = 'fatha' | 'kasra' | 'damma' | 'sukun' | 'shadda';
 export const HARAKA: Record<Haraka, string> = {
   fatha: String.fromCodePoint(0x64e),
   kasra: String.fromCodePoint(0x650),
   damma: String.fromCodePoint(0x64f),
   sukun: String.fromCodePoint(0x652),
+  shadda: String.fromCodePoint(0x651),
 };
 const SUKUN = HARAKA.sukun;
+
+/** Lesson 8: the three tanween, by name and code point. */
+export type Tanween = 'fath' | 'damm' | 'kasr';
+export const TANWEEN: Record<Tanween, string> = {
+  fath: String.fromCodePoint(0x64b),
+  damm: String.fromCodePoint(0x64c),
+  kasr: String.fromCodePoint(0x64d),
+};
 
 /** Lesson 7 (the madd): each madd letter and the vowel it lengthens. */
 export type Madd = 'alif' | 'ya' | 'waw';
@@ -38,12 +47,17 @@ export const POSITIONS: readonly Position[] = ['start', 'middle', 'end'];
  * is the pausal sukun every word ends in, not the sukun the lesson teaches.
  * With `after` (a vowel's code point), the letter counts only where it is BARE
  * and the letter before carries that vowel (lesson 7, the madd): ا after a
- * fatha, ي after a kasra, و after a damma; بَيْتْ and يَوْمْ have no madd.
+ * fatha, ي after a kasra, و after a damma; بَيْتْ and يَوْمْ have no madd, and
+ * neither has the silent waw of أُولَئِكَ / أُولُو (أ و ل: the و is not read).
+ * With `tanween` (its code point), the word's END counts where it carries that
+ * tanween (lesson 8): the last letter, or for the fath the letter before a bare
+ * final ا or ى (كِتَابًا); `letters` is then empty.
  */
 export interface LetterUnit {
   letters: readonly string[];
   mark?: string;
   after?: string;
+  tanween?: string;
 }
 
 const TATWEEL = 0x640;
@@ -90,6 +104,12 @@ function marksOf(word: string): string[][] {
 /** Where each of the unit's letters (or pairs) occurs in the word's letters (carrying the unit's mark, if it has one). */
 function occurrences(word: string, unit: LetterUnit): { at: number; length: number }[] {
   const ls = lettersOf(word);
+  if (unit.tanween) {
+    const marks = marksOf(word);
+    let k = ls.length - 1;
+    if (k > 0 && unit.tanween === TANWEEN.fath && (ls[k] === 'ا' || ls[k] === 'ى') && marks[k]!.length === 0) k--;
+    return k >= 0 && marks[k]!.includes(unit.tanween) ? [{ at: k, length: 1 }] : [];
+  }
   const marks = unit.mark || unit.after ? marksOf(word) : [];
   const out: { at: number; length: number }[] = [];
   for (const entry of unit.letters) {
@@ -99,10 +119,35 @@ function occurrences(word: string, unit: LetterUnit): { at: number; length: numb
       if (unit.mark && !marks[i]!.includes(unit.mark)) continue;
       if (unit.mark === SUKUN && i + seq.length === ls.length) continue;
       if (unit.after && (i === 0 || marks[i]!.length > 0 || !marks[i - 1]!.includes(unit.after))) continue;
+      if (unit.after && isSilentWaw(ls, i)) continue;
       out.push({ at: i, length: seq.length });
     }
   }
   return out.sort((a, b) => a.at - b.at);
+}
+
+/** The silent waw of أُولَئِكَ / أُولُو / أُولَاتُ: أ, then و, then ل -- written, never read. */
+function isSilentWaw(ls: readonly string[], i: number): boolean {
+  return i === 1 && ls[0] === 'أ' && ls[1] === 'و' && ls[2] === 'ل';
+}
+
+/**
+ * A madd the madd rule does not count, though it is read long: a dagger alif
+ * (هٰذَا), an alif maqsura after a fatha (عَلَى), or an alif madda (آ). A madd
+ * unit's quiz refuses an option carrying one, so a "wrong" option never
+ * secretly has a madd.
+ */
+export function uncountedMadd(word: string): boolean {
+  const ls = lettersOf(word);
+  const marks = marksOf(word);
+  return [...word].some((ch) => ch === String.fromCodePoint(0x670)) || ls.includes('آ') || ls.some((l, i) => l === 'ى' && i > 0 && marks[i - 1]!.includes(HARAKA.fatha));
+}
+
+/** A sukun written on a madd letter (فِيْلْ): a content error, since a madd letter is written bare. With a shadda the letter is a consonant (غَنِيّْ), not a madd. */
+export function sukunOnMadd(word: string): boolean {
+  const ls = lettersOf(word);
+  const marks = marksOf(word);
+  return ls.some((l, i) => i > 0 && marks[i]!.includes(SUKUN) && !marks[i]!.includes(HARAKA.shadda) && Object.values(MADD).some((m) => m.letter === l && marks[i - 1]!.includes(m.after)));
 }
 
 export function has(word: string, unit: LetterUnit): boolean {
