@@ -4457,10 +4457,6 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get boardDraftDiscarded =>
-      'Unsaved changes from an earlier visit could not be applied: the board had changed since.';
-
-  @override
   String get boardFailedLimit =>
       'This board has reached a limit: a page holds up to 512 KB, a board 50 pages, and your boards 25 MB of drawings.';
 
@@ -4666,4 +4662,26 @@ class L10nEn extends L10n {
 
   @override
   String get boardVerseChanged => 'Verse text updated, re-insert';
+
+  @override
+  String get boardDraftStale =>
+      'You have changes from an earlier visit that were not saved, on pages that have changed since. Keep yours (they replace those pages) or discard them.';
+
+  @override
+  String get boardDraftStaleKeep => 'Keep mine';
+
+  @override
+  String get boardDraftStaleDiscard => 'Discard';
+
+  @override
+  String get boardDraftNotKept =>
+      'Your unsaved changes couldn\'t be kept on this device. Stay on this board until it says Saved.';
+
+  @override
+  String get boardPageFull =>
+      'This page is full (512 KB). Add a new page to keep writing; nothing more is saved on this one.';
+
+  @override
+  String get boardSaveFirst =>
+      'Your changes have to be saved first. Try again once the board says Saved.';
 }

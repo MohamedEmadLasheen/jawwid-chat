@@ -7636,12 +7636,6 @@ abstract class L10n {
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
-  /// **'Unsaved changes from an earlier visit could not be applied: the board had changed since.'**
-  String get boardDraftDiscarded;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
   /// **'This board has reached a limit: a page holds up to 512 KB, a board 50 pages, and your boards 25 MB of drawings.'**
   String get boardFailedLimit;
 
@@ -8034,6 +8028,42 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Verse text updated, re-insert'**
   String get boardVerseChanged;
+
+  /// PD-39 whiteboard. Review of #293: never dropped, never silently written over.
+  ///
+  /// In en, this message translates to:
+  /// **'You have changes from an earlier visit that were not saved, on pages that have changed since. Keep yours (they replace those pages) or discard them.'**
+  String get boardDraftStale;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep mine'**
+  String get boardDraftStaleKeep;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get boardDraftStaleDiscard;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Your unsaved changes couldn\'t be kept on this device. Stay on this board until it says Saved.'**
+  String get boardDraftNotKept;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'This page is full (512 KB). Add a new page to keep writing; nothing more is saved on this one.'**
+  String get boardPageFull;
+
+  /// PD-39 whiteboard. A page action while changes are unsaved (offline).
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes have to be saved first. Try again once the board says Saved.'**
+  String get boardSaveFirst;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

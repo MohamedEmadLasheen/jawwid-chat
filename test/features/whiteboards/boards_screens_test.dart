@@ -27,15 +27,15 @@ class _Boards implements WhiteboardsRepository {
   final saved = <BoardPage>[];
 
   BoardSummary summary(String id, String title, {BoardState state = BoardState.active}) => BoardSummary(
-        id: id,
-        title: title,
-        state: state,
-        revision: revision,
-        pageCount: 1,
-        updatedAt: DateTime(2026, 10, 29),
-        trashedAt: state == BoardState.trashed ? DateTime(2026, 10, 20) : null,
-        purgeAfter: state == BoardState.trashed ? DateTime(2026, 11, 19) : null,
-      );
+    id: id,
+    title: title,
+    state: state,
+    revision: revision,
+    pageCount: 1,
+    updatedAt: DateTime(2026, 10, 29),
+    trashedAt: state == BoardState.trashed ? DateTime(2026, 10, 20) : null,
+    purgeAfter: state == BoardState.trashed ? DateTime(2026, 11, 19) : null,
+  );
 
   @override
   Future<List<BoardSummary>> list() async => [summary('b1', 'Al-Fatihah')];
@@ -45,10 +45,10 @@ class _Boards implements WhiteboardsRepository {
 
   @override
   Future<BoardDetail> open(String boardId) async => BoardDetail(
-        summary: summary(boardId, 'Al-Fatihah'),
-        canEdit: true,
-        pages: const [BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: [])],
-      );
+    summary: summary(boardId, 'Al-Fatihah'),
+    canEdit: true,
+    pages: const [BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: [])],
+  );
 
   @override
   Future<PageSaved> savePage(String boardId, String pageId, int revision, BoardPage page) async {
@@ -66,11 +66,13 @@ void main() {
 
   setUp(() {
     repo = _Boards();
-    container = ProviderContainer(overrides: [
-      whiteboardsRepositoryProvider.overrideWithValue(repo),
-      boardDraftStoreProvider.overrideWithValue(InMemoryBoardDraftStore()),
-      principalIdProvider.overrideWithValue('teacher-1'),
-    ]);
+    container = ProviderContainer(
+      overrides: [
+        whiteboardsRepositoryProvider.overrideWithValue(repo),
+        boardDraftStoreProvider.overrideWithValue(InMemoryBoardDraftStore()),
+        principalIdProvider.overrideWithValue('teacher-1'),
+      ],
+    );
   });
   tearDown(() => container.dispose());
 
@@ -78,16 +80,23 @@ void main() {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        locale: locale,
-        theme: JawwidTheme.light(isArabic: locale.languageCode == 'ar'),
-        supportedLocales: JawwidApp.supportedLocales,
-        localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
-        home: home,
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: locale,
+          theme: JawwidTheme.light(isArabic: locale.languageCode == 'ar'),
+          supportedLocales: JawwidApp.supportedLocales,
+          localizationsDelegates: const [
+            L10n.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: home,
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     return L10n.delegate.load(locale);
   }

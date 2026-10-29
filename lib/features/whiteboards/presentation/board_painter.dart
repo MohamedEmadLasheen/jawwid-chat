@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -25,7 +26,7 @@ typedef VerseSource = VerseLookup Function(VerseElement verse);
 /// rest in order: the highlighter sits UNDER the ink so the writing over it
 /// stays readable (design §4.1). The finished elements are recorded once into
 /// a [ui.Picture] and replayed, so drawing a new stroke repaints only that
-/// stroke ([LiveStrokePainter]), not the whole page.
+/// stroke (the canvas's overlay), not the whole page.
 class BoardPagePainter extends CustomPainter {
   BoardPagePainter({required this.page, this.placeholderLabel, this.verses, this.versesVersion})
     : _cache = _PictureCache.of(page, versesVersion);
@@ -58,47 +59,35 @@ class BoardPagePainter extends CustomPainter {
       !identical(old.versesVersion, versesVersion);
 }
 
-/// The stroke under the pen, drawn above the page until it is finished.
-class LiveStrokePainter extends CustomPainter {
-  LiveStrokePainter({required this.stroke, required this.revision});
-
-  final InkElement? stroke;
-
-  /// Bumped for every new point: the list itself grows in place.
-  final int revision;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = stroke;
-    if (s == null) return;
-    canvas.save();
-    canvas.scale(size.width / kBoardPageSize.width, size.height / kBoardPageSize.height);
-    paintInk(canvas, s);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(LiveStrokePainter old) => old.revision != revision || !identical(old.stroke, stroke);
-}
-
 // ---------------------------------------------------------------------------
 
-/// One recorded picture per element list, shared by every painter of the same
-/// page state (the editor, its thumbnail, the read-only viewer).
+/// The recorded pictures of the last few page states, shared by every painter
+/// of the same state (the editor, its thumbnail). BOUNDED (review of #293): a
+/// picture per undo step would hold the whole history's drawings in memory,
+/// so only the most recently drawn states keep theirs. An evicted picture is
+/// only let go, never disposed: a frame being drawn may still hold it.
 class _PictureCache {
   _PictureCache._(this.key);
 
   final Object key;
   ui.Picture? _picture;
 
-  static final Expando<_PictureCache> _byList = Expando('whiteboard-picture');
+  static const int _capacity = 16;
+  static final LinkedHashMap<List<BoardElement>, _PictureCache> _recent = LinkedHashMap(equals: identical, hashCode: identityHashCode);
 
   static _PictureCache of(BoardPage page, Object? versesVersion) {
     final key = (page.layout, page.background, versesVersion == null ? 0 : identityHashCode(versesVersion));
-    final existing = _byList[page.elements];
-    if (existing != null && existing.key == key) return existing;
+    final existing = _recent.remove(page.elements);
+    if (existing != null && existing.key == key) {
+      _recent[page.elements] = existing; // most recent last
+      return existing;
+    }
     final cache = _PictureCache._(key);
-    _byList[page.elements] = cache;
+    _recent[page.elements] = cache;
+    while (_recent.length > _capacity) {
+      final oldest = _recent.keys.first;
+      _recent.remove(oldest);
+    }
     return cache;
   }
 

@@ -24,13 +24,13 @@ import 'package:jawwid_chat/shared/models/materials.dart';
 final _range = 'b' * 64;
 
 VerseText _text(int from, int to, {String? range, bool basmala = false}) => VerseText(
-      datasetId: 'tanzil-uthmani-1.1',
-      rangeSha256: range ?? _range,
-      attribution: 'Tanzil Project — tanzil.net',
-      ayahs: [
-        for (var a = from; a <= to; a++) VerseAyah(ayah: a, text: 'SYNTHETIC-$a', basmala: basmala && a == 1 ? 'SYNTHETIC-BASMALA' : null),
-      ],
-    );
+  datasetId: 'tanzil-uthmani-1.1',
+  rangeSha256: range ?? _range,
+  attribution: 'Tanzil Project — tanzil.net',
+  ayahs: [
+    for (var a = from; a <= to; a++) VerseAyah(ayah: a, text: 'SYNTHETIC-$a', basmala: basmala && a == 1 ? 'SYNTHETIC-BASMALA' : null),
+  ],
+);
 
 class _Quran implements QuranTextRepository {
   Object? error;
@@ -59,10 +59,10 @@ class _Boards implements WhiteboardsRepository {
 
   @override
   Future<BoardDetail> open(String boardId) async => BoardDetail(
-        summary: BoardSummary(id: boardId, title: 'B', state: BoardState.active, revision: revision, pageCount: 1, updatedAt: DateTime(2026)),
-        canEdit: true,
-        pages: const [BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: [])],
-      );
+    summary: BoardSummary(id: boardId, title: 'B', state: BoardState.active, revision: revision, pageCount: 1, updatedAt: DateTime(2026)),
+    canEdit: true,
+    pages: const [BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: [])],
+  );
 
   @override
   Future<PageSaved> savePage(String boardId, String pageId, int revision, BoardPage page) async {
@@ -75,16 +75,16 @@ class _Boards implements WhiteboardsRepository {
 }
 
 VerseElement _verse({String? range}) => VerseElement(
-      id: 'v',
-      surah: 2,
-      fromAyah: 1,
-      toAyah: 3,
-      datasetId: 'tanzil-uthmani-1.1',
-      rangeSha256: range ?? _range,
-      rect: const Rect.fromLTWH(0, 0, 1400, 300),
-      fontSize: 64,
-      color: const Color(0xFF000000),
-    );
+  id: 'v',
+  surah: 2,
+  fromAyah: 1,
+  toAyah: 3,
+  datasetId: 'tanzil-uthmani-1.1',
+  rangeSha256: range ?? _range,
+  rect: const Rect.fromLTWH(0, 0, 1400, 300),
+  fontSize: 64,
+  color: const Color(0xFF000000),
+);
 
 void main() {
   late _Quran quran;
@@ -92,13 +92,15 @@ void main() {
 
   setUp(() {
     quran = _Quran();
-    container = ProviderContainer(overrides: [
-      quranTextRepositoryProvider.overrideWithValue(quran),
-      materialsRepositoryProvider.overrideWithValue(_Materials()),
-      whiteboardsRepositoryProvider.overrideWithValue(_Boards()),
-      boardDraftStoreProvider.overrideWithValue(InMemoryBoardDraftStore()),
-      principalIdProvider.overrideWithValue('teacher-1'),
-    ]);
+    container = ProviderContainer(
+      overrides: [
+        quranTextRepositoryProvider.overrideWithValue(quran),
+        materialsRepositoryProvider.overrideWithValue(_Materials()),
+        whiteboardsRepositoryProvider.overrideWithValue(_Boards()),
+        boardDraftStoreProvider.overrideWithValue(InMemoryBoardDraftStore()),
+        principalIdProvider.overrideWithValue('teacher-1'),
+      ],
+    );
   });
   tearDown(() => container.dispose());
 
@@ -135,16 +137,23 @@ void main() {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        locale: const Locale('en'),
-        theme: JawwidTheme.light(isArabic: false),
-        supportedLocales: JawwidApp.supportedLocales,
-        localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
-        home: const BoardEditorScreen(boardId: 'b1'),
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: const Locale('en'),
+          theme: JawwidTheme.light(isArabic: false),
+          supportedLocales: JawwidApp.supportedLocales,
+          localizationsDelegates: const [
+            L10n.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: const BoardEditorScreen(boardId: 'b1'),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     final l10n = await L10n.delegate.load(const Locale('en'));
     await tester.tap(find.byTooltip(l10n.boardToolVerse));

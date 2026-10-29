@@ -4553,10 +4553,6 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get boardDraftDiscarded =>
-      'تعذّر تطبيق تغييرات غير محفوظة من زيارة سابقة: تغيّرت السبورة منذ ذلك الحين.';
-
-  @override
   String get boardFailedLimit =>
       'بلغت هذه السبورة حدًّا: الصفحة حتى 512 كيلوبايت، والسبورة 50 صفحة، وسبوراتك 25 ميغابايت من الرسوم.';
 
@@ -4762,4 +4758,26 @@ class L10nAr extends L10n {
 
   @override
   String get boardVerseChanged => 'تغيّر نص الآية، أعد إدراجها';
+
+  @override
+  String get boardDraftStale =>
+      'لديك تغييرات من زيارة سابقة لم تُحفظ، على صفحات تغيّرت منذ ذلك الحين. احتفظ بتغييراتك (تحلّ محلّ تلك الصفحات) أو تجاهلها.';
+
+  @override
+  String get boardDraftStaleKeep => 'احتفظ بتغييراتي';
+
+  @override
+  String get boardDraftStaleDiscard => 'تجاهل';
+
+  @override
+  String get boardDraftNotKept =>
+      'تعذّر الاحتفاظ بتغييراتك غير المحفوظة على هذا الجهاز. ابقَ على هذه السبورة حتى تظهر عبارة «محفوظ».';
+
+  @override
+  String get boardPageFull =>
+      'امتلأت هذه الصفحة (512 كيلوبايت). أضف صفحة جديدة لتواصل الكتابة؛ لن يُحفظ المزيد على هذه الصفحة.';
+
+  @override
+  String get boardSaveFirst =>
+      'يجب حفظ تغييراتك أولًا. حاول مرة أخرى عندما تظهر عبارة «محفوظ».';
 }

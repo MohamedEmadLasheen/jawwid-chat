@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/features/whiteboards/domain/board_elements.dart';
 import 'package:jawwid_chat/features/whiteboards/domain/board_page.dart';
+import 'package:jawwid_chat/features/whiteboards/domain/page_size.dart';
 import 'package:jawwid_chat/features/whiteboards/domain/stroke_points.dart';
 
 InkElement ink(String id, List<Offset> pts, {double width = 4}) =>
@@ -41,8 +42,13 @@ void main() {
   group('a page document', () {
     test('round-trips every MVP element, and keeps a kind it does not draw (an image before PR-4) exactly as it came', () {
       final verse = <String, Object?>{
-        'id': 'v1', 'kind': 'verse', 'surah': 1, 'fromAyah': 1, 'toAyah': 7,
-        'datasetId': 'tanzil-uthmani-1.1', 'rangeSha256': 'a' * 64,
+        'id': 'v1',
+        'kind': 'verse',
+        'surah': 1,
+        'fromAyah': 1,
+        'toAyah': 7,
+        'datasetId': 'tanzil-uthmani-1.1',
+        'rangeSha256': 'a' * 64,
         'transform': {'x': 260.0, 'y': 300.0, 'w': 1400.0, 'h': 420.0},
         'style': {'size': 64.0, 'color': '#1b1b1b'},
       };
@@ -56,10 +62,37 @@ void main() {
           'v': 1,
           'elements': [
             ink('s1', const [Offset(10, 10), Offset(20, 30)]).toJson(),
-            const ShapeElement(id: 'r1', shape: ShapeKind.ellipse, rect: Rect.fromLTWH(1, 2, 3, 4), stroke: Color(0xFFAA0000), width: 3).toJson(),
-            const LineElement(id: 'a1', from: Offset(0, 0), to: Offset(50, 50), color: Color(0xFF000000), width: 4, arrow: true, bothEnds: true).toJson(),
-            const TextElement(id: 't1', text: 'بِسْمِ اللَّهِ', topLeft: Offset(5, 5), size: Size(400, 80), fontSize: 48, color: Color(0xFF1B1B1B)).toJson(),
-            const StampElement(id: 'st', stamp: StampKind.excellentAr, rect: Rect.fromLTWH(0, 0, 200, 80), color: Color(0xFF2E7D32), text: 'ممتاز').toJson(),
+            const ShapeElement(
+              id: 'r1',
+              shape: ShapeKind.ellipse,
+              rect: Rect.fromLTWH(1, 2, 3, 4),
+              stroke: Color(0xFFAA0000),
+              width: 3,
+            ).toJson(),
+            const LineElement(
+              id: 'a1',
+              from: Offset(0, 0),
+              to: Offset(50, 50),
+              color: Color(0xFF000000),
+              width: 4,
+              arrow: true,
+              bothEnds: true,
+            ).toJson(),
+            const TextElement(
+              id: 't1',
+              text: 'بِسْمِ اللَّهِ',
+              topLeft: Offset(5, 5),
+              size: Size(400, 80),
+              fontSize: 48,
+              color: Color(0xFF1B1B1B),
+            ).toJson(),
+            const StampElement(
+              id: 'st',
+              stamp: StampKind.excellentAr,
+              rect: Rect.fromLTWH(0, 0, 200, 80),
+              color: Color(0xFF2E7D32),
+              text: 'ممتاز',
+            ).toJson(),
             verse,
             image,
           ],
@@ -67,7 +100,15 @@ void main() {
       });
       expect(page.layout, PageLayout.arabicLines);
       expect(page.background, PageBackground.cream);
-      expect(page.elements.map((e) => e.runtimeType), [InkElement, ShapeElement, LineElement, TextElement, StampElement, VerseElement, OpaqueElement]);
+      expect(page.elements.map((e) => e.runtimeType), [
+        InkElement,
+        ShapeElement,
+        LineElement,
+        TextElement,
+        StampElement,
+        VerseElement,
+        OpaqueElement,
+      ]);
       final again = BoardPage.fromJson({'id': 'p1', 'document': page.documentJson()});
       expect(again.documentJson(), page.documentJson());
       final out = page.documentJson()['elements'] as List;
@@ -89,8 +130,13 @@ void main() {
   group('undo and redo', () {
     test('step back and forward; a new change drops the redo', () {
       final h = PageHistory(const []);
-      final a = [ink('a', const [Offset(0, 0), Offset(1, 1)])];
-      final b = [...a, ink('b', const [Offset(2, 2), Offset(3, 3)])];
+      final a = [
+        ink('a', const [Offset(0, 0), Offset(1, 1)]),
+      ];
+      final b = [
+        ...a,
+        ink('b', const [Offset(2, 2), Offset(3, 3)]),
+      ];
       h.push(a);
       h.push(b);
       expect(h.undo(), a);
@@ -103,7 +149,9 @@ void main() {
     test('keeps at most 100 steps', () {
       final h = PageHistory(const []);
       for (var i = 0; i < 150; i++) {
-        h.push([ink('$i', const [Offset(0, 0)])]);
+        h.push([
+          ink('$i', const [Offset(0, 0)]),
+        ]);
       }
       var n = 0;
       while (h.undo() != null) {
@@ -139,6 +187,24 @@ void main() {
       expect(simple.first.x, 0);
       expect(simple.last.x, 100);
       expect(simple.length, lessThan(5));
+    });
+  });
+
+  group('the page size, as the server measures it', () {
+    test('jsonb\'s text form: ": " after every key, ", " between items, UTF-8 bytes', () {
+      // Postgres prints {"v":1,"elements":[{"id":"a","t":"بِ"}]} as
+      // {"v": 1, "elements": [{"t": "بِ", "id": "a"}]} -- 48 bytes ("بِ" is 4).
+      expect(
+        storedJsonBytes({
+          'v': 1,
+          'elements': [
+            {'id': 'a', 't': 'بِ'},
+          ],
+        }),
+        48,
+      );
+      expect(storedJsonBytes([1, 2, 3]), '[1, 2, 3]'.length);
+      expect(storedJsonBytes(<String, Object?>{}), 2);
     });
   });
 }

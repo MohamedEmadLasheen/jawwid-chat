@@ -113,8 +113,7 @@ sealed class BoardElement {
 /// A pen or highlighter stroke. The highlighter is drawn translucent and under
 /// the ink (design §4.1).
 class InkElement extends BoardElement {
-  const InkElement({required String id, required this.points, required this.color, required this.width, this.highlight = false})
-    : super(id);
+  InkElement({required String id, required this.points, required this.color, required this.width, this.highlight = false}) : super(id);
 
   final List<StrokePoint> points;
   final Color color;
@@ -124,8 +123,11 @@ class InkElement extends BoardElement {
   @override
   String get kind => highlight ? 'highlight' : 'stroke';
 
+  /// Computed once: a stroke is immutable, and hit tests ask often.
   @override
-  Rect get bounds {
+  late final Rect bounds = _bounds();
+
+  Rect _bounds() {
     if (points.isEmpty) return Rect.zero;
     var l = points.first.x, t = points.first.y, r = l, b = t;
     for (final p in points) {
