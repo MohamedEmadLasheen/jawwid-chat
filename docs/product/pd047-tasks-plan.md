@@ -354,6 +354,24 @@ Migration `20261029235800_chat_pd047_phase_b_sources.sql`. The four set-up sourc
 - **Spec:** `tasks-setup-pd047.spec.ts`.
 - **Admin Web:** each source links to where its work is done: New Students, or the teacher's file.
 
+#### 3.6.3 As built in PR-6c (slot `20261030000000`)
+
+Migration `20261030000000_chat_pd047_phase_b_decisions.sql`, with a fifth sweep, `chat.work_task_sweep_decisions()`. It follows the same review rules as PR-6a and PR-6b: the settle window, owners who leave, orphans for the super admin, and triggers that never block their source. All four sources are operational and Medium, and a person may reassign them.
+
+| Source | Key | Assignee | Due | Done (actor) | Withdrawn |
+|---|---|---|---|---|---|
+| `complaint` | the Teacher File entry | `work_task_teacher_owner` | filed + 48 h | a `complaint_resolution` refers to it (its author) | -- |
+| `feedback` | the parent's feedback | as above | filed + 48 h | `status = 'resolved'` (`responded_by`) | -- |
+| `schedule_change` | the request | the child's teacher's owner | asked + 48 h | approved / rejected (`decided_by`) | the family withdraws it |
+| `makeup_owed` | the episode: the lesson, or its chain's last dead make-up | the lesson's teacher's owner | its end + `lesson.makeup_window_days` | a make-up booked anywhere in its chain (its booker; the system for a family), or a `makeup_followup` ruling DECIDED (`decided_by`); a pending ruling keeps it owed | the outcome corrected away |
+
+- **`feedback`, not `parent_feedback`.** PD-32 confines every reader of a parent's feedback in `src/` to `teacher-file` (`parent-feedback-confinement.spec.ts`), because the teacher must never see it. So Tasks reads one only through two SQL helpers: `chat.work_task_feedback_teacher` (the teacher it is about) and `chat.work_task_feedback_title` (the names its title shows). It never reads the words or who filed it. The key is `feedback:<id>`.
+- **A parent's complaint raises one task:** its PD-26 complaint entry's. The feedback source covers praise and suggestions only.
+- **One rule for owed make-ups: the supervisor follow-up's.** `chat.lesson_owes_makeup(lesson, causes)` is the rule, and `LessonService.owedMakeups` now calls it too.
+  - **Revised by the department head, 2026-10-29** (correcting answer 2). This is a supervisor task, so its causes, `chat.work_task_makeup_causes()`, are `owedMakeups`' default, `TEACHER_MAKEUP_CAUSES`. A family's own apology owes a make-up but is never escalated, so it raises no task. A unit spec holds the SQL list to the constant. An integration spec proves the set of lessons with an open task equals `owedMakeups()`' set.
+  - **Make-up chains** (department head review of #275). A missed make-up may itself be made up (`makeup_for` = that make-up). The task finds its original lesson up the chain (`chat.work_task_makeup_original`), and a booking anywhere in the chain after its episode began completes it. Without this, the missed make-up's task could never close. `assertOwed` is unchanged.
+- **A family's booking names nobody the task log can.** The system completes the task, so the guard adds `makeup_owed` to the sources that may complete without an actor.
+
 ### 3.7 Manual tasks, and who is responsible
 
 - **Create** (`tasks.create`): a manager for anyone in their team; the super admin for anyone; a teacher supervisor for their teachers (Q5). There is no peer-to-peer creation.

@@ -148,6 +148,10 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   certificate_resubmit: { en: 'Certificate request', ar: 'طلب شهادة' },
   certificate_review: { en: 'Certificate review', ar: 'مراجعة شهادة' },
   certificate_send: { en: 'Certificate to send', ar: 'شهادة للإرسال' },
+  complaint: { en: 'Complaint', ar: 'شكوى' },
+  feedback: { en: 'Parent feedback', ar: 'ملاحظة وليّ أمر' },
+  schedule_change: { en: 'New lesson times', ar: 'طلب مواعيد جديدة' },
+  makeup_owed: { en: 'Make-up owed', ar: 'حصة تعويضية مستحقة' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -178,6 +182,10 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   certificate_resubmit: { en: 'Revise the certificate request: {name}', ar: 'عدّل طلب الشهادة: {name}' },
   certificate_review: { en: 'Review the certificate design: {name}', ar: 'راجع تصميم الشهادة: {name}' },
   certificate_send: { en: 'Send the certificate: {name}', ar: 'أرسل الشهادة: {name}' },
+  complaint: { en: 'Resolve a complaint about {teacher}', ar: 'عالج شكوى بشأن {teacher}' },
+  feedback: { en: 'Answer a parent about {teacher}: {learner}', ar: 'أجب وليّ الأمر بشأن {teacher}: {learner}' },
+  schedule_change: { en: 'Decide on new lesson times: {learner}', ar: 'قرّر بشأن المواعيد الجديدة: {learner}' },
+  makeup_owed: { en: 'Make sure a lesson is made up: {learner}, {when}', ar: 'تأكّد من تعويض الحصة: {learner}، {when}' },
 }
 
 export const EVENT_LABEL: Record<TaskEvent['kind'], Pair> = {
