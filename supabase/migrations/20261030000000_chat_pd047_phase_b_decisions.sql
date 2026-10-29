@@ -10,6 +10,8 @@
 --   complaint        complaint:<entry>            the teacher's supervisor, else the          filed + 48 h
 --                                                 Teachers manager (work_task_teacher_owner)
 --   parent_feedback  parent_feedback:<feedback>   as complaint                                filed + 48 h
+--   schedule_change  schedule_change:<request>    the child's teacher's supervisor, else the  asked + 48 h
+--                                                 Teachers manager
 --
 --   Every one: operational, medium; reassignable by hand. The records that
 --   already exist decide them; no new state (department head, 2026-10-29).
@@ -22,6 +24,9 @@
 --   parent_feedback  a parent's praise or suggestion (chat.parent_feedback).
 --                    Done when it reaches its closed state, resolved, by who
 --                    answered it. A complaint is the complaint source's.
+--   schedule_change  a request for new regular times (PD-11). Done when it
+--                    is approved or rejected, by who decided; withdrawn when
+--                    the family withdraws it.
 --
 --   RAISED by chat.work_task_sweep_decisions() (the worker, every minute, its
 --   own advisory lock and batches), past PR-6a's settle window. COMPLETED at
@@ -53,6 +58,9 @@ as $$
   select case p_type
     when 'complaint' then (select chat.work_task_teacher_owner(e.teacher_id) from chat.teacher_supervision_entry e where e.id = p_source)
     when 'parent_feedback' then (select chat.work_task_teacher_owner(f.teacher_id) from chat.parent_feedback f where f.id = p_source)
+    when 'schedule_change' then (select chat.work_task_teacher_owner(ln.teacher_id)
+                                   from chat.schedule_change_request q join chat.learner ln on ln.id = q.learner_id
+                                  where q.id = p_source)
   end;
 $$;
 
@@ -82,6 +90,13 @@ begin
            case when f.status = 'resolved' then f.responded_by end
       into verdict, actor
       from chat.parent_feedback f where f.id = p_source and f.category <> 'complaint';
+    verdict := coalesce(verdict, 'gone');
+  end if;
+  if p_type = 'schedule_change' then
+    select case q.status when 'pending' then 'back' when 'withdrawn' then 'gone' else 'done' end,
+           case when q.status in ('approved', 'rejected') then q.decided_by end
+      into verdict, actor
+      from chat.schedule_change_request q where q.id = p_source;
     verdict := coalesce(verdict, 'gone');
   end if;
 end;
@@ -138,6 +153,29 @@ begin
 end;
 $$;
 
+create or replace function chat.work_task_raise_schedule_change(p_request uuid)
+returns uuid
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  q       chat.schedule_change_request;
+  v_owner uuid;
+begin
+  select * into q from chat.schedule_change_request where id = p_request;
+  if q.id is null or q.status <> 'pending' or q.created_at < chat.work_task_since('schedule_change') then
+    return null;
+  end if;
+  v_owner := chat.work_task_teacher_owner((select ln.teacher_id from chat.learner ln where ln.id = q.learner_id));
+  if v_owner is null then
+    perform chat.work_task_note_issue(q.organization_id, 'schedule_change:' || q.id, 'no live supervisor or Teachers manager for the child''s teacher');
+    return null;
+  end if;
+  return chat.work_task_raise(q.organization_id, 'schedule_change', q.id, v_owner, null,
+                              'medium', 'operational', 'generic', q.created_at + interval '48 hours');
+end;
+$$;
+
 -- ===========================================================================
 -- 3. The sweep: create what is missing, reconcile what is done, follow owners
 -- ===========================================================================
@@ -164,18 +202,20 @@ declare
   v_settle    interval := chat.work_task_settle_window();
   s_complaint  timestamptz;
   s_feedback  timestamptz;
+  s_schedule  timestamptz;
 begin
   if not pg_try_advisory_xact_lock(hashtext('chat.work_task_sweep_decisions')) then
     return jsonb_build_object('skipped', true);
   end if;
   s_complaint := chat.work_task_since('complaint');
   s_feedback := chat.work_task_since('parent_feedback');
+  s_schedule := chat.work_task_since('schedule_change');
 
   -- The issue log shrinks with these sources too: an occurrence whose task
   -- closed, whose work is done or gone, or an orphan given an owner again.
   -- Only these sources' keys.
   delete from chat.work_task_source_issue i
-   where split_part(i.source_key, ':', 1) in ('complaint', 'parent_feedback')
+   where split_part(i.source_key, ':', 1) in ('complaint', 'parent_feedback', 'schedule_change')
      and (exists (select 1 from chat.work_task t
                    where t.organization_id = i.organization_id and t.source_key = i.source_key
                      and t.state in ('completed', 'removed'))
@@ -199,6 +239,10 @@ begin
       select f.organization_id, 'parent_feedback', f.id, 'parent_feedback:' || f.id, f.created_at
         from chat.parent_feedback f
        where f.category <> 'complaint' and f.status <> 'resolved' and f.created_at >= s_feedback
+      union all
+      select q.organization_id, 'schedule_change', q.id, 'schedule_change:' || q.id, q.created_at
+        from chat.schedule_change_request q
+       where q.status = 'pending' and q.created_at >= s_schedule
     ) x
      where x.at <= now() - v_settle
        and not exists (select 1 from chat.work_task t where t.organization_id = x.org and t.source_key = x.key)
@@ -213,6 +257,7 @@ begin
       if (case r.src
             when 'complaint' then chat.work_task_raise_complaint(r.id)
             when 'parent_feedback' then chat.work_task_raise_parent_feedback(r.id)
+            when 'schedule_change' then chat.work_task_raise_schedule_change(r.id)
           end) is not null then
         v_raised := v_raised + 1;
       else
@@ -235,7 +280,7 @@ begin
         from chat.work_task t
         cross join lateral chat.work_task_decision_verdict(t.source_type, t.source_id) v
        where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-         and t.source_type in ('complaint', 'parent_feedback')
+         and t.source_type in ('complaint', 'parent_feedback', 'schedule_change')
     ) y
      where y.source_state = 'pending' and y.verdict in ('done', 'gone')
         or y.source_state = 'withdrawn' and y.verdict in ('back', 'done')
@@ -262,7 +307,7 @@ begin
     select t.organization_id as org, t.source_key as key, chat.work_task_decision_owner(t.source_type, t.source_id) as owner
       from chat.work_task t
      where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-       and t.source_type in ('complaint', 'parent_feedback')
+       and t.source_type in ('complaint', 'parent_feedback', 'schedule_change')
        and chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is null
        and chat.work_task_decision_owner(t.source_type, t.source_id) is not null
        and not exists (select 1 from chat.work_task_source_issue i
@@ -284,7 +329,7 @@ begin
     select t.organization_id as org, t.source_key as key
       from chat.work_task t
      where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-       and t.source_type in ('complaint', 'parent_feedback')
+       and t.source_type in ('complaint', 'parent_feedback', 'schedule_change')
        and chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is null
        and chat.work_task_decision_owner(t.source_type, t.source_id) is null
        and not exists (select 1 from chat.work_task_source_issue i
@@ -349,6 +394,30 @@ create trigger parent_feedback_settles_its_task after update of status on chat.p
   for each row when (old.status is distinct from 'resolved' and new.status = 'resolved')
   execute function chat.work_task_from_parent_feedback();
 
+-- A schedule request decided (done, by who decided) or withdrawn by the family.
+create or replace function chat.work_task_from_schedule_change()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  begin
+    if new.status in ('approved', 'rejected') then
+      perform chat.work_task_settle(new.organization_id, 'schedule_change:' || new.id, new.decided_by);
+    elsif new.status = 'withdrawn' then
+      perform chat.work_task_withdraw(new.organization_id, 'schedule_change:' || new.id);
+    end if;
+  exception when others then
+    perform chat.work_task_note_issue(new.organization_id, 'schedule_change:' || new.id, sqlerrm);
+  end;
+  return null;
+end;
+$$;
+
+create trigger schedule_change_moves_its_task after update of status on chat.schedule_change_request
+  for each row when (old.status = 'pending' and new.status <> 'pending')
+  execute function chat.work_task_from_schedule_change();
+
 -- ===========================================================================
 -- 6. Fail closed
 -- ===========================================================================
@@ -360,3 +429,5 @@ revoke all on function chat.work_task_raise_complaint(uuid) from public;
 revoke all on function chat.work_task_from_supervision_entry() from public;
 revoke all on function chat.work_task_raise_parent_feedback(uuid) from public;
 revoke all on function chat.work_task_from_parent_feedback() from public;
+revoke all on function chat.work_task_raise_schedule_change(uuid) from public;
+revoke all on function chat.work_task_from_schedule_change() from public;

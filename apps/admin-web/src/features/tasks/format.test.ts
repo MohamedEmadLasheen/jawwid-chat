@@ -85,8 +85,14 @@ describe('PD-47 PR-6c: the Teachers department\'s decisions', () => {
     expect(sourceLink(t)).toBe('/teachers/supervision?section=feedback')
   })
 
+  it('a schedule request names the child and leads to Needs action', () => {
+    const t = task('schedule_change', 'q1', { learnerName: 'learner_l', learnerId: 'l1' })
+    expect(titleOf(t, en, fmt)).toBe('Decide on new lesson times: learner_l')
+    expect(sourceLink(t)).toBe('/teachers/needs-action')
+  })
+
   it('every one has its label and title in both languages, with no placeholder left unfilled', () => {
-    for (const type of ['complaint', 'parent_feedback'] as const) {
+    for (const type of ['complaint', 'parent_feedback', 'schedule_change'] as const) {
       expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
       expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
     }

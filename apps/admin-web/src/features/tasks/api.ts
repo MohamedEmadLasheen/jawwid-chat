@@ -35,6 +35,7 @@ export type SourceType =
   | 'certificate_send'
   | 'complaint'
   | 'parent_feedback'
+  | 'schedule_change'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 
 export interface Principal {

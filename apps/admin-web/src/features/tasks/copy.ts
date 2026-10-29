@@ -150,6 +150,7 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   certificate_send: { en: 'Certificate to send', ar: 'شهادة للإرسال' },
   complaint: { en: 'Complaint', ar: 'شكوى' },
   parent_feedback: { en: 'Parent feedback', ar: 'ملاحظة وليّ أمر' },
+  schedule_change: { en: 'New lesson times', ar: 'طلب مواعيد جديدة' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -182,6 +183,7 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   certificate_send: { en: 'Send the certificate: {name}', ar: 'أرسل الشهادة: {name}' },
   complaint: { en: 'Resolve a complaint about {teacher}', ar: 'عالج شكوى بشأن {teacher}' },
   parent_feedback: { en: 'Answer a parent about {teacher}: {learner}', ar: 'أجب وليّ الأمر بشأن {teacher}: {learner}' },
+  schedule_change: { en: 'Decide on new lesson times: {learner}', ar: 'قرّر بشأن المواعيد الجديدة: {learner}' },
 }
 
 export const EVENT_LABEL: Record<TaskEvent['kind'], Pair> = {

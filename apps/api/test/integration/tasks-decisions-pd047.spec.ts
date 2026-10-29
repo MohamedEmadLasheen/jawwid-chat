@@ -6,6 +6,8 @@
  *                    Teachers manager's); done by its complaint_resolution
  *   parent_feedback  a parent's praise or suggestion: as complaint; done when
  *                    it is resolved (a parent's complaint is a complaint)
+ *   schedule_change  a family's request for new times: the child's teacher's
+ *                    supervisor's; done when decided, withdrawn with it
  *   every one        raised by the sweep past the settle window, announced
  *                    once (task_assigned, ids only); a source's write stands
  *                    when its task cannot be settled; an owner who leaves is
@@ -31,7 +33,7 @@ const feedback = new ParentFeedbackService(g.prisma, g.conversations, files, aud
 const recorder = { toThread: async () => undefined, toThreadAudience: async () => undefined, toUsers: async () => undefined };
 const worker = new OutboxWorker(g.prisma, g.notifications, recorder as never, g.identity, g.pipeline);
 
-const SOURCES = ['complaint', 'parent_feedback'];
+const SOURCES = ['complaint', 'parent_feedback', 'schedule_change'];
 
 let s: Scenario;
 let sa: string;
@@ -79,6 +81,16 @@ const resolve = (id: string, by = tmgr) => files.addEntry(by, s.teacherId, { kin
 /** A parent's feedback on the seeded child's teacher. */
 const parentSays = async (category: string) =>
   ((await feedback.file(s.parentId, { learnerId: s.learnerId, category, body: 'Lessons are wonderful and very clear.' })) as { id: string }).id;
+
+/** The seeded parent asks for new regular times for their child (PD-11). */
+const askNewTimes = async () =>
+  (await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `insert into chat.schedule_change_request (organization_id, learner_id, requested_by, slots)
+     values (chat.default_organization_id(), $1::uuid, $2::uuid, '[{"weekday": 2, "start": "17:00"}]'::jsonb)
+     returning id::text as id`, s.learnerId, s.parentId,
+  ))[0]!.id;
+const decide = (id: string, status: 'approved' | 'rejected', by: string) =>
+  exec(`update chat.schedule_change_request set status = $2, decided_by = $3::uuid, decided_at = now() where id = $1::uuid`, id, status, by);
 
 beforeAll(async () => {
   await g.prisma.$connect();
@@ -217,10 +229,45 @@ describe('a parent\'s praise or suggestion', () => {
   });
 });
 
+describe('a family\'s request for new lesson times', () => {
+  it('is the child\'s teacher\'s supervisor\'s; deciding it completes it, by who decided', async () => {
+    await superviseTeacher();
+    const q = await askNewTimes();
+    await tasks.sweep();
+    const id = (await taskFor(`schedule_change:${q}`)) as string;
+    expect(await tasks.get(tsup, id)).toMatchObject({
+      assignee: { kind: 'staff', id: tsup }, titleParams: { learnerId: s.learnerId, learnerName: expect.any(String) },
+    });
+    await decide(q, 'rejected', tsup);
+    expect(await tasks.get(tsup, id)).toMatchObject({ state: 'completed', outcome: 'done' });
+    expect((await completion(id))?.actor).toMatchObject({ kind: 'staff', id: tsup });
+  });
+
+  it('withdrawn by the family, the task is withdrawn', async () => {
+    const q = await askNewTimes();
+    await tasks.sweep();
+    const id = (await taskFor(`schedule_change:${q}`)) as string;
+    await exec(`update chat.schedule_change_request set status = 'withdrawn' where id = $1::uuid`, q);
+    expect(await stateOf(id)).toMatchObject({ state: 'open', source_state: 'withdrawn' });
+  });
+
+  it('a decision stands even when its task cannot be settled; the sweep settles it after', async () => {
+    const q = await askNewTimes();
+    await tasks.sweep();
+    const id = (await taskFor(`schedule_change:${q}`)) as string;
+    await refusingTaskChanges(() => decide(q, 'approved', tmgr));
+    expect((await g.prisma.scheduleChangeRequest.findUniqueOrThrow({ where: { id: q } })).status).toBe('approved');
+    expect(await stateOf(id)).toMatchObject({ state: 'open' });
+    await tasks.sweep();
+    expect(await stateOf(id)).toMatchObject({ state: 'completed' });
+  });
+});
+
 describe('each source is announced once', () => {
   it('one task_assigned push per source, to its assignee, with no variables -- however often the sweep runs', async () => {
     const c = await complaint();
     const f = await parentSays('suggestion');
+    const q = await askNewTimes();
     for (let i = 0; i < 2; i++) {
       await tasks.sweep();
       await worker.drain(500);
@@ -228,6 +275,7 @@ describe('each source is announced once', () => {
     const expected: Array<[string, string, string]> = [
       ['complaint', (await taskFor(`complaint:${c}`)) as string, tmgr],
       ['parent_feedback', (await taskFor(`parent_feedback:${f}`)) as string, tmgr],
+      ['schedule_change', (await taskFor(`schedule_change:${q}`)) as string, tmgr],
     ];
     for (const [key, id, to] of expected) {
       const sent = await pushes(id);
