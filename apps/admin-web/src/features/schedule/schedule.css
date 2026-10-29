@@ -35,7 +35,7 @@
 .sc-filter__trigger { display: inline-flex; align-items: center; gap: var(--space-1); cursor: pointer; }
 .sc-filter__caret::after { content: '▾'; font-size: 0.75em; color: var(--text-muted); }
 .sc-filter__trigger[aria-expanded='true'] { border-color: var(--accent); }
-.sc-filter--on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.sc-filter--on { border-color: var(--accent); color: var(--text-link); background: var(--accent-soft); }
 .sc-filter__count {
   min-inline-size: 18px; padding-inline: 5px; border-radius: var(--radius-full);
   background: var(--accent); color: var(--text-inverse); font-size: 0.75rem; text-align: center;
