@@ -36,7 +36,9 @@
 //     them (PROTECTED: this script, the guards, the CI workflows, CODEOWNERS,
 //     the engine's and the content check's readers) -- a PR never checks itself;
 //   * deleting or unsigning a file that is signed on the base branch (withdraw
-//     by exporting again: the API signs what is approved now);
+//     by exporting again: the API signs what is approved now). A lesson that is
+//     removed is RETIRED, not deleted: a newer signed export with zero
+//     approvals; its file and ledger entry stay, and it approves nothing;
 //   * a changed signed file not strictly newer than the base ledger's entry for
 //     its lesson (a replay of an export since withdrawn), or a brand-new one
 //     whose lesson already has an entry, or that was issued more than
@@ -80,7 +82,7 @@ const KEY_ID = /^[0-9a-f]{16}$/;
 const STEPS = ['check', 'teacher', 'scholar'];
 const ENVS = ['production', 'staging'];
 const SKEW_MS = 5 * 60 * 1000;
-const NEW_WITHIN_DAYS = 30;
+const NEW_WITHIN_DAYS = 7;
 
 /** The same bytes as canonicalJson() in apps/lessons and apps/api. */
 export function canonicalJson(value) {
@@ -291,7 +293,8 @@ function diffMain() {
     console.log(`verify-approvals diff: no ${ref} here; nothing to compare (pull requests are compared in CI)`);
     return 0;
   }
-  const names = git('diff', '--name-only', ref, '--', REL_KEYS, REL_LEDGER, REL_APPROVALS, ...PROTECTED).split('\n').filter(Boolean);
+  // --no-renames: a rename is a delete plus an add, each judged as such.
+  const names = git('diff', '--name-only', '--no-renames', ref, '--', REL_KEYS, REL_LEDGER, REL_APPROVALS, ...PROTECTED).split('\n').filter(Boolean);
   const read = (path, at) => {
     try {
       return JSON.parse(at ? git('show', `${at}:${path}`) : readFileSync(join(ROOT, path), 'utf8'));
@@ -381,6 +384,8 @@ function selftest() {
   const older = at('2026-10-01T00:00:00.000Z');
   const newer = at('2026-10-02T00:00:00.000Z');
   const stale = at('2026-08-01T00:00:00.000Z');
+  const recent = at('2026-10-29T00:00:00.000Z');
+  const R = { 'quran-112': '2026-10-29T00:00:00.000Z' };
   const unsignedEmpty = { payload: { ...payload, approvals: [], issuedAt: null }, keyId: null, signature: null };
   const f = 'apps/lessons/src/content/approvals/surah-112.json';
   const L = (issued) => ({ about: '', issued });
@@ -390,20 +395,22 @@ function selftest() {
     ['a replayed older export', one(newer, older, { 'quran-112': '2026-10-02T00:00:00.000Z' }, { 'quran-112': '2026-10-01T00:00:00.000Z' }), false],
     ['the same export again', one(newer, newer, { 'quran-112': '2026-10-02T00:00:00.000Z' }, { 'quran-112': '2026-10-02T00:00:00.000Z' }), false],
     ['a newer export the ledger does not record', one(older, newer, { 'quran-112': '2026-10-01T00:00:00.000Z' }, { 'quran-112': '2026-10-01T00:00:00.000Z' }), false],
-    ['a first export, recent', one(null, newer, {}, { 'quran-112': '2026-10-02T00:00:00.000Z' }), true],
+    ['a first export, recent (1 day)', one(null, recent, {}, R), true],
     ['a first export, stale', one(null, stale, {}, { 'quran-112': '2026-08-01T00:00:00.000Z' }), false],
     ['a signed file deleted', one(newer, null, { 'quran-112': '2026-10-02T00:00:00.000Z' }, { 'quran-112': '2026-10-02T00:00:00.000Z' }), false],
     ['a signed file unsigned', one(newer, unsignedEmpty, { 'quran-112': '2026-10-02T00:00:00.000Z' }, { 'quran-112': '2026-10-02T00:00:00.000Z' }), false],
     // PR 1 deleted it and dropped the entry (refused above); were it to slip, PR 2 re-adds the old export:
     ['re-added after a deletion', one(null, older, { 'quran-112': '2026-10-02T00:00:00.000Z' }, { 'quran-112': '2026-10-01T00:00:00.000Z' }), false],
     ['the ledger loses an entry', { keysChanged: false, files: {}, ledger: { before: L({ 'quran-112': '2026-10-02T00:00:00.000Z' }), after: L({}) }, keys: [key], now }, false],
-    ['keys and approvals together', one(null, newer, {}, { 'quran-112': '2026-10-02T00:00:00.000Z' }, { keysChanged: true }), false],
+    ['keys and approvals together', one(null, recent, {}, R, { keysChanged: true }), false],
     ['keys and the ledger together', { keysChanged: true, files: {}, ledger: { before: L({}), after: L({ 'quran-112': '2026-10-02T00:00:00.000Z' }) }, keys: [key], now }, false],
     ['a key alone', { keysChanged: true, files: {}, ledger: { before: L({}), after: L({}) }, keys: [key], now }, true],
-    ['approvals with the verifier', one(null, newer, {}, { 'quran-112': '2026-10-02T00:00:00.000Z' }, { protectedChanged: ['scripts/lessons/verify-approvals.mjs'] }), false],
+    ['approvals with the verifier', one(null, recent, {}, R, { protectedChanged: ['scripts/lessons/verify-approvals.mjs'] }), false],
     ['the verifier alone', { keysChanged: false, protectedChanged: ['scripts/lessons/verify-approvals.mjs'], files: {}, ledger: { before: L({}), after: L({}) }, keys: [key], now }, true],
-    ['signed by a retired key', one(null, newer, {}, { 'quran-112': '2026-10-02T00:00:00.000Z' }, { keys: [{ ...key, retiredAt: '2999-01-01T00:00:00Z' }] }), false],
+    ['signed by a retired key', one(null, recent, {}, R, { keys: [{ ...key, retiredAt: '2999-01-01T00:00:00Z' }] }), false],
     ['an unsigned empty file, new', one(null, unsignedEmpty, {}, {}), true],
+    ['a lesson retired: a newer signed export with zero approvals', one(newer, signed({ ...payload, approvals: [], issuedAt: '2026-10-03T00:00:00.000Z' }), { 'quran-112': '2026-10-02T00:00:00.000Z' }, { 'quran-112': '2026-10-03T00:00:00.000Z' }), true],
+    ['a first export, 8 days old', one(null, at('2026-10-22T00:00:00.000Z'), {}, { 'quran-112': '2026-10-22T00:00:00.000Z' }), false],
     ['an unsigned empty file with the checking code (approves nothing)', one(null, unsignedEmpty, {}, {}, { protectedChanged: ['apps/lessons/src/play/mechanics.ts'] }), true],
   ];
   for (const [name, input, ok] of diffs) if ((checkDiff(input).length === 0) !== ok) failed.push(`diff: ${name}`);

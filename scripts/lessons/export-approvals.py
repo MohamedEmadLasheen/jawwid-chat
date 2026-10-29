@@ -14,7 +14,8 @@ newer than the lesson's entry: the ledger only grows). It verifies
 nothing cryptographically and changes nothing: CI does that
 (scripts/lessons/verify-approvals.mjs), so a file edited after the API signed it
 fails the build. Commit the file AND the ledger in an ordinary reviewed PR that
-changes nothing else of the checking code (CI refuses that).
+changes nothing else of the checking code (CI refuses that). A removed lesson is
+retired the same way: export it once it approves nothing, and commit that.
 Standard library only; reads and writes files.
 """
 import json

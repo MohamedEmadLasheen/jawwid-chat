@@ -574,10 +574,10 @@ The scholar key is a deliberate grant to named people, never a bundle default.
     - a retired key signs no changed file, and a revoked key verifies nothing;
     - a PR may not change `approvals-keys.json` and any approvals file together (plus a CODEOWNERS entry on the key file).
   - **No replay through deletion, and no PR checks itself** (second review of #265):
-    - `approvals-ledger.json` keeps each signed lesson's high-water `issuedAt`. It only grows, and every signed file must match its entry. A changed file must be newer than its entry, and a brand-new one must be recent (30 days).
-    - A file that is signed on the base branch is never deleted or unsigned.
+    - `approvals-ledger.json` keeps each signed lesson's high-water `issuedAt`. It only grows, and every signed file must match its entry. A changed file must be newer than its entry, and a brand-new one must be recent (7 days). A rename counts as a delete plus an add.
+    - A file that is signed on the base branch is never deleted or unsigned. **A removed lesson is retired:** a newer signed export with zero approvals. Its file and ledger entry stay, and the content check accepts an approvals file with no content file only when it approves nothing.
     - A PR that changes approvals (or the ledger) may not change the code that checks them: the verifier, the content check, the guards, the CI workflows, CODEOWNERS, or the engine's readers.
-    - CODEOWNERS covers all of these. The owner turns on "Require review from Code Owners" before the first key is added.
+    - CODEOWNERS covers all of these, and any future engine approvals loader joins `PROTECTED` and CODEOWNERS. The owner turns on "Require review from Code Owners" before the first key is added.
     - Times compare as instants, so a timestamp with or without milliseconds is the same time. An `issuedAt` more than 5 minutes in the future is refused.
     - The key registry is validated field by field, and the golden vector's test key can never be listed in it. The golden vectors include an Arabic value.
   - **The loader rule:** any engine loader reads exactly the set `verify-approvals.mjs` checks, `apps/lessons/src/content/approvals/*.json`, and nothing else.

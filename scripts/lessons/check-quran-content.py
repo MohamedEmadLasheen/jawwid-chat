@@ -566,6 +566,14 @@ def envelope_errors(appr, keys):
     return errors
 
 
+def retired_errors(appr, keys):
+    """An approvals file whose content was removed: a retired lesson. Its export (signed or not) approves nothing."""
+    errors = envelope_errors(appr, keys)
+    if not errors and appr['payload']['approvals']:
+        errors.append('no content file for it, yet it approves something: retire a lesson with a newer export that approves nothing')
+    return errors
+
+
 def check_approvals(appr, content, works, keys):
     """The API's signed export (plan F.3): {payload, keyId, signature}. The signature itself is verified
     by scripts/lessons/verify-approvals.mjs (Node's crypto); here: its shape, its key, and what it approves."""
@@ -729,6 +737,12 @@ def selftest():
     # Times compare as instants: 12:00:00Z is 12:00:00.000Z (a string compare says otherwise).
     if iso_ms('2026-10-29T12:00:00Z') != iso_ms('2026-10-29T12:00:00.000Z') or iso_ms('2026-10-29T12:00:00.001Z') <= iso_ms('2026-10-29T12:00:00Z'):
         failed.append('iso_ms: one instant in two forms')
+    # A retired lesson: its signed export approves nothing; one that still approves something is refused.
+    gkeys = {golden['key']['id']: golden['key']}
+    if retired_errors(dict(golden['envelope'], payload=dict(golden['envelope']['payload'], approvals=[])), gkeys) != []:
+        failed.append('a retired lesson (a signed export approving nothing) was refused')
+    if not retired_errors(golden['envelope'], gkeys):
+        failed.append('an approvals file approving something with no content file was accepted')
     retired_same = dict(golden['key'], retiredAt='2026-10-29T12:00:00Z')
     if not envelope_errors(golden['envelope'], {golden['key']['id']: retired_same}):
         failed.append('a key retired at the very instant it signed (written without ms) was accepted')
@@ -779,8 +793,14 @@ def main(argv):
     approvals = sorted(f for f in os.listdir(APPROVALS) if re.fullmatch(r'surah-\d{3}\.json', f)) if os.path.isdir(APPROVALS) else []
     for f in approvals:
         if f not in files:
-            print(f'quran-content: approvals/{f}: no content file for it')
-            failed += 1
+            # A removed lesson is retired, never deleted: its signed export approves nothing and stays.
+            errors = retired_errors(json.load(open(os.path.join(APPROVALS, f), encoding='utf-8')), approval_keys)
+            for e in errors:
+                print(f'quran-content: approvals/{f}: {e}')
+            if errors:
+                failed += 1
+            else:
+                print(f'quran-content: approvals/{f}: a retired lesson (no content; approves nothing)')
     surahs = v1.verified_surahs() if files else {}
     every = [v for s in sorted(surahs) for v in surahs[s]]
     for f in files:
