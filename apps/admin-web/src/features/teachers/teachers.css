@@ -59,7 +59,7 @@
 .ts-inline { max-inline-size: 18rem; }
 .ts-windows { display: grid; gap: var(--space-2); margin-block: var(--space-2); }
 .ts-window { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.ts-window .select, .ts-window .input { inline-size: auto; }
+.ts-window .ss, .ts-window > .input { inline-size: auto; }
 .ts-narrow { max-inline-size: 6rem; }
 .ts-subtitle { margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-md); }
 .ts-daysoff { list-style: none; padding: 0; margin: 0 0 var(--space-2); display: grid; gap: var(--space-1); }

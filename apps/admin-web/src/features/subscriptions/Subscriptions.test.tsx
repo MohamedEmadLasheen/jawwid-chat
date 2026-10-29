@@ -9,6 +9,7 @@ import type { StudentProfile } from '@/features/profiles/api'
 import type { SubscriptionView } from './api'
 import { PaymentLockBanner } from './PaymentLockBanner'
 import { packageLabel } from './copy'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-30 in Admin Web, through the real routes and the real API client with
@@ -119,7 +120,7 @@ describe('the Student Profile: Subscription', () => {
     await userEvent.click(within(section).getByRole('button', { name: 'Add subscription' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add subscription' })
     await userEvent.type(within(dialog).getByLabelText('Lessons'), '8')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Plan'), '1')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Plan'), '1')
     // Free lessons need a reason.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(within(dialog).getByText('Required.')).toBeInTheDocument()

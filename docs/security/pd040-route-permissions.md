@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-540 routes.
+541 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -128,6 +128,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/conversations/:conversationId/messages/search` | chat.use | `communication/api/message.controller.ts#MessageController.search` |
 | GET | `/api/v1/conversations/:conversationId/messages/unread` | chat.use | `communication/api/message.controller.ts#MessageController.unread` |
 | PUT | `/api/v1/conversations/:conversationId/theme` | chat.use | `communication/api/chat-theme.controller.ts#ChatThemeController.setTheme` |
+| POST | `/api/v1/conversations/:conversationId/typing` | chat.use | `communication/api/typing.controller.ts#TypingController.typing` |
 | DELETE | `/api/v1/conversations/:conversationId/wallpaper` | chat.use | `communication/api/chat-theme.controller.ts#ChatThemeController.remove` |
 | POST | `/api/v1/conversations/:conversationId/wallpaper` | chat.use | `communication/api/chat-theme.controller.ts#ChatThemeController.commit` |
 | POST | `/api/v1/conversations/:conversationId/wallpaper/upload` | chat.use | `communication/api/chat-theme.controller.ts#ChatThemeController.upload` |
