@@ -3,6 +3,7 @@ import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { PageHeader } from '@/shared/components/PageHeader'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
 import { useSupervisionDirectory } from '@/features/teacher-files/hooks'
@@ -36,12 +37,12 @@ export function TeacherBoardsPage({ basePath }: { basePath: string }) {
           <label className="field__label" htmlFor="tb-teacher">
             {tx(B.teacher)}
           </label>
-          <select
+          <SearchableSelect
             id="tb-teacher"
             className="input"
             value={teacherId ?? ''}
             disabled={directory.isLoading}
-            onChange={(e) => setParams(e.target.value ? { teacher: e.target.value } : {}, { replace: true })}
+            onValueChange={(v) => setParams(v ? { teacher: v } : {}, { replace: true })}
           >
             <option value="">{tx(B.chooseTeacher)}</option>
             {teachers.map((t) => (
@@ -49,7 +50,7 @@ export function TeacherBoardsPage({ basePath }: { basePath: string }) {
                 {t.isActive ? t.name : tx(B.departed, { name: t.name })}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
         {!teacherId ? (
           <EmptyState title={tx(B.chooseTeacher)} hint={tx(B.chooseTeacherHint)} />

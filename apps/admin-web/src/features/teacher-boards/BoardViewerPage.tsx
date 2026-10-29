@@ -7,6 +7,7 @@ import { holdsAny } from '@/core/permissions/capabilities'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { EmptyState, ErrorState, QueryBoundary } from '@/shared/components/States'
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
 import { useSupervisionDirectory } from '@/features/teacher-files/hooks'
@@ -236,14 +237,14 @@ function CopyDialog({ board, onClose }: { board: BoardDetail; onClose: () => voi
             <label className="field__label" htmlFor="tb-copy-to">
               {tx(B.copyTo)}
             </label>
-            <select id="tb-copy-to" className="input" value={target} onChange={(e) => setTarget(e.target.value)}>
+            <SearchableSelect id="tb-copy-to" className="input" value={target} onValueChange={(v) => setTarget(v)}>
               <option value="">{tx(B.chooseTeacher)}</option>
               {active.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           </div>
           {copy.error ? <ErrorState error={copy.error} compact /> : null}
         </>

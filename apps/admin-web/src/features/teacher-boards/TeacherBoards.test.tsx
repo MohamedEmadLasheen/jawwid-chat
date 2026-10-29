@@ -5,6 +5,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
+import { chooseOption, optionsOf } from '@/test/select'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 
 /**
@@ -114,9 +115,10 @@ describe('PD-39 staff board viewer', () => {
     expect(within(nav).getByRole('link', { name: 'Boards' })).toHaveAttribute('aria-current', 'page')
     // Nothing is asked for before a teacher is chosen: a listing is logged.
     expect(calls('GET', /\/teacher-boards/)).toHaveLength(0)
-    const picker = await screen.findByLabelText('Teacher')
-    await waitFor(() => expect(within(picker).getByRole('option', { name: 'Teacher One (left)' })).toBeInTheDocument())
-    await userEvent.selectOptions(picker, T1)
+    const picker = await screen.findByRole('combobox', { name: 'Teacher' })
+    await waitFor(() => expect(picker).toBeEnabled())
+    expect((await optionsOf(userEvent, picker)).map((o) => o.label)).toContain('Teacher One (left)')
+    await chooseOption(userEvent, picker, T1)
     expect(await screen.findByRole('link', { name: 'Al-Fatihah review' })).toHaveAttribute('href', `/teachers/boards/${BOARD}`)
     expect(screen.getByText(/Kept until/)).toBeInTheDocument()
     expect(calls('GET', new RegExp(`/teacher-boards\\?teacherId=${T1}$`))).toHaveLength(1)
@@ -184,10 +186,10 @@ describe('PD-39 staff board viewer', () => {
     expect(await screen.findByText(/deleted for good on/)).toBeInTheDocument()
     await userEvent.click(await screen.findByRole('button', { name: 'Copy to a teacher' }))
     const dialog = await screen.findByRole('dialog')
-    const to = within(dialog).getByLabelText('Copy to')
+    const to = within(dialog).getByRole('combobox', { name: 'Copy to' })
     // Only active teachers, never the departed owner.
-    await waitFor(() => expect(within(to).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a teacher', 'Teacher Two', 'Teacher Three']))
-    await userEvent.selectOptions(to, T3)
+    await waitFor(async () => expect((await optionsOf(userEvent, to)).map((o) => o.label)).toEqual(['Choose a teacher', 'Teacher Two', 'Teacher Three']))
+    await chooseOption(userEvent, to, T3)
     await userEvent.click(within(dialog).getByRole('button', { name: 'Copy' }))
     expect(await within(dialog).findByText('Copied. Teacher Three now has «Al-Fatihah review» among their boards.')).toBeInTheDocument()
     expect(writes()).toHaveLength(1)
