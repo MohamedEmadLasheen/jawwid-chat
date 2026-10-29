@@ -22,20 +22,24 @@ export const J = {
   choose: { en: 'Choose…', ar: 'اختر…' },
   excuseBefore: { en: 'Excuse before the lesson starts', ar: 'عذر قبل بداية الحصة' },
   excuseBeforeHint: {
-    en: 'The group is told the student has an excuse and will not attend. No reason is needed.',
-    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى الطالب عذرًا ولن يحضر الحصة. لا حاجة لذكر السبب.',
+    en: 'The group is told the student has an excuse and will not attend. A reason is optional; staff and the teacher can read it, the family never sees it.',
+    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى الطالب عذرًا ولن يحضر الحصة. ذكر السبب اختياري، ويطّلع عليه فريق الإدارة والمعلم فقط ولا يظهر للأسرة.',
   },
   excuseAfter: { en: 'Excuse after the lesson started', ar: 'عذر بعد بداية الحصة' },
   excuseAfterHint: {
-    en: 'The lesson is recorded as excused at once. The reason stays with staff and is never shown in the group.',
-    ar: 'تُسجَّل الحصة معذورة فورًا. يبقى السبب لدى الإدارة ولا يظهر في المجموعة.',
+    en: 'The lesson is recorded as excused at once. Staff and the teacher can read the reason; the family never sees it.',
+    ar: 'تُسجَّل الحصة معذورة فورًا. يطّلع على السبب فريق الإدارة والمعلم فقط، ولا يظهر للأسرة.',
   },
   notAvailable: { en: 'Not available for this lesson now', ar: 'غير متاح لهذه الحصة الآن' },
   reason: { en: 'Reason', ar: 'السبب' },
   reasonInternal: { en: 'Reason (staff only)', ar: 'السبب (للإدارة فقط)' },
+  // An excuse's reason (lesson.outcome_note): the server gives it to staff AND the
+  // lesson's teacher (PD-15), never to the family -- say so where it is written.
+  reasonStaffTeacher: { en: 'Reason (staff and the teacher only)', ar: 'السبب (للإدارة والمعلم فقط)' },
+  reasonStaffTeacherOptional: { en: 'Reason (staff and the teacher only, optional)', ar: 'السبب (للإدارة والمعلم فقط، اختياري)' },
   teacherExcuseHint: {
-    en: 'The group is told the teacher has an excuse and a make-up follows. The reason is kept for staff. Schedules are not changed.',
-    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى المعلم عذرًا وأن حصة تعويضية ستُرتَّب. يبقى السبب لدى الإدارة، ولا تتغيّر المواعيد.',
+    en: 'The group is told the teacher has an excuse and a make-up follows. Staff and the teacher can read the reason; the family never sees it. Schedules are not changed.',
+    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى المعلم عذرًا وأن حصة تعويضية ستُرتَّب. يطّلع على السبب فريق الإدارة والمعلم فقط ولا يظهر للأسرة، ولا تتغيّر المواعيد.',
   },
   makeupHint: {
     en: 'Record the make-up once the family and the teacher have agreed on a time. The teacher\'s free times are suggested below.',

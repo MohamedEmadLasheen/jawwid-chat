@@ -78,6 +78,13 @@ class HttpLessonRepository implements LessonRepository {
   }
 
   @override
+  Future<String?> outcomeNote(String lessonId) async {
+    final d = (await _client.get<Map<String, Object?>>('/lessons/$lessonId')).data ?? const {};
+    final note = d['outcomeNote'];
+    return note is String && note.trim().isNotEmpty ? note : null;
+  }
+
+  @override
   Future<List<GroupChild>> groupChildren(String conversationId) async {
     final d = (await _client.get<Map<String, Object?>>('/conversations/$conversationId/learners')).data ?? const {};
     final out = <GroupChild>[];

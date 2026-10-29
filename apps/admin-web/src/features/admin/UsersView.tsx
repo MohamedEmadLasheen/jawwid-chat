@@ -14,6 +14,7 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { RefreshAction, matches, useEyebrow, useRoleLabel } from './common'
 import { ACCOUNT_STATUS, PLURAL, PRINCIPAL_KIND, PRINCIPAL_KIND_PLURAL, TEXT, listTime, useLabel, usePlural, useText } from './copy'
 import type { AdminSection } from './sections'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 type KindFilter = 'all' | AdminUser['principalKind']
 type StatusFilter = 'all' | 'active' | 'inactive'
@@ -138,26 +139,26 @@ export function UsersView({ section }: { section: AdminSection }) {
               ]}
             />
             <div className="toolbar__end">
-              <select
+              <SearchableSelect
                 className="select select--inline"
                 value={status}
-                onChange={(e) => setStatus(e.target.value as StatusFilter)}
+                onValueChange={(v) => setStatus(v as StatusFilter)}
                 aria-label={tx(TEXT.filterByAccountStatus)}
               >
                 <option value="all">{tx(TEXT.allStatuses)}</option>
                 <option value="active">{tx(TEXT.active)}</option>
                 <option value="inactive">{tx(TEXT.inactive)}</option>
-              </select>
-              <select
+              </SearchableSelect>
+              <SearchableSelect
                 className="select select--inline"
                 value={sort}
-                onChange={(e) => setSort(e.target.value as SortKey)}
+                onValueChange={(v) => setSort(v as SortKey)}
                 aria-label={tx(TEXT.sortBy)}
               >
                 <option value="name">{tx(TEXT.sortName)}</option>
                 <option value="signin">{tx(TEXT.sortSignIn)}</option>
                 <option value="newest">{tx(TEXT.sortNewestAdded)}</option>
-              </select>
+              </SearchableSelect>
             </div>
           </div>
 

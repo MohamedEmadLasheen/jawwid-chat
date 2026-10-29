@@ -7,6 +7,7 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { NewStudentDto } from '@/features/trials/api'
 import type { ParentProfile, StudentProfile } from '@/features/profiles/api'
 import type { CarriedOverView, EnteredFamily, EnteredList, FamilyOwnership } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-42 PR-3, the Operations side in Admin Web, through the real routes and the
@@ -157,7 +158,7 @@ describe('New Students: the families entered by hand', () => {
     const dialog = await screen.findByRole('dialog', { name: /Suggest a supervisor/ })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Suggest' }))
     expect(sent('POST', /supervisor-suggestion$/)).toEqual([])
-    await userEvent.selectOptions(await within(dialog).findByLabelText('Operations supervisor'), 'sup-1')
+    await chooseOption(userEvent, await within(dialog).findByLabelText('Operations supervisor'), 'sup-1')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Suggest' }))
     await waitFor(() => expect(sent('POST', /\/family-intake\/families\/f-1\/supervisor-suggestion$/)).toEqual([{ supervisorId: 'sup-1' }]))
   })
@@ -180,7 +181,7 @@ describe('New Students: the families entered by hand', () => {
     const card = within(region).getByRole('heading', { name: 'Parent Alpha' }).closest('article')!
     await userEvent.click(within(card).getByRole('button', { name: 'Choose the supervisor' }))
     const dialog = await screen.findByRole('dialog', { name: /Choose the Operations supervisor/ })
-    await waitFor(() => expect(within(dialog).getByLabelText('Operations supervisor')).toHaveValue('sup-2'))
+    await waitFor(() => expect(within(dialog).getByLabelText('Operations supervisor')).toHaveAttribute('data-value', 'sup-2'))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent('POST', /\/family-intake\/families\/f-1\/operations-supervisor$/)).toEqual([{ supervisorId: 'sup-2' }]))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
@@ -225,7 +226,7 @@ describe('A trial sibling: Assign adds the children to the family the parent is 
     const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
     await userEvent.click(within(card).getByRole('button', { name: 'Assign' }))
     const dialog = await screen.findByRole('dialog', { name: /Assign a supervisor/ })
-    await userEvent.selectOptions(await within(dialog).findByLabelText('Supervisor'), 'sup-1')
+    await chooseOption(userEvent, await within(dialog).findByLabelText('Supervisor'), 'sup-1')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
     expect(await within(dialog).findByText('This parent is already in Chat.')).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: "Add to Parent Delta's family" }))
@@ -278,7 +279,7 @@ describe('The Parent Profile: sign-in e-mail, Sales owner, Operations supervisor
     expect(within(region).getByText('Supervisor One')).toBeInTheDocument()
     await userEvent.click(within(region).getByRole('button', { name: 'Change the Sales owner' }))
     const dialog = await screen.findByRole('dialog', { name: /Change the Sales owner/ })
-    await userEvent.selectOptions(within(dialog).getByLabelText('Sales owner'), 'sales-2')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Sales owner'), 'sales-2')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(sent('POST', /sales-owner$/)).toEqual([])
     await userEvent.type(within(dialog).getByLabelText('Reason (required)'), 'takes the renewals')
@@ -294,7 +295,7 @@ describe('The Parent Profile: sign-in e-mail, Sales owner, Operations supervisor
     expect(within(region).getByText('Needs an Operations supervisor')).toBeInTheDocument()
     await userEvent.click(within(region).getByRole('button', { name: 'Choose the supervisor' }))
     const dialog = await screen.findByRole('dialog', { name: /Choose the Operations supervisor/ })
-    await userEvent.selectOptions(within(dialog).getByLabelText('Operations supervisor'), 'sup-1')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Operations supervisor'), 'sup-1')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent('POST', /\/family-intake\/families\/f-1\/operations-supervisor$/)).toEqual([{ supervisorId: 'sup-1' }]))
   })

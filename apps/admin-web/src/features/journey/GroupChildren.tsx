@@ -8,6 +8,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/organization/copy'
 import { journeyApi, journeyKeys, type GroupLearner } from './api'
 import { J, WEEKDAYS, useJourneyCopy } from './copy'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './journey.css'
 
 /**
@@ -160,12 +161,12 @@ export function EnrollmentDialog({
       </div>
       <div className="field">
         <label className="field__label" htmlFor={`${id}-c`}>{tx(J.course)}</label>
-        <select id={`${id}-c`} className="select" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+        <SearchableSelect id={`${id}-c`} className="select" value={courseId} onValueChange={(v) => setCourseId(v)}>
           <option value="">{tx(J.noCourse)}</option>
           {options.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </select>
+        </SearchableSelect>
       </div>
       {courses.data?.canManage && (
         <div className="field">

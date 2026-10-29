@@ -1,0 +1,83 @@
+/* SearchableSelect: a text box that filters a list (shared/components/SearchableSelect.tsx).
+   The text box keeps the caller's .select class, so it looks and sizes like the
+   <select> it replaced, chevron included. Text never uses --accent (#273). */
+.ss { position: relative; display: block; min-inline-size: 0; }
+.ss--inline { display: inline-block; }
+/* The wrapper is what a layout sizes (a flex item, a grid cell); the text box fills it. */
+.ss__input { text-overflow: ellipsis; cursor: pointer; }
+/* The chevron of .select, also on the pickers that carried .input. */
+input.ss__input {
+  padding-inline-end: var(--space-6);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2366737a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+[dir='rtl'] input.ss__input { background-position: left 10px center; }
+.ss > input.ss__input { inline-size: 100%; }
+.ss--inline > input.ss__input { inline-size: auto; }
+.ss__input:focus { cursor: text; }
+.ss__input:disabled { cursor: not-allowed; opacity: 0.6; }
+input.ss__input--clearable { padding-inline-end: 60px; }
+
+.ss__clear {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 30px;
+  margin-block: auto;
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.ss__clear:hover { background: var(--surface-hover); color: var(--text); }
+
+/* Above dialogs (z-index 50) and the rail (30). */
+.ss__popup {
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-md);
+}
+.ss__list {
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ss__option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-block-size: 36px;
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+}
+.ss__option .icon { grid-column: 2; grid-row: 1 / span 2; color: var(--text-link); }
+.ss__label { overflow-wrap: anywhere; }
+.ss__hint { grid-column: 1; font-size: var(--fs-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.ss__option[aria-selected='true'] { background: var(--surface-selected); font-weight: var(--fw-medium); }
+.ss__option--active { background: var(--surface-hover); box-shadow: inset 0 0 0 2px var(--focus); }
+.ss__option[aria-disabled='true'] { color: var(--text-subtle); cursor: not-allowed; }
+.ss__separator { block-size: 1px; margin: var(--space-1) var(--space-2); background: var(--border); }
+.ss__empty { padding: var(--space-3); color: var(--text-muted); }
+
+@media (pointer: coarse) {
+  .ss__option { min-block-size: var(--tap); }
+}

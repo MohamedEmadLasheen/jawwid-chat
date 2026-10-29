@@ -7,6 +7,7 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import { destinationsFor, entriesOf } from '@/app/navigation'
 import type { NewStudentDto, TrialDto, TrialGroupContextDto } from './api'
 import { TrialCardDialog, TrialGroupBar } from './TrialCardDialog'
+import { chooseOption, optionsOf } from '@/test/select'
 
 /**
  * PD-11 T4 and the trial journey's Admin Web through the real routes and API
@@ -129,7 +130,7 @@ describe('Trial lessons, as Sales', () => {
     // Nothing is sent without a reason.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
     expect(sent('POST', /\/outcome$/)).toEqual([])
-    await userEvent.selectOptions(within(dialog).getByLabelText('Reason'), 'schedule')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Reason'), 'schedule')
     await userEvent.type(within(dialog).getByLabelText('Details (required for "Other")'), 'evenings only')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
     await waitFor(() =>
@@ -162,13 +163,13 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.type(within(child).getByLabelText('Name'), 'Child Alpha')
     await userEvent.type(within(child).getByLabelText('Age'), '9')
     await userEvent.type(within(child).getByLabelText('Course'), 'Course A')
-    await waitFor(() => expect(within(within(child).getByLabelText('Assigned teacher')).getAllByRole('option')).toHaveLength(3))
-    expect(within(child).getByLabelText('Assigned teacher')).toHaveValue('t-1') // the trial's teacher, by default
+    await waitFor(async () => expect(await optionsOf(userEvent, within(child).getByLabelText('Assigned teacher'))).toHaveLength(3))
+    expect(within(child).getByLabelText('Assigned teacher')).toHaveAttribute('data-value', 't-1') // the trial's teacher, by default
     await userEvent.type(within(child).getByLabelText('Package price'), '1200')
     await userEvent.type(within(child).getByLabelText('Price per lesson'), '150')
-    await userEvent.selectOptions(within(child).getByLabelText('Day'), '1')
+    await chooseOption(userEvent, within(child).getByLabelText('Day'), '1')
     await userEvent.type(within(child).getByLabelText('Time'), '17:30')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Currency'), 'SAR')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Currency'), 'SAR')
     await userEvent.click(within(dialog).getByRole('radio', { name: 'Invoice' }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
     await waitFor(() =>
@@ -201,15 +202,16 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'The student subscribed' }))
     const child = within(dialog).getByRole('group', { name: 'Child 1' })
     const select = within(child).getByLabelText('Assigned teacher')
-    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(4))
-    expect(within(select).getByRole('option', { name: 'Teacher One' })).toBeInTheDocument()
-    expect(within(select).getByRole('option', { name: 'Teacher Two — Setup incomplete · No supervisor' })).toBeInTheDocument()
-    await userEvent.selectOptions(select, 't-2')
-    expect(select).toHaveValue('t-2')
+    await waitFor(async () => expect(await optionsOf(userEvent, select)).toHaveLength(4))
+    const labels = (await optionsOf(userEvent, select)).map((o) => o.label)
+    expect(labels).toContain('Teacher One')
+    expect(labels).toContain('Teacher Two — Setup incomplete · No supervisor')
+    await chooseOption(userEvent, select, 't-2')
+    expect(select).toHaveAttribute('data-value', 't-2')
     expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; this is a warning.')).toBeInTheDocument()
     // No supervisor: who covers them (plan §3.7).
     expect(within(child).getByText('The Teachers Manager covers this teacher until a supervisor is set.')).toBeInTheDocument()
-    await userEvent.selectOptions(select, 't-3')
+    await chooseOption(userEvent, select, 't-3')
     expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; this is a warning.')).toBeInTheDocument()
     expect(within(child).queryByText('The Teachers Manager covers this teacher until a supervisor is set.')).not.toBeInTheDocument()
   })
@@ -251,8 +253,8 @@ describe('Trial lessons, as Sales', () => {
     expect(within(second).getByLabelText('Level (optional)')).toHaveValue('beginner') // carried over
     await userEvent.type(within(second).getByLabelText('Student name'), 'Huda')
 
-    await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
-    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    await waitFor(async () => expect(await optionsOf(userEvent, within(dialog).getByLabelText('Teacher'))).toHaveLength(3))
+    await chooseOption(userEvent, within(dialog).getByLabelText('Teacher'), 't-2')
     const times = await freeTimes(dialog)
     expect(times).toHaveLength(SLOTS.length)
     // PD-31 chips: the day with its count, then its times under Evening (17:00 and 17:30 Cairo).
@@ -288,8 +290,8 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
     const dialog = await screen.findByRole('dialog', { name: /Edit — Karim, Huda/ })
     expect(within(dialog).queryByLabelText('Student name')).not.toBeInTheDocument()
-    await waitFor(() => expect(within(dialog).getByLabelText('Teacher')).toHaveValue('t-1'))
-    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    await waitFor(() => expect(within(dialog).getByLabelText('Teacher')).toHaveAttribute('data-value', 't-1'))
+    await chooseOption(userEvent, within(dialog).getByLabelText('Teacher'), 't-2')
     await pickTime(dialog, SLOTS[1]!)
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() =>
@@ -312,8 +314,8 @@ describe('Trial lessons, as Sales', () => {
 
     await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add another student' }))
-    await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
-    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    await waitFor(async () => expect(await optionsOf(userEvent, within(dialog).getByLabelText('Teacher'))).toHaveLength(3))
+    await chooseOption(userEvent, within(dialog).getByLabelText('Teacher'), 't-2')
     await pickTime(dialog, SLOTS[0]!)
     await userEvent.click(book)
     // The empty second row is the reason, and it can simply be removed.
@@ -331,8 +333,8 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Book a trial' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
-    await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
-    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    await waitFor(async () => expect(await optionsOf(userEvent, within(dialog).getByLabelText('Teacher'))).toHaveLength(3))
+    await chooseOption(userEvent, within(dialog).getByLabelText('Teacher'), 't-2')
     const length = within(dialog).getByLabelText('Length (minutes)')
     expect(length).toHaveValue(30)
     await userEvent.clear(length)
@@ -357,8 +359,8 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Book' }))
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Choose the teacher.')
-    await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
-    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    await waitFor(async () => expect(await optionsOf(userEvent, within(dialog).getByLabelText('Teacher'))).toHaveLength(3))
+    await chooseOption(userEvent, within(dialog).getByLabelText('Teacher'), 't-2')
     await freeTimes(dialog)
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Choose a free time.')
   })
@@ -638,7 +640,7 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     const dialog = await screen.findByRole('dialog', { name: /Assign a supervisor/ })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
     expect(sent('POST', /assign$/)).toEqual([])
-    await userEvent.selectOptions(await within(dialog).findByLabelText('Supervisor'), 'sup-1')
+    await chooseOption(userEvent, await within(dialog).findByLabelText('Supervisor'), 'sup-1')
     expect(within(dialog).getByLabelText(/sign-in e-mail/)).toHaveValue('delta@example.test')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
     await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/assign$/)).toEqual([{ supervisorId: 'sup-1', email: 'delta@example.test' }]))
@@ -699,8 +701,8 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     expect(within(dialog).getByText('Moves: Child D1')).toBeInTheDocument()
     // The current supervisor is not offered; a supervisor and a reason are both required.
     const select = await within(dialog).findByLabelText('New supervisor')
-    await waitFor(() => expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose…', 'Supervisor Two (2)']))
-    await userEvent.selectOptions(select, 'sup-2')
+    await waitFor(async () => expect((await optionsOf(userEvent, select)).map((o) => o.label)).toEqual(['Choose…', 'Supervisor Two (2)']))
+    await chooseOption(userEvent, select, 'sup-2')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change supervisor' }))
     expect(sent('POST', /supervisor$/)).toEqual([])
     await userEvent.type(within(dialog).getByLabelText('Reason (required)'), 'supervisor on leave')

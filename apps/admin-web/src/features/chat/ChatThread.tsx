@@ -40,6 +40,7 @@ import { useLessonCards } from '@/features/journey/LessonCardDialogs'
 import { LessonRecordDialog } from '@/features/journey/LessonRecordDialog'
 import { LESSON_CARD_KINDS } from '@/features/journey/api'
 import { LessonMovedCard, readLessonMovedCard } from '@/features/journey/LessonMovedCard'
+import { LessonExcuseCard, readLessonExcuseCard } from '@/features/journey/LessonExcuseCard'
 import { journeyCopyFor } from '@/features/journey/journeyCopyFor'
 import {
   SCHEDULED_CALL_CARD_KINDS,
@@ -941,6 +942,8 @@ function MessageItem({
       : null
   // PD-31: a moved lesson's card draws "previous → new" on the academy's clock.
   const movedCard = live && m.type === 'card' && m.card?.kind === 'lesson_moved' ? readLessonMovedCard(m.card.payload) : null
+  // An excused lesson's reason and its make-up's time; a make-up's day, date and time.
+  const excuseCard = live && m.type === 'card' && m.card ? readLessonExcuseCard(m.card.kind, m.card.payload) : null
   // PD-35 B6: a case escalated to this department, linked to Escalations.
   const caseCard = live && m.type === 'card' && m.card?.kind === 'case_escalated' ? readCaseEscalatedCard(m.card.payload) : null
   const reactions = summarize(m.reactions ?? [], selfId)
@@ -1044,6 +1047,8 @@ function MessageItem({
             <ScheduledCallCard cardKind={m.card.kind} card={callCard} conversationId={m.conversationId} />
           ) : movedCard ? (
             <LessonMovedCard card={movedCard} />
+          ) : excuseCard ? (
+            <LessonExcuseCard card={excuseCard} />
           ) : caseCard ? (
             <CaseEscalatedCard payload={caseCard} />
           ) : (

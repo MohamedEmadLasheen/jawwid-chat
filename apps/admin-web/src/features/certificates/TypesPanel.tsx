@@ -4,6 +4,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import type { CertificateCategory } from './api'
 import { C, describeError, useCopy } from './copy'
 import { useCertificateTypes, useSaveType } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-41 owner safeguard 6: the super admin keeps the types. A type is enabled
@@ -70,10 +71,10 @@ export function TypesPanel() {
         </div>
       </QueryBoundary>
       <div className="cert-row">
-        <select className="select" aria-label={tx(C.type)} value={category} onChange={(e) => setCategory(e.target.value as CertificateCategory)}>
+        <SearchableSelect className="select" aria-label={tx(C.type)} value={category} onValueChange={(v) => setCategory(v as CertificateCategory)}>
           <option value="student">{tx(C.students)}</option>
           <option value="teacher">{tx(C.teachers)}</option>
-        </select>
+        </SearchableSelect>
         <input className="input" aria-label={tx(C.key)} placeholder={tx(C.key)} value={key} onChange={(e) => setKey(e.target.value)} />
         <input className="input" dir="rtl" aria-label={tx(C.labelAr)} placeholder={tx(C.labelAr)} value={labelAr} onChange={(e) => setLabelAr(e.target.value)} />
         <input className="input" aria-label={tx(C.labelEn)} placeholder={tx(C.labelEn)} value={labelEn} onChange={(e) => setLabelEn(e.target.value)} />
