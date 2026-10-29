@@ -1300,6 +1300,9 @@ class L10nAr extends L10n {
   String get cardReason => 'السبب';
 
   @override
+  String get ticketCategoryLabel => 'السبب (يظهر في المجموعة)';
+
+  @override
   String get cardMakeupLesson => 'الحصة التعويضية';
 
   @override
@@ -1307,6 +1310,30 @@ class L10nAr extends L10n {
 
   @override
   String get cardStaffReason => 'السبب (للإدارة والمعلم فقط)';
+
+  @override
+  String get cardStaffNote => 'ملاحظة (للإدارة والمعلم فقط)';
+
+  @override
+  String get excuseCategoryTravel => 'سفر';
+
+  @override
+  String get excuseCategoryIllness => 'مرض';
+
+  @override
+  String get excuseCategoryExams => 'امتحانات';
+
+  @override
+  String get excuseCategoryEmergency => 'ظرف طارئ';
+
+  @override
+  String get excuseCategoryOther => 'أخرى';
+
+  @override
+  String get ticketFamilyNoteOptional => 'ملاحظة للمعلم والإدارة (اختياري)';
+
+  @override
+  String get ticketFamilyDetails => 'تفاصيل للمعلم والإدارة';
 
   @override
   String get ticketBookMakeup => 'حجز حصة التعويض';

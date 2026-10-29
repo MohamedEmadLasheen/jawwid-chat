@@ -1259,6 +1259,9 @@ class L10nEn extends L10n {
   String get cardReason => 'Reason';
 
   @override
+  String get ticketCategoryLabel => 'Reason (shown in the group)';
+
+  @override
   String get cardMakeupLesson => 'Make-up lesson';
 
   @override
@@ -1266,6 +1269,31 @@ class L10nEn extends L10n {
 
   @override
   String get cardStaffReason => 'Reason (staff and the teacher only)';
+
+  @override
+  String get cardStaffNote => 'Note (staff and the teacher only)';
+
+  @override
+  String get excuseCategoryTravel => 'Travel';
+
+  @override
+  String get excuseCategoryIllness => 'Illness';
+
+  @override
+  String get excuseCategoryExams => 'Exams';
+
+  @override
+  String get excuseCategoryEmergency => 'An emergency';
+
+  @override
+  String get excuseCategoryOther => 'Other';
+
+  @override
+  String get ticketFamilyNoteOptional =>
+      'Note for the teacher and staff (optional)';
+
+  @override
+  String get ticketFamilyDetails => 'Details for the teacher and staff';
 
   @override
   String get ticketBookMakeup => 'Book the make-up lesson';

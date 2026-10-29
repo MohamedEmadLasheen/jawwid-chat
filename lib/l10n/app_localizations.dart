@@ -2245,6 +2245,12 @@ abstract class L10n {
   /// **'Reason'**
   String get cardReason;
 
+  /// PD-50: label above the excuse reason category chips; the category is shown on the group card, the note is not.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (shown in the group)'**
+  String get ticketCategoryLabel;
+
   /// Lesson card row label: the booked make-up lesson's day, date and time follow (on the make-up card and on the excuse card it replaces).
   ///
   /// In en, this message translates to:
@@ -2262,6 +2268,54 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Reason (staff and the teacher only)'**
   String get cardStaffReason;
+
+  /// PD-50: label of the free-text note beside an excuse category -- on the lesson card (staff and the teacher only, never a family) and on the teacher's apology form.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (staff and the teacher only)'**
+  String get cardStaffNote;
+
+  /// PD-50: an excuse category, shown on the apology forms and to the family on the lesson card.
+  ///
+  /// In en, this message translates to:
+  /// **'Travel'**
+  String get excuseCategoryTravel;
+
+  /// No description provided for @excuseCategoryIllness.
+  ///
+  /// In en, this message translates to:
+  /// **'Illness'**
+  String get excuseCategoryIllness;
+
+  /// No description provided for @excuseCategoryExams.
+  ///
+  /// In en, this message translates to:
+  /// **'Exams'**
+  String get excuseCategoryExams;
+
+  /// No description provided for @excuseCategoryEmergency.
+  ///
+  /// In en, this message translates to:
+  /// **'An emergency'**
+  String get excuseCategoryEmergency;
+
+  /// No description provided for @excuseCategoryOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get excuseCategoryOther;
+
+  /// PD-50: the optional free-text note on a family's apology before the lesson; only the teacher and staff read it, never the family group card.
+  ///
+  /// In en, this message translates to:
+  /// **'Note for the teacher and staff (optional)'**
+  String get ticketFamilyNoteOptional;
+
+  /// PD-50: the required free-text details on a family's late apology; only the teacher and staff read them.
+  ///
+  /// In en, this message translates to:
+  /// **'Details for the teacher and staff'**
+  String get ticketFamilyDetails;
 
   /// No description provided for @ticketBookMakeup.
   ///

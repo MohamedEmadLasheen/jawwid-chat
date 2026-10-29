@@ -749,7 +749,11 @@ abstract interface class LessonRepository {
   Future<void> absence(String lessonId, {String? note});
 
   /// `POST /lessons/:id/apology`, `/teacher-apology` or `/late-apology`, by [kind].
-  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason);
+  /// PD-50: [category] is the fixed reason the family sees on the card
+  /// (`reasonCategory`, see excuse_category.dart); [reason] is the free-text note only
+  /// staff and the lesson's teacher read. A family's apology before the start may omit
+  /// [reason] when it names a [category]; the server decides.
+  Future<void> apologise(String lessonId, LessonTicketKind kind, {String? reason, String? category});
 
   /// `GET /lessons/:id/makeup-slots`
   Future<MakeupOffer> makeupSlots(String lessonId);
@@ -883,7 +887,7 @@ class NoLessonRepository implements LessonRepository {
       throw UnsupportedError('no lesson server in this build');
 
   @override
-  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) =>
+  Future<void> apologise(String lessonId, LessonTicketKind kind, {String? reason, String? category}) =>
       throw UnsupportedError('no lesson server in this build');
 
   @override

@@ -191,6 +191,82 @@ void main() {
       expect(lessons.asked, isEmpty);
     });
   });
+
+  /// PD-50: "Parents see a category." The card names the excuse's category to everyone;
+  /// the free-text note stays with staff and the lesson's teacher.
+  group('an excuse with a category', () {
+    MessageCard categorised(String kind, {String lessonId = 'l5', Map<String, Object?> extra = const {}}) =>
+        MessageCard(kind: kind, lessonId: lessonId, payload: {
+          'lessonId': lessonId, 'learnerName': 'Yusuf', 'teacherName': 'Teacher Huda',
+          'startsAt': missed, 'endsAt': '2026-10-27T14:30:00.000Z', 'durationMinutes': 30,
+          'reasonCategory': 'illness', 'makeupOwed': true, ...extra,
+        });
+
+    for (final lang in ['en', 'ar']) {
+      testWidgets('a parent sees the category under "Reason", and never fetches nor sees the note ($lang)', (tester) async {
+        final lessons = _Notes();
+        for (final card in [
+          categorised('lesson_apology', extra: {'timing': 'before_start'}),
+          categorised('lesson_late_apology'),
+          categorised('lesson_teacher_apology'),
+          categorised('lesson_ruling', extra: {'decision': 'excused'}),
+        ]) {
+          await tester.pumpWidget(app(card, role: UserRole.parent, lessons: lessons, locale: Locale(lang)));
+          await tester.pumpAndSettle();
+          final l10n = L10n.of(tester.element(find.byType(Builder).first));
+          expect(find.text(l10n.cardReason), findsOneWidget, reason: card.kind);
+          expect(find.text(l10n.excuseCategoryIllness), findsOneWidget, reason: card.kind);
+          if (lang == 'ar') expect(find.text('مرض'), findsOneWidget);
+          if (lang == 'en') expect(find.text('Illness'), findsOneWidget);
+          expect(find.text(l10n.cardStaffNote), findsNothing);
+          expect(find.textContaining('travelling'), findsNothing);
+        }
+        expect(lessons.asked, isEmpty, reason: 'a parent never asks for the note');
+      });
+
+      testWidgets('a teacher sees the category and the note, labelled "Note (staff and the teacher only)" ($lang)', (tester) async {
+        final lessons = _Notes();
+        await tester.pumpWidget(app(categorised('lesson_apology', extra: {'timing': 'before_start'}),
+            role: UserRole.teacher, lessons: lessons, locale: Locale(lang)));
+        await tester.pumpAndSettle();
+        final l10n = L10n.of(tester.element(find.byType(Builder).first));
+        expect(lessons.asked, ['l5'], reason: 'no reason on the card: the note is fetched');
+        expect(find.text(l10n.excuseCategoryIllness), findsOneWidget);
+        expect(find.text(l10n.cardStaffNote), findsOneWidget);
+        expect(find.text(l10n.cardStaffReason), findsNothing);
+        expect(find.text('The family called the office; the child is travelling.'), findsOneWidget);
+        if (lang == 'en') expect(find.text('Note (staff and the teacher only)'), findsOneWidget);
+        if (lang == 'ar') expect(find.text('ملاحظة (للإدارة والمعلم فقط)'), findsOneWidget);
+      });
+    }
+
+    testWidgets('staff read a teacher apology\'s category and its note', (tester) async {
+      final lessons = _Notes();
+      await tester.pumpWidget(app(categorised('lesson_teacher_apology', lessonId: 'l6'), role: UserRole.sales, lessons: lessons));
+      await tester.pumpAndSettle();
+      expect(find.text('Illness'), findsOneWidget);
+      expect(find.text('Note (staff and the teacher only)'), findsOneWidget);
+      expect(lessons.asked, ['l6']);
+    });
+
+    testWidgets('an older card without a category keeps the family\'s reason and fetches nothing', (tester) async {
+      final lessons = _Notes();
+      await tester.pumpWidget(app(familyExcuse(), role: UserRole.teacher, lessons: lessons));
+      await tester.pumpAndSettle();
+      expect(find.text('Yusuf has a fever today.'), findsOneWidget);
+      expect(find.text('Illness'), findsNothing);
+      expect(lessons.asked, isEmpty);
+    });
+
+    testWidgets('a category code this build does not know shows no row', (tester) async {
+      final lessons = _Notes();
+      await tester.pumpWidget(app(categorised('lesson_ruling', extra: {'decision': 'excused', 'reasonCategory': 'bereavement'}),
+          role: UserRole.parent, lessons: lessons));
+      await tester.pumpAndSettle();
+      expect(find.text('Reason'), findsNothing);
+      expect(find.text('bereavement'), findsNothing);
+    });
+  });
 }
 
 class _Notes implements LessonRepository {

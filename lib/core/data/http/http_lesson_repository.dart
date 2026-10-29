@@ -153,14 +153,17 @@ class HttpLessonRepository implements LessonRepository {
   }
 
   @override
-  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) async {
+  Future<void> apologise(String lessonId, LessonTicketKind kind, {String? reason, String? category}) async {
     final path = switch (kind) {
       LessonTicketKind.apology => 'apology',
       LessonTicketKind.teacherApology => 'teacher-apology',
       LessonTicketKind.lateApology => 'late-apology',
       _ => throw ArgumentError.value(kind, 'kind', 'not an apology'),
     };
-    await _client.post<Object?>('/lessons/$lessonId/$path', data: {'reason': reason});
+    await _client.post<Object?>('/lessons/$lessonId/$path', data: {
+      'reason': ?reason,
+      'reasonCategory': ?category,
+    });
   }
 
   @override

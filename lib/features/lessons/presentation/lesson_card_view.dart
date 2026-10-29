@@ -11,6 +11,7 @@ import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/clock_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../materials/data/materials_repository.dart';
+import '../domain/excuse_category.dart';
 import '../domain/report_vocab.dart';
 import 'lesson_report_sheet.dart' show showEditReportSheet;
 import 'lesson_ticket_sheet.dart' show lessonWhen, weeklyLabel;
@@ -137,8 +138,16 @@ class _LessonCard extends ConsumerWidget {
     final starts = makeupCard ? null : card.time('startsAt');
     final makeupStarts = makeupCard ? card.time('startsAt') : card.time('makeupStartsAt');
     final missedStarts = makeupCard ? card.time('missedStartsAt') : null;
+    // PD-50: the excuse's category, which everyone reading the card sees -- the family
+    // included. With one, the family's free text is not on the card; it is the staff note.
+    final categoryCode = switch (card.kind) {
+      'lesson_apology' || 'lesson_teacher_apology' || 'lesson_late_apology' || 'lesson_ruling' => card.text('reasonCategory'),
+      _ => null,
+    };
+    final category = excuseCategoryLabel(l10n, categoryCode);
     // PD-15: the internal reason, for staff and the teacher -- never fetched, never shown
-    // for a parent (or an unknown role). The family's own apology reason is on the card.
+    // for a parent (or an unknown role). An older card carries the family's own apology
+    // reason; a PD-50 card carries its category instead, and its note is fetched here.
     // The role is read only for a card that could carry such a reason.
     final staffNoteCard = lessonId != null &&
         switch (card.kind) {
@@ -231,8 +240,10 @@ class _LessonCard extends ConsumerWidget {
       if (tasks.isNotEmpty) (l10n.cardNextLesson, tasks.join('، ')),
       if (card.text('homework') case final v?) (l10n.cardHomework, v),
       if (practice.isNotEmpty) (l10n.materialsTabPractice, practice.join('، ')),
+      ?category == null ? null : (l10n.cardReason, category),
       if (card.text('reason') case final v?) (l10n.cardReason, v),
-      if (staffNote != null && staffNote.trim().isNotEmpty) (l10n.cardStaffReason, staffNote),
+      if (staffNote != null && staffNote.trim().isNotEmpty)
+        (categoryCode != null ? l10n.cardStaffNote : l10n.cardStaffReason, staffNote),
       if (card.text('note') case final v?) (l10n.cardNote, v),
     ];
 
