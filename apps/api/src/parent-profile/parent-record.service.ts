@@ -72,8 +72,10 @@ export class ParentRecordService implements OnModuleInit {
   /** The parents this staff member may open, by name. `q` narrows by name. */
   /**
    * ?q= and, PD-44, ?access=locked|grace: only the parents of a family with a
-   * child in that PD-30 state (the stored chat.learner_access row -- what the
-   * parent's app enforces).
+   * child in that PD-30 state, computed now (chat.compute_learner_access, as
+   * enforcement computes it), never read from the chat.learner_access row a
+   * sweep may not have refreshed yet: an instalment overdue at midnight
+   * shows at once. One statement; EXISTS stops at the family's first match.
    */
   async list(actorId: string, q?: string, accessFilter?: string) {
     const { actor, scope } = await this.requireAdmin(actorId);
@@ -91,7 +93,8 @@ export class ParentRecordService implements OnModuleInit {
         JOIN chat.family f ON f.id = c.family_id
        WHERE ${this.listWhere(actor, scope, search)}
          AND (${state}::text IS NULL OR EXISTS (
-               SELECT 1 FROM chat.learner_access a WHERE a.family_id = f.id AND a.state = ${state}::text))
+               SELECT 1 FROM chat.learner l CROSS JOIN LATERAL chat.compute_learner_access(l.id) a
+                WHERE l.family_id = f.id AND a.state = ${state}::text))
        ORDER BY c.name, c.id
        LIMIT ${SEARCH_LIMIT}`;
     return {
@@ -117,7 +120,8 @@ export class ParentRecordService implements OnModuleInit {
   /**
    * PD-44: the Dashboard's tiles for the Parents list's subscription filters
    * -- what `list(?access=locked|grace)` shows, counted in one statement over
-   * the same rows (listWhere) and capped at the list's SEARCH_LIMIT:
+   * the same rows (listWhere), each child's state computed once, now (as
+   * `list` and enforcement compute it), and capped at the list's SEARCH_LIMIT:
    *
    *   parents.locked   parents of a family with a child whose subscription is locked
    *   parents.grace    ... a child in the grace period
@@ -132,11 +136,22 @@ export class ParentRecordService implements OnModuleInit {
     const scope = (await billingAccessOf(this.prisma, actor)).scope;
     if (!scope) return [];
     const [r] = await this.prisma.$queryRaw<Array<{ locked: number; grace: number }>>`
-      SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM chat.learner_access a WHERE a.family_id = f.id AND a.state = 'locked'))::int AS locked,
-             count(*) FILTER (WHERE EXISTS (SELECT 1 FROM chat.learner_access a WHERE a.family_id = f.id AND a.state = 'grace'))::int AS grace
-        FROM chat.contact c
-        JOIN chat.family f ON f.id = c.family_id
-       WHERE ${this.listWhere(actor, scope, '')}`;
+      WITH shown AS (
+        SELECT f.id AS family_id
+          FROM chat.contact c
+          JOIN chat.family f ON f.id = c.family_id
+         WHERE ${this.listWhere(actor, scope, '')}
+      ), states AS (
+        SELECT l.family_id, bool_or(a.state = 'locked') AS locked, bool_or(a.state = 'grace') AS grace
+          FROM chat.learner l
+         CROSS JOIN LATERAL chat.compute_learner_access(l.id) a
+         WHERE l.family_id IN (SELECT family_id FROM shown)
+         GROUP BY l.family_id
+      )
+      SELECT count(*) FILTER (WHERE s.locked)::int AS locked,
+             count(*) FILTER (WHERE s.grace)::int AS grace
+        FROM shown
+        JOIN states s ON s.family_id = shown.family_id`;
     const tile = (key: string, n: number) => dashboardTile(key, Math.min(n, SEARCH_LIMIT), null, n > SEARCH_LIMIT);
     return [tile('parents.locked', r?.locked ?? 0), tile('parents.grace', r?.grace ?? 0)];
   }

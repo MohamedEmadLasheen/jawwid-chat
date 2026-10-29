@@ -33,6 +33,8 @@ import {
 } from './validate';
 
 const RECEIPT_STATUSES = ['pending', 'approved', 'rejected'] as const;
+/** The receipts list's page size; the Dashboard tile caps at it too (PD-44). */
+const RECEIPTS_LIMIT = 200;
 const DEFAULT_EXPIRY_DAYS = 14;
 const INVOICE_LINK_TTL_SECONDS = 5 * 60;
 
@@ -418,7 +420,7 @@ export class PaymentsService {
         : null;
     const where = { organizationId: org, ...(familyFilter ? { familyId: { in: familyFilter } } : {}) };
     const [rows, grouped] = await Promise.all([
-      this.prisma.paymentReceipt.findMany({ where: { ...where, status }, orderBy: { uploadedAt: status === 'pending' ? 'asc' : 'desc' }, take: 200 }),
+      this.prisma.paymentReceipt.findMany({ where: { ...where, status }, orderBy: { uploadedAt: status === 'pending' ? 'asc' : 'desc' }, take: RECEIPTS_LIMIT }),
       this.prisma.paymentReceipt.groupBy({ by: ['status'], where, _count: { _all: true } }),
     ]);
     const counts = { pending: 0, approved: 0, rejected: 0 };
@@ -430,8 +432,10 @@ export class PaymentsService {
   /**
    * PD-44: the Dashboard's receipts tile -- `receipts`' own counts.pending, in
    * one statement over the same families (every receipt of the organization
-   * for the `all` scope; those of the families in scope otherwise). Staff who
-   * read no family's money get no tile; non-staff are refused.
+   * for the `all` scope; those of the families in scope otherwise -- the
+   * shared predicate, equivalent to `receipts`' two-step family filter), and
+   * capped like that list at RECEIPTS_LIMIT. Staff who read no family's money
+   * get no tile; non-staff are refused.
    */
   async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
     const reader = await this.billing.readerOrNone(actorId);
@@ -444,7 +448,8 @@ export class PaymentsService {
        WHERE r.organization_id = ${actor.organizationId as string}::uuid
          AND r.status = 'pending'
          AND (${all}::boolean OR (r.family_id IS NOT NULL AND ${familyInScopeSql(actor.actorId, access.scope, Prisma.sql`r.family_id`)}))`;
-    return [dashboardTile('receipts.pending', r?.pending ?? 0, r?.oldest ?? null)];
+    const pending = r?.pending ?? 0;
+    return [dashboardTile('receipts.pending', Math.min(pending, RECEIPTS_LIMIT), r?.oldest ?? null, pending > RECEIPTS_LIMIT)];
   }
 
   /** { amountMinor?, paidOn? } -- the verifier saw the money arrive. */
