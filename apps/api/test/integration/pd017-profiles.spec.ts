@@ -29,6 +29,7 @@ import { SignedLocalObjectStorage } from '@communication/attachments/object-stor
 import { AvatarService } from '@communication/profile/avatar.service';
 import { BillingService } from '../../src/billing/billing.service';
 import { ParentRecordService } from '../../src/parent-profile/parent-record.service';
+import { contactKeyHash } from '../../src/new-students/contact-key';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { EnrollmentService } from '../../src/lessons/enrollment.service';
@@ -481,5 +482,93 @@ describe('7. a parent\'s own payments', () => {
     for (const who of [f.children[0]!.teacherId, m.superAdmin.id, m.operationsManager.id]) {
       expect(await code(billing.mine(who))).toBe(CommErrorCode.BILLING_DENIED);
     }
+  });
+});
+
+describe('PD-45: a family\'s location on the Parent Profile', () => {
+  const famA = () => m.families[m.families.length - 1]!;
+  const famB = () => m.families[m.families.length - 2]!;
+  const family = (id: string) => g.prisma.family.findUniqueOrThrow({ where: { id } });
+
+  beforeAll(() => {
+    process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
+  });
+
+  it('saves a country and its subdivision, names them in both languages, and says who set them', async () => {
+    const out = await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'eg', subdivisionCode: 'eg-gz' });
+    expect(out.contact).toMatchObject({
+      countryCode: 'EG',
+      subdivisionCode: 'EG-GZ',
+      location: {
+        country: { code: 'EG', en: 'Egypt', ar: 'مصر' },
+        subdivision: { code: 'EG-GZ', en: 'Giza', ar: 'الجيزة' },
+        label: { en: 'Governorate', ar: 'المحافظة' },
+      },
+      locationSource: 'staff',
+    });
+    expect(out.contact.locationUpdatedAt).toEqual(expect.any(String));
+    expect(await family(famA().id)).toMatchObject({ countryCode: 'EG', subdivisionCode: 'EG-GZ', locationSource: 'staff', locationUpdatedBy: m.operationsManager.id });
+    const rows = await g.prisma.auditLog.findMany({ where: { entityId: famA().parent.id, action: 'parent_profile.updated' }, orderBy: { id: 'desc' }, take: 1 });
+    expect(rows[0]!.after).toMatchObject({ fields: expect.arrayContaining(['countryCode', 'subdivisionCode']) });
+    expect(JSON.stringify(rows[0]!.after)).not.toMatch(/EG-GZ|Giza|الجيزة/);
+  });
+
+  it('refuses a subdivision of another country or one without a country, and drops the subdivision when the country changes', async () => {
+    expect(await code(parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'EG', subdivisionCode: 'AE-DU' }))).toBe(CommErrorCode.VALIDATION);
+    expect(await code(parents.update(m.operationsManager.id, famA().parent.id, { countryCode: null, subdivisionCode: 'EG-GZ' }))).toBe(CommErrorCode.VALIDATION);
+    expect(await code(parents.update(m.operationsManager.id, famA().parent.id, { subdivisionCode: 'SA-01' }))).toBe(CommErrorCode.VALIDATION);
+    expect(await family(famA().id)).toMatchObject({ countryCode: 'EG', subdivisionCode: 'EG-GZ' });
+    const moved = await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE' });
+    expect(moved.contact).toMatchObject({ countryCode: 'AE', subdivisionCode: null, location: { subdivision: null, label: { en: 'Emirate' } } });
+    await parents.update(m.operationsManager.id, famA().parent.id, { subdivisionCode: 'AE-DU' });
+    expect(await family(famA().id)).toMatchObject({ countryCode: 'AE', subdivisionCode: 'AE-DU' });
+  });
+
+  it('suggests the country of an international phone number while the family has none, and never saves it', async () => {
+    const out = await parents.update(m.operationsManager.id, famB().parent.id, { countryCode: null, phone: '+966 50 765 4321' });
+    expect(out.contact).toMatchObject({ countryCode: null, location: null });
+    expect(out.suggestedCountryCode).toBe('SA');
+    expect((await family(famB().id)).countryCode).toBeNull();
+    const set = await parents.update(m.operationsManager.id, famB().parent.id, { countryCode: 'SA' });
+    expect(set.suggestedCountryCode).toBeNull();
+  });
+
+  it('lists the parents whose location is missing (no country, or a country with subdivisions but none chosen), with each row\'s location', async () => {
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'EG', subdivisionCode: 'EG-C' });
+    await parents.update(m.operationsManager.id, famB().parent.id, { countryCode: 'EG', subdivisionCode: null });
+    const all = await parents.list(m.operationsManager.id);
+    expect(all.items.find((i) => i.id === famA().parent.id)!.location).toEqual({ countryCode: 'EG', subdivisionCode: 'EG-C' });
+    const missing = (await parents.list(m.operationsManager.id, undefined, 'missing')).items.map((i) => i.id);
+    expect(missing).toContain(famB().parent.id);
+    expect(missing).not.toContain(famA().parent.id);
+    const noCountry = m.families.find((f) => f.id !== famA().id && f.id !== famB().id)!;
+    await parents.update(m.operationsManager.id, noCountry.parent.id, { countryCode: null });
+    expect((await parents.list(m.operationsManager.id, undefined, 'missing')).items.map((i) => i.id)).toContain(noCountry.parent.id);
+    expect(await code(parents.list(m.operationsManager.id, undefined, 'everything'))).toBe(CommErrorCode.VALIDATION);
+  });
+
+  it('re-keys the phone when a new country reads it as another number, and refuses a number another family already holds (PD-42 S1)', async () => {
+    // A local Gulf number, entered while the family had no country: unreadable, so not keyed.
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: null, phone: '050 765 0000' });
+    // Another family already holds that number as read in the UAE.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.family_contact_key (organization_id, key_hash, family_id, kind) values ($1::uuid, $2, $3::uuid, 'phone')`,
+      orgId, contactKeyHash('phone', '+971507650000'), famB().id,
+    );
+    const refused = await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE' }).catch((e: unknown) => e);
+    expect(refused).toMatchObject({ code: CommErrorCode.PARENT_EXISTS, status: 409 });
+    expect(JSON.stringify(refused)).not.toMatch(new RegExp(famB().id));
+    expect((await family(famA().id)).countryCode).toBeNull();
+    // A number nobody holds: the country is saved and the family keyed by the number as it now reads.
+    await parents.update(m.operationsManager.id, famA().parent.id, { phone: '050 765 1111' });
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE' });
+    const key = await g.prisma.$queryRawUnsafe<Array<{ family_id: string }>>(
+      `select family_id::text from chat.family_contact_key where organization_id = $1::uuid and key_hash = $2`,
+      orgId, contactKeyHash('phone', '+971507651111'),
+    );
+    expect(key).toEqual([{ family_id: famA().id }]);
+    // Saving the same country again adds nothing.
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE', subdivisionCode: 'AE-SH' });
+    expect((await family(famA().id)).subdivisionCode).toBe('AE-SH');
   });
 });

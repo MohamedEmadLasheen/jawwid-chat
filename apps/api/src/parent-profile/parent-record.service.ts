@@ -2,7 +2,11 @@ import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
-import { invalidCountryMessage, isGeoForeignKeyViolation, listedCountry } from '../geo/countries';
+import { invalidCountryMessage, isGeoForeignKeyViolation } from '../geo/countries';
+import { locationOf, parseLocationPatch } from '../geo/location';
+import { contactKeyHash } from '../new-students/contact-key';
+import { e164ForKey } from '../new-students/intake-input';
+import { suggestedCountryFromPhone } from './parent-phone-directory';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
@@ -35,7 +39,8 @@ type Admin = { actor: Actor; scope: Scope; canEdit: boolean; editOwnedOnly: bool
  *
  * WHAT. The parent's name and photo (chat.contact -- the same name and photo
  * every chat surface shows, so an edit here is an edit everywhere), the family's
- * country (chat.family.country_code, shared with Stories targeting), the number
+ * country (chat.family.country_code, shared with Stories targeting) and, PD-45,
+ * its first-level subdivision (always the country's) and who set them, the number
  * of children, and the administration's own record in chat.parent_file: phone,
  * e-mail, emirate / governorate and an internal note the parent never sees.
  * Money is BillingService's (`/families/:id/billing`), under the same rule.
@@ -65,17 +70,27 @@ export class ParentRecordService implements OnModuleInit {
 
   // ---------------------------------------------------------------- read
 
-  /** The parents this staff member may open, by name. `q` narrows by name. */
-  async list(actorId: string, q?: string) {
+  /**
+   * The parents this staff member may open, by name. `q` narrows by name;
+   * PD-45 `location=missing` to the families with no country, or a country with
+   * subdivisions and none chosen -- the list staff complete (plan §6.1 a).
+   */
+  async list(actorId: string, q?: string, location?: string) {
     const { actor, scope } = await this.requireAdmin(actorId);
+    if (location !== undefined && location !== '' && location !== 'missing') throw invalid('location: missing, or leave it out');
+    const missing = location === 'missing';
     const search = typeof q === 'string' ? q.trim().slice(0, 80) : '';
     const reach = scope === 'reach';
     const owned = scope === 'owned';
     const rows = await this.prisma.$queryRaw<
-      Array<{ id: string; name: string; avatar_object_key: string | null; family_id: string; family_name: string; children: number }>
+      Array<{
+        id: string; name: string; avatar_object_key: string | null; family_id: string; family_name: string; children: number;
+        country_code: string | null; subdivision_code: string | null;
+      }>
     >`
       SELECT c.id, c.name, c.avatar_object_key, f.id AS family_id, f.display_name AS family_name,
-             (SELECT count(*)::int FROM chat.learner l WHERE l.family_id = f.id) AS children
+             (SELECT count(*)::int FROM chat.learner l WHERE l.family_id = f.id) AS children,
+             f.country_code, f.subdivision_code
         FROM chat.contact c
         JOIN chat.family f ON f.id = c.family_id
        WHERE c.organization_id = ${actor.organizationId as string}::uuid
@@ -83,6 +98,10 @@ export class ParentRecordService implements OnModuleInit {
          AND (${search} = '' OR c.name ILIKE '%' || ${search} || '%' OR f.display_name ILIKE '%' || ${search} || '%')
          AND (${!reach} OR chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL)
          AND (${!owned} OR chat.staff_owns_family(${actor.actorId}::uuid, f.id))
+         AND (${!missing} OR f.country_code IS NULL
+              OR (f.subdivision_code IS NULL
+                  AND EXISTS (SELECT 1 FROM chat.geo_subdivision gs
+                               WHERE gs.country_code = f.country_code AND gs.retired_at IS NULL)))
        ORDER BY c.name, c.id
        LIMIT ${SEARCH_LIMIT}`;
     return {
@@ -92,6 +111,7 @@ export class ParentRecordService implements OnModuleInit {
         avatarUrl: signAvatar('contact', r.id, 'profile', actor.actorId, r.avatar_object_key),
         family: { id: r.family_id, name: r.family_name },
         childrenCount: r.children,
+        location: { countryCode: r.country_code, subdivisionCode: r.subdivision_code },
       })),
       truncated: rows.length === SEARCH_LIMIT,
     };
@@ -109,7 +129,7 @@ export class ParentRecordService implements OnModuleInit {
 
   /**
    * Partial: an absent field is left alone; null clears it (the name cannot be
-   * cleared). { name, phone, email, countryCode, region, adminNote }
+   * cleared). { name, phone, email, countryCode, subdivisionCode, region, adminNote }
    */
   async update(actorId: string, contactId: string, body: Record<string, unknown>) {
     const { actor, contact } = await this.requireEditableContact(actorId, contactId);
@@ -120,13 +140,10 @@ export class ParentRecordService implements OnModuleInit {
     if ('email' in body) file.adminOnlyParentEmail = optionalEmail(body.email);
     if ('region' in body) file.region = optionalText('region', body.region, 80);
     if ('adminNote' in body) file.adminNote = optionalText('adminNote', body.adminNote, 1000);
-    let countryCode: string | null | undefined;
-    if ('countryCode' in body) {
-      // PD-45: one of the list (chat.geo_country), never just two letters.
-      const c = body.countryCode === null ? null : listedCountry(body.countryCode);
-      if (body.countryCode !== null && c === null) throw invalid(invalidCountryMessage('countryCode'));
-      countryCode = c;
-    }
+    // PD-45: one of the list (chat.geo_country), and a subdivision always the country's.
+    const location = parseLocationPatch(body, { countryCode: contact.countryCode, subdivisionCode: contact.subdivisionCode });
+    const countryChanged = location !== undefined && location.countryCode !== contact.countryCode;
+    const subdivisionChanged = location !== undefined && location.subdivisionCode !== contact.subdivisionCode;
 
     const before = await this.prisma.parentFile.findUnique({ where: { contactId: contact.id } });
     const changed: string[] = [];
@@ -134,7 +151,8 @@ export class ParentRecordService implements OnModuleInit {
     for (const [key, value] of Object.entries(file) as Array<[keyof typeof file, string | null]>) {
       if ((before?.[key] ?? null) !== value) changed.push(FIELD_NAME[key]);
     }
-    if (countryCode !== undefined && countryCode !== contact.countryCode) changed.push('countryCode');
+    if (countryChanged) changed.push('countryCode');
+    if (subdivisionChanged) changed.push('subdivisionCode');
     if (changed.length === 0) return this.present(actor, contact.id, true);
 
     await this.prisma.$transaction(async (tx) => {
@@ -152,11 +170,21 @@ export class ParentRecordService implements OnModuleInit {
           update: { ...file, updatedBy: actor.actorId },
         });
       }
-      if (countryCode !== undefined && countryCode !== contact.countryCode) {
-        // The one country column, shared with Stories targeting (20261017120000).
+      if (location !== undefined && (countryChanged || subdivisionChanged)) {
+        // PD-42 S1 / PD-45 §9: the country decides how a stored local number reads.
+        if (countryChanged) await rekeyPhonesForCountry(tx, contact.familyId, contact.countryCode, location.countryCode, actor.actorId);
+        const now = new Date();
         await tx.family.update({
           where: { id: contact.familyId },
-          data: { countryCode, segmentSource: 'admin', segmentUpdatedAt: new Date() },
+          data: {
+            countryCode: location.countryCode,
+            subdivisionCode: location.subdivisionCode,
+            locationSource: 'staff',
+            locationUpdatedBy: actor.actorId,
+            locationUpdatedAt: now,
+            // The one country column, shared with Stories targeting (20261017120000).
+            ...(countryChanged ? { segmentSource: 'admin', segmentUpdatedAt: now } : {}),
+          },
         }).catch((e: unknown) => {
           // PD-45 safety net: the database's own list refused it.
           throw isGeoForeignKeyViolation(e) ? invalid(invalidCountryMessage('countryCode')) : e;
@@ -197,7 +225,11 @@ export class ParentRecordService implements OnModuleInit {
   private async present(actor: Actor, contactId: string, canEdit: boolean) {
     const contact = await this.prisma.contact.findUniqueOrThrow({
       where: { id: contactId },
-      include: { family: { select: { id: true, displayName: true, countryCode: true } } },
+      include: {
+        family: {
+          select: { id: true, displayName: true, countryCode: true, subdivisionCode: true, locationSource: true, locationUpdatedAt: true },
+        },
+      },
     });
     const [file, children] = await Promise.all([
       this.prisma.parentFile.findUnique({ where: { contactId } }),
@@ -218,8 +250,16 @@ export class ParentRecordService implements OnModuleInit {
         phone: file?.adminOnlyParentPhone ?? null,
         email: file?.adminOnlyParentEmail ?? null,
         countryCode: contact.family.countryCode,
+        // PD-45: the subdivision, the names of both, and who set them (Q6: staff see a parent's own answer).
+        subdivisionCode: contact.family.subdivisionCode,
+        location: locationOf(contact.family.countryCode, contact.family.subdivisionCode),
+        locationSource: contact.family.locationSource,
+        locationUpdatedAt: contact.family.locationUpdatedAt?.toISOString() ?? null,
+        // Free text from before PD-45, shown as "Old note" until PR-5's backfill matches it.
         region: file?.region ?? null,
       },
+      // PD-45 §6.2: a suggestion while the family has no country; only the code leaves this module (G-07).
+      suggestedCountryCode: contact.family.countryCode ? null : suggestedCountryFromPhone(file?.adminOnlyParentPhone ?? null),
       adminNote: file?.adminNote ?? null,
       childrenCount: children.length,
       children: children.map((c) => ({
@@ -270,12 +310,12 @@ export class ParentRecordService implements OnModuleInit {
     if (!isUuid(contactId)) return null;
     const contact = await this.prisma.contact.findFirst({
       where: { id: contactId.toLowerCase(), organizationId: actor.organizationId as string },
-      select: { id: true, name: true, familyId: true, organizationId: true, family: { select: { countryCode: true } } },
+      select: { id: true, name: true, familyId: true, organizationId: true, family: { select: { countryCode: true, subdivisionCode: true } } },
     });
     if (!contact) return null;
     if (scope === 'reach' && !(await reachesFamily(this.prisma, actor, contact.familyId))) return null;
     if (scope === 'owned' && !(await ownsFamily(this.prisma, actor, contact.familyId))) return null;
-    return { ...contact, countryCode: contact.family.countryCode };
+    return { ...contact, countryCode: contact.family.countryCode, subdivisionCode: contact.family.subdivisionCode };
   }
 
   private async requireContact(actor: Actor, scope: Scope, contactId: string) {
@@ -338,6 +378,49 @@ export async function recordSignInEmail(
     where: { contactId: input.contactId, adminOnlyParentEmail: null },
     data: { adminOnlyParentEmail: input.email.trim().toLowerCase(), updatedBy: input.actorId },
   });
+}
+
+/**
+ * PD-45 §9 (PD-42 S1): a family's country decides how a stored LOCAL number
+ * reads ("050 765 1111" is +971... in the UAE). When the country changes, each
+ * active parent's number is read again; a reading that differs is keyed for
+ * this family too (keys are never removed while the family exists), and one
+ * another family already holds refuses the change -- two families would then
+ * be one parent. The answer names no family. Inside the caller's transaction.
+ */
+export async function rekeyPhonesForCountry(
+  tx: Prisma.TransactionClient,
+  familyId: string,
+  from: string | null,
+  to: string | null,
+  actorId: string,
+): Promise<void> {
+  if (!to || from === to) return;
+  const files = await tx.$queryRaw<Array<{ phone: string; organization_id: string }>>`
+    SELECT pf.phone, c.organization_id::text AS organization_id
+      FROM chat.parent_file pf
+      JOIN chat.contact c ON c.id = pf.contact_id AND c.is_active
+     WHERE c.family_id = ${familyId}::uuid AND pf.phone IS NOT NULL`;
+  const taken = () =>
+    new CommError(CommErrorCode.PARENT_EXISTS, 'read in this country, the parent\'s number is another family\'s; ask your manager', 409);
+  for (const f of files) {
+    const now = e164ForKey(f.phone, to);
+    if (!now || now === 'ambiguous' || now === e164ForKey(f.phone, from)) continue;
+    const keyHash = contactKeyHash('phone', now);
+    const [held] = await tx.$queryRaw<Array<{ family_id: string }>>`
+      SELECT family_id::text FROM chat.family_contact_key
+       WHERE organization_id = ${f.organization_id}::uuid AND key_hash = ${keyHash}`;
+    if (held?.family_id === familyId) continue;
+    if (held) throw taken();
+    await tx.$executeRaw`
+      INSERT INTO chat.family_contact_key (organization_id, key_hash, family_id, kind, created_by)
+      VALUES (${f.organization_id}::uuid, ${keyHash}, ${familyId}::uuid, 'phone', ${actorId}::uuid)`
+      .catch((e: unknown) => {
+        // Two staff keying the same number at once: the guard (or the primary key) answers for the second.
+        if (/already in Chat|23505|P2002/.test(String((e as { message?: unknown; code?: unknown })?.message ?? '') + String((e as { code?: unknown })?.code ?? ''))) throw taken();
+        throw e;
+      });
+  }
 }
 
 const FIELD_NAME = {
