@@ -140,6 +140,7 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   teacher_setup: { en: 'Teacher set-up', ar: 'إعداد معلم' },
   new_student_assign: { en: 'New student form', ar: 'استمارة طالب جديد' },
   new_student_group: { en: 'Family group', ar: 'مجموعة العائلة' },
+  teacher_unsupervised: { en: 'Teacher without a supervisor', ar: 'معلم بلا مشرف' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -162,6 +163,7 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   teacher_setup: { en: 'Finish setting up {teacher}: {count} left', ar: 'أكمل إعداد {teacher}: المتبقي {count}' },
   new_student_assign: { en: 'Assign the new family: {prospect}, trial {when}', ar: 'أسند العائلة الجديدة: {prospect}، تجربة {when}' },
   new_student_group: { en: 'Open the family group: {family}', ar: 'افتح مجموعة العائلة: {family}' },
+  teacher_unsupervised: { en: 'Choose a supervisor for {teacher}', ar: 'اختر مشرفًا لـ{teacher}' },
 }
 
 export const EVENT_LABEL: Record<TaskEvent['kind'], Pair> = {

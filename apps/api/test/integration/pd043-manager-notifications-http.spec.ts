@@ -1,13 +1,14 @@
 /**
  * PD-43 §3.4, §3.7: what the Teachers Manager is told (PD-34 notifications).
  *
- *   1. A teacher added with no supervisor, by anyone but the manager -- the
- *      manager covers them until one is set.
- *   2. A teacher supervisor deactivated while teachers are still assigned to
- *      them, whichever path deactivated them (a trigger on chat.staff).
- *   3. A sign-in or contact refused because it is on a teacher OUT of the
+ *   1. A teacher added with no supervisor: NOT a notice any more. PD-47
+ *      PR-6b (owner 2026-10-29, "Replace it") makes it the Teachers manager's
+ *      teacher_unsupervised task (tasks-handover-pd047.spec.ts).
+ *   2. A sign-in or contact refused because it is on a teacher OUT of the
  *      adder's reach: the adder learns nothing, so someone who may see both
  *      is told (gate P2-5 keeps the adder's answer identical).
+ *   3. A teacher supervisor deactivated while teachers are still assigned to
+ *      them: likewise a task now; the chat.staff trigger is gone.
  *   With no Teachers manager, the super admin is told instead. Each is one
  *   notification however often it is retried (the dedupe key).
  *
@@ -159,21 +160,13 @@ async function toldEventually(recipientId: string, templateKey: string, count: n
 }
 
 describe('1. a teacher added with no supervisor', () => {
-  it('tells the Teachers manager when anyone else adds one; never the manager about their own', async () => {
+  it('is no longer a notice: the manager\'s task replaces it (PD-47 PR-6b)', async () => {
     const before = (await told(m.teachersManager.id, 'teacher_added_unsupervised')).length;
     const bySupervisor = await add(m.teacherSupervisors[0]!.subject, { name: 'QA Unsupervised One', email: email('u'), supervisorId: null });
     expect(bySupervisor.status).toBe(201);
     const bySuperAdmin = await add(m.superAdmin.subject, { name: 'QA Unsupervised Two', email: email('u') });
     expect(bySuperAdmin.status).toBe(201);
-    const byManager = await add(m.teachersManager.subject, { name: 'QA Unsupervised Three', email: email('u') });
-    expect(byManager.status).toBe(201);
-    const withSupervisor = await add(m.superAdmin.subject, { name: 'QA Supervised', email: email('u'), supervisorId: m.teacherSupervisors[0]!.id });
-    expect(withSupervisor.status).toBe(201);
-
-    const rows = (await told(m.teachersManager.id, 'teacher_added_unsupervised')).slice(before);
-    expect(rows.map((r) => (r.variables as { teacher: string }).teacher)).toEqual(['QA Unsupervised One', 'QA Unsupervised Two']);
-    expect(rows[0]).toMatchObject({ eventType: 'teacher_added_unsupervised', status: 'scheduled' });
-    expect(rows[0]!.variables).toMatchObject({ teacher: 'QA Unsupervised One', addedBy: expect.any(String) });
+    expect(await told(m.teachersManager.id, 'teacher_added_unsupervised')).toHaveLength(before);
   });
 });
 
@@ -212,7 +205,7 @@ describe('2. a sign-in or contact on a teacher out of the adder\'s reach', () =>
   });
 });
 
-describe('3. a supervisor deactivated with teachers assigned (a trigger on chat.staff)', () => {
+describe('3. a supervisor deactivated with teachers assigned', () => {
   /** A primary teacher supervisor of this organization's Teachers department, holding `teachers` new teachers. */
   async function supervisorHolding(label: string, teachers: number) {
     const id = randomUUID();
@@ -228,35 +221,22 @@ describe('3. a supervisor deactivated with teachers assigned (a trigger on chat.
     }
     return { id, name };
   }
-  const leftFor = async (supervisor: string) =>
-    (await told(m.teachersManager.id, 'teacher_supervisor_left')).filter((r) => (r.variables as { supervisor: string }).supervisor === supervisor);
   const isLive = async (id: string) =>
     (await g.prisma.staff.findUniqueOrThrow({ where: { id }, select: { isActive: true, leftAt: true } }));
 
-  it('tells the Teachers manager once, naming the supervisor and how many teachers they held', async () => {
+  it('is no longer a notice: the trigger on chat.staff is gone, and the deactivation stands', async () => {
     const s = await supervisorHolding('a', 2);
     await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${s.id}::uuid, 'left the academy', null, 'deactivated')::text`;
-    const rows = await leftFor(s.name);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ eventType: 'teacher_supervisor_left', status: 'scheduled' });
-    expect(rows[0]!.variables).toEqual({ supervisor: s.name, teachers: 2 });
+    expect(await isLive(s.id)).toMatchObject({ isActive: false, leftAt: expect.any(Date) });
+    expect(await told(m.teachersManager.id, 'teacher_supervisor_left')).toHaveLength(0);
+    const [gone] = await g.prisma.$queryRaw<Array<{ fn: number; trg: number }>>`
+      SELECT (SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+               WHERE n.nspname = 'chat' AND p.proname = 'notify_teacher_supervisor_left') AS fn,
+             (SELECT count(*)::int FROM pg_trigger WHERE tgname = 'teacher_supervisor_left_tells_the_manager') AS trg`;
+    expect(gone).toEqual({ fn: 0, trg: 0 });
   });
 
-  it('the ONE entry point: SECURITY DEFINER, a pinned search_path, no request role may call it', async () => {
-    // Today only the server-side writer may deactivate staff (service_role has no
-    // privilege on chat.staff; chat_app is refused by RT-032, below). DEFINER keeps
-    // the trigger working for any future writer without INSERT on chat.notification.
-    const [fn] = await g.prisma.$queryRaw<Array<{ definer: boolean; config: string[] | null; anyone: boolean; app: boolean }>>`
-      SELECT p.prosecdef AS definer, p.proconfig AS config,
-             has_function_privilege('public', p.oid, 'EXECUTE') AS anyone,
-             has_function_privilege('chat_app', p.oid, 'EXECUTE') AS app
-        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-       WHERE n.nspname = 'chat' AND p.proname = 'notify_teacher_supervisor_left'`;
-    expect(fn).toMatchObject({ definer: true, anyone: false, app: false });
-    expect(fn!.config).toEqual(['search_path=pg_catalog, pg_temp']);
-  });
-
-  it('a request role (chat_app) cannot deactivate staff at all: RT-032 refuses it, never this trigger', async () => {
+  it('a request role (chat_app) cannot deactivate staff at all: RT-032 refuses it', async () => {
     const s = await supervisorHolding('c', 1);
     const out = await g.prisma
       .$transaction(async (tx) => {
@@ -264,40 +244,8 @@ describe('3. a supervisor deactivated with teachers assigned (a trigger on chat.
         await tx.$executeRawUnsafe(`update chat.staff set is_active = false, left_at = now() where id = '${s.id}'::uuid`);
       })
       .then(() => 'ok', (e: Error) => e.message);
-    // RLS may hide the row (nothing changes) or the journal refuses it; either way no 42501 from the trigger's own reads.
+    // RLS may hide the row (nothing changes) or the journal refuses it.
     if (out !== 'ok') expect(out).toMatch(/RT-032|row-level security|permission denied for table staff/);
     expect((await isLive(s.id)).isActive).toBe(true);
-    expect(await leftFor(s.name)).toHaveLength(0);
-  });
-
-  it('one notification per deactivation: a repeat in the same transaction, or of one already out, adds none', async () => {
-    const s = await supervisorHolding('d', 1);
-    await g.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.id}::uuid`;
-      await tx.$executeRaw`UPDATE chat.staff SET is_active = true, left_at = null WHERE id = ${s.id}::uuid`;
-      await tx.$executeRaw`UPDATE chat.staff SET is_active = false, left_at = now() WHERE id = ${s.id}::uuid`;
-    });
-    await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${s.id}::uuid, 'again', null, 'deactivated')::text`;
-    expect(await leftFor(s.name)).toHaveLength(1);
-  });
-
-  it('a notification that cannot be written never blocks the deactivation', async () => {
-    const s = await supervisorHolding('e', 1);
-    await g.prisma.$executeRawUnsafe(
-      `alter table chat.notification add constraint pd043_spec_refuses_supervisor_left check (template_key <> 'teacher_supervisor_left') not valid`,
-    );
-    try {
-      await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${s.id}::uuid, 'left', null, 'deactivated')::text`;
-    } finally {
-      await g.prisma.$executeRawUnsafe('alter table chat.notification drop constraint pd043_spec_refuses_supervisor_left');
-    }
-    expect(await isLive(s.id)).toMatchObject({ isActive: false, leftAt: expect.any(Date) });
-    expect(await leftFor(s.name)).toHaveLength(0);
-  });
-
-  it('a supervisor with no teachers: nobody is told', async () => {
-    const s = await supervisorHolding('f', 0);
-    await g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${s.id}::uuid, 'left', null, 'deactivated')::text`;
-    expect(await leftFor(s.name)).toHaveLength(0);
   });
 });

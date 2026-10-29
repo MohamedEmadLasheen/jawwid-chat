@@ -126,14 +126,8 @@ export class TeacherOnboardingService {
     } catch (e) {
       throw await this.refusal(e, actor, email, phone, name);
     }
-    // Plan §3.7: an unsupervised teacher is the Teachers manager's; they are told
-    // unless they added the teacher themselves.
-    if (supervisorId === null) {
-      await this.tellTeachersManager(actor, 'teacher_added_unsupervised', `teacher_added_unsupervised:${id}`, {
-        teacher: created.name,
-        addedBy: actor.displayName,
-      });
-    }
+    // Plan §3.7: an unsupervised teacher is the Teachers manager's. PD-47 PR-6b:
+    // the manager's teacher_unsupervised task replaces the notice (owner 2026-10-29).
     const emailed = await this.deliver(email, created.issued);
     return {
       teacher: { id, name: created.name, supervisorId },

@@ -68,6 +68,8 @@ export const SOURCE_TYPES = [
   'instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed',
   // PD-47 PR-6a: the set-up sources (chat.work_task_sweep_setup).
   'family_unsupervised', 'teacher_setup', 'new_student_assign', 'new_student_group',
+  // PD-47 PR-6b: work handed between people (chat.work_task_sweep_handover).
+  'teacher_unsupervised',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -429,8 +431,12 @@ export class TaskService {
       skipped: false, raised: 0, settled: 0, withdrawn: 0, restored: 0, rerouted: 0, floored: 0, orphaned: 0,
       failed: 0, declined: 0, issues: 0, batches: 0,
     };
-    // PR-2's sources, PR-2b's financial ones, then PR-6a's set-up ones: each sweep its own lock and batches.
-    const sweeps = [Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`, Prisma.sql`chat.work_task_sweep_setup(50)`];
+    // PR-2's sources, PR-2b's financial ones, PR-6a's set-up ones, then PR-6b's
+    // hand-overs: each sweep its own lock and batches.
+    const sweeps = [
+      Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`,
+      Prisma.sql`chat.work_task_sweep_setup(50)`, Prisma.sql`chat.work_task_sweep_handover(50)`,
+    ];
     let skipped = 0;
     for (const sweep of sweeps) {
       for (let i = 0; i < SWEEP_BATCHES; i++) {
@@ -977,6 +983,7 @@ export class TaskService {
                WHEN 'violation_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_violation q WHERE q.id = t.source_id)
                WHEN 'lesson_ruling' THEN (SELECT l.teacher_id::text FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id WHERE q.id = t.source_id)
                WHEN 'teacher_setup' THEN t.source_id::text
+               WHEN 'teacher_unsupervised' THEN (SELECT sp.teacher_id::text FROM chat.work_task_teacher_spell sp WHERE sp.id = t.source_id)
              END AS source_teacher_id,
              CASE t.source_type
                WHEN 'lesson_report' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
@@ -1020,6 +1027,10 @@ export class TaskService {
                                                  FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
                WHEN 'new_student_group' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id)
                                                 FROM chat.student_enrolment e JOIN chat.family f ON f.id = e.family_id WHERE e.id = t.source_id)
+               -- PR-6b. A spell is named by its teacher.
+               WHEN 'teacher_unsupervised' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id)
+                                                   FROM chat.work_task_teacher_spell sp JOIN chat.teacher te ON te.id = sp.teacher_id
+                                                  WHERE sp.id = t.source_id)
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,

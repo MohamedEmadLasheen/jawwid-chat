@@ -37,3 +37,19 @@ describe('PD-47 PR-6a: the set-up sources', () => {
     }
   })
 })
+
+describe('PD-47 PR-6b: work handed between people', () => {
+  it('a teacher without a supervisor names the teacher and leads to their file, not to the spell', () => {
+    const t = task('teacher_unsupervised', 'spell1', { teacherName: 'teacher_u', teacherId: 't9' })
+    expect(titleOf(t, en, fmt)).toBe('Choose a supervisor for teacher_u')
+    expect(sourceLink(t)).toBe('/teachers/files/t9')
+    expect(sourceLink(task('teacher_unsupervised', 'spell1', {}))).toBeNull()
+  })
+
+  it('every one has its label and title in both languages, with no placeholder left unfilled', () => {
+    for (const type of ['teacher_unsupervised'] as const) {
+      expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
+      expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
+    }
+  })
+})
