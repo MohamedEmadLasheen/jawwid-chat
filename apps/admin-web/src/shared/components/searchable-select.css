@@ -75,6 +75,7 @@ input.ss__input--clearable { padding-inline-end: 60px; }
 .ss__option[aria-selected='true'] { background: var(--surface-selected); font-weight: var(--fw-medium); }
 .ss__option--active { background: var(--surface-hover); box-shadow: inset 0 0 0 2px var(--focus); }
 .ss__option[aria-disabled='true'] { color: var(--text-subtle); cursor: not-allowed; }
+.ss__separator { block-size: 1px; margin: var(--space-1) var(--space-2); background: var(--border); }
 .ss__empty { padding: var(--space-3); color: var(--text-muted); }
 
 @media (pointer: coarse) {

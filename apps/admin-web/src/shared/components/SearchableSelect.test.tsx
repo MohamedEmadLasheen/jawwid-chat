@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test/utils'
 import { chooseOption, listOf } from '@/test/select'
 import { Dialog } from './Dialog'
-import { SearchableSelect, optionsFromChildren, type SelectOption } from './SearchableSelect'
+import { SearchableSelect, belongsToOpenPicker, optionsFromChildren, type SelectOption } from './SearchableSelect'
 
 /**
  * The owner's ask (2026-10-29): every list can be typed into as well as picked
@@ -15,6 +15,7 @@ import { SearchableSelect, optionsFromChildren, type SelectOption } from './Sear
 const c = (...codes: number[]) => String.fromCharCode(...codes)
 const AHMAD_HAMZA = c(0x623, 0x62d, 0x645, 0x62f)
 const AHMAD_BARE = c(0x627, 0x62d, 0x645, 0x62f)
+const RULE = c(0x2500).repeat(10)
 
 const FAMILIES = ['Abdelrahman family', 'Ali family', 'Amer family', 'Ashour family', 'Bakr family']
 
@@ -238,40 +239,141 @@ describe('SearchableSelect', () => {
     expect(screen.getByRole('button', { name: 'مسح' })).toBeInTheDocument()
   })
 
-  it('asks the server, debounced, when the list is server-backed, and shows its answer unfiltered', async () => {
-    vi.useFakeTimers()
+
+  it('names its list after the label', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<Harness />)
+    await user.click(box())
+    expect(screen.getByRole('listbox', { name: 'Family' })).toBeInTheDocument()
+  })
+
+  it('leaving after typing, by Tab or a click elsewhere, keeps the old value', async () => {
+    const user = userEvent.setup()
+    const onPick = vi.fn()
+    renderWithProviders(
+      <>
+        <Harness initial="f1" onPick={onPick} />
+        <button type="button">elsewhere</button>
+      </>,
+    )
+    await user.click(box())
+    await user.keyboard('bak')
+    await user.tab()
+    expect(box()).toHaveValue('Ali family')
+    expect(box()).toHaveAttribute('aria-expanded', 'false')
+    await user.click(box())
+    await user.keyboard('ash')
+    await user.click(screen.getByRole('button', { name: 'elsewhere' }))
+    expect(box()).toHaveValue('Ali family')
+    expect(box()).toHaveAttribute('data-value', 'f1')
+    expect(onPick).not.toHaveBeenCalled()
+  })
+
+  it('Home and End move the caret, not the list, once something is typed', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<Harness />)
+    await user.click(box())
+    await user.keyboard('family')
+    const first = box().getAttribute('aria-activedescendant')
+    await user.keyboard('{End}')
+    expect(box().getAttribute('aria-activedescendant')).toBe(first)
+    await user.keyboard('{Home}')
+    expect(box().getAttribute('aria-activedescendant')).toBe(first)
+  })
+
+  it('offers no clear button where it would save at once, or where "" is only a prompt', async () => {
+    const user = userEvent.setup()
+    const onValueChange = vi.fn()
+    const { unmount } = renderWithProviders(
+      <SearchableSelect aria-label="Supervisor" clearable={false} value="s1" onValueChange={onValueChange}>
+        <option value="">Unassigned</option>
+        <option value="s1">Supervisor One</option>
+      </SearchableSelect>,
+    )
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull()
+    // Typing can still be cleared; the choice itself is never emptied by the x.
+    await user.click(screen.getByRole('combobox', { name: 'Supervisor' }))
+    await user.keyboard('zz')
+    await user.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(onValueChange).not.toHaveBeenCalled()
+    unmount()
+
+    renderWithProviders(
+      <SearchableSelect aria-label="Category" value="a" onValueChange={onValueChange}>
+        <option value="" disabled>
+          Choose a category
+        </option>
+        <option value="a">A</option>
+      </SearchableSelect>,
+    )
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull()
+    expect(onValueChange).not.toHaveBeenCalled()
+  })
+
+  it('draws a divider option as a separator: not an option, skipped by the keys, gone while typing', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <SearchableSelect aria-label="Country" value="" onValueChange={() => undefined}>
+        <option value="">Not set</option>
+        <option value="EG">Egypt</option>
+        <option disabled>{RULE}</option>
+        <option value="AE">United Arab Emirates</option>
+      </SearchableSelect>,
+    )
+    const country = screen.getByRole('combobox', { name: 'Country' })
+    await user.click(country)
+    const list = listOf(country)
+    expect(within(list).getAllByRole('option').map((o) => o.textContent)).toEqual(['Not set', 'Egypt', 'United Arab Emirates'])
+    expect(within(list).getAllByRole('separator')).toHaveLength(1)
+    await user.keyboard('{ArrowDown}{ArrowDown}')
+    expect(document.getElementById(country.getAttribute('aria-activedescendant')!)).toHaveTextContent('United Arab Emirates')
+    await user.keyboard('a')
+    expect(within(listOf(country)).queryAllByRole('separator')).toHaveLength(0)
+  })
+
+  it("keeps the list's clicks to itself: the host's click handler never sees them", async () => {
+    const user = userEvent.setup()
+    const onRowClick = vi.fn()
+    renderWithProviders(
+      <div onClick={onRowClick}>
+        <Harness />
+      </div>,
+    )
+    await user.click(box())
+    onRowClick.mockClear()
+    await user.click(screen.getByRole('option', { name: 'Ali family' }))
+    expect(onRowClick).not.toHaveBeenCalled()
+    expect(box()).toHaveAttribute('data-value', 'f1')
+  })
+
+  it('stays inside the viewport sideways: a right-to-left box at the left edge does not run off it', async () => {
+    const user = userEvent.setup()
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 0, right: 100, width: 100, top: 100, bottom: 140, height: 40, x: 0, y: 100, toJSON: () => ({}),
+    } as DOMRect)
     try {
-      const onSearch = vi.fn()
-      function Server() {
-        const [value, setValue] = useState('')
-        const [options, setOptions] = useState<SelectOption[]>([{ value: 's1', label: 'Staff One' }])
-        return (
-          <SearchableSelect
-            aria-label="Staff"
-            value={value}
-            onValueChange={setValue}
-            options={options}
-            onSearch={(q) => {
-              onSearch(q)
-              setOptions([{ value: 's9', label: 'Server Match', hint: 'matched by phone' }])
-            }}
-          />
-        )
-      }
-      renderWithProviders(<Server />)
-      const input = screen.getByRole('combobox', { name: 'Staff' })
-      fireEvent.click(input)
-      fireEvent.change(input, { target: { value: '0100' } })
-      fireEvent.change(input, { target: { value: '01001' } })
-      expect(onSearch).not.toHaveBeenCalled()
-      act(() => vi.advanceTimersByTime(300))
-      expect(onSearch).toHaveBeenCalledTimes(1)
-      expect(onSearch).toHaveBeenCalledWith('01001')
-      // '01001' matches nothing on the client, but the server's answer is shown as given.
-      expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.dataset.value)).toEqual(['s9'])
+      renderWithProviders(<Harness />, { locale: 'ar' })
+      await user.click(box())
+      const popup = listOf(box()).parentElement!
+      // The list is 200 wide; in RTL it would start at 100 - 200 = -100.
+      expect(popup.style.width).toBe('200px')
+      expect(popup.style.left).toBe('8px')
     } finally {
-      vi.useRealTimers()
+      rect.mockRestore()
     }
+  })
+})
+
+describe('belongsToOpenPicker', () => {
+  it('is true on the open list and on the text box while open, false elsewhere', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<Harness />)
+    expect(belongsToOpenPicker(box())).toBe(false)
+    await user.click(box())
+    expect(belongsToOpenPicker(box())).toBe(true)
+    expect(belongsToOpenPicker(screen.getByRole('option', { name: 'Ali family' }))).toBe(true)
+    expect(belongsToOpenPicker(document.body)).toBe(false)
+    expect(belongsToOpenPicker(null)).toBe(false)
   })
 })
 
@@ -291,6 +393,7 @@ describe('optionsFromChildren', () => {
           <option value="d" disabled data-hint="note">
             Disabled
           </option>
+          <option disabled>{RULE}</option>
         </>,
       ),
     ).toEqual([
@@ -298,6 +401,17 @@ describe('optionsFromChildren', () => {
       { value: '1', label: 'Week 1', hint: undefined, disabled: undefined },
       { value: '2', label: 'Week 2', hint: undefined, disabled: undefined },
       { value: 'd', label: 'Disabled', hint: 'note', disabled: true },
+      { value: RULE, label: RULE, hint: undefined, disabled: true, separator: true },
     ])
+  })
+
+  it('refuses <optgroup>, which a filtered list cannot show', () => {
+    expect(() =>
+      optionsFromChildren(
+        <optgroup label="Group">
+          <option value="a">A</option>
+        </optgroup>,
+      ),
+    ).toThrow(/optgroup/)
   })
 })

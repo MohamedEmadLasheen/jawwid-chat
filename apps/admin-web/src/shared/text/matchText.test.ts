@@ -20,6 +20,12 @@ describe('foldForSearch', () => {
     expect(foldForSearch(c(0x645, 0x62d) + TATWEEL + TATWEEL + c(0x645, 0x62f))).toBe(MUHAMMAD)
   })
 
+  it('drops the superscript (dagger) alef, U+0670', () => {
+    // رحمٰن (with a dagger alef) folds to رحمن.
+    expect(foldForSearch(c(0x631, 0x62d, 0x645, 0x670, 0x646))).toBe(c(0x631, 0x62d, 0x645, 0x646))
+    expect(matchesQuery(c(0x631, 0x62d, 0x645, 0x646), `${c(0x639, 0x628, 0x62f)} ${c(0x627, 0x644, 0x631, 0x62d, 0x645, 0x670, 0x646)}`)).toBe(true)
+  })
+
   it('reads every alef form as a bare alef', () => {
     for (const alef of [0x623, 0x625, 0x622, 0x671]) {
       expect(foldForSearch(c(alef))).toBe(ALEF)

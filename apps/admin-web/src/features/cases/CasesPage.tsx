@@ -150,6 +150,7 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
                 <label className="field">
                   <span className="field__label">{tx(C.owner)}</span>
                   <SearchableSelect
+                    clearable={false}
                     className="select"
                     aria-label={tx(C.owner)}
                     value={c.owner?.id ?? ''}

@@ -173,6 +173,7 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
                     {g.dueOn && <span className="muted"> · {tx(E.due)} {g.dueOn}</span>}{' '}
                     {canWrite ? (
                       <SearchableSelect
+                        clearable={false}
                         className="select select--sm"
                         aria-label={tx(E.status, { n: g.position })}
                         value={g.status}

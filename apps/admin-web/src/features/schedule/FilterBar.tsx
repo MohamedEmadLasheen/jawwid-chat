@@ -4,7 +4,7 @@ import { wallClock12 } from '@/core/time/academyTime'
 import type { CalendarOptions, CalendarStatus, Category, LessonKind } from './api'
 import { CATEGORY_LABEL, KIND_LABEL, S, STATUS_LABEL, WEEKDAYS, useScheduleText, type Pair } from './copy'
 import { activeFilterCount, clearFilters, type ListFilter, type ScalarFilter, type ViewState } from './viewState'
-import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { SearchableSelect, belongsToOpenPicker } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-38 filters (the owner's top priority). Every chip is a multi-select that
@@ -46,11 +46,14 @@ function Menu({
     if (!isOpen) return
     // Into the panel, so the keyboard lands where the choices are.
     panel.current?.querySelector<HTMLElement>('input, select, button')?.focus()
+    // A picker's list is portalled to the body: a pointer on it is inside, and
+    // while it is open its Escape closes only the list.
     const outside = (e: PointerEvent) => {
+      if (belongsToOpenPicker(e.target)) return
       if (box.current && !box.current.contains(e.target as Node)) setOpen(null)
     }
     const escape = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      if (e.key !== 'Escape' || belongsToOpenPicker(e.target)) return
       e.stopPropagation()
       setOpen(null)
       trigger.current?.focus()

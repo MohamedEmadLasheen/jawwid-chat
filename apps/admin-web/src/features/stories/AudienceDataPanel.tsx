@@ -141,6 +141,7 @@ function FamilyRow({ family: f, countries }: { family: FamilyAudienceRow; countr
       </td>
       <td>
         <SearchableSelect
+          clearable={false}
           className="select select--sm"
           value={f.countryCode ?? ''}
           disabled={save.isPending}
@@ -159,6 +160,7 @@ function FamilyRow({ family: f, countries }: { family: FamilyAudienceRow; countr
       </td>
       <td>
         <SearchableSelect
+          clearable={false}
           className="select select--sm"
           value={f.subscriptionPlanMonths ?? ''}
           disabled={save.isPending}

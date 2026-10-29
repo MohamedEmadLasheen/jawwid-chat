@@ -129,6 +129,7 @@ function TeachersTab() {
                         </td>
                         <td>
                           <SearchableSelect
+                            clearable={false}
                             className="select"
                             aria-label={tx(T.assignTitle, { name: t.name })}
                             value={live?.id ?? ''}

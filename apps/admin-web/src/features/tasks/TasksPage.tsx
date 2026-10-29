@@ -387,6 +387,7 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                   <label className="field">
                     <span className="field__label">{tx(C.manualLevel)}</span>
                     <SearchableSelect
+                      clearable={false}
                       className="select"
                       value={t.manualPriority}
                       disabled={op.isPending}
