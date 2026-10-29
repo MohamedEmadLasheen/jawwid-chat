@@ -136,6 +136,10 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   renewal_request: { en: 'Renewal', ar: 'تجديد' },
   receipt_review: { en: 'Transfer receipt', ar: 'إيصال تحويل' },
   checkout_failed: { en: 'Card payment', ar: 'دفع بالبطاقة' },
+  family_unsupervised: { en: 'Family without a supervisor', ar: 'عائلة بلا مشرف' },
+  teacher_setup: { en: 'Teacher set-up', ar: 'إعداد معلم' },
+  new_student_assign: { en: 'New student form', ar: 'استمارة طالب جديد' },
+  new_student_group: { en: 'Family group', ar: 'مجموعة العائلة' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -151,6 +155,13 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   renewal_request: { en: 'Renewal requested: {learner}', ar: 'طلب تجديد: {learner}' },
   receipt_review: { en: 'Review a transfer receipt: {family}, {amount}', ar: 'راجع إيصال تحويل: {family}، {amount}' },
   checkout_failed: { en: 'Card payment failed: {family}, {label}, {amount}', ar: 'فشل الدفع بالبطاقة: {family}، {label}، {amount}' },
+  family_unsupervised: {
+    en: 'Choose an Operations supervisor: {family}, {count} waiting',
+    ar: 'اختر مشرف عمليات: {family}، بانتظار {count}',
+  },
+  teacher_setup: { en: 'Finish setting up {teacher}: {count} left', ar: 'أكمل إعداد {teacher}: المتبقي {count}' },
+  new_student_assign: { en: 'Assign the new family: {prospect}, trial {when}', ar: 'أسند العائلة الجديدة: {prospect}، تجربة {when}' },
+  new_student_group: { en: 'Open the family group: {family}', ar: 'افتح مجموعة العائلة: {family}' },
 }
 
 export const EVENT_LABEL: Record<TaskEvent['kind'], Pair> = {

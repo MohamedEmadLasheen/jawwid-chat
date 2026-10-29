@@ -38,6 +38,8 @@ export function titleOf(t: Pick<TaskSummary, 'title' | 'source' | 'titleParams'>
     title: str(p.caseTitle),
     label: str(p.label),
     balance: str(p.balance),
+    count: str(p.count),
+    prospect: str(p.prospectName),
     when: typeof p.startsAt === 'string' ? fmt.dateTime(p.startsAt) : '',
     first: day(p.firstDay, fmt),
     last: day(p.lastDay, fmt),
@@ -97,6 +99,12 @@ export function sourceLink(t: Pick<TaskSummary, 'source' | 'titleParams'>): stri
     case 'receipt_review':
     case 'checkout_failed':
       return '/payments'
+    case 'family_unsupervised':
+    case 'new_student_assign':
+    case 'new_student_group':
+      return '/trials/new-students'
+    case 'teacher_setup':
+      return `/teachers/files/${encodeURIComponent(t.source.id)}`
     default:
       return null
   }
