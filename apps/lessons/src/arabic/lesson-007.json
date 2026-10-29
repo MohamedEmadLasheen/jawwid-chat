@@ -1035,14 +1035,88 @@
       ]
     }
   ],
+  "distractors": [
+    {
+      "id": "distractor-001",
+      "text": "قَلَمْ",
+      "was": "قَلَم",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only"
+    },
+    {
+      "id": "distractor-002",
+      "text": "وَلَدْ",
+      "was": "وَلَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only"
+    },
+    {
+      "id": "distractor-003",
+      "text": "قُلْ",
+      "was": "قُل",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only"
+    },
+    {
+      "id": "distractor-004",
+      "text": "قِفْ",
+      "was": "قِف",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only"
+    },
+    {
+      "id": "distractor-005",
+      "text": "قَمَرْ",
+      "was": "قَمَر",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only"
+    },
+    {
+      "id": "distractor-006",
+      "text": "أَسَدْ",
+      "was": "أَسَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-001), a wrong option only"
+    },
+    {
+      "id": "distractor-007",
+      "text": "أَرْنَبْ",
+      "was": "أَرْنَب",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-002), a wrong option only"
+    },
+    {
+      "id": "distractor-008",
+      "text": "أَكَلْ",
+      "was": "أَكَلَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-003), a wrong option only"
+    },
+    {
+      "id": "distractor-009",
+      "text": "سَأَلْ",
+      "was": "سَأَلَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-004), a wrong option only"
+    },
+    {
+      "id": "distractor-010",
+      "text": "أَمَلْ",
+      "was": "أَمَل",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-006), a wrong option only"
+    },
+    {
+      "id": "distractor-011",
+      "text": "أَخَذْ",
+      "was": "أَخَذَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-007), a wrong option only"
+    },
+    {
+      "id": "distractor-012",
+      "text": "أَحَدْ",
+      "was": "أَحَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-009), a wrong option only"
+    }
+  ],
   "quiz": [
     {
       "id": "madd_alif-q1",
       "kind": "contains",
       "unit": "madd_alif",
       "options": [
-        "صَدِيقْ",
-        "نَسِيمْ",
+        "وَلَدْ",
+        "أَرْنَبْ",
         "بَابْ"
       ],
       "answer": 2,
@@ -1054,8 +1128,8 @@
       "unit": "madd_alif",
       "options": [
         "طَارْ",
-        "رَقِيقْ",
-        "حَنِينْ"
+        "أَسَدْ",
+        "قَلَمْ"
       ],
       "answer": 0,
       "review": null
@@ -1073,8 +1147,8 @@
       "kind": "contains",
       "unit": "madd_ya",
       "options": [
-        "قَالْ",
-        "صَاحْ",
+        "وَلَدْ",
+        "أَرْنَبْ",
         "كَبِيرْ"
       ],
       "answer": 2,
@@ -1086,8 +1160,8 @@
       "unit": "madd_ya",
       "options": [
         "بَعِيدْ",
-        "حَالْ",
-        "عَادْ"
+        "أَسَدْ",
+        "قَلَمْ"
       ],
       "answer": 0,
       "review": null
@@ -1105,8 +1179,8 @@
       "kind": "contains",
       "unit": "madd_waw",
       "options": [
-        "خَالْ",
-        "لَامْ",
+        "أَكَلْ",
+        "قَلَمْ",
         "نُورْ"
       ],
       "answer": 2,
@@ -1118,8 +1192,8 @@
       "unit": "madd_waw",
       "options": [
         "أُصُولْ",
-        "فَاقْ",
-        "نَاسْ"
+        "أَحَدْ",
+        "أَرْنَبْ"
       ],
       "answer": 0,
       "review": null

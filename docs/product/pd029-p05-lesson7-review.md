@@ -18,6 +18,7 @@ This file is generated from `apps/lessons/src/arabic/lesson-007.json` and the re
 | Held with a reason (spelling or word) | 22 |
 | Dropped | 1 |
 | Old duplicates removed | 1 |
+| Distractors (no madd) | 12 |
 | Quiz questions | 9 |
 
 **Why words are held:**
@@ -63,18 +64,41 @@ This file is generated from `apps/lessons/src/arabic/lesson-007.json` and the re
 |---|---|---|
 | madd_waw | بُول | not suitable for children |
 
+## Old duplicates removed
+
+- نَام (twice in madd_alif)
+
+## The distractors (wrong quiz options, no madd at all)
+
+They are taken first from the old lesson's own quiz options, then from lesson 3. Each is held, and is never shown as an example.
+
+| Id | Word | Held because |
+|---|---|---|
+| distractor-001 | قَلَمْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only |
+| distractor-002 | وَلَدْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only |
+| distractor-003 | قُلْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only |
+| distractor-004 | قِفْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only |
+| distractor-005 | قَمَرْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from the old lesson's own quiz, a wrong option only |
+| distractor-006 | أَسَدْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-001), a wrong option only |
+| distractor-007 | أَرْنَبْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-002), a wrong option only |
+| distractor-008 | أَكَلْ | ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-003), a wrong option only |
+| distractor-009 | سَأَلْ | ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-004), a wrong option only |
+| distractor-010 | أَمَلْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-006), a wrong option only |
+| distractor-011 | أَخَذْ | ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-007), a wrong option only |
+| distractor-012 | أَحَدْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-009), a wrong option only |
+
 ## The quiz
 
 | Unit | Id | Options | Right answer |
 |---|---|---|---|
-| madd_alif | madd_alif-q1 | صَدِيقْ، نَسِيمْ، بَابْ | بَابْ |
-| madd_alif | madd_alif-q2 | طَارْ، رَقِيقْ، حَنِينْ | طَارْ |
+| madd_alif | madd_alif-q1 | وَلَدْ، أَرْنَبْ، بَابْ | بَابْ |
+| madd_alif | madd_alif-q2 | طَارْ، أَسَدْ، قَلَمْ | طَارْ |
 | madd_alif | madd_alif-q3 | where: كِتَابْ | middle |
-| madd_ya | madd_ya-q1 | قَالْ، صَاحْ، كَبِيرْ | كَبِيرْ |
-| madd_ya | madd_ya-q2 | بَعِيدْ، حَالْ، عَادْ | بَعِيدْ |
+| madd_ya | madd_ya-q1 | وَلَدْ، أَرْنَبْ، كَبِيرْ | كَبِيرْ |
+| madd_ya | madd_ya-q2 | بَعِيدْ، أَسَدْ، قَلَمْ | بَعِيدْ |
 | madd_ya | madd_ya-q3 | where: صَغِيرْ | middle |
-| madd_waw | madd_waw-q1 | خَالْ، لَامْ، نُورْ | نُورْ |
-| madd_waw | madd_waw-q2 | أُصُولْ، فَاقْ، نَاسْ | أُصُولْ |
+| madd_waw | madd_waw-q1 | أَكَلْ، قَلَمْ، نُورْ | نُورْ |
+| madd_waw | madd_waw-q2 | أُصُولْ، أَحَدْ، أَرْنَبْ | أُصُولْ |
 | madd_waw | madd_waw-q3 | where: سُورْ | middle |
 
 ## Every word, per unit

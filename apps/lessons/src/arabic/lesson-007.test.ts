@@ -25,4 +25,10 @@ describe('Arabic lesson 7 (the madd), the real file', () => {
     expect(words.find((w) => w.text.startsWith('رَاس'))!.review).toMatch(/SPELLING: hamza dropped/);
     expect(words.some((w) => w.text.startsWith('بُول'))).toBe(false);
   });
+
+  it('the wrong options are distractors with no madd at all', () => {
+    const d = (raw as unknown as { distractors: { text: string }[] }).distractors;
+    expect(d.length).toBeGreaterThanOrEqual(6);
+    for (const x of d) for (const u of raw.units) expect(has(x.text, { letters: u.letters, after: MADD[u.madd].after })).toBe(false);
+  });
 });
