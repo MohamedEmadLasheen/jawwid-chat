@@ -55,6 +55,7 @@ import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../features/settings/data/parent_notice_repository.dart';
 import '../features/tasks/application/task_signal_channel.dart';
+import '../features/whiteboards/data/board_draft_files.dart';
 import '../features/whiteboards/data/whiteboards_repository.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
@@ -326,7 +327,9 @@ List<Override> _httpOverrides() {
       () => AuthController(
         repository: auth,
         tokens: tokenStore,
-        clearLocalData: () async {},
+        // PD-39: board drafts are a device's copy of a teacher's unsaved pages; a
+        // shared device keeps nobody's after sign-out.
+        clearLocalData: () => platformBoardDraftStore().clearAll(),
         // The transport layer needs the principal too: ownership is decided by actor id and
         // approval policy by role. Before this existed, `actorId()` returned '' and `role()`
         // silently defaulted to parent, so a signed-in teacher saw their own messages as

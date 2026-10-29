@@ -75,10 +75,13 @@ class BoardDetail {
 
 /// What one page save answers.
 class PageSaved {
-  const PageSaved({required this.revision, required this.updatedAt});
+  const PageSaved({required this.revision, required this.updatedAt, this.savedAt});
 
   final int revision;
   final DateTime updatedAt;
+
+  /// The page's `updatedAt` exactly as the server sent it (a draft's base).
+  final String? savedAt;
 }
 
 DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;

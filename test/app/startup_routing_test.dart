@@ -243,6 +243,22 @@ void main() {
     });
   });
 
+  group('PD-39: Boards are a teacher\'s', () {
+    testWidgets('a parent following a Boards or board link lands on Chats', (tester) async {
+      await pumpApp(tester);
+      await controller().restore();
+      await controller().signIn(username: 'parent', password: 'secret');
+      await settle(tester);
+
+      for (final link in [Routes.boards, Routes.board('b1')]) {
+        router().go(link);
+        await settle(tester);
+        expect(currentLocation(), Routes.chats, reason: link);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('PD-17: Payments are a parent\'s', () {
     testWidgets('a parent reaches their Payments -- now the Subscriptions tab (PD-30)', (tester) async {
       await pumpApp(tester);

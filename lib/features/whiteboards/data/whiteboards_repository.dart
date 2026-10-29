@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/network/api_client.dart';
 import '../domain/board.dart';
 import '../domain/board_page.dart';
+import 'board_draft_files.dart';
 
 /// PD-39: a teacher's boards (apps/api/src/whiteboards, design §4.5, §10). Every
 /// method is one endpoint. NO AUTHORIZATION LIVES HERE: the server decides who
@@ -146,6 +147,7 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
     return PageSaved(
       revision: (d['revision'] as num?)?.toInt() ?? revision + 1,
       updatedAt: DateTime.tryParse(d['updatedAt'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+      savedAt: d['updatedAt'] as String?,
     );
   }
 
@@ -165,28 +167,29 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
 // ---------------------------------------------------------------------------
 
 /// The pages not yet saved, kept on this device so a lost connection or a
-/// closed tab loses nothing (design §4.5). Per account and board; cleared once
-/// every page is saved. Applied on the next open only if the board is still at
-/// the revision the draft was made against.
+/// closed tab loses nothing (design §4.5). Per account and board.
+///
+/// Each page carries its BASE: the server's `updatedAt` for that page when the
+/// draft's changes began (review of #293, P1). On the next open a page is
+/// re-applied only while the server still has that same version of it; a page
+/// that changed since -- in another tab, or by a save whose answer never
+/// arrived -- is never silently dropped and never silently overwrites: the
+/// teacher keeps it or discards it.
 class BoardDraft {
-  const BoardDraft({required this.revision, required this.pages});
+  const BoardDraft({required this.pages});
 
-  final int revision;
-
-  /// pageId → `{document, layout, background}`, as the page save sends them.
+  /// pageId → `{document, layout, background, base}`.
   final Map<String, Map<String, Object?>> pages;
 
-  Map<String, Object?> toJson() => {'revision': revision, 'pages': pages};
+  bool get isEmpty => pages.isEmpty;
+
+  Map<String, Object?> toJson() => {'v': 2, 'pages': pages};
 
   static BoardDraft? fromJson(Object? j) {
-    if (j is! Map) return null;
-    final revision = j['revision'];
-    final pages = j['pages'];
-    if (revision is! int || pages is! Map) return null;
+    if (j is! Map || j['v'] != 2 || j['pages'] is! Map) return null;
     return BoardDraft(
-      revision: revision,
       pages: {
-        for (final e in pages.entries)
+        for (final e in (j['pages'] as Map).entries)
           if (e.key is String && e.value is Map) e.key as String: Map<String, Object?>.from(e.value as Map),
       },
     );
@@ -195,16 +198,26 @@ class BoardDraft {
 
 abstract interface class BoardDraftStore {
   Future<BoardDraft?> read(String actorId, String boardId);
-  Future<void> write(String actorId, String boardId, BoardDraft draft);
+
+  /// False when the draft could not be kept (over the device's budget, or the
+  /// storage refused): the editor says so rather than pretending.
+  Future<bool> write(String actorId, String boardId, BoardDraft draft);
   Future<void> clear(String actorId, String boardId);
+
+  /// Every board draft on this device: on sign-out, so a shared device keeps
+  /// nobody's unsaved pages.
+  Future<void> clearAll();
 }
 
-/// `shared_preferences`: localStorage in the browser, the app's preferences on a
-/// phone. One open board at a time, each page at most 512 KB.
+/// The browser: `shared_preferences` is localStorage, about 5 MB for the whole
+/// site, so a draft is capped well under it.
 class SharedPreferencesBoardDraftStore implements BoardDraftStore {
   const SharedPreferencesBoardDraftStore();
 
-  static String keyFor(String actorId, String boardId) => 'jawwid.whiteboard.draft.v1.$actorId.$boardId';
+  static const String prefix = 'jawwid.whiteboard.draft.v2.';
+  static const int maxChars = 3 * 1024 * 1024;
+
+  static String keyFor(String actorId, String boardId) => '$prefix$actorId.$boardId';
 
   @override
   Future<BoardDraft?> read(String actorId, String boardId) async {
@@ -218,11 +231,13 @@ class SharedPreferencesBoardDraftStore implements BoardDraftStore {
   }
 
   @override
-  Future<void> write(String actorId, String boardId, BoardDraft draft) async {
+  Future<bool> write(String actorId, String boardId, BoardDraft draft) async {
+    final text = jsonEncode(draft.toJson());
+    if (text.length > maxChars) return false;
     try {
-      await (await SharedPreferences.getInstance()).setString(keyFor(actorId, boardId), jsonEncode(draft.toJson()));
+      return await (await SharedPreferences.getInstance()).setString(keyFor(actorId, boardId), text);
     } on Object {
-      // A full browser store: the server copy still stands; nothing to undo here.
+      return false;
     }
   }
 
@@ -230,21 +245,41 @@ class SharedPreferencesBoardDraftStore implements BoardDraftStore {
   Future<void> clear(String actorId, String boardId) async {
     await (await SharedPreferences.getInstance()).remove(keyFor(actorId, boardId));
   }
+
+  @override
+  Future<void> clearAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in prefs.getKeys().where((k) => k.startsWith('jawwid.whiteboard.draft.')).toList()) {
+      await prefs.remove(k);
+    }
+  }
 }
 
 /// In memory, for tests.
 class InMemoryBoardDraftStore implements BoardDraftStore {
   final Map<String, BoardDraft> stored = {};
 
+  /// Set to make every write fail (a full device).
+  bool full = false;
+
   @override
   Future<BoardDraft?> read(String actorId, String boardId) async => stored['$actorId/$boardId'];
   @override
-  Future<void> write(String actorId, String boardId, BoardDraft draft) async => stored['$actorId/$boardId'] = draft;
+  Future<bool> write(String actorId, String boardId, BoardDraft draft) async {
+    if (full) return false;
+    stored['$actorId/$boardId'] = draft;
+    return true;
+  }
+
   @override
   Future<void> clear(String actorId, String boardId) async => stored.remove('$actorId/$boardId');
+  @override
+  Future<void> clearAll() async => stored.clear();
 }
 
-final boardDraftStoreProvider = Provider<BoardDraftStore>((ref) => const SharedPreferencesBoardDraftStore());
+/// A file per board on a phone or tablet (app support directory, up to 32 MB a
+/// draft); localStorage in the browser.
+final boardDraftStoreProvider = Provider<BoardDraftStore>((ref) => platformBoardDraftStore());
 
 /// Debug fixtures only (no API in the build): boards kept in memory, with the
 /// server's revision rule, so the Boards tab and the editor can be tried in a

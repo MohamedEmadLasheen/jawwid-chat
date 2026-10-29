@@ -68,9 +68,32 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   double _width = 6;
   StampKind _stamp = StampKind.star;
   bool _gateLogged = false;
+  late final AppLifecycleListener _lifecycle;
+  late final BoardEditorController _held;
+
+  @override
+  void initState() {
+    super.initState();
+    _held = ref.read(boardEditorProvider(widget.boardId).notifier);
+    // Going to the background may be the app's last moment: the draft is
+    // written and a save is tried (review of #293).
+    _lifecycle = AppLifecycleListener(
+      onStateChange: (s) {
+        if (s == AppLifecycleState.inactive || s == AppLifecycleState.paused || s == AppLifecycleState.hidden) {
+          unawaited(_held.persistNow());
+          unawaited(_held.flush());
+        }
+      },
+    );
+  }
 
   @override
   void dispose() {
+    _lifecycle.dispose();
+    // Leaving the board: the draft is written now; the controller stays alive
+    // (its keep-alive) until every page is on the server.
+    unawaited(_held.persistNow());
+    unawaited(_held.flush());
     _view.dispose();
     super.dispose();
   }
@@ -83,13 +106,16 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     final editor = ref.watch(boardEditorProvider(widget.boardId));
     ref.listen(boardEditorProvider(widget.boardId), (prev, next) {
       final s = next.value;
-      if (s != null && s.draftDiscarded) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.boardDraftDiscarded)));
-        _controller.acknowledgeDraftDiscarded();
+      if (s != null && s.notice == EditorNotice.saveFirst) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.boardSaveFirst)));
+        _controller.acknowledgeNotice();
       }
     });
     return PopScope(
-      onPopInvokedWithResult: (_, _) => unawaited(_controller.flush()),
+      onPopInvokedWithResult: (_, _) {
+        unawaited(_controller.persistNow());
+        unawaited(_controller.flush());
+      },
       child: editor.when(
         loading: () => Scaffold(appBar: AppBar(), body: const JawwidLoadingView()),
         error: (e, _) {
@@ -161,6 +187,21 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
             children: [
               if (s.save == SaveStatus.conflict) _ConflictBanner(onReload: _controller.reload, onCopy: () => _saveAsCopy(context, s)),
               if (s.save == SaveStatus.failed) _FailedBanner(code: s.failureCode),
+              if (s.draftStale)
+                MaterialBanner(
+                  leading: const Icon(Icons.history),
+                  content: Text(l10n.boardDraftStale),
+                  actions: [
+                    TextButton(onPressed: _controller.discardStaleDraft, child: Text(l10n.boardDraftStaleDiscard)),
+                    FilledButton(onPressed: _controller.keepStaleDraft, child: Text(l10n.boardDraftStaleKeep)),
+                  ],
+                ),
+              if (s.draftNotKept && s.save != SaveStatus.saved)
+                MaterialBanner(
+                  leading: const Icon(Icons.sd_card_alert_outlined),
+                  content: Text(l10n.boardDraftNotKept),
+                  actions: const [SizedBox.shrink()],
+                ),
               if (s.canEdit && blockedByDevice)
                 MaterialBanner(content: Text(l10n.boardEditNeedsLargerScreen), actions: const [SizedBox.shrink()]),
               Expanded(
@@ -370,6 +411,7 @@ class _FailedBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final text = switch (code) {
+      kPageFullCode => l10n.boardPageFull,
       'COMM.WHITEBOARD_LIMIT' => l10n.boardFailedLimit,
       'COMM.WHITEBOARD_INVALID' => l10n.boardFailedInvalid,
       _ => l10n.boardFailedOther,
@@ -440,19 +482,24 @@ class _ToolPanel extends StatelessWidget {
       onPressed: () => onTool(t),
       icon: Icon(icon, color: tool == t ? tokens.colorBrandPrimary : tokens.colorTextPrimary),
     );
-    Widget swatch(Color c, String label) => Tooltip(
-      message: label,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: () => onColor(c),
-        child: Container(
-          width: 28,
-          height: 28,
-          margin: const EdgeInsets.all(Spacing.spacing1),
-          decoration: BoxDecoration(
-            color: c,
-            shape: BoxShape.circle,
-            border: Border.all(color: c == color ? tokens.colorBrandPrimary : tokens.colorBorderDefault, width: c == color ? 3 : 1),
+    Widget swatch(Color c, String label) => Semantics(
+      button: true,
+      selected: c == color,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => onColor(c),
+          child: Container(
+            width: 28,
+            height: 28,
+            margin: const EdgeInsets.all(Spacing.spacing1),
+            decoration: BoxDecoration(
+              color: c,
+              shape: BoxShape.circle,
+              border: Border.all(color: c == color ? tokens.colorBrandPrimary : tokens.colorBorderDefault, width: c == color ? 3 : 1),
+            ),
           ),
         ),
       ),

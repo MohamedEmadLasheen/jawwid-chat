@@ -39,13 +39,25 @@ enum PageBackground {
 
 /// One page as the editor holds it: its look and its elements, bottom first.
 class BoardPage {
-  const BoardPage({required this.id, required this.position, required this.layout, required this.background, required this.elements});
+  const BoardPage({
+    required this.id,
+    required this.position,
+    required this.layout,
+    required this.background,
+    required this.elements,
+    this.savedAt,
+  });
 
   final String id;
   final int position;
   final PageLayout layout;
   final PageBackground background;
   final List<BoardElement> elements;
+
+  /// The server's `updatedAt` for this page as last seen here, exactly as sent:
+  /// a draft made against it applies only while the server still says the same
+  /// (review of #293, P1). Local edits never change it; a save does.
+  final String? savedAt;
 
   factory BoardPage.fromJson(Map<String, Object?> json) {
     final document = json['document'];
@@ -55,6 +67,7 @@ class BoardPage {
       position: (json['position'] as num?)?.toInt() ?? 0,
       layout: PageLayout.parse(json['layout'] as String?),
       background: PageBackground.parse(json['background'] as String?),
+      savedAt: json['updatedAt'] as String?,
       elements: [
         for (final e in raw)
           if (e is Map) BoardElement.fromJson(Map<String, Object?>.from(e)),
@@ -62,13 +75,15 @@ class BoardPage {
     );
   }
 
-  BoardPage copyWith({List<BoardElement>? elements, PageLayout? layout, PageBackground? background, int? position}) => BoardPage(
-    id: id,
-    position: position ?? this.position,
-    layout: layout ?? this.layout,
-    background: background ?? this.background,
-    elements: elements ?? this.elements,
-  );
+  BoardPage copyWith({List<BoardElement>? elements, PageLayout? layout, PageBackground? background, int? position, String? savedAt}) =>
+      BoardPage(
+        id: id,
+        position: position ?? this.position,
+        layout: layout ?? this.layout,
+        background: background ?? this.background,
+        elements: elements ?? this.elements,
+        savedAt: savedAt ?? this.savedAt,
+      );
 
   /// The document the server stores (`{v: 1, elements}`).
   Map<String, Object?> documentJson() => {
