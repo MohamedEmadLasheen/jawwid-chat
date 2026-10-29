@@ -1,6 +1,7 @@
 import { Body, Controller, Param, Post, UseFilters } from '@nestjs/common';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.guard';
+import { Requires } from '../../platform/permissions/route-access';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
@@ -17,6 +18,8 @@ export class TypingController {
   constructor(private readonly gateway: RealtimeGateway) {}
 
   /** `{ typing: true }` while the draft changes (clients ping every 3 s), `{ typing: false }` to stop. */
+  // PD-40: a chat action, as the read and delivered cursors are.
+  @Requires('chat.use')
   @RateLimited(ActionScope.TYPING)
   @Post()
   async typing(
