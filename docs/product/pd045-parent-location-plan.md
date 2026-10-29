@@ -1,6 +1,6 @@
 # PD-45: a parent's country and state / province / emirate / governorate (review and plan)
 
-**State:** **APPROVED**, revision 2. The owner approved Q1–Q7 as recommended on 2026-10-28, relayed verbatim by the department head, who also decided the two coordination points (§12). No feature code has been written. Code waits for the department head's GO (builder slots are full).
+**State:** **APPROVED**, revision 3. Revision 3 adds the owner's two decisions of 2026-10-29 (§12.3): the location at trial booking, and the owner reviewing the Arabic names (R-45a). Revision 2: The owner approved Q1–Q7 as recommended on 2026-10-28, relayed verbatim by the department head, who also decided the two coordination points (§12). No feature code has been written. Code waits for the department head's GO (builder slots are full).
 **Claim:** `docs/product/pd-registry/PD-45.md`. Migration slots, assigned by the department head on 2026-10-28:
 - `20261028180000` (`chat_pd045_parent_location`) for PR-1;
 - `20261028190000` (`chat_pd045_validate_country_fk`) for PR-5.
@@ -49,7 +49,7 @@ The owner's request, verbatim:
 | C2 | **PD-16 Assign**: the only production code that creates `family`, `account` and `contact`. `POST /trials/new-students/:trialId/assign` (`trial.controller.ts:92-96`, `@Requires('new_students.manage')`) → `apps/api/src/new-students/enrolment.service.ts:145-287`. It creates the family at `:181-182` with `language: 'ar'` hard-coded, then calls `seedFromEnrolment` (`apps/api/src/parent-profile/parent-record.service.ts:274-305`), which writes the parent file's phone and e-mail. Admin Web: `AssignDialog` (`features/trials/NewStudentSetup.tsx:247-307`). | copied from C1 | **none**: no country, no region |
 | C3 | **PD-42 intake** (planned; plan merged in #173, data in #194, intake form is PD-42 PR-2). "The same `SubscriptionForm`, with its fields made optional" (`pd042-direct-enrolment-plan.md:405-406`). The transaction writes family, contact, optional account, and the parent file (phone, e-mail) (`:199-211`). | name, phone or e-mail, children (`:337-352`) | `Country \| no \| PD-17 Parent Profile` (`:352`). **No region.** |
 | C4 | **Parent sign-up** (PD-16/PD-23/PD-32). `POST /auth/signup/request\|verify` (`apps/api/src/platform/auth/parent-signup.controller.ts:26-46`, `@Public`) only creates the credential (`parent-signup.service.ts:149`). Flutter `ParentSignupScreen` (`lib/features/auth/presentation/parent_signup_screen.dart:20`): e-mail, code, password. | none: the family exists already | n/a |
-| C5 | **Trial booking and prospects**: student display names only, by design (`apps/api/src/lessons/trial.service.ts:50-52`, `:79-99`, `:151-195`) | none | n/a |
+| C5 | **Trial booking and prospects** (Admin Web `BookTrialDialog`, `apps/admin-web/src/features/trials/TrialsPage.tsx:180-221`; API `POST /trials`, `apps/api/src/lessons/trial.controller.ts:149` → `trial.service.ts:157`). Prospects (`:80-99`) are student display names only, by design (BR-2, `:50-52`). Sales books, and the Teachers department may book too. | display names, level, note | **none today.** **Owner, 2026-10-29: "At booking too".** Optional country and subdivision on the booking, stored *beside* the prospect, never on it. They pre-fill Sales' subscription form (§5.2, §5.5). |
 | C6 | Dev seed only: `apps/api/src/cli/org-chat-seed.ts:321-350` | n/a | n/a |
 
 ### 1.2 Where a parent's details are edited
@@ -279,6 +279,7 @@ chat.geo_subdivision (country_code text references chat.geo_country, code text,
 | **The parent** | **their own family only** | yes, through `/me/location` (§5.4) |
 | A child's teacher, the Teachers department, PD-35 supervisors | **never** | never |
 | Other parents | never | never |
+| **The booking's location** (§5.5), before the prospect is a family | **Sales** (`trials.manage` with Sales standing), and only in the subscription form it pre-fills. **Never** the trial's teacher, the trial group's cards, a trial event, or a teacher-facing read. A Teachers-department booker writes it but never reads it back. | whoever books (`trials.manage`) |
 
 **Why this is safe under the existing rules:**
 - **G-07 (no phone anywhere):** a location is not a phone. The suggestion from the phone (§6.2) is computed inside `src/parent-profile`. Only the suggested *country code* leaves that module, never the number.
@@ -325,6 +326,7 @@ The guard lists any other file that reads the column, so a teacher-facing servic
 | **E2 Stories audience data** (`AudienceDataPanel.tsx:106-147`; API `story.service.ts:1088-1093`) | The country picker becomes `LocationPicker` in country-only mode. The API validates against the dataset instead of `/^[A-Z]{2}$/`. Subdivision targeting is **not** added (§13). | PR-2 |
 | **PD-42 intake: the phone's country** (`apps/admin-web/src/features/intake/IntakeDialog.tsx:260`; API `apps/api/src/new-students/intake-input.ts:76-84`). Systest QA, relayed by the department head 2026-10-28. | It lists raw ISO codes (EG, AE, SA…). It only formats and keys the phone (E.164 for the contact key), and **never sets the family's country**. PR-3 makes two changes:<ol><li>**Its labels come from the dataset**: Arabic and English names, the Q3 order, and search, through the same country list as `LocationPicker` (country-only mode). The API validates the code against the dataset instead of `/^[A-Za-z]{2}$/`.</li><li>**It pre-fills the location** (below).</li></ol>The two stay **separate fields**: the phone's country and where the family lives can differ (a Gulf number, a family in Egypt). | PR-3 |
 | **C4 Parent sign-up** | **No change.** The family and its location exist before the parent signs up. A parent who signs up into a family without a location gets the prompt (§5.4). | — |
+| **C5 Trial booking** (`BookTrialDialog`; `POST /trials`) | **Optional** location block (`LocationPicker`), under the students. It is stored in `chat.trial_prospect_location` (§5.5), never on the prospect. It is never shown in the trial card, the trial group or the teacher's app. | PR-3 |
 | **E3 App: my profile** | A read-and-edit "Location" row in `MyProfileScreen` (§5.4) | PR-4 |
 
 ### 5.3 Copy
@@ -347,6 +349,32 @@ The guard lists any other file that reads the column, so a teacher-facing servic
   - the one-time prompt reuses the `AppLockOffer` pattern (`lib/features/app_lock/presentation/app_lock_gate.dart:78`), but the "answered" state lives **on the server**, so it is not shown again on a second device;
   - the arb keys go in `lib/l10n/app_{ar,en}.arb`.
 - **Never** in a push payload, a realtime event, a chat header or a teacher-facing screen.
+
+### 5.5 The location at booking (owner, 2026-10-29: "At booking too")
+
+The rules a trial already lives by decide where this goes:
+- **A prospect is a display name only** (BR-2, `trial.service.ts:50-52`).
+- Every booking change posts a card into the **teacher's** trial group.
+- The trial's teacher reads trials from the app.
+
+So the booking's location must not be a column on `chat.trial_prospect`, which those paths read. It goes in a **sibling, confined table**:
+
+```
+chat.trial_prospect_location (prospect_id uuid primary key references chat.trial_prospect,
+                              organization_id, country_code, subdivision_code,
+                              recorded_by uuid references chat.staff, recorded_at)
+  -- the same composite foreign key to chat.geo_subdivision as the family (§3.3)
+  -- RLS on, no request-role grant; the organization equals the prospect's (trigger)
+```
+
+**Who touches it:**
+- **Writing:** `POST /trials` (`trials.manage`) takes an optional `location {countryCode, subdivisionCode}`, validated by `parseLocation`, and upserts the row in the booking's transaction. A later booking for the same prospect may set it, or change it. The audit records the field names, never the values.
+- **Reading:** only the subscription form's pre-fill, in `src/new-students`, for Sales. When Sales open the form for that trial, the location block is pre-filled and marked "من الحجز / From the booking". Sales confirm or change it, and only the form's submission saves it, to `trial_subscription` and then, at Assign, to the family. The booking's location takes precedence over the phone suggestion (§6.2), which fills the block only when it is still empty.
+- **Never read** by the trial card, `TrialGroupService`, any trial event or the outbox, the teacher's trial views, or the trial list's DTO. A **confinement spec** (like `new-students-confinement.spec.ts`) lists the only two files allowed to name `trial_prospect_location`: the booking write and the pre-fill read.
+- **No phone, no e-mail** at booking: G-07 is unchanged. A location is not a contact channel, and the prospect stays a display name.
+- **Retention:** the row stays with its prospect, as the prospect does. Assign copies the *confirmed* form value, not this row.
+
+**A migration is needed** (one table). It is folded into PR-3 (head, 2026-10-29), which needs a slot from the department head. Alternatively, because #204 is not merged yet, the head may fold the table into PR-1's migration `20261028180000`.
 
 ---
 
@@ -496,7 +524,7 @@ Elsewhere:
 |---|---|---|
 | **PR-1, data** (waits for the GO; slot `20261028180000`) | <ul><li>`scripts/geo/build-dataset.py` + `data/geo/overlay.json` (reviewed Arabic names, labels, pinned order, aliases)</li><li>the generated `apps/api/src/geo/dataset.json` + `LICENSE-CLDR.txt`</li><li>the migration: `chat.geo_country`, `chat.geo_subdivision` (seeded); `family.subdivision_code` and `location_*`; the composite FK and CHECK; the country FK `NOT VALID`; `trial_subscription.country_code/subdivision_code` with the same FKs; no grants to request roles (as `country_code`)</li><li>Prisma fields</li><li>the parity spec</li></ul>No behaviour change.<br>**Release gate R-45a (head, 2026-10-28):** before PR-1 merges, a human reviewer, recorded by role and never by name (G-20), signs off the 88 Arabic names in `data/geo/overlay.json` (Egypt, the six Gulf states, Jordan). The PR records the sign-off as the reviewer's role, the date and the overlay's SHA-256. The PR stays draft until then. | the GO |
 | **PR-2, staff edit: option (a)** | <ul><li>`src/geo` (dataset service, `parseLocation`, `GET /geo/...`)</li><li>Parent Profile: `subdivisionCode`, stop writing `region`, the "Old note" display, `suggestedCountryCode`, the re-key on country change (§9)</li><li>Parents list: column and `?location=missing`</li><li>Stories validation</li><li>Admin Web `LocationPicker`, `EditContactDialog`, Parents filter, Stories panel</li><li>the confinement guard</li><li>the route table</li><li>the time-zone estimate and the hint (§7)</li><li>`GET /geo/countries` also serves the phone-country picker (PR-3)</li></ul> | PR-1, #194 |
-| **PR-3, new parents** | <ul><li>Sales' subscription form and its API (`new-students`)</li><li>Assign copies the codes</li><li>the suggestion chip</li><li>Q1's required rule</li><li>the intake: the location block, and the phone-country picker labelled from the dataset and validated by it (§5.2)</li><li>both forms: the location's empty country pre-filled from the phone's country, visible and editable, never saved without the form (§6.2)</li></ul> | PR-2 |
+| **PR-3, new parents** | <ul><li>Sales' subscription form and its API (`new-students`)</li><li>Assign copies the codes</li><li>the suggestion chip</li><li>Q1's required rule</li><li>the intake: the location block, and the phone-country picker labelled from the dataset and validated by it (§5.2)</li><li>both forms: the location's empty country pre-filled from the phone's country, visible and editable, never saved without the form (§6.2)</li><li>**the booking** (§5.5): the optional location block in `BookTrialDialog`, `chat.trial_prospect_location` (a new table: a slot from the head), the pre-fill of Sales' form "From the booking", and the confinement spec</li></ul> | PR-2; a slot |
 | **PR-4, the app: option (b)** | <ul><li>`GET/PUT /me/location` and the server-side "answered" stamp (a small table, `chat.contact_location_prompt(contact_id, answered_at, outcome)`, in PR-1's migration)</li><li>the Flutter picker, profile row and one-time prompt</li><li>the arb strings</li></ul> | PR-2 |
 | **PR-5, backfill** | <ul><li>`geo:backfill` CLI (§6.3)</li><li>the report</li><li>after a clean report, the `VALIDATE CONSTRAINT` migration (slot `20261028190000`)</li></ul> | PR-2 |
 | **PR-6, docs** | <ul><li>PD-45 in the boundary doc §4</li><li>the PD-17 doc (region → subdivision)</li><li>the STORIES.md ownership note</li><li>a `docs/admin/` page for supervisors on completing locations</li><li>the PD-44 hand-off for the aggregate counts</li></ul> | PR-3, PR-4 |
@@ -531,6 +559,13 @@ PR-3 and PR-4 are independent of each other once PR-2 is merged. Under the two-s
 | H4 | The Arabic overlay | The 88 names need a human reviewer (by role) before PR-1 merges. This is release gate **R-45a** (§11). |
 
 ---
+
+### 12.3 DECIDED (owner, 2026-10-29, relayed by the department head)
+
+| # | Decision, verbatim | Effect |
+|---|---|---|
+| O1 | "At booking too" | Optional country and subdivision on the trial booking. They are stored beside the prospect and pre-fill Sales' subscription form, where they are confirmed (§1.1 C5, §4, §5.2, §5.5). Built in PR-3. |
+| O2 | "I'll review them" (R-45a) | **The owner is the reviewer** of the 88 Arabic names, the labels and the country overrides. They review from a sheet the department head passes on (not committed). The sign-off is recorded in `data/geo/overlay-review.json` as role `owner`, with the date and the overlay's SHA-256, never a name. #204 stays draft until then. |
 
 ## 13. Out of scope
 
