@@ -4728,4 +4728,13 @@ class L10nEn extends L10n {
   @override
   String get boardSaveFirst =>
       'Your changes have to be saved first. Try again once the board says Saved.';
+
+  @override
+  String get pickerSearchHint => 'Type to search';
+
+  @override
+  String get pickerNoMatches => 'No matches';
+
+  @override
+  String get materialsAgeLabel => 'Age';
 }
