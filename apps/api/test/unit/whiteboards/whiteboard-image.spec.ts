@@ -5,9 +5,14 @@
  * and one over 8,000 px are refused. The PDF export lays out the client's PNGs
  * one per page, 16:9.
  */
+import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
+import { CommError, CommErrorCode } from '../../../src/platform/errors';
 import { BOARD_IMAGE_MAX_EDGE, imageSize, inspectBoardImage, sniffBoardImage } from '../../../src/whiteboards/whiteboard-image';
-import { EXPORT_PAGE, composeBoardPdf } from '../../../src/whiteboards/whiteboard-export';
+import { EXPORT_PAGE, checkExportPng, composeBoardPdf } from '../../../src/whiteboards/whiteboard-export';
+import { composeInWorker } from '../../../src/whiteboards/whiteboard-export-runner';
+
+const FONT = join(__dirname, '..', '..', '..', 'assets', 'fonts', 'IBMPlexSansArabic-Regular.ttf');
 import { contentDisposition } from '../../../src/whiteboards/whiteboard.controller';
 import { exportFileName } from '../../../src/whiteboards/whiteboard.service';
 
@@ -20,22 +25,26 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([len, body, crc]);
 }
 
-/** A real, decodable RGB PNG; `animated` adds an acTL chunk (an APNG). */
-export function png(width: number, height: number, animated = false): Buffer {
+/** A real, decodable PNG (RGB, or RGBA with `alpha`); `animated` adds an acTL chunk (an APNG); `idat` replaces its image data. */
+export function png(width: number, height: number, animated = false, opts: { alpha?: boolean; idat?: Buffer } = {}): Buffer {
+  const channels = opts.alpha ? 4 : 3;
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr.set([8, 2, 0, 0, 0], 8);
-  const rows = Buffer.alloc((width * 3 + 1) * height, 0xcc);
-  for (let y = 0; y < height; y++) rows[y * (width * 3 + 1)] = 0; // filter: none
+  ihdr.set([8, opts.alpha ? 6 : 2, 0, 0, 0], 8);
+  const rows = Buffer.alloc((width * channels + 1) * height, 0xcc);
+  for (let y = 0; y < height; y++) rows[y * (width * channels + 1)] = 0; // filter: none
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', ihdr),
     ...(animated ? [chunk('acTL', Buffer.from([0, 0, 0, 2, 0, 0, 0, 0]))] : []),
-    chunk('IDAT', deflateSync(rows)),
+    chunk('IDAT', opts.idat ?? deflateSync(rows)),
     chunk('IEND', Buffer.alloc(0)),
   ]);
 }
+
+/** The review's P0 page: an RGBA PNG with a valid header, valid chunk CRCs and IEND, and image data that is not deflate. */
+const corrupt = () => png(64, 36, false, { alpha: true, idat: Buffer.from('78da' + 'ff'.repeat(40), 'hex') });
 
 /** A PNG header that claims a size, for the size checks (not decodable). */
 function pngClaiming(width: number, height: number): Buffer {
@@ -100,7 +109,7 @@ describe('a board image, read from its bytes', () => {
 
 describe('a board exported as a PDF', () => {
   it('lays out one 16:9 page per board page, with a strip for the credit', async () => {
-    const pdf = await composeBoardPdf({ title: 'Al-Fatihah', pages: [png(64, 36), png(64, 36), png(64, 36)], credit: 'Quran text: Tanzil Project — tanzil.net' });
+    const pdf = await composeBoardPdf({ title: 'Al-Fatihah', pages: [png(64, 36), png(64, 36), png(64, 36)], credit: 'Quran text: Tanzil Project — tanzil.net', font: FONT });
     const text = pdf.toString('latin1');
     expect(text.startsWith('%PDF-')).toBe(true);
     expect(text.match(/\/Type \/Page\b/g)).toHaveLength(3);
@@ -115,5 +124,46 @@ describe('a board exported as a PDF', () => {
     const h = contentDisposition(exportFileName('مراجعة الفاتحة'));
     expect(h).toMatch(/^attachment; filename="[\x20-\x7e]+"; filename\*=UTF-8''/);
     expect(decodeURIComponent(h.split("UTF-8''")[1])).toBe('مراجعة الفاتحة.pdf');
+  });
+});
+
+
+describe('an export page, decoded before the PDF library sees it (review of #305, P0)', () => {
+  it('the damaged RGBA page passes the header checks but not the decode', () => {
+    expect(inspectBoardImage(corrupt(), 'image/png')).toMatchObject({ ok: true });
+    expect(checkExportPng(corrupt())).toEqual({ refused: 'the PNG image data is damaged' });
+    expect(checkExportPng(png(64, 36, false, { alpha: true }))).toEqual({ width: 64, height: 36 });
+    expect(checkExportPng(png(64, 36))).toEqual({ width: 64, height: 36 });
+  });
+
+  it('refuses a damaged chunk, a page larger than the board page, more data than the header says, and a tail', () => {
+    const bad = Buffer.from(png(8, 8));
+    bad[bad.length - 20] ^= 0xff; // inside IDAT: its CRC no longer matches
+    expect(checkExportPng(bad)).toMatchObject({ refused: expect.stringMatching(/damaged/) });
+    expect(checkExportPng(png(1921, 2))).toMatchObject({ refused: expect.stringMatching(/1920 x 1080/) });
+    const tooMuch = png(4, 4, false, { idat: deflateSync(Buffer.alloc((4 * 3 + 1) * 40)) });
+    expect(checkExportPng(tooMuch)).toEqual({ refused: 'the PNG image data is not the size its header says' });
+    expect(checkExportPng(Buffer.concat([png(4, 4), Buffer.from('x')]))).toMatchObject({ refused: expect.stringMatching(/after its end|cut short/) });
+    expect(checkExportPng(png(4, 4, true))).toEqual({ refused: 'an export page is a still image' });
+  });
+
+  it('in the worker: the damaged page is refused by number, and the API process is untouched', async () => {
+    const refused = await composeInWorker({ title: 'B', pages: [png(64, 36), corrupt()], credit: null }).catch((e) => e);
+    expect(refused).toBeInstanceOf(CommError);
+    expect((refused as CommError).code).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    expect((refused as CommError).message).toBe('page 2: the PNG image data is damaged');
+    const pdf = await composeInWorker({ title: 'B', pages: [png(64, 36, false, { alpha: true })], credit: 'Quran text: Tanzil Project — tanzil.net' });
+    expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+
+  it('a fault no code can catch ends the worker, not the API; so does running out of time', async () => {
+    const thrower = join(__dirname, 'fixtures', 'export-throws-async.js');
+    const crashed = await composeInWorker({ title: 'B', pages: [png(4, 4)], credit: null }, { module: thrower }).catch((e) => e);
+    expect((crashed as CommError).code).toBe(CommErrorCode.WHITEBOARD_LIMIT);
+    const slow = join(__dirname, 'fixtures', 'export-never-answers.js');
+    const late = await composeInWorker({ title: 'B', pages: [png(4, 4)], credit: null }, { module: slow, timeoutMs: 300 }).catch((e) => e);
+    expect((late as CommError).code).toBe(CommErrorCode.WHITEBOARD_LIMIT);
+    // Still here, still working.
+    expect(checkExportPng(png(4, 4))).toEqual({ width: 4, height: 4 });
   });
 });

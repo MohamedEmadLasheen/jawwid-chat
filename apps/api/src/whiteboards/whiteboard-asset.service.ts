@@ -82,7 +82,7 @@ export class WhiteboardAssetService {
    * The upload copied to its kept key and inspected there. Refused bytes are
    * deleted from the kept key and never become ready.
    */
-  async pin(uploadKey: string, keepAt: string, declared: { contentType: string; byteSize: number }): Promise<Pinned> {
+  async pin(uploadKey: string, keepAt: string, declared: { contentType: string; byteSize: number }, max?: { width: number; height: number }): Promise<Pinned> {
     const mime = declared.contentType as BoardImageType;
     const head = await this.storage.readHead(uploadKey, 16);
     if (!head) throw new CommError(CommErrorCode.WHITEBOARD_STATE, 'the image has not been uploaded', 409);
@@ -96,7 +96,7 @@ export class WhiteboardAssetService {
       ? ({ ok: false, reason: 'the image has not been uploaded' } as const)
       : bytes.length !== declared.byteSize
         ? ({ ok: false, reason: 'the image changed size' } as const)
-        : inspectBoardImage(bytes, mime);
+        : inspectBoardImage(bytes, mime, max);
     if (!verdict.ok || !bytes) {
       await this.deleteQuietly([keepAt]);
       throw new CommError(CommErrorCode.WHITEBOARD_INVALID, verdict.ok ? 'the image has not been uploaded' : verdict.reason, 422);

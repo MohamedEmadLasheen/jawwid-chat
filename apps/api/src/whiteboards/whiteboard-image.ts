@@ -28,15 +28,22 @@ export function sniffBoardImage(head: Buffer): BoardImageType | null {
 
 export type ImageVerdict = { ok: true; width: number; height: number } | { ok: false; reason: string };
 
-export function inspectBoardImage(bytes: Buffer, declared: BoardImageType): ImageVerdict {
+export function inspectBoardImage(
+  bytes: Buffer,
+  declared: BoardImageType,
+  max: { width: number; height: number } = { width: BOARD_IMAGE_MAX_EDGE, height: BOARD_IMAGE_MAX_EDGE },
+): ImageVerdict {
   if (sniffBoardImage(bytes.subarray(0, 16)) !== declared) return { ok: false, reason: 'the file is not the image it claims to be' };
   const ended = inspectCertificateFile(bytes, declared);
   if (ended) return { ok: false, reason: ended };
   const size = imageSize(bytes, declared);
   if (!size) return { ok: false, reason: 'the image size cannot be read' };
   if (size.animated) return { ok: false, reason: 'an animated image cannot be put on a board; use a still image' };
-  if (size.width < 1 || size.height < 1 || size.width > BOARD_IMAGE_MAX_EDGE || size.height > BOARD_IMAGE_MAX_EDGE) {
-    return { ok: false, reason: `an image is at most ${BOARD_IMAGE_MAX_EDGE} px on each side` };
+  if (size.width < 1 || size.height < 1 || size.width > max.width || size.height > max.height) {
+    return {
+      ok: false,
+      reason: max.width === max.height ? `an image is at most ${max.width} px on each side` : `an image is at most ${max.width} x ${max.height} px`,
+    };
   }
   return { ok: true, width: size.width, height: size.height };
 }

@@ -28,7 +28,9 @@ import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
 import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { WhiteboardModule } from '../../src/whiteboards/whiteboard.module';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
+import { LocalFsBlobStore } from '@communication/attachments/blob-store';
 import { buildGraph, truncate } from './harness';
+import { corruptPng, png } from './pd039-png';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -212,5 +214,79 @@ describe('the write rate limit', () => {
       await g.prisma.$executeRaw`UPDATE chat.config SET value = ${JSON.stringify(throttleBefore ?? 240)}::jsonb WHERE key = ${THROTTLE_KEY}`;
       app.get(AppConfigService).invalidate();
     }
+  });
+});
+
+describe('PR-4: the image and export routes over HTTP', () => {
+  const blobs = new LocalFsBlobStore();
+  const flags = async (on: boolean) => {
+    for (const key of ['whiteboards.assets_enabled', 'whiteboards.assets_lifecycle_verified']) {
+      await g.prisma.$executeRaw`
+        INSERT INTO chat.config (key, value, scope) VALUES (${key}, ${JSON.stringify(on)}::jsonb, 'whiteboards')
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
+    }
+    app.get(AppConfigService).invalidate();
+  };
+  afterAll(() => flags(false));
+
+  it('off: every write answers 503 COMM.WHITEBOARD_ASSETS_OFF; staff are refused every route', async () => {
+    await flags(false);
+    const teacher = m.teachers[3]!;
+    const b = await newBoard(teacher.subject);
+    const fake = randomUUID();
+    const routes: Array<[string, string, unknown?]> = [
+      ['POST', `/whiteboards/${b.id}/assets/grant`, { contentType: 'image/png', byteSize: 100 }],
+      ['POST', `/whiteboards/${b.id}/assets/${fake}/confirm`, { objectKey: 'x' }],
+      ['POST', `/whiteboards/${b.id}/exports/grant`, { pages: [{ byteSize: 100 }] }],
+      ['POST', `/whiteboards/${b.id}/exports/compose`, { pages: [{ assetId: fake, objectKey: 'x' }] }],
+    ];
+    for (const [method, path, body] of routes) {
+      const r = await http(teacher.subject, method, path, body);
+      expect([path, r.status, r.code]).toEqual([path, 503, 'COMM.WHITEBOARD_ASSETS_OFF']);
+    }
+    expect((await http(teacher.subject, 'GET', `/whiteboards/${b.id}/assets`)).json).toEqual({ assets: [] });
+    for (const staff of [m.superAdmin, m.teachersManager, m.teacherSupervisors[0]!]) {
+      for (const [method, path, body] of [...routes, ['GET', `/whiteboards/${b.id}/assets`] as [string, string]]) {
+        expect([path, (await http(staff.subject, method, path, body)).status]).toEqual([path, 403]);
+      }
+    }
+  });
+
+  it('on: grant, upload, confirm, sign; an export comes back as a PDF; a damaged page is a 422 and the API answers on', async () => {
+    await flags(true);
+    const teacher = m.teachers[3]!;
+    const b = await newBoard(teacher.subject);
+    const bytes = png(40, 30);
+    const grant = await http(teacher.subject, 'POST', `/whiteboards/${b.id}/assets/grant`, { contentType: 'image/png', byteSize: bytes.length });
+    expect(grant.status).toBe(201);
+    await blobs.put(grant.json.upload.objectKey, 'image/png', bytes);
+    const confirm = await http(teacher.subject, 'POST', `/whiteboards/${b.id}/assets/${grant.json.assetId}/confirm`, { objectKey: grant.json.upload.objectKey });
+    expect([confirm.status, confirm.json.asset?.width]).toEqual([200, 40]);
+    const signed = await http(teacher.subject, 'GET', `/whiteboards/${b.id}/assets`);
+    expect(signed.json.assets.map((a: { id: string }) => a.id)).toEqual([grant.json.assetId]);
+
+    const page = png(64, 36, { alpha: true });
+    const ex = await http(teacher.subject, 'POST', `/whiteboards/${b.id}/exports/grant`, { pages: [{ byteSize: page.length }] });
+    expect(ex.status).toBe(201);
+    await blobs.put(ex.json.pages[0].upload.objectKey, 'image/png', page);
+    const r = await fetch(`${base}/whiteboards/${b.id}/exports/compose`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${await tokenFor(teacher.subject)}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ pages: [{ assetId: ex.json.pages[0].assetId, objectKey: ex.json.pages[0].upload.objectKey }] }),
+    });
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toMatch(/^application\/pdf/);
+    expect(r.headers.get('content-disposition')).toMatch(/^attachment; filename="Lesson board.pdf"/);
+    expect(r.headers.get('cache-control')).toBe('private, no-store');
+    expect(Buffer.from(await r.arrayBuffer()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+
+    const bad = corruptPng();
+    const ex2 = await http(teacher.subject, 'POST', `/whiteboards/${b.id}/exports/grant`, { pages: [{ byteSize: bad.length }] });
+    await blobs.put(ex2.json.pages[0].upload.objectKey, 'image/png', bad);
+    const refused = await http(teacher.subject, 'POST', `/whiteboards/${b.id}/exports/compose`, {
+      pages: [{ assetId: ex2.json.pages[0].assetId, objectKey: ex2.json.pages[0].upload.objectKey }],
+    });
+    expect([refused.status, refused.code]).toEqual([422, 'COMM.WHITEBOARD_INVALID']);
+    expect((await http(teacher.subject, 'GET', `/whiteboards/${b.id}`)).status).toBe(200);
   });
 });

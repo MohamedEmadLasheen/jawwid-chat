@@ -1,0 +1,61 @@
+import { join } from 'node:path';
+import { Worker } from 'node:worker_threads';
+import { CommError, CommErrorCode } from '../platform/errors';
+import type { ExportInput } from './whiteboard-export';
+
+/**
+ * PD-39 (review of #305, P0): a board export is made in a worker thread with
+ * its own memory limits and a time limit. The pages are a client's bytes and
+ * the PDF library's PNG reader can throw where nothing catches it; in a
+ * worker that ends the worker -- the API answers "could not be made" and goes
+ * on serving everyone else.
+ *
+ * The worker loads whiteboard-export by path: the compiled .js in the image,
+ * the .ts source under the tests (Node 24 strips its types). That module has
+ * no relative imports, so it loads the same either way.
+ */
+
+const MODULE = join(__dirname, __filename.endsWith('.ts') ? 'whiteboard-export.ts' : 'whiteboard-export.js');
+const FONT = join(__dirname, '..', '..', 'assets', 'fonts', 'IBMPlexSansArabic-Regular.ttf');
+
+/** How long one export may take, and the worker's heap. Buffers outside the heap are bounded by the page and export byte caps. */
+export const EXPORT_TIMEOUT_MS = 30_000;
+const LIMITS = { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32, stackSizeMb: 4 };
+
+const SCRIPT = `
+const { parentPort, workerData } = require('node:worker_threads');
+const m = require(workerData.module);
+m.checkAndCompose({ ...workerData.input, pages: workerData.input.pages.map((p) => Buffer.from(p)) })
+  .then((out) => parentPort.postMessage(out))
+  .catch((e) => parentPort.postMessage({ failed: String(e && e.message || e) }));
+`;
+
+export type ExportJob = Omit<ExportInput, 'font'>;
+
+export function composeInWorker(job: ExportJob, opts: { timeoutMs?: number; module?: string } = {}): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const unusable = () => new CommError(CommErrorCode.WHITEBOARD_LIMIT, 'this export could not be made; export fewer pages, or try again', 409, { limit: 'exports' });
+    const worker = new Worker(SCRIPT, {
+      eval: true,
+      resourceLimits: LIMITS,
+      workerData: { module: opts.module ?? MODULE, input: { ...job, font: FONT, pages: job.pages.map((p) => new Uint8Array(p)) } },
+    });
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+      void worker.terminate();
+    };
+    const timer = setTimeout(() => finish(() => reject(unusable())), opts.timeoutMs ?? EXPORT_TIMEOUT_MS);
+    worker.on('message', (out: { pdf?: Uint8Array; refused?: string; failed?: string }) => {
+      if (out.pdf) finish(() => resolve(Buffer.from(out.pdf as Uint8Array)));
+      else if (out.refused) finish(() => reject(new CommError(CommErrorCode.WHITEBOARD_INVALID, out.refused as string, 422)));
+      else finish(() => reject(unusable()));
+    });
+    // A fault the module could not catch (an async throw, out of memory) ends the worker, never the API.
+    worker.on('error', () => finish(() => reject(unusable())));
+    worker.on('exit', () => finish(() => reject(unusable())));
+  });
+}

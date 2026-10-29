@@ -18,7 +18,6 @@
  * Synthetic fixtures only (G-16).
  */
 import { randomUUID } from 'node:crypto';
-import { crc32, deflateSync } from 'node:zlib';
 import { LocalFsBlobStore } from '../../src/communication/attachments/blob-store';
 import { CommError, CommErrorCode } from '@platform/errors';
 import { runWithRequestContext } from '@platform/request-context';
@@ -26,6 +25,7 @@ import type { Actor } from '@platform/types';
 import { WhiteboardAssetService } from '../../src/whiteboards/whiteboard-asset.service';
 import { WhiteboardService } from '../../src/whiteboards/whiteboard.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { corruptPng, png } from './pd039-png';
 
 jest.setTimeout(120_000);
 
@@ -427,31 +427,14 @@ describe('limits and concurrency', () => {
 
 const blobs = new LocalFsBlobStore();
 
-/** A real, decodable RGB PNG. */
-function png(width: number, height: number): Buffer {
-  const chunk = (type: string, data: Buffer) => {
-    const len = Buffer.alloc(4);
-    len.writeUInt32BE(data.length);
-    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
-    const crc = Buffer.alloc(4);
-    crc.writeUInt32BE(crc32(body) >>> 0);
-    return Buffer.concat([len, body, crc]);
-  };
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr.set([8, 2, 0, 0, 0], 8);
-  const rows = Buffer.alloc((width * 3 + 1) * height, 0x80);
-  for (let y = 0; y < height; y++) rows[y * (width * 3 + 1)] = 0;
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]);
-}
-
-async function assetsSwitch(on: boolean) {
-  await exec(
-    `insert into chat.config (key, value, scope) values ('whiteboards.assets_enabled', $1::jsonb, 'whiteboards')
-     on conflict (key) do update set value = excluded.value`,
-    JSON.stringify(on),
-  );
+async function assetsSwitch(on: boolean, lifecycle = on) {
+  for (const [key, value] of [['whiteboards.assets_enabled', on], ['whiteboards.assets_lifecycle_verified', lifecycle]] as const) {
+    await exec(
+      `insert into chat.config (key, value, scope) values ($1, $2::jsonb, 'whiteboards')
+       on conflict (key) do update set value = excluded.value`,
+      key, JSON.stringify(value),
+    );
+  }
   g.config.invalidate();
 }
 
@@ -469,7 +452,10 @@ describe('PR-4: images and export', () => {
   beforeEach(() => assetsSwitch(true));
   afterAll(() => assetsSwitch(false));
 
-  it('is off until the environment switches it on: nothing granted, nothing written', async () => {
+  it('is off until the environment switches it on AND records the lifecycle rule: nothing granted, nothing written', async () => {
+    await assetsSwitch(true, false);
+    const early = await boards.create({ title: 'Early' }, teacher(s.teacherId));
+    expect(await code(boards.grantImage(early.id, { contentType: 'image/png', byteSize: 100 }, teacher(s.teacherId)))).toBe(CommErrorCode.WHITEBOARD_ASSETS_OFF);
     await assetsSwitch(false);
     const t = teacher(s.teacherId);
     const b = await boards.create({ title: 'Off' }, t);
@@ -596,5 +582,108 @@ describe('PR-4: images and export', () => {
     await exec(`update chat.whiteboard_asset set expires_at = now() - interval '1 minute' where board_id = $1::uuid`, b.id);
     expect(await boards.sweepAbandonedAssets()).toBe(6);
     expect((await snapshot(b.id))!.assets).toBe(0);
+  });
+
+  it('a damaged export page is refused, by number, and the API goes on (review of #305, P0)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Broken' }, t);
+    await boards.addPage(b.id, { revision: 1 }, t);
+    const pages = [png(64, 36), corruptPng()];
+    const grant = await boards.grantExport(b.id, { pages: pages.map((p) => ({ byteSize: p.length })) }, t);
+    for (const [i, p] of grant.pages.entries()) await blobs.put(p.upload.objectKey, 'image/png', pages[i]!);
+    const refused = await boards.composeExport(b.id, { pages: grant.pages.map((p) => ({ assetId: p.assetId, objectKey: p.upload.objectKey })) }, t).catch((e) => e);
+    expect(refused).toBeInstanceOf(CommError);
+    expect((refused as CommError).code).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    expect((refused as CommError).message).toBe('page 2: the PNG image data is damaged');
+    expect((await log(b.id)).map((r) => r.action)).not.toContain('export');
+    // Nothing of it was kept; the rows wait for the sweep.
+    for (const p of grant.pages) expect(await blobs.get(p.upload.objectKey)).toBeNull();
+    expect((await boards.open(b.id, t)).id).toBe(b.id);
+  });
+
+  it('an export page larger than the board page is refused at the grant and at compose (review of #305, P1)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Big' }, t);
+    expect(await code(boards.grantExport(b.id, { pages: [{ byteSize: 8 * 1024 * 1024 + 1 }] }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    const wide = png(1921, 4);
+    const grant = await boards.grantExport(b.id, { pages: [{ byteSize: wide.length }] }, t);
+    await blobs.put(grant.pages[0]!.upload.objectKey, 'image/png', wide);
+    expect(await code(boards.composeExport(b.id, { pages: [{ assetId: grant.pages[0]!.assetId, objectKey: grant.pages[0]!.upload.objectKey }] }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+  });
+
+  it('two confirms of one image at once: one keeps it, the other answers the same ready image', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Twice' }, t);
+    const bytes = png(40, 30);
+    const { assetId, upload } = await boards.grantImage(b.id, { contentType: 'image/png', byteSize: bytes.length }, t);
+    await blobs.put(upload.objectKey, 'image/png', bytes);
+    const both = await Promise.all([
+      boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t),
+      boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t),
+    ]);
+    expect(both.map((r) => r.asset.id)).toEqual([assetId, assetId]);
+    expect(both.filter((r) => r.replayed)).toHaveLength(1);
+    const [row] = await g.prisma.$queryRaw<Array<{ state: string; object_key: string }>>`SELECT state, object_key FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`;
+    expect(row!.state).toBe('ready');
+    expect((await blobs.get(row!.object_key))?.bytes.equals(bytes)).toBe(true);
+  });
+
+  it('the sweep and a confirm at once: never a ready image without its bytes, never bytes without a row', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Race' }, t);
+    for (let round = 0; round < 6; round++) {
+      const bytes = png(40, 30);
+      const { assetId, upload } = await boards.grantImage(b.id, { contentType: 'image/png', byteSize: bytes.length }, t);
+      await blobs.put(upload.objectKey, 'image/png', bytes);
+      await exec(`update chat.whiteboard_asset set expires_at = now() + interval '50 milliseconds' where id = $1::uuid`, assetId);
+      await new Promise((r) => setTimeout(r, round * 15));
+      await Promise.all([
+        boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t).catch(() => null),
+        new Promise((r) => setTimeout(r, 50)).then(() => boards.sweepAbandonedAssets()),
+      ]);
+      const [row] = await g.prisma.$queryRaw<Array<{ state: string }>>`SELECT state FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`;
+      const kept = await blobs.get(`whiteboards/${org}/${b.id}/${assetId}`);
+      if (row?.state === 'ready') expect(kept).not.toBeNull();
+      else {
+        // Refused (expired) or swept: a leftover pending row is swept next time, and no kept bytes are served.
+        await boards.sweepAbandonedAssets();
+        expect((await g.prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`)[0]!.n).toBe(0);
+        expect(await blobs.get(`whiteboards/${org}/${b.id}/${assetId}`)).toBeNull();
+      }
+    }
+  });
+
+  it('copying a board with many images copies every one, outside the transaction, under the new board', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Many' }, t);
+    const ids: string[] = [];
+    for (let i = 0; i < 12; i++) ids.push((await addImage(b.id, t, png(10 + i, 10))).asset.id);
+    const doc = { v: 1, elements: ids.map((assetId, i) => ({ id: `i${i}`, kind: 'image', assetId, x: i * 10, y: 0, w: 50, h: 50 })) };
+    await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: doc }, t);
+    const copy = await boards.duplicate(b.id, t);
+    expect(copy.assets).toHaveLength(12);
+    const named = (copy.pages[0]!.document as { elements: Array<{ assetId: string }> }).elements.map((e) => e.assetId);
+    expect(new Set(named)).toEqual(new Set(copy.assets.map((a) => a.id)));
+    expect(named.some((id) => ids.includes(id))).toBe(false);
+    for (const a of copy.assets) expect((await blobs.get(`whiteboards/${org}/${copy.id}/${a.id}`))?.bytes.length).toBe(a.byteSize);
+    // One source object gone: the copy is refused, and none of its copies is left behind.
+    const [gone] = await g.prisma.$queryRaw<Array<{ object_key: string }>>`SELECT object_key FROM chat.whiteboard_asset WHERE id = ${ids[11]}::uuid`;
+    await g.storage.delete(gone!.object_key);
+    const boardsBefore = (await boards.list(t)).length;
+    const copied: string[] = [];
+    const real = g.storage.copy!.bind(g.storage);
+    const spy = jest.spyOn(g.storage, 'copy').mockImplementation(async (from: string, to: string) => {
+      const ok = await real(from, to);
+      if (ok) copied.push(to);
+      return ok;
+    });
+    try {
+      expect(await code(boards.duplicate(b.id, t))).toBe(CommErrorCode.WHITEBOARD_STATE);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(copied.length).toBeGreaterThan(0);
+    for (const key of copied) expect(await blobs.get(key)).toBeNull();
+    expect((await boards.list(t)).length).toBe(boardsBefore);
   });
 });
