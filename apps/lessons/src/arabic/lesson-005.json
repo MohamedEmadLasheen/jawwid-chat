@@ -1,0 +1,562 @@
+{
+  "lesson": 5,
+  "kind": "reading",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 arabic/lesson-5/data/sentences.ts, read as text from the quarantined copy, never built or run), as a reading lesson (P0-5c). Case endings stay inside each sentence; only its last word takes the pausal sukun, held. Unmarked qamari lams get their sukun, held. Duplicate sentences are removed."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/arabic/lesson-5 (read as text, never built or run)",
+    "sha256": {
+      "data/sentences.ts": "e72ac268a59870c9704b05bcf3ad2db555522bb8aec2ad04a596467048a0d98d"
+    }
+  },
+  "retiredIds": [],
+  "stages": [
+    {
+      "id": "sentences",
+      "name": "جُمَلٌ قَصِيرَةْ",
+      "items": [
+        {
+          "id": "sentences-001",
+          "kind": "sentence",
+          "text": "أَكَلَ الْوَلَدُ تُفَّاحًا",
+          "was": "أَكَلَ الوَلَدُ تُفَّاحًا",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam; FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-002",
+          "kind": "sentence",
+          "text": "شَرِبَ الطِّفْلُ حَلِيبًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-003",
+          "kind": "sentence",
+          "text": "قَرَأَ مُحَمَّدٌ كِتَابًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-004",
+          "kind": "sentence",
+          "text": "لَعِبَ الْوَلَدُ بِالْكُرَةْ",
+          "was": "لَعِبَ الوَلَدُ بِالكُرَةِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-005",
+          "kind": "sentence",
+          "text": "ذَهَبَ أَحْمَدُ إِلَى الْمَسْجِدْ",
+          "was": "ذَهَبَ أَحْمَدُ إِلَى المَسْجِدِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-006",
+          "kind": "sentence",
+          "text": "رَسَمَ الطِّفْلُ صُورَةْ",
+          "was": "رَسَمَ الطِّفْلُ صُورَةً",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-007",
+          "kind": "sentence",
+          "text": "نَظَرَ الْوَلَدُ إِلَى السَّمَاءْ",
+          "was": "نَظَرَ الوَلَدُ إِلَى السَّمَاءِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-008",
+          "kind": "sentence",
+          "text": "كَتَبَ الطِّفْلُ دَرْسَهْ",
+          "was": "كَتَبَ الطِّفْلُ دَرْسَهُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-009",
+          "kind": "sentence",
+          "text": "فَتَحَ الْوَلَدُ الْبَابْ",
+          "was": "فَتَحَ الوَلَدُ البَابَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-010",
+          "kind": "sentence",
+          "text": "غَسَلَ الطِّفْلُ يَدَيْهْ",
+          "was": "غَسَلَ الطِّفْلُ يَدَيْهِ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-011",
+          "kind": "sentence",
+          "text": "نَامَ الطِّفْلُ مُبَكِّرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-012",
+          "kind": "sentence",
+          "text": "جَلَسَ الْوَلَدُ عَلَى الْكُرْسِيّْ",
+          "was": "جَلَسَ الوَلَدُ عَلَى الكُرْسِيِّ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-013",
+          "kind": "sentence",
+          "text": "أَحَبَّ الطِّفْلُ أُمَّهْ",
+          "was": "أَحَبَّ الطِّفْلُ أُمَّهُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-014",
+          "kind": "sentence",
+          "text": "سَمِعَ الْوَلَدُ الْأَذَانْ",
+          "was": "سَمِعَ الوَلَدُ الأَذَانَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-015",
+          "kind": "sentence",
+          "text": "لَبِسَ الطِّفْلُ ثَوْبَهْ",
+          "was": "لَبِسَ الطِّفْلُ ثَوْبَهُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-016",
+          "kind": "sentence",
+          "text": "زَرَعَ الْوَلَدُ شَجَرَةْ",
+          "was": "زَرَعَ الوَلَدُ شَجَرَةً",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-017",
+          "kind": "sentence",
+          "text": "حَفِظَ مُحَمَّدٌ سُورَةْ",
+          "was": "حَفِظَ مُحَمَّدٌ سُورَةً",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-018",
+          "kind": "sentence",
+          "text": "صَلَّى الْوَلَدُ الْفَجْرْ",
+          "was": "صَلَّى الوَلَدُ الفَجْرَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-019",
+          "kind": "sentence",
+          "text": "رَكَضَ الطِّفْلُ فِي الْحَدِيقَةْ",
+          "was": "رَكَضَ الطِّفْلُ فِي الحَدِيقَةِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-020",
+          "kind": "sentence",
+          "text": "سَبَحَ الْوَلَدُ فِي الْبَحْرْ",
+          "was": "سَبَحَ الوَلَدُ فِي البَحْرِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-021",
+          "kind": "sentence",
+          "text": "طَبَخَتْ أُمِّي طَعَامًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-022",
+          "kind": "sentence",
+          "text": "قَطَفَ الْوَلَدُ وَرْدَةْ",
+          "was": "قَطَفَ الوَلَدُ وَرْدَةً",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-023",
+          "kind": "sentence",
+          "text": "حَمَلَ الطِّفْلُ حَقِيبَتَهْ",
+          "was": "حَمَلَ الطِّفْلُ حَقِيبَتَهُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-024",
+          "kind": "sentence",
+          "text": "وَضَعَ الْوَلَدُ الْكِتَابْ",
+          "was": "وَضَعَ الوَلَدُ الكِتَابَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-025",
+          "kind": "sentence",
+          "text": "مَشَى الطِّفْلُ إِلَى الْبَيْتْ",
+          "was": "مَشَى الطِّفْلُ إِلَى البَيْتِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-026",
+          "kind": "sentence",
+          "text": "ضَحِكَ الْوَلَدُ كَثِيرًا",
+          "was": "ضَحِكَ الوَلَدُ كَثِيرًا",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam; FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-027",
+          "kind": "sentence",
+          "text": "بَكَى الطِّفْلُ قَلِيلًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-028",
+          "kind": "sentence",
+          "text": "نَظَّفَ الْوَلَدُ غُرْفَتَهْ",
+          "was": "نَظَّفَ الوَلَدُ غُرْفَتَهُ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-029",
+          "kind": "sentence",
+          "text": "سَاعَدَ الطِّفْلُ أَبَاهْ",
+          "was": "سَاعَدَ الطِّفْلُ أَبَاهُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-030",
+          "kind": "sentence",
+          "text": "أَطْعَمَ الْوَلَدُ الْقِطَّةْ",
+          "was": "أَطْعَمَ الوَلَدُ القِطَّةَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-031",
+          "kind": "sentence",
+          "text": "شَاهَدَ الطِّفْلُ الْقَمَرْ",
+          "was": "شَاهَدَ الطِّفْلُ القَمَرَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-032",
+          "kind": "sentence",
+          "text": "قَفَزَ الْوَلَدُ عَالِيًا",
+          "was": "قَفَزَ الوَلَدُ عَالِيًا",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam; FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-033",
+          "kind": "sentence",
+          "text": "دَخَلَ الطِّفْلُ الْفَصْلْ",
+          "was": "دَخَلَ الطِّفْلُ الفَصْلَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-034",
+          "kind": "sentence",
+          "text": "خَرَجَ الْوَلَدُ مِنَ الْبَيْتْ",
+          "was": "خَرَجَ الوَلَدُ مِنَ البَيْتِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-035",
+          "kind": "sentence",
+          "text": "عَلَّمَ الْمُعَلِّمُ الْأَطْفَالْ",
+          "was": "عَلَّمَ المُعَلِّمُ الأَطْفَالَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-036",
+          "kind": "sentence",
+          "text": "سَقَى الْوَلَدُ الزَّهْرَةْ",
+          "was": "سَقَى الوَلَدُ الزَّهْرَةَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-037",
+          "kind": "sentence",
+          "text": "طَارَ الْعُصْفُورُ فِي السَّمَاءْ",
+          "was": "طَارَ العُصْفُورُ فِي السَّمَاءِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-038",
+          "kind": "sentence",
+          "text": "أَكَلَ الطِّفْلُ مَوْزَةْ",
+          "was": "أَكَلَ الطِّفْلُ مَوْزَةً",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-039",
+          "kind": "sentence",
+          "text": "شَرِبَ الْوَلَدُ عَصِيرًا",
+          "was": "شَرِبَ الوَلَدُ عَصِيرًا",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam; FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-040",
+          "kind": "sentence",
+          "text": "رَتَّبَ الطِّفْلُ أَلْعَابَهْ",
+          "was": "رَتَّبَ الطِّفْلُ أَلْعَابَهُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-041",
+          "kind": "sentence",
+          "text": "صَنَعَ الْوَلَدُ طَائِرَةْ",
+          "was": "صَنَعَ الوَلَدُ طَائِرَةً",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-042",
+          "kind": "sentence",
+          "text": "قَالَ الطِّفْلُ الْحَمْدُ لِلَّهْ",
+          "was": "قَالَ الطِّفْلُ الحَمْدُ لِلَّهِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-043",
+          "kind": "sentence",
+          "text": "سَلَّمَ الْوَلَدُ عَلَى جَدِّهْ",
+          "was": "سَلَّمَ الوَلَدُ عَلَى جَدِّهِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-044",
+          "kind": "sentence",
+          "text": "فَرِحَ الطِّفْلُ بِالْهَدِيَّةْ",
+          "was": "فَرِحَ الطِّفْلُ بِالهَدِيَّةِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-045",
+          "kind": "sentence",
+          "text": "لَوَّنَ الْوَلَدُ الرَّسْمَةْ",
+          "was": "لَوَّنَ الوَلَدُ الرَّسْمَةَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-046",
+          "kind": "sentence",
+          "text": "أَغْلَقَ الطِّفْلُ النَّافِذَةْ",
+          "was": "أَغْلَقَ الطِّفْلُ النَّافِذَةَ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-047",
+          "kind": "sentence",
+          "text": "وَجَدَ الْوَلَدُ كَنْزًا",
+          "was": "وَجَدَ الوَلَدُ كَنْزًا",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam; FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-048",
+          "kind": "sentence",
+          "text": "تَعَلَّمَ الطِّفْلُ الْحُرُوفْ",
+          "was": "تَعَلَّمَ الطِّفْلُ الحُرُوفَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-049",
+          "kind": "sentence",
+          "text": "بَنَى الْوَلَدُ بُرْجًا",
+          "was": "بَنَى الوَلَدُ بُرْجًا",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam; FINAL MARK EXCEPTION: the tanween fath of the last word (read as a long alif in pause)",
+          "finalMarkException": "the tanween fath of the last word (read as a long alif in pause)"
+        },
+        {
+          "id": "sentences-050",
+          "kind": "sentence",
+          "text": "عَدَّ الطِّفْلُ النُّجُومْ",
+          "was": "عَدَّ الطِّفْلُ النُّجُومَ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-051",
+          "kind": "sentence",
+          "text": "رَكِبَ الْوَلَدُ الدَّرَّاجَةْ",
+          "was": "رَكِبَ الوَلَدُ الدَّرَّاجَةَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-052",
+          "kind": "sentence",
+          "text": "أَحْضَرَ الطِّفْلُ الْمَاءْ",
+          "was": "أَحْضَرَ الطِّفْلُ المَاءَ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-053",
+          "kind": "sentence",
+          "text": "جَاءَ الْوَلَدْ",
+          "was": "جَاءَ الوَلَدُ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-054",
+          "kind": "sentence",
+          "text": "نَامَ الطِّفْلْ",
+          "was": "نَامَ الطِّفْلُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-055",
+          "kind": "sentence",
+          "text": "أَكَلَ مُحَمَّدْ",
+          "was": "أَكَلَ مُحَمَّدٌ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-056",
+          "kind": "sentence",
+          "text": "شَرِبَ أَحْمَدْ",
+          "was": "شَرِبَ أَحْمَدُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-057",
+          "kind": "sentence",
+          "text": "لَعِبَ الطِّفْلْ",
+          "was": "لَعِبَ الطِّفْلُ",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-058",
+          "kind": "sentence",
+          "text": "رَسَمَ الْوَلَدُ صُورَةْ",
+          "was": "رَسَمَ الوَلَدُ صُورَةً",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-059",
+          "kind": "sentence",
+          "text": "حَفِظَ الطِّفْلُ سُورَةْ",
+          "was": "حَفِظَ الطِّفْلُ سُورَةً",
+          "review": "ADDED TASHKEEL: the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-060",
+          "kind": "sentence",
+          "text": "ذَهَبَ الْوَلَدُ إِلَى الْمَدْرَسَةْ",
+          "was": "ذَهَبَ الوَلَدُ إِلَى المَدْرَسَةِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-061",
+          "kind": "sentence",
+          "text": "جَلَسَ الطِّفْلُ عَلَى الْكُرْسِيّْ",
+          "was": "جَلَسَ الطِّفْلُ عَلَى الكُرْسِيِّ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        },
+        {
+          "id": "sentences-062",
+          "kind": "sentence",
+          "text": "مَشَى مُحَمَّدٌ إِلَى الْبَيْتْ",
+          "was": "مَشَى مُحَمَّدٌ إِلَى البَيْتِ",
+          "review": "ADDED TASHKEEL: sukun on the qamari lam, the pausal sukun on the last word"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "sentences-q1",
+      "kind": "missing",
+      "sentence": "sentences-001",
+      "blank": 1,
+      "options": [
+        "الْوَلَدُ",
+        "الطِّفْلْ",
+        "الْعُصْفُورُ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "sentences-q3",
+      "kind": "missing",
+      "sentence": "sentences-003",
+      "blank": 1,
+      "options": [
+        "مُحَمَّدٌ",
+        "أَحْمَدُ",
+        "الْعُصْفُورُ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "sentences-q4",
+      "kind": "missing",
+      "sentence": "sentences-004",
+      "blank": 1,
+      "options": [
+        "الْعُصْفُورُ",
+        "أُمِّي",
+        "الْوَلَدُ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sentences-q8",
+      "kind": "missing",
+      "sentence": "sentences-008",
+      "blank": 1,
+      "options": [
+        "أَحْمَدُ",
+        "مُحَمَّدٌ",
+        "الطِّفْلُ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sentences-q9",
+      "kind": "missing",
+      "sentence": "sentences-009",
+      "blank": 1,
+      "options": [
+        "مُحَمَّدْ",
+        "أَحْمَدُ",
+        "الْوَلَدُ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sentences-q10",
+      "kind": "missing",
+      "sentence": "sentences-010",
+      "blank": 1,
+      "options": [
+        "أَحْمَدْ",
+        "الطِّفْلُ",
+        "مُحَمَّدْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "sentences-q12",
+      "kind": "missing",
+      "sentence": "sentences-012",
+      "blank": 1,
+      "options": [
+        "الْوَلَدْ",
+        "الْوَلَدُ",
+        "الْمُعَلِّمُ"
+      ],
+      "answer": 1,
+      "review": null
+    }
+  ]
+}
