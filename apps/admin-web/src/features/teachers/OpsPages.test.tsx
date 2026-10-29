@@ -5,6 +5,7 @@ import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { LessonDto, NeedsAction, Roster, SuspensionDto } from './opsApi'
+import { chooseOption } from '@/test/select'
 
 /**
  * The supervisors' operations pages, through the real routes and API client,
@@ -125,7 +126,7 @@ describe('Needs action', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Record decision' }))
     const dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Action'), 'family_credit')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Action'), 'family_credit')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent('POST', /makeup-resolution/)).toEqual([{ action: 'family_credit' }]))
   })
@@ -208,7 +209,7 @@ describe('Schedules', () => {
 
     await userEvent.click(within(row).getByRole('button', { name: 'Pause or stop' }))
     dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Kind'), 'permanent')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Kind'), 'permanent')
     await userEvent.type(within(dialog).getByLabelText('Returns on'), '2026-11-01')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent('POST', /suspensions$/)).toHaveLength(2))

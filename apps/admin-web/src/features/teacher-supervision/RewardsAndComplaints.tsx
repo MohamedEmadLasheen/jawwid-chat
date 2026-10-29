@@ -18,6 +18,7 @@ import type { SupervisedComplaint } from './api'
 import { H, useCopy } from './copy'
 import { useDeductionDefaults, useRecordReward, useRewards, useSetDeductionDefault, useSupervisedComplaints } from './hooks'
 import { SectionIntro } from './SectionIntro'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const MONEY = /^\d{1,10}(\.\d{1,2})?$/
 
@@ -133,7 +134,7 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
         <label className="field__label" htmlFor={teacherId}>
           {tx(H.teacher)}
         </label>
-        <select id={teacherId} className="input" value={teacher} onChange={(e) => setTeacher(e.target.value)}>
+        <SearchableSelect id={teacherId} className="input" value={teacher} onValueChange={(v) => setTeacher(v)}>
           <option value="">—</option>
           {(teachers.data?.teachers ?? [])
             .filter((t) => t.isActive)
@@ -142,7 +143,7 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
                 {t.name}
               </option>
             ))}
-        </select>
+        </SearchableSelect>
         {touched && missing.teacher && <span className="field__error">{tx(H.teacher)}</span>}
       </div>
       <div className="field">

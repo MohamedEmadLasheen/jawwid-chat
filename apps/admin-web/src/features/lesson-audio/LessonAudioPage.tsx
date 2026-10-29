@@ -17,6 +17,7 @@ import {
   type StringView,
 } from './api'
 import { browserPlayer, type ClipPlayer } from './player'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './lesson-audio.css'
 
 /** PD-48 copy, Arabic and English side by side. */
@@ -309,7 +310,7 @@ function Clip(props: {
         <div className="lesson-audio__form">
           <label>
             {tx(C.category)}
-            <select value={category} onChange={(e) => setCategory(e.target.value as RejectCategory | '')}>
+            <SearchableSelect value={category} onValueChange={(v) => setCategory(v as RejectCategory | '')}>
               <option value="" disabled>
                 {tx(C.chooseCategory)}
               </option>
@@ -318,7 +319,7 @@ function Clip(props: {
                   {tx(CATEGORY[k])}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           </label>
           <label>
             {tx(C.reason)}

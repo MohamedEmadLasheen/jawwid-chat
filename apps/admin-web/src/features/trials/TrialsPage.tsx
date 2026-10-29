@@ -17,6 +17,7 @@ import '../teachers/teachers.css'
 import './trials.css'
 import { TrialBadge } from '@/shared/components/TrialBadge'
 import { ACADEMY_ZONE } from '@/core/time/academyTime'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
 type Filter = 'all' | 'decision' | 'upcoming'
@@ -302,12 +303,12 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
       )}
       <div className="field">
         <label className="field__label" htmlFor="bt-teacher">{tx(TR.teacher)}</label>
-        <select id="bt-teacher" className="select" value={teacherId} onChange={(e) => { setTeacherId(e.target.value); setSlot('') }}>
+        <SearchableSelect id="bt-teacher" className="select" value={teacherId} onValueChange={(v) => { setTeacherId(v); setSlot('') }}>
           <option value="">—</option>
           {(teachers.data?.teachers ?? []).map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
-        </select>
+        </SearchableSelect>
       </div>
       <div className="field">
         <label className="field__label" htmlFor="bt-duration">{tx(TR.duration)}</label>

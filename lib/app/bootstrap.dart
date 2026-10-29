@@ -58,6 +58,8 @@ import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../features/settings/data/parent_notice_repository.dart';
 import '../features/tasks/application/task_signal_channel.dart';
+import '../features/whiteboards/data/board_draft_files.dart';
+import '../features/whiteboards/data/whiteboards_repository.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
 import 'providers.dart';
@@ -240,6 +242,10 @@ List<Override> _httpOverrides() {
     feedbackRepositoryProvider.overrideWithValue(
       HttpFeedbackRepository(client: client),
     ),
+    // PD-39: the teacher's boards (the whiteboard).
+    whiteboardsRepositoryProvider.overrideWithValue(
+      HttpWhiteboardsRepository(client: client),
+    ),
     // PD-20: Sales' Payments (search, a family's instalments, record / void).
     salesPaymentsRepositoryProvider.overrideWithValue(
       HttpSalesPaymentsRepository(client: client),
@@ -328,7 +334,10 @@ List<Override> _httpOverrides() {
       () => AuthController(
         repository: auth,
         tokens: tokenStore,
-        clearLocalData: drafts.clearAll,
+        // Nothing a person left unsent survives their sign-out on a shared
+        // device: PD-37 chat drafts, and PD-39 board drafts (a teacher's
+        // unsaved pages). Both run even if one fails.
+        clearLocalData: () => Future.wait([drafts.clearAll(), platformBoardDraftStore().clearAll()]),
         // The transport layer needs the principal too: ownership is decided by actor id and
         // approval policy by role. Before this existed, `actorId()` returned '' and `role()`
         // silently defaulted to parent, so a signed-in teacher saw their own messages as
@@ -388,6 +397,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
     // PD-32: in memory, the fixture parent's OWN feedback.
     feedbackRepositoryProvider.overrideWithValue(FakeFeedbackRepository()),
+    // PD-39: boards in memory, for trying the Boards tab without an API.
+    whiteboardsRepositoryProvider.overrideWithValue(FakeWhiteboardsRepository()),
     // A Sales seat can join a fixture trial group (PD-20).
     trialRepositoryProvider.overrideWithValue(FakeTrialRepository(backend)),
     draftStoreProvider.overrideWithValue(drafts),

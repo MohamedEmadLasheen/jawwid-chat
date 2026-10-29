@@ -6,6 +6,7 @@ import type { NewEntry, TeacherFile } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
 import { useAddEntryFor, useSupervisionDirectory, useUpdatePersonal } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 export function Footer({ onCancel, onSave, pending }: { onCancel: () => void; onSave: () => void; pending: boolean }) {
   const tx = useCopy()
@@ -203,7 +204,7 @@ export function AddEntryDialog({
           <label className="field__label" htmlFor={teacherFieldId}>
             {tx(T.name)}
           </label>
-          <select id={teacherFieldId} className="input" value={chosen} onChange={(e) => setChosen(e.target.value)}>
+          <SearchableSelect id={teacherFieldId} className="input" value={chosen} onValueChange={(v) => setChosen(v)}>
             <option value="">{tx(T.chooseTeacher)}</option>
             {(directory.data?.teachers ?? [])
               .filter((t) => t.isActive)
@@ -212,7 +213,7 @@ export function AddEntryDialog({
                   {t.name}
                 </option>
               ))}
-          </select>
+          </SearchableSelect>
           {touched && missing.teacher && <span className="field__error">{tx(T.required)}</span>}
         </div>
       )}
@@ -222,13 +223,13 @@ export function AddEntryDialog({
             <label className="field__label" htmlFor={sourceId}>
               {tx(T.source)}
             </label>
-            <select id={sourceId} className="input" value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
+            <SearchableSelect id={sourceId} className="input" value={source} onValueChange={(v) => setSource(v as typeof source)}>
               <option value="" disabled>
                 {tx(T.source)}
               </option>
               <option value="management">{tx(T.sourceManagement)}</option>
               <option value="parent">{tx(T.sourceParent)}</option>
-            </select>
+            </SearchableSelect>
             {touched && missing.source && <span className="field__error">{tx(T.required)}</span>}
           </div>
           {needsChat && (
@@ -236,14 +237,14 @@ export function AddEntryDialog({
               <label className="field__label" htmlFor={chatId}>
                 {tx(T.familyChat)}
               </label>
-              <select id={chatId} className="input" value={chat} onChange={(e) => setChat(e.target.value)}>
+              <SearchableSelect id={chatId} className="input" value={chat} onValueChange={(v) => setChat(v)}>
                 <option value="">{tx(T.chooseFamilyChat)}</option>
                 {(directory.data?.familyChats ?? []).map((c) => (
                   <option key={c.conversationId} value={c.conversationId}>
                     {c.learnerName}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
               {touched && missing.chat && <span className="field__error">{tx(T.required)}</span>}
             </div>
           )}
@@ -251,14 +252,14 @@ export function AddEntryDialog({
             <label className="field__label" htmlFor={handlerId}>
               {tx(T.handler)}
             </label>
-            <select id={handlerId} className="input" value={handler} onChange={(e) => setHandler(e.target.value)}>
+            <SearchableSelect id={handlerId} className="input" value={handler} onValueChange={(v) => setHandler(v)}>
               <option value="">{tx(T.handlerMe)}</option>
               {(directory.data?.supervisors ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           </div>
         </>
       )}

@@ -5,6 +5,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { CertificateCategory, FullCertificate, RequestBody } from './api'
 import { C, describeError, isCode, useCopy } from './copy'
 import { useCertificateAct, useCertificateTypes, useCreateCertificate, useRecipients } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * A new request (Ops supervisor: a student; Teacher Supervision: a teacher),
@@ -129,14 +130,14 @@ export function RequestDialog({
       )}
       <label className="field">
         <span className="field__label">{tx(C.type)}</span>
-        <select className="select" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+        <SearchableSelect className="select" value={typeId} onValueChange={(v) => setTypeId(v)}>
           <option value="" />
           {(types.data?.types ?? []).map((t) => (
             <option key={t.id} value={t.id}>
               {tx({ en: t.labelEn, ar: t.labelAr })}
             </option>
           ))}
-        </select>
+        </SearchableSelect>
       </label>
       {mode !== 'accept' && (
         <label className="field">

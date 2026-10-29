@@ -2245,6 +2245,24 @@ abstract class L10n {
   /// **'Reason'**
   String get cardReason;
 
+  /// Lesson card row label: the booked make-up lesson's day, date and time follow (on the make-up card and on the excuse card it replaces).
+  ///
+  /// In en, this message translates to:
+  /// **'Make-up lesson'**
+  String get cardMakeupLesson;
+
+  /// Make-up card row label: the day, date and time of the missed lesson the make-up replaces follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Instead of the lesson on'**
+  String get cardMakeupInsteadOf;
+
+  /// PD-15: lesson card row label for the internal excuse/apology reason, shown to staff and the teacher only, never to a family.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (staff and the teacher only)'**
+  String get cardStaffReason;
+
   /// No description provided for @ticketBookMakeup.
   ///
   /// In en, this message translates to:
@@ -7440,6 +7458,576 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Terms and privacy'**
   String get lessonAudioTermsTitle;
+
+  /// PD-39 whiteboard. Teacher tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Boards'**
+  String get tabBoards;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Boards'**
+  String get boardsTitle;
+
+  /// PD-39 whiteboard. Segment: boards in use.
+  ///
+  /// In en, this message translates to:
+  /// **'Boards'**
+  String get boardsInUse;
+
+  /// PD-39 whiteboard. Segment and screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted boards'**
+  String get boardsDeleted;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'No boards yet. Create one to start drawing.'**
+  String get boardsEmpty;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in Deleted boards.'**
+  String get boardsDeletedEmpty;
+
+  /// PD-39 whiteboard. Owner-decided wording (design §11.3).
+  ///
+  /// In en, this message translates to:
+  /// **'Boards in Deleted boards are restorable for 30 days, then deleted for good within 60 days.'**
+  String get boardsDeletedFooter;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'New board'**
+  String get boardsNew;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Board name'**
+  String get boardsTitleLabel;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled board'**
+  String get boardsUntitled;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get boardsCreate;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get boardsCancel;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get boardsSave;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get boardsRename;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get boardsDuplicate;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get boardsDelete;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get boardsRestore;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Pages: {count}'**
+  String boardsPages(String count);
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {date}'**
+  String boardsUpdated(String date);
+
+  /// PD-39 whiteboard. §10 5a.
+  ///
+  /// In en, this message translates to:
+  /// **'Move «{title}» to Deleted boards?'**
+  String boardsDeleteTitle(String title);
+
+  /// PD-39 whiteboard. §10 5a.
+  ///
+  /// In en, this message translates to:
+  /// **'You can restore it until {date}. After that it is deleted for good.'**
+  String boardsDeleteBody(String date);
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted on {deleted} · Restorable until {until}'**
+  String boardsDeletedOnUntil(String deleted, String until);
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Board restored.'**
+  String get boardsRestored;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved to Deleted boards.'**
+  String get boardsMovedToTrash;
+
+  /// PD-39 whiteboard. Save status.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get boardSaved;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get boardSaving;
+
+  /// PD-39 whiteboard. Changed here, or offline.
+  ///
+  /// In en, this message translates to:
+  /// **'Not saved yet'**
+  String get boardUnsaved;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'This board changed somewhere else'**
+  String get boardConflictTitle;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'It was edited in another tab or device. Reload it to see that version, or keep yours as a new board.'**
+  String get boardConflictBody;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get boardConflictReload;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep mine as a copy'**
+  String get boardConflictCopy;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'{title} (copy)'**
+  String boardCopyTitle(String title);
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'This board has reached a limit: a page holds up to 512 KB, a board 50 pages, and your boards 25 MB of drawings.'**
+  String get boardFailedLimit;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'This change could not be saved.'**
+  String get boardFailedInvalid;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'The board could not be saved. Try again.'**
+  String get boardFailedOther;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'View only'**
+  String get boardReadOnly;
+
+  /// PD-39 whiteboard. §10 2c.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing boards needs a laptop or tablet. You can view this board here.'**
+  String get boardEditNeedsLargerScreen;
+
+  /// PD-39 whiteboard. §10 2c.
+  ///
+  /// In en, this message translates to:
+  /// **'This browser can\'t edit boards. Try the latest Chrome, Edge, Safari or Firefox.'**
+  String get boardEditBrowserUnsupported;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} of {count}'**
+  String boardPageOf(String page, String count);
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Add page'**
+  String get boardAddPage;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate page'**
+  String get boardDuplicatePage;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete page'**
+  String get boardDeletePage;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Move page earlier'**
+  String get boardMovePageEarlier;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Move page later'**
+  String get boardMovePageLater;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Lines'**
+  String get boardLayout;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Page colour'**
+  String get boardBackground;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Plain'**
+  String get boardLayoutPlain;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Ruled'**
+  String get boardLayoutRuled;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Narrow ruled'**
+  String get boardLayoutNarrowRuled;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid'**
+  String get boardLayoutGrid;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Arabic handwriting lines'**
+  String get boardLayoutArabicLines;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'White'**
+  String get boardBackgroundWhite;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Cream'**
+  String get boardBackgroundCream;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Grey'**
+  String get boardBackgroundGrey;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Blackboard green'**
+  String get boardBackgroundGreen;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get boardBackgroundDark;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get boardToolSelect;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Move the view'**
+  String get boardToolHand;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Pen'**
+  String get boardToolPen;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Highlighter'**
+  String get boardToolHighlighter;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Eraser (whole strokes)'**
+  String get boardToolEraser;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Eraser (area)'**
+  String get boardToolAreaEraser;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get boardToolText;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Rectangle'**
+  String get boardToolRect;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Circle'**
+  String get boardToolEllipse;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Triangle'**
+  String get boardToolTriangle;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Line'**
+  String get boardToolLine;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrow'**
+  String get boardToolArrow;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Stamp'**
+  String get boardToolStamp;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get boardUndo;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Redo'**
+  String get boardRedo;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom in'**
+  String get boardZoomIn;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom out'**
+  String get boardZoomOut;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Fit page'**
+  String get boardZoomFit;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete selection'**
+  String get boardDeleteSelection;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get boardColour;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Thickness'**
+  String get boardThickness;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Tajweed'**
+  String get boardTajweed;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Madd'**
+  String get boardTajweedMadd;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Ghunnah'**
+  String get boardTajweedGhunnah;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Ikhfa\''**
+  String get boardTajweedIkhfa;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Izhar'**
+  String get boardTajweedIzhar;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get boardTextTitle;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Write here'**
+  String get boardTextHint;
+
+  /// PD-39 whiteboard. A verse element before the verses update.
+  ///
+  /// In en, this message translates to:
+  /// **'Quran verse'**
+  String get boardVersePlaceholder;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Not shown in this version'**
+  String get boardElementUnknown;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get boardStampExcellent;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Well done'**
+  String get boardStampWellDone;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get boardMore;
+
+  /// PD-39 whiteboard. Review of #293: never dropped, never silently written over.
+  ///
+  /// In en, this message translates to:
+  /// **'You have changes from an earlier visit that were not saved, on pages that have changed since. Keep yours (they replace those pages) or discard them.'**
+  String get boardDraftStale;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep mine'**
+  String get boardDraftStaleKeep;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get boardDraftStaleDiscard;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Your unsaved changes couldn\'t be kept on this device. Stay on this board until it says Saved.'**
+  String get boardDraftNotKept;
+
+  /// PD-39 whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'This page is full (512 KB). Add a new page to keep writing; nothing more is saved on this one.'**
+  String get boardPageFull;
+
+  /// PD-39 whiteboard. A page action while changes are unsaved (offline).
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes have to be saved first. Try again once the board says Saved.'**
+  String get boardSaveFirst;
 
   /// PD-37: before the unsent text of a chat, in the Chats list (WhatsApp's "Draft:").
   ///

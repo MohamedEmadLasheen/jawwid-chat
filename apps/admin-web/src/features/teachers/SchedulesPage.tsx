@@ -12,6 +12,7 @@ import { useAvailability, useOp, useRoster } from './opsHooks'
 import { ChangeTeacherDialog } from './ChangeTeacherDialog'
 import { AddLessonDialog, LessonsDialog } from './LessonDialogs'
 import { WeeklyChangeDialog } from './WeeklyChangeDialog'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './teachers.css'
 
 type Learner = Roster['learners'][number]
@@ -66,12 +67,12 @@ export function SchedulesPage() {
         <QueryBoundary isLoading={roster.isLoading} error={roster.error} onRetry={() => void roster.refetch()}>
           <label className="ts-month">
             <span className="field__label">{tx(O.chooseTeacher)}</span>
-            <select className="select" value={teacherId ?? ''} onChange={(e) => pickTeacher(e.target.value)} aria-label={tx(O.chooseTeacher)}>
+            <SearchableSelect className="select" value={teacherId ?? ''} onValueChange={(v) => pickTeacher(v)} aria-label={tx(O.chooseTeacher)}>
               <option value="">{tx(O.pickTeacher)}</option>
               {teachers.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
-            </select>
+            </SearchableSelect>
           </label>
           {notice && <div className="banner banner--info" role="status">{notice}</div>}
           {teacher && (
@@ -206,9 +207,9 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
         <div className="ts-windows">
           {windows.map((w, i) => (
             <div className="ts-window" key={i} data-window={i}>
-              <select className="select" aria-label={`${tx(O.when)} ${i + 1}`} value={w.weekday} onChange={(e) => set(i, { weekday: Number(e.target.value) })}>
+              <SearchableSelect className="select" aria-label={`${tx(O.when)} ${i + 1}`} value={w.weekday} onValueChange={(v) => set(i, { weekday: Number(v) })}>
                 {WEEKDAYS.map((d) => <option key={d} value={d}>{tx(WEEKDAY[d]!)}</option>)}
-              </select>
+              </SearchableSelect>
               <input className="input" type="time" aria-label={`start ${i + 1}`} value={w.start} onChange={(e) => set(i, { start: e.target.value })} />
               <span aria-hidden>–</span>
               <input className="input" type="time" aria-label={`end ${i + 1}`} value={w.end} onChange={(e) => set(i, { end: e.target.value })} />

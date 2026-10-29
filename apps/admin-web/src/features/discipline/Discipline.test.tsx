@@ -5,6 +5,7 @@ import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { Violation } from './api'
+import { chooseOption, optionsOf } from '@/test/select'
 
 /**
  * PD-12 S2 discipline, now the Supervision page's Absences and Lateness
@@ -178,11 +179,11 @@ describe('discipline on the Supervision page', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Record lateness' }))
     const dialog = await screen.findByRole('dialog')
     const teacherSelect = within(dialog).getByRole('combobox', { name: 'Teacher' })
-    await waitFor(() => expect(within(teacherSelect).getAllByRole('option')).toHaveLength(2))
-    await userEvent.selectOptions(teacherSelect, 't-1')
+    await waitFor(async () => expect(await optionsOf(userEvent, teacherSelect)).toHaveLength(2))
+    await chooseOption(userEvent, teacherSelect, 't-1')
     const lessonSelect = await within(dialog).findByRole('combobox', { name: 'Lesson' })
-    await waitFor(() => expect(within(lessonSelect).getAllByRole('option')).toHaveLength(2))
-    await userEvent.selectOptions(lessonSelect, 'l-7')
+    await waitFor(async () => expect(await optionsOf(userEvent, lessonSelect)).toHaveLength(2))
+    await chooseOption(userEvent, lessonSelect, 'l-7')
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Minutes late' }), '15')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(calls('POST', /\/lateness$/)).toHaveLength(1))
