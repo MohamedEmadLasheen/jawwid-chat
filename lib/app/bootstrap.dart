@@ -48,6 +48,7 @@ import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/messages/data/receipt_repository.dart';
+import '../features/messages/data/typing_repository.dart';
 import '../features/notifications/data/notifications_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
@@ -55,6 +56,8 @@ import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../features/settings/data/parent_notice_repository.dart';
 import '../features/tasks/application/task_signal_channel.dart';
+import '../features/whiteboards/data/board_draft_files.dart';
+import '../features/whiteboards/data/whiteboards_repository.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
 import 'providers.dart';
@@ -203,6 +206,7 @@ List<Override> _httpOverrides() {
     ),
     // PD-37: Message info, and "me" for realtime frames (another device of mine).
     receiptRepositoryProvider.overrideWithValue(HttpReceiptRepository(client: client)),
+    typingRepositoryProvider.overrideWithValue(HttpTypingRepository(client: client)),
     viewerActorIdProvider.overrideWithValue(session.actorId),
     profilePhotoRepositoryProvider.overrideWithValue(
       HttpProfilePhotoRepository(client: client),
@@ -232,6 +236,10 @@ List<Override> _httpOverrides() {
     // PD-32: a parent's feedback about the teacher.
     feedbackRepositoryProvider.overrideWithValue(
       HttpFeedbackRepository(client: client),
+    ),
+    // PD-39: the teacher's boards (the whiteboard).
+    whiteboardsRepositoryProvider.overrideWithValue(
+      HttpWhiteboardsRepository(client: client),
     ),
     // PD-20: Sales' Payments (search, a family's instalments, record / void).
     salesPaymentsRepositoryProvider.overrideWithValue(
@@ -321,7 +329,9 @@ List<Override> _httpOverrides() {
       () => AuthController(
         repository: auth,
         tokens: tokenStore,
-        clearLocalData: () async {},
+        // PD-39: board drafts are a device's copy of a teacher's unsaved pages; a
+        // shared device keeps nobody's after sign-out.
+        clearLocalData: () => platformBoardDraftStore().clearAll(),
         // The transport layer needs the principal too: ownership is decided by actor id and
         // approval policy by role. Before this existed, `actorId()` returned '' and `role()`
         // silently defaulted to parent, so a signed-in teacher saw their own messages as
@@ -379,6 +389,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
     // PD-32: in memory, the fixture parent's OWN feedback.
     feedbackRepositoryProvider.overrideWithValue(FakeFeedbackRepository()),
+    // PD-39: boards in memory, for trying the Boards tab without an API.
+    whiteboardsRepositoryProvider.overrideWithValue(FakeWhiteboardsRepository()),
     // A Sales seat can join a fixture trial group (PD-20).
     trialRepositoryProvider.overrideWithValue(FakeTrialRepository(backend)),
     authControllerProvider.overrideWith(

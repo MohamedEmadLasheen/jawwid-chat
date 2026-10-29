@@ -6,6 +6,7 @@ import { destinationsFor, entriesOf } from '@/app/navigation'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { FamilyBilling, ParentProfile, StudentProfile, TimelineInstalment } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-17 Parent and Student Profiles, through the real routes and the real API
@@ -222,8 +223,8 @@ describe('the Parent Profile', () => {
     let dialog = screen.getByRole('dialog', { name: 'Add instalments' })
     await userEvent.type(within(dialog).getByLabelText('Label'), 'Winter term')
     await userEvent.type(within(dialog).getByLabelText('Amount of each instalment'), '1,250.50')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Number of instalments'), '3')
-    await userEvent.selectOptions(within(dialog).getByLabelText('For'), 'k-2')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Number of instalments'), '3')
+    await chooseOption(userEvent, within(dialog).getByLabelText('For'), 'k-2')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
     await waitFor(() => expect(calls('POST', /\/families\/f-1\/instalments$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/families\/f-1\/instalments$/)[0])).toEqual({

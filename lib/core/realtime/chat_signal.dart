@@ -45,7 +45,10 @@ class ChatSignal {
   /// Null only for [ChatSignalKind.reconnected].
   final String? conversationId;
 
-  /// Server sequence of the new message, for [ChatSignalKind.messageCreated].
+  /// Server sequence of the new message, for [ChatSignalKind.messageCreated]; and,
+  /// for `message.updated` (PD-50), of the changed message when it may sit above the
+  /// newest page -- a lesson card whose make-up changed -- so the thread re-reads just it.
+  /// Null for every other event.
   final int? seq;
 
   @override
@@ -103,7 +106,8 @@ ChatSignal? decodeChatSignal(String event, Object? payload) {
   final conversationId = payload['conversationId'];
   if (conversationId is! String || conversationId.isEmpty) return null;
 
-  final rawSeq = payload['seq'];
+  // Only these two name one message by seq; no other change is routed on one.
+  final rawSeq = event == ChatEventNames.messageCreated || event == ChatEventNames.messageUpdated ? payload['seq'] : null;
   final seq = rawSeq is int
       ? rawSeq
       : rawSeq is String

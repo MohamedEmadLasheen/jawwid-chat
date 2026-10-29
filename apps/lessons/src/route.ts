@@ -6,7 +6,7 @@ export type Route =
   | { kind: 'index' }
   | { kind: 'not-found' };
 
-export const ARABIC_LESSONS: readonly number[] = [1, 2, 3, 6];
+export const ARABIC_LESSONS: readonly number[] = [1, 2, 3, 6, 7];
 
 export function route(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '') || '/';

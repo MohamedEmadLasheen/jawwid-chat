@@ -7,6 +7,7 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import { ConversationInfo } from '@/features/chat/ConversationInfo'
 import { ChangeTeacherDialog } from './ChangeTeacherDialog'
 import type { LessonDto, NeedsAction, Roster, ScheduleOptions, TransferPreview } from './opsApi'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-31 in Admin Web, through the real routes and API client with `fetch`
@@ -372,7 +373,7 @@ describe('Change teacher', () => {
     await userEvent.click(within(which).getByRole('radio', { name: 'Teacher One' }))
     expect(await screen.findByText(/Mon 17:00 — free/)).toBeInTheDocument()
     await waitFor(() => expect(confirm).toBeEnabled())
-    await userEvent.selectOptions(screen.getByLabelText('Reason'), 'teacher_leaving')
+    await chooseOption(userEvent, screen.getByLabelText('Reason'), 'teacher_leaving')
     await userEvent.click(confirm)
     await waitFor(() =>
       expect(sent('POST', /\/conversations\/c-1\/teacher$/)).toEqual([{ toTeacherId: 't-2', reason: 'teacher_leaving', fromTeacherId: 't-1' }]),

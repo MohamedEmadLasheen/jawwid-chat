@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { EvaluationsSection, type TeacherRecords } from './Evaluations'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-35: evaluations and improvement plans on the Teacher File, with `fetch`
@@ -76,7 +77,7 @@ describe('evaluations on the Teacher File', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'New evaluation' }))
     const dialog = await screen.findByRole('dialog', { name: 'New evaluation' })
     expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled()
-    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Report quality' }), '3')
+    await chooseOption(userEvent, within(dialog).getByRole('combobox', { name: 'Report quality' }), '3')
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Recommendations' }), 'Add the surah range')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent('POST', /\/teachers\/t-1\/evaluations$/)).toHaveLength(1))

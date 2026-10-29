@@ -833,10 +833,6 @@ export class RealtimeGateway
    * PD-37: "is typing" comes only from a SEATED member and reaches only seated
    * members. Never stored, never sent to a PD-8 reader without a seat, never in
    * a direct teacher<->parent conversation (PD-7).
-   *
-   * Debounced BEFORE any database read: a repeat ping inside the TTL, or one
-   * inside the broadcast floor, is answered from Redis alone, so typing costs no
-   * query per keystroke. Only a ping that would announce is authorized.
    */
   @SubscribeMessage('typing.start')
   async typingStart(
@@ -845,23 +841,7 @@ export class RealtimeGateway
   ): Promise<{ ok: boolean }> {
     const conversationId = body?.conversationId;
     if (!conversationId || !isUuid(conversationId) || !client.actor) return { ok: false };
-    if (!(await this.typing.start(conversationId, client.actor.actorId))) return { ok: true };
-
-    const actor = await this.typingSeat(client, conversationId);
-    if (!actor) {
-      // Refused: forget the key, so nothing a refused ping set can look typed.
-      await this.typing.stop(conversationId, client.actor.actorId);
-      return { ok: false };
-    }
-    // RT-009: authorized per recipient at delivery; PD-37: seated recipients only.
-    await this.deliverToConversation(
-      conversationId,
-      CommEvent.TYPING_STARTED,
-      { conversationId, actorId: actor.actorId, displayName: actor.displayName },
-      client.id,
-      { countableOnly: true },
-    );
-    return { ok: true };
+    return this.startTyping(client.actor.actorId, () => this.currentActor(client), conversationId, client.id);
   }
 
   @SubscribeMessage('typing.stop')
@@ -871,42 +851,93 @@ export class RealtimeGateway
   ): Promise<{ ok: boolean }> {
     const conversationId = body?.conversationId;
     if (!conversationId || !isUuid(conversationId) || !client.actor) return { ok: false };
-    // Only a start that was announced has a key; nothing else needs a stop.
-    if (!(await this.typing.stop(conversationId, client.actor.actorId))) return { ok: true };
+    return this.stopTyping(client.actor.actorId, () => this.currentActor(client), conversationId, client.id);
+  }
 
-    // A stop needs no SEAT: someone silenced or made an observer mid-word can
-    // still clear "typing…" from everyone else's screen. It still needs READ
-    // access (RT-009): a member who was REMOVED broadcasts nothing into the
-    // room any more -- their indicator expires on the clients
-    // (realtime.typing_ttl_seconds) instead. Only seated members receive it.
-    const actor = await this.currentActor(client);
-    if (!actor) return { ok: false };
-    if (!(await this.authorize(actor, conversationId)).ok) return { ok: false };
+  /**
+   * PD-37: the HTTP form of typing (POST /conversations/:id/typing), for a
+   * client whose transport cannot send frames. The SAME rules as the socket
+   * frames, through the same two methods below. [actor] is the one the
+   * request's guard resolved moments ago (RT-009: as they are NOW), so it is
+   * not resolved a second time.
+   */
+  async typingFromHttp(actor: Actor, conversationId: string, typing: boolean): Promise<{ ok: boolean }> {
+    if (!isUuid(conversationId)) return { ok: false };
+    const resolve = async () => actor;
+    return typing
+      ? this.startTyping(actor.actorId, resolve, conversationId)
+      : this.stopTyping(actor.actorId, resolve, conversationId);
+  }
+
+  /**
+   * "Started": debounced in Redis BEFORE any database read -- a repeat ping
+   * inside the TTL, or one inside the broadcast floor, is answered from Redis
+   * alone, so a socket frame costs no query. (An HTTP ping has already paid
+   * for its request's authentication; see TypingController.) Only a ping that
+   * would announce resolves the actor (RT-009: as they are NOW) and is
+   * authorized.
+   */
+  private async startTyping(
+    actorId: string,
+    resolve: () => Promise<Actor | null>,
+    conversationId: string,
+    exceptSocketId?: string,
+  ): Promise<{ ok: boolean }> {
+    if (!(await this.typing.start(conversationId, actorId))) return { ok: true };
+    const actor = await resolve();
+    if (!actor || !(await this.seatedForTyping(actor, conversationId))) {
+      // Refused: forget the key, so nothing a refused ping set can look typed.
+      await this.typing.stop(conversationId, actorId);
+      return { ok: false };
+    }
+    // RT-009: authorized per recipient at delivery; PD-37: seated recipients only.
     await this.deliverToConversation(
       conversationId,
-      CommEvent.TYPING_STOPPED,
+      CommEvent.TYPING_STARTED,
       { conversationId, actorId: actor.actorId, displayName: actor.displayName },
-      client.id,
+      exceptSocketId,
       { countableOnly: true },
     );
     return { ok: true };
   }
 
   /**
-   * PD-37: the socket's identity NOW (RT-009), if it may read the conversation
-   * AND holds a countable seat in it (live, not silent, not observer), and the
-   * conversation is not a direct teacher<->parent one. Otherwise null.
+   * "Stopped": only a start that was announced has a key, so nothing else needs
+   * one. A stop needs no SEAT -- someone silenced or made an observer mid-word
+   * can still clear "typing…" from everyone else's screen -- but it still needs
+   * READ access (RT-009): a member who was REMOVED broadcasts nothing into the
+   * room any more, and their indicator expires on the clients instead.
    */
-  private async typingSeat(client: AuthedSocket, conversationId: string): Promise<Actor | null> {
-    const actor = await this.currentActor(client);
-    if (!actor) return null;
-    if (!(await this.authorize(actor, conversationId)).ok) return null;
+  private async stopTyping(
+    actorId: string,
+    resolve: () => Promise<Actor | null>,
+    conversationId: string,
+    exceptSocketId?: string,
+  ): Promise<{ ok: boolean }> {
+    if (!(await this.typing.stop(conversationId, actorId))) return { ok: true };
+    const actor = await resolve();
+    if (!actor) return { ok: false };
+    if (!(await this.authorize(actor, conversationId)).ok) return { ok: false };
+    await this.deliverToConversation(
+      conversationId,
+      CommEvent.TYPING_STOPPED,
+      { conversationId, actorId: actor.actorId, displayName: actor.displayName },
+      exceptSocketId,
+      { countableOnly: true },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * PD-37: may this actor type here? They may read it, hold a countable seat
+   * (live, not silent, not observer), and it is not a direct teacher<->parent
+   * conversation (PD-7: "is typing" is a signal too).
+   */
+  private async seatedForTyping(actor: Actor, conversationId: string): Promise<boolean> {
+    if (!(await this.authorize(actor, conversationId)).ok) return false;
     const membership = await this.conversations.membershipOf(conversationId, actor.actorId);
-    if (!membership || !isCountableReader(membership)) return null;
-    // PD-7: "is typing" is a signal too; a direct teacher<->parent
-    // conversation carries none.
-    if (await this.conversations.isDirectTeacherParent(conversationId)) return null;
-    return actor;
+    if (!membership || !isCountableReader(membership)) return false;
+    return !(await this.conversations.isDirectTeacherParent(conversationId));
   }
 
   @SubscribeMessage('presence.heartbeat')

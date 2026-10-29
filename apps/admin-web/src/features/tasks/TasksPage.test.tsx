@@ -7,6 +7,7 @@ import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { TasksPage } from './TasksPage'
 import type { TaskDetail, TaskSummary } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-47 PR-3: the Tasks page, with `fetch` answered at the network boundary.
@@ -155,8 +156,8 @@ describe('the list', () => {
     renderWithProviders(<TasksPage />, { staff: manager, route: '/tasks?tab=team&overdue=true' })
     await screen.findAllByRole('listitem')
     expect(sent('GET', /\/tasks\?view=team/)[0]!.url).toMatch(/overdue=true/)
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Level' }), 'high')
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Kind' }), 'financial')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Level' }), 'high')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Kind' }), 'financial')
     await waitFor(() => expect(sent('GET', /\/tasks\?view=team/).some((r) => /level=high/.test(r.url) && /category=financial/.test(r.url))).toBe(true))
     await userEvent.click(screen.getByRole('tab', { name: 'Closed' }))
     await waitFor(() => expect(sent('GET', /\/me\/tasks/).some((r) => /state=closed/.test(r.url))).toBe(true))
@@ -207,11 +208,11 @@ describe('a task', () => {
 
     await userEvent.click(within(panel).getByRole('button', { name: 'Hand on' }))
     let dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(await within(dialog).findByRole('combobox'), 'department:sales')
+    await chooseOption(userEvent, await within(dialog).findByRole('combobox'), 'department:sales')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Hand on' }))
     await waitFor(() => expect(sent('POST', /reassign$/)).toEqual([expect.objectContaining({ body: { to: { department: 'sales' } } })]))
 
-    await userEvent.selectOptions(within(panel).getByRole('combobox', { name: 'Level set by a person' }), 'high')
+    await chooseOption(userEvent, within(panel).getByRole('combobox', { name: 'Level set by a person' }), 'high')
     await waitFor(() => expect(sent('POST', /priority$/)).toEqual([expect.objectContaining({ body: { priority: 'high' } })]))
 
     await userEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
@@ -265,7 +266,7 @@ describe('giving a task', () => {
     renderWithProviders(<TasksPage />, { staff: manager })
     await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
     const dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: 'Assignee' }), 'staff:sup-1')
+    await chooseOption(userEvent, await within(dialog).findByRole('combobox', { name: 'Assignee' }), 'staff:sup-1')
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Title' }), 'Call the family back')
     await userEvent.type(within(dialog).getByLabelText('Due'), '2026-11-02')
     await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Financial' }))

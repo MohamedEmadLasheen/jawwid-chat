@@ -14,6 +14,7 @@ import {
   useVoidCarryOver,
 } from './hooks'
 import type { GroupJoin } from './api'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-42 PR-3 dialogs. Each sends one request and shows the server's answer;
@@ -88,18 +89,18 @@ export function SupervisorDialog({
       <p className="field__hint">{tx(mode === 'assign' ? OP.chooseHint : OP.suggestHint)}</p>
       <div className="field">
         <label className="field__label" htmlFor={`${uid}-sup`}>{tx(OP.supervisor)}</label>
-        <select
+        <SearchableSelect
           id={`${uid}-sup`}
           className="select"
           value={supervisorId}
           aria-invalid={touched && !supervisorId}
-          onChange={(e) => setSupervisorId(e.target.value)}
+          onValueChange={(v) => setSupervisorId(v)}
         >
           <option value="">{tx(OP.pick)}</option>
           {choices.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </select>
+        </SearchableSelect>
         {touched && !supervisorId && <span className="field__error">{tx(OP.required)}</span>}
       </div>
       {op.error ? <p className="banner banner--danger" role="alert">{describeIntakeError(op.error, locale)}</p> : null}
@@ -206,12 +207,12 @@ export function SalesOwnerDialog({
     >
       <div className="field">
         <label className="field__label" htmlFor={`${uid}-owner`}>{tx(OP.salesOwner)}</label>
-        <select id={`${uid}-owner`} className="select" value={staffId} aria-invalid={touched && !staffId} onChange={(e) => setStaffId(e.target.value)}>
+        <SearchableSelect id={`${uid}-owner`} className="select" value={staffId} aria-invalid={touched && !staffId} onValueChange={(v) => setStaffId(v)}>
           <option value="">{tx(OP.pick)}</option>
           {choices.filter((c) => c.id !== currentId).map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </select>
+        </SearchableSelect>
         {touched && !staffId && <span className="field__error">{tx(OP.required)}</span>}
       </div>
       <div className="field">

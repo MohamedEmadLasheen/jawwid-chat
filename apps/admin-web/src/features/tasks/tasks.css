@@ -57,7 +57,7 @@
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
-.tasks__filters .select {
+.tasks__filters .ss {
   inline-size: auto;
   min-inline-size: 10rem;
 }
