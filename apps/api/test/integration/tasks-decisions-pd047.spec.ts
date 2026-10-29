@@ -87,6 +87,12 @@ const settleWindow = (seconds: number) =>
 const superviseTeacher = () =>
   exec(`insert into chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id, assigned_by)
         values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`, s.teacherId, tsup, tmgr);
+/**
+ * Every pending outbox row, whatever the clocks say: the worker claims rows
+ * available by ITS clock, and a database container running ahead (seen: 33 ms
+ * on a busy Mac) would hide the rows a sweep wrote a moment ago.
+ */
+const drain = () => worker.drain(500, new Date(Date.now() + 60_000));
 const leaves = (staffId: string) =>
   g.prisma.$queryRaw`SELECT chat.deactivate_principal('staff', ${staffId}::uuid, 'left the academy', null, 'deactivated')::text`;
 
@@ -445,7 +451,7 @@ describe('each source is announced once', () => {
     const q = await askNewTimes();
     for (let i = 0; i < 2; i++) {
       await tasks.sweep();
-      await worker.drain(500);
+      await drain();
     }
     const expected: Array<[string, string, string]> = [
       ['complaint', (await taskFor(`complaint:${c}`)) as string, tmgr],

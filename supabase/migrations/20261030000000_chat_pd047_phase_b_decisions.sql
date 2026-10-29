@@ -255,12 +255,16 @@ begin
                                             and o.outcome = any (chat.work_task_makeup_causes())) then
       return;
     end if;
-    select coalesce(s.outcome_at, s.created_at) into v_since from chat.lesson s where s.id = p_source;
+    -- When this episode's own lesson was booked: null for the original (every
+    -- make-up of it comes after). Make-ups are compared with make-ups by when
+    -- each was booked -- one clock, never a booking against an outcome time.
+    select s.created_at into v_since from chat.lesson s where s.id = p_source and p_source <> v_original;
     -- Booked: the first make-up anywhere in the chain booked after this
-    -- episode began (a later one that died opens the next episode).
+    -- episode's lesson (a later one that died opens the next episode).
     select 'done', chat.work_task_lesson_actor(m.created_by_kind, m.created_by) into verdict, actor
       from chat.lesson m
-     where m.id in (select chat.work_task_makeup_chain(v_original)) and m.created_at > v_since
+     where m.id in (select chat.work_task_makeup_chain(v_original)) and m.id <> p_source
+       and (v_since is null or m.created_at > v_since)
      order by m.created_at, m.id
      limit 1;
     if verdict = 'done' then
