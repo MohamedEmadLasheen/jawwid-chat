@@ -32,7 +32,48 @@ m.checkAndCompose({ ...workerData.input, pages: workerData.input.pages.map((p) =
 
 export type ExportJob = Omit<ExportInput, 'font'>;
 
-export function composeInWorker(job: ExportJob, opts: { timeoutMs?: number; module?: string } = {}): Promise<Buffer> {
+/**
+ * At most 2 export workers at once in this API process, and 4 more exports
+ * waiting their turn; past that an export is refused with 429 at once
+ * (review of #305): a burst of exports cannot take the process's memory or
+ * CPU from everyone else.
+ */
+export const EXPORT_WORKERS = 2;
+export const EXPORT_QUEUE = 4;
+let running = 0;
+const waiting: Array<() => void> = [];
+
+async function acquire(): Promise<void> {
+  if (running < EXPORT_WORKERS) {
+    running += 1;
+    return;
+  }
+  if (waiting.length >= EXPORT_QUEUE) {
+    throw new CommError(CommErrorCode.WHITEBOARD_LIMIT, 'many exports are being made right now; try again in a minute', 429, { limit: 'exports' });
+  }
+  // The slot is handed over by release(): `running` stays as it is.
+  await new Promise<void>((resolve) => waiting.push(resolve));
+}
+
+function release(): void {
+  const next = waiting.shift();
+  if (next) next();
+  else running -= 1;
+}
+
+/** For tests: the slots in use and the exports waiting. */
+export const exportSlots = () => ({ running, waiting: waiting.length });
+
+export async function composeInWorker(job: ExportJob, opts: { timeoutMs?: number; module?: string } = {}): Promise<Buffer> {
+  await acquire();
+  try {
+    return await runWorker(job, opts);
+  } finally {
+    release();
+  }
+}
+
+function runWorker(job: ExportJob, opts: { timeoutMs?: number; module?: string }): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
     const unusable = () => new CommError(CommErrorCode.WHITEBOARD_LIMIT, 'this export could not be made; export fewer pages, or try again', 409, { limit: 'exports' });
     const worker = new Worker(SCRIPT, {

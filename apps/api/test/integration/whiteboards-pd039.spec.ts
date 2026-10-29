@@ -686,4 +686,25 @@ describe('PR-4: images and export', () => {
     for (const key of copied) expect(await blobs.get(key)).toBeNull();
     expect((await boards.list(t)).length).toBe(boardsBefore);
   });
+
+  it('a copy that would not fit is refused before a single object is copied (review of #305)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Full up' }, t);
+    await addImage(b.id, t);
+    // The rest of the 300 MB, as images already kept on another board.
+    const filler = await boards.create({ title: 'Filler' }, t);
+    await exec(
+      `insert into chat.whiteboard_asset (id, board_id, kind, object_key, content_type, byte_size, state)
+       select x.id, $1::uuid, 'image', 'whiteboards/' || $2 || '/' || $1 || '/' || x.id, 'image/png', 20971520, 'ready'
+         from (select gen_random_uuid() as id from generate_series(1, 15)) x`,
+      filler.id, org,
+    );
+    const spy = jest.spyOn(g.storage, 'copy');
+    try {
+      expect(await code(boards.duplicate(b.id, t))).toBe(CommErrorCode.WHITEBOARD_LIMIT);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

@@ -10,7 +10,7 @@ import { crc32, deflateSync } from 'node:zlib';
 import { CommError, CommErrorCode } from '../../../src/platform/errors';
 import { BOARD_IMAGE_MAX_EDGE, imageSize, inspectBoardImage, sniffBoardImage } from '../../../src/whiteboards/whiteboard-image';
 import { EXPORT_PAGE, checkExportPng, composeBoardPdf } from '../../../src/whiteboards/whiteboard-export';
-import { composeInWorker } from '../../../src/whiteboards/whiteboard-export-runner';
+import { EXPORT_QUEUE, EXPORT_WORKERS, composeInWorker, exportSlots } from '../../../src/whiteboards/whiteboard-export-runner';
 
 const FONT = join(__dirname, '..', '..', '..', 'assets', 'fonts', 'IBMPlexSansArabic-Regular.ttf');
 import { contentDisposition } from '../../../src/whiteboards/whiteboard.controller';
@@ -165,5 +165,22 @@ describe('an export page, decoded before the PDF library sees it (review of #305
     expect((late as CommError).code).toBe(CommErrorCode.WHITEBOARD_LIMIT);
     // Still here, still working.
     expect(checkExportPng(png(4, 4))).toEqual({ width: 4, height: 4 });
+  });
+});
+
+describe('export workers are capped for the whole process (review of #305)', () => {
+  it(`runs ${EXPORT_WORKERS} at once, queues ${EXPORT_QUEUE}, and refuses the next with 429 at once`, async () => {
+    const slow = join(__dirname, 'fixtures', 'export-never-answers.js');
+    const job = { title: 'B', pages: [png(4, 4)], credit: null };
+    const started = Array.from({ length: EXPORT_WORKERS + EXPORT_QUEUE }, () => composeInWorker(job, { module: slow, timeoutMs: 400 }).catch((e) => e));
+    await new Promise((r) => setImmediate(r));
+    expect(exportSlots()).toEqual({ running: EXPORT_WORKERS, waiting: EXPORT_QUEUE });
+    const refused = await composeInWorker(job, { module: slow, timeoutMs: 400 }).catch((e) => e);
+    expect([(refused as CommError).code, (refused as CommError).status]).toEqual([CommErrorCode.WHITEBOARD_LIMIT, 429]);
+    // The queued ones get their turn as the running ones end; then every slot is free again.
+    const outcomes = await Promise.all(started);
+    expect(outcomes.every((e) => (e as CommError).code === CommErrorCode.WHITEBOARD_LIMIT)).toBe(true);
+    expect(exportSlots()).toEqual({ running: 0, waiting: 0 });
+    expect((await composeInWorker(job)).subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 });

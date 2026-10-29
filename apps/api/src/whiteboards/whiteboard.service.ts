@@ -151,6 +151,8 @@ export function refusal(e: unknown): unknown {
 }
 
 /** The one size measure is the database's (chat.whiteboard_page.document_bytes); 413 like an oversized body. */
+const drawingsFull = () =>
+  limit('storage', `storage: a teacher's boards hold at most ${DOCUMENT_BYTES_PER_TEACHER / (1024 * 1024)} MB of drawings; delete boards you no longer need`);
 const pageTooLarge = () => new CommError(CommErrorCode.WHITEBOARD_LIMIT, 'page: a page holds at most 512 KB; add a page', 413, { limit: 'page' });
 
 /**
@@ -246,8 +248,12 @@ export class WhiteboardService {
 
   async duplicate(boardId: string, actor: Actor): Promise<BoardDetail> {
     const { teacherId, organizationId } = this.writer(actor);
-    const first = await this.read(async (tx) => this.ownBoard(tx, boardId, teacherId, organizationId));
-    if (first.state !== 'active') throw state('only a board in use can be duplicated');
+    const first = await this.read(async (tx) => {
+      const source = await this.ownBoard(tx, boardId, teacherId, organizationId);
+      if (source.state !== 'active') throw state('only a board in use can be duplicated');
+      await this.assertCopyFits(tx, teacherId, source.id);
+      return source;
+    });
     const plan = await this.copyImagesAhead(first, organizationId);
     return this.withCopiedImages(plan, () =>
       this.write(async (tx) => {
@@ -491,7 +497,11 @@ export class WhiteboardService {
       return { source, basis };
     };
     // Authorized before a single object is copied; checked again with the rows.
-    const first = await this.read(async (tx) => (await check(tx)).source);
+    const first = await this.read(async (tx) => {
+      const { source } = await check(tx);
+      await this.assertCopyFits(tx, target, source.id);
+      return source;
+    });
     const plan = await this.copyImagesAhead(first, first.organization_id);
     return this.withCopiedImages(plan, () =>
       this.write(async (tx) => {
@@ -967,9 +977,7 @@ export class WhiteboardService {
       SELECT COALESCE(sum(p.document_bytes), 0)::bigint AS used
         FROM chat.whiteboard_page p JOIN chat.whiteboard w ON w.id = p.board_id
        WHERE w.teacher_id = ${teacherId}::uuid`;
-    if (Number(used) > DOCUMENT_BYTES_PER_TEACHER) {
-      throw limit('storage', `storage: a teacher's boards hold at most ${DOCUMENT_BYTES_PER_TEACHER / (1024 * 1024)} MB of drawings; delete boards you no longer need`);
-    }
+    if (Number(used) > DOCUMENT_BYTES_PER_TEACHER) throw drawingsFull();
   }
 
   /**
@@ -989,6 +997,23 @@ export class WhiteboardService {
     const keys = images.map((a) => keptKey(organizationId, boardId, renamed.get(a.id) as string));
     await this.assets.copyAll(images.map((a, i) => ({ from: a.object_key, to: keys[i] as string })));
     return { boardId, images, renamed, keys };
+  }
+
+  /**
+   * Before a single object is copied (review of #305): the copy would fit the
+   * receiving teacher's board, drawing and image limits. The transaction that
+   * writes the rows checks all of them again.
+   */
+  private async assertCopyFits(tx: Tx, teacherId: string, sourceId: string): Promise<void> {
+    await this.assertBoardRoom(tx, teacherId);
+    const [{ docs, images, used }] = await tx.$queryRaw<Array<{ docs: bigint; images: bigint; used: bigint }>>`
+      SELECT (SELECT COALESCE(sum(document_bytes), 0) FROM chat.whiteboard_page WHERE board_id = ${sourceId}::uuid)::bigint AS docs,
+             (SELECT COALESCE(sum(byte_size), 0) FROM chat.whiteboard_asset
+               WHERE board_id = ${sourceId}::uuid AND state = 'ready' AND kind IN ('image', 'pdf_page'))::bigint AS images,
+             (SELECT COALESCE(sum(p.document_bytes), 0) FROM chat.whiteboard_page p JOIN chat.whiteboard w ON w.id = p.board_id
+               WHERE w.teacher_id = ${teacherId}::uuid)::bigint AS used`;
+    if (Number(used) + Number(docs) > DOCUMENT_BYTES_PER_TEACHER) throw drawingsFull();
+    await this.assertAssetQuota(tx, teacherId, Number(images));
   }
 
   private async withCopiedImages<T>(plan: ImagePlan, fn: () => Promise<T>): Promise<T> {
