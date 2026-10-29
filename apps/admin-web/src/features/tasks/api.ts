@@ -28,6 +28,11 @@ export type SourceType =
   | 'teacher_unsupervised'
   | 'trial_attendance'
   | 'trial_outcome'
+  | 'certificate_accept'
+  | 'certificate_design'
+  | 'certificate_resubmit'
+  | 'certificate_review'
+  | 'certificate_send'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 
 export interface Principal {

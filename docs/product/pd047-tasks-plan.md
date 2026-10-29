@@ -291,7 +291,9 @@ The **Needs action** page and the other source pages stay as they are. A task is
   | `approved` | `certificate_send` | the requester of record | send |
 
   Cancel withdraws the open step's task. `certificate_suggestion_decided` is information, not an action: its push stops and PD-12's card in the teacher's supervision chat remains their notice.
-  - **(B) Who holds an unclaimed request?** Every `certificates.design` holder may claim it, but a task has one assignee. **Recommended:** the category's overseer (the Operations manager for `student`, the Teachers manager for `teacher`, else the super admin): the one person who may already reassign the Designer. The task moves to the Designer when one claims it.
+  - **(B) Who holds an unclaimed request?** Every `certificates.design` holder may claim it, but a task has one assignee. **Recommended:** the category's overseer (the Operations manager for `student`, the Teachers manager for `teacher`, else the super admin): the one person who may already reassign the Designer. A claim (`start`) completes that step, by the Designer, and opens the Designer's own `in_design` step.
+  - **As built:** every state change completes the open step by whoever made it, except a cancel, which withdraws it. Each step is raised at once by a trigger on `chat.appreciation_certificate_event`, with the sweep as the backstop. The sweep also moves a pending step to its person when that person changes, for example a learner's new supervisor or a Designer who left. Certificate steps follow their source: PD-41 safeguard 1 means a manual hand-on would give someone work they may not do. Due: the step's start + 48 h.
+  - **Known noise:** a Designer who claims a request is told of the `in_design` step they just took, because a raise has no actor to leave out (`work_task_raise` signals with `actorId` null).
 
 #### 3.6.1 As built in PR-2 (#241)
 

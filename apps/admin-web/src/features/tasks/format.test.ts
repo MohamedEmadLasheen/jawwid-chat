@@ -56,8 +56,16 @@ describe('PD-47 PR-6b: work handed between people', () => {
     expect(sourceLink(task('trial_outcome', 'l1', {}))).toBe('/trials')
   })
 
+  it('a certificate step names the printed name and opens its certificate, not the event', () => {
+    const t = task('certificate_review', 'event1', { printedName: 'learner_l', certificateId: 'c7' })
+    expect(titleOf(t, en, fmt)).toBe('Review the certificate design: learner_l')
+    expect(sourceLink(t)).toBe('/certificates?id=c7')
+    expect(sourceLink(task('certificate_send', 'event1', {}))).toBe('/certificates')
+  })
+
   it('every one has its label and title in both languages, with no placeholder left unfilled', () => {
-    for (const type of ['teacher_unsupervised', 'trial_attendance', 'trial_outcome'] as const) {
+    for (const type of ['teacher_unsupervised', 'trial_attendance', 'trial_outcome', 'certificate_accept', 'certificate_design',
+      'certificate_resubmit', 'certificate_review', 'certificate_send'] as const) {
       expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
       expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
     }

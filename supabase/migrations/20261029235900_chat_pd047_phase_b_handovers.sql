@@ -11,6 +11,7 @@
 --                                                              super admin                      + 48 h
 --   trial_attendance      trial_attendance:<lesson>            the trial's teacher              the trial's end + 24 h
 --   trial_outcome         trial_outcome:<lesson>               the prospect's Sales owner       attendance + 48 h
+--   certificate_<step>    certificate_<step>:<event>           the person the step waits on     the step's start + 48 h
 --
 --   teacher_unsupervised  an active teacher with no live PD-35 supervisor of
 --                         the Teachers department. One SPELL
@@ -44,6 +45,27 @@
 --                         family_sales_owner, until it subscribes.
 --                         Neither carries the prospect's or the form's data:
 --                         ids only (G-07).
+--   certificate_<step>    a PD-41 certificate waiting on a person (owner
+--                         2026-10-29, "Yes, replace them"): one task per step,
+--                         keyed on the chat.appreciation_certificate_event
+--                         that opened it, so a certificate that loops back
+--                         gets a fresh task each round.
+--                           proposed           accept    the learner's Operations supervisor,
+--                                                        else the Operations manager
+--                           requested          design    the category's overseer (until claimed)
+--                           in_design          design    the assigned Designer
+--                           changes_requested  resubmit  the requester of record
+--                           uploaded           review    the requester of record
+--                           approved           send      the requester of record
+--                         The next state change completes it, by whoever made
+--                         it; a cancel withdraws it. RAISED AT ONCE by a
+--                         trigger on the event (each event is a hand-over to
+--                         someone else; the sweep is the backstop). The four
+--                         notifications PD-41 sent stop (the API no longer
+--                         emits them); PD-41's state machine is unchanged.
+--                         Follows its source: the requester of record alone
+--                         approves and sends (PD-41 safeguard 1), so a hand-on
+--                         by hand would give someone work they may not do.
 --
 --   RAISED by chat.work_task_sweep_handover() (the worker, every minute, its
 --   own advisory lock and batches, as PR-6a's): a teacher is often added and
@@ -142,6 +164,66 @@ as $$
     (select chat.work_task_super_admin(l.organization_id) from chat.lesson l where l.id = p_lesson));
 $$;
 
+-- The step a certificate in p_state waits on, if it waits on a person.
+create or replace function chat.work_task_certificate_step(p_state text)
+returns text
+language sql
+immutable
+set search_path = chat, pg_temp
+as $$
+  select case p_state
+    when 'proposed' then 'certificate_accept'
+    when 'requested' then 'certificate_design'
+    when 'in_design' then 'certificate_design'
+    when 'changes_requested' then 'certificate_resubmit'
+    when 'uploaded' then 'certificate_review'
+    when 'approved' then 'certificate_send'
+  end;
+$$;
+
+-- The event that opened a certificate's current state: its latest state change.
+create or replace function chat.work_task_certificate_entry(p_certificate uuid)
+returns uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select e.id from chat.appreciation_certificate_event e
+   where e.certificate_id = p_certificate and (e.from_state is null or e.from_state <> e.to_state)
+   order by e.seq desc
+   limit 1;
+$$;
+
+-- Who a certificate waits on now. The overseer (PD-41 §6: the Operations
+-- manager for a student's, the Teachers manager for a teacher's, else the
+-- super admin) holds what has nobody of its own.
+create or replace function chat.work_task_certificate_assignee(p_certificate uuid)
+returns uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  with c as (
+    select c.*, ls.supervisor_id,
+           case when c.category = 'student' then chat.work_task_operations_manager(c.organization_id)
+                else chat.work_task_teachers_manager(c.organization_id) end as overseer
+      from chat.appreciation_certificate c
+      left join chat.learner_supervision ls on ls.learner_id = c.learner_id
+     where c.id = p_certificate)
+  select case
+    when c.state = 'proposed' then
+      coalesce(case when chat.task_principal_kind(c.supervisor_id, c.organization_id) = 'staff' then c.supervisor_id end, c.overseer)
+    when c.state = 'requested' then c.overseer
+    when c.state = 'in_design' then
+      coalesce(case when chat.task_principal_kind(c.assigned_designer_id, c.organization_id) = 'staff' then c.assigned_designer_id end, c.overseer)
+    when c.state in ('changes_requested', 'uploaded', 'approved') then
+      coalesce(case when c.category = 'student' and chat.task_principal_kind(c.supervisor_id, c.organization_id) = 'staff' then c.supervisor_id end,
+               case when chat.task_principal_kind(c.requested_by_staff, c.organization_id) = 'staff' then c.requested_by_staff end,
+               c.overseer)
+  end
+  from c;
+$$;
+
 -- One stretch of a teacher without a supervisor: the task's source.
 create table chat.work_task_teacher_spell (
   id              uuid primary key default gen_random_uuid(),
@@ -185,6 +267,32 @@ begin
            case when l.outcome in ('held', 'student_no_show') then l.outcome_by end
       into verdict, actor
       from (select 1) one left join chat.lesson l on l.id = p_source and l.kind = 'trial';
+  elsif p_type like 'certificate\_%' then
+    -- The step ends at the certificate's next state change: done by whoever
+    -- made it, gone when it was a cancel.
+    declare
+      e    chat.appreciation_certificate_event;
+      nxt  chat.appreciation_certificate_event;
+    begin
+      select * into e from chat.appreciation_certificate_event where id = p_source;
+      if e.id is null then
+        verdict := 'gone';
+        return;
+      end if;
+      select * into nxt from chat.appreciation_certificate_event x
+       where x.certificate_id = e.certificate_id and x.seq > e.seq and x.from_state is distinct from x.to_state
+       order by x.seq
+       limit 1;
+      if nxt.id is null then
+        verdict := case when exists (select 1 from chat.appreciation_certificate c where c.id = e.certificate_id and c.state = e.to_state)
+                        then 'back' else 'gone' end;
+      elsif nxt.to_state = 'cancelled' then
+        verdict := 'gone';
+      else
+        verdict := 'done';
+        actor := coalesce(nxt.actor_staff_id, nxt.actor_teacher_id);
+      end if;
+    end;
   elsif p_type = 'trial_outcome' then
     select o.recorded_by into actor from chat.trial_outcome o where o.lesson_id = p_source;
     if actor is not null then
@@ -289,6 +397,37 @@ begin
 end;
 $$;
 
+-- The step a certificate event opened, if it is still the current one and
+-- waits on a person.
+create or replace function chat.work_task_raise_certificate_step(p_event uuid)
+returns uuid
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  e       chat.appreciation_certificate_event;
+  c       chat.appreciation_certificate;
+  v_type  text;
+  v_owner uuid;
+begin
+  select * into e from chat.appreciation_certificate_event where id = p_event;
+  select * into c from chat.appreciation_certificate where id = e.certificate_id;
+  v_type := chat.work_task_certificate_step(c.state);
+  if e.id is null or c.id is null or v_type is null or c.state <> e.to_state
+     or chat.work_task_certificate_entry(c.id) is distinct from e.id
+     or e.at < chat.work_task_since(v_type) then
+    return null;
+  end if;
+  v_owner := chat.work_task_certificate_assignee(c.id);
+  if v_owner is null then
+    perform chat.work_task_note_issue(c.organization_id, v_type || ':' || e.id, 'nobody live to hold this certificate step');
+    return null;
+  end if;
+  return chat.work_task_raise(c.organization_id, v_type, e.id, v_owner, null,
+                              'medium', 'operational', 'generic', e.at + interval '48 hours');
+end;
+$$;
+
 -- ===========================================================================
 -- 3. The sweep: create what is missing, reconcile what is done
 -- ===========================================================================
@@ -307,6 +446,7 @@ declare
   v_settled   integer := 0;
   v_withdrawn integer := 0;
   v_restored  integer := 0;
+  v_rerouted  integer := 0;
   v_failed    integer := 0;
   v_declined  integer := 0;
   v_more      boolean := false;
@@ -314,6 +454,7 @@ declare
   s_teacher   timestamptz;
   s_attend    timestamptz;
   s_outcome   timestamptz;
+  s_cert      timestamptz;
 begin
   if not pg_try_advisory_xact_lock(hashtext('chat.work_task_sweep_handover')) then
     return jsonb_build_object('skipped', true);
@@ -321,12 +462,17 @@ begin
   s_teacher := chat.work_task_since('teacher_unsupervised');
   s_attend := chat.work_task_since('trial_attendance');
   s_outcome := chat.work_task_since('trial_outcome');
+  -- One cut-off for every certificate step: the earliest of theirs.
+  s_cert := least(chat.work_task_since('certificate_accept'), chat.work_task_since('certificate_design'),
+                  chat.work_task_since('certificate_resubmit'), chat.work_task_since('certificate_review'),
+                  chat.work_task_since('certificate_send'));
 
   -- The issue log shrinks with these sources too: an occurrence whose task
   -- closed, or whose work is done or gone. Only these sources' keys; a key
   -- names its spell (or step), so a teacher's issue goes with its spell.
   delete from chat.work_task_source_issue i
-   where split_part(i.source_key, ':', 1) in ('teacher_unsupervised', 'trial_attendance', 'trial_outcome')
+   where split_part(i.source_key, ':', 1) in ('teacher_unsupervised', 'trial_attendance', 'trial_outcome',
+                                              'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send')
      and (exists (select 1 from chat.work_task t
                    where t.organization_id = i.organization_id and t.source_key = i.source_key
                      and t.state in ('completed', 'removed'))
@@ -358,6 +504,14 @@ begin
         from chat.lesson l
        where l.kind = 'trial' and l.outcome = 'held' and coalesce(l.outcome_at, l.ends_at) >= s_outcome
          and not exists (select 1 from chat.trial_outcome o where o.lesson_id = l.id)
+      union all
+      select c.organization_id, chat.work_task_certificate_step(c.state), e.id,
+             chat.work_task_certificate_step(c.state) || ':' || e.id, e.at, null
+        from chat.appreciation_certificate c
+        cross join lateral (select x.id, x.at from chat.appreciation_certificate_event x
+                             where x.id = chat.work_task_certificate_entry(c.id)) e
+       where c.state in ('proposed', 'requested', 'in_design', 'changes_requested', 'uploaded', 'approved')
+         and e.at >= s_cert
     ) x
      where not exists (select 1 from chat.work_task t where t.organization_id = x.org and t.source_key = x.key)
        and not exists (select 1 from chat.work_task_source_issue i
@@ -372,6 +526,7 @@ begin
             when 'teacher_unsupervised' then chat.work_task_raise_teacher_unsupervised(r.id)
             when 'trial_attendance' then chat.work_task_raise_trial_attendance(r.id)
             when 'trial_outcome' then chat.work_task_raise_trial_outcome(r.id)
+            else case when r.src like 'certificate\_%' then chat.work_task_raise_certificate_step(r.id) end
           end) is not null then
         v_raised := v_raised + 1;
       else
@@ -392,7 +547,8 @@ begin
         from chat.work_task t
         cross join lateral chat.work_task_handover_verdict(t.source_type, t.source_id) v
        where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-         and t.source_type in ('teacher_unsupervised', 'trial_attendance', 'trial_outcome')
+         and t.source_type in ('teacher_unsupervised', 'trial_attendance', 'trial_outcome',
+                               'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send')
     ) y
      where y.source_state = 'pending' and y.verdict in ('done', 'gone')
         or y.source_state = 'withdrawn' and y.verdict in ('back', 'done')
@@ -417,9 +573,33 @@ begin
     end;
   end loop;
 
+  -- A certificate step follows its person: a learner's new supervisor, a
+  -- Designer who left. Only a step still current and pending.
+  for r in
+    select y.* from (
+      select t.organization_id as org, t.source_key as key, t.assignee_staff_id as now_on,
+             chat.work_task_certificate_assignee(e.certificate_id) as owner
+        from chat.work_task t
+        join chat.appreciation_certificate_event e on e.id = t.source_id
+       where t.kind = 'system' and t.state in ('open', 'awaiting_decision') and t.source_state = 'pending'
+         and t.source_type in ('certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send')
+    ) y
+     where y.owner is not null and y.owner is distinct from y.now_on
+     limit v_left + 1
+  loop
+    if v_left = 0 then v_more := true; exit; end if;
+    v_left := v_left - 1;
+    begin
+      v_rerouted := v_rerouted + chat.work_task_reroute(r.org, r.key, r.owner, null, null);
+    exception when others then
+      v_failed := v_failed + 1;
+      perform chat.work_task_note_issue(r.org, r.key, sqlerrm);
+    end;
+  end loop;
+
   return jsonb_build_object('skipped', false, 'raised', v_raised, 'settled', v_settled, 'withdrawn', v_withdrawn,
-                            'restored', v_restored, 'failed', v_failed, 'declined', v_declined, 'more', v_more,
-                            'issues', (select count(*) from chat.work_task_source_issue));
+                            'restored', v_restored, 'rerouted', v_rerouted, 'failed', v_failed, 'declined', v_declined,
+                            'more', v_more, 'issues', (select count(*) from chat.work_task_source_issue));
 end;
 $$;
 
@@ -517,6 +697,51 @@ $$;
 create trigger trial_outcome_settles_its_task after insert on chat.trial_outcome
   for each row execute function chat.work_task_from_trial_outcome();
 
+-- A certificate's state changed: the step it ended is done by whoever moved
+-- it (gone, if it was a cancel), and the step it opened is its person's task.
+-- In PD-41's own transaction, never blocking it.
+create or replace function chat.work_task_from_certificate_event()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  v_org uuid;
+  r     record;
+begin
+  if new.from_state is not distinct from new.to_state then
+    return null;
+  end if;
+  select c.organization_id into v_org from chat.appreciation_certificate c where c.id = new.certificate_id;
+  for r in
+    select t.source_key as key
+      from chat.work_task t join chat.appreciation_certificate_event e on e.id = t.source_id
+     where e.certificate_id = new.certificate_id and e.id <> new.id
+       and t.organization_id = v_org and t.state in ('open', 'awaiting_decision')
+       and t.source_type in ('certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send')
+  loop
+    begin
+      if new.to_state = 'cancelled' then
+        perform chat.work_task_withdraw(v_org, r.key);
+      else
+        perform chat.work_task_settle(v_org, r.key, coalesce(new.actor_staff_id, new.actor_teacher_id));
+      end if;
+    exception when others then
+      perform chat.work_task_note_issue(v_org, r.key, sqlerrm);
+    end;
+  end loop;
+  begin
+    perform chat.work_task_raise_certificate_step(new.id);
+  exception when others then
+    perform chat.work_task_note_issue(v_org, coalesce(chat.work_task_certificate_step(new.to_state), 'certificate_design') || ':' || new.id, sqlerrm);
+  end;
+  return null;
+end;
+$$;
+
+create trigger certificate_event_moves_its_tasks after insert on chat.appreciation_certificate_event
+  for each row execute function chat.work_task_from_certificate_event();
+
 -- PD-43's notice is replaced by the task (owner 2026-10-29, "Replace it").
 drop trigger teacher_supervisor_left_tells_the_manager on chat.staff;
 drop function chat.notify_teacher_supervisor_left();
@@ -524,8 +749,9 @@ drop function chat.notify_teacher_supervisor_left();
 -- ===========================================================================
 -- 5. The guard: a teacher's supervisor placed by the CLI names nobody -- the
 --    system may complete that task, as PR-6a's set-up -- and a trial's
---    attendance follows its teacher, as a lesson report does. Otherwise
---    PR-6a's guard unchanged.
+--    attendance follows its teacher, as a lesson report does, and a
+--    certificate's step its person (PD-41 safeguard 1). Otherwise PR-6a's
+--    guard unchanged.
 -- ===========================================================================
 
 create or replace function chat.guard_work_task()
@@ -648,13 +874,14 @@ begin
   -- sweep moves it on to its owner once there is one again.
   if v_moved and old.kind = 'system' and not v_system
      and old.source_type in ('lesson_report', 'report_correction', 'case', 'trial_attendance',
+                             'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send',
                              'instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed')
      and not (old.source_type in ('instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed')
               and exists (select 1 from chat.staff s
                            where s.id = v_actor::uuid and s.organization_id = old.organization_id and s.role = 'super_admin'
                              and s.is_active and s.left_at is null)
               and chat.task_principal_kind(coalesce(old.assignee_staff_id, old.assignee_teacher_id), old.organization_id) is null) then
-    raise exception 'this task follows its source: change the lesson''s teacher, the case''s owner, or the family''s billing supervisor or Sales owner' using errcode = 'check_violation';
+    raise exception 'this task follows its source: change the lesson''s teacher, the case''s owner, the certificate''s Designer or requester, or the family''s billing supervisor or Sales owner' using errcode = 'check_violation';
   end if;
   if v_moved and chat.task_principal_kind(coalesce(new.assignee_staff_id, new.assignee_teacher_id), old.organization_id) is null then
     raise exception 'a task is reassigned to a live person of its organization' using errcode = 'check_violation';
@@ -749,6 +976,11 @@ revoke all on function chat.work_task_raise_trial_attendance(uuid) from public;
 revoke all on function chat.work_task_raise_trial_outcome(uuid) from public;
 revoke all on function chat.work_task_from_trial_lesson() from public;
 revoke all on function chat.work_task_from_trial_outcome() from public;
+revoke all on function chat.work_task_certificate_step(text) from public;
+revoke all on function chat.work_task_certificate_entry(uuid) from public;
+revoke all on function chat.work_task_certificate_assignee(uuid) from public;
+revoke all on function chat.work_task_raise_certificate_step(uuid) from public;
+revoke all on function chat.work_task_from_certificate_event() from public;
 revoke all on function chat.work_task_sweep_handover(integer) from public;
 revoke all on function chat.work_task_from_teacher_supervisor_assignment() from public;
 revoke all on function chat.guard_work_task() from public;

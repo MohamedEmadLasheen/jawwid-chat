@@ -26,6 +26,8 @@ import { CardPoster } from '../../src/supervision/card-poster';
 import { CertificateService } from '../../src/certificates/certificate.service';
 import { CertificateTypeService } from '../../src/certificates/certificate-type.service';
 import { LocalFsBlobStore } from '../../src/communication/attachments/blob-store';
+import { OutboxWorker } from '@communication/outbox/outbox.worker';
+import { TaskService } from '../../src/tasks/task.service';
 import { activateBackup, buildGraph, moveFamily, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -33,7 +35,7 @@ const audit = new PrismaAuditService();
 const permissions = new PermissionService(g.prisma);
 const supervision = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
 const cards = new CardPoster(g.conversations, g.outbox, audit);
-const svc = new CertificateService(g.prisma, g.conversations, supervision, cards, g.storage, audit, permissions, g.notifications, g.stories);
+const svc = new CertificateService(g.prisma, g.conversations, supervision, cards, g.storage, audit, permissions, g.stories);
 const types = new CertificateTypeService(g.prisma, g.conversations, permissions, audit);
 const blobs = new LocalFsBlobStore();
 
@@ -503,7 +505,7 @@ describe('5. the learner\'s assigned Operations supervisor decides a teacher\'s 
     return svc.suggest(s.teacherId, { learnerId: s.learnerId, title: 'Juz Amma', achievement: 'Memorized Juz Amma', achievedOn: '2026-10-01', printedName: 'learner_l' });
   }
 
-  it('another supervisor and the manager cannot; the assigned one accepts and the teacher is told', async () => {
+  it('another supervisor and the manager cannot; the assigned one accepts and the teacher is told by the card', async () => {
     const { certificate, conversationId } = await suggestion();
     expect(await code(svc.accept(s.otherAdminId, certificate.id, { typeId: juzTypeId, juz: 30 }))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
     expect(await code(svc.accept(s.managerId, certificate.id, { typeId: juzTypeId, juz: 30 }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
@@ -514,8 +516,9 @@ describe('5. the learner\'s assigned Operations supervisor decides a teacher\'s 
     const row = await g.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id: certificate.id } });
     expect(row).toMatchObject({ requestedByStaff: s.ownerId, decidedBy: s.ownerId });
     expect((await cardsIn(conversationId)).map((m) => m.card?.kind)).toEqual(['certificate_requested', 'certificate_accepted']);
+    // PD-47 PR-6b: the card is the teacher's answer; the push stopped (owner 2026-10-29).
     const told = await g.prisma.notification.findMany({ where: { recipientId: s.teacherId, templateKey: 'certificate_suggestion_decided' } });
-    expect(told).toHaveLength(1);
+    expect(told).toHaveLength(0);
   });
 
   it('an undecided suggestion can be cancelled by an overseer; a learner with no supervisor is decided by the Operations manager', async () => {
@@ -636,10 +639,87 @@ describe('7. the trail, duplicates, and what the Designer sees', () => {
     expect((await svc.list(s.otherAdminId, {})).certificates).toEqual([]);
   });
 
-  it('the Designer is told of a new request; the requester of an upload', async () => {
+  it('each step is its person\'s task now, not a notice (PD-47 PR-6b): the design, then the requester\'s review', async () => {
+    const steps = () => g.prisma.$queryRaw<Array<{ type: string; assignee: string; state: string }>>`
+      SELECT t.source_type AS type, t.assignee_staff_id::text AS assignee, t.state
+        FROM chat.work_task t JOIN chat.appreciation_certificate_event e ON e.id = t.source_id
+       ORDER BY e.seq`;
     const c = await studentRequest();
-    expect(await g.prisma.notification.count({ where: { recipientId: designerId, templateKey: 'certificate_requested' } })).toBe(1);
+    expect((await steps()).map((x) => [x.type, x.state])).toEqual([['certificate_design', 'open']]);
     await design(c.id);
-    expect(await g.prisma.notification.count({ where: { recipientId: s.ownerId, templateKey: 'certificate_uploaded' } })).toBe(1);
+    expect(await steps()).toEqual([
+      { type: 'certificate_design', assignee: expect.any(String), state: 'completed' },
+      { type: 'certificate_design', assignee: designerId, state: 'completed' },
+      { type: 'certificate_review', assignee: s.ownerId, state: 'open' },
+    ]);
+    for (const key of ['certificate_requested', 'certificate_uploaded', 'certificate_returned']) {
+      expect(await g.prisma.notification.count({ where: { templateKey: key } })).toBe(0);
+    }
+  });
+});
+
+describe('PD-47 PR-6b: each step that waits on a person is their task (owner 2026-10-29, "Yes, replace them")', () => {
+  const tasks = new TaskService(g.prisma, g.outbox);
+  const recorder = { toThread: async () => undefined, toThreadAudience: async () => undefined, toUsers: async () => undefined };
+  const worker = new OutboxWorker(g.prisma, g.notifications, recorder as never, g.identity, g.pipeline);
+  /** The certificate's step tasks, in the order its steps opened. */
+  const steps = (certificateId: string) => g.prisma.$queryRaw<Array<{ id: string; type: string; assignee: string; state: string; sourceState: string }>>`
+    SELECT t.id::text AS id, t.source_type AS type, t.assignee_staff_id::text AS assignee, t.state, t.source_state AS "sourceState"
+      FROM chat.work_task t JOIN chat.appreciation_certificate_event e ON e.id = t.source_id
+     WHERE e.certificate_id = ${certificateId}::uuid
+     ORDER BY e.seq`;
+  const closer = async (taskId: string) =>
+    (await g.prisma.$queryRaw<Array<{ by: string | null }>>`SELECT closed_by::text AS by FROM chat.work_task WHERE id = ${taskId}::uuid`)[0]!.by;
+
+  it('a teacher\'s suggestion is the learner\'s supervisor\'s to decide; accepting it completes that step, by them', async () => {
+    const { certificate } = await svc.suggest(s.teacherId, {
+      learnerId: s.learnerId, title: 'Juz Amma', achievement: 'Memorized Juz Amma', achievedOn: '2026-10-01', printedName: 'learner_l',
+    });
+    expect(await steps(certificate.id)).toEqual([expect.objectContaining({ type: 'certificate_accept', assignee: s.ownerId, state: 'open' })]);
+    await svc.accept(s.ownerId, certificate.id, { typeId: juzTypeId, juz: 30 });
+    const [accept, designStep] = await steps(certificate.id);
+    expect(accept).toMatchObject({ type: 'certificate_accept', state: 'completed' });
+    expect(await closer(accept!.id)).toBe(s.ownerId);
+    expect(designStep).toMatchObject({ type: 'certificate_design', assignee: s.managerId, state: 'open' });
+  });
+
+  it('a return is the requester\'s step; resubmitting opens a FRESH design step', async () => {
+    const c = await studentRequest();
+    await svc.start(designerId, c.id);
+    await svc.returnForChanges(designerId, c.id, { message: 'which Juz exactly? 29 or 30?' });
+    await svc.resubmit(s.ownerId, c.id);
+    expect((await steps(c.id)).map((x) => [x.type, x.assignee, x.state])).toEqual([
+      ['certificate_design', s.managerId, 'completed'],
+      ['certificate_design', designerId, 'completed'],
+      ['certificate_resubmit', s.ownerId, 'completed'],
+      ['certificate_design', s.managerId, 'open'],
+    ]);
+  });
+
+  it('an approved certificate is the requester\'s to send; a cancel withdraws the open step', async () => {
+    const ok = await approved();
+    expect((await steps(ok.id)).at(-1)).toMatchObject({ type: 'certificate_send', assignee: s.ownerId, state: 'open' });
+    const c = await studentRequest({ typeId: juzTypeId, juz: 28 });
+    await svc.cancel(s.ownerId, c.id, { reason: 'the family asked us to wait' });
+    expect((await steps(c.id)).at(-1)).toMatchObject({ type: 'certificate_design', state: 'open', sourceState: 'withdrawn' });
+  });
+
+  it('each step is announced once, to its person, with no variables -- however often the sweep runs', async () => {
+    // Drained after each step: a step already done when the worker reads it is never announced.
+    const c = await studentRequest();
+    await worker.drain(500);
+    await svc.start(designerId, c.id);
+    await worker.drain(500);
+    await design(c.id);
+    for (let i = 0; i < 2; i++) {
+      await tasks.sweep();
+      await worker.drain(500);
+    }
+    expect((await steps(c.id)).map((x) => x.type)).toEqual(['certificate_design', 'certificate_design', 'certificate_review']);
+    for (const step of await steps(c.id)) {
+      const sent = await g.prisma.notification.findMany({ where: { templateKey: 'task_assigned', dedupeKey: { startsWith: `task_assigned:${step.id}:` } } });
+      expect({ type: step.type, recipients: sent.map((p) => p.recipientId) }).toEqual({ type: step.type, recipients: [step.assignee] });
+      for (const p of sent) expect(p.variables ?? {}).toEqual({});
+    }
   });
 });

@@ -524,6 +524,8 @@ for a Designer (today it runs per open row: `certificate.service.ts:379`).
 
 ## 9. Notifications (PD-34)
 
+> **Superseded by PD-47 PR-6b (owner 2026-10-29, "Yes, replace them").** The four `task` notifications below are no longer sent. Each step that waits on a person is that person's task instead (`docs/product/pd047-tasks-plan.md` §3.6), announced once with `task_assigned`. The teacher's answer to a suggestion is PD-12's card alone. The state machine is unchanged.
+
 All are category `task`, with a `dedupeKey` per certificate and revision. They are emitted with
 `NotificationPipeline.emit` in the same transaction as the transition. Each has a template row,
 a `notification-catalog.ts` entry and an Arabic-first copy.

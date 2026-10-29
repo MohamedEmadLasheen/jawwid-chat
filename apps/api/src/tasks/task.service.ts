@@ -61,6 +61,10 @@ const SWEEP_BATCHES = 20;
 /** GET /tasks/assignees: at most this many people, and `truncated` beyond it. */
 const ASSIGNEES_MAX = 500;
 
+/** PD-47 PR-6b: a certificate step's title params, from the event that opened it. */
+const CERTIFICATE_PARAMS = Prisma.sql`(SELECT jsonb_build_object('printedName', c.printed_name, 'certificateId', c.id)
+  FROM chat.appreciation_certificate_event e JOIN chat.appreciation_certificate c ON c.id = e.certificate_id WHERE e.id = t.source_id)`;
+
 /** PD-47 PR-2: the sources of system tasks (chat.work_task_sweep). */
 export const SOURCE_TYPES = [
   'lesson_report', 'report_correction', 'lesson_ruling', 'leave_decision', 'violation_decision', 'case',
@@ -70,6 +74,7 @@ export const SOURCE_TYPES = [
   'family_unsupervised', 'teacher_setup', 'new_student_assign', 'new_student_group',
   // PD-47 PR-6b: work handed between people (chat.work_task_sweep_handover).
   'teacher_unsupervised', 'trial_attendance', 'trial_outcome',
+  'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -1037,6 +1042,12 @@ export class TaskService {
                                                FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
                WHEN 'trial_outcome' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
                                             FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
+               -- A certificate step is the event that opened it; named by the printed name, as PD-41's notices were.
+               WHEN 'certificate_accept' THEN ${CERTIFICATE_PARAMS}
+               WHEN 'certificate_design' THEN ${CERTIFICATE_PARAMS}
+               WHEN 'certificate_resubmit' THEN ${CERTIFICATE_PARAMS}
+               WHEN 'certificate_review' THEN ${CERTIFICATE_PARAMS}
+               WHEN 'certificate_send' THEN ${CERTIFICATE_PARAMS}
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,
