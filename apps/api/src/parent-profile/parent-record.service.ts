@@ -172,7 +172,8 @@ export class ParentRecordService implements OnModuleInit {
       if (countryChanged) changed.push('countryCode');
       if (subdivisionChanged) changed.push('subdivisionCode');
       if (changed.length === 0) return;
-      const country = location?.countryCode ?? current.countryCode;
+      // A request that CLEARS the country reads the number in no country (review of #296).
+      const country = location ? location.countryCode : current.countryCode;
 
       if (name !== undefined && name !== contact.name) {
         await tx.contact.update({ where: { id: contact.id }, data: { name } });
@@ -184,12 +185,15 @@ export class ParentRecordService implements OnModuleInit {
           update: { ...file, updatedBy: actor.actorId },
         });
       }
-      // PD-42 S1 (review of #294): a changed number is keyed as recorded, read in
-      // the family's (new) country; one another family holds refuses the edit.
+      // PD-42 S1 (review of #294): a changed number is keyed, read in the family's
+      // (new) country; one another family holds refuses the edit. An international
+      // number reads the same in every country, so it is recorded; a LOCAL one
+      // reads by the country, so it is a re-keyed reading that a corrected
+      // country replaces (review of #296).
       if (changed.includes('phone') && file.adminOnlyParentPhone) {
         await keyPhoneReading(tx, {
           familyId: contact.familyId, organizationId: contact.organizationId, phone: file.adminOnlyParentPhone,
-          country, actorId: actor.actorId, source: 'record',
+          country, actorId: actor.actorId, source: isInternational(file.adminOnlyParentPhone) ? 'record' : 'rekey',
         });
       }
       if (location !== undefined && (countryChanged || subdivisionChanged)) {
@@ -460,6 +464,11 @@ async function keyPhoneReading(
       if (/already in Chat|23505|P2002/.test(text)) throw taken();
       throw e;
     });
+}
+
+/** A number written with its country code (+... or 00...): it reads the same in every country. */
+function isInternational(phone: string): boolean {
+  return /^\s*(\+|00)/.test(phone);
 }
 
 const FIELD_NAME = {

@@ -603,16 +603,24 @@ describe('PD-45: a family\'s location on the Parent Profile', () => {
     expect((await keysOf(famA().id)).filter((k) => k.source === 'rekey')).toEqual([{ key_hash: contactKeyHash('phone', reading), source: 'rekey' }]);
   });
 
-  it('keys every changed number as recorded, read in the family\'s country -- alone or with a new country -- and refuses one another family holds', async () => {
+  it('keys every changed number, read in the family\'s country -- alone or with a new country -- and refuses one another family holds', async () => {
     await parents.update(m.operationsManager.id, famA().parent.id, { phone: '+20 100 765 5555' });
     expect((await keysOf(famA().id)).find((k) => k.key_hash === contactKeyHash('phone', '+201007655555'))).toEqual({
       key_hash: contactKeyHash('phone', '+201007655555'), source: 'record',
     });
-    // A new number and a new country in one edit: the number is read in the new country.
+    // A new LOCAL number and a new country in one edit: read in the new country,
+    // as a re-keyed reading -- so correcting that country replaces it.
     await parents.update(m.operationsManager.id, famA().parent.id, { phone: '050 765 4444', countryCode: 'AE' });
     expect((await keysOf(famA().id)).find((k) => k.key_hash === contactKeyHash('phone', '+971507654444'))).toEqual({
-      key_hash: contactKeyHash('phone', '+971507654444'), source: 'record',
+      key_hash: contactKeyHash('phone', '+971507654444'), source: 'rekey',
     });
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'SA' });
+    expect(await holder('+971507654444')).toBeNull();
+    expect(await holder('+966507654444')).toBe(famA().id);
+    // Clearing the country reads the number in no country: a Gulf local number then has no key at all.
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: null });
+    expect(await holder('+966507654444')).toBeNull();
+    await parents.update(m.operationsManager.id, famA().parent.id, { countryCode: 'AE' });
     // Another family's number is refused, and nothing of the edit is kept.
     await holdFor(famB().id, '+971507659999');
     expect(await code(parents.update(m.operationsManager.id, famA().parent.id, { phone: '050 765 9999' }))).toBe(CommErrorCode.PARENT_EXISTS);
