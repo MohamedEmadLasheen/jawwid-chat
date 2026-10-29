@@ -22,6 +22,7 @@ import 'package:jawwid_chat/features/messages/data/typing_repository.dart';
 import 'package:jawwid_chat/features/messages/domain/typing_sender.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_actions.dart';
+import 'package:jawwid_chat/features/messages/presentation/message_composer.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
@@ -202,6 +203,35 @@ void main() {
 
       sender.dispose(); // nothing active: no second stop
       expect(sent, [true, true, false, true, false]);
+    });
+  });
+
+  group('PD-37 the composer says "typing" only when the TEXT changes', () {
+    testWidgets('a caret move or a selection -- a tap in the field -- is not typing', (tester) async {
+      final said = <String>[];
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        theme: JawwidTheme.light(isArabic: false),
+        supportedLocales: JawwidApp.supportedLocales,
+        localizationsDelegates: const [
+          L10n.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Scaffold(body: MessageComposer(onSend: (_) {}, onDraftChanged: said.add)),
+      ));
+      await tester.enterText(find.byType(TextField), 'hello');
+      expect(said, ['hello']);
+
+      final field = tester.widget<TextField>(find.byType(TextField)).controller!;
+      field.selection = const TextSelection.collapsed(offset: 2);
+      field.selection = const TextSelection(baseOffset: 0, extentOffset: 5);
+      await tester.pump();
+      expect(said, ['hello'], reason: 'the text did not change');
+
+      await tester.enterText(find.byType(TextField), 'hello!');
+      expect(said, ['hello', 'hello!']);
     });
   });
 

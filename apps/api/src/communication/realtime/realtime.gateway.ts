@@ -751,19 +751,25 @@ export class RealtimeGateway
   /**
    * PD-37: the HTTP form of typing (POST /conversations/:id/typing), for a
    * client whose transport cannot send frames. The SAME rules as the socket
-   * frames, through the same two methods below.
+   * frames, through the same two methods below. [actor] is the one the
+   * request's guard resolved moments ago (RT-009: as they are NOW), so it is
+   * not resolved a second time.
    */
-  async typingFromHttp(actorId: string, conversationId: string, typing: boolean): Promise<{ ok: boolean }> {
+  async typingFromHttp(actor: Actor, conversationId: string, typing: boolean): Promise<{ ok: boolean }> {
     if (!isUuid(conversationId)) return { ok: false };
-    const resolve = () => this.conversations.requireActor(actorId).catch(() => null);
-    return typing ? this.startTyping(actorId, resolve, conversationId) : this.stopTyping(actorId, resolve, conversationId);
+    const resolve = async () => actor;
+    return typing
+      ? this.startTyping(actor.actorId, resolve, conversationId)
+      : this.stopTyping(actor.actorId, resolve, conversationId);
   }
 
   /**
    * "Started": debounced in Redis BEFORE any database read -- a repeat ping
    * inside the TTL, or one inside the broadcast floor, is answered from Redis
-   * alone, so typing costs no query per keystroke. Only a ping that would
-   * announce resolves the actor (RT-009: as they are NOW) and is authorized.
+   * alone, so a socket frame costs no query. (An HTTP ping has already paid
+   * for its request's authentication; see TypingController.) Only a ping that
+   * would announce resolves the actor (RT-009: as they are NOW) and is
+   * authorized.
    */
   private async startTyping(
     actorId: string,
