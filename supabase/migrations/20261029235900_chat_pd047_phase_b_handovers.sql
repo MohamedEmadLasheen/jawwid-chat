@@ -52,10 +52,14 @@
 --                         gets a fresh task each round.
 --                           proposed           accept    the learner's Operations supervisor,
 --                                                        else the Operations manager
---                           requested          design    the category's overseer (until claimed)
+--                           requested          design    the org's one Designer, else the category's
+--                                                        overseer, who (or the super admin) hands it to
+--                                                        a Designer (department head, revised 2026-10-29)
 --                           in_design          design    the assigned Designer
 --                           changes_requested  resubmit  the requester of record
---                           uploaded           review    the requester of record
+--                           uploaded           review    the requester of record -- or, when they
+--                                                        uploaded it themselves, their active cover
+--                                                        (PD-41: the uploader never approves)
 --                           approved           send      the requester of record
 --                         The next state change completes it, by whoever made
 --                         it; a cancel withdraws it. RAISED AT ONCE by a
@@ -65,7 +69,24 @@
 --                         emits them); PD-41's state machine is unchanged.
 --                         Follows its source: the requester of record alone
 --                         approves and sends (PD-41 safeguard 1), so a hand-on
---                         by hand would give someone work they may not do.
+--                         by hand would give someone work they may not do --
+--                         except an unclaimed request, which its overseer or
+--                         the super admin hands to a live Designer
+--                         (certificates.design).
+--
+--   SPELLS open when the teacher loses their supervisor, at that moment: a
+--   trigger on the assignment's DELETE / UPDATE and on chat.staff (a
+--   supervisor deactivated). A supervisor cannot leave the Teachers
+--   department while they hold teachers (PD-35's
+--   chat.guard_teacher_supervisor_move), so that path needs none. The sweep
+--   opens one for anything they missed.
+--
+--   ORPHANS: a task whose assignee left with nobody live to follow is
+--   recorded as `orphaned:`; while it is, the super admin may hand it to
+--   anyone live, even one that follows its source (the guard).
+--
+--   The race of an assignment committing while the sweep raises is accepted:
+--   the settle window makes it rare, and the next reconcile settles it.
 --
 --   RAISED by chat.work_task_sweep_handover() (the worker, every minute, its
 --   own advisory lock and batches, as PR-6a's): a teacher is often added and
@@ -200,34 +221,107 @@ as $$
    limit 1;
 $$;
 
--- Who a certificate waits on now. The overseer (PD-41 §6: the Operations
--- manager for a student's, the Teachers manager for a teacher's, else the
--- super admin) holds what has nobody of its own.
-create or replace function chat.work_task_certificate_assignee(p_certificate uuid)
+-- A certificate's overseer (PD-41 §6): the Operations manager for a
+-- student's, the Teachers manager for a teacher's, else the super admin.
+create or replace function chat.work_task_certificate_overseer(p_certificate uuid)
 returns uuid
 language sql
 stable
 set search_path = chat, pg_temp
 as $$
-  with c as (
-    select c.*, ls.supervisor_id,
-           case when c.category = 'student' then chat.work_task_operations_manager(c.organization_id)
-                else chat.work_task_teachers_manager(c.organization_id) end as overseer
-      from chat.appreciation_certificate c
-      left join chat.learner_supervision ls on ls.learner_id = c.learner_id
-     where c.id = p_certificate)
-  select case
-    when c.state = 'proposed' then
-      coalesce(case when chat.task_principal_kind(c.supervisor_id, c.organization_id) = 'staff' then c.supervisor_id end, c.overseer)
-    when c.state = 'requested' then c.overseer
-    when c.state = 'in_design' then
-      coalesce(case when chat.task_principal_kind(c.assigned_designer_id, c.organization_id) = 'staff' then c.assigned_designer_id end, c.overseer)
-    when c.state in ('changes_requested', 'uploaded', 'approved') then
-      coalesce(case when c.category = 'student' and chat.task_principal_kind(c.supervisor_id, c.organization_id) = 'staff' then c.supervisor_id end,
-               case when chat.task_principal_kind(c.requested_by_staff, c.organization_id) = 'staff' then c.requested_by_staff end,
-               c.overseer)
-  end
-  from c;
+  select case when c.category = 'student' then chat.work_task_operations_manager(c.organization_id)
+              else chat.work_task_teachers_manager(c.organization_id) end
+    from chat.appreciation_certificate c
+   where c.id = p_certificate;
+$$;
+
+-- The organization's one live Designer (certificates.design), if it has
+-- exactly one. The super admin holds every key, so is not counted.
+create or replace function chat.work_task_sole_designer(p_org uuid)
+returns uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select case when count(*) = 1 then (array_agg(s.id))[1] end
+    from chat.staff s
+   where s.organization_id = p_org and s.is_active and s.left_at is null and s.role <> 'super_admin'
+     and chat.staff_has_permission(s.id, 'certificates.design');
+$$;
+
+-- Who a certificate waits on now; the overseer holds what has nobody of its own.
+create or replace function chat.work_task_certificate_assignee(p_certificate uuid)
+returns uuid
+language plpgsql
+stable
+set search_path = chat, pg_temp
+as $$
+declare
+  c          chat.appreciation_certificate;
+  v_sup      uuid;
+  v_overseer uuid;
+  v_req      uuid;
+  v_uploader uuid;
+begin
+  select * into c from chat.appreciation_certificate where id = p_certificate;
+  if c.id is null then
+    return null;
+  end if;
+  select ls.supervisor_id into v_sup from chat.learner_supervision ls where ls.learner_id = c.learner_id;
+  if chat.task_principal_kind(v_sup, c.organization_id) is distinct from 'staff' then
+    v_sup := null;
+  end if;
+  v_overseer := chat.work_task_certificate_overseer(c.id);
+  if c.state = 'proposed' then
+    return coalesce(v_sup, v_overseer);
+  elsif c.state = 'requested' then
+    return coalesce(chat.work_task_sole_designer(c.organization_id), v_overseer);
+  elsif c.state = 'in_design' then
+    return coalesce(case when chat.task_principal_kind(c.assigned_designer_id, c.organization_id) = 'staff' then c.assigned_designer_id end,
+                    v_overseer);
+  elsif c.state in ('changes_requested', 'uploaded', 'approved') then
+    v_req := coalesce(case when c.category = 'student' then v_sup end,
+                      case when chat.task_principal_kind(c.requested_by_staff, c.organization_id) = 'staff' then c.requested_by_staff end,
+                      v_overseer);
+    if c.state = 'uploaded' then
+      -- PD-41: whoever uploaded a design never approves it. A requester who
+      -- uploaded it themselves is reviewed by their active PD-33 cover, who
+      -- acts as them (chat.certificate_acts_as). With none, it stays theirs:
+      -- PD-41 then allows only a redesign or a cancel.
+      select f.uploaded_by into v_uploader from chat.appreciation_certificate_file f where f.id = c.current_file_id;
+      if v_uploader is not distinct from v_req then
+        return coalesce(
+          (select s.id from chat.staff s
+            where s.organization_id = c.organization_id and s.id <> v_req and s.is_active and s.left_at is null
+              and chat.backup_is_active(v_req, s.id, now())
+            order by s.id
+            limit 1),
+          v_req);
+      end if;
+    end if;
+    return v_req;
+  end if;
+  return null;
+end;
+$$;
+
+-- May p_actor hand this task on by hand as an unclaimed request's design
+-- step? Its overseer or the super admin, while the request is unclaimed.
+create or replace function chat.work_task_certificate_hand_on(p_task uuid, p_actor uuid)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select coalesce((
+    select t.source_type = 'certificate_design' and e.to_state = 'requested'
+           and chat.work_task_certificate_entry(e.certificate_id) = e.id
+           and (p_actor = chat.work_task_certificate_overseer(e.certificate_id)
+                or exists (select 1 from chat.staff s
+                            where s.id = p_actor and s.organization_id = t.organization_id and s.role = 'super_admin'
+                              and s.is_active and s.left_at is null))
+      from chat.work_task t join chat.appreciation_certificate_event e on e.id = t.source_id
+     where t.id = p_task), false);
 $$;
 
 -- One stretch of a teacher without a supervisor: the task's source.
@@ -244,6 +338,24 @@ comment on table chat.work_task_teacher_spell is
   'PD-47 PR-6b: one stretch of a teacher without a supervisor -- the source of a teacher_unsupervised task. Closed when a supervisor is assigned.';
 
 create unique index work_task_teacher_spell_one_open on chat.work_task_teacher_spell (teacher_id) where closed_at is null;
+
+-- A teacher who has just lost their supervisor: their spell opens now (the
+-- moment the records would otherwise lose). Nothing if they are supervised,
+-- gone, or already in a spell.
+create or replace function chat.work_task_open_teacher_spell(p_teacher uuid)
+returns void
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  insert into chat.work_task_teacher_spell (organization_id, teacher_id, opened_at)
+  select t.organization_id, t.id, clock_timestamp()
+    from chat.teacher t
+   where t.id = p_teacher and t.is_active and t.left_at is null
+     and chat.work_task_teacher_supervisor(t.id) is null
+  on conflict (teacher_id) where closed_at is null do nothing;
+end;
+$$;
 
 -- Who a hand-over task belongs to now, by its source (as its raise names it).
 create or replace function chat.work_task_handover_owner(p_type text, p_source uuid)
@@ -343,10 +455,11 @@ language plpgsql
 set search_path = chat, pg_temp
 as $$
 declare
-  t       chat.teacher;
-  v_since timestamptz;
-  v_spell uuid;
-  v_owner uuid;
+  t        chat.teacher;
+  v_since  timestamptz;
+  v_opened timestamptz;
+  v_spell  uuid;
+  v_owner  uuid;
 begin
   -- One writer per teacher, without waiting: a busy teacher is the next sweep's.
   if not pg_try_advisory_xact_lock(hashtextextended('chat.work_task_teacher_spell:' || p_teacher, 0)) then
@@ -354,15 +467,24 @@ begin
   end if;
   select * into t from chat.teacher where id = p_teacher;
   v_since := chat.work_task_unsupervised_since(p_teacher);
-  if t.id is null or not t.is_active or t.left_at is not null or v_since is null
-     or v_since < chat.work_task_since('teacher_unsupervised') then
+  if t.id is null or not t.is_active or t.left_at is not null or v_since is null then
     return null;
   end if;
-  select sp.id into v_spell from chat.work_task_teacher_spell sp where sp.teacher_id = t.id and sp.closed_at is null;
+  -- A spell a trigger opened knows when it began; else the records' best.
+  select sp.id, sp.opened_at into v_spell, v_opened
+    from chat.work_task_teacher_spell sp where sp.teacher_id = t.id and sp.closed_at is null;
+  v_since := coalesce(v_opened, v_since);
+  if v_since < chat.work_task_since('teacher_unsupervised') then
+    return null;
+  end if;
   if v_spell is null then
     insert into chat.work_task_teacher_spell (organization_id, teacher_id, opened_at)
     values (t.organization_id, t.id, v_since)
+    on conflict (teacher_id) where closed_at is null do nothing
     returning id into v_spell;
+    if v_spell is null then
+      select sp.id into v_spell from chat.work_task_teacher_spell sp where sp.teacher_id = t.id and sp.closed_at is null;
+    end if;
   end if;
   v_owner := chat.work_task_teachers_manager(t.organization_id);
   if v_owner is null then
@@ -525,11 +647,11 @@ begin
   for r in
     select x.org, x.src, x.id, x.key from (
       select t.organization_id as org, 'teacher_unsupervised' as src, t.id,
-             'teacher_unsupervised:' || coalesce(sp.id, t.id) as key, u.since as at, sp.id as spell
+             'teacher_unsupervised:' || coalesce(sp.id, t.id) as key, coalesce(sp.opened_at, u.since) as at, sp.id as spell
         from chat.teacher t
         cross join lateral (select chat.work_task_unsupervised_since(t.id) as since) u
         left join chat.work_task_teacher_spell sp on sp.teacher_id = t.id and sp.closed_at is null
-       where t.is_active and t.left_at is null and u.since is not null and u.since >= s_teacher
+       where t.is_active and t.left_at is null and u.since is not null and coalesce(sp.opened_at, u.since) >= s_teacher
       union all
       select l.organization_id, 'trial_attendance', l.id, 'trial_attendance:' || l.id, l.ends_at, null
         from chat.lesson l
@@ -618,13 +740,16 @@ begin
   for r in
     select y.* from (
       select t.organization_id as org, t.source_key as key, t.assignee_staff_id as now_on,
-             chat.work_task_certificate_assignee(e.certificate_id) as owner
+             chat.work_task_certificate_assignee(e.certificate_id) as owner, e.to_state = 'requested' as requested
         from chat.work_task t
         join chat.appreciation_certificate_event e on e.id = t.source_id
        where t.kind = 'system' and t.state in ('open', 'awaiting_decision') and t.source_state = 'pending'
          and t.source_type in ('certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send')
     ) y
      where y.owner is not null and y.owner is distinct from y.now_on
+       -- An unclaimed request handed to a live Designer stays theirs.
+       and not (y.requested and chat.task_principal_kind(y.now_on, y.org) = 'staff'
+                and chat.staff_has_permission(y.now_on, 'certificates.design'))
      limit v_left + 1
   loop
     if v_left = 0 then v_more := true; exit; end if;
@@ -682,7 +807,7 @@ begin
     if v_left = 0 then v_more := true; exit; end if;
     v_left := v_left - 1;
     perform chat.work_task_note_issue(r.org, r.key,
-      'orphaned: its assignee left and nobody live follows (the Teachers or Sales manager, the trial''s teacher, the certificate''s person, the super admin)');
+      'orphaned: its assignee left and nobody live follows (the Teachers or Sales manager, the trial''s teacher, the certificate''s person): the super admin may reassign it');
     v_orphaned := v_orphaned + 1;
   end loop;
 
@@ -715,6 +840,8 @@ begin
       if v_spell is not null then
         perform chat.work_task_settle(new.organization_id, 'teacher_unsupervised:' || v_spell, new.assigned_by);
       end if;
+    else
+      perform chat.work_task_open_teacher_spell(new.teacher_id);
     end if;
   exception when others then
     perform chat.work_task_note_issue(new.organization_id, 'teacher_unsupervised:' || coalesce(v_spell::text, new.teacher_id::text), sqlerrm);
@@ -726,6 +853,53 @@ $$;
 create trigger teacher_supervisor_assignment_settles_its_task
   after insert or update of supervisor_id on chat.teacher_supervisor_assignment
   for each row execute function chat.work_task_from_teacher_supervisor_assignment();
+
+-- A supervisor unassigned (PD-43's assign(null) deletes the row): the spell
+-- opens now.
+create or replace function chat.work_task_from_teacher_supervisor_unassigned()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  begin
+    perform chat.work_task_open_teacher_spell(old.teacher_id);
+  exception when others then
+    perform chat.work_task_note_issue(old.organization_id, 'teacher_unsupervised:' || old.teacher_id, sqlerrm);
+  end;
+  return null;
+end;
+$$;
+
+create trigger teacher_supervisor_unassigned_opens_a_spell after delete on chat.teacher_supervisor_assignment
+  for each row execute function chat.work_task_from_teacher_supervisor_unassigned();
+
+-- A teacher supervisor deactivated: each of their teachers' spells opens now
+-- (what PD-43's dropped notice trigger caught; never blocking it).
+create or replace function chat.work_task_from_staff_leaving()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  r record;
+begin
+  for r in select a.teacher_id from chat.teacher_supervisor_assignment a where a.supervisor_id = new.id
+  loop
+    begin
+      perform chat.work_task_open_teacher_spell(r.teacher_id);
+    exception when others then
+      perform chat.work_task_note_issue(new.organization_id, 'teacher_unsupervised:' || r.teacher_id, sqlerrm);
+    end;
+  end loop;
+  return null;
+end;
+$$;
+
+create trigger staff_leaving_opens_teacher_spells after update of is_active, left_at on chat.staff
+  for each row
+  when ((old.is_active and old.left_at is null) and not (new.is_active and new.left_at is null))
+  execute function chat.work_task_from_staff_leaving();
 
 -- A trial's attendance recorded, the trial moved or cancelled, its teacher
 -- changed, or its attendance corrected by Sales. One function per table
@@ -840,8 +1014,9 @@ drop function chat.notify_teacher_supervisor_left();
 -- 5. The guard: a teacher's supervisor placed by the CLI names nobody -- the
 --    system may complete that task, as PR-6a's set-up -- and a trial's
 --    attendance follows its teacher, as a lesson report does, and a
---    certificate's step its person (PD-41 safeguard 1). Otherwise PR-6a's
---    guard unchanged.
+--    certificate's step its person (PD-41 safeguard 1) -- save an unclaimed
+--    request handed to a Designer, and any orphan the super admin hands on.
+--    Otherwise PR-6a's guard unchanged.
 -- ===========================================================================
 
 create or replace function chat.guard_work_task()
@@ -970,7 +1145,20 @@ begin
               and exists (select 1 from chat.staff s
                            where s.id = v_actor::uuid and s.organization_id = old.organization_id and s.role = 'super_admin'
                              and s.is_active and s.left_at is null)
-              and chat.task_principal_kind(coalesce(old.assignee_staff_id, old.assignee_teacher_id), old.organization_id) is null) then
+              and chat.task_principal_kind(coalesce(old.assignee_staff_id, old.assignee_teacher_id), old.organization_id) is null)
+     -- PR-6b: an unclaimed certificate request, handed by its overseer or the
+     -- super admin to a live Designer.
+     and not (chat.work_task_certificate_hand_on(old.id, v_actor::uuid)
+              and new.assignee_staff_id is not null
+              and chat.staff_has_permission(new.assignee_staff_id, 'certificates.design'))
+     -- PR-6b: an orphan (the sweep found nobody live to follow), handed on by
+     -- the super admin.
+     and not (exists (select 1 from chat.work_task_source_issue i
+                       where i.organization_id = old.organization_id and i.source_key = old.source_key
+                         and i.reason like 'orphaned:%')
+              and exists (select 1 from chat.staff s
+                           where s.id = v_actor::uuid and s.organization_id = old.organization_id and s.role = 'super_admin'
+                             and s.is_active and s.left_at is null)) then
     raise exception 'this task follows its source: change the lesson''s teacher, the case''s owner, the certificate''s Designer or requester, or the family''s billing supervisor or Sales owner' using errcode = 'check_violation';
   end if;
   if v_moved and chat.task_principal_kind(coalesce(new.assignee_staff_id, new.assignee_teacher_id), old.organization_id) is null then
@@ -1070,6 +1258,12 @@ revoke all on function chat.work_task_from_trial_outcome() from public;
 revoke all on function chat.work_task_certificate_step(text) from public;
 revoke all on function chat.work_task_certificate_entry(uuid) from public;
 revoke all on function chat.work_task_certificate_assignee(uuid) from public;
+revoke all on function chat.work_task_certificate_overseer(uuid) from public;
+revoke all on function chat.work_task_sole_designer(uuid) from public;
+revoke all on function chat.work_task_certificate_hand_on(uuid, uuid) from public;
+revoke all on function chat.work_task_open_teacher_spell(uuid) from public;
+revoke all on function chat.work_task_from_teacher_supervisor_unassigned() from public;
+revoke all on function chat.work_task_from_staff_leaving() from public;
 revoke all on function chat.work_task_raise_certificate_step(uuid) from public;
 revoke all on function chat.work_task_from_certificate_event() from public;
 revoke all on function chat.work_task_sweep_handover(integer) from public;

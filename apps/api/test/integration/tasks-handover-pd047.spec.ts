@@ -13,6 +13,10 @@
  *                         Sales owner's; done when the outcome is recorded.
  *                         Two tasks, each person seeing only their own step
  *                         (owner 2026-10-29, "Two tasks")
+ *   certificate_<step>    a PD-41 step waiting on a person: an unclaimed
+ *                         request is the one Designer's, else the overseer's
+ *                         to hand to a Designer (department head, revised
+ *                         2026-10-29); an orphan the super admin hands on
  *   every one             raised by the sweep and announced once
  *                         (task_assigned, ids only)
  *
@@ -27,6 +31,11 @@ import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { TrialService } from '../../src/lessons/trial.service';
 import { NewStudentsService } from '../../src/new-students/new-students.service';
 import { CardPoster } from '../../src/supervision/card-poster';
+import { PermissionService } from '@platform/permissions/permission.service';
+import { SupervisionConversationService } from '../../src/supervision/supervision-conversation.service';
+import { CertificateService } from '../../src/certificates/certificate.service';
+import { CertificateTypeService } from '../../src/certificates/certificate-type.service';
+import { CommError, CommErrorCode } from '@platform/errors';
 import { TaskService } from '../../src/tasks/task.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
@@ -39,11 +48,18 @@ const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, 
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, new CardPoster(g.conversations, g.outbox, audit), g.config, audit);
 const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
+const permissions = new PermissionService(g.prisma);
+const certs = new CertificateService(
+  g.prisma, g.conversations, new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit),
+  new CardPoster(g.conversations, g.outbox, audit), g.storage, audit, permissions, g.stories,
+);
+const types = new CertificateTypeService(g.prisma, g.conversations, permissions, audit);
 const recorder = { toThread: async () => undefined, toThreadAudience: async () => undefined, toUsers: async () => undefined };
 const worker = new OutboxWorker(g.prisma, g.notifications, recorder as never, g.identity, g.pipeline);
 
 const MIN = 60_000;
-const SOURCES = ['teacher_unsupervised', 'trial_attendance', 'trial_outcome'];
+const SOURCES = ['teacher_unsupervised', 'trial_attendance', 'trial_outcome',
+  'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send'];
 
 let s: Scenario;
 let sa: string;
@@ -76,6 +92,55 @@ const supervise = (teacherId: string, supervisorId: string, by: string | null) =
                                             assigned_at = now()`,
     teacherId, supervisorId, by,
   );
+const staff = (id: string) => ({ kind: 'staff', id });
+async function code(p: Promise<unknown>): Promise<string> {
+  try {
+    await p;
+  } catch (e) {
+    if (e instanceof CommError) return e.code;
+    throw e;
+  }
+  throw new Error('expected a refusal');
+}
+/** Runs fn while every write to a task is refused: a trigger's task step fails as a guard rejection would. */
+async function refusingTaskChanges(fn: () => Promise<unknown>) {
+  await exec(`alter table chat.work_task add constraint pd047_spec_refuses_changes check (revision < 0) not valid`);
+  try {
+    await fn();
+  } finally {
+    await exec(`alter table chat.work_task drop constraint pd047_spec_refuses_changes`);
+  }
+}
+const stateOf = async (id: string) =>
+  (await g.prisma.$queryRaw<Array<{ state: string; source_state: string; assignee: string | null }>>`
+    SELECT state, source_state, coalesce(assignee_staff_id, assignee_teacher_id)::text AS assignee FROM chat.work_task WHERE id = ${id}::uuid`)[0];
+/** A specialist holding only certificates.view + design (PD-40), as PD-41's spec makes its Designer. */
+async function designer(label: string): Promise<string> {
+  const id = randomUUID();
+  await exec(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, $2, 'specialist', true)`, id, `designer_${label}`);
+  const [{ id: roleId }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT chat.define_access_role(${`pd047_designer_${randomUUID().slice(0, 8)}`}, 'Designer (spec)', 'المصمم', null, 'specialist',
+                                   ${['certificates.view', 'certificates.design']}::text[], 'spec', ${sa}::uuid)::text AS id`;
+  await g.prisma.$queryRaw`SELECT chat.grant_access_role(${id}::uuid, ${roleId}::uuid, 'spec', ${sa}::uuid)`;
+  return id;
+}
+/** A student certificate requested by the learner's supervisor (PD-41). */
+async function certificateRequest(): Promise<string> {
+  await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+  const typeId = (await types.create(sa, {
+    category: 'student', key: `juz_${randomUUID().slice(0, 8)}`, labelEn: "Juz' completed", labelAr: 'إتمام جزء', needsJuz: true,
+  })).type.id;
+  const out = await certs.create(s.ownerId, {
+    category: 'student', typeId, learnerId: s.learnerId, printedName: 'learner_l', juz: 30, requestKey: randomUUID(),
+  });
+  return (out.certificate as { id: string }).id;
+}
+/** A certificate's step tasks, in the order its steps opened. */
+const steps = (certificateId: string) => g.prisma.$queryRaw<Array<{ id: string; type: string; assignee: string; state: string }>>`
+  SELECT t.id::text AS id, t.source_type AS type, t.assignee_staff_id::text AS assignee, t.state
+    FROM chat.work_task t JOIN chat.appreciation_certificate_event e ON e.id = t.source_id
+   WHERE e.certificate_id = ${certificateId}::uuid
+   ORDER BY e.seq`;
 const taskFor = async (key: string) =>
   (await g.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.work_task WHERE source_key = ${key}`)[0]?.id;
 /** A trial Sales booked for a prospect, over an hour or more ago, with nothing recorded yet. */
@@ -190,6 +255,31 @@ describe('a teacher without a supervisor', () => {
     expect(await spellTasks(s.teacherId)).toHaveLength(2);
   });
 
+  it('an unassigned supervisor opens the spell at that moment, not when the teacher was added', async () => {
+    await supervise(s.teacherId, tsup, tmgr);
+    const before = new Date();
+    await exec(`delete from chat.teacher_supervisor_assignment where teacher_id = $1::uuid`, s.teacherId);
+    await tasks.sweep();
+    const [first] = await spellTasks(s.teacherId);
+    const [{ opened }] = await g.prisma.$queryRaw<Array<{ opened: Date }>>`
+      SELECT opened_at AS opened FROM chat.work_task_teacher_spell WHERE id = ${first!.spell}::uuid`;
+    expect(opened.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
+    const task = await tasks.get(tmgr, first!.id);
+    expect(new Date(task.dueAt as string).getTime()).toBe(opened.getTime() + 48 * 3600_000);
+  });
+
+  it('a supervisor deactivated opens their teachers\' spells at that moment; one cannot leave the department while holding them', async () => {
+    await supervise(s.teacherId, tsup, tmgr);
+    await expect(exec(`delete from chat.department_member where staff_id = $1::uuid`, tsup)).rejects.toThrow(/reassign this supervisor/);
+    const before = new Date();
+    await leaves(tsup);
+    const [spell] = await g.prisma.$queryRaw<Array<{ opened: Date }>>`
+      SELECT opened_at AS opened FROM chat.work_task_teacher_spell WHERE teacher_id = ${s.teacherId}::uuid AND closed_at IS NULL`;
+    expect(spell!.opened.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
+    await tasks.sweep();
+    expect(await spellTasks(s.teacherId)).toHaveLength(1);
+  });
+
   it('a supervisor placed by the CLI names nobody: the system completes it', async () => {
     await tasks.sweep();
     const [first] = await spellTasks(s.teacherId);
@@ -261,6 +351,49 @@ describe('a trial: the teacher\'s attendance, then Sales\' outcome', () => {
     expect((await completion(outcome))?.actor).toMatchObject({ kind: 'staff', id: salesId });
   });
 
+  it('attendance and an outcome stand even when their task cannot be settled; the sweep settles after', async () => {
+    const lesson = await pastTrial();
+    await tasks.sweep();
+    const attendance = (await taskFor(`trial_attendance:${lesson}`)) as string;
+    await refusingTaskChanges(() => trials.attendance(s.teacherId, lesson, { attended: true, covered: 'tajweed basics' }));
+    expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: lesson } })).outcome).toBe('held');
+    expect(await stateOf(attendance)).toMatchObject({ state: 'open', source_state: 'pending' });
+    await tasks.sweep();
+    expect(await stateOf(attendance)).toMatchObject({ state: 'completed' });
+
+    const outcome = (await taskFor(`trial_outcome:${lesson}`)) as string;
+    await refusingTaskChanges(() => trials.outcome(salesId, lesson, { result: 'not_subscribed', reason: 'price' }));
+    expect(await g.prisma.trialOutcome.findUnique({ where: { lessonId: lesson } })).not.toBeNull();
+    expect(await stateOf(outcome)).toMatchObject({ state: 'open' });
+    await tasks.sweep();
+    expect(await stateOf(outcome)).toMatchObject({ state: 'completed' });
+  });
+
+  it('a trial given to another teacher moves the attendance task to them', async () => {
+    const lesson = await pastTrial();
+    await tasks.sweep();
+    const attendance = (await taskFor(`trial_attendance:${lesson}`)) as string;
+    const other = (await g.prisma.teacher.create({ data: { organizationId: (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId, name: 'teacher_o', isActive: true } })).id;
+    await exec(`update chat.lesson set teacher_id = $2::uuid where id = $1::uuid`, lesson, other);
+    expect(await stateOf(attendance)).toMatchObject({ state: 'open', assignee: other });
+  });
+
+  it('attendance corrected to a no-show withdraws the outcome task; corrected back, it is owed again', async () => {
+    const lesson = await pastTrial();
+    await trials.attendance(s.teacherId, lesson, { attended: true, covered: 'tajweed basics' });
+    await tasks.sweep();
+    const outcome = (await taskFor(`trial_outcome:${lesson}`)) as string;
+    const correct = (to: string) => g.prisma.$transaction([
+      exec(`select set_config('chat.correcting_trial', 'on', true), set_config('chat.trial_correction_reason', 'PD-47 spec', true)`),
+      exec(`update chat.lesson set outcome = $2, outcome_by = $3::uuid, outcome_by_kind = 'staff', outcome_at = now() where id = $1::uuid`,
+        lesson, to, salesId),
+    ]);
+    await correct('student_no_show');
+    expect(await stateOf(outcome)).toMatchObject({ state: 'open', source_state: 'withdrawn' });
+    await correct('held');
+    expect(await stateOf(outcome)).toMatchObject({ state: 'open', source_state: 'pending' });
+  });
+
   it('a prospect who did not attend owes no outcome task', async () => {
     const lesson = await pastTrial();
     await tasks.sweep();
@@ -299,6 +432,69 @@ describe('a trial: the teacher\'s attendance, then Sales\' outcome', () => {
     });
     await tasks.sweep();
     expect(await taskFor(`trial_attendance:${later.id}`)).toBeUndefined();
+  });
+});
+
+describe('a certificate step (PD-41)', () => {
+  it('an unclaimed request goes straight to the organization\'s one Designer', async () => {
+    const d1 = await designer('one');
+    const c = await certificateRequest();
+    expect(await steps(c)).toEqual([expect.objectContaining({ type: 'certificate_design', assignee: d1, state: 'open' })]);
+  });
+
+  it('with several Designers it is the overseer\'s, who hands it to a Designer only; the sweep leaves it there', async () => {
+    const [d1, d2] = [await designer('one'), await designer('two')];
+    const c = await certificateRequest();
+    const [step] = await steps(c);
+    expect(step).toMatchObject({ type: 'certificate_design', assignee: s.managerId });
+    expect(await code(tasks.reassign(s.managerId, step!.id, { to: staff(s.otherAdminId) }))).toBe(CommErrorCode.TASK_INVALID);
+    await tasks.reassign(s.managerId, step!.id, { to: staff(d2) });
+    expect(await stateOf(step!.id)).toMatchObject({ state: 'open', assignee: d2 });
+    await tasks.sweep();
+    expect(await stateOf(step!.id)).toMatchObject({ assignee: d2 });
+    // Anyone else, or the database by hand, may not.
+    expect(await code(tasks.reassign(d2, step!.id, { to: staff(d1) }))).toBe(CommErrorCode.TASK_DENIED);
+    // A claim closes it and opens the Designer's own step.
+    await certs.start(d1, c);
+    expect((await steps(c)).map((x) => [x.type, x.assignee, x.state])).toEqual([
+      ['certificate_design', d2, 'completed'],
+      ['certificate_design', d1, 'open'],
+    ]);
+  });
+
+  it('a request made while tasks cannot be written stands; the sweep raises its step', async () => {
+    const d1 = await designer('one');
+    let c = '';
+    await refusingTaskChanges(async () => {
+      c = await certificateRequest();
+    });
+    expect(await g.prisma.appreciationCertificate.findUnique({ where: { id: c } })).not.toBeNull();
+    expect(await steps(c)).toEqual([]);
+    await exec(`delete from chat.work_task_source_issue where source_key like 'certificate_%'`);
+    await tasks.sweep();
+    expect(await steps(c)).toEqual([expect.objectContaining({ type: 'certificate_design', assignee: d1 })]);
+  });
+
+  it('a step whose person left with nobody live to follow is an orphan, which the super admin hands on', async () => {
+    const d1 = await designer('one');
+    const c = await certificateRequest();
+    await certs.start(d1, c);
+    const designStep = (await steps(c)).at(-1)!;
+    // Nobody follows: no Operations manager, no super admin, the Designer gone.
+    await exec(`update chat.department set manager_id = null where kind = 'operations'`);
+    await exec(`update chat.staff set is_active = false, left_at = now() where id in ($1::uuid, $2::uuid)`, sa, d1);
+    await tasks.sweep();
+    const [{ reason }] = await g.prisma.$queryRaw<Array<{ reason: string }>>`
+      SELECT reason FROM chat.work_task_source_issue i JOIN chat.work_task t ON t.source_key = i.source_key WHERE t.id = ${designStep.id}::uuid`;
+    expect(reason).toMatch(/^orphaned:.*super admin may reassign/);
+
+    const sa2 = randomUUID();
+    await g.prisma.$transaction([
+      exec(`select set_config('chat.provisioning_super_admin', 'on', true)`),
+      exec(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'sa2_h', 'super_admin', true)`, sa2),
+    ]);
+    await tasks.reassign(sa2, designStep.id, { to: staff(s.otherAdminId) });
+    expect(await stateOf(designStep.id)).toMatchObject({ state: 'open', assignee: s.otherAdminId });
   });
 });
 

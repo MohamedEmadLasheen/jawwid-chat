@@ -35,6 +35,8 @@ interface TaskRules {
   outOfScope: boolean;
   comment: boolean;
   reassign: 'yes' | 'not_responsible' | 'follows_source';
+  /** PD-47 PR-6b: the reassign is an unclaimed certificate request's hand-on to a Designer. */
+  designHandOn: boolean;
 }
 /** What a viewer may do with a task now (TaskService.get `actions`). */
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority';
@@ -84,7 +86,11 @@ export type SourceType = (typeof SOURCE_TYPES)[number];
  * correction are the lesson's teacher's (change the lesson's teacher on the
  * Schedule); a case follows its owner (assign it on the Cases page).
  */
-const NOT_REASSIGNABLE: ReadonlySet<SourceType> = new Set(['lesson_report', 'report_correction', 'case', ...FINANCIAL]);
+const NOT_REASSIGNABLE: ReadonlySet<SourceType> = new Set([
+  'lesson_report', 'report_correction', 'case', ...FINANCIAL,
+  // PD-47 PR-6b: a trial's attendance is its teacher's; a certificate step its person's (PD-41 safeguard 1).
+  'trial_attendance', 'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send',
+]);
 /** The reference time and zone every effective level of one response is computed at. */
 interface Clock {
   asOf: string;
@@ -555,12 +561,29 @@ export class TaskService {
           ? 'a case\'s task follows its owner: assign the case on its page'
           : FINANCIAL.has(row.source_type)
             ? 'a financial task follows the family\'s billing supervisor or Sales owner: change them, and the task follows'
-            : 'only the lesson\'s teacher writes its report or correction: change the lesson\'s teacher on the Schedule, and the task follows',
+            : row.source_type.startsWith('certificate_')
+              ? 'a certificate step is its person\'s: only an unclaimed request is handed to a Designer'
+              : 'only the lesson\'s teacher does this: change the lesson\'s teacher on the Schedule, and the task follows',
       );
     }
     const instructions = text(body.instructions, 'instructions', NOTE_MAX, false);
     const to = await this.targetOf(viewer, body.to);
     await this.requireLive(viewer.organizationId, to.principal);
+    // PD-47 PR-6b: an unclaimed certificate request goes to a Designer, from
+    // its overseer or the super admin; the database decides it again.
+    if (rules.designHandOn) {
+      const [ok] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+        SELECT ${to.principal.kind === 'staff' && !to.department}::boolean
+               AND chat.staff_has_permission(${to.principal.id}::uuid, 'certificates.design') AS ok`;
+      if (!ok?.ok) throw invalid('to: a Designer (certificates.design)');
+      const current = assigneeOf(row);
+      if (current.kind === to.principal.kind && current.id === to.principal.id) throw invalid('to: the task is already theirs');
+      const set = Prisma.sql`assignee_staff_id = ${to.principal.id}::uuid, assignee_teacher_id = NULL::uuid,
+                             instructions = ${instructions}, state = 'open'`;
+      return this.move(viewer, row, 'reassign', instructions, set, 'reassigned',
+        Prisma.sql`chat.work_task_certificate_hand_on(t.id, ${viewer.id}::uuid)
+                   AND chat.staff_has_permission(${to.principal.id}::uuid, 'certificates.design')`);
+    }
     // A teacher's decision (leave, violation, ruling) goes to someone who stands to that teacher.
     if (row.source_teacher_id) {
       const [ok] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
@@ -847,8 +870,12 @@ export class TaskService {
     const followsSource = !!row.source_type && NOT_REASSIGNABLE.has(row.source_type);
     // PR-2b: the super admin hands on a financial task whose assignee left with
     // nobody live to follow; the sweep moves it to its owner again later.
-    const orphaned = followsSource && viewer.superAdmin && FINANCIAL.has(row.source_type as SourceType)
-      && !(await this.isLive(viewer.organizationId, assigneeOf(row)));
+    // PR-6b: and any task the sweep recorded as orphaned.
+    const orphaned = followsSource && viewer.superAdmin && (
+      (FINANCIAL.has(row.source_type as SourceType) && !(await this.isLive(viewer.organizationId, assigneeOf(row))))
+      || (await this.isOrphaned(row)));
+    // PR-6b: an unclaimed certificate request, handed to a Designer by its overseer or the super admin.
+    const designHandOn = row.source_type === 'certificate_design' && viewer.kind === 'staff' && (await this.mayHandOnDesign(viewer, row));
     return {
       mine,
       decide,
@@ -856,8 +883,24 @@ export class TaskService {
       acknowledge: mine && row.kind === 'system' && row.source_state === 'withdrawn',
       outOfScope: mine,
       comment: mine || decide,
-      reassign: !decide && !handsOwn ? 'not_responsible' : followsSource && !orphaned ? 'follows_source' : 'yes',
+      reassign: designHandOn ? 'yes' : !decide && !handsOwn ? 'not_responsible' : followsSource && !orphaned ? 'follows_source' : 'yes',
+      designHandOn,
     };
+  }
+
+  /** The sweep found nobody live to follow this task (an `orphaned:` issue). */
+  private async isOrphaned(row: Row): Promise<boolean> {
+    const [r] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT EXISTS (SELECT 1 FROM chat.work_task t JOIN chat.work_task_source_issue i
+                        ON i.organization_id = t.organization_id AND i.source_key = t.source_key
+                      WHERE t.id = ${row.id}::uuid AND i.reason LIKE 'orphaned:%') AS ok`;
+    return r?.ok === true;
+  }
+
+  private async mayHandOnDesign(viewer: Viewer, row: Row): Promise<boolean> {
+    const [r] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT chat.work_task_certificate_hand_on(${row.id}::uuid, ${viewer.id}::uuid) AS ok`;
+    return r?.ok === true;
   }
 
   /** `rulesFor`, as the actions this viewer may take now (TaskService.get). */
