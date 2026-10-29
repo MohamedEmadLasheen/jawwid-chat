@@ -124,6 +124,17 @@ async function designer(label: string): Promise<string> {
   await g.prisma.$queryRaw`SELECT chat.grant_access_role(${id}::uuid, ${roleId}::uuid, 'spec', ${sa}::uuid)`;
   return id;
 }
+/**
+ * PD-40's legacy bundle gives the Teachers department's manager and
+ * supervisors certificates.design too: take them out, so the spec's own
+ * Designers are the organization's only ones.
+ */
+async function onlySpecDesigners() {
+  await exec(`delete from chat.department_member where department_id = $1::uuid`, tdept);
+  await exec(`update chat.department set manager_id = null where id = $1::uuid`, tdept);
+}
+/** The organization has one super admin: the spec's own, back after leaving. */
+const superAdminReturns = () => exec(`update chat.staff set is_active = true, left_at = null where id = $1::uuid`, sa);
 /** A student certificate requested by the learner's supervisor (PD-41). */
 async function certificateRequest(): Promise<string> {
   await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
@@ -436,6 +447,8 @@ describe('a trial: the teacher\'s attendance, then Sales\' outcome', () => {
 });
 
 describe('a certificate step (PD-41)', () => {
+  beforeEach(onlySpecDesigners);
+
   it('an unclaimed request goes straight to the organization\'s one Designer', async () => {
     const d1 = await designer('one');
     const c = await certificateRequest();
@@ -492,17 +505,15 @@ describe('a certificate step (PD-41)', () => {
       SELECT reason FROM chat.work_task_source_issue i JOIN chat.work_task t ON t.source_key = i.source_key WHERE t.id = ${designStep.id}::uuid`;
     expect(reason).toMatch(/^orphaned:.*super admin may reassign/);
 
-    const sa2 = randomUUID();
-    await g.prisma.$transaction([
-      exec(`select set_config('chat.provisioning_super_admin', 'on', true)`),
-      exec(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'sa2_h', 'super_admin', true)`, sa2),
-    ]);
-    await tasks.reassign(sa2, designStep.id, { to: staff(s.otherAdminId) });
+    await superAdminReturns();
+    await tasks.reassign(sa, designStep.id, { to: staff(s.otherAdminId) });
     expect(await stateOf(designStep.id)).toMatchObject({ state: 'open', assignee: s.otherAdminId });
   });
 });
 
 describe('an orphaned unclaimed request', () => {
+  beforeEach(onlySpecDesigners);
+
   it('the super admin may hand it to anyone live, and the picker offers anyone', async () => {
     const d1 = await designer('one');
     const c = await certificateRequest();
@@ -511,13 +522,9 @@ describe('an orphaned unclaimed request', () => {
     await exec(`update chat.department set manager_id = null where kind = 'operations'`);
     await exec(`update chat.staff set is_active = false, left_at = now() where id in ($1::uuid, $2::uuid)`, sa, d1);
     await tasks.sweep();
-    const sa2 = randomUUID();
-    await g.prisma.$transaction([
-      exec(`select set_config('chat.provisioning_super_admin', 'on', true)`),
-      exec(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'sa2_h', 'super_admin', true)`, sa2),
-    ]);
-    expect((await tasks.assignees(sa2, { task: step!.id })).people.map((p) => p.id)).toContain(s.otherAdminId);
-    await tasks.reassign(sa2, step!.id, { to: staff(s.otherAdminId) });
+    await superAdminReturns();
+    expect((await tasks.assignees(sa, { task: step!.id })).people.map((p) => p.id)).toContain(s.otherAdminId);
+    await tasks.reassign(sa, step!.id, { to: staff(s.otherAdminId) });
     expect(await stateOf(step!.id)).toMatchObject({ state: 'open', assignee: s.otherAdminId });
   });
 });
