@@ -13,11 +13,12 @@ import { HandOverDialog } from './HandOverDialog'
 import { AssignSupervisorDialog, BackupActionDialog, CreateBackupDialog } from './OrgDialogs'
 import type { BackupAction } from './hooks'
 import './organization.css'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { SupervisorColors } from '@/features/schedule/SupervisorColors'
 import { studentPath } from '@/features/profiles/api'
 
 type Tab = 'children' | 'teachers' | 'structure'
+const TABS: readonly Tab[] = ['children', 'teachers', 'structure']
 
 /**
  * PD-8: the organization structure -- for the super admin (the whole
@@ -34,7 +35,9 @@ export function OrganizationPage() {
   // PD-35: the Teachers Manager and the super admin assign teachers to supervisors.
   const teachersDept = departments.find((d) => d.kind === 'teachers') ?? null
   const assignsTeachers = !!teachersDept && !!staff && (staff.role === 'super_admin' || teachersDept.manager?.id === staff.id)
-  const [tab, setTab] = useState<Tab>('children')
+  // ?tab=teachers: Teacher Files' "Assign supervisor" shortcut (PD-43 §3.7) lands on that tab.
+  const [params] = useSearchParams()
+  const [tab, setTab] = useState<Tab>(() => (TABS.includes(params.get('tab') as Tab) ? (params.get('tab') as Tab) : 'children'))
   const shown: Tab =
     tab === 'children' ? (operations ? 'children' : assignsTeachers ? 'teachers' : 'structure')
     : tab === 'teachers' ? (assignsTeachers ? 'teachers' : 'structure')

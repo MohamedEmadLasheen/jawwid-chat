@@ -134,6 +134,7 @@ function sub(id: string, lessons: number, startsOn: string, over: Partial<Learne
     id, organizationId: 'o', learnerId: 'l', familyId: 'f', planMonths: 3, lessonsIncluded: lessons,
     startsOn: new Date(`${startsOn}T00:00:00Z`), source: 'staff', requestId: null, planRef: null, note: null,
     createdBy: 's', createdAt: new Date(`${startsOn}T08:00:00Z`), voidedAt: null, voidedBy: null, voidReason: null,
+    lessonsUsedBefore: 0, overConfirmedBy: null,
     ...over,
   };
 }

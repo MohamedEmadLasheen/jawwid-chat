@@ -52,6 +52,19 @@ export function renderPd012CardBody(kind: string, p: Record<string, unknown>, la
         line(ar ? 'التقدير' : 'Grade', p.grade),
         ar ? 'مبارك! الشهادة مرفقة.' : 'Congratulations! The certificate is attached.',
       );
+    case CardKind.CERTIFICATE_ACCEPTED:
+      return join(
+        ar ? `✅ قُبل اقتراح شهادة ${s(p.learnerName)}` : `✅ The certificate suggestion for ${s(p.learnerName)} was accepted`,
+        line(ar ? 'الشهادة' : 'Certificate', p.title),
+        ar ? 'ستصلكم الشهادة بعد تصميمها واعتمادها.' : 'It will reach the family once it is designed and approved.',
+      );
+    case CardKind.CERTIFICATE_AWARDED:
+      return join(
+        ar ? `🏅 شهادة تقدير — ${s(p.printedName)}` : `🏅 Certificate of appreciation — ${s(p.printedName)}`,
+        line(ar ? 'التقدير' : 'Award', p.type ?? p.title),
+        p.periodStart ? line(ar ? 'الفترة' : 'Period', p.periodEnd && p.periodEnd !== p.periodStart ? `${s(p.periodStart)} → ${s(p.periodEnd)}` : p.periodStart) : null,
+        ar ? 'شكرًا لعطائك! الشهادة مرفقة.' : 'Thank you for your work! The certificate is attached.',
+      );
     case CardKind.CERTIFICATE_DECLINED:
       return join(
         ar ? `ℹ️ لم يُعتمد طلب شهادة ${s(p.learnerName)}` : `ℹ️ The certificate request for ${s(p.learnerName)} was not approved`,

@@ -3,6 +3,7 @@ import { CurrentActor } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import type { Actor } from '../platform/types';
 import { StaffProfileService } from './staff-profile.service';
+import { Requires, SelfService } from '../platform/permissions/route-access';
 
 /**
  * `/staff-profiles` -- staff profiles, responsibilities, teams and the super
@@ -25,34 +26,42 @@ export class StaffProfileController {
   constructor(private readonly profiles: StaffProfileService) {}
 
   /** The caller's direct reports (managers; the super admin's reports). */
+  // PD-40: the caller's own direct reports, filtered by the profile policy,
+  // so self-service like /staff-profiles/:staffId.
+  @SelfService()
   @Get('team')
   team(@CurrentActor() actor: Actor) {
     return this.profiles.team(actor);
   }
 
   /** Super admin only: the organization's staff, teams, coverage, workload and health. */
+  @Requires('staff_profiles.organization')
   @Get('organization')
   organization(@CurrentActor() actor: Actor) {
     return this.profiles.organization(actor);
   }
 
+  @SelfService()
   @Get(':staffId')
   profile(@CurrentActor() actor: Actor, @Param('staffId') staffId: string) {
     return this.profiles.profile(actor, staffId);
   }
 
+  @SelfService()
   @Get(':staffId/activity')
   activity(@CurrentActor() actor: Actor, @Param('staffId') staffId: string) {
     return this.profiles.activity(actor, staffId);
   }
 
   /** Job title, introduction, display name. Only the fields sent change. */
+  @SelfService()
   @Patch(':staffId')
   update(@CurrentActor() actor: Actor, @Param('staffId') staffId: string, @Body() body: Record<string, unknown>) {
     return this.profiles.updateProfile(actor, staffId, body && typeof body === 'object' ? body : {});
   }
 
   /** A signed PUT bound to type and size, under this profile's own prefix. */
+  @SelfService()
   @Post(':staffId/avatar/upload')
   avatarUpload(
     @CurrentActor() actor: Actor,
@@ -63,6 +72,7 @@ export class StaffProfileController {
   }
 
   /** Commit an uploaded object as the photo, after its bytes are inspected. */
+  @SelfService()
   @Post(':staffId/avatar')
   avatarCommit(
     @CurrentActor() actor: Actor,
@@ -72,11 +82,13 @@ export class StaffProfileController {
     return this.profiles.commitAvatar(actor, staffId, body ?? {});
   }
 
+  @SelfService()
   @Delete(':staffId/avatar')
   avatarRemove(@CurrentActor() actor: Actor, @Param('staffId') staffId: string) {
     return this.profiles.removeAvatar(actor, staffId);
   }
 
+  @Requires('staff_profiles.manage')
   @Post(':staffId/responsibilities')
   assign(
     @CurrentActor() actor: Actor,
@@ -86,6 +98,7 @@ export class StaffProfileController {
     return this.profiles.assignResponsibility(actor, staffId, body ?? {});
   }
 
+  @Requires('staff_profiles.manage')
   @Post(':staffId/responsibilities/:responsibilityId/end')
   end(
     @CurrentActor() actor: Actor,
@@ -97,6 +110,7 @@ export class StaffProfileController {
   }
 
   /** Super admin only. `managerStaffId: null` removes the line. A reason is required. */
+  @Requires('staff_profiles.reporting_lines')
   @Post(':staffId/reporting-line')
   reportingLine(
     @CurrentActor() actor: Actor,

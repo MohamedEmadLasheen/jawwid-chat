@@ -47,6 +47,7 @@ import {
   readScheduledCallCard,
 } from '@/features/calls-page/ScheduledCallCard'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
+import { CaseEscalatedCard, readCaseEscalatedCard } from '@/features/cases/CaseEscalatedCard'
 
 /** The quick reactions, the same six as the mobile app. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
@@ -940,6 +941,8 @@ function MessageItem({
       : null
   // PD-31: a moved lesson's card draws "previous → new" on the academy's clock.
   const movedCard = live && m.type === 'card' && m.card?.kind === 'lesson_moved' ? readLessonMovedCard(m.card.payload) : null
+  // PD-35 B6: a case escalated to this department, linked to Escalations.
+  const caseCard = live && m.type === 'card' && m.card?.kind === 'case_escalated' ? readCaseEscalatedCard(m.card.payload) : null
   const reactions = summarize(m.reactions ?? [], selfId)
   // A lesson report's card is changed only from its lesson record (PD-15).
   const reportCard = m.type === 'card' && m.card?.kind === 'lesson_report'
@@ -1041,6 +1044,8 @@ function MessageItem({
             <ScheduledCallCard cardKind={m.card.kind} card={callCard} conversationId={m.conversationId} />
           ) : movedCard ? (
             <LessonMovedCard card={movedCard} />
+          ) : caseCard ? (
+            <CaseEscalatedCard payload={caseCard} />
           ) : (
             <>
               {m.attachments.map((a) => (

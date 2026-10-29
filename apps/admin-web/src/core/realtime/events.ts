@@ -1,5 +1,3 @@
-import type { AttentionBucket, Case, Handoff, HandlingMode, Message, Presence, Task } from '@/shared/types/domain'
-
 /**
  * Realtime events are SIGNALS, NOT STATE.
  *
@@ -10,24 +8,9 @@ import type { AttentionBucket, Case, Handoff, HandlingMode, Message, Presence, T
  * reconcile to the server rather than to whichever tab wrote last.
  */
 export interface ServerEvents {
-  'family.updated': {
-    family_id: string
-    bucket: AttentionBucket
-    top_reason: string
-    needs_reply: boolean
-    on_duty_id: string | null
-    handling_mode: HandlingMode
-  }
-  'message.created': { family_id: string; message: Message }
-  'case.updated': { family_id: string; case: Case }
-  'task.updated': { task: Task }
-  'handoff.created': { handoff: Handoff }
+  /** PD-47: a task changed. Ids only: the page refetches what the viewer may see. */
+  'task.changed': { taskId: string; revision: number; change: string }
   'coverage.changed': { family_ids?: string[]; effective_at: string }
-  'ownership.changed': { family_id: string; from: string; to: string }
-  'unattended.changed': { count: number }
-  'escalation.created': { family_id: string; case_id: string; reason: string }
-  'presence.changed': { staff_id: string; presence: Presence }
-  'shift.ending': { minutes_remaining: number; waiting_count: number; follow_up_count: number }
 }
 
 export type ServerEventName = keyof ServerEvents

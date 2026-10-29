@@ -258,6 +258,50 @@ void main() {
       });
     }
 
+    group('PD-40: a specialist without chat.use is told to use Admin Web', () {
+      Map<String, Object?> specialist(Object? permissions) => {
+            ...actorDto(kind: Wire.actorStaff),
+            'staffRole': 'specialist',
+            'familyId': null,
+            'permissions': permissions,
+          };
+      Future<void> expectCode(String code) => expectLater(
+            stack().auth.currentUser(),
+            throwsA(
+              isA<AppError>()
+                  .having((e) => e.code, 'code', code)
+                  .having((e) => e.kind, 'kind', AppErrorKind.forbidden),
+            ),
+          );
+
+      test('no keys at all: Admin Web, and no department lookup', () async {
+        server.on('GET', '/me', [Reply.ok(specialist(<String>[]))]);
+        await expectCode(AuthFailures.usesAdminWeb);
+        expect(server.countOf('GET', '/lessons/access'), 0);
+      });
+
+      test('a missing permissions field means no keys', () async {
+        final body = specialist(null)..remove('permissions');
+        server.on('GET', '/me', [Reply.ok(body)]);
+        await expectCode(AuthFailures.usesAdminWeb);
+      });
+
+      test('keys, but not chat.use (a Designer): Admin Web', () async {
+        server.on('GET', '/me', [Reply.ok(specialist(['certificates.view', 'certificates.design']))]);
+        await expectCode(AuthFailures.usesAdminWeb);
+      });
+
+      test('a specialist WITH chat.use is not a Sales seat either: still refused, as before', () async {
+        server.on('GET', '/me', [Reply.ok(specialist(['chat.use']))]);
+        await expectCode(AuthFailures.roleNotSupported);
+      });
+
+      test('only a specialist: a finance member is refused as before', () async {
+        server.on('GET', '/me', [Reply.ok({...specialist(<String>[]), 'staffRole': 'finance'})]);
+        await expectCode(AuthFailures.roleNotSupported);
+      });
+    });
+
     group('PD-20: a staff member is Sales, or refused', () {
       Map<String, Object?> staff(String? staffRole) => {...actorDto(kind: Wire.actorStaff), 'staffRole': staffRole, 'familyId': null};
       Reply access({required bool sales}) => Reply.ok({'lessonManager': false, 'sales': sales, 'operations': !sales});

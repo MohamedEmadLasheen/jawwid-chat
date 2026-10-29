@@ -15,8 +15,12 @@ import 'activity_view_web.dart' if (dart.library.io) 'activity_view_mobile.dart'
 /// package is sandboxed by its own CSP header besides (an opaque origin).
 abstract interface class ActivityViewFactory {
   /// [sandbox] is the exact iframe sandbox for the web build ([sandboxIsolated] or
-  /// [sandboxSite]); [allow] pins every top-level navigation.
-  Widget build(BuildContext context, {required String url, required String sandbox, required bool Function(Uri uri) allow});
+  /// [sandboxSite]); [allow] pins every top-level navigation. [audio], for a
+  /// Quran lesson of the lessons site, is the audio list the release gate gave
+  /// this account (lesson_audio.dart): it is handed to the page as DATA, to the
+  /// page's own origin only, and nothing else ever crosses to it.
+  Widget build(BuildContext context,
+      {required String url, required String sandbox, required bool Function(Uri uri) allow, Future<Map<String, Object?>?>? audio});
 }
 
 final activityViewFactoryProvider = Provider<ActivityViewFactory>((ref) => createActivityViewFactory());
@@ -32,5 +36,5 @@ bool Function(Uri) activityAllowance(String url, {required bool isPackage}) {
     final prefix = '/${prefixSegments.join('/')}/';
     return (uri) => uri.scheme == start.scheme && uri.host == start.host && uri.port == start.port && uri.path.startsWith(prefix);
   }
-  return (uri) => uri.scheme == 'https' && uri.host == start.host;
+  return (uri) => uri.scheme == 'https' && uri.host == start.host && uri.port == start.port;
 }

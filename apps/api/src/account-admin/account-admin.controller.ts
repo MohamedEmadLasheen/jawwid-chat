@@ -4,6 +4,7 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { AuthError, AuthErrorCode } from '../platform/auth/auth.errors';
 import type { Actor } from '../platform/types';
 import { AccountAdminService } from './account-admin.service';
+import { Requires } from '../platform/permissions/route-access';
 
 /**
  * The caller's own ACCOUNT id -- what chat.session.revoked_by and
@@ -30,17 +31,20 @@ const CurrentAccountId = createParamDecorator((_data: unknown, ctx: ExecutionCon
 export class AccountAdminController {
   constructor(private readonly accounts: AccountAdminService) {}
 
+  @Requires('accounts.administer')
   @Get()
   list(@CurrentActor() actor: Actor, @Query('q') q?: string, @Query('kind') kind?: string) {
     return this.accounts.list(actor, { q: typeof q === 'string' ? q : undefined, kind: typeof kind === 'string' ? kind : undefined });
   }
 
+  @Requires('accounts.administer')
   @Get(':accountId')
   get(@CurrentActor() actor: Actor, @Param('accountId') accountId: string) {
     return this.accounts.get(actor, accountId);
   }
 
   /** Returns the one-time code ONCE. Body: `{ reason, signOutEverywhere? }`. */
+  @Requires('accounts.administer')
   @Post(':accountId/password-reset')
   @HttpCode(201)
   passwordReset(
@@ -53,6 +57,7 @@ export class AccountAdminController {
   }
 
   /** Body: `{ reason }`. */
+  @Requires('accounts.administer')
   @Post(':accountId/suspend')
   @HttpCode(200)
   suspend(
@@ -65,12 +70,14 @@ export class AccountAdminController {
   }
 
   /** PD-23: the account's live sessions (devices). */
+  @Requires('accounts.administer')
   @Get(':accountId/sessions')
   sessions(@CurrentActor() actor: Actor, @Param('accountId') accountId: string) {
     return this.accounts.listSessions(actor, accountId);
   }
 
   /** PD-23: end every session. Body: `{ reason }`. Declared before `:sessionId/revoke` so the literal wins. */
+  @Requires('accounts.administer')
   @Post(':accountId/sessions/revoke-all')
   @HttpCode(200)
   revokeAllSessions(
@@ -83,6 +90,7 @@ export class AccountAdminController {
   }
 
   /** PD-23: end one session. Body: `{ reason }`. */
+  @Requires('accounts.administer')
   @Post(':accountId/sessions/:sessionId/revoke')
   @HttpCode(200)
   revokeSession(
@@ -96,6 +104,7 @@ export class AccountAdminController {
   }
 
   /** Body: `{ reason }`. */
+  @Requires('accounts.administer')
   @Post(':accountId/reactivate')
   @HttpCode(200)
   reactivate(@CurrentActor() actor: Actor, @Param('accountId') accountId: string, @Body() body: { reason?: unknown }) {

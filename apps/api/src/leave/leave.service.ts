@@ -5,7 +5,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { scopeCovers } from '../platform/teacher-scope';
+import { pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
 import { isLiveTeacher } from '../platform/pd012-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { CardKind, LeaveState } from '../communication/contracts/vocab';
@@ -56,6 +56,20 @@ export interface LeaveBalance {
  * its card to the family exactly as any other cancellation does. They never
  * count as violations.
  */
+/**
+ * One teacher's leave as staff read it. The allowance, the balance and the
+ * allowance's history are absent (not null) for a caller who reaches the
+ * teacher only through Operations (owner, PD-26 amendment).
+ */
+export type StaffTeacherLeave = {
+  year: number;
+  requests: Awaited<ReturnType<LeaveService['list']>>['requests'];
+  allowance?: number | null;
+  used?: number;
+  balance?: number | null;
+  allowanceHistory?: Array<{ days: number; note: string | null; setAt: string; setBy: { id: string; name: string | null } }>;
+};
+
 @Injectable()
 export class LeaveService {
   private readonly logger = new Logger(LeaveService.name);
@@ -171,7 +185,8 @@ export class LeaveService {
       throw invalid('state: requested | approved | declined | withdrawn | cancelled');
     }
     // PD-35: the requests of the teachers in the caller's scope.
-    const scope = await this.supervision.teacherScope.scopeOf(actor);
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const scope = page.teachers;
     const rows = await this.prisma.teacherLeaveRequest.findMany({
       where: {
         organizationId: actor.organizationId,
@@ -181,7 +196,7 @@ export class LeaveService {
       orderBy: query.state === LeaveState.REQUESTED ? { requestedAt: 'asc' } : { firstDay: 'desc' },
       take: 500,
     });
-    return { requests: await this.dtos(rows, true) };
+    return { requests: await this.dtos(rows, true, page) };
   }
 
   /**
@@ -209,17 +224,19 @@ export class LeaveService {
         LEFT JOIN LATERAL chat.teacher_away(t.id, chat.academy_today()) away ON true
        WHERE t.organization_id = ${actor.organizationId}::uuid
        ORDER BY (t.is_active AND t.left_at IS NULL) DESC, t.name`;
-    const scope = await this.supervision.teacherScope.scopeOf(actor);
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
     return {
       year,
-      // PD-35: the teachers in the caller's scope.
-      teachers: rows.filter((r) => scopeCovers(scope, r.id)).map((r) => ({
+      // PD-35: the teachers in the caller's scope. The allowance, and so the
+      // balance, is the Teachers department's: a teacher reached only through
+      // Operations comes without them (owner, PD-26 amendment) -- absent, not null.
+      teachers: rows.filter((r) => scopeCovers(page.teachers, r.id)).map((r) => ({
         id: r.id,
         name: r.name,
         isActive: r.active,
-        allowance: r.allowance,
-        used: r.used,
-        balance: r.allowance === null ? null : r.allowance - r.used,
+        ...(scopeCovers(page.whole, r.id)
+          ? { allowance: r.allowance, used: r.used, balance: r.allowance === null ? null : r.allowance - r.used }
+          : {}),
         pendingRequests: r.pending,
         away: r.away_kind && r.away_until ? { kind: r.away_kind, until: isoDate(r.away_until) } : null,
       })),
@@ -227,11 +244,14 @@ export class LeaveService {
   }
 
   /** One teacher's leave for a year, for the Teacher File and the Supervision page. */
-  async teacherLeave(actorId: string, teacherId: string, yearQuery?: string) {
+  async teacherLeave(actorId: string, teacherId: string, yearQuery?: string): Promise<StaffTeacherLeave> {
     const actor = await this.requireSupervisor(actorId);
     await this.requireTeacherOf(actor, teacherId);
     const year = yearField(yearQuery, todayIn(await this.timeZone()));
-    const view = await this.view(teacherId, year, true);
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const { allowance, used, balance, ...view } = await this.view(teacherId, year, true, page);
+    // The allowance, its history and the balance are the Teachers department's (owner, PD-26 amendment).
+    if (!scopeCovers(page.whole, teacherId)) return view;
     const history = await this.prisma.teacherLeaveAllowance.findMany({
       where: { teacherId, leaveYear: year },
       orderBy: { setAt: 'desc' },
@@ -240,6 +260,9 @@ export class LeaveService {
     const setters = await this.staffNames(history.map((h) => h.setBy));
     return {
       ...view,
+      allowance,
+      used,
+      balance,
       allowanceHistory: history.map((h) => ({
         days: h.days,
         note: h.note,
@@ -255,6 +278,11 @@ export class LeaveService {
       throw new CommError(CommErrorCode.LEAVE_DENIED, "only the Teachers department's manager sets a leave allowance");
     }
     await this.requireTeacherOf(actor, teacherId);
+    // The allowance is the Teachers department's, per teacher: never for one the
+    // caller reaches only through Operations (re-review of #175, NIT-B).
+    if (!(await this.supervision.teacherScope.covers(actor, teacherId))) {
+      throw new CommError(CommErrorCode.LEAVE_NOT_FOUND, 'teacher not found');
+    }
     const year = body.year;
     if (typeof year !== 'number' || !Number.isInteger(year) || year < 2000 || year > 2100) throw invalid('year: a calendar year');
     const days = body.days;
@@ -293,7 +321,7 @@ export class LeaveService {
   async approve(actorId: string, requestId: string, body: Record<string, unknown>) {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
-    await this.supervision.requireTeacherInScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
     if (row.state !== LeaveState.REQUESTED) throw state('this request has already been decided');
     const firstDay = isoDate(row.firstDay);
     const lastDay = isoDate(row.lastDay);
@@ -364,13 +392,13 @@ export class LeaveService {
         notCancelled.push({ lessonId: lesson.id, reason });
       }
     }
-    return { request: await this.dtoById(row.id), cancelledLessons: colliding.length - notCancelled.length, notCancelled };
+    return { request: await this.dtoById(row.id, actor), cancelledLessons: colliding.length - notCancelled.length, notCancelled };
   }
 
   async decline(actorId: string, requestId: string, body: Record<string, unknown>) {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
-    await this.supervision.requireTeacherInScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
     if (row.state !== LeaveState.REQUESTED) throw state('this request has already been decided');
     const note = textField(body, 'note', MAX_TEXT, true) as string;
     const teacher = await this.conversations.requireActor(row.teacherId);
@@ -390,7 +418,7 @@ export class LeaveService {
         });
       }),
     );
-    return { request: await this.dtoById(row.id) };
+    return { request: await this.dtoById(row.id, actor) };
   }
 
   /**
@@ -402,7 +430,7 @@ export class LeaveService {
   async cancel(actorId: string, requestId: string, body: Record<string, unknown>) {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
-    await this.supervision.requireTeacherInScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
     if (row.state !== LeaveState.APPROVED) throw state('only an approved leave can be cancelled');
     const note = textField(body, 'note', MAX_TEXT, true) as string;
     const teacher = await this.conversations.requireActor(row.teacherId);
@@ -429,7 +457,7 @@ export class LeaveService {
         });
       }),
     );
-    return { request: await this.dtoById(row.id), daysReturned: returned };
+    return { request: await this.dtoById(row.id, actor), daysReturned: returned };
   }
 
   // ------------------------------------------------------------------
@@ -453,19 +481,19 @@ export class LeaveService {
 
   // ------------------------------------------------------------------
 
-  private async view(teacherId: string, year: number, staffView: boolean) {
+  private async view(teacherId: string, year: number, staffView: boolean, page?: PageScope) {
     const balance = await this.balanceOf(this.prisma, teacherId, year);
     const rows = await this.prisma.teacherLeaveRequest.findMany({
       where: { teacherId, firstDay: { gte: asDate(`${year}-01-01`), lte: asDate(`${year}-12-31`) } },
       orderBy: { firstDay: 'desc' },
     });
-    return { ...balance, requests: await this.dtos(rows, staffView) };
+    return { ...balance, requests: await this.dtos(rows, staffView, page) };
   }
 
   /** Open lessons of the teacher whose start falls on a day of the leave, in the academy's time zone. */
   private async collidingLessons(teacherId: string, firstDay: string, lastDay: string, tz: string) {
-    return this.prisma.$queryRaw<Array<{ id: string; kind: string; starts_at: Date; learner_name: string }>>`
-      SELECT l.id::text AS id, l.kind, l.starts_at, coalesce(ln.name, p.display_name) AS learner_name
+    return this.prisma.$queryRaw<Array<{ id: string; kind: string; starts_at: Date; learner_id: string | null; learner_name: string }>>`
+      SELECT l.id::text AS id, l.kind, l.starts_at, l.learner_id::text AS learner_id, coalesce(ln.name, p.display_name) AS learner_name
         FROM chat.lesson l
         LEFT JOIN chat.learner ln ON ln.id = l.learner_id
         LEFT JOIN chat.trial_prospect p ON p.id = l.prospect_id -- PD-11 T4: a trial is the teacher's time too
@@ -499,12 +527,19 @@ export class LeaveService {
     await this.cards.post(tx, conv, recorder, { kind, payload, body: renderPd012CardBody(kind, payload, langOf(teacher)) });
   }
 
-  private async dtoById(id: string) {
+  /** `actor` is the staff member who acted: what they are shown follows their page scope. */
+  private async dtoById(id: string, actor?: Actor) {
     const row = await this.prisma.teacherLeaveRequest.findUniqueOrThrow({ where: { id } });
-    return (await this.dtos([row], true))[0];
+    const page = actor ? await this.supervision.teacherScope.pageRowsOf(actor) : undefined;
+    return (await this.dtos([row], true, page))[0];
   }
 
-  private async dtos(rows: TeacherLeaveRequest[], withCollisions: boolean) {
+  /**
+   * `page`: the staff caller's page scope. Of a teacher reached only through
+   * Operations, the balance is left out and another family's colliding lesson
+   * comes without the child's name (P1-1, P2-4). Absent: shown whole.
+   */
+  private async dtos(rows: TeacherLeaveRequest[], withCollisions: boolean, page?: PageScope) {
     if (rows.length === 0) return [];
     const teachers = await this.prisma.teacher.findMany({
       where: { id: { in: [...new Set(rows.map((r) => r.teacherId))] } },
@@ -519,6 +554,7 @@ export class LeaveService {
       const lastDay = isoDate(r.lastDay);
       const year = Number(firstDay.slice(0, 4));
       const open = r.state === LeaveState.REQUESTED;
+      const whole = !page || scopeCovers(page.whole, r.teacherId);
       out.push({
         id: r.id,
         teacher: { id: r.teacherId, name: names.get(r.teacherId) ?? null },
@@ -533,13 +569,13 @@ export class LeaveService {
         decisionNote: r.decisionNote,
         endedAt: r.endedAt?.toISOString() ?? null,
         // For the approver: what approving would do, computed now.
-        balance: withCollisions && open ? (await this.balanceOf(this.prisma, r.teacherId, year)).balance : undefined,
+        balance: withCollisions && open && whole ? (await this.balanceOf(this.prisma, r.teacherId, year)).balance : undefined,
         collidingLessons:
           withCollisions && open
             ? (await this.collidingLessons(r.teacherId, firstDay, lastDay, tz)).map((l) => ({
                 id: l.id,
                 startsAt: l.starts_at.toISOString(),
-                learnerName: l.learner_name,
+                learnerName: whole || (page && pageRowVisible(page, r.teacherId, { learnerId: l.learner_id })) ? l.learner_name : null,
               }))
             : undefined,
       });
@@ -568,8 +604,10 @@ export class LeaveService {
 
   private async requireSupervisor(actorId: string): Promise<Actor> {
     const actor = await this.conversations.requireActor(actorId);
-    if (!(await this.supervision.staffAccess(actor)).canSupervise) {
-      throw new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department decides leave');
+    // PD-26 amendment: the Teachers department, or an Operations supervisor for
+    // the teachers of their families (narrowed below by the page scope).
+    if (!(await this.supervision.pageAccess(actor)).canSupervise) {
+      throw new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department and, for the teachers of their families, Operations decide leave');
     }
     return actor;
   }
@@ -578,7 +616,7 @@ export class LeaveService {
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.LEAVE_NOT_FOUND, 'teacher not found');
     const t = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId ?? '' }, select: { id: true } });
     if (!t) throw new CommError(CommErrorCode.LEAVE_NOT_FOUND, 'teacher not found');
-    await this.supervision.requireTeacherInScope(actor, t.id, CommErrorCode.LEAVE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, t.id, CommErrorCode.LEAVE_NOT_FOUND);
   }
 
   private async timeZone(): Promise<string> {

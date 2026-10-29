@@ -109,6 +109,9 @@ jobs:
         env:
           API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
           REALTIME_URL: ${{ vars.STAGING_REALTIME_URL }}
+          # PD-29 audio: the lessons site's origin, compiled into Admin Web and the
+          # teacher web portal. Unset = no lesson is handed Quran audio.
+          LESSONS_ORIGIN: ${{ vars.STAGING_LESSONS_ORIGIN }}
         run: |
           test -n "$API_BASE_URL" || { echo "::error::vars.STAGING_API_BASE_URL is not set"; exit 1; }
           # The variable is the API ORIGIN: the smoke test probes
@@ -137,6 +140,7 @@ jobs:
             --build-arg VITE_REALTIME_URL="$REALTIME_URL" \
             --build-arg VITE_APP_ENV=staging \
             --build-arg VITE_GIT_COMMIT="${GITHUB_SHA}" \
+            --build-arg VITE_LESSONS_ORIGIN="$LESSONS_ORIGIN" \
             -t "$IMAGE:staging-${GITHUB_SHA}" -t "$IMAGE:staging" \
             apps/admin-web
           docker push "$IMAGE:staging-${GITHUB_SHA}"
@@ -210,6 +214,7 @@ jobs:
           WORKER_CONCURRENCY: '5'
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          RESET_CODE_HASH_SECRET: ${{ secrets.RESET_CODE_HASH_SECRET }}
           JWT_ACCESS_TTL: 15m
           JWT_REFRESH_TTL: 30d
           STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
@@ -222,6 +227,7 @@ jobs:
           MEDIA_PUBLIC_BASE_URL: ${{ vars.MEDIA_PUBLIC_BASE_URL }}
           MATERIALS_SITE_BASE_URL: ${{ vars.MATERIALS_SITE_BASE_URL }}
           MATERIALS_FRAME_ORIGINS: ${{ vars.MATERIALS_FRAME_ORIGINS }}
+          LESSON_APPROVALS_SIGNING_KEY: ${{ secrets.LESSON_APPROVALS_SIGNING_KEY }}
           STORAGE_LOCAL_ROOT: ${{ vars.STORAGE_LOCAL_ROOT }}
           STORAGE_PUBLIC_BASE_URL: ${{ vars.STORAGE_PUBLIC_BASE_URL }}
           OUTBOX_POLL_MS: ${{ vars.OUTBOX_POLL_MS }}
@@ -271,6 +277,8 @@ jobs:
           # PD-35: strict teacher-supervisor scope is off everywhere until the owner sets
           # the variable to 'true' (department head, 2026-10-26).
           TEACHER_SUPERVISOR_STRICT_SCOPE: ${{ vars.TEACHER_SUPERVISOR_STRICT_SCOPE || 'false' }}
+          # PD-42: NOT defaulted -- unset keeps the value stored in chat.config.
+          SALES_FAMILY_SCOPE: ${{ vars.SALES_FAMILY_SCOPE }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           OTEL_SERVICE_NAME: jawwid-chat-api
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
@@ -322,6 +330,17 @@ jobs:
         run: |
           # AI #1's migration runner is the single migration authority.
           PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/apply.sh
+
+      - name: Load the pinned Quran text
+        # docs/product/quran-dataset-contract.md: after the migrations, from
+        # this checkout (never inside the API image). The loader refuses a file
+        # whose SHA-256 is not the pinned one, a count mismatch, a split or
+        # empty ayah, and writes all or nothing; a dataset already loaded with
+        # the same fingerprints is skipped. No dataset vendored: nothing to do.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/load-quran.sh
 
       - name: Release
         # Deploys the resolved .do/app.staging.yaml with doctl and fails unless

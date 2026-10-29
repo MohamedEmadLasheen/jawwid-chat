@@ -70,6 +70,7 @@ export const chatCopy = {
     filterGroups: 'المجموعات',
     // PD-35: groups joined to support, kept out of the main list.
     filterJoined: 'انضممت إليها',
+    filterWaiting: 'تنتظر ردّنا',
     joinGroup: 'الانضمام إلى مجموعة',
     joinGroupHint: 'مجموعات طلاب معلميك. ينضم اسمك إلى المجموعة ويراه الأعضاء.',
     joinGroupSearch: 'ابحث باسم الطالب أو المعلم',
@@ -279,6 +280,7 @@ export const chatCopy = {
       family_group: 'مجموعة العائلة',
       teacher_supervision: 'محادثة الإشراف',
       trial_group: 'مجموعة الحصص التجريبية',
+      department_room: 'غرفة القسم',
     } as Record<string, string>,
     role: { contact: 'ولي أمر', teacher: 'معلم', staff: 'جوّد', system: 'النظام' } as Record<string, string>,
     system: {
@@ -291,6 +293,9 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `أصبح ${String(p.supervisor)} مشرفك؛ سجلّ المحادثة كما هو` : 'تغيّر مشرفك؛ سجلّ المحادثة كما هو',
       'group.learner_detached': () => 'انتقل طفل من هذه المجموعة إلى مشرف آخر',
+      // PD-42: a child added to the family joined its group.
+      'group.learner_added': (p: Record<string, unknown>) =>
+        p.learner ? `انضم ${String(p.learner)} إلى هذه المجموعة` : 'انضم طفل إلى هذه المجموعة',
       // PD-33. Worded without a gendered verb: the names are anyone's.
       // A list preview carries the kind only: then the line is generic.
       'cover.started': (p: Record<string, unknown>) =>
@@ -344,6 +349,7 @@ export const chatCopy = {
     filterGroups: 'Groups',
     // PD-35: groups joined to support, kept out of the main list.
     filterJoined: 'Joined',
+    filterWaiting: 'Waiting for a reply',
     joinGroup: 'Join a group',
     joinGroupHint: "Your teachers' students' groups. Members see that you joined.",
     joinGroupSearch: 'Search by student or teacher',
@@ -553,6 +559,7 @@ export const chatCopy = {
       family_group: 'Family group',
       teacher_supervision: 'Supervision chat',
       trial_group: 'Trial group',
+      department_room: 'Department room',
     } as Record<string, string>,
     role: { contact: 'Parent', teacher: 'Teacher', staff: 'Jawwid', system: 'System' } as Record<string, string>,
     system: {
@@ -565,6 +572,7 @@ export const chatCopy = {
       'direct.supervisor_changed': (p: Record<string, unknown>) =>
         p.supervisor ? `${String(p.supervisor)} is now your supervisor; the chat history is kept` : 'Your supervisor changed; the chat history is kept',
       'group.learner_detached': () => 'A child of this group moved to another supervisor',
+      'group.learner_added': (p: Record<string, unknown>) => (p.learner ? `${String(p.learner)} joined this group` : 'A child joined this group'),
       'cover.started': (p: Record<string, unknown>) =>
         p.cover && p.supervisor
           ? `${String(p.cover)} is covering for ${String(p.supervisor)} until ${coverDay(p.until, 'en-GB')}`

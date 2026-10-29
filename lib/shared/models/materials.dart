@@ -110,7 +110,7 @@ const sandboxSite = 'allow-scripts allow-same-origin allow-forms';
 
 /// What `open` returned: a short-lived URL to play, and how.
 class OpenedMaterial {
-  const OpenedMaterial({required this.kind, required this.mode, required this.url, required this.presentation, this.mimeType});
+  const OpenedMaterial({required this.kind, required this.mode, required this.url, required this.presentation, this.mimeType, this.audioEligible = false});
 
   final String kind;
   final String mode;
@@ -118,12 +118,16 @@ class OpenedMaterial {
   final MaterialPresentation presentation;
   final String? mimeType;
 
+  /// Only a lessons-site item: the app may hand it Quran audio (lesson_audio.dart).
+  final bool audioEligible;
+
   static OpenedMaterial fromJson(Map<String, Object?> raw) => OpenedMaterial(
         kind: raw['kind'] as String? ?? '',
         mode: raw['mode'] as String? ?? 'link',
         url: raw['url'] as String? ?? '',
         presentation: MaterialPresentation.parse(raw['presentation'] as String?),
         mimeType: raw['mimeType'] as String?,
+        audioEligible: raw['audioEligible'] == true,
       );
 }
 

@@ -1,0 +1,830 @@
+{
+ "lesson": "arabic-001",
+ "source": "apps/lessons/src/arabic/lesson-001.json",
+ "sourceSha256": "74d0e2c4998ceb8444c06253d2aca1ca2715b1e9588931f95df1c7418759cc80",
+ "lessonApproved": false,
+ "strings": [
+  {
+   "id": "alif.name",
+   "kind": "name",
+   "text": "\u0623\u064e\u0644\u0650\u0641\u0652",
+   "sha256": "7b409f99ba659ec8cc833d7935b287d4a6f3463ac75321a0f55a2eed9ea2c4e8"
+  },
+  {
+   "id": "alif-021",
+   "kind": "word",
+   "text": "\u062f\u064f\u0646\u0652\u064a\u064e\u0627",
+   "sha256": "3f2479cbe97b19026dedee8a8ee962deb21e127025ef9cf2d880658fb2aef9a8"
+  },
+  {
+   "id": "alif-022",
+   "kind": "word",
+   "text": "\u0639\u064f\u0644\u0652\u064a\u064e\u0627",
+   "sha256": "f7d0498549d49fcde6bc1e4fff9bdc89012a76c804cbe5d69535fdb1c7c16b05"
+  },
+  {
+   "id": "alif-024",
+   "kind": "word",
+   "text": "\u0643\u064e\u0646\u064e\u062f\u064e\u0627",
+   "sha256": "3ffa605927cb729a424eac61b24686195d96ccb9c40712ce820b7838b9316986"
+  },
+  {
+   "id": "alif-025",
+   "kind": "word",
+   "text": "\u0641\u064e\u0631\u064e\u0646\u0652\u0633\u064e\u0627",
+   "sha256": "a7907fae777668773a95c9e823d40dcbf8f3d4dd45ebda07c90794e20f5e9797"
+  },
+  {
+   "id": "alif-026",
+   "kind": "word",
+   "text": "\u0623\u064e\u0645\u0652\u0631\u0650\u064a\u0643\u064e\u0627",
+   "sha256": "22e69dfc0ae7e2ce483df604fe8658fb882da84cfbeeeb1dac88e5a37c52cb81"
+  },
+  {
+   "id": "alif-027",
+   "kind": "word",
+   "text": "\u0623\u064e\u0644\u0652\u0645\u064e\u0627\u0646\u0652\u064a\u064e\u0627",
+   "sha256": "e868918360d39b1b18815bc58490ab6a7b596e96d959255f8cd52d036d286db0"
+  },
+  {
+   "id": "alif-028",
+   "kind": "word",
+   "text": "\u0631\u064f\u0648\u0633\u0652\u064a\u064e\u0627",
+   "sha256": "140cec2e9cc45aad068756256030ffc2d45242d351d64288fdedfaf98720a764"
+  },
+  {
+   "id": "alif-029",
+   "kind": "word",
+   "text": "\u0623\u064f\u0648\u0631\u064f\u0648\u0628\u064e\u0651\u0627",
+   "sha256": "795f34b27ff782d36f220b9e238698d3a76926bf6fd0e72dadc3ee742cce80a6"
+  },
+  {
+   "id": "alif-030",
+   "kind": "word",
+   "text": "\u0623\u064e\u0641\u0652\u0631\u0650\u064a\u0642\u0652\u064a\u064e\u0627",
+   "sha256": "22355ec64c06ae9247b5a0baf359b6364b1a2830873a505c5afa607d7831d9f7"
+  },
+  {
+   "id": "alif-031",
+   "kind": "word",
+   "text": "\u0622\u0633\u0652\u064a\u064e\u0627",
+   "sha256": "9d2876755ca0563dd200b25a791ba2e11b5dd761f538282e75d84c62f77d0498"
+  },
+  {
+   "id": "alif-032",
+   "kind": "word",
+   "text": "\u062a\u064f\u0631\u0652\u0643\u0650\u064a\u064e\u0627",
+   "sha256": "f8b3636d0ed6a11f291574f7a1bb239244817cff072f5f20a90c77d62ba97079"
+  },
+  {
+   "id": "alif-033",
+   "kind": "word",
+   "text": "\u0633\u064f\u0648\u0631\u0652\u064a\u064e\u0627",
+   "sha256": "a9606df08b9c7a99c47bbe8d4674c5cb4b6d3db1a2dd3a578ddbd0f96f67d60d"
+  },
+  {
+   "id": "alif-034",
+   "kind": "word",
+   "text": "\u0644\u0650\u064a\u0628\u0652\u064a\u064e\u0627",
+   "sha256": "791d804183b69cf0780afaa91a9f4da342504fe5d25e9c9ab55c4d498afe0aa9"
+  },
+  {
+   "id": "ba.name",
+   "kind": "name",
+   "text": "\u0628\u064e\u0627\u0621\u0652",
+   "sha256": "fdac6226be42cb35a3c0e1cb9239f3748fb1cc9b195885d4a3356c52d5989959"
+  },
+  {
+   "id": "ba-020",
+   "kind": "word",
+   "text": "\u0635\u064e\u0628\u0650\u064a",
+   "sha256": "8a246a7988f94154154bc51d7dae438f34960de62c16bc26ff9f4056146a12e5"
+  },
+  {
+   "id": "ta.name",
+   "kind": "name",
+   "text": "\u062a\u064e\u0627\u0621\u0652",
+   "sha256": "0a13989a204d6570a530e528c88cc31c7582bd76c4b1d3eb459a9866397edced"
+  },
+  {
+   "id": "ta_marbuta.name",
+   "kind": "name",
+   "text": "\u062a\u064e\u0627\u0621\u064c \u0645\u064e\u0631\u0652\u0628\u064f\u0648\u0637\u064e\u0629\u0652",
+   "sha256": "c62f4c043260cb855f92c3404f397dea52f859325deb383f0c80cc7426ab2d36"
+  },
+  {
+   "id": "tha.name",
+   "kind": "name",
+   "text": "\u062b\u064e\u0627\u0621\u0652",
+   "sha256": "7d83bf2664549408a63b5954ff8792b8cf728f3b5f8b53be218cb74bfb10b0ee"
+  },
+  {
+   "id": "tha-014",
+   "kind": "word",
+   "text": "\u062b\u064e\u0627\u0646\u0650\u064a",
+   "sha256": "14a8010cbd0eef044fc881d6f22d175cee233931ba4469e452f01ff8a610dd16"
+  },
+  {
+   "id": "jim.name",
+   "kind": "name",
+   "text": "\u062c\u0650\u064a\u0645\u0652",
+   "sha256": "2ea4f3670804336a4bbe803497fbcae589d0f1919ce0d9d54fb4fafdcbe4467a"
+  },
+  {
+   "id": "jim-009",
+   "kind": "word",
+   "text": "\u062c\u064f\u0646\u0652\u062f\u0650\u064a",
+   "sha256": "ce273b70ba9de96de85d166af02bccb2a45a58c2a20b1ff25346f02297ab2dbd"
+  },
+  {
+   "id": "hha.name",
+   "kind": "name",
+   "text": "\u062d\u064e\u0627\u0621\u0652",
+   "sha256": "3f1e3509b34c6c09816d594c7fd7a55be9a095eec3fd8d3842dc1d24d2840694"
+  },
+  {
+   "id": "hha-011",
+   "kind": "word",
+   "text": "\u062d\u064e\u0644\u0652\u0648\u064e\u0649",
+   "sha256": "67a56412b17e2301428cf9a70cc33d623bffb8d554125b26b5ce1438c5838b7e"
+  },
+  {
+   "id": "kha.name",
+   "kind": "name",
+   "text": "\u062e\u064e\u0627\u0621\u0652",
+   "sha256": "7e24e525376366fbe74793825de305f19c49185744cab9a80c5e654bd93926af"
+  },
+  {
+   "id": "dal.name",
+   "kind": "name",
+   "text": "\u062f\u064e\u0627\u0644\u0652",
+   "sha256": "69890b471593ea5d8cf73100d8e2e38639480093922c8ffc9bd22c53830195b3"
+  },
+  {
+   "id": "dhal.name",
+   "kind": "name",
+   "text": "\u0630\u064e\u0627\u0644\u0652",
+   "sha256": "ddf88f2719fad1f869ff6309b9745b294ab353f3d0dca0678cdd221156b31eeb"
+  },
+  {
+   "id": "dhal-010",
+   "kind": "word",
+   "text": "\u0630\u0650\u0643\u0652\u0631\u064e\u0649",
+   "sha256": "5654ec92e3c6e9492693bc7a42459c02da0fce538b1bf01bc0cf33c89a5cf22c"
+  },
+  {
+   "id": "ra.name",
+   "kind": "name",
+   "text": "\u0631\u064e\u0627\u0621\u0652",
+   "sha256": "0227b4bad57199cb30d66e1ae768cced5d053d8db6cb72017d8177f7fbc5506c"
+  },
+  {
+   "id": "zay.name",
+   "kind": "name",
+   "text": "\u0632\u064e\u0627\u064a\u0652",
+   "sha256": "a02f4614aa137171861d42581536613d9e81e2446763c52d9154eca1147b639e"
+  },
+  {
+   "id": "zay-028",
+   "kind": "word",
+   "text": "\u062e\u064f\u0632\u064e\u0627\u0645\u064e\u0649",
+   "sha256": "ff6b682aedb6b6376c30a31f4d7feb3350fbc049ef2cd97192d0edb8066c6cdc"
+  },
+  {
+   "id": "sin.name",
+   "kind": "name",
+   "text": "\u0633\u0650\u064a\u0646\u0652",
+   "sha256": "0f4c7785aba98bda9f27afdec18065bf98c1fd44702bd8fdd76b2c01dd25758f"
+  },
+  {
+   "id": "shin.name",
+   "kind": "name",
+   "text": "\u0634\u0650\u064a\u0646\u0652",
+   "sha256": "e90108716819f81808e1a30ce697db9ab34ae874d89e8262bf7e668cb61e05a3"
+  },
+  {
+   "id": "sad.name",
+   "kind": "name",
+   "text": "\u0635\u064e\u0627\u062f\u0652",
+   "sha256": "ece1f0e1250453fd411273aba9922a6aa7b84bf75b348b042ae5120028b98033"
+  },
+  {
+   "id": "dad.name",
+   "kind": "name",
+   "text": "\u0636\u064e\u0627\u062f\u0652",
+   "sha256": "7689552fecb76194258ef91fdf4a517d99be2d52d5895fd3981306f6a8f46aaf"
+  },
+  {
+   "id": "dad-024",
+   "kind": "word",
+   "text": "\u0642\u064e\u0627\u0636\u0650\u064a",
+   "sha256": "a1e50a4a3e2694c32b46562a7e970471eb1fe00bcecaf3c0ddce6e605856b1d4"
+  },
+  {
+   "id": "dad-025",
+   "kind": "word",
+   "text": "\u0631\u064e\u0627\u0636\u0650\u064a",
+   "sha256": "8ada56f09e464882461c89536748211c79463eb87b7e6bd3a57c232e637ce26b"
+  },
+  {
+   "id": "tta.name",
+   "kind": "name",
+   "text": "\u0637\u064e\u0627\u0621\u0652",
+   "sha256": "0c022a9f442df78e696de1460a07e704c81c2b82c46903f1394708456e9446f8"
+  },
+  {
+   "id": "tta-023",
+   "kind": "word",
+   "text": "\u0628\u064e\u0637\u064e\u0627\u0637\u064e\u0627",
+   "sha256": "9efcc6fc06f885220d3d83732468d8a40cbd52b999c9c736ee1192d2129ec083"
+  },
+  {
+   "id": "zza.name",
+   "kind": "name",
+   "text": "\u0638\u064e\u0627\u0621\u0652",
+   "sha256": "ad87a1fed097ff7880b97a88ec742e07d06c5fda36b665c7f36a329a9e05a2ad"
+  },
+  {
+   "id": "ain.name",
+   "kind": "name",
+   "text": "\u0639\u064e\u064a\u0652\u0646\u0652",
+   "sha256": "0337f90d726eddfd4cc4bd989db2db21d7cfc271a4d2b365652b1e9607e37596"
+  },
+  {
+   "id": "ghain.name",
+   "kind": "name",
+   "text": "\u063a\u064e\u064a\u0652\u0646\u0652",
+   "sha256": "19363bf8db35b25b0fb06d749361e3da04009fbf5c1b9bbb7ac437500394d8a8"
+  },
+  {
+   "id": "fa.name",
+   "kind": "name",
+   "text": "\u0641\u064e\u0627\u0621\u0652",
+   "sha256": "3cd321875ba28a3b2d6dd0397ee3d80bea38f6481a9c8b4f5499e04da4b36c13"
+  },
+  {
+   "id": "qaf.name",
+   "kind": "name",
+   "text": "\u0642\u064e\u0627\u0641\u0652",
+   "sha256": "05e0ee291873248cdabf6e06b7a817d4e53f12c7c7a23a21aad38e9a031b58a9"
+  },
+  {
+   "id": "qaf-025",
+   "kind": "word",
+   "text": "\u0645\u064f\u0648\u0633\u0650\u064a\u0642\u064e\u0649",
+   "sha256": "d7431dae83fe5948f7203a1e82d403089dc70d902283931fbf6d4ef858c60e5e"
+  },
+  {
+   "id": "kaf.name",
+   "kind": "name",
+   "text": "\u0643\u064e\u0627\u0641\u0652",
+   "sha256": "65fb33ae4b99baa9daf9198e724c13ffcb828462876db8e949cd9cfe4643873e"
+  },
+  {
+   "id": "kaf-027",
+   "kind": "word",
+   "text": "\u0630\u0650\u0643\u0652\u0631\u064e\u0649",
+   "sha256": "5654ec92e3c6e9492693bc7a42459c02da0fce538b1bf01bc0cf33c89a5cf22c"
+  },
+  {
+   "id": "kaf-029",
+   "kind": "word",
+   "text": "\u0628\u064e\u0643\u064e\u0649",
+   "sha256": "c2ad75fec21a8efe9f0683e5af606a61adfac7f80fb98ee2a879c4ea8cbf7ea0"
+  },
+  {
+   "id": "lam.name",
+   "kind": "name",
+   "text": "\u0644\u064e\u0627\u0645\u0652",
+   "sha256": "4cb3db3dcb07749c09ed67a2e9e2958106673841f8033a2b191b486f70209e33"
+  },
+  {
+   "id": "mim.name",
+   "kind": "name",
+   "text": "\u0645\u0650\u064a\u0645\u0652",
+   "sha256": "77f45bf4cfddd63fbfa7eb1a1a88d8e34d4ab2cd0639e9a86945f4e5792b0178"
+  },
+  {
+   "id": "mim-012",
+   "kind": "word",
+   "text": "\u0645\u064f\u0648\u0633\u0650\u064a\u0642\u064e\u0649",
+   "sha256": "d7431dae83fe5948f7203a1e82d403089dc70d902283931fbf6d4ef858c60e5e"
+  },
+  {
+   "id": "nun.name",
+   "kind": "name",
+   "text": "\u0646\u064f\u0648\u0646\u0652",
+   "sha256": "26386f9541b6d69aa52971e6be6ffbd057570a271a59c7f31c726eb08eee998a"
+  },
+  {
+   "id": "nun-030",
+   "kind": "word",
+   "text": "\u062b\u064e\u0627\u0646\u0650\u064a",
+   "sha256": "14a8010cbd0eef044fc881d6f22d175cee233931ba4469e452f01ff8a610dd16"
+  },
+  {
+   "id": "ha.name",
+   "kind": "name",
+   "text": "\u0647\u064e\u0627\u0621\u0652",
+   "sha256": "053bb5757fb497cd3596ac1b529ea81b826acfe913f0a28bab177a03929f3eb0"
+  },
+  {
+   "id": "waw.name",
+   "kind": "name",
+   "text": "\u0648\u064e\u0627\u0648\u0652",
+   "sha256": "9398dd2463ebc2e7721d2ba26edf44e0e47299d98cd3dbdd9a509c7fab7050fd"
+  },
+  {
+   "id": "waw-045",
+   "kind": "word",
+   "text": "\u0647\u064e\u062f\u064f\u0648",
+   "sha256": "d29670f651eea84b815cd4743a72f66d1f644e188fe5ac0c34a9d70e58e50590"
+  },
+  {
+   "id": "ya.name",
+   "kind": "name",
+   "text": "\u064a\u064e\u0627\u0621\u0652",
+   "sha256": "cf74c943ec313c31fe090171bb6b7bae06eb110a8a6b3ab28587044a26aee5c1"
+  },
+  {
+   "id": "ya-032",
+   "kind": "word",
+   "text": "\u0642\u064e\u0627\u0636\u0650\u064a",
+   "sha256": "a1e50a4a3e2694c32b46562a7e970471eb1fe00bcecaf3c0ddce6e605856b1d4"
+  },
+  {
+   "id": "ya-033",
+   "kind": "word",
+   "text": "\u0631\u064e\u0627\u0639\u0650\u064a",
+   "sha256": "2d2f3cf51a248586c4f2b579ce6f621172e2d7535062ce5e800829ad032ae800"
+  },
+  {
+   "id": "ya-034",
+   "kind": "word",
+   "text": "\u0647\u064e\u0627\u062f\u0650\u064a",
+   "sha256": "2fbfc966ad68e50928fd1a044da50ffaded32f505ff5c9b0bfe79d3e91e98db5"
+  },
+  {
+   "id": "ya-035",
+   "kind": "word",
+   "text": "\u0633\u064e\u0627\u0639\u0650\u064a",
+   "sha256": "e0ef050b3b9a28ad496da5ecb776bf6edd86562c02b6d346dca198cb5900e706"
+  },
+  {
+   "id": "ya-036",
+   "kind": "word",
+   "text": "\u0646\u064e\u0627\u062f\u0650\u064a",
+   "sha256": "2e1606eccdadb1d8149ada18f4681d7ac0aa75da0e0ffc4d4826a84a5256a3db"
+  },
+  {
+   "id": "ya-037",
+   "kind": "word",
+   "text": "\u0648\u064e\u0627\u062f\u0650\u064a",
+   "sha256": "7a90f19df1b3591c9451993f3ea104a50e80597532dcc1819a638445503de8be"
+  },
+  {
+   "id": "ya-038",
+   "kind": "word",
+   "text": "\u0645\u064e\u0627\u0636\u0650\u064a",
+   "sha256": "41e15ed092b98096158294215bfab7f56363381fb233b32a85cbeaff4020acb1"
+  },
+  {
+   "id": "ya-039",
+   "kind": "word",
+   "text": "\u0623\u064e\u063a\u064e\u0627\u0646\u0650\u064a",
+   "sha256": "3aac45746186f51b504561936d09c6f31353fa2a9a561ccac6bcd41e2c7dbeb1"
+  },
+  {
+   "id": "ya-040",
+   "kind": "word",
+   "text": "\u0645\u064e\u0639\u064e\u0627\u0646\u0650\u064a",
+   "sha256": "391725f5f02821380410ef3240d0db9d3d43dd9ff4e3b16ee1c4d12d04368cc0"
+  },
+  {
+   "id": "ya-041",
+   "kind": "word",
+   "text": "\u0644\u064e\u064a\u064e\u0627\u0644\u0650\u064a",
+   "sha256": "5bceb7dd564b7fca5f92f30ec2225885e539b61fa5509a49b7e8deca893b2de5"
+  },
+  {
+   "id": "ya-042",
+   "kind": "word",
+   "text": "\u0623\u064e\u0645\u064e\u0627\u0646\u0650\u064a",
+   "sha256": "bb4fe40f25d9e4854eba961e9f7dac7d7fcd5c7ae0398c8a14c26007c4682a75"
+  },
+  {
+   "id": "ya-043",
+   "kind": "word",
+   "text": "\u062a\u064e\u0647\u064e\u0627\u0646\u0650\u064a",
+   "sha256": "a7173b0f63e38752814e182e164d0fcd5f8a992379f40ece8a18ab85ce386ea0"
+  },
+  {
+   "id": "ya-044",
+   "kind": "word",
+   "text": "\u0623\u064e\u0631\u064e\u0627\u0636\u0650\u064a",
+   "sha256": "9f27ea25ccf91c6d586111893a1576738321166ca520f6be3eb79dc8ed878393"
+  },
+  {
+   "id": "ya-045",
+   "kind": "word",
+   "text": "\u0645\u064e\u0628\u064e\u0627\u0646\u0650\u064a",
+   "sha256": "909a691b5c7008d52a63ae082bfb816ccca89a730a132ed0239790297a0a46c1"
+  },
+  {
+   "id": "hamza.name",
+   "kind": "name",
+   "text": "\u0647\u064e\u0645\u0652\u0632\u064e\u0629\u0652",
+   "sha256": "cfc61550b37da6b2585d4bcf7c352173babb787ecaa26b3572dfc696796288a3"
+  },
+  {
+   "id": "hamza-100",
+   "kind": "word",
+   "text": "\u0648\u064e\u0625\u0650\u0630\u064e\u0627",
+   "sha256": "59d92c1a7f40ea83756dd2f1f3b8d1dfa4afe65cf9c830cf1145b3ab5dc2dfa9"
+  },
+  {
+   "id": "hamza-109",
+   "kind": "word",
+   "text": "\u0641\u064e\u0625\u0650\u0630\u064e\u0627",
+   "sha256": "e99e065a827142f0c10b52639d052621863f10d2d267a04f08256513a31e6d5d"
+  },
+  {
+   "id": "alif_maqsura.name",
+   "kind": "name",
+   "text": "\u0623\u064e\u0644\u0650\u0641\u064c \u0645\u064e\u0642\u0652\u0635\u064f\u0648\u0631\u064e\u0629\u0652",
+   "sha256": "25e4968c35c6631718435a493f95a79499ba128baf8c3e7cf46e403ebade290b"
+  },
+  {
+   "id": "alif_maqsura-001",
+   "kind": "word",
+   "text": "\u0641\u064e\u062a\u064e\u0649",
+   "sha256": "c2f7c00a8cc11ed46edb1e085d9cbeb9a2312eef2e91c3066f3a3379bb73b957"
+  },
+  {
+   "id": "alif_maqsura-002",
+   "kind": "word",
+   "text": "\u0647\u064f\u062f\u064e\u0649",
+   "sha256": "06fa2bb64ba87822f7ce6c5255aa229b9b0da4487bfea216dbc16d5ca8ad6af3"
+  },
+  {
+   "id": "alif_maqsura-003",
+   "kind": "word",
+   "text": "\u0645\u064f\u0648\u0633\u064e\u0649",
+   "sha256": "cf9068950f467cf53749672ae93832bb62db38821eff61af199b26114bb93684"
+  },
+  {
+   "id": "alif_maqsura-004",
+   "kind": "word",
+   "text": "\u0639\u0650\u064a\u0633\u064e\u0649",
+   "sha256": "e2f9609a35b31768d999e5c0f23826f75ef12c34fca0ad75d167892704950b77"
+  },
+  {
+   "id": "alif_maqsura-005",
+   "kind": "word",
+   "text": "\u064a\u064e\u062d\u0652\u064a\u064e\u0649",
+   "sha256": "7e532e6fe10fcbaaa1ca8e1e9dd55851067b50e757c7cf5d92ac6737859a039c"
+  },
+  {
+   "id": "alif_maqsura-006",
+   "kind": "word",
+   "text": "\u0643\u064f\u0628\u0652\u0631\u064e\u0649",
+   "sha256": "f2b6fa9eb2905bd03e025e4b5b88047838c503ef7ca203af92a928a9841e92db"
+  },
+  {
+   "id": "alif_maqsura-007",
+   "kind": "word",
+   "text": "\u0635\u064f\u063a\u0652\u0631\u064e\u0649",
+   "sha256": "ef4f3b13d01597d4e768aa214b2477d2797d8abe082fa5fb325f67271b9d9d6f"
+  },
+  {
+   "id": "alif_maqsura-008",
+   "kind": "word",
+   "text": "\u0623\u064f\u0648\u0644\u064e\u0649",
+   "sha256": "8342928d50f67216580229ca3412e84e23865ad29a1e553ca7a4eaa3dbec69e6"
+  },
+  {
+   "id": "alif_maqsura-009",
+   "kind": "word",
+   "text": "\u062d\u064f\u0633\u0652\u0646\u064e\u0649",
+   "sha256": "3f83437af1f8ebd7d349cc486e9f41596b0d0c4a51f1343871c2eacfdc503d74"
+  },
+  {
+   "id": "alif_maqsura-010",
+   "kind": "word",
+   "text": "\u0641\u064f\u0636\u0652\u0644\u064e\u0649",
+   "sha256": "b978111fa8c6fe524c42e68e2437fbee4706505300bdc9555fdf7a866eccfff2"
+  },
+  {
+   "id": "alif_maqsura-011",
+   "kind": "word",
+   "text": "\u0648\u064f\u0633\u0652\u0637\u064e\u0649",
+   "sha256": "5da69adb9aa4115404a6d8c7b0dad1405960aad8dd37cb75e1d64a9ebee8b275"
+  },
+  {
+   "id": "alif_maqsura-012",
+   "kind": "word",
+   "text": "\u0644\u064e\u064a\u0652\u0644\u064e\u0649",
+   "sha256": "f09f7750f1d778c2bea2d10bc59e15c373faea5f5cbd55df1794b1f78913a250"
+  },
+  {
+   "id": "alif_maqsura-013",
+   "kind": "word",
+   "text": "\u0633\u064e\u0644\u0652\u0645\u064e\u0649",
+   "sha256": "99cffd150b5a87bb5fb4e7ac87b5c5a61dbe15a6c8797c487c38ca59ec40e3ae"
+  },
+  {
+   "id": "alif_maqsura-014",
+   "kind": "word",
+   "text": "\u0645\u064e\u0631\u0652\u0636\u064e\u0649",
+   "sha256": "42f037a52d48dbbf13da40c3f8166f1efe80dc45a9e6f3f6256f35865fe5fcf8"
+  },
+  {
+   "id": "alif_maqsura-015",
+   "kind": "word",
+   "text": "\u062c\u064e\u0631\u0652\u062d\u064e\u0649",
+   "sha256": "5f7b7f94e7b6020210de3d128cc02bd9d538e171fd6a68722263a9b82426c9c2"
+  },
+  {
+   "id": "alif_maqsura-016",
+   "kind": "word",
+   "text": "\u0642\u064e\u062a\u0652\u0644\u064e\u0649",
+   "sha256": "3f3575caba95aac5f03397d5fcab8dde72de675956055935278eff886c7a3a19"
+  },
+  {
+   "id": "alif_maqsura-017",
+   "kind": "word",
+   "text": "\u0623\u064e\u0633\u0652\u0631\u064e\u0649",
+   "sha256": "ded2cc18f436e7e8b8e650ed531f16aaf88387655b674a254ff0550c13bc6fe5"
+  },
+  {
+   "id": "alif_maqsura-018",
+   "kind": "word",
+   "text": "\u0635\u064e\u0631\u0652\u0639\u064e\u0649",
+   "sha256": "2b5ec023820dfcaeb3c0c180bee187eea6a9b0c9c19a3bb542fb2c757d521200"
+  },
+  {
+   "id": "alif_maqsura-019",
+   "kind": "word",
+   "text": "\u0633\u064e\u0643\u0652\u0631\u064e\u0649",
+   "sha256": "58dff5b6c82aa38b826e9b6026647ff8fd7ad58a578095b12c3e0c2a294510af"
+  },
+  {
+   "id": "alif_maqsura-020",
+   "kind": "word",
+   "text": "\u062d\u064e\u064a\u0652\u0631\u064e\u0649",
+   "sha256": "95da12ecf12036342daee6aaac80dbaa0121de350dce39e1c0e79d54dad7a083"
+  },
+  {
+   "id": "alif_maqsura-021",
+   "kind": "word",
+   "text": "\u063a\u064e\u0636\u0652\u0628\u064e\u0649",
+   "sha256": "ef7a1449e45a9b2cb9502681f2d2ce1797efebc5dd539cbcc3c67bc5b741b8c3"
+  },
+  {
+   "id": "alif_maqsura-022",
+   "kind": "word",
+   "text": "\u0639\u064e\u0637\u0652\u0634\u064e\u0649",
+   "sha256": "97998993313004d83dfee668f1029fef4801ab0ea42c50ced2494b75e2337263"
+  },
+  {
+   "id": "alif_maqsura-023",
+   "kind": "word",
+   "text": "\u0646\u064e\u0634\u0652\u0648\u064e\u0649",
+   "sha256": "f81db104922d8c5c3440d56ccbbe34a2aa3219fe95a9417920bf81c9e1aae44d"
+  },
+  {
+   "id": "alif_maqsura-024",
+   "kind": "word",
+   "text": "\u0631\u064e\u0636\u0652\u0648\u064e\u0649",
+   "sha256": "e76952914036e643e1d98656eae4bdf628eb269e28bc1f11c00d83435bfbcf2c"
+  },
+  {
+   "id": "alif_maqsura-025",
+   "kind": "word",
+   "text": "\u0632\u064f\u0644\u0652\u0641\u064e\u0649",
+   "sha256": "e3c4ddee78a06d32a5e11d0a4a5fee597d51370629b05c9bef44412d5e48abad"
+  },
+  {
+   "id": "alif_maqsura-026",
+   "kind": "word",
+   "text": "\u0633\u064e\u0644\u0652\u0648\u064e\u0649",
+   "sha256": "d6e4aac3538ec37ef3b11f57e3255896a6e2685b7657166a17ae6ee77da3e910"
+  },
+  {
+   "id": "alif_maqsura-027",
+   "kind": "word",
+   "text": "\u0646\u064e\u062c\u0652\u0648\u064e\u0649",
+   "sha256": "c592c84377b8e4af0db57802a6daa110d0f7eae5b5da1a2c6e0145a77abba4dc"
+  },
+  {
+   "id": "alif_maqsura-028",
+   "kind": "word",
+   "text": "\u0628\u064f\u0634\u0652\u0631\u064e\u0649",
+   "sha256": "e2963935aee0574f69212b5ad7bd999ad1d434b1fe53dec53099a375eb4d28c6"
+  },
+  {
+   "id": "alif_maqsura-029",
+   "kind": "word",
+   "text": "\u0630\u0650\u0643\u0652\u0631\u064e\u0649",
+   "sha256": "5654ec92e3c6e9492693bc7a42459c02da0fce538b1bf01bc0cf33c89a5cf22c"
+  },
+  {
+   "id": "alif_maqsura-030",
+   "kind": "word",
+   "text": "\u0634\u064f\u0648\u0631\u064e\u0649",
+   "sha256": "a3835daf53e37d944bd7129d91c87890a8715475fa7e7737e7ab82beef1c1c14"
+  },
+  {
+   "id": "alif_maqsura-031",
+   "kind": "word",
+   "text": "\u0641\u064e\u062a\u0652\u0648\u064e\u0649",
+   "sha256": "67994bfa39158a9836717d6a78e8e7c4c525559eb1a70c4d2d6c387a5a56e62a"
+  },
+  {
+   "id": "alif_maqsura-032",
+   "kind": "word",
+   "text": "\u062f\u064e\u0639\u0652\u0648\u064e\u0649",
+   "sha256": "1689169992fe6655cab187d2ad73d61f957554d2d6aea29b2fe710197cb5df64"
+  },
+  {
+   "id": "alif_maqsura-033",
+   "kind": "word",
+   "text": "\u062a\u064e\u0642\u0652\u0648\u064e\u0649",
+   "sha256": "48b14c958f079ef20e04ed82b0d403af3c725381515eb932cb6e4e7be23ce891"
+  },
+  {
+   "id": "alif_maqsura-034",
+   "kind": "word",
+   "text": "\u0645\u064e\u0623\u0652\u0648\u064e\u0649",
+   "sha256": "afd4df6129cbf702952ad57b5c031cda41c5a6d486c0269c33b17ac3e81be799"
+  },
+  {
+   "id": "alif_maqsura-035",
+   "kind": "word",
+   "text": "\u0645\u064f\u0633\u0652\u062a\u064e\u0634\u0652\u0641\u064e\u0649",
+   "sha256": "46854de8183dd934d3226b85942d49e3d6049e7405fa915a2d1497e94c1de0c2"
+  },
+  {
+   "id": "alif_maqsura-036",
+   "kind": "word",
+   "text": "\u0645\u064f\u0635\u0652\u0637\u064e\u0641\u064e\u0649",
+   "sha256": "bb0b1a65841d2bc5c78829231ebd3cd9cfa88b2a8725c802847574ba532d9a1a"
+  },
+  {
+   "id": "alif_maqsura-037",
+   "kind": "word",
+   "text": "\u0645\u064f\u0631\u0652\u062a\u064e\u0636\u064e\u0649",
+   "sha256": "e0aa577c31e46d87d7d43f00fdbef80303418e38bc2f82ec9b3582795d49277d"
+  },
+  {
+   "id": "alif_maqsura-038",
+   "kind": "word",
+   "text": "\u0645\u064f\u0646\u0652\u062a\u064e\u0647\u064e\u0649",
+   "sha256": "0c5f072d352101cea5a9a2f080b5b00ac19073ca8d5fb6869e74e46ce7fc781c"
+  },
+  {
+   "id": "alif_maqsura-039",
+   "kind": "word",
+   "text": "\u0645\u064f\u0644\u0652\u062a\u064e\u0642\u064e\u0649",
+   "sha256": "59d51563e7cd19ee84371c7425c4415222cb52c8407f18f1ecde429a646f18e2"
+  },
+  {
+   "id": "alif_maqsura-040",
+   "kind": "word",
+   "text": "\u0645\u064f\u0633\u0652\u062a\u064e\u0648\u064e\u0649",
+   "sha256": "6127ed99c85b2744ac005e4b89f5e896eac50e6b686844a3c8986013917e8f73"
+  },
+  {
+   "id": "alif_maqsura-041",
+   "kind": "word",
+   "text": "\u0645\u064e\u0639\u0652\u0646\u064e\u0649",
+   "sha256": "6c3cfb92ff2a28167027e9bbac9dacd9990ce856a14d48eb8c33945211fbe74b"
+  },
+  {
+   "id": "alif_maqsura-042",
+   "kind": "word",
+   "text": "\u0645\u064e\u0628\u0652\u0646\u064e\u0649",
+   "sha256": "d9e37abbe530e6491f73c728097b99923d72afe1bb3b96743b9e0b7b07224810"
+  },
+  {
+   "id": "alif_maqsura-043",
+   "kind": "word",
+   "text": "\u0645\u064e\u063a\u0652\u0632\u064e\u0649",
+   "sha256": "d46ef52c1878c235b56035797ce7b264d579f094637f35774c6f5a568c601c3a"
+  },
+  {
+   "id": "alif_maqsura-044",
+   "kind": "word",
+   "text": "\u0645\u064e\u0633\u0652\u0639\u064e\u0649",
+   "sha256": "68f521bca44dcdf99e8f51970444171a149d511de7892dce5c50ee3131d58c76"
+  },
+  {
+   "id": "alif_maqsura-045",
+   "kind": "word",
+   "text": "\u0645\u064e\u0631\u0652\u0639\u064e\u0649",
+   "sha256": "55c7f2ad58b83698f22bee4081dc19a241729abc4e9340455062f40c9166c19b"
+  },
+  {
+   "id": "lam_alif.name",
+   "kind": "name",
+   "text": "\u0644\u064e\u0627\u0645\u064f \u0623\u064e\u0644\u0650\u0641\u0652",
+   "sha256": "65c2d9adceb773ff2b7c6ce339c0ccfd44d96a9fce3a7afb288d2c247528e0f3"
+  },
+  {
+   "id": "lam_alif-001",
+   "kind": "word",
+   "text": "\u0644\u064e\u0627",
+   "sha256": "a4e8ac8696fd9d0943c4384a9f45c93d15f1449ffc53f6b60ee110f290721f45"
+  },
+  {
+   "id": "lam_alif-031",
+   "kind": "word",
+   "text": "\u062d\u064e\u0644\u064e\u0651\u0627",
+   "sha256": "1d05645b8ec2a1d932e086a004147dd605685cf063739dc250805444464d1686"
+  },
+  {
+   "id": "lam_alif-032",
+   "kind": "word",
+   "text": "\u0639\u064e\u0644\u064e\u0651\u0627",
+   "sha256": "f8c411ed151907a72603aa74d607f751d21f90d874c6b0fba8ddd0b0e4a4d913"
+  },
+  {
+   "id": "lam_alif-033",
+   "kind": "word",
+   "text": "\u062a\u064e\u0644\u064e\u0627",
+   "sha256": "39108a23146f1466a313f8f5acac7a13a5685ad8e3f6a581bbd9a352294859a5"
+  },
+  {
+   "id": "lam_alif-034",
+   "kind": "word",
+   "text": "\u062e\u064e\u0644\u064e\u0627",
+   "sha256": "0b0c28bf0567e35e70e16ac9a71397cdc49af09e60a0f09a07feb9d0b91a64ae"
+  },
+  {
+   "id": "lam_alif-035",
+   "kind": "word",
+   "text": "\u0645\u064e\u0644\u064e\u0627",
+   "sha256": "979f3ffafd41e519c219031093765823c6ea8f81440b56a3b99fda86c072505f"
+  },
+  {
+   "id": "lam_alif-036",
+   "kind": "word",
+   "text": "\u062d\u064f\u0644\u064e\u0627",
+   "sha256": "e3849c3b9cc5cb2cd591b99228302488f2d383daca4bb15226fa297d82e09a73"
+  },
+  {
+   "id": "lam_alif-037",
+   "kind": "word",
+   "text": "\u0639\u064f\u0644\u064e\u0627",
+   "sha256": "55e0f47ed8d69b0b18e2a1ced6137c489d6b5823fe4470f26932e6e42802d492"
+  },
+  {
+   "id": "lam_alif-038",
+   "kind": "word",
+   "text": "\u063a\u064e\u0644\u064e\u0627",
+   "sha256": "5b41cd5764556749793d0e12d15631ff9dc2573d908b1cf70dd993a680eb7a43"
+  },
+  {
+   "id": "lam_alif-039",
+   "kind": "word",
+   "text": "\u062c\u064e\u0644\u064e\u0627",
+   "sha256": "a6745347bfa5800166f67afbf8743d1f328c77e6713400694965d57292d84a6c"
+  },
+  {
+   "id": "lam_alif-040",
+   "kind": "word",
+   "text": "\u0635\u064e\u0644\u064e\u0651\u0627",
+   "sha256": "bc9fc1adc3daa3e29e6f0628c9e396904c3ab1b322a526131553c43b555ec5f2"
+  },
+  {
+   "id": "lam_alif-041",
+   "kind": "word",
+   "text": "\u0628\u064e\u0644\u064e\u0651\u0627",
+   "sha256": "b5abc52de9290c1bd531825d50b6160d8abb2c6e974adafee442aad9b3bc2f7f"
+  },
+  {
+   "id": "lam_alif-042",
+   "kind": "word",
+   "text": "\u062f\u064e\u0644\u064e\u0651\u0627",
+   "sha256": "667ba177779eb7a4d07276f38f4fdffa560f0a76b4af3cfc51f4bfac9f9dd010"
+  },
+  {
+   "id": "lam_alif-043",
+   "kind": "word",
+   "text": "\u0637\u064e\u0644\u064e\u0651\u0627",
+   "sha256": "b0c0e138f8ee0b6b29a948857802c7720169ed16eac6ec20c6bc98e000b668a2"
+  },
+  {
+   "id": "lam_alif-044",
+   "kind": "word",
+   "text": "\u0648\u064e\u0644\u064e\u0651\u0627",
+   "sha256": "6358c464029a2c0d35a3f25e9b82360edd3e1be79f6972258ba85bebc9acc0ab"
+  },
+  {
+   "id": "lam_alif-045",
+   "kind": "word",
+   "text": "\u0633\u064e\u0644\u064e\u0651\u0627",
+   "sha256": "2a1e1aed40b27a9089c9eea2e516f5d470b4458b1b760bc0a1874abe4ffcceff"
+  }
+ ]
+}

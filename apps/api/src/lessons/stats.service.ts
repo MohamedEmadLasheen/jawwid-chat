@@ -69,6 +69,9 @@ export class StatsService {
       operations,
       // PD-38: the scheduling calendar -- the Teachers department, Operations, the super admin.
       calendar: lessonManager || operations,
+      // PD-26 amendment: the Teacher Supervision page -- the Teachers department, the
+      // super admin, and an Operations supervisor (for the teachers of their families).
+      supervisionPage: staff && (await this.lessons.teacherScope.pageBasis(actor)) !== null,
     };
   }
 
@@ -172,12 +175,12 @@ export class StatsService {
     const owed = await this.lessons.owedMakeups(learner.organizationId, { learnerIds: [learner.id], causes: MAKEUP_CAUSES });
     const next = [...lessons].reverse().find((l) => l.outcome === null && l.startsAt.getTime() > now) ?? null;
     const lastReport = lessons.find((l) => l.outcome === LessonOutcome.HELD && l.report !== null && l.report.deletedAt === null) ?? null;
-    // PD-12: the learner's issued student certificates. The file itself is the
+    // PD-12 / PD-41: the learner's sent certificates. The file itself is the
     // attachment of the card in `conversationId`, signed per reader there.
-    const certificates = await this.prisma.learnerCertificate.findMany({
-      where: { learnerId: learner.id, state: 'issued' },
-      orderBy: { achievedOn: 'desc' },
-      select: { id: true, title: true, achievement: true, achievedOn: true, grade: true, decidedAt: true, conversationId: true, issuedMessageId: true },
+    const certificates = await this.prisma.appreciationCertificate.findMany({
+      where: { learnerId: learner.id, category: 'student', state: 'sent' },
+      orderBy: [{ achievedOn: 'desc' }, { sentAt: 'desc' }],
+      select: { id: true, title: true, achievement: true, achievedOn: true, grade: true, sentAt: true, conversationId: true, sentMessageId: true },
       take: 50,
     });
     return {
@@ -210,11 +213,11 @@ export class StatsService {
         id: c.id,
         title: c.title,
         achievement: c.achievement,
-        achievedOn: c.achievedOn.toISOString().slice(0, 10),
+        achievedOn: c.achievedOn?.toISOString().slice(0, 10) ?? null,
         grade: c.grade,
-        issuedAt: c.decidedAt?.toISOString() ?? null,
+        issuedAt: c.sentAt?.toISOString() ?? null,
         conversationId: c.conversationId,
-        messageId: c.issuedMessageId,
+        messageId: c.sentMessageId,
       })),
     };
   }

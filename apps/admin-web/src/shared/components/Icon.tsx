@@ -128,6 +128,7 @@ const PATHS = {
   chevronUp: <path d="m6 15 6-6 6 6" />,
   chevronForward: <path d="m9 6 6 6-6 6" />,
   arrowBack: <path d="M19 12H5M11 6l-6 6 6 6" />,
+  expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   search: (
     <>
       <circle cx="11" cy="11" r="7" />
@@ -313,6 +314,14 @@ const PATHS = {
     <>
       <path d="M12 6.5C10.3 5.2 7.9 4.5 4 4.5v13c3.9 0 6.3.7 8 2 1.7-1.3 4.1-2 8-2v-13c-3.9 0-6.3.7-8 2Z" />
       <path d="M12 6.5v13" />
+    </>
+  ),
+  /** PD-47: the Finance tag on a financial task. */
+  banknote: (
+    <>
+      <rect x="2.5" y="6" width="19" height="12" rx="1.5" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M6 9.5v.01M18 14.5v.01" />
     </>
   ),
 } satisfies Record<string, ReactElement>

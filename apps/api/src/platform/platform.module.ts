@@ -11,6 +11,7 @@ import { SqlStaffScope } from './staff-scope';
 import { TimeZoneService } from './time-zone.service';
 import { SqlSubscriptionLock } from './subscription-lock';
 import { TeacherScopeService } from './teacher-scope';
+import { SalesScopeService } from './sales-scope';
 import {
   AUDIT_SERVICE,
   COVERAGE_SERVICE,
@@ -33,6 +34,8 @@ import {
   providers: [
     // PD-35: which teachers a Teachers-department member works on (and the switch).
     TeacherScopeService,
+    // PD-42: the Sales family scope switch, written to chat.config at boot.
+    SalesScopeService,
     PrismaService,
     AppConfigService,
     AuthorizationService,
@@ -57,6 +60,7 @@ import {
   ],
   exports: [
     TeacherScopeService,
+    SalesScopeService,
     PrismaService,
     AppConfigService,
     AuthorizationService,

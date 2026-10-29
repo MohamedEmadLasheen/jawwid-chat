@@ -8,7 +8,7 @@ import type { Actor } from './types';
  *   personal info, assigned students           read                  read          never
  *   personal info: edit                        manager only          yes           never
  *   supervision timeline                       read + write          read + write  never
- *   payroll (PD-18): read + write              --                    yes           never
+ *   payroll (PD-18): read + write              manager only (PD-43)  yes           never
  *
  * "Teachers-dept staff" is the manager of the organization's Teachers
  * department and that department's members (PD-8 §1). Operations supervisors
@@ -26,7 +26,12 @@ export interface TeacherFileAccess {
   canView: boolean;
   canEditPersonal: boolean;
   canWriteSupervision: boolean;
-  /** PD-18: payroll -- pay terms, payout account, amounts, financial summary. Read and written in Chat; super admin only. */
+  /**
+   * PD-18: payroll -- pay terms, payout account, amounts, financial summary. Read
+   * and written in Chat by the super admin and, since PD-43 (owner N2, "Full
+   * teacher finance"), the Teachers manager. The database names the same two
+   * (chat.is_teacher_payroll_author).
+   */
   canViewFinance: boolean;
 }
 
@@ -50,7 +55,7 @@ export function decideTeacherFileAccess(
   // The role is re-checked, not inferred from the relation: the department
   // tables' triggers guarantee it today, and this keeps a stale row harmless.
   if (target.teachersDepartmentRole === 'manager' && actor.staffRole === StaffRole.MANAGER) {
-    return { canView: true, canEditPersonal: true, canWriteSupervision: true, canViewFinance: false };
+    return { canView: true, canEditPersonal: true, canWriteSupervision: true, canViewFinance: true };
   }
   if (
     target.teachersDepartmentRole === 'member' &&
@@ -60,3 +65,27 @@ export function decideTeacherFileAccess(
   }
   return NO_TEACHER_FILE_ACCESS;
 }
+
+/** The Teacher File access on the Teacher Supervision page (PD-26), and whether the page is open at all. */
+export interface TeacherFilePageAccess extends TeacherFileAccess {
+  onPage: boolean;
+}
+
+/**
+ * PD-26 amendment (owner 2026-10-27). The Teachers department and the super
+ * admin keep their access as it is. An Operations supervisor writes on the page
+ * -- complaints, follow-ups, resolutions -- for the teachers of their families,
+ * and nothing else of the Teacher File: no file, no personal record, no money.
+ */
+export function teacherFilePageAccess(
+  access: TeacherFileAccess,
+  basis: 'super_admin' | 'teachers' | 'operations' | null,
+): TeacherFilePageAccess {
+  if (basis === 'operations') {
+    return { canView: false, canEditPersonal: false, canWriteSupervision: true, canViewFinance: false, onPage: true };
+  }
+  return { ...access, onPage: basis !== null };
+}
+
+/** What an Operations supervisor may write on a teacher's timeline: the page's complaints. */
+export const OPERATIONS_ENTRY_KINDS: ReadonlySet<string> = new Set(['complaint', 'complaint_followup', 'complaint_resolution']);

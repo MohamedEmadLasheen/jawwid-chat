@@ -6,16 +6,7 @@ import { I18nProvider } from '@/core/i18n/I18nProvider'
 import { SessionProvider } from '@/core/auth/SessionProvider'
 import { qk } from '@/core/api/queryKeys'
 import type { Locale } from '@/core/i18n/messages'
-import type {
-  Case,
-  Contact,
-  FamilyCapabilities,
-  FamilyDetail,
-  InboxRow,
-  Message,
-  Staff,
-  StaffRole,
-} from '@/shared/types/domain'
+import type { Staff, StaffRole } from '@/shared/types/domain'
 
 export function createTestQueryClient(): QueryClient {
   return new QueryClient({
@@ -67,119 +58,6 @@ export function makeStaff(overrides: Partial<Staff> = {}): Staff {
     role: 'admin',
     presence: 'online',
     is_active: true,
-    ...overrides,
-  }
-}
-
-export function makeCapabilities(overrides: Partial<FamilyCapabilities> = {}): FamilyCapabilities {
-  return {
-    can_send_customer_message: true,
-    can_reply_as_assist: false,
-    assist_blocked_reason: null,
-    can_close_owner_locked: true,
-    can_transfer_ownership: false,
-    can_create_task: true,
-    can_escalate: true,
-    ...overrides,
-  }
-}
-
-export function makeInboxRow(overrides: Partial<InboxRow> = {}): InboxRow {
-  return {
-    family_id: 'fam_1',
-    display_name: 'Family One',
-    bucket: 'now',
-    top_reason: 'class started 5 minutes ago',
-    waiting_since: new Date(Date.now() - 12 * 60_000).toISOString(),
-    needs_reply: true,
-    tier: 'standard',
-    state: 'active',
-    owner_id: 'staff_a',
-    on_duty_id: 'staff_a',
-    handling_mode: 'owner',
-    open_case_count: 0,
-    response_target: null,
-    ...overrides,
-  }
-}
-
-export function makeMessage(overrides: Partial<Message> = {}): Message {
-  return {
-    id: 'msg_1',
-    case_id: null,
-    author_type: 'contact',
-    author_id: 'contact_1',
-    author_name: 'Parent',
-    on_behalf_mode: null,
-    body: 'Hello',
-    attachments: [],
-    visibility: 'customer',
-    created_at: new Date().toISOString(),
-    ...overrides,
-  }
-}
-
-export function makeCase(overrides: Partial<Case> = {}): Case {
-  return {
-    id: 'case_1',
-    family_id: 'fam_1',
-    learner_id: null,
-    type: 'general',
-    severity: null,
-    is_blocking: false,
-    status: 'open',
-    handler_id: 'staff_a',
-    owner_locked: false,
-    due_at: null,
-    follow_up_reason: null,
-    escalation_level: 0,
-    escalated_to_id: null,
-    resolved_at: null,
-    reopen_count: 0,
-    ...overrides,
-  }
-}
-
-export function makeContact(overrides: Partial<Contact> = {}): Contact {
-  return {
-    id: 'contact_1',
-    name: 'Guardian A',
-    relationship: 'mother',
-    role_preset: 'primary_guardian',
-    can_message: true,
-    can_view_progress: true,
-    can_manage_schedule: true,
-    can_manage_billing: true,
-    can_manage_contacts: true,
-    can_cancel: true,
-    is_active: true,
-    ...overrides,
-  }
-}
-
-export function makeFamilyDetail(overrides: Partial<FamilyDetail> = {}): FamilyDetail {
-  return {
-    family: {
-      id: 'fam_1',
-      display_name: 'Family One',
-      tier: 'standard',
-      tier_reason: null,
-      state: 'active',
-      state_reason: null,
-      state_changed_at: null,
-      language: 'ar',
-      manual_flag: null,
-      manual_flag_reason: null,
-    },
-    owner: { id: 'staff_a', name: 'Admin A' },
-    on_duty: { id: 'staff_a', name: 'Admin A', mode: 'owner' },
-    contacts: [makeContact()],
-    learners: [],
-    subscription: null,
-    pinned_notes: [],
-    recent_cases: [],
-    open_tasks: [],
-    capabilities: makeCapabilities(),
     ...overrides,
   }
 }

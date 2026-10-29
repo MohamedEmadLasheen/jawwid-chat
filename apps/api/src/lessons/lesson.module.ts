@@ -22,6 +22,8 @@ import { EnrollmentService } from './enrollment.service';
 import { JourneyController } from './journey.controller';
 import { LessonRecordService } from './lesson-record.service';
 import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
+import { FamilyIntakeService } from '../new-students/intake.service';
+import { FamilyIntakeController } from '../new-students/intake.controller';
 import { ReportMaterials } from '../materials/report-materials';
 
 /**
@@ -39,7 +41,7 @@ import { ReportMaterials } from '../materials/report-materials';
   // OrgStructureModule: PD-24, a new student's supervisor changes through the one transfer.
   // BillingModule: PD-27, a trial's payment links before Assign, attached at Assign.
   imports: [CommunicationModule, SupervisionModule, NewStudentsModule, OrgStructureModule, BillingModule],
-  controllers: [StatsController, SchedulingController, LessonController, JourneyController, LifecycleController, TrialController, TrialTicketsController, ReportCorrectionController],
+  controllers: [StatsController, SchedulingController, LessonController, JourneyController, LifecycleController, TrialController, TrialTicketsController, ReportCorrectionController, FamilyIntakeController],
   providers: [
     LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService,
     // PD-15: corrections and report edits / deletes; enrolment details and courses.
@@ -47,6 +49,8 @@ import { ReportMaterials } from '../materials/report-materials';
     // PD-16: enrolling a new student. The file lives in src/new-students (it reads
     // the confined form); it is provided here, beside the scheduling it calls.
     NewStudentEnrolmentService,
+    // PD-42: entering families by hand (the intake from Jawwid Core), beside PD-16.
+    FamilyIntakeService,
     // PD-29: a report's practice and memorization marks, written in the
     // report's transaction. The file lives in src/materials.
     ReportMaterials,

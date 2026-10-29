@@ -38,6 +38,14 @@ JWT_ACCESS_SECRET	auth	yes	req	req	req
 JWT_REFRESH_SECRET	auth	yes	req	req	req
 JWT_ACCESS_TTL	auth	no	opt	req	req
 JWT_REFRESH_TTL	auth	no	opt	req	req
+# RESET_CODE_HASH_SECRET is CONSUMED by apps/api/src/platform/auth/password-reset.service.ts
+# (PD-43): the HMAC key under which every one-time code -- a reset (PD-21/PD-25)
+# or a first sign-in code -- is stored, so a database read or a backup cannot
+# recover a live code. At least 32 characters. Required in staging and
+# production: without it no code is issued or accepted (fails closed). Locally
+# a key is derived from JWT_REFRESH_SECRET. Rotating it voids every live code.
+# Generate one with: openssl rand -base64 48
+RESET_CODE_HASH_SECRET	auth	yes	opt	req	req
 # STORAGE. Two kinds of row live here, and the difference matters when reading
 # this file against the code.
 #
@@ -99,6 +107,14 @@ ATTACHMENT_MAX_VOICE_DURATION_MS	storage	no	opt	opt	opt
 # own MATERIALS_FRAME_ORIGINS.
 MATERIALS_SITE_BASE_URL	materials	no	opt	opt	opt
 MATERIALS_FRAME_ORIGINS	materials	no	opt	opt	opt
+# LESSON_APPROVALS_SIGNING_KEY is CONSUMED by apps/api/src/lesson-content/approvals-signer.ts
+# (PD-49): the Ed25519 private key that signs the export of children's Quran
+# content approvals. Its PUBLIC key is committed with its id in
+# apps/lessons/src/content/approvals-keys.json, and CI refuses any approvals file
+# it does not verify. Optional: unset, the API exports nothing (503) and no
+# content reaches a child. An owner action (docs/infrastructure/secrets.md).
+# PEM PKCS#8, or its base64 DER. Generate with: openssl genpkey -algorithm ed25519
+LESSON_APPROVALS_SIGNING_KEY	materials	yes	opt	opt	opt
 FCM_PROJECT_ID	push	no	opt	opt	req
 FCM_SERVICE_ACCOUNT_JSON	push	yes	opt	opt	req
 APNS_KEY_ID	push	no	opt	opt	req
@@ -181,6 +197,16 @@ SUBSCRIPTION_LOCK_ENFORCED	payments	no	opt	opt	opt
 # a boot that changes it logs a warning. Runbook: docs/admin/pd035-teacher-supervisors.md. Department head decision 2026-10-26: off everywhere until the
 # owner turns it on (the deploy workflows default it so).
 TEACHER_SUPERVISOR_STRICT_SCOPE	application	no	opt	opt	opt
+# SALES_FAMILY_SCOPE is CONSUMED by apps/api/src/platform/sales-scope.ts (PD-42)
+# in the API, which writes it into chat.config at boot so the database's write
+# guards read the same value: 'own' = a Sales member reads and writes only the
+# families they own (the Sales manager keeps every family); 'all' = every
+# Sales member reads every family, as before PD-42. Any other value REFUSES TO
+# BOOT (fail closed). UNSET writes nothing: the stored value stands ('all'
+# until written); a boot that changes it logs a warning. The deploy workflows
+# do NOT default it. Owner decision 2026-10-28: 'own' only after the intake
+# from Jawwid Core is complete and verified.
+SALES_FAMILY_SCOPE	application	no	opt	opt	opt
 # SENTRY_DSN is CONSUMED: when set, the API and the worker report 5xx responses,
 # swallowed worker-subsystem failures and process-level faults to Sentry
 # (apps/api/src/infra/observability/sentry-error-tracker.ts); when unset or
@@ -210,8 +236,12 @@ BUILD_TIME	release	no	opt	req	req
 # SMTP_URL + RECOVERY_MAIL_FROM; WhatsApp needs WHATSAPP_PHONE_NUMBER_ID +
 # WHATSAPP_ACCESS_TOKEN + WHATSAPP_RECOVERY_TEMPLATE (an APPROVED Meta
 # authentication template). SMTP_URL embeds the SMTP password, so it is secret.
-SMTP_URL	recovery	yes	opt	opt	opt
-RECOVERY_MAIL_FROM	recovery	no	opt	opt	opt
+# REQUIRED in production (department head, 2026-10-28): e-mail also carries the
+# first-login and reset codes staff and teachers depend on (PD-40, PD-43), so a
+# production without it strands people at sign-in. Both halves are required:
+# SMTP_URL alone still leaves the e-mail channel off.
+SMTP_URL	recovery	yes	opt	opt	req
+RECOVERY_MAIL_FROM	recovery	no	opt	opt	req
 WHATSAPP_PHONE_NUMBER_ID	recovery	no	opt	opt	opt
 WHATSAPP_ACCESS_TOKEN	recovery	yes	opt	opt	opt
 WHATSAPP_RECOVERY_TEMPLATE	recovery	no	opt	opt	opt

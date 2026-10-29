@@ -205,6 +205,15 @@ export class CallService {
     // PD-19 second amendment: the staff-only groups around a teacher (trial
     // group, supervision) seat several people, so their calls are group calls.
     const callType = GROUP_CALL_CONVERSATION_TYPES.has(conv.type) ? CallType.GROUP : CallType.DIRECT;
+    // PD-35 B6: no calls in a department room yet, whatever its size -- a
+    // two-member room is not a direct call. Calls there are a later PD-19 decision.
+    if (conv.type === ConversationType.DEPARTMENT_ROOM) {
+      return {
+        decision: { allowed: false, code: CommErrorCode.CALL_NOT_IN_ROOM, reason: 'calls are not available in a department room' },
+        participantActors: [],
+        callType,
+      };
+    }
 
     const members = await this.prisma.conversationMember.findMany({
       where: { conversationId: conv.id, leftAt: null },

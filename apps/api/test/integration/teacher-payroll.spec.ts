@@ -137,9 +137,9 @@ afterAll(async () => {
 });
 
 describe('1. who reaches payroll', () => {
-  it('the super admin only; the file tells each reader whether to offer it', async () => {
+  it('the super admin and the Teachers manager (PD-43 N2); the file tells each reader whether to offer it', async () => {
     const t = shiftTeacher().id;
-    const refused = [m.teachersManager, m.teacherSupervisors[0], m.supervisors[0], m.operationsManager, m.teachers[0], m.families[0].parent];
+    const refused = [m.teacherSupervisors[0], m.supervisors[0], m.operationsManager, m.teachers[0], m.families[0].parent];
     for (const who of refused) {
       for (const [method, path, body] of [
         ['GET', `/teacher-files/${t}/finance`, undefined],
@@ -157,7 +157,10 @@ describe('1. who reaches payroll', () => {
     expect(ok.json).toMatchObject({ month, keyConfigured: true, terms: [], currentTerms: null, payoutAccount: null });
 
     expect((await http(owner(), 'GET', `/teacher-files/${t}`)).json.access.canViewFinance).toBe(true);
-    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${t}`)).json.access.canViewFinance).toBe(false);
+    // PD-43 N2 (owner 2026-10-27, "Full teacher finance"): the Teachers manager reads payroll too.
+    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${t}`)).json.access.canViewFinance).toBe(true);
+    expect((await http(m.teachersManager.subject, 'GET', `/teacher-files/${t}/finance`)).status).toBe(200);
+    expect((await http(m.teacherSupervisors[0].subject, 'GET', `/teacher-files/${t}`)).json.access.canViewFinance).toBe(false);
   });
 
   it('a foreign or unknown teacher is the same 404', async () => {
@@ -248,6 +251,24 @@ describe('3. the payout account', () => {
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>')
       .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z/g, '<at>');
     for (const secret of [ACCOUNT_NUMBER, IBAN, 'QA Bank', '6000', '5500']) expect(text).not.toContain(secret);
+  });
+
+  it('the Teachers manager reveals it too (PD-43 N2), and every reveal is audited as theirs, with its reason', async () => {
+    const before = await g.prisma.auditLog.count({ where: { entityId: t(), action: 'teacher_file.payout_account_revealed' } });
+    const r = await http(m.teachersManager.subject, 'POST', `/teacher-files/${t()}/finance/payout-account/reveal`, { reason: 'paying November' });
+    expect(r.status).toBe(201);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect(r.json).toEqual({ method: 'bank_transfer', details: account });
+    const audit = await g.prisma.auditLog.findMany({
+      where: { entityId: t(), action: 'teacher_file.payout_account_revealed' },
+      orderBy: { id: 'desc' },
+    });
+    expect(audit).toHaveLength(before + 1);
+    expect(audit[0]).toMatchObject({ actorId: m.teachersManager.id, reason: 'paying November' });
+    expect(JSON.stringify({ before: audit[0]!.before, after: audit[0]!.after })).not.toContain(ACCOUNT_NUMBER);
+    // A teacher supervisor still may not.
+    const refused = await http(m.teacherSupervisors[0]!.subject, 'POST', `/teacher-files/${t()}/finance/payout-account/reveal`, { reason: 'r' });
+    expect([refused.status, refused.code]).toEqual([403, 'COMM.TEACHER_FILE_DENIED']);
   });
 
   it('refuses unknown fields, and a teacher with no account has nothing to reveal', async () => {

@@ -12,14 +12,36 @@ Wire contract: `../contracts/API-CONTRACT.md` §3.1 (`POST /auth/password-reset`
 
 ## Who may do what
 
-One rule, `AuthorizationService.canAdministerAccount(actor, target, act)`, for every act
-(`reset_password`, `suspend`, `reactivate`, `impersonate`):
+One rule, `AuthorizationService.canAdministerAccount(actor, target, act, standing)`, for every
+act (`reset_password`, `suspend`, `reactivate`, `impersonate`, `sign_out`). `standing` is
+the caller's department roles, read by `accountAdminStandingOf`. The department matrix is
+`apps/api/src/platform/account-admin-policy.ts`.
+
+**PD-40 (2026-10-27) narrowed the 2026-10-22 rule; the product owner approved it as proposed the same day.** Before, every staff role (finance,
+technical and academic too) could act on every parent and teacher account, impersonation
+included. Now only the departments that do that work keep it:
 
 | Caller \ target | parent (family) | teacher | another staff member | the super admin | own account |
 |---|:-:|:-:|:-:|:-:|:-:|
-| any staff role (admin, coverage, manager, finance, technical, academic) | ● | ● | — | — | — |
 | super admin | ● | ● | ● (never impersonated) | — | — |
+| Operations department (manager; supervisors and backups) | ● | — | — | — | — |
+| Sales department (manager, members) | reset + sign out | — | — | — | — |
+| Teachers department (manager; supervisors) | — | ● | — | — | — |
+| anyone else (no department; finance, technical, academic) | — | — | — | — | — |
 | parent, teacher | — | — | — | — | — |
+
+- A department role counts only with the staff role that department can hold: its manager
+  must be a `manager`, and its members `admin` or `coverage`. The rule is the same as
+  `decidePd012StaffAccess`'s, so a stale department row admits nobody.
+- The Accounts list shows each caller only the kinds they administer. The response's
+  `administers` field names them, and an empty list is an answer, not an error.
+- An account of a kind the caller does not administer is answered as not found by
+  `GET /admin/accounts/:id`. An action on it is refused with `COMM.ACCOUNT_ADMIN_DENIED`.
+- A support session already open is re-decided on every request (`liveSupportSession`), so
+  an administrator who leaves the department loses it on their next request.
+- The database guard on reset codes (`chat.guard_password_reset_code`) still admits any
+  active staff member of the organization. It is narrowed with the PD-40 data model (PR-2).
+  Until then, the API is the only writer and decides it.
 
 - Same organization only. Another tenant's account answers **404**, never 403, so the status
   does not reveal that the id exists elsewhere.

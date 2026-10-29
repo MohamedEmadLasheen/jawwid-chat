@@ -1,0 +1,39 @@
+{
+  "name": "jawwid-lessons-engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PD-29 materials quality P0-3: the Chat-owned lessons engine. Built only by CI; installed with `npm ci --ignore-scripts`.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "4.7.0",
+    "jsdom": "25.0.1",
+    "typescript": "5.9.3",
+    "vite": "6.4.3",
+    "vitest": "2.1.9"
+  },
+  "overrides": {
+    "rollup": "4.64.12",
+    "postcss": "8.5.31",
+    "@babel/parser": "7.29.9",
+    "@babel/types": "7.29.8",
+    "@babel/helper-string-parser": "7.29.7",
+    "browserslist": "4.29.4",
+    "caniuse-lite": "1.0.30001817",
+    "electron-to-chromium": "1.5.463",
+    "node-releases": "2.0.59",
+    "baseline-browser-mapping": "2.11.30"
+  }
+}

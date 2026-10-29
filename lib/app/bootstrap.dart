@@ -19,6 +19,7 @@ import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_sales_payments_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/http_supervision_repository.dart';
+import '../core/data/http/http_task_repository.dart';
 import '../core/data/http/http_teacher_profile_repository.dart';
 import '../core/data/http/http_trial_repository.dart';
 import '../core/errors/app_error.dart';
@@ -53,6 +54,8 @@ import '../features/profile/data/profile_photo_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
 import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
+import '../features/settings/data/parent_notice_repository.dart';
+import '../features/tasks/application/task_signal_channel.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
 import 'providers.dart';
@@ -190,6 +193,9 @@ List<Override> _httpOverrides() {
     lessonRepositoryProvider.overrideWithValue(
       HttpLessonRepository(client: client),
     ),
+    taskRepositoryProvider.overrideWithValue(
+      HttpTaskRepository(client: client),
+    ),
     supervisionRepositoryProvider.overrideWithValue(
       HttpSupervisionRepository(client: client),
     ),
@@ -220,6 +226,10 @@ List<Override> _httpOverrides() {
     // PD-29: the child's Materials page and the report's practice and map.
     materialsRepositoryProvider.overrideWithValue(
       HttpMaterialsRepository(client: client),
+    ),
+    // PD-48: the parent's lesson-audio notice (acknowledged once).
+    parentNoticeRepositoryProvider.overrideWithValue(
+      HttpParentNoticeRepository(client: client),
     ),
     // PD-32: a parent's feedback about the teacher.
     feedbackRepositoryProvider.overrideWithValue(
@@ -287,6 +297,12 @@ List<Override> _httpOverrides() {
     // PD-37: typing, decoded from the session's one socket (listen only).
     chatTypingChannelProvider.overrideWith((ref) {
       final channel = ChatTypingChannel(ref.watch(realtimeSocketProvider));
+      ref.onDispose(channel.dispose);
+      return channel;
+    }),
+    // PD-47 PR-4: task.changed, decoded from the same socket (listen only).
+    taskSignalChannelProvider.overrideWith((ref) {
+      final channel = TaskSignalChannel(ref.watch(realtimeSocketProvider));
       ref.onDispose(channel.dispose);
       return channel;
     }),

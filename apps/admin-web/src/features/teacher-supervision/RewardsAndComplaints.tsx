@@ -1,16 +1,15 @@
 import { useId, useState } from 'react'
 import { ApiError } from '@/core/api/errors'
-import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import { teacherFilePath } from '@/features/supervision/TeachersTabs'
+import { TeacherName } from '@/features/teacher-files/TeacherName'
 import { describeError as describeDiscipline } from '@/features/discipline/copy'
 import { useViolations } from '@/features/discipline/hooks'
 import { DecideDialog } from '@/features/discipline/DisciplineDialogs'
 import { describeError } from '@/features/teacher-files/copy'
-import { useTeacherList } from '@/features/teacher-files/hooks'
+import { useSupervisionDirectory } from '@/features/teacher-files/hooks'
 import { useMoney } from '@/features/teacher-files/Payroll'
 import { ComplaintItem, UpholdDialog } from '@/features/teacher-files/Complaint'
 import { AddEntryDialog, type EntryIntent } from '@/features/teacher-files/TeacherFileDialogs'
@@ -66,7 +65,7 @@ export function RewardsSection({ basePath }: { basePath: string }) {
                   {rows.map((r) => (
                     <tr key={r.id}>
                       <td dir="auto">
-                        <Link to={teacherFilePath(basePath, r.teacher.id)}>{r.teacher.name}</Link>
+                        <TeacherName basePath={basePath} teacher={r.teacher} />
                       </td>
                       <td dir="auto">{r.reason}</td>
                       {canViewAmounts && (
@@ -91,7 +90,7 @@ export function RewardsSection({ basePath }: { basePath: string }) {
 function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
-  const teachers = useTeacherList()
+  const teachers = useSupervisionDirectory()
   const record = useRecordReward()
   const teacherId = useId()
   const reasonId = useId()

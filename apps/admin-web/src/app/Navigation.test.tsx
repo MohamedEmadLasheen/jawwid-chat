@@ -49,6 +49,20 @@ const staff = (role: StaffRole) => makeStaff({ id: `staff_${role}`, name: `Synth
 const superAdmin = staff('super_admin')
 const OPERATOR_ROLES: StaffRole[] = ['manager', 'admin', 'coverage', 'finance', 'technical', 'academic']
 
+/** PD-44: what GET /dashboard/chats and /dashboard/cases answer a manager here. */
+const DASHBOARD_ROUTES = {
+  '/dashboard/chats': { generatedAt: '2026-10-28T09:00:00.000Z', tiles: [{ key: 'chats.waiting', count: 2, oldestAt: null, capped: false }] },
+  '/dashboard/cases': {
+    generatedAt: '2026-10-28T09:00:00.000Z',
+    tiles: [
+      { key: 'cases.mine_open', count: 0, oldestAt: null, capped: false },
+      { key: 'cases.department_open', count: 1, oldestAt: null, capped: false },
+      { key: 'cases.overdue', count: 0, oldestAt: null, capped: false },
+    ],
+  },
+}
+const dashboardManager = makeStaff({ id: 'staff_manager', role: 'manager', permissions: ['chat.use', 'cases.view'] })
+
 beforeEach(() => {
   localStorage.clear()
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
@@ -65,10 +79,12 @@ describe('The navigation registry', () => {
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
     // Accounts (PD-21: where every staff role administers accounts),
-    // Materials (PD-29: the library the super admin manages) and the Schedule
-    // (PD-38: the academy's calendar).
-    expect(keys).toHaveLength(25)
-    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule'].sort())
+    // Materials (PD-29: the library the super admin manages), the Schedule
+    // (PD-38: the academy's calendar), Trials & new students (PD-11 T4,
+    // PD-16), Teacher credentials review, Escalations (PD-35 B5) and
+    // Certificates (PD-41) and Lesson audio (PD-48, under More).
+    expect(keys).toHaveLength(30)
+    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
     const more = destinations.find((d) => d.key === 'more')!
@@ -79,9 +95,7 @@ describe('The navigation registry', () => {
     for (const role of OPERATOR_ROLES) {
       for (const [lessonManager, billingReader] of [[false, false], [true, false], [false, true], [true, true]] as const) {
         const listed = destinationsFor(role, { lessonManager, billingReader }).flatMap((d) => entriesOf(d).map((e) => e.path))
-        // Exactly the openable areas, with TWO deliberate exceptions: the legacy
-        // Inbox stays routable (old links) but is never offered -- its API
-        // routes (/inbox, /families/*) exist on no branch; and Teacher
+        // Exactly the openable areas, with one deliberate exception: Teacher
         // statistics is offered only when the server confirms the Teachers
         // department (GET /lessons/access), which the role alone cannot tell --
         // and Instalments likewise waits for Operations (GET /instalments/access).
@@ -91,7 +105,6 @@ describe('The navigation registry', () => {
         expect([...listed].sort(), role).toEqual([...allowed].sort())
         expect(listed, role).not.toContain('/inbox')
         const withheld = [
-          ...(visibleAreas(role).includes('inbox') ? ['inbox'] : []),
           ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
           // PD-38: the Schedule waits for GET /lessons/access to say `calendar`.
           ...(visibleAreas(role).includes('schedule') ? ['schedule'] : []),
@@ -103,6 +116,10 @@ describe('The navigation registry', () => {
           ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
           // PD-29: Materials waits for the Teachers manager (GET /materials/admin/access).
           ...(visibleAreas(role).includes('materials') ? ['materials'] : []),
+          // PD-41: Certificates waits for GET /certificates/access.
+          ...(visibleAreas(role).includes('certificates') ? ['certificates'] : []),
+          // PD-48: Lesson audio waits for GET /lesson-audio/access.
+          ...(visibleAreas(role).includes('lesson-audio') ? ['lesson-audio'] : []),
         ]
         expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager, billingReader }).includes(a)), role).toEqual(withheld)
         expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
@@ -111,10 +128,13 @@ describe('The navigation registry', () => {
     // And the super admin's navigation is the portal, not the operator screens
     // -- except Chat, the one workspace it writes in (PD-8), Accounts, the
     // one page every staff role shares (PD-21), the Schedule it shares with
-    // the Teachers department and Operations (PD-38), and Materials, the
-    // library it manages with the Teachers manager (PD-29).
+    // the Teachers department and Operations (PD-38), Trials & new students,
+    // which it shares with Sales and Operations (PD-11 T4, PD-16), Teacher
+    // credentials review (the queue it reviews with operators), Escalations
+    // (PD-35 B5) and Materials, the library it manages with the Teachers
+    // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/materials'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/certificates', '/materials', '/lesson-audio'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -191,9 +211,77 @@ describe('Landing and deep links', () => {
 
   it('answers a page outside the role with Forbidden, and does not list it', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
-    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/coverage' })
+    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/dashboard' })
     expect(await screen.findByRole('alert')).toHaveTextContent("You don't have permission")
-    expect(within(screen.getByRole('navigation')).queryByRole('link', { name: 'Coverage' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation')).queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
+  })
+})
+
+describe('The retired Coverage page', () => {
+  // Shifts, coverage rules and absences were replaced by PD-8 backups and
+  // PD-33 covers on the Organization page; the API never had /coverage routes.
+  it('is listed for no role', () => {
+    for (const role of [...OPERATOR_ROLES, 'super_admin'] as StaffRole[]) {
+      const entries = destinationsFor(role, { lessonManager: true, billingReader: true }).flatMap(entriesOf)
+      expect(entries.map((e) => e.path)).not.toContain('/coverage')
+      expect(entries.map((e) => e.key)).not.toContain('coverage')
+    }
+  })
+
+  it('is not a route: /coverage falls to the unknown-path handling, like any other', async () => {
+    for (const [role, home] of [['manager', '/chat'], ['super_admin', '/admin/conversations']] as const) {
+      vi.stubGlobal('fetch', routeFetch({}))
+      const { unmount } = renderWithProviders(
+        <>
+          <AppRoutes />
+          <Where />
+        </>,
+        { staff: staff(role), route: '/coverage' },
+      )
+      await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(home))
+      expect(screen.queryByRole('heading', { name: 'Coverage' })).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+})
+
+describe('The retired Families page', () => {
+  // The API never served GET /families: family records live in Chat, the
+  // Parent Profile (/parents) and Accounts (/accounts).
+  it('is listed for no role', () => {
+    for (const role of [...OPERATOR_ROLES, 'super_admin'] as StaffRole[]) {
+      expect(visibleAreas(role), role).not.toContain('families')
+      const entries = destinationsFor(role, { lessonManager: true, billingReader: true }).flatMap(entriesOf)
+      expect(entries.map((e) => e.path)).not.toContain('/families')
+      expect(entries.map((e) => e.key)).not.toContain('families')
+    }
+  })
+
+  it('is not a route: /families falls to the unknown-path handling, like any other', async () => {
+    for (const [role, home] of [['manager', '/chat'], ['super_admin', '/admin/conversations']] as const) {
+      vi.stubGlobal('fetch', routeFetch({}))
+      const { unmount } = renderWithProviders(
+        <>
+          <AppRoutes />
+          <Where />
+        </>,
+        { staff: staff(role), route: '/families?bucket=now' },
+      )
+      await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(home))
+      expect(screen.queryByRole('heading', { name: 'Families' })).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('is no longer where the Dashboard sends the manager', async () => {
+    const fetchMock = routeFetch(DASHBOARD_ROUTES)
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithProviders(<AppRoutes />, { staff: dashboardManager, route: '/dashboard' })
+    // PD-44: every tile opens a working page; none opens the retired families list.
+    await screen.findByRole('link', { name: /Chats waiting for our reply/ })
+    const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href') ?? '')
+    expect(hrefs.filter((h) => /^\/families(\/|\?|$)/.test(h))).toEqual([])
+    expect(fetchMock.mock.calls.some(([url]) => /\/families(\?|$)/.test(String(url)))).toBe(false)
   })
 })
 
@@ -233,8 +321,8 @@ describe('The desktop rail', () => {
 
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
     // 13 + Payments (PD-27, beside Instalments under Operations & performance)
-    // + Materials (PD-29, under Overview).
-    expect(within(menu).getAllByRole('link')).toHaveLength(15)
+    // + Materials (PD-29, under Overview) + Lesson audio (PD-48).
+    expect(within(menu).getAllByRole('link')).toHaveLength(16)
     expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'Overview', 'Communication', 'Operations & performance', 'Administration',
     ])
@@ -262,8 +350,20 @@ describe('The desktop rail', () => {
     // PD-21: then Accounts,
     expect(document.activeElement).toHaveAccessibleName('Accounts')
     await userEvent.keyboard('{ArrowDown}')
-    // PD-38: then the Schedule, closing the first People group,
+    // PD-38: then the Schedule,
     expect(document.activeElement).toHaveAccessibleName('Schedule')
+    await userEvent.keyboard('{ArrowDown}')
+    // PD-11 T4 / PD-16: then Trials & new students,
+    expect(document.activeElement).toHaveAccessibleName('Trials & new students')
+    await userEvent.keyboard('{ArrowDown}')
+    // then Teacher credentials review,
+    expect(document.activeElement).toHaveAccessibleName('Teacher credentials review')
+    await userEvent.keyboard('{ArrowDown}')
+    // PD-35 B5: then Escalations,
+    expect(document.activeElement).toHaveAccessibleName('Escalations')
+    await userEvent.keyboard('{ArrowDown}')
+    // PD-41: then Certificates, closing the first People group,
+    expect(document.activeElement).toHaveAccessibleName('Certificates')
     await userEvent.keyboard('{ArrowDown}')
     // PD-17: then Parents (an Operations section under People), then the menu wraps.
     expect(document.activeElement).toHaveAccessibleName('Parents')
@@ -287,11 +387,13 @@ describe('The desktop rail', () => {
   it('gives each operator role only its own destinations, and links a one-page destination directly', async () => {
     const cases: [StaffRole, string[], string[], string[]][] = [
       // role, destinations, direct links, menus
-      // Conversations is a direct link to /chat: the legacy Inbox is not offered.
+      // Conversations is a direct link to /chat (the legacy Inbox is retired).
       // PD-13: Calls is its own destination for every operating role.
-      // Teacher Profile V2: the certificate review queue joins Families under
-      // People, so for admin and coverage People becomes a menu of two pages.
-      ['manager', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories'], ['People & teams', 'More']],
+      // Teacher Profile V2: the certificate review queue sits under People beside
+      // the other people pages, so for admin and coverage People is a menu.
+      // PD-44: the Dashboard is its own destination for a manager, beside
+      // Conversations, which leaves More holding Tasks alone: a direct link.
+      ['manager', ['conversations', 'dashboard', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Dashboard', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       // PD-21: Accounts is every role's, so a department has two one-page destinations.
@@ -309,8 +411,14 @@ describe('The desktop rail', () => {
   })
 })
 
-describe('The legacy Inbox is not offered as a destination', () => {
-  it('no role is shown a link to /inbox (menus opened); operators\' Conversations goes to /chat; /inbox itself still routes', async () => {
+describe('The retired Inbox', () => {
+  // The legacy Inbox and everything it read (/inbox, /inbox/away-summary,
+  // /inbox/shift-banner, /me/duty, /config, /staff, /families/:id) answer 404
+  // for every persona: conversations live in Chat (/chat).
+  it('no role can open it, and no role is shown a link to /inbox (menus opened); operators\' Conversations goes to /chat', async () => {
+    for (const role of [...OPERATOR_ROLES, 'super_admin'] as StaffRole[]) {
+      expect(visibleAreas(role), role).not.toContain('inbox')
+    }
     for (const role of ['manager', 'admin', 'coverage', 'finance'] as StaffRole[]) {
       vi.stubGlobal('fetch', routeFetch({}))
       const { unmount } = renderWithProviders(<AppRoutes />, { staff: staff(role), route: '/' })
@@ -323,11 +431,45 @@ describe('The legacy Inbox is not offered as a destination', () => {
       }
       unmount()
     }
-    vi.stubGlobal('fetch', routeFetch({}))
-    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/inbox' })
-    await screen.findByRole('navigation', { name: 'Jawwid Operations' })
-    // Routed to the Inbox page itself, not refused: an old link still lands.
-    expect(document.querySelector('.state--forbidden')).toBeNull()
+  })
+
+  it('is not a route: /inbox and /inbox/:familyId fall to the unknown-path handling, like any other', async () => {
+    for (const route of ['/inbox', '/inbox/fam_1']) {
+      for (const [role, home] of [['admin', '/chat'], ['manager', '/chat']] as const) {
+        vi.stubGlobal('fetch', routeFetch({}))
+        const { unmount } = renderWithProviders(
+          <>
+            <AppRoutes />
+            <Where />
+          </>,
+          { staff: staff(role), route },
+        )
+        await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(home))
+        unmount()
+      }
+    }
+  })
+
+  it('the shell no longer asks for duty, shift banners, config or staff', async () => {
+    for (const role of ['manager', 'admin', 'coverage'] as StaffRole[]) {
+      const fetchMock = routeFetch({})
+      vi.stubGlobal('fetch', fetchMock)
+      const { unmount } = renderWithProviders(<AppRoutes />, { staff: staff(role), route: '/tasks' })
+      await screen.findByRole('navigation', { name: 'Jawwid Operations' })
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+      const paths = fetchMock.mock.calls.map(([url]) => String(url).replace(/^.*\/api\/v1/, '').split('?')[0])
+      expect(paths.filter((p) => /^\/(inbox|me\/duty|config|staff)(\/|$)/.test(p!)), role).toEqual([])
+      unmount()
+    }
+  })
+
+  it("is no longer where the Dashboard's cases send the manager", async () => {
+    vi.stubGlobal('fetch', routeFetch(DASHBOARD_ROUTES))
+    renderWithProviders(<AppRoutes />, { staff: dashboardManager, route: '/dashboard' })
+    // PD-44: an escalation is counted and opens the Cases page, never the retired Inbox.
+    expect(await screen.findByRole('link', { name: /Open cases in the department/ })).toHaveAttribute('href', '/cases?tab=department')
+    const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href') ?? '')
+    expect(hrefs.filter((h) => h.startsWith('/inbox'))).toEqual([])
   })
 })
 
@@ -344,7 +486,11 @@ describe('The drawer, below desktop width', () => {
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
     expect(within(more).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
-    expect(within(nav).getAllByRole('link')).toHaveLength(25)
+    expect(within(nav).getAllByRole('link', { name: 'التصعيدات' })[0]).toHaveAttribute('href', '/cases')
+    const people = within(nav).getByRole('group', { name: 'الأشخاص والفرق' })
+    expect(within(people).getByRole('link', { name: 'الحصص التجريبية والطلاب الجدد' })).toHaveAttribute('href', '/trials')
+    expect(within(people).getByRole('link', { name: 'مراجعة مؤهلات المعلمين' })).toHaveAttribute('href', '/teacher-profiles')
+    expect(within(nav).getAllByRole('link')).toHaveLength(30)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

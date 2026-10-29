@@ -32,9 +32,9 @@
 /* Filters ---------------------------------------------------------------- */
 .sc-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block-end: var(--space-3); }
 .sc-filter { position: relative; }
-.sc-filter > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); }
-.sc-filter > summary::-webkit-details-marker { display: none; }
-.sc-filter > summary::after { content: '▾'; font-size: 0.75em; color: var(--text-muted); }
+.sc-filter__trigger { display: inline-flex; align-items: center; gap: var(--space-1); cursor: pointer; }
+.sc-filter__caret::after { content: '▾'; font-size: 0.75em; color: var(--text-muted); }
+.sc-filter__trigger[aria-expanded='true'] { border-color: var(--accent); }
 .sc-filter--on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .sc-filter__count {
   min-inline-size: 18px; padding-inline: 5px; border-radius: var(--radius-full);
@@ -187,3 +187,57 @@
 }
 .sc-swatch[aria-pressed='true'] { outline: 3px solid var(--focus); outline-offset: 2px; }
 .sc-swatch--clear { background: var(--surface); border-style: dashed; border-color: var(--border-control); }
+
+/* Day view: a fixed width per hour (DAY_HOUR_PX), so a long day scrolls instead of
+   squeezing its labels into each other; blocks have room for name and time. */
+.sc-grid--day { --sc-row-h: 52px; min-inline-size: calc(var(--sc-head-w) + var(--sc-day-w, 960px)); }
+.sc-grid--day .sc-row { grid-template-columns: var(--sc-head-w) minmax(var(--sc-day-w, 960px), 1fr); }
+.sc-lesson { flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; }
+.sc-lesson__name { max-inline-size: 100%; }
+.sc-lesson__time { font-size: 0.68rem; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-inline-size: 100%; font-variant-numeric: tabular-nums; }
+.sc-axis__tick bdi { white-space: nowrap; }
+
+/* Filters in the phone's bottom sheet: stacked, full width, one open at a time. */
+.sc-filters-button { min-block-size: 44px; display: inline-flex; align-items: center; gap: var(--space-2); margin-block-end: var(--space-3); }
+.sc-filters--sheet { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+.sc-filters--sheet .sc-filter { inline-size: 100%; }
+.sc-filters--sheet .sc-filter__trigger { inline-size: 100%; min-block-size: 44px; justify-content: space-between; }
+.sc-filters--sheet .sc-filter__panel { position: static; inline-size: 100%; max-inline-size: none; box-shadow: none; border: 0; padding-inline: var(--space-2); }
+.sc-filters--sheet .sc-check { min-block-size: 44px; }
+
+/* The phone: an agenda, touch targets of at least 44 px. */
+.sc-page--narrow { --sc-head-w: 120px; }
+.sc-page--narrow .sc-toolbar { flex-direction: column; align-items: stretch; }
+.sc-page--narrow .sc-nav .btn, .sc-page--narrow .sc-nav .input { min-block-size: 44px; min-inline-size: 44px; }
+.sc-page--narrow .seg__item { min-block-size: 44px; }
+.sc-page--narrow .sc-range { inline-size: 100%; margin-inline-start: 0; }
+.sc-page--narrow .sc-legend { font-size: 0.75rem; }
+.sc-agenda { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.sc-agenda__date {
+  position: sticky; inset-block-start: 0; z-index: 2; margin: 0;
+  padding: var(--space-2) var(--space-3); background: var(--surface-sunken); border-block-end: 1px solid var(--border);
+  font-size: var(--fs-sm); font-weight: var(--fw-semibold, 600);
+}
+.sc-agenda__none { padding: var(--space-3); margin: 0; }
+.sc-agenda__teacher { padding: var(--space-2) var(--space-3); border-block-end: 1px solid var(--border); }
+.sc-agenda__who { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-block-end: var(--space-2); }
+.sc-agenda__list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.sc-agenda__item {
+  inline-size: 100%; min-block-size: 48px; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: var(--space-3);
+  align-items: center; padding: var(--space-2) var(--space-3); text-align: start; cursor: pointer;
+  background: var(--sc-fill, var(--surface)); color: var(--sc-text, var(--text)); border: 2px solid var(--sc-border, var(--border-strong)); border-radius: var(--radius); font: inherit;
+}
+.sc-agenda__item--trial { border-style: dashed; }
+.sc-agenda__item--paused { border-style: dotted; }
+.sc-agenda__item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sc-agenda__time { grid-row: span 2; font-variant-numeric: tabular-nums; font-size: var(--fs-sm); white-space: nowrap; }
+.sc-agenda__name { font-weight: var(--fw-medium, 500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-agenda__status { font-size: 0.75rem; opacity: 0.85; }
+.sc-agenda__empty {
+  min-block-size: 44px; display: grid; grid-template-columns: auto 1fr; column-gap: var(--space-3); align-items: center;
+  padding: var(--space-2) var(--space-3); border: 2px solid var(--danger); border-radius: var(--radius); color: var(--text);
+}
+.sc-agenda__leave { min-block-size: 44px; display: flex; align-items: center; padding-inline: var(--space-3); border-radius: var(--radius); background: repeating-linear-gradient(135deg, var(--warn-soft) 0 6px, transparent 6px 12px); border: 1px solid var(--warn); }
+.sc-agenda__month { grid-template-columns: 1fr auto; grid-template-rows: auto; }
+.sc-agenda__month .sc-agenda__status { grid-row: auto; }
+.sc-agenda__month--empty { border-inline-start: 4px solid var(--danger); }

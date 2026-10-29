@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import '../../../shared/utils/clock_time.dart';
 
 // PD-31: the one way a free time is picked in the app -- a make-up, moving one
 // lesson, changing a weekly time. The Admin Web `SlotPicker` has the same shape.
@@ -134,7 +135,7 @@ class _SlotChipPickerState extends State<SlotChipPicker> {
           at: (t) => t,
           chip: (t) => ChoiceChip(
             key: ValueKey('${widget.keyPrefix}-time-${t.toUtc().toIso8601String()}'),
-            label: Text(m.formatTimeOfDay(TimeOfDay.fromDateTime(t))),
+            label: Text(formatClockTime(context, TimeOfDay.fromDateTime(t))),
             selected: widget.selected != null && t.isAtSameMomentAs(widget.selected!),
             onSelected: (_) => widget.onSelected(t),
           ),
@@ -224,7 +225,7 @@ class _WeeklySlotChipPickerState extends State<WeeklySlotChipPicker> {
           items: times,
           at: (o) => o.nextStartsAt,
           chip: (o) {
-            final time = Text(m.formatTimeOfDay(TimeOfDay.fromDateTime(o.nextStartsAt)));
+            final time = Text(formatClockTime(context, TimeOfDay.fromDateTime(o.nextStartsAt)));
             return ChoiceChip(
               key: ValueKey('weekly-${o.weekday}-${o.start}'),
               label: o.except.isEmpty

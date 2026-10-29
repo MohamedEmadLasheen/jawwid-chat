@@ -4,6 +4,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { teacherFilePath } from '@/features/supervision/TeachersTabs'
+import { useOpensTeacherFiles } from '@/features/teacher-files/hooks'
 import type { FeedbackCategory, FeedbackStatus, StaffFeedback } from './api'
 import { F, describeFeedbackError, useCopy } from './copy'
 import { FeedbackItem, ReplyDialog } from './FeedbackParts'
@@ -21,6 +22,8 @@ export function ParentFeedbackSection({ basePath }: { basePath: string }) {
   const [status, setStatus] = useState<StatusFilter>('all')
   const list = useParentFeedback({ ...(category !== 'all' ? { category } : {}), ...(status !== 'all' ? { status } : {}) })
   const take = useTakeFeedback()
+  // PD-26 amendment: an Operations supervisor sees the teacher's name, not a Teacher File link.
+  const opensFiles = useOpensTeacherFiles()
   const [replying, setReplying] = useState<StaffFeedback | null>(null)
   const canWrite = list.data?.canWrite ?? false
   const rows = list.data?.feedback ?? []
@@ -69,7 +72,7 @@ export function ParentFeedbackSection({ basePath }: { basePath: string }) {
                 <FeedbackItem
                   key={f.id}
                   feedback={f}
-                  teacherHref={teacherFilePath(basePath, f.teacher.id)}
+                  teacherHref={opensFiles ? teacherFilePath(basePath, f.teacher.id) : undefined}
                   actions={
                     canWrite && (
                       <>
@@ -98,9 +101,11 @@ export function ParentFeedbackSection({ basePath }: { basePath: string }) {
           current={replying.response}
           links={
             <div className="th-actions">
-              <Link className="btn btn--sm btn--ghost" to={teacherFilePath(basePath, replying.teacher.id)}>
-                {tx(F.openTeacherFile)}
-              </Link>
+              {opensFiles && (
+                <Link className="btn btn--sm btn--ghost" to={teacherFilePath(basePath, replying.teacher.id)}>
+                  {tx(F.openTeacherFile)}
+                </Link>
+              )}
               <Link className="btn btn--sm btn--ghost" to={{ search: '?section=complaints' }} onClick={() => setReplying(null)}>
                 {tx(F.openComplaints)}
               </Link>

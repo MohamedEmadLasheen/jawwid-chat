@@ -7,8 +7,10 @@
  *   - suspend: the next request is refused and login says ACCOUNT_DISABLED;
  *   - reactivate: login works again, and NO old session or refresh token
  *     comes back to life;
- *   - who may: any staff role for parents and teachers; staff only by the super
- *     admin; never the super admin or oneself; parents and teachers never;
+ *   - who may (PD-40): parents by the super admin and Operations (Sales: reset
+ *     and sign out), teachers by the super admin and the Teachers department;
+ *     staff only by the super admin; never the super admin or oneself; parents
+ *     and teachers never;
  *   - every action leaves its audit row, with the administrator and the reason.
  *
  * Synthetic people only (G-20).
@@ -172,13 +174,14 @@ describe('PD-21: who may', () => {
     expect(await g.prisma.passwordResetCode.count({ where: { organizationId: orgId } })).toBe(0);
   });
 
-  it('an ordinary staff member lists parents and teachers -- never staff, never the super admin -- and finds a family by a child\'s name', async () => {
+  it('an Operations supervisor lists parents -- never teachers, staff or the super admin -- and finds a family by a child\'s name', async () => {
     const supervisor = m.supervisors[0]!;
     const all = await as(supervisor.subject, 'GET', '/admin/accounts');
     expect(all.status).toBe(200);
+    expect(all.json.administers).toEqual(['family']);
     const accounts = all.json.accounts as Array<{ kind: string; name: string; children: string[]; allowed: Record<string, boolean> }>;
     expect(accounts.length).toBeGreaterThan(0);
-    expect(new Set(accounts.map((a) => a.kind))).toEqual(new Set(['family', 'teacher']));
+    expect(new Set(accounts.map((a) => a.kind))).toEqual(new Set(['family']));
     expect(JSON.stringify(all.json)).not.toMatch(/@|passwordHash|password_hash|codeHash|"subject"/i);
     for (const a of accounts) expect(a.allowed).toEqual({ resetPassword: true, suspend: true, reactivate: false, impersonate: true, signOut: true });
 
@@ -187,9 +190,50 @@ describe('PD-21: who may', () => {
     const hits = found.json.accounts as Array<{ kind: string; children: string[] }>;
     expect(hits.some((a) => a.kind === 'family' && a.children.includes(child.name))).toBe(true);
 
-    // Asking for staff is not a way round it.
-    const staff = await as(supervisor.subject, 'GET', '/admin/accounts?kind=staff');
-    expect((staff.json.accounts as Array<{ kind: string }>).every((a) => a.kind !== 'staff')).toBe(true);
+    // Asking for staff or teachers is not a way round it.
+    for (const kind of ['staff', 'teacher']) {
+      const other = await as(supervisor.subject, 'GET', `/admin/accounts?kind=${kind}`);
+      expect((other.json.accounts as Array<{ kind: string }>).every((a) => a.kind === 'family')).toBe(true);
+    }
+  });
+
+  it('PD-40: the Teachers department lists and administers teachers only; Sales resets and signs out parents only', async () => {
+    const teachersSupervisor = m.teacherSupervisors[0]!.subject;
+    const list = await as(teachersSupervisor, 'GET', '/admin/accounts');
+    expect(list.json.administers).toEqual(['teacher']);
+    const kinds = new Set((list.json.accounts as Array<{ kind: string }>).map((a) => a.kind));
+    expect(kinds).toEqual(new Set(['teacher']));
+
+    const parentAccount = await accountIdOf(m.families[9]!.parent.subject);
+    const teacherAccount = await accountIdOf(m.teachers[3]!.subject);
+    for (const [who, subject, accountId] of [
+      ['Teachers supervisor on a parent', teachersSupervisor, parentAccount],
+      ['Teachers manager on a parent', m.teachersManager.subject, parentAccount],
+      ['Operations supervisor on a teacher', m.supervisors[0]!.subject, teacherAccount],
+      ['Operations manager on a teacher', m.operationsManager.subject, teacherAccount],
+      ['Sales manager on a teacher', m.salesManager.subject, teacherAccount],
+    ] as const) {
+      const reset = await as(subject, 'POST', `/admin/accounts/${accountId}/password-reset`, { reason: 'try' });
+      expect({ who, status: reset.status, code: reset.code }).toEqual({ who, status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
+      const suspend = await as(subject, 'POST', `/admin/accounts/${accountId}/suspend`, { reason: 'try' });
+      expect({ who, status: suspend.status }).toEqual({ who, status: 403 });
+      // Not listed, so not found either.
+      expect({ who, status: (await as(subject, 'GET', `/admin/accounts/${accountId}`)).status }).toEqual({ who, status: 404 });
+    }
+    expect(await g.prisma.passwordResetCode.count({ where: { accountId: { in: [parentAccount, teacherAccount] } } })).toBe(0);
+    expect(await audits(parentAccount, 'account.suspended')).toHaveLength(0);
+    expect(await audits(teacherAccount, 'account.suspended')).toHaveLength(0);
+
+    const sales = await as(m.salesManager.subject, 'GET', '/admin/accounts');
+    expect(sales.json.administers).toEqual(['family']);
+    for (const a of sales.json.accounts as Array<{ kind: string; allowed: Record<string, boolean> }>) {
+      expect(a.kind).toBe('family');
+      expect(a.allowed).toMatchObject({ suspend: false, reactivate: false, impersonate: false });
+    }
+    const salesReset = await as(m.salesManager.subject, 'POST', `/admin/accounts/${parentAccount}/password-reset`, { reason: 'new parent cannot sign in' });
+    expect(salesReset.status).toBe(201);
+    const salesSuspend = await as(m.salesManager.subject, 'POST', `/admin/accounts/${parentAccount}/suspend`, { reason: 'try' });
+    expect({ status: salesSuspend.status, code: salesSuspend.code }).toEqual({ status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
   });
 
   it('the super admin also lists staff -- but not their own account', async () => {
@@ -301,8 +345,11 @@ describe('PD-21: password reset', () => {
     const expired = await call(null, 'POST', '/auth/password-reset', { username: teacher.subject, code: fresh.json.code, password: NEW_PASSWORD });
     expect(expired.code).toBe(AuthErrorCode.RESET_CODE_INVALID);
 
-    const short = await call(null, 'POST', '/auth/password-reset', { username: teacher.subject, code: '123456', password: 'short' });
+    const short = await call(null, 'POST', '/auth/password-reset', { username: teacher.subject, code: '123456', password: 'abc' });
     expect(short.code).toBe(AuthErrorCode.PASSWORD_TOO_WEAK);
+    // Owner decision 2026-10-27: 4 characters is enough, for every account.
+    const four = await call(null, 'POST', '/auth/password-reset', { username: teacher.subject, code: '123456', password: '1234' });
+    expect(four.code).not.toBe(AuthErrorCode.PASSWORD_TOO_WEAK);
   });
 
   it('a new code supersedes the old one; "sign out everywhere" ends every session at once', async () => {
@@ -348,7 +395,7 @@ describe('PD-21: suspend and reactivate', () => {
     const session = await login(teacher.subject);
     expect((await call(session.accessToken, 'GET', '/me')).status).toBe(200);
 
-    const admin = m.supervisors[0]!;
+    const admin = m.teacherSupervisors[0]!;
     const suspended = await as(admin.subject, 'POST', `/admin/accounts/${accountId}/suspend`, { reason: 'left the academy for a term' });
     expect(suspended.status).toBe(200);
     expect(suspended.json).toMatchObject({ status: 'suspended', allowed: { suspend: false, reactivate: true, impersonate: false, signOut: false } });
@@ -367,7 +414,7 @@ describe('PD-21: suspend and reactivate', () => {
     expect((await as(admin.subject, 'POST', `/admin/accounts/${accountId}/suspend`, { reason: 'again' })).status).toBe(200);
     expect(await audits(accountId, 'account.suspended')).toHaveLength(1);
 
-    const back = await as(m.operationsManager.subject, 'POST', `/admin/accounts/${accountId}/reactivate`, { reason: 'returned' });
+    const back = await as(m.teachersManager.subject, 'POST', `/admin/accounts/${accountId}/reactivate`, { reason: 'returned' });
     expect(back.status).toBe(200);
     expect(back.json).toMatchObject({ status: 'active' });
 
@@ -380,23 +427,23 @@ describe('PD-21: suspend and reactivate', () => {
       expect.objectContaining({ actorId: admin.id, reason: 'left the academy for a term' }),
     ]);
     expect(await audits(accountId, 'account.reactivated')).toEqual([
-      expect.objectContaining({ actorId: m.operationsManager.id, reason: 'returned' }),
+      expect.objectContaining({ actorId: m.teachersManager.id, reason: 'returned' }),
     ]);
   });
 
   it('reactivation never reverses an offboarding; an active account is left alone', async () => {
     const parent = m.families[5]!.parent;
     const accountId = await accountIdOf(parent.subject);
-    const active = await as(m.salesManager.subject, 'POST', `/admin/accounts/${accountId}/reactivate`, { reason: 'noop' });
+    const active = await as(m.operationsManager.subject, 'POST', `/admin/accounts/${accountId}/reactivate`, { reason: 'noop' });
     expect(active.status).toBe(200);
     expect(await audits(accountId, 'account.reactivated')).toHaveLength(0);
 
     await g.prisma.$queryRaw`select chat.deactivate_principal('account', ${accountId}::uuid, 'offboarded', null, 'deactivated')::text`;
-    const r = await as(m.salesManager.subject, 'POST', `/admin/accounts/${accountId}/reactivate`, { reason: 'try' });
+    const r = await as(m.operationsManager.subject, 'POST', `/admin/accounts/${accountId}/reactivate`, { reason: 'try' });
     expect({ status: r.status, code: r.code }).toEqual({ status: 409, code: CommErrorCode.ACCOUNT_ADMIN_STATE });
-    const s = await as(m.salesManager.subject, 'POST', `/admin/accounts/${accountId}/suspend`, { reason: 'try' });
+    const s = await as(m.operationsManager.subject, 'POST', `/admin/accounts/${accountId}/suspend`, { reason: 'try' });
     expect({ status: s.status, code: s.code }).toEqual({ status: 409, code: CommErrorCode.ACCOUNT_ADMIN_STATE });
-    const reset = await as(m.salesManager.subject, 'POST', `/admin/accounts/${accountId}/password-reset`, { reason: 'try' });
+    const reset = await as(m.operationsManager.subject, 'POST', `/admin/accounts/${accountId}/password-reset`, { reason: 'try' });
     expect(reset.status).toBe(409);
   });
 

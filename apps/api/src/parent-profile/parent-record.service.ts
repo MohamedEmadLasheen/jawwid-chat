@@ -9,14 +9,14 @@ import type { BillingAccess } from '../platform/pd012-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { AvatarService } from '../communication/profile/avatar.service';
 import { signAvatar } from '../communication/profile/avatar-urls';
-import { billingAccessOf, reachesFamily } from '../billing/billing-access';
+import { billingAccessOf, ownsFamily, reachesFamily, salesEditsFamily } from '../billing/billing-access';
 
 const NAME_MAX = 120;
 const SEARCH_LIMIT = 200;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 type Scope = NonNullable<BillingAccess['scope']>;
-type Admin = { actor: Actor; scope: Scope; canEdit: boolean };
+type Admin = { actor: Actor; scope: Scope; canEdit: boolean; editOwnedOnly: boolean };
 
 /**
  * PD-17: the Parent Profile -- the administration's page about one parent.
@@ -24,8 +24,9 @@ type Admin = { actor: Actor; scope: Scope; canEdit: boolean };
  * WHO. The Instalment Payments rule, exactly (billingAccessOf): the super admin
  * and the Operations Manager every parent, an Operations supervisor (or
  * coverage) the parents of families they reach (PD-8), the Sales department
- * every parent -- Sales to record payments, so it reads but does not edit the
- * contact record. Anyone else -- a teacher, a parent, the Teachers
+ * every parent -- Sales to record payments. PD-42: a Sales account edits the
+ * contact record of the families it owns only, and while the Sales switch is
+ * 'own' a Sales member reads only those. Anyone else -- a teacher, a parent, the Teachers
  * department -- is refused with
  * PARENT_PROFILE_DENIED BEFORE any parent is looked up, so the answer says
  * nothing about which ids exist. A parent outside the caller's reach is the
@@ -68,6 +69,7 @@ export class ParentRecordService implements OnModuleInit {
     const { actor, scope } = await this.requireAdmin(actorId);
     const search = typeof q === 'string' ? q.trim().slice(0, 80) : '';
     const reach = scope === 'reach';
+    const owned = scope === 'owned';
     const rows = await this.prisma.$queryRaw<
       Array<{ id: string; name: string; avatar_object_key: string | null; family_id: string; family_name: string; children: number }>
     >`
@@ -79,6 +81,7 @@ export class ParentRecordService implements OnModuleInit {
          AND c.is_active
          AND (${search} = '' OR c.name ILIKE '%' || ${search} || '%' OR f.display_name ILIKE '%' || ${search} || '%')
          AND (${!reach} OR chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL)
+         AND (${!owned} OR chat.staff_owns_family(${actor.actorId}::uuid, f.id))
        ORDER BY c.name, c.id
        LIMIT ${SEARCH_LIMIT}`;
     return {
@@ -94,9 +97,11 @@ export class ParentRecordService implements OnModuleInit {
   }
 
   async detail(actorId: string, contactId: string) {
-    const { actor, scope, canEdit } = await this.requireAdmin(actorId);
+    const { actor, scope, canEdit, editOwnedOnly } = await this.requireAdmin(actorId);
     const contact = await this.requireContact(actor, scope, contactId);
-    return this.present(actor, contact.id, canEdit);
+    // PD-42: a Sales account edits only the families it owns.
+    const editable = canEdit && (!editOwnedOnly || (await salesEditsFamily(this.prisma, actor, contact.familyId)));
+    return this.present(actor, contact.id, editable);
   }
 
   // ---------------------------------------------------------------- write
@@ -106,8 +111,7 @@ export class ParentRecordService implements OnModuleInit {
    * cleared). { name, phone, email, countryCode, region, adminNote }
    */
   async update(actorId: string, contactId: string, body: Record<string, unknown>) {
-    const { actor, scope } = await this.requireEditor(actorId);
-    const contact = await this.requireContact(actor, scope, contactId);
+    const { actor, contact } = await this.requireEditableContact(actorId, contactId);
 
     const name = 'name' in body ? requireName(body.name) : undefined;
     const file: { adminOnlyParentPhone?: string | null; adminOnlyParentEmail?: string | null; region?: string | null; adminNote?: string | null } = {};
@@ -133,6 +137,9 @@ export class ParentRecordService implements OnModuleInit {
 
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      // PD-42 S3: the edit names its staff member, for the Sales-scope guards on
+      // chat.contact and chat.family (which carry no actor column).
+      await tx.$executeRaw`SELECT set_config('chat.acting_staff_id', ${actor.actorId}, true)`;
       if (name !== undefined && name !== contact.name) {
         await tx.contact.update({ where: { id: contact.id }, data: { name } });
       }
@@ -166,20 +173,17 @@ export class ParentRecordService implements OnModuleInit {
   }
 
   async authorizePhotoUpload(actorId: string, contactId: string, body: Record<string, unknown>) {
-    const { actor, scope } = await this.requireEditor(actorId);
-    const contact = await this.requireContact(actor, scope, contactId);
+    const { actor, contact } = await this.requireEditableContact(actorId, contactId);
     return this.avatars.authorizeUploadForContact(actor, contact.id, body);
   }
 
   async commitPhoto(actorId: string, contactId: string, body: Record<string, unknown>) {
-    const { actor, scope } = await this.requireEditor(actorId);
-    const contact = await this.requireContact(actor, scope, contactId);
+    const { actor, contact } = await this.requireEditableContact(actorId, contactId);
     return this.avatars.commitForContact(actor, contact.id, body);
   }
 
   async removePhoto(actorId: string, contactId: string) {
-    const { actor, scope } = await this.requireEditor(actorId);
-    const contact = await this.requireContact(actor, scope, contactId);
+    const { actor, contact } = await this.requireEditableContact(actorId, contactId);
     return this.avatars.removeForContact(actor, contact.id);
   }
 
@@ -235,16 +239,26 @@ export class ParentRecordService implements OnModuleInit {
     if (!access.scope) {
       throw new CommError(CommErrorCode.PARENT_PROFILE_DENIED, 'parent profiles are the administration\'s');
     }
-    return { actor, scope: access.scope, canEdit: access.canEditParent };
+    return { actor, scope: access.scope, canEdit: access.canEditParent, editOwnedOnly: access.editOwnedOnly === true };
   }
 
-  /** PD-17: Sales reads the profile (to record payments) but the contact record is the Operations department's. */
+  /** PD-17: the contact record is the Operations department's -- and, PD-42, a Sales owner's for the families they own. */
   private async requireEditor(actorId: string): Promise<Admin> {
     const admin = await this.requireAdmin(actorId);
     if (!admin.canEdit) {
       throw new CommError(CommErrorCode.PARENT_PROFILE_DENIED, 'a parent\'s contact record is edited by the Operations department');
     }
     return admin;
+  }
+
+  /** The contact, if this editor may change it: in scope, and (PD-42) their own family when they edit only those. */
+  private async requireEditableContact(actorId: string, contactId: string) {
+    const admin = await this.requireEditor(actorId);
+    const contact = await this.requireContact(admin.actor, admin.scope, contactId);
+    if (admin.editOwnedOnly && !(await salesEditsFamily(this.prisma, admin.actor, contact.familyId))) {
+      throw new CommError(CommErrorCode.PARENT_PROFILE_DENIED, 'a parent\'s contact record is edited by the family\'s own supervisor');
+    }
+    return { actor: admin.actor, contact };
   }
 
   private async findContact(actor: Actor, scope: Scope, contactId: string) {
@@ -255,6 +269,7 @@ export class ParentRecordService implements OnModuleInit {
     });
     if (!contact) return null;
     if (scope === 'reach' && !(await reachesFamily(this.prisma, actor, contact.familyId))) return null;
+    if (scope === 'owned' && !(await ownsFamily(this.prisma, actor, contact.familyId))) return null;
     return { ...contact, countryCode: contact.family.countryCode };
   }
 
@@ -301,6 +316,22 @@ export async function seedFromEnrolment(
       currency: input.currency,
       updatedBy: input.actorId,
     },
+  });
+}
+
+/**
+ * PD-42: a parent entered by hand without an e-mail is given one later ("Set
+ * sign-in e-mail"). The parent file keeps it as the e-mail on record when it
+ * had none; an e-mail already on record is left as it is (it is the
+ * administration's, edited on the profile). Inside the caller's transaction.
+ */
+export async function recordSignInEmail(
+  tx: Prisma.TransactionClient,
+  input: { contactId: string; email: string; actorId: string },
+): Promise<void> {
+  await tx.parentFile.updateMany({
+    where: { contactId: input.contactId, adminOnlyParentEmail: null },
+    data: { adminOnlyParentEmail: input.email.trim().toLowerCase(), updatedBy: input.actorId },
   });
 }
 

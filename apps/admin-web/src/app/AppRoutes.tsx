@@ -1,14 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from '@/core/auth/SessionProvider'
-import { canOpenArea, isDepartment, isSuperAdmin, type NavArea } from '@/core/permissions/capabilities'
+import { canOpenArea, holdsAny, isDepartment, isSuperAdmin, type NavArea } from '@/core/permissions/capabilities'
 import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
-import { InboxPage } from '@/features/inbox/InboxPage'
 import { ChatPage } from '@/features/chat/ChatPage'
-import { FamiliesPage } from '@/features/family/FamiliesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
-import { CoveragePage } from '@/features/coverage/CoveragePage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { StoriesStudio } from '@/features/stories/StoriesStudio'
 import { StoryComposer } from '@/features/stories/StoryComposer'
@@ -21,11 +18,15 @@ import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
 import { SchedulesPage } from '@/features/teachers/SchedulesPage'
 import { StudentsPage } from '@/features/teachers/StudentsPage'
+import { TeachersAreaTabs } from '@/features/teachers/area'
+import { CasesPage } from '@/features/cases/CasesPage'
 import { TrialsPage } from '@/features/trials/TrialsPage'
 import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
-import { CertificatesPage } from '@/features/supervision/CertificatesPage'
+import { CertificatesPage } from '@/features/certificates/CertificatesPage'
+import { LessonAudioPage } from '@/features/lesson-audio/LessonAudioPage'
+import type { Staff } from '@/shared/types/domain'
 import { TeacherSupervisionPage } from '@/features/teacher-supervision/TeacherSupervisionPage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
@@ -37,6 +38,9 @@ import { CallsPage } from '@/features/calls-page/CallsPage'
 import { JoinLinkPage } from '@/features/calls-page/JoinLinkPage'
 import { TeacherProfilesPage } from '@/features/teacher-profiles/TeacherProfilesPage'
 import { AccountsPage } from '@/features/accounts/AccountsPage'
+import { StaffAccountsPage } from '@/features/staff-accounts/StaffAccountsPage'
+import { RolesPage } from '@/features/staff-accounts/RolesPage'
+import { ROLE_PAGE_KEYS, STAFF_ACCOUNT_KEYS } from '@/features/staff-accounts/AccountsTabs'
 import { SupportSessionPage } from '@/features/support/SupportSessionPage'
 import { DevicesPage } from '@/features/devices/DevicesPage'
 import { NotificationsPage } from '@/features/notification-center/NotificationsPage'
@@ -55,6 +59,16 @@ function Area({ area, children }: { area: NavArea; children: ReactElement }) {
   return canOpenArea(staff.role, area) ? children : <ForbiddenPage />
 }
 
+/**
+ * PD-40: a page that belongs to a permission, not a role -- open when GET /me
+ * reports one of `any`. Same rule as Area: UX, not security.
+ */
+function RequirePermission({ any, children }: { any: readonly string[]; children: ReactElement }) {
+  const { staff } = useSession()
+  if (!staff) return null
+  return holdsAny(staff, any) ? children : <ForbiddenPage />
+}
+
 /** The Admin Portal sections. Same rule as Area: UX, not security -- every
  *  `/admin/*` request is refused server-side for anyone but super_admin. */
 function SuperAdminOnly({ children }: { children: ReactElement }) {
@@ -65,10 +79,15 @@ function SuperAdminOnly({ children }: { children: ReactElement }) {
 
 /** Where "/" (and so a fresh sign-in with no deep link) lands: the role's
  *  conversations. The Dashboard stays at its own URL, under More. */
-function homeFor(role: Parameters<typeof isDepartment>[0]): string {
+function homeFor(staff: Pick<Staff, 'role' | 'permissions'>): string {
+  const role = staff.role
   if (isSuperAdmin(role)) return adminSectionPath('conversations')
-  // Departments have no inbox — they only ever see their own tasks. Operators
-  // land in their conversations: the chat workspace on the real API.
+  // PD-40/PD-41: the Designer's whole Admin Web is the Certificates page;
+  // PD-48: a Pronunciation reviewer's is Lesson audio.
+  if (role === 'specialist') return holdsAny(staff, ['lesson_audio.view', 'lesson_audio.review']) && !holdsAny(staff, ['certificates.view', 'certificates.design']) ? '/lesson-audio' : '/certificates'
+  // The legacy department roles (finance, technical, academic) have no
+  // conversations: they land on their Tasks (PD-47). Operators land in their
+  // conversations: the chat workspace on the real API.
   return isDepartment(role) ? '/tasks' : '/chat'
 }
 
@@ -81,16 +100,13 @@ export function AppRoutes() {
   return (
     <AppShell>
       <Routes>
-        <Route path="/" element={<Navigate to={homeFor(staff.role)} replace />} />
+        <Route path="/" element={<Navigate to={homeFor(staff)} replace />} />
         <Route path="/chat" element={<Area area="chat"><ChatPage /></Area>} />
         <Route path="/chat/:conversationId" element={<Area area="chat"><ChatPage /></Area>} />
         {/* PD-13: the Calls page; the super admin reaches it as /admin/calls. A
             call link (members-only) lands on /calls/join/:id for both. */}
         <Route path="/calls" element={<Area area="calls"><CallsPage /></Area>} />
         <Route path="/calls/join/:scheduledCallId" element={<Area area="calls"><JoinLinkPage /></Area>} />
-        <Route path="/inbox" element={<Area area="inbox"><InboxPage /></Area>} />
-        <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
-        <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
         <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
         {/* The Teachers area (features/teachers/area.tsx): Statistics is its base tab. */}
         <Route path="/teachers" element={<Area area="teachers"><TeacherStatsPage inTeachersArea /></Area>} />
@@ -103,9 +119,16 @@ export function AppRoutes() {
         <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />
         {/* PD-12: the department's queues, tabs of the same area. */}
-        <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
+        {/* PD-41: certificates have their own page; the PD-12 tab lands there. */}
+        <Route path="/certificates" element={<Area area="certificates"><CertificatesPage /></Area>} />
+        {/* PD-48: lesson voice-over review (listen; two different reviewers approve each clip). */}
+        <Route path="/lesson-audio" element={<Area area="lesson-audio"><LessonAudioPage /></Area>} />
+        <Route path="/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         {/* PD-26: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
+        {/* PD-35 B5: escalation cases -- a Teachers tab, and /cases for everyone else who opens or owns one. */}
+        <Route path="/teachers/cases" element={<Area area="teachers"><CasesPage header={<TeachersAreaTabs />} /></Area>} />
+        <Route path="/cases" element={<Area area="cases"><CasesPage /></Area>} />
         <Route path="/teachers/leave" element={<Navigate to="/teachers/supervision?section=leave" replace />} />
         {/* PD-11 T4: Sales' trials and Operations' new students (features/trials/area.tsx). */}
         <Route path="/trials" element={<Area area="trials"><TrialsPage /></Area>} />
@@ -123,7 +146,6 @@ export function AppRoutes() {
         {/* PD-17: the Student Profile. Several departments open it, so the server alone decides. */}
         <Route path="/students/:learnerId" element={<StudentProfilePage />} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
-        <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
         {/*
           Stories: one studio, two homes. Operators (admin, coverage, manager)
@@ -144,6 +166,15 @@ export function AppRoutes() {
         />
         {/* PD-21: account administration -- every staff role; the server decides each account and action. */}
         <Route path="/accounts" element={<Area area="accounts"><AccountsPage /></Area>} />
+        {/* PD-40: tabs of the Accounts page, each for the permission keys /me reports; the server decides every request. */}
+        <Route
+          path="/accounts/staff"
+          element={<Area area="accounts"><RequirePermission any={STAFF_ACCOUNT_KEYS}><StaffAccountsPage /></RequirePermission></Area>}
+        />
+        <Route
+          path="/accounts/roles"
+          element={<Area area="accounts"><RequirePermission any={ROLE_PAGE_KEYS}><RolesPage /></RequirePermission></Area>}
+        />
         {/* PD-21: a support session (acting as a parent or teacher); the token lives in memory only. */}
         <Route path="/support/:impersonationId" element={<Area area="accounts"><SupportSessionPage /></Area>} />
         {/*
@@ -164,10 +195,7 @@ export function AppRoutes() {
           path="/admin/:section"
           element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
         />
-        <Route
-          path="/admin/teachers/certificates"
-          element={<SuperAdminOnly><CertificatesPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
-        />
+        <Route path="/admin/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         <Route
           path="/admin/teachers/discipline"
           element={<Navigate to={`${adminSectionPath('teachers')}/supervision?section=absences`} replace />}
@@ -199,7 +227,7 @@ export function AppRoutes() {
           built. Adding it is a single Route here plus a nav registry entry —
           no refactor. (/calls was the other seam; PD-13 filled it.)
         */}
-        <Route path="*" element={<Navigate to={homeFor(staff.role)} replace />} />
+        <Route path="*" element={<Navigate to={homeFor(staff)} replace />} />
       </Routes>
     </AppShell>
   )

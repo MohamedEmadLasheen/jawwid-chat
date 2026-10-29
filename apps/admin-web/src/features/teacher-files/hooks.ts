@@ -1,13 +1,18 @@
+import { useSession } from '@/core/auth/SessionProvider'
+import { useLessonAccess } from '@/features/teachers/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   payrollApi,
   payrollKeys,
+  supervisionDirectoryApi,
+  supervisionDirectoryKeys,
   supervisionTimelineApi,
   teacherFileApi,
   teacherFileKeys,
   timelineKeys,
   type NewAdjustment,
   type NewEntry,
+  type NewTeacher,
   type PayoutDetails,
   type PayoutMethod,
   type PersonalPatch,
@@ -16,6 +21,85 @@ import {
 
 export function useTeacherList(enabled = true) {
   return useQuery({ queryKey: teacherFileKeys.list, queryFn: teacherFileApi.list, enabled, staleTime: 30_000 })
+}
+
+/** PD-43: add a teacher; the list refreshes so the new teacher appears. */
+export function useAddTeacher() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: NewTeacher) => teacherFileApi.addTeacher(body),
+    // The answer holds a sign-in code: never kept once the dialog lets go of it.
+    gcTime: 0,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.list }),
+  })
+}
+
+/** PD-43: Give sign-in -- a login, and its first code shown once, for a teacher who has none. */
+export function useGiveSignIn(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (email: string) => teacherFileApi.giveSignIn(teacherId, email),
+    gcTime: 0,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.detail(teacherId) })
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.list })
+    },
+  })
+}
+
+/** PD-43: a new sign-in e-mail; while the login waits, the answer carries a new code (for the Manager and the super admin). */
+export function useChangeSignIn(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { email: string; reason: string }) => teacherFileApi.changeSignIn(teacherId, body),
+    gcTime: 0,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.detail(teacherId) })
+      void qc.invalidateQueries({ queryKey: teacherFileKeys.list })
+    },
+  })
+}
+
+/** PD-43: a new first sign-in code; the answer carries the code only for the Manager and the super admin. */
+export function useReissueFirstLogin(teacherId: string) {
+  return useMutation({ mutationFn: () => teacherFileApi.reissueFirstLogin(teacherId), gcTime: 0 })
+}
+
+/** PD-43: what offboarding would meet. Read fresh each time the dialog opens. */
+export function useOffboardPreview(teacherId: string) {
+  return useQuery({
+    queryKey: [...teacherFileKeys.detail(teacherId), 'offboard-preview'],
+    queryFn: () => teacherFileApi.offboardPreview(teacherId),
+    staleTime: 0,
+    gcTime: 0,
+  })
+}
+
+export function useOffboard(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { reason: string; cancelOpenLessons?: boolean }) => teacherFileApi.offboard(teacherId, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.all }),
+  })
+}
+
+/** PD-43: the super admin brings a teacher back; the answer holds a new first sign-in code. */
+export function useReactivate(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (reason: string) => teacherFileApi.reactivate(teacherId, reason),
+    gcTime: 0,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.all }),
+  })
+}
+
+/** PD-43: the history card. Under the file's key, so a change that refreshes the file refreshes it too. */
+export function useTeacherHistory(teacherId: string) {
+  return useQuery({
+    queryKey: [...teacherFileKeys.detail(teacherId), 'history'],
+    queryFn: () => teacherFileApi.history(teacherId),
+    staleTime: 15_000,
+  })
 }
 
 export function useTeacherFile(teacherId: string) {
@@ -121,3 +205,30 @@ export function useAddAdjustment(teacherId: string) {
   const done = useFinanceRefresh(teacherId)
   return useMutation({ mutationFn: (body: NewAdjustment) => payrollApi.addAdjustment(teacherId, body), onSuccess: done })
 }
+
+/** PD-26 amendment: the page's teachers (the caller's) and complaint handlers. */
+export function useSupervisionDirectory(enabled = true) {
+  return useQuery({ queryKey: supervisionDirectoryKeys.directory, queryFn: supervisionDirectoryApi.directory, enabled, staleTime: 30_000 })
+}
+
+/** PD-26 amendment: one teacher's held lessons of the last two weeks, for recording lateness. */
+export function useHeldLessons(teacherId: string, kind: 'regular' | 'trial') {
+  return useQuery({
+    queryKey: supervisionDirectoryKeys.held(teacherId, kind),
+    queryFn: () => supervisionDirectoryApi.heldLessons(teacherId, kind),
+    enabled: teacherId !== '',
+  })
+}
+
+/**
+ * Whether to LINK a teacher's name to their Teacher File: the super admin and
+ * the Teachers department. An Operations supervisor on the Supervision page sees
+ * the name only (PD-26 amendment); the server refuses the file either way.
+ */
+export function useOpensTeacherFiles(): boolean {
+  const { staff } = useSession()
+  const access = useLessonAccess(Boolean(staff) && staff?.role !== 'super_admin')
+  // Until the server answers, no link: a name is never a link the viewer cannot follow.
+  return staff?.role === 'super_admin' || access.data?.lessonManager === true
+}
+

@@ -13,6 +13,22 @@ import 'package:jawwid_chat/l10n/app_localizations.dart';
 /// the code their supervisor relays. The server's answers are stubbed; what is held here is
 /// that the screen sends exactly what the API takes, refuses locally what it would refuse,
 /// shows a refusal in plain words, and hands the credentials back to sign in normally.
+/// The form grew (PD-48): the button may sit below the fold, so it is scrolled into view first.
+/// A field that just took text scrolls itself into view; that settles before the button is found.
+Future<void> submit(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.byKey(const ValueKey('signup-submit')));
+  await tester.tap(find.byKey(const ValueKey('signup-submit')));
+}
+
+/// PD-48: the lesson-audio line, ticked before the account is finished.
+Future<void> tick(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.byKey(const ValueKey('signup-lesson-audio')));
+  await tester.tap(find.byKey(const ValueKey('signup-lesson-audio')));
+  await tester.pump();
+}
+
 void main() {
   Widget app(Widget home, _RecordingSignup repo, {Locale locale = const Locale('en')}) {
     return ProviderScope(
@@ -46,42 +62,68 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const ValueKey('signup-email')), 'not-an-email');
-    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await submit(tester);
     await tester.pump();
     expect(find.text('Enter a valid e-mail address.'), findsOneWidget);
     expect(repo.requested, isEmpty);
 
     await tester.enterText(find.byKey(const ValueKey('signup-email')), ' parent@example.test ');
-    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await submit(tester);
     await tester.pumpAndSettle();
     expect(repo.requested, ['parent@example.test']);
     expect(find.textContaining('on WhatsApp'), findsOneWidget);
 
     await tester.enterText(find.byKey(const ValueKey('signup-code')), '482913');
+    await tick(tester);
     await tester.enterText(find.byKey(const ValueKey('signup-password')), 'long-password-1');
     await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'different-password');
-    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await submit(tester);
     await tester.pump();
     expect(find.text('The passwords do not match.'), findsOneWidget);
     expect(repo.verified, isEmpty);
 
     await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'long-password-1');
-    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await submit(tester);
     await tester.pumpAndSettle();
     expect(repo.verified, ['parent@example.test 482913 long-password-1']);
     expect(result, (email: 'parent@example.test', password: 'long-password-1'));
+  });
+
+  // Owner decision 2026-10-27: a password may be as short as 4 characters, for every account.
+  testWidgets('a 3-character password is refused locally; a 4-character one is sent', (tester) async {
+    final repo = _RecordingSignup();
+    await tester.pumpWidget(app(const ParentSignupScreen(), repo));
+    await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
+    await submit(tester);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('signup-code')), '482913');
+    await tick(tester);
+    await tester.enterText(find.byKey(const ValueKey('signup-password')), 'abc');
+    await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'abc');
+    await submit(tester);
+    await tester.pump();
+    expect(find.text('Use at least 4 characters.'), findsOneWidget);
+    expect(repo.verified, isEmpty);
+
+    await tester.enterText(find.byKey(const ValueKey('signup-password')), '1234');
+    await tester.enterText(find.byKey(const ValueKey('signup-confirm')), '1234');
+    await submit(tester);
+    await tester.pumpAndSettle();
+    expect(repo.verified, ['parent@example.test 482913 1234']);
   });
 
   testWidgets('a code the server refuses says so plainly, in Arabic too, and a new code can be asked for', (tester) async {
     final repo = _RecordingSignup(refuseVerifyWith: 'AUTH.SIGNUP_CODE_INVALID');
     await tester.pumpWidget(app(const ParentSignupScreen(), repo, locale: const Locale('ar')));
     await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
-    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await submit(tester);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('signup-code')), '000000');
+    await tick(tester);
     await tester.enterText(find.byKey(const ValueKey('signup-password')), 'long-password-1');
     await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'long-password-1');
-    await tester.tap(find.byKey(const ValueKey('signup-submit')));
+    await submit(tester);
     await tester.pumpAndSettle();
     expect(find.text('هذا الرمز غير صالح أو انتهت صلاحيته. اطلب رمزًا جديدًا.'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('signup-new-code')));
@@ -102,18 +144,52 @@ void main() {
       final repo = _RecordingSignup(refuseVerifyWith: 'AUTH.SIGNUP_LOCKED', refuseKind: AppErrorKind.forbidden);
       await tester.pumpWidget(app(const ParentSignupScreen(), repo, locale: locale));
       await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
-      await tester.tap(find.byKey(const ValueKey('signup-submit')));
+      await submit(tester);
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('signup-code')), '000000');
+      await tick(tester);
       await tester.enterText(find.byKey(const ValueKey('signup-password')), 'long-password-1');
       await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'long-password-1');
-      await tester.tap(find.byKey(const ValueKey('signup-submit')));
+      await submit(tester);
       await tester.pumpAndSettle();
 
       expect(find.text(locked), findsOneWidget);
       expect(find.text(invalid), findsNothing);
     });
   }
+
+  testWidgets('PD-48: finishing needs the approved lesson-audio line ticked; then its version is sent', (tester) async {
+    final repo = _RecordingSignup();
+    await tester.pumpWidget(app(const ParentSignupScreen(), repo));
+    await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
+    await submit(tester);
+    await tester.pumpAndSettle();
+    // The owner's words, exactly.
+    expect(find.text('I understand that lesson pronunciation audio is computer-generated and checked by the academy\'s teachers before use.'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('signup-code')), '482913');
+    await tester.enterText(find.byKey(const ValueKey('signup-password')), 'long-password-1');
+    await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'long-password-1');
+    await submit(tester);
+    await tester.pumpAndSettle();
+    expect(repo.verified, isEmpty);
+    await tick(tester);
+    await submit(tester);
+    await tester.pumpAndSettle();
+    expect(repo.verified, ['parent@example.test 482913 long-password-1']);
+    expect(repo.notices, [1]);
+  });
+
+  testWidgets('PD-48: the sign-up links to About lesson audio, with the terms', (tester) async {
+    await tester.pumpWidget(app(const ParentSignupScreen(), _RecordingSignup()));
+    await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
+    await submit(tester);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('signup-lesson-audio-about')));
+    await tester.tap(find.byKey(const ValueKey('signup-lesson-audio-about')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('lesson-audio-about-body')), findsOneWidget);
+    expect(find.text('Terms and privacy'), findsOneWidget);
+  });
 }
 
 class _RecordingSignup implements ParentSignupRepository {
@@ -123,13 +199,15 @@ class _RecordingSignup implements ParentSignupRepository {
   final AppErrorKind refuseKind;
   final requested = <String>[];
   final verified = <String>[];
+  final notices = <int?>[];
 
   @override
   Future<void> requestCode(String email) async => requested.add(email.trim());
 
   @override
-  Future<void> verify({required String email, required String code, required String password}) async {
+  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice}) async {
     if (refuseVerifyWith != null) throw AppError(refuseKind, code: refuseVerifyWith);
     verified.add('$email $code $password');
+    notices.add(lessonAudioNotice);
   }
 }

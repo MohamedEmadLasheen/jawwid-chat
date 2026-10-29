@@ -33,7 +33,11 @@ export type ActionKind =
   | 'view_lesson'
   | 'view_payments'
   | 'open_stories'
-  | 'open_calls';
+  | 'open_calls'
+  /** PD-35 B5: an escalation case, opened in Escalations (refs.caseId). */
+  | 'open_case'
+  /** PD-47 PR-4: a task, opened in Tasks (refs.taskId), which re-checks who may see it. */
+  | 'open_task';
 
 export interface CatalogEntry {
   version: number;
@@ -62,6 +66,9 @@ const BY_RULE: Readonly<Record<string, CatalogEntry>> = {
   incoming_call: { version: 1, category: 'call', inbox: 'inbox.generic', listed: false },
   group_call_started: { version: 1, category: 'call', inbox: 'inbox.generic', listed: false },
   story_published: { version: 1, category: 'announcement', inbox: 'inbox.story_published', action: 'open_stories' },
+  // PD-36 mentions: their own Center entry, under Conversations (PD-34 QA 2026-10-27).
+  mention: { version: 1, category: 'conversation', inbox: 'inbox.mention', action: 'open_conversation' },
+  mention_group: { version: 1, category: 'conversation', inbox: 'inbox.mention_group', action: 'open_conversation' },
 };
 
 const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
@@ -77,6 +84,27 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   subscription_locked: { version: 1, category: 'payment', inbox: 'inbox.generic', action: 'view_payments' },
   subscription_unlocked: { version: 1, category: 'payment', inbox: 'inbox.generic', action: 'view_payments' },
   subscription_renewal_requested: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  // PD-35 B5: escalation cases, to their owner and the target department's manager.
+  case_opened: { version: 1, category: 'task', inbox: 'inbox.case_opened', action: 'open_case' },
+  case_assigned: { version: 1, category: 'task', inbox: 'inbox.case_assigned', action: 'open_case' },
+  case_due_soon: { version: 1, category: 'task', inbox: 'inbox.case_due_soon', action: 'open_case' },
+  // PD-47 PR-4: a task, to the person who must act on it. Generic texts: never
+  // the task's title, an amount, a card or a family (a lock screen is not
+  // behind sign-in); the task is read in Tasks, which re-checks who may see it.
+  task_assigned: { version: 1, category: 'task', inbox: 'inbox.task_assigned', action: 'open_task' },
+  task_returned: { version: 1, category: 'task', inbox: 'inbox.task_returned', action: 'open_task' },
+  task_out_of_scope: { version: 1, category: 'task', inbox: 'inbox.task_out_of_scope', action: 'open_task' },
+  task_overdue: { version: 1, category: 'task', inbox: 'inbox.task_overdue', action: 'open_task' },
+  task_overdue_decision: { version: 1, category: 'task', inbox: 'inbox.task_overdue_decision', action: 'open_task' },
+  // PD-43 §3.4, §3.7: for the Teachers manager (the super admin when there is none).
+  teacher_added_unsupervised: { version: 1, category: 'task', inbox: 'inbox.teacher_added_unsupervised' },
+  teacher_duplicate_hidden: { version: 1, category: 'task', inbox: 'inbox.teacher_duplicate_hidden' },
+  teacher_supervisor_left: { version: 1, category: 'task', inbox: 'inbox.teacher_supervisor_left' },
+  // PD-41: the Certificates page's work items.
+  certificate_requested: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_returned: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_uploaded: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  certificate_suggestion_decided: { version: 1, category: 'task', inbox: 'inbox.generic' },
 };
 
 const FALLBACK: CatalogEntry = { version: 1, category: 'system', inbox: 'inbox.generic' };

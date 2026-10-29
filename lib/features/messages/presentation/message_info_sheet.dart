@@ -4,6 +4,7 @@ import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/app_clock.dart';
+import '../../../shared/utils/clock_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../data/receipt_repository.dart';
 
@@ -84,7 +85,7 @@ class _Section extends StatelessWidget {
                   ? null
                   : Text(() {
                       final at = AppClock.view(p.at!);
-                      return '${local.formatShortDate(at)} ${local.formatTimeOfDay(TimeOfDay.fromDateTime(at))}';
+                      return '${local.formatShortDate(at)} ${formatClockTime(context, TimeOfDay.fromDateTime(at))}';
                     }()),
             ),
         ],

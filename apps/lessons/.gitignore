@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Generated in CI from data/quran/ by scripts/lessons/build-quran-snapshot.py, never committed.
+public/data/

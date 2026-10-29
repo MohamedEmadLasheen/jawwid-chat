@@ -1,0 +1,545 @@
+{
+  "surah": 99,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the six Tajweed rules, the two Tajweed games and the two Tajweed quiz questions (Tajweed comes only from the reviewed dataset), the audio URLs and the reciter line, and every hand-typed Quran string (replaced by positions). Also dropped: the intro card's hadith (of Abu Hurayra on \"akhbaraha\"), which has no field here and quotes ayah 4 in full. The complete-the-ayah words are the answers of the old completion and missing-word games; their hand-typed distractors that are not words of this surah (jabal, ard, najm and akhraja; and qala and akhrajat, typed without the wa- the verse words carry) are gone, as the game draws its options from these words. The quiz question \"which ayah follows ...\" typed ayah 1 into its text; it now shows ayah 1's last word. The old quiz categories were mapped (hifz, ma'ani, and \"fahm\" to lessons). Emoji were stripped from the ends of the tafsir lines and the lesson titles, and from the start of the reflection questions. Each lesson learned is its old title and description joined with \": \". The reflection question is the old two reflection questions joined with a space; its ideas are the second question's answer line, then the lessons' five \"how do we apply it\" lines. Not carried (no field or no such game in the engine): the \"Madani\" surah type, the ayah-ordering, memory (start-end matching) and build-the-ayah games, the word-meaning games, the intro quiz, the reflection's hint and closing lines, and the quiz's difficulty levels."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-99 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "9cbee15d27c018dc8c074027c59936f1a11d43698f7f33192e8c0982f28bff7a",
+      "components/SectionIntro.tsx": "985669f97a312646e21611457584ed62b5ddc8cd0f8c085306ec05c11ac1dab6",
+      "components/SectionListen.tsx": "08adec752fd13405736cbb9b6055dd8c9d4bc14e591aced772bf4ef45ca2575f",
+      "components/SectionLearnVerses.tsx": "759b3f2fd36e314c6d8ab1f6488923e0103c9cb9ddf8b8c38c1b05c321f2a8e6",
+      "components/SectionMemoryGames.tsx": "097bc97043a2b9093d331fc8794ea3d9c8d6336e0f8b899dca04b2059caf83a2",
+      "components/SectionMeanings.tsx": "0fbff937f0a9275308cffbc1c03e593033e8df668b3d19d775b659e34265b3f8",
+      "components/SectionTajweed.tsx": "f9940377b96f33eabd8488e86493bce466081d6aa9a7d1e05cb436f2e6053b82",
+      "components/SectionLessons.tsx": "2fa1377c23641b611f921962e5b73fc44e059b4edc815357ac2b6b36cfd7db33",
+      "components/SectionQuiz.tsx": "d10af54887f3c9464b15823b905c01803ba12170b7acf7610e89568c97563d53"
+    }
+  },
+  "intro": {
+    "text": "سورة الزلزلة تتحدث عن يوم القيامة عندما تهتز الأرض وتخرج ما بداخلها، وكل إنسان يرى أعماله الخيرة والسيئة.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "عندما تهتز الأرض اهتزازًا شديدًا يوم القيامة",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "وتُخرج الأرض كل ما بداخلها من كنوز وأموات",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "ويقول الإنسان متعجبًا: ماذا يحدث للأرض؟!",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "في ذلك اليوم تتكلم الأرض وتخبر بكل ما فعله الناس عليها",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "لأن الله أمرها أن تتكلم وتشهد",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "في ذلك اليوم يخرج الناس من قبورهم ليروا ماذا فعلوا في حياتهم",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "من يعمل أي عمل خير حتى لو كان صغيرًا جدًا سيراه",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "ومن يعمل أي عمل سيء حتى لو كان صغيرًا جدًا سيراه أيضًا",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "اهتزت بشدة",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "الأرض التي نعيش عليها",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "اهتزازها الشديد",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 1,
+      "meaning": "أظهرت وأخرجت",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "ما بداخلها من كنوز وأموات",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 2,
+      "meaning": "الشخص / البشر",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 3,
+      "meaning": "ماذا يحدث لها؟",
+      "review": "PHRASE: the old entry is the two words \"ma laha\" (3:3-4); the engine shows one word, so this points at ma (3:3) and the meaning covers both. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 4,
+      "word": 1,
+      "meaning": "في ذلك اليوم (يوم القيامة)",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 2,
+      "meaning": "تتكلم وتخبر",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "ما حدث عليها من أعمال",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 2,
+      "meaning": "الله سبحانه وتعالى",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 3,
+      "meaning": "أمر وأخبر",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 2,
+      "meaning": "يخرج ويذهب",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 3,
+      "meaning": "كل البشر",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 4,
+      "meaning": "مجموعات مختلفة متفرقين",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 5,
+      "meaning": "ليشاهدوا",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 6,
+      "meaning": "ما فعلوه في حياتهم",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 3,
+      "meaning": "وزن / مقدار",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 4,
+      "meaning": "شيء صغير جدًا جدًا",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 5,
+      "meaning": "عمل طيب وجميل",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 6,
+      "meaning": "يشاهده ويجده",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 5,
+      "meaning": "عمل سيء",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 1,
+      "word": 4
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 3,
+      "word": 2
+    },
+    {
+      "ayah": 4,
+      "word": 3
+    },
+    {
+      "ayah": 5,
+      "word": 3
+    },
+    {
+      "ayah": 7,
+      "word": 4
+    },
+    {
+      "ayah": 7,
+      "word": 6
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "الفاتحة"
+        },
+        {
+          "text": "الزلزلة"
+        },
+        {
+          "text": "الناس"
+        },
+        {
+          "text": "الفلق"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الزلزلة؟",
+      "options": [
+        {
+          "text": "5"
+        },
+        {
+          "text": "8"
+        },
+        {
+          "text": "10"
+        },
+        {
+          "text": "6"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "سكنت"
+        },
+        {
+          "text": "اهتزت بشدة"
+        },
+        {
+          "text": "نامت"
+        },
+        {
+          "text": "طارت"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 2
+      },
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "جبل كبير"
+        },
+        {
+          "text": "شيء صغير جدًا"
+        },
+        {
+          "text": "نجمة"
+        },
+        {
+          "text": "شجرة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 7,
+        "word": 4
+      },
+      "id": "q4"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية التي تلي",
+      "options": [
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 4
+        },
+        {
+          "ayah": 6
+        },
+        {
+          "ayah": 8
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old question typed the whole of ayah 1 into its text; it now shows ayah 1's last word (zilzalaha) after \"ma al-ayah allati tali\". Teacher to confirm it reads well.",
+      "word": {
+        "ayah": 1,
+        "word": 4
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "تتكلم وتخبر بما حدث عليها"
+        },
+        {
+          "text": "تهتز بشدة"
+        },
+        {
+          "text": "تخرج كنوزها"
+        },
+        {
+          "text": "تنام"
+        }
+      ],
+      "answer": 0,
+      "review": "PHRASE: the old question asks about the two words \"tuhaddithu akhbaraha\" (4:2-3); the engine shows one word, so it points at tuhaddithu (4:2) and the options mean both. Teacher to confirm it reads right.",
+      "word": {
+        "ayah": 4,
+        "word": 2
+      },
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "سعداء"
+        },
+        {
+          "text": "متفرقين"
+        },
+        {
+          "text": "نائمين"
+        },
+        {
+          "text": "جالسين"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 6,
+        "word": 4
+      },
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 6,
+        "words": 4
+      },
+      "options": [
+        {
+          "ayah": 6,
+          "word": 5
+        },
+        {
+          "ayah": 1,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 3
+        },
+        {
+          "ayah": 5,
+          "word": 3
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old answer \"liyuraw a'malahum\" (6:5-6) and the distractor \"awha laha\" (5:3-4) were two-word phrases; it now asks only for the next word, liyuraw (6:5), and that distractor is awha (5:3). The other two (zilzalaha 1:4, akhbaraha 4:3) are unchanged.",
+      "id": "q8"
+    },
+    {
+      "category": "lessons",
+      "question": "ما الدرس الرئيسي من سورة الزلزلة؟",
+      "options": [
+        {
+          "text": "كل عمل محسوب عند الله مهما كان صغيرًا"
+        },
+        {
+          "text": "الأرض لا تتحرك"
+        },
+        {
+          "text": "لا حساب يوم القيامة"
+        },
+        {
+          "text": "الأعمال الصغيرة لا قيمة لها"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q9"
+    },
+    {
+      "category": "hifz",
+      "question": "ما الآية الأخيرة في سورة الزلزلة؟",
+      "options": [
+        {
+          "ayah": 8
+        },
+        {
+          "ayah": 6
+        },
+        {
+          "ayah": 4
+        },
+        {
+          "ayah": 2
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q10"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "كل عمل محسوب: الله يرى كل شيء نفعله، حتى الأشياء الصغيرة جدًا!",
+      "review": null
+    },
+    {
+      "text": "نعمل الخير دائمًا: كل عمل خير مهما كان صغيرًا له قيمة كبيرة عند الله",
+      "review": null
+    },
+    {
+      "text": "نبتعد عن الأذى: حتى الأعمال السيئة الصغيرة يراها الله",
+      "review": null
+    },
+    {
+      "text": "الأرض تشهد علينا: الأرض ستتكلم يوم القيامة وتخبر بما فعلنا عليها",
+      "review": null
+    },
+    {
+      "text": "الصلاة والعبادة: الصلاة من أعظم الأعمال الخيرة التي نقدمها",
+      "review": "True, and prayer is a good deed (ayah 7), but the surah does not speak of prayer or worship. Teacher to keep or drop."
+    }
+  ],
+  "reflection": {
+    "question": "ما أجمل شيء تعلمته من سورة الزلزلة؟ كيف يمكن أن نطبق هذه السورة في حياتنا؟",
+    "ideas": [
+      "نعمل الخير دائمًا حتى لو كان صغيرًا مثل الابتسامة، ونبتعد عن كل ما يؤذي الآخرين!",
+      "عندما تساعد صديقك أو تبتسم لأحد، الله يراك ويكتب لك أجرًا!",
+      "ساعد ماما وبابا في البيت، شارك ألعابك مع إخوتك!",
+      "لا تؤذِ أحدًا، لا تكذب، كن صادقًا دائمًا!",
+      "حافظ على نظافة الأرض ولا ترمِ القمامة في الشارع!",
+      "صلِّ مع بابا وماما وتعلم الصلاة!"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن سورة الزلزلة عدد آياتها 8 آيات فقط؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن كلمة 'ذرة' تعني شيئًا صغيرًا جدًا لا يُرى بالعين؟",
+      "review": "Says a dharra is \"too small to be seen by the eye\". Common tafsir: the smallest ant, or a speck of dust seen in a sunbeam; \"atom\" is a modern reading. The lesson's own word meaning (\"something very, very small\") is safe. Teacher to confirm the wording."
+    },
+    {
+      "text": "هل تعلم أن الأرض ستتكلم يوم القيامة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن قراءة القرآن تجعل قلبك سعيدًا؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الزلزلة سورة مدنية؟",
+      "review": "Whether Az-Zalzalah is Madani or Makki is disputed: the Madinah mushaf heads it Madani (reported from Ibn Abbas and Qatada), but others (Ibn Mas'ud, Jabir, Ata) hold it is Makki, and its theme (the Hour and the reckoning) is that of the Makki surahs. Teacher to decide whether to keep this."
+    },
+    {
+      "text": "هل تعلم أن كل حسنة تعملها مكتوبة عند الله؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الابتسامة في وجه أخيك صدقة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن حفظ القرآن يرفع درجتك في الجنة؟",
+      "review": null
+    }
+  ]
+}

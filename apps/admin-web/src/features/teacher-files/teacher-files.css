@@ -48,3 +48,17 @@
 .tf-eval__goals { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-1); }
 .tf-eval__period, .tf-eval__goal-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
 .tf-eval__goal-row .field { flex: 1 1 10rem; }
+
+/* PD-43: the Add teacher dialog's supervisor choice and the first sign-in code. */
+.tf-radio { display: flex; align-items: center; gap: var(--space-2, 8px); padding-block: 4px; }
+.tf-code { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0; }
+.tf-code dt { color: var(--text-muted, inherit); }
+.tf-code__value { font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.5rem; letter-spacing: 0.2em; }
+
+/* PD-43 PR-1b: the set-up checklist and the offboard preview's lessons. */
+.tf-setup { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.tf-setup li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.tf-lessons { margin: var(--space-2) 0; padding-inline-start: var(--space-4); }
+
+/* PD-43: the teacher's and their login's history. */
+.tf-history { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-2); }
