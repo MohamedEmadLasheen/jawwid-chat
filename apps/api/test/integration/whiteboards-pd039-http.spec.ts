@@ -20,6 +20,8 @@ import { PlatformModule } from '@platform/platform.module';
 import { AuthModule } from '@platform/auth/auth.module';
 import { AuthService } from '@platform/auth/auth.service';
 import { hashPassword } from '@platform/auth/password';
+import { AppConfigService } from '@platform/app-config.service';
+import { PERMISSION_GUARD_MODE, shadowDenials } from '@platform/permissions/permission.guard';
 import { CommunicationModule } from '@communication/communication.module';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
@@ -136,8 +138,16 @@ describe('who reaches which route', () => {
       expect((await http(staff.subject, 'GET', '/whiteboards')).status).toBe(403);
       expect((await http(staff.subject, 'GET', `/whiteboards/${b.id}`)).status).toBe(403);
     }
-    // PermissionGuard: an Operations supervisor holds no whiteboards key.
-    expect((await http(m.supervisors[0]!.subject, 'GET', `/teacher-boards/${b.id}`)).status).toBe(403);
+    // PermissionGuard: an Operations supervisor holds no whiteboards key. While
+    // PD-40 runs in shadow mode the guard records the would-be refusal and the
+    // service refuses (404); under enforce the guard answers 403 itself.
+    const deniedBefore = [...shadowDenials.entries()].filter(([k]) => k.includes('teacher-boards')).reduce((n, [, v]) => n + v, 0);
+    const ops = await http(m.supervisors[0]!.subject, 'GET', `/teacher-boards/${b.id}`);
+    expect(ops.status).toBe(PERMISSION_GUARD_MODE === 'enforce' ? 403 : 404);
+    if (PERMISSION_GUARD_MODE === 'shadow') {
+      const deniedAfter = [...shadowDenials.entries()].filter(([k]) => k.includes('teacher-boards')).reduce((n, [, v]) => n + v, 0);
+      expect(deniedAfter).toBe(deniedBefore + 1);
+    }
     // The key opens the door; the service narrows to the teacher's own readers.
     expect((await http(m.teacherSupervisors[0]!.subject, 'GET', `/teacher-boards/${b.id}`)).status).toBe(200);
     expect((await http(m.teachersManager.subject, 'GET', `/teacher-boards?teacherId=${owner().id}`)).status).toBe(200);
@@ -188,6 +198,8 @@ describe('the write rate limit', () => {
     const teacher = m.teachers[2]!;
     const b = await newBoard(teacher.subject);
     await g.prisma.$executeRaw`UPDATE chat.config SET value = '3'::jsonb WHERE key = ${THROTTLE_KEY}`;
+    // The guard reads the limit through the config cache: drop what it holds.
+    app.get(AppConfigService).invalidate();
     try {
       const statuses: number[] = [];
       for (let i = 0; i < 5; i++) {
@@ -198,6 +210,7 @@ describe('the write rate limit', () => {
       expect(statuses).toContain(429);
     } finally {
       await g.prisma.$executeRaw`UPDATE chat.config SET value = ${JSON.stringify(throttleBefore ?? 240)}::jsonb WHERE key = ${THROTTLE_KEY}`;
+      app.get(AppConfigService).invalidate();
     }
   });
 });
