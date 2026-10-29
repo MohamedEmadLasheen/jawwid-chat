@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { rounds as windows, scrambled, shuffled } from '../../games/shuffle';
+import { scrambled, shuffled } from '../../games/shuffle';
 import type { Band } from '../../content/quran-content';
 import type { Ayah } from '../../quran/dataset';
 import { KNOBS } from '../adapt';
-import { Beads, GameEnd, VerseCard, type GameProps } from './common';
+import { Beads, GameEnd, SHAPE_NAMES, VerseCard, type GameProps } from './common';
 
 /**
  * Order the ayat (رتّب الآيات), every band. Each card is a whole, real ayah, shown
@@ -26,6 +26,24 @@ export const ROUNDS = 3;
 export interface Order {
   ayat: Ayah[];
   shown: Ayah[];
+}
+
+/**
+ * n cards cut into rounds of at most `size`, as even as can be (7 by 6 is 4 and 3, never 6 and 1 or
+ * 7): a round never holds more than the band allows, and none is left with one card.
+ */
+export function windows(n: number, size: number): number[][] {
+  if (n < 2) return [];
+  const count = Math.ceil(n / size);
+  const base = Math.floor(n / count);
+  const out: number[][] = [];
+  let at = 1;
+  for (let w = 0; w < count; w++) {
+    const len = base + (w < n % count ? 1 : 0);
+    out.push(Array.from({ length: len }, (_, k) => at + k));
+    at += len;
+  }
+  return out;
 }
 
 /** 3-5: neighbouring pairs, starting from each ayah of the segment; two ayat with the same words are never a pair. */
@@ -106,8 +124,8 @@ export function OrderAyat({ surah, ayahs, pool, audio, band, seed, onComplete }:
             <div key={a.ayah} className="play__pair">
               <VerseCard ayah={a} shape={i} numbered={false} mark={a === current.ayat[0] && done ? (placed >= 1 ? 'right' : 'shown') : null} onPress={() => touch(a)} />
               {audio ? (
-                <button type="button" className="play__big" onClick={() => audio.play(surah, a.ayah)} aria-label={`استمع إلى الآية ذات الشكل ${i + 1}`}>
-                  🔊 استمع
+                <button type="button" className="play__big" onClick={() => audio.play(surah, a.ayah)}>
+                  🔊 استمع<span className="sr-only">{` إلى آية ${SHAPE_NAMES[i % SHAPE_NAMES.length]}`}</span>
                 </button>
               ) : null}
             </div>

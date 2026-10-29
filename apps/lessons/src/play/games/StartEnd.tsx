@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { shuffled } from '../../games/shuffle';
+import { rng, shuffled } from '../../games/shuffle';
 import type { Band } from '../../content/quran-content';
 import type { Ayah } from '../../quran/dataset';
 import { KNOBS } from '../adapt';
-import { GameEnd, VerseCard, tilesOf, type GameProps } from './common';
+import { GameEnd, VerseCard, skeleton, tilesOf, type GameProps } from './common';
 
 /**
  * Start and end (بداية ونهاية), 6-8 and 9-12: real ayat cut in two at a word boundary
@@ -11,8 +11,8 @@ import { GameEnd, VerseCard, tilesOf, type GameProps } from './common';
  * a half -- marked with "…" where it was cut, and named "the start of an ayah" or "the
  * end of an ayah" -- so it never reads as an ayah. A start is never joined to an end
  * that is not its own: a wrong end is refused where it sits. A matched pair becomes the
- * whole verified ayah. 9-12 matches more pairs, from neighbouring ayat, whose endings
- * are alike.
+ * whole verified ayah. 9-12 matches more pairs, and as many as can be end in the same
+ * letter (the surah's rhyme), so the ends cannot be told apart by their last sound.
  */
 
 /** Pairs in one game (the plan: 3 halves for 6-8, 5 for 9-12). */
@@ -24,32 +24,50 @@ export interface Pair {
   end: string;
 }
 
+/** The last letter of an ayah: its rhyme (fasila). */
+const rhyme = (p: Pair) => skeleton(p.end).slice(-1);
+
 /**
- * The pairs, from the segment's ayat first, then the nearest of the surah: an ayah of at least four
- * words, cut in the middle. No two starts and no two ends have the same words, so every match is one.
+ * The pairs, decided ONCE from the seed: from the segment's ayat first (in a drawn order), then the
+ * nearest of the surah; an ayah of at least four words, cut in the middle. For 9-12 the pairs that
+ * share the commonest rhyme come first. No two starts and no two ends have the same words, so every
+ * match has one answer.
  */
-export function planPairs(ayahs: readonly Ayah[], pool: readonly Ayah[], band: Band): Pair[] {
+export function planPairs(ayahs: readonly Ayah[], pool: readonly Ayah[], band: Band, seed: number): Pair[] {
+  const next = rng(seed);
   const first = ayahs[0]?.ayah ?? 1;
   const last = ayahs[ayahs.length - 1]?.ayah ?? first;
   const dist = (a: Ayah) => (a.ayah < first ? first - a.ayah : a.ayah > last ? a.ayah - last : 0);
+  let candidates = pool
+    .map((ayah) => ({ ayah, k: dist(ayah) + next() }))
+    .sort((x, y) => x.k - y.k)
+    .map(({ ayah }) => ({ ayah, tiles: tilesOf(ayah.text) }))
+    .filter((c) => c.tiles.length >= 4)
+    .map(({ ayah, tiles }) => {
+      const cut = Math.floor(tiles.length / 2);
+      return { ayah, start: tiles.slice(0, cut).join(' '), end: tiles.slice(cut).join(' ') };
+    });
+  if (band === '9-12') {
+    const count = new Map<string, number>();
+    for (const c of candidates) count.set(rhyme(c), (count.get(rhyme(c)) ?? 0) + 1);
+    // The commonest rhyme; on a tie, the one the nearest candidate has.
+    const top = candidates.map(rhyme).reduce((best, r) => ((count.get(r) ?? 0) > (count.get(best) ?? 0) ? r : best), candidates[0] ? rhyme(candidates[0]) : '');
+    candidates = [...candidates.filter((c) => rhyme(c) === top), ...candidates.filter((c) => rhyme(c) !== top)];
+  }
   const out: Pair[] = [];
-  for (const ayah of [...pool].sort((x, y) => dist(x) - dist(y) || x.ayah - y.ayah)) {
+  for (const pair of candidates) {
     if (out.length >= PAIRS[band]) break;
-    const tiles = tilesOf(ayah.text);
-    if (tiles.length < 4) continue;
-    const cut = Math.floor(tiles.length / 2);
-    const pair = { ayah, start: tiles.slice(0, cut).join(' '), end: tiles.slice(cut).join(' ') };
     if (out.some((p) => p.start === pair.start || p.end === pair.end)) continue;
     out.push(pair);
   }
   return out.length >= 2 ? out : [];
 }
 
-export const fitsStartEnd = (ayahs: readonly Ayah[], pool: readonly Ayah[], band: Band) => planPairs(ayahs, pool, band).length > 0;
+export const fitsStartEnd = (ayahs: readonly Ayah[], pool: readonly Ayah[], band: Band) => planPairs(ayahs, pool, band, 0).length > 0;
 
 export function StartEnd({ ayahs, pool, band, seed, onComplete }: GameProps) {
   const knobs = KNOBS[band];
-  const pairs = useMemo(() => planPairs(ayahs, pool, band), [ayahs, pool, band]);
+  const pairs = useMemo(() => planPairs(ayahs, pool, band, seed), [ayahs, pool, band, seed]);
   const starts = useMemo(() => shuffled(pairs, seed), [pairs, seed]);
   const ends = useMemo(() => shuffled(pairs, seed + 1), [pairs, seed]);
   const [picked, setPicked] = useState<Pair | null>(null);
@@ -87,7 +105,7 @@ export function StartEnd({ ayahs, pool, band, seed, onComplete }: GameProps) {
     <section className="play" aria-label="بداية ونهاية">
       <p className="play__ask">المس بداية آية، ثم نهايتها</p>
       {matched.length > 0 ? (
-        <div className="play-cards" aria-label="آيات اكتملت">
+        <div className="play-cards" role="group" aria-label="آيات اكتملت">
           {[...matched]
             .sort((x, y) => x.ayah.ayah - y.ayah.ayah)
             .map((p, i) => (

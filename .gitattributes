@@ -5,3 +5,4 @@ apps/lessons/src/games/shuffle.ts text eol=lf
 apps/lessons/src/audio/audio-controller.ts text eol=lf
 apps/lessons/src/audio/audio-manifest.ts text eol=lf
 apps/lessons/src/quran/dataset.ts text eol=lf
+apps/lessons/src/styles.css text eol=lf

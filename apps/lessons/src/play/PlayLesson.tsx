@@ -71,9 +71,10 @@ interface Sitting {
  *
  * The grown-up can always replay, skip forward or stop (plan §C.3.4), turn the
  * recitation off (the sitting restarts without it: there is no other sound to
- * mute), change the verse size (§C.4) and choose the child's age band (the
- * sitting restarts for it). `band` is where it starts; the opener's profile will
- * set it (§B.5) once it exists.
+ * mute), change the verse size (§C.4) and move the child's age band one step
+ * up or down from `band` (§B.1; the sitting restarts for it). These controls are
+ * folded behind "للكبار", so the child sees the game, not the settings. `band`
+ * is where it starts; the opener's profile will set it (§B.5) once it exists.
  */
 export function PlayLesson({
   surah,
@@ -107,6 +108,8 @@ export function PlayLesson({
   const [scale, setScale] = useState(0);
   const [sitting, setSitting] = useState<Sitting | null>(null);
   const [chosen, setChosen] = useState<Band>(band);
+  // The grown-up's controls are folded away: the child sees the game, not the settings.
+  const [grownUp, setGrownUp] = useState(false);
   const [day] = useState(() => date ?? today());
   // Which games may be played is fixed at build time (signed.ts), never a prop.
   const { mechanics, approvals, keys } = SIGNED;
@@ -227,7 +230,10 @@ export function PlayLesson({
       <p className="note">
         الآيات {arabic(seg![0])}–{arabic(seg![1])} · اللعبة {arabic(Math.min(step + 1, session.length))} من {arabic(session.length)}
       </p>
-      <nav className="play__grownup" aria-label="أدوات الكبير">
+      <button type="button" className="play__grownup-toggle" aria-expanded={grownUp} aria-controls="play-grownup" onClick={() => setGrownUp(!grownUp)}>
+        ⚙ للكبار
+      </button>
+      <nav id="play-grownup" className="play__grownup" aria-label="أدوات الكبير" hidden={!grownUp}>
         {live ? (
           <>
             <button type="button" onClick={() => (audio?.stop(), setAttempt(attempt + 1))}>
@@ -254,7 +260,7 @@ export function PlayLesson({
         </button>
         <span className="play__bands" role="group" aria-label="عمر الطفل">
           العمر:
-          {BANDS.map((b) => (
+          {BANDS.filter((b) => Math.abs(BANDS.indexOf(b) - BANDS.indexOf(band)) <= 1).map((b) => (
             <button
               key={b}
               type="button"

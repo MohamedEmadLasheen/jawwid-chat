@@ -25,19 +25,28 @@ export interface Ask {
  * The questions, decided ONCE from the seed. Prompts walk the segment. Wrong choices are other ayat of
  * the surah with other words: for 6-8 never a neighbour of the prompt or the answer ("apart"), for 9-12
  * the nearest ones ("near").
+ *
+ * One answer only: a refrain (an ayah whose words come again in the surah, as in Ar-Rahman) is never
+ * the prompt, since each of its copies is followed by another ayah. And no wrong choice is itself
+ * next to (or, asking "before", just before) an ayah with the prompt's words.
  */
 export function planAsks(ayahs: readonly Ayah[], pool: readonly Ayah[], knobs: Knobs, seed: number): Ask[] {
   const next = rng(seed);
   const by = new Map(pool.map((a) => [a.ayah, a]));
   const asks: Ask[] = [];
+  const copies = (text: string) => pool.filter((a) => a.text === text).length;
   for (const prompt of ayahs) {
     if (asks.length >= knobs.rounds) break;
+    if (copies(prompt.text) > 1) continue;
     const way = knobs.distractors === 'near' && asks.length % 2 === 1 && by.has(prompt.ayah - 1) ? 'previous' : 'next';
     const answer = by.get(prompt.ayah + (way === 'next' ? 1 : -1));
     if (!answer || answer.text === prompt.text) continue;
     const near = (a: Ayah) => Math.min(Math.abs(a.ayah - prompt.ayah), Math.abs(a.ayah - answer.ayah));
+    // The ayah a wrong choice would answer for: the one before it (asking "next"), or after it.
+    const beside = (a: Ayah) => by.get(a.ayah + (way === 'next' ? -1 : 1));
     const others = pool
       .filter((a) => a.ayah !== prompt.ayah && a.ayah !== answer.ayah && a.text !== answer.text && a.text !== prompt.text)
+      .filter((a) => beside(a)?.text !== prompt.text)
       .filter((a) => knobs.distractors !== 'apart' || near(a) > 1)
       .map((a) => ({ a, k: (knobs.distractors === 'near' ? near(a) : 0) + next() }))
       .sort((x, y) => x.k - y.k)

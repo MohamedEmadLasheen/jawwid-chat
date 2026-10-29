@@ -26,8 +26,8 @@ export interface Mechanic {
   /**
    * The game's file in play/games/, and the SHA-256 of it plus every file that changes what a
    * game does (the card, the knobs, the session, the page and its route, this registry and
-   * signed.ts, the shuffle, the recitation player and list, the verified-text loader, the games'
-   * stylesheet): what is
+   * signed.ts, the shuffle, the recitation player and list, the verified-text loader, the
+   * stylesheets): what is
    * signed includes the code. check-quran-content.py (SHARED_CODE) defines and verifies it.
    */
   code: string;

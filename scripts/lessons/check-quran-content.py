@@ -67,12 +67,13 @@ LESSONS_SRC = os.path.join(ROOT, 'apps', 'lessons', 'src')
 # answer is shown, rounds, options), the session, the page that runs it and the route that
 # gives it its band and recitation, the registry and what may sign it, the shuffle that places
 # the answer, the recitation player and its verified list, the loader of the verified text, and
-# the games' stylesheet (how a verse, a tile or a blank is shown).
+# the stylesheets (how a verse, a tile or a blank is shown): the games' own, and the engine's
+# base one, whose buttons, notes and page the games also use.
 # Change one and every mechanic waits for review again. (route.ts only maps a path to a surah
 # number, and App.tsx only renders PlayRoute: neither is here.)
 SHARED_CODE = ('play/games/common.tsx', 'play/adapt.ts', 'play/session.ts', 'play/PlayLesson.tsx', 'play/PlayRoute.tsx',
                'play/mechanics.ts', 'play/signed.ts', 'games/shuffle.ts', 'audio/audio-controller.ts', 'audio/audio-manifest.ts',
-               'quran/dataset.ts', 'play/play.css')
+               'quran/dataset.ts', 'play/play.css', 'styles.css')
 PLAY_APPROVALS = os.path.join(APPROVALS, 'play.json')
 RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
 PIN = os.path.join(ROOT, 'apps', 'lessons', 'quran-pin.json')

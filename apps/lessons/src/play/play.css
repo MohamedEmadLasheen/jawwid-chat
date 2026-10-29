@@ -1,7 +1,7 @@
 /*
  * PD-49 games (src/play): big targets for small hands, the verse never animated, only its frame.
- * Here, not in styles.css: how a game shows the verse is part of what its mechanic's signature
- * covers (check-quran-content.py SHARED_CODE), so a lesson style cannot change a signed game.
+ * How a game shows the verse is part of what its mechanic's signature covers (check-quran-content.py
+ * SHARED_CODE): this file AND styles.css, whose base buttons, notes and page the games also use.
  */
 .play__title { font-size: 1.5rem; margin-block: 0.5rem; }
 .play { display: grid; gap: 0.75rem; justify-items: stretch; }

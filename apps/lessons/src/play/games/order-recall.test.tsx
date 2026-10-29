@@ -4,7 +4,7 @@ import type { Ayah } from '../../quran/dataset';
 import { KNOBS } from '../adapt';
 import { BuildAyah, MAX_TILES, buildable, planBuilds } from './BuildAyah';
 import { NextAyah, planAsks } from './NextAyah';
-import { OrderAyat, planOrders } from './OrderAyat';
+import { OrderAyat, planOrders, windows } from './OrderAyat';
 import { StartEnd, planPairs } from './StartEnd';
 import { tilesOf } from './common';
 
@@ -53,7 +53,11 @@ describe('Build the ayah (ركّب الآية)', () => {
         const line = () => [...document.querySelectorAll('.play__slot:not(.play__slot--empty)')].map((x) => x.textContent);
         expect(line()).toEqual(tiles.slice(0, k));
         // The line reads as words, with spaces between them (for a screen reader and a copy).
-        expect(document.querySelector('.play__line')!.textContent!.trim()).toBe(tiles.slice(0, k).join(' '));
+        const shown = document.querySelector('.play__line')!.cloneNode(true) as HTMLElement;
+        shown.querySelectorAll('.sr-only').forEach((x) => x.remove());
+        expect(shown.textContent!.trim()).toBe(tiles.slice(0, k).join(' '));
+        // ...and tells a screen reader how far it is built.
+        expect(document.querySelector('.play__line .sr-only')!.textContent).toBe(`الكلمات المرتّبة: ${(k).toLocaleString('ar-EG')} من ${tiles.length.toLocaleString('ar-EG')}: `);
         // Blanks for what is not built yet.
         expect(document.querySelectorAll('.play__slot--empty')).toHaveLength(tiles.length - k);
         const group = screen.getByRole('group', { name: 'الكلمات' });
@@ -143,6 +147,28 @@ describe('Order the ayat (رتّب الآيات)', () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it('a round never holds more cards than the band allows, and none is left with one', () => {
+    expect(windows(7, 6).map((w) => w.length)).toEqual([4, 3]);
+    expect(windows(6, 5).map((w) => w.length)).toEqual([3, 3]);
+    expect(windows(11, 5).map((w) => w.length)).toEqual([4, 4, 3]);
+    expect(windows(5, 5)).toEqual([[1, 2, 3, 4, 5]]);
+    expect(windows(1, 5)).toEqual([]);
+    for (let n = 2; n <= 40; n++) {
+      for (const size of [5, 6]) {
+        const w = windows(n, size);
+        expect(w.flat()).toEqual(Array.from({ length: n }, (_, i) => i + 1));
+        for (const x of w) expect(x.length).toBeGreaterThanOrEqual(2), expect(x.length).toBeLessThanOrEqual(size);
+      }
+    }
+  });
+
+  it('3-5: each listen button names its card by its shape, in words', () => {
+    const { controller } = { controller: { play: vi.fn(), stop: vi.fn() } };
+    render(<OrderAyat {...props({ band: '3-5', ayahs: AYAHS.slice(0, 1), audio: controller })} />);
+    expect(screen.getByRole('button', { name: /استمع إلى آية الدائرة/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /استمع إلى آية المثلث/ })).toBeTruthy();
+  });
+
   it('two ayat with the same words are never asked to be told apart', () => {
     const twins = [...AYAHS.slice(0, 3), { ...AYAHS[3]!, text: TEXTS[0]! }];
     expect(planOrders(twins, twins, '6-8', 1)).toEqual([]);
@@ -153,20 +179,38 @@ describe('Order the ayat (رتّب الآيات)', () => {
 
 describe('Start and end (بداية ونهاية)', () => {
   it('each half is cut from a real ayah at a word boundary; the halves of a pair ARE the ayah', () => {
-    const pairs = planPairs(AYAHS.slice(0, 2), AYAHS, '9-12');
-    expect(pairs).toHaveLength(5);
-    // The segment's ayat first, then the nearest.
-    expect(pairs.map((p) => p.ayah.ayah)).toEqual([1, 2, 3, 4, 5]);
-    for (const p of pairs) expect(`${p.start} ${p.end}`).toBe(p.ayah.text);
-    expect(planPairs(AYAHS.slice(0, 2), AYAHS, '6-8')).toHaveLength(3);
+    const pairs = planPairs(AYAHS.slice(0, 2), AYAHS, '6-8', 1);
+    expect(pairs).toHaveLength(3);
+    // The segment's ayat first (in a drawn order), then the nearest.
+    expect(pairs.slice(0, 2).map((p) => p.ayah.ayah).sort()).toEqual([1, 2]);
+    expect(pairs[2]!.ayah.ayah).toBe(3);
+    for (const p of planPairs(AYAHS, AYAHS, '9-12', 1)) expect(`${p.start} ${p.end}`).toBe(p.ayah.text);
+    expect(planPairs(AYAHS.slice(0, 2), AYAHS, '9-12', 1)).toHaveLength(5);
     // Fewer than two ayat long enough to cut: no game.
-    expect(planPairs([AYAHS[7]!], [AYAHS[7]!, AYAHS[0]!], '6-8')).toEqual([]);
+    expect(planPairs([AYAHS[7]!], [AYAHS[7]!, AYAHS[0]!], '6-8', 1)).toEqual([]);
+  });
+
+  it('drawn from the seed, like every game: the order changes with it', () => {
+    const orders = new Set<string>();
+    for (let seed = 0; seed < 20; seed++) orders.add(planPairs(AYAHS.slice(0, 4), AYAHS, '6-8', seed).map((p) => p.ayah.ayah).join());
+    expect(orders.size).toBeGreaterThan(1);
+  });
+
+  it('9-12: the ends share the commonest rhyme first, so their last sound gives nothing away', () => {
+    // Four ayat ending in nun, three in other letters (stand-ins, not Quran).
+    const rhymed = ['ألف باء تاء نون', 'جيم حاء خاء دال', 'راء زاي سين نون', 'صاد ضاد طاء ظاء', 'غين فاء قاف نون', 'لام ميم هاء واو', 'ياء همزة باء نون']
+      .map((text, i) => ({ ayah: i + 1, basmala: null, text, sha256: '' }));
+    for (let seed = 0; seed < 10; seed++) {
+      const pairs = planPairs(rhymed.slice(0, 2), rhymed, '9-12', seed);
+      expect(pairs).toHaveLength(5);
+      expect(pairs.slice(0, 4).map((p) => p.end.slice(-3))).toEqual(['نون', 'نون', 'نون', 'نون']);
+    }
   });
 
   it('a wrong end is refused and nothing joined is shown; a match is the whole verified ayah', () => {
     const onComplete = vi.fn();
     render(<StartEnd {...props({ onComplete })} />);
-    const pairs = planPairs(AYAHS.slice(0, 4), AYAHS, '6-8');
+    const pairs = planPairs(AYAHS.slice(0, 4), AYAHS, '6-8', 3);
     const starts = () => screen.getByRole('group', { name: 'البدايات' });
     const ends = () => screen.getByRole('group', { name: 'النهايات' });
     fireEvent.click(within(ends()).getAllByRole('button')[0]!);
@@ -182,7 +226,7 @@ describe('Start and end (بداية ونهاية)', () => {
       }
       fireEvent.click(within(ends()).getByRole('button', { name: new RegExp(`نهاية آية: ${p.end}`) }));
     }
-    expect(verses()).toEqual(pairs.map((p) => p.ayah.text));
+    expect(verses()).toEqual([...pairs].sort((x, y) => x.ayah.ayah - y.ayah.ayah).map((p) => p.ayah.text));
     fireEvent.click(screen.getByRole('button', { name: /التالي/ }));
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
@@ -212,6 +256,26 @@ describe('What comes next? (ما الآية التالية؟)', () => {
     for (const a of asks) {
       expect(a.answer.ayah).toBe(a.prompt.ayah + (a.way === 'next' ? 1 : -1));
       expect(a.options).toHaveLength(4);
+    }
+  });
+
+  it('a refrain never makes two right answers, asking "next" or "before" (as Ar-Rahman 55:16-19)', () => {
+    // R is a refrain (stand-in): ayat 2, 4 and 6 have the same words, so 3, 5 and 7 each follow it.
+    const R = 'فاء باء ألف راء';
+    const refrain = ['ألف باء تاء ثاء', R, 'جيم حاء خاء دال', R, 'راء زاي سين شين', R, 'صاد ضاد طاء ظاء', 'غين فاء قاف كاف', 'لام ميم نون هاء']
+      .map((text, i) => ({ ayah: i + 1, basmala: null, text, sha256: '' }));
+    const by = new Map(refrain.map((a) => [a.ayah, a]));
+    for (const band of ['6-8', '9-12'] as const) {
+      for (let seed = 0; seed < 40; seed++) {
+        for (const a of planAsks(refrain, refrain, KNOBS[band], seed)) {
+          // The refrain is never the prompt.
+          expect(a.prompt.text).not.toBe(R);
+          // Exactly one choice is next to (or just before) an ayah with the prompt's words: the answer.
+          const step = a.way === 'next' ? -1 : 1;
+          const right = a.options.filter((o) => by.get(o.ayah + step)?.text === a.prompt.text);
+          expect(right).toEqual([a.answer]);
+        }
+      }
     }
   });
 

@@ -42,8 +42,15 @@ export function tilesOf(verse: string): string[] {
   return out;
 }
 
+/** A word's letters only, without its vowel and recitation marks: two words that look alike to a child share it. */
+export function skeleton(word: string): string {
+  return [...word].filter((c) => LETTER.test(c)).join('');
+}
+
 /** Shapes, so a card is never told apart by colour alone. */
 export const SHAPES = ['●', '▲', '■', '★', '◆'] as const;
+/** Their names, for a screen reader. */
+export const SHAPE_NAMES = ['الدائرة', 'المثلث', 'المربع', 'النجمة', 'المعيّن'] as const;
 
 /** Calls onComplete once, the first time `done` is true. */
 export function useCompleteOnce(done: boolean, onComplete: () => void): void {
