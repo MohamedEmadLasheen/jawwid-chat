@@ -22,6 +22,7 @@ import { AccountRecoveryModule } from './account-recovery/account-recovery.modul
 import { MaterialsModule } from './materials/materials.module';
 import { QuranModule } from './quran/quran.module';
 import { LessonAudioModule } from './lesson-audio/lesson-audio.module';
+import { LessonContentModule } from './lesson-content/lesson-content.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
 import { TeacherSupervisorModule } from './teacher-supervisors/teacher-supervisor.module';
 import { CalendarModule } from './calendar/calendar.module';
@@ -77,6 +78,8 @@ import { TaskModule } from './tasks/task.module';
     QuranModule,
     // PD-48: lesson voice-over (computer voice, two teacher approvals per clip). Never Quran audio.
     LessonAudioModule,
+    // PD-49: the review of children's Quran content and game mechanics (teacher + scholar steps).
+    LessonContentModule,
     // PD-30: subscription locks -- cards, pushes, lesson holds, renewal requests.
     SubscriptionModule,
     // PD-35: teacher supervisors (assignment, the 'supervision' seat).

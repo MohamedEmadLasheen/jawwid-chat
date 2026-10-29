@@ -388,6 +388,10 @@ gate_lessons_supply_chain() {
   # resting on pinned editions.
   "$PYTHON" -I scripts/lessons/check-quran-content.py selftest || return 1
   "$PYTHON" -I scripts/lessons/check-quran-content.py || return 1
+  # PD-49: the API reviews exactly what apps/lessons holds -- its generated map of
+  # items and mechanics (with their hashes and required steps) is never stale.
+  "$PYTHON" -I scripts/lessons/lesson-content-subjects.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/lesson-content-subjects.py check || return 1
   # P0-5: the Arabic letters lessons -- every word holds its unit's letter by the
   # one rule (no folding), full tashkeel with the pausal sukun, and every quiz
   # question has exactly one right answer.
