@@ -4446,7 +4446,7 @@ class L10nAr extends L10n {
   String get photoLabel => 'صورة';
 
   @override
-  String photoPositionLabel(int position, int count) {
+  String photoPositionLabel(String position, String count) {
     return 'الصورة $position من $count';
   }
 }

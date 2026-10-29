@@ -4350,7 +4350,7 @@ class L10nEn extends L10n {
   String get photoLabel => 'Photo';
 
   @override
-  String photoPositionLabel(int position, int count) {
+  String photoPositionLabel(String position, String count) {
     return 'Photo $position of $count';
   }
 }

@@ -71,7 +71,7 @@ class _MediaViewerState extends State<MediaViewer> {
 
   /// "Photo 2 of 5" -- or just "Photo" when there is one.
   String _positionLabel(L10n l10n, int index) =>
-      widget.photos.length > 1 ? l10n.photoPositionLabel(index + 1, widget.photos.length) : l10n.photoLabel;
+      widget.photos.length > 1 ? l10n.photoPositionLabel('${index + 1}', '${widget.photos.length}') : l10n.photoLabel;
 
   void _onPageChanged(int index) {
     setState(() {

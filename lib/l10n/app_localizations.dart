@@ -7447,11 +7447,11 @@ abstract class L10n {
   /// **'Photo'**
   String get photoLabel;
 
-  /// PD-37: which photo of the message is on screen, read by a screen reader.
+  /// PD-37: which photo of the message is on screen, read by a screen reader. Positions, not counts: no noun follows either number, so there is no plural agreement to make.
   ///
   /// In en, this message translates to:
   /// **'Photo {position} of {count}'**
-  String photoPositionLabel(int position, int count);
+  String photoPositionLabel(String position, String count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
