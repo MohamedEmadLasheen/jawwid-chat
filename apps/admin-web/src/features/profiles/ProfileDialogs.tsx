@@ -21,6 +21,7 @@ import {
   useVoidInstalment,
   useVoidPayment,
 } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 function Footer({ onCancel, onSave, pending, saveLabel }: { onCancel: () => void; onSave: () => void; pending: boolean; saveLabel?: string }) {
   const tx = useCopy()
@@ -112,7 +113,7 @@ export function EditContactDialog({ profile, onClose }: { profile: ParentProfile
       </Field>
       <Field label={tx(P.country)}>
         {(id) => (
-          <select id={id} className="select" value={country} onChange={(e) => setCountry(e.target.value)}>
+          <SearchableSelect id={id} className="select" value={country} onValueChange={(v) => setCountry(v)}>
             <option value="">{tx(P.noCountry)}</option>
             {COUNTRIES.map((c) => (
               <option key={c} value={c}>
@@ -120,7 +121,7 @@ export function EditContactDialog({ profile, onClose }: { profile: ParentProfile
               </option>
             ))}
             <option value="other">{tx(P.otherCountry)}</option>
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       {country === 'other' && (
@@ -189,38 +190,38 @@ export function EditBillingDialog({ billing, onClose }: { billing: FamilyBilling
       <ServerError error={save.error} />
       <Field label={tx(P.plan)}>
         {(id) => (
-          <select id={id} className="select" value={plan} onChange={(e) => setPlan(e.target.value)}>
+          <SearchableSelect id={id} className="select" value={plan} onValueChange={(v) => setPlan(v)}>
             <option value="">{tx(P.none)}</option>
             {PLAN_MONTHS.map((n) => (
               <option key={n} value={n}>
                 {planLabel(n, locale)}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       <Field label={tx(P.method)}>
         {(id) => (
-          <select id={id} className="select" value={method} onChange={(e) => setMethod(e.target.value)}>
+          <SearchableSelect id={id} className="select" value={method} onValueChange={(v) => setMethod(v)}>
             <option value="">{tx(P.none)}</option>
             {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (
               <option key={m} value={m}>
                 {tx(METHOD_LABEL[m])}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       <Field label={tx(P.currency)}>
         {(id) => (
-          <select id={id} className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          <SearchableSelect id={id} className="select" value={currency} onValueChange={(v) => setCurrency(v)}>
             <option value="">{tx(P.none)}</option>
             {[...new Set([...(billing.currency ? [billing.currency] : []), ...CURRENCIES])].map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         )}
       </Field>
     </Dialog>
@@ -314,13 +315,13 @@ export function NewInstalmentsDialog({
   const currencyField = (
     <Field label={tx(P.currency)}>
       {(id) => (
-        <select id={id} className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+        <SearchableSelect id={id} className="select" value={currency} onValueChange={(v) => setCurrency(v)}>
           {[...new Set([...(billing.currency ? [billing.currency] : []), ...CURRENCIES])].map((c) => (
             <option key={c} value={c}>
               {c}
             </option>
           ))}
-        </select>
+        </SearchableSelect>
       )}
     </Field>
   )
@@ -356,25 +357,25 @@ export function NewInstalmentsDialog({
             </Field>
             <Field label={tx(P.count)}>
               {(id) => (
-                <select id={id} className="select" value={count} onChange={(e) => setCount(e.target.value)}>
+                <SearchableSelect id={id} className="select" value={count} onValueChange={(v) => setCount(v)}>
                   {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>
                       {n}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               )}
             </Field>
             {count !== '1' && (
               <Field label={tx(P.every)}>
                 {(id) => (
-                  <select id={id} className="select" value={every} onChange={(e) => setEvery(e.target.value)}>
+                  <SearchableSelect id={id} className="select" value={every} onValueChange={(v) => setEvery(v)}>
                     {[1, 2, 3, 6, 12].map((n) => (
                       <option key={n} value={n}>
                         {n}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 )}
               </Field>
             )}
@@ -426,14 +427,14 @@ export function NewInstalmentsDialog({
       {children.length > 0 && (
         <Field label={tx(P.child)}>
           {(id) => (
-            <select id={id} className="select" value={learnerId} onChange={(e) => setLearnerId(e.target.value)}>
+            <SearchableSelect id={id} className="select" value={learnerId} onValueChange={(v) => setLearnerId(v)}>
               <option value="">{tx(P.wholeFamily)}</option>
               {children.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           )}
         </Field>
       )}
@@ -446,14 +447,14 @@ export function NewInstalmentsDialog({
           </Field>
           <Field label={tx(SUB.plan)}>
             {(id) => (
-              <select id={id} className="select" value={lessonPlan} onChange={(e) => setLessonPlan(e.target.value)}>
+              <SearchableSelect id={id} className="select" value={lessonPlan} onValueChange={(v) => setLessonPlan(v)}>
                 <option value="">{tx(SUB.noPlan)}</option>
                 {PLAN_MONTHS.map((n) => (
                   <option key={n} value={n}>
                     {monthsLabel(n, locale)}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             )}
           </Field>
         </div>
@@ -489,13 +490,13 @@ export function RecordPaymentDialog({ billing, instalment, onClose }: { billing:
       </Field>
       <Field label={tx(P.method)}>
         {(id) => (
-          <select id={id} className="select" value={method} onChange={(e) => setMethod(e.target.value as InstalmentPaymentMethod)}>
+          <SearchableSelect id={id} className="select" value={method} onValueChange={(v) => setMethod(v as InstalmentPaymentMethod)}>
             {INSTALMENT_METHODS.map((m) => (
               <option key={m} value={m}>
                 {tx(METHOD[m])}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       <Field label={tx(P.reference)} hint={tx(P.referenceHint)}>
@@ -623,13 +624,13 @@ export function RequestPaymentDialog({
       <p className="field__hint">{tx(PAY.requestHint)}</p>
       <Field label={tx(PAY.purpose)}>
         {(id) => (
-          <select id={id} className="select" value={purpose} onChange={(e) => setPurpose(e.target.value as RequestPurpose)}>
+          <SearchableSelect id={id} className="select" value={purpose} onValueChange={(v) => setPurpose(v as RequestPurpose)}>
             {PURPOSES.map((p) => (
               <option key={p} value={p}>
                 {tx(PURPOSE_LABEL[p])}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       <Field label={tx(PAY.label)} hint={tx(PAY.labelHint)} error={errors.label}>
@@ -641,27 +642,27 @@ export function RequestPaymentDialog({
         </Field>
         <Field label={tx(PAY.currency)}>
           {(id) => (
-            <select id={id} className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            <SearchableSelect id={id} className="select" value={currency} onValueChange={(v) => setCurrency(v)}>
               {currencyChoices(billing.currency).map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           )}
         </Field>
       </div>
       {children.length > 0 && (
         <Field label={tx(PAY.child)}>
           {(id) => (
-            <select id={id} className="select" value={learnerId} onChange={(e) => setLearnerId(e.target.value)}>
+            <SearchableSelect id={id} className="select" value={learnerId} onValueChange={(v) => setLearnerId(v)}>
               <option value="">{tx(PAY.wholeFamily)}</option>
               {children.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           )}
         </Field>
       )}
@@ -669,14 +670,14 @@ export function RequestPaymentDialog({
         <>
           <Field label={tx(PAY.plan)}>
             {(id) => (
-              <select id={id} className="select" value={plan} onChange={(e) => setPlan(e.target.value)}>
+              <SearchableSelect id={id} className="select" value={plan} onValueChange={(v) => setPlan(v)}>
                 <option value="">{tx(PAY.noPlan)}</option>
                 {PLAN_MONTHS.map((n) => (
                   <option key={n} value={n}>
                     {planLabel(n, locale)}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             )}
           </Field>
           <Field label={tx(SUB.lessons)} hint={tx(SUB.lessonsHint)} error={errors.lessons}>
@@ -844,16 +845,16 @@ export function RecordFamilyPaymentDialog({
       <p className="field__hint">{tx(PAY.recordHint)}</p>
       <Field label={tx(PAY.method)}>
         {(id) => (
-          <select id={id} className="select" value={method} onChange={(e) => setMethod(e.target.value as NewFamilyPayment['method'])}>
+          <SearchableSelect id={id} className="select" value={method} onValueChange={(v) => setMethod(v as NewFamilyPayment['method'])}>
             <option value="cash">{tx(METHOD.cash)}</option>
             <option value="bank_transfer">{tx(METHOD.bank_transfer)}</option>
-          </select>
+          </SearchableSelect>
         )}
       </Field>
       {(openRequests.length > 0 || openInstalments.length > 0) && (
         <Field label={tx(PAY.towards)}>
           {(id) => (
-            <select id={id} className="select" value={towards} onChange={(e) => choose(e.target.value)}>
+            <SearchableSelect id={id} className="select" value={towards} onValueChange={(v) => choose(v)}>
               <option value="">{tx(PAY.towardsNothing)}</option>
               {openRequests.map((r) => (
                 <option key={r.id} value={`r:${r.id}`}>
@@ -865,7 +866,7 @@ export function RecordFamilyPaymentDialog({
                   {tx(PAY.towardsInstalment, { label: i.label, remaining: formatMoney(instalmentOwes(i), i.currency, locale) })}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           )}
         </Field>
       )}
@@ -876,13 +877,13 @@ export function RecordFamilyPaymentDialog({
         {towards === '' && (
           <Field label={tx(PAY.currency)}>
             {(id) => (
-              <select id={id} className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              <SearchableSelect id={id} className="select" value={currency} onValueChange={(v) => setCurrency(v)}>
                 {currencyChoices(billing.currency).map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             )}
           </Field>
         )}
@@ -893,14 +894,14 @@ export function RecordFamilyPaymentDialog({
       {children.length > 0 && (
         <Field label={tx(PAY.child)}>
           {(id) => (
-            <select id={id} className="select" value={learnerId} onChange={(e) => setLearnerId(e.target.value)}>
+            <SearchableSelect id={id} className="select" value={learnerId} onValueChange={(v) => setLearnerId(v)}>
               <option value="">{tx(PAY.wholeFamily)}</option>
               {children.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           )}
         </Field>
       )}

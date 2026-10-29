@@ -22,6 +22,7 @@ import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { LessonModule } from '../../src/lessons/lesson.module';
 import { BillingModule } from '../../src/billing/billing.module';
 import { ParentRecordModule } from '../../src/parent-profile/parent-record.module';
+import { GeoModule } from '../../src/geo/geo.module';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
 
@@ -86,7 +87,7 @@ beforeAll(async () => {
 
   process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({
-    imports: [PlatformModule, AuthModule, CommunicationModule, LessonModule, BillingModule, ParentRecordModule],
+    imports: [PlatformModule, AuthModule, CommunicationModule, LessonModule, BillingModule, ParentRecordModule, GeoModule],
   }).compile();
   app = moduleRef.createNestApplication({ logger: false, rawBody: true });
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/live', 'health/ready'] });
@@ -209,6 +210,10 @@ describe('PD-17 over HTTP', () => {
     const item = (list.json.items as Array<Record<string, unknown>>).find((p) => p.id === f.parent.id)!;
     // The list carries no contact channel: the app never asks for the detail route.
     expect(Object.keys(item).sort()).toEqual(['avatarUrl', 'childrenCount', 'family', 'id', 'name']);
+    // PD-45: nor a location unless asked for (data minimisation); the Admin Web's Parents page asks.
+    const located = await http(sales, 'GET', `/parent-profiles?with=location&q=${encodeURIComponent(f.parent.name.split(' ')[0]!)}`);
+    const row = (located.json.items as Array<Record<string, unknown>>).find((p) => p.id === f.parent.id)!;
+    expect(Object.keys(row.location as object).sort()).toEqual(['countryCode', 'subdivisionCode']);
 
     const created = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/instalments`, {
       label: 'Sales app fees', amountMinor: 70000, currency: 'AED', firstDueDate: '2026-10-01',
@@ -226,5 +231,30 @@ describe('PD-17 over HTTP', () => {
     expect(voided.status).toBe(201);
     // Sales never edits the contact record, from any client.
     expect((await http(sales, 'POST', `/parent-profiles/${f.parent.id}`, { region: 'x' })).status).toBe(403);
+  });
+});
+
+describe('PD-45: the country and subdivision lists over HTTP', () => {
+  it('are behind the bearer guard, and any signed-in account reads them: staff, a teacher, a parent', async () => {
+    expect((await http(null, 'GET', '/geo/countries')).status).toBe(401);
+    expect((await http(null, 'GET', '/geo/countries/EG/subdivisions')).status).toBe(401);
+    const f = m.families[0]!;
+    const teacher = m.teachers.find((t) => t.id === f.children[0]!.teacherId)!;
+    for (const who of [m.superAdmin.subject, m.operationsManager.subject, teacher.subject, f.parent.subject]) {
+      const countries = await http(who, 'GET', '/geo/countries');
+      expect({ who, status: countries.status }).toEqual({ who, status: 200 });
+      const list = countries.json.countries as Array<{ code: string; pinned: number | null }>;
+      expect(list.find((c) => c.code === 'EG')).toMatchObject({ pinned: 0 });
+      const eg = await http(who, 'GET', '/geo/countries/eg/subdivisions');
+      expect(eg.status).toBe(200);
+      expect((eg.json.subdivisions as unknown[]).length).toBe(27);
+    }
+  });
+
+  it('refuse a code that is not a country, and may be kept a day', async () => {
+    const bad = await http(m.superAdmin.subject, 'GET', '/geo/countries/UK/subdivisions');
+    expect({ status: bad.status, code: bad.code }).toEqual({ status: 400, code: CommErrorCode.VALIDATION });
+    const r = await fetch(`${base}/geo/countries`, { headers: { authorization: `Bearer ${await tokenFor(m.superAdmin.subject)}` } });
+    expect(r.headers.get('cache-control')).toBe('private, max-age=86400');
   });
 });

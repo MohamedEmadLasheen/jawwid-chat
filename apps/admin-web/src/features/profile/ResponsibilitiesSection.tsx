@@ -5,6 +5,7 @@ import { NOTE_MAX, RESPONSIBILITY_CATEGORIES, type StaffProfile } from './api'
 import { CATEGORY_LABEL, T, labelFor, useCopy } from './copy'
 import { describeError } from './errors'
 import { useAssignResponsibility, useEndResponsibility } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * Section 3: what this person supervises.
@@ -136,13 +137,13 @@ function AssignDialog({ refKey, taken, onClose }: { refKey: string; taken: Set<s
     >
       <div className="field">
         <label className="field__label" htmlFor={ids.cat}>{tx(T.category)}</label>
-        <select id={ids.cat} className="select" value={category} onChange={(e) => setCategory(e.target.value)}>
+        <SearchableSelect id={ids.cat} className="select" value={category} onValueChange={(v) => setCategory(v)}>
           {options.map((c) => (
             <option key={c} value={c}>
               {tx(labelFor(CATEGORY_LABEL, c))}
             </option>
           ))}
-        </select>
+        </SearchableSelect>
       </div>
       <div className="field">
         <label className="field__label" htmlFor={ids.note}>{tx(T.scopeNote)}</label>

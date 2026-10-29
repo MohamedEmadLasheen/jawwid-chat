@@ -58,6 +58,7 @@ import { ReportMaterials } from '../materials/report-materials';
     ReportCorrectionService,
   ],
   // PD-35: TrialGroupService re-seats a trial group when a teacher's supervisor changes.
-  exports: [LessonService, SchedulingService, ReportMaterials, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService],
+  // PD-44: the Dashboard's Enrolment section counts through TrialService and NewStudentEnrolmentService.
+  exports: [LessonService, SchedulingService, ReportMaterials, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService, NewStudentEnrolmentService],
 })
 export class LessonModule {}

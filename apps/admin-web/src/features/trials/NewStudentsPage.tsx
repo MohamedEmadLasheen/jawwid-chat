@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
-import { TrialPaymentsDialog } from '@/features/payments/TrialPaymentsDialog'
+import { TrialPaymentsDialog, TrialRequestsSummary } from '@/features/payments/TrialPaymentsDialog'
 import { PAY } from '@/features/payments/copy'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Badge } from '@/shared/components/Badge'
@@ -51,11 +52,23 @@ export function NewStudentsPage() {
   const [editing, setEditing] = useState<NewStudentDto | null>(null)
   const [paying, setPaying] = useState<NewStudentDto | null>(null)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<StatusFilter>('all')
+  // PD-44: the filter lives in the URL, so a Dashboard tile opens the filter
+  // it counted (?filter=unassigned|waiting|signed_up) and a later link moves it too.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('filter')
+  const filter: StatusFilter = asked === 'unassigned' || asked === 'waiting' || asked === 'signed_up' ? asked : 'all'
+  const setFilter = (next: StatusFilter) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('filter')
+      else p.set('filter', next)
+      return p
+    }, { replace: true })
   const { staff } = useSession()
   const students = q.data?.students ?? []
-  // PD-27: before Assign, Sales, the Operations Manager (who assigns) and the
-  // super admin ask for the subscription payment. The server decides each request.
+  // PD-27: Sales, the Operations Manager (who assigns) and the super admin ask
+  // for the subscription payment before Assign, and still see the trial's
+  // requests after it (read only). The server decides each request.
   const mayRequestPayment = access.sales || q.data?.canAssign === true || (staff !== null && isSuperAdmin(staff.role))
 
   // PD-32: one status per card drives the badge and the filter; the search is on names.
@@ -106,7 +119,7 @@ export function NewStudentsPage() {
                       canAssign={q.data?.canAssign === true}
                       // PD-16: a form that became a family is frozen.
                       onEdit={access.sales && !s.enrolment ? () => setEditing(s) : undefined}
-                      onPayments={mayRequestPayment && !s.enrolment ? () => setPaying(s) : undefined}
+                      onPayments={mayRequestPayment ? () => setPaying(s) : undefined}
                     />
                   ))}
                 </div>
@@ -202,6 +215,7 @@ function StudentCard({
               <dd>{currencyName(s.payment.currency, locale)}</dd>
             </div>
           </dl>
+          {onPayments && <TrialRequestsSummary trialId={s.trialId} />}
         </section>
         <NewStudentSetup s={s} canAssign={canAssign} />
       </div>

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
+import { chooseOption } from '@/test/select'
 
 /**
  * The redesigned Dashboard, Conversations and Stories pages (2026-10-13).
@@ -144,9 +145,9 @@ describe('Conversations', () => {
 
     const names = () => [...document.querySelectorAll('.conv-row__name')].map((n) => n.textContent)
     expect(names()).toEqual(['Alpha', 'Charlie', 'Bravo'])
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Sort' }), 'oldest')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'oldest')
     expect(names()).toEqual(['Bravo', 'Charlie', 'Alpha'])
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Sort' }), 'name')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'name')
     expect(names()).toEqual(['Alpha', 'Bravo', 'Charlie'])
     // Name order has no day sections.
     expect(screen.queryByRole('heading', { level: 2, name: 'Today' })).not.toBeInTheDocument()
@@ -212,7 +213,7 @@ describe('Stories', () => {
     expect(screen.getByText('18 of 20 viewed')).toBeInTheDocument()
     expect(screen.getByText('Not published')).toBeInTheDocument()
 
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Sort' }), 'views')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'views')
     const titles = [...document.querySelectorAll('.story-row__name')].map((n) => n.textContent)
     expect(titles).toEqual(['Story two', 'Story one', 'Story three'])
   })
@@ -263,7 +264,7 @@ describe('Users summary and sort', () => {
     const figure = (label: string) => within(strip).getByText(label).nextElementSibling?.textContent
     expect([figure('People'), figure('Active'), figure('Inactive'), figure('No login')]).toEqual(['3', '2', '1', '1'])
 
-    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveValue('newest')
+    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveAttribute('data-value', 'newest')
     expect(names()).toEqual(['Amy', 'Zed'])
   })
 
@@ -274,9 +275,9 @@ describe('Users summary and sort', () => {
     expect(names()).toEqual(['Amy', 'Bob', 'Zed'])
 
     const sort = screen.getByRole('combobox', { name: 'Sort' })
-    await userEvent.selectOptions(sort, 'signin')
+    await chooseOption(userEvent, sort, 'signin')
     expect(names()).toEqual(['Zed', 'Amy', 'Bob'])
-    await userEvent.selectOptions(sort, 'newest')
+    await chooseOption(userEvent, sort, 'newest')
     expect(names()).toEqual(['Bob', 'Amy', 'Zed'])
   })
 })

@@ -6,6 +6,7 @@ import type { StaffProfile } from './api'
 import { ROLE_LABEL, T, useCopy } from './copy'
 import { describeError } from './errors'
 import { useOrganization, useSetReportingLine } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * Super admin only (the button exists only when `canManageReportingLine`, and
@@ -59,14 +60,14 @@ export function ReportingLineDialog({ profile, refKey, onClose }: { profile: Sta
         <>
           <div className="field">
             <label className="field__label" htmlFor={ids.mgr}>{tx(T.manager)}</label>
-            <select id={ids.mgr} className="select" value={manager} onChange={(e) => setManager(e.target.value)}>
+            <SearchableSelect id={ids.mgr} className="select" value={manager} onValueChange={(v) => setManager(v)}>
               <option value="">{tx(T.noneOption)}</option>
               {candidates.map((c) => (
                 <option key={c.staffId} value={c.staffId}>
                   {c.displayName} — {tx(ROLE_LABEL[c.role] ?? { en: c.role, ar: c.role })}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
             <span className="field__hint">{tx(T.managerHint)}</span>
           </div>
           <div className="field">

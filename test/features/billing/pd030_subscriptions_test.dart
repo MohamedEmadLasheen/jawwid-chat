@@ -76,8 +76,9 @@ void main() {
       expect(find.text('الاشتراكات'), findsOneWidget);
     });
 
-    testWidgets('a teacher gets no new tab, and Sales keeps its Payments', (tester) async {
-      expect(Shells.forRole(UserRole.teacher).map((d) => d.route), ['/chats', '/schedule', '/calls', '/settings']);
+    testWidgets('a teacher gets no Subscriptions tab, and Sales keeps its Payments', (tester) async {
+      // PD-39 (2026-10-29) gave a teacher Boards; never Subscriptions.
+      expect(Shells.forRole(UserRole.teacher).map((d) => d.route), ['/chats', '/schedule', '/boards', '/calls', '/settings']);
       expect(Shells.forRole(UserRole.sales).map((d) => d.route), ['/chats', '/calls', '/payments', '/settings']);
 
       for (final role in [UserRole.teacher, UserRole.sales]) {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../design/tokens.dart';
+import '../../../design/widgets/searchable_picker.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/materials.dart';
@@ -133,18 +134,23 @@ class _LibraryTabState extends ConsumerState<_LibraryTab> with AutomaticKeepAliv
           padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing2, Spacing.spacing5, 0),
           child: Align(
             alignment: AlignmentDirectional.centerStart,
-            child: DropdownButton<String>(
-              key: const ValueKey('materials-age'),
-              value: shownBand,
-              onChanged: (v) => setState(() => _ageGroup = v),
-              items: [
-                DropdownMenuItem(value: 'all', child: Text(l10n.materialsAgeAll)),
-                for (final band in materialAgeGroups)
-                  DropdownMenuItem(
-                    value: band,
-                    child: Text(band == childBand ? l10n.materialsAgeForChild(ageBandLabel(l10n, band)) : ageBandLabel(l10n, band)),
-                  ),
-              ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: SearchablePickerField<String>(
+                key: const ValueKey('materials-age'),
+                value: shownBand,
+                label: l10n.materialsAgeLabel,
+                decoration: InputDecoration(labelText: l10n.materialsAgeLabel, isDense: true),
+                onChanged: (v) => setState(() => _ageGroup = v),
+                options: [
+                  PickerOption(value: 'all', label: l10n.materialsAgeAll),
+                  for (final band in materialAgeGroups)
+                    PickerOption(
+                      value: band,
+                      label: band == childBand ? l10n.materialsAgeForChild(ageBandLabel(l10n, band)) : ageBandLabel(l10n, band),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

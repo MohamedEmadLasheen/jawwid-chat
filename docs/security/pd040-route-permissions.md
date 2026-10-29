@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-521 routes.
+542 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -128,6 +128,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/conversations/:conversationId/messages/search` | chat.use | `communication/api/message.controller.ts#MessageController.search` |
 | GET | `/api/v1/conversations/:conversationId/messages/unread` | chat.use | `communication/api/message.controller.ts#MessageController.unread` |
 | PUT | `/api/v1/conversations/:conversationId/theme` | chat.use | `communication/api/chat-theme.controller.ts#ChatThemeController.setTheme` |
+| POST | `/api/v1/conversations/:conversationId/typing` | chat.use | `communication/api/typing.controller.ts#TypingController.typing` |
 | DELETE | `/api/v1/conversations/:conversationId/wallpaper` | chat.use | `communication/api/chat-theme.controller.ts#ChatThemeController.remove` |
 | POST | `/api/v1/conversations/:conversationId/wallpaper` | chat.use | `communication/api/chat-theme.controller.ts#ChatThemeController.commit` |
 | POST | `/api/v1/conversations/:conversationId/wallpaper/upload` | chat.use | `communication/api/chat-theme.controller.ts#ChatThemeController.upload` |
@@ -157,6 +158,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/courses/:id` | lessons.courses | `lessons/journey.controller.ts#JourneyController.updateCourse` |
 | GET | `/api/v1/dashboard/cases` | cases.view | `dashboard/dashboard.controller.ts#DashboardController.casesSection` |
 | GET | `/api/v1/dashboard/chats` | chat.use | `dashboard/dashboard.controller.ts#DashboardController.chats` |
+| GET | `/api/v1/dashboard/enrolment` | trials.view | new_students.view | `dashboard/dashboard.controller.ts#DashboardController.enrolmentSection` |
 | GET | `/api/v1/dashboard/lessons` | lessons.view | schedule.view | `dashboard/dashboard.controller.ts#DashboardController.lessons` |
 | GET | `/api/v1/dashboard/tasks` | self-service | `dashboard/dashboard.controller.ts#DashboardController.tasksSection` |
 | POST | `/api/v1/discipline/complaints/:id/uphold` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.uphold` |
@@ -187,6 +189,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/family-intake/learners/:learnerId/carried-over` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.carryOver` |
 | POST | `/api/v1/family-intake/learners/:learnerId/carried-over/void` | subscriptions.carry_over | `new-students/intake.controller.ts#FamilyIntakeController.voidCarryOver` |
 | GET | `/api/v1/family-intake/options` | new_students.manage | `new-students/intake.controller.ts#FamilyIntakeController.options` |
+| GET | `/api/v1/geo/countries` | self-service | `geo/geo.controller.ts#GeoController.countries` |
+| GET | `/api/v1/geo/countries/:country/subdivisions` | self-service | `geo/geo.controller.ts#GeoController.subdivisions` |
 | GET | `/api/v1/health` | public | `infra/health/health.controller.ts#HealthController.detail` |
 | GET | `/api/v1/health/live` | public | `infra/health/health.controller.ts#HealthController.live` |
 | GET | `/api/v1/health/ready` | public | `infra/health/health.controller.ts#HealthController.ready` |
@@ -458,6 +462,10 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/tasks/:id/remove` | tasks.manage | `tasks/task.controller.ts#TaskController.remove` |
 | POST | `/api/v1/tasks/:id/return` | tasks.manage | `tasks/task.controller.ts#TaskController.returnTask` |
 | GET | `/api/v1/tasks/assignees` | tasks.create | tasks.manage | `tasks/task.controller.ts#TaskController.assignees` |
+| GET | `/api/v1/teacher-boards` | whiteboards.view | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.list` |
+| GET | `/api/v1/teacher-boards/:id` | whiteboards.view | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.review` |
+| GET | `/api/v1/teacher-boards/:id/access-log` | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.accessLog` |
+| POST | `/api/v1/teacher-boards/:id/copy` | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.copy` |
 | GET | `/api/v1/teacher-files` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.list` |
 | GET | `/api/v1/teacher-files/:teacherId` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.detail` |
 | POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_supervision.record | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |
@@ -535,3 +543,16 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/trials/slots` | trials.view | `lessons/trial.controller.ts#TrialController.slots` |
 | GET | `/api/v1/trials/teachers` | trials.view | `lessons/trial.controller.ts#TrialController.teachers` |
 | POST | `/api/v1/trials/teachers/:teacherId/group` | trials.manage | `lessons/trial.controller.ts#TrialController.openGroup` |
+| GET | `/api/v1/whiteboards` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.list` |
+| POST | `/api/v1/whiteboards` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.create` |
+| GET | `/api/v1/whiteboards/:id` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.open` |
+| POST | `/api/v1/whiteboards/:id/duplicate` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.duplicate` |
+| POST | `/api/v1/whiteboards/:id/pages` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.addPage` |
+| POST | `/api/v1/whiteboards/:id/pages/:pageId` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.savePage` |
+| POST | `/api/v1/whiteboards/:id/pages/:pageId/delete` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.deletePage` |
+| POST | `/api/v1/whiteboards/:id/pages/:pageId/duplicate` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.duplicatePage` |
+| POST | `/api/v1/whiteboards/:id/pages/order` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.reorderPages` |
+| POST | `/api/v1/whiteboards/:id/rename` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.rename` |
+| POST | `/api/v1/whiteboards/:id/restore` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.restore` |
+| POST | `/api/v1/whiteboards/:id/trash` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.moveToTrash` |
+| GET | `/api/v1/whiteboards/trash` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.trash` |

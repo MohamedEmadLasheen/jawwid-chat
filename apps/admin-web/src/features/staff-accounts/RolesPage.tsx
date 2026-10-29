@@ -13,6 +13,7 @@ import { SA, TIER, blockingGrants, describeError, localized, pageLabel, useCopy 
 import { useAccessRoles, useArchiveRole, useDefineRole, usePermissionCatalogue, useStaffAccounts, useUpdateRole } from './hooks'
 import { AccountsTabs, STAFF_ACCOUNT_KEYS } from './AccountsTabs'
 import { RiskBadge, groupByPage } from './NewStaffAccountDialog'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import '@/features/accounts/accounts.css'
 import './staff-accounts.css'
 
@@ -252,13 +253,13 @@ function RoleEditorDialog({ role, staff, onClose }: { role: AccessRole | null; s
           <label className="field__label" htmlFor={tierId}>
             {tx(SA.maxTier)}
           </label>
-          <select id={tierId} className="input" value={maxTier} onChange={(e) => setMaxTier(e.target.value as RoleMaxTier)}>
+          <SearchableSelect id={tierId} className="input" value={maxTier} onValueChange={(v) => setMaxTier(v as RoleMaxTier)}>
             {MAX_TIERS.map((t) => (
               <option key={t} value={t}>
                 {tx(TIER[t]!)}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
       )}
 

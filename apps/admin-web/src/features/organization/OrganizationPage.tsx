@@ -16,6 +16,7 @@ import './organization.css'
 import { Link, useSearchParams } from 'react-router-dom'
 import { SupervisorColors } from '@/features/schedule/SupervisorColors'
 import { studentPath } from '@/features/profiles/api'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 type Tab = 'children' | 'teachers' | 'structure'
 const TABS: readonly Tab[] = ['children', 'teachers', 'structure']
@@ -127,18 +128,19 @@ function TeachersTab() {
                           {!t.isActive && <> <Badge tone="neutral">{tx(T.inactiveTeacher)}</Badge></>}
                         </td>
                         <td>
-                          <select
+                          <SearchableSelect
+                            clearable={false}
                             className="select"
                             aria-label={tx(T.assignTitle, { name: t.name })}
                             value={live?.id ?? ''}
                             disabled={assign.isPending}
-                            onChange={(e) => assign.mutate({ teacherId: t.id, supervisorId: e.target.value || null })}
+                            onValueChange={(v) => assign.mutate({ teacherId: t.id, supervisorId: v || null })}
                           >
                             <option value="">{tx(T.noTeacherSupervisor)}</option>
                             {view.supervisors.map((s) => (
                               <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
-                          </select>
+                          </SearchableSelect>
                           {!live && t.isActive && <> <Badge tone="warn" dot>{tx(T.unassigned)}</Badge></>}
                           {t.supervisor && !live && (
                             <> <span className="muted" dir="auto">{tx(T.formerSupervisor, { name: t.supervisor.name })}</span></>
@@ -186,13 +188,13 @@ function ChildrenTab({ operations }: { operations: Department }) {
         <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
         <div className="org-filter">
           <label className="field__label" htmlFor="org-filter">{tx(T.filter)}</label>
-          <select id="org-filter" className="select" value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <SearchableSelect id="org-filter" className="select" value={filter} onValueChange={(v) => setFilter(v)}>
             <option value="all">{tx(T.filterAll)}</option>
             <option value="unassigned">{tx(T.filterUnassigned)}</option>
             {supervisors.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
-          </select>
+          </SearchableSelect>
         </div>
         <span className="toolbar__count">{tx(T.count, { n: number(rows.length) })}</span>
       </div>

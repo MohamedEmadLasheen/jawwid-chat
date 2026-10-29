@@ -558,4 +558,34 @@ describe('6. review of #202', () => {
     // The Parent Profile's own edit names its staff member: refused for B at the API already.
     expect(await code(parents.update(salesB, r.contactId, { name: 'x' }))).toBe(CommErrorCode.PARENT_PROFILE_NOT_FOUND);
   });
+
+  it('P1-3 "own" (PD-45): the "Missing location" list shows a Sales member only the families they own', async () => {
+    const mine = await intake.enter(salesA, form());
+    const theirs = await intake.enter(salesB, form());
+    await scope('own');
+    const listed = (await parents.list(salesA, undefined, 'missing')).items.map((i) => i.family.id);
+    expect(listed).toContain(mine.familyId);
+    expect(listed).not.toContain(theirs.familyId);
+  });
+
+  it('P1-3 "own" (PD-45): the rest of a family\'s location -- its subdivision and who set it -- is guarded like its country', async () => {
+    const r = await intake.enter(salesA, form());
+    await scope('own');
+    const asStaff = (who: string, statement: string, ...args: unknown[]) =>
+      g.prisma.$transaction([
+        g.prisma.$executeRawUnsafe(`select set_config('chat.acting_staff_id', $1, true)`, who),
+        g.prisma.$executeRawUnsafe(statement, ...args),
+      ]);
+    const refused = /handles only their own families/;
+    await asStaff(salesA, `update chat.family set country_code = 'EG', subdivision_code = 'EG-GZ' where id = $1::uuid`, r.familyId);
+    await expect(asStaff(salesB, `update chat.family set subdivision_code = 'EG-C' where id = $1::uuid`, r.familyId)).rejects.toThrow(refused);
+    await expect(asStaff(salesB, `update chat.family set subdivision_code = null where id = $1::uuid`, r.familyId)).rejects.toThrow(refused);
+    await expect(asStaff(
+      salesB, `update chat.family set location_source = 'staff', location_updated_by = $2::uuid, location_updated_at = now() where id = $1::uuid`,
+      r.familyId, salesB,
+    )).rejects.toThrow(refused);
+    await asStaff(salesA, `update chat.family set subdivision_code = 'EG-C', location_source = 'staff', location_updated_by = $2::uuid where id = $1::uuid`, r.familyId, salesA);
+    const row = await g.prisma.family.findUniqueOrThrow({ where: { id: r.familyId } });
+    expect({ c: row.countryCode, s: row.subdivisionCode, by: row.locationUpdatedBy }).toEqual({ c: 'EG', s: 'EG-C', by: salesA });
+  });
 });

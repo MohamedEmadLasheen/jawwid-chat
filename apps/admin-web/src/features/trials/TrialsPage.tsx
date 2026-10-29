@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { SlotPicker } from '@/shared/components/SlotPicker'
@@ -17,6 +17,7 @@ import '../teachers/teachers.css'
 import './trials.css'
 import { TrialBadge } from '@/shared/components/TrialBadge'
 import { ACADEMY_ZONE } from '@/core/time/academyTime'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
 type Filter = 'all' | 'decision' | 'upcoming'
@@ -37,7 +38,18 @@ export function TrialsPage() {
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const access = useTrialsAccess()
   const q = useTrials()
-  const [filter, setFilter] = useState<Filter>('all')
+  // PD-44: the tab lives in the URL, so a Dashboard tile opens the tab it
+  // counted (/trials?filter=decision|upcoming) and a later link moves it too.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('filter')
+  const filter: Filter = asked === 'decision' || asked === 'upcoming' ? asked : 'all'
+  const setFilter = (next: Filter) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('filter')
+      else p.set('filter', next)
+      return p
+    }, { replace: true })
   const [booking, setBooking] = useState(false)
   const [dialog, setDialog] = useState<Pending>(null)
   const [card, setCard] = useState<TrialDto | null>(null)
@@ -302,12 +314,12 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
       )}
       <div className="field">
         <label className="field__label" htmlFor="bt-teacher">{tx(TR.teacher)}</label>
-        <select id="bt-teacher" className="select" value={teacherId} onChange={(e) => { setTeacherId(e.target.value); setSlot('') }}>
+        <SearchableSelect id="bt-teacher" className="select" value={teacherId} onValueChange={(v) => { setTeacherId(v); setSlot('') }}>
           <option value="">—</option>
           {(teachers.data?.teachers ?? []).map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
-        </select>
+        </SearchableSelect>
       </div>
       <div className="field">
         <label className="field__label" htmlFor="bt-duration">{tx(TR.duration)}</label>

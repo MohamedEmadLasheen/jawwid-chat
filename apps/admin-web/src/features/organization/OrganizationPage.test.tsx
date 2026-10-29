@@ -5,6 +5,7 @@ import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { Department, LearnerAssignment } from './api'
+import { chooseOption, optionsOf } from '@/test/select'
 
 /**
  * PD-8 organization page, through the real routes and the real API client,
@@ -87,7 +88,7 @@ describe('children and their supervisors', () => {
   it('filters to the children without a supervisor', async () => {
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
     await screen.findByText('Child Alpha')
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Show' }), 'unassigned')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Show' }), 'unassigned')
     expect(screen.queryByText('Child Alpha')).not.toBeInTheDocument()
     expect(screen.getByText('Child Beta')).toBeInTheDocument()
   })
@@ -100,8 +101,8 @@ describe('children and their supervisors', () => {
 
     // Only Operations PRIMARY supervisors are offered -- never the backup.
     const select = within(dialog).getByRole('combobox', { name: 'New supervisor' })
-    expect(within(select).queryByRole('option', { name: /Backup One/ })).not.toBeInTheDocument()
-    await userEvent.selectOptions(select, 'sup-2')
+    expect((await optionsOf(userEvent, select)).map((o) => o.label).join()).not.toMatch(/Backup One/)
+    await chooseOption(userEvent, select, 'sup-2')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(within(dialog).getByText('Required.')).toBeInTheDocument()
     expect(calls('POST', /\/org\/learners\//)).toHaveLength(0)
@@ -123,7 +124,7 @@ describe('children and their supervisors', () => {
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
     await userEvent.click(await screen.findByRole('button', { name: 'Assign — Child Beta' }))
     const dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'New supervisor' }), 'sup-2')
+    await chooseOption(userEvent, within(dialog).getByRole('combobox', { name: 'New supervisor' }), 'sup-2')
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason (required)' }), 'x')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('You are not allowed to make this change.')
@@ -168,9 +169,9 @@ describe('departments and backup supervisors', () => {
     const dialog = await screen.findByRole('dialog')
     const primary = within(dialog).getByRole('combobox', { name: 'Supervisor' })
     // A backup supervisor is never offered as the PRIMARY.
-    expect(within(primary).queryByRole('option', { name: 'Backup One' })).not.toBeInTheDocument()
-    await userEvent.selectOptions(primary, 'sup-1')
-    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Backup' }), 'bak-1')
+    expect((await optionsOf(userEvent, primary)).map((o) => o.label)).not.toContain('Backup One')
+    await chooseOption(userEvent, primary, 'sup-1')
+    await chooseOption(userEvent, within(dialog).getByRole('combobox', { name: 'Backup' }), 'bak-1')
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason (required)' }), 'coverage plan')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(calls('POST', /\/org\/backups$/)).toHaveLength(1))
@@ -233,8 +234,8 @@ describe('teachers and their supervisors', () => {
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/organization' })
     expect(await screen.findByRole('tab', { name: 'Teachers & supervisors', selected: true })).toBeInTheDocument()
     expect(await screen.findByText(/2 teachers have no supervisor/)).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher T' })).toHaveValue('tsup-1')
-    expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher U' })).toHaveValue('')
+    expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher T' })).toHaveAttribute('data-value', 'tsup-1')
+    expect(screen.getByRole('combobox', { name: 'Supervisor for Teacher U' })).toHaveAttribute('data-value', '')
   })
 
   it('opens on Teachers & supervisors from ?tab=teachers (the Teacher Files "Assign supervisor" shortcut)', async () => {
@@ -245,7 +246,7 @@ describe('teachers and their supervisors', () => {
   it('shows a teacher whose supervisor left as unassigned, naming the former supervisor', async () => {
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/organization' })
     const select = await screen.findByRole('combobox', { name: 'Supervisor for Teacher V' })
-    expect(select).toHaveValue('')
+    expect(select).toHaveAttribute('data-value', '')
     const row = select.closest('tr') as HTMLElement
     expect(within(row).getByText('Unassigned')).toBeInTheDocument()
     expect(within(row).getByText(/Former supervisor: Old Sup/)).toBeInTheDocument()
@@ -255,10 +256,10 @@ describe('teachers and their supervisors', () => {
     on('POST', /\/org\/teachers\/t-2\/supervisor$/, () => json({ teacherId: 't-2', supervisorId: 'tsup-2' }))
     on('POST', /\/org\/teachers\/t-1\/supervisor$/, () => json({ teacherId: 't-1', supervisorId: null }))
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/organization' })
-    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Supervisor for Teacher U' }), 'tsup-2')
+    await chooseOption(userEvent, await screen.findByRole('combobox', { name: 'Supervisor for Teacher U' }), 'tsup-2')
     await waitFor(() => expect(calls('POST', /\/org\/teachers\/t-2\/supervisor$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/org\/teachers\/t-2\/supervisor$/)[0]!)).toEqual({ supervisorId: 'tsup-2' })
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Supervisor for Teacher T' }), '')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Supervisor for Teacher T' }), '')
     await waitFor(() => expect(calls('POST', /\/org\/teachers\/t-1\/supervisor$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/org\/teachers\/t-1\/supervisor$/)[0]!)).toEqual({ supervisorId: null })
   })
