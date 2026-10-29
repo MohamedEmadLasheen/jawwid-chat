@@ -34,6 +34,10 @@ abstract interface class MaterialsRepository {
   /// Quran lesson ([lessonAudioMessage]), or null when the release gate gives
   /// this account no audio.
   Future<Map<String, Object?>?> lessonAudio(int surah);
+
+  /// PD-48: `GET /lesson-audio/:lesson` -- the voice-over list for a framed
+  /// Arabic letters lesson ([lessonVoiceMessage]), possibly EMPTY (which clears).
+  Future<Map<String, Object?>?> voiceOver(String lesson);
 }
 
 /// A build with no materials server (fixtures, tests that do not override it):
@@ -57,6 +61,9 @@ class NoMaterialsRepository implements MaterialsRepository {
   Future<List<MaterialItem>> picker({String? query, int? surah}) async => _none();
   @override
   Future<Map<String, Object?>?> lessonAudio(int surah) async => null;
+
+  @override
+  Future<Map<String, Object?>?> voiceOver(String lesson) async => null;
 }
 
 /// Overridden at startup with [HttpMaterialsRepository].
@@ -129,6 +136,9 @@ class HttpMaterialsRepository implements MaterialsRepository {
         surah,
         await collectAyahPages((from, to) => _get('/quran/ayahs', {'surah': '$surah', 'from': '$from', if (to != null) 'to': '$to'})),
       );
+
+  @override
+  Future<Map<String, Object?>?> voiceOver(String lesson) async => lessonVoiceMessage(lesson, await _get('/lesson-audio/$lesson'));
 
   @override
   Future<List<MaterialItem>> picker({String? query, int? surah}) async {

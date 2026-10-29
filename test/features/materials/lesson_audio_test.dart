@@ -77,4 +77,49 @@ void main() {
     expect(lessonOriginOf('https://lessons.example.test:8443/x'), 'https://lessons.example.test:8443');
     expect(lessonOriginOf('not a url'), isNull);
   });
+
+  test('PD-48: only a lessons-site Arabic letters page takes voice-over, under its lesson key', () {
+    expect(lessonLettersOf('https://lessons.example.test/lessons/arabic/lesson-1'), 'arabic-001');
+    expect(lessonLettersOf('https://lessons.example.test/lessons/arabic/lesson-12/'), 'arabic-012');
+    for (final url in [
+      'https://lessons.example.test/lessons/arabic/lesson-01',
+      'https://lessons.example.test/lessons/arabic/lesson-0',
+      'https://lessons.example.test/lessons/quran/surah-78',
+      'https://lessons.example.test/lessons/arabic/lesson-1/x',
+      'javascript:alert(1)',
+      'not a url',
+    ]) {
+      expect(lessonLettersOf(url), isNull, reason: url);
+    }
+  });
+
+  test('PD-48: the voice-over message is the API answer field by field, nothing added; an empty one still clears', () {
+    final answer = {
+      'lesson': 'arabic-001',
+      'clips': [
+        {'id': 'ba-001', 'audio': {'key': 'k', 'url': 'u', 'sha256': 's', 'textSha256': 't', 'token': 'never'}, 'extra': 1},
+        'junk',
+        {'id': 7, 'audio': <String, Object?>{}},
+      ],
+    };
+    expect(lessonVoiceMessage('arabic-001', answer), {
+      'type': 'jawwid:lesson-audio',
+      'lesson': 'arabic-001',
+      'clips': [
+        {'id': 'ba-001', 'audio': {'key': 'k', 'url': 'u', 'sha256': 's', 'textSha256': 't'}},
+      ],
+    });
+    expect(lessonVoiceMessage('arabic-001', {'lesson': 'arabic-001', 'clips': <Object?>[]}), {'type': 'jawwid:lesson-audio', 'lesson': 'arabic-001', 'clips': <Object?>[]});
+    // Another lesson's answer is no message.
+    expect(lessonVoiceMessage('arabic-001', {'lesson': 'arabic-002', 'clips': <Object?>[]}), isNull);
+  });
+
+  test("a lesson's ready message names its surah or, for a letters lesson, its lesson key", () {
+    expect(readyFor({'type': 'jawwid:lesson-ready', 'surah': 78}, 'https://l.test/lessons/quran/surah-78'), isTrue);
+    expect(readyFor({'type': 'jawwid:lesson-ready', 'surah': 79}, 'https://l.test/lessons/quran/surah-78'), isFalse);
+    expect(readyFor({'type': 'jawwid:lesson-ready', 'lesson': 'arabic-001'}, 'https://l.test/lessons/arabic/lesson-1'), isTrue);
+    expect(readyFor({'type': 'jawwid:lesson-ready', 'lesson': 'arabic-002'}, 'https://l.test/lessons/arabic/lesson-1'), isFalse);
+    expect(readyFor({'type': 'jawwid:lesson-ready', 'surah': 1}, 'https://l.test/lessons/arabic/lesson-1'), isFalse);
+    expect(readyFor({'type': 'other', 'lesson': 'arabic-001'}, 'https://l.test/lessons/arabic/lesson-1'), isFalse);
+  });
 }

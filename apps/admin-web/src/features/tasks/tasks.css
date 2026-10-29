@@ -49,7 +49,7 @@
   cursor: pointer;
 }
 .tasks__tab[aria-selected='true'] {
-  color: var(--accent);
+  color: var(--text-link);
   border-block-end-color: var(--accent);
   font-weight: 600;
 }
