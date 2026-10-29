@@ -3,7 +3,7 @@
 .sa-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; border-block-end: 2px solid transparent; }
 .sa-tab--active { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
 
-.sa-name { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; text-align: start; }
+.sa-name { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--text-link); cursor: pointer; text-align: start; }
 .sa-name:hover { text-decoration: underline; }
 .sa-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .sa-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: flex-end; }
