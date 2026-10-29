@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ActorId } from './actor.decorator';
 import { MentionService } from '../mentions/mention.service';
+import { Requires } from '../../platform/permissions/route-access';
 
 /**
  * PD-36 @mentions. Sending one rides on the message send (`mentions` in its
@@ -18,12 +19,14 @@ export class MentionController {
    * charge of this conversation who are not members, plus -- for parents --
    * the @supervisor / @admin roles. Exactly who a send would accept.
    */
+  @Requires('chat.use')
   @Get('conversations/:id/mention-candidates')
   candidates(@ActorId() actorId: string, @Param('id') id: string, @Query('q') q?: string) {
     return this.mentions.candidates(actorId, id, q);
   }
 
   /** The caller opened the conversation: their "Mentioned" badges there go. */
+  @Requires('chat.use')
   @Post('conversations/:id/mentions/seen')
   @HttpCode(204)
   async seen(@ActorId() actorId: string, @Param('id') id: string): Promise<void> {
@@ -31,12 +34,14 @@ export class MentionController {
   }
 
   /** The caller's open summonses. */
+  @Requires('chat.use')
   @Get('me/mentions')
   mine(@ActorId() actorId: string) {
     return this.mentions.openFor(actorId);
   }
 
   /** "Not for me": the caller's open summonses in that conversation close. */
+  @Requires('chat.use')
   @Post('mentions/:id/dismiss')
   dismiss(@ActorId() actorId: string, @Param('id') id: string) {
     return this.mentions.dismiss(actorId, id);

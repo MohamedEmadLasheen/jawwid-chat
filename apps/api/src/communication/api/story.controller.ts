@@ -4,6 +4,7 @@ import type { AudienceClause } from '../stories/story-audience.resolver';
 import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
+import { Requires } from '../../platform/permissions/route-access';
 
 /**
  * Stories.
@@ -31,12 +32,14 @@ export class StoryController {
   constructor(private readonly stories: StoryService) {}
 
   /** The reader's own feed: the live stories published to THEM. */
+  @Requires('stories.view')
   @Get('feed')
   async feed(@ActorId() actorId: string) {
     return { stories: await this.stories.feed(actorId) };
   }
 
   /** The publisher's list, with delivery, view and tap counts. Publisher-only. */
+  @Requires('stories.publish')
   @Get()
   async list(@ActorId() actorId: string, @Query('drafts') drafts?: string) {
     return { stories: await this.stories.list(actorId, drafts !== 'false') };
@@ -46,6 +49,7 @@ export class StoryController {
    * The shape of the organization's audience -- families per country, plan and
    * number of children, and how many lack each fact. Counts only. Publisher-only.
    */
+  @Requires('stories.publish')
   @Get('audience/facts')
   async audienceFacts(@ActorId() actorId: string) {
     return this.stories.audienceFacts(actorId);
@@ -55,6 +59,7 @@ export class StoryController {
    * How many people an audience reaches if published now, with this call to
    * action. Counts only. Publisher-only. A POST because the audience is a body.
    */
+  @Requires('stories.publish')
   @Post('audience/estimate')
   async estimate(
     @ActorId() actorId: string,
@@ -70,6 +75,7 @@ export class StoryController {
    * Families and their targeting attributes (country, plan, number of
    * children). Super admin and managers only.
    */
+  @Requires('stories.publish')
   @Get('audience/families')
   async families(
     @ActorId() actorId: string,
@@ -80,6 +86,7 @@ export class StoryController {
   }
 
   /** Set a family's country and/or plan. Super admin and managers only. */
+  @Requires('stories.publish')
   @Post('audience/families/:familyId')
   async setFamily(
     @ActorId() actorId: string,
@@ -96,6 +103,7 @@ export class StoryController {
    * Authorize a media upload and return a signed, size- and type-bound PUT URL.
    * The bytes never pass through this API when storage is S3.
    */
+  @Requires('stories.publish')
   @Post('media')
   // An upload grant like an attachment's, and the same budget: each one
   // authorises a write to object storage.
@@ -111,6 +119,7 @@ export class StoryController {
   }
 
   /** Create a draft. The audience is validated now and resolved at publish. */
+  @Requires('stories.publish')
   @Post()
   async create(
     @ActorId() actorId: string,
@@ -146,6 +155,7 @@ export class StoryController {
   }
 
   /** One story as its publisher sees it. Publisher-only. */
+  @Requires('stories.view')
   @Get(':id')
   async get(@ActorId() actorId: string, @Param('id') id: string) {
     return this.stories.get(id, actorId);
@@ -155,12 +165,14 @@ export class StoryController {
    * One story's performance: reach, views, taps, rates, a daily series and a
    * country breakdown. `tz` is the IANA zone a day is counted in. Publisher-only.
    */
+  @Requires('stories.publish')
   @Get(':id/analytics')
   async analytics(@ActorId() actorId: string, @Param('id') id: string, @Query('tz') tz?: string) {
     return this.stories.analytics(id, actorId, tz || 'UTC');
   }
 
   /** Resolve the audience and go live. Publisher-only, checked server-side. */
+  @Requires('stories.publish')
   @Post(':id/publish')
   @RateLimited(ActionScope.STORY_PUBLISH)
   async publish(@ActorId() actorId: string, @Param('id') id: string) {
@@ -168,6 +180,7 @@ export class StoryController {
   }
 
   /** Record that the caller watched this story. Idempotent. */
+  @Requires('stories.view')
   @Post(':id/view')
   async view(@ActorId() actorId: string, @Param('id') id: string) {
     return this.stories.markViewed(id, actorId);
@@ -178,6 +191,7 @@ export class StoryController {
    * open, or -- for message-the-publisher -- the direct conversation to open.
    * Recipients only; every refusal reads as "not found".
    */
+  @Requires('stories.view')
   @Post(':id/cta')
   async cta(@ActorId() actorId: string, @Param('id') id: string) {
     return this.stories.tapCta(id, actorId);
@@ -190,6 +204,7 @@ export class StoryController {
    * parent opened which publication and when, and a parent is not the owner of an
    * academy publication.
    */
+  @Requires('stories.publish')
   @Get(':id/viewers')
   async viewers(@ActorId() actorId: string, @Param('id') id: string) {
     return { viewers: await this.stories.viewers(id, actorId) };
@@ -206,6 +221,7 @@ export class StoryController {
    * message deletion there is no default: an academy publication being removed
    * without a stated reason is a gap in the audit trail, not a convenience.
    */
+  @Requires('stories.publish')
   @Delete(':id')
   async remove(
     @ActorId() actorId: string,

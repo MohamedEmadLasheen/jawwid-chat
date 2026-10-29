@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { RealtimeProvider } from './RealtimeProvider'
 import { SessionProvider } from '@/core/auth/SessionProvider'
 import { qk } from '@/core/api/queryKeys'
-import { createTestQueryClient, makeInboxRow, makeStaff } from '@/test/utils'
+import { createTestQueryClient, makeStaff } from '@/test/utils'
 
 /** Minimal Socket.IO stand-in that lets a test emit a server event. */
 const handlers = new Map<string, (payload: unknown) => void>()
@@ -71,81 +71,31 @@ describe('realtime', () => {
     tokenStore.clear()
   })
 
-  it('subscribes to the events the operator’s workspace depends on', async () => {
+  it('subscribes to the events the operator’s workspace depends on, and none of the retired Inbox’s or on-duty Dashboard’s', async () => {
     mount()
     await waitFor(() => expect(handlers.size).toBeGreaterThan(0))
-    for (const event of [
-      'family.updated',
-      'message.created',
-      'case.updated',
-      'task.updated',
-      'coverage.changed',
-      'ownership.changed',
-    ]) {
+    for (const event of ['task.changed', 'coverage.changed']) {
       expect(handlers.has(event), `missing handler for ${event}`).toBe(true)
     }
-  })
-
-  it('invalidates the inbox on family.updated instead of writing the new bucket into the cache', async () => {
-    const queryClient = mount()
-    await waitFor(() => expect(handlers.has('family.updated')).toBe(true))
-
-    const stale = [makeInboxRow({ bucket: 'now', top_reason: 'stale reason' })]
-    queryClient.setQueryData(qk.inbox('now'), { pages: [{ items: stale, next_cursor: null }] })
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
-
-    emit('family.updated', {
-      family_id: 'fam_1',
-      bucket: 'quiet',
-      top_reason: 'server says quiet now',
-      needs_reply: false,
-      on_duty_id: 'staff_b',
-      handling_mode: 'coverage',
-    })
-
-    // The refetch is what makes the server the single source of computed truth.
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.inboxAll })
-
-    // Critically: the payload must NOT have been patched into the cached row.
-    const cached = queryClient.getQueryData(qk.inbox('now')) as {
-      pages: { items: typeof stale }[]
+    // PD-47: task.updated was the dead legacy page's; task.changed replaced it.
+    for (const event of ['task.updated', 'family.updated', 'message.created', 'case.updated', 'handoff.created', 'shift.ending']) {
+      expect(handlers.has(event), `handler left for ${event}`).toBe(false)
     }
-    expect(cached.pages[0]!.items[0]!.bucket).toBe('now')
-    expect(cached.pages[0]!.items[0]!.top_reason).toBe('stale reason')
+    // PD-44: the on-duty Dashboard's signals. The server never sent the first
+    // three; presence.changed is real, but only the chat thread listens to it
+    // (usePresence), and the new Dashboard polls its counts.
+    for (const event of ['ownership.changed', 'unattended.changed', 'escalation.created', 'presence.changed']) {
+      expect(handlers.has(event), `handler left for ${event}`).toBe(false)
+    }
   })
 
-  it('refreshes duty and the inbox when coverage changes, not just the schedule', async () => {
+  it('refreshes tasks when a task changes', async () => {
     const queryClient = mount()
-    await waitFor(() => expect(handlers.has('coverage.changed')).toBe(true))
+    await waitFor(() => expect(handlers.has('task.changed')).toBe(true))
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
-    emit('coverage.changed', { effective_at: new Date().toISOString() })
-
-    // Changing a rule changes who on_duty() returns, so the inbox is stale too.
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.coverageAll })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.duty })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.inboxAll })
-  })
-
-  it('refreshes the inbox when a task is completed, because the case may reopen', async () => {
-    const queryClient = mount()
-    await waitFor(() => expect(handlers.has('task.updated')).toBe(true))
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
-
-    emit('task.updated', { task: { id: 't1', family_id: 'fam_1' } })
+    emit('task.changed', { taskId: 't1', revision: 2, change: 'reassigned' })
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.tasksAll })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.inboxAll })
-  })
-
-  it('refreshes the family and the dashboard when ownership changes', async () => {
-    const queryClient = mount()
-    await waitFor(() => expect(handlers.has('ownership.changed')).toBe(true))
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
-
-    emit('ownership.changed', { family_id: 'fam_1', from: 'staff_a', to: 'staff_b' })
-
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.family('fam_1') })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.dashboardAll })
   })
 })

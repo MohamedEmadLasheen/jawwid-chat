@@ -148,6 +148,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${JWT_REFRESH_TTL}
+      - key: RESET_CODE_HASH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${RESET_CODE_HASH_SECRET}
       - key: STORAGE_ENDPOINT
         scope: RUN_TIME
         type: GENERAL
@@ -228,6 +232,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${MATERIALS_FRAME_ORIGINS}
+      - key: LESSON_APPROVALS_SIGNING_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${LESSON_APPROVALS_SIGNING_KEY}
       - key: FCM_PROJECT_ID
         scope: RUN_TIME
         type: GENERAL
@@ -312,6 +320,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${TEACHER_SUPERVISOR_STRICT_SCOPE}
+      - key: SALES_FAMILY_SCOPE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${SALES_FAMILY_SCOPE}
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET
@@ -505,6 +517,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${JWT_REFRESH_TTL}
+      - key: RESET_CODE_HASH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${RESET_CODE_HASH_SECRET}
       - key: STORAGE_ENDPOINT
         scope: RUN_TIME
         type: GENERAL
@@ -669,6 +685,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${TEACHER_SUPERVISOR_STRICT_SCOPE}
+      - key: SALES_FAMILY_SCOPE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${SALES_FAMILY_SCOPE}
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET

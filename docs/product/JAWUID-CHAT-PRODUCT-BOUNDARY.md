@@ -2036,6 +2036,15 @@ pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the
 
 ### PD-21 · Account administration: password reset, inactive accounts, impersonation
 
+> **Narrowed by PD-40 (2026-10-27); approved by the product owner on 2026-10-27 ("Approve as proposed").** Decision 1's "every staff role" is replaced by:
+> - parent accounts: the super admin and the Operations department; Sales may reset and
+>   sign out only;
+> - teacher accounts: the super admin and the Teachers department;
+> - staff accounts: the super admin, as before;
+> - nobody else.
+>
+> The record is `../admin/pd021-account-administration.md`. The rest of PD-21 is unchanged.
+
 **Closed by the product owner on 2026-10-22** (owner request: admins, the super
 admin included, may impersonate a student's account, reset another account's
 password, and set any account inactive; permissions enforced on the backend,
@@ -2195,6 +2204,18 @@ devices and sessions, the app lock and its deviation from the first design,
 domain) is `../security/pd023-convenient-sign-in.md`. The summary is the PD-23
 row in the table above.
 
+**Amendment 2026-10-27 -- minimum password length (owner decision, PD-23 / PD-25
+boundary).** The minimum password length is **4 characters for ALL accounts**
+(parents, teachers, staff and the super admin), replacing 8 (and 12 for the
+super-admin bootstrap). The owner was told staff-only 8+ was the recommendation
+and chose all accounts. Unchanged: the maximum (128; 256 for the bootstrap CLI),
+Argon2id hashing, the login rate limiter and lockout, and the reset / sign-up
+code limits. There is no common-password or breach list, so a 4-character PIN
+such as `1234` is a valid password. One rule per codebase:
+`PASSWORD_MIN_LENGTH` in `apps/api/src/platform/auth/password-policy.ts`,
+mirrored in `apps/admin-web/src/features/auth/passwordPolicy.ts` and
+`lib/features/auth/password_policy.dart`.
+
 ---
 
 ### PD-24 · Changing a family's supervisor without losing anything
@@ -2303,6 +2324,10 @@ Record: `../admin/pd025-parent-self-recovery.md`.
 
 **Closed.** 2026-10-22.
 
+**Amendment 2026-10-27.** The password a parent chooses at recovery (and at
+sign-up, and when finishing a PD-21 reset) may be as short as 4 characters. See
+the PD-23 amendment above: the owner decided the minimum is 4 for all accounts.
+
 ---
 
 ### PD-26 · The Teacher Supervision page
@@ -2399,6 +2424,61 @@ month has no pay terms. Every staff complaint names its source on every route
 "on leave" notice updates on the conversation's realtime signals, on reconnect,
 on app resume and when the shown leave ends, never by polling. Record:
 `docs/admin/pd026-teacher-supervision.md` §Known limits, closed.
+
+**Amendment, 2026-10-27: Operations access** (owner request, no new number;
+registry `pd-registry/PD-26-amendment-operations-access.md`). The owner: "We
+need these pages to be visible to the Operations Supervision team as well,
+since they will also use them to record teacher delays and excuses." Asked to
+scope it, the owner chose **the whole page** (leave, apologies and absences,
+lateness trial and regular, rewards, complaints, parent feedback) with **the
+Teachers department's rights on it**, for **the teachers of their families**.
+
+- **Which teachers.** The current teacher of each learner whose PD-8
+  supervisor is the Operations supervisor, a supervisor they cover as an
+  active backup (PD-33), or, for the Operations manager, any member of the
+  department; and the teacher of each of those learners' lessons from 30 days
+  ago on (`chat.operations_lesson_window()`; a lesson called off ties nobody).
+  Every other teacher answers as not found, as PD-35 does. One rule, in the
+  database (`chat.operations_teacher_ids`) and read by
+  `TeacherScopeService.operationsScopeOf`.
+- **Which children.** Of a teacher reached only through Operations, rows about
+  one child or family (lessons, lateness, a parent's complaint or feedback)
+  show only for the caller's own learners; writing on another family's answers
+  as not found. Teacher-level rows and decisions (leave, suspension) do not
+  narrow. The leave allowance, days used and balance stay the Teachers
+  department's and are left out by the server. A parent's complaint is about
+  its family (its PD-32 feedback's, or the conversation it was taken from); one
+  whose family is unknown is hidden from Operations, and Operations files one
+  only from a conversation with its own family. Management's complaints are the
+  teacher's.
+- **Rights are per teacher.** Someone who holds both bases has the Teachers
+  department's rights only for the teachers in its own (PD-35) scope; for the
+  rest, Operations' rights. The Teacher File never opens through Operations.
+- **Known limits (recorded, not fixed).** (1) The database confines Operations
+  to its families only for lateness and replies to a parent
+  (`chat.may_supervise_learner_row`); a complaint's follow-up, resolution,
+  upholding, take and handler are checked per teacher there, and per family by
+  the server only. (2) A leftover lesson -- say an open one the old teacher kept
+  after a transfer, dated after the transfer -- keeps that teacher in scope
+  until it falls 30 days into the past or is closed; it is a real lesson of the
+  family, so this is accepted.
+- **What they may do there.** What the Teachers department may do on the page:
+  decide leave; record lateness and absences; decide on the ladder (warnings,
+  deductions, suspensions); record complaints, follow-ups and resolutions, and
+  uphold them; handle a complaint; record a reward; read and answer parent
+  feedback. A complaint may also be handed to them.
+- **What does not change.** Money keeps PD-18's finance tier: reward amounts,
+  default deduction amounts, payroll and the payout account stay the super
+  admin's. Operations records a reward or decides a deduction case without a
+  price; a decided deduction is still priced from the super admin's default,
+  as for anyone. The Teacher File (personal record, monthly comments, days off,
+  the leave allowance) and the rest of the Teachers area (statistics, files,
+  certificates, materials) stay the Teachers department's. Admin Web shows
+  Operations the Teachers → Supervision page only, on the server's word.
+- **Backstop.** The PD-12/PD-26 database guards that said "the Teachers
+  department" now say "the Teachers department or the teacher's Operations
+  supervisor" (`chat.may_supervise_teacher`, migration
+  `20261027160000_chat_pd026_operations_access.sql`).
 
 **Closed.** 2026-10-22.
 
@@ -2756,6 +2836,44 @@ one order           everywhere a list of materials appears (the child's
 
 PD-35's planned "not progressing" flag, which was to read this map, is dropped
 with it (the department head tells PD-35).
+
+**Amendment 2026-10-27: materials quality, P0-2, the one shared Quran dataset.**
+The owner approved this on 2026-10-27 for both the lessons and the whiteboard.
+The plan is `docs/product/pd029-materials-quality-plan.md`; the contract, agreed
+with PD-39, is `docs/product/quran-dataset-contract.md`; migration `20261027170000`.
+
+```
+one source          the Quran text lives once, in chat.quran_ayah (Tanzil
+                    Uthmani, Hafs; CC BY 3.0, verbatim, credited), loaded from
+                    one vendored file (data/quran/). The lessons engine and the
+                    PD-39 whiteboard both read it; nothing else holds ayah text
+verified at every   the file's SHA-256 and the digest of its 6,236 ayah hashes
+load                are pinned in code (apps/api/src/quran/pinned.ts). The
+                    loader refuses a file that is not the pinned one, a count
+                    mismatch against chat.quran_surah, or a split, duplicate or
+                    empty ayah, before a row is written. The API re-verifies
+                    the whole dataset at start-up and every served ayah on
+                    every request, and refuses everything (503) on any
+                    mismatch: fail closed
+the Basmala         Tanzil prefixes it to ayah 1 of 112 surahs (not 1, where 1:1
+                    IS the Basmala, nor 9). Each ayah is served as { basmala,
+                    text }; the prefix is accepted only when its SHA-256 is one
+                    of the two known spellings, else the load is refused.
+                    Tajweed offsets, audio and the whiteboard's range hash are
+                    defined against the verse without it
+Tajweed             a mark is served only when a Tajweed reviewer (the Teachers
+                    department, the owner's decision 2026-10-27) approved it, it is not
+                    withdrawn, and the LATEST sign-off of its surah names it and
+                    still matches the digest of the marks it named; marks come
+                    from a published annotation, never hand or model
+                    classification; none are shipped yet
+audio               one file per ayah, its key generated from (reciter, surah,
+                    ayah), its hash computed by the server's ingest from the
+                    stored object, so a verse and its audio cannot mismatch and
+                    audio is never served unverified. No audio
+                    is shipped: chat.config quran.audio stays unset until the
+                    owner confirms the reciter and the right to self-host
+```
 
 ---
 
@@ -3338,6 +3456,25 @@ Canonical: `supabase/migrations/20261026160007_chat_pd035_supervision_cases.sql`
 
 Canonical: `supabase/migrations/20261027100000_chat_pd035_department_rooms.sql`, `apps/api/src/org/department-room.service.ts`. Proven by `apps/api/test/integration/department-rooms-pd035.spec.ts`, `apps/admin-web/src/features/cases/Cases.test.tsx` and `test/features/sales/sales_chats_test.dart`.
 
+**Final decision (B7: the action log).** Approved design `pd35-design.md` B7; built 2026-10-27. **No new logging.**
+1. **`GET staff/:id/action-log?from&to&cursor`** lists what one staff member did, newest first:
+   - every `chat.audit_log` row with them as the actor;
+   - plus the case history that is not audited: a due date set and a note added (`chat.supervision_case_event`).
+   - The default window is the last 30 days, and a request covers at most 366.
+   - A page is 200 lines. Its `nextCursor` is an opaque keyset (the time to the microsecond, the source, the row's key), so a run of lines written in one transaction is paged without losing or repeating a line.
+   - A time must carry its zone; a bare date is midnight UTC.
+2. **What a line shows:** the act, the entity it was about (linked in Admin Web), the audited reason and the time. It also says whether it was done during a PD-21 support session.
+   - It never shows the before/after payloads (pay terms, the Teacher File's personal facts).
+   - A case line shows the act and the case's id only. B5 shows a case's title and notes only to those who may see it, and opening the link re-checks that.
+3. **Who may read it:** the person themselves, the manager of the department they are in, and the super admin. Anyone else gets `ACTION_LOG_NOT_FOUND`: another organization's super admin, an inactive reader, an unknown id, or an id that is not a uuid.
+4. **A manager reads the reasons of their own era only.** A reason written before the member joined the manager's department is withheld from that manager (the act and its link stay). The person and the super admin read every reason.
+   - **Known limit:** `chat.department_member` keeps no history, so the line is `assigned_at`, which every move and position change resets. It is conservative: it may withhold a reason the manager could have read, never the reverse.
+5. **Deviation from the design.** The design listed a union over each record table: supervision entries, violation decisions, report revisions, evaluations and shares, plan updates, correction requests, seats and case events. Every one of these already writes `chat.audit_log`, so reading them again would show each act twice. Only the case history the audit misses (due date, note) is added.
+6. **Admin Web:** an "Action log" section on the Profile page, shown when the server answers. It offers a period (30 days, 90 days, 12 months) and "Load more". A manager reaches it from their team's profile links.
+7. **Known limit, not B7's:** the append-only triggers on `chat.audit_log` and `chat.supervision_case_event` refuse UPDATE and DELETE, but not TRUNCATE. Only the database owner can truncate; no API path does.
+
+Canonical: `apps/api/src/action-log/`. Proven by `apps/api/test/integration/action-log-pd035.spec.ts` and `apps/admin-web/src/features/profile/ActionLog.test.tsx`.
+
 ---
 
 ### PD-36 · @mentions that summon someone in charge to step in
@@ -3406,6 +3543,114 @@ Mentioned row, Join / Step in / Not for me banner, Group Info rows; app @ picker
 'mention'); PD-33's `cover_of`.
 
 **Closed.** 2026-10-26.
+
+---
+
+### PD-42 · Entering families by hand (the intake from Jawwid Core), without a trial
+
+**Closed 2026-10-28** by the product owner. The original request (2026-10-27): "We need a way to add parents and students to the system without going through the trial lesson process, since not all students attend trial lessons." The design questions Q1–Q5 were answered "Approve all 5 recommendations", with five safeguards. F4 was answered "Allow, tightly limited", recorded as `PD-30-amendment-carried-over`. Plan: `pd042-direct-enrolment-plan.md`.
+
+**Decision.** Sales supervisors and Operations supervisors enter the families they already handle in Jawwid Core, by hand, in Chat. Nothing in Core is read or changed (D6).
+
+- **Who enters:**
+  - an **Operations supervisor**, for children placed on themself;
+  - a **Sales member**, for a family they own;
+  - the Operations manager, the Sales manager or the super admin, **for** one of their department's supervisors (D5). The supervisor owns the family. The manager is recorded as the one who entered it, and never owns it themself.
+- **Required fields:** the parent's name, a phone or an e-mail, and each child's name.
+- **The child's current package:** total, completed and plan length, exactly as typed. The remaining lessons are computed, never stored, and no payment is created.
+- **"Add child":** adds a child to a family the caller owns. If the family has a live group, the child joins it.
+- **The trial sibling:** Assign on a trial whose parent is already in Chat answers `PARENT_EXISTS` naming the family. Assigning with that family adds the children there.
+- **A Sales-entered family:** it waits for its Operations supervisor. The Operations manager places it, and its Sales owner may suggest a name (D1).
+- **The Sales owner:** set and changed only by the Sales manager or the super admin, with a reason.
+
+**Canonical rule.** One family per parent.
+
+- **Contact keys:** the parent's e-mail and E.164 number are keyed (HMAC, `chat.family_contact_key`) and locked for the transaction. A second family for the same parent is impossible.
+- **Replays:** a replayed intake id writes nothing.
+- **Family history:** who entered each family and child, who owns it, and who placed it are durable columns plus one audit row per act, shown on the Parent Profile's Family history.
+- **Opening the intake:** `/family-intake` is closed (`INTAKE_NOT_READY`) until the contact-key backfill has keyed every existing family.
+
+**The Sales scope (D2).** `SALES_FAMILY_SCOPE=all|own` is written to `chat.config` at boot.
+
+- **`all` (the default):** changes nothing.
+- **`own`:** narrows a Sales member to the families they own, at the API and at the database. The Sales manager keeps every family.
+- **Switching on:** only after the read-only `pd042-ownership-report` is clean, both managers have signed it off, and the owner gives a GO.
+- **PD-42's own actions:** owner-scoped from day one.
+
+**Implementation phase.**
+- PR-1 #194: data.
+- PR-2 #202: intake, the Sales switch and the backfill.
+- PR-3 #214: the Operations side, the group join, the trial sibling and the report.
+- The follow-up: the Family history, the Action log lines and these docs.
+- Migrations: `20261028110000`, `20261028210000`, `20261029120000`.
+
+**Consequences.**
+- **Permission keys:** `subscriptions.carry_over` (new, in the Operations and Sales bundles), and `parents.edit` for the Sales bundles, limited to the families a Sales account owns.
+- **The PD-30 ledger:** gains the `carried_over` source.
+- **PD-16 Assign:** keys its parents.
+
+**Not changed.** The PD-16 trial flow, PD-24's transfer (a later move of an Operations supervisor), and PD-30's lock and grace rules (a carried-over package is counted by them; D3).
+
+**Deferred.** The second guardian (Q4).
+
+**Closed.** 2026-10-28.
+
+---
+
+### PD-44 · A real manager Dashboard on data the API already computes
+
+**Closed 2026-10-28** by the product owner: "Remove Inbox, rebuild Dashboard",
+then on the plan's nine questions "Approve all (Recommended)", with Q6
+corrected to "(6) The Operations manager sees Teacher Supervision figures
+(their access is now merged)". Plan: `pd044-manager-dashboard-plan.md`.
+
+**Decision.** The dead Dashboard, which called four `/dashboard/*` routes that
+never existed and measured the retired on-duty model, is rebuilt as counts of
+what is waiting. There are seven sections: chats, cases, lessons, enrolment,
+billing, teachers and structure.
+
+- **Who:** the super admin, inside the Admin Portal's Dashboard section, and
+  the three managers. Supervisors come later.
+- **Navigation:** Chat stays the landing page. The Dashboard moves from More to
+  the main navigation.
+- **What a tile shows:** a count, plus "oldest since" where it helps. Never a
+  name. Every tile links to the page that resolves it.
+
+**Canonical rule.** One read-only `GET /dashboard/<section>` per section.
+
+- **Permission:** each section `@Requires` the PD-40 key of the page its tiles
+  link to. There is no dashboard key of its own.
+- **Counting:** the count is a method of the service that owns that page, with
+  the page's own scope helper (PD-8, PD-26, PD-35), so the tile equals the list
+  it opens.
+- **Absent is not zero:** a tile outside the caller's basis is left out, never
+  sent as 0.
+- **Cost:** each request runs a fixed number of statements whatever the number
+  of rows.
+- **Freshness:** polling every 60 s; no realtime.
+- **Specific rules:** "today" is the calendar's zone; a chat waits from the
+  parent's first unanswered message; a family "without a supervisor" has any
+  child without one.
+
+**Implementation phase.** Eight PRs (plan §7). PR-1 serves `/dashboard/chats`
+and `/dashboard/cases`.
+
+**Consequences.**
+- The Admin Web's `/dashboard/header`, `/team-now`, `/needs-action` and
+  `/this-week` calls are removed (PR-2).
+- A "Locked / grace" filter is added to the Parents page (PR-5).
+- No migration and no new permission key.
+
+**Deprecated behaviour.**
+- The on-duty / unattended counts, "team now", workload scores and response
+  targets.
+- `chat.staff_workload.awaiting_reply` as a scope: it groups by
+  `family.owner_id`, not PD-8.
+
+**Not changed.** `/tasks` is kept, to be rebuilt later as its own feature
+(owner, 2026-10-28: "Keep and rebuild later").
+
+**Closed.** 2026-10-28.
 
 ---
 

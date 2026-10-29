@@ -17,7 +17,7 @@ import type { IconName } from '@/shared/components/Icon'
  * answer "forbidden". (Listing is UX, not security: the server decides.)
  */
 
-export type DestinationKey = 'conversations' | 'calls' | 'people' | 'stories' | 'more'
+export type DestinationKey = 'conversations' | 'dashboard' | 'calls' | 'people' | 'stories' | 'more'
 
 type OperatorArea = Exclude<NavArea, 'settings'>
 
@@ -49,6 +49,8 @@ export interface Destination {
 
 export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label: Bilingual }[] = [
   { key: 'conversations', icon: 'conversations', label: { en: 'Conversations', ar: 'المحادثات' } },
+  // PD-44: a manager's Dashboard is one click from anywhere, beside the chats it counts.
+  { key: 'dashboard', icon: 'dashboard', label: { en: 'Dashboard', ar: 'لوحة المتابعة' } },
   { key: 'calls', icon: 'calls', label: { en: 'Calls', ar: 'المكالمات' } },
   { key: 'people', icon: 'users', label: { en: 'People & teams', ar: 'الأشخاص والفرق' } },
   { key: 'stories', icon: 'stories', label: { en: 'Stories', ar: 'الحالات' } },
@@ -89,16 +91,13 @@ export const SECTION_DESTINATION: Record<AdminSectionKey, DestinationKey> = {
 /** Operator areas. `settings` has no page, so it has no place (as before). */
 export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   chat: 'conversations',
-  inbox: 'conversations',
   calls: 'calls',
-  families: 'people',
   organization: 'people',
   teachers: 'people',
   instalments: 'people',
   parents: 'people',
   payments: 'people',
   trials: 'people',
-  coverage: 'people',
   'teacher-profiles': 'people',
   accounts: 'people',
   stories: 'stories',
@@ -107,15 +106,19 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   tasks: 'more',
   // PD-35 B5: escalation cases, for every operator who may open or own one.
   cases: 'people',
-  dashboard: 'more',
+  // PD-41: the Certificates page.
+  certificates: 'people',
+  // PD-48: lesson voice-over review.
+  'lesson-audio': 'more',
+  // PD-44: out of More, its own destination (the super admin's stays in the
+  // Admin Portal's More until PD-44 PR-8).
+  dashboard: 'dashboard',
   settings: null,
 }
 
 export const AREA_PATH: Record<OperatorArea, string> = {
   chat: '/chat',
-  inbox: '/inbox',
   calls: '/calls',
-  families: '/families',
   organization: '/organization',
   teachers: '/teachers',
   instalments: '/instalments',
@@ -123,7 +126,6 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   payments: '/payments',
   trials: '/trials',
   tasks: '/tasks',
-  coverage: '/coverage',
   dashboard: '/dashboard',
   stories: '/stories',
   'teacher-profiles': '/teacher-profiles',
@@ -131,13 +133,13 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   materials: '/materials',
   schedule: '/schedule',
   cases: '/cases',
+  certificates: '/certificates',
+  'lesson-audio': '/lesson-audio',
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
   chat: 'conversations',
-  inbox: 'conversations',
   calls: 'calls',
-  families: 'users',
   organization: 'teams',
   teachers: 'academy',
   instalments: 'calendar',
@@ -145,7 +147,6 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   payments: 'tag',
   trials: 'calendar',
   tasks: 'tasks',
-  coverage: 'teams',
   dashboard: 'dashboard',
   stories: 'stories',
   'teacher-profiles': 'approvals',
@@ -153,6 +154,8 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   materials: 'book',
   schedule: 'calendar',
   cases: 'tasks',
+  certificates: 'star',
+  'lesson-audio': 'approvals',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
@@ -163,6 +166,13 @@ export const ADMIN_MATERIALS_LABEL: Bilingual = { en: 'Materials', ar: 'المو
 
 /** PD-38: the scheduling calendar, under People. */
 export const ADMIN_SCHEDULE_LABEL: Bilingual = { en: 'Schedule', ar: 'الجدول' }
+
+/** PD-11 T4 / PD-16: trial lessons and new students, under People. */
+export const ADMIN_TRIALS_LABEL: Bilingual = { en: 'Trials & new students', ar: 'الحصص التجريبية والطلاب الجدد' }
+
+/** Teacher Profile V2: the credential review queue, under People -- not "Teacher profiles",
+ *  whose Arabic is Teacher files' own name. */
+export const ADMIN_TEACHER_CREDENTIALS_LABEL: Bilingual = { en: 'Teacher credentials review', ar: 'مراجعة مؤهلات المعلمين' }
 
 /** PD-35 B5: escalation cases, under People. */
 export const ADMIN_CASES_LABEL: Bilingual = { en: 'Escalations', ar: 'التصعيدات' }
@@ -221,6 +231,25 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     label: { text: ADMIN_SCHEDULE_LABEL },
     inDevelopment: false,
   })
+  // PD-11 T4 / PD-16: trial lessons and new students at /trials, the same
+  // pages Sales and Operations have; the server admits the super admin to
+  // both, and the page offers each tab GET /lessons/access confirms.
+  out.get('people')?.[0]?.entries.push({
+    key: 'trials',
+    path: AREA_PATH.trials,
+    icon: AREA_ICON.trials,
+    label: { text: ADMIN_TRIALS_LABEL },
+    inDevelopment: false,
+  })
+  // Teacher Profile V2: the server admits the super admin as a credential
+  // reviewer (canReviewTeacherProfile), at /teacher-profiles.
+  out.get('people')?.[0]?.entries.push({
+    key: 'teacher-profiles',
+    path: AREA_PATH['teacher-profiles'],
+    icon: AREA_ICON['teacher-profiles'],
+    label: { text: ADMIN_TEACHER_CREDENTIALS_LABEL },
+    inDevelopment: false,
+  })
   // PD-29: the super admin manages the Materials library at /materials, the
   // same page the Teachers manager has.
   out.get('more')?.[0]?.entries.push({
@@ -238,6 +267,22 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     label: { text: ADMIN_CASES_LABEL },
     inDevelopment: false,
   })
+  // PD-41: the Certificates page, with its types, at /certificates.
+  out.get('people')?.[0]?.entries.push({
+    key: 'certificates',
+    path: AREA_PATH.certificates,
+    icon: AREA_ICON.certificates,
+    label: { message: 'nav.certificates' },
+    inDevelopment: false,
+  })
+  // PD-48: the super admin holds every key, so reviews lesson voice-over too.
+  out.get('more')?.[0]?.entries.push({
+    key: 'lesson-audio',
+    path: AREA_PATH['lesson-audio'],
+    icon: AREA_ICON['lesson-audio'],
+    label: { message: 'nav.lesson-audio' },
+    inDevelopment: false,
+  })
   // One registry group inside a destination needs no heading.
   for (const groups of out.values()) {
     if (groups.length === 1) groups[0]!.label = null
@@ -247,14 +292,15 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
 
 function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
-  // navAreas, not visibleAreas: the legacy Inbox stays routable but is never offered.
+  // navAreas, not visibleAreas: some areas wait for the server to confirm them.
   for (const area of navAreas(role, access)) {
     const dest = AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
     groups[0]!.entries.push({
       key: area,
-      path: AREA_PATH[area],
+      // PD-26 amendment: without the Teachers department, the Teachers area is its Supervision page.
+      path: area === 'teachers' && access.lessonManager !== true ? `${AREA_PATH.teachers}/supervision` : AREA_PATH[area],
       icon: AREA_ICON[area],
       label: { message: `nav.${area}` },
       inDevelopment: false,

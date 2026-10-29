@@ -8,7 +8,7 @@ export class CommErrorFilter implements ExceptionFilter {
   catch(exception: CommError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     response.status(exception.status).json({
-      error: { code: exception.code, message: exception.message },
+      error: { code: exception.code, message: exception.message, ...(exception.detail ? { detail: exception.detail } : {}) },
     });
   }
 }

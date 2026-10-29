@@ -26,6 +26,7 @@ import { AuthService } from '@platform/auth/auth.service';
 import { hashPassword } from '@platform/auth/password';
 import { CommErrorCode } from '@platform/errors';
 import { OBJECT_STORAGE } from '@platform/tokens';
+import { RECITATION_HOSTS } from '../../src/materials/recitation-hosts';
 import { CommunicationModule } from '@communication/communication.module';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
@@ -183,7 +184,10 @@ beforeAll(async () => {
   process.env.MATERIALS_FRAME_ORIGINS = 'https://activities.example.test';
   const moduleRef = await Test.createTestingModule({
     imports: [PlatformModule, AuthModule, CommunicationModule, LessonModule, MaterialsModule],
-  }).overrideProvider(OBJECT_STORAGE).useValue(storage).compile();
+  }).overrideProvider(OBJECT_STORAGE).useValue(storage)
+    // One external host allowed, with a (test) licence record -- the code default allows none.
+    .overrideProvider(RECITATION_HOSTS).useValue([{ host: 'audio.example.test', licence: { confirmedBy: 'test', confirmedAt: '2026-10-28', reference: 'spec' } }])
+    .compile();
   app = moduleRef.createNestApplication({ logger: false, rawBody: true });
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/live', 'health/ready'] });
   app.useGlobalFilters(new CommErrorFilter());
@@ -325,7 +329,10 @@ describe('3. open: the access decision', () => {
       expect(r.json.url).toMatch(/^https:\/\/storage\.pd29\.example\.test\/.+\?ttl=3600&sig=/);
     }
     const link = await linkItem(manager);
-    expect((await http(parent, 'POST', `/materials/items/${link.id}/open`)).json).toMatchObject({ mode: 'link', presentation: 'frame-site', url: 'https://activities.example.test/a' });
+    const openedLink = (await http(parent, 'POST', `/materials/items/${link.id}/open`)).json;
+    expect(openedLink).toMatchObject({ mode: 'link', presentation: 'frame-site', url: 'https://activities.example.test/a' });
+    // An allowlisted third-party frame is never handed Quran audio: only the lessons site is.
+    expect(openedLink.audioEligible).toBeUndefined();
   });
 
   it('a draft is the managers\' preview only; another organization gets the same 404 as an unknown id', async () => {
@@ -438,7 +445,7 @@ describe('4b. pinning and presentation', () => {
     const row = await g.prisma.materialItem.findFirstOrThrow({ where: { organizationId: orgId, externalRef: '/lessons/quran/surah-78' } });
     expect(row).toMatchObject({ source: 'site', sitePath: '/lessons/quran/surah-78', url: null, kind: 'activity_link' });
     const open = await http(parent, 'POST', `/materials/items/${row.id}/open`);
-    expect(open.json).toMatchObject({ mode: 'link', presentation: 'frame-site', url: `${SITE}/lessons/quran/surah-78` });
+    expect(open.json).toMatchObject({ mode: 'link', presentation: 'frame-site', url: `${SITE}/lessons/quran/surah-78`, audioEligible: true });
     // Re-importing the same path updates, never duplicates.
     await http(manager, 'POST', '/materials/admin/import', {
       manifest: 'ref,title_ar,subject,path\r\n/lessons/quran/surah-78,سورة النبأ (محدّثة),quran,/lessons/quran/surah-78\r\n', dryRun: false,
@@ -676,21 +683,45 @@ describe('7. the child\'s page', () => {
     expect(lib.json.items.every((i: any) => !('url' in i))).toBe(true);
   });
 
-  it('recitations: a source\'s template covers every surah, a track overrides one; managers only', async () => {
-    expect((await http(parent, 'POST', '/materials/recitations/1/open')).status).toBe(404);
-    expect((await http(teacher, 'POST', '/materials/admin/recitations/sources', { name: 'x' })).status).toBe(403);
-    const bad = await http(manager, 'POST', '/materials/admin/recitations/sources', { name: 'Source', urlTemplate: 'http://audio.example.test/{surah}.mp3' });
-    expect(bad.status).toBe(400);
-    const source = await http(manager, 'POST', '/materials/admin/recitations/sources', { name: 'Authorized source', urlTemplate: 'https://audio.example.test/{surah3}.mp3', isDefault: true });
-    expect(source.status).toBe(201);
-    expect((await http(parent, 'POST', '/materials/recitations/1/open')).json).toMatchObject({ surah: 1, url: 'https://audio.example.test/001.mp3', source: { name: 'Authorized source' } });
+  it('recitations: only on an allowed host, only through the release gate; a track overrides the template; managers only', async () => {
+    const setConfig = (key: string, value: unknown) => g.prisma.$executeRawUnsafe(
+      `insert into chat.config (key, value, scope, description) values ($1, $2::jsonb, 'quran', 'pd029-materials-http.spec')
+       on conflict (key) do update set value = excluded.value`, key, JSON.stringify(value),
+    );
+    try {
+      expect((await http(parent, 'POST', '/materials/recitations/1/open')).status).toBe(404);
+      expect((await http(teacher, 'POST', '/materials/admin/recitations/sources', { name: 'x' })).status).toBe(403);
+      const bad = await http(manager, 'POST', '/materials/admin/recitations/sources', { name: 'Source', urlTemplate: 'http://audio.example.test/{surah}.mp3' });
+      expect(bad.status).toBe(400);
+      // A host not allowed in code cannot be saved at all.
+      const unknown = await http(manager, 'POST', '/materials/admin/recitations/sources', { name: 'Unknown', urlTemplate: 'https://cdn.unknown.example.test/{surah}.mp3' });
+      expect(unknown.status).toBe(400);
+      expect(JSON.stringify(unknown.json)).toMatch(/not an allowed recitation host/);
+      const source = await http(manager, 'POST', '/materials/admin/recitations/sources', { name: 'Authorized source', urlTemplate: 'https://audio.example.test/{surah3}.mp3', isDefault: true });
+      expect(source.status).toBe(201);
+      // The release gate is unset (none): nobody opens a recitation, whatever the source.
+      expect((await http(parent, 'POST', '/materials/recitations/1/open')).status).toBe(404);
+      await setConfig('quran.audio.enabled_for', 'all');
+      // all + the host's licence recorded in code: a family opens it.
+      expect((await http(parent, 'POST', '/materials/recitations/1/open')).json).toMatchObject({ surah: 1, url: 'https://audio.example.test/001.mp3', source: { name: 'Authorized source' } });
 
-    const token = await upload(manager, 'mulk.mp3', 'audio/mpeg', MP3, 'recitation');
-    const set = await http(manager, 'POST', `/materials/admin/recitations/sources/${source.json.id}/surahs/67`, { uploadToken: token });
-    expect(set.status).toBe(201);
-    expect((await http(parent, 'POST', '/materials/recitations/67/open')).json.url).toMatch(/^https:\/\/storage\.pd29\.example\.test\//);
-    await http(manager, 'POST', `/materials/admin/recitations/sources/${source.json.id}/surahs/67`, { clear: true });
-    expect((await http(parent, 'POST', '/materials/recitations/67/open')).json.url).toBe('https://audio.example.test/067.mp3');
+      const token = await upload(manager, 'mulk.mp3', 'audio/mpeg', MP3, 'recitation');
+      const set = await http(manager, 'POST', `/materials/admin/recitations/sources/${source.json.id}/surahs/67`, { uploadToken: token });
+      expect(set.status).toBe(201);
+      // An uploaded file has no licence record: never a family, only the testers.
+      expect((await http(parent, 'POST', '/materials/recitations/67/open')).status).toBe(404);
+      expect((await http(manager, 'POST', '/materials/recitations/67/open')).status).toBe(404);
+      await setConfig('quran.audio.test_staff_ids', [m.teachersManager.id]);
+      expect((await http(manager, 'POST', '/materials/recitations/67/open')).json.url).toMatch(/^https:\/\/storage\.pd29\.example\.test\//);
+      await http(manager, 'POST', `/materials/admin/recitations/sources/${source.json.id}/surahs/67`, { clear: true });
+      expect((await http(parent, 'POST', '/materials/recitations/67/open')).json.url).toBe('https://audio.example.test/067.mp3');
+      // Back to none: nobody again.
+      await setConfig('quran.audio.enabled_for', 'none');
+      expect((await http(parent, 'POST', '/materials/recitations/1/open')).status).toBe(404);
+      expect((await http(manager, 'POST', '/materials/recitations/67/open')).status).toBe(404);
+    } finally {
+      await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('quran.audio.enabled_for', 'quran.audio.test_staff_ids')`);
+    }
   });
 
   it('opened this week: an open FOR a child is recorded; each item once, last opened first; only those who read the child see it', async () => {

@@ -1,0 +1,410 @@
+{
+  "surah": 103,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the five Tajweed rules, the two Tajweed games and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs and the reciter line, the typed basmala, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old \"complete the ayah\" and \"missing word\" games; wal-'asr (1:1) is left out because ayah 1 is that one word, so the game would show only a gap, and the games' hand-typed distractors (none of them words of this surah) are gone: the game draws its options from these words. Wa-tawasaw occurs twice in ayah 3 (3:6, 3:8); its meaning card points at the first. The old quiz had difficulty levels (easy, medium, hard), not categories; the categories were assigned by question type. Each lesson learned is its old title and description joined with \": \". The reflection is the old prompt's question, with the \"how we apply these lessons\" tips as its ideas. Emoji were stripped from the start and end of lines. Not carried (no field or no such game in the engine): the \"Makki\" type; the intro card's report that the Companions did not part until they had recited this surah (the old line credits it to al-Shafi'i, but it is the report of Abu Madinah al-Darimi in al-Tabarani's al-Awsat and al-Bayhaqi's Shu'ab; a teacher may add it, correctly attributed); the ayah-ordering and build-the-ayah games; the three word-meaning games (same words and meanings as the list); the intro quiz (surah name, ayah count); and the reflection's lead-in line, its second question and its four short answers."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-103 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "5e6019cdb77f1154446407f6182bddd89ea355c7eacff60df7a63455a63c6da9",
+      "components/WelcomeSection.tsx": "8f8e42769a08493e01b8901bd5bdcc94f6156223d74f2d31425a8ed9401324a7",
+      "components/IntroSection.tsx": "32b127475e1490ae56b41c0d564966664d95910f90734ebc51c09d9d5b9a0254",
+      "components/MemorizationGames.tsx": "4cdb5e41a28b4178bd50c671b8f07f08df8407977ef2fa72e104bf4139db8d1d",
+      "components/MeaningsSection.tsx": "d62ed977b7a27cb7f30391fa577eabb00372886c4eb08c5bb44fbe5d477a580c",
+      "components/TajweedSection.tsx": "2fade2d634bc426d823197a7b6ebaef34020287fe9ba92e210aa3057b6a0aafd",
+      "components/LessonsAndReflection.tsx": "8b3e31832b58cf0c216325aa2c65ca4eb3048632cfea08b77c4a662a9e9cd36f"
+    }
+  },
+  "intro": {
+    "text": "سورة العصر سورة قصيرة وجميلة، أقسم الله فيها بالعصر (الوقت)، وأخبرنا أن الإنسان في خسارة إلا من آمن وعمل صالحاً وتواصى بالحق والصبر.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "يُقسم الله بالوقت، لأن الوقت مهم جداً ويجب أن نستغله في الخير.",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "كل الناس في خسارة إذا لم يعملوا الخير ويطيعوا الله.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "إلا الذين يؤمنون بالله ويعملون أعمالاً طيبة، ويتناصحون بالحق والصبر. هؤلاء هم الفائزون!",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "أقسم بالوقت",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 1,
+      "meaning": "حقاً / بالتأكيد",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 2,
+      "meaning": "كل الناس",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "واقع في",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 4,
+      "meaning": "خسارة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 1,
+      "meaning": "ما عدا / غير",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 2,
+      "meaning": "الذين / الأشخاص",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 3,
+      "meaning": "صدّقوا بالله",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 4,
+      "meaning": "وفعلوا",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 5,
+      "meaning": "الأعمال الطيبة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 6,
+      "meaning": "ونصح بعضهم بعضاً",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 7,
+      "meaning": "بالصدق والصواب",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 9,
+      "meaning": "بالتحمل وعدم الاستعجال",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 2,
+      "word": 4
+    },
+    {
+      "ayah": 3,
+      "word": 9
+    },
+    {
+      "ayah": 2,
+      "word": 1
+    },
+    {
+      "ayah": 3,
+      "word": 3
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "سورة الفاتحة"
+        },
+        {
+          "text": "سورة العصر"
+        },
+        {
+          "text": "سورة الناس"
+        },
+        {
+          "text": "سورة الفلق"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة العصر؟",
+      "options": [
+        {
+          "text": "2"
+        },
+        {
+          "text": "3"
+        },
+        {
+          "text": "4"
+        },
+        {
+          "text": "5"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "ما أول كلمة في سورة العصر؟",
+      "options": [
+        {
+          "ayah": 3,
+          "word": 1
+        },
+        {
+          "ayah": 3,
+          "word": 3
+        },
+        {
+          "ayah": 1,
+          "word": 1
+        },
+        {
+          "ayah": 2,
+          "word": 1
+        }
+      ],
+      "answer": 2,
+      "review": "CHANGED: the old distractors \"bism\" and \"qul\" were hand-typed Quran not of this surah; they are now illa (3:1) and amanu (3:3), words of this surah. The answer (wal-'asr, 1:1) and the fourth option (inna, 2:1) are unchanged.",
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "فرح"
+        },
+        {
+          "text": "خسارة"
+        },
+        {
+          "text": "ربح"
+        },
+        {
+          "text": "نوم"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 2,
+        "word": 4
+      },
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "لعبوا معاً"
+        },
+        {
+          "text": "نصح بعضهم بعضاً بالصدق"
+        },
+        {
+          "text": "ناموا معاً"
+        },
+        {
+          "text": "أكلوا معاً"
+        }
+      ],
+      "answer": 1,
+      "review": "PHRASE: the old question asks about \"tawasaw bi-l-haqq\" (3:6-7); the engine shows one word, so it points at tawasaw (3:6) and the right option carries \"with the truth\" as \"bi-l-sidq\" (truthfulness), a narrow reading of al-haqq (common tafsir: faith, the Quran, obeying Allah). Teacher to confirm.",
+      "word": {
+        "ayah": 3,
+        "word": 6
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "من الذين ليسوا في خسارة حسب السورة؟",
+      "options": [
+        {
+          "text": "الذين ينامون كثيراً"
+        },
+        {
+          "ayah": 3
+        },
+        {
+          "text": "الذين يلعبون فقط"
+        },
+        {
+          "text": "الذين لا يدرسون"
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the right option was \"alladhina amanu wa-'amilu al-salihat\", four words of ayah 3 typed as text. It now shows ayah 3 itself (which also names those who urge one another to truth and patience); the three wrong options are the old prose. Teacher to confirm a whole-ayah option among prose options reads well.",
+      "id": "q6"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 3,
+        "words": 8
+      },
+      "options": [
+        {
+          "ayah": 3,
+          "word": 7
+        },
+        {
+          "ayah": 3,
+          "word": 9
+        },
+        {
+          "ayah": 3,
+          "word": 5
+        },
+        {
+          "ayah": 2,
+          "word": 4
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old question typed ayah 3 up to the gap (now a prompt of its first eight words), and its distractors (bi-l-khayr, bi-l-'ilm, bi-l-hubb) were hand-typed, not of this surah; they are now bi-l-haqq (3:7), al-salihat (3:5) and khusr (2:4). The answer (bi-l-sabr, 3:9) is unchanged.",
+      "id": "q7"
+    },
+    {
+      "category": "meanings",
+      "question": "بماذا أقسم الله في بداية السورة؟",
+      "options": [
+        {
+          "text": "بالشمس"
+        },
+        {
+          "text": "بالقمر"
+        },
+        {
+          "text": "بالعصر (الوقت)"
+        },
+        {
+          "text": "بالليل"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q8"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الإيمان بالله: نؤمن بالله ونحبه ونطيعه في كل شيء.",
+      "review": null
+    },
+    {
+      "text": "العمل الصالح: نفعل أشياء طيبة مثل مساعدة الآخرين والصلاة وبر الوالدين.",
+      "review": null
+    },
+    {
+      "text": "الصدق: نقول الحق دائماً ولا نكذب أبداً.",
+      "review": "Truthful speech is part of al-haqq, but the surah's \"tawasaw bi-l-haqq\" is urging one another to the truth (common tafsir: faith, the Quran, obeying Allah), which the lesson on advice (al-nasiha) carries. Teacher to keep or reword."
+    },
+    {
+      "text": "الصبر: نتحمل الأشياء الصعبة ولا نستعجل ونصبر.",
+      "review": null
+    },
+    {
+      "text": "النصيحة: ننصح أصدقاءنا بالخير ونساعدهم ليكونوا أفضل.",
+      "review": null
+    },
+    {
+      "text": "استغلال الوقت: لا نضيع وقتنا، بل نستخدمه في أشياء مفيدة مثل التعلم واللعب المفيد.",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "ما أجمل شيء تعلمته من سورة العصر؟",
+    "ideas": [
+      "نصلي الصلوات الخمس في وقتها",
+      "نطيع وال\u062f\u064a\u0646\u0627 ونحترمهم",
+      "نساعد أصدقاءنا وجيراننا",
+      "نتعلم ونقرأ القرآن كل يوم",
+      "نقول الصدق دائماً",
+      "نصبر عندما تصعب الأمور"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "سورة العصر من أقصر سور القرآن الكريم!",
+      "review": null
+    },
+    {
+      "text": "قال الإمام الشافعي: لو تدبر الناس هذه السورة لكفتهم!",
+      "review": "Ibn Kathir reports al-Shafi'i as saying \"law tadabbara al-nasu hadhihi al-surata la-wasi'athum\" (it would be enough for them); the \"la-kafathum\" wording belongs to another report of his words (\"had Allah sent down no proof to His creation but this surah, it would have sufficed them\"). Teacher to choose the wording."
+    },
+    {
+      "text": "كلمة العصر تعني الوقت أو الزمان",
+      "review": null
+    },
+    {
+      "text": "سورة العصر مكية نزلت في مكة المكرمة",
+      "review": "Makki is the majority view (Ibn Abbas, Ibn al-Zubayr), but Mujahid, Qatada and Muqatil count Al-'Asr Madani. Teacher to confirm or drop."
+    },
+    {
+      "text": "عدد كلمات سورة العصر 14 كلمة فقط!",
+      "review": null
+    },
+    {
+      "text": "القرآن الكريم فيه 114 سورة",
+      "review": null
+    },
+    {
+      "text": "قراءة القرآن كل يوم تجعلنا سعداء",
+      "review": null
+    },
+    {
+      "text": "كل حرف نقرأه من القرآن له حسنة!",
+      "review": null
+    },
+    {
+      "text": "الصبر من أجمل الأخلاق التي تعلمنا إياها السورة",
+      "review": null
+    },
+    {
+      "text": "النصيحة بالحق تجعل المجتمع أفضل",
+      "review": null
+    }
+  ]
+}

@@ -40,10 +40,13 @@ so a hand-written cleanup is easy to get half right.
 ## The switch: `TEACHER_SUPERVISOR_STRICT_SCOPE`
 
 - **Off everywhere** (manifest, env templates, `.do` specs, deploy workflows).
-  Turning it on is the **owner's decision after QA**, once every active teacher
-  has a supervisor (Organization -> Teachers & supervisors shows the count; a
-  teacher whose supervisor was deactivated or left the department counts as
-  unassigned).
+  Turning it on is the **owner's decision after QA**. A teacher with no
+  supervisor does **not** block it (owner, 2026-10-27, PD-43 N3: "Yes, Manager
+  covers them"). An unsupervised teacher is worked on by the Teachers Manager
+  and the super admin only. Before switching, read the count on
+  Organization -> Teachers & supervisors as a **readiness check**: each
+  unsupervised teacher is extra load on the Teachers Manager. A teacher whose
+  supervisor was deactivated or left the department counts as unassigned.
 - The database row `chat.config 'teacher_supervisor.strict_scope'` is what SQL
   and the API read (`chat.teacher_scope_strict()`).
 - At boot the API and the worker write the variable into that row **only when

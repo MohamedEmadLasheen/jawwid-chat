@@ -119,6 +119,24 @@ void main() {
     expect(find.text('Times in Cairo'), findsOneWidget);
   });
 
+  testWidgets('the Day view\'s hour axis is on a 12-hour clock, in the reader\'s digits (owner 2026-10-28)', (tester) async {
+    await pump(tester);
+    await tester.tap(find.text('Day'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 PM'), findsOneWidget);
+    expect(find.text('12 PM'), findsOneWidget);
+    expect(find.text('13:00'), findsNothing);
+    expect(find.text('12:00'), findsNothing);
+  });
+
+  testWidgets('in Arabic the axis reads ص/م with Arabic-Indic digits', (tester) async {
+    await pump(tester, locale: const Locale('ar'));
+    await tester.tap(find.text('يوم'));
+    await tester.pumpAndSettle();
+    expect(find.text('١ م'), findsOneWidget);
+    expect(find.text('١٣:٠٠'), findsNothing);
+  });
+
   testWidgets('a malformed answer is the error state, not a crash', (tester) async {
     tester.view.physicalSize = const Size(1000, 2400);
     tester.view.devicePixelRatio = 1;

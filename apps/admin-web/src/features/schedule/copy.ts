@@ -88,6 +88,15 @@ export const S = {
   hours: { en: '{h} h', ar: '{h} س' },
   dash: { en: '—', ar: '—' },
 
+  // Phone layout
+  filtersButton: { en: 'Filters', ar: 'عوامل التصفية' },
+  done: { en: 'Done', ar: 'تم' },
+  availableSlot: { en: 'Available, no student', ar: 'متاح بدون طالب' },
+  onLeave: { en: 'On leave', ar: 'في إجازة' },
+  noLessonsDay: { en: 'No lessons', ar: 'لا حصص' },
+  // "Label: number" -- no noun that would need a plural form after a count.
+  dayTotals: { en: 'Lessons: {lessons} · Empty: {empty}', ar: 'الحصص: {lessons} · الفارغ: {empty}' },
+
   // Legend
   legend: { en: 'Legend', ar: 'دليل الألوان' },
   supervisorsLegend: { en: 'Supervisors', ar: 'المشرفون' },

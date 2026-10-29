@@ -28,12 +28,16 @@ ARG VITE_APP_ENV=production
 ARG VITE_SENTRY_DSN
 ARG VITE_BUILD_VERSION
 ARG VITE_GIT_COMMIT
+# PD-29 audio: the lessons site's origin. Only a frame on it is handed Quran
+# audio (src/features/materials/lessonAudio.ts); unset = no lesson gets audio.
+ARG VITE_LESSONS_ORIGIN
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
     VITE_REALTIME_URL=$VITE_REALTIME_URL \
     VITE_APP_ENV=$VITE_APP_ENV \
     VITE_SENTRY_DSN=$VITE_SENTRY_DSN \
     VITE_BUILD_VERSION=$VITE_BUILD_VERSION \
-    VITE_GIT_COMMIT=$VITE_GIT_COMMIT
+    VITE_GIT_COMMIT=$VITE_GIT_COMMIT \
+    VITE_LESSONS_ORIGIN=$VITE_LESSONS_ORIGIN
 
 RUN test -n "$VITE_API_BASE_URL" || (echo "VITE_API_BASE_URL is required" && exit 1)
 RUN npm run build

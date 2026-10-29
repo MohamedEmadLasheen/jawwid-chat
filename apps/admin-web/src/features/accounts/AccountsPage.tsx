@@ -10,7 +10,7 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { QueryBoundary } from '@/shared/components/States'
-import { ReasonDialog } from '@/features/family/ReasonDialog'
+import { ReasonDialog } from '@/shared/components/ReasonDialog'
 import { ApiError } from '@/core/api/errors'
 import type { AccountStatus, AccountSummary, IssuedReset } from './api'
 import { A, KIND, STATUS, describeError, useCopy } from './copy'
@@ -21,10 +21,12 @@ import { accountSessionsApi, sessionKeys, type SessionDto } from '@/features/dev
 import { D, isSessionGone } from '@/features/devices/copy'
 import { SessionList, useDeviceName } from '@/features/devices/SessionList'
 import '@/features/devices/devices.css'
+import { AccountsTabs } from '@/features/staff-accounts/AccountsTabs'
 import './accounts.css'
 
 type Kind = 'all' | 'family' | 'teacher' | 'staff'
-type Pending =
+/** One account action in progress: the dialog it shows. PD-40: the Staff accounts page reuses them. */
+export type AccountPending =
   | { act: 'reset'; account: AccountSummary }
   | { act: 'suspend'; account: AccountSummary }
   | { act: 'reactivate'; account: AccountSummary }
@@ -42,11 +44,12 @@ const STATUS_TONE: Record<AccountStatus, Tone> = {
 }
 
 /**
- * PD-21: account administration. Every staff member finds a parent (by the
- * parent's, the family's or a child's name) or a teacher, and resets the
- * password or sets the account inactive; the super admin also other staff.
- * The server decides the list and every action; the buttons follow its
- * `allowed` answer, which is advisory.
+ * PD-21: account administration. Staff find a parent (by the parent's, the
+ * family's or a child's name) or a teacher, and reset the password or set the
+ * account inactive; the super admin also other staff. PD-40: which kinds is
+ * the server's answer (`administers`) -- parents for Operations and Sales,
+ * teachers for the Teachers department. The server decides the list and every
+ * action; the chips and buttons follow its answer, which is advisory.
  */
 export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
@@ -54,16 +57,20 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const { staff } = useSession()
   const [q, setQ] = useState('')
   const [kind, setKind] = useState<Kind>('all')
-  const [pending, setPending] = useState<Pending | null>(null)
+  const [pending, setPending] = useState<AccountPending | null>(null)
   const deferred = useDeferredValue(q.trim())
   const list = useAccounts(deferred, kind)
   const accounts = list.data?.accounts ?? []
 
-  const kinds: Kind[] = staff && isSuperAdmin(staff.role) ? ['all', 'family', 'teacher', 'staff'] : ['all', 'family', 'teacher']
+  const administers = list.data?.administers
+  const fallback: Kind[] = staff && isSuperAdmin(staff.role) ? ['family', 'teacher', 'staff'] : ['family', 'teacher']
+  const kinds: Kind[] = ['all', ...(administers ?? fallback)]
+  const noneAdministered = administers !== undefined && administers.length === 0
 
   return (
     <div className="page">
       <div className="page__inner">
+        <AccountsTabs />
         <PageHeader eyebrow={eyebrow} title={tx(A.title)} subtitle={tx(A.subtitle)} />
         <div className="toolbar">
           <SearchField value={q} onChange={setQ} label={tx(A.search)} clearLabel={t('common.cancel')} />
@@ -78,7 +85,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
           isLoading={list.isLoading}
           error={list.error}
           isEmpty={accounts.length === 0}
-          emptyTitle={tx(A.empty)}
+          emptyTitle={tx(noneAdministered ? A.noneAdministered : A.empty)}
           onRetry={() => void list.refetch()}
         >
           <div className="table-wrap">
@@ -114,37 +121,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                     </td>
                     <td>{a.lastLoginAt ? dateTime(a.lastLoginAt) : tx(A.never)}</td>
                     <td>
-                      <div className="acct-actions">
-                        {a.allowed.resetPassword && (
-                          <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'reset', account: a })}>
-                            {tx(A.resetPassword)}
-                          </button>
-                        )}
-                        {a.allowed.suspend && (
-                          <button
-                            type="button"
-                            className="btn btn--sm btn--danger"
-                            onClick={() => setPending({ act: 'suspend', account: a })}
-                          >
-                            {tx(A.suspend)}
-                          </button>
-                        )}
-                        {a.allowed.impersonate && (
-                          <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'impersonate', account: a })}>
-                            {tx(S.open, { name: a.name })}
-                          </button>
-                        )}
-                        {a.allowed.signOut === true && (
-                          <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'devices', account: a })}>
-                            {tx(D.devicesButton)}
-                          </button>
-                        )}
-                        {a.allowed.reactivate && (
-                          <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'reactivate', account: a })}>
-                            {tx(A.reactivate)}
-                          </button>
-                        )}
-                      </div>
+                      <AccountActionButtons account={a} onAct={setPending} />
                     </td>
                   </tr>
                 ))}
@@ -156,38 +133,87 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
         <SupportRecord />
       </div>
 
+      <AccountActionDialogs pending={pending} onChange={setPending} />
+    </div>
+  )
+}
+
+/** The actions the server allows on an account (`allowed`), as buttons. */
+export function AccountActionButtons({ account: a, onAct }: { account: AccountSummary; onAct: (p: AccountPending) => void }) {
+  const tx = useCopy()
+  return (
+    <div className="acct-actions">
+      {a.allowed.resetPassword && (
+        <button type="button" className="btn btn--sm" onClick={() => onAct({ act: 'reset', account: a })}>
+          {tx(A.resetPassword)}
+        </button>
+      )}
+      {a.allowed.suspend && (
+        <button type="button" className="btn btn--sm btn--danger" onClick={() => onAct({ act: 'suspend', account: a })}>
+          {tx(A.suspend)}
+        </button>
+      )}
+      {a.allowed.impersonate && (
+        <button type="button" className="btn btn--sm" onClick={() => onAct({ act: 'impersonate', account: a })}>
+          {tx(S.open, { name: a.name })}
+        </button>
+      )}
+      {a.allowed.signOut === true && (
+        <button type="button" className="btn btn--sm" onClick={() => onAct({ act: 'devices', account: a })}>
+          {tx(D.devicesButton)}
+        </button>
+      )}
+      {a.allowed.reactivate && (
+        <button type="button" className="btn btn--sm" onClick={() => onAct({ act: 'reactivate', account: a })}>
+          {tx(A.reactivate)}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** The dialog of the action in progress, if any; `onChange(null)` closes it. */
+export function AccountActionDialogs({
+  pending,
+  onChange,
+}: {
+  pending: AccountPending | null
+  onChange: (p: AccountPending | null) => void
+}) {
+  return (
+    <>
       {pending?.act === 'reset' && (
         <ResetDialog
           account={pending.account}
-          onIssued={(issued) => setPending({ act: 'code', account: pending.account, issued })}
-          onClose={() => setPending(null)}
+          onIssued={(issued) => onChange({ act: 'code', account: pending.account, issued })}
+          onClose={() => onChange(null)}
         />
       )}
       {pending?.act === 'code' && (
-        <CodeDialog account={pending.account} issued={pending.issued} onClose={() => setPending(null)} />
+        <CodeDialog account={pending.account} issued={pending.issued} onClose={() => onChange(null)} />
       )}
-      {pending?.act === 'impersonate' && <StartSupportDialog account={pending.account} onClose={() => setPending(null)} />}
+      {pending?.act === 'impersonate' && <StartSupportDialog account={pending.account} onClose={() => onChange(null)} />}
       {pending?.act === 'devices' && (
         <DevicesDialog
           account={pending.account}
           notice={pending.notice}
-          onRevoke={(session) => setPending({ act: 'revokeSession', account: pending.account, session })}
-          onRevokeAll={() => setPending({ act: 'revokeAll', account: pending.account })}
-          onClose={() => setPending(null)}
+          onRevoke={(session) => onChange({ act: 'revokeSession', account: pending.account, session })}
+          onRevokeAll={() => onChange({ act: 'revokeAll', account: pending.account })}
+          onClose={() => onChange(null)}
         />
       )}
       {(pending?.act === 'revokeSession' || pending?.act === 'revokeAll') && (
         <RevokeSessionDialog
           account={pending.account}
           session={pending.act === 'revokeSession' ? pending.session : null}
-          onDone={(notice) => setPending({ act: 'devices', account: pending.account, notice })}
-          onClose={() => setPending({ act: 'devices', account: pending.account })}
+          onDone={(notice) => onChange({ act: 'devices', account: pending.account, notice })}
+          onClose={() => onChange({ act: 'devices', account: pending.account })}
         />
       )}
       {(pending?.act === 'suspend' || pending?.act === 'reactivate') && (
-        <StatusDialog act={pending.act} account={pending.account} onClose={() => setPending(null)} />
+        <StatusDialog act={pending.act} account={pending.account} onClose={() => onChange(null)} />
       )}
-    </div>
+    </>
   )
 }
 
@@ -227,36 +253,52 @@ function ResetDialog({
   )
 }
 
-/** The code exists only in this dialog's props: closing it is the end of it. */
+/**
+ * The code exists only in this dialog's props: closing it is the end of it.
+ * PD-40 PR-3: a code a department manager issues for a staff account is
+ * e-mailed only and never returned -- the dialog says where it went (or that
+ * it could not go), and shows no code box.
+ */
 function CodeDialog({ account, issued, onClose }: { account: AccountSummary; issued: IssuedReset; onClose: () => void }) {
   const tx = useCopy()
   const [copied, setCopied] = useState(false)
+  const code = issued.code
   return (
     <Dialog
       title={tx(A.codeTitle, { name: account.name })}
       onClose={onClose}
       footer={
         <>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              void navigator.clipboard?.writeText(issued.code).then(() => setCopied(true), () => undefined)
-            }}
-          >
-            {copied ? tx(A.copied) : tx(A.copy)}
-          </button>
+          {code && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                void navigator.clipboard?.writeText(code).then(() => setCopied(true), () => undefined)
+              }}
+            >
+              {copied ? tx(A.copied) : tx(A.copy)}
+            </button>
+          )}
           <button type="button" className="btn btn--primary" onClick={onClose}>
             {tx(A.done)}
           </button>
         </>
       }
     >
-      <p>{tx(A.codeExplain, { name: account.name, minutes: issued.expiresInMinutes })}</p>
-      <p className="acct-code" dir="ltr" aria-label={issued.code.split('').join(' ')}>
-        {issued.code}
-      </p>
-      <p className="field__hint">{tx(A.codeHow)}</p>
+      {code ? (
+        <>
+          <p>{tx(A.codeExplain, { name: account.name, minutes: issued.expiresInMinutes })}</p>
+          <p className="acct-code" dir="ltr" aria-label={code.split('').join(' ')}>
+            {code}
+          </p>
+          <p className="field__hint">{tx(A.codeHow)}</p>
+        </>
+      ) : (
+        <p role="status">
+          {issued.emailed === true ? tx(A.codeEmailed, { minutes: issued.expiresInMinutes }) : tx(A.codeNotEmailed)}
+        </p>
+      )}
       {issued.signedOutSessions > 0 && <p className="field__hint">{tx(A.signedOut, { n: issued.signedOutSessions })}</p>}
     </Dialog>
   )

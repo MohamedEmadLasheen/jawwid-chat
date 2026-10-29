@@ -10,9 +10,10 @@ import { SupervisionService } from '../lessons/supervision.service';
 import { openPayout, parsePayoutKeys, sealPayout, type PayoutKeyring } from './payout-seal';
 
 /**
- * PD-18 (closed 2026-10-21): teacher payroll lives in Chat. The super admin
- * only -- PD-10's finance tier -- so every route here passes
- * `canViewFinance` before the teacher is even looked up.
+ * PD-18 (closed 2026-10-21): teacher payroll lives in Chat. PD-10's finance
+ * tier -- the super admin and, since PD-43 (owner N2), the Teachers manager --
+ * so every route here passes `canViewFinance` before the teacher is even
+ * looked up.
  *
  *   pay terms        salary type, currency, amount; one version per effective
  *                    month, append-only
@@ -371,12 +372,14 @@ export class TeacherPayrollService {
    * finance tier); for everyone else `amount` is absent, never null.
    */
   async rewards(actorId: string, month?: unknown) {
-    const { actor, access } = await this.files.gate(actorId, (a) => a.canView);
+    // PD-26 amendment: the page's rewards list; an Operations supervisor reads
+    // their families' teachers' rewards, never an amount (canViewFinance is false).
+    const { actor, access } = await this.files.pageGate(actorId, (a) => a.onPage);
     const org = actor.organizationId as string;
     const m = month === undefined || month === '' ? null : requireMonth('month', month);
     const [from, to] = m ? await this.monthBounds(m) : [null, null];
     // PD-35: the rewards of the teachers in the caller's scope.
-    const scope = await this.files.teacherScope.scopeOf(actor);
+    const scope = await this.files.teacherScope.pageScopeOf(actor);
     const entries = await this.prisma.teacherSupervisionEntry.findMany({
       where: {
         organizationId: org,

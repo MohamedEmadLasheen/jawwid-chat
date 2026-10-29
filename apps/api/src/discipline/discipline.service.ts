@@ -6,6 +6,8 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
+import { pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
+import { complaintAbout, familiesOfComplaints } from '../teacher-file/complaint-family';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
@@ -49,10 +51,16 @@ const KIND_FILTERS = {
  *                          card, `teacher.suspended` to Core/HR; open lessons in
  *                          the window are cancelled for the families
  *   permanent suspension   refused while the teacher still has students (move
- *                          them first, PD-11 transfer); then the card,
- *                          `teacher.suspended`, the teacher deactivated through
+ *                          them first, PD-11 transfer); their open lessons are
+ *                          cancelled FIRST, while the teacher is still live (a
+ *                          trial's card goes to the teacher's trial group, which
+ *                          needs one) -- if any cannot be, nothing is decided;
+ *                          then, in one transaction that refuses over any lesson
+ *                          still open, the card, `teacher.suspended`, the login
+ *                          closed and its waiting codes superseded (as PD-43's
+ *                          offboarding), and the teacher deactivated through
  *                          chat.deactivate_principal (RT-032: signed out
- *                          everywhere), and their open lessons cancelled
+ *                          everywhere)
  *   excused                kept on record, no longer counted
  *
  * The suggested step is computed on every read (ladder.ts); choosing anything
@@ -93,7 +101,8 @@ export class DisciplineService {
     if (query.kind !== undefined && !(query.kind in KIND_FILTERS)) throw invalid(`kind: ${Object.keys(KIND_FILTERS).join(' | ')}`);
 
     // PD-35: the violations of the teachers in the caller's scope.
-    const scope = await this.supervision.teacherScope.scopeOf(actor);
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const scope = page.teachers;
     const where: Prisma.TeacherViolationWhereInput = {
       organizationId: actor.organizationId,
       ...(scope.all ? {} : { AND: [{ teacherId: { in: [...scope.teacherIds] } }] }),
@@ -102,11 +111,11 @@ export class DisciplineService {
       ...(query.teacherId ? { teacherId: query.teacherId } : {}),
       ...(query.kind ? { kind: { in: [...KIND_FILTERS[query.kind as keyof typeof KIND_FILTERS]] } } : {}),
     };
-    const rows = await this.standing(await this.prisma.teacherViolation.findMany({
+    const rows = await this.visible(page, await this.standing(await this.prisma.teacherViolation.findMany({
       where,
       orderBy: state === 'open' ? { occurredAt: 'asc' } : { occurredAt: 'desc' },
       take: 500,
-    }));
+    })));
     return { violations: await this.dtos(rows) };
   }
 
@@ -120,7 +129,9 @@ export class DisciplineService {
       where: { teacherId: teacher.id, month: new Date(`${m}-01T00:00:00Z`) },
       orderBy: { occurredAt: 'asc' },
     }));
+    // The count is the teacher's (it sets the next step); the rows listed are the caller's (P2-4).
     const counted = rows.filter((r) => r.decision !== Decision.EXCUSED).length;
+    const shown = await this.visible(await this.supervision.teacherScope.pageRowsOf(actor), rows);
     const suspensions = await this.prisma.teacherSuspension.findMany({
       where: { teacherId: teacher.id },
       orderBy: { startsOn: 'desc' },
@@ -131,7 +142,7 @@ export class DisciplineService {
       month: m,
       counted,
       nextStep: decisionForStep(counted + 1),
-      violations: await this.dtos(rows),
+      violations: await this.dtos(shown),
       suspensions: suspensions.map((s) => ({
         id: s.id,
         kind: s.kind,
@@ -152,7 +163,11 @@ export class DisciplineService {
     if (!isUuid(lessonId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
     const lesson = await this.prisma.lesson.findFirst({ where: { id: lessonId, organizationId: actor.organizationId } });
     if (!lesson) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
-    await this.supervision.requireTeacherInScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    // P2-4: an Operations supervisor records lateness on their own families' lessons only.
+    if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), lesson.teacherId, { learnerId: lesson.learnerId })) {
+      throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+    }
     const minutes = body.minutes;
     if (typeof minutes !== 'number' || !Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
       throw invalid('minutes: a whole number of minutes, 1 to 240');
@@ -249,7 +264,11 @@ export class DisciplineService {
       where: { id: complaintId, organizationId: actor.organizationId ?? '', kind: 'complaint' },
     });
     if (!complaint) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
-    await this.supervision.requireTeacherInScope(actor, complaint.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, complaint.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    const about = complaintAbout(complaint, await familiesOfComplaints(this.prisma, [complaint]));
+    if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), complaint.teacherId, about)) {
+      throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
+    }
     const note = textField(body, 'note', false);
     const row = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
@@ -329,6 +348,25 @@ export class DisciplineService {
 
     const teacher = await this.conversations.requireActor(violation.teacherId);
     const context = await this.cardContext(violation);
+    const cancelReason = teacher.locale === 'en' ? 'The teacher is suspended' : 'المعلم موقوف';
+    const permanent = decision === Decision.PERMANENT_SUSPENSION;
+
+    // A permanent suspension deactivates the teacher, so their lessons are
+    // cancelled before it, while they are still live (as PD-43's offboarding).
+    // One that cannot be cancelled stops the decision: nothing is deactivated.
+    const cancelled: string[] = [];
+    if (permanent) {
+      const notCancelled = await this.cancelLessons(actorId, violation.teacherId, colliding, cancelReason, cancelled);
+      if (notCancelled.length > 0) {
+        throw new CommError(
+          CommErrorCode.DISCIPLINE_NOT_CANCELLED,
+          `${notCancelled.length} lesson(s) could not be cancelled; the teacher is not suspended`,
+          409,
+          { cancelledLessons: cancelled, notCancelled },
+        );
+      }
+    }
+
     await this.write(() =>
       this.prisma.$transaction(async (tx) => {
         let suspensionId: string | null = null;
@@ -411,41 +449,79 @@ export class DisciplineService {
             endsOn: window.endsOn,
           });
         }
+        let login: ClosedLogin | null = null;
+        if (permanent) {
+          // Nothing open may outlive the teacher: a lesson booked since the
+          // cancellations above refuses the whole decision.
+          const [{ open }] = await tx.$queryRaw<Array<{ open: number }>>`
+            SELECT count(*)::int AS open FROM chat.lesson l
+             WHERE l.teacher_id = ${violation.teacherId}::uuid AND l.outcome IS NULL
+               AND (l.starts_at AT TIME ZONE ${tz})::date >= ${today}::date`;
+          if (open > 0) {
+            throw new CommError(
+              CommErrorCode.DISCIPLINE_LESSONS_COLLIDE,
+              `${open} open lesson(s) remain; the teacher is not suspended -- decide again to cancel them`,
+              409,
+            );
+          }
+          const why = `permanent suspension: ${note ?? `ladder step ${step}`}`;
+          // The login closes with the teacher, as PD-43's offboarding closes it
+          // (chat.offboard_teacher): a waiting first sign-in or reset code can
+          // no longer activate it.
+          login = await closeLoginInTx(tx, violation.teacherId, why, actor.actorId);
+          // RT-032: the teacher's sessions are revoked through the journal, and a
+          // node's completion barrier confirms it after this commit.
+          await tx.$queryRaw`
+            SELECT chat.deactivate_principal('teacher', ${violation.teacherId}::uuid, ${why},
+                                             ${actor.actorId}::uuid, 'deactivated')::text`;
+        }
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: `teacher.discipline_${decision}`,
           entity: 'teacher',
           entityId: violation.teacherId,
-          after: { violationId: violation.id, suggestedStep: step, suspensionId, collidingLessons: colliding.map((l) => l.id) },
+          after: {
+            violationId: violation.id,
+            suggestedStep: step,
+            suspensionId,
+            collidingLessons: colliding.map((l) => l.id),
+            ...(login ? { login } : {}),
+          },
           reason: note ?? `ladder step ${step}`,
         });
-        if (decision === Decision.PERMANENT_SUSPENSION) {
-          // RT-032: the teacher's sessions are revoked through the journal, and a
-          // node's completion barrier confirms it after this commit.
-          await tx.$queryRaw`
-            SELECT chat.deactivate_principal('teacher', ${violation.teacherId}::uuid,
-                                             ${`permanent suspension: ${note ?? `ladder step ${step}`}`},
-                                             ${actor.actorId}::uuid, 'deactivated')::text`;
-        }
       }),
     );
 
-    // The families are told through each lesson's own cancellation card.
+    // A temporary suspension: the teacher stays live, so the lessons are
+    // cancelled after it is recorded. The families are told through each
+    // lesson's own cancellation card.
+    const notCancelled = permanent ? [] : await this.cancelLessons(actorId, violation.teacherId, colliding, cancelReason, cancelled);
+    const fresh = await this.prisma.teacherViolation.findUniqueOrThrow({ where: { id: violation.id } });
+    return { violation: (await this.dtos([fresh]))[0], cancelledLessons: cancelled.length, notCancelled };
+  }
+
+  /** Cancels each lesson (a trial as a trial); `cancelled` collects the ids that were. Returns those that were not. */
+  private async cancelLessons(
+    actorId: string,
+    teacherId: string,
+    lessons: ReadonlyArray<{ id: string; kind: string }>,
+    reason: string,
+    cancelled: string[],
+  ): Promise<Array<{ lessonId: string; reason: string }>> {
     const notCancelled: Array<{ lessonId: string; reason: string }> = [];
-    for (const lesson of colliding) {
+    for (const lesson of lessons) {
       try {
-        const reason = teacher.locale === 'en' ? 'The teacher is suspended' : 'المعلم موقوف';
         // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
         if (lesson.kind === 'trial') await this.trials.cancel(actorId, lesson.id, { reason });
         else await this.lessons.cancel(actorId, lesson.id, { reason });
+        cancelled.push(lesson.id);
       } catch (e) {
-        const reason = e instanceof Error ? e.message : String(e);
-        this.logger.warn(`lesson ${lesson.id} inside suspension of ${violation.teacherId} was not cancelled: ${reason}`);
-        notCancelled.push({ lessonId: lesson.id, reason });
+        const why = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`lesson ${lesson.id} inside suspension of ${teacherId} was not cancelled: ${why}`);
+        notCancelled.push({ lessonId: lesson.id, reason: why });
       }
     }
-    const fresh = await this.prisma.teacherViolation.findUniqueOrThrow({ where: { id: violation.id } });
-    return { violation: (await this.dtos([fresh]))[0], cancelledLessons: colliding.length - notCancelled.length, notCancelled };
+    return notCancelled;
   }
 
   // ------------------------------------------------------------------
@@ -559,8 +635,41 @@ export class DisciplineService {
     if (!isUuid(id)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
     const v = await this.prisma.teacherViolation.findFirst({ where: { id, organizationId: actor.organizationId } });
     if (!v || (await this.standing([v])).length === 0) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
-    await this.supervision.requireTeacherInScope(actor, v.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, v.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    if ((await this.visible(await this.supervision.teacherScope.pageRowsOf(actor), [v])).length === 0) {
+      throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
+    }
     return v;
+  }
+
+  /**
+   * P2-4: of an Operations-only teacher's violations, those about another
+   * family's child do not show -- lateness or an absence on their lesson, or
+   * the upheld complaint of another family. Teacher-level ones (an absence with
+   * no lesson, a management complaint) do.
+   */
+  private async visible<T extends { id: string; teacherId: string; lessonId: string | null; complaintEntryId: string | null }>(
+    page: PageScope,
+    rows: T[],
+  ): Promise<T[]> {
+    const partial = rows.filter((r) => !scopeCovers(page.whole, r.teacherId));
+    if (partial.length === 0) return rows;
+    const scope = this.supervision.teacherScope;
+    const learnerOf = await scope.learnersOfLessons(partial.map((r) => r.lessonId).filter((x): x is string => !!x));
+    const complaintIds = partial.map((r) => r.complaintEntryId).filter((x): x is string => !!x);
+    const complaints = complaintIds.length
+      ? await this.prisma.teacherSupervisionEntry.findMany({
+          where: { id: { in: complaintIds } },
+          select: { id: true, parentFeedbackId: true, conversationId: true, complaintSource: true },
+        })
+      : [];
+    const familyOf = await familiesOfComplaints(this.prisma, complaints);
+    const complaintOf = new Map(complaints.map((c) => [c.id, c]));
+    return rows.filter((r) => {
+      if (r.lessonId) return pageRowVisible(page, r.teacherId, { learnerId: learnerOf.get(r.lessonId) ?? null });
+      const c = r.complaintEntryId ? complaintOf.get(r.complaintEntryId) : undefined;
+      return pageRowVisible(page, r.teacherId, c ? complaintAbout(c, familyOf) : null);
+    });
   }
 
   /**
@@ -586,8 +695,10 @@ export class DisciplineService {
 
   private async requireSupervisor(actorId: string): Promise<Actor> {
     const actor = await this.conversations.requireActor(actorId);
-    if (!(await this.supervision.staffAccess(actor)).canSupervise) {
-      throw new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s');
+    // PD-26 amendment: the Teachers department, or an Operations supervisor for
+    // the teachers of their families (narrowed below by the page scope).
+    if (!(await this.supervision.pageAccess(actor)).canSupervise) {
+      throw new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s and, for the teachers of their families, Operations\'');
     }
     return actor;
   }
@@ -596,7 +707,7 @@ export class DisciplineService {
     if (!isUuid(teacherId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'teacher not found');
     const t = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId ?? '' } });
     if (!t) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'teacher not found');
-    await this.supervision.requireTeacherInScope(actor, t.id, CommErrorCode.DISCIPLINE_NOT_FOUND);
+    await this.supervision.requireTeacherInPageScope(actor, t.id, CommErrorCode.DISCIPLINE_NOT_FOUND);
     return t;
   }
 
@@ -666,4 +777,41 @@ function addDays(day: string, n: number): string {
 
 function langOf(actor: Actor): CardLanguage {
   return actor.locale === 'en' ? 'en' : 'ar';
+}
+
+/** What closing a permanently suspended teacher's login did, for the audit row. */
+interface ClosedLogin {
+  accountId: string;
+  /** The account's status before: `active`, `provisioned`, `suspended` or already `deactivated`. */
+  statusBefore: string;
+  /** Waiting first sign-in and reset codes superseded. */
+  supersededCodes: number;
+}
+
+/**
+ * The teacher's login, closed whatever state it was in, and every waiting code
+ * superseded -- chat.offboard_teacher's own steps (PD-43), so a first sign-in
+ * code issued before the suspension cannot activate the account after it.
+ * An active login goes through chat.deactivate_principal (RT-032); one never
+ * used (provisioned) or suspended is simply deactivated. Null: no login.
+ */
+async function closeLoginInTx(tx: Tx, teacherId: string, reason: string, actorId: string): Promise<ClosedLogin | null> {
+  const [account] = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+    SELECT a.id::text AS id, a.status
+      FROM chat.teacher t JOIN chat.account a ON a.id = t.account_id
+     WHERE t.id = ${teacherId}::uuid
+       FOR UPDATE OF a`;
+  if (!account) return null;
+  if (account.status === 'active') {
+    await tx.$queryRaw`
+      SELECT chat.deactivate_principal('account', ${account.id}::uuid, ${reason}, ${actorId}::uuid, 'deactivated')::text`;
+  } else if (account.status === 'provisioned' || account.status === 'suspended') {
+    await tx.$executeRaw`
+      UPDATE chat.account SET status = 'deactivated', is_active = false, deactivated_at = coalesce(deactivated_at, now())
+       WHERE id = ${account.id}::uuid`;
+  }
+  const supersededCodes = await tx.$executeRaw`
+    UPDATE chat.password_reset_code SET superseded_at = now()
+     WHERE account_id = ${account.id}::uuid AND used_at IS NULL AND superseded_at IS NULL`;
+  return { accountId: account.id, statusBefore: account.status, supersededCodes };
 }

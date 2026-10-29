@@ -1,11 +1,8 @@
-import { useId, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useId, useState } from 'react'
 import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { opsApi } from '@/features/teachers/opsApi'
-import { trialsApi } from '@/features/trials/api'
-import { useRoster } from '@/features/teachers/opsHooks'
+import { useHeldLessons, useSupervisionDirectory } from '@/features/teacher-files/hooks'
 import { LADDER, type Decision, type Violation } from './api'
 import { D, DECISION_LABEL, describeError, useCopy } from './copy'
 import { useDecide, useRecordAbsence, useRecordLateness } from './hooks'
@@ -162,7 +159,8 @@ export function LatenessDialog({ onClose, lessonType = 'regular' }: { onClose: (
   const tx = useCopy()
   const { dateTime } = useI18n()
   const record = useRecordLateness()
-  const roster = useRoster()
+  // PD-26 amendment: the page's teachers -- the caller's (an Operations supervisor's are her families').
+  const roster = useSupervisionDirectory()
   const teacherId = useId()
   const lessonId = useId()
   const minutesId = useId()
@@ -172,29 +170,11 @@ export function LatenessDialog({ onClose, lessonType = 'regular' }: { onClose: (
   const [minutes, setMinutes] = useState('')
   const [note, setNote] = useState('')
   const [touched, setTouched] = useState(false)
-  const window = useMemo(() => ({ from: new Date(Date.now() - 14 * 86_400_000).toISOString(), to: new Date().toISOString() }), [])
-  // A regular lesson (or make-up) comes from /lessons; a trial from /trials. Both are held lessons.
-  const lessons = useQuery({
-    queryKey: ['lessons', 'held', teacher, window.from],
-    queryFn: () => opsApi.lessons({ teacherId: teacher, ...window }),
-    enabled: teacher !== '' && lessonType === 'regular',
-  })
-  const trials = useQuery({
-    queryKey: ['trials', 'held', teacher, window.from],
-    queryFn: () => trialsApi.list({ teacherId: teacher, ...window }),
-    enabled: teacher !== '' && lessonType === 'trial',
-  })
-  const held: Array<{ id: string; label: string; startsAt: string }> =
-    lessonType === 'trial'
-      ? (trials.data?.trials ?? [])
-          .filter((t) => t.attendance === 'attended')
-          .map((t) => ({ id: t.id, label: t.prospect.displayName, startsAt: t.startsAt }))
-          .reverse()
-      : (lessons.data?.lessons ?? [])
-          .filter((l) => l.outcome === 'held')
-          .map((l) => ({ id: l.id, label: l.learner.name, startsAt: l.startsAt }))
-          .reverse()
-  const loading = lessonType === 'trial' ? trials.isLoading : lessons.isLoading
+  // PD-26 amendment: the page's own read -- the teacher's held lessons (or attended
+  // trials) of the last two weeks, for whoever works on that teacher, Operations too.
+  const lessons = useHeldLessons(teacher, lessonType)
+  const held = lessons.data?.lessons ?? []
+  const loading = lessons.isLoading
   const parsed = /^\d{1,3}$/.test(minutes.trim()) ? Number(minutes.trim()) : NaN
   const minutesInvalid = !Number.isInteger(parsed) || parsed < 1 || parsed > 240
 
@@ -290,7 +270,8 @@ export function LatenessDialog({ onClose, lessonType = 'regular' }: { onClose: (
 export function AbsenceDialog({ onClose }: { onClose: () => void }) {
   const tx = useCopy()
   const record = useRecordAbsence()
-  const roster = useRoster()
+  // PD-26 amendment: the page's teachers -- the caller's (an Operations supervisor's are her families').
+  const roster = useSupervisionDirectory()
   const teacherId = useId()
   const dayId = useId()
   const noteId = useId()

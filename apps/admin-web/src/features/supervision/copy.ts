@@ -83,6 +83,10 @@ export const S = {
     ar: 'ألغِ تحديد اليوم الذي ليس إجازة، كيوم الإجازة الأسبوعية للمعلم. تُخصم الأيام المحددة فقط.',
   },
   deducted: { en: '{n} day(s) will be deducted; balance after: {b}', ar: 'سيُخصم {n} يوم؛ الرصيد بعد الاعتماد: {b}' },
+  /** PD-26 amendment: Operations is not shown the balance -- the allowance is the Teachers department's. */
+  deductedOnly: { en: '{n} day(s) will be deducted from the teacher’s leave', ar: 'سيُخصم {n} يوم من إجازات المعلم' },
+  /** PD-26 amendment: a colliding lesson of a family that is not the viewer's -- the child is not named. */
+  otherFamilyLesson: { en: 'Another family’s lesson', ar: 'حصة لأسرة أخرى' },
   collisions: { en: 'Lessons inside this leave', ar: 'حصص داخل هذه الإجازة' },
   collisionsHint: {
     en: 'These lessons will be cancelled and each family is told in its student group. A make-up is owed.',

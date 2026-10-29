@@ -1,0 +1,372 @@
+{
+  "surah": 97,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson (content in lib/lessonData.ts and the components; lib/audioUtils.ts holds only audio code), then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the four Tajweed rules (Tajweed comes only from the reviewed dataset; the old quiz had no Tajweed question), the audio URLs and the reciter line, the typed basmala and whole-surah text on the intro card, the did-you-know line \"hal ta'lam anna laylat al-qadri khayrun min alfi shahr ...\" (it quotes ayah 3 whole; cut before the quote nothing is left), the quiz question \"laylat al-qadri khayrun min kam shahr?\" (four words of ayah 3 typed; same reason), the reflection idea \"li-annaha khayrun min alfi shahr\" (four words of ayah 3; same reason), and every hand-typed Quran string (replaced by positions). Cut: the intro stops before its quote of four words of ayah 3. The complete-the-ayah words are the answers of the old missing-word game; its hand-typed distractors not of this surah (katabnahu, qara'nahu, al-nujum, al-tuyur, aqallu, aktharu) are gone, as the game draws its options from these words. The old complete-the-ayah game's answers were two-word endings and are not carried. The old quiz had no categories (they were assigned here) and difficulty levels (not carried); two of its three complete-the-ayah questions had two-word answers and now ask for the next word only. Two word cards (alf shahr, matla' al-fajr) are two-word phrases; each points at its first word and is held. Emoji were stripped from the ends of the true/false options and the start of the reflection ideas. Matching-only aids, never stored: adraka (2:2, alif maqsura + dagger alif), wa- on al-ruh (4:3). Not carried (no field or no such game in the engine): the \"Makki\" surah type (disputed: the Madinah mushaf heads Al-Qadr Makki, but some, e.g. al-Waqidi, held it Madani), the intro quiz (name, ayah count), the ayah-ordering, start-end matching and build-the-ayah games, the three word-meaning games (they repeat the word list with shorter meanings), and the motivational lines. Head review: q2 held (typed option)."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-97 (read as text, never built or run)",
+    "sha256": {
+      "lib/lessonData.ts": "a4b3b26b6d112e7e526bfd995cece1a6115b8f75caa39c0976a01f718e866964",
+      "lib/audioUtils.ts": "60f26e46abc66383a4f917750fa7bde0aa9b2e7b68796247e07ec5f15d9fa003",
+      "components/LessonIntro.tsx": "9fbfe66f456a7a0a87311a9aa959698f35bfd18287bf297de65e2bc0829e82c6",
+      "components/AyahLearning.tsx": "0ef762df52b2ddbded7959729f724429be3fbf09556bcf5306ef1712ecca45c5",
+      "components/MeaningsSection.tsx": "73928d84e591f04013901b63945693f57518ca3fcef2b0c8d5cbc6afd15f48a6",
+      "components/TajweedSection.tsx": "ecf58f4aecf223f21d9b334d8dca320a717f4227fb0a57751cb9808ee2b4022b",
+      "components/QuizSection.tsx": "376e40fcb27643c3c0bde11045b7894b50eadd18508162c36767d2a970e2fb41"
+    }
+  },
+  "intro": {
+    "text": "سورة القدر تتحدث عن ليلة القدر، وهي ليلة عظيمة ومباركة نزل فيها القرآن الكريم",
+    "review": "CUT: the old intro ended \"... wa-hiya khayrun min alfi shahr\" (and it is better than a thousand months), four words of ayah 3 typed. The Quran never goes in prose, so the text stops before it (and its comma). Teacher to finish the sentence."
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "يخبرنا الله أنه أنزل القرآن الكريم في ليلة عظيمة اسمها ليلة القدر.",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "يسأل الله سؤالاً ليبين لنا عظمة هذه الليلة: هل تعرف ما هي ليلة القدر؟",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "ليلة القدر أفضل من ألف شهر! يعني العبادة فيها أفضل من عبادة أكثر من 83 سنة.",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "في هذه الليلة تنزل الملائكة وجبريل عليه السلام إلى الأرض بأمر الله.",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "هذه الليلة كلها سلام وأمان ورحمة من الله حتى يطلع الفجر.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "أنزلنا القرآن الكريم من السماء",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 5,
+      "meaning": "الشرف والعظمة، وليلة القدر هي الليلة العظيمة التي نزل فيها القرآن",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 5,
+      "meaning": "ألف شهر تساوي أكثر من 83 سنة",
+      "review": "PHRASE: the old card is the 2-word phrase at 3:5-6; the engine shows one word, so it points at the first word (3:5) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    },
+    {
+      "ayah": 4,
+      "word": 2,
+      "meaning": "مخلوقات نورانية خلقها الله لعبادته وطاعته",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "جبريل عليه السلام، وهو أعظم الملائكة",
+      "review": "Adds that Jibril \"is the greatest of the angels\". That al-ruh here is Jibril is the view of most mufassirun; which angel is greatest is a matter scholars differ on. Teacher to keep or drop the second half."
+    },
+    {
+      "ayah": 5,
+      "word": 1,
+      "meaning": "أمان وطمأنينة ورحمة من الله",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 4,
+      "meaning": "وقت طلوع الفجر وبداية النهار",
+      "review": "PHRASE: the old card is the 2-word phrase at 5:4-5; the engine shows one word, so it points at the first word (5:4) and the meaning covers the whole phrase. Teacher to confirm it reads right."
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 4,
+      "word": 2
+    },
+    {
+      "ayah": 3,
+      "word": 3
+    }
+  ],
+  "quiz": [
+    {
+      "category": "meanings",
+      "question": "ماذا نزل في ليلة القدر؟",
+      "options": [
+        {
+          "text": "الشمس"
+        },
+        {
+          "text": "القرآن الكريم"
+        },
+        {
+          "text": "المطر"
+        },
+        {
+          "text": "النجوم"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "meanings",
+      "question": "من ينزل في ليلة القدر؟",
+      "options": [
+        {
+          "text": "الطيور"
+        },
+        {
+          "text": "الملائكة والروح"
+        },
+        {
+          "text": "الأسماك"
+        },
+        {
+          "text": "الأطفال"
+        }
+      ],
+      "answer": 1,
+      "review": "TYPED: the right option \"al-mala'ikah wa-al-ruh\" is two words of ayah 4 typed by hand. Teacher to rephrase it in prose, or the option to become a position.",
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 1,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 1,
+          "word": 4
+        },
+        {
+          "ayah": 3,
+          "word": 6
+        },
+        {
+          "ayah": 5,
+          "word": 5
+        },
+        {
+          "ayah": 4,
+          "word": 9
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old options were two-word endings: the answer \"laylat al-qadr\" (1:4-5) and three hand-typed distractors not of this surah (laylat al-'id, yawm al-jumu'ah, shahr ramadan). It now asks for the next word, laylah (1:4); the distractors shahr (3:6), al-fajr (5:5) and amr (4:9) are words of this surah.",
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 5,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 3,
+          "word": 5
+        },
+        {
+          "ayah": 5,
+          "word": 4
+        },
+        {
+          "ayah": 1,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 9
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old options were two-word endings: the answer \"matla' al-fajr\" (5:4-5) and three hand-typed distractors not of this surah (ghurub al-shams, nisf al-layl, waqt al-zuhr). It now asks for the next word, matla' (5:4); the distractors alf (3:5), laylah (1:4) and amr (4:9) are words of this surah.",
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الهواء"
+        },
+        {
+          "text": "جبريل عليه السلام"
+        },
+        {
+          "text": "الماء"
+        },
+        {
+          "text": "النار"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 4,
+        "word": 3
+      },
+      "id": "q5"
+    },
+    {
+      "category": "lessons",
+      "question": "ليلة القدر تكون في شهر رمضان",
+      "options": [
+        {
+          "text": "صحيح"
+        },
+        {
+          "text": "خطأ"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q6"
+    },
+    {
+      "category": "hifz",
+      "question": "كم آية في سورة القدر؟",
+      "options": [
+        {
+          "text": "3 آيات"
+        },
+        {
+          "text": "4 آيات"
+        },
+        {
+          "text": "5 آيات"
+        },
+        {
+          "text": "6 آيات"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 4,
+        "words": 2
+      },
+      "options": [
+        {
+          "ayah": 4,
+          "word": 3
+        },
+        {
+          "ayah": 5,
+          "word": 5
+        },
+        {
+          "ayah": 1,
+          "word": 5
+        },
+        {
+          "ayah": 3,
+          "word": 6
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old distractors (al-shams, al-nujum, al-riyah) were hand-typed, not of this surah; they are replaced by al-fajr (5:5), al-qadr (1:5) and shahr (3:6), words of this surah. The old prompt's dangling \"wa-\" moves into the answer word, wa-al-ruh (4:3).",
+      "id": "q8"
+    },
+    {
+      "category": "meanings",
+      "question": "ليلة القدر ليلة فيها:",
+      "options": [
+        {
+          "text": "خوف وقلق"
+        },
+        {
+          "text": "سلام وأمان"
+        },
+        {
+          "text": "حزن وبكاء"
+        },
+        {
+          "text": "لعب ولهو"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "ليلة القدر ليلة عظيمة ومباركة نزل فيها القرآن الكريم.",
+      "review": null
+    },
+    {
+      "text": "القرآن الكريم نعمة عظيمة من الله يجب أن نحافظ عليه.",
+      "review": null
+    },
+    {
+      "text": "العبادة في ليلة القدر لها أجر عظيم جداً عند الله.",
+      "review": null
+    },
+    {
+      "text": "الملائكة تنزل في ليلة القدر وهذا يدل على عظمتها.",
+      "review": null
+    },
+    {
+      "text": "يجب أن نحرص على قيام ليلة القدر والدعاء فيها.",
+      "review": "A good lesson, but not one the surah itself teaches: it praises the night; standing in prayer and making du'a in it come from the hadith (e.g. \"whoever stands in prayer on Laylat al-Qadr out of faith and hope of reward\", al-Bukhari and Muslim). Teacher to keep or drop."
+    }
+  ],
+  "reflection": {
+    "question": "لماذا تعتبر ليلة القدر ليلة عظيمة ومباركة؟",
+    "ideas": [
+      "لأن القرآن الكريم نزل فيها",
+      "لأن الملائكة تنزل فيها",
+      "لأنها ليلة سلام وأمان حتى الفجر"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الملائكة تنزل إلى الأرض في ليلة القدر؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن ليلة القدر تكون في شهر رمضان المبارك؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن القرآن الكريم نزل في ليلة القدر؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن ليلة القدر ليلة سلام وأمان حتى طلوع الفجر؟",
+      "review": null
+    }
+  ]
+}

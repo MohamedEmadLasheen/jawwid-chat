@@ -1,0 +1,5 @@
+{
+  "datasetId": "tanzil-uthmani-1.1",
+  "fileSha256": "18c719bb3ba26d32ef457f40dad77cd28c4c5a34156833e26a8e5fcfdd246fb1",
+  "about": "The one Quran dataset this engine accepts (docs/product/quran-dataset-contract.md). The snapshot builder refuses a dataset that is not this one; the engine refuses a snapshot manifest that is not this one. Changing it is a reviewed change with apps/api/src/quran/pinned.ts."
+}

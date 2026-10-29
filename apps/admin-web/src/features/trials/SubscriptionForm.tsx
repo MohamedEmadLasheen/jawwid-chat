@@ -4,6 +4,7 @@ import type { Pair } from '../teachers/copy'
 import type { NewStudentDto, PaymentMethod, ScheduleSlot, SubscriptionFormInput } from './api'
 import { CURRENCIES, TR, WEEKDAY } from './copy'
 import { useTrialTeachers } from './hooks'
+import { readinessNote } from '@/features/teacher-files/readiness'
 import './trials.css'
 
 /**
@@ -177,10 +178,25 @@ export function SubscriptionForm({
                   onChange={(e) => setChild(i, { teacherId: e.target.value })}
                 >
                   <option value="">—</option>
-                  {(teachers.data?.teachers ?? []).map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
+                  {(teachers.data?.teachers ?? []).map((t) => {
+                    // PD-43: a warning in the label; every teacher stays pickable (owner Q5).
+                    const note = readinessNote(t.readiness, locale)
+                    return (
+                      <option key={t.id} value={t.id}>{note ? `${t.name} — ${note}` : t.name}</option>
+                    )
+                  })}
                 </select>
+                {(() => {
+                  const readiness = teachers.data?.teachers.find((t) => t.id === c.teacherId)?.readiness
+                  if (!readinessNote(readiness, locale)) return null
+                  return (
+                    <>
+                      <span className="field__hint">{tx(TR.teacherNotReady)}</span>
+                      {/* PD-43 §3.7: an unsupervised teacher is the Teachers Manager's. */}
+                      {readiness?.noSupervisor && <span className="field__hint">{tx(TR.teacherManagerCovers)}</span>}
+                    </>
+                  )
+                })()}
               </div>
             </div>
             <div className="tj-row">

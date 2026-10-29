@@ -16,10 +16,11 @@ import { useSession } from '@/core/auth/SessionProvider'
 import { useLessonAccess } from '@/features/teachers/hooks'
 import { useInstalmentAccess } from '@/features/instalments/hooks'
 import { useMaterialsAccess } from '@/features/materials/hooks'
+import { useCertificateAccess } from '@/features/certificates/hooks'
+import { useLessonAudioAccess } from '@/features/lesson-audio/hooks'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { TEXT, useText } from '@/features/admin/copy'
-import { ShiftEndBanner } from '@/features/inbox/ShiftEndBanner'
 import { NotificationBell } from '@/features/notification-center/NotificationBell'
 import { Avatar } from '@/shared/components/Avatar'
 import { BrandLogo } from '@/shared/components/BrandLogo'
@@ -53,12 +54,19 @@ function useDestinations(): Destination[] {
   const sales = access.data?.sales === true
   const operations = access.data?.operations === true
   const calendar = access.data?.calendar === true
+  const supervisionPage = access.data?.supervisionPage === true
   // PD-29: only a manager can be the Teachers manager (the super admin's entry is a section).
   const materials = useMaterialsAccess(staff?.role === 'manager')
   const materialsManager = materials.data?.canManage === true
+  // PD-41: the Certificates page, for whoever holds a certificates key (the Designer included).
+  const certificateAccess = useCertificateAccess(operator)
+  const certificates = certificateAccess.data?.canOpen === true
+  // PD-48: the Lesson audio page, for whoever may listen (the Pronunciation reviewer included).
+  const lessonAudioAccess = useLessonAudioAccess(operator)
+  const lessonAudio = lessonAudioAccess.data?.view === true
   return useMemo(
-    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar }) : []),
-    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar],
+    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio }) : []),
+    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio],
   )
 }
 
@@ -399,20 +407,6 @@ function ConnectionBanner() {
   )
 }
 
-function DutyIndicator() {
-  const { t, time } = useI18n()
-  const { staff, duty } = useSession()
-  if (!staff) return null
-  if (!duty?.in_shift && !(duty && duty.covering_for.length > 0)) return null
-
-  return (
-    <span className="topbar__user-role">
-      {duty?.in_shift && duty.shift_ends_at && time(duty.shift_ends_at)}
-      {duty && duty.covering_for.length > 0 && <> · {t('bucket.covering')}</>}
-    </span>
-  )
-}
-
 function LanguageToggle() {
   const { t, locale, setLocale } = useI18n()
   return (
@@ -482,11 +476,7 @@ function Topbar({
             <Avatar name={staff.name} seed={staff.id} size="sm" />
             <span className="topbar__user-text">
               <span className="topbar__user-name">{staff.name}</span>
-              {superAdmin ? (
-                <span className="topbar__user-role">{t('role.super_admin')}</span>
-              ) : (
-                <DutyIndicator />
-              )}
+              {superAdmin && <span className="topbar__user-role">{t('role.super_admin')}</span>}
             </span>
           </Link>
         </>
@@ -508,7 +498,6 @@ function Topbar({
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
-  const { staff } = useSession()
   const [navOpen, setNavOpen] = useState(false)
   const menuRef = useRef<HTMLButtonElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -539,9 +528,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Topbar navOpen={navOpen} onOpenNav={() => setNavOpen(true)} menuRef={menuRef} />
         <main className="shell__content">
           <ConnectionBanner />
-          {/* Shifts belong to operator roles; the super admin has none, and the
-              banner's endpoint would only ever answer it with a 404. */}
-          {staff && !isSuperAdmin(staff.role) && <ShiftEndBanner />}
           <div className="shell__view">{children}</div>
         </main>
       </div>

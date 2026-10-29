@@ -29,6 +29,13 @@ export const StaffRole = {
    * through CONVERSATION_STAFF_ROLES below.
    */
   SUPER_ADMIN: 'super_admin',
+  /**
+   * PD-40: a department account -- the Designer, later the Accountant or
+   * Marketing. Holds NOTHING by its role: every page and action comes from the
+   * access roles it is granted (chat.staff_access_profile). Not family-facing,
+   * never a department supervisor or manager.
+   */
+  SPECIALIST: 'specialist',
 } as const;
 export type StaffRole = (typeof StaffRole)[keyof typeof StaffRole];
 
@@ -333,6 +340,10 @@ export const CardKind = {
   /** PD-12: posted in the learner's group, carrying the certificate file as its attachment. */
   CERTIFICATE_ISSUED: 'certificate_issued',
   CERTIFICATE_DECLINED: 'certificate_declined',
+  /** PD-41: a teacher's suggestion accepted by the learner's Operations supervisor (supervision conversation). */
+  CERTIFICATE_ACCEPTED: 'certificate_accepted',
+  /** PD-41: a teacher's appreciation certificate, with its file, in their supervision conversation. */
+  CERTIFICATE_AWARDED: 'certificate_awarded',
   LEAVE_REQUESTED: 'leave_requested',
   LEAVE_APPROVED: 'leave_approved',
   LEAVE_DECLINED: 'leave_declined',
@@ -396,9 +407,24 @@ export type MakeupAction = (typeof MakeupAction)[keyof typeof MakeupAction];
 /** The outcomes that owe the family a make-up: the teacher did not give the lesson. */
 export const MAKEUP_OWING_OUTCOMES: ReadonlySet<string> = new Set(['teacher_apology', 'teacher_no_show']);
 
-/** PD-12: a student certificate's life. */
-export const CertificateState = { REQUESTED: 'requested', ISSUED: 'issued', DECLINED: 'declined' } as const;
+/** PD-12 / PD-41: an appreciation certificate's life (docs/product/pd041-certificates-design.md §3). */
+export const CertificateState = {
+  /** PD-41: a teacher's suggestion, for the learner's Operations supervisor to decide. */
+  PROPOSED: 'proposed',
+  REQUESTED: 'requested',
+  IN_DESIGN: 'in_design',
+  CHANGES_REQUESTED: 'changes_requested',
+  UPLOADED: 'uploaded',
+  APPROVED: 'approved',
+  SENT: 'sent',
+  CANCELLED: 'cancelled',
+  DECLINED: 'declined',
+} as const;
 export type CertificateState = (typeof CertificateState)[keyof typeof CertificateState];
+
+/** PD-41: who a certificate is for (chat.certificate_category). */
+export const CertificateCategory = { STUDENT: 'student', TEACHER: 'teacher' } as const;
+export type CertificateCategory = (typeof CertificateCategory)[keyof typeof CertificateCategory];
 
 /** PD-12: a leave request's life. */
 export const LeaveState = {

@@ -79,6 +79,41 @@ async function apology(): Promise<string> {
   return (await g.prisma.teacherViolation.findFirstOrThrow({ where: { lessonId: id } })).id;
 }
 
+/** PD-11 T4: a trial booked for teacher_c, `ms` from now -- the teacher's time too. */
+async function futureTrial(ms: number): Promise<string> {
+  const organizationId = (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId;
+  const prospect = await g.prisma.trialProspect.create({ data: { organizationId, displayName: 'prospect_q', createdBy: tsupId } });
+  const trial = await g.prisma.lesson.create({
+    data: {
+      organizationId, kind: 'trial', prospectId: prospect.id, teacherId: s.teacherId,
+      startsAt: new Date(Date.now() + ms), endsAt: new Date(Date.now() + ms + 30 * 60_000),
+      createdByKind: 'staff', createdBy: tsupId,
+    },
+  });
+  return trial.id;
+}
+
+/** teacher_c's students go to teacher_d, so a permanent suspension may be decided. */
+async function moveStudents() {
+  await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${s.newTeacherId}'::uuid where teacher_id = '${s.teacherId}'::uuid`);
+}
+
+async function refusal(p: Promise<unknown>): Promise<CommError> {
+  try {
+    await p;
+  } catch (e) {
+    if (e instanceof CommError) return e;
+    throw e;
+  }
+  throw new Error('expected a refusal, got success');
+}
+
+const outcomeOf = async (id: string) => (await g.prisma.lesson.findUniqueOrThrow({ where: { id } })).outcome;
+const teacherLive = async () => {
+  const t = await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } });
+  return t.isActive && t.leftAt === null;
+};
+
 async function supervisionCards() {
   const conv = await g.prisma.conversation.findFirst({ where: { type: 'teacher_supervision', supervisedTeacherId: s.teacherId } });
   if (!conv) return [];
@@ -140,7 +175,9 @@ describe('1. what is a violation', () => {
     await lessons.report(s.teacherId, held, { covered: 'Al-Mulk' });
     expect(await code(discipline.recordLateness(tsupId, held, { minutes: 5 }))).toBe(CommErrorCode.DISCIPLINE_STATE);
     expect(await code(discipline.recordLateness(s.teacherId, held, { minutes: 15 }))).toBe(CommErrorCode.DISCIPLINE_DENIED);
-    expect(await code(discipline.recordLateness(s.ownerId, held, { minutes: 15 }))).toBe(CommErrorCode.DISCIPLINE_DENIED);
+    // PD-26 amendment: an Operations supervisor records it for her families' teachers
+    // only (pd026-operations-access.spec); admin_b has no charge over teacher_c.
+    expect(await code(discipline.recordLateness(s.otherAdminId, held, { minutes: 15 }))).toBe(CommErrorCode.DISCIPLINE_NOT_FOUND);
 
     const { violation } = await discipline.recordLateness(tsupId, held, { minutes: 15, note: 'joined at 18:15' });
     expect(violation).toMatchObject({ kind: 'late', lateMinutes: 15, step: 1, suggestedDecision: 'warning' });
@@ -254,24 +291,96 @@ describe('3. what each decision does', () => {
     );
     expect(n).toBe(1);
   });
+
+  // Bug (found by PD-43, 2026-10-28): the teacher was deactivated BEFORE their
+  // lessons were cancelled, and a trial's cancellation card needs a live teacher
+  // (their trial group), so the trials stayed open on a deactivated teacher.
+  it('a permanent suspension cancels the lessons and trials ahead first, while the teacher is live, then deactivates', async () => {
+    const v = await apology();
+    const regular = await lesson(26 * HOUR);
+    const trial = await futureTrial(30 * HOUR);
+    await moveStudents();
+    const out = await discipline.decide(tsupId, v, { decision: 'permanent_suspension', note: 'serious', cancelCollidingLessons: true });
+    expect(out).toMatchObject({ cancelledLessons: 2, notCancelled: [] });
+    expect([await outcomeOf(regular), await outcomeOf(trial)]).toEqual(['admin_cancelled', 'admin_cancelled']);
+    expect(await teacherLive()).toBe(false);
+    // The trial's cancellation reached the teacher's trial group.
+    const group = await g.prisma.conversation.findFirstOrThrow({ where: { type: 'trial_group', trialTeacherId: s.teacherId } });
+    const posted = await g.prisma.message.findMany({ where: { conversationId: group.id, type: 'card' }, include: { card: true } });
+    expect(posted.map((m) => m.card?.kind)).toContain('trial_cancelled');
+  });
+
+  it('a lesson that cannot be cancelled refuses the whole decision: nothing is suspended or deactivated', async () => {
+    const v = await apology();
+    const trial = await futureTrial(30 * HOUR);
+    await moveStudents();
+    const spy = jest.spyOn(trials, 'cancel').mockRejectedValueOnce(new Error('the trial group could not be reached'));
+    let e: CommError;
+    try {
+      e = await refusal(discipline.decide(tsupId, v, { decision: 'permanent_suspension', note: 'serious', cancelCollidingLessons: true }));
+    } finally {
+      spy.mockRestore();
+    }
+    expect([e.code, e.status]).toEqual([CommErrorCode.DISCIPLINE_NOT_CANCELLED, 409]);
+    expect(e.detail).toMatchObject({ cancelledLessons: [], notCancelled: [{ lessonId: trial, reason: 'the trial group could not be reached' }] });
+    expect(await teacherLive()).toBe(true);
+    expect((await g.prisma.teacherViolation.findUniqueOrThrow({ where: { id: v } })).decision).toBeNull();
+    expect(await g.prisma.teacherSuspension.count({ where: { teacherId: s.teacherId } })).toBe(0);
+    expect(await outcomeOf(trial)).toBeNull();
+
+    // Decided again, it goes through.
+    await expect(discipline.decide(tsupId, v, { decision: 'permanent_suspension', note: 'serious', cancelCollidingLessons: true })).resolves.toMatchObject({
+      cancelledLessons: 1,
+      notCancelled: [],
+    });
+    expect(await teacherLive()).toBe(false);
+  });
+
+  it('a lesson still open when the decision commits refuses it too (the transaction checks again)', async () => {
+    const v = await apology();
+    const regular = await lesson(26 * HOUR);
+    await moveStudents();
+    // The cancellation "succeeds" without closing the lesson: it is still open at commit.
+    const spy = jest.spyOn(lessons, 'cancel').mockResolvedValueOnce(undefined as never);
+    let e: CommError;
+    try {
+      e = await refusal(discipline.decide(tsupId, v, { decision: 'permanent_suspension', note: 'serious', cancelCollidingLessons: true }));
+    } finally {
+      spy.mockRestore();
+    }
+    expect([e.code, e.status]).toEqual([CommErrorCode.DISCIPLINE_LESSONS_COLLIDE, 409]);
+    expect(await outcomeOf(regular)).toBeNull();
+    expect(await teacherLive()).toBe(true);
+    expect((await g.prisma.teacherViolation.findUniqueOrThrow({ where: { id: v } })).decision).toBeNull();
+    expect(await g.prisma.teacherSuspension.count({ where: { teacherId: s.teacherId } })).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
 
 describe('4. who may, and the database backstop', () => {
-  it('only the Teachers department reads and decides', async () => {
+  it('only the Teachers department -- and, since PD-26\'s amendment, the teacher\'s Operations supervisor -- reads and decides', async () => {
     const v = await apology();
-    for (const outsider of [s.ownerId, s.managerId, s.teacherId, s.parentId]) {
+    for (const outsider of [s.teacherId, s.parentId]) {
       expect(await code(discipline.list(outsider, {}))).toBe(CommErrorCode.DISCIPLINE_DENIED);
       expect(await code(discipline.decide(outsider, v, { decision: 'warning' }))).toBe(CommErrorCode.DISCIPLINE_DENIED);
     }
+    // An Operations supervisor with no charge over teacher_c: nothing to read, and not found.
+    expect((await discipline.list(s.otherAdminId, {})).violations).toHaveLength(0);
+    expect(await code(discipline.decide(s.otherAdminId, v, { decision: 'warning' }))).toBe(CommErrorCode.DISCIPLINE_NOT_FOUND);
     expect((await discipline.list(tmgrId, {})).violations).toHaveLength(1);
+    // admin_a (learner_l is hers) and manager_c (the Operations department's families) read it,
+    // and manager_c decides it.
+    expect((await discipline.list(s.ownerId, {})).violations.map((x) => x.id)).toEqual([v]);
+    expect((await discipline.list(s.managerId, {})).violations.map((x) => x.id)).toEqual([v]);
+    const decided = await discipline.decide(s.managerId, v, { decision: 'warning' });
+    expect(decided.violation).toMatchObject({ decision: 'warning', decidedBy: { id: s.managerId } });
   });
 
   it('a violation is decided once, by the department, and never deleted', async () => {
     const v = await apology();
     expect(
-      await sqlError(g.prisma.teacherViolation.update({ where: { id: v }, data: { decision: 'warning', suggestedStep: 1, decidedBy: s.ownerId } })),
+      await sqlError(g.prisma.teacherViolation.update({ where: { id: v }, data: { decision: 'warning', suggestedStep: 1, decidedBy: s.otherAdminId } })),
     ).toMatch(/Teachers department/);
     await discipline.decide(tsupId, v, { decision: 'warning' });
     expect(

@@ -2,6 +2,7 @@ import { Controller, Get, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ActorId } from './actor.decorator';
 import { ConversationExportService } from '../export/conversation-export.service';
+import { Requires } from '../../platform/permissions/route-access';
 
 /**
  * GET /conversations/:id/export -- the chat as a .zip (transcript + media).
@@ -13,6 +14,7 @@ import { ConversationExportService } from '../export/conversation-export.service
 export class ExportController {
   constructor(private readonly exports: ConversationExportService) {}
 
+  @Requires('chat.export')
   @Get('export')
   async export(@ActorId() actorId: string, @Param('conversationId') conversationId: string, @Res() res: Response): Promise<void> {
     const prepared = await this.exports.prepare(actorId, conversationId);

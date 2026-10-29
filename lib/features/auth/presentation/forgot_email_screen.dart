@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../password_policy.dart';
 import 'recovery_widgets.dart';
 
 enum _Stage { phone, code, found }
@@ -131,7 +132,7 @@ class _ForgotEmailScreenState extends ConsumerState<ForgotEmailScreen> {
 
   Future<void> _setPassword() async {
     setState(() => _tried = true);
-    if (_chosen == null || _password.text.length < 8 || _password.text != _confirm.text) return;
+    if (_chosen == null || _password.text.length < kPasswordMinLength || _password.text != _confirm.text) return;
     _begin();
     try {
       await ref.read(passwordResetRepositoryProvider).complete(
@@ -291,7 +292,7 @@ class _ForgotEmailScreenState extends ConsumerState<ForgotEmailScreen> {
             textDirection: TextDirection.ltr,
             decoration: InputDecoration(
               labelText: l10n.signupPasswordLabel,
-              errorText: _tried && _password.text.length < 8 ? l10n.signupPasswordTooShort : null,
+              errorText: _tried && _password.text.length < kPasswordMinLength ? l10n.signupPasswordTooShort : null,
             ),
           ),
           const SizedBox(height: Spacing.spacing4),
@@ -303,7 +304,7 @@ class _ForgotEmailScreenState extends ConsumerState<ForgotEmailScreen> {
             textDirection: TextDirection.ltr,
             decoration: InputDecoration(
               labelText: l10n.signupPasswordConfirmLabel,
-              errorText: _tried && _password.text.length >= 8 && _password.text != _confirm.text ? l10n.signupPasswordsDiffer : null,
+              errorText: _tried && _password.text.length >= kPasswordMinLength && _password.text != _confirm.text ? l10n.signupPasswordsDiffer : null,
             ),
           ),
           const SizedBox(height: Spacing.spacing6),

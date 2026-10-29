@@ -257,7 +257,13 @@ class L10nEn extends L10n {
 
   @override
   String typingMany(int count) {
-    return '$count people are typing…';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people are typing…',
+      one: '$count person is typing…',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -540,15 +546,29 @@ class L10nEn extends L10n {
   String get appLockTitle => 'App lock';
 
   @override
-  String get appLockToggle => 'Lock with Face ID, fingerprint or passcode';
+  String appLockToggle(String platform) {
+    String _temp0 = intl.Intl.selectLogic(platform, {
+      'android': 'Lock with fingerprint, face (if supported) or screen lock',
+      'other': 'Lock with Face ID, fingerprint or passcode',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get appLockToggleSubtitle =>
       'Ask to unlock when you return to the app';
 
   @override
-  String get appLockUnavailable =>
-      'Set up Face ID, a fingerprint or a passcode on this device to use app lock.';
+  String appLockUnavailable(String platform) {
+    String _temp0 = intl.Intl.selectLogic(platform, {
+      'android': 'Set up a fingerprint or a screen lock on this device to use app lock.',
+      'other': 'Set up Face ID, a fingerprint or a passcode on this device to use app lock.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get appLockOpenSettings => 'Open settings';
 
   @override
   String get appLockTimeoutLabel => 'Lock automatically';
@@ -584,8 +604,13 @@ class L10nEn extends L10n {
   String get appLockOfferTitle => 'Lock the app?';
 
   @override
-  String get appLockOfferBody =>
-      'Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.';
+  String appLockOfferBody(String platform) {
+    String _temp0 = intl.Intl.selectLogic(platform, {
+      'android': 'Use your fingerprint, face (if supported) or screen lock to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.',
+      'other': 'Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get appLockOfferAccept => 'Turn on';
@@ -999,6 +1024,14 @@ class L10nEn extends L10n {
   @override
   String get systemGroupLearnerDetached =>
       'A child of this group moved to another supervisor';
+
+  @override
+  String systemGroupLearnerAdded(String learner) {
+    return '$learner joined this group';
+  }
+
+  @override
+  String get systemGroupLearnerAddedNoName => 'A child joined this group';
 
   @override
   String systemCoverStarted(String cover, String supervisor, String date) {
@@ -2719,13 +2752,13 @@ class L10nEn extends L10n {
   String get signupCodeLabel => '6-digit code';
 
   @override
-  String get signupPasswordLabel => 'New password (at least 8 characters)';
+  String get signupPasswordLabel => 'New password (at least 4 characters)';
 
   @override
   String get signupPasswordConfirmLabel => 'Repeat the password';
 
   @override
-  String get signupPasswordTooShort => 'Use at least 8 characters.';
+  String get signupPasswordTooShort => 'Use at least 4 characters.';
 
   @override
   String get signupPasswordsDiffer => 'The passwords do not match.';
@@ -3534,6 +3567,9 @@ class L10nEn extends L10n {
   String get materialsTitle => 'Materials';
 
   @override
+  String get activityLoadFailed => 'This lesson couldn\'t load.';
+
+  @override
   String get materialsEntrySubtitle =>
       'Library, practice this week and the memorization map';
 
@@ -4157,4 +4193,156 @@ class L10nEn extends L10n {
 
   @override
   String get messageInfoFailed => 'Couldn\'t load message info';
+
+  @override
+  String get adminWebOnlyTitle => 'This account uses Admin Web';
+
+  @override
+  String get adminWebOnlyBody =>
+      'Department staff accounts work in Admin Web, in a browser. Sign in there with the same e-mail and password.';
+
+  @override
+  String get adminWebOnlyAnotherAccount => 'Use another account';
+
+  @override
+  String scheduleFilterTodo(int count) {
+    return 'To do ($count)';
+  }
+
+  @override
+  String get todoEmpty => 'Nothing to do.';
+
+  @override
+  String get todoLoadFailed => 'Couldn\'t load your tasks. Try again.';
+
+  @override
+  String get taskLevelHigh => 'High';
+
+  @override
+  String get taskLevelMedium => 'Medium';
+
+  @override
+  String get taskLevelLow => 'Low';
+
+  @override
+  String get taskReasonOverdue => 'Overdue';
+
+  @override
+  String get taskReasonDueSoon => 'Due soon';
+
+  @override
+  String get taskReasonSource => 'Raised by its source';
+
+  @override
+  String get taskFinance => 'Finance';
+
+  @override
+  String taskTitleLessonReport(String learner, String when) {
+    return 'Write the lesson report: $learner, $when';
+  }
+
+  @override
+  String taskTitleReportCorrection(String learner, String when) {
+    return 'Correct the lesson report: $learner, $when';
+  }
+
+  @override
+  String taskTitleTrialAttendance(String prospect, String when) {
+    return 'Record attendance: $prospect, trial $when';
+  }
+
+  @override
+  String get taskTitleFromAcademy => 'A task from the academy';
+
+  @override
+  String taskDue(String when) {
+    return 'Due $when';
+  }
+
+  @override
+  String get taskNoDue => 'No due date';
+
+  @override
+  String get taskStateReturned => 'Returned with instructions';
+
+  @override
+  String get taskStateAwaiting => 'Waiting for your manager';
+
+  @override
+  String get taskStateWithdrawn => 'No longer needed';
+
+  @override
+  String taskGivenBy(String name) {
+    return 'Given by $name';
+  }
+
+  @override
+  String get taskInstructions => 'Instructions';
+
+  @override
+  String get taskWithdrawnNotice =>
+      'The work behind this task no longer exists. Acknowledge it to clear it.';
+
+  @override
+  String get taskOpenLesson => 'Open the lesson';
+
+  @override
+  String get taskMarkDone => 'Mark done';
+
+  @override
+  String get taskAcknowledge => 'Acknowledge';
+
+  @override
+  String get taskNotMine => 'Not mine';
+
+  @override
+  String get taskNotMineHint =>
+      'Say why. Your manager decides what happens next.';
+
+  @override
+  String get taskComment => 'Add a comment';
+
+  @override
+  String get taskSend => 'Send';
+
+  @override
+  String get taskActionFailed => 'Couldn\'t do that. Try again.';
+
+  @override
+  String get taskDoneSnack => 'Done.';
+
+  @override
+  String get taskNotMineSent => 'Sent to your manager.';
+
+  @override
+  String get taskCommentSent => 'Comment added.';
+
+  @override
+  String scheduleFilterTodoMore(int count) {
+    return 'To do ($count+)';
+  }
+
+  @override
+  String get notificationsActionOpenTask => 'Open my To do';
+
+  @override
+  String get lessonAudioAboutTitle => 'About lesson audio';
+
+  @override
+  String get lessonAudioAboutBody =>
+      'Pronunciation in the lessons is spoken by a computer voice. Every recording is checked and approved by two of our teachers before your child hears it. If the computer voice cannot say a word correctly, that word has no audio. Quran recitation is never computer-generated.';
+
+  @override
+  String get lessonAudioTermsHeading => 'Lesson pronunciation audio.';
+
+  @override
+  String get lessonAudioTermsBody =>
+      'Some lessons play the pronunciation of letters, words and sentences. This audio is generated by a computer voice. Before any child hears a recording, two of our teachers listen to it and approve it. A word the computer voice cannot say correctly has no audio. The Quran is never read by a computer voice. The text of our lessons is sent to our speech provider to produce the audio. No information about you or your child is sent.';
+
+  @override
+  String get lessonAudioNoticeAccept =>
+      'I understand that lesson pronunciation audio is computer-generated and checked by the academy\'s teachers before use.';
+
+  @override
+  String get lessonAudioTermsTitle => 'Terms and privacy';
 }

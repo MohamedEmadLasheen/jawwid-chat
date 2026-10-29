@@ -204,6 +204,7 @@ jobs:
           WORKER_CONCURRENCY: '10'
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          RESET_CODE_HASH_SECRET: ${{ secrets.RESET_CODE_HASH_SECRET }}
           JWT_ACCESS_TTL: 15m
           JWT_REFRESH_TTL: 30d
           STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
@@ -216,6 +217,7 @@ jobs:
           MEDIA_PUBLIC_BASE_URL: ${{ vars.MEDIA_PUBLIC_BASE_URL }}
           MATERIALS_SITE_BASE_URL: ${{ vars.MATERIALS_SITE_BASE_URL }}
           MATERIALS_FRAME_ORIGINS: ${{ vars.MATERIALS_FRAME_ORIGINS }}
+          LESSON_APPROVALS_SIGNING_KEY: ${{ secrets.LESSON_APPROVALS_SIGNING_KEY }}
           STORAGE_LOCAL_ROOT: ${{ vars.STORAGE_LOCAL_ROOT }}
           STORAGE_PUBLIC_BASE_URL: ${{ vars.STORAGE_PUBLIC_BASE_URL }}
           OUTBOX_POLL_MS: ${{ vars.OUTBOX_POLL_MS }}
@@ -264,6 +266,9 @@ jobs:
           # PD-35: strict teacher-supervisor scope is off everywhere until the owner sets
           # the variable to 'true' (department head, 2026-10-26).
           TEACHER_SUPERVISOR_STRICT_SCOPE: ${{ vars.TEACHER_SUPERVISOR_STRICT_SCOPE || 'false' }}
+          # PD-42: NOT defaulted -- unset keeps the value stored in chat.config ('all'
+          # until written); the owner sets 'own' after the intake is verified.
+          SALES_FAMILY_SCOPE: ${{ vars.SALES_FAMILY_SCOPE }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           OTEL_SERVICE_NAME: jawwid-chat-api
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
@@ -287,6 +292,24 @@ jobs:
         run: |
           scripts/infra/check-env.sh production
           python3 scripts/infra/app-spec.py resolve production --out "$RUNNER_TEMP/app-spec.yaml"
+
+      - name: Object storage keeps deleted objects for 30 days
+        # BEFORE the backup and the migrations, so a refusal changes nothing.
+        # Attachments, voice notes, avatars, Materials and whiteboard images
+        # exist only in the bucket; without versioning a delete is final
+        # (docs/infrastructure/backup-recovery.md, "Object storage"). Refuses
+        # unless versioning is Enabled and the lifecycle expires noncurrent
+        # versions after 30 days. The storage key needs read access to the
+        # bucket's configuration (s3:GetBucketVersioning,
+        # s3:GetLifecycleConfiguration); a refused call fails this step, it
+        # never passes it. Fix with: scripts/infra/storage-versioning.sh apply
+        env:
+          STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          STORAGE_REGION: ${{ vars.STORAGE_REGION }}
+          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
+          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+        run: scripts/infra/storage-versioning.sh verify
 
       - name: Preflight the database role capability
         # BEFORE the backup and BEFORE any migration. 20260910120200 grants
@@ -326,6 +349,17 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/apply.sh
+
+      - name: Load the pinned Quran text
+        # docs/product/quran-dataset-contract.md: after the migrations, from
+        # this checkout (never inside the API image). The loader refuses a file
+        # whose SHA-256 is not the pinned one, a count mismatch, a split or
+        # empty ayah, and writes all or nothing; a dataset already loaded with
+        # the same fingerprints is skipped. No dataset vendored: nothing to do.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/load-quran.sh
 
       - name: Release
         # Deploys the resolved .do/app.production.yaml with doctl and fails

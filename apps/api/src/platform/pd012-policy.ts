@@ -90,9 +90,16 @@ export function canRequestCertificate(
 export type OperationsDepartmentRole = 'manager' | 'member' | null;
 export type SalesDepartmentRole = 'manager' | 'member' | null;
 
+/** PD-42 S3: SALES_FAMILY_SCOPE, as chat.sales_family_scope() reads it. */
+export type SalesFamilyScope = 'all' | 'own';
+
 export interface BillingAccess {
-  /** null = no access; 'all' = every family of the organization; 'reach' = chat.staff_reaches_family. */
-  scope: 'all' | 'reach' | null;
+  /**
+   * null = no access; 'all' = every family of the organization; 'reach' =
+   * chat.staff_reaches_family; 'owned' (PD-42, a Sales member while the Sales
+   * switch is 'own') = chat.staff_owns_family -- the families they own.
+   */
+  scope: 'all' | 'reach' | 'owned' | null;
   /** Set or clear a family's billing supervisor. */
   canAssign: boolean;
   /** Create instalments, record payments, void, set the plan and payment method (inside `scope`). */
@@ -106,6 +113,12 @@ export interface BillingAccess {
    * Recording, voiding and deciding receipts stay with canRecord (PD-17 / PD-20).
    */
   canVerify: boolean;
+  /**
+   * PD-42: canEditParent reaches only a Sales account's own families, whatever
+   * `scope` reads: a Sales member, the families they own; the Sales manager,
+   * the families that have a Sales owner (salesEditsFamily).
+   */
+  editOwnedOnly?: boolean;
 }
 
 export const NO_BILLING_ACCESS: BillingAccess = Object.freeze({ scope: null, canAssign: false, canRecord: false, canEditParent: false, canVerify: false });
@@ -114,6 +127,7 @@ export function decideBillingAccess(
   actor: Actor,
   operationsRole: OperationsDepartmentRole,
   salesRole: SalesDepartmentRole = null,
+  salesScope: SalesFamilyScope = 'all',
 ): BillingAccess {
   if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return NO_BILLING_ACCESS;
   if (actor.staffRole === StaffRole.SUPER_ADMIN) return { scope: 'all', canAssign: true, canRecord: true, canEditParent: true, canVerify: true };
@@ -126,6 +140,27 @@ export function decideBillingAccess(
   ) {
     return { scope: 'reach', canAssign: false, canRecord: true, canEditParent: true, canVerify: false };
   }
-  if (salesRole !== null) return { scope: 'all', canAssign: false, canRecord: true, canEditParent: false, canVerify: false };
+  // PD-42 (owner 2026-10-27/28): a Sales supervisor manages the families they
+  // own -- reads them, records their money, edits their contact record. While
+  // the Sales switch is 'all' they still read every family, as before; the
+  // Sales manager keeps every family whatever the switch says.
+  if (salesRole === 'manager') {
+    return { scope: 'all', canAssign: false, canRecord: true, canEditParent: true, canVerify: false, editOwnedOnly: true };
+  }
+  if (salesRole !== null) {
+    return { scope: salesScope === 'own' ? 'owned' : 'all', canAssign: false, canRecord: true, canEditParent: true, canVerify: false, editOwnedOnly: true };
+  }
   return NO_BILLING_ACCESS;
+}
+
+/**
+ * PD-26 amendment (owner 2026-10-27): the Teacher Supervision page's PD-12 rights.
+ * The Teachers department and the super admin keep exactly what they have; an
+ * Operations supervisor supervises on the page (leave decisions, discipline) for
+ * the teachers of their families -- the callers narrow by the page scope -- and
+ * never sets a leave allowance (a Teacher File act).
+ */
+export function decidePd012PageAccess(staffAccess: Pd012Access, basis: 'super_admin' | 'teachers' | 'operations' | null): Pd012Access {
+  if (basis === 'operations') return { canSupervise: true, canSetAllowance: false };
+  return staffAccess;
 }

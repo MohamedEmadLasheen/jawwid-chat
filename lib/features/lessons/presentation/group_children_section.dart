@@ -9,7 +9,10 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/clock_time.dart';
+import '../../materials/presentation/child_materials_entry.dart';
 import '../../profile/presentation/profile_sections.dart';
+import 'child_progress_card.dart';
 
 /// PD-15: each child of a group, from `GET /conversations/:id/learners`.
 final groupChildrenProvider = FutureProvider.autoDispose.family<List<GroupChild>, String>((ref, conversationId) {
@@ -24,10 +27,17 @@ final groupChildrenProvider = FutureProvider.autoDispose.family<List<GroupChild>
 /// PD-17: a child's card opens their Student Profile, and only for the child's own
 /// teacher -- the signed-in teacher whose id the card carries. A parent's cards, and
 /// another teacher's, are not tappable at all: no affordance rather than a refusal.
+///
+/// [withChildEntries]: each child's progress (PD-10) and Materials (PD-29) right under
+/// that child's card. A family group names no single learner -- it lists its children
+/// here -- so this is the only place those entries can come from; who may open them is
+/// still the server's answer. A group about ONE learner shows them from its learner
+/// instead (ProfileBody), so it passes false and nothing is listed twice.
 class GroupChildrenSection extends ConsumerWidget {
-  const GroupChildrenSection({super.key, required this.conversationId});
+  const GroupChildrenSection({super.key, required this.conversationId, this.withChildEntries = false});
 
   final String conversationId;
+  final bool withChildEntries;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -43,9 +53,19 @@ class GroupChildrenSection extends ConsumerWidget {
         const ProfileDivider(),
         ProfileSectionHeading(text: l10n.groupChildrenTitle),
         for (final child in children)
-          _ChildCard(
-            child: child,
-            onOpen: mine(child) ? () => context.push(Routes.studentProfile(child.id)) : null,
+          Column(
+            key: ValueKey('group-child-block-${child.id}'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ChildCard(
+                child: child,
+                onOpen: mine(child) ? () => context.push(Routes.studentProfile(child.id)) : null,
+              ),
+              if (withChildEntries) ...[
+                ChildProgressCard(learnerId: child.id),
+                ChildMaterialsEntry(learnerId: child.id, childName: child.name),
+              ],
+            ],
           ),
       ],
     );
@@ -68,14 +88,13 @@ class _ChildCard extends StatelessWidget {
     // ISO weekday 1 = Monday; 2024-01-01 was a Monday.
     String weekday(int d) => DateFormat.EEEE(locale).format(DateTime(2024, 1, d));
     final notSet = l10n.groupChildNotSet;
-    final material = MaterialLocalizations.of(context);
     // PD-22: the next real start in the reader's own zone; the teacher's wall clock only
     // for a slot the server sent without one.
     String when(GroupChildSlot s) {
       final next = s.nextStartsAt;
       return next == null
           ? '${weekday(s.weekday)} · ${s.start}'
-          : '${weekday(next.weekday)} · ${material.formatTimeOfDay(TimeOfDay.fromDateTime(next))}';
+          : '${weekday(next.weekday)} · ${formatClockTime(context, TimeOfDay.fromDateTime(next))}';
     }
 
     Widget row(String label, Widget value) => Padding(

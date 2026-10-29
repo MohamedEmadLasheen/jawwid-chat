@@ -59,6 +59,21 @@ The Flutter apps may carry the public API base URL, the public realtime URL and
 the public LiveKit URL. They must never carry a JWT signing secret, storage
 credentials, the LiveKit API secret, or Core credentials.
 
+### Quran audio in lessons (PD-29): build-time, public, unset = no audio
+
+These are compiled into client bundles, not read by the API, so they are not
+in `infra/env/manifest.tsv`. Leaving any of them unset is safe: no lesson is
+handed audio. Who may HEAR audio is the API's release gate
+(`chat.config quran.audio.enabled_for`, `apps/api/src/quran/audio-gate.ts`),
+whatever these say.
+
+| Variable | Built into | Value | Set from |
+|---|---|---|---|
+| `VITE_LESSONS_ORIGIN` | Admin Web (`apps/admin-web/Dockerfile` build arg) | the lessons site's origin, e.g. `https://lessons.example.org`; only a frame on it is handed audio | `vars.STAGING_LESSONS_ORIGIN` (deploy-staging) |
+| `JAWWID_LESSONS_ORIGIN` | the Flutter app and the teacher web portal (`--dart-define`) | the same origin | `LESSONS_ORIGIN` for `scripts/mobile/build-teacher-web.sh`; the phone build's `--dart-define` |
+| `LESSONS_PARENT_ORIGINS` | the lessons engine (`apps/lessons/vite.config.ts`) | comma-separated https origins allowed to hand a lesson its audio list: the Admin Web and teacher web origins (= `frame-ancestors`); the phone app needs none | `vars.LESSONS_PARENT_ORIGINS` (ci.yml lessons build) |
+| `LESSONS_MEDIA_ORIGINS` | the lessons engine (also its CSP `connect-src`) | comma-separated https origins the signed audio URLs point at (the object storage) | `vars.LESSONS_MEDIA_ORIGINS` (ci.yml lessons build) |
+
 ---
 
 ## Variables
@@ -99,6 +114,8 @@ credentials, the LiveKit API secret, or Core credentials.
 | `JWT_REFRESH_SECRET` | **yes** | req | req | req |
 | `JWT_ACCESS_TTL` | no | opt | req | req |
 | `JWT_REFRESH_TTL` | no | opt | req | req |
+| `RESET_CODE_HASH_SECRET` (PD-43: the HMAC key for one-time codes; locally derived from `JWT_REFRESH_SECRET`) | **yes** | opt | req | req |
+| `LESSON_APPROVALS_SIGNING_KEY` (PD-49: the Ed25519 key that signs the export of children's Quran content approvals; unset = nothing is exported, so no content reaches a child) | **yes** | opt | opt | opt |
 
 ### Storage
 

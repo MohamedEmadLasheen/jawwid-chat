@@ -23,6 +23,7 @@ import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/messages/data/receipt_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
+import '../features/tasks/application/task_signal_channel.dart';
 import '../shared/models/user_role.dart';
 
 /// Composition root.
@@ -88,6 +89,12 @@ final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
   return const NoLessonRepository();
 });
 
+/// PD-47: the person's own tasks (the teacher's "To do"). A harmless default like the
+/// lesson repository's: a build without a task server has nothing to do.
+final taskRepositoryProvider = Provider<TaskRepository>((ref) {
+  return const NoTaskRepository();
+});
+
 /// PD-12 S1. A harmless default like the lesson repository's: a build without a
 /// supervision server offers no supervision ticket.
 final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
@@ -105,6 +112,11 @@ final receiptRepositoryProvider = Provider<ReceiptRepository>((ref) {
 /// has no live typing and needs no session; the signed-in app builds it on the
 /// session's socket (bootstrap).
 final chatTypingChannelProvider = Provider<ChatTypingChannel?>((ref) => null);
+
+/// PD-47 PR-4: `task.changed`, decoded from the session's realtime transport. Null by
+/// default (a widget test, a fixture build); the signed-in app builds it on the
+/// session's socket (bootstrap).
+final taskSignalChannelProvider = Provider<TaskSignalChannel?>((ref) => null);
 
 /// PD-37: the signed-in account's own actor id, where a screen must tell "me"
 /// from others in a realtime frame (another device of mine typing). Null in a

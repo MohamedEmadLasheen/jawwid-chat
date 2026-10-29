@@ -400,7 +400,7 @@ Keyed by the verified request only. Support sessions (PD-21) are never listed an
 
 **POST /auth/password-reset** — EXISTS (PD-21)
 - Auth: none (the one-time code is the credential). Rate-limited by the login limiter, per identifier (`reset:<username>`) and per source, before anything else.
-- Request: `{ username: string, code: string /* 6 digits */, password: string /* 8..128 */ }`.
+- Request: `{ username: string, code: string /* 6 digits */, password: string /* 4..128, every account: owner decision 2026-10-27, was 8 */ }`.
 - Response: `200 { ok: true }`. Opens no session: the client signs in with `POST /auth/login`.
 - Side effects (one transaction): the code is spent, the password set (Argon2id), the lockout cleared, **every session of the account revoked**; then sockets disconnected (RT-009 barrier, an unconfirmed barrier is logged, not returned, since the reset happened).
 - Errors: `AUTH.RESET_CODE_INVALID` 401 — one code for an unknown login, a wrong / expired / used / superseded code, and a code spent by its fifth miss · `AUTH.PASSWORD_TOO_WEAK` 400 · `COMMON.RATE_LIMITED` 429.
@@ -1311,7 +1311,7 @@ AccountSummaryDto { accountId, kind: 'family'|'teacher'|'staff', name, staffRole
                     allowed: { resetPassword, suspend, reactivate, impersonate, signOut } }   // advisory; decided again per action
 ```
 
-Permission (every route): `AuthorizationService.canAdministerAccount` — any active staff role, same organization, on a parent or teacher account; a staff account only by the super admin; never the super admin's account or the caller's own. A non-staff caller gets `COMM.ACCOUNT_ADMIN_DENIED` 403 before any lookup; another tenant's account is `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404. No route returns a password, a hash, a login identifier or a contact channel.
+Permission (every route): `AuthorizationService.canAdministerAccount`, same organization. PD-40 narrowed it (`apps/api/src/platform/account-admin-policy.ts`). A parent account is administered by the super admin and the Operations department; Sales may reset and sign out only. A teacher account is administered by the super admin and the Teachers department. A staff account is administered only by the super admin, and never the super admin's account or the caller's own. `GET /admin/accounts` lists only the kinds the caller administers and names them in `administers`. A non-staff caller gets `COMM.ACCOUNT_ADMIN_DENIED` 403 before any lookup; another tenant's account is `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404. No route returns a password, a hash, a login identifier or a contact channel.
 
 **GET /admin/accounts** — Query: `q?` (the person's, the family's or a child's name), `kind?` (`family`|`teacher`|`staff`; staff for the super admin only). Response: `{ accounts: AccountSummaryDto[], truncated }`, at most 100, never the caller's own nor the super admin's.
 
@@ -1351,6 +1351,56 @@ Every route runs on the **administrator's own** token. Permission: `canAdministe
 - reads are allowed and send no receipt; writes only from the allowlist (`SupportSessionInterceptor`: sending a message, the person's own profile / photos / teacher profile / leave requests, star, delete-for-me, chat preferences) — anything else `COMM.SUPPORT_SESSION_FORBIDDEN` 403;
 - every request is recorded in `chat.impersonation_action`; every audit row written carries `impersonation_id`; every message sent carries it and is served with `MessageDto.sentBySupport: true`;
 - `POST /auth/refresh` has nothing to present; `POST /auth/logout` is refused; the realtime gateway refuses the token.
+
+### 3.10c Certificates (`certificates.controller.ts`, `certificate.controller.ts`) — EXISTS (PD-41)
+
+Design and the owner's safeguards: `docs/product/pd041-certificates-design.md` (§3 states, §14 safeguards). Every staff route names its PD-40 key (below). The service decides which certificate and which act on the **locked row**, and `chat.guard_appreciation_certificate` decides again and writes the history.
+
+```
+CertificateDto (projection 'full': the requester side, an overseer)
+  { projection:'full', id, category:'student'|'teacher', type: TypeRef|null, state, stateGroup,
+    learner:{id,name}|null, teacher:{id,name}|null, signatoryTeacher:{id,name}|null,
+    requestedBy:Person|null, suggestedBy:Person|null,
+    title, achievement, achievedOn, grade, printedName, juz, periodStart, periodEnd,
+    designerNote, internalNote, publishStory, requestedAt, updatedAt,
+    assignedDesigner:Person|null, designStartedAt, returnMessage,
+    currentFile: FileRef|null, files: FileRef[], approval:{fileId,by,at}|null,
+    sent:{at,by,conversationId}|null, suggestion:{decidedAt,decidedBy,declineReason}|null,
+    consent:{kind,method,recordedAt,recordedBy}|null, story:{id,publishedAt,withdrawnAt}|null,
+    cancelled:{at,by,reason}|null, actions: Act[], history?: Event[] }
+CertificateDto (projection 'design': a Designer) -- an allow-list, nothing else:
+  { projection:'design', id, category, type, state, stateGroup, title, achievement, achievedOn, grade,
+    printedName, signatoryName, juz, periodStart, periodEnd, designerNote, requesterName, requestedAt,
+    assignedDesigner, designStartedAt, returnMessage, currentFile, files, delivered:boolean, actions, history? }
+state      proposed | requested | in_design | changes_requested | uploaded | approved | sent | cancelled | declined
+stateGroup suggested | pending | in_progress | completed | sent | closed   (the page's lists)
+Act        edit | resubmit | cancel | accept | decline | start | return | release | upload | approve
+           | redesign | withdraw_approval | send | consent | story          (what THIS caller may do now)
+```
+
+| Route | Key | What |
+|---|---|---|
+| `GET /certificates/access` | view | the caller's per-category capabilities (nav, form, tabs) |
+| `GET /certificates/types?category&includeDisabled` | view | active types; `includeDisabled=true` for the super admin |
+| `POST /certificates/types` · `POST /certificates/types/:id` | types | add / relabel / enable / disable. Never delete (owner safeguard 6) |
+| `GET /certificates?category&status&q&cursor` | view | Scoped in the query; keyset pages of 100. `status` is a stateGroup or a state; pass `nextCursor` back as `cursor` |
+| `GET /certificates/recipients?category&q` | request.student \| request.teacher | the caller's learners (with their teacher), or teachers in scope |
+| `POST /certificates` | request.* | `{ category, typeId, learnerId|teacherId, printedName, title?, achievement?, achievedOn?, grade?, juz?, periodStart?, periodEnd?, designerNote?, internalNote?, publishStory?, requestKey, confirmDuplicate? }` → `201 { certificate, replayed }`. Same `requestKey` → the first request. `COMM.CERTIFICATE_DUPLICATE` 409 (same recipient, type, Juz' or period) · `COMM.CERTIFICATE_DUPLICATE_SUSPECTED` 409 (similar in 30 days; resend with `confirmDuplicate`) · `COMM.CERTIFICATE_TYPE_DISABLED` 409 |
+| `GET /certificates/:id` | view | the DTO with `history` |
+| `POST /certificates/:id/edit` · `/resubmit` | request.* | the requester of record, in `requested` / `changes_requested` |
+| `POST /certificates/:id/accept` · `/decline` | request.student | A teacher's suggestion: the learner's assigned supervisor or their active cover only; the Operations manager when nobody supervises the learner. `accept {typeId, juz?, …}`, `decline {reason ≥10}` |
+| `POST /certificates/:id/start` · `/return {message ≥10}` · `/release` | design (release: design \| oversee) | the Designer takes, returns, or lets go |
+| `POST /certificates/:id/files/upload {mimeType, byteSize}` | design | a signed PUT into `certificate-uploads/<org>/<id>/` (never served) |
+| `POST /certificates/:id/files {objectKey, fileName}` | design | sniffs the bytes, pins a copy, → `uploaded`. Idempotent per upload |
+| `GET /certificates/:id/files/:fileId` | view | `{ url, expiresInSeconds }`, a 5-minute signed read |
+| `POST /certificates/:id/approve {fileId}` | request.* | the requester approves THIS revision. `COMM.CERTIFICATE_REVISION_CHANGED` 409 · `COMM.CERTIFICATE_SELF_APPROVAL` 403 |
+| `POST /certificates/:id/redesign {message}` · `/withdraw-approval {message}` | request.* | back to `in_design`, with the message |
+| `GET /certificates/:id/delivery` | deliver | `{ target: { conversationId, type, title, members } \| null }`: the group the server would choose. A read that creates nothing: a teacher with no supervision conversation yet gets `conversationId: null` |
+| `POST /certificates/:id/send {conversationId}` | deliver | `approved` only (`COMM.CERTIFICATE_NOT_APPROVED` 409), by whoever answers for it now (the learner's CURRENT supervisor, or their cover). Must echo the target, `null` included (`COMM.CERTIFICATE_TARGET_CHANGED` 409 with `detail.conversationId`). Keeps the type's labels as they read when sent. Repeat → `replayed: true` |
+| `POST /certificates/:id/consent` | story | Student only. `{ kind:'granted', contactId, method:'in_chat'|'phone'|'in_person'|'written', evidenceMessageId?, note? }`: in_chat needs the parent's message or a note; the others need a note ≥10 (for `written`, where the signed document is kept). Or `{ kind:'withdrawn', note }`, which takes a published Story down in the same transaction |
+| `POST /certificates/:id/story` | story | `approved`/`sent`, opted in, image file (`COMM.CERTIFICATE_STORY_NEEDS_IMAGE`), student: latest consent granted (`COMM.CERTIFICATE_STORY_CONSENT_MISSING`). Once; repeat → `replayed: true` |
+| `POST /certificates/:id/cancel {reason ≥10}` | request.* \| oversee | An undecided suggestion is cancelled by an overseer only |
+| `GET /learner-certificates?state` · `POST /learner-certificates` | not for staff | the teacher app: own suggestions, and suggesting one (unchanged body). Staff routes `/:id/upload|issue|decline` are **removed**: the Certificates page replaces them |
 
 ### 3.11 Health (`infra/health/health.controller.ts`) — EXISTS, unauthenticated, no prefix
 

@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ActorId } from './actor.decorator';
 import { AvatarService } from '../profile/avatar.service';
+import { NotForStaff, SelfService } from '../../platform/permissions/route-access';
 
 /**
  * Profile photos for parents and teachers (their own) and for parents'
@@ -13,26 +14,31 @@ export class ProfilePhotoController {
   constructor(private readonly avatars: AvatarService) {}
 
   /** The caller's photo and, for a parent, each child's -- as links for the caller. */
+  @SelfService()
   @Get('photo')
   mine(@ActorId() actorId: string) {
     return this.avatars.mine(actorId);
   }
 
+  @SelfService()
   @Post('avatar/upload')
   upload(@ActorId() actorId: string, @Body() body: { mimeType?: unknown; byteSize?: unknown }) {
     return this.avatars.authorizeUpload(actorId, { kind: 'self' }, body ?? {});
   }
 
+  @SelfService()
   @Post('avatar')
   commit(@ActorId() actorId: string, @Body() body: { objectKey?: unknown }) {
     return this.avatars.commit(actorId, { kind: 'self' }, body ?? {});
   }
 
+  @SelfService()
   @Delete('avatar')
   remove(@ActorId() actorId: string) {
     return this.avatars.remove(actorId, { kind: 'self' });
   }
 
+  @NotForStaff()
   @Post('children/:learnerId/avatar/upload')
   childUpload(
     @ActorId() actorId: string,
@@ -42,11 +48,13 @@ export class ProfilePhotoController {
     return this.avatars.authorizeUpload(actorId, { kind: 'child', learnerId }, body ?? {});
   }
 
+  @NotForStaff()
   @Post('children/:learnerId/avatar')
   childCommit(@ActorId() actorId: string, @Param('learnerId') learnerId: string, @Body() body: { objectKey?: unknown }) {
     return this.avatars.commit(actorId, { kind: 'child', learnerId }, body ?? {});
   }
 
+  @NotForStaff()
   @Delete('children/:learnerId/avatar')
   childRemove(@ActorId() actorId: string, @Param('learnerId') learnerId: string) {
     return this.avatars.remove(actorId, { kind: 'child', learnerId });

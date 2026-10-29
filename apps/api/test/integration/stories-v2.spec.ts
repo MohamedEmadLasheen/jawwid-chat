@@ -88,10 +88,11 @@ async function addFamily(opts: {
   }
   if (opts.supervisor) {
     for (const id of learners) {
+      // Placed by the seed's Operations manager (PD-42: a supervision names its assigner).
       await prisma.$executeRawUnsafe(
-        `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
-         values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
-        id, opts.supervisor,
+        `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by)
+         values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`,
+        id, opts.supervisor, s.managerId,
       );
     }
   }

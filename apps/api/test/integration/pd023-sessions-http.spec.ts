@@ -7,8 +7,10 @@
  *   - Devices & sessions: a person lists their own live sessions, ends another
  *     one, ends all the others, and ends the current one (= sign out); never
  *     another account's; a support session can read but not end anything;
- *   - administrators: list and end an account's sessions under the PD-21 rule,
- *     with a reason, audited; parents and teachers reach none of it.
+ *   - administrators: list and end an account's sessions under the PD-21 rule
+ *     as narrowed by PD-40 (parents: the super admin and Operations, Sales may
+ *     sign out; teachers: the super admin and the Teachers department), with a
+ *     reason, audited; parents and teachers reach none of it.
  *
  * Synthetic people only (G-20).
  */
@@ -315,14 +317,33 @@ describe('PD-23: an administrator ends an account\'s sessions', () => {
     const accountId = await accountIdOf(teacher);
     const a = await login(teacher, ios);
     const b = await login(teacher, android);
-    const manager = (await login(m.operationsManager.subject, web)).accessToken;
 
+    // PD-40 (owner-approved 2026-10-27): a teacher account is the Teachers
+    // department's. The Operations manager is refused and ends nothing.
+    const operations = (await login(m.operationsManager.subject, web)).accessToken;
+    const refused = await call(operations, 'POST', `/admin/accounts/${accountId}/sessions/revoke-all`, { reason: 'shared device' });
+    expect({ status: refused.status, code: refused.code }).toEqual({ status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
+    expect((await call(a.accessToken, 'GET', '/me')).status).toBe(200);
+
+    const manager = (await login(m.teachersManager.subject, web)).accessToken;
     const r = await call(manager, 'POST', `/admin/accounts/${accountId}/sessions/revoke-all`, { reason: 'shared device' });
     expect(r.status).toBe(200);
     expect(r.json.revoked).toBeGreaterThanOrEqual(2);
     expect((await call(a.accessToken, 'GET', '/me')).status).toBe(401);
     expect((await call(b.accessToken, 'GET', '/me')).status).toBe(401);
     expect((await login(teacher, ios)).status).toBe(200);
+  });
+
+  it('PD-40: Sales signs a parent out everywhere, but never a teacher', async () => {
+    const parent = m.families[9]!.parent.subject;
+    const own = await login(parent, ios);
+    const sales = (await login(m.salesManager.subject, web)).accessToken;
+    const teacherAccount = await accountIdOf(m.teachers[2]!.subject);
+    const refused = await call(sales, 'POST', `/admin/accounts/${teacherAccount}/sessions/revoke-all`, { reason: 'x' });
+    expect({ status: refused.status, code: refused.code }).toEqual({ status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
+    const r = await call(sales, 'POST', `/admin/accounts/${await accountIdOf(parent)}/sessions/revoke-all`, { reason: 'new phone' });
+    expect(r.status).toBe(200);
+    expect((await call(own.accessToken, 'GET', '/me')).status).toBe(401);
   });
 
   it('follows the PD-21 rule: parents and teachers never; staff accounts only by the super admin; never the super admin', async () => {

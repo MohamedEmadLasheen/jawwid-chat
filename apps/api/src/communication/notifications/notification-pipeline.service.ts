@@ -40,6 +40,12 @@ export interface EmitInput {
   variables?: Record<string, unknown>;
   /** The intended moment. The Center shows it then; quiet hours may push it later. */
   scheduledAt: Date;
+  /**
+   * PD-47 PR-4: the entry asks its recipient to act on a task (the Center's
+   * Action tab): who must act, by when, and where it stands. The Center mirrors
+   * the task; the Tasks page is the truth.
+   */
+  task?: { ownerId: string; dueAt: Date | null; status: 'open' | 'escalated' } | null;
   basis?: string | null;
   /**
    * A delivery a lifecycle change cancelled (a teacher transfer clears a
@@ -124,6 +130,9 @@ export class NotificationPipeline {
       variables: input.variables ?? {},
       pushState,
       visibleAt: input.scheduledAt,
+      ...(input.task
+        ? { requiresAction: true, ownerId: input.task.ownerId, dueAt: input.task.dueAt, taskStatus: input.task.status }
+        : {}),
     }, input.reviveCancelled ?? false);
     if (!item) return null;
 
@@ -439,6 +448,26 @@ export class NotificationPipeline {
   }
 
   /**
+   * PD-47 PR-4: a task left these people (done, removed, or handed to someone
+   * else): their entries about it no longer ask anything of them. Marked acted,
+   * with where the task went; the entries stay as history. `keep` is the person
+   * it is still with, whose entries stand; `only` narrows it to some kinds of
+   * entry (a decision taken settles the deciders' "decision waiting"; a new due
+   * date settles the old "overdue").
+   */
+  async taskLeft(taskId: string, status: 'done' | 'cancelled', keep: string | null = null, only?: readonly string[]): Promise<number> {
+    const result = await this.prisma.notificationItem.updateMany({
+      where: {
+        subjectType: 'task', subjectId: taskId, actedAt: null,
+        ...(keep ? { recipientId: { not: keep } } : {}),
+        ...(only ? { eventType: { in: [...only] } } : {}),
+      },
+      data: { actedAt: new Date(), taskStatus: status },
+    });
+    return result.count;
+  }
+
+  /**
    * The person read a conversation (on any device): its waiting push is
    * withdrawn, its Center entry is read, and their other devices are told.
    */
@@ -471,7 +500,9 @@ export class NotificationPipeline {
     });
     const read = await this.prisma.$executeRaw`
       UPDATE chat.notification_item SET read_at = now(), updated_at = now()
-       WHERE recipient_id = ${actorId}::uuid AND group_key = ${`conversation:${conversationId}`} AND read_at IS NULL
+       WHERE recipient_id = ${actorId}::uuid AND read_at IS NULL
+         AND (group_key = ${`conversation:${conversationId}`}
+              OR (event_type = 'mention_created' AND refs ->> 'conversationId' = ${conversationId}))
          AND coalesce((variables ->> 'lastSeq')::numeric, 0) <= ${seq}::numeric`;
     await this.tell(() => this.realtime.toUsers([actorId], CommEvent.CONVERSATION_READ, {
       conversationId,
@@ -784,22 +815,53 @@ export class NotificationPipeline {
     conversationId: string;
     messageId?: string;
     mentionId?: string;
+    /** Who mentioned them (a display name), for the Center only -- never the lock screen. */
+    by?: string | null;
     now?: Date;
   }): Promise<string | null> {
     const rule = await this.prisma.notificationRule.findUnique({ where: { key: input.ruleKey } });
     if (!rule || !rule.enabled) return null;
+    const organizationId = await this.organizationFor(input.recipientId, input.conversationId);
+    if (!organizationId) return null;
     const optedOut = await this.prisma.notificationPreference.findFirst({
       where: { actorId: input.recipientId, category: 'conversation', channel: 'push', enabled: false },
       select: { actorId: true },
     });
-    if (optedOut) return null;
     const at = new Date((input.now ?? new Date()).getTime() + rule.offsetSeconds * 1000);
-    const windows = await this.quietWindows([input.recipientId], await this.chatQuietDefaults());
-    const scheduledAt = rule.respectQuietHours ? deferForQuiet(at, windows.get(input.recipientId)) : at;
     const message = input.messageId
       ? await this.prisma.message.findUnique({ where: { id: input.messageId }, select: { seq: true } })
       : null;
-    return this.notifications.schedule({
+    const lastSeq = message?.seq != null ? message.seq.toString() : null;
+
+    // PD-34 QA (2026-10-27): the mention is its OWN Center entry ("X mentioned
+    // you"), not only a push -- whether or not a push goes, like every message.
+    const entry = catalogEntry(rule.key, rule.eventType);
+    const refs = { conversationId: input.conversationId, ...(input.messageId ? { messageId: input.messageId } : {}), ...(input.mentionId ? { mentionId: input.mentionId } : {}) };
+    const item = await this.upsertItem({
+      organizationId,
+      dedupeKey: input.dedupeKey,
+      recipientId: input.recipientId,
+      ruleKey: rule.key,
+      ruleVersion: entry.version,
+      eventType: rule.eventType,
+      category: entry.category,
+      severity: severityOf(rule.priority),
+      basis: 'mentioned',
+      subjectType: 'mention',
+      subjectId: input.mentionId ?? input.messageId ?? null,
+      refs,
+      action: { kind: 'open_conversation', conversationId: input.conversationId },
+      templateKey: entry.inbox,
+      locale: input.locale === 'en' ? 'en' : 'ar',
+      variables: { ...(input.by ? { by: input.by } : {}), ...(lastSeq ? { lastSeq } : {}) },
+      pushState: optedOut ? 'opted_out' : 'scheduled',
+      visibleAt: at,
+    }, false);
+    if (optedOut || !item) return null;
+
+    const windows = await this.quietWindows([input.recipientId], await this.chatQuietDefaults());
+    const scheduledAt = rule.respectQuietHours ? deferForQuiet(at, windows.get(input.recipientId)) : at;
+    const deliveryId = await this.notifications.schedule({
       dedupeKey: input.dedupeKey,
       ruleKey: rule.key,
       templateKey: rule.templateKey,
@@ -810,13 +872,17 @@ export class NotificationPipeline {
       priority: rule.priority,
       conversationId: input.conversationId,
       variables: {
-        ...(message?.seq != null ? { lastSeq: message.seq.toString() } : {}),
+        ...(lastSeq ? { lastSeq } : {}),
         ...(input.mentionId ? { mentionId: input.mentionId } : {}),
         ...(scheduledAt.getTime() > at.getTime() ? { quietDeferred: true, notBefore: at.toISOString() } : {}),
       },
       scheduledAt,
       respectQuietHours: false,
     });
+    // Linked: a mention that closes before it goes (MENTION_CLOSED) or a person
+    // who leaves (AUDIENCE) withdraws the entry with the push.
+    if (deliveryId) await this.link(deliveryId, item.id, false, scheduledAt);
+    return deliveryId;
   }
 
   /** The live actors among `ids`, in three queries whatever their number. */
@@ -973,6 +1039,10 @@ export class NotificationPipeline {
       variables: Record<string, unknown>;
       pushState: string;
       visibleAt: Date;
+      requiresAction?: boolean;
+      ownerId?: string;
+      dueAt?: Date | null;
+      taskStatus?: string;
     },
     revive: boolean,
   ): Promise<NotificationItem | null> {

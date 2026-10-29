@@ -36,12 +36,14 @@ export class ParentSignupController {
   @Public()
   @Post('verify')
   @HttpCode(200)
-  async verify(@Body() body: { email?: unknown; code?: unknown; password?: unknown }, @Ip() ip?: string) {
+  async verify(@Body() body: { email?: unknown; code?: unknown; password?: unknown; lessonAudioNotice?: unknown }, @Ip() ip?: string) {
     const email = typeof body?.email === 'string' ? body.email : '';
     const code = typeof body?.code === 'string' ? body.code : '';
     const password = typeof body?.password === 'string' ? body.password : '';
     if (!email || !code) throw new AuthError(AuthErrorCode.SIGNUP_CODE_INVALID);
     await this.rateLimit.reserve(`signup:${email.trim().toLowerCase()}`, sourceAddress(ip, this.addressPolicy));
-    return this.signup.verify(email, code, password);
+    // PD-48: the version of the lesson-audio notice the parent ticked at sign-up (or nothing).
+    const notice = typeof body?.lessonAudioNotice === 'number' ? body.lessonAudioNotice : null;
+    return this.signup.verify(email, code, password, notice);
   }
 }

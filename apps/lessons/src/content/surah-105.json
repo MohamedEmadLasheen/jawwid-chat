@@ -1,0 +1,356 @@
+{
+  "surah": 105,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs and the reciter line, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old \"complete the ayah\" game; its hand-typed distractors (an-nas, al-falaq, al-kawthar, and made-up rhymes such as tanzil, jamil, majhul) are gone: the game draws its options from this surah's words. The \"choose the right word\" game's two-word answers end in the same words, so they add none. The old quiz categories were mapped memorization -> hifz and meaning -> meanings, except \"what do we learn from Surat al-Fil?\" (q8), moved to lessons. Each lesson learned is its old title and description joined with \": \". The reflection is the old question with its right answer and the line shown after it as the ideas (its three wrong options are not carried). Emoji were stripped from the ends of lines. Not carried (no field or no such game in the engine): the intro facts (ayah count, \"Makki\"), the intro quiz, the ayah-ordering, choose-the-word and build-the-ayah games, and the word-meaning match/choose/drag games (same words and meanings as the list and quiz). Matching aid, for alignment only and never stored: the word meaning 'asfin ma'kul was typed without the ka- the verse word carries, so it points at the whole verse word ka-'asfin (5:2)."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-105 (read as text, never built or run)",
+    "sha256": {
+      "lib/lessonData.ts": "a742c152a573ad5f27cccd985b50b7d82e53b57049d036c5e8c64f7048065f68",
+      "components/lesson/IntroSection.tsx": "511c2ede3aba76ee7bc4ca208b05104d48898fa24395e4d579dbf986058125ba",
+      "components/lesson/LearnVersesSection.tsx": "219666684277b1076de545c36552516288490eb045010db8e9b4af8ef35dfa08",
+      "components/lesson/MemorizationGames.tsx": "8d0cefeacb3f2fc38d69562a89ea1a71111cb890876f6a8d0483fc8faaa40bfb",
+      "components/lesson/MeaningsSection.tsx": "70facc5d68f92dc581e7dd9e10d9f39401e0fea8cd02ac1af1d92a730c31f9a5",
+      "components/lesson/TajweedSection.tsx": "49bb878e2656e84dd99acdc6ad5c7b53f95377a2c42bd4e945dae818ef94aaaf",
+      "components/lesson/FinalAssessment.tsx": "e1cda30041167e8445ce7b6b0acd90de02b331e644a22ce62462b056208f1a24"
+    }
+  },
+  "intro": {
+    "text": "سورة الفيل تحكي قصة كيف حمى الله الكعبة المشرفة عندما جاء جيش كبير بقيادة أبرهة ومعهم فيل ضخم يريدون هدم الكعبة، فأرسل الله طيوراً رمتهم بحجارة صغيرة فهزمهم الله وحمى بيته الحرام.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "هل رأيت يا محمد كيف عاقب الله الجيش الذي جاء بالفيل ليهدم الكعبة؟",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "الله جعل خطتهم الشريرة تفشل ولم تنجح أبداً!",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "أرسل الله عليهم طيوراً كثيرة جاءت في مجموعات!",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "هذه الطيور كانت ترمي الجيش بحجارة صغيرة من طين صلب!",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "فجعلهم الله مثل ورق الشجر اليابس المأكول، أي دمرهم تماماً!",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 7,
+      "meaning": "الحيوان الكبير الضخم",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "خطتهم الشريرة ومكرهم",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 5,
+      "meaning": "ضياع وفشل وخسارة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 4,
+      "meaning": "طيور كثيرة في مجموعات",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 4,
+      "meaning": "طين صلب محروق",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 2,
+      "meaning": "ورق شجر يابس مأكول",
+      "review": "PHRASE: the old entry is the two words \"'asfin ma'kul\" (5:2-3, typed without the ka- of ka-'asfin); the engine shows one word, so this points at ka-'asfin (5:2) and the meaning covers both. Teacher to confirm it reads right."
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 7
+    },
+    {
+      "ayah": 2,
+      "word": 5
+    },
+    {
+      "ayah": 3,
+      "word": 4
+    },
+    {
+      "ayah": 4,
+      "word": 4
+    },
+    {
+      "ayah": 5,
+      "word": 3
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "سورة الفلق"
+        },
+        {
+          "text": "سورة الفيل"
+        },
+        {
+          "text": "سورة الناس"
+        },
+        {
+          "text": "سورة الكوثر"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الفيل؟",
+      "options": [
+        {
+          "text": "3 آيات"
+        },
+        {
+          "text": "4 آيات"
+        },
+        {
+          "text": "5 آيات"
+        },
+        {
+          "text": "6 آيات"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "hifz",
+      "question": "ما هي أول آية في سورة الفيل؟",
+      "options": [
+        {
+          "ayah": 3
+        },
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 5
+        },
+        {
+          "ayah": 4
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "حجارة كبيرة"
+        },
+        {
+          "text": "طيور كثيرة في مجموعات"
+        },
+        {
+          "text": "جيش كبير"
+        },
+        {
+          "text": "فيلة ضخمة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 3,
+        "word": 4
+      },
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "ماء حار"
+        },
+        {
+          "text": "طين صلب محروق"
+        },
+        {
+          "text": "رمل ناعم"
+        },
+        {
+          "text": "خشب صلب"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 4,
+        "word": 4
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "طعام لذيذ"
+        },
+        {
+          "text": "ورق شجر يابس مأكول"
+        },
+        {
+          "text": "حيوان صغير"
+        },
+        {
+          "text": "ماء صافي"
+        }
+      ],
+      "answer": 1,
+      "review": "PHRASE: the old question asks about \"'asfin ma'kul\" (5:2-3), typed into the question without the ka- of ka-'asfin; the engine shows one word, so it points at ka-'asfin (5:2). Teacher to confirm it reads right.",
+      "word": {
+        "ayah": 5,
+        "word": 2
+      },
+      "id": "q6"
+    },
+    {
+      "category": "hifz",
+      "question": "ماذا أرسل الله على أصحاب الفيل؟",
+      "options": [
+        {
+          "text": "مطراً شديداً"
+        },
+        {
+          "text": "رياحاً قوية"
+        },
+        {
+          "ayah": 3,
+          "word": 3
+        },
+        {
+          "text": "زلزالاً"
+        }
+      ],
+      "answer": 2,
+      "review": "CHANGED: the old answer \"tayran ababil\" was this surah's 3:3-4, typed into an option; it now shows the verse word tayran (3:3). Teacher to confirm one word reads as the answer.",
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نتعلم من سورة الفيل؟",
+      "options": [
+        {
+          "text": "أن الله يحمي بيته الحرام"
+        },
+        {
+          "text": "أن الفيل حيوان قوي"
+        },
+        {
+          "text": "أن الطيور جميلة"
+        },
+        {
+          "text": "أن الحجارة صلبة"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q8"
+    },
+    {
+      "category": "meanings",
+      "question": "من الذي حمى الكعبة من أصحاب الفيل؟",
+      "options": [
+        {
+          "text": "الجيش"
+        },
+        {
+          "text": "الناس"
+        },
+        {
+          "text": "الله سبحانه وتعالى"
+        },
+        {
+          "text": "الطيور وحدها"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الله يحمي بيته الحرام: الله سبحانه وتعالى حمى الكعبة المشرفة من جيش أبرهة الذي أراد هدمها.",
+      "review": null
+    },
+    {
+      "text": "الله قادر على كل شيء: الله قادر على هزيمة أي جيش مهما كان قوياً، حتى لو كان معهم فيلة ضخمة!",
+      "review": null
+    },
+    {
+      "text": "الله ينصر الحق: الله دائماً ينصر الحق ويهزم الباطل، فلا نخاف أبداً!",
+      "review": "Broader than this surah: it shows Allah protecting His House from Abraha's army, not a contest between the people of truth and falsehood (Quraysh had left Makkah and did not fight). \"Allah always gives victory to the truth, so we never fear\" may read to a child as a promise of victory in every worldly event. Teacher to keep or reword."
+    }
+  ],
+  "reflection": {
+    "question": "من الذي حمى الكعبة عندما جاء أصحاب الفيل؟",
+    "ideas": [
+      "الله سبحانه وتعالى",
+      "الله قادر على كل شيء وهو يحمي بيته الحرام"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الكعبة هي بيت الله الحرام؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الله قادر على حماية بيته من أي عدو؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الفيل نزلت في مكة المكرمة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن الفيل حيوان كبير جداً لكن الله أقوى من كل شيء؟",
+      "review": null
+    }
+  ]
+}

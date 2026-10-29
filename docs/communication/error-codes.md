@@ -129,8 +129,19 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | Code | HTTP | Meaning |
 |---|---|---|
 | `COMM.CERTIFICATE_NOT_FOUND` | 404 | No such certificate, or a learner the teacher does not teach (one code for both, so a teacher cannot probe other learners). |
-| `COMM.CERTIFICATE_DENIED` | 403 | Only the Teachers department and the super admin see, issue or decline certificates. Never retry. |
-| `COMM.CERTIFICATE_STATE` | 409 | Already decided, the file has not been uploaded, or the learner has no live group to deliver into. Refresh; do not retry. |
+| `COMM.CERTIFICATE_DENIED` | 403 | PD-41: the caller may not do this to this certificate (not the requester of record, not the learner's supervisor, not a designer, or no key). Never retry. |
+| `COMM.CERTIFICATE_STATE` | 409 | The certificate's state does not allow this act, the file has not been uploaded, or the recipient has no live group. Refresh; do not retry. |
+| `COMM.CERTIFICATE_DUPLICATE` | 409 | PD-41: the same certificate (recipient, type, Juz' or period) is already open or sent; `detail.certificateId` names it. |
+| `COMM.CERTIFICATE_DUPLICATE_SUSPECTED` | 409 | PD-41: a similar certificate was requested in the last 30 days; resend with `confirmDuplicate: true` to file another. |
+| `COMM.CERTIFICATE_NOT_APPROVED` | 409 | PD-41: send and Story need the requester's approval of the current design first. |
+| `COMM.CERTIFICATE_REVISION_CHANGED` | 409 | PD-41: the design changed since it was reviewed; review `detail.currentFileId`. |
+| `COMM.CERTIFICATE_SELF_APPROVAL` | 403 | PD-41: the person who uploaded a design does not approve it (four eyes). |
+| `COMM.CERTIFICATE_TARGET_CHANGED` | 409 | PD-41: the group the server would send into changed since it was shown; `detail.conversationId` is the new one. Check and send again. |
+| `COMM.CERTIFICATE_STORY_NOT_OPTED_IN` | 409 | PD-41: the request did not opt in to a Story. |
+| `COMM.CERTIFICATE_STORY_CONSENT_MISSING` | 409 | PD-41: a student certificate's Story needs the family's recorded consent; none, or it was withdrawn. |
+| `COMM.CERTIFICATE_STORY_NEEDS_IMAGE` | 409 | PD-41: a Story shows an image; this certificate's file is a PDF. |
+| `COMM.CERTIFICATE_TYPE_DISABLED` | 409 | PD-41: the certificate type is disabled; pick an active one. |
+| `COMM.STORY_MEDIA_NOT_GRANTED` | 403 | PD-41: a story's media is a `stories/` key that `POST /stories/media` issued to this publisher, used once. Any other key is refused. Upload again. |
 | `COMM.LEAVE_NOT_FOUND` | 404 | No such leave request or teacher, or one the caller may not see. |
 | `COMM.LEAVE_DENIED` | 403 | Leave is requested by a teacher for themselves, decided by the Teachers department, and the allowance is set by its manager or the super admin. Never retry. |
 | `COMM.LEAVE_STATE` | 409 | The leave does not allow it: already decided or withdrawn, overlapping another open or approved request, in the past, or crossing a calendar year. |
@@ -145,7 +156,8 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.DISCIPLINE_NOT_FOUND` | 404 | No such violation, lesson or teacher in the caller's organization. |
 | `COMM.DISCIPLINE_DENIED` | 403 | Discipline is read, recorded and decided only by the Teachers department and the super admin. Never retry. |
 | `COMM.DISCIPLINE_STATE` | 409 | Not allowed now: already decided, below the late threshold, the lesson was not held, the suspension starts in the past, or the teacher still has students (permanent suspension). |
-| `COMM.DISCIPLINE_LESSONS_COLLIDE` | 409 | Open lessons fall inside the suspension. Decide again with `cancelCollidingLessons: true` to cancel them (each family is told in its group). |
+| `COMM.DISCIPLINE_LESSONS_COLLIDE` | 409 | Open lessons fall inside the suspension. Decide again with `cancelCollidingLessons: true` to cancel them (each family is told in its group). For a permanent suspension, also when a lesson was booked after the cancellations: nothing was decided; decide again. |
+| `COMM.DISCIPLINE_NOT_CANCELLED` | 409 | A permanent suspension cancels the teacher's lessons first; some could not be cancelled, so nothing was decided and the teacher is still active. `detail.cancelledLessons` / `detail.notCancelled` (`{ lessonId, reason }`). Deal with those lessons, then decide again. |
 | `COMM.BILLING_DENIED` | 403 | A family's money (PD-17: read and recorded) is only for Operations supervisors (their families), the Operations Manager, the Sales department and the super admin, and a parent's own (`/me/billing`) only for a parent of that family; a billing supervisor is set only by the Operations Manager and the super admin. Never retry. |
 | `COMM.BILLING_NOT_FOUND` | 404 | No such family in the caller's organization, or one this caller does not reach. |
 | `COMM.BILLING_STATE` | 409 | PD-17: the instalment is already paid or voided. PD-27: also a payment request already paid, cancelled or expired, a receipt already decided, a card payment voided instead of refunded, a refund larger than what is left. Reload; never retry blindly. |
@@ -155,7 +167,14 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.SUBSCRIPTION_STATE` | 409 | PD-30: the subscription is already voided, the exception already revoked, or a renewal was already requested today. Reload. |
 | `COMM.PARENT_PROFILE_DENIED` | 403 | PD-17: Parent Profiles are the administration's (Operations in scope, the Operations Manager, Sales, the super admin) — never a teacher or a parent — and their contact record is edited by Operations and the super admin only (Sales gets this on an edit). Answered before any parent is looked up. Never retry. |
 | `COMM.PARENT_PROFILE_NOT_FOUND` | 404 | PD-17: no such parent in the caller's organization, or one this caller does not reach. Indistinguishable on purpose. |
-| `COMM.ACCOUNT_ADMIN_DENIED` | 403 | PD-21: this caller may not reset, suspend, reactivate or impersonate this account. Any staff member acts on parent and teacher accounts; only the super admin on another staff account; nobody on the super admin's account or their own; a staff account is never impersonated. Never retry. |
+| `COMM.ACCOUNT_ADMIN_DENIED` | 403 | PD-21 as narrowed by PD-40: this caller may not reset, suspend, reactivate, sign out or impersonate this account. Parent accounts are administered by the super admin and the Operations department (Sales: reset and sign out only); teacher accounts by the super admin and the Teachers department; another staff account only by the super admin; nobody acts on the super admin's account or their own; a staff account is never impersonated. Never retry. |
+| `COMM.PERMISSION_DENIED` | 403 | PD-40: this staff account does not hold the permission the route declares (`docs/security/pd040-route-permissions.md`), the route declares none, or it is a parent's or a teacher's own route. Only staff are checked. Until PD-40 enforces, existing staff roles are let through and the refusal is only logged (`SHADOW_DENIED`). Never retry: it changes only when the account's roles change. |
+| `COMM.STAFF_ACCOUNT_DENIED` | 403 | PD-40 PR-3: this caller may not create or manage this staff account, or grant this role. Only the super admin creates supervisors and managers. A department manager acts on the specialists of their own department, with specialist roles whose every key they hold and may delegate. Never retry. |
+| `COMM.STAFF_ACCOUNT_NOT_FOUND` | 404 | PD-40 PR-3: no such staff account within the caller's reach. An account outside it answers the same way. |
+| `COMM.STAFF_ACCOUNT_INVALID` | 400 | PD-40 PR-3: a malformed request (name, e-mail, tier, department, role list or reason), or a tier that is never created here (the super admin). |
+| `COMM.STAFF_ACCOUNT_CONFLICT` | 409 | PD-40 PR-3: the sign-in e-mail already signs in to Chat. |
+| `COMM.ACCESS_ROLE_INVALID` | 400 | PD-40 PR-3: an access role that cannot be defined. Causes: an unknown key; a super-admin-only key, which never goes in a role (S4); no key at all; a bad tier; or a key already taken. |
+| `COMM.ACCESS_ROLE_CONFLICT` | 409 | PD-40 PR-3: the edit adds a key that a department manager who granted this role may not grant (H5). The message names those grants (staff id and grantor) but may be cut short; `detail.grants` lists every one, as `[{ staffId, grantedBy }]`, parsed from the full database text. The super admin revokes them first, then edits again. |
 | `COMM.ACCOUNT_ADMIN_NOT_FOUND` | 404 | PD-21: no such account in the caller's organization. Indistinguishable from another tenant's account on purpose. |
 | `COMM.ACCOUNT_ADMIN_STATE` | 409 | PD-21: the account is not in a state for this — suspending one that is not active, reactivating one that is not suspended, impersonating one that cannot sign in. Reload the account; never retry blindly. |
 | `COMM.SESSION_NOT_FOUND` | 404 | PD-23: the account has no live session with this id — ended already, or another account's (one answer for both). Refetch the list. |

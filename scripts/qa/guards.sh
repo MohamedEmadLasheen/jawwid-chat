@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry quran-dataset pd040-routes lessons-supply-chain ci-wiring"
 
 title() {
   case "$1" in
@@ -200,6 +200,9 @@ title() {
     backup-client) echo "The backup drill runs the pg_dump it is given" ;;
     backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
+    quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
+    pd040-routes)  echo "PD-40 · every API route declares the permission it asks of staff" ;;
+    lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text; the API's voice-over text is current" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -333,6 +336,106 @@ gate_pd_registry() {
   fi
   "$PYTHON" -I scripts/docs/registry-index.py selftest || return 1
   "$PYTHON" -I scripts/docs/registry-index.py check
+}
+
+gate_quran_dataset() {
+  # The shared Quran dataset (docs/product/quran-dataset-contract.md): the
+  # loader's refusals are tested (tampered file, count mismatch, split,
+  # duplicate or empty ayah), and every pinned fingerprint agrees with its
+  # manifest and its vendored file.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the quran-dataset gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/db/test_load_quran.py || return 1
+  "$PYTHON" -I scripts/db/check-quran-pins.py
+}
+
+gate_pd040_routes() {
+  # PD-40: a route with no @Requires / @SelfService / @NotForStaff / @Public is
+  # refused to staff at runtime. This catches it before it ships, without Node.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the pd040-routes gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/qa/check-route-permissions.py selftest || return 1
+  "$PYTHON" -I scripts/qa/check-route-permissions.py check
+}
+
+gate_lessons_supply_chain() {
+  # apps/lessons (PD-29 materials quality P0-3) is written from scratch; the old
+  # lessons repo was infected through its build config. Exact pins, every locked
+  # package from registry.npmjs.org with integrity, no unlisted install scripts,
+  # none of the infected family's markers in any git-listed file, no postcss/tailwind
+  # config, .vscode or nested node_modules/dist, no unlisted binary, nothing
+  # imported or aliased from outside apps/lessons; and the
+  # Quran snapshot builds only from the verified dataset. The selftest proves
+  # each check can fail.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the lessons-supply-chain gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/qa/check-lessons-supply-chain.py selftest || return 1
+  "$PYTHON" -I scripts/qa/check-lessons-supply-chain.py || return 1
+  "$PYTHON" -I scripts/lessons/test_build_quran_snapshot.py || return 1
+  # P0-4: each lesson's reviewed content resolves in the verified surah and
+  # carries no typed Quran.
+  "$PYTHON" -I scripts/lessons/check-lesson-content.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/check-lesson-content.py || return 1
+  # PD-49: the children's Quran content (schema 2) -- positions and tokens
+  # resolve, no typed Quran, every citation a public-domain work in its role,
+  # asbab only under the display rule, and every approval fresh, complete and
+  # resting on pinned editions.
+  "$PYTHON" -I scripts/lessons/check-quran-content.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/check-quran-content.py || return 1
+  # PD-49: every approvals file is the API's signed export, verified under a key
+  # of approvals-keys.json (Ed25519, Node's built-in crypto): CI is the trust
+  # anchor, so a hand-edited or forged approval fails here.
+  if ! command -v node >/dev/null 2>&1; then
+    echo "guards: node not found -- the approvals signatures cannot be verified, so the gate FAILS"
+    return 2
+  fi
+  node scripts/lessons/verify-approvals.mjs selftest || return 1
+  node scripts/lessons/verify-approvals.mjs || return 1
+  # ...a change never adds a key together with what it signs, never re-commits an
+  # older export (a replay of something since withdrawn), never signs with a
+  # retired key (against the PR's base branch; GITHUB_BASE_REF in CI).
+  node scripts/lessons/verify-approvals.mjs diff || return 1
+  # ...and the job that builds the production lessons bundle verifies them
+  # before it builds; no other workflow builds that bundle (a hand-built or
+  # elsewhere-built bundle cannot skip the check).
+  "$PYTHON" -I - <<'PY' || return 1
+import glob, re, sys
+ci = open('.github/workflows/ci.yml', encoding='utf-8').read()
+job = re.search(r'\n  lessons:\n(.*?)(?=\n  [a-z0-9_-]+:\n|\Z)', ci, re.S)
+if not job:
+    sys.exit('guards: ci.yml has no lessons job')
+body = job.group(1)
+v, b = body.find('verify-approvals.mjs'), body.find('npm run build')
+if v < 0 or b < 0 or v > b:
+    sys.exit('guards: the ci.yml lessons job must run scripts/lessons/verify-approvals.mjs before npm run build')
+others = [f for f in glob.glob('.github/workflows/*.yml') if f != '.github/workflows/ci.yml'
+          and re.search(r'apps/lessons[^\n]*\n?[^\n]*npm run build|working-directory: apps/lessons', open(f, encoding='utf-8').read())]
+if others:
+    sys.exit(f'guards: only ci.yml builds the lessons bundle; also built in: {others}')
+print('lessons bundle: built only by the ci.yml lessons job, after its approvals verify')
+PY
+  # PD-49: the API reviews exactly what apps/lessons holds -- its generated map of
+  # items and mechanics (with their hashes and required steps) is never stale.
+  "$PYTHON" -I scripts/lessons/lesson-content-subjects.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/lesson-content-subjects.py check || return 1
+  # P0-5: the Arabic letters lessons -- every word holds its unit's letter by the
+  # one rule (no folding), full tashkeel with the pausal sukun, and every quiz
+  # question has exactly one right answer.
+  "$PYTHON" -I scripts/lessons/check-arabic-lesson.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/check-arabic-lesson.py || return 1
+  # PD-48: the API's copy of each lesson's approved text is current (a changed
+  # word switches its voice-over clip off), and no lesson uses the browser's
+  # own speech synthesis.
+  "$PYTHON" -I scripts/lessons/lesson-audio-texts.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/lesson-audio-texts.py check || return 1
+  # PD-48: the operator's generation script plans and refuses as it must (no network, no key).
+  "$PYTHON" -I scripts/lessons/tts/tts.py selftest
 }
 
 gate_ci_wiring() {

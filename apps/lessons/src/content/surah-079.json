@@ -1,0 +1,654 @@
+{
+  "surah": 79,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson (content in lib/surahData.ts and the components), then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. NUMBERING: the old lesson had 46 entries, the same count as the surah's 46 ayat, but they are not the real ayat: it split real ayah 40 into two entries (its 40 \"wa-amma man khafa maqama rabbih\" and 41 \"wa-naha al-nafsa 'an al-hawa\"), so its entries 42-46 are real ayat 41-45, and it never has real ayah 46 (ka-annahum yawma yarawnaha ...); a code comment in the old data file names that ayah, then defines an unused identical copy of the list. The tafsir for ayah 40 is its two lines joined (MERGED); the tafsir for ayat 41-45 is renumbered through the map and held (RENUMBERED); ayah 46 has no line (MISSING). Word meanings, complete-the-ayah words and quiz positions are matched by text, not by the old numbers. The old per-ayah audio used the old numbers, so from entry 41 on it played the wrong ayah. The tafsir of the four opening oaths and the word card al-nazi'at give one reading (the angels) as the only one and are held. Dropped: the four Tajweed rules and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the full-surah and per-ayah audio URLs and the reciter line, the typed basmala, and every hand-typed Quran string (replaced by positions). The old quiz categories were mapped (memorization to hifz, meaning to meanings; the question on the lesson of Fir'awn's story to lessons); its difficulty levels are not carried. Quiz q5 (which ayah follows the first half of ayah 40) is rebuilt as complete-the-ayah and held; q9 (the old q10, ayah 46) now asks for one word with distractors of this surah and is held; q7 quotes three words of ayah 24 and is held. The word card al-ma'wa (in ayat 39 and 41; the old card does not say which) is placed on 41, the one after al-hawa in the old list. The complete-the-ayah words are the answers of the old complete-the-ayah and missing-word games; their hand-typed distractors that are not words of this surah are gone, as the game draws its options from these words. The reflection ideas are the old \"show some answers\" list. Emoji were stripped from the ends of lines. Not carried (no field or no such game in the engine): the intro facts (ayah count, Makkah) and the intro quiz (name, ayah count, story), the \"what we will learn\" list, the ayah-ordering game, the meaning-match game (same words and meanings as the list), the encouragement lines and the quiz's difficulty levels. Matching aids, for alignment only and never stored: the old text writes with a plain alif what the Uthmani text writes as alif maqsura + dagger alif (ataka 15:2, nadahu 16:2, fa-arahu 20:1, banaha 27:6, fa-sawwaha 28:3, duhaha 29:4, dahaha 30:4, wa-mar'aha 31:4, arsaha 32:2, mursaha 42:5, dhikraha 43:4, muntahaha 44:3, yakhshaha 45:5), with an alif what it writes as waw + dagger alif (al-hayah 38:3), and with a hamza seat the Uthmani omits (yas'alunaka 42:1); the word cards tagha, tazakka, al-hawa and al-ma'wa were typed without the dagger alif after the final alif maqsura; al-nazi'at (wa-, 1:1) and al-sahirah (bi-, 14:3), and the quiz options al-sahirah (bi-, 14:3) and 'asa (wa-, 21:2), were typed without the particles the verse words carry, so they point at the whole verse words."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-79 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "1b79c941c96a4a590afe0e15a13a0cd4ed5372688b4b1d63bf1b75d96bcfed55",
+      "components/SurahIntro.tsx": "be86b844bcf008ebb515e838e451e51d0377a43f35a2090b5355f5ec66543740",
+      "components/FullListening.tsx": "f1e3c9ec41fd71d5ba519ed36275f1abc6c2272aabdb512bea66af7d2ee9656d",
+      "components/VerseByVerse.tsx": "414b61817b584b9d118aa6373d4919f89e7033c29772b17413a101bdd15955d3",
+      "components/MemorizationGames.tsx": "b38b68a98f1f653097edf7ee134b2d4ee8ecd5700f0f365d91237e2279b4a3db",
+      "components/MeaningsSection.tsx": "51d06a5bab2af3d50c045bf37799c7060ff71f408da5da5692b60da59d054730",
+      "components/FinalAssessment.tsx": "82f3fb6657a6017da3bcbbe6c16c4a72a857c9f0a7171b0b82fa31bb0c4a5713",
+      "pages/Index.tsx": "7d745d078f3de1537475dd9f6c67a07900ab2903846d55ee004800a8cf7d8be4"
+    }
+  },
+  "intro": {
+    "text": "سورة النازعات تذكرنا بيوم القيامة وتخبرنا بقصة النبي موسى عليه السلام مع فرعون، وتعلمنا أن الله هو الخالق العظيم.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "الله يقسم بالملائكة التي تأخذ أرواح الكافرين بقوة",
+      "review": "One reading of the opening oaths, given as the only one. The angels are the view of most (Ibn Mas'ud, Ibn 'Abbas, Masruq; Ibn Kathir calls it the sound view), but common tafsir (al-Tabari, Ibn Kathir, al-Qurtubi) also report: death (Mujahid), the stars (al-Hasan, Qatada), the souls, bows in battle ('Ata', ayat 1-2), ships ('Ata', ayah 3) and horses ('Ata', ayah 4). Al-Tabari keeps every reading. Only ayah 5 (al-mudabbirat) is the angels by agreement. Teacher to choose the wording (e.g. \"the angels, in the view of most scholars\")."
+    },
+    {
+      "ayah": 2,
+      "text": "والملائكة التي تأخذ أرواح المؤمنين برفق",
+      "review": "One reading of the opening oaths, given as the only one. The angels are the view of most (Ibn Mas'ud, Ibn 'Abbas, Masruq; Ibn Kathir calls it the sound view), but common tafsir (al-Tabari, Ibn Kathir, al-Qurtubi) also report: death (Mujahid), the stars (al-Hasan, Qatada), the souls, bows in battle ('Ata', ayat 1-2), ships ('Ata', ayah 3) and horses ('Ata', ayah 4). Al-Tabari keeps every reading. Only ayah 5 (al-mudabbirat) is the angels by agreement. Teacher to choose the wording (e.g. \"the angels, in the view of most scholars\")."
+    },
+    {
+      "ayah": 3,
+      "text": "والملائكة التي تنزل من السماء بسرعة",
+      "review": "One reading of the opening oaths, given as the only one. The angels are the view of most (Ibn Mas'ud, Ibn 'Abbas, Masruq; Ibn Kathir calls it the sound view), but common tafsir (al-Tabari, Ibn Kathir, al-Qurtubi) also report: death (Mujahid), the stars (al-Hasan, Qatada), the souls, bows in battle ('Ata', ayat 1-2), ships ('Ata', ayah 3) and horses ('Ata', ayah 4). Al-Tabari keeps every reading. Only ayah 5 (al-mudabbirat) is the angels by agreement. Teacher to choose the wording (e.g. \"the angels, in the view of most scholars\")."
+    },
+    {
+      "ayah": 4,
+      "text": "والملائكة التي تسبق لتنفيذ أمر الله",
+      "review": "One reading of the opening oaths, given as the only one. The angels are the view of most (Ibn Mas'ud, Ibn 'Abbas, Masruq; Ibn Kathir calls it the sound view), but common tafsir (al-Tabari, Ibn Kathir, al-Qurtubi) also report: death (Mujahid), the stars (al-Hasan, Qatada), the souls, bows in battle ('Ata', ayat 1-2), ships ('Ata', ayah 3) and horses ('Ata', ayah 4). Al-Tabari keeps every reading. Only ayah 5 (al-mudabbirat) is the angels by agreement. Teacher to choose the wording (e.g. \"the angels, in the view of most scholars\")."
+    },
+    {
+      "ayah": 5,
+      "text": "والملائكة التي تدبر أمور الكون بأمر الله",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "يوم تهتز الأرض اهتزازًا شديدًا",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "ثم تأتي بعدها نفخة أخرى",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "قلوب الناس في ذلك اليوم خائفة جدًا",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "وأعينهم ذليلة من شدة الخوف",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "text": "يقول الكافرون: هل سنعود أحياء بعد الموت؟",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "text": "حتى لو صرنا عظامًا بالية؟",
+      "review": null
+    },
+    {
+      "ayah": 12,
+      "text": "قالوا: لو حدث هذا فسنكون خاسرين",
+      "review": null
+    },
+    {
+      "ayah": 13,
+      "text": "البعث يحتاج نفخة واحدة فقط",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "text": "فيقومون جميعًا على وجه الأرض",
+      "review": null
+    },
+    {
+      "ayah": 15,
+      "text": "هل سمعت قصة النبي موسى عليه السلام؟",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "text": "عندما كلّمه الله في الوادي المقدس طوى",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "text": "قال الله لموسى: اذهب إلى فرعون لأنه تكبّر وظلم",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "text": "وقل له: هل تريد أن تصبح إنسانًا صالحًا؟",
+      "review": null
+    },
+    {
+      "ayah": 19,
+      "text": "وأدلّك على طريق الله فتخاف عقابه",
+      "review": null
+    },
+    {
+      "ayah": 20,
+      "text": "فأرى موسى فرعون معجزة كبيرة",
+      "review": null
+    },
+    {
+      "ayah": 21,
+      "text": "لكن فرعون كذّب ولم يطع الله",
+      "review": null
+    },
+    {
+      "ayah": 22,
+      "text": "ثم ابتعد يحارب الحق",
+      "review": null
+    },
+    {
+      "ayah": 23,
+      "text": "فجمع الناس ونادى فيهم",
+      "review": null
+    },
+    {
+      "ayah": 24,
+      "text": "وقال فرعون: أنا إلهكم الأعلى! وهذا كذب كبير",
+      "review": null
+    },
+    {
+      "ayah": 25,
+      "text": "فعاقبه الله عقابًا شديدًا في الدنيا والآخرة",
+      "review": null
+    },
+    {
+      "ayah": 26,
+      "text": "في هذه القصة درس لكل من يخاف الله",
+      "review": null
+    },
+    {
+      "ayah": 27,
+      "text": "هل أنتم أصعب في الخلق أم السماء؟ الله بناها",
+      "review": null
+    },
+    {
+      "ayah": 28,
+      "text": "رفع الله السماء عاليًا وجعلها مستوية",
+      "review": null
+    },
+    {
+      "ayah": 29,
+      "text": "جعل الله الليل مظلمًا والنهار مضيئًا",
+      "review": null
+    },
+    {
+      "ayah": 30,
+      "text": "وبسط الله الأرض ومهّدها",
+      "review": null
+    },
+    {
+      "ayah": 31,
+      "text": "أخرج الله من الأرض الماء والنباتات",
+      "review": null
+    },
+    {
+      "ayah": 32,
+      "text": "وثبّت الله الجبال على الأرض",
+      "review": null
+    },
+    {
+      "ayah": 33,
+      "text": "كل هذا لكم ولحيواناتكم لتستمتعوا به",
+      "review": null
+    },
+    {
+      "ayah": 34,
+      "text": "فعندما يأتي يوم القيامة العظيم",
+      "review": null
+    },
+    {
+      "ayah": 35,
+      "text": "يتذكر الإنسان كل ما عمله في حياته",
+      "review": null
+    },
+    {
+      "ayah": 36,
+      "text": "وتظهر النار لكل الناس",
+      "review": null
+    },
+    {
+      "ayah": 37,
+      "text": "أما من تكبّر وعصى الله",
+      "review": null
+    },
+    {
+      "ayah": 38,
+      "text": "وفضّل الدنيا على الآخرة",
+      "review": null
+    },
+    {
+      "ayah": 39,
+      "text": "فمكانه النار",
+      "review": null
+    },
+    {
+      "ayah": 40,
+      "text": "وأما من خاف الله ومنع نفسه من المعاصي",
+      "review": "MERGED: the old lesson split this ayah into two (its 40 and 41); these are its two lines joined with a space. Teacher to smooth the wording."
+    },
+    {
+      "ayah": 41,
+      "text": "فمكانه الجنة الجميلة",
+      "review": "RENUMBERED: this is the old lesson's entry 42, which it showed as ayah 42; it is real ayah 41 (the old lesson split ayah 40, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 42,
+      "text": "يسألونك متى يوم القيامة؟",
+      "review": "RENUMBERED: this is the old lesson's entry 43, which it showed as ayah 43; it is real ayah 42 (the old lesson split ayah 40, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 43,
+      "text": "ليس عليك أن تعرف موعدها",
+      "review": "RENUMBERED: this is the old lesson's entry 44, which it showed as ayah 44; it is real ayah 43 (the old lesson split ayah 40, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 44,
+      "text": "علمها عند الله وحده",
+      "review": "RENUMBERED: this is the old lesson's entry 45, which it showed as ayah 45; it is real ayah 44 (the old lesson split ayah 40, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 45,
+      "text": "أنت فقط تحذّر الناس من ذلك اليوم",
+      "review": "RENUMBERED: this is the old lesson's entry 46, which it showed as ayah 46; it is real ayah 45 (the old lesson split ayah 40, so every later entry was one too high). The line is unchanged. Teacher to confirm."
+    },
+    {
+      "ayah": 46,
+      "text": null,
+      "review": "MISSING: the old lesson never has this ayah (it split ayah 40 into two entries and still stopped at 46 entries, so the last real ayah, 46, is absent). There is no line. A teacher writes it."
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "الملائكة التي تنزع الأرواح بقوة",
+      "review": "One reading of the opening oaths, given as the only one. The angels are the view of most (Ibn Mas'ud, Ibn 'Abbas, Masruq; Ibn Kathir calls it the sound view), but common tafsir (al-Tabari, Ibn Kathir, al-Qurtubi) also report: death (Mujahid), the stars (al-Hasan, Qatada), the souls, bows in battle ('Ata', ayat 1-2), ships ('Ata', ayah 3) and horses ('Ata', ayah 4). Al-Tabari keeps every reading. Only ayah 5 (al-mudabbirat) is the angels by agreement. Teacher to choose the wording (e.g. \"the angels, in the view of most scholars\")."
+    },
+    {
+      "ayah": 1,
+      "word": 2,
+      "meaning": "نزعًا شديدًا بقوة",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 3,
+      "meaning": "النفخة الأولى التي تهتز بها الأرض",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 2,
+      "meaning": "النفخة الثانية التي تأتي بعدها",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 3,
+      "meaning": "خائفة ومرتعبة",
+      "review": null
+    },
+    {
+      "ayah": 10,
+      "word": 5,
+      "meaning": "الحياة الأولى - العودة للحياة",
+      "review": null
+    },
+    {
+      "ayah": 11,
+      "word": 4,
+      "meaning": "بالية ومتفتتة",
+      "review": null
+    },
+    {
+      "ayah": 14,
+      "word": 3,
+      "meaning": "وجه الأرض",
+      "review": null
+    },
+    {
+      "ayah": 16,
+      "word": 6,
+      "meaning": "اسم الوادي المقدس",
+      "review": null
+    },
+    {
+      "ayah": 17,
+      "word": 5,
+      "meaning": "تكبّر وتجاوز الحد",
+      "review": null
+    },
+    {
+      "ayah": 18,
+      "word": 6,
+      "meaning": "تطهّر وتصبح صالحًا",
+      "review": null
+    },
+    {
+      "ayah": 30,
+      "word": 4,
+      "meaning": "بسطها ومهّدها",
+      "review": null
+    },
+    {
+      "ayah": 32,
+      "word": 2,
+      "meaning": "ثبّتها وأقرّها",
+      "review": null
+    },
+    {
+      "ayah": 34,
+      "word": 3,
+      "meaning": "يوم القيامة العظيم",
+      "review": null
+    },
+    {
+      "ayah": 40,
+      "word": 9,
+      "meaning": "رغبات النفس السيئة",
+      "review": null
+    },
+    {
+      "ayah": 41,
+      "word": 4,
+      "meaning": "المكان الذي يعيش فيه",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 2
+    },
+    {
+      "ayah": 6,
+      "word": 3
+    },
+    {
+      "ayah": 15,
+      "word": 4
+    },
+    {
+      "ayah": 41,
+      "word": 4
+    },
+    {
+      "ayah": 17,
+      "word": 5
+    },
+    {
+      "ayah": 2,
+      "word": 2
+    },
+    {
+      "ayah": 8,
+      "word": 3
+    },
+    {
+      "ayah": 24,
+      "word": 4
+    },
+    {
+      "ayah": 40,
+      "word": 9
+    },
+    {
+      "ayah": 32,
+      "word": 2
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما أول آية في سورة النازعات؟",
+      "options": [
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 3
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 41,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 10,
+          "word": 5
+        },
+        {
+          "ayah": 41,
+          "word": 4
+        },
+        {
+          "ayah": 14,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "word": {
+        "ayah": 17,
+        "word": 5
+      },
+      "options": [
+        {
+          "text": "تكبّر وتجاوز الحد"
+        },
+        {
+          "text": "خاف وارتعب"
+        },
+        {
+          "text": "سافر بعيدًا"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 17,
+        "words": 4
+      },
+      "options": [
+        {
+          "ayah": 21,
+          "word": 2
+        },
+        {
+          "ayah": 17,
+          "word": 5
+        },
+        {
+          "ayah": 35,
+          "word": 5
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q4"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 40,
+        "words": 5
+      },
+      "options": [
+        {
+          "ayah": 41,
+          "word": 1
+        },
+        {
+          "ayah": 40,
+          "word": 6
+        },
+        {
+          "ayah": 38,
+          "word": 1
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old question asked which ayah comes after \"wa-amma man khafa maqama rabbih\", and its answer \"wa-naha al-nafsa 'an al-hawa\" is the second half of the same ayah, 40 (the old lesson split ayah 40 in two). The real next ayah is 41, which was one of its distractors. It is now a complete-the-ayah question: \"akmil\" (the old completion questions' word), the first five words of ayah 40, and the first word of each old option: fa-inna (41:1), wa-naha (40:6, the answer, unchanged in meaning) and wa-athara (38:1). Teacher to confirm, or ask for ayah 41 instead.",
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "word": {
+        "ayah": 34,
+        "word": 3
+      },
+      "options": [
+        {
+          "text": "الزلزال الكبير"
+        },
+        {
+          "text": "يوم القيامة العظيم"
+        },
+        {
+          "text": "العاصفة الشديدة"
+        }
+      ],
+      "answer": 1,
+      "review": "PHRASE: the meaning is of the phrase \"al-tammah al-kubra\"; the engine shows it on the one word al-tammah (34:3). Teacher to confirm it reads right.",
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "من هو الذي قال 'أَنَا رَبُّكُمُ الْأَعْلَى'؟",
+      "options": [
+        {
+          "text": "النبي موسى"
+        },
+        {
+          "text": "فرعون"
+        },
+        {
+          "text": "النبي إبراهيم"
+        }
+      ],
+      "answer": 1,
+      "review": "TYPED: the question quotes \"ana rabbukum al-a'la\", three words of ayah 24 typed by hand (under the checker's four-word limit, but typed Quran). Cut before the quote, \"man huwa alladhi qal\" says nothing. Teacher to rephrase it in prose.",
+      "id": "q7"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نتعلم من قصة فرعون في السورة؟",
+      "options": [
+        {
+          "text": "أن التكبر يؤدي إلى العقاب"
+        },
+        {
+          "text": "أن السفر مفيد"
+        },
+        {
+          "text": "أن الطعام مهم"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q8"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 46,
+        "words": 6
+      },
+      "options": [
+        {
+          "ayah": 46,
+          "word": 7
+        },
+        {
+          "ayah": 29,
+          "word": 2
+        },
+        {
+          "ayah": 42,
+          "word": 3
+        }
+      ],
+      "answer": 0,
+      "review": "CHANGED: the old answer \"'ashiyyatan aw duhaha\" (46:7-9) was a three-word ending and its distractors \"yawman aw laylah\" and \"sa'atan aw aqall\" were hand-typed, not of this surah. It now asks only for the next word, 'ashiyyah (46:7); the distractors are laylaha (29:2) and al-sa'ah (42:3), words of this surah. This is real ayah 46, which the old lesson's ayah list (and so its tafsir) never has.",
+      "id": "q9"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "أن الله هو الخالق العظيم الذي خلق السماء والأرض",
+      "review": null
+    },
+    {
+      "text": "أن يوم القيامة يوم عظيم يجب أن نستعد له",
+      "review": null
+    },
+    {
+      "text": "أن من يطيع الله ويخاف عقابه يدخل الجنة",
+      "review": null
+    },
+    {
+      "text": "أن من يعصي الله ويتكبر مثل فرعون يُعاقب",
+      "review": null
+    },
+    {
+      "text": "أن نمنع أنفسنا من الأشياء السيئة ونعمل الخير",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "كيف يمكننا أن نعمل الخير لنكون من أهل الجنة؟",
+    "ideas": [
+      "أصلي الصلوات الخمس في وقتها",
+      "أساعد أمي وأبي في البيت",
+      "أكون صادقًا دائمًا",
+      "أحسن إلى أصدقائي وجيراني",
+      "أقرأ القرآن كل يوم",
+      "أتصدق على المحتاجين"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن الله خلق السماء والأرض بنظام رائع ومحكم؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن طاعة الله تقود إلى الجنة الجميلة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن فرعون كان أكثر الناس تكبرًا فعاقبه الله؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة النازعات نزلت في مكة المكرمة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن عدد آيات سورة النازعات 46 آية؟",
+      "review": null
+    }
+  ]
+}

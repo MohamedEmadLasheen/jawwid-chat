@@ -73,8 +73,12 @@ export interface ObjectStorage {
     mimeType: string;
     byteSize: number;
   }): Promise<UploadAuthorization>;
-  /** Short-lived signed read URL. Never a permanent public URL. */
-  signedReadUrl(objectKey: string, ttlSeconds: number): Promise<string>;
+  /**
+   * Short-lived signed read URL. Never a permanent public URL. `cacheControl`
+   * asks the store to answer with that Cache-Control (S3 ResponseCacheControl),
+   * for a URL that is one caller's bearer link (Quran audio: private, no-store).
+   */
+  signedReadUrl(objectKey: string, ttlSeconds: number, opts?: { cacheControl?: string }): Promise<string>;
   /**
    * Remove the bytes. Idempotent: deleting an absent object succeeds, because a
    * retention sweep must converge rather than wedge on a key somebody already

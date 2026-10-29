@@ -1,0 +1,560 @@
+{
+  "surah": 104,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the five Tajweed rules, the two Tajweed games and the Tajweed quiz question (Tajweed comes only from the reviewed dataset), the audio URLs and the reciter line, and every hand-typed Quran string (replaced by positions). The complete-the-ayah words are the answers of the old \"complete the ayah\" and \"missing word\" games; the two-word answers (humazatin lumazah, malan wa-'addadah) became their last word, and the games' hand-typed distractors (none of them words of this surah) are gone: the game draws its options from these words. Two old spellings needed a matching-only aid, never stored: adraka (5:2, Uthmani adraka with alif maqsura and dagger alif) and al-af'idah (7:4, Uthmani writes its hamza without the ya seat). One word meaning ('addadahu) was typed without the \"wa-\" the verse word carries; it points at the whole verse word (2:4). The old quiz had difficulty levels (easy, medium, hard), not categories; the categories were assigned by question type. Each lesson learned is its old title and description joined with \": \". The reflection is the old prompt's question, with the \"how we apply these lessons\" tips as its ideas. Not carried (no field or no such game in the engine): the \"Makki\" type, the \"why it was revealed\" line, the ayah-ordering, start-end memory and choose-the-ayah games, the three word-meaning games (same words and meanings as the list), the intro quiz (surah name, ayah count), the reflection's lead-in line, its three \"will you ...\" prompts and its closing du'a."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-104 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "87fd478f821e86160b1cd80ac1345d43f127aa4517a1f3aee4a5c48aaa74a997",
+      "components/WelcomeSection.tsx": "05f01d2b0656d74b78b8afc9ec45d42998e4a0d7ed263bec5590ce60ae485edb",
+      "components/LearnVerses.tsx": "a207765ff07dbd97f9ae7d0ebe4b10a7483ac91d92130a91aafca5823db22b48",
+      "components/MeaningsSection.tsx": "88fd54e71484c794a4ff19ceacc47544935060ea57e0713e66e1ade029902c93",
+      "components/TajweedSection.tsx": "023cffa07f11b240625bcd51e17c0ee53e7680b298d7c2f96d14ba0eb0d72e13",
+      "components/LessonsAndReflection.tsx": "b5baa1c863bc58187979e13fc383e66d4a90ee925f41ee64913dcc4f713b6488",
+      "components/FinalAssessment.tsx": "dea91aa7f3d8db564f071654b817039568b479240907305752bc28142fbd901c",
+      "LessonApp.tsx": "c955d8fca9c268fee3f31b8a443f6c4874c028186359b87dca0677ccc482e753"
+    }
+  },
+  "intro": {
+    "text": "سورة الهُمَزَة سورة مكية نزلت في مكة المكرمة، عدد آياتها 9 آيات. تتحدث عن الذي يعيب الناس ويغتابهم ويظن أن ماله سيبقيه للأبد.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "عذاب شديد لكل من يعيب الناس بالكلام أو بالإشارة. يعني لا نتكلم عن الناس بكلام سيء!",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "هذا الشخص يجمع المال ويعدّه كثيرًا ويفرح به. لكن المال وحده لا يكفي!",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "يظن أن ماله الكثير سيجعله يعيش للأبد! لكن هذا غير صحيح، الله وحده هو الباقي.",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "لا! سيُلقى في نار شديدة تسمى الحُطَمة. هذا عقاب من لا يطيع الله.",
+      "review": "Ends \"this is the punishment of whoever does not obey Allah\". The ayah threatens the man of ayat 1-3 (the slanderer who hoards wealth and thinks it makes him immortal); as written a child may take it that every disobedience leads to al-Hutamah. Teacher to reword."
+    },
+    {
+      "ayah": 5,
+      "text": "هل تعرف ما هي الحُطَمة؟ إنها نار عظيمة جدًا! الله يخبرنا عنها لنحذر.",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "text": "هي نار الله المشتعلة التي لا تنطفئ أبدًا.",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "text": "هذه النار تصل إلى القلوب. نسأل الله أن يحمينا منها.",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "text": "هذه النار مغلقة عليهم ولا يستطيعون الخروج منها.",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "text": "في أعمدة طويلة ممتدة. نسأل الله السلامة.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 1,
+      "meaning": "عذاب شديد",
+      "review": null
+    },
+    {
+      "ayah": 1,
+      "word": 3,
+      "meaning": "الذي يعيب الناس بالإشارة",
+      "review": "One view (Mujahid, Ibn Zayd): humazah faults people by gesture (hand, eye), lumazah by the tongue. Others reverse it, or say both are the backbiter and slanderer (Ibn Abbas: humazah lumazah, the one who goes about backbiting and defaming). Teacher to choose the wording."
+    },
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "الذي يعيب الناس بالكلام",
+      "review": "One view (Mujahid, Ibn Zayd): humazah faults people by gesture (hand, eye), lumazah by the tongue. Others reverse it, or say both are the backbiter and slanderer (Ibn Abbas: humazah lumazah, the one who goes about backbiting and defaming). Teacher to choose the wording."
+    },
+    {
+      "ayah": 2,
+      "word": 2,
+      "meaning": "حصّل وكثّر",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "meaning": "نقود وأشياء ثمينة",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "word": 4,
+      "meaning": "أحصاه وعدّه مرة بعد مرة",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 1,
+      "meaning": "يظن ويعتقد",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 4,
+      "meaning": "جعله يعيش للأبد",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 1,
+      "meaning": "لا! ليس كما يظن",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 2,
+      "meaning": "سيُلقى ويُرمى",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 4,
+      "meaning": "اسم من \u0623\u0633\u0645\u0627\u0621 النار",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 2,
+      "meaning": "أعلمك وأخبرك",
+      "review": null
+    },
+    {
+      "ayah": 6,
+      "word": 3,
+      "meaning": "المشتعلة دائمًا",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 2,
+      "meaning": "تصل وتنفذ",
+      "review": null
+    },
+    {
+      "ayah": 7,
+      "word": 4,
+      "meaning": "القلوب",
+      "review": null
+    },
+    {
+      "ayah": 8,
+      "word": 3,
+      "meaning": "مغلقة ومقفلة",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "word": 2,
+      "meaning": "أعمدة",
+      "review": null
+    },
+    {
+      "ayah": 9,
+      "word": 3,
+      "meaning": "طويلة ممتدة",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 4
+    },
+    {
+      "ayah": 2,
+      "word": 4
+    },
+    {
+      "ayah": 3,
+      "word": 4
+    },
+    {
+      "ayah": 4,
+      "word": 4
+    },
+    {
+      "ayah": 6,
+      "word": 3
+    },
+    {
+      "ayah": 1,
+      "word": 3
+    },
+    {
+      "ayah": 2,
+      "word": 3
+    },
+    {
+      "ayah": 7,
+      "word": 4
+    },
+    {
+      "ayah": 8,
+      "word": 3
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها؟",
+      "options": [
+        {
+          "text": "الفاتحة"
+        },
+        {
+          "text": "الهمزة"
+        },
+        {
+          "text": "الإخلاص"
+        },
+        {
+          "text": "الفلق"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الهمزة؟",
+      "options": [
+        {
+          "text": "5"
+        },
+        {
+          "text": "7"
+        },
+        {
+          "text": "9"
+        },
+        {
+          "text": "11"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "فرح كبير"
+        },
+        {
+          "text": "عذاب شديد"
+        },
+        {
+          "text": "مال كثير"
+        },
+        {
+          "text": "نوم عميق"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 1
+      },
+      "id": "q3"
+    },
+    {
+      "category": "hifz",
+      "question": "ما أول كلمة في سورة الهمزة؟",
+      "options": [
+        {
+          "ayah": 3,
+          "word": 1
+        },
+        {
+          "ayah": 4,
+          "word": 1
+        },
+        {
+          "ayah": 1,
+          "word": 1
+        },
+        {
+          "ayah": 2,
+          "word": 1
+        }
+      ],
+      "answer": 2,
+      "review": "CHANGED: the old distractors \"qul\" and \"bismi\" were hand-typed Quran not of this surah; they are now the first words of ayat 3 and 4 (yahsabu, kalla). The answer (waylun, 1:1) and the fourth option (alladhi, 2:1) are unchanged.",
+      "id": "q4"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "الجنة"
+        },
+        {
+          "text": "اسم من \u0623\u0633\u0645\u0627\u0621 النار"
+        },
+        {
+          "text": "جبل كبير"
+        },
+        {
+          "text": "نهر عظيم"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 4,
+        "word": 4
+      },
+      "id": "q5"
+    },
+    {
+      "category": "meanings",
+      "question": "ماذا يظن الشخص الذي يجمع المال؟",
+      "options": [
+        {
+          "text": "أن المال سيجعله يعيش للأبد"
+        },
+        {
+          "text": "أن المال قليل"
+        },
+        {
+          "text": "أن المال حرام"
+        },
+        {
+          "text": "أن المال ليس مهمًا"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "مفتوحة"
+        },
+        {
+          "text": "مغلقة"
+        },
+        {
+          "text": "جميلة"
+        },
+        {
+          "text": "كبيرة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 8,
+        "word": 3
+      },
+      "id": "q7"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "الأيدي"
+        },
+        {
+          "text": "الأرجل"
+        },
+        {
+          "text": "القلوب"
+        },
+        {
+          "text": "العيون"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "word": {
+        "ayah": 7,
+        "word": 4
+      },
+      "id": "q8"
+    },
+    {
+      "category": "lessons",
+      "question": "ما الدرس المستفاد من سورة الهمزة؟",
+      "options": [
+        {
+          "text": "نجمع المال الكثير"
+        },
+        {
+          "text": "لا نغتاب الناس ولا نسخر منهم"
+        },
+        {
+          "text": "نلعب كثيرًا"
+        },
+        {
+          "text": "ننام مبكرًا"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q9"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل الآية",
+      "prompt": {
+        "ayah": 1,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 9,
+          "word": 3
+        },
+        {
+          "ayah": 1,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 4
+        },
+        {
+          "ayah": 8,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors were invented words (umazah, humazah with ha, rumazah), not Quran; they are now mumaddadah (9:3), al-hutamah (4:4) and mu'sadah (8:3), words of this surah. The answer (lumazah, 1:4) is unchanged.",
+      "id": "q10"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 3,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 2,
+          "word": 4
+        },
+        {
+          "ayah": 3,
+          "word": 4
+        },
+        {
+          "ayah": 5,
+          "word": 2
+        },
+        {
+          "ayah": 2,
+          "word": 2
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors (a'tahu, afrahahu, akramahu) were hand-typed, not of this surah; they are now 'addadahu (2:4), adraka (5:2) and jama'a (2:2), words of this surah. The answer (akhladahu, 3:4) is unchanged.",
+      "id": "q11"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "لا نغتاب الناس: لا نتكلم عن الناس بكلام سيء من ورائهم",
+      "review": null
+    },
+    {
+      "text": "لا نسخر من أحد: لا نضحك على الناس أو نعيبهم",
+      "review": null
+    },
+    {
+      "text": "المال ليس كل شيء: الأخلاق الطيبة أهم من المال الكثير",
+      "review": null
+    },
+    {
+      "text": "نكون طيبين: نتكلم بكلام جميل ونعامل الناس بلطف",
+      "review": null
+    },
+    {
+      "text": "نشكر الله: نشكر الله على كل النعم ولا نتكبر",
+      "review": "Gratitude is not a theme of this surah; the \"do not be arrogant\" half fits (the man who trusts his wealth). Teacher to keep, reword or drop."
+    },
+    {
+      "text": "نطيع الله: نسمع كلام الله ورسوله ونبتعد عما نهانا عنه",
+      "review": "A good lesson (obey Allah and His Messenger), but not one this surah teaches. Teacher to keep or drop."
+    }
+  ],
+  "reflection": {
+    "question": "ما أجمل شيء تعلمته من سورة الهمزة؟",
+    "ideas": [
+      "نتكلم بكلام جميل عن الناس ولا نغتابهم",
+      "نشكر الله على نعمه ولا نتكبر بما عندنا",
+      "نكون لطيفين مع أصدقائنا ولا نسخر من أحد",
+      "نتصدق ونساعد المحتاجين بما عندنا"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "سورة الهمزة هي السورة رقم 104 في القرآن الكريم",
+      "review": null
+    },
+    {
+      "text": "كلمة 'الحُطَمة' هي اسم من \u0623\u0633\u0645\u0627\u0621 النار",
+      "review": null
+    },
+    {
+      "text": "قراءة القرآن كل يوم تجعلك قريبًا من الله",
+      "review": null
+    },
+    {
+      "text": "كل حرف تقرأه من القرآن لك به حسنة والحسنة بعشر أمثالها",
+      "review": null
+    },
+    {
+      "text": "الهُمَزة هو الذي يعيب الناس بالإشارة واللُّمَزة بالكلام",
+      "review": "One view (Mujahid, Ibn Zayd): humazah faults people by gesture (hand, eye), lumazah by the tongue. Others reverse it, or say both are the backbiter and slanderer (Ibn Abbas: humazah lumazah, the one who goes about backbiting and defaming). Teacher to choose the wording."
+    },
+    {
+      "text": "سورة الهمزة نزلت في مكة المكرمة",
+      "review": null
+    },
+    {
+      "text": "من يحفظ القرآن يكون من أهل الله وخاصته",
+      "review": "The hadith (Ahmad, Ibn Majah, from Anas) says \"ahl al-Quran are the people of Allah and His elect\"; the scholars explain ahl al-Quran as those who memorise it AND act by it, not memorising alone. Teacher to confirm the wording."
+    },
+    {
+      "text": "النبي ﷺ قال: خيركم من تعلم القرآن وعلمه",
+      "review": null
+    }
+  ]
+}

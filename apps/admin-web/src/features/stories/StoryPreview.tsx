@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon, type IconName } from '@/shared/components/Icon'
-import { clock } from '@/features/family/VoiceMessage'
+import { clock } from './clock'
 import { useText } from '@/features/admin/copy'
 import { CTA_DEFAULT_TEXT, S } from './copy'
 import type { CtaKind, StoryKind } from './api'

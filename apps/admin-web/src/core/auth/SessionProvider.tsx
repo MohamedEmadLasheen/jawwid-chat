@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { sessionApi, type DutyState } from '@/core/api/endpoints'
+import { sessionApi } from '@/core/api/endpoints'
 import { qk } from '@/core/api/queryKeys'
 import { setUnauthenticatedHandler } from '@/core/api/client'
 import { onSignedOutElsewhere, tokenStore } from './tokens'
@@ -9,7 +9,6 @@ import type { Staff } from '@/shared/types/domain'
 
 interface SessionValue {
   staff: Staff | null
-  duty: DutyState | null
   isLoading: boolean
   isAuthenticated: boolean
   signOut: () => Promise<void>
@@ -34,16 +33,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   })
 
-  const dutyQuery = useQuery({
-    queryKey: qk.duty,
-    queryFn: () => sessionApi.duty(),
-    // super_admin has no shift and no duty: it is not a family-facing role.
-    enabled: Boolean(meQuery.data) && meQuery.data?.role !== 'super_admin',
-    // Duty state changes on shift boundaries; a minute of staleness is enough
-    // because coverage.changed events invalidate it as well.
-    refetchInterval: 60_000,
-  })
-
   useEffect(() => {
     // A 401 from anywhere clears every cached page so a signed-out operator
     // cannot read another role's data out of the cache.
@@ -58,7 +47,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo<SessionValue>(
     () => ({
       staff: meQuery.data ?? null,
-      duty: dutyQuery.data ?? null,
       isLoading: meQuery.isLoading,
       isAuthenticated: Boolean(meQuery.data),
       signOut: async () => {
@@ -70,7 +58,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         endSession(queryClient)
       },
     }),
-    [meQuery.data, meQuery.isLoading, dutyQuery.data, queryClient],
+    [meQuery.data, meQuery.isLoading, queryClient],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

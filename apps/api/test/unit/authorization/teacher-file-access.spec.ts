@@ -16,7 +16,8 @@ const staff = (role: string, over: Partial<Actor> = {}): Actor => ({
 
 const NONE = { canView: false, canEditPersonal: false, canWriteSupervision: false, canViewFinance: false };
 const READ_WRITE = { canView: true, canEditPersonal: false, canWriteSupervision: true, canViewFinance: false };
-const MANAGER = { canView: true, canEditPersonal: true, canWriteSupervision: true, canViewFinance: false };
+// PD-43 N2 (owner 2026-10-27, "Full teacher finance"): the Teachers manager holds payroll too.
+const MANAGER = { canView: true, canEditPersonal: true, canWriteSupervision: true, canViewFinance: true };
 const OWNER = { canView: true, canEditPersonal: true, canWriteSupervision: true, canViewFinance: true };
 
 const decide = (actor: Actor, rel: TeachersDepartmentRole, org = ORG) =>
@@ -29,7 +30,7 @@ describe('PD-10 Teacher File access', () => {
     }
   });
 
-  it('the Teachers manager reads, edits personal info and writes the timeline, but never sees finance', () => {
+  it('the Teachers manager reads, edits personal info, writes the timeline and holds payroll (PD-43 N2)', () => {
     expect(decide(staff(StaffRole.MANAGER), 'manager')).toEqual(MANAGER);
   });
 
