@@ -78,7 +78,8 @@ export const SOURCE_TYPES = [
   'teacher_unsupervised', 'trial_attendance', 'trial_outcome',
   'certificate_accept', 'certificate_design', 'certificate_resubmit', 'certificate_review', 'certificate_send',
   // PD-47 PR-6c: the Teachers department's decisions (chat.work_task_sweep_decisions).
-  'complaint', 'parent_feedback', 'schedule_change',
+  // `feedback` is a parent's (PD-32): read only through chat.work_task_feedback_*.
+  'complaint', 'feedback', 'schedule_change', 'makeup_owed',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -1044,9 +1045,10 @@ export class TaskService {
                WHEN 'teacher_unsupervised' THEN (SELECT sp.teacher_id::text FROM chat.work_task_teacher_spell sp WHERE sp.id = t.source_id)
                WHEN 'trial_attendance' THEN (SELECT l.teacher_id::text FROM chat.lesson l WHERE l.id = t.source_id)
                WHEN 'complaint' THEN (SELECT e.teacher_id::text FROM chat.teacher_supervision_entry e WHERE e.id = t.source_id)
-               WHEN 'parent_feedback' THEN (SELECT f.teacher_id::text FROM chat.parent_feedback f WHERE f.id = t.source_id)
+               WHEN 'feedback' THEN chat.work_task_feedback_teacher(t.source_id)::text
                WHEN 'schedule_change' THEN (SELECT ln.teacher_id::text FROM chat.schedule_change_request q
                                               JOIN chat.learner ln ON ln.id = q.learner_id WHERE q.id = t.source_id)
+               WHEN 'makeup_owed' THEN (SELECT l.teacher_id::text FROM chat.lesson l WHERE l.id = chat.work_task_makeup_original(t.source_id))
              END AS source_teacher_id,
              CASE t.source_type
                WHEN 'lesson_report' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
@@ -1109,12 +1111,14 @@ export class TaskService {
                WHEN 'complaint' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id)
                                         FROM chat.teacher_supervision_entry e JOIN chat.teacher te ON te.id = e.teacher_id
                                        WHERE e.id = t.source_id)
-               WHEN 'parent_feedback' THEN (SELECT jsonb_build_object('teacherName', te.name, 'learnerName', ln.name, 'category', f.category)
-                                              FROM chat.parent_feedback f JOIN chat.teacher te ON te.id = f.teacher_id
-                                              JOIN chat.learner ln ON ln.id = f.learner_id WHERE f.id = t.source_id)
+               WHEN 'feedback' THEN chat.work_task_feedback_title(t.source_id)
                WHEN 'schedule_change' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'learnerId', ln.id)
                                               FROM chat.schedule_change_request q JOIN chat.learner ln ON ln.id = q.learner_id
                                              WHERE q.id = t.source_id)
+               -- The original lesson, whichever episode the key names.
+               WHEN 'makeup_owed' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
+                                          FROM chat.lesson l JOIN chat.learner ln ON ln.id = l.learner_id
+                                         WHERE l.id = chat.work_task_makeup_original(t.source_id))
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,

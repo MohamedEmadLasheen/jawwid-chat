@@ -80,7 +80,7 @@ describe('PD-47 PR-6c: the Teachers department\'s decisions', () => {
   })
 
   it('a parent\'s feedback names the teacher and the child, never what was written', () => {
-    const t = task('parent_feedback', 'f1', { teacherName: 'teacher_c', learnerName: 'learner_l', category: 'praise' })
+    const t = task('feedback', 'f1', { teacherName: 'teacher_c', learnerName: 'learner_l', category: 'praise' })
     expect(titleOf(t, en, fmt)).toBe('Answer a parent about teacher_c: learner_l')
     expect(sourceLink(t)).toBe('/teachers/supervision?section=feedback')
   })
@@ -91,8 +91,14 @@ describe('PD-47 PR-6c: the Teachers department\'s decisions', () => {
     expect(sourceLink(t)).toBe('/teachers/needs-action')
   })
 
+  it('a make-up owed names the child and the lesson\'s time', () => {
+    const t = task('makeup_owed', 'l1', { learnerName: 'learner_l', startsAt: '2026-10-29T10:00:00Z', lessonId: 'l1' })
+    expect(titleOf(t, en, fmt)).toBe('Make sure a lesson is made up: learner_l, at 2026-10-29T10:00:00Z')
+    expect(sourceLink(t)).toBe('/teachers/needs-action')
+  })
+
   it('every one has its label and title in both languages, with no placeholder left unfilled', () => {
-    for (const type of ['complaint', 'parent_feedback', 'schedule_change'] as const) {
+    for (const type of ['complaint', 'feedback', 'schedule_change', 'makeup_owed'] as const) {
       expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
       expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
     }
