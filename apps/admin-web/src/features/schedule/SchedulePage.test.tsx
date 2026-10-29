@@ -7,6 +7,7 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { CalendarOptions, CalendarStats, CalendarSummary, CalendarTeacher, CalendarWindow, Totals, WorkPatterns } from './api'
 import { ShiftSection } from './ShiftSection'
 import { SupervisorColors } from './SupervisorColors'
+import { optionsOf } from '@/test/select'
 
 /**
  * PD-38 Admin Web: the page's side of the contract, through the real routes and
@@ -260,7 +261,7 @@ describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
     // The hours filter speaks the same clock; its values stay HH:MM for the API.
     await userEvent.click(within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'Hours' }))
     const from = within(screen.getByRole('dialog', { name: 'Hours' })).getByRole('combobox', { name: 'From' })
-    expect(within(from).getByRole('option', { name: '1:00 PM' })).toHaveValue('13:00')
+    expect(await optionsOf(userEvent, from)).toContainEqual({ value: '13:00', label: '1:00 PM', disabled: false })
   })
 
   it('the lesson details say when on the same clock', async () => {

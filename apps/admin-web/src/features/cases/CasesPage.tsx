@@ -8,6 +8,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { casesApi, type CaseDetail, type CaseStatus, type CaseSummary, type CaseTab } from './api'
 import { C, EVENT_LABEL, STATUS_LABEL, SUBJECT_LABEL, TAB_LABEL, TARGET_LABEL, useCopy } from './copy'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import '../teachers/teachers.css'
 import './cases.css'
 
@@ -148,13 +149,13 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
               <div className="cases__controls">
                 <label className="field">
                   <span className="field__label">{tx(C.owner)}</span>
-                  <select
+                  <SearchableSelect
                     className="select"
                     aria-label={tx(C.owner)}
                     value={c.owner?.id ?? ''}
                     disabled={!live || op.isPending}
-                    onChange={(e) => {
-                      const ownerId = e.target.value
+                    onValueChange={(v) => {
+                      const ownerId = v
                       if (ownerId) op.mutate(() => casesApi.assign(id, ownerId))
                     }}
                   >
@@ -162,7 +163,7 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
                     {(owners.data?.owners ?? (c.owner ? [c.owner] : [])).map((o) => (
                       <option key={o.id} value={o.id}>{o.name}</option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </label>
                 <label className="field">
                   <span className="field__label">{tx(C.due)}</span>

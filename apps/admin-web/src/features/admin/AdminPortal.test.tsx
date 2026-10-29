@@ -7,6 +7,7 @@ import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { ADMIN_GROUPS, ADMIN_SECTIONS, sectionsInGroup } from './sections'
 import { effectiveState } from '@/features/stories/StoriesStudio'
+import { chooseOption } from '@/test/select'
 
 /**
  * The super admin's view of the portal.
@@ -368,7 +369,7 @@ describe('Users', () => {
     expect(screen.queryByRole('button', { name: 'Owner O' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /^All/ }))
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'inactive')
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Status' }), 'inactive')
     expect(screen.getByRole('button', { name: 'Parent P' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Owner O' })).not.toBeInTheDocument()
 

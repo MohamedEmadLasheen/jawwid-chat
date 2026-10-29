@@ -5,6 +5,7 @@ import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { CertificateAccess, DesignCertificate, FullCertificate } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-41: the Certificates page through the real routes and the real API
@@ -184,7 +185,7 @@ describe('the requester', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'New request' }))
     const form = await screen.findByRole('dialog', { name: 'New request' })
     await userEvent.click(await within(form).findByRole('option', { name: /Child Alpha/ }))
-    await userEvent.selectOptions(within(form).getByLabelText('Type'), 'type-1')
+    await chooseOption(userEvent, within(form).getByLabelText('Type'), 'type-1')
     await userEvent.type(within(form).getByLabelText('Juz’'), '30')
     expect(within(form).getByRole('checkbox', { name: /Publish as a Story/ })).not.toBeChecked()
     await userEvent.click(within(form).getByRole('button', { name: 'Submit request' }))

@@ -7,6 +7,7 @@ import type { AddedTeacher, FirstLogin, TeacherOnboardingOffer } from './api'
 import { T, describeError, useCopy } from './copy'
 import { Field } from '@/shared/components/Field'
 import { useAddTeacher, useGiveSignIn } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-43: add a teacher. The supervisor choice is the server's (GET
@@ -89,14 +90,14 @@ export function AddTeacherDialog({
           <label className="field__label" htmlFor={supervisorId}>
             {tx(T.supervisor)}
           </label>
-          <select id={supervisorId} className="input" value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>
+          <SearchableSelect id={supervisorId} className="input" value={supervisor} onValueChange={(v) => setSupervisor(v)}>
             <option value="">{tx(T.noSupervisorYet)}</option>
             {offer.supervisors.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
           {supervisor === '' && <span className="field__hint">{tx(T.unsupervisedNote)}</span>}
         </div>
       ) : (

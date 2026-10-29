@@ -5,6 +5,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { describeError } from '@/features/teacher-files/copy'
 import { casesApi, type CaseSubjectKind, type CaseTarget, type NewCase } from './api'
 import { C, TARGET_LABEL, useCopy } from './copy'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /**
  * PD-35 B5: "Escalate" -- open a case about this teacher, lesson, child,
@@ -99,11 +100,11 @@ function OpenCaseDialog({
       </label>
       <label className="field">
         <span className="field__label">{tx(C.sendTo)}</span>
-        <select className="select" value={target} onChange={(e) => setTarget(e.target.value as CaseTarget)}>
+        <SearchableSelect className="select" value={target} onValueChange={(v) => setTarget(v as CaseTarget)}>
           {(['teachers', 'operations'] as const).map((t) => (
             <option key={t} value={t}>{tx(TARGET_LABEL[t])}</option>
           ))}
-        </select>
+        </SearchableSelect>
       </label>
       <label className="field">
         <span className="field__label">{tx(C.due)}</span>

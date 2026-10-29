@@ -19,6 +19,7 @@ import {
   SUGGESTED_COUNTRIES,
   useCountryName,
 } from './copy'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 export interface AudienceDraft {
   who: SegmentWho | null
@@ -177,12 +178,12 @@ export function AudienceBuilder({
             <label className="add-country">
               <span className="sr-only">{tx(S.addCountry)}</span>
               <Icon name="plus" size={14} />
-              <select
+              <SearchableSelect
                 className="add-country__select"
                 value=""
                 aria-label={tx(S.addCountry)}
-                onChange={(e) => {
-                  const c = e.target.value
+                onValueChange={(v) => {
+                  const c = v
                   if (c) onChange({ ...value, countries: [...value.countries, c] })
                 }}
               >
@@ -194,7 +195,7 @@ export function AudienceBuilder({
                 {addable.rest.map(([c, name]) => (
                   <option key={c} value={c}>{`${flagOf(c)} ${name}`}</option>
                 ))}
-              </select>
+              </SearchableSelect>
             </label>
           </ChipGroup>
 
