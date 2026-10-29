@@ -51,19 +51,38 @@ This file is generated from `apps/lessons/src/arabic/lesson-009.json` and the re
 | د | زدَّ | not a word |
 | ب | ربَّ | a noun (رَبّ), not a verb |
 
+## The distractors (wrong quiz options, no shadda)
+
+Words from lesson 3 with no shadda, so each question tests the shadda itself. Each is held, and is never shown as an example.
+
+| Id | Word | Held because |
+|---|---|---|
+| distractor-001 | أَسَدْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-001), a wrong option only |
+| distractor-002 | أَرْنَبْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-002), a wrong option only |
+| distractor-003 | أَكَلْ | ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-003), a wrong option only |
+| distractor-004 | سَأَلْ | ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-004), a wrong option only |
+| distractor-005 | أَمَلْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-006), a wrong option only |
+| distractor-006 | أَخَذْ | ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-007), a wrong option only |
+| distractor-007 | أَحَدْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-009), a wrong option only |
+| distractor-008 | أَبَدْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-010), a wrong option only |
+| distractor-009 | إِبْرَةْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-001), a wrong option only |
+| distractor-010 | سُئِلْ | ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_kasra-002), a wrong option only |
+| distractor-011 | إِسْلَامْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-003), a wrong option only |
+| distractor-012 | إِيمَانْ | ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-004), a wrong option only |
+
 ## The quiz
 
 | Unit | Id | Options | Right answer |
 |---|---|---|---|
-| mim_shadda | mim_shadda-q1 | جَرّْ، وَدّْ، أَمّْ | أَمّْ |
-| dal_shadda | dal_shadda-q1 | حَبّْ، هَمّْ، مَدّْ | مَدّْ |
-| ra_shadda | ra_shadda-q1 | مَرّْ، عَزّْ، هَمّْ | مَرّْ |
-| ba_shadda | ba_shadda-q1 | رَقّْ، حَبّْ، مَنّْ | حَبّْ |
-| qaf_shadda | qaf_shadda-q1 | حَقّْ، حَلّْ، مَسّْ | حَقّْ |
-| lam_shadda | lam_shadda-q1 | لَمّْ، جَنّْ، حَلّْ | حَلّْ |
-| nun_shadda | nun_shadda-q1 | ظَنّْ، رَقّْ، هَزّْ | ظَنّْ |
-| sin_shadda | sin_shadda-q1 | جَرّْ، مَسّْ، دَقّْ | مَسّْ |
-| zay_shadda | zay_shadda-q1 | نَمّْ، هَزّْ، عَدّْ | هَزّْ |
+| mim_shadda | mim_shadda-q1 | أَمَلْ، سُئِلْ، أَمّْ | أَمّْ |
+| dal_shadda | dal_shadda-q1 | أَمَلْ، سُئِلْ، مَدّْ | مَدّْ |
+| ra_shadda | ra_shadda-q1 | مَرّْ، إِسْلَامْ، أَخَذْ | مَرّْ |
+| ba_shadda | ba_shadda-q1 | إِبْرَةْ، حَبّْ، سَأَلْ | حَبّْ |
+| qaf_shadda | qaf_shadda-q1 | حَقّْ، إِسْلَامْ، أَخَذْ | حَقّْ |
+| lam_shadda | lam_shadda-q1 | أَرْنَبْ، أَحَدْ، حَلّْ | حَلّْ |
+| nun_shadda | nun_shadda-q1 | ظَنّْ، أَبَدْ، أَكَلْ | ظَنّْ |
+| sin_shadda | sin_shadda-q1 | أَخَذْ، مَسّْ، أَسَدْ | مَسّْ |
+| zay_shadda | zay_shadda-q1 | أَكَلْ، هَزّْ، سُئِلْ | هَزّْ |
 
 ## Every word, per unit
 

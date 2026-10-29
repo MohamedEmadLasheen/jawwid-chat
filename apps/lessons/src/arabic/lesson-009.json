@@ -453,14 +453,88 @@
       ]
     }
   ],
+  "distractors": [
+    {
+      "id": "distractor-001",
+      "text": "أَسَدْ",
+      "was": "أَسَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-001), a wrong option only"
+    },
+    {
+      "id": "distractor-002",
+      "text": "أَرْنَبْ",
+      "was": "أَرْنَب",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-002), a wrong option only"
+    },
+    {
+      "id": "distractor-003",
+      "text": "أَكَلْ",
+      "was": "أَكَلَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-003), a wrong option only"
+    },
+    {
+      "id": "distractor-004",
+      "text": "سَأَلْ",
+      "was": "سَأَلَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-004), a wrong option only"
+    },
+    {
+      "id": "distractor-005",
+      "text": "أَمَلْ",
+      "was": "أَمَل",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-006), a wrong option only"
+    },
+    {
+      "id": "distractor-006",
+      "text": "أَخَذْ",
+      "was": "أَخَذَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_fatha-007), a wrong option only"
+    },
+    {
+      "id": "distractor-007",
+      "text": "أَحَدْ",
+      "was": "أَحَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-009), a wrong option only"
+    },
+    {
+      "id": "distractor-008",
+      "text": "أَبَدْ",
+      "was": "أَبَد",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_fatha-010), a wrong option only"
+    },
+    {
+      "id": "distractor-009",
+      "text": "إِبْرَةْ",
+      "was": "إِبْرَة",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-001), a wrong option only"
+    },
+    {
+      "id": "distractor-010",
+      "text": "سُئِلْ",
+      "was": "سُئِلَ",
+      "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun; DISTRACTOR: from lesson 3 (hamza_kasra-002), a wrong option only"
+    },
+    {
+      "id": "distractor-011",
+      "text": "إِسْلَامْ",
+      "was": "إِسْلَام",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-003), a wrong option only"
+    },
+    {
+      "id": "distractor-012",
+      "text": "إِيمَانْ",
+      "was": "إِيمَان",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_kasra-004), a wrong option only"
+    }
+  ],
   "quiz": [
     {
       "id": "mim_shadda-q1",
       "kind": "contains",
       "unit": "mim_shadda",
       "options": [
-        "جَرّْ",
-        "وَدّْ",
+        "أَمَلْ",
+        "سُئِلْ",
         "أَمّْ"
       ],
       "answer": 2,
@@ -471,8 +545,8 @@
       "kind": "contains",
       "unit": "dal_shadda",
       "options": [
-        "حَبّْ",
-        "هَمّْ",
+        "أَمَلْ",
+        "سُئِلْ",
         "مَدّْ"
       ],
       "answer": 2,
@@ -484,8 +558,8 @@
       "unit": "ra_shadda",
       "options": [
         "مَرّْ",
-        "عَزّْ",
-        "هَمّْ"
+        "إِسْلَامْ",
+        "أَخَذْ"
       ],
       "answer": 0,
       "review": null
@@ -495,9 +569,9 @@
       "kind": "contains",
       "unit": "ba_shadda",
       "options": [
-        "رَقّْ",
+        "إِبْرَةْ",
         "حَبّْ",
-        "مَنّْ"
+        "سَأَلْ"
       ],
       "answer": 1,
       "review": null
@@ -508,8 +582,8 @@
       "unit": "qaf_shadda",
       "options": [
         "حَقّْ",
-        "حَلّْ",
-        "مَسّْ"
+        "إِسْلَامْ",
+        "أَخَذْ"
       ],
       "answer": 0,
       "review": null
@@ -519,8 +593,8 @@
       "kind": "contains",
       "unit": "lam_shadda",
       "options": [
-        "لَمّْ",
-        "جَنّْ",
+        "أَرْنَبْ",
+        "أَحَدْ",
         "حَلّْ"
       ],
       "answer": 2,
@@ -532,8 +606,8 @@
       "unit": "nun_shadda",
       "options": [
         "ظَنّْ",
-        "رَقّْ",
-        "هَزّْ"
+        "أَبَدْ",
+        "أَكَلْ"
       ],
       "answer": 0,
       "review": null
@@ -543,9 +617,9 @@
       "kind": "contains",
       "unit": "sin_shadda",
       "options": [
-        "جَرّْ",
+        "أَخَذْ",
         "مَسّْ",
-        "دَقّْ"
+        "أَسَدْ"
       ],
       "answer": 1,
       "review": null
@@ -555,9 +629,9 @@
       "kind": "contains",
       "unit": "zay_shadda",
       "options": [
-        "نَمّْ",
+        "أَكَلْ",
         "هَزّْ",
-        "عَدّْ"
+        "سُئِلْ"
       ],
       "answer": 1,
       "review": null

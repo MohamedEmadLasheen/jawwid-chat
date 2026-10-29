@@ -25,4 +25,10 @@ describe('Arabic lesson 9 (the shadda), the real file', () => {
     expect(words.map((w) => w.text)).toContain('مَدّْ');
     expect(words.some((w) => w.was === 'زدَّ')).toBe(false);
   });
+
+  it('the wrong options are distractors with no shadda, so a question tests the shadda', () => {
+    const d = (raw as unknown as { distractors: { text: string }[] }).distractors;
+    expect(d).toHaveLength(12);
+    for (const x of d) expect(x.text.includes(HARAKA.shadda)).toBe(false);
+  });
 });
