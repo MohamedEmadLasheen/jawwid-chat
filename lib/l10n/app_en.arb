@@ -786,7 +786,7 @@
   "@cardMakeupLesson": {"description": "Lesson card row label: the booked make-up lesson's day, date and time follow (on the make-up card and on the excuse card it replaces)."},
   "cardMakeupInsteadOf": "Instead of the lesson on",
   "@cardMakeupInsteadOf": {"description": "Make-up card row label: the day, date and time of the missed lesson the make-up replaces follow."},
-  "cardStaffReason": "Reason (staff only)",
+  "cardStaffReason": "Reason (staff and the teacher only)",
   "@cardStaffReason": {"description": "PD-15: lesson card row label for the internal excuse/apology reason, shown to staff and the teacher only, never to a family."},
   "ticketBookMakeup": "Book the make-up lesson",
   "ticketFor": "For {name}",

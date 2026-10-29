@@ -4,7 +4,9 @@
  * make-up with its live make-up; booking or moving the make-up announces
  * message.updated for that card so open threads re-read it.
  */
-import { owesMakeup, withOwedMakeups } from '../../../src/communication/messages/owed-makeup';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { NOT_LIVE_MAKEUP_OUTCOMES, owesMakeup, withOwedMakeups } from '../../../src/communication/messages/owed-makeup';
 import { LessonService } from '../../../src/lessons/lesson.service';
 import { renderCardBody } from '../../../src/lessons/lesson-card';
 
@@ -36,8 +38,9 @@ describe('withOwedMakeups', () => {
     expect(findMany).toHaveBeenCalledTimes(1);
     const where = findMany.mock.calls[0][0].where;
     expect(where.makeupFor).toEqual({ in: ['l1'] });
-    // Only a make-up that still stands: not moved away, cancelled or voided.
-    expect(where.OR).toEqual([{ outcome: null }, { outcome: { in: ['held', 'student_no_show'] } }]);
+    // Only the make-up the database counts as live (see the next describe).
+    expect(where.kind).toBe('makeup');
+    expect(where.OR).toEqual([{ outcome: null }, { outcome: { notIn: [...NOT_LIVE_MAKEUP_OUTCOMES] } }]);
     expect(out[0].card!.payload).toEqual({
       ...base, reason: 'exams', makeupOwed: true,
       makeupLessonId: 'm1', makeupStartsAt: '2026-11-04T16:00:00.000Z', makeupEndsAt: '2026-11-04T16:30:00.000Z',
@@ -59,6 +62,20 @@ describe('withOwedMakeups', () => {
     const rows = [row('a', 'lesson_teacher_apology', { ...base, makeupOwed: true })];
     const out = await withOwedMakeups({ lesson: { findMany: jest.fn().mockResolvedValue([]) } } as never, rows);
     expect(out[0]).toBe(rows[0]);
+  });
+});
+
+describe('a standing make-up is the database\'s live make-up', () => {
+  it('excludes exactly the outcomes the latest chat.lesson_one_live_makeup excludes', () => {
+    const dir = join(__dirname, '../../../../../supabase/migrations');
+    const latest = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
+      .map((f) => readFileSync(join(dir, f), 'utf8'))
+      .flatMap((sql) => [...sql.matchAll(/create unique index lesson_one_live_makeup[\s\S]*?;/gi)].map((m) => m[0]))
+      .pop();
+    expect(latest).toBeDefined();
+    expect(latest).toMatch(/where kind = 'makeup'/);
+    const list = /outcome not in \(([^)]*)\)/.exec(latest!)![1].split(',').map((x) => x.trim().replace(/'/g, ''));
+    expect([...NOT_LIVE_MAKEUP_OUTCOMES].sort()).toEqual(list.sort());
   });
 });
 

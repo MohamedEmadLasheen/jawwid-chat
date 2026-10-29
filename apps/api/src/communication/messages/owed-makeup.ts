@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { CardKind, LessonOutcome, RulingDecision } from '../contracts/vocab';
+import { CardKind, LessonKind, LessonOutcome, RulingDecision } from '../contracts/vocab';
 
 /**
  * Owner report 2026-10-29: a card that says a make-up is owed (the student's
@@ -9,8 +9,8 @@ import { CardKind, LessonOutcome, RulingDecision } from '../contracts/vocab';
  * carries its live make-up as `makeupLessonId` / `makeupStartsAt` /
  * `makeupEndsAt`, which clients draw in the reader's zone (PD-22). Booking or
  * moving the make-up announces `message.updated` for the card, so open threads
- * re-read it. Always current: a moved make-up reads its new time, a cancelled
- * one reads nothing.
+ * re-read it. A moved make-up reads its new time; one cancelled by the teacher
+ * or the academy, or voided, reads nothing.
  */
 
 /** The cards that can say a make-up is owed; `owesMakeup` picks the ones that do. */
@@ -25,12 +25,19 @@ export function owesMakeup(kind: string, p: Record<string, unknown>): boolean {
 }
 
 /**
- * A make-up that still stands: not yet happened, or happened. One moved away
- * (rescheduled -- its successor carries the same makeup_for), cancelled,
- * voided, suspended or itself excused is not "the make-up" any more.
+ * The outcomes after which a make-up no longer stands -- exactly the ones
+ * chat.lesson_one_live_makeup (20261021120000) excludes, so the card names the
+ * make-up the database counts as live: never one it would let a second booking
+ * replace, and never "owed" while the database refuses another. A moved one
+ * (rescheduled) is followed by its successor with the same makeup_for.
  */
+export const NOT_LIVE_MAKEUP_OUTCOMES: readonly string[] = [
+  LessonOutcome.TEACHER_APOLOGY, LessonOutcome.TEACHER_NO_SHOW, LessonOutcome.ADMIN_CANCELLED,
+  LessonOutcome.RESCHEDULED, LessonOutcome.VOIDED,
+];
 const STANDING: Prisma.LessonWhereInput = {
-  OR: [{ outcome: null }, { outcome: { in: [LessonOutcome.HELD, LessonOutcome.STUDENT_NO_SHOW] } }],
+  kind: LessonKind.MAKEUP,
+  OR: [{ outcome: null }, { outcome: { notIn: [...NOT_LIVE_MAKEUP_OUTCOMES] } }],
 };
 
 type CardRow = { card?: { kind: string; lessonId: string | null; payload: unknown } | null };

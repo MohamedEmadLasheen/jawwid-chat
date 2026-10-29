@@ -135,7 +135,7 @@ void main() {
       ]) {
         await tester.pumpWidget(app(card, role: UserRole.parent, lessons: lessons));
         await tester.pumpAndSettle();
-        expect(find.text('Reason (staff only)'), findsNothing);
+        expect(find.text('Reason (staff and the teacher only)'), findsNothing);
         expect(find.textContaining('travelling'), findsNothing);
       }
       expect(lessons.asked, isEmpty);
@@ -150,7 +150,7 @@ void main() {
         expect(lessons.asked, ['l2']);
         expect(find.text(l10n.cardStaffReason), findsOneWidget);
         expect(find.text('The family called the office; the child is travelling.'), findsOneWidget);
-        if (lang == 'ar') expect(find.text('السبب (للفريق فقط)'), findsOneWidget);
+        if (lang == 'ar') expect(find.text('السبب (للإدارة والمعلم فقط)'), findsOneWidget);
       });
     }
 
@@ -162,7 +162,7 @@ void main() {
         lessons: lessons,
       ));
       await tester.pumpAndSettle();
-      expect(find.text('Reason (staff only)'), findsOneWidget);
+      expect(find.text('Reason (staff and the teacher only)'), findsOneWidget);
 
       await tester.pumpWidget(app(
         const MessageCard(kind: 'lesson_cancelled', lessonId: 'l4', payload: {'lessonId': 'l4', 'startsAt': missed, 'outcome': 'teacher_no_show', 'makeupOwed': true}),
@@ -170,7 +170,7 @@ void main() {
         lessons: lessons,
       ));
       await tester.pumpAndSettle();
-      expect(find.text('Reason (staff only)'), findsOneWidget);
+      expect(find.text('Reason (staff and the teacher only)'), findsOneWidget);
       expect(lessons.asked, ['l3', 'l4']);
     });
 
@@ -179,7 +179,7 @@ void main() {
       await tester.pumpWidget(app(staffExcuse, role: UserRole.teacher, lessons: lessons));
       await tester.pumpAndSettle();
       expect(lessons.asked, ['l2']);
-      expect(find.text('Reason (staff only)'), findsNothing);
+      expect(find.text('Reason (staff and the teacher only)'), findsNothing);
     });
 
     testWidgets('the family\'s own reason is not fetched again for staff', (tester) async {
@@ -187,7 +187,7 @@ void main() {
       await tester.pumpWidget(app(familyExcuse(), role: UserRole.teacher, lessons: lessons));
       await tester.pumpAndSettle();
       expect(find.text('Yusuf has a fever today.'), findsOneWidget);
-      expect(find.text('Reason (staff only)'), findsNothing);
+      expect(find.text('Reason (staff and the teacher only)'), findsNothing);
       expect(lessons.asked, isEmpty);
     });
   });

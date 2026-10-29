@@ -60,10 +60,10 @@ describe('an excused lesson\'s card', () => {
     expect(screen.getByRole('group')).toHaveTextContent('A make-up lesson will be arranged.')
   })
 
-  it('a staff-recorded reason is read from the lesson record and labelled staff only', async () => {
+  it('a staff-recorded reason is read from the lesson record and labelled staff and the teacher only', async () => {
     outcomeNote = 'Hospital visit'
     renderWithProviders(<LessonExcuseCard card={readLessonExcuseCard('lesson_apology', { ...base, timing: 'after_start', makeupOwed: true })!} />, { staff })
-    await waitFor(() => expect(screen.getByRole('group')).toHaveTextContent('Reason (staff only)Hospital visit'))
+    await waitFor(() => expect(screen.getByRole('group')).toHaveTextContent('Reason (staff and the teacher only)Hospital visit'))
     expect(lessonGets()).toBe(1)
   })
 

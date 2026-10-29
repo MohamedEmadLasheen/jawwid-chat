@@ -98,7 +98,7 @@ function mayHaveStaffReason(card: LessonExcusePayload): boolean {
  *
  * The family's reason is on the card. A staff member's or the teacher's reason
  * is not (PD-15): Admin Web -- staff only -- reads it from the lesson record,
- * which the server gives to staff alone, and labels it "staff only".
+ * which the server gives to staff and the lesson's teacher, and labels it so.
  */
 export function LessonExcuseCard({ card }: { card: LessonExcusePayload }) {
   const { locale, number } = useI18n()
@@ -126,7 +126,7 @@ export function LessonExcuseCard({ card }: { card: LessonExcusePayload }) {
     : [
         ['lesson', tx(COPY.lesson), when(card.startsAt)],
         ...(card.reason ? [['reason', tx(J.reason), card.reason] as [string, string, string]] : []),
-        ...(staffReason ? [['staff-reason', tx(J.reasonInternal), staffReason] as [string, string, string]] : []),
+        ...(staffReason ? [['staff-reason', tx(J.reasonStaffTeacher), staffReason] as [string, string, string]] : []),
         ...(card.note ? [['note', tx(COPY.note), card.note] as [string, string, string]] : []),
         ...(card.makeupStartsAt ? [['makeup', tx(COPY.makeup), when(card.makeupStartsAt)] as [string, string, string]] : []),
       ]

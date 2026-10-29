@@ -625,7 +625,7 @@
   "cardReason": "السبب",
   "cardMakeupLesson": "الحصة التعويضية",
   "cardMakeupInsteadOf": "بدلًا من حصة",
-  "cardStaffReason": "السبب (للفريق فقط)",
+  "cardStaffReason": "السبب (للإدارة والمعلم فقط)",
   "ticketBookMakeup": "حجز حصة التعويض",
   "ticketFor": "لـ {name}",
   "makeupPickDay": "اختر يومًا",

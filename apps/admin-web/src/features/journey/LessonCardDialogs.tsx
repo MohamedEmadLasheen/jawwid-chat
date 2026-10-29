@@ -190,7 +190,7 @@ export function LessonCardDialog({
 
           {showReason && (
             <div className="field">
-              <label className="field__label" htmlFor={`${base}-reason`}>{tx(needsReason ? J.reasonInternal : J.reasonInternalOptional)}</label>
+              <label className="field__label" htmlFor={`${base}-reason`}>{tx(needsReason ? J.reasonStaffTeacher : J.reasonStaffTeacherOptional)}</label>
               <textarea
                 id={`${base}-reason`}
                 className="input"

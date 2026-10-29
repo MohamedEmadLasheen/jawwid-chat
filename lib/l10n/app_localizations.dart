@@ -2260,7 +2260,7 @@ abstract class L10n {
   /// PD-15: lesson card row label for the internal excuse/apology reason, shown to staff and the teacher only, never to a family.
   ///
   /// In en, this message translates to:
-  /// **'Reason (staff only)'**
+  /// **'Reason (staff and the teacher only)'**
   String get cardStaffReason;
 
   /// No description provided for @ticketBookMakeup.

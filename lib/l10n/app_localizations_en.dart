@@ -1265,7 +1265,7 @@ class L10nEn extends L10n {
   String get cardMakeupInsteadOf => 'Instead of the lesson on';
 
   @override
-  String get cardStaffReason => 'Reason (staff only)';
+  String get cardStaffReason => 'Reason (staff and the teacher only)';
 
   @override
   String get ticketBookMakeup => 'Book the make-up lesson';
