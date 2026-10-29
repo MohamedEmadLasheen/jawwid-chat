@@ -652,6 +652,25 @@ describe('PD-45: the family\'s location, from Sales\' form to the family', () =>
     expect((await forms.get(await org(), lesson.id))!.parent.location).toBeNull();
   });
 
+  it('Assign keys a LOCAL number as the recorded country reads it, as a re-keyed reading (review of #296)', async () => {
+    const prospectId = (await trials.createProspect(salesId, { displayName: 'prospect_k' })).id;
+    const startsAt = new Date(Date.now() - 40 * 60 * MIN);
+    const lesson = await g.prisma.lesson.create({
+      data: { organizationId: await org(), kind: 'trial', prospectId, teacherId: s.teacherId, startsAt, endsAt: new Date(startsAt.getTime() + 45 * MIN), createdByKind: 'staff', createdBy: salesId },
+    });
+    await trials.outcome(salesId, lesson.id, {
+      result: 'subscribed',
+      subscription: {
+        parent: { name: 'parent_k', email: null, phone: '050 765 8888', location: { countryCode: 'AE', subdivisionCode: 'AE-SH' } },
+        children: [{ name: 'child_k', age: 9, course: 'course_k', teacherId: s.teacherId, packagePrice: 100, lessonPrice: 10, schedule: [{ weekday: 4, time: '17:00' }] }],
+        payment: { currency: 'AED', method: 'invoice' },
+      },
+    });
+    const done = await enrolment.assign(s.managerId, lesson.id, { supervisorId: s.ownerId, email: `p45k.${randomUUID().slice(0, 6)}@example.test` });
+    const keys = await g.prisma.familyContactKey.findMany({ where: { familyId: done.familyId, kind: 'phone' } });
+    expect(keys.map((k) => ({ hash: k.keyHash, source: k.source }))).toEqual([{ hash: contactKeyHash('phone', '+971507658888'), source: 'rekey' }]);
+  });
+
   it('a form without a location is still recorded and assigned (it becomes required with the new form, PR-3b)', async () => {
     const done = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
     expect(await g.prisma.family.findUniqueOrThrow({ where: { id: done.familyId } })).toMatchObject({ countryCode: null, subdivisionCode: null, locationSource: null });

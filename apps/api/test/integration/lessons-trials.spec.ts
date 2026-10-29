@@ -186,15 +186,20 @@ describe('2. booking', () => {
         label: { en: 'Governorate', ar: 'المحافظة' },
       },
     });
-    // The Teachers department may book (and so write it) but never reads it back; the teacher never does.
+    // A Teachers-department manager (tsupId: the 'manager' standing) may book, and so write
+    // it, but never reads it back; the trial's own teacher never does.
     expect(await code(trials.subscriptionPrefill(tsupId, t.id))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(trials.subscriptionPrefill(s.teacherId, t.id))).toBe(CommErrorCode.LESSON_DENIED);
 
-    // A later booking for the same prospect changes it; one without a location leaves it.
+    // Re-booking the SAME prospect with a location overwrites the one it had (by anyone who may book) ...
     await trials.book(tsupId, { prospectId, teacherId: s.teacherId, startsAt: slots[7], location: { countryCode: 'AE' } });
     expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'AE' }, subdivision: null });
+    await trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[9], location: { countryCode: 'SA', subdivisionCode: 'SA-01' } });
+    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'SA' }, subdivision: { code: 'SA-01' } });
+    expect(await g.prisma.trialProspectLocation.count({ where: { prospectId } })).toBe(1);
+    // ... and one without a location leaves it.
     await trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[11] });
-    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'AE' } });
+    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'SA' } });
 
     const other = (await trials.createProspect(salesId, { displayName: 'prospect_r' })).id;
     const bare = await trials.book(salesId, { prospectId: other, teacherId: s.teacherId, startsAt: slots[13] });

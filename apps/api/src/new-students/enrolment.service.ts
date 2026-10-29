@@ -246,11 +246,13 @@ export class NewStudentEnrolmentService {
         });
         // PD-42 S1: the parent's contact keys, so the same parent is never a
         // second family -- entered by hand later, or already entered by hand.
-        for (const k of parentContactKeys(email, form.parent.phone)) {
+        for (const k of parentContactKeys(email, form.parent.phone, form.parent.location?.countryCode ?? null)) {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pd042:${k.hash}`}, 0))`;
           const other = await tx.familyContactKey.findFirst({ where: { organizationId: org, keyHash: k.hash }, select: { familyId: true } });
           if (other) throw await parentExists(tx, other.familyId);
-          await tx.familyContactKey.create({ data: { organizationId: org, keyHash: k.hash, familyId: family.id, kind: k.kind, createdBy: actor.actorId } });
+          await tx.familyContactKey.create({
+            data: { organizationId: org, keyHash: k.hash, familyId: family.id, kind: k.kind, source: k.source, createdBy: actor.actorId },
+          });
         }
 
         const learners: Array<{ id: string; child: PresentedForm['children'][number] }> = [];
@@ -334,7 +336,7 @@ export class NewStudentEnrolmentService {
     const contact = family.primaryContactId
       ? await this.prisma.contact.findUnique({ where: { id: family.primaryContactId }, select: { id: true, accountId: true } })
       : null;
-    const keys = parentContactKeys(email, form.parent.phone);
+    const keys = parentContactKeys(email, form.parent.phone, form.parent.location?.countryCode ?? null);
     const held = keys.length
       ? await this.prisma.familyContactKey.findMany({ where: { organizationId: org, keyHash: { in: keys.map((k) => k.hash) } }, select: { familyId: true } })
       : [];
@@ -620,13 +622,22 @@ export class NewStudentEnrolmentService {
 /**
  * PD-42 S1: the keys a parent is known by -- the sign-in e-mail, and the phone
  * Sales typed when it reads as one number (E.164; a local number with no
- * country is not keyed rather than keyed wrong).
+ * country is not keyed rather than keyed wrong). PD-45 (review of #296): a
+ * local number is read in the country Sales recorded, and that reading is a
+ * re-keyed one -- correcting the family's country later replaces it. An
+ * international number reads the same everywhere, so it is recorded.
  */
-export function parentContactKeys(email: string | null, phone: string | null): Array<{ kind: 'email' | 'phone'; hash: string }> {
-  const keys: Array<{ kind: 'email' | 'phone'; hash: string }> = [];
-  if (email) keys.push({ kind: 'email', hash: contactKeyHash('email', email.trim().toLowerCase()) });
-  const e164 = phone ? e164ForKey(phone, null) : null;
-  if (e164 && e164 !== 'ambiguous') keys.push({ kind: 'phone', hash: contactKeyHash('phone', e164) });
+export function parentContactKeys(
+  email: string | null,
+  phone: string | null,
+  country: string | null = null,
+): Array<{ kind: 'email' | 'phone'; hash: string; source: 'record' | 'rekey' }> {
+  const keys: Array<{ kind: 'email' | 'phone'; hash: string; source: 'record' | 'rekey' }> = [];
+  if (email) keys.push({ kind: 'email', hash: contactKeyHash('email', email.trim().toLowerCase()), source: 'record' });
+  const e164 = phone ? e164ForKey(phone, country) : null;
+  if (phone && e164 && e164 !== 'ambiguous') {
+    keys.push({ kind: 'phone', hash: contactKeyHash('phone', e164), source: /^\s*(\+|00)/.test(phone) ? 'record' : 'rekey' });
+  }
   return keys;
 }
 
