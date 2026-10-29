@@ -13,6 +13,8 @@
  */
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '@platform/auth/password';
+import { supportSessionMayCall } from '@platform/auth/support-session.interceptor';
+import { runWithRequestContext } from '@platform/request-context';
 import type { Actor } from '@platform/types';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { ParentNoticeService } from '../../src/lesson-audio/parent-notice.service';
@@ -117,6 +119,19 @@ describe('PD-48: what a signed-in parent is asked', () => {
     expect(await notices.acknowledge(parent, 'lesson_audio', { version: PARENT_NOTICES.lesson_audio })).toEqual({ key: 'lesson_audio', version: 1, acknowledged: true });
     expect(await notices.acknowledge(parent, 'lesson_audio', { version: PARENT_NOTICES.lesson_audio })).toEqual({ key: 'lesson_audio', version: 1, acknowledged: true });
     expect((await notices.list(parent)).notices[0]!.acknowledged).toBe(true);
+  });
+
+  it('a support session (PD-21) is shown no notice, and its acknowledgement is refused at the route and in the service', async () => {
+    const parent = parentActor(m.families[4]!.parent.id);
+    expect(supportSessionMayCall('GET', '/parent-notices')).toBe(true);
+    expect(supportSessionMayCall('POST', '/parent-notices/:key/acknowledge')).toBe(false);
+    expect(supportSessionMayCall('POST', '/api/v1/parent-notices/:key/acknowledge')).toBe(false);
+    await runWithRequestContext({ impersonationId: randomUUID() }, async () => {
+      expect(await notices.list(parent)).toEqual({ notices: [] });
+      await expect(notices.acknowledge(parent, 'lesson_audio', { version: PARENT_NOTICES.lesson_audio })).rejects.toMatchObject({ code: 'COMM.SUPPORT_SESSION_FORBIDDEN', status: 403 });
+    });
+    // Nothing was recorded: outside the support session the parent is still asked.
+    expect((await notices.list(parent)).notices[0]!.acknowledged).toBe(false);
   });
 
   it('a teacher or a staff member has no parent notice and acknowledges none', async () => {

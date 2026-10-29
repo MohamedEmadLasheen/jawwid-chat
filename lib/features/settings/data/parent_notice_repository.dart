@@ -22,17 +22,6 @@ abstract interface class ParentNoticeRepository {
   Future<void> acknowledgeLessonAudio();
 }
 
-/// A build with no API: nothing to acknowledge.
-class NoParentNoticeRepository implements ParentNoticeRepository {
-  const NoParentNoticeRepository();
-
-  @override
-  Future<bool> needsLessonAudio() async => false;
-
-  @override
-  Future<void> acknowledgeLessonAudio() async {}
-}
-
 class HttpParentNoticeRepository implements ParentNoticeRepository {
   HttpParentNoticeRepository({required ApiClient client}) : _client = client;
 
@@ -41,6 +30,7 @@ class HttpParentNoticeRepository implements ParentNoticeRepository {
   @override
   Future<bool> needsLessonAudio() async {
     final d = (await _client.get<Map<String, Object?>>('/parent-notices')).data ?? const {};
+    // An empty list (a support session, PD-21; or not a parent) asks nothing.
     for (final n in (d['notices'] as List?) ?? const []) {
       if (n is Map && n['key'] == kLessonAudioNoticeKey) {
         return n['version'] == kLessonAudioNoticeVersion && n['acknowledged'] == false;
@@ -55,8 +45,9 @@ class HttpParentNoticeRepository implements ParentNoticeRepository {
   }
 }
 
-/// Overridden at startup with [HttpParentNoticeRepository].
-final parentNoticeRepositoryProvider = Provider<ParentNoticeRepository>((ref) => const NoParentNoticeRepository());
+/// Overridden at startup with [HttpParentNoticeRepository]. Null in a build with no API:
+/// there is no server to ask, and nothing is shown.
+final parentNoticeRepositoryProvider = Provider<ParentNoticeRepository?>((ref) => null);
 
 /// The accounts already asked in this app session (an account switch asks the next parent).
 class LessonAudioNoticeAsked extends Notifier<Set<String>> {

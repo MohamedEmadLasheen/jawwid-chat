@@ -29,16 +29,21 @@ class _LessonAudioNoticeGateState extends ConsumerState<LessonAudioNoticeGate> {
   }
 
   Future<void> _maybeAsk() async {
-    // The server first: a parent who acknowledged (or a build with no API) needs nothing else.
     final repo = ref.read(parentNoticeRepositoryProvider);
+    if (repo == null) return;
+    // The account asked about: if another one is signed in by the time the server
+    // answers, that answer was about someone else, and it is dropped.
+    final accountId = ref.read(authControllerProvider).user?.id;
+    if (accountId == null || ref.read(lessonAudioNoticeAskedProvider).contains(accountId)) return;
     final needs = await repo.needsLessonAudio().catchError((Object _) => false);
-    if (!needs || !mounted) return;
-    final user = ref.read(authControllerProvider).user;
-    if (user == null || ref.read(lessonAudioNoticeAskedProvider).contains(user.id)) return;
-    ref.read(lessonAudioNoticeAskedProvider.notifier).mark(user.id);
+    if (!needs || !mounted || ref.read(authControllerProvider).user?.id != accountId) return;
+    if (ref.read(lessonAudioNoticeAskedProvider).contains(accountId)) return;
+    ref.read(lessonAudioNoticeAskedProvider.notifier).mark(accountId);
     final accepted = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => const LessonAudioNoticeDialog());
     // Without a record (dismissed, or the request failed) the next sign-in asks again.
-    if (accepted == true) await repo.acknowledgeLessonAudio().catchError((Object _) {});
+    if (accepted == true && mounted && ref.read(authControllerProvider).user?.id == accountId) {
+      await repo.acknowledgeLessonAudio().catchError((Object _) {});
+    }
   }
 
   @override
