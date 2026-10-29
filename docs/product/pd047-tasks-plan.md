@@ -321,6 +321,34 @@ Outside these rules a task reads as `TASK_NOT_FOUND`. Every list is keyset-paged
   - for the super admin, `tasks.all_overdue`.
   - Coordinated with the PD-44 session (#211). The dead `/dashboard/needs-action` call is retired by PD-44.
 
+**As built in PR-4.**
+- **Delivery:** `OutboxWorker.deliverTask` reads the task live, beside PD-35's `deliverCase`.
+  - Signalled: the assignee, the person it left on a hand-on, the responsible managers, and the super admin while it waits on a decision or no manager stands to it. Ids only.
+  - Told, as a PD-34 `task` entry (Action tab: `requires_action`, `owner_id`, `due_at`, `task_status`; action `open_task`) with a generic push:
+    - `created` and `reassigned`: the assignee. A lesson report is not announced when raised.
+    - `returned`: the assignee.
+    - `out_of_scope`: the responsible managers, else the super admin (`task_status` `escalated`).
+    - `overdue`: the assignee.
+  - Never told: the person who did it.
+- **Settled:** a task that leaves a person (handed on, completed, removed) marks their entries acted, with `task_status` `cancelled` or `done`.
+- **Who did it is written with the change.** The actor, and for a hand-on whom it left and reached, are put in `task.changed` when the change is made: by the API, and by the database's `work_task_raise` and `work_task_reroute`. Delivery never reads them back from the task's newest event, which may be a later one.
+  - A task handed A → B → C before delivery signals all three and tells only C, once.
+  - Nobody already asked about a task is told "given" again.
+- **Settled** also covers decisions: a return settles the deciders' "decision waiting", and a new due date settles the old "overdue".
+- **Overdue:** `TaskService.sweepOverdue` (the worker, each minute, batch after batch, with its own error label) announces each task once per due date (`chat.work_task_overdue_notice`). Two sweeps at once announce it once. A task re-dated and overdue again is announced again.
+  - **Decided:** a task whose work went away (withdrawn) is not announced overdue, because nobody must do it.
+  - **Decided:** a task overdue while it waits on a decision is announced to the decider (the responsible managers, else the super admin) as "a task waiting for your decision is overdue" (`task_overdue_decision`), not to the assignee. A return settles that notice, and tells the assignee once if the task is still overdue.
+  - The overdue signal carries the due date it is for. A task re-dated before delivery gets nothing for the old date.
+- **Signalled** also includes a teacher's supervisors, who read their tasks (owner Q3); they are never told. After a hand-on, the managers and supervisors of the person it left are signalled too, because their lists changed.
+- **A renewal always reaches someone:** the family's Sales owner, else the Sales manager, else the super admin. When a Sales owner or manager appears, the task moves to them.
+- **Tile == list:** the list takes `gone=true` (the assignee left) and `unmanaged=true` (no live manager stands to it), so "Tasks whose assignee left" and "Tasks no manager can move" open exactly the list they count. A spec compares every tile with its list.
+- **No content in any text:** templates `task_*` and `inbox.task_*` are generic: no title, amount, card, family or child. Entries carry no variables.
+- **Q-F6:** the renewal push to every Sales member is gone. The renewal task's assignment notice reaches its one owner.
+- **Dashboard (PD-44):** a Tasks section, open to everyone. Each tile opens the Tasks view it counts.
+- **Clients:**
+  - Admin Web routes `open_task` to `/tasks?task=`.
+  - Flutter listens for `task.changed` on the session socket (`TaskSignalChannel`, listen only; the frozen call client is untouched) and refreshes the To do. A task entry opens the teacher's Schedule on its To do.
+
 ### 3.12 Clients
 
 **Admin Web: `features/tasks` rebuilt.**

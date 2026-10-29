@@ -140,3 +140,28 @@ describe('a case reaches the people it is for', () => {
     expect((await items(tmgr)).filter((i) => i.eventType === 'case_due_soon')).toHaveLength(1);
   });
 });
+
+describe('the push behind each entry (PD-47 found the FK)', () => {
+  it('each case event writes its push row under a real rule, and its outbox entry is published once, not retried', async () => {
+    const c = await cases.open(tsupA, { subject: { kind: 'teacher', id: s.teacherId }, target: 'teachers', title: 'x' });
+    await cases.assign(tmgr, c.id, { ownerId: tsupB });
+    const [{ d }] = await g.prisma.$queryRaw<Array<{ d: string }>>`SELECT (chat.academy_today() + 1)::text AS d`;
+    await cases.setDue(tsupB, c.id, { dueOn: d });
+    await cases.sweepDueSoon();
+    await worker.drain(100);
+
+    for (const [rule, recipient] of [['case_opened', tmgr], ['case_assigned', tsupB], ['case_due_soon', tsupB]] as const) {
+      // A push row exists -- scheduled now, or held to the end of quiet hours.
+      const push = await g.prisma.notification.findFirst({ where: { ruleKey: rule, recipientId: recipient } });
+      expect(push).not.toBeNull();
+      // And the Center entry points at it.
+      expect((await items(recipient)).some((i) => i.eventType === rule)).toBe(true);
+    }
+    const events = await g.prisma.outboxEvent.findMany({ where: { type: { in: ['case.opened', 'case.assigned', 'case.due_soon'] } } });
+    expect(events).toHaveLength(3);
+    for (const e of events) {
+      expect(e).toMatchObject({ status: 'published', attempts: 1, lastError: null });
+    }
+  });
+});
+
