@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -375,6 +376,21 @@ describe('Trial lessons, opened from the Dashboard (PD-44)', () => {
     expect(screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')?.textContent).not.toBe(
       screen.getAllByRole('tab')[0]!.textContent,
     )
+  })
+
+  it('follows the URL when it changes while the page is open', async () => {
+    access({ sales: true })
+    renderWithProviders(
+      <>
+        <AppRoutes />
+        <Link to="/trials?filter=decision">to decision</Link>
+      </>,
+      { staff, route: '/trials' },
+    )
+    expect(await screen.findByText('Prospect Gamma')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'to decision' }))
+    await waitFor(() => expect(screen.queryByText('Prospect Gamma')).not.toBeInTheDocument())
+    expect(screen.getByText('Prospect Alpha')).toBeInTheDocument()
   })
 
   it('falls back to all trials for a filter the URL names wrongly', async () => {

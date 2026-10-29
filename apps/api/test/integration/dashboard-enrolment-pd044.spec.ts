@@ -64,6 +64,8 @@ let s: Scenario;
 let tsupId: string;
 let salesId: string;
 let financeId: string;
+/** An Operations backup supervisor: in the department, neither its manager nor a supervisor. */
+let opsBackupId: string;
 let sa: string;
 let sa2: string;
 let org2: string;
@@ -103,13 +105,13 @@ async function department(kind: string, staffIds: string[]) {
 }
 
 /** A trial lesson `offsetMin` from now; one teacher, never two lessons at once. */
-async function trialAt(offsetMin: number): Promise<string> {
+async function trialAt(offsetMin: number, teacherId: string = s.teacherId): Promise<string> {
   const prospectId = (await trials.createProspect(salesId, { displayName: `prospect_${randomUUID().slice(0, 6)}` })).id;
   const startsAt = new Date(Date.now() + offsetMin * MIN);
   const lesson = await g.prisma.lesson.create({
     data: {
       organizationId: (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId,
-      kind: 'trial', prospectId, teacherId: s.teacherId, startsAt, endsAt: new Date(startsAt.getTime() + 30 * MIN),
+      kind: 'trial', prospectId, teacherId, startsAt, endsAt: new Date(startsAt.getTime() + 30 * MIN),
       createdByKind: 'staff', createdBy: salesId,
     },
   });
@@ -196,11 +198,17 @@ beforeEach(async () => {
   await g.prisma.$executeRaw`UPDATE chat.config SET value = 'false'::jsonb WHERE key = 'teacher_supervisor.strict_scope'`;
   s = await seed(g.prisma);
   hour = 0;
-  [tsupId, salesId, financeId, sa, sa2, org2] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  [tsupId, salesId, financeId, sa, sa2, org2, opsBackupId] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
   await g.prisma.$executeRawUnsafe(
     `insert into chat.staff (id, name, role, is_active) values
-       ($1::uuid, 'tsup_e', 'admin', true), ($2::uuid, 'sales_e', 'admin', true), ($3::uuid, 'fin_e', 'finance', true)`,
-    tsupId, salesId, financeId,
+       ($1::uuid, 'tsup_e', 'admin', true), ($2::uuid, 'sales_e', 'admin', true), ($3::uuid, 'fin_e', 'finance', true),
+       ($4::uuid, 'opsbk_e', 'admin', true)`,
+    tsupId, salesId, financeId, opsBackupId,
+  );
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.department_member (staff_id, organization_id, department_id, position)
+     values ($1::uuid, chat.default_organization_id(), $2::uuid, 'backup_supervisor')`,
+    opsBackupId, s.departmentId,
   );
   await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'org_two')`, org2, `pd044e-${org2.slice(0, 8)}`);
   await g.prisma.$transaction([
@@ -239,6 +247,7 @@ describe('GET /dashboard/enrolment -- trials and new students', () => {
       [salesId, true, true], // Sales: every trial, the entries not yet assigned
       [s.ownerId, true, true], // an Operations supervisor: every trial, their own children's entries
       [s.otherAdminId, true, true], // an Operations supervisor with no new children
+      [opsBackupId, true, true], // an Operations backup supervisor: the trial desk, and no children of their own
       [tsupId, true, false], // the Teachers department: its trials; New Students is not theirs
       [sa, true, true],
       [sa2, true, true],
@@ -263,6 +272,49 @@ describe('GET /dashboard/enrolment -- trials and new students', () => {
     // tsup_e is assigned no teacher: no trial is theirs.
     expect((await both(tsupId)).every((t) => t.count === 0)).toBe(true);
     await g.prisma.$executeRaw`UPDATE chat.config SET value = 'false'::jsonb WHERE key = 'teacher_supervisor.strict_scope'`;
+  });
+
+  it('narrows a strict Teachers supervisor who covers one of two trial teachers to that teacher\'s trials', async () => {
+    // teacher_d gets a trial too; tsup_e is assigned teacher_c only.
+    await trialAt(72 * 60, s.newTeacherId);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id) values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
+      s.teacherId, tsupId,
+    );
+    await g.prisma.$executeRaw`UPDATE chat.config SET value = 'true'::jsonb WHERE key = 'teacher_supervisor.strict_scope'`;
+    await expectParity(tsupId, true, false);
+    const mine = await both(tsupId);
+    const all = await both(s.managerId);
+    expect(tileOf(mine, 'trials.upcoming')?.count).toBe((tileOf(all, 'trials.upcoming')?.count ?? 0) - 1);
+    expect(tileOf(mine, 'trials.awaiting')?.count).toBe(tileOf(all, 'trials.awaiting')?.count);
+    await g.prisma.$executeRaw`UPDATE chat.config SET value = 'false'::jsonb WHERE key = 'teacher_supervisor.strict_scope'`;
+  });
+
+  it('says "N+" past each page\'s limit, counting only what the page lists (1000 trials, 500 forms)', async () => {
+    const prospectId = (await trials.createProspect(salesId, { displayName: 'prospect_bulk' })).id;
+    // 1001 more trials to come, 31 minutes apart on teacher_d: well inside the window, never overlapping.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.lesson (organization_id, prospect_id, teacher_id, kind, starts_at, ends_at, created_by, created_by_kind)
+       select chat.default_organization_id(), $1::uuid, $2::uuid, 'trial',
+              now() + interval '3 hours' + i * interval '31 minutes', now() + interval '3 hours' + i * interval '31 minutes' + interval '30 minutes',
+              $3::uuid, 'staff'
+         from generate_series(1, 1001) i`,
+      prospectId, s.newTeacherId, salesId,
+    );
+    // 501 more live forms, written as data (copies of a real one's shape), triggers off.
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.trial_subscription (lesson_id, organization_id, parent_name, phone, children, currency, payment_method, recorded_by)
+         select l.id, t.organization_id, t.parent_name, t.phone, t.children, t.currency, t.payment_method, t.recorded_by
+           from (select id from chat.lesson where prospect_id = $1::uuid order by starts_at limit 501) l,
+                (select * from chat.trial_subscription limit 1) t`,
+        prospectId,
+      ),
+    ]);
+    const tiles = await both(s.managerId);
+    expect(tiles.every((t) => t.capped)).toBe(true);
+    await expectParity(s.managerId, true, true);
   });
 
   it('leaves out what the caller cannot open, and refuses anyone who is not staff', async () => {
