@@ -16,6 +16,7 @@ describe('route', () => {
     expect(route('/lessons/arabic/lesson-1/')).toEqual({ kind: 'arabic', lesson: 1 });
     expect(route('/lessons/arabic/lesson-3')).toEqual({ kind: 'arabic', lesson: 3 });
     expect(route('/lessons/arabic/lesson-7')).toEqual({ kind: 'arabic', lesson: 7 });
+    expect(route('/lessons/arabic/lesson-6')).toEqual({ kind: 'arabic', lesson: 6 });
     for (const bad of ['/lessons/arabic/lesson-0', '/lessons/arabic/lesson-4', '/lessons/arabic/lesson-10', '/lessons/arabic/lesson-03', '/lessons/islamic/lesson-1']) {
       expect(route(bad)).toEqual({ kind: 'not-found' });
     }
