@@ -83,3 +83,35 @@ export function harakatStandIn(): ArabicLesson {
     ],
   };
 }
+
+/** Lesson 2 (letters that look or sound alike): one pair, a unit per letter. */
+export function pairStandIn(): ArabicLesson {
+  return {
+    lesson: 2,
+    review: { status: 'approved', by: 'test', note: '' },
+    provenance: {},
+    finalMark: 'sukun',
+    retiredIds: [],
+    units: [
+      {
+        id: 'ba_vs_nun',
+        letters: ['ب'],
+        group: 'ب ن',
+        name: 'بَاءْ',
+        forms: ['ب', 'بـ', 'ـبـ', 'ـب'],
+        note: null,
+        words: [{ id: 'ba_vs_nun-001', text: 'بَابْ', was: null, review: null }],
+      },
+      {
+        id: 'nun_vs_ba',
+        letters: ['ن'],
+        group: 'ب ن',
+        name: 'نُونْ',
+        forms: ['ن', 'نـ', 'ـنـ', 'ـن'],
+        note: null,
+        words: [{ id: 'nun_vs_ba-001', text: 'نَارْ', was: null, review: null }],
+      },
+    ],
+    quiz: [{ id: 'q1', kind: 'contains', unit: 'ba_vs_nun', options: ['بَابْ', 'نَارْ'], answer: 0, review: null }],
+  };
+}
