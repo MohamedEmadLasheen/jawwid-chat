@@ -53,6 +53,7 @@ Every abuse case this product has is an *authorized* action:
 | `abuse.throttle.presence_read_actor` | 60 | `GET /presence` (PD-37) |
 | `abuse.throttle.quran_read_actor` | 120 | `GET /quran/ayahs`, `GET /quran/tajweed` (PD-29 materials quality: up to 50 ayat a question) |
 | `abuse.throttle.lesson_audio_read_actor` | 60 | `GET /lesson-audio/:lesson` (PD-48: a lesson's signed voice-over URLs, one question per lesson opened) |
+| `abuse.throttle.whiteboard_write_actor` | 240 | every PD-39 board write: `POST /whiteboards`, `POST /whiteboards/:id/…` (an autosave every ~2 s while a teacher draws, plus page actions) |
 | `abuse.realtime.frames_per_socket_per_minute` | 600 | every inbound WebSocket frame |
 
 PD-32 adds three limits counted in the database rather than in the action store,
