@@ -1,12 +1,14 @@
-import { Controller, Get, UseFilters } from '@nestjs/common';
+import { Controller, Get, Req, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ConversationService } from '../communication/conversations/conversation.service';
 import { SupervisionCaseService } from '../cases/supervision-case.service';
 import { TaskService } from '../tasks/task.service';
 import { CalendarService } from '../calendar/calendar.service';
+import { TrialService } from '../lessons/trial.service';
+import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
 import { Requires, SelfService } from '../platform/permissions/route-access';
-import { dashboardSection, type DashboardSection } from './dashboard-tile';
+import { dashboardSection, type DashboardSection, type DashboardTile } from './dashboard-tile';
 
 /**
  * PD-44: the manager Dashboard, one read-only section per page it summarises
@@ -25,6 +27,8 @@ export class DashboardController {
     private readonly cases: SupervisionCaseService,
     private readonly tasks: TaskService,
     private readonly calendar: CalendarService,
+    private readonly trials: TrialService,
+    private readonly enrolment: NewStudentEnrolmentService,
   ) {}
 
   /** Chats waiting for a staff reply, in the caller's PD-8 scope. Links to /chat. */
@@ -67,5 +71,28 @@ export class DashboardController {
   async lessons(@ActorId() actorId: string): Promise<DashboardSection> {
     const now = new Date();
     return dashboardSection(await this.calendar.dashboardCounts(actorId, now), now);
+  }
+
+  /**
+   * Two pages' tiles in one section: the Trials page's tabs (trials.view) and
+   * the New Students page's filters (new_students.view). A staff caller gets
+   * each page's tiles only with that page's own key (resolved by
+   * PermissionGuard), and each service decides department and scope. Links to
+   * /trials and /trials/new-students.
+   */
+  @Requires('trials.view', 'new_students.view')
+  @Get('enrolment')
+  async enrolmentSection(
+    @ActorId() actorId: string,
+    @Req() request?: { permissions?: ReadonlySet<string> },
+  ): Promise<DashboardSection> {
+    const now = new Date();
+    const keys = request?.permissions;
+    const holds = (key: string) => !keys || keys.has(key);
+    const tiles: DashboardTile[] = [
+      ...(holds('trials.view') ? await this.trials.dashboardCounts(actorId, now) : []),
+      ...(holds('new_students.view') ? await this.enrolment.dashboardCounts(actorId) : []),
+    ];
+    return dashboardSection(tiles, now);
   }
 }

@@ -53,6 +53,7 @@ import 'message_composer.dart';
 import 'message_info_sheet.dart';
 import 'payment_lock_banner.dart';
 import 'pinned_banner.dart';
+import 'swipe_to_reply.dart';
 import 'teacher_away_banner.dart';
 
 /// One conversation.
@@ -1397,7 +1398,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             return Column(
               children: [
                 if (showDaySeparator) _DaySeparator(when: message.createdAt),
-                MessageBubble(
+                // PD-37: swipe toward the trailing side to reply, as on WhatsApp
+                // -- never from the leading edge, which is the back gesture's.
+                SwipeToReply(
+                  enabled: canActOn(message) && !_selecting && !widget.isReadOnly,
+                  onReply: () => setState(() => _replyingTo = _previewOf(message)),
+                  child: MessageBubble(
                   key: _messageKeys.putIfAbsent(key, GlobalKey.new),
                   message: message,
                   showAuthor: showAuthor,
@@ -1430,6 +1436,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
                           _guard(() => controller.toggleReaction(message, emoji)),
                   onOpenAttachment: (attachment) =>
                       _openAttachment(message, attachment),
+                  ),
                 ),
               ],
             );
