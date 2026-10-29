@@ -3,6 +3,8 @@
  * §4.3, §4.5). The rules that matter most: a verse is a reference and never its
  * text, an image names an asset and never a key, and a page stays within 512 KB.
  */
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { PAGE_MAX_BYTES, PAGE_MAX_ELEMENTS, VERSE_MAX_AYAT, checkDocument } from '../../../src/whiteboards/whiteboard-document';
 
 const SHA = 'a'.repeat(64);
@@ -83,5 +85,14 @@ describe('a board page document', () => {
     expect(reason(doc(...elements))).toMatch(new RegExp(`at most ${PAGE_MAX_BYTES}`));
     const many = Array.from({ length: PAGE_MAX_ELEMENTS + 1 }, (_, i) => ({ id: `l${i}`, kind: 'line' }));
     expect(reason(doc(...many))).toMatch(new RegExp(`at most ${PAGE_MAX_ELEMENTS}`));
+  });
+
+  it('accepts the shared fixture: the page every kind of element, as the Flutter portal writes it and Admin Web draws it', () => {
+    const fixture = JSON.parse(readFileSync(resolve(__dirname, '../../../../../test/fixtures/whiteboards/page-every-kind.json'), 'utf8'));
+    const r = checkDocument(fixture.page.document);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.document).toEqual(fixture.page.document);
+    expect(r.value.verses.map((v) => v.rangeSha256)).toEqual([fixture.ayahs.rangeSha256]);
   });
 });

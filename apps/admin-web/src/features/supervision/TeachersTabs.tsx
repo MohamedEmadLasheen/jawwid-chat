@@ -1,5 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import { TeachersAreaTabs } from '@/features/teachers/area'
+import { useSession } from '@/core/auth/SessionProvider'
+import { holdsAny } from '@/core/permissions/capabilities'
+import { BOARD_KEYS } from '@/features/teacher-boards/api'
 import { S, useCopy } from './copy'
 import './supervision.css'
 
@@ -14,10 +17,13 @@ import './supervision.css'
  */
 export function TeachersTabs({ basePath }: { basePath: string }) {
   const tx = useCopy()
+  const { staff } = useSession()
   if (!basePath.startsWith('/admin')) return <TeachersAreaTabs />
   const tabs = [
     { to: basePath, label: tx(S.tabTeachers), end: true },
     { to: `${basePath}/supervision`, label: tx(S.tabSupervision), end: false },
+    // PD-39: the teachers' boards, read only.
+    ...(holdsAny(staff, BOARD_KEYS) ? [{ to: `${basePath}/boards`, label: tx(S.tabBoards), end: false }] : []),
   ]
   return (
     <nav className="sv-tabs" aria-label={tx(S.sections)}>

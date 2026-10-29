@@ -72,3 +72,19 @@
   src: url('../../assets/fonts/ibm-plex-sans-arabic-latin-700-normal.woff2') format('woff2');
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
+
+/*
+ * Amiri Quran -- the Quran verses on a teacher's board (PD-39 staff viewer),
+ * the same file the teacher's portal bundles (assets/fonts/AmiriQuran.ttf,
+ * sha256 e2a47644762d16bdfb6d33e0d8db8c6ff30beae84150ef5a705316bbd829455c,
+ * pinned by src/features/teacher-boards/render.test.ts). Licence: SIL Open
+ * Font License 1.1 (../../assets/fonts/OFL-Amiri.txt), Amiri 1.003. Loaded
+ * only when a board with a verse is drawn.
+ */
+@font-face {
+  font-family: 'Amiri Quran';
+  font-style: normal;
+  font-display: block;
+  font-weight: 400;
+  src: url('../../assets/fonts/AmiriQuran.ttf') format('truetype');
+}

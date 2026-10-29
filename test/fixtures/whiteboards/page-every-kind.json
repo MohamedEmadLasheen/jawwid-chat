@@ -1,0 +1,319 @@
+{
+  "about": [
+    "PD-39: one page with every kind of element, exactly as the Flutter teacher portal writes it.",
+    "Shared by three tests, so the three readers of a board agree on its JSON:",
+    "  the API accepts it (apps/api/test/unit/whiteboards/whiteboard-document.spec.ts),",
+    "  Flutter reads it and writes it back unchanged (test/features/whiteboards/board_fixture_test.dart),",
+    "  Admin Web draws it read-only (apps/admin-web/src/features/teacher-boards/render.test.ts).",
+    "The verse text is SYNTHETIC: a test proves the plumbing, the verified dataset proves the words."
+  ],
+  "page": {
+    "id": "7d2e6f9a-1b3c-4d5e-8f70-a1b2c3d4e5f6",
+    "position": 0,
+    "layout": "arabic_lines",
+    "background": "cream",
+    "document": {
+      "v": 1,
+      "elements": [
+        {
+          "id": "ink-1",
+          "kind": "stroke",
+          "points": "0AcAALgLAABaMQFkAICLAfwAqvQBlADSWwIUAKDxAYj/ZA==",
+          "color": "#1b1b1b",
+          "width": 4
+        },
+        {
+          "id": "verse-1",
+          "kind": "verse",
+          "surah": 1,
+          "fromAyah": 1,
+          "toAyah": 7,
+          "datasetId": "synthetic-quran",
+          "rangeSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transform": {
+            "x": 260,
+            "y": 80,
+            "w": 1400,
+            "h": 300
+          },
+          "style": {
+            "size": 56,
+            "color": "#1b1b1b"
+          }
+        },
+        {
+          "id": "hl-1",
+          "kind": "highlight",
+          "points": "ECcAAGgQAACAxAkAAIDECSgAgA==",
+          "color": "#e53935",
+          "width": 28
+        },
+        {
+          "id": "mouse-1",
+          "kind": "stroke",
+          "points": "cBcAAFgbAACAkAGc/4BYApYAgFgCuv+A",
+          "color": "#1565c0",
+          "width": 6
+        },
+        {
+          "id": "rect-1",
+          "kind": "shape",
+          "shape": "rect",
+          "x": 100,
+          "y": 500,
+          "w": 300,
+          "h": 180,
+          "color": "#2e7d32",
+          "fill": null,
+          "width": 4
+        },
+        {
+          "id": "oval-1",
+          "kind": "shape",
+          "shape": "ellipse",
+          "x": 450,
+          "y": 500,
+          "w": 260,
+          "h": 180,
+          "color": "#c62828",
+          "fill": "#fdd835",
+          "width": 3
+        },
+        {
+          "id": "tri-1",
+          "kind": "shape",
+          "shape": "triangle",
+          "x": 760,
+          "y": 500,
+          "w": 200,
+          "h": 180,
+          "color": "#6a1b9a",
+          "fill": null,
+          "width": 5
+        },
+        {
+          "id": "line-1",
+          "kind": "line",
+          "x1": 100,
+          "y1": 760,
+          "x2": 500,
+          "y2": 760,
+          "color": "#1b1b1b",
+          "width": 4
+        },
+        {
+          "id": "arrow-1",
+          "kind": "arrow",
+          "x1": 560,
+          "y1": 760,
+          "x2": 900,
+          "y2": 820.5,
+          "color": "#ef6c00",
+          "width": 4,
+          "heads": "both"
+        },
+        {
+          "id": "text-ar",
+          "kind": "text",
+          "text": "اقرأ الآيات مرتين",
+          "x": 1100,
+          "y": 560,
+          "w": 600,
+          "h": 80,
+          "size": 48,
+          "color": "#1b1b1b"
+        },
+        {
+          "id": "text-en",
+          "kind": "text",
+          "text": "Read it twice, then once from memory",
+          "x": 1100,
+          "y": 660,
+          "w": 600,
+          "h": 140,
+          "size": 40,
+          "color": "#1565c0"
+        },
+        {
+          "id": "star-1",
+          "kind": "stamp",
+          "stamp": "star",
+          "x": 1500,
+          "y": 860,
+          "w": 120,
+          "h": 120,
+          "color": "#f9a825"
+        },
+        {
+          "id": "praise-1",
+          "kind": "stamp",
+          "stamp": "excellentAr",
+          "x": 1100,
+          "y": 860,
+          "w": 320,
+          "h": 120,
+          "color": "#2e7d32",
+          "text": "ممتاز"
+        },
+        {
+          "id": "img-1",
+          "kind": "image",
+          "assetId": "3f1c2b4a-5d6e-4f70-8a9b-0c1d2e3f4a5b",
+          "x": 100,
+          "y": 860,
+          "w": 400,
+          "h": 180
+        }
+      ]
+    },
+    "updatedAt": "2026-10-29T09:00:00.000Z"
+  },
+  "expect": {
+    "drawOrder": [
+      "hl-1",
+      "ink-1",
+      "verse-1",
+      "mouse-1",
+      "rect-1",
+      "oval-1",
+      "tri-1",
+      "line-1",
+      "arrow-1",
+      "text-ar",
+      "text-en",
+      "star-1",
+      "praise-1",
+      "img-1"
+    ],
+    "notDrawn": [
+      "img-1"
+    ],
+    "points": {
+      "ink-1": [
+        [
+          200,
+          300,
+          90
+        ],
+        [
+          230.5,
+          310,
+          128
+        ],
+        [
+          270,
+          335.2,
+          170
+        ],
+        [
+          320,
+          350,
+          210
+        ],
+        [
+          380.3,
+          352,
+          160
+        ],
+        [
+          430,
+          340,
+          100
+        ]
+      ],
+      "hl-1": [
+        [
+          1000,
+          420,
+          128
+        ],
+        [
+          1250,
+          420,
+          128
+        ],
+        [
+          1500,
+          424,
+          128
+        ]
+      ],
+      "mouse-1": [
+        [
+          600,
+          700,
+          128
+        ],
+        [
+          640,
+          690,
+          128
+        ],
+        [
+          700,
+          705,
+          128
+        ],
+        [
+          760,
+          698,
+          128
+        ]
+      ]
+    }
+  },
+  "palette": {
+    "ink": "#1b1b1b",
+    "white": "#ffffff",
+    "cream": "#fbf6e9",
+    "grey": "#eff1f3",
+    "green": "#1f4a3a",
+    "dark": "#1d232a",
+    "ruleOnLight": "#5b708347",
+    "ruleOnDark": "#ffffff38",
+    "placeholderOnLight": "#5b7083ff",
+    "placeholderOnDark": "#ffffffb3"
+  },
+  "ayahs": {
+    "dataset": {
+      "id": "synthetic-quran",
+      "attribution": "Synthetic test data"
+    },
+    "surah": {
+      "number": 1,
+      "ayahCount": 7
+    },
+    "rangeSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ayahs": [
+      {
+        "ayah": 1,
+        "text": "SYNTHETIC-1",
+        "basmala": "SYNTHETIC-BASMALA"
+      },
+      {
+        "ayah": 2,
+        "text": "SYNTHETIC-2"
+      },
+      {
+        "ayah": 3,
+        "text": "SYNTHETIC-3"
+      },
+      {
+        "ayah": 4,
+        "text": "SYNTHETIC-4"
+      },
+      {
+        "ayah": 5,
+        "text": "SYNTHETIC-5"
+      },
+      {
+        "ayah": 6,
+        "text": "SYNTHETIC-6"
+      },
+      {
+        "ayah": 7,
+        "text": "SYNTHETIC-7"
+      }
+    ]
+  }
+}
