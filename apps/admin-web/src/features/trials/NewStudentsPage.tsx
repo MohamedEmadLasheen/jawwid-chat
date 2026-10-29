@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
@@ -51,7 +52,12 @@ export function NewStudentsPage() {
   const [editing, setEditing] = useState<NewStudentDto | null>(null)
   const [paying, setPaying] = useState<NewStudentDto | null>(null)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<StatusFilter>('all')
+  // PD-44: a Dashboard tile opens the filter it counted (?filter=unassigned|waiting|signed_up).
+  const [params] = useSearchParams()
+  const asked = params.get('filter')
+  const [filter, setFilter] = useState<StatusFilter>(
+    asked === 'unassigned' || asked === 'waiting' || asked === 'signed_up' ? asked : 'all',
+  )
   const { staff } = useSession()
   const students = q.data?.students ?? []
   // PD-27: Sales, the Operations Manager (who assigns) and the super admin ask

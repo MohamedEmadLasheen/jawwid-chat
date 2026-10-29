@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { SlotPicker } from '@/shared/components/SlotPicker'
@@ -37,7 +37,10 @@ export function TrialsPage() {
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const access = useTrialsAccess()
   const q = useTrials()
-  const [filter, setFilter] = useState<Filter>('all')
+  // PD-44: a Dashboard tile opens the tab it counted (/trials?filter=decision|upcoming).
+  const [params] = useSearchParams()
+  const asked = params.get('filter')
+  const [filter, setFilter] = useState<Filter>(asked === 'decision' || asked === 'upcoming' ? asked : 'all')
   const [booking, setBooking] = useState(false)
   const [dialog, setDialog] = useState<Pending>(null)
   const [card, setCard] = useState<TrialDto | null>(null)

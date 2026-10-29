@@ -14,7 +14,8 @@ import { SchedulingService } from '../lessons/scheduling.service';
 import { normalizeEmail, signupWrongCodes } from '../platform/auth/parent-signup.service';
 import { subjectHash } from '../platform/auth/subject-hash';
 import { PaymentLedger } from '../billing/payment-ledger.service';
-import { NewStudentsService } from './new-students.service';
+import { NEW_STUDENTS_LIMIT, NewStudentsService } from './new-students.service';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { seedFromEnrolment } from '../parent-profile/parent-record.service';
 import { contactKeyHash } from './contact-key';
 import { e164ForKey } from './intake-input';
@@ -62,6 +63,59 @@ export class NewStudentEnrolmentService {
     // Optional only for suites that build this service by hand.
     @Optional() private readonly payments?: PaymentLedger,
   ) {}
+
+  /**
+   * PD-44: the Dashboard's New Students tiles -- the page's own filters,
+   * counted over the page's own forms (the NEW_STUDENTS_LIMIT newest live
+   * ones) with `page`'s visibility rule, in one statement:
+   *
+   *   new_students.unassigned  no enrolment yet ("Not assigned"): the super
+   *                            admin, the Operations manager and Sales see them
+   *   new_students.waiting     enrolled, the parent not signed up yet ("Waiting
+   *                            for the parent", a locked sign-up included): the
+   *                            super admin, the Operations manager, and whoever
+   *                            supervises one of the children
+   *
+   * Anyone the page refuses gets no tile; `capped` when there are more live
+   * forms than the page lists. Unlike the page, no per-account wrong-code
+   * lookup: a count does not need it.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) {
+      throw new CommError(CommErrorCode.LESSON_DENIED, 'the New Students page belongs to Operations and Sales');
+    }
+    const viewer = await this.viewer(actor);
+    if (!viewer.superAdmin && !viewer.opsManager && !viewer.operations && !viewer.sales) return [];
+    const org = actor.organizationId as string;
+    const all = viewer.superAdmin || viewer.opsManager;
+    const [r] = await this.prisma.$queryRaw<Array<{ unassigned: number; unassigned_oldest: Date | null; waiting: number; total: number }>>`
+      WITH forms AS (
+        SELECT f.lesson_id, f.recorded_at
+          FROM chat.trial_subscription f
+         WHERE f.organization_id = ${org}::uuid AND f.withdrawn_at IS NULL
+         ORDER BY f.recorded_at DESC
+         LIMIT ${NEW_STUDENTS_LIMIT}
+      ),
+      entry AS (
+        SELECT forms.recorded_at, e.lesson_id IS NOT NULL AS enrolled, e.learner_ids,
+               (e.account_id IS NOT NULL AND EXISTS (SELECT 1 FROM chat.account_credential c WHERE c.account_id = e.account_id)) AS signed_up
+          FROM forms
+          LEFT JOIN chat.student_enrolment e ON e.lesson_id = forms.lesson_id AND e.organization_id = ${org}::uuid
+      )
+      SELECT count(*) FILTER (WHERE NOT enrolled AND (${all}::boolean OR ${viewer.sales}::boolean))::int AS unassigned,
+             min(recorded_at) FILTER (WHERE NOT enrolled AND (${all}::boolean OR ${viewer.sales}::boolean)) AS unassigned_oldest,
+             count(*) FILTER (WHERE enrolled AND NOT signed_up
+                                AND (${all}::boolean OR learner_ids && ${viewer.supervised}::uuid[]))::int AS waiting,
+             (SELECT count(*)::int FROM chat.trial_subscription f
+               WHERE f.organization_id = ${org}::uuid AND f.withdrawn_at IS NULL) AS total
+        FROM entry`;
+    const capped = (r?.total ?? 0) > NEW_STUDENTS_LIMIT;
+    return [
+      dashboardTile('new_students.unassigned', r?.unassigned ?? 0, r?.unassigned_oldest ?? null, capped),
+      dashboardTile('new_students.waiting', r?.waiting ?? 0, null, capped),
+    ];
+  }
 
   /** The New Students page, filtered for the viewer, each entry with its setup state. */
   async page(actorId: string) {
