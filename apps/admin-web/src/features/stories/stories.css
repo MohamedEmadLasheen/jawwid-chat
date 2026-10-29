@@ -272,7 +272,7 @@
   text-align: center; cursor: pointer;
 }
 .dropzone:hover, .dropzone.is-over { border-color: var(--accent); background: var(--accent-soft); }
-.dropzone__icon { color: var(--accent); }
+.dropzone__icon { color: var(--text-link); }
 .dropzone__title { font-weight: var(--fw-semibold); }
 .dropzone__hint { font-size: var(--fs-xs); color: var(--text-subtle); }
 

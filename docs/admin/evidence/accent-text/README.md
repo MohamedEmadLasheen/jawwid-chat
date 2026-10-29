@@ -20,3 +20,17 @@ unchanged on purpose. The fix shows in dark: `#1b7f93` (3.7:1 on a surface,
 | Dark, after | `02-after-dark-en.jpg` | `04-after-dark-ar.jpg` |
 | Light, before | `05-before-light-en.jpg` | `07-before-light-ar.jpg` |
 | Light, after | `06-after-light-en.jpg` | `08-after-light-ar.jpg` |
+
+## The two icons
+
+The no-access icon (`.state--forbidden … .state__icon`, on `ForbiddenPage`) and
+the Stories upload icon (`.dropzone__icon`, shown with the dropzone hovered)
+drew `--accent` on `--accent-soft`: 2.95:1 in dark, under the 3:1 an icon
+needs. They now use `--text-link` (6.8:1). Light is unchanged.
+
+| | |
+|---|---|
+| Dark, before (EN) | `09-icons-before-dark-en.jpg` |
+| Dark, after (EN) | `10-icons-after-dark-en.jpg` |
+| Dark, after (AR) | `11-icons-after-dark-ar.jpg` |
+| Light, after (EN) | `12-icons-after-light-en.jpg` |

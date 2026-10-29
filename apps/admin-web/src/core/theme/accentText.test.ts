@@ -3,10 +3,11 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Text is never drawn in --accent. In dark --accent is #1b7f93: 3.7:1 on a
- * surface and 2.9:1 on --accent-soft, below 4.5:1. Text uses --text-link and
- * --accent stays on borders, underlines, fills and icons. The tab strips came
- * first (tabs.test.ts); these are the links, initials, filter and cards.
+ * Text and icons are never drawn in --accent. In dark --accent is #1b7f93: 3.7:1 on a
+ * surface and 2.9:1 on --accent-soft: below 4.5:1 for text, and below 3:1 for an
+ * icon on --accent-soft. Text and icons use --text-link; --accent stays on
+ * borders, underlines and fills. The tab strips came first (tabs.test.ts);
+ * these are the links, initials, filter, cards and two icons.
  */
 const src = join(__dirname, '../..')
 const read = (file: string) => readFileSync(join(src, file), 'utf8')
@@ -41,9 +42,11 @@ const RULES: Array<[string, string, string, string[]]> = [
   ['features/schedule/schedule.css', '.sc-filter--on', 'active filter chip (Schedule)', ['accent-soft']],
   ['features/stories/stories.css', '.type-card.is-selected', 'selected story type', ['accent-soft']],
   ['features/stories/stories.css', '.cta-choice.is-selected', 'selected story button', ['accent-soft']],
+  ['core/theme/design-system.css', ".state--forbidden.state[role='alert'] .state__icon", 'no-access icon', ['accent-soft']],
+  ['features/stories/stories.css', '.dropzone__icon', 'upload icon (the dropzone turns --accent-soft on hover)', ['surface', 'accent-soft']],
 ]
 
-describe('text on --accent surfaces is readable in both themes', () => {
+describe('text and icons on --accent surfaces are readable in both themes', () => {
   it.each(RULES)('%s %s (%s)', (file, selector, _what, backgrounds) => {
     const css = read(file)
     const at = css.indexOf(`${selector} {`)
@@ -59,20 +62,19 @@ describe('text on --accent surfaces is readable in both themes', () => {
   })
 })
 
-describe('no stylesheet draws text in --accent', () => {
+describe('no stylesheet draws text or icons in --accent', () => {
   const sheets = (dir: string): string[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? sheets(join(dir, e.name)) : e.name.endsWith('.css') ? [join(dir, e.name)] : [],
     )
 
-  it('only icons (non-text, graded 3:1) may take color: var(--accent)', () => {
+  it('no rule takes color: var(--accent)', () => {
     const found: string[] = []
     for (const path of sheets(src)) {
       const css = readFileSync(path, 'utf8')
       for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
         if (!/(^|[;{\s])color:\s*var\(--accent\)/.test(m[2]!)) continue
         const selector = m[1]!.replace(/\/\*[\s\S]*?\*\//g, '').trim()
-        if (selector.split(',').every((s) => /__icon$/.test(s.trim()))) continue
         found.push(`${relative(src, path)}: ${selector}`)
       }
     }
