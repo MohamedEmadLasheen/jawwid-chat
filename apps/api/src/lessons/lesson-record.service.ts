@@ -135,6 +135,8 @@ export class LessonRecordService {
             // admin_cancelled must name its reason; every other correction's
             // reason is internal and lives on the correction row.
             outcomeNote: to === LessonOutcome.ADMIN_CANCELLED ? reason : null,
+            // PD-50: a category belongs to an excuse; a correction away from one drops it.
+            excuseCategory: to === LessonOutcome.STUDENT_APOLOGY || to === LessonOutcome.TEACHER_APOLOGY ? lesson.excuseCategory : null,
             outcomeByKind: ActorKind.STAFF,
             outcomeBy: actor.actorId,
             outcomeAt: new Date(),

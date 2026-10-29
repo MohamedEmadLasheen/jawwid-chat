@@ -5,7 +5,7 @@ import type { MenuItem } from '@/shared/components/Menu'
 import { describeError } from '@/features/organization/copy'
 import { chatKeys } from '@/features/chat/chatApi'
 import { journeyApi, journeyKeys, type LessonTicket } from './api'
-import { J, formatLessonWhen, useJourneyCopy } from './copy'
+import { EXCUSE_CATEGORIES, EXCUSE_CATEGORY_LABEL, J, formatLessonWhen, useJourneyCopy, type ExcuseCategory } from './copy'
 import { academyWallClockToIso, isoToAcademyWallClock } from '@/core/time/academyTime'
 
 export type CardKind = 'student_excuse' | 'teacher_excuse' | 'makeup'
@@ -77,6 +77,7 @@ export function LessonCardDialog({
   const acts = new Set(chosen?.tickets.map((t) => t.ticket) ?? [])
   const [timing, setTiming] = useState<'before' | 'after' | ''>('')
   const [reason, setReason] = useState('')
+  const [category, setCategory] = useState<ExcuseCategory | ''>('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [touched, setTouched] = useState(false)
@@ -93,6 +94,8 @@ export function LessonCardDialog({
   const needsReason = kind === 'teacher_excuse' || (kind === 'student_excuse' && timing === 'after')
   // Before the start a reason is optional: kept with staff like the others, never in the group.
   const showReason = needsReason || (kind === 'student_excuse' && timing === 'before')
+  // PD-50: every excuse names its category, which the family reads on the card.
+  const needsCategory = showReason
   // PD-22: what is typed is the academy's (Cairo) clock, whatever the browser's zone.
   const typed = date && time ? academyWallClockToIso(date, time) : null
   const startsAt = typed ? new Date(typed) : date && time ? new Date(Number.NaN) : null
@@ -100,6 +103,7 @@ export function LessonCardDialog({
     !lessonId ||
     (kind === 'student_excuse' && !timing) ||
     (needsReason && !reason.trim()) ||
+    (needsCategory && !category) ||
     (kind === 'makeup' && (!startsAt || Number.isNaN(startsAt.getTime())))
 
   const submit = async () => {
@@ -109,10 +113,10 @@ export function LessonCardDialog({
     setError(null)
     try {
       if (kind === 'student_excuse') {
-        if (timing === 'before') await journeyApi.excuseBefore(lessonId, reason.trim() || null)
-        else await journeyApi.excuseAfter(lessonId, reason.trim())
+        if (timing === 'before') await journeyApi.excuseBefore(lessonId, reason.trim() || null, category || null)
+        else await journeyApi.excuseAfter(lessonId, reason.trim(), category || null)
       } else if (kind === 'teacher_excuse') {
-        await journeyApi.teacherExcuse(lessonId, reason.trim())
+        await journeyApi.teacherExcuse(lessonId, reason.trim(), category || null)
       } else {
         await journeyApi.bookMakeup(lessonId, (startsAt as Date).toISOString())
       }
@@ -188,9 +192,30 @@ export function LessonCardDialog({
 
           {kind === 'teacher_excuse' && <p className="ts-muted">{tx(J.teacherExcuseHint)}</p>}
 
+          {needsCategory && (
+            <div className="field">
+              <span className="field__label" id={`${base}-category`}>{tx(J.reasonCategory)}</span>
+              <div className="jr-chips" role="radiogroup" aria-labelledby={`${base}-category`}>
+                {EXCUSE_CATEGORIES.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    className="jr-chip"
+                    aria-checked={category === c}
+                    onClick={() => setCategory(c)}
+                  >
+                    {tx(EXCUSE_CATEGORY_LABEL[c])}
+                  </button>
+                ))}
+              </div>
+              {touched && !category && <span className="field__error">{tx(J.required)}</span>}
+            </div>
+          )}
+
           {showReason && (
             <div className="field">
-              <label className="field__label" htmlFor={`${base}-reason`}>{tx(needsReason ? J.reasonStaffTeacher : J.reasonStaffTeacherOptional)}</label>
+              <label className="field__label" htmlFor={`${base}-reason`}>{tx(needsReason ? J.noteStaffTeacher : J.noteStaffTeacherOptional)}</label>
               <textarea
                 id={`${base}-reason`}
                 className="input"

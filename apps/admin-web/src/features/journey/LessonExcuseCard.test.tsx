@@ -67,6 +67,21 @@ describe('an excused lesson\'s card', () => {
     expect(lessonGets()).toBe(1)
   })
 
+  it('PD-50: the category is shown; the free text beside it is a staff-and-teacher note', async () => {
+    outcomeNote = 'Fever since yesterday'
+    renderWithProviders(
+      <LessonExcuseCard card={readLessonExcuseCard('lesson_apology', { ...base, timing: 'after_start', makeupOwed: true, reasonCategory: 'illness' })!} />,
+      { staff },
+    )
+    const group = screen.getByRole('group')
+    expect(group).toHaveTextContent('ReasonIllness')
+    await waitFor(() => expect(group).toHaveTextContent('Note (staff and the teacher only)Fever since yesterday'))
+  })
+
+  it('an unknown category code is not drawn', () => {
+    expect(readLessonExcuseCard('lesson_teacher_apology', { ...base, reasonCategory: 'secret' })?.category).toBeNull()
+  })
+
   it('a record that cannot be read shows no reason, never an error', async () => {
     fetchMock.mockImplementation(async () => json({ error: { code: 'lesson_not_found', message: 'x' } }, 404))
     renderWithProviders(<LessonExcuseCard card={readLessonExcuseCard('lesson_teacher_apology', { ...base, makeupOwed: true })!} />, { staff })

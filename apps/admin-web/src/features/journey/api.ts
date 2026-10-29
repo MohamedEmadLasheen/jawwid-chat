@@ -38,6 +38,8 @@ export interface LessonRecord {
   outcome: string | null
   apologyTiming: 'before_start' | 'after_start' | null
   outcomeNote: string | null
+  /** PD-50: the excuse's reason category, which the family reads. */
+  excuseCategory?: string | null
   report: (Omit<ReportInput, 'note'> & {
     note?: string | null
     version: number
@@ -86,11 +88,13 @@ export const journeyApi = {
   tickets: (conversationId: string) =>
     api.get<{ tickets: LessonTicket[] }>(`/conversations/${conversationId}/lesson-tickets`),
   /** A student excused before the start (the supervisor gives no reason). */
-  excuseBefore: (lessonId: string, reason: string | null = null) =>
-    api.post<LessonRecord>(`/lessons/${lessonId}/apology`, reason ? { reason } : {}),
+  excuseBefore: (lessonId: string, reason: string | null = null, reasonCategory: string | null = null) =>
+    api.post<LessonRecord>(`/lessons/${lessonId}/apology`, { ...(reason ? { reason } : {}), ...(reasonCategory ? { reasonCategory } : {}) }),
   /** A student excused after the start: excused at once; the reason is internal. */
-  excuseAfter: (lessonId: string, reason: string) => api.post<LessonRecord>(`/lessons/${lessonId}/late-excuse`, { reason }),
-  teacherExcuse: (lessonId: string, reason: string) => api.post<LessonRecord>(`/lessons/${lessonId}/teacher-apology`, { reason }),
+  excuseAfter: (lessonId: string, reason: string, reasonCategory: string | null = null) =>
+    api.post<LessonRecord>(`/lessons/${lessonId}/late-excuse`, { reason, ...(reasonCategory ? { reasonCategory } : {}) }),
+  teacherExcuse: (lessonId: string, reason: string, reasonCategory: string | null = null) =>
+    api.post<LessonRecord>(`/lessons/${lessonId}/teacher-apology`, { reason, ...(reasonCategory ? { reasonCategory } : {}) }),
   makeupSlots: (lessonId: string) =>
     api.get<{ lessonId: string; durationMinutes: number; timezone: string | null; slots: string[] }>(`/lessons/${lessonId}/makeup-slots`),
   bookMakeup: (lessonId: string, startsAt: string) => api.post<LessonRecord>(`/lessons/${lessonId}/makeup`, { startsAt }),

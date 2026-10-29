@@ -1335,6 +1335,8 @@ model Lesson {
   endsAt               DateTime       @map("ends_at") @db.Timestamptz
   outcome              String?
   outcomeNote          String?        @map("outcome_note")
+  /// PD-50: the excuse's reason category (EXCUSE_CATEGORIES), shown to the family.
+  excuseCategory       String?        @map("excuse_category")
   outcomeByKind        String?        @map("outcome_by_kind")
   outcomeBy            String?        @map("outcome_by") @db.Uuid
   outcomeAt            DateTime?      @map("outcome_at") @db.Timestamptz
@@ -1485,6 +1487,8 @@ model LessonRuling {
   decidedBy      String?   @map("decided_by") @db.Uuid
   decidedAt      DateTime? @map("decided_at") @db.Timestamptz
   decisionNote   String?   @map("decision_note")
+  /// PD-50: a late apology's reason category, written when the ruling is opened.
+  excuseCategory String?   @map("excuse_category")
 
   @@unique([lessonId, kind])
   @@map("lesson_ruling")

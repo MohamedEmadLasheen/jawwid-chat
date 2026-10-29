@@ -15,6 +15,8 @@ import {
   ActorKind,
   CardKind,
   ConversationType,
+  EXCUSE_CATEGORIES,
+  type ExcuseCategory,
   LessonKind,
   LessonOutcome,
   MessageType,
@@ -705,15 +707,18 @@ export class LessonService {
   async apology(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const actor = await this.conversations.requireActor(actorId);
     const family = actor.kind === ActorKind.CONTACT;
-    const reason = textField(body, 'reason', MAX_TEXT, family);
+    // PD-50: a category is what the family reads; with one, the family's own
+    // words are optional and stay with staff and the teacher like anyone's.
+    const category = excuseCategoryField(body);
+    const reason = textField(body, 'reason', MAX_TEXT, family && category === null);
     return this.close(actorId, lessonId, 'apology', LessonOutcome.STUDENT_APOLOGY, reason, async (tx, lesson, recorder, lang) => {
       const noticeMinutes = Math.max(0, Math.round((lesson.startsAt.getTime() - Date.now()) / 60_000));
       await this.postCard(
         tx, lesson, recorder, CardKind.LESSON_APOLOGY,
-        { ...this.cardBase(lesson), timing: 'before_start', noticeMinutes, makeupOwed: true, ...(family ? { reason } : {}) },
+        { ...this.cardBase(lesson), timing: 'before_start', noticeMinutes, makeupOwed: true, ...excuseOnCard(category, family ? reason : null) },
         lang,
       );
-    }, !family && reason === null ? 'student excused before the start' : null);
+    }, reason === null ? 'student excused before the start' : null, category);
   }
 
   /**
@@ -723,13 +728,14 @@ export class LessonService {
    */
   async teacherApology(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const reason = textField(body, 'reason', MAX_TEXT, true) as string;
+    const category = excuseCategoryField(body);
     return this.close(actorId, lessonId, 'teacher_apology', LessonOutcome.TEACHER_APOLOGY, reason, async (tx, lesson, actor, lang) => {
       await this.postCard(
         tx, lesson, actor, CardKind.LESSON_TEACHER_APOLOGY,
-        { ...this.cardBase(lesson), makeupOwed: true },
+        { ...this.cardBase(lesson), makeupOwed: true, ...excuseOnCard(category, null) },
         lang,
       );
-    });
+    }, null, category);
   }
 
   /**
@@ -743,6 +749,7 @@ export class LessonService {
    */
   async lateExcuse(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const reason = textField(body, 'reason', MAX_TEXT, true) as string;
+    const picked = excuseCategoryField(body);
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.load(actor, lessonId);
     this.requireAct(actor, standing, 'late_excuse');
@@ -760,6 +767,8 @@ export class LessonService {
     }
     const existing = lesson.rulings.find((r) => r.kind === RulingKind.LATE_APOLOGY) ?? null;
     if (existing?.decision) throw stateError('a decision on an excuse for this lesson was already recorded; correct the lesson instead');
+    // PD-50: the supervisor's category, else the one the family's late apology gave.
+    const category = picked ?? (existing?.excuseCategory as ExcuseCategory | null | undefined) ?? null;
 
     const lang = await this.languageOf(lesson);
     await this.write(() =>
@@ -780,12 +789,15 @@ export class LessonService {
         });
         const updated = await tx.lesson.update({
           where: { id: lesson.id },
-          data: { outcome: LessonOutcome.STUDENT_APOLOGY, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: now },
+          data: {
+            outcome: LessonOutcome.STUDENT_APOLOGY, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: now,
+            excuseCategory: category,
+          },
         });
         await this.emitClosed(tx, updated, lesson.outcome !== null);
         await this.postCard(
           tx, lesson, actor, CardKind.LESSON_APOLOGY,
-          { ...this.cardBase(lesson), timing: 'after_start', makeupOwed: true },
+          { ...this.cardBase(lesson), timing: 'after_start', makeupOwed: true, ...excuseOnCard(category, null) },
           lang,
         );
         await this.audit.audit(tx, {
@@ -829,6 +841,7 @@ export class LessonService {
    */
   async lateApology(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const reason = textField(body, 'reason', MAX_TEXT, true) as string;
+    const category = excuseCategoryField(body);
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.load(actor, lessonId);
     this.requireAct(actor, standing, 'late_apology');
@@ -853,11 +866,12 @@ export class LessonService {
             openedByKind: ActorKind.CONTACT,
             openedBy: actor.actorId,
             reason,
+            excuseCategory: category,
           },
         });
         await this.postCard(
           tx, lesson, actor, CardKind.LESSON_LATE_APOLOGY,
-          { ...this.cardBase(lesson), reason, rulingId: ruling.id },
+          { ...this.cardBase(lesson), ...excuseOnCard(category, reason), rulingId: ruling.id },
           lang,
         );
         await this.audit.audit(tx, {
@@ -904,14 +918,21 @@ export class LessonService {
         if (lesson.outcome !== outcome) {
           const updated = await tx.lesson.update({
             where: { id: lesson.id },
-            data: { outcome, outcomeNote: note ?? ruling.reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
+            data: {
+              outcome, outcomeNote: note ?? ruling.reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date(),
+              // PD-50: an excused late apology keeps the family's category.
+              excuseCategory: outcome === LessonOutcome.STUDENT_APOLOGY ? ruling.excuseCategory : null,
+            },
           });
           await this.emitClosed(tx, updated, lesson.outcome !== null);
           await this.recordAttendance(tx, updated, actor, lesson.learner.familyId);
         }
         await this.postCard(
           tx, lesson, null, CardKind.LESSON_RULING,
-          { ...this.cardBase(lesson), rulingId: ruling.id, decision, note },
+          {
+            ...this.cardBase(lesson), rulingId: ruling.id, decision, note,
+            ...(decision === RulingDecision.EXCUSED ? excuseOnCard(ruling.excuseCategory as ExcuseCategory | null, null) : {}),
+          },
           lang,
         );
         await this.audit.audit(tx, {
@@ -943,6 +964,8 @@ export class LessonService {
     then: (tx: Tx, lesson: LessonWithRelations, actor: Actor, lang: CardLanguage) => Promise<void>,
     /** PD-15: audit a close that carries no note (a supervisor's excuse before the start) under this reason. */
     auditReason: string | null = null,
+    /** PD-50: an excuse's reason category, written with the outcome. */
+    excuseCategory: ExcuseCategory | null = null,
   ) {
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.load(actor, lessonId);
@@ -971,6 +994,7 @@ export class LessonService {
             outcomeByKind: actor.kind,
             outcomeBy: actor.actorId,
             outcomeAt: now,
+            ...(excuseCategory ? { excuseCategory } : {}),
           },
         });
         await then(tx, lesson, actor, lang);
@@ -995,6 +1019,8 @@ export class LessonService {
   }
 
   async emitClosed(tx: Tx, lesson: Lesson, correction: boolean) {
+    // A make-up cancelled, voided, excused or corrected: the card that owed it re-reads it.
+    if (lesson.kind === LessonKind.MAKEUP && lesson.makeupFor) await this.announceOwedCard(tx, lesson.makeupFor);
     await this.outbox.enqueue(tx, CommEvent.LESSON_CLOSED, {
       lessonId: lesson.id,
       learnerId: lesson.learnerId,
@@ -1174,7 +1200,7 @@ export class LessonService {
   async announceOwedCard(tx: Tx, missedLessonId: string) {
     const cards = await tx.messageCard.findMany({
       where: { lessonId: missedLessonId, kind: { in: [...MAKEUP_OWED_CARD_KINDS] }, message: { deletedForAll: false } },
-      include: { message: { select: { conversationId: true, visibility: true } } },
+      include: { message: { select: { conversationId: true, visibility: true, seq: true } } },
     });
     const now = new Date().toISOString();
     for (const c of cards) {
@@ -1184,6 +1210,8 @@ export class LessonService {
         messageId: c.messageId,
         visibility: c.message.visibility,
         editedAt: now,
+        // The card may be far up the thread: clients re-read this one message.
+        ...(c.message.seq != null ? { seq: c.message.seq.toString() } : {}),
       });
     }
   }
@@ -1339,6 +1367,8 @@ export class LessonService {
           ? lesson.outcomeNote
           : null,
       outcomeAt: lesson.outcomeAt?.toISOString() ?? null,
+      // PD-50: the family reads the category; the note above stays PD-15's.
+      excuseCategory: lesson.excuseCategory,
       // Who recorded it is staff-facing; a family sees what happened, not whom to blame.
       outcomeBy: staffView
         ? (lesson.outcomeBy ? { kind: lesson.outcomeByKind, id: lesson.outcomeBy } : null)
@@ -1523,6 +1553,27 @@ export function dateField(body: Record<string, unknown>, key: string): Date {
   if (typeof v !== 'string') throw invalid(`${key}: must be an ISO-8601 timestamp`);
   return parseDate(v, key);
 }
+/** PD-50: `reasonCategory`, one of EXCUSE_CATEGORIES, or null when not given. */
+export function excuseCategoryField(body: Record<string, unknown>): ExcuseCategory | null {
+  const v = body.reasonCategory;
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string' || !(EXCUSE_CATEGORIES as readonly string[]).includes(v)) {
+    throw invalid(`reasonCategory: one of ${EXCUSE_CATEGORIES.join(', ')}`);
+  }
+  return v as ExcuseCategory;
+}
+
+/**
+ * What an excuse card says about why (PD-50): the category when there is one --
+ * the family's own words then stay off the card, with staff and the teacher;
+ * without one (a client that predates PD-50), the family's words as before.
+ * A staff member's or a teacher's words are never on it (PD-15).
+ */
+export function excuseOnCard(category: ExcuseCategory | null, familyReason: string | null): Record<string, string> {
+  if (category) return { reasonCategory: category };
+  return familyReason ? { reason: familyReason } : {};
+}
+
 export function textField(body: Record<string, unknown>, key: string, max: number, required: boolean): string | null {
   const v = body[key];
   if (v === undefined || v === null || (typeof v === 'string' && v.trim() === '')) {

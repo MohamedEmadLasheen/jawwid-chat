@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE, whenIn, zoneLabel } from '@/core/time/academyTime'
 import { journeyApi, journeyKeys } from './api'
-import { J } from './copy'
+import { J, excuseCategoryLabel } from './copy'
 import './journey.css'
 
 /**
@@ -27,6 +27,8 @@ export interface LessonExcusePayload {
   durationMinutes: number | null
   /** The family's own reason; a staff reason is never on the card (PD-15). */
   reason: string | null
+  /** PD-50: the reason category (EXCUSE_CATEGORIES), which the family reads. */
+  category: string | null
   /** An accepted late apology's decision note, which the family reads. */
   note: string | null
   makeupStartsAt: string | null
@@ -61,6 +63,7 @@ export function readLessonExcuseCard(cardKind: string, payload: Record<string, u
     startsAt,
     durationMinutes: typeof p.durationMinutes === 'number' ? p.durationMinutes : null,
     reason: str(p.reason),
+    category: excuseCategoryLabel(p.reasonCategory) ? (p.reasonCategory as string) : null,
     note: str(p.note),
     makeupStartsAt: str(p.makeupStartsAt),
     missedStartsAt: str(p.missedStartsAt),
@@ -125,8 +128,12 @@ export function LessonExcuseCard({ card }: { card: LessonExcusePayload }) {
       ]
     : [
         ['lesson', tx(COPY.lesson), when(card.startsAt)],
+        ...(card.category ? [['category', tx(J.reason), tx(excuseCategoryLabel(card.category)!)] as [string, string, string]] : []),
         ...(card.reason ? [['reason', tx(J.reason), card.reason] as [string, string, string]] : []),
-        ...(staffReason ? [['staff-reason', tx(J.reasonStaffTeacher), staffReason] as [string, string, string]] : []),
+        // With a category the free text is a note beside it; without one it is the reason itself.
+        ...(staffReason
+          ? [['staff-reason', tx(card.category ? J.noteStaffTeacher : J.reasonStaffTeacher), staffReason] as [string, string, string]]
+          : []),
         ...(card.note ? [['note', tx(COPY.note), card.note] as [string, string, string]] : []),
         ...(card.makeupStartsAt ? [['makeup', tx(COPY.makeup), when(card.makeupStartsAt)] as [string, string, string]] : []),
       ]
