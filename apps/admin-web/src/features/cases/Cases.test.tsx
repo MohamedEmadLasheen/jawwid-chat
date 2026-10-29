@@ -89,6 +89,33 @@ describe('the cases queue', () => {
     expect(sent('GET', /\/cases\?tab=mine/)).toHaveLength(0)
   })
 
+  it('marks exactly one tab selected, in the shared tab style, and moves it on click', async () => {
+    renderWithProviders(<CasesPage />, { staff: makeStaff({ id: 'mgr-t', role: 'manager' }) })
+    expect(await screen.findByText('Late reports again')).toBeInTheDocument()
+    const strip = screen.getByRole('tablist', { name: 'Escalations' })
+    expect(strip).toHaveClass('ts-tabs')
+    const selected = () => within(strip).getAllByRole('tab').filter((t) => t.getAttribute('aria-selected') === 'true')
+    expect(selected().map((t) => t.textContent)).toEqual(['Mine'])
+    expect(screen.getByRole('tab', { name: 'Mine' })).toHaveClass('ts-tab', 'ts-tab--active')
+    expect(screen.getByRole('tab', { name: 'Opened by me' })).not.toHaveClass('ts-tab--active')
+    await userEvent.click(screen.getByRole('tab', { name: 'Opened by me' }))
+    expect(selected().map((t) => t.textContent)).toEqual(['Opened by me'])
+    expect(screen.getByRole('tab', { name: 'Opened by me' })).toHaveClass('ts-tab--active')
+    expect(screen.getByRole('tab', { name: 'Mine' })).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getByRole('tab', { name: 'Mine' })).not.toHaveClass('ts-tab--active')
+  })
+
+  it('in Arabic the page is right-to-left and the selected tab is marked the same way', async () => {
+    renderWithProviders(<CasesPage />, { staff: makeStaff({ id: 'mgr-t', role: 'manager' }), locale: 'ar' })
+    expect(await screen.findByText('Late reports again')).toBeInTheDocument()
+    expect(document.documentElement).toHaveAttribute('dir', 'rtl')
+    expect(screen.getByRole('tab', { name: 'المسندة إليّ' })).toHaveAttribute('aria-selected', 'true')
+    await userEvent.click(screen.getByRole('tab', { name: 'قسمي' }))
+    expect(screen.getByRole('tab', { name: 'قسمي' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'قسمي' })).toHaveClass('ts-tab--active')
+    expect(screen.getByRole('tab', { name: 'المسندة إليّ' })).toHaveAttribute('aria-selected', 'false')
+  })
+
   it('falls back to Mine for a tab the URL names wrongly', async () => {
     renderWithProviders(<CasesPage />, { staff: makeStaff({ id: 'mgr-t', role: 'manager' }), route: '/cases?tab=everything' })
     expect(await screen.findByText('Late reports again')).toBeInTheDocument()
