@@ -222,7 +222,7 @@ def tashkeel(where, w, err, exception=None):
 def check(lesson, number):
     errors = []
     err = errors.append
-    if not isinstance(lesson, dict) or set(lesson) != KEYS:
+    if not isinstance(lesson, dict) or not KEYS <= set(lesson) or set(lesson) - KEYS - {'distractors'}:
         err(f'keys must be {sorted(KEYS)}, not {sorted(lesson) if isinstance(lesson, dict) else type(lesson).__name__}')
         return errors
     if not is_int(lesson['lesson']) or lesson['lesson'] != number:
@@ -251,6 +251,50 @@ def check(lesson, number):
             flagged.append(where)
 
     units, vocabulary, word_ids = {}, set(), set()
+
+    def word_checks(where, w, u, seen):
+        """One word: of unit u, or a lesson-level distractor (u is None)."""
+        t = w.get('text') if isinstance(w, dict) else None
+        ww = f'{where} word {t!r}'
+        if not isinstance(w, dict) or set(w) - (WORD_KEYS | {'finalMarkException'}) or not WORD_KEYS <= set(w):
+            err(f'{ww}: keys are id, text, was, review (and finalMarkException)')
+            return
+        wid = w['id']
+        owner = u['id'] if u else 'distractor'
+        if not is_str(wid) or not WORD_ID.match(wid) or wid[:-4] != owner:
+            err(f'{ww}: id {wid!r} must be {owner}-NNN (PD-48 voice-over binds a clip to it)')
+        elif wid in word_ids:
+            err(f'{ww}: id {wid!r} is used twice (ids are never reused)')
+        elif wid in retired:
+            err(f'{ww}: id {wid!r} is retired (a removed word\'s id is never reused)')
+        word_ids.add(wid)
+        if not is_word(t):
+            err(f'{ww}: not one written word (letters and marks, in NFC)')
+            return
+        if t in seen:
+            err(f'{ww}: listed twice')
+        seen.add(t)
+        vocabulary.add(t)
+        if u and not has(t, u['letters'], u['_mark'], u['_after'], u['_tanween']):
+            err(f'{ww}: does not contain the unit\'s letter {"/".join(u["letters"])}{" carrying its " + u["mark"] if u["_mark"] else ""}{" as a madd" if u["_after"] else ""}{" ending in its tanween" if u["_tanween"] else ""} (by the one rule: only marks are removed)')
+        if sukun_on_madd(t):
+            err(f'{ww}: a sukun on a madd letter ({t!r}): a madd letter is written bare')
+        exc = w.get('finalMarkException')
+        if 'finalMarkException' in w:
+            if not is_str(exc) or not exc.strip():
+                err(f'{ww}: finalMarkException needs a reason')
+            elif not w['review'] and not approved:
+                err(f'{ww}: a finalMarkException stays held (review set) until the file is approved')
+        tashkeel(ww, t, err, exc)
+        note_ok(ww, w['review'])
+        if w['was'] is not None:
+            if not is_str(w['was']):
+                err(f'{ww}: was is the old spelling, or null')
+            elif w['was'] == t:
+                err(f'{ww}: was equals text (clearing a word sets was to null)')
+            if not w['review']:
+                err(f'{ww}: changed from {w["was"]!r} but not held (a teacher clears it: review and was to null)')
+
     for i, u in enumerate(lesson['units']):
         where = f'unit {u.get("id", i)!r}' if isinstance(u, dict) else f'unit {i}'
         if not isinstance(u, dict) or not UNIT_KEYS <= set(u) or set(u) - UNIT_KEYS - UNIT_OPTIONAL:
@@ -287,8 +331,9 @@ def check(lesson, number):
             err(f'{where}: group must be a short non-empty name (the letter)')
         u = {**u, '_mark': mark, '_after': after, '_tanween': tanween}
         units[u['id']] = u
-        if mark:
+        if mark and len(u['letters']) <= 5:
             # A marked unit's name is its syllable: one of its letters with that mark (بَ), not a word.
+            # (A unit over the whole alphabet, lesson 6's one sukun unit, is named like any unit.)
             if u['name'] not in [l + mark for l in u['letters']]:
                 err(f'{where}: name {u["name"]!r} must be the syllable, one of its letters with its {u["mark"]}')
         elif not is_phrase(u['name']):
@@ -321,45 +366,17 @@ def check(lesson, number):
             continue
         seen = set()
         for w in u['words']:
-            t = w.get('text') if isinstance(w, dict) else None
-            ww = f'{where} word {t!r}'
-            if not isinstance(w, dict) or set(w) - (WORD_KEYS | {'finalMarkException'}) or not WORD_KEYS <= set(w):
-                err(f'{ww}: keys are id, text, was, review (and finalMarkException)')
-                continue
-            wid = w['id']
-            if not is_str(wid) or not WORD_ID.match(wid) or wid[:-4] != u['id']:
-                err(f'{ww}: id {wid!r} must be {u["id"]}-NNN (PD-48 voice-over binds a clip to it)')
-            elif wid in word_ids:
-                err(f'{ww}: id {wid!r} is used twice (ids are never reused)')
-            elif wid in retired:
-                err(f'{ww}: id {wid!r} is retired (a removed word\'s id is never reused)')
-            word_ids.add(wid)
-            if not is_word(t):
-                err(f'{ww}: not one written word (letters and marks, in NFC)')
-                continue
-            if t in seen:
-                err(f'{ww}: listed twice')
-            seen.add(t)
-            vocabulary.add(t)
-            if not has(t, u['letters'], u['_mark'], u['_after'], u['_tanween']):
-                err(f'{ww}: does not contain the unit\'s letter {"/".join(u["letters"])}{" carrying its " + u["mark"] if u["_mark"] else ""}{" as a madd" if u["_after"] else ""}{" ending in its tanween" if u["_tanween"] else ""} (by the one rule: only marks are removed)')
-            if sukun_on_madd(t):
-                err(f'{ww}: a sukun on a madd letter ({t!r}): a madd letter is written bare')
-            exc = w.get('finalMarkException')
-            if 'finalMarkException' in w:
-                if not is_str(exc) or not exc.strip():
-                    err(f'{ww}: finalMarkException needs a reason')
-                elif not w['review'] and not approved:
-                    err(f'{ww}: a finalMarkException stays held (review set) until the file is approved')
-            tashkeel(ww, t, err, exc)
-            note_ok(ww, w['review'])
-            if w['was'] is not None:
-                if not is_str(w['was']):
-                    err(f'{ww}: was is the old spelling, or null')
-                elif w['was'] == t:
-                    err(f'{ww}: was equals text (clearing a word sets was to null)')
-                if not w['review']:
-                    err(f'{ww}: changed from {w["was"]!r} but not held (a teacher clears it: review and was to null)')
+            word_checks(where, w, u, seen)
+
+    # Lesson-level distractors (lesson 6, one unit): words that are only ever WRONG quiz options. They are
+    # checked as words (tashkeel, ids, review) and join the vocabulary, but belong to no unit.
+    distractors = lesson.get('distractors', [])
+    if not isinstance(distractors, list):
+        err('distractors must be a list')
+        distractors = []
+    seen = set()
+    for w in distractors:
+        word_checks('distractors', w, None, seen)
 
     ids = set()
     for q in lesson['quiz']:
@@ -604,6 +621,16 @@ def selftest():
                                                              words=[{'id': 'dal_shadda-001', 'text': 'جَدَّةْ', 'was': None, 'review': None}]) or c['quiz'][0].update(unit='dal_shadda', options=['جَدَّةْ', 'بَابْ']) or c['quiz'][1].update(options=['جَدَّةْ', 'بَابْ']), None),
         'tanween-unit-clean': (lambda c: c['units'].append({'id': 'tanween_damm', 'letters': [], 'tanween': 'damm', 'name': 'تَنْوِينْ', 'forms': ['ـٌ'], 'note': None,
                                                             'words': [{'id': 'tanween_damm-001', 'text': 'كِتَابٌ', 'was': None, 'review': 'FINAL MARK EXCEPTION', 'finalMarkException': "the lesson's tanween"}]}), None),
+        'one-sukun-unit-with-distractors': (lambda c: c.update(
+            units=[{'id': 'sukun', 'letters': ['ء', 'أ', 'إ', 'ؤ', 'ئ', 'ا', 'ب', 'ت', 'ة', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي', 'ى'], 'mark': 'sukun', 'name': 'سُكُونْ', 'forms': ['ـْ'], 'note': None,
+                    'words': [{'id': 'sukun-001', 'text': 'نَجْمْ', 'was': None, 'review': None}, {'id': 'sukun-002', 'text': 'بَحْرْ', 'was': None, 'review': None}]}],
+            distractors=[{'id': 'distractor-001', 'text': 'كَتَبَ', 'was': None, 'review': 'FINAL MARK EXCEPTION', 'finalMarkException': "the lesson's vowel on the last letter"},
+                         {'id': 'distractor-002', 'text': 'قَلَمْ', 'was': None, 'review': None}],
+            quiz=[{'id': 'q1', 'kind': 'contains', 'unit': 'sukun', 'options': ['قَلَمْ', 'نَجْمْ', 'كَتَبَ'], 'answer': 1, 'review': None}]), None),
+        'distractor-wrong-id': (lambda c: c.update(distractors=[{'id': 'jim_sukun-009', 'text': 'قَلَمْ', 'was': None, 'review': None}]), 'must be distractor-NNN'),
+        'distractor-carrying-the-mark': (lambda c: c.update(distractors=[{'id': 'distractor-001', 'text': 'حَجْمْ', 'was': None, 'review': None}])
+                                         or c['quiz'][0].update(options=['نَجْمْ', 'حَجْمْ']), 'exactly one right answer'),
+        'unknown-lesson-key': (lambda c: c.update(extras=[]), 'keys must be'),
         'tanween-with-letters': (lambda c: c['units'].append({'id': 'tanween_damm', 'letters': ['ب'], 'tanween': 'damm', 'name': 'تَنْوِينْ', 'forms': ['ـٌ'], 'note': None,
                                                               'words': []}), 'tanween must be'),
     }

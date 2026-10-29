@@ -69,6 +69,12 @@ export interface ArabicLesson {
   finalMark: 'sukun';
   /** Ids of removed words: never used again. */
   retiredIds: string[];
+  /**
+   * Lesson 6 (one unit): words that are only ever WRONG quiz options, ids `distractor-NNN`. They are
+   * checked and held like any word and join the vocabulary, but belong to no unit and are never shown
+   * as examples.
+   */
+  distractors?: ArabicWord[];
   units: ArabicUnit[];
   quiz: ArabicQuizItem[];
 }
@@ -148,8 +154,10 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
       }
       check(typeof u.name === 'string' && isPhrase(u.name));
       if (u.mark !== undefined) {
-        // A marked unit is one letter with one haraka; its name is exactly that syllable.
-        check(typeof u.mark === 'string' && Object.hasOwn(HARAKA, u.mark) && u.letters.every((l) => [...l].length === 1) && u.letters.some((l) => u.name === l + HARAKA[u.mark!]));
+        // A marked unit is single letters with one mark; its name is exactly that syllable (بَ) --
+        // except a unit over the whole alphabet (lesson 6's one sukun unit), named like any unit.
+        check(typeof u.mark === 'string' && Object.hasOwn(HARAKA, u.mark) && u.letters.every((l) => [...l].length === 1));
+        check(u.letters.length > 5 || u.letters.some((l) => u.name === l + HARAKA[u.mark!]));
       }
       if (u.madd !== undefined) {
         // A madd unit is exactly its madd letter, and never also marked.
@@ -172,6 +180,19 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
         }
         vocabulary.add(w.text);
         if (w.review) flagged.add(w.text);
+      }
+    }
+    check(raw.distractors === undefined || Array.isArray(raw.distractors));
+    for (const w of raw.distractors ?? []) {
+      check(typeof w.id === 'string' && WORD_ID.test(w.id) && w.id.slice(0, -4) === 'distractor' && !wordIds.has(w.id) && !retired.has(w.id));
+      wordIds.add(w.id);
+      check(typeof w.text === 'string' && isWord(w.text) && !sukunOnMadd(w.text) && isReview(w.review));
+      check(w.was === null || typeof w.was === 'string');
+      if (w.finalMarkException !== undefined) check(typeof w.finalMarkException === 'string' && (approved || !!w.review));
+      vocabulary.add(w.text);
+      if (w.review) {
+        flagged.add(w.text);
+        held++;
       }
     }
     const cleared = (word: string) => vocabulary.has(word) && !flagged.has(word);

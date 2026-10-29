@@ -130,6 +130,29 @@ describe('an Arabic letters lesson: words, positions and a quiz proved by the on
     }
   });
 
+  it('lesson 6: one sukun unit over the whole alphabet, with distractors as its quiz\'s wrong options', () => {
+    const c = sukunMaddStandIn();
+    c.units = [{
+      id: 'sukun', letters: [...'ءأإؤئابتةثجحخدذرزسشصضطظعغفقكلمنهوىي'], mark: 'sukun', name: 'سُكُونْ', forms: ['ـْ'], note: null,
+      words: [{ id: 'sukun-001', text: 'نَجْمْ', was: null, review: null }, { id: 'sukun-002', text: 'بَحْرْ', was: null, review: null }],
+    }];
+    c.distractors = [{ id: 'distractor-001', text: 'قَلَمْ', was: null, review: null }];
+    c.quiz = [{ id: 'q1', kind: 'contains', unit: 'sukun', options: ['قَلَمْ', 'نَجْمْ'], answer: 1, review: null }];
+    const r = resolveArabicLesson(c, 6)!;
+    expect(r).not.toBeNull();
+    expect(r.units[0]!.words.map((w) => w.text)).toEqual(['نَجْمْ', 'بَحْرْ']); // distractors are never examples
+    expect(r.quiz).toHaveLength(1);
+    const bad: ((x: ArabicLesson) => void)[] = [
+      (x) => { x.distractors![0]!.id = 'sukun-009'; }, // a distractor's id is distractor-NNN
+      (x) => { x.distractors![0]!.text = 'حَجْمْ'; x.quiz[0] = { ...x.quiz[0]!, options: ['حَجْمْ', 'نَجْمْ'] } as never; }, // it has a sukun too: two right answers
+    ];
+    for (const change of bad) {
+      const x = structuredClone(c);
+      change(x);
+      expect(resolveArabicLesson(x, 6)).toBeNull();
+    }
+  });
+
   it('lessons 8 and 9: a tanween unit counts the word\'s end; a shadda unit, the letter carrying it', () => {
     const c = sukunMaddStandIn();
     c.units.push(
