@@ -206,6 +206,19 @@ const LATER: readonly Later[] = [
     // Verified in pd040-legacy-bundles.spec.ts (legacyLessonContentKeys).
     delegable: ['lesson_content.check', 'lesson_content.review_teacher', 'lesson_content.view'],
   },
+  {
+    // PD-39: teachers' boards. The Teachers Manager reads and manages a
+    // departed teacher's boards; a Teachers supervisor reads (the service
+    // narrows to their own teachers). Neither key is delegable.
+    migration: '20261030020000_chat_pd039_whiteboards.sql',
+    tag: 'pd039',
+    permissions: ['whiteboards.view', 'whiteboards.retention'],
+    bundles: [
+      ['manager', 'teachers', 'whiteboards.retention'],
+      ['manager', 'teachers', 'whiteboards.view'],
+      ['supervisor', 'teachers', 'whiteboards.view'],
+    ],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));

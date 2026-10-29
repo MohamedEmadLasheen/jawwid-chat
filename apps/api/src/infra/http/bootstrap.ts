@@ -51,6 +51,7 @@ export function applyInfrastructure(
   applyTrustedProxy(app);
   applyWebhookBodyParser(app);
   applyMaterialsImportBodyParser(app);
+  applyWhiteboardPageBodyParser(app);
   applyRequestOrigin(app);
   applySecurityHeaders(app);
   applyCors(app, options.allowedOrigins ?? parseOrigins(process.env.CORS_ALLOWED_ORIGINS));
@@ -130,6 +131,56 @@ function applyMaterialsImportBodyParser(app: INestApplication): void {
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > LIMIT) {
+        if (!refused) res.status(413).end();
+        refused = true;
+        req.destroy();
+      } else chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (refused) return;
+      try {
+        req.body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      } catch {
+        req.body = {};
+      }
+      // Tell the default JSON parser this body is already read.
+      req._body = true;
+      next();
+    });
+    req.on('error', next);
+  });
+}
+
+/**
+ * PD-39: a board page's autosave carries the whole page document, up to
+ * 512 KB (the database's measure), over the default 100 KB JSON limit -- past
+ * it every save of a growing page would be a 413 and the page could never be
+ * saved again (review of #279, P1). The page-save route alone, POST
+ * /whiteboards/:id/pages/:pageId, may send up to 600 KB; the service then
+ * decides the page's own size. Every other route keeps the default limit.
+ */
+export const WHITEBOARD_PAGE_BODY_LIMIT = 600 * 1024;
+const WHITEBOARD_PAGE_SAVE = /\/whiteboards\/[0-9a-f-]{36}\/pages\/[0-9a-f-]{36}$/i;
+
+function applyWhiteboardPageBodyParser(app: INestApplication): void {
+  type Req = NodeJS.ReadableStream & {
+    headers: Record<string, string | string[] | undefined>;
+    url?: string;
+    method?: string;
+    body?: unknown;
+    _body?: boolean;
+    destroy(): void;
+  };
+  app.use((req: Req, res: { status(code: number): { end(): void } }, next: (err?: unknown) => void) => {
+    const type = String(req.headers['content-type'] ?? '').toLowerCase();
+    const path = String(req.url ?? '').split('?')[0];
+    if (req.method !== 'POST' || !WHITEBOARD_PAGE_SAVE.test(path) || !type.startsWith('application/json')) return next();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let refused = false;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > WHITEBOARD_PAGE_BODY_LIMIT) {
         if (!refused) res.status(413).end();
         refused = true;
         req.destroy();
