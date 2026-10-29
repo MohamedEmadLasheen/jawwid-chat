@@ -182,7 +182,7 @@ describe('7. the one-time prompt', () => {
   it('is answered once per contact, as saved or later', async () => {
     await sql(`insert into chat.contact_location_prompt (contact_id, outcome) values ($1::uuid, 'later')`, s.parentId);
     expect(await refusal(sql(`insert into chat.contact_location_prompt (contact_id, outcome) values ($1::uuid, 'saved')`, s.parentId)))
-      .toMatch(/contact_location_prompt_pkey/);
+      .toMatch(/23505[\s\S]*\(contact_id\)/);
     expect(await refusal(sql(`insert into chat.contact_location_prompt (contact_id, outcome) values ($1::uuid, 'dismissed')`, s.otherParentId)))
       .toMatch(/contact_location_prompt_outcome_check/);
   });
@@ -249,7 +249,7 @@ describe('9. the booking\'s location', () => {
   it('stores a country, with or without its subdivision, once per prospect', async () => {
     const p = await prospect();
     await record(p, 'AE', 'AE-DU');
-    expect(await refusal(record(p, 'AE', null))).toMatch(/trial_prospect_location_pkey/);
+    expect(await refusal(record(p, 'AE', null))).toMatch(/23505[\s\S]*\(prospect_id\)/);
     await sql(`update chat.trial_prospect_location set subdivision_code = null, recorded_by = $2::uuid where prospect_id = $1::uuid`, p, s.ownerId);
     await sql(`update chat.trial_prospect_location set country_code = 'EG', subdivision_code = 'EG-GZ', recorded_by = $2::uuid where prospect_id = $1::uuid`, p, s.ownerId);
   });
