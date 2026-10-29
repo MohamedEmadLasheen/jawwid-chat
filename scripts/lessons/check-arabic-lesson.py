@@ -38,6 +38,7 @@ cannot disagree. This FAILS when:
   * the file says "approved" while anything is flagged or uncleared.
 Standard library only; reads files.
 """
+import importlib.util
 import json
 import os
 import re
@@ -46,6 +47,9 @@ import unicodedata
 
 sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
+_spec = importlib.util.spec_from_file_location('rasm', os.path.join(HERE, 'rasm.py'))
+RASM = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(RASM)  # the ONE typed-Quran fold (shared with check-lesson-content and PD-48)
 ROOT = os.path.dirname(os.path.dirname(HERE))
 ARABIC = os.path.join(ROOT, 'apps', 'lessons', 'src', 'arabic')
 FIXTURE_NAME = 'letters.fixture.json'
@@ -181,7 +185,198 @@ def tashkeel(where, w, err, exception=None):
         err(f'{where}: {w!r} ends with {end}, not the pausal sukun (the one final mark; set finalMarkException to keep it)')
 
 
-def check(lesson, number):
+# --- Reading lessons (P0-5c, pd029-p05-reading-lessons-design.md): lessons 4, 5 and 10.
+READING_KEYS = {'lesson', 'kind', 'review', 'provenance', 'retiredIds', 'stages', 'quiz'}
+STAGE_ID = re.compile(r'^[a-z][a-z0-9_]*$')
+PUNCTUATION = set('.،؟!؛')
+READING_RUN = 3  # 3+ consecutive Quran words (rasm) refuse a reading text: the PD-49 calibration
+
+
+def words_of(sentence):
+    """A sentence's words: single spaces only, one optional closing punctuation mark; else None."""
+    if not is_str(sentence) or not sentence:
+        return None
+    body = sentence[:-1] if sentence[-1] in PUNCTUATION else sentence
+    ws = body.split(' ')
+    return ws if ws and all(is_word(w) for w in ws) else None
+
+
+def all_carry(text, vowel):
+    """Every letter carries this vowel (a lesson-4 drill or word of one stage)."""
+    ls = letters_marks(text)
+    return bool(ls) and all(vowel in mk for _, mk in ls)
+
+
+def check_reading(lesson, number, quran_grams=None):
+    errors = []
+    err = errors.append
+    if not READING_KEYS <= set(lesson) or set(lesson) - READING_KEYS - {'passages'}:
+        return [f'keys must be {sorted(READING_KEYS)} (and passages), not {sorted(lesson)}']
+    if not is_int(lesson['lesson']) or lesson['lesson'] != number:
+        err(f'lesson is {lesson["lesson"]!r}, not {number}')
+    review = lesson['review']
+    if not isinstance(review, dict) or review.get('status') not in ('pending', 'approved'):
+        return errors + ['review.status must be pending or approved']
+    approved = review['status'] == 'approved'
+    retired = lesson['retiredIds'] if isinstance(lesson['retiredIds'], list) else []
+    if not isinstance(lesson['retiredIds'], list) or not all(is_str(r) and WORD_ID.match(r) for r in retired):
+        err('retiredIds must be a list of retired item ids')
+    flagged, ids, items, stages, texts = [], set(), {}, {}, []
+
+    def held(where, r):
+        if r is not None and (not is_str(r) or not r.strip()):
+            err(f'{where}: review must be null or a non-empty note')
+        if r:
+            flagged.append(where)
+
+    def no_quran(where, text):
+        if quran_grams is None:
+            return
+        ws = RASM.rasm(text).split()
+        if any(tuple(ws[i:i + READING_RUN]) in quran_grams for i in range(len(ws) - READING_RUN + 1)):
+            err(f'{where}: carries {READING_RUN} or more consecutive Quran words: refused (a child\'s reading text never carries altered Quran)')
+
+    for s in lesson['stages'] if isinstance(lesson['stages'], list) else []:
+        where = f'stage {s.get("id")!r}' if isinstance(s, dict) else 'a stage'
+        if not isinstance(s, dict) or not {'id', 'name', 'items'} <= set(s) or set(s) - {'id', 'name', 'items', 'vowel'}:
+            err(f'{where}: keys are id, name, items (and vowel)')
+            continue
+        if not is_str(s['id']) or not STAGE_ID.match(s['id']) or s['id'] in stages or s['id'] == 'passage':
+            err(f'{where}: a stage id is a unique lowercase slug')
+            continue
+        vowel = None
+        if 'vowel' in s:
+            if not is_str(s['vowel']) or s['vowel'] not in ('fatha', 'kasra', 'damma'):
+                err(f'{where}: vowel must be fatha, kasra or damma')
+            else:
+                vowel = HARAKA[s['vowel']]
+        stages[s['id']] = {**s, '_vowel': vowel}
+        if words_of(s['name']) is None:
+            err(f'{where}: name {s["name"]!r} is not words')
+        for it in s['items'] if isinstance(s['items'], list) else []:
+            iw = f'{where} item {it.get("id") if isinstance(it, dict) else it!r}'
+            if not isinstance(it, dict) or set(it) - {'id', 'kind', 'text', 'was', 'review', 'finalMarkException'} or not {'id', 'kind', 'text', 'was', 'review'} <= set(it):
+                err(f'{iw}: keys are id, kind, text, was, review (and finalMarkException)')
+                continue
+            if not is_str(it['id']) or not WORD_ID.match(it['id']) or it['id'][:-4] != s['id'] or it['id'] in ids or it['id'] in retired:
+                err(f'{iw}: id must be {s["id"]}-NNN, unique and never retired')
+            ids.add(it['id'])
+            t = it['text']
+            if not is_str(t) or t != unicodedata.normalize('NFC', t):
+                err(f'{iw}: text must be NFC')
+                continue
+            held(iw, it['review'])
+            if it['was'] is not None and (not is_str(it['was']) or it['was'] == t or not it['review']):
+                err(f'{iw}: was is the old text, different, and only on a held item')
+            if it['kind'] in ('syllables', 'word'):
+                if not is_word(t):
+                    err(f'{iw}: {t!r} is not one written word')
+                    continue
+                if unmarked(t):
+                    err(f'{iw}: {t!r} is not fully vowelled ({", ".join(unmarked(t))} unmarked)')
+                if vowel and not all_carry(t, vowel):
+                    err(f'{iw}: {t!r} breaks the stage\'s vowel ({s["vowel"]} on every letter)')
+            elif it['kind'] == 'sentence':
+                ws = words_of(t)
+                if not ws or len(ws) < 2:
+                    err(f'{iw}: a sentence is two or more single-spaced words (one closing mark allowed)')
+                    continue
+                for w in ws[:-1]:
+                    if unmarked(w):
+                        err(f'{iw}: {w!r} is not fully vowelled ({", ".join(unmarked(w))} unmarked)')
+                # Case endings stay inside the sentence; only its LAST word takes the pausal sukun.
+                tashkeel(iw, ws[-1], err, it.get('finalMarkException'))
+                if 'finalMarkException' in it and not it['review'] and not approved:
+                    err(f'{iw}: a finalMarkException stays held until the file is approved')
+            else:
+                err(f'{iw}: kind must be syllables, word or sentence')
+                continue
+            no_quran(iw, t)
+            items[it['id']] = {**it, '_stage': s['id']}
+
+    passages = lesson.get('passages', [])
+    pids = set()
+    for p in passages if isinstance(passages, list) else []:
+        pw = f'passage {p.get("id") if isinstance(p, dict) else p!r}'
+        if not isinstance(p, dict) or set(p) != {'id', 'title', 'sentences'}:
+            err(f'{pw}: keys are id, title, sentences')
+            continue
+        if not is_str(p['id']) or not WORD_ID.match(p['id']) or p['id'][:-4] != 'passage' or p['id'] in pids or p['id'] in ids:
+            err(f'{pw}: id must be passage-NNN, unique')
+        pids.add(p['id'])
+        title = p['title']
+        if not isinstance(title, dict) or set(title) != {'text', 'review'} or words_of(title.get('text')) is None:
+            err(f'{pw}: title is {{text, review}}, words')
+        else:
+            held(f'{pw} title', title['review'])
+            no_quran(f'{pw} title', title['text'])
+        sl = p['sentences']
+        if not isinstance(sl, list) or not sl or len(set(sl)) != len(sl) or not all(items.get(x, {}).get('kind') == 'sentence' for x in sl):
+            err(f'{pw}: sentences are distinct sentence item ids')
+        else:
+            no_quran(pw, ' '.join(items[x]['text'] for x in sl))  # across sentence boundaries too
+
+    qids = set()
+    for q in lesson['quiz'] if isinstance(lesson['quiz'], list) else []:
+        qw = f'quiz {q.get("id") if isinstance(q, dict) else q!r}'
+        if not isinstance(q, dict) or not is_str(q.get('id')) or q['id'] in qids:
+            err(f'{qw}: quiz ids must be unique')
+            continue
+        qids.add(q['id'])
+        held(qw, q.get('review'))
+        opts = q.get('options')
+        if not isinstance(opts, list) or not 2 <= len(opts) <= 4 or not all(is_str(o) for o in opts) or len(set(opts)) != len(opts) or not is_int(q.get('answer')):
+            err(f'{qw}: 2-4 distinct options and an answer index')
+            continue
+        if q.get('kind') == 'vowel':
+            st = stages.get(q.get('stage'))
+            if not st or not st['_vowel']:
+                err(f'{qw}: stage must be a vowel stage')
+                continue
+            drill_texts = {i['text'] for i in items.values() if i['kind'] != 'sentence'}
+            if any(o not in drill_texts for o in opts):
+                err(f'{qw}: options must be drills or words of this lesson')
+            right = [i for i, o in enumerate(opts) if all_carry(o, st['_vowel'])]
+            if right != [q['answer']]:
+                err(f'{qw}: must have exactly one right answer, the answer; by the stage vowel the right ones are {right}')
+            elif not any(i['_stage'] == q['stage'] and i['text'] == opts[q['answer']] for i in items.values()):
+                err(f'{qw}: the answer must be the stage\'s own item')
+        elif q.get('kind') == 'missing':
+            it = items.get(q.get('sentence'))
+            ws = words_of(it['text']) if it and it['kind'] == 'sentence' else None
+            if not ws or not is_int(q.get('blank')) or not 0 <= q['blank'] < len(ws):
+                err(f'{qw}: sentence and blank must name a sentence item and one of its words')
+                continue
+            right = [i for i, o in enumerate(opts) if o == ws[q['blank']]]
+            if right != [q['answer']] or not all(is_word(o) for o in opts):
+                err(f'{qw}: exactly one option must complete the sentence verbatim; the right ones are {right}')
+        else:
+            err(f'{qw}: kind must be vowel or missing')
+
+    if approved:
+        if not is_str(review.get('by')) or not review['by'].strip():
+            err('review: an approved lesson names its reviewer')
+        if flagged:
+            err(f'review: approved while {len(flagged)} item(s) are still flagged ({", ".join(flagged[:3])}...)')
+    return errors
+
+
+def quran_grams():
+    """Every READING_RUN-word run of the whole verified Quran, as rasm skeletons."""
+    spec = importlib.util.spec_from_file_location('lesson_content', os.path.join(HERE, 'check-lesson-content.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    grams = set()
+    for verses in mod.verified_surahs().values():
+        for v in verses:
+            ws = RASM.rasm(v).split()
+            grams.update(tuple(ws[i:i + READING_RUN]) for i in range(len(ws) - READING_RUN + 1))
+    return grams
+
+
+def check(lesson, number, quran=None):
+    if isinstance(lesson, dict) and lesson.get('kind') == 'reading':
+        return check_reading(lesson, number, quran)
     errors = []
     err = errors.append
     if not isinstance(lesson, dict) or set(lesson) != KEYS:
@@ -505,6 +700,46 @@ def selftest():
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
+    # Reading lessons (P0-5c): drills in their stage's vowel, sentences, passages, two quiz kinds.
+    def reading():
+        return {
+            'lesson': 5, 'kind': 'reading', 'review': {'status': 'pending', 'by': None, 'note': ''}, 'provenance': {}, 'retiredIds': [],
+            'stages': [
+                {'id': 'fatha', 'name': 'الْفَتْحَةْ', 'vowel': 'fatha', 'items': [
+                    {'id': 'fatha-001', 'kind': 'syllables', 'text': 'بَتَ', 'was': None, 'review': None},
+                    {'id': 'fatha-002', 'kind': 'word', 'text': 'كَتَبَ', 'was': None, 'review': None}]},
+                {'id': 'kasra', 'name': 'الْكَسْرَةْ', 'vowel': 'kasra', 'items': [{'id': 'kasra-001', 'kind': 'syllables', 'text': 'بِتِ', 'was': None, 'review': None}]},
+                {'id': 'sentences', 'name': 'جُمَلْ', 'items': [
+                    {'id': 'sentences-001', 'kind': 'sentence', 'text': 'أَكَلَ الْوَلَدُ تُفَّاحًا', 'was': None, 'review': 'TANWEEN KEPT',
+                     'finalMarkException': 'the tanween fath of the last word'},
+                    {'id': 'sentences-002', 'kind': 'sentence', 'text': 'نَامَتِ الْقِطَّةُ الصَّغِيرَةْ.', 'was': None, 'review': None}]},
+            ],
+            'passages': [{'id': 'passage-001', 'title': {'text': 'الْقِطَّةْ', 'review': None}, 'sentences': ['sentences-002']}],
+            'quiz': [{'id': 'q1', 'kind': 'vowel', 'stage': 'fatha', 'options': ['بِتِ', 'بَتَ'], 'answer': 1, 'review': None},
+                     {'id': 'q2', 'kind': 'missing', 'sentence': 'sentences-002', 'blank': 1, 'options': ['الْقِطَّةُ', 'الْوَلَدُ'], 'answer': 0, 'review': None}],
+        }
+    toy_quran = {tuple(RASM.rasm('نَامَتِ الْقِطَّةُ الصَّغِيرَةُ').split())}
+    rcases = {
+        'reading-clean': (lambda c: None, None, None),
+        'reading-breaks-the-stage-vowel': (lambda c: c['stages'][0]['items'][0].update(text='بَتِ'), "breaks the stage's vowel", None),
+        'reading-unvowelled-drill': (lambda c: c['stages'][0]['items'][0].update(text='بَت'), 'not fully vowelled', None),
+        'reading-inner-word-unvowelled': (lambda c: c['stages'][2]['items'][1].update(text='نامت الْقِطَّةُ الصَّغِيرَةْ.'), 'not fully vowelled', None),
+        'reading-last-word-not-pausal': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتِ الْقِطَّةُ الصَّغِيرَةُ.'), 'not the pausal sukun', None),
+        'reading-double-space': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتِ  الْقِطَّةْ'), 'single-spaced', None),
+        'reading-two-right-vowel-answers': (lambda c: c['quiz'][0].update(options=['بَتَ', 'كَتَبَ']), 'exactly one right answer', None),
+        'reading-missing-wrong-answer': (lambda c: c['quiz'][1].update(answer=1), 'complete the sentence', None),
+        'reading-passage-of-a-drill': (lambda c: c['passages'][0].update(sentences=['fatha-001']), 'sentence item ids', None),
+        'reading-exception-not-held': (lambda c: c['stages'][2]['items'][0].update(review=None), 'stays held', None),
+        'reading-typed-quran': (lambda c: None, 'consecutive Quran words', toy_quran),
+        'reading-unknown-kind': (lambda c: c['stages'][0]['items'][0].update(kind='letter'), 'kind must be', None),
+    }
+    for name, (mutate, expected, grams) in rcases.items():
+        c = reading()
+        mutate(c)
+        errors = check(c, 5, grams)
+        ok = (not errors) if expected is None else any(expected in e for e in errors)
+        if not ok:
+            failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
     # A misnamed lesson file is refused, not skipped.
     if not stray_files(['lesson-001.json', FIXTURE_NAME, 'lesson-1.json', 'notes.json', 'index.ts']) == ['lesson-1.json', 'notes.json']:
         failed.append('stray-json: a misnamed .json is not refused')
@@ -513,7 +748,7 @@ def selftest():
     for f in failed:
         print(f'arabic-lesson selftest: FAIL {f}')
     if not failed:
-        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + 1} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
+        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + len(rcases) + 1} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
     return 1 if failed else 0
 
 
@@ -531,13 +766,19 @@ def main(argv):
         print(f'arabic-lesson: {f}: not a lesson file (lesson-NNN.json) and not {FIXTURE_NAME}; a misnamed lesson would skip every check')
         failed += 1
     files = sorted(f for f in names if LESSON_FILE.fullmatch(f))
+    lessons = {f: json.load(open(os.path.join(ARABIC, f), encoding='utf-8')) for f in files}
+    grams = quran_grams() if any(isinstance(x, dict) and x.get('kind') == 'reading' for x in lessons.values()) else None
     for f in files:
-        lesson = json.load(open(os.path.join(ARABIC, f), encoding='utf-8'))
-        errors = check(lesson, int(f[7:10]))
+        lesson = lessons[f]
+        errors = check(lesson, int(f[7:10]), grams)
         for e in errors:
             print(f'arabic-lesson: {f}: {e}')
         if errors:
             failed += 1
+        elif lesson.get('kind') == 'reading':
+            held = sum(1 for s in lesson['stages'] for i in s['items'] if i['review']) + sum(1 for q in lesson['quiz'] if q['review'])
+            print(f'arabic-lesson: {f}: reading lesson, every drill in its stage\'s vowel, full tashkeel, no Quran run; '
+                  f'review {lesson["review"]["status"]}, {held} item(s) held for a teacher')
         else:
             held = sum(1 for u in lesson['units'] for w in u['words'] if w['review']) + \
                 sum(1 for u in lesson['units'] if u['note'] and u['note']['review']) + sum(1 for q in lesson['quiz'] if q['review'])
