@@ -91,6 +91,8 @@ describe('PD-44 DashboardController', () => {
     const only = async (key: string) => (await controller.teachersSection('staff-1', { permissions: new Set([key]) })).tiles;
     expect(await only('teacher_supervision.view')).toEqual([...leaveTiles, ...disciplineTiles, ...feedbackTiles]);
     expect(await only('certificates.view')).toEqual(certificateTiles);
+    const both = (await controller.teachersSection('staff-1', { permissions: new Set(['teacher_profiles.review', 'certificates.view']) })).tiles;
+    expect(both).toEqual([...certificateTiles, ...profileTiles]);
     expect(await only('teacher_profiles.review')).toEqual(profileTiles);
   });
 
@@ -105,7 +107,8 @@ describe('PD-44 DashboardController', () => {
     expect(access('enrolmentSection')).toEqual({ kind: 'requires', anyOf: ['trials.view', 'new_students.view'] });
     expect(access('teachersSection')).toEqual({
       kind: 'requires',
-      anyOf: ['teacher_supervision.view', 'certificates.view', 'teacher_profiles.review'],
+      // Not certificates.view: the certificate keys open exactly the certificate routes (PD-41).
+      anyOf: ['teacher_supervision.view', 'teacher_profiles.review'],
     });
   });
 });

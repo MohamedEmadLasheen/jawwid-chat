@@ -180,7 +180,10 @@ async function pages(actorId: string) {
   await shown('lateness.open', async () => (await discipline.list(actorId, { state: 'open', kind: 'late' })).violations.length);
   await shown('feedback.received', async () => (await feedback.list(actorId, { status: 'received' })).feedback.length);
   await shown('feedback.in_review', async () => (await feedback.list(actorId, { status: 'in_review' })).feedback.length);
+  // The Certificates page shows a category's tab only to whom it reaches (CertificatesPage's own rule).
+  const a = await certificates.access(actorId);
   for (const category of ['student', 'teacher'] as const) {
+    if (!a.view || !(a.design || a.categories[category].request || a.categories[category].oversee)) continue;
     await shown(`certificates.${category}_requested`, async () => (await certificates.list(actorId, { category, status: 'pending' })).certificates.length);
   }
   await shown('teacher_profiles.pending', async () => (await profiles.certificateReviewQueue(actorId)).length);
