@@ -26,6 +26,8 @@ export type SourceType =
   | 'new_student_assign'
   | 'new_student_group'
   | 'teacher_unsupervised'
+  | 'trial_attendance'
+  | 'trial_outcome'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 
 export interface Principal {

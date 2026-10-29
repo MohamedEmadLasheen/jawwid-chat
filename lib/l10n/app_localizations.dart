@@ -7267,6 +7267,12 @@ abstract class L10n {
   /// **'Correct the lesson report: {learner}, {when}'**
   String taskTitleReportCorrection(String learner, String when);
 
+  /// PD-47 PR-6b: the teacher's step of a trial.
+  ///
+  /// In en, this message translates to:
+  /// **'Record attendance: {prospect}, trial {when}'**
+  String taskTitleTrialAttendance(String prospect, String when);
+
   /// PD-47: a system task this build has no words for.
   ///
   /// In en, this message translates to:

@@ -9,6 +9,8 @@
 --   source_type           key                                  assignee                         due
 --   teacher_unsupervised  teacher_unsupervised:<spell>         the Teachers manager, else the   unsupervised since
 --                                                              super admin                      + 48 h
+--   trial_attendance      trial_attendance:<lesson>            the trial's teacher              the trial's end + 24 h
+--   trial_outcome         trial_outcome:<lesson>               the prospect's Sales owner       attendance + 48 h
 --
 --   teacher_unsupervised  an active teacher with no live PD-35 supervisor of
 --                         the Teachers department. One SPELL
@@ -24,6 +26,24 @@
 --                         sending teacher_added_unsupervised, and the
 --                         chat.staff trigger that sent teacher_supervisor_left
 --                         is dropped here. Their text rows stay, for history.
+--   trial_attendance      a trial whose time is over with no attendance (the
+--                         teacher's fact). Done when it is recorded (held or
+--                         student_no_show), by who recorded it -- the teacher,
+--                         or Sales' no-show. Withdrawn when the trial is
+--                         rescheduled or cancelled. Follows the trial's
+--                         teacher, as a lesson report does.
+--   trial_outcome         an attended trial (held) with no outcome yet. Raised
+--                         only once attendance is held: two tasks, each person
+--                         seeing only their own step (owner 2026-10-29, "Two
+--                         tasks"). Done when chat.trial_outcome is written, by
+--                         who recorded it. Withdrawn if Sales corrects the
+--                         attendance to a no-show; back if corrected back.
+--                         Its owner: the prospect's creator (always Sales)
+--                         while live, else the Sales manager, else the super
+--                         admin -- a prospect has no family, so no
+--                         family_sales_owner, until it subscribes.
+--                         Neither carries the prospect's or the form's data:
+--                         ids only (G-07).
 --
 --   RAISED by chat.work_task_sweep_handover() (the worker, every minute, its
 --   own advisory lock and batches, as PR-6a's): a teacher is often added and
@@ -32,7 +52,8 @@
 --   evidence as a safety net.
 --
 --   Cut-offs (owner 2026-10-29, the last 14 days at switch-on): a stretch by
---   when it began, as the records show it.
+--   when it began, as the records show it; a trial by its end (attendance)
+--   or by when its attendance was recorded (outcome).
 --
 -- FAIL CLOSED: RLS and revoked grants as PR-1/PR-2. Every function pins its
 -- search_path.
@@ -94,6 +115,33 @@ as $$
     chat.work_task_super_admin(p_org));
 $$;
 
+-- Who records a trial's outcome: the prospect's creator while live and still
+-- in Sales, else the live Sales manager, else the live super admin.
+create or replace function chat.work_task_trial_sales_owner(p_lesson uuid)
+returns uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select coalesce(
+    (select p.created_by
+       from chat.lesson l
+       join chat.trial_prospect p on p.id = l.prospect_id
+       join chat.staff s on s.id = p.created_by and s.is_active and s.left_at is null
+      where l.id = p_lesson
+        and (exists (select 1 from chat.department_member m join chat.department d on d.id = m.department_id
+                      where m.staff_id = p.created_by and d.kind = 'sales')
+             or exists (select 1 from chat.department d where d.manager_id = p.created_by and d.kind = 'sales'))),
+    (select s.id
+       from chat.lesson l
+       join chat.department d on d.organization_id = l.organization_id and d.kind = 'sales'
+       join chat.staff s on s.id = d.manager_id and s.is_active and s.left_at is null
+      where l.id = p_lesson
+      order by d.id
+      limit 1),
+    (select chat.work_task_super_admin(l.organization_id) from chat.lesson l where l.id = p_lesson));
+$$;
+
 -- One stretch of a teacher without a supervisor: the task's source.
 create table chat.work_task_teacher_spell (
   id              uuid primary key default gen_random_uuid(),
@@ -128,6 +176,23 @@ begin
       select a.assigned_by into actor from chat.teacher_supervisor_assignment a where a.teacher_id = v_teacher;
     else
       verdict := 'back';
+    end if;
+  elsif p_type = 'trial_attendance' then
+    select case when l.id is null then 'gone'
+                when l.outcome is null then 'back'
+                when l.outcome in ('held', 'student_no_show') then 'done'
+                else 'gone' end,
+           case when l.outcome in ('held', 'student_no_show') then l.outcome_by end
+      into verdict, actor
+      from (select 1) one left join chat.lesson l on l.id = p_source and l.kind = 'trial';
+  elsif p_type = 'trial_outcome' then
+    select o.recorded_by into actor from chat.trial_outcome o where o.lesson_id = p_source;
+    if actor is not null then
+      verdict := 'done';
+    elsif exists (select 1 from chat.lesson l where l.id = p_source and l.kind = 'trial' and l.outcome = 'held') then
+      verdict := 'back';
+    else
+      verdict := 'gone';
     end if;
   end if;
 end;
@@ -175,6 +240,55 @@ begin
 end;
 $$;
 
+-- The teacher's fact. Its key is the trial.
+create or replace function chat.work_task_raise_trial_attendance(p_lesson uuid)
+returns uuid
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  l chat.lesson;
+begin
+  select * into l from chat.lesson where id = p_lesson;
+  if l.id is null or l.kind <> 'trial' or l.outcome is not null or l.ends_at > now()
+     or l.ends_at < chat.work_task_since('trial_attendance') then
+    return null;
+  end if;
+  if chat.task_principal_kind(l.teacher_id, l.organization_id) is distinct from 'teacher' then
+    perform chat.work_task_note_issue(l.organization_id, 'trial_attendance:' || l.id, 'the trial''s teacher is not active');
+    return null;
+  end if;
+  return chat.work_task_raise(l.organization_id, 'trial_attendance', l.id, null, l.teacher_id,
+                              'medium', 'operational', 'overdue_only', l.ends_at + interval '24 hours');
+end;
+$$;
+
+-- Sales' step, only once the teacher's is done and the prospect attended.
+create or replace function chat.work_task_raise_trial_outcome(p_lesson uuid)
+returns uuid
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  l       chat.lesson;
+  v_owner uuid;
+begin
+  select * into l from chat.lesson where id = p_lesson;
+  if l.id is null or l.kind <> 'trial' or l.outcome is distinct from 'held'
+     or exists (select 1 from chat.trial_outcome o where o.lesson_id = l.id)
+     or coalesce(l.outcome_at, l.ends_at) < chat.work_task_since('trial_outcome') then
+    return null;
+  end if;
+  v_owner := chat.work_task_trial_sales_owner(l.id);
+  if v_owner is null then
+    perform chat.work_task_note_issue(l.organization_id, 'trial_outcome:' || l.id, 'no live Sales owner, Sales manager or super admin');
+    return null;
+  end if;
+  return chat.work_task_raise(l.organization_id, 'trial_outcome', l.id, v_owner, null,
+                              'medium', 'operational', 'generic', coalesce(l.outcome_at, l.ends_at) + interval '48 hours');
+end;
+$$;
+
 -- ===========================================================================
 -- 3. The sweep: create what is missing, reconcile what is done
 -- ===========================================================================
@@ -198,17 +312,21 @@ declare
   v_more      boolean := false;
   r           record;
   s_teacher   timestamptz;
+  s_attend    timestamptz;
+  s_outcome   timestamptz;
 begin
   if not pg_try_advisory_xact_lock(hashtext('chat.work_task_sweep_handover')) then
     return jsonb_build_object('skipped', true);
   end if;
   s_teacher := chat.work_task_since('teacher_unsupervised');
+  s_attend := chat.work_task_since('trial_attendance');
+  s_outcome := chat.work_task_since('trial_outcome');
 
   -- The issue log shrinks with these sources too: an occurrence whose task
   -- closed, or whose work is done or gone. Only these sources' keys; a key
   -- names its spell (or step), so a teacher's issue goes with its spell.
   delete from chat.work_task_source_issue i
-   where split_part(i.source_key, ':', 1) in ('teacher_unsupervised')
+   where split_part(i.source_key, ':', 1) in ('teacher_unsupervised', 'trial_attendance', 'trial_outcome')
      and (exists (select 1 from chat.work_task t
                    where t.organization_id = i.organization_id and t.source_key = i.source_key
                      and t.state in ('completed', 'removed'))
@@ -231,6 +349,15 @@ begin
         cross join lateral (select chat.work_task_unsupervised_since(t.id) as since) u
         left join chat.work_task_teacher_spell sp on sp.teacher_id = t.id and sp.closed_at is null
        where t.is_active and t.left_at is null and u.since is not null and u.since >= s_teacher
+      union all
+      select l.organization_id, 'trial_attendance', l.id, 'trial_attendance:' || l.id, l.ends_at, null
+        from chat.lesson l
+       where l.kind = 'trial' and l.outcome is null and l.ends_at <= now() and l.ends_at >= s_attend
+      union all
+      select l.organization_id, 'trial_outcome', l.id, 'trial_outcome:' || l.id, coalesce(l.outcome_at, l.ends_at), null
+        from chat.lesson l
+       where l.kind = 'trial' and l.outcome = 'held' and coalesce(l.outcome_at, l.ends_at) >= s_outcome
+         and not exists (select 1 from chat.trial_outcome o where o.lesson_id = l.id)
     ) x
      where not exists (select 1 from chat.work_task t where t.organization_id = x.org and t.source_key = x.key)
        and not exists (select 1 from chat.work_task_source_issue i
@@ -243,6 +370,8 @@ begin
     begin
       if (case r.src
             when 'teacher_unsupervised' then chat.work_task_raise_teacher_unsupervised(r.id)
+            when 'trial_attendance' then chat.work_task_raise_trial_attendance(r.id)
+            when 'trial_outcome' then chat.work_task_raise_trial_outcome(r.id)
           end) is not null then
         v_raised := v_raised + 1;
       else
@@ -263,7 +392,7 @@ begin
         from chat.work_task t
         cross join lateral chat.work_task_handover_verdict(t.source_type, t.source_id) v
        where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-         and t.source_type in ('teacher_unsupervised')
+         and t.source_type in ('teacher_unsupervised', 'trial_attendance', 'trial_outcome')
     ) y
      where y.source_state = 'pending' and y.verdict in ('done', 'gone')
         or y.source_state = 'withdrawn' and y.verdict in ('back', 'done')
@@ -328,14 +457,75 @@ create trigger teacher_supervisor_assignment_settles_its_task
   after insert or update of supervisor_id on chat.teacher_supervisor_assignment
   for each row execute function chat.work_task_from_teacher_supervisor_assignment();
 
+-- A trial's attendance recorded, the trial moved or cancelled, its teacher
+-- changed, or its attendance corrected by Sales. One function per table
+-- (chat.work_task_from_lesson keeps the lessons' own).
+create or replace function chat.work_task_from_trial_lesson()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  begin
+    if old.outcome is null and new.outcome in ('held', 'student_no_show') then
+      perform chat.work_task_settle(new.organization_id, 'trial_attendance:' || new.id, new.outcome_by);
+    elsif old.outcome is null and new.outcome is not null then
+      perform chat.work_task_withdraw(new.organization_id, 'trial_attendance:' || new.id);
+    end if;
+    if new.teacher_id is distinct from old.teacher_id then
+      perform chat.work_task_reroute(new.organization_id, 'trial_attendance:' || new.id, null, new.teacher_id, null);
+    end if;
+  exception when others then
+    perform chat.work_task_note_issue(new.organization_id, 'trial_attendance:' || new.id, sqlerrm);
+  end;
+  -- Sales corrects attendance: no outcome is owed for a no-show.
+  begin
+    if old.outcome = 'held' and new.outcome is distinct from 'held' then
+      perform chat.work_task_withdraw(new.organization_id, 'trial_outcome:' || new.id);
+    elsif old.outcome is distinct from 'held' and new.outcome = 'held'
+          and not exists (select 1 from chat.trial_outcome o where o.lesson_id = new.id) then
+      perform chat.work_task_restore(new.organization_id, 'trial_outcome:' || new.id);
+    end if;
+  exception when others then
+    perform chat.work_task_note_issue(new.organization_id, 'trial_outcome:' || new.id, sqlerrm);
+  end;
+  return null;
+end;
+$$;
+
+create trigger trial_lesson_moves_its_tasks after update of outcome, teacher_id on chat.lesson
+  for each row
+  when (new.kind = 'trial' and (old.outcome is distinct from new.outcome or old.teacher_id is distinct from new.teacher_id))
+  execute function chat.work_task_from_trial_lesson();
+
+-- Sales' outcome written: the outcome task is done, by who recorded it.
+create or replace function chat.work_task_from_trial_outcome()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  begin
+    perform chat.work_task_settle(new.organization_id, 'trial_outcome:' || new.lesson_id, new.recorded_by);
+  exception when others then
+    perform chat.work_task_note_issue(new.organization_id, 'trial_outcome:' || new.lesson_id, sqlerrm);
+  end;
+  return null;
+end;
+$$;
+
+create trigger trial_outcome_settles_its_task after insert on chat.trial_outcome
+  for each row execute function chat.work_task_from_trial_outcome();
+
 -- PD-43's notice is replaced by the task (owner 2026-10-29, "Replace it").
 drop trigger teacher_supervisor_left_tells_the_manager on chat.staff;
 drop function chat.notify_teacher_supervisor_left();
 
 -- ===========================================================================
 -- 5. The guard: a teacher's supervisor placed by the CLI names nobody -- the
---    system may complete that task, as PR-6a's set-up. Otherwise PR-6a's
---    guard unchanged.
+--    system may complete that task, as PR-6a's set-up -- and a trial's
+--    attendance follows its teacher, as a lesson report does. Otherwise
+--    PR-6a's guard unchanged.
 -- ===========================================================================
 
 create or replace function chat.guard_work_task()
@@ -450,14 +640,14 @@ begin
 
   v_moved := (new.assignee_staff_id, new.assignee_teacher_id) is distinct from (old.assignee_staff_id, old.assignee_teacher_id);
   v_returned := old.state = 'awaiting_decision' and new.state = 'open' and not v_moved;
-  -- A lesson report and a correction are the lesson's teacher's, a case's task
+  -- A lesson report, a correction and a trial's attendance (PR-6b) are the lesson's teacher's, a case's task
   -- follows the case's owner, and a financial task the family's billing
   -- supervisor or Sales owner: only their source moves them (PR-2, PR-2b).
   -- The one exception: the super admin hands on a financial task whose
   -- assignee left with nobody live to follow (the sweep records it); the
   -- sweep moves it on to its owner once there is one again.
   if v_moved and old.kind = 'system' and not v_system
-     and old.source_type in ('lesson_report', 'report_correction', 'case',
+     and old.source_type in ('lesson_report', 'report_correction', 'case', 'trial_attendance',
                              'instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed')
      and not (old.source_type in ('instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed')
               and exists (select 1 from chat.staff s
@@ -554,6 +744,11 @@ revoke all on function chat.work_task_unsupervised_since(uuid) from public;
 revoke all on function chat.work_task_teachers_manager(uuid) from public;
 revoke all on function chat.work_task_handover_verdict(text, uuid) from public;
 revoke all on function chat.work_task_raise_teacher_unsupervised(uuid) from public;
+revoke all on function chat.work_task_trial_sales_owner(uuid) from public;
+revoke all on function chat.work_task_raise_trial_attendance(uuid) from public;
+revoke all on function chat.work_task_raise_trial_outcome(uuid) from public;
+revoke all on function chat.work_task_from_trial_lesson() from public;
+revoke all on function chat.work_task_from_trial_outcome() from public;
 revoke all on function chat.work_task_sweep_handover(integer) from public;
 revoke all on function chat.work_task_from_teacher_supervisor_assignment() from public;
 revoke all on function chat.guard_work_task() from public;

@@ -1668,6 +1668,7 @@
   "taskFinance": "مالية",
   "taskTitleLessonReport": "اكتب تقرير الحصة: {learner}، {when}",
   "taskTitleReportCorrection": "صحّح تقرير الحصة: {learner}، {when}",
+  "taskTitleTrialAttendance": "سجّل الحضور: {prospect}، تجربة {when}",
   "taskTitleFromAcademy": "مهمة من الأكاديمية",
   "taskDue": "الموعد {when}",
   "taskNoDue": "بلا موعد",

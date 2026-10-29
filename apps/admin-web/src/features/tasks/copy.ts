@@ -141,6 +141,8 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   new_student_assign: { en: 'New student form', ar: 'استمارة طالب جديد' },
   new_student_group: { en: 'Family group', ar: 'مجموعة العائلة' },
   teacher_unsupervised: { en: 'Teacher without a supervisor', ar: 'معلم بلا مشرف' },
+  trial_attendance: { en: 'Trial attendance', ar: 'حضور الحصة التجريبية' },
+  trial_outcome: { en: 'Trial outcome', ar: 'نتيجة الحصة التجريبية' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -164,6 +166,8 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   new_student_assign: { en: 'Assign the new family: {prospect}, trial {when}', ar: 'أسند العائلة الجديدة: {prospect}، تجربة {when}' },
   new_student_group: { en: 'Open the family group: {family}', ar: 'افتح مجموعة العائلة: {family}' },
   teacher_unsupervised: { en: 'Choose a supervisor for {teacher}', ar: 'اختر مشرفًا لـ{teacher}' },
+  trial_attendance: { en: 'Record attendance: {prospect}, trial {when}', ar: 'سجّل الحضور: {prospect}، تجربة {when}' },
+  trial_outcome: { en: 'Record the trial outcome: {prospect}, trial {when}', ar: 'سجّل نتيجة التجربة: {prospect}، تجربة {when}' },
 }
 
 export const EVENT_LABEL: Record<TaskEvent['kind'], Pair> = {

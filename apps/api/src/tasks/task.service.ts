@@ -69,7 +69,7 @@ export const SOURCE_TYPES = [
   // PD-47 PR-6a: the set-up sources (chat.work_task_sweep_setup).
   'family_unsupervised', 'teacher_setup', 'new_student_assign', 'new_student_group',
   // PD-47 PR-6b: work handed between people (chat.work_task_sweep_handover).
-  'teacher_unsupervised',
+  'teacher_unsupervised', 'trial_attendance', 'trial_outcome',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -984,6 +984,7 @@ export class TaskService {
                WHEN 'lesson_ruling' THEN (SELECT l.teacher_id::text FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id WHERE q.id = t.source_id)
                WHEN 'teacher_setup' THEN t.source_id::text
                WHEN 'teacher_unsupervised' THEN (SELECT sp.teacher_id::text FROM chat.work_task_teacher_spell sp WHERE sp.id = t.source_id)
+               WHEN 'trial_attendance' THEN (SELECT l.teacher_id::text FROM chat.lesson l WHERE l.id = t.source_id)
              END AS source_teacher_id,
              CASE t.source_type
                WHEN 'lesson_report' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
@@ -1031,6 +1032,11 @@ export class TaskService {
                WHEN 'teacher_unsupervised' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id)
                                                    FROM chat.work_task_teacher_spell sp JOIN chat.teacher te ON te.id = sp.teacher_id
                                                   WHERE sp.id = t.source_id)
+               -- A trial is named by its prospect, never by its form (G-07).
+               WHEN 'trial_attendance' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
+                                               FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
+               WHEN 'trial_outcome' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
+                                            FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,

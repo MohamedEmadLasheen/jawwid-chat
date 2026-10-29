@@ -2925,6 +2925,8 @@
   "@taskTitleLessonReport": {"placeholders": {"learner": {"type": "String"}, "when": {"type": "String"}}},
   "taskTitleReportCorrection": "Correct the lesson report: {learner}, {when}",
   "@taskTitleReportCorrection": {"placeholders": {"learner": {"type": "String"}, "when": {"type": "String"}}},
+  "taskTitleTrialAttendance": "Record attendance: {prospect}, trial {when}",
+  "@taskTitleTrialAttendance": {"description": "PD-47 PR-6b: the teacher's step of a trial.", "placeholders": {"prospect": {"type": "String"}, "when": {"type": "String"}}},
   "taskTitleFromAcademy": "A task from the academy",
   "@taskTitleFromAcademy": {"description": "PD-47: a system task this build has no words for."},
   "taskDue": "Due {when}",

@@ -46,8 +46,18 @@ describe('PD-47 PR-6b: work handed between people', () => {
     expect(sourceLink(task('teacher_unsupervised', 'spell1', {}))).toBeNull()
   })
 
+  it('a trial\'s two steps name the prospect only, and lead to the trials', () => {
+    const at = '2026-10-29T10:00:00Z'
+    expect(titleOf(task('trial_attendance', 'l1', { prospectName: 'prospect_p', startsAt: at }), en, fmt))
+      .toBe('Record attendance: prospect_p, trial at 2026-10-29T10:00:00Z')
+    expect(titleOf(task('trial_outcome', 'l1', { prospectName: 'prospect_p', startsAt: at }), en, fmt))
+      .toBe('Record the trial outcome: prospect_p, trial at 2026-10-29T10:00:00Z')
+    expect(sourceLink(task('trial_attendance', 'l1', {}))).toBe('/trials')
+    expect(sourceLink(task('trial_outcome', 'l1', {}))).toBe('/trials')
+  })
+
   it('every one has its label and title in both languages, with no placeholder left unfilled', () => {
-    for (const type of ['teacher_unsupervised'] as const) {
+    for (const type of ['teacher_unsupervised', 'trial_attendance', 'trial_outcome'] as const) {
       expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
       expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
     }

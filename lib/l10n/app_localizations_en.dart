@@ -4247,6 +4247,11 @@ class L10nEn extends L10n {
   }
 
   @override
+  String taskTitleTrialAttendance(String prospect, String when) {
+    return 'Record attendance: $prospect, trial $when';
+  }
+
+  @override
   String get taskTitleFromAcademy => 'A task from the academy';
 
   @override
