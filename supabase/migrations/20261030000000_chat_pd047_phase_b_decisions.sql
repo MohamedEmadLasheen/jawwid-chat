@@ -451,7 +451,7 @@ begin
       select e.organization_id as org, 'complaint' as src, e.id, 'complaint:' || e.id as key, e.created_at as at
         from chat.teacher_supervision_entry e
        where e.kind = 'complaint' and e.created_at >= s_complaint
-         and not exists (select 1 from chat.teacher_supervision_entry r where r.refers_to = e.id and r.kind = 'complaint_resolution')
+         and not exists (select 1 from chat.teacher_supervision_entry res where res.refers_to = e.id and res.kind = 'complaint_resolution')
       union all
       select f.organization_id, 'feedback', f.id, 'feedback:' || f.id, f.created_at
         from chat.parent_feedback f
