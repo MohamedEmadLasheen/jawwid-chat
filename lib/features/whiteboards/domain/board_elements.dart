@@ -13,9 +13,8 @@ const Size kBoardPageSize = Size(1920, 1080);
 ///
 /// The JSON shape is the client's own (the server checks ids, kinds, sizes,
 /// verses and images only: apps/api/src/whiteboards/whiteboard-document.ts).
-/// A kind this build does not draw -- a verse before PR-3, an image before
-/// PR-4, anything newer -- is kept as an [OpaqueElement] and saved back
-/// exactly as it came.
+/// A kind this build does not draw -- an image before PR-4, anything newer --
+/// is kept as an [OpaqueElement] and saved back exactly as it came.
 sealed class BoardElement {
   const BoardElement(this.id);
 
@@ -75,6 +74,25 @@ sealed class BoardElement {
             size: Size(_num(json['w'], 300), _num(json['h'], 60)),
             fontSize: _num(json['size'], 48),
             color: _color(json['color']),
+          );
+        case 'verse':
+          final t = json['transform'];
+          final st = json['style'];
+          final transform = t is Map ? t : const {};
+          final style = st is Map ? st : const {};
+          final surah = json['surah'], from = json['fromAyah'], to = json['toAyah'];
+          final dataset = json['datasetId'], range = json['rangeSha256'];
+          if (surah is! int || from is! int || to is! int || dataset is! String || range is! String) break;
+          return VerseElement(
+            id: id,
+            surah: surah,
+            fromAyah: from,
+            toAyah: to,
+            datasetId: dataset,
+            rangeSha256: range,
+            rect: Rect.fromLTWH(_num(transform['x'], 0), _num(transform['y'], 0), _num(transform['w'], 1400), _num(transform['h'], 200)),
+            fontSize: _num(style['size'], 64),
+            color: _color(style['color']),
           );
         case 'stamp':
           return StampElement(
@@ -322,8 +340,90 @@ class StampElement extends BoardElement {
   };
 }
 
-/// A kind this build does not draw (a verse before PR-3, an image before PR-4,
-/// or anything newer). Kept and saved back exactly as it came; it moves only
+/// A Quran verse on the page (design §4.3): a REFERENCE to the shared, verified
+/// dataset -- surah, ayat, the dataset and the range's SHA-256 -- and never its
+/// text, which the server refuses in a document. Where it sits and how it is
+/// drawn go in `transform` and `style`, the only other fields a verse may
+/// carry. The text is fetched (GET /quran/ayahs) and drawn in Amiri Quran; a
+/// range whose served SHA-256 is not [rangeSha256] is shown as "re-insert",
+/// never silently redrawn.
+class VerseElement extends BoardElement {
+  const VerseElement({
+    required String id,
+    required this.surah,
+    required this.fromAyah,
+    required this.toAyah,
+    required this.datasetId,
+    required this.rangeSha256,
+    required this.rect,
+    required this.fontSize,
+    required this.color,
+  }) : super(id);
+
+  final int surah;
+  final int fromAyah;
+  final int toAyah;
+  final String datasetId;
+  final String rangeSha256;
+
+  /// Where it sits; its height is what the text took when it was placed.
+  final Rect rect;
+  final double fontSize;
+  final Color color;
+
+  /// The key of its text in the verse cache.
+  String get rangeKey => '$datasetId/$surah/$fromAyah-$toAyah';
+
+  @override
+  String get kind => 'verse';
+
+  @override
+  Rect get bounds => rect;
+
+  VerseElement copyWith({Rect? rect, double? fontSize, Color? color}) => VerseElement(
+    id: id,
+    surah: surah,
+    fromAyah: fromAyah,
+    toAyah: toAyah,
+    datasetId: datasetId,
+    rangeSha256: rangeSha256,
+    rect: rect ?? this.rect,
+    fontSize: fontSize ?? this.fontSize,
+    color: color ?? this.color,
+  );
+
+  @override
+  BoardElement translated(Offset delta) => copyWith(rect: rect.shift(delta));
+
+  /// A verse scales as one: both sides and the type by the same factor (the
+  /// width's), so the text always fits the box it was laid out in.
+  @override
+  BoardElement scaled(Offset anchor, double sx, double sy) {
+    final k = (fontSize * sx.abs()).clamp(16, 240) / fontSize;
+    final r = Rect.fromLTWH(
+      anchor.dx + (rect.left - anchor.dx) * k,
+      anchor.dy + (rect.top - anchor.dy) * k,
+      rect.width * k,
+      rect.height * k,
+    );
+    return copyWith(rect: r, fontSize: fontSize * k);
+  }
+
+  @override
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'kind': kind,
+    'surah': surah,
+    'fromAyah': fromAyah,
+    'toAyah': toAyah,
+    'datasetId': datasetId,
+    'rangeSha256': rangeSha256,
+    'transform': _rectJson(rect),
+    'style': {'size': _round(fontSize), 'color': _hex(color)},
+  };
+}
+
+/// A kind this build does not draw (an image before PR-4, or anything newer). Kept and saved back exactly as it came; it moves only
 /// when it carries x/y/w/h, and it is shown as a labelled box.
 class OpaqueElement extends BoardElement {
   const OpaqueElement(super.id, this.json);
