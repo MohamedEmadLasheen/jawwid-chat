@@ -266,7 +266,10 @@ The **Needs action** page and the other source pages stay as they are. A task is
   1. Completed at **booking** (as above), or only once the make-up is **held**? Held is stricter, but then the task stays open for days after the work is arranged.
   2. Should `student_apology` owe a make-up task at all, or only the teacher causes?
   3. A `makeup_followup` ruling also raises PR-2's `lesson_ruling` task for the supervisor. Settling `makeup_owed` by the same decision is right, but confirm the two do not need to be one task.
-- **Waiting for the owner:** `teacher_unsupervised` (whether it replaces PD-43's notices), `trial_outcome` (one task handed on, or two), and `certificate` (with PD-41).
+**Owner's answers, 2026-10-29** (relayed verbatim by the department head). These three are **PR-6b**, each source in its own commit; its slot is asked for after PR-6a.
+- **`teacher_unsupervised`: "Replace it".** The task replaces PD-43's two notices to the Teachers manager, `teacher_added_unsupervised` (the API, `teacher-onboarding.service.ts`) and `teacher_supervisor_left` (the trigger on `chat.staff`, `mig/20261029150000`), the way Q-F6 replaced the renewal push. The manager hears of it once, through the task's own `task_assigned`. `teacher_duplicate_hidden` is not a task and stays a notice.
+- **`trial_outcome`: "Two tasks".** The **teacher** gets an attendance task (`trial_attendance:<lessonId>`), done when attendance is recorded. Only **then** does the family's **Sales owner** get an outcome task (`trial_outcome:<lessonId>`), done when the outcome is recorded. Each sees only their own step: the teacher never sees the outcome task, and Sales never sees the attendance task.
+- **`certificate`: "Yes, replace them".** Each PD-41 step that needs someone to act becomes a task for that person, and the four `task` notifications (`certificate_requested`, `certificate_returned`, `certificate_uploaded`, `certificate_suggestion_decided`) stop. PD-47 owns the change in PD-41's emitters (`certificate.service.ts`). **PD-41's state machine and its tests stay intact**: only who is told, and how, changes.
 
 #### 3.6.1 As built in PR-2 (#241)
 
