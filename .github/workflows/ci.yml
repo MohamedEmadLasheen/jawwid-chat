@@ -224,6 +224,15 @@ jobs:
         # Runs the loader's verification of data/quran/ first and refuses on any
         # mismatch (docs/product/quran-dataset-contract.md, "Loading").
         run: python3 -I scripts/lessons/build-quran-snapshot.py
+      - name: The approvals in this bundle are the API's, signed (PD-49)
+        working-directory: .
+        # CI is the cryptographic trust anchor for children's content approvals:
+        # this job is the ONLY place the production lessons bundle is built (the
+        # lessons-dist-<sha> artifact), and it builds nothing whose approvals do
+        # not verify under a key of apps/lessons/src/content/approvals-keys.json.
+        # guards.sh lessons-supply-chain fails if this step goes, or if another
+        # workflow builds the bundle.
+        run: node scripts/lessons/verify-approvals.mjs
       - run: npm run typecheck
       - run: npm test
       - name: Build

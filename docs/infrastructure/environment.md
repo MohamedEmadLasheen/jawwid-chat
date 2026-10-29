@@ -115,6 +115,7 @@ whatever these say.
 | `JWT_ACCESS_TTL` | no | opt | req | req |
 | `JWT_REFRESH_TTL` | no | opt | req | req |
 | `RESET_CODE_HASH_SECRET` (PD-43: the HMAC key for one-time codes; locally derived from `JWT_REFRESH_SECRET`) | **yes** | opt | req | req |
+| `LESSON_APPROVALS_SIGNING_KEY` (PD-49: the Ed25519 key that signs the export of children's Quran content approvals; unset = nothing is exported, so no content reaches a child) | **yes** | opt | opt | opt |
 
 ### Storage
 

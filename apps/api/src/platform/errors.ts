@@ -508,6 +508,8 @@ export enum CommErrorCode {
   LESSON_CONTENT_STATE = 'COMM.LESSON_CONTENT_STATE',
   /** The reviewer does not hold the step's key, or already signed another step of this text. 403. */
   LESSON_CONTENT_DENIED = 'COMM.LESSON_CONTENT_DENIED',
+  /** The API has no approvals signing key (LESSON_APPROVALS_SIGNING_KEY): nothing is exported unsigned. 503. */
+  LESSON_CONTENT_SIGNING_UNAVAILABLE = 'COMM.LESSON_CONTENT_SIGNING_UNAVAILABLE',
 
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */

@@ -4,12 +4,15 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { lessonContentAccess, type LessonContentAccess, type ReviewStep } from '../platform/lesson-content-policy';
 import { PermissionService } from '../platform/permissions/permission.service';
 import type { Actor } from '../platform/types';
+import { ApprovalsSigner, type ApprovalsPayload, type SignedApprovals } from './approvals-signer';
 import type { LessonContentStore, ReviewRow } from './lesson-content.store';
 import { SHA256, reviewScope, type Scope, type Step, type Subject } from './review-subjects';
 
 export const LESSON_CONTENT_STORE = Symbol('LESSON_CONTENT_STORE');
 /** The scopes as the API was built with them (review-subjects.ts); a token so a spec can supply its own. */
 export const LESSON_CONTENT_SCOPES = Symbol('LESSON_CONTENT_SCOPES');
+/** The approvals signer (approvals-signer.ts); a token so a spec can sign with its own key. */
+export const LESSON_APPROVALS_SIGNER = Symbol('LESSON_APPROVALS_SIGNER');
 
 export const REJECT_CATEGORIES = ['wrong_meaning', 'not_in_source', 'aqeedah', 'weak_report', 'too_hard_for_band', 'language', 'respect', 'other'] as const;
 const ACTIONS = ['approve', 'reject', 'withdraw'] as const;
@@ -54,9 +57,11 @@ export function itemStatus(subject: Pick<Subject, 'id' | 'approvalSha256' | 'req
  * one person signs one step of a text.
  *
  * export() is what reaches children: the items whose current text has every
- * required step signed and is neither rejected nor withdrawn, in the format of
- * apps/lessons/src/content/approvals/ (scripts/lessons/export-approvals.py
- * writes it into the repo; the lessons engine checks it again).
+ * required step signed and is neither rejected nor withdrawn, with who signed
+ * each step, SIGNED with the API's Ed25519 key (approvals-signer.ts) in the
+ * format of apps/lessons/src/content/approvals/. scripts/lessons/export-approvals.py
+ * writes it into the repo; CI verifies the signature; the engine checks it again.
+ * No signing key: the export refuses (503) -- nothing unsigned is ever handed out.
  */
 @Injectable()
 export class LessonContentService {
@@ -64,6 +69,7 @@ export class LessonContentService {
     @Inject(LESSON_CONTENT_STORE) private readonly store: LessonContentStore,
     private readonly permissions: PermissionService,
     @Optional() @Inject(LESSON_CONTENT_SCOPES) private readonly scopes: (scope: string) => Scope | null = reviewScope,
+    @Optional() @Inject(LESSON_APPROVALS_SIGNER) private readonly signer: Pick<ApprovalsSigner, 'sign'> = new ApprovalsSigner(),
   ) {}
 
   async access(actor: Actor): Promise<LessonContentAccess> {
@@ -143,18 +149,40 @@ export class LessonContentService {
     }
   }
 
-  /** The approvals that may reach children, in the apps/lessons approvals format. */
-  async export(scope: string, actor: Actor) {
+  /** The approvals that may reach children, signed: the apps/lessons approvals file. */
+  async export(scope: string, actor: Actor): Promise<SignedApprovals> {
     await this.require(actor);
     const s = this.scopeOf(scope);
     const reviews = await this.store.reviews(s.scope);
     const approvals = [...s.subjects.values()]
       .map((subject) => ({ subject, status: itemStatus(subject, reviews) }))
       .filter(({ status }) => status.approved)
-      .map(({ subject, status }) => ({ id: subject.id, approvalSha256: subject.approvalSha256, steps: status.signed }))
+      .map(({ subject, status }) => ({
+        id: subject.id,
+        approvalSha256: subject.approvalSha256,
+        steps: status.signed,
+        // Who signed each step of THIS text, as the database recorded it: exactly one row
+        // per step (the unique index lesson_content_one_approval_per_step).
+        signers: status.signed.map((step) => {
+          const rows = reviews.filter((x) => x.itemId === subject.id && x.approvalSha256 === subject.approvalSha256 && x.action === 'approve' && x.step === step);
+          if (rows.length !== 1) throw new Error(`lesson content ${s.scope}/${subject.id}: ${rows.length} signatures of the ${step} step`);
+          return { step, staffId: rows[0]!.staffId, at: new Date(rows[0]!.at).toISOString() };
+        }),
+      }))
       .sort((a, b) => a.id.localeCompare(b.id));
-    if (s.scope === 'play') return { scope: 'play', approvals };
-    return { surah: Number(s.scope.slice('quran-'.length)), lessonKey: s.scope, approvals };
+    const payload: ApprovalsPayload = {
+      v: 1,
+      env: process.env.APP_ENV ?? 'local',
+      issuedAt: new Date().toISOString(),
+      datasetId: s.datasetId,
+      lessonKey: s.scope,
+      approvals,
+    };
+    const signed = this.signer.sign(payload);
+    if (!signed) {
+      throw new CommError(CommErrorCode.LESSON_CONTENT_SIGNING_UNAVAILABLE, 'approvals are exported only signed, and the API has no signing key (LESSON_APPROVALS_SIGNING_KEY)', 503);
+    }
+    return signed;
   }
 
   private scopeOf(scope: string): Scope {
