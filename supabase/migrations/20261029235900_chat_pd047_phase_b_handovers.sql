@@ -486,11 +486,12 @@ begin
                        and t.source_key = 'teacher_unsupervised:' || sp.id and t.state in ('open', 'awaiting_decision'));
 
   -- Create. A candidate is the SOURCE the raise is called with (a teacher);
-  -- its key is the open spell's, when there is one.
+  -- its key is the open spell's, else one named by the teacher (never an
+  -- empty id: the issue log reads every key's id as a uuid).
   for r in
     select x.org, x.src, x.id, x.key from (
       select t.organization_id as org, 'teacher_unsupervised' as src, t.id,
-             'teacher_unsupervised:' || coalesce(sp.id::text, '') as key, u.since as at, sp.id as spell
+             'teacher_unsupervised:' || coalesce(sp.id, t.id) as key, u.since as at, sp.id as spell
         from chat.teacher t
         cross join lateral (select chat.work_task_unsupervised_since(t.id) as since) u
         left join chat.work_task_teacher_spell sp on sp.teacher_id = t.id and sp.closed_at is null
@@ -531,6 +532,10 @@ begin
         v_raised := v_raised + 1;
       else
         v_declined := v_declined + 1;
+        if not exists (select 1 from chat.work_task_source_issue i
+                        where i.organization_id = r.org and i.source_key = r.key and i.next_try_at > now()) then
+          perform chat.work_task_note_issue(r.org, r.key, 'not raised: its source declined it (see its raise rule)');
+        end if;
       end if;
     exception when others then
       v_failed := v_failed + 1;
