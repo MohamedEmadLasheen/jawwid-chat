@@ -12,8 +12,9 @@ import { EmptyState, ErrorState, QueryBoundary } from '@/shared/components/State
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
 import { useSupervisionDirectory } from '@/features/teacher-files/hooks'
 import type { Pair } from '@/features/organization/copy'
+import { newIdempotencyKey } from '@/core/api/client'
 import { RETENTION_KEYS, type BoardDetail } from './api'
-import { parsePage, type BoardElement, type VerseLookup } from './board'
+import { parsePage, type BoardElement, type BoardPage, type VerseLookup } from './board'
 import { BoardCanvas } from './BoardCanvas'
 import { ACTION, B, BASIS, useCopy } from './copy'
 import { useAccessLog, useCopyBoard, useTeacherBoard, useVerseTexts } from './hooks'
@@ -60,9 +61,11 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
   const { date } = useI18n()
   const { staff } = useSession()
   const retention = holdsAny(staff, RETENTION_KEYS)
-  const pages = useMemo(() => [...board.pages].sort((a, b) => a.position - b.position).map((p) => parsePage(p as unknown as Record<string, unknown>)), [board.pages])
+  // Only the page on view is decoded (its strokes can be large); the rest wait until they are shown.
+  const pages = useMemo(() => [...board.pages].sort((a, b) => a.position - b.position), [board.pages])
   const [index, setIndex] = useState(0)
-  const page = pages[Math.min(index, pages.length - 1)] ?? null
+  const shown = pages[Math.min(index, pages.length - 1)]
+  const page = useMemo(() => (shown ? parsePage(shown as unknown as Record<string, unknown>) : null), [shown])
   const verse = useVerseTexts(page)
   const directory = useSupervisionDirectory()
   const teacherName = directory.data?.teachers.find((t) => t.id === board.teacherId)?.name
@@ -122,6 +125,7 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
       {page ? (
         <section className="tb-viewer">
           <BoardCanvas page={page} verse={verse} label={label} ariaLabel={tx(B.canvasLabel, { n: index + 1, title: board.title })} />
+          <PageText page={page} />
           <div className="tb-pager">
             <button type="button" className="btn btn--ghost btn--sm" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
               {tx(B.previousPage)}
@@ -207,6 +211,8 @@ function CopyDialog({ board, onClose }: { board: BoardDetail; onClose: () => voi
   const directory = useSupervisionDirectory()
   const copy = useCopyBoard(board.id)
   const [target, setTarget] = useState('')
+  // One key per intended copy: a retry (a double click, a lost answer) answers the same copy.
+  const key = useMemo(() => newIdempotencyKey(), [target])
   const active = (directory.data?.teachers ?? []).filter((t) => t.isActive && t.id !== board.teacherId)
   const chosen = active.find((t) => t.id === target)
   return (
@@ -221,7 +227,7 @@ function CopyDialog({ board, onClose }: { board: BoardDetail; onClose: () => voi
         ) : (
           <>
             <DialogCancelButton onClick={onClose} disabled={copy.isPending} />
-            <button type="button" className="btn btn--primary" disabled={!target || copy.isPending} onClick={() => copy.mutate(target)}>
+            <button type="button" className="btn btn--primary" disabled={!target || copy.isPending} onClick={() => copy.mutate({ teacherId: target, key })}>
               {tx(B.copyConfirm)}
             </button>
           </>
@@ -250,5 +256,28 @@ function CopyDialog({ board, onClose }: { board: BoardDetail; onClose: () => voi
         </>
       )}
     </Dialog>
+  )
+}
+
+/**
+ * What the page says, for a screen reader: the canvas is one picture, so its
+ * words and its verses are listed as text too (hidden on screen). A verse is
+ * named by its reference, never by text the page did not check.
+ */
+function PageText({ page }: { page: BoardPage }) {
+  const tx = useCopy()
+  const items = page.elements.flatMap((e) => {
+    if (e.kind === 'text' && e.text.trim()) return [e.text]
+    if (e.kind === 'stamp' && e.text) return [e.text]
+    if (e.kind === 'verse') return [tx(B.verseRef, { surah: e.ref.surah, from: e.ref.fromAyah, to: e.ref.toAyah })]
+    return []
+  })
+  if (items.length === 0) return null
+  return (
+    <ul className="sr-only" aria-label={tx(B.pageText)}>
+      {items.map((item, i) => (
+        <li key={i}>{item}</li>
+      ))}
+    </ul>
   )
 }

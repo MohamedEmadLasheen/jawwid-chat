@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { PALETTE, decodePoints, drawOrder, lookupVerse, parsePage, verseBody, type AyahsAnswer, type BoardElement, type VerseRef } from './board'
-import { drawPage, isRtl, scaleAlpha, wrapLines, type Ctx } from './render'
+import { drawPage, drawVerse, isRtl, scaleAlpha, verseTokens, wrapLines, wrapTokens, type Ctx } from './render'
+import { familyLoaded } from './BoardCanvas'
 
 /**
  * PD-39: the staff viewer reads a board exactly as the teacher's portal writes
@@ -125,6 +126,54 @@ describe('the shared fixture, read by the staff viewer', () => {
     const ref: VerseRef = verseEl.ref
     expect(Object.keys(ref).sort()).toEqual(['datasetId', 'fromAyah', 'rangeSha256', 'surah', 'toAyah'])
     expect(verseBody(fixture.ayahs)).not.toContain('BASMALA')
+  })
+})
+
+describe('pause marks (review of #304)', () => {
+  // Tanzil writes a pause mark (U+06D6-06DC) as its own space-separated word.
+  const MARK = '\u06DB'
+  const text = (words: string): AyahsAnswer => ({ ...fixture.ayahs, ayahs: [{ ayah: 2, text: words }] })
+
+  it('a mark-only token goes with the word before it, so it is never drawn alone', () => {
+    expect(verseTokens(`SYNTHETIC-A ${MARK} SYNTHETIC-B ${MARK} SYNTHETIC-C`)).toEqual([`SYNTHETIC-A ${MARK}`, `SYNTHETIC-B ${MARK}`, 'SYNTHETIC-C'])
+    expect(verseTokens(`${MARK} SYNTHETIC-A`)).toEqual([MARK, 'SYNTHETIC-A'])
+  })
+
+  it('no line starts with a mark, and every justified word carries its marks', () => {
+    const words = Array.from({ length: 30 }, (_, i) => (i % 3 === 2 ? MARK : `SYNTHETIC-${i}`)).join(' ')
+    const { ctx, texts } = recorder()
+    const lines = wrapTokens(ctx, verseTokens(words), 200)
+    expect(lines.length).toBeGreaterThan(2)
+    for (const line of lines) expect(line[0]!.startsWith(MARK)).toBe(false)
+    drawVerse(ctx, { x: 0, y: 0, w: 200, h: 2000 }, 40, '#000000', text(words))
+    const drawn = texts()
+    expect(drawn.length).toBeGreaterThan(0)
+    for (const t of drawn) {
+      expect(t.trim().startsWith(MARK)).toBe(false)
+      expect(t.trim()).not.toBe(MARK)
+    }
+    expect(drawn.join(' ')).toContain(`SYNTHETIC-1 ${MARK}`)
+  })
+  it('the clip reaches as high as the first line draws: a mark over the line box is not cut off', () => {
+    const { ctx, calls } = recorder()
+    const tall = new Proxy(ctx, {
+      get: (t, prop: string) => (prop === 'measureText' ? (x: string) => ({ width: x.length * 10, actualBoundingBoxAscent: x.includes(MARK) ? 40 * 1.28 : 40 * 0.8 }) : (t as unknown as Record<string, unknown>)[prop]),
+      set: (t, prop: string, v) => (((t as unknown as Record<string, unknown>)[prop] = v), true),
+    }) as unknown as Ctx
+    drawVerse(tall, { x: 0, y: 100, w: 2000, h: 200 }, 40, '#000000', text(`SYNTHETIC-A ${MARK} SYNTHETIC-B`))
+    const clip = calls.find((c) => c.op === 'rect')!
+    const clipTop = clip.args[1] as number
+    const markTop = 100 + (40 * 1.9) / 2 - 40 * 1.28
+    expect(clipTop).toBeLessThan(markTop)
+  })
+})
+
+describe('the Quran font gate', () => {
+  const face = (family: string, status: FontFaceLoadStatus) => ({ family, status }) as FontFace
+  it('is open only when an Amiri Quran face has LOADED (a failed face does not count)', () => {
+    expect(familyLoaded([face('"Amiri Quran"', 'loaded')], 'Amiri Quran')).toBe(true)
+    expect(familyLoaded([face('Amiri Quran', 'error')], 'Amiri Quran')).toBe(false)
+    expect(familyLoaded([face('Amiri Quran', 'loading'), face('IBM Plex Sans Arabic', 'loaded')], 'Amiri Quran')).toBe(false)
   })
 })
 

@@ -279,46 +279,85 @@ function drawText(ctx: Ctx, text: string, rect: Rect, size: number, color: strin
   ctx.restore()
 }
 
+/** A word made only of combining marks: Tanzil writes its pause marks (U+06D6-06DC) apart, between spaces. */
+const MARKS_ONLY = /^\p{M}+$/u
+
+/**
+ * A verse's words for laying out, each mark-only token kept with the word
+ * before it ("word ۛ"): a mark is never drawn on its own -- a canvas
+ * would draw it on a dotted circle -- and never starts a line (review of #304).
+ */
+export function verseTokens(text: string): string[] {
+  const out: string[] = []
+  for (const token of text.split(/ +/)) {
+    if (!token) continue
+    const last = out.length - 1
+    if (MARKS_ONLY.test(token) && last >= 0) out[last] = `${out[last]} ${token}`
+    else out.push(token)
+  }
+  return out
+}
+
+/** Tokens onto lines no wider than [maxWidth]; a token is never split. */
+export function wrapTokens(ctx: Pick<Ctx, 'measureText'>, tokens: string[], maxWidth: number): string[][] {
+  const lines: string[][] = []
+  let line: string[] = []
+  for (const token of tokens) {
+    if (line.length && ctx.measureText([...line, token].join(' ')).width > maxWidth) {
+      lines.push(line)
+      line = [token]
+    } else {
+      line.push(token)
+    }
+  }
+  if (line.length) lines.push(line)
+  return lines
+}
+
 /**
  * A verse in its box (§4.3): the Basmala on its own centred line (ayah 1 of
  * the surahs that carry it), then the ayat right to left, justified, each
  * closed by U+06DD with its number, never splitting a word, and never drawn
- * past its box.
+ * past its box. A justified line is drawn token by token, and a token always
+ * carries its pause marks.
  */
 export function drawVerse(ctx: Ctx, rect: Rect, size: number, color: string, text: AyahsAnswer) {
   const lh = size * 1.9
   const pad = size * 0.25
   ctx.save()
-  ctx.beginPath()
-  ctx.rect(rect.x - pad, rect.y - pad, rect.w + pad * 2, rect.h + pad * 2)
-  ctx.clip()
   ctx.font = `${size}px ${QURAN_FONT}`
   ctx.fillStyle = color
   ctx.direction = 'rtl'
   ctx.textBaseline = 'middle'
-  let y = rect.y
   const basmala = text.ayahs[0]?.basmala
-  if (basmala) {
-    ctx.textAlign = 'center'
-    for (const line of wrapLines(ctx, basmala, rect.w)) {
-      ctx.fillText(line, rect.x + rect.w / 2, y + lh / 2)
-      y += lh
-    }
+  const basmalaLines = basmala ? wrapTokens(ctx, verseTokens(basmala), rect.w) : []
+  const lines = wrapTokens(ctx, verseTokens(verseBody(text)), rect.w)
+  // A pause mark rides higher than the line box (about 1.3 em over the line's
+  // middle in Amiri Quran): the clip reaches as high as the first line really
+  // draws, so a mark is never cut off (review of #304).
+  const first = basmalaLines[0] ?? lines[0] ?? []
+  const reach = Math.max(0, ...first.map((t) => ctx.measureText(t).actualBoundingBoxAscent ?? 0)) - lh / 2
+  const top = Math.max(pad, reach + size * 0.05)
+  ctx.beginPath()
+  ctx.rect(rect.x - pad, rect.y - top, rect.w + pad * 2, rect.h + top + pad)
+  ctx.clip()
+  let y = rect.y
+  ctx.textAlign = 'center'
+  for (const line of basmalaLines) {
+    ctx.fillText(line.join(' '), rect.x + rect.w / 2, y + lh / 2)
+    y += lh
   }
   ctx.textAlign = 'right'
-  const lines = wrapLines(ctx, verseBody(text), rect.w)
-  lines.forEach((line, i) => {
-    const words = line.split(' ')
-    const last = i === lines.length - 1
-    if (last || words.length < 2) {
-      ctx.fillText(line, rect.x + rect.w, y + lh / 2)
+  lines.forEach((tokens, i) => {
+    if (i === lines.length - 1 || tokens.length < 2) {
+      ctx.fillText(tokens.join(' '), rect.x + rect.w, y + lh / 2)
     } else {
-      // Justified: the words placed right to left with the spare width shared between them.
-      const widths = words.map((w) => ctx.measureText(w).width)
-      const gap = (rect.w - widths.reduce((a, b) => a + b, 0)) / (words.length - 1)
+      // Justified: the tokens placed right to left with the spare width shared between them.
+      const widths = tokens.map((t) => ctx.measureText(t).width)
+      const gap = (rect.w - widths.reduce((a, b) => a + b, 0)) / (tokens.length - 1)
       let x = rect.x + rect.w
-      words.forEach((w, k) => {
-        ctx.fillText(w, x, y + lh / 2)
+      tokens.forEach((t, k) => {
+        ctx.fillText(t, x, y + lh / 2)
         x -= (widths[k] ?? 0) + gap
       })
     }

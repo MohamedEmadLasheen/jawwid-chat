@@ -148,6 +148,10 @@ describe('PD-39 staff board viewer', () => {
     await waitFor(() => expect(drawn).toContain('SYNTHETIC-BASMALA'))
     expect(drawn).toContain('ممتاز')
     expect(screen.getByText('Quran text: Synthetic test data')).toBeInTheDocument()
+    // What the canvas shows, as text for a screen reader; a verse by its reference.
+    const said = screen.getByRole('list', { name: 'Text on this page' })
+    expect(within(said).getByText('Quran: surah 1, ayat 1 to 7')).toBeInTheDocument()
+    expect(within(said).getByText('ممتاز')).toBeInTheDocument()
     // A supervisor reads; the history and the copy are the Teachers Manager's.
     expect(screen.queryByRole('button', { name: /Copy|Edit|Delete|Restore|Save/ })).not.toBeInTheDocument()
     expect(screen.queryByText('Access history')).not.toBeInTheDocument()
@@ -194,6 +198,8 @@ describe('PD-39 staff board viewer', () => {
     expect(await within(dialog).findByText('Copied. Teacher Three now has «Al-Fatihah review» among their boards.')).toBeInTheDocument()
     expect(writes()).toHaveLength(1)
     expect(JSON.parse(String((calls('POST', /\/copy$/)[0]![1] as RequestInit).body))).toEqual({ teacherId: T3 })
+    // A key per intended copy: a retry answers the same copy (the server keeps it in the log).
+    expect(new Headers((calls('POST', /\/copy$/)[0]![1] as RequestInit).headers).get('Idempotency-Key')).toMatch(/.+/)
   })
 
   it('the super admin reaches the same pages from Admin > Teachers', async () => {

@@ -31,7 +31,7 @@ export function useAccessLog(boardId: string, enabled: boolean) {
 export function useCopyBoard(boardId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (teacherId: string) => teacherBoardsApi.copy(boardId, teacherId),
+    mutationFn: ({ teacherId, key }: { teacherId: string; key: string }) => teacherBoardsApi.copy(boardId, teacherId, key),
     onSuccess: () => client.invalidateQueries({ queryKey: teacherBoardsKeys.accessLog(boardId) }),
   })
 }

@@ -49,6 +49,8 @@ export const B = {
   image: { en: 'Image (not shown here yet)', ar: 'صورة (لا تُعرض هنا بعد)' },
   unknownKind: { en: 'Not shown here: {kind}', ar: 'لا يُعرض هنا: {kind}' },
   quranSource: { en: 'Quran text: {source}', ar: 'نص القرآن: {source}' },
+  pageText: { en: 'Text on this page', ar: 'النصوص في هذه الصفحة' },
+  verseRef: { en: 'Quran: surah {surah}, ayat {from} to {to}', ar: 'القرآن: سورة {surah}، الآيات {from} إلى {to}' },
 
   history: { en: 'Access history', ar: 'سجل الوصول' },
   showHistory: { en: 'Show access history', ar: 'عرض سجل الوصول' },

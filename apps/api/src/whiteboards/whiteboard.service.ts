@@ -443,12 +443,25 @@ export class WhiteboardService {
    * §10 4a: a departed teacher's board, given to an active teacher as a new
    * board of their own. The original is unchanged and keeps its 12 months.
    */
-  async copyToTeacher(boardId: string, body: Record<string, unknown>, actor: Actor): Promise<BoardSummary> {
+  async copyToTeacher(boardId: string, body: Record<string, unknown>, actor: Actor, idempotencyKey?: string): Promise<BoardSummary> {
     const target = this.uuid(body.teacherId, 'teacherId');
     if (currentImpersonationId()) throw new CommError(CommErrorCode.WHITEBOARD_DENIED, 'a support session never copies a board');
+    const key = idempotencyKey === undefined || idempotencyKey === '' ? null : idempotencyKey;
+    if (key !== null && (key.length > 200 || !/^[\x21-\x7e]+$/.test(key))) throw invalid('Idempotency-Key: 1-200 visible characters');
     return this.write(async (tx) => {
       const source = await this.readableBoard(tx, boardId, actor);
       const basis = await this.readerBasis(tx, actor, source.teacher_id);
+      if (key !== null) {
+        // A retry of the same copy (review of #304): the copy it made, never a second one.
+        // The target's lock serializes two retries in flight; the log row is the record.
+        await this.lockTeacher(tx, target);
+        const [done] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT}
+          WHERE w.id = (SELECT (l.detail ->> 'toBoardId')::uuid FROM chat.whiteboard_access_log l
+                         WHERE l.board_id = ${source.id}::uuid AND l.action = 'copy'
+                           AND l.viewer_id = ${actor.actorId}::uuid AND l.detail ->> 'idempotencyKey' = ${key}
+                         ORDER BY l.id DESC LIMIT 1)`;
+        if (done) return summary(done);
+      }
       if (source.state !== 'retained') throw state("only a departed teacher's board is copied to another teacher");
       const [teacher] = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id::text AS id FROM chat.teacher
@@ -458,7 +471,7 @@ export class WhiteboardService {
       await this.assertBoardRoom(tx, target);
       const copy = await this.copyBoard(tx, source, target, source.organization_id, source.title);
       await this.assertQuota(tx, target);
-      await this.record(tx, source, { id: actor.actorId, kind: 'staff', basis }, 'copy', { toBoardId: copy, toTeacherId: target });
+      await this.record(tx, source, { id: actor.actorId, kind: 'staff', basis }, 'copy', { toBoardId: copy, toTeacherId: target, ...(key !== null ? { idempotencyKey: key } : {}) });
       const [row] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${copy}::uuid`;
       return summary(row);
     });

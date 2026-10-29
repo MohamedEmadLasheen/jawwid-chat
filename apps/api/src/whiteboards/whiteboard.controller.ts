@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, HttpCode, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { CurrentActor } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
@@ -162,7 +162,7 @@ export class TeacherBoardsController {
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
   @Post(':id/copy')
   @HttpCode(201)
-  copy(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
-    return this.boards.copyToTeacher(id, body ?? {}, actor);
+  copy(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor, @Headers('idempotency-key') key?: string) {
+    return this.boards.copyToTeacher(id, body ?? {}, actor, key);
   }
 }

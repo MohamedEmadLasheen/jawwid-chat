@@ -361,6 +361,25 @@ describe('§10 4a, 4c: a teacher who leaves', () => {
     await exec(`update chat.teacher set is_active = true, left_at = null where id = $1::uuid`, s.teacherId);
     expect(await boards.list(t)).toEqual([expect.objectContaining({ id: b.id, state: 'active', retainedUntil: null })]);
   });
+
+  it('a copy retried with the same key is the same copy: two clicks, or a lost answer, never make two', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Once' }, t);
+    await exec(`update chat.teacher set is_active = false, left_at = now() where id = $1::uuid`, s.teacherId);
+    const mgr = staff(tmgr, 'manager');
+    const [first, second] = await Promise.all([
+      boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-1'),
+      boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-1'),
+    ]);
+    expect(second.id).toBe(first.id);
+    const third = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-1');
+    expect(third.id).toBe(first.id);
+    expect((await boards.list(teacher(s.newTeacherId))).filter((x) => x.title === 'Once')).toHaveLength(1);
+    expect((await log(b.id)).filter((r) => r.action === 'copy')).toHaveLength(1);
+    // A new key is a new copy, as asked.
+    const another = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-2');
+    expect(another.id).not.toBe(first.id);
+  });
 });
 
 describe('limits and concurrency', () => {

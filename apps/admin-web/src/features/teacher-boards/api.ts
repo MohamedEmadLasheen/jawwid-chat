@@ -61,7 +61,8 @@ export const teacherBoardsApi = {
   list: (teacherId: string) => api.get<BoardSummary[]>('/teacher-boards', { teacherId }),
   board: (boardId: string) => api.get<BoardDetail>(`/teacher-boards/${seg(boardId)}`),
   accessLog: (boardId: string) => api.get<AccessLogEntry[]>(`/teacher-boards/${seg(boardId)}/access-log`),
-  copy: (boardId: string, teacherId: string) => api.post<BoardSummary>(`/teacher-boards/${seg(boardId)}/copy`, { teacherId }),
+  /** `key` makes a retry of the same copy answer the first copy, never make a second one. */
+  copy: (boardId: string, teacherId: string, key: string) => api.post<BoardSummary>(`/teacher-boards/${seg(boardId)}/copy`, { teacherId }, key),
   /** The verified text of one verse element's range (PD-29 P0-2, shared with PD-39). */
   ayahs: (ref: VerseRef) => api.get<AyahsAnswer>('/quran/ayahs', { surah: ref.surah, from: ref.fromAyah, to: ref.toAyah }),
 }
