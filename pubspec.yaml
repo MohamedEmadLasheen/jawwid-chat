@@ -123,6 +123,10 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   mocktail: ^1.0.5
+  # PD-39: the font test checks AmiriQuran.ttf's SHA-256 against the pinned
+  # value. dart.dev's own package, already in the lock (through the web
+  # plugins) at this exact version: declaring it adds nothing to the build.
+  crypto: ^3.0.7
 
 flutter:
   uses-material-design: true

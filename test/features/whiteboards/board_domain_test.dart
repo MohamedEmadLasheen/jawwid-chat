@@ -207,4 +207,23 @@ void main() {
       expect(storedJsonBytes(<String, Object?>{}), 2);
     });
   });
+
+  test('a verse resizes as one: both sides and its type by the same factor', () {
+    final v = VerseElement(
+      id: 'v',
+      surah: 1,
+      fromAyah: 1,
+      toAyah: 7,
+      datasetId: 'd',
+      rangeSha256: 'a' * 64,
+      rect: const Rect.fromLTWH(100, 100, 1000, 400),
+      fontSize: 50,
+      color: const Color(0xFF000000),
+    );
+    final r = v.scaled(const Offset(100, 100), 1.5, 0.2) as VerseElement;
+    expect(r.rect, const Rect.fromLTWH(100, 100, 1500, 600));
+    expect(r.fontSize, 75);
+    // The type stays legible and bounded: 16..240.
+    expect((v.scaled(const Offset(100, 100), 0.01, 1) as VerseElement).fontSize, 16);
+  });
 }

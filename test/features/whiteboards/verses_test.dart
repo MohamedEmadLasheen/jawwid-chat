@@ -2,6 +2,8 @@
 // verified dataset. The texts here are SYNTHETIC placeholders, never Quran
 // text: a test proves the plumbing, the dataset proves the words.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,7 +25,8 @@ import 'package:jawwid_chat/shared/models/materials.dart';
 
 final _range = 'b' * 64;
 
-VerseText _text(int from, int to, {String? range, bool basmala = false}) => VerseText(
+VerseText _text(int from, int to, {String? range, bool basmala = false, int surah = 2}) => VerseText(
+  surah: surah,
   datasetId: 'tanzil-uthmani-1.1',
   rangeSha256: range ?? _range,
   attribution: 'Tanzil Project — tanzil.net',
@@ -34,14 +37,21 @@ VerseText _text(int from, int to, {String? range, bool basmala = false}) => Vers
 
 class _Quran implements QuranTextRepository {
   Object? error;
-  String range = 'b' * 64;
   final asked = <(int, int, int)>[];
+
+  /// When set, every answer waits for it (a slow network).
+  Completer<void>? hold;
+
+  /// A broken server: answers this range whatever is asked.
+  (int, int)? answersInstead;
 
   @override
   Future<VerseText> ayahs(int surah, int from, int to) async {
     asked.add((surah, from, to));
+    if (hold != null) await hold!.future;
     if (error != null) throw error!;
-    return _text(from, to, range: range, basmala: true);
+    final (f, t) = answersInstead ?? (from, to);
+    return _text(f, t, basmala: true, surah: surah);
   }
 }
 
@@ -114,15 +124,33 @@ void main() {
       expect(cache.lookup(_verse(range: 'c' * 64)).status, VerseStatus.changed);
     });
 
-    test('an unavailable dataset (503) shows no text, and is asked again later', () async {
+    test('P0: a text that is not exactly the reference\'s ayat is never shown under it', () {
+      final cache = container.read(verseCacheProvider.notifier);
+      // remember() refuses another range's text outright...
+      cache.remember(_verse(), _text(4, 6));
+      expect(cache.lookup(_verse()).status, VerseStatus.loading);
+      // ...and lookup refuses one that slipped in under the key.
+      container.read(verseCacheProvider.notifier).state = {_verse().rangeKey: VerseLookup(VerseStatus.ready, _text(4, 6))};
+      expect(cache.lookup(_verse()).status, VerseStatus.unavailable);
+      expect(_text(1, 3).covers(2, 1, 3), isTrue);
+      expect(_text(1, 3, surah: 3).covers(2, 1, 3), isFalse);
+    });
+
+    testWidgets('P1: an unavailable dataset is not asked again on every rebuild, only after a back-off', (tester) async {
       quran.error = Exception('COMM.QURAN_UNAVAILABLE');
       final cache = container.read(verseCacheProvider.notifier);
       cache.ensure([_verse()]);
-      await Future<void>.delayed(Duration.zero);
+      await tester.pump();
       expect(cache.lookup(_verse()).status, VerseStatus.unavailable);
+      for (var i = 0; i < 20; i++) {
+        cache.ensure([_verse()]);
+      }
+      await tester.pump(const Duration(seconds: 1));
+      expect(quran.asked, hasLength(1));
       quran.error = null;
-      cache.ensure([_verse()]);
-      await Future<void>.delayed(Duration.zero);
+      await tester.pump(VerseCache.firstRetry);
+      await tester.pump();
+      expect(quran.asked, hasLength(2));
       expect(cache.lookup(_verse()).status, VerseStatus.ready);
     });
   });
@@ -176,4 +204,76 @@ void main() {
     await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
     await tester.pumpAndSettle();
   });
+
+  group('P0: the picker inserts exactly the text it shows', () {
+    Future<L10n> openPicker(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            theme: JawwidTheme.light(isArabic: false),
+            supportedLocales: JawwidApp.supportedLocales,
+            localizationsDelegates: const [
+              L10n.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const BoardEditorScreen(boardId: 'b1'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final l10n = await L10n.delegate.load(const Locale('en'));
+      await tester.tap(find.byTooltip(l10n.boardToolVerse));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownMenu<Surah>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2. Surah Two').last);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      return l10n;
+    }
+
+    FilledButton insert(L10n l10n) => tester0!.widget<FilledButton>(find.widgetWithText(FilledButton, l10n.boardVerseInsert));
+
+    testWidgets('changing the range turns Insert off until THAT range has arrived', (tester) async {
+      tester0 = tester;
+      final l10n = await openPicker(tester);
+      expect(insert(l10n).onPressed, isNotNull); // 2:1-7 shown
+      quran.hold = Completer<void>();
+      // Choose "to ayah" 3: before the debounce and during the fetch, Insert is off.
+      await tester.tap(find.byType(DropdownButtonFormField<int>).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('3').last);
+      await tester.pump();
+      expect(insert(l10n).onPressed, isNull, reason: 'before the fetch');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(insert(l10n).onPressed, isNull, reason: 'during the fetch');
+      quran.hold!.complete();
+      quran.hold = null;
+      await tester.pumpAndSettle();
+      expect(insert(l10n).onPressed, isNotNull);
+      await tester.tap(find.text(l10n.boardVerseInsert));
+      await tester.pumpAndSettle();
+      final verse = container.read(boardEditorProvider('b1')).value!.page.elements.single as VerseElement;
+      expect((verse.surah, verse.fromAyah, verse.toAyah), (2, 1, 3));
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('an answer for another range (a broken server) is never insertable', (tester) async {
+      tester0 = tester;
+      quran.answersInstead = (4, 6);
+      final l10n = await openPicker(tester);
+      expect(insert(l10n).onPressed, isNull);
+      expect(find.textContaining('SYNTHETIC-4'), findsNothing);
+    });
+  });
 }
+
+WidgetTester? tester0;

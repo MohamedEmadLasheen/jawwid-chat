@@ -12,13 +12,16 @@ import '../data/quran_text_repository.dart';
 import 'board_painter.dart';
 
 /// The verse the teacher chose: its range and its verified text.
+/// The range is the TEXT's own (review of #295, P0): what is inserted is
+/// always exactly what was shown.
 class PickedVerse {
-  const PickedVerse({required this.surah, required this.from, required this.to, required this.text});
+  const PickedVerse(this.text);
 
-  final int surah;
-  final int from;
-  final int to;
   final VerseText text;
+
+  int get surah => text.surah;
+  int get from => text.from;
+  int get to => text.to;
 }
 
 /// At most this many ayat in one verse element (the server's limit too).
@@ -42,8 +45,19 @@ class _VersePickerState extends ConsumerState<_VersePicker> {
   Surah? _surah;
   int _from = 1;
   int _to = 1;
-  Future<VerseText>? _preview;
   Timer? _debounce;
+
+  /// The preview shown, and whether it failed. A request carries its number;
+  /// only the latest one's answer is ever shown (review of #295, P0).
+  VerseText? _loaded;
+  bool _failed = false;
+  int _request = 0;
+
+  /// The preview is exactly the current choice: the only state Insert accepts.
+  bool get _ready {
+    final s = _surah;
+    return s != null && _loaded != null && _loaded!.covers(s.number, _from, _to);
+  }
 
   @override
   void initState() {
@@ -75,16 +89,34 @@ class _VersePickerState extends ConsumerState<_VersePicker> {
     _refresh();
   }
 
+  /// A new choice: the old preview goes at once (Insert is off until the new
+  /// one arrives), then the new range is asked for.
   void _refresh() {
     _debounce?.cancel();
+    final request = ++_request;
+    setState(() {
+      _loaded = null;
+      _failed = false;
+    });
     final s = _surah;
     if (s == null) return;
-    _debounce = Timer(const Duration(milliseconds: 250), () {
-      if (!mounted) return;
-      final preview = ref.read(quranTextRepositoryProvider).ayahs(s.number, _from, _to);
-      setState(() {
-        _preview = preview;
-      });
+    final (surah, from, to) = (s.number, _from, _to);
+    _debounce = Timer(const Duration(milliseconds: 250), () async {
+      try {
+        final text = await ref.read(quranTextRepositoryProvider).ayahs(surah, from, to);
+        if (!mounted || request != _request) return;
+        // Another range's text (a broken answer) is never shown, never insertable.
+        setState(() {
+          if (text.covers(surah, from, to)) {
+            _loaded = text;
+          } else {
+            _failed = true;
+          }
+        });
+      } on Object {
+        if (!mounted || request != _request) return;
+        setState(() => _failed = true);
+      }
     });
   }
 
@@ -156,14 +188,11 @@ class _VersePickerState extends ConsumerState<_VersePicker> {
               const SizedBox(height: Spacing.spacing4),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 260),
-                child: FutureBuilder<VerseText>(
-                  future: _preview,
-                  builder: (context, snap) {
-                    if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-                    if (snap.hasError || snap.data == null) {
-                      return Text(l10n.boardVerseUnavailable, style: TextStyle(color: tokens.colorStatusDangerFg));
-                    }
-                    final text = snap.data!;
+                child: Builder(
+                  builder: (context) {
+                    if (_failed) return Text(l10n.boardVerseUnavailable, style: TextStyle(color: tokens.colorStatusDangerFg));
+                    if (!_ready) return const Center(child: CircularProgressIndicator());
+                    final text = _loaded!;
                     return SingleChildScrollView(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -198,15 +227,7 @@ class _VersePickerState extends ConsumerState<_VersePicker> {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.boardsCancel)),
-        FutureBuilder<VerseText>(
-          future: _preview,
-          builder: (context, snap) => FilledButton(
-            onPressed: s == null || snap.data == null
-                ? null
-                : () => Navigator.of(context).pop(PickedVerse(surah: s.number, from: _from, to: _to, text: snap.data!)),
-            child: Text(l10n.boardVerseInsert),
-          ),
-        ),
+        FilledButton(onPressed: _ready ? () => Navigator.of(context).pop(PickedVerse(_loaded!)) : null, child: Text(l10n.boardVerseInsert)),
       ],
     );
   }

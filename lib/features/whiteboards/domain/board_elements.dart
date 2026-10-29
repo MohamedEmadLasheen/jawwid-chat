@@ -395,10 +395,18 @@ class VerseElement extends BoardElement {
   @override
   BoardElement translated(Offset delta) => copyWith(rect: rect.shift(delta));
 
+  /// A verse scales as one: both sides and the type by the same factor (the
+  /// width's), so the text always fits the box it was laid out in.
   @override
   BoardElement scaled(Offset anchor, double sx, double sy) {
-    final r = _scaleRect(rect, anchor, sx, sy);
-    return copyWith(rect: r, fontSize: (fontSize * sx.abs()).clamp(16, 240).toDouble());
+    final k = (fontSize * sx.abs()).clamp(16, 240) / fontSize;
+    final r = Rect.fromLTWH(
+      anchor.dx + (rect.left - anchor.dx) * k,
+      anchor.dy + (rect.top - anchor.dy) * k,
+      rect.width * k,
+      rect.height * k,
+    );
+    return copyWith(rect: r, fontSize: fontSize * k);
   }
 
   @override

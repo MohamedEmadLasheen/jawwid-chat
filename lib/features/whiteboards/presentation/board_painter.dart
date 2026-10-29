@@ -220,14 +220,19 @@ double verseHeight(VerseText text, double fontSize, double width) {
   return (laid.basmala?.height ?? 0) + laid.text.height;
 }
 
+/// Drawn within its box, never past it: a verse never spills over what is
+/// around it on the page.
 void paintVerse(Canvas canvas, VerseElement v, VerseText text) {
   final laid = layoutVerse(text, v.fontSize, v.color, v.rect.width);
+  canvas.save();
+  canvas.clipRect(v.rect.inflate(v.fontSize * 0.25));
   var y = v.rect.top;
   if (laid.basmala != null) {
     laid.basmala!.paint(canvas, Offset(v.rect.left, y));
     y += laid.basmala!.height;
   }
   laid.text.paint(canvas, Offset(v.rect.left, y));
+  canvas.restore();
 }
 
 /// A pen stroke widens with pressure; a stroke from a mouse (no pressure) and
