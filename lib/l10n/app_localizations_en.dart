@@ -1259,6 +1259,15 @@ class L10nEn extends L10n {
   String get cardReason => 'Reason';
 
   @override
+  String get cardMakeupLesson => 'Make-up lesson';
+
+  @override
+  String get cardMakeupInsteadOf => 'Instead of the lesson on';
+
+  @override
+  String get cardStaffReason => 'Reason (staff and the teacher only)';
+
+  @override
   String get ticketBookMakeup => 'Book the make-up lesson';
 
   @override
@@ -4345,6 +4354,314 @@ class L10nEn extends L10n {
 
   @override
   String get lessonAudioTermsTitle => 'Terms and privacy';
+
+  @override
+  String get tabBoards => 'Boards';
+
+  @override
+  String get boardsTitle => 'Boards';
+
+  @override
+  String get boardsInUse => 'Boards';
+
+  @override
+  String get boardsDeleted => 'Deleted boards';
+
+  @override
+  String get boardsEmpty => 'No boards yet. Create one to start drawing.';
+
+  @override
+  String get boardsDeletedEmpty => 'Nothing in Deleted boards.';
+
+  @override
+  String get boardsDeletedFooter =>
+      'Boards in Deleted boards are restorable for 30 days, then deleted for good within 60 days.';
+
+  @override
+  String get boardsNew => 'New board';
+
+  @override
+  String get boardsTitleLabel => 'Board name';
+
+  @override
+  String get boardsUntitled => 'Untitled board';
+
+  @override
+  String get boardsCreate => 'Create';
+
+  @override
+  String get boardsCancel => 'Cancel';
+
+  @override
+  String get boardsSave => 'Save';
+
+  @override
+  String get boardsRename => 'Rename';
+
+  @override
+  String get boardsDuplicate => 'Duplicate';
+
+  @override
+  String get boardsDelete => 'Delete';
+
+  @override
+  String get boardsRestore => 'Restore';
+
+  @override
+  String boardsPages(String count) {
+    return 'Pages: $count';
+  }
+
+  @override
+  String boardsUpdated(String date) {
+    return 'Updated $date';
+  }
+
+  @override
+  String boardsDeleteTitle(String title) {
+    return 'Move «$title» to Deleted boards?';
+  }
+
+  @override
+  String boardsDeleteBody(String date) {
+    return 'You can restore it until $date. After that it is deleted for good.';
+  }
+
+  @override
+  String boardsDeletedOnUntil(String deleted, String until) {
+    return 'Deleted on $deleted · Restorable until $until';
+  }
+
+  @override
+  String get boardsRestored => 'Board restored.';
+
+  @override
+  String get boardsMovedToTrash => 'Moved to Deleted boards.';
+
+  @override
+  String get boardSaved => 'Saved';
+
+  @override
+  String get boardSaving => 'Saving…';
+
+  @override
+  String get boardUnsaved => 'Not saved yet';
+
+  @override
+  String get boardConflictTitle => 'This board changed somewhere else';
+
+  @override
+  String get boardConflictBody =>
+      'It was edited in another tab or device. Reload it to see that version, or keep yours as a new board.';
+
+  @override
+  String get boardConflictReload => 'Reload';
+
+  @override
+  String get boardConflictCopy => 'Keep mine as a copy';
+
+  @override
+  String boardCopyTitle(String title) {
+    return '$title (copy)';
+  }
+
+  @override
+  String get boardFailedLimit =>
+      'This board has reached a limit: a page holds up to 512 KB, a board 50 pages, and your boards 25 MB of drawings.';
+
+  @override
+  String get boardFailedInvalid => 'This change could not be saved.';
+
+  @override
+  String get boardFailedOther => 'The board could not be saved. Try again.';
+
+  @override
+  String get boardReadOnly => 'View only';
+
+  @override
+  String get boardEditNeedsLargerScreen =>
+      'Editing boards needs a laptop or tablet. You can view this board here.';
+
+  @override
+  String get boardEditBrowserUnsupported =>
+      'This browser can\'t edit boards. Try the latest Chrome, Edge, Safari or Firefox.';
+
+  @override
+  String boardPageOf(String page, String count) {
+    return 'Page $page of $count';
+  }
+
+  @override
+  String get boardAddPage => 'Add page';
+
+  @override
+  String get boardDuplicatePage => 'Duplicate page';
+
+  @override
+  String get boardDeletePage => 'Delete page';
+
+  @override
+  String get boardMovePageEarlier => 'Move page earlier';
+
+  @override
+  String get boardMovePageLater => 'Move page later';
+
+  @override
+  String get boardLayout => 'Lines';
+
+  @override
+  String get boardBackground => 'Page colour';
+
+  @override
+  String get boardLayoutPlain => 'Plain';
+
+  @override
+  String get boardLayoutRuled => 'Ruled';
+
+  @override
+  String get boardLayoutNarrowRuled => 'Narrow ruled';
+
+  @override
+  String get boardLayoutGrid => 'Grid';
+
+  @override
+  String get boardLayoutArabicLines => 'Arabic handwriting lines';
+
+  @override
+  String get boardBackgroundWhite => 'White';
+
+  @override
+  String get boardBackgroundCream => 'Cream';
+
+  @override
+  String get boardBackgroundGrey => 'Grey';
+
+  @override
+  String get boardBackgroundGreen => 'Blackboard green';
+
+  @override
+  String get boardBackgroundDark => 'Dark';
+
+  @override
+  String get boardToolSelect => 'Select';
+
+  @override
+  String get boardToolHand => 'Move the view';
+
+  @override
+  String get boardToolPen => 'Pen';
+
+  @override
+  String get boardToolHighlighter => 'Highlighter';
+
+  @override
+  String get boardToolEraser => 'Eraser (whole strokes)';
+
+  @override
+  String get boardToolAreaEraser => 'Eraser (area)';
+
+  @override
+  String get boardToolText => 'Text';
+
+  @override
+  String get boardToolRect => 'Rectangle';
+
+  @override
+  String get boardToolEllipse => 'Circle';
+
+  @override
+  String get boardToolTriangle => 'Triangle';
+
+  @override
+  String get boardToolLine => 'Line';
+
+  @override
+  String get boardToolArrow => 'Arrow';
+
+  @override
+  String get boardToolStamp => 'Stamp';
+
+  @override
+  String get boardUndo => 'Undo';
+
+  @override
+  String get boardRedo => 'Redo';
+
+  @override
+  String get boardZoomIn => 'Zoom in';
+
+  @override
+  String get boardZoomOut => 'Zoom out';
+
+  @override
+  String get boardZoomFit => 'Fit page';
+
+  @override
+  String get boardDeleteSelection => 'Delete selection';
+
+  @override
+  String get boardColour => 'Colour';
+
+  @override
+  String get boardThickness => 'Thickness';
+
+  @override
+  String get boardTajweed => 'Tajweed';
+
+  @override
+  String get boardTajweedMadd => 'Madd';
+
+  @override
+  String get boardTajweedGhunnah => 'Ghunnah';
+
+  @override
+  String get boardTajweedIkhfa => 'Ikhfa\'';
+
+  @override
+  String get boardTajweedIzhar => 'Izhar';
+
+  @override
+  String get boardTextTitle => 'Text';
+
+  @override
+  String get boardTextHint => 'Write here';
+
+  @override
+  String get boardVersePlaceholder => 'Quran verse';
+
+  @override
+  String get boardElementUnknown => 'Not shown in this version';
+
+  @override
+  String get boardStampExcellent => 'Excellent';
+
+  @override
+  String get boardStampWellDone => 'Well done';
+
+  @override
+  String get boardMore => 'More';
+
+  @override
+  String get boardDraftStale =>
+      'You have changes from an earlier visit that were not saved, on pages that have changed since. Keep yours (they replace those pages) or discard them.';
+
+  @override
+  String get boardDraftStaleKeep => 'Keep mine';
+
+  @override
+  String get boardDraftStaleDiscard => 'Discard';
+
+  @override
+  String get boardDraftNotKept =>
+      'Your unsaved changes couldn\'t be kept on this device. Stay on this board until it says Saved.';
+
+  @override
+  String get boardPageFull =>
+      'This page is full (512 KB). Add a new page to keep writing; nothing more is saved on this one.';
+
+  @override
+  String get boardSaveFirst =>
+      'Your changes have to be saved first. Try again once the board says Saved.';
 
   @override
   String get pickerSearchHint => 'Type to search';

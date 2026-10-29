@@ -28,6 +28,7 @@ import {
   Visibility,
 } from '../communication/contracts/vocab';
 import { renderCardBody, type CardLanguage } from './lesson-card';
+import { MAKEUP_OWED_CARD_KINDS, owesMakeup } from '../communication/messages/owed-makeup';
 import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
 import { lessonPosition } from '../billing/subscription-reads';
 import type { SubscriptionLockReader } from '../platform/subscription-lock';
@@ -1159,6 +1160,29 @@ export class LessonService {
       return rows.map((r) => r.learnerId);
     }
     return [];
+  }
+
+  /**
+   * A make-up was booked for `missedLessonId`, or that make-up was moved. The
+   * card that said a make-up is owed is written once (chat.guard_message_card);
+   * every read joins its live make-up (owed-makeup.ts). This tells open threads
+   * to re-read it, so "excused -- make-up on ..." appears without a reload.
+   */
+  async announceOwedCard(tx: Tx, missedLessonId: string) {
+    const cards = await tx.messageCard.findMany({
+      where: { lessonId: missedLessonId, kind: { in: [...MAKEUP_OWED_CARD_KINDS] }, message: { deletedForAll: false } },
+      include: { message: { select: { conversationId: true, visibility: true } } },
+    });
+    const now = new Date().toISOString();
+    for (const c of cards) {
+      if (!c.message.conversationId || !owesMakeup(c.kind, (c.payload ?? {}) as Record<string, unknown>)) continue;
+      await this.outbox.enqueue(tx, CommEvent.MESSAGE_UPDATED, {
+        conversationId: c.message.conversationId,
+        messageId: c.messageId,
+        visibility: c.message.visibility,
+        editedAt: now,
+      });
+    }
   }
 
   cardBase(lesson: LessonWithRelations) {
