@@ -74,9 +74,17 @@ model Family {
   tier                   String    @default("standard")
   state                  String    @default("onboarding")
   language               String    @default("ar")
-  /// Story targeting (20261017120000). Owned by Jawwid Core; an admin sets them
-  /// until the Core projection writes them. ISO 3166-1 alpha-2.
+  /// ISO 3166-1 alpha-2 (PD-45: one of chat.geo_country). Stories targeting
+  /// (20261017120000) and the parsing of a stored local-format phone read it.
   countryCode            String?   @map("country_code")
+  /// PD-45: first-level ISO 3166-2 (governorate, emirate, province, state),
+  /// always one of countryCode's (composite FK to chat.geo_subdivision).
+  subdivisionCode        String?   @map("subdivision_code")
+  /// PD-45: staff | parent | backfill -- who last set the location.
+  locationSource         String?   @map("location_source")
+  locationUpdatedAt      DateTime? @map("location_updated_at") @db.Timestamptz
+  /// PD-45: the chat.staff (staff) or chat.contact (parent) id; null for the backfill.
+  locationUpdatedBy      String?   @map("location_updated_by") @db.Uuid
   /// Length of the subscription PLAN in months: 1, 3, 6 or 12.
   subscriptionPlanMonths Int?      @map("subscription_plan_months") @db.SmallInt
   /// admin | core -- who last wrote the two columns above.
@@ -2133,6 +2141,9 @@ model TrialSubscription {
   updatedBy           String?   @map("updated_by") @db.Uuid
   updatedAt           DateTime? @map("updated_at") @db.Timestamptz
   withdrawnAt         DateTime? @map("withdrawn_at") @db.Timestamptz
+  /// PD-45: the family's location as Sales recorded it; Assign copies it.
+  countryCode         String?   @map("country_code")
+  subdivisionCode     String?   @map("subdivision_code")
 
   @@map("trial_subscription")
   @@schema("chat")
@@ -2930,5 +2941,55 @@ model RenewalRequest {
   requestedAt    DateTime @default(now()) @map("requested_at") @db.Timestamptz
 
   @@map("renewal_request")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-45 -- 20261030030000_chat_pd045_parent_location.sql owns the DDL and
+// the seed. Codes only; the names are apps/api/src/geo/dataset.json.
+// =====================================================================
+
+/// Every country a family may live in (ISO 3166-1 alpha-2, CLDR 49). Fixed by its migration.
+model GeoCountry {
+  code      String    @id
+  retiredAt DateTime? @map("retired_at") @db.Timestamptz
+
+  @@map("geo_country")
+  @@schema("chat")
+}
+
+/// Every first-level ISO 3166-2 subdivision, under its country. Fixed by its migration.
+model GeoSubdivision {
+  countryCode String    @map("country_code")
+  code        String
+  retiredAt   DateTime? @map("retired_at") @db.Timestamptz
+
+  @@id([countryCode, code])
+  @@map("geo_subdivision")
+  @@schema("chat")
+}
+
+/// A parent answered the app's one-time location prompt (saved, or Later). Never asked again.
+model ContactLocationPrompt {
+  contactId  String   @id @map("contact_id") @db.Uuid
+  outcome    String
+  answeredAt DateTime @default(now()) @map("answered_at") @db.Timestamptz
+
+  @@map("contact_location_prompt")
+  @@schema("chat")
+}
+
+/// PD-45 (owner 2026-10-29): the location given at trial booking, BESIDE the
+/// prospect (BR-2). Read only to pre-fill Sales' subscription form
+/// (trial-prospect-location-confinement.spec.ts).
+model TrialProspectLocation {
+  prospectId      String   @id @map("prospect_id") @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  countryCode     String   @map("country_code")
+  subdivisionCode String?  @map("subdivision_code")
+  recordedBy      String   @map("recorded_by") @db.Uuid
+  recordedAt      DateTime @default(now()) @map("recorded_at") @db.Timestamptz
+
+  @@map("trial_prospect_location")
   @@schema("chat")
 }

@@ -114,6 +114,12 @@ jobs:
         # is written, and pinned.ts, data/quran/<id>.json and the file agree.
         run: bash scripts/qa/guards.sh quran-dataset
 
+      - name: PD-45 · the country and subdivision dataset is exactly what its pinned CLDR files and reviewed overlay build
+        # Downloads the CLDR 49 files pinned in data/geo/cldr-49.json (refusing
+        # any whose SHA-256 differs) and rebuilds apps/api/src/geo/dataset.json,
+        # its licence notice and the migration's seed with --check.
+        run: bash scripts/qa/guards.sh geo-dataset
+
       - name: PD-40 · every API route declares the permission it asks of staff
         # A route with no @Requires / @SelfService / @NotForStaff / @Public is
         # refused to staff by PermissionGuard; this fails the build first.

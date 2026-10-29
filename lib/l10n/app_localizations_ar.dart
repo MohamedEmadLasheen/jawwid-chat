@@ -1300,6 +1300,15 @@ class L10nAr extends L10n {
   String get cardReason => 'السبب';
 
   @override
+  String get cardMakeupLesson => 'الحصة التعويضية';
+
+  @override
+  String get cardMakeupInsteadOf => 'بدلًا من حصة';
+
+  @override
+  String get cardStaffReason => 'السبب (للإدارة والمعلم فقط)';
+
+  @override
   String get ticketBookMakeup => 'حجز حصة التعويض';
 
   @override

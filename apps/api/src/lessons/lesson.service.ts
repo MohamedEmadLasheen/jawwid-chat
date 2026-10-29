@@ -28,6 +28,7 @@ import {
   Visibility,
 } from '../communication/contracts/vocab';
 import { renderCardBody, type CardLanguage } from './lesson-card';
+import { MAKEUP_OWED_CARD_KINDS, owesMakeup } from '../communication/messages/owed-makeup';
 import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
 import { lessonPosition } from '../billing/subscription-reads';
 import type { SubscriptionLockReader } from '../platform/subscription-lock';
@@ -431,16 +432,13 @@ export class LessonService {
       SELECT l.id::text AS id
         FROM chat.lesson l
        WHERE l.organization_id = ${organizationId}::uuid
-         AND l.kind <> 'trial'
+         -- An index-friendly first cut; the rule itself is chat.lesson_owes_makeup,
+         -- the one PD-47's makeup_owed tasks read too (never re-implemented).
          AND l.outcome = ANY(${causes}::text[])
+         AND chat.lesson_owes_makeup(l.id, ${causes}::text[])
          AND (${opts.closedDaysAgo ?? null}::int IS NULL OR l.outcome_at <= now() - make_interval(days => ${opts.closedDaysAgo ?? null}::int))
          AND (${opts.since ?? null}::timestamptz IS NULL OR l.starts_at >= ${opts.since ?? null}::timestamptz)
          AND (${opts.learnerIds ?? null}::uuid[] IS NULL OR l.learner_id = ANY(${opts.learnerIds ?? null}::uuid[]))
-         AND NOT EXISTS (
-           SELECT 1 FROM chat.lesson m
-            WHERE m.makeup_for = l.id AND m.kind = 'makeup'
-              AND (m.outcome IS NULL OR m.outcome NOT IN ('teacher_apology', 'teacher_no_show', 'admin_cancelled', 'rescheduled', 'voided')))
-         AND NOT EXISTS (SELECT 1 FROM chat.lesson_ruling r WHERE r.lesson_id = l.id AND r.kind = 'makeup_followup')
        ORDER BY l.outcome_at ASC
        LIMIT 500`;
     if (ids.length === 0) return [];
@@ -1162,6 +1160,29 @@ export class LessonService {
       return rows.map((r) => r.learnerId);
     }
     return [];
+  }
+
+  /**
+   * A make-up was booked for `missedLessonId`, or that make-up was moved. The
+   * card that said a make-up is owed is written once (chat.guard_message_card);
+   * every read joins its live make-up (owed-makeup.ts). This tells open threads
+   * to re-read it, so "excused -- make-up on ..." appears without a reload.
+   */
+  async announceOwedCard(tx: Tx, missedLessonId: string) {
+    const cards = await tx.messageCard.findMany({
+      where: { lessonId: missedLessonId, kind: { in: [...MAKEUP_OWED_CARD_KINDS] }, message: { deletedForAll: false } },
+      include: { message: { select: { conversationId: true, visibility: true } } },
+    });
+    const now = new Date().toISOString();
+    for (const c of cards) {
+      if (!c.message.conversationId || !owesMakeup(c.kind, (c.payload ?? {}) as Record<string, unknown>)) continue;
+      await this.outbox.enqueue(tx, CommEvent.MESSAGE_UPDATED, {
+        conversationId: c.message.conversationId,
+        messageId: c.messageId,
+        visibility: c.message.visibility,
+        editedAt: now,
+      });
+    }
   }
 
   cardBase(lesson: LessonWithRelations) {

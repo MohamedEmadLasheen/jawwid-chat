@@ -8,6 +8,7 @@ import type { Category, ShiftDefault, ShiftWindow, WorkPattern, WorkPatterns } f
 import { CATEGORY_LABEL, S, WEEKDAYS, dayLabel, describeScheduleError, useScheduleText } from './copy'
 import { useCalendarOptions, useSetWorkPattern, useWorkPatterns } from './hooks'
 import { academyToday } from './viewState'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './schedule.css'
 
 /**
@@ -240,10 +241,10 @@ function ClockSelect({ label, value, onChange, end = false }: { label: string; v
   const times = end ? QUARTERS.slice(1) : QUARTERS.slice(0, -1)
   const all = times.includes(value) ? times : [value, ...times].sort()
   return (
-    <select className="select select--sm" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+    <SearchableSelect className="select select--sm" aria-label={label} value={value} onValueChange={(v) => onChange(v)}>
       {all.map((t) => (
         <option key={t} value={t}>{t === '24:00' ? `${wallClock12(t, locale)} +1` : wallClock12(t, locale)}</option>
       ))}
-    </select>
+    </SearchableSelect>
   )
 }

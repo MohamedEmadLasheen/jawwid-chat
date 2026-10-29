@@ -297,7 +297,7 @@ The **Needs action** page and the other source pages stay as they are. A task is
     - If the organization has exactly one live staff member given `certificates.design` by an explicit PD-40 access-role grant (for example the `designer` template), the unclaimed request goes straight to them. Two kinds of holder are not counted: PD-40's legacy bundle gives the key to the Teachers department's manager and supervisors, and the super admin holds every key (department head, 2026-10-29). They may all still design, so the hand-on picker lists every live holder.
     - Otherwise it goes to the overseer. The overseer, or the super admin, may hand that step by hand to a live `certificates.design` holder only (`chat.work_task_certificate_hand_on`; the guard allows exactly that). The sweep leaves a step handed to a Designer where it is.
     - When a Designer starts, the step closes and their own design step opens, as before.
-  - **The review step when the requester uploaded the design.** PD-41 forbids the uploader approving (`guard_appreciation_certificate`: "the person who uploaded a design does not approve it"). Approval is the requester of record's or their active PD-33 cover's (`chat.certificate_acts_as`). So the review task goes to that cover. With no cover, PD-41 leaves only a redesign or a cancel. **Open PD-41 question (department head, 2026-10-29; to the owner):** who approves when the requester of record uploaded the design and has no cover? PD-41 is unchanged in this PR, and the task stays with the requester.
+  - **The review step when the requester uploaded the design.** PD-41 forbids the uploader approving (`guard_appreciation_certificate`: "the person who uploaded a design does not approve it"). Approval is the requester of record's or their active PD-33 cover's (`chat.certificate_acts_as`). So the review task goes to that cover. With no cover, PD-41 leaves only a redesign or a cancel. **Decided by the owner on 2026-10-29 ("Their manager", PD-41 §15.3):** the category's overseer approves, so the review task goes to them, or to the super admin when the overseer uploaded it themself. The sweep reroutes review tasks that are already open. Migration `20261030010000`.
   - **The picker.** For a design hand-on, the Tasks page offers live Designers only and no department. For an orphan, the super admin is offered anyone live (`TaskService.assignees`, the same `rulesFor`).
   - **Spells begin when the supervisor is lost.** PD-43's `assign(null)` deletes the assignment row, so the records alone would date the spell from the teacher's creation. Triggers on the assignment (DELETE, and an UPDATE that leaves them unsupervised) and on `chat.staff` (a supervisor deactivated) open the spell at that moment. A supervisor cannot leave the Teachers department while holding teachers (PD-35), so that path needs no trigger.
   - **Orphans.** While the sweep has recorded a task as `orphaned:`, the super admin may hand it to anyone live, even a task that follows its source. The issue says so.
@@ -353,6 +353,24 @@ Migration `20261029235800_chat_pd047_phase_b_sources.sql`. The four set-up sourc
 - **Privacy (G-07):** the form's contents never reach a task. The title names the trial's prospect, read behind sign-in. `src/` still names `trial_subscription` only in `new-students/`.
 - **Spec:** `tasks-setup-pd047.spec.ts`.
 - **Admin Web:** each source links to where its work is done: New Students, or the teacher's file.
+
+#### 3.6.3 As built in PR-6c (slot `20261030000000`)
+
+Migration `20261030000000_chat_pd047_phase_b_decisions.sql`, with a fifth sweep, `chat.work_task_sweep_decisions()`. It follows the same review rules as PR-6a and PR-6b: the settle window, owners who leave, orphans for the super admin, and triggers that never block their source. All four sources are operational and Medium, and a person may reassign them.
+
+| Source | Key | Assignee | Due | Done (actor) | Withdrawn |
+|---|---|---|---|---|---|
+| `complaint` | the Teacher File entry | `work_task_teacher_owner` | filed + 48 h | a `complaint_resolution` refers to it (its author) | -- |
+| `feedback` | the parent's feedback | as above | filed + 48 h | `status = 'resolved'` (`responded_by`) | -- |
+| `schedule_change` | the request | the child's teacher's owner | asked + 48 h | approved / rejected (`decided_by`) | the family withdraws it |
+| `makeup_owed` | the episode: the lesson, or its chain's last dead make-up | the lesson's teacher's owner | its end + `lesson.makeup_window_days` | a make-up booked anywhere in its chain (its booker; the system for a family), or a `makeup_followup` ruling DECIDED (`decided_by`); a pending ruling keeps it owed | the outcome corrected away |
+
+- **`feedback`, not `parent_feedback`.** PD-32 confines every reader of a parent's feedback in `src/` to `teacher-file` (`parent-feedback-confinement.spec.ts`), because the teacher must never see it. So Tasks reads one only through two SQL helpers: `chat.work_task_feedback_teacher` (the teacher it is about) and `chat.work_task_feedback_title` (the names its title shows). It never reads the words or who filed it. The key is `feedback:<id>`.
+- **A parent's complaint raises one task:** its PD-26 complaint entry's. The feedback source covers praise and suggestions only.
+- **One rule for owed make-ups: the supervisor follow-up's.** `chat.lesson_owes_makeup(lesson, causes)` is the rule, and `LessonService.owedMakeups` now calls it too.
+  - **Revised by the department head, 2026-10-29** (correcting answer 2). This is a supervisor task, so its causes, `chat.work_task_makeup_causes()`, are `owedMakeups`' default, `TEACHER_MAKEUP_CAUSES`. A family's own apology owes a make-up but is never escalated, so it raises no task. A unit spec holds the SQL list to the constant. An integration spec proves the set of lessons with an open task equals `owedMakeups()`' set.
+  - **Make-up chains** (department head review of #275). A missed make-up may itself be made up (`makeup_for` = that make-up). The task finds its original lesson up the chain (`chat.work_task_makeup_original`), and a booking anywhere in the chain after its episode began completes it. Without this, the missed make-up's task could never close. `assertOwed` is unchanged.
+- **A family's booking names nobody the task log can.** The system completes the task, so the guard adds `makeup_owed` to the sources that may complete without an actor.
 
 ### 3.7 Manual tasks, and who is responsible
 

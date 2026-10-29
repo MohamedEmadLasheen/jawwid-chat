@@ -1,0 +1,407 @@
+{
+  "lesson": 6,
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 arabic/lesson-6/lib/lessonData.ts, read as text from the quarantined copy, never built or run). One sukun unit (only an internal sukun counts; the pausal sukun on the last letter never does). Final tanween damm/kasr read as the pausal sukun, held. The 27 syllables and the words the rule refuses are left out and listed. The quiz's wrong options are distractors taken from lesson 3."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/arabic/lesson-6 (read as text, never built or run)",
+    "sha256": {
+      "lib/lessonData.ts": "27c5c80a40f37c620c7821a2eb3852796409346d7fc123aab751219441cf611b"
+    }
+  },
+  "finalMark": "sukun",
+  "retiredIds": [],
+  "units": [
+    {
+      "id": "sukun",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ",
+        "ا",
+        "ب",
+        "ت",
+        "ة",
+        "ث",
+        "ج",
+        "ح",
+        "خ",
+        "د",
+        "ذ",
+        "ر",
+        "ز",
+        "س",
+        "ش",
+        "ص",
+        "ض",
+        "ط",
+        "ظ",
+        "ع",
+        "غ",
+        "ف",
+        "ق",
+        "ك",
+        "ل",
+        "م",
+        "ن",
+        "ه",
+        "و",
+        "ى",
+        "ي"
+      ],
+      "mark": "sukun",
+      "phraseName": true,
+      "name": "سُكُونْ",
+      "forms": [
+        "ـْ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sukun-001",
+          "text": "نَجْمْ",
+          "was": "نَجْمٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-002",
+          "text": "بَحْرْ",
+          "was": "بَحْرٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-003",
+          "text": "نَخْلْ",
+          "was": "نَخْلٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-004",
+          "text": "بَدْرْ",
+          "was": "بَدْرٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-005",
+          "text": "جَذْعْ",
+          "was": "جَذْعٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-006",
+          "text": "دَرْسْ",
+          "was": "دَرْسٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-007",
+          "text": "خَزْنْ",
+          "was": "خَزْنٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-008",
+          "text": "شَمْسْ",
+          "was": "شَمْسٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-009",
+          "text": "عَشْرْ",
+          "was": "عَشْرٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-010",
+          "text": "نَصْرْ",
+          "was": "نَصْرٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-011",
+          "text": "أَرْضْ",
+          "was": "أرْضٌ",
+          "review": "ADDED TASHKEEL: fatha on the hamza, final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-012",
+          "text": "قِطْعَةْ",
+          "was": "قِطْعَةٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-013",
+          "text": "حِفْظْ",
+          "was": "حِفْظٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-014",
+          "text": "شَعْبْ",
+          "was": "شَعْبٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-015",
+          "text": "مَغْرِبْ",
+          "was": "مَغْرِبٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-016",
+          "text": "نَفْسْ",
+          "was": "نَفْسٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-017",
+          "text": "وَقْتْ",
+          "was": "وَقْتٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-018",
+          "text": "حُكْمْ",
+          "was": "حُكْمٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-019",
+          "text": "عِلْمْ",
+          "was": "عِلْمٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-020",
+          "text": "حَمْدْ",
+          "was": "حَمْدٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-021",
+          "text": "عَيْنْ",
+          "was": "عَيْنٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-022",
+          "text": "نَهْرْ",
+          "was": "نَهْرٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-023",
+          "text": "يَوْمْ",
+          "was": "يَوْمٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        },
+        {
+          "id": "sukun-024",
+          "text": "بَيْتْ",
+          "was": "بَيْتٌ",
+          "review": "ADDED TASHKEEL: final tanween read as the pausal sukun"
+        }
+      ]
+    }
+  ],
+  "distractors": [
+    {
+      "id": "distractor-001",
+      "text": "وُصُولْ",
+      "was": "وُصُول",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (waw_damma-003), a wrong option only"
+    },
+    {
+      "id": "distractor-002",
+      "text": "أُفُقْ",
+      "was": "أُفُق",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (hamza_damma-006), a wrong option only"
+    },
+    {
+      "id": "distractor-003",
+      "text": "ثَلَاثَةْ",
+      "was": "ثَلَاثَة",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (tha_fatha-010), a wrong option only"
+    },
+    {
+      "id": "distractor-004",
+      "text": "سُجُودْ",
+      "was": "سُجُود",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (jim_damma-008), a wrong option only"
+    },
+    {
+      "id": "distractor-005",
+      "text": "خِطَابْ",
+      "was": "خِطَاب",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (kha_kasra-006), a wrong option only"
+    },
+    {
+      "id": "distractor-006",
+      "text": "غَذَاءْ",
+      "was": "غَذَاء",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (dhal_fatha-005), a wrong option only"
+    },
+    {
+      "id": "distractor-007",
+      "text": "زَرَافَةْ",
+      "was": "زَرَافَة",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (zay_fatha-002), a wrong option only"
+    },
+    {
+      "id": "distractor-008",
+      "text": "سُوقْ",
+      "was": "سُوق",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (sin_damma-001), a wrong option only"
+    },
+    {
+      "id": "distractor-009",
+      "text": "صِرَاعْ",
+      "was": "صِرَاع",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (sad_kasra-004), a wrong option only"
+    },
+    {
+      "id": "distractor-010",
+      "text": "طَبِيبْ",
+      "was": "طَبِيب",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (tta_fatha-002), a wrong option only"
+    },
+    {
+      "id": "distractor-011",
+      "text": "ظُفُورْ",
+      "was": "ظُفُور",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (zza_damma-005), a wrong option only"
+    },
+    {
+      "id": "distractor-012",
+      "text": "غِلَافْ",
+      "was": "غِلَاف",
+      "review": "ADDED TASHKEEL: final sukun; DISTRACTOR: from lesson 3 (ghain_kasra-007), a wrong option only"
+    }
+  ],
+  "quiz": [
+    {
+      "id": "sukun-q1",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "أُفُقْ",
+        "وُصُولْ",
+        "نَجْمْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sukun-q2",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "بَحْرْ",
+        "ثَلَاثَةْ",
+        "سُجُودْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "sukun-q3",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "نَخْلْ",
+        "خِطَابْ",
+        "غَذَاءْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "sukun-q4",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "زَرَافَةْ",
+        "بَدْرْ",
+        "سُوقْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "sukun-q5",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "طَبِيبْ",
+        "صِرَاعْ",
+        "جَذْعْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sukun-q6",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "غِلَافْ",
+        "ظُفُورْ",
+        "دَرْسْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sukun-q7",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "أُفُقْ",
+        "وُصُولْ",
+        "خَزْنْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sukun-q8",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "شَمْسْ",
+        "ثَلَاثَةْ",
+        "سُجُودْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "sukun-q9",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "غَذَاءْ",
+        "خِطَابْ",
+        "عَشْرْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sukun-q10",
+      "kind": "contains",
+      "unit": "sukun",
+      "options": [
+        "زَرَافَةْ",
+        "نَصْرْ",
+        "سُوقْ"
+      ],
+      "answer": 1,
+      "review": null
+    }
+  ]
+}

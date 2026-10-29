@@ -5,6 +5,7 @@ import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { TeacherSummary } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-43: "Add teacher" on Teacher Files, through the real routes and API
@@ -84,7 +85,7 @@ describe('Add teacher', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add teacher' })
     await user.type(within(dialog).getByLabelText('Full name'), 'New Teacher')
     await user.type(within(dialog).getByLabelText('Sign-in e-mail'), 'new.teacher@example.test')
-    await user.selectOptions(within(dialog).getByLabelText('Supervisor'), 's-2')
+    await chooseOption(user, within(dialog).getByLabelText('Supervisor'), 's-2')
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     await waitFor(() => expect(calls('POST', /\/teachers$/)).toHaveLength(1))

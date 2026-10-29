@@ -5,6 +5,7 @@ import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { AccessRole, PermissionEntry, StaffAccount } from './api'
+import { chooseOption, optionsOf } from '@/test/select'
 
 /**
  * PD-40 PR-5: the Staff accounts page, through the real route and the real API
@@ -176,9 +177,9 @@ describe('PD-40: the Staff accounts page', () => {
     await identity(dialog)
 
     const tier = within(dialog).getByLabelText('Tier')
-    expect(within(tier).getAllByRole('option').map((o) => o.getAttribute('value'))).toEqual(['specialist', 'admin', 'coverage', 'manager'])
-    await userEvent.selectOptions(await within(dialog).findByLabelText('Department'), 'd-o')
-    await userEvent.selectOptions(tier, 'manager')
+    expect((await optionsOf(userEvent, tier)).map((o) => o.value)).toEqual(['specialist', 'admin', 'coverage', 'manager'])
+    await chooseOption(userEvent, await within(dialog).findByLabelText('Department'), 'd-o')
+    await chooseOption(userEvent, tier, 'manager')
     expect(within(dialog).queryByLabelText('Department')).not.toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }))
     await userEvent.type(within(dialog).getByLabelText('Reason'), 'runs a department')
@@ -200,7 +201,7 @@ describe('PD-40: the Staff accounts page', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'New account' }))
     const dialog = screen.getByRole('dialog', { name: 'New staff account' })
     await identity(dialog)
-    await userEvent.selectOptions(await within(dialog).findByLabelText('Department'), 'd-o')
+    await chooseOption(userEvent, await within(dialog).findByLabelText('Department'), 'd-o')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }))
     await userEvent.type(within(dialog).getByLabelText('Reason'), 'operations help')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create account' }))
@@ -312,8 +313,8 @@ describe('PD-40: the Staff accounts page', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Specialist One' }))
     const detail = await screen.findByRole('dialog', { name: 'Specialist One' })
     const picker = await within(detail).findByLabelText('Add a role')
-    await waitFor(() => expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a role', 'Designer']))
-    await userEvent.selectOptions(picker, 'r-1')
+    await waitFor(async () => expect((await optionsOf(userEvent, picker)).map((o) => o.label)).toEqual(['Choose a role', 'Designer']))
+    await chooseOption(userEvent, picker, 'r-1')
     await userEvent.click(within(detail).getByRole('button', { name: 'Grant' }))
     const reason = screen.getByRole('dialog', { name: 'Grant Designer to Specialist One' })
     await userEvent.type(within(reason).getByRole('textbox'), 'designs the certificates')
@@ -412,7 +413,7 @@ describe('PD-40: review of #239', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Finance Two' }))
     const detail = await screen.findByRole('dialog', { name: 'Finance Two' })
     const picker = await within(detail).findByLabelText('Add a role')
-    expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a role', 'Designer'])
+    expect((await optionsOf(userEvent, picker)).map((o) => o.label)).toEqual(['Choose a role', 'Designer'])
     expect(within(detail).queryByText('There are no roles you can grant.')).not.toBeInTheDocument()
   })
 
