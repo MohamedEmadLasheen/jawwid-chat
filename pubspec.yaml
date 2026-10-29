@@ -146,6 +146,8 @@ flutter:
     # `LicenseRegistry` (see `lib/main.dart`) can surface it in the app's own
     # licence page. OFL 1.1 §2 requires the licence to accompany the fonts.
     - assets/fonts/OFL.txt
+    # PD-39: Amiri Quran's licence (SIL OFL 1.1), for the same reason.
+    - assets/fonts/OFL-Amiri.txt
 
   # IBM Plex Sans Arabic — SIL Open Font License 1.1, © 2017 IBM Corp., Reserved
   # Font Name "Plex". Byte-identical to the Google Fonts upstream of record
@@ -171,3 +173,11 @@ flutter:
           weight: 600
         - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
           weight: 700
+    # PD-39: Quran verses on the whiteboard, as the shared Quran dataset's
+    # contract names (docs/product/quran-dataset-contract.md "Fonts"). Amiri
+    # 1.003 (SIL OFL 1.1), from the upstream release Amiri-1.003.zip (sha256
+    # 81af0aff7d2086d8af24cea7202f7546130997982534691373485cd96744d05e);
+    # AmiriQuran.ttf sha256 e2a47644762d16bdfb6d33e0d8db8c6ff30beae84150ef5a705316bbd829455c.
+    - family: Amiri Quran
+      fonts:
+        - asset: assets/fonts/AmiriQuran.ttf

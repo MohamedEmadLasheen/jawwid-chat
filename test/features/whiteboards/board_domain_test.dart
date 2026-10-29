@@ -39,11 +39,14 @@ void main() {
   });
 
   group('a page document', () {
-    test('round-trips every MVP element, and keeps a verse (not drawn before PR-3) exactly as it came', () {
+    test('round-trips every MVP element, and keeps a kind it does not draw (an image before PR-4) exactly as it came', () {
       final verse = <String, Object?>{
         'id': 'v1', 'kind': 'verse', 'surah': 1, 'fromAyah': 1, 'toAyah': 7,
         'datasetId': 'tanzil-uthmani-1.1', 'rangeSha256': 'a' * 64,
+        'transform': {'x': 260.0, 'y': 300.0, 'w': 1400.0, 'h': 420.0},
+        'style': {'size': 64.0, 'color': '#1b1b1b'},
       };
+      final image = <String, Object?>{'id': 'i1', 'kind': 'image', 'assetId': '3f2c1a9e-0b1d-4c2e-9f00-1234567890ab'};
       final page = BoardPage.fromJson({
         'id': 'p1',
         'position': 0,
@@ -58,15 +61,19 @@ void main() {
             const TextElement(id: 't1', text: 'بِسْمِ اللَّهِ', topLeft: Offset(5, 5), size: Size(400, 80), fontSize: 48, color: Color(0xFF1B1B1B)).toJson(),
             const StampElement(id: 'st', stamp: StampKind.excellentAr, rect: Rect.fromLTWH(0, 0, 200, 80), color: Color(0xFF2E7D32), text: 'ممتاز').toJson(),
             verse,
+            image,
           ],
         },
       });
       expect(page.layout, PageLayout.arabicLines);
       expect(page.background, PageBackground.cream);
-      expect(page.elements.map((e) => e.runtimeType), [InkElement, ShapeElement, LineElement, TextElement, StampElement, OpaqueElement]);
+      expect(page.elements.map((e) => e.runtimeType), [InkElement, ShapeElement, LineElement, TextElement, StampElement, VerseElement, OpaqueElement]);
       final again = BoardPage.fromJson({'id': 'p1', 'document': page.documentJson()});
       expect(again.documentJson(), page.documentJson());
-      expect((page.documentJson()['elements'] as List).last, verse);
+      final out = page.documentJson()['elements'] as List;
+      // The verse is a reference and its place: exactly the fields the server allows, no text.
+      expect(out[5], verse);
+      expect(out.last, image);
     });
 
     test('moving and scaling keep ids; a verse without a position is not moved', () {
@@ -74,7 +81,7 @@ void main() {
       final moved = s.translated(const Offset(5, -5)) as InkElement;
       expect(moved.id, 's1');
       expect(moved.points.first.offset, const Offset(15, 5));
-      const unplaced = OpaqueElement('v', {'id': 'v', 'kind': 'verse'});
+      const unplaced = OpaqueElement('v', {'id': 'v', 'kind': 'image'});
       expect(identical(unplaced.translated(const Offset(1, 1)), unplaced), isTrue);
     });
   });

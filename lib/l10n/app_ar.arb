@@ -1782,9 +1782,18 @@
   "boardTajweedIzhar": "الإظهار",
   "boardTextTitle": "نص",
   "boardTextHint": "اكتب هنا",
-  "boardVersePlaceholder": "آية قرآنية",
   "boardElementUnknown": "لا يظهر في هذا الإصدار",
   "boardStampExcellent": "ممتاز",
   "boardStampWellDone": "أحسنت",
-  "boardMore": "المزيد"
+  "boardMore": "المزيد",
+  "boardToolVerse": "آية قرآنية",
+  "boardVerseSurah": "السورة",
+  "boardVerseFrom": "من الآية",
+  "boardVerseTo": "إلى الآية",
+  "boardVerseMax": "{count} آية على الأكثر في المرة الواحدة.",
+  "boardVerseSource": "نص القرآن الكريم: {source}",
+  "boardVerseInsert": "إدراج",
+  "boardVerseLoading": "جارٍ تحميل الآية…",
+  "boardVerseUnavailable": "نص القرآن غير متاح",
+  "boardVerseChanged": "تغيّر نص الآية، أعد إدراجها"
 }

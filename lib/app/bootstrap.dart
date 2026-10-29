@@ -55,6 +55,7 @@ import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../features/settings/data/parent_notice_repository.dart';
 import '../features/tasks/application/task_signal_channel.dart';
+import '../features/whiteboards/data/quran_text_repository.dart';
 import '../features/whiteboards/data/whiteboards_repository.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
@@ -237,6 +238,10 @@ List<Override> _httpOverrides() {
     // PD-39: the teacher's boards (the whiteboard).
     whiteboardsRepositoryProvider.overrideWithValue(
       HttpWhiteboardsRepository(client: client),
+    ),
+    // PD-39 PR-3: the verified Quran text (the shared dataset), for verses on a board.
+    quranTextRepositoryProvider.overrideWithValue(
+      HttpQuranTextRepository(client: client),
     ),
     // PD-20: Sales' Payments (search, a family's instalments, record / void).
     salesPaymentsRepositoryProvider.overrideWithValue(

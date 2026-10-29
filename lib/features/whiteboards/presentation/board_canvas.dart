@@ -41,6 +41,8 @@ class BoardCanvas extends StatefulWidget {
     this.onRequestText,
     this.placeholderLabel,
     this.view,
+    this.verses,
+    this.versesVersion,
   });
 
   final BoardPage page;
@@ -57,6 +59,10 @@ class BoardCanvas extends StatefulWidget {
 
   /// Zoom and pan, shared with the zoom buttons.
   final BoardViewController? view;
+
+  /// The verses' texts (the open board's verse cache), and what changes when one does.
+  final VerseSource? verses;
+  final Object? versesVersion;
 
   @override
   State<BoardCanvas> createState() => BoardCanvasState();
@@ -555,7 +561,12 @@ class BoardCanvasState extends State<BoardCanvas> {
                             child: RepaintBoundary(
                               child: CustomPaint(
                                 size: pageSize,
-                                painter: BoardPagePainter(page: _shown, placeholderLabel: widget.placeholderLabel),
+                                painter: BoardPagePainter(
+                                  page: _shown,
+                                  placeholderLabel: widget.placeholderLabel,
+                                  verses: widget.verses,
+                                  versesVersion: widget.versesVersion,
+                                ),
                                 foregroundPainter: _OverlayPainter(
                                   live: _drag == _Drag.draw && _live.isNotEmpty
                                       ? InkElement(
