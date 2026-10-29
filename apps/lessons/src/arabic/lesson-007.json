@@ -1,0 +1,1136 @@
+{
+  "lesson": 7,
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 arabic/lesson-7/data/maddData.ts, read as text from the quarantined copy, never built or run). Three madd units: the letter counts only BARE right after its own vowel. The pausal sukun is added and held; hamza-dropped spellings and obscure words are held with a reason; بُول is left out."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/arabic/lesson-7 (read as text, never built or run)",
+    "sha256": {
+      "data/maddData.ts": "48591b2af9a545a77e29aa2208297b314148fb0913016ff4efce57f27f9a4ac0"
+    }
+  },
+  "finalMark": "sukun",
+  "retiredIds": [],
+  "units": [
+    {
+      "id": "madd_alif",
+      "letters": [
+        "ا"
+      ],
+      "madd": "alif",
+      "name": "مَدٌّ بِالْأَلِفْ",
+      "forms": [
+        "ـَا"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "madd_alif-001",
+          "text": "بَابْ",
+          "was": "بَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-002",
+          "text": "كِتَابْ",
+          "was": "كِتَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-003",
+          "text": "نَامْ",
+          "was": "نَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-004",
+          "text": "قَامْ",
+          "was": "قَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-005",
+          "text": "سَارْ",
+          "was": "سَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-006",
+          "text": "طَارْ",
+          "was": "طَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-007",
+          "text": "مَاءْ",
+          "was": "مَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-008",
+          "text": "سَمَاءْ",
+          "was": "سَمَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-009",
+          "text": "دَارْ",
+          "was": "دَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-010",
+          "text": "نَارْ",
+          "was": "نَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-011",
+          "text": "جَارْ",
+          "was": "جَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-012",
+          "text": "حَارْ",
+          "was": "حَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-013",
+          "text": "زَارْ",
+          "was": "زَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-014",
+          "text": "فَارْ",
+          "was": "فَار",
+          "review": "ADDED TASHKEEL: final sukun; SPELLING: hamza dropped (standard فَأْر); a teacher decides"
+        },
+        {
+          "id": "madd_alif-015",
+          "text": "غَارْ",
+          "was": "غَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-016",
+          "text": "شَارِعْ",
+          "was": "شَارِع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-017",
+          "text": "بَاعْ",
+          "was": "بَاع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-018",
+          "text": "سَاعْ",
+          "was": "سَاع",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-019",
+          "text": "رَاحْ",
+          "was": "رَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-020",
+          "text": "صَاحْ",
+          "was": "صَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-021",
+          "text": "نَاحْ",
+          "was": "نَاح",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-022",
+          "text": "فَازْ",
+          "was": "فَاز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-023",
+          "text": "جَازْ",
+          "was": "جَاز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-024",
+          "text": "خَافْ",
+          "was": "خَاف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-025",
+          "text": "عَامْ",
+          "was": "عَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-026",
+          "text": "حَامْ",
+          "was": "حَام",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-027",
+          "text": "رَامْ",
+          "was": "رَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-028",
+          "text": "سَامْ",
+          "was": "سَام",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-029",
+          "text": "هَامْ",
+          "was": "هَام",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-030",
+          "text": "لَامْ",
+          "was": "لَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-031",
+          "text": "قَالْ",
+          "was": "قَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-032",
+          "text": "مَالْ",
+          "was": "مَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-033",
+          "text": "صَامْ",
+          "was": "صَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-034",
+          "text": "دَامْ",
+          "was": "دَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-035",
+          "text": "حَالْ",
+          "was": "حَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-036",
+          "text": "بَالْ",
+          "was": "بَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-037",
+          "text": "خَالْ",
+          "was": "خَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-038",
+          "text": "جَالْ",
+          "was": "جَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-039",
+          "text": "زَالْ",
+          "was": "زَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-040",
+          "text": "سَاقْ",
+          "was": "سَاق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-041",
+          "text": "بَاقْ",
+          "was": "بَاق",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-042",
+          "text": "رَاقْ",
+          "was": "رَاق",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-043",
+          "text": "فَاقْ",
+          "was": "فَاق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-044",
+          "text": "طَاقْ",
+          "was": "طَاق",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-045",
+          "text": "عَادْ",
+          "was": "عَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-046",
+          "text": "سَادْ",
+          "was": "سَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-047",
+          "text": "قَادْ",
+          "was": "قَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-048",
+          "text": "مَاشْ",
+          "was": "مَاش",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_alif-049",
+          "text": "رَاسْ",
+          "was": "رَاس",
+          "review": "ADDED TASHKEEL: final sukun; SPELLING: hamza dropped (standard رَأْس); a teacher decides"
+        },
+        {
+          "id": "madd_alif-050",
+          "text": "بَاسْ",
+          "was": "بَاس",
+          "review": "ADDED TASHKEEL: final sukun; SPELLING: hamza dropped (standard بَأْس); a teacher decides"
+        },
+        {
+          "id": "madd_alif-051",
+          "text": "كَاسْ",
+          "was": "كَاس",
+          "review": "ADDED TASHKEEL: final sukun; SPELLING: hamza dropped (standard كَأْس); a teacher decides"
+        },
+        {
+          "id": "madd_alif-052",
+          "text": "نَاسْ",
+          "was": "نَاس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_alif-053",
+          "text": "فَاسْ",
+          "was": "فَاس",
+          "review": "ADDED TASHKEEL: final sukun; SPELLING: hamza dropped (standard فَأْس); a teacher decides"
+        },
+        {
+          "id": "madd_alif-054",
+          "text": "حَاجْ",
+          "was": "حَاج",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "madd_ya",
+      "letters": [
+        "ي"
+      ],
+      "madd": "ya",
+      "name": "مَدٌّ بِالْيَاءْ",
+      "forms": [
+        "ـِي"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "madd_ya-001",
+          "text": "كَبِيرْ",
+          "was": "كَبِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-002",
+          "text": "صَغِيرْ",
+          "was": "صَغِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-003",
+          "text": "جَمِيلْ",
+          "was": "جَمِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-004",
+          "text": "طَوِيلْ",
+          "was": "طَوِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-005",
+          "text": "قَرِيبْ",
+          "was": "قَرِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-006",
+          "text": "بَعِيدْ",
+          "was": "بَعِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-007",
+          "text": "جَدِيدْ",
+          "was": "جَدِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-008",
+          "text": "سَعِيدْ",
+          "was": "سَعِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-009",
+          "text": "حَلِيبْ",
+          "was": "حَلِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-010",
+          "text": "رَغِيفْ",
+          "was": "رَغِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-011",
+          "text": "رَبِيعْ",
+          "was": "رَبِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-012",
+          "text": "نَسِيمْ",
+          "was": "نَسِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-013",
+          "text": "كَرِيمْ",
+          "was": "كَرِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-014",
+          "text": "عَظِيمْ",
+          "was": "عَظِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-015",
+          "text": "حَكِيمْ",
+          "was": "حَكِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-016",
+          "text": "رَحِيمْ",
+          "was": "رَحِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-017",
+          "text": "طَرِيقْ",
+          "was": "طَرِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-018",
+          "text": "فَرِيقْ",
+          "was": "فَرِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-019",
+          "text": "صَدِيقْ",
+          "was": "صَدِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-020",
+          "text": "رَفِيقْ",
+          "was": "رَفِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-021",
+          "text": "عَمِيقْ",
+          "was": "عَمِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-022",
+          "text": "دَقِيقْ",
+          "was": "دَقِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-023",
+          "text": "رَقِيقْ",
+          "was": "رَقِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-024",
+          "text": "أَنِيقْ",
+          "was": "أَنِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-025",
+          "text": "سَمِينْ",
+          "was": "سَمِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-026",
+          "text": "حَزِينْ",
+          "was": "حَزِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-027",
+          "text": "أَمِينْ",
+          "was": "أَمِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-028",
+          "text": "ثَمِينْ",
+          "was": "ثَمِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-029",
+          "text": "مَتِينْ",
+          "was": "مَتِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-030",
+          "text": "رَزِينْ",
+          "was": "رَزِين",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_ya-031",
+          "text": "حَنِينْ",
+          "was": "حَنِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-032",
+          "text": "فَطِينْ",
+          "was": "فَطِين",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_ya-033",
+          "text": "نَظِيفْ",
+          "was": "نَظِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-034",
+          "text": "لَطِيفْ",
+          "was": "لَطِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-035",
+          "text": "خَفِيفْ",
+          "was": "خَفِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-036",
+          "text": "كَثِيفْ",
+          "was": "كَثِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-037",
+          "text": "ظَرِيفْ",
+          "was": "ظَرِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-038",
+          "text": "شَرِيفْ",
+          "was": "شَرِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-039",
+          "text": "عَفِيفْ",
+          "was": "عَفِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-040",
+          "text": "مُنِيفْ",
+          "was": "مُنِيف",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_ya-041",
+          "text": "قَدِيمْ",
+          "was": "قَدِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-042",
+          "text": "عَلِيمْ",
+          "was": "عَلِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-043",
+          "text": "سَلِيمْ",
+          "was": "سَلِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-044",
+          "text": "حَلِيمْ",
+          "was": "حَلِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-045",
+          "text": "زَعِيمْ",
+          "was": "زَعِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-046",
+          "text": "غَنِيمْ",
+          "was": "غَنِيم",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_ya-047",
+          "text": "نَعِيمْ",
+          "was": "نَعِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-048",
+          "text": "مُقِيمْ",
+          "was": "مُقِيم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-049",
+          "text": "فَقِيرْ",
+          "was": "فَقِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-050",
+          "text": "أَسِيرْ",
+          "was": "أَسِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-051",
+          "text": "مُنِيرْ",
+          "was": "مُنِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-052",
+          "text": "مُجِيبْ",
+          "was": "مُجِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-053",
+          "text": "قَدِيرْ",
+          "was": "قَدِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-054",
+          "text": "خَطِيرْ",
+          "was": "خَطِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_ya-055",
+          "text": "أَثِيرْ",
+          "was": "أَثِير",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        }
+      ]
+    },
+    {
+      "id": "madd_waw",
+      "letters": [
+        "و"
+      ],
+      "madd": "waw",
+      "name": "مَدٌّ بِالْوَاوْ",
+      "forms": [
+        "ـُو"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "madd_waw-001",
+          "text": "نُورْ",
+          "was": "نُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-002",
+          "text": "سُورْ",
+          "was": "سُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-003",
+          "text": "طُورْ",
+          "was": "طُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-004",
+          "text": "دُورْ",
+          "was": "دُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-005",
+          "text": "فُولْ",
+          "was": "فُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-006",
+          "text": "أُصُولْ",
+          "was": "أُصُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-007",
+          "text": "فُصُولْ",
+          "was": "فُصُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-008",
+          "text": "عُصْفُورْ",
+          "was": "عُصْفُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-009",
+          "text": "سُرُورْ",
+          "was": "سُرُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-010",
+          "text": "شُكُورْ",
+          "was": "شُكُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-011",
+          "text": "صَبُورْ",
+          "was": "صَبُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-012",
+          "text": "غَفُورْ",
+          "was": "غَفُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-013",
+          "text": "شَكُورْ",
+          "was": "شَكُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-014",
+          "text": "وَقُورْ",
+          "was": "وَقُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-015",
+          "text": "حَبُورْ",
+          "was": "حَبُور",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_waw-016",
+          "text": "دُرُوسْ",
+          "was": "دُرُوس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-017",
+          "text": "جُلُوسْ",
+          "was": "جُلُوس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-018",
+          "text": "شُمُوعْ",
+          "was": "شُمُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-019",
+          "text": "دُمُوعْ",
+          "was": "دُمُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-020",
+          "text": "رُجُوعْ",
+          "was": "رُجُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-021",
+          "text": "خُضُوعْ",
+          "was": "خُضُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-022",
+          "text": "وُقُوعْ",
+          "was": "وُقُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-023",
+          "text": "طُلُوعْ",
+          "was": "طُلُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-024",
+          "text": "سُكُونْ",
+          "was": "سُكُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-025",
+          "text": "عُيُونْ",
+          "was": "عُيُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-026",
+          "text": "جُنُونْ",
+          "was": "جُنُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-027",
+          "text": "فُنُونْ",
+          "was": "فُنُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-028",
+          "text": "شُؤُونْ",
+          "was": "شُؤُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-029",
+          "text": "حُصُونْ",
+          "was": "حُصُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-030",
+          "text": "لُحُونْ",
+          "was": "لُحُون",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_waw-031",
+          "text": "ظُنُونْ",
+          "was": "ظُنُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-032",
+          "text": "بُحُورْ",
+          "was": "بُحُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-033",
+          "text": "قُصُورْ",
+          "was": "قُصُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-034",
+          "text": "جُسُورْ",
+          "was": "جُسُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-035",
+          "text": "طُيُورْ",
+          "was": "طُيُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-036",
+          "text": "زُهُورْ",
+          "was": "زُهُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-037",
+          "text": "شُهُورْ",
+          "was": "شُهُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-038",
+          "text": "أُمُورْ",
+          "was": "أُمُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-039",
+          "text": "صُخُورْ",
+          "was": "صُخُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-040",
+          "text": "يَقُولْ",
+          "was": "يَقُول",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-041",
+          "text": "يَصُومْ",
+          "was": "يَصُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-042",
+          "text": "يَدُورْ",
+          "was": "يَدُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-043",
+          "text": "يَزُورْ",
+          "was": "يَزُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-044",
+          "text": "يَعُودْ",
+          "was": "يَعُود",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-045",
+          "text": "يَسُوقْ",
+          "was": "يَسُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-046",
+          "text": "يَفُوزْ",
+          "was": "يَفُوز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-047",
+          "text": "يَقُومْ",
+          "was": "يَقُوم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-048",
+          "text": "مَسْرُورْ",
+          "was": "مَسْرُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-049",
+          "text": "مَشْكُورْ",
+          "was": "مَشْكُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-050",
+          "text": "مَشْهُورْ",
+          "was": "مَشْهُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-051",
+          "text": "مَنْصُورْ",
+          "was": "مَنْصُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-052",
+          "text": "مَأْمُورْ",
+          "was": "مَأْمُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "madd_waw-053",
+          "text": "مَحْبُورْ",
+          "was": "مَحْبُور",
+          "review": "ADDED TASHKEEL: final sukun; WORD: obscure or doubtful for a child; a teacher decides"
+        },
+        {
+          "id": "madd_waw-054",
+          "text": "مَعْذُورْ",
+          "was": "مَعْذُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "madd_alif-q1",
+      "kind": "contains",
+      "unit": "madd_alif",
+      "options": [
+        "صَدِيقْ",
+        "نَسِيمْ",
+        "بَابْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "madd_alif-q2",
+      "kind": "contains",
+      "unit": "madd_alif",
+      "options": [
+        "طَارْ",
+        "رَقِيقْ",
+        "حَنِينْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "madd_alif-q3",
+      "kind": "position",
+      "unit": "madd_alif",
+      "word": "كِتَابْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "madd_ya-q1",
+      "kind": "contains",
+      "unit": "madd_ya",
+      "options": [
+        "قَالْ",
+        "صَاحْ",
+        "كَبِيرْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "madd_ya-q2",
+      "kind": "contains",
+      "unit": "madd_ya",
+      "options": [
+        "بَعِيدْ",
+        "حَالْ",
+        "عَادْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "madd_ya-q3",
+      "kind": "position",
+      "unit": "madd_ya",
+      "word": "صَغِيرْ",
+      "answer": "middle",
+      "review": null
+    },
+    {
+      "id": "madd_waw-q1",
+      "kind": "contains",
+      "unit": "madd_waw",
+      "options": [
+        "خَالْ",
+        "لَامْ",
+        "نُورْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "madd_waw-q2",
+      "kind": "contains",
+      "unit": "madd_waw",
+      "options": [
+        "أُصُولْ",
+        "فَاقْ",
+        "نَاسْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "madd_waw-q3",
+      "kind": "position",
+      "unit": "madd_waw",
+      "word": "سُورْ",
+      "answer": "middle",
+      "review": null
+    }
+  ]
+}
